@@ -31,6 +31,8 @@ Decision: **one present per WORLD, where a world = a branch; one reality per com
 
 "Acts should also be CAS — they are also chains." Built: an Act's `_id` is the hash of its OPENING (past/act/actHash.js), chained per (branch, being) via `p` and ActHead (advanced only where the row lands — sealAct and crossWorld's documented direct open — so crashed moments never enter the chain). Identity is minted at assign so the moment's facts can carry actId; the closure fields (status, endMessage, facadeSnapshot, answers) stay OUTSIDE the digest as mutable bookkeeping — the truth of what happened is the hash-chained facts. rootCorrelation is excluded (a parentless act is its own root — circular); wall-clock fields excluded per #1.
 
+**Concurrency guard (2026-06-11).** The open→seal of an act is a read-compute-write on the head (`p` = ActHead.headHash at open). Two concurrent openers on one (branch, being) both chained off the same `p` and the second seal silently FORKED the chain. Closed two ways: (1) advanceActHead is now a COMPARE-AND-SET on `expectPrev`, run inside the seal transaction for ΔF≥1 — a stale head throws ACT_CHAIN_MOVED and the whole seal aborts (no facts, no act, no head), the moment fails loud, its inbox row stays open, the retry re-opens from the new head; (2) the direct helpers (withIAmAct/withBeingAct, crossWorld's open) serialize per (branch, being) via an in-process AsyncLocalStorage-reentrant lock (past/act/actChainLock.js). The scheduler's moments stay UNLOCKED (already serial per being; a moment may legitimately open a same-being act) — their guard is the CAS. Proven in .test/e2e/act-chain-e2e.mjs (8 concurrent acts, chain verifies, exact count). The port's WAL-append-as-seal (#4) subsumes both: the head advance is part of the same atomic append.
+
 ## 6. The reality root does not cover acts — ANSWERED (Tabor 2026-06-11), BUILT for acts
 
 With acts content-addressed, "the reality root would literally cover everything": branch roll-ups now include act-chain heads alongside reel heads (chainRoots.js branchRollup carries `reels` AND `acts`), seeds capture/plant actHeads as core genome, and plant verification covers both chain families. Remaining luggage: extensionData collections (planted verbatim, unverified) — extensions own arbitrary collections, so either extensions declare hashable state or doctrine pins extension data as outside identity. Projections never need covering (caches of the fold by definition).
@@ -47,9 +49,9 @@ Second sanctioned exception (documented in crossWorld.js): the local "I attempte
 
 The corrected model lives in [beFix.md](beFix.md); the earlier elaboration here was wrong in two ways. BE is the verb that acts on the LEFT stance (the actor mutates their own identity slot; every other verb operates on the right). Arrival is a REAL being — there is no "no-actor" case; single-stance addresses are sugar for `pos@arrival :: pos`, so authorize always has someone to evaluate. be:birth has no direct wire surface AT ALL: identity creation is `summon:mate` to a delegate (cherub for arrival, birther for authenticated callers) whose handler emits BE:birth via birthBeing — "skips the verb-level stamp" was a misread; birth never enters that seam. The remaining true asymmetry is centralization: the four wire BE ops enqueue on cherub (one identity-gate being) instead of the actor's own intake. The port unifies consciously or copies knowingly — beFix.md lays out both moves and their costs.
 
-## 10. Branch-resolution precedence is duplicated
+## 10. Branch-resolution precedence is duplicated — BUILT (2026-06-11)
 
-authorize() and the verb layer each resolve target branch with their own precedence chains. They agree today; nothing forces them to. Port: ONE shared branch-resolution primitive both call.
+authorize() and the verb layer each resolved target branch with their own precedence chains. They agreed; nothing forced them to. Closed: both now delegate to `resolveTargetBranch` (seed/ibp/branchResolve.js) — one precedence (target.branch → summonCtx.targetBranch → summonCtx.actorAct.branch → caller's seated branch), each caller keeping only its own NULL tail (verb layer throws MISSING_BRANCH; authorize falls anonymous callers to the operator default). Conformance vectors in .test/scripts/verify-branch-resolution.js pin the precedence and the two callers' agreement. The branch that GATES an act and the branch a fact STAMPS on can no longer diverge.
 
 ## 11. Roots are recomputed on demand with a TTL memo
 
@@ -67,9 +69,9 @@ Bundles carry blobs inline (capped, with an honest omission ledger). The pull-wh
 
 Deleted branches stay forensically intact and still count in the reality root. Physical purge of a branch (and its facts' blobs) is an explicit op that does not exist. Decide whether it ever should — purging facts contradicts PAST FIXED; the likely answer is "never; archive realities whole," but say it in doctrine.
 
-## 15. Scope-branch reads vs writes asymmetry
+## 15. Scope-branch reads vs writes asymmetry — HARDENED (2026-06-11)
 
-Subtree-scoped branches refuse out-of-scope WRITES at the stamp boundary but reads inherit the parent transparently. The fold's per-branch caches and the scope rules interact in ways only lightly exercised. Port should treat branchScope as a first-class fact-emission gate with tests.
+Subtree-scoped branches refuse out-of-scope WRITES at the stamp boundary but reads inherit the parent transparently. Two improvements landed: (a) the asymmetry has standing coverage (.test/scripts/verify-subtree-branch.js, 6 cases incl. in-scope ok / out-of-scope refused / read-transparency / heaven bypass); (b) the gate now FAILS CLOSED — the old fact-emission catch swallowed any non-IbpError as "pre-bootstrap," so a resolver bug or DB error DURING scope resolution silently ALLOWED the out-of-scope write. Now the module load is swallowed (genuine pre-bootstrap) but a throw from getBranchScopeSpaceId / isTargetInBranchScope refuses the write (SCOPE_CHECK_FAILED). The port must keep scope a fail-closed fact-emission gate, not a best-effort check.
 
 ## 16. The word "substrate"
 
@@ -79,7 +81,7 @@ Standing style rule (Tabor): TreeOS prose should say spaces/matter/beings (the p
 
 - Mongo 16MB doc cap shapes capPayload's limits; pick caps from doctrine, not the engine.
 - Mongoose Map/Object duality for qualities (serializeQualities everywhere) disappears with a real type system.
-- `canon` (canonicalize) is a VERSIONED WIRE FORMAT — the Rust implementation must reproduce it byte-for-byte or all identities change at the border. Freeze it with a test-vector file before porting.
+- `canon` (canonicalize) is a VERSIONED WIRE FORMAT — the Rust implementation must reproduce it byte-for-byte or all identities change at the border. FROZEN (2026-06-11): seed/past/fact/canon.vectors.json holds the conformance vectors (canonicalize cases, computeHash, fact + act identities, chaining), generated from the reference impl by .test/scripts/gen-canon-vectors.mjs and checked by verify-canon-vectors.js. The port verifies its canonicalize/hash against this file. NB the pinned footguns: -0 → "0", 1e21 → "1e+21", empty-object values dropped, empty arrays kept, Date → ISO-with-ms-Z, NaN/Infinity → null, recursive key sort.
 - The socket buffer (socketMaxBufferSize) and the 90s DO timeout are transport tuning, not protocol.
 - Eager-fold is an optimization; the fold must stay correct without it (self-healing is the contract).
 

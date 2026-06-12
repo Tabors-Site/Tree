@@ -1,0 +1,45 @@
+.rp-section { padding: 8px 12px 10px; border-top: 1px solid #2a2a2a; }
+.rp-section:first-child { border-top: none; }
+.rp-title { font-size: 13px; margin: 0 0 6px; font-weight: 600; }
+.rp-clickable { cursor: pointer; user-select: none; }
+.rp-clickable:hover { color: #88c; }
+.rp-body { padding-top: 4px; }
+.rp-note { font-size: 12px; margin: 4px 0 8px; }
+.kv-row { font-size: 12px; line-height: 1.6; }
+.kv-key { display: inline-block; min-width: 80px; }
+.dim { color: #888; }
+
+.perm-row { display: flex; align-items: baseline; gap: 8px; margin: 3px 0; font-size: 12px; }
+.perm-verb { display: inline-block; min-width: 60px; font-weight: 700; color: #8ab; }
+.perm-body { flex: 1; line-height: 1.6; }
+.perm-token { color: #cdf; }
+.perm-owner { color: #fc8; font-size: 12px; margin: 4px 0; }
+
+.grant-card { border-left: 3px solid #2a4; padding: 4px 8px; margin: 4px 0; background: #1118; border-radius: 2px; }
+.grant-card.inert { border-left-color: #444; }
+.grant-head { font-size: 12px; }
+.grant-status.active { color: #4c8; }
+.grant-meta { font-size: 11px; margin-top: 1px; }
+.btn-compact { font-size: 11px; padding: 2px 6px; margin-top: 2px; }
+
+.role-filter { width: 100%; margin: 4px 0 8px; padding: 4px; font-size: 12px; background: #111; color: #ccc; border: 1px solid #333; }
+.hosted-card { border-left: 2px solid #333; padding: 4px 8px; margin: 3px 0; font-size: 11px; }
+.hosted-head { font-size: 12px; }
+.hosted-desc { line-height: 1.4; margin: 1px 0; }
+.hosted-can { color: #aab; line-height: 1.4; }
+.hosted-reach { margin-top: 1px; }
+.hosted-list { max-height: 400px; overflow-y: auto; }
+
+.compact-form .field-row { margin: 4px 0; display: flex; flex-direction: column; gap: 2px; }
+.compact-form .field-row label { font-size: 11px; color: #888; }
+.compact-form .op-input { background: #0c0c0c; color: #ccc; border: 1px solid #333; padding: 3px 6px; font-size: 12px; }
+.picker-box { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 6px 8px; background: #0a0a0a; border: 1px solid #222; max-height: 140px; overflow-y: auto; }
+.picker-item { font-size: 12px; cursor: pointer; user-select: none; color: #cdf; display: inline-flex; align-items: center; gap: 2px; }
+.picker-item:hover { color: #fff; }
+.picker-item input { vertical-align: middle; margin: 0; }
+.picker-empty { font-size: 11px; padding: 4px; }
+.compact-form .btn-primary { margin-top: 6px; padding: 4px 12px; font-size: 12px; background: #2a4; color: #fff; border: 0; cursor: pointer; }
+.compact-form .btn-warn { background: #a42; }
+.action-result { font-size: 11px; margin-top: 4px; padding: 2px 6px; }
+.action-result.action-ok { color: #4c8; }
+.action-result.action-err { color: #f86; }

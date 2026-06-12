@@ -209,13 +209,14 @@ function corsOriginCheck(origin, cb) {
 }
 
 // IBP is **structurally cross-origin**. Any Portal client from any
-// origin must be able to open a WS connection. Authentication is
-// bearer token (auth.token in the Socket.IO handshake), not cookies.
-// Browsers do not auto-send cookies cross-origin, so legacy
-// cookie-authed handlers already fail closed for unauthenticated
-// cross-origin sockets. The WS origin gate is therefore not load
-// bearing for security; it would only prevent legitimate Portal
-// clients from connecting.
+// origin must be able to open a WS connection — authentication for
+// those clients is the bearer token (auth.token in the Socket.IO
+// handshake). NOTE the cookie caveat: browsers DO auto-send the
+// session cookie on cross-site WS handshakes, so the WS auth layer
+// (transports/ws/websocket.js) honors the COOKIE token only when the
+// handshake Origin is this reality — that per-handshake gate is the
+// CSWSH defense, which is why this connection-level check can stay
+// open without being load-bearing for security.
 function wsOriginCheck(_origin, cb) {
   return cb(null, true);
 }

@@ -15,12 +15,13 @@
 // The Act row is created at seal-time by stamped.js, only when
 // cognition returned ok:true. On ok:false the Act row never
 // materializes — that's how "no Act row for the failed moment" is
-// structurally enforced. Tool-calls during the moment still stamp
-// Facts carrying actId; on a partial-then-fail those Facts persist
-// with an actId pointing to a row that never existed. That's the
-// honest audit: intermediate Facts happened inside a moment that
-// produced no final answer. See [[project-cognition-result-type]]
-// and seed/present/cognition/cognitionResult.js for the CognitionResult contract.
+// structurally enforced. Tool-calls during the moment do NOT write
+// Facts directly either: emitFact accumulates into summonCtx.deltaF
+// and the whole ΔF commits atomically with the Act at seal (Phase 2,
+// facts.js / 4-stamped.js). A failed moment therefore leaves NOTHING
+// on the chain — no orphan facts, no act row. See
+// seed/present/cognition/cognitionResult.js for the CognitionResult
+// contract.
 //
 // Two intake kinds reach assign:
 //
@@ -459,6 +460,10 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
         rootCorrelation: entry.rootCorrelation || entry.correlation,
         activeRole,
         orientation,
+        // Envelope intent — what the auth walk gated on. Without it
+        // the role handler can't dispatch on the caller's purpose
+        // (federation handshakes read this; see seed/SUMMON.md).
+        intent:          entry.intent || null,
         inReplyTo:       entry.inReplyTo,
         attachments:     entry.attachments,
         sentAt:          entry.sentAt,
@@ -613,7 +618,7 @@ async function planActRow(opts = {}) {
   let resolvedParentThread = null;
   if (!inReplyTo) {
     try {
-      const { getCurrentRootCorrelation } = await import("../../intake/scheduler.js");
+      const { getCurrentRootCorrelation } = await import("../intake/scheduler.js");
       const currentRoot = getCurrentRootCorrelation(String(beingIn));
       if (currentRoot && currentRoot !== resolvedRoot) {
         resolvedParentThread = currentRoot;

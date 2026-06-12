@@ -1,0 +1,656 @@
+{
+  "format": "treeos-canon-vectors",
+  "version": 1,
+  "note": "Conformance vectors for the content-addressed identity layer. hash = SHA-256(prev + '|' + canonical(content)), hex. canonical = JSON with recursively sorted object keys, undefined keys dropped, empty-object values dropped, empty arrays kept, array undefined -> null, NaN/Infinity -> null, Date -> ISO-8601 with milliseconds and Z (BSON DateTime must serialize the same way), numbers serialized as ECMAScript JSON.stringify does (-0 -> '0', 1e21 -> '1e+21'). fact content NEVER includes date (display witness) and normalizes absent branch to '0'. Any port must reproduce every byte here.",
+  "genesisPrev": "0000000000000000000000000000000000000000000000000000000000000000",
+  "canonicalize": [
+    {
+      "name": "key-sorting",
+      "input": {
+        "b": 1,
+        "a": 2,
+        "A": 3
+      },
+      "canonical": "{\"A\":3,\"a\":2,\"b\":1}"
+    },
+    {
+      "name": "nested-key-sorting",
+      "input": {
+        "z": {
+          "y": 2,
+          "x": 1
+        },
+        "a": [
+          {
+            "c": 3,
+            "b": 2
+          }
+        ]
+      },
+      "canonical": "{\"a\":[{\"b\":2,\"c\":3}],\"z\":{\"x\":1,\"y\":2}}"
+    },
+    {
+      "name": "empty-object-value-dropped",
+      "input": {
+        "a": {},
+        "b": 1,
+        "c": {
+          "d": {}
+        }
+      },
+      "canonical": "{\"b\":1}"
+    },
+    {
+      "name": "empty-array-kept",
+      "input": {
+        "a": [],
+        "b": 1
+      },
+      "canonical": "{\"a\":[],\"b\":1}"
+    },
+    {
+      "name": "null-kept",
+      "input": {
+        "a": null,
+        "b": 1
+      },
+      "canonical": "{\"a\":null,\"b\":1}"
+    },
+    {
+      "name": "array-null-kept",
+      "input": {
+        "a": [
+          1,
+          null,
+          "x"
+        ]
+      },
+      "canonical": "{\"a\":[1,null,\"x\"]}"
+    },
+    {
+      "name": "unicode-literal",
+      "input": {
+        "name": "héllo 世界 🌳",
+        "mix": "Ωμέγα"
+      },
+      "canonical": "{\"mix\":\"Ωμέγα\",\"name\":\"héllo 世界 🌳\"}"
+    },
+    {
+      "name": "string-escapes",
+      "input": {
+        "s": "a\"b\\c\nd\te\u0000"
+      },
+      "canonical": "{\"s\":\"a\\\"b\\\\c\\nd\\te\\u0000\"}"
+    },
+    {
+      "name": "number-negative-zero",
+      "input": {
+        "n": 0
+      },
+      "canonical": "{\"n\":0}"
+    },
+    {
+      "name": "number-large-exponent",
+      "input": {
+        "n": 1e+21
+      },
+      "canonical": "{\"n\":1e+21}"
+    },
+    {
+      "name": "number-max-safe-int",
+      "input": {
+        "n": 9007199254740991
+      },
+      "canonical": "{\"n\":9007199254740991}"
+    },
+    {
+      "name": "number-float",
+      "input": {
+        "n": 1.5,
+        "m": 0.1
+      },
+      "canonical": "{\"m\":0.1,\"n\":1.5}"
+    },
+    {
+      "name": "deep-mix",
+      "input": {
+        "a": [
+          {
+            "b": [
+              2,
+              {
+                "c": null
+              }
+            ]
+          }
+        ],
+        "d": "e"
+      },
+      "canonical": "{\"a\":[{\"b\":[2,{\"c\":null}]}],\"d\":\"e\"}"
+    },
+    {
+      "name": "top-level-array",
+      "input": [
+        3,
+        {
+          "b": 1,
+          "a": 2
+        },
+        null
+      ],
+      "canonical": "[3,{\"a\":2,\"b\":1},null]"
+    },
+    {
+      "name": "top-level-string",
+      "input": "plain",
+      "canonical": "\"plain\""
+    },
+    {
+      "name": "top-level-number",
+      "input": 42,
+      "canonical": "42"
+    },
+    {
+      "name": "top-level-null",
+      "input": null,
+      "canonical": "null"
+    }
+  ],
+  "computeHash": [
+    {
+      "name": "genesis-simple",
+      "prev": "0000000000000000000000000000000000000000000000000000000000000000",
+      "content": {
+        "verb": "do",
+        "n": 1
+      },
+      "canonical": "{\"n\":1,\"verb\":\"do\"}",
+      "hash": "732b6af5826d25caedadbe100fd2ba9c5c29f95141ecbf4cd50511307cc2264f"
+    },
+    {
+      "name": "key-order-invariant",
+      "prev": "0000000000000000000000000000000000000000000000000000000000000000",
+      "content": {
+        "n": 1,
+        "verb": "do"
+      },
+      "canonical": "{\"n\":1,\"verb\":\"do\"}",
+      "hash": "732b6af5826d25caedadbe100fd2ba9c5c29f95141ecbf4cd50511307cc2264f"
+    },
+    {
+      "name": "unicode-content",
+      "prev": "0000000000000000000000000000000000000000000000000000000000000000",
+      "content": {
+        "msg": "héllo 世界 🌳"
+      },
+      "canonical": "{\"msg\":\"héllo 世界 🌳\"}",
+      "hash": "f4e4b563b3999ea2dffe2c3997a7f488ee8ee619295102de02a9598e8c32f06e"
+    }
+  ],
+  "facts": [
+    {
+      "name": "minimal-branch-defaulted",
+      "prev": "0000000000000000000000000000000000000000000000000000000000000000",
+      "row": {
+        "beingId": "be1",
+        "verb": "do",
+        "action": "set-being",
+        "target": {
+          "kind": "being",
+          "id": "be1"
+        },
+        "seq": 1,
+        "params": {
+          "field": "qualities.x",
+          "value": 1
+        },
+        "result": null,
+        "actId": "act-1",
+        "sessionId": null,
+        "homeReality": null,
+        "wasRemote": false,
+        "date": "2026-06-11T00:00:00.000Z"
+      },
+      "content": {
+        "beingId": "be1",
+        "verb": "do",
+        "action": "set-being",
+        "target": {
+          "kind": "being",
+          "id": "be1"
+        },
+        "seq": 1,
+        "branch": "0",
+        "params": {
+          "field": "qualities.x",
+          "value": 1
+        },
+        "result": null,
+        "actId": "act-1",
+        "sessionId": null,
+        "homeReality": null,
+        "wasRemote": false
+      },
+      "canonical": "{\"actId\":\"act-1\",\"action\":\"set-being\",\"beingId\":\"be1\",\"branch\":\"0\",\"homeReality\":null,\"params\":{\"field\":\"qualities.x\",\"value\":1},\"result\":null,\"seq\":1,\"sessionId\":null,\"target\":{\"id\":\"be1\",\"kind\":\"being\"},\"verb\":\"do\",\"wasRemote\":false}",
+      "id": "c69794d1c8a66bb5a3347c69e2ac135e24d4e43307d88bb1625492f64dc904cf"
+    },
+    {
+      "name": "same-deed-different-date-same-id",
+      "prev": "0000000000000000000000000000000000000000000000000000000000000000",
+      "row": {
+        "beingId": "be1",
+        "verb": "do",
+        "action": "set-being",
+        "target": {
+          "kind": "being",
+          "id": "be1"
+        },
+        "seq": 1,
+        "params": {
+          "field": "qualities.x",
+          "value": 1
+        },
+        "result": null,
+        "actId": "act-1",
+        "sessionId": null,
+        "homeReality": null,
+        "wasRemote": false,
+        "date": "2030-01-01T12:34:56.789Z"
+      },
+      "content": {
+        "beingId": "be1",
+        "verb": "do",
+        "action": "set-being",
+        "target": {
+          "kind": "being",
+          "id": "be1"
+        },
+        "seq": 1,
+        "branch": "0",
+        "params": {
+          "field": "qualities.x",
+          "value": 1
+        },
+        "result": null,
+        "actId": "act-1",
+        "sessionId": null,
+        "homeReality": null,
+        "wasRemote": false
+      },
+      "canonical": "{\"actId\":\"act-1\",\"action\":\"set-being\",\"beingId\":\"be1\",\"branch\":\"0\",\"homeReality\":null,\"params\":{\"field\":\"qualities.x\",\"value\":1},\"result\":null,\"seq\":1,\"sessionId\":null,\"target\":{\"id\":\"be1\",\"kind\":\"being\"},\"verb\":\"do\",\"wasRemote\":false}",
+      "id": "c69794d1c8a66bb5a3347c69e2ac135e24d4e43307d88bb1625492f64dc904cf",
+      "expectSameIdAs": "minimal-branch-defaulted"
+    },
+    {
+      "name": "explicit-deep-branch",
+      "prev": "0000000000000000000000000000000000000000000000000000000000000000",
+      "row": {
+        "beingId": "be1",
+        "verb": "do",
+        "action": "set-being",
+        "target": {
+          "kind": "being",
+          "id": "be1"
+        },
+        "seq": 1,
+        "branch": "1a1",
+        "params": {
+          "field": "qualities.x",
+          "value": 1
+        },
+        "result": null,
+        "actId": "act-1",
+        "sessionId": null,
+        "homeReality": null,
+        "wasRemote": false
+      },
+      "content": {
+        "beingId": "be1",
+        "verb": "do",
+        "action": "set-being",
+        "target": {
+          "kind": "being",
+          "id": "be1"
+        },
+        "seq": 1,
+        "branch": "1a1",
+        "params": {
+          "field": "qualities.x",
+          "value": 1
+        },
+        "result": null,
+        "actId": "act-1",
+        "sessionId": null,
+        "homeReality": null,
+        "wasRemote": false
+      },
+      "canonical": "{\"actId\":\"act-1\",\"action\":\"set-being\",\"beingId\":\"be1\",\"branch\":\"1a1\",\"homeReality\":null,\"params\":{\"field\":\"qualities.x\",\"value\":1},\"result\":null,\"seq\":1,\"sessionId\":null,\"target\":{\"id\":\"be1\",\"kind\":\"being\"},\"verb\":\"do\",\"wasRemote\":false}",
+      "id": "e494b2d333cf13b58f7364fa3f461a77f1b8471c97a26cdf98e2f81c1db50556"
+    },
+    {
+      "name": "foldseq-present",
+      "prev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "row": {
+        "beingId": "be2",
+        "verb": "do",
+        "action": "create-matter",
+        "target": {
+          "kind": "matter",
+          "id": "m1"
+        },
+        "seq": 9,
+        "branch": "0",
+        "params": {
+          "name": "héllo 世界",
+          "qualities": {
+            "tags": [
+              "a",
+              "b"
+            ],
+            "note": null
+          }
+        },
+        "result": {
+          "ok": true
+        },
+        "truncated": false,
+        "actId": "act-9",
+        "sessionId": "sess-1",
+        "homeReality": "tree.example",
+        "wasRemote": true,
+        "foldSeq": 7
+      },
+      "content": {
+        "beingId": "be2",
+        "verb": "do",
+        "action": "create-matter",
+        "target": {
+          "kind": "matter",
+          "id": "m1"
+        },
+        "seq": 9,
+        "branch": "0",
+        "params": {
+          "name": "héllo 世界",
+          "qualities": {
+            "tags": [
+              "a",
+              "b"
+            ],
+            "note": null
+          }
+        },
+        "result": {
+          "ok": true
+        },
+        "truncated": false,
+        "actId": "act-9",
+        "sessionId": "sess-1",
+        "homeReality": "tree.example",
+        "wasRemote": true,
+        "foldSeq": 7
+      },
+      "canonical": "{\"actId\":\"act-9\",\"action\":\"create-matter\",\"beingId\":\"be2\",\"branch\":\"0\",\"foldSeq\":7,\"homeReality\":\"tree.example\",\"params\":{\"name\":\"héllo 世界\",\"qualities\":{\"note\":null,\"tags\":[\"a\",\"b\"]}},\"result\":{\"ok\":true},\"seq\":9,\"sessionId\":\"sess-1\",\"target\":{\"id\":\"m1\",\"kind\":\"matter\"},\"truncated\":false,\"verb\":\"do\",\"wasRemote\":true}",
+      "id": "642a6e2c037d5fdac9367e519d0fe2e046f662316ca23a7bcd500674f230b0dc"
+    },
+    {
+      "name": "foldseq-absent-differs",
+      "prev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "row": {
+        "beingId": "be2",
+        "verb": "do",
+        "action": "create-matter",
+        "target": {
+          "kind": "matter",
+          "id": "m1"
+        },
+        "seq": 9,
+        "branch": "0",
+        "params": {
+          "name": "héllo 世界",
+          "qualities": {
+            "tags": [
+              "a",
+              "b"
+            ],
+            "note": null
+          }
+        },
+        "result": {
+          "ok": true
+        },
+        "truncated": false,
+        "actId": "act-9",
+        "sessionId": "sess-1",
+        "homeReality": "tree.example",
+        "wasRemote": true
+      },
+      "content": {
+        "beingId": "be2",
+        "verb": "do",
+        "action": "create-matter",
+        "target": {
+          "kind": "matter",
+          "id": "m1"
+        },
+        "seq": 9,
+        "branch": "0",
+        "params": {
+          "name": "héllo 世界",
+          "qualities": {
+            "tags": [
+              "a",
+              "b"
+            ],
+            "note": null
+          }
+        },
+        "result": {
+          "ok": true
+        },
+        "truncated": false,
+        "actId": "act-9",
+        "sessionId": "sess-1",
+        "homeReality": "tree.example",
+        "wasRemote": true
+      },
+      "canonical": "{\"actId\":\"act-9\",\"action\":\"create-matter\",\"beingId\":\"be2\",\"branch\":\"0\",\"homeReality\":\"tree.example\",\"params\":{\"name\":\"héllo 世界\",\"qualities\":{\"note\":null,\"tags\":[\"a\",\"b\"]}},\"result\":{\"ok\":true},\"seq\":9,\"sessionId\":\"sess-1\",\"target\":{\"id\":\"m1\",\"kind\":\"matter\"},\"truncated\":false,\"verb\":\"do\",\"wasRemote\":true}",
+      "id": "1f25f39f516b265eb26b1f84cbcb0909bb3d842fb97c74c468d80ad1c0a265b7",
+      "expectDifferentIdFrom": "foldseq-present"
+    },
+    {
+      "name": "chained-second-fact",
+      "prev": "c69794d1c8a66bb5a3347c69e2ac135e24d4e43307d88bb1625492f64dc904cf",
+      "row": {
+        "beingId": "be1",
+        "verb": "do",
+        "action": "set-being",
+        "target": {
+          "kind": "being",
+          "id": "be1"
+        },
+        "seq": 2,
+        "branch": "0",
+        "params": {
+          "field": "qualities.x",
+          "value": 2
+        },
+        "result": null,
+        "actId": "act-2",
+        "sessionId": null,
+        "homeReality": null,
+        "wasRemote": false
+      },
+      "content": {
+        "beingId": "be1",
+        "verb": "do",
+        "action": "set-being",
+        "target": {
+          "kind": "being",
+          "id": "be1"
+        },
+        "seq": 2,
+        "branch": "0",
+        "params": {
+          "field": "qualities.x",
+          "value": 2
+        },
+        "result": null,
+        "actId": "act-2",
+        "sessionId": null,
+        "homeReality": null,
+        "wasRemote": false
+      },
+      "canonical": "{\"actId\":\"act-2\",\"action\":\"set-being\",\"beingId\":\"be1\",\"branch\":\"0\",\"homeReality\":null,\"params\":{\"field\":\"qualities.x\",\"value\":2},\"result\":null,\"seq\":2,\"sessionId\":null,\"target\":{\"id\":\"be1\",\"kind\":\"being\"},\"verb\":\"do\",\"wasRemote\":false}",
+      "id": "8c00386d4018a4d32fd233614dfa42a6526b45c34138349e9a58bc9d583e501b",
+      "note": "prev = the id of minimal-branch-defaulted; identity commits to history"
+    }
+  ],
+  "acts": [
+    {
+      "name": "act-minimal",
+      "prev": "0000000000000000000000000000000000000000000000000000000000000000",
+      "opening": {
+        "beingIn": "be1",
+        "beingOut": "be1",
+        "ibpAddress": null,
+        "activeRole": null,
+        "inboxMessageId": null,
+        "inReplyTo": null,
+        "parentThread": null,
+        "startMessage": {
+          "content": "first act",
+          "source": "be1"
+        },
+        "reality": "tree.example",
+        "branch": "0"
+      },
+      "content": {
+        "beingIn": "be1",
+        "beingOut": "be1",
+        "ibpAddress": null,
+        "activeRole": null,
+        "inboxMessageId": null,
+        "inReplyTo": null,
+        "parentThread": null,
+        "startMessage": {
+          "content": "first act",
+          "source": "be1"
+        },
+        "reality": "tree.example",
+        "branch": "0"
+      },
+      "canonical": "{\"activeRole\":null,\"beingIn\":\"be1\",\"beingOut\":\"be1\",\"branch\":\"0\",\"ibpAddress\":null,\"inReplyTo\":null,\"inboxMessageId\":null,\"parentThread\":null,\"reality\":\"tree.example\",\"startMessage\":{\"content\":\"first act\",\"source\":\"be1\"}}",
+      "id": "4f7060feeb83c5ed6b23c25899c103af1ce22a34f2458e2fe70753fc761815d5"
+    },
+    {
+      "name": "act-branch-defaulted",
+      "prev": "0000000000000000000000000000000000000000000000000000000000000000",
+      "opening": {
+        "beingIn": "be1",
+        "beingOut": "be1",
+        "ibpAddress": null,
+        "activeRole": null,
+        "inboxMessageId": null,
+        "inReplyTo": null,
+        "parentThread": null,
+        "startMessage": {
+          "content": "first act",
+          "source": "be1"
+        },
+        "reality": "tree.example"
+      },
+      "content": {
+        "beingIn": "be1",
+        "beingOut": "be1",
+        "ibpAddress": null,
+        "activeRole": null,
+        "inboxMessageId": null,
+        "inReplyTo": null,
+        "parentThread": null,
+        "startMessage": {
+          "content": "first act",
+          "source": "be1"
+        },
+        "reality": "tree.example",
+        "branch": "0"
+      },
+      "canonical": "{\"activeRole\":null,\"beingIn\":\"be1\",\"beingOut\":\"be1\",\"branch\":\"0\",\"ibpAddress\":null,\"inReplyTo\":null,\"inboxMessageId\":null,\"parentThread\":null,\"reality\":\"tree.example\",\"startMessage\":{\"content\":\"first act\",\"source\":\"be1\"}}",
+      "id": "4f7060feeb83c5ed6b23c25899c103af1ce22a34f2458e2fe70753fc761815d5",
+      "expectSameIdAs": "act-minimal"
+    },
+    {
+      "name": "act-unicode-roles",
+      "prev": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "opening": {
+        "beingIn": "be2",
+        "beingOut": "be3",
+        "ibpAddress": "tree.example#1a/garden@be3",
+        "activeRole": "gärtner",
+        "inboxMessageId": "corr-1",
+        "inReplyTo": "corr-0",
+        "parentThread": null,
+        "startMessage": {
+          "content": "héllo 世界 🌳",
+          "source": "be2"
+        },
+        "reality": "tree.example",
+        "branch": "1a"
+      },
+      "content": {
+        "beingIn": "be2",
+        "beingOut": "be3",
+        "ibpAddress": "tree.example#1a/garden@be3",
+        "activeRole": "gärtner",
+        "inboxMessageId": "corr-1",
+        "inReplyTo": "corr-0",
+        "parentThread": null,
+        "startMessage": {
+          "content": "héllo 世界 🌳",
+          "source": "be2"
+        },
+        "reality": "tree.example",
+        "branch": "1a"
+      },
+      "canonical": "{\"activeRole\":\"gärtner\",\"beingIn\":\"be2\",\"beingOut\":\"be3\",\"branch\":\"1a\",\"ibpAddress\":\"tree.example#1a/garden@be3\",\"inReplyTo\":\"corr-0\",\"inboxMessageId\":\"corr-1\",\"parentThread\":null,\"reality\":\"tree.example\",\"startMessage\":{\"content\":\"héllo 世界 🌳\",\"source\":\"be2\"}}",
+      "id": "bc1b12614ff9860563092a53e2bf274e9b0d876a36f7216bed095bbffa94bf8d"
+    },
+    {
+      "name": "act-chained-second",
+      "prev": "4f7060feeb83c5ed6b23c25899c103af1ce22a34f2458e2fe70753fc761815d5",
+      "opening": {
+        "beingIn": "be1",
+        "beingOut": "be1",
+        "ibpAddress": null,
+        "activeRole": null,
+        "inboxMessageId": null,
+        "inReplyTo": null,
+        "parentThread": null,
+        "startMessage": {
+          "content": "second act",
+          "source": "be1"
+        },
+        "reality": "tree.example",
+        "branch": "0"
+      },
+      "content": {
+        "beingIn": "be1",
+        "beingOut": "be1",
+        "ibpAddress": null,
+        "activeRole": null,
+        "inboxMessageId": null,
+        "inReplyTo": null,
+        "parentThread": null,
+        "startMessage": {
+          "content": "second act",
+          "source": "be1"
+        },
+        "reality": "tree.example",
+        "branch": "0"
+      },
+      "canonical": "{\"activeRole\":null,\"beingIn\":\"be1\",\"beingOut\":\"be1\",\"branch\":\"0\",\"ibpAddress\":null,\"inReplyTo\":null,\"inboxMessageId\":null,\"parentThread\":null,\"reality\":\"tree.example\",\"startMessage\":{\"content\":\"second act\",\"source\":\"be1\"}}",
+      "id": "9f6a047f37cdc8038e30a42bcd230f86e8c11c74bc5b083db86c17c4474b60b1",
+      "note": "prev = the id of act-minimal"
+    }
+  ]
+}

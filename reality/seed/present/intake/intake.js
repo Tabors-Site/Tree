@@ -153,18 +153,29 @@ export async function enqueueIntake(spaceId, beingId, entry) {
  *
  * @param {string} spaceId  the inbox-space (recipient's stance)
  * @param {string} beingId  the recipient
+ * @param {object} [opts]
+ * @param {Iterable<string>} [opts.excludeCorrelations]  correlations the
+ *        caller already attempted (or skipped: paused/deleted branch)
+ *        this pass. Excluding them HERE keeps one blocked top row from
+ *        starving the rest of the inbox — the pick falls through to the
+ *        next-best row instead of returning the same one forever.
  * @returns {Promise<null | { entry, index }>}
  */
-export async function pickNextIntake(spaceId, beingId) {
+export async function pickNextIntake(spaceId, beingId, opts = {}) {
   if (!beingId) return null;
-  // Priority order: HUMAN < GATEWAY < INTERACTIVE < BACKGROUND
-  // (lexical alpha matches desired order; HUMAN picked first). Within
-  // priority, oldest sentAt wins (FIFO).
+  const exclude = opts.excludeCorrelations
+    ? Array.from(opts.excludeCorrelations, String)
+    : [];
+  // Priority order: HUMAN, GATEWAY, INTERACTIVE, BACKGROUND — sorted
+  // on the numeric priorityRank (1..4) the fold writes, because the
+  // string enum sorts lexically to the WRONG order (BACKGROUND would
+  // pick before HUMAN). Within a rank, oldest sentAt wins (FIFO).
   const row = await InboxProjection.findOne({
     recipient:    String(beingId),
     ...(spaceId ? { inboxSpaceId: String(spaceId) } : {}),
+    ...(exclude.length ? { _id: { $nin: exclude } } : {}),
   })
-    .sort({ priority: 1, sentAt: 1 })
+    .sort({ priorityRank: 1, sentAt: 1 })
     .lean();
   if (!row) return null;
 

@@ -46,6 +46,7 @@ import { isExtensionBlockedAtSpace } from "../materials/space/extensionScope.js"
 import { authorizeViaRoles } from "./roleAuth.js";
 import { getSpaceRootId } from "../sprout.js";
 import { getRealityDomain } from "./address.js";
+import { resolveTargetBranch } from "./branchResolve.js";
 
 /**
  * Authorize a verb request.
@@ -132,12 +133,16 @@ export async function authorize(args) {
   // branch via the pointer registry — never literal "0"; set-pointer
   // can re-point main. Authenticated callers with no branch anywhere
   // are a perimeter threading bug: fail loud.
-  let targetBranch =
-    target?.branch ||
-    summonCtx?.targetBranch ||
-    summonCtx?.actorAct?.branch ||
-    args.actorBranch ||
-    null;
+  // Shared precedence (PORT-NOTES #10): target.branch →
+  // summonCtx.targetBranch → summonCtx.actorAct.branch → the caller's
+  // seated branch (args.actorBranch here). Identical chain to the verb
+  // layer's resolveBranchForFact, so the branch that GATES an act and
+  // the branch a fact STAMPS on can never diverge.
+  let targetBranch = resolveTargetBranch({
+    target,
+    summonCtx,
+    currentBranch: args.actorBranch,
+  });
   if (!targetBranch) {
     const isAnonymous = !identity?.beingId || identity?.name === "arrival";
     if (isAnonymous) {

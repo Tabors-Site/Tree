@@ -1,3 +1,5 @@
+import "../styles/audio-player.css";
+
 // audioPlayer.js . rung-3 Web Audio playback for fact-driven cues.
 //
 // One-shot sound playback parallel to skeletal animation. The drummer
@@ -36,7 +38,6 @@ const pendingLoads = new Map();     // URL . Promise<AudioBuffer | null>
 const pendingBytes = new Map();     // URL . ArrayBuffer (decoded once ctx exists)
 
 let _overlayEl = null;
-let _stylesInjected = false;
 
 // soundId . URL cache so playSound() can skip the manifest fetch on hot paths.
 const _idToUrl = new Map();
@@ -192,37 +193,6 @@ export async function playSound(soundId) {
   }
 }
 
-function injectOverlayStyles() {
-  if (_stylesInjected) return;
-  _stylesInjected = true;
-  const style = document.createElement("style");
-  style.id = "audio-unlock-overlay-style";
-  style.textContent = `
-    .audio-unlock-overlay {
-      position: fixed; inset: 0;
-      display: flex; align-items: center; justify-content: center;
-      background: rgba(8,10,9,0.45);
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
-      color: #c8d3cb;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 13px;
-      cursor: pointer;
-      z-index: 30;
-      transition: opacity 220ms ease-out;
-    }
-    .audio-unlock-overlay.fading { opacity: 0; pointer-events: none; }
-    .audio-unlock-card {
-      padding: 14px 22px;
-      background: rgba(10,13,12,0.94);
-      border: 1px solid #2c3a32;
-      border-radius: 6px;
-      box-shadow: 0 8px 28px rgba(0,0,0,0.55);
-      letter-spacing: 0.02em;
-    }
-  `;
-  document.head.appendChild(style);
-}
 
 /**
  * Inject a one-time "tap to enable sound" overlay. Click anywhere to
@@ -233,7 +203,6 @@ function injectOverlayStyles() {
 export function ensureUnlockOverlay() {
   if (isAudioUnlocked()) return;
   if (_overlayEl) return;
-  injectOverlayStyles();
 
   const el = document.createElement("div");
   el.className = "audio-unlock-overlay";

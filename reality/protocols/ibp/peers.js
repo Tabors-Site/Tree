@@ -2,8 +2,8 @@
 //
 // Canopy is the cross-place auth scheme: a place signs its outgoing IBP
 // envelopes with its Ed25519 key; the receiving place verifies against the
-// sender's known public key from this registry. See
-// [[project_canopy_folds_into_ibp]].
+// sender's known public key from this registry.
+//
 //
 // This file is intentionally slim. Liveness checks, redirect handling,
 // and the old `/canopy/info` heartbeat retired with the parallel

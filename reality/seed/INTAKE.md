@@ -44,29 +44,31 @@ Stored in `seed/past/projections/inbox/inboxProjection.js`. Authoritative schema
 | `sender` | `params.sender` | Envelope `from` stance |
 | `content` | `params.content` | Opaque payload |
 | `intent` | `params.intent` | Envelope intent; the receiver's role handler reads this |
-| `priority` | `params.priority` | `HUMAN` < `GATEWAY` < `INTERACTIVE` < `BACKGROUND` (lexical pick order) |
+| `priority` | `params.priority` | Enum label; pick order comes from `priorityRank`, not this string |
+| `priorityRank` | fold (`priorityRankOf`) | Numeric pick order: 1 `HUMAN`, 2 `GATEWAY`, 3 `INTERACTIVE`, 4 `BACKGROUND` |
 | `orientation` | `params.orientation` | `forward` (default), `half`, `inward` (self summons only) |
 | `rootCorrelation` | `params.rootCorrelation` | Conversation root; sever sweep target |
 | `inReplyTo` | `params.inReplyTo` | Which earlier summon this replies to |
 | `inboxSpaceId` | `params.inboxSpaceId` | Where the summon was addressed |
 | `sentAt` | `params.sentAt` | FIFO tiebreaker within a priority class |
 | `activeRole` | `params.activeRole` | Which role the moment runs under |
-| `branch` | `fact.branch` | Per branch isolation — never crosses |
+| `branch` | `fact.branch` | The branch the row's moment runs on; sever sweep deletes per branch |
 | `attachments` | `params.attachments` | Caller side metadata, opaque to seed |
 
 ## The scheduler picks rows
 
 ```
 scheduler tick / wake event
-  └─ pickNextIntake(spaceId, beingId)
-       └─ InboxProjection.findOne({recipient, branch})
-            .sort({priority: 1, sentAt: 1})
-                 ← row picked
+  └─ pickNextIntake(spaceId, beingId, {excludeCorrelations})
+       └─ InboxProjection.findOne({recipient, inboxSpaceId, _id ∉ excluded})
+            .sort({priorityRank: 1, sentAt: 1})
+                 ← row picked (runs on the row's own branch;
+                   paused/deleted branch rows are excluded per pass)
        └─ scheduler in-memory: claim correlation for this being
        └─ assign + run moment with the picked row as the summon
 ```
 
-Priority order: `HUMAN`, `GATEWAY`, `INTERACTIVE`, `BACKGROUND` (lexical asc matches the desired order, HUMAN first). Ties go to oldest `sentAt` (FIFO within class).
+Priority order: `HUMAN`, `GATEWAY`, `INTERACTIVE`, `BACKGROUND`. The pick sorts on the numeric `priorityRank` (1..4) the fold writes from the enum, because the strings sort lexically to the wrong order (`BACKGROUND` would pick before `HUMAN`). Ties go to oldest `sentAt` (FIFO within class).
 
 **Claim is in memory only.** The scheduler holds a `Map<beingId, currentCorrelation>` to prevent a second pick before the first moment seals. A crashed moment leaves the row in place and the next tick re picks it. Self healing.
 

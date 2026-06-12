@@ -123,26 +123,6 @@ export function wake(beingId, spaceId) {
   }
 }
 
-// DB-health gate. When Mongoose's connection has dropped (readyState
-// not 1), every query throws "Client must be connected before running
-// operations." Without this gate, a wake storm (the dance-floor seed
-// schedules ticks; each tick fans N dancer wakes) crashes every dancer
-// runLoop in parallel and re-fires on every tick, producing the cascade
-// the operator sees nonstop in logs. We pause picking until the
-// connection comes back; wakes still enqueue, and the next post-recovery
-// wake drains them.
-let _dbReadyState = null;
-async function _isDbHealthy() {
-  if (_dbReadyState !== null && _dbReadyState !== 1) {
-    // Stale value; re-check.
-    _dbReadyState = null;
-  }
-  if (_dbReadyState === 1) return true;
-  const { default: mongoose } = await import("../../seedReality/dbConfig.js");
-  _dbReadyState = mongoose.connection.readyState;
-  return _dbReadyState === 1;
-}
-
 let _dbDownNotedAt = 0;
 function _noteDbDownOnce() {
   const now = Date.now();
@@ -263,20 +243,26 @@ async function runLoop(beingId) {
   const state = _state.get(beingId);
   if (!state) return;
 
-  // DB-health gate. When Mongoose's readyState !== 1, every query
-  // will throw. Picking inbox rows under those conditions guarantees
-  // each runLoop pass crashes immediately; with a wake storm (the
-  // dance-floor schedules ticks that fan to N dancer wakes), N runLoops
-  // crash in parallel and the next tick refires them all. The cascade
-  // saturates logs faster than the terminal can flush. Pause picking
-  // until the connection comes back; wakes still enqueue, and the next
-  // wake after recovery drains them.
-  if (!(await _isDbHealthy())) {
-    _noteDbDownOnce();
-    return;  // run finally: clears running/controller, leaves wakeQueue
-  }
-
   try {
+    // DB-health gate. When Mongoose's readyState !== 1, every query
+    // will throw. Picking inbox rows under those conditions guarantees
+    // each runLoop pass crashes immediately; with a wake storm (the
+    // dance-floor schedules ticks that fan to N dancer wakes), N runLoops
+    // crash in parallel and the next tick refires them all. The cascade
+    // saturates logs faster than the terminal can flush. Pause picking
+    // until the connection comes back; wakes still enqueue, and the next
+    // wake after recovery drains them.
+    //
+    // INSIDE the try so the finally clears `running` — an early return
+    // before the try left running=true forever and wedged the being's
+    // lane until restart. Live readyState read every pass (dbConfig's
+    // isDbHealthy), never cached: the gate exists precisely for
+    // mid-run outages, which a sticky cache can't see.
+    const { isDbHealthy } = await import("../../seedReality/dbConfig.js");
+    if (!isDbHealthy()) {
+      _noteDbDownOnce();
+      return; // finally below clears running/controller, leaves wakeQueue
+    }
     // Process every space that has wake-queued pending work. The loop
     // drains the wakeQueue, then picks one per iteration. New wakes
     // arriving mid-loop just add to wakeQueue and the next iteration
@@ -310,22 +296,25 @@ async function runLoop(beingId) {
           // pick-attempts (or for entries we'd dedupe via
           // seenCorrelations) used to drain tokens during quiet periods
           // and force the rate-limit branch on legitimate traffic.
-          const picked = await pickNextIntake(spaceId, beingId);
+          // Seen correlations are excluded IN the pick query, so one
+          // blocked top row (failed cognition, paused branch) falls
+          // through to the next-best row instead of starving the rest
+          // of this space's inbox. Rows stay open in the projection
+          // (the model's correct shape for a moment that didn't seal);
+          // a future external wake gets a fresh run and a fresh attempt.
+          const picked = await pickNextIntake(spaceId, beingId, {
+            excludeCorrelations: seenCorrelations,
+          });
           if (!picked) break;
-          if (seenCorrelations.has(picked.entry.correlation)) {
-            // Already attempted in this run. Stop draining — the row
-            // stays open in the InboxProjection (the model's correct
-            // shape for a moment that didn't seal). A future external
-            // wake gets a fresh run and a fresh attempt.
-            break;
-          }
           // Pause / delete gate. Entries land on the picked branch;
           // if that branch is paused or deleted, running the moment
           // would just hit the wire-layer REALITY_PAUSED gate when
           // its downstream DOs fire, leaving the row open and
           // triggering a rate-limit storm. Mark the correlation seen
-          // so we don't loop on it, and break to let the next pass
-          // try once unpause / undelete lands.
+          // (the pick excludes it for the rest of this pass) and
+          // CONTINUE — rows on other branches behind it stay
+          // drainable. The next pass retries once unpause/undelete
+          // lands.
           //
           // EXCEPTION: branch-lifecycle ops must run on a paused or
           // deleted branch . they're the only way to revive one.
@@ -360,14 +349,14 @@ async function runLoop(beingId) {
               const { isBranchPaused } = await import("../../materials/branch/branches.js");
               if (await isBranchPaused(entryBranch)) {
                 seenCorrelations.add(picked.entry.correlation);
-                break;
+                continue;
               }
             }
             if (!isDeleteLifecycleOp) {
               const { isBranchDeleted } = await import("../../materials/branch/branches.js");
               if (await isBranchDeleted(entryBranch)) {
                 seenCorrelations.add(picked.entry.correlation);
-                break;
+                continue;
               }
             }
           }

@@ -85,15 +85,14 @@ export function capContent(s) {
  * the moment's full record (every Fact + the Act) lands as one
  * unit. PAST FIXED on the whole moment, not just the Act.
  *
- * Three commit shapes:
+ * Two commit shapes:
  *   - ΔF=0 (content-only act, e.g. an LLM that emitted prose via a
  *     speech tool): single-doc Act.create. No transaction needed.
- *   - ΔF=1, no replica set: logFact-then-Act.create. Two writes,
- *     each individually atomic. The moment's atomicity reduces to
- *     "both happened or neither" only via the per-reel lock for the
- *     fact + the Act's unique _id.
- *   - ΔF≥1, replica set: one session, withTransaction, append the
- *     whole ΔF + Act.create inside. All-or-nothing across the moment.
+ *   - ΔF≥1: one session, withTransaction, append the whole ΔF +
+ *     Act.create + the CAS'd act-head advance inside. All-or-nothing
+ *     across the moment. A replica set is REQUIRED — without one
+ *     sealAct throws REPLICA_SET_REQUIRED rather than degrade to a
+ *     two-write shape that could land facts without their act.
  *
  * Side effects (fire only after the Act lands):
  *   - closeInboxOnAnswer(answers)  evicts the matching
@@ -212,6 +211,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
 
   let inserted = null;
   let sortedReels = [];
+  let wasReplay = false;
 
   // ── ΔF=0: pure single-doc Act insert. No transaction needed. ──
   if (!Array.isArray(deltaF) || deltaF.length === 0) {
@@ -223,6 +223,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
       // once already; this is a replay.
       if (err?.code === 11000) {
         inserted = await Act.findById(actDoc._id).lean();
+        wasReplay = true;
         log.debug("Stamped", `act replay deduped (${String(actDoc._id).slice(0, 8)})`);
       }
       if (!inserted) {
@@ -261,6 +262,19 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
             // 2. Insert the Act row in the same session.
             const docs = await Act.create([actDoc], { session });
             inserted = docs[0];
+
+            // 3. Advance the act-chain head IN the transaction, CAS'd
+            // on the `p` this act chained off. If another act sealed
+            // on this (branch, being) between open and seal, the CAS
+            // throws ACT_CHAIN_MOVED and the whole seal aborts —
+            // facts, act row, head, nothing lands. The alternative
+            // (last-writer-wins after commit) silently forked the
+            // chain. The moment fails loudly; its inbox row stays
+            // open; the retry re-opens from the new head.
+            const { advanceActHead } = await import("../../past/act/actHash.js");
+            await advanceActHead(actDoc.branch || "0", actDoc.beingIn, actDoc._id, {
+              session, expectPrev: actDoc.p,
+            });
           });
         } finally {
           await session.endSession();
@@ -277,16 +291,28 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
 
   if (!inserted) return null;
 
-  // Advance the being's act-chain head — ONLY here, where the Act row
-  // actually landed (and in crossWorld's documented direct open).
-  // Crashed moments never reach this line, so the chain only ever
-  // points at acts that exist. The head feeds the NEXT act's `p`
-  // (assign reads it) and the branch/reality roots (chainRoots).
-  try {
+  // ΔF=0 path only: the transactional path advanced the head inside
+  // its session above. Advance here — where the Act row actually
+  // landed — CAS'd on this act's `p`. A mismatch means another act
+  // sealed between open and seal: the act row is already inserted
+  // (visible in audit) but taking the head would FORK the chain, so
+  // ACT_CHAIN_MOVED propagates to the caller instead. Crashed moments
+  // never reach this line, so the chain only ever points at acts
+  // that exist. The head feeds the NEXT act's `p` (assign reads it)
+  // and the branch/reality roots (chainRoots).
+  if (!Array.isArray(deltaF) || deltaF.length === 0) {
     const { advanceActHead } = await import("../../past/act/actHash.js");
-    await advanceActHead(actDoc.branch || "0", actDoc.beingIn, actDoc._id);
-  } catch (err) {
-    log.warn("Stamped", `actHead advance failed: ${err.message} (next act re-chains from the prior head)`);
+    try {
+      await advanceActHead(actDoc.branch || "0", actDoc.beingIn, actDoc._id, {
+        expectPrev: actDoc.p,
+      });
+    } catch (err) {
+      // On a REPLAY the head normally moved past this act long ago —
+      // the original seal advanced it. That's the dedup contract, not
+      // a fork. (If the original crashed before advancing, the CAS
+      // above just succeeded and healed it.)
+      if (!(wasReplay && /ACT_CHAIN_MOVED/.test(err.message))) throw err;
+    }
   }
 
   // Status transition: attempted → landed. For same-world and

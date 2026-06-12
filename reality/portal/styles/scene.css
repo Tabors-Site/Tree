@@ -1,0 +1,55 @@
+/* Glare vignette pulse used by the 3D scene's frozen-time visual cue. */
+@keyframes glare-pulse {
+  0%, 100% { opacity: 0.6; }
+  50%      { opacity: 1.0; }
+}
+
+/* Being-activity bubbles. Server-emitted activity (summoning / acting /
+   summoned / said) renders into a floating bubble above each being. */
+.being-activity {
+  position: fixed; pointer-events: none; z-index: 7;
+  transform: translate(-50%, -100%);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  max-width: 360px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.45);
+  display: flex; align-items: center; gap: 6px;
+}
+.being-activity-arrow {
+  color: #ffd479;
+  font-weight: 600;
+}
+.being-activity-arrow--in {
+  color: #9ec5ff;
+}
+.being-activity-dot {
+  color: #8fbf9f;
+  opacity: 0.8;
+}
+.being-activity-body {
+  color: #d4ddd6;
+}
+.being-activity--summoning {
+  background: rgba(38, 24, 12, 0.92);
+  border: 1px solid #6a4828;
+}
+.being-activity--summoned {
+  background: rgba(14, 22, 36, 0.92);
+  border: 1px solid #2e4866;
+}
+.being-activity--acting {
+  background: rgba(13, 30, 22, 0.88);
+  border: 1px solid #2c4a3a;
+  font-size: 10px;
+  padding: 2px 8px;
+}
+.being-activity--said {
+  background: rgba(10, 13, 12, 0.92);
+  border: 1px solid #2c3a32;
+  color: #c8d3cb;
+  white-space: pre-wrap;
+}

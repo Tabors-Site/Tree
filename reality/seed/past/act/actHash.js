@@ -71,15 +71,59 @@ export async function readActHead(branch, beingId) {
  * Advance the act-chain head — called ONLY where the Act row actually
  * lands (sealAct, crossWorld's direct open). Crashed moments never
  * reach here, so the chain only ever points at acts that exist.
+ *
+ * With `expectPrev` (the `p` the sealing act chained off) the advance
+ * is a COMPARE-AND-SET: it only lands if the head still equals
+ * expectPrev. A mismatch means another act sealed on this chain
+ * between this act's open and its seal — last-writer-wins here would
+ * silently FORK the chain (two acts sharing one parent, one of them
+ * unreachable from the head). Instead we throw ACT_CHAIN_MOVED;
+ * inside sealAct's transaction that aborts the whole seal (facts,
+ * act row, head — nothing lands), the moment fails loudly, the inbox
+ * row stays open, and the retry re-opens from the new head.
  */
-export async function advanceActHead(branch, beingId, actId, { session = null } = {}) {
-  const update = ActHead.updateOne(
-    { _id: actHeadKey(branch, beingId) },
+export async function advanceActHead(branch, beingId, actId, { session = null, expectPrev } = {}) {
+  const _id = actHeadKey(branch, beingId);
+  if (expectPrev === undefined) {
+    // Legacy unconditional advance (callers that own their serialization).
+    const update = ActHead.updateOne(
+      { _id },
+      { $set: { headHash: actId }, $setOnInsert: { branch, beingId: String(beingId) } },
+      { upsert: true },
+    );
+    if (session) update.session(session);
+    await update;
+    return;
+  }
+
+  const isGenesis = expectPrev == null || expectPrev === GENESIS_PREV;
+  const filter = isGenesis
+    ? { _id, $or: [{ headHash: null }, { headHash: { $exists: false } }] }
+    : { _id, headHash: expectPrev };
+  const q = ActHead.updateOne(
+    filter,
     { $set: { headHash: actId }, $setOnInsert: { branch, beingId: String(beingId) } },
-    { upsert: true },
+    // Upsert only for the first act (no head row yet). A non-genesis
+    // upsert would resurrect a filtered-out row and mask the fork.
+    { upsert: isGenesis },
   );
-  if (session) update.session(session);
-  await update;
+  if (session) q.session(session);
+  let moved = false;
+  try {
+    const r = await q;
+    moved = r.matchedCount === 0 && !(r.upsertedCount > 0 || r.upsertedId);
+  } catch (err) {
+    // Genesis upsert losing the insert race surfaces as a duplicate
+    // _id — same meaning: someone else advanced first.
+    if (err?.code === 11000) moved = true;
+    else throw err;
+  }
+  if (moved) {
+    throw new Error(
+      `ACT_CHAIN_MOVED: head of ${_id} is no longer ${String(expectPrev).slice(0, 12)} — ` +
+      `another act sealed between open and seal; refusing to fork the chain`,
+    );
+  }
 }
 
 /**

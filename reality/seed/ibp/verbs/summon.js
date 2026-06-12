@@ -217,46 +217,10 @@ export async function summonVerb(stance, message, opts = {}) {
     }
   }
   if (!toBeing) {
-    // Creation pathway. When the addressed @qualifier doesn't yet
-    // resolve to a Being row AND the message carries a creation spec
-    // AND the caller has identity, this SUMMON is a call-forth: the
-    // caller is summoning the @qualifier into existence. Authorize
-    // (via birthBeing's internal authorize() check) decides
-    // whether the caller's stance permits creation at the target
-    // space. The audit chain (Act row + BE.register Fact) is
-    // stamped by summonCreateBeing.
-    const content = validatedMessage.content;
-    if (
-      identity &&
-      typeof content === "object" && content !== null &&
-      content.kind === "create-being" &&
-      content.spec && typeof content.spec === "object"
-    ) {
-      const parentBeingId = content.spec.parentBeingId || identity.beingId;
-      const homeSpace = content.spec.homeSpace || resolved.spaceId || null;
-      const spec = {
-        ...content.spec,
-        name:      content.spec.name      || qualifier,
-        // parentBeingId defaults to the asker: a SUMMON-create's
-        // parent is who summoned the being forth. The being-tree
-        // invariant is "only I-Am has null parentBeingId"; honoring
-        // identity.beingId here keeps the chain intact when the
-        // caller didn't explicitly set it.
-        parentBeingId: parentBeingId ? String(parentBeingId) : null,
-        // homeSpace defaults to where the being was summoned at
-        // (resolved.spaceId). createBeingWithHome will fall back to
-        // the parent's home if neither homeSpace nor homeParent is
-        // set; this keeps the legacy "summoned at X → home is X"
-        // behavior intact for the wire path.
-        homeSpace: homeSpace ? String(homeSpace) : null,
-      };
-      const result = await summonCreateBeing({ spec, identity, summonCtx: opts.summonCtx || null });
-      return {
-        status:  "created",
-        beingId: result.beingId,
-        name:    result.name,
-      };
-    }
+    // No creation pathway here. SUMMON is being-to-being
+    // communication; minting a being is a BE op (birthBeing in
+    // materials/being/identity/birth.js). An unresolvable
+    // @qualifier is simply unavailable.
     throw new IbpError(
       IBP_ERR.ROLE_UNAVAILABLE,
       `No being addressable as "@${qualifier}" at this position`,

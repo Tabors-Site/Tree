@@ -7,6 +7,7 @@
 
 import * as THREE from "three";
 import { CSS3DRenderer, CSS3DObject } from "three/addons/renderers/CSS3DRenderer.js";
+import "../styles/scene.css";
 import { showLabel, hideLabel, setSkyClock, hideSkyClock, setHud } from "./ui.js";
 import { loadModel, preloadModels, collectModelIds } from "./assetResolver.js";
 
@@ -415,7 +416,7 @@ export class Scene {
       // Fresh entry into the doorway volume — attempt the walk.
       const selfStance = "@" + this._selfName;
       const target = p.target;
-      this._client.do(selfStance, "set-being:position", { field: "position", value: target })
+      this._client.do(selfStance, "set-being", { field: "position", value: target })
         .then(() => {
           // Successful transit . the next descriptor SEE will reposition
           // the player at the foreign side; no further action here.
@@ -3512,17 +3513,6 @@ function _showGlareVignette(on) {
         rgba(10, 13, 12, 0) 70%);
       animation: glare-pulse 2.4s ease-in-out infinite;
     `;
-    if (!document.getElementById("glare-style")) {
-      const style = document.createElement("style");
-      style.id = "glare-style";
-      style.textContent = `
-        @keyframes glare-pulse {
-          0%, 100% { opacity: 0.6; }
-          50%      { opacity: 1.0; }
-        }
-      `;
-      document.head.appendChild(style);
-    }
     document.body.appendChild(el);
     _glareVignette = el;
   } else {
@@ -3551,7 +3541,6 @@ function _showGlareVignette(on) {
 //   said      . the being closed its act with a reply. Rendered as
 //               the speech-bubble body of `<content>`.
 function _renderActivity(el, activity) {
-  _ensureActivityStyles();
   el.className = "being-activity";
   const kind = activity?.kind || "acting";
   el.classList.add(`being-activity--${kind}`);
@@ -3603,63 +3592,6 @@ function _renderActivity(el, activity) {
   el.textContent = activity?.content || "";
 }
 
-let _activityStylesInjected = false;
-function _ensureActivityStyles() {
-  if (_activityStylesInjected) return;
-  _activityStylesInjected = true;
-  const style = document.createElement("style");
-  style.id = "being-activity-style";
-  style.textContent = `
-    .being-activity {
-      position: fixed; pointer-events: none; z-index: 7;
-      transform: translate(-50%, -100%);
-      padding: 4px 10px;
-      border-radius: 6px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      font-size: 11px;
-      line-height: 1.4;
-      max-width: 360px;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.45);
-      display: flex; align-items: center; gap: 6px;
-    }
-    .being-activity-arrow {
-      color: #ffd479;
-      font-weight: 600;
-    }
-    .being-activity-arrow--in {
-      color: #9ec5ff;
-    }
-    .being-activity-dot {
-      color: #8fbf9f;
-      opacity: 0.8;
-    }
-    .being-activity-body {
-      color: #d4ddd6;
-    }
-    .being-activity--summoning {
-      background: rgba(38, 24, 12, 0.92);
-      border: 1px solid #6a4828;
-    }
-    .being-activity--summoned {
-      background: rgba(14, 22, 36, 0.92);
-      border: 1px solid #2e4866;
-    }
-    .being-activity--acting {
-      background: rgba(13, 30, 22, 0.88);
-      border: 1px solid #2c4a3a;
-      font-size: 10px;
-      padding: 2px 8px;
-    }
-    .being-activity--said {
-      background: rgba(10, 13, 12, 0.92);
-      border: 1px solid #2c3a32;
-      color: #c8d3cb;
-      white-space: pre-wrap;
-    }
-  `;
-  document.head.appendChild(style);
-}
 
 function worldToScreen(pos, camera, renderer) {
   const v = pos.clone();

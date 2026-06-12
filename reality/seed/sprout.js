@@ -126,6 +126,13 @@ export async function withIAmAct(sourceLabel, fn) {
   if (typeof fn !== "function") {
     throw new Error("withIAmAct: fn must be a function");
   }
+  // Open→seal under the per-(branch, being) act-chain lock: the act's
+  // identity chains off the head read here, so concurrent helpers on
+  // the I-Am's chain (position persists, manifest writes, circuit
+  // trips, delegate births) must serialize or the second seal forks
+  // the chain. Reentrant per async context; see actChainLock.js.
+  const { withActChainLock } = await import("./past/act/actChainLock.js");
+  return withActChainLock("0", I_AM, async () => {
   const now = new Date();
 
   const { getRealityDomain } = await import("./ibp/address.js");
@@ -190,6 +197,7 @@ export async function withIAmAct(sourceLabel, fn) {
     );
   }
   return result;
+  });
 }
 
 /**
@@ -223,6 +231,11 @@ export async function withBeingAct(beingId, sourceLabel, branch, fn) {
   if (typeof fn !== "function") {
     throw new Error("withBeingAct: fn must be a function");
   }
+  // Same open→seal serialization as withIAmAct (see there). The
+  // scheduler's moments are NOT under this lock — their cross-check
+  // is the CAS'd head advance at seal.
+  const { withActChainLock } = await import("./past/act/actChainLock.js");
+  return withActChainLock(branch, beingId, async () => {
   const now = new Date();
 
   const { getRealityDomain } = await import("./ibp/address.js");
@@ -279,6 +292,7 @@ export async function withBeingAct(beingId, sourceLabel, branch, fn) {
     );
   }
   return result;
+  });
 }
 
 // `withBatch` is intentionally NOT defined here. Earlier sketches

@@ -17,6 +17,7 @@
 // `spaceId` field on creation.
 
 import { applySetQualities, applySetField, applyCreateMatter, applyMove, applyPurgeContent } from "../reducerHelpers.js";
+import { DELETED } from "../space/heavenSpaces.js";
 
 /**
  * Empty initial state. Today: empty — the fold derives qualities +
@@ -71,4 +72,21 @@ export function reduce(state, fact) {
   }
 
   return next === state ? { ...state } : next;
+}
+
+/**
+ * Gone-predicate the fold engine consults after reducing. Ended
+ * matter (end-matter writes spaceId=DELETED; the row stays on the
+ * reel for audit) must TOMBSTONE its projection slot: tombstoning
+ * frees the per-branch unique name index (partial filter
+ * tombstoned:false) and drops the slot from findByName, so a new
+ * matter can take the name and ended matter stops resolving. Without
+ * this the name stays locked forever while the chain says "created"
+ * — the chain and the fold cache disagree.
+ *
+ * @param {object} state
+ * @returns {boolean}
+ */
+export function isGone(state) {
+  return state?.spaceId === DELETED;
 }

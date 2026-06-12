@@ -1,3 +1,5 @@
+import "../styles/llm-panel.css";
+
 // llm-panel.js — the Place > LLM (and Reality > LLM) tab.
 //
 // Surfaces LLM connection management + the 7-step resolution chain
@@ -32,7 +34,6 @@ import { flat } from "./host.js";
 
 export async function renderLlmPanel(body, action, opByName, { refreshView, mode } = {}) {
   body.innerHTML = "";
-  injectStyles();
 
   const desc = action.values?.descriptor || flat.state?.descriptor || {};
   const reality = flat.state?.discovery?.reality
@@ -555,22 +556,3 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
-function injectStyles() {
-  if (document.getElementById("llm-panel-styles")) return;
-  const s = document.createElement("style");
-  s.id = "llm-panel-styles";
-  s.textContent = `
-    .llm-chosen { font-size: 13px; margin-top: 4px; }
-    .llm-chain-list { list-style: none; padding: 0; margin: 6px 0 0; font-size: 11px; font-family: ui-monospace, monospace; }
-    .llm-chain-list li { padding: 2px 4px; border-left: 2px solid #333; margin: 1px 0; }
-    .llm-chain-list li.llm-chosen-row { border-left-color: #4c8; color: #cdf; background: #0a1a14; }
-    .llm-source { color: #8ab; }
-    .llm-conn-card { border-left: 3px solid #2a4; padding: 4px 8px; margin: 4px 0; background: #1118; border-radius: 2px; }
-    .llm-conn-head { font-size: 12px; }
-    .llm-conn-meta { font-size: 11px; margin-top: 1px; }
-    .llm-conn-slots { font-size: 11px; color: #8ab; margin-top: 2px; }
-    .check-row label { display: flex; align-items: center; cursor: pointer; user-select: none; font-size: 12px; }
-    .check-row input { margin-right: 4px; }
-  `;
-  document.head.appendChild(s);
-}

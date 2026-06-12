@@ -34,7 +34,7 @@ export async function handleSee(socket, env, ack) {
     // see what they were joining. authorize sees beingId:null and
     // applies ARRIVAL_PROPS (arrival: true); the relaxed place-root
     // SEE default `requires: {}` admits. Per-position rules at
-    // private trees can still tighten. See [[project-arrival-see]].
+    // private trees can still tighten..
     const identity = socket.beingId
       ? { beingId: socket.beingId, name: socket.name }
       : { beingId: null, name: "arrival" };

@@ -18,6 +18,7 @@
 
 import log from "../../seedReality/log.js";
 import { IbpError, IBP_ERR } from "../protocol.js";
+import { resolveTargetBranch } from "../branchResolve.js";
 
 /**
  * Normalize an identity input. Callers may pass a bare string (a
@@ -114,17 +115,13 @@ export function refuseHistoricalWrite(verb, target, opts) {
  * surfaces immediately at the offending call site. No silent "0".
  */
 export function resolveBranchForFact(summonCtx, currentBranch, verb) {
-  const targetBranch = summonCtx?.targetBranch;
-  if (typeof targetBranch === "string" && targetBranch.length > 0) {
-    return targetBranch;
-  }
-  const actorBranch = summonCtx?.actorAct?.branch;
-  if (typeof actorBranch === "string" && actorBranch.length > 0) {
-    return actorBranch;
-  }
-  if (typeof currentBranch === "string" && currentBranch.length > 0) {
-    return currentBranch;
-  }
+  // Shared precedence (PORT-NOTES #10). Fact emission carries no parsed
+  // `target` here, so the chain reduces to summonCtx.targetBranch →
+  // actorAct.branch → currentBranch — identical to before.
+  const resolved = resolveTargetBranch({ summonCtx, currentBranch });
+  if (resolved) return resolved;
+  // Caller-specific null tail: a missing branch at the verb perimeter
+  // is a threading bug — fail loud.
   const frame = captureCallerFrame();
   throw new IbpError(
     IBP_ERR.MISSING_BRANCH || "MISSING_BRANCH",

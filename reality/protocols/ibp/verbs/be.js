@@ -64,6 +64,38 @@ import { dispatchTransportAct } from "../../../seed/present/intake/transportAct.
 import { emitToBeingRoom, emitToBeing } from "../../../seed/ibp/pushChannel.js";
 import { IBP_EVENT, buildTransportActReply } from "../events.js";
 
+// WS-side throttle for the unauthenticated entry ops, mirroring the
+// HTTP auth limiter (transports/http/auth.js): connect 10 attempts
+// per 15 minutes, birth 5 per hour, keyed per IP. Without this the
+// HTTP limits were a fiction — the same bcrypt brute force and
+// registration flooding ran unthrottled over the socket, and every
+// birth writes permanent facts into the append-only chain. Fixed
+// window per (op, ip); entries expire lazily on the next check.
+const BE_RATE = {
+  connect: { max: 10, windowMs: 15 * 60 * 1000 },
+  birth:   { max: 5,  windowMs: 60 * 60 * 1000 },
+};
+const _beRateBuckets = new Map(); // "op:ip" -> { count, resetAt }
+function checkBeRate(op, ip) {
+  const rule = BE_RATE[op];
+  if (!rule) return true;
+  const key = `${op}:${ip}`;
+  const now = Date.now();
+  let b = _beRateBuckets.get(key);
+  if (!b || now >= b.resetAt) {
+    b = { count: 0, resetAt: now + rule.windowMs };
+    _beRateBuckets.set(key, b);
+    // Lazy sweep so the map doesn't grow unboundedly across IPs.
+    if (_beRateBuckets.size > 10000) {
+      for (const [k, v] of _beRateBuckets) {
+        if (now >= v.resetAt) _beRateBuckets.delete(k);
+      }
+    }
+  }
+  b.count += 1;
+  return b.count <= rule.max;
+}
+
 // Cherub's beingId. Looked up lazily on first BE; cached for the
 // rest of the process lifetime. Cherub is a scripted place-being
 // planted by seedDelegates.js at boot.
@@ -89,6 +121,17 @@ export async function handleBe(socket, env, ack) {
     const operation = payload?.op || payload?.operation;
     if (!operation) {
       throw new IbpError(IBP_ERR.INVALID_INPUT, "BE payload must include `op`");
+    }
+
+    if (operation === "connect" || operation === "birth") {
+      const ip = socket?.handshake?.address
+        || socket?.request?.socket?.remoteAddress || "unknown";
+      if (!checkBeRate(operation, ip)) {
+        throw new IbpError(
+          IBP_ERR.FORBIDDEN,
+          `Too many ${operation} attempts from this address; retry later`,
+        );
+      }
     }
 
     const { op: _op, operation: _operation, identity: _identityField, correlation: clientCorrelation, ...opPayload } = payload || {};

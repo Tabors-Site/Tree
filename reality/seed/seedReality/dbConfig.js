@@ -68,11 +68,10 @@ mongoose.connection.on("error", (err) => {
   log.error("DB", `MongoDB connection error: ${err.message}`);
 });
 
-process.on("SIGTERM", () => {
-  mongoose.connection.close(false).then(() => {
-    log.verbose("DB", "MongoDB connection closed (SIGTERM)");
-  });
-});
+// No SIGTERM handler here. begin.js owns shutdown ordering: it flushes
+// in-flight host lanes FIRST, then closes this connection. A second
+// handler here raced that sequence — closing Mongo out from under the
+// lanes still sealing their last acts.
 
 // readyState: 0 disconnected, 1 connected, 2 connecting, 3 disconnecting.
 // The conversation loop checks this before entering the tool loop so a

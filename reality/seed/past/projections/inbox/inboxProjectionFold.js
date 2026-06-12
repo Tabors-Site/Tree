@@ -31,7 +31,7 @@
 // failures self-heal on the next fold round. Handlers are idempotent
 // — upsert and delete-by-key both tolerate replay.
 
-import InboxProjection from "./inboxProjection.js";
+import InboxProjection, { priorityRankOf } from "./inboxProjection.js";
 import { registerCrossCuttingHandler } from "../../../present/beats/2-fold/foldEngine.js";
 import { assertBranchOrThrow } from "../../../materials/projections.js";
 
@@ -69,6 +69,7 @@ async function handleSummon(fact /*, type, id*/) {
         attachments:     params.attachments || undefined,
         intent:          params.intent || null,
         priority:        params.priority || "INTERACTIVE",
+        priorityRank:    priorityRankOf(params.priority || "INTERACTIVE"),
         orientation:     params.orientation || "forward",
         rootCorrelation: params.rootCorrelation || params.correlation,
         inReplyTo:       params.inReplyTo || null,
@@ -90,7 +91,14 @@ async function handleBeSever(fact /*, type, id*/) {
   if (fact?.verb !== "be" || fact?.action !== "sever") return;
   const rootCorrelation = fact.params?.rootCorrelation;
   if (!rootCorrelation) return;
-  await InboxProjection.deleteMany({ rootCorrelation });
+  // Scoped to the sever-fact's branch: severing a thread on one
+  // branch must not evict a sibling branch's open rows (INTAKE.md's
+  // "per branch isolation — never crosses"). A thread inherited
+  // across a fork is severed per branch, by a sever fact on each.
+  await InboxProjection.deleteMany({
+    rootCorrelation,
+    branch: assertBranchOrThrow(fact.branch, "inboxProjectionFold(be:sever)"),
+  });
 }
 
 // Register both fact-driven handlers with the fold engine. The Act-seal

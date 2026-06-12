@@ -43,7 +43,12 @@ function setAuthCookie(res, req, token) {
   res.cookie("token", token, {
     httpOnly: true,
     secure:   !isLocal,
-    sameSite: isLocal ? "Lax" : "None",
+    // Lax everywhere. The portal is same-origin (served by this
+    // reality), so None bought nothing except sending the session
+    // cookie on every cross-site request — the CSWSH ingredient.
+    // Programmatic cross-origin clients authenticate with the
+    // handshake/bearer token, never the cookie.
+    sameSite: "Lax",
     domain:   cookieDomain(req),
     maxAge:   expiryDays * 24 * 60 * 60 * 1000,
     path:     "/",
@@ -55,7 +60,7 @@ function clearAuthCookie(res, req) {
   res.clearCookie("token", {
     httpOnly: true,
     secure:   !isLocal,
-    sameSite: isLocal ? "Lax" : "None",
+    sameSite: "Lax",
     domain:   cookieDomain(req),
     path:     "/",
   });

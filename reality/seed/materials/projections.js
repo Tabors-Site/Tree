@@ -293,9 +293,15 @@ export async function initProjection(type, id, branch, next) {
  * @param {string} id
  * @param {string} branch
  * @param {number} atFoldedSeq
+ * @param {object} [opts]
+ * @param {object} [opts.state]  the terminal fold state to record alongside
+ *        the tombstone. When the gone-state IS the truth (ended matter
+ *        whose spaceId folded to DELETED), consumers should still read it
+ *        from the slot — the tombstone is cache-control, not amnesia.
+ *        Omitted: state is left as-is (release/death paths that only flag).
  * @returns {Promise<void>}
  */
-export async function tombstoneProjection(type, id, branch, atFoldedSeq) {
+export async function tombstoneProjection(type, id, branch, atFoldedSeq, opts = {}) {
   if (!id) throw new Error("tombstoneProjection: id is required");
   assertType(type);
   assertBranch(branch);
@@ -303,15 +309,17 @@ export async function tombstoneProjection(type, id, branch, atFoldedSeq) {
     throw new Error("tombstoneProjection: atFoldedSeq must be a number");
   }
   const _id = projectionKey(branch, type, id);
+  const set = {
+    tombstoned: true,
+    foldedSeq:  atFoldedSeq,
+    position:   null,
+  };
+  if (opts.state && typeof opts.state === "object") set.state = opts.state;
   await Projection.updateOne(
     { _id },
     {
-      $set: {
-        tombstoned: true,
-        foldedSeq:  atFoldedSeq,
-        position:   null,
-      },
-      $setOnInsert: { _id, branch, type, id, state: {} },
+      $set: set,
+      $setOnInsert: { _id, branch, type, id, ...(opts.state ? {} : { state: {} }) },
     },
     { upsert: true },
   );

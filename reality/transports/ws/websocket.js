@@ -20,7 +20,8 @@
 import log from "../../seed/seedReality/log.js";
 import { getInternalConfigValue } from "../../seed/internalConfig.js";
 import { Server } from "socket.io";
-import { decodeToken } from "../../seed/materials/being/identity.js";
+import { verifyTokenStrict } from "../../seed/materials/being/identity.js";
+import { getRealityDomain } from "../../seed/ibp/address.js";
 import { getRealityConfigValue } from "../../seed/realityConfig.js";
 import { setPushChannel, IBP_EVENT } from "../../seed/ibp/pushChannel.js";
 import { noteSocketConnected, noteSocketDisconnected } from "../../seed/materials/host/host.js";
@@ -173,18 +174,45 @@ export function initWebSocketServer(httpServer, originPolicy) {
     });
 
     socket.beingId = null;
+    // CSWSH gate: the browser auto-sends the session COOKIE on any
+    // cross-site WebSocket handshake, so the cookie token is only
+    // honored when the handshake's Origin is this reality (hostname
+    // match; no-Origin = non-browser client, no auto-cookie risk).
+    // handshake.auth.token is always honored — a hostile page cannot
+    // read or attach another site's token programmatically.
     const cookieToken =
       socket.request.headers.cookie?.match(/token=([^;]+)/)?.[1];
     const handshakeToken = socket.handshake.auth?.token;
-    const token = cookieToken || handshakeToken;
+    const origin = socket.handshake.headers?.origin || null;
+    let cookieOriginOk = true;
+    if (cookieToken && origin) {
+      try {
+        const originHost = new URL(origin).hostname.toLowerCase();
+        const realityHost = getRealityDomain().toLowerCase();
+        const isLocalOrigin =
+          originHost === "localhost" || originHost === "127.0.0.1" || originHost === "0.0.0.0";
+        cookieOriginOk = originHost === realityHost || isLocalOrigin;
+      } catch {
+        cookieOriginOk = false;
+      }
+      if (!cookieOriginOk) {
+        log.warn("WS", `cookie auth refused for cross-origin handshake from ${origin} (${ip})`);
+      }
+    }
+    const token = (cookieOriginOk ? cookieToken : null) || handshakeToken;
     if (token) {
-      const decoded = decodeToken(token);
-      if (decoded) {
-        socket.beingId = decoded.beingId;
-        socket.name = decoded.name;
+      // STRICT verification (one DB read): decode + the being still
+      // exists (not tombstoned) + token postdates any revocation
+      // (qualities.auth.tokensInvalidBefore). The verbs are WS-only,
+      // so a password change or revocation must bite HERE, not just
+      // on the HTTP middleware.
+      const verified = await verifyTokenStrict(token, { loadBeing: false }).catch(() => null);
+      if (verified) {
+        socket.beingId = verified.beingId;
+        socket.name = verified.name;
         socket.jwt = token;
       } else {
-        log.debug("WS", `Invalid token from ${ip}`);
+        log.debug("WS", `Invalid/revoked token from ${ip}`);
       }
     }
     // Anonymous binding (seed/RolesAreAuth.md "Anonymous arrival floor").

@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "start": "node plant.js",
-    "test": "node --test --experimental-test-module-mocks test/*.test.js",
+    "test": "node .test/scripts/verify-canon-vectors.js && node .test/scripts/verify-branch-resolution.js",
+    "test:e2e": "bash .test/e2e/run-e2e.sh",
     "build:portal": "cd portal && npm install && npm run build",
     "dev:portal": "cd portal && npm run dev",
     "postinstall": "cd portal && npm install && npm run build"

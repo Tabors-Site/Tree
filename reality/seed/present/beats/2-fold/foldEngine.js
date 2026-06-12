@@ -22,15 +22,45 @@
 
 import Fact from "../../../past/fact/fact.js";
 import * as reducers from "../../../materials/reducers.js";
-import { loadProjection, saveProjection, initProjection } from "../../../materials/projections.js";
+import { loadProjection, saveProjection, initProjection, tombstoneProjection } from "../../../materials/projections.js";
 import {
   resolveBranchLineage,
   getBranchPoint,
   isMain,
   MAIN,
 } from "../../../materials/branch/branches.js";
+import log from "../../../seedReality/log.js";
 
 const REEL_TYPES = new Set(["being", "space", "matter"]);
+
+// Name-collision self-heal. The per-branch unique index on
+// (branch, type, state.name) is a backstop on a CACHE — when two live
+// reels of one type collide on name (the pre-stamp check is per-op,
+// no cross-reel lock), the facts have already committed and the chain
+// is the truth. Refusing to materialize the second slot would poison
+// that reel forever (every fold re-throws E11000; the aggregate never
+// resolves). Instead: materialize under a deconflicted name carrying
+// a visible conflict marker. Deterministic across re-folds while the
+// winner holds the name; if the winner is later tombstoned, a rebuild
+// re-claims the original name — the cache heals toward the chain.
+function isDupKeyError(err) {
+  return err?.code === 11000 || err?.cause?.code === 11000;
+}
+// E11000 carries the offending index in its message. Only the NAME
+// index warrants deconfliction; a dup on _id is Mongo's known
+// concurrent-upsert race on the same slot (benign — the slot exists
+// now, a plain retry matches it).
+function isNameDupError(err) {
+  return isDupKeyError(err) && /state\.name/.test(String(err?.message || err?.cause?.message || ""));
+}
+function deconflictName(state, id) {
+  const base = typeof state.name === "string" ? state.name : "unnamed";
+  return {
+    ...state,
+    name: `${base}~conflict-${String(id).slice(0, 8)}`,
+    nameConflict: { name: base },
+  };
+}
 
 // Cross-cutting projection handlers. Per-aggregate reducers build
 // the aggregate's own state from its own reel; cross-cutting handlers
@@ -265,15 +295,45 @@ export async function fold(type, id, opts = {}) {
     if (!skipCrossCutting) await dispatchCrossCutting(f, type, id);
   }
   const newFoldedSeq = tail[tail.length - 1].seq;
+
+  // Gone-in-this-branch (reducer-owned predicate, e.g. ended matter's
+  // spaceId=DELETED sentinel). Tombstone instead of saving: the slot
+  // leaves the per-branch unique name index (freeing the name for
+  // re-creation) and findByName/listByType stop returning it. The
+  // reel keeps the full history; only the cache slot is closed.
+  if (typeof reducer.isGone === "function" && reducer.isGone(state)) {
+    // Record the terminal state WITH the tombstone: the gone-state
+    // (e.g. ended matter's spaceId=DELETED) is the chain's truth, and
+    // consumers reading the slot should see it. The tombstone frees
+    // the name index and drops the slot from findByName/listByType.
+    await tombstoneProjection(type, id, branch, newFoldedSeq, { state });
+    return { state, foldedSeq: newFoldedSeq, tombstoned: true };
+  }
+
   const position = state.position !== undefined ? state.position : undefined;
 
   // CAS: only advance if no one beat us. On failure, the next fold
   // catches up. Per-branch slot — main and #1 don't contend.
-  await saveProjection(
-    type, id, branch,
-    { state, foldedSeq: newFoldedSeq, position },
-    slot.foldedSeq,
-  );
+  try {
+    await saveProjection(
+      type, id, branch,
+      { state, foldedSeq: newFoldedSeq, position },
+      slot.foldedSeq,
+    );
+  } catch (err) {
+    if (!isNameDupError(err)) throw err;
+    state = deconflictName(state, id);
+    log.warn(
+      "Fold",
+      `name collision folding ${type} ${String(id).slice(0, 8)} on #${branch}; ` +
+      `materialized as "${state.name}" (see state.nameConflict)`,
+    );
+    await saveProjection(
+      type, id, branch,
+      { state, foldedSeq: newFoldedSeq, position },
+      slot.foldedSeq,
+    );
+  }
 
   return { state, foldedSeq: newFoldedSeq };
 }
@@ -347,8 +407,35 @@ export async function rebuild(type, id, opts = {}) {
     return { state, foldedSeq: lastSeq };
   }
 
+  // Gone-in-this-branch — same predicate as the hot fold path. A cold
+  // rebuild of a lineage ending in the gone state must land a
+  // TOMBSTONED slot, not a live one: initProjection of an ended
+  // matter's name would re-occupy the unique name index and E11000
+  // any same-named successor.
+  if (typeof reducer.isGone === "function" && reducer.isGone(state)) {
+    await tombstoneProjection(type, id, branch, lastSeq, { state });
+    return { state, foldedSeq: lastSeq, tombstoned: true };
+  }
+
   const position = state.position !== undefined ? state.position : undefined;
-  await initProjection(type, id, branch, { state, foldedSeq: lastSeq, position });
+  try {
+    await initProjection(type, id, branch, { state, foldedSeq: lastSeq, position });
+  } catch (err) {
+    if (isDupKeyError(err) && !isNameDupError(err)) {
+      // _id upsert race: another fold built this slot concurrently.
+      // Retry as-is — the slot exists now, the update matches it.
+      await initProjection(type, id, branch, { state, foldedSeq: lastSeq, position });
+      return { state, foldedSeq: lastSeq };
+    }
+    if (!isNameDupError(err)) throw err;
+    state = deconflictName(state, id);
+    log.warn(
+      "Fold",
+      `name collision rebuilding ${type} ${String(id).slice(0, 8)} on #${branch}; ` +
+      `materialized as "${state.name}" (see state.nameConflict)`,
+    );
+    await initProjection(type, id, branch, { state, foldedSeq: lastSeq, position });
+  }
 
   return { state, foldedSeq: lastSeq };
 }

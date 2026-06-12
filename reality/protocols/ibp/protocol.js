@@ -5,7 +5,7 @@
 // envelope and call dispatchIbp; the response comes back via the ack
 // callback the transport supplies.
 //
-// Wire shape ([[project_ibp_wire_shape]]):
+// Wire shape:
 //
 //   { id, verb, address, payload, identity? }
 //
@@ -24,8 +24,8 @@
 // target place, signs the envelope with this reality's private key, and
 // POSTs to the peer's `/ibp/<verb>/<addr>` endpoint. The peer's
 // verifyIncoming middleware authenticates against the RealityPeer registry
-// before re-entering dispatchIbp on the receiving side. See
-// [[project_canopy_folds_into_ibp]].
+// before re-entering dispatchIbp on the receiving side.
+//
 
 import log from "../../seed/seedReality/log.js";
 import { handleSee } from "./verbs/see.js";

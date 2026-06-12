@@ -1,6 +1,6 @@
 // TreeOS IBP envelope helpers.
 //
-// Canonical wire shape per [[project_ibp_wire_shape]]:
+// Canonical wire shape:
 //
 //   { id, verb, address, payload, identity? }
 //

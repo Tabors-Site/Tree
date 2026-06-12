@@ -77,6 +77,13 @@ const InboxProjectionSchema = new mongoose.Schema({
     default: "INTERACTIVE",
   },
 
+  // Numeric rank the scheduler sorts on (1=HUMAN, highest priority,
+  // picked first). The string enum does NOT sort to the right order
+  // lexically (BACKGROUND < GATEWAY < HUMAN < INTERACTIVE), so the
+  // fold writes this rank from the priority and the pick sorts on it.
+  // Default 3 = INTERACTIVE's rank.
+  priorityRank: { type: Number, default: 3, index: true },
+
   // Orientation (INNER-FOLD §1): which way the recipient's moment
   // folds when this summon is picked. External summons carry forward;
   // self-summons may carry half or inward. Read by assign and put on
@@ -101,21 +108,32 @@ const InboxProjectionSchema = new mongoose.Schema({
 
   // Branch this summon belongs to. Summons can never cross branches
   // (the IBP parse-time bridge gate rejects mixed-branch addresses),
-  // so every row is single-branch. The scheduler keys its pick on
-  // (recipient, branch) so a being summoned on #1 doesn't see their
-  // #2 inbox in their #1 fold. Default "0" so pre-branch rows are
-  // legible after migration.
+  // so every row is single-branch. The pick reads across branches
+  // (each picked row runs its moment ON its own branch; paused or
+  // deleted branches are skipped per pass via the pick's exclusion
+  // set) — branch scoping matters on the WRITE side: the sever sweep
+  // deletes only rows on the sever-fact's branch.
   branch:          { type: String, default: "0", index: true },
 });
 
-// The scheduler's pick query — per being + branch, by priority and arrival.
-// HUMAN < GATEWAY < INTERACTIVE < BACKGROUND lexically, which matches
-// the desired priority order (HUMAN first). Sort by sentAt to break
-// ties oldest-first (FIFO within priority class).
-InboxProjectionSchema.index({ recipient: 1, branch: 1, priority: 1, sentAt: 1 });
+// The scheduler's pick query — per recipient + inbox space, by
+// priorityRank then arrival. The numeric rank (1=HUMAN..4=BACKGROUND)
+// is what makes HUMAN pick first; the string enum sorts lexically to
+// the WRONG order, so never sort on `priority` directly. sentAt breaks
+// ties oldest-first (FIFO within a priority class).
+InboxProjectionSchema.index({ recipient: 1, inboxSpaceId: 1, priorityRank: 1, sentAt: 1 });
 
 // Sever sweep target.
 InboxProjectionSchema.index({ rootCorrelation: 1 }, { sparse: true });
+
+// Priority → numeric rank (lower = picked first). The ONE place the
+// enum-to-rank mapping lives; the fold writes priorityRank from it.
+export const PRIORITY_RANK = Object.freeze({
+  HUMAN: 1, GATEWAY: 2, INTERACTIVE: 3, BACKGROUND: 4,
+});
+export function priorityRankOf(priority) {
+  return PRIORITY_RANK[priority] ?? 3;
+}
 
 const InboxProjection = mongoose.model(
   "InboxProjection",

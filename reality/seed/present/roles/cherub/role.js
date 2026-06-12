@@ -96,7 +96,7 @@ async function birthHandler({ payload, ctx }) {
   // The I_AM already exists (planted by ensureSpaceRoot at boot) and
   // I (cherub) was summoned forth by the I_AM at genesis. The very
   // first human registration is admitted through me like every other
-  // one . I summon them forth via SUMMON.create-being. Two things
+  // one . I mint them via the BE birth pathway (birthBeing). Two things
   // differ from the subsequent path: their being-tree parent is the
   // I_AM directly (so they become the first heaven authority), and
   // beforeRegister is bypassed because hook listeners are not yet

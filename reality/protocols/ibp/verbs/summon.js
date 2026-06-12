@@ -1,6 +1,6 @@
 // TreeOS IBP — SUMMON verb (wire adapter).
 //
-// Consumes the unified envelope per [[project_ibp_wire_shape]]:
+// Consumes the unified envelope:
 //
 //   { id, verb: "summon", address (stance), payload: { message, ...threading } }
 //
@@ -16,8 +16,8 @@
 // broadcaster, delegates to `summonVerb` in seed/ibp/verbs/summon.js. The
 // scheduler invokes the broadcaster when async summoning completes;
 // the reply places on every socket the asker has connected (via the
-// being-room). See [[project_four_verbs_one_execution]] and
-// [[project_protocol_transport_separation]].
+// being-room).
+//
 
 import log from "../../../seed/seedReality/log.js";
 import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";

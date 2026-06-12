@@ -1,0 +1,11 @@
+.inbox-card { border-left: 3px solid #2a4a8c; padding: 6px 10px; margin: 6px 0; background: #1118; border-radius: 2px; }
+.inbox-head { font-size: 13px; }
+.inbox-meta { font-size: 11px; margin-top: 2px; }
+.inbox-body { font-size: 12px; margin: 6px 0; line-height: 1.4; }
+.inbox-body pre.inbox-json { max-height: 200px; overflow: auto; padding: 4px; background: #0a0a0a; border: 1px solid #222; font-size: 11px; }
+.inbox-actions { display: flex; gap: 6px; align-items: center; margin-top: 6px; flex-wrap: wrap; }
+.inbox-reply { flex: 1; min-width: 120px; background: #0c0c0c; color: #ccc; border: 1px solid #333; padding: 3px 6px; font-size: 12px; }
+.btn-ok      { background: #2a6e3a; color: #fff; border: 0; cursor: pointer; }
+.btn-warn    { background: #6e2a2a; color: #fff; border: 0; cursor: pointer; }
+.btn-neutral { background: #444;    color: #fff; border: 0; cursor: pointer; }
+.btn-disabled { opacity: 0.5; cursor: not-allowed; }

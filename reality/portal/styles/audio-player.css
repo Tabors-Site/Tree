@@ -1,0 +1,22 @@
+.audio-unlock-overlay {
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(8,10,9,0.45);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #c8d3cb;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  cursor: pointer;
+  z-index: 30;
+  transition: opacity 220ms ease-out;
+}
+.audio-unlock-overlay.fading { opacity: 0; pointer-events: none; }
+.audio-unlock-card {
+  padding: 14px 22px;
+  background: rgba(10,13,12,0.94);
+  border: 1px solid #2c3a32;
+  border-radius: 6px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.55);
+  letter-spacing: 0.02em;
+}

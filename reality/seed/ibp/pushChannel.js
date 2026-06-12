@@ -23,7 +23,7 @@
 import log from "../seedReality/log.js";
 
 // The single wire event name for all IBP traffic in both directions
-// (see [[project_ibp_summon_unified_event]], [[project_ibp_wire_shape]]).
+//
 // Seed declares it here — the push channel is the seed-side wire
 // boundary — so callers don't reach across into protocols/. The
 // protocol-side adapter (protocols/ibp/protocol.js) declares the same

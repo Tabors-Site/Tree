@@ -80,6 +80,7 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
   // here because this open IS the row landing.
   const { computeActId, readActHead, advanceActHead } =
     await import("../past/act/actHash.js");
+  const { withActChainLock } = await import("../past/act/actChainLock.js");
   const opening = {
     beingIn: actor.beingId,
     beingOut: actor.beingId,
@@ -95,30 +96,35 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
     reality,
     branch: actor.branch,
   };
-  const p = await readActHead(actor.branch, actor.beingId);
-  const actId = computeActId(p, opening);
-  await Act.create({
-    _id: actId,
-    p,
-    beingIn: actor.beingId,
-    beingOut: actor.beingId,
-    ibpAddress: envelope.address,
-    activeRole: null,
-    inboxMessageId: null,
-    inReplyTo: null,
-    rootCorrelation: actId,
-    parentThread: null,
-    receivedAt: now,
-    stampedAt: now,
-    startMessage: {
-      content: `cross-reality ${envelope.verb}`,
-      source: actor.beingId,
-    },
-    reality,
-    branch: actor.branch,
-    status: "attempted",
+  // Open + advance under the act-chain lock (read-compute-write on
+  // the head); the CAS'd advance is the cross-check.
+  const actId = await withActChainLock(actor.branch, actor.beingId, async () => {
+    const p = await readActHead(actor.branch, actor.beingId);
+    const id = computeActId(p, opening);
+    await Act.create({
+      _id: id,
+      p,
+      beingIn: actor.beingId,
+      beingOut: actor.beingId,
+      ibpAddress: envelope.address,
+      activeRole: null,
+      inboxMessageId: null,
+      inReplyTo: null,
+      rootCorrelation: id,
+      parentThread: null,
+      receivedAt: now,
+      stampedAt: now,
+      startMessage: {
+        content: `cross-reality ${envelope.verb}`,
+        source: actor.beingId,
+      },
+      reality,
+      branch: actor.branch,
+      status: "attempted",
+    });
+    await advanceActHead(actor.branch, actor.beingId, id, { expectPrev: p });
+    return id;
   });
-  await advanceActHead(actor.branch, actor.beingId, actId);
   // Stamper live loop parity: this direct open is the one seal path
   // that bypasses sealAct, so fire afterAct here too (cross-reality
   // attempt acts push to stamper-space subscribers like any other).

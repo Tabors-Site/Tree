@@ -213,13 +213,45 @@ export async function logFact(input, opts = {}) {
     normalizedTarget.id &&
     branch !== "0"
   ) {
+    // Load the scope module separately from running the check. A load
+    // failure is a genuine pre-bootstrap signal (branch infra not yet
+    // loaded) and is safe to swallow. But the check ITSELF must FAIL
+    // CLOSED: if getBranchScopeSpaceId / isTargetInBranchScope throws
+    // (a resolver bug, a missing branch row), the write is REFUSED,
+    // not silently allowed. A scope gate that fails open is no gate —
+    // an out-of-scope write would slip through on any internal error.
+    let scopeMod = null;
     try {
-      const { isTargetInBranchScope, getBranchScopeSpaceId } = await import(
-        "../../materials/branch/branchScope.js",
-      );
-      const scopeSpaceId = await getBranchScopeSpaceId(branch);
+      scopeMod = await import("../../materials/branch/branchScope.js");
+    } catch {
+      scopeMod = null; // pre-bootstrap: branch infra not loaded
+    }
+    if (scopeMod) {
+      const { isTargetInBranchScope, getBranchScopeSpaceId } = scopeMod;
+      let scopeSpaceId;
+      try {
+        scopeSpaceId = await getBranchScopeSpaceId(branch);
+      } catch (err) {
+        throw new IbpError(
+          IBP_ERR.FORBIDDEN,
+          `SCOPE_CHECK_FAILED: could not resolve scope for branch "#${branch}" ` +
+          `(${err.message}); refusing the write rather than bypass the gate.`,
+          { branch, target: normalizedTarget },
+        );
+      }
       if (scopeSpaceId) {
-        const allowed = await isTargetInBranchScope(branch, normalizedTarget);
+        let allowed;
+        try {
+          allowed = await isTargetInBranchScope(branch, normalizedTarget);
+        } catch (err) {
+          throw new IbpError(
+            IBP_ERR.FORBIDDEN,
+            `SCOPE_CHECK_FAILED: scope test threw for branch "#${branch}" ` +
+            `target ${normalizedTarget.kind}:${normalizedTarget.id} ` +
+            `(${err.message}); refusing the write rather than bypass the gate.`,
+            { branch, target: normalizedTarget, scopeSpaceId },
+          );
+        }
         if (!allowed) {
           throw new IbpError(
             IBP_ERR.FORBIDDEN,
@@ -232,10 +264,6 @@ export async function logFact(input, opts = {}) {
           );
         }
       }
-    } catch (err) {
-      // Re-throw IbpErrors (the SCOPE_VIOLATION above); swallow any
-      // module-load failures as pre-bootstrap signals.
-      if (err instanceof IbpError) throw err;
     }
   }
 
@@ -573,7 +601,7 @@ async function prevHashAt(kind, id, prevSeq, branch, session = null) {
 // Multi-fact ΔF: requires a Mongo replica set (multi-document
 // transactions are a replica-set feature). sealFacts opens one
 // session, acquires per-reel locks in sorted order (deadlock
-// prevention — see [[project-sealfacts-atomic-seal]]), appends each
+// prevention), appends each
 // fact inside the session, commits as one transaction. If any
 // append fails, the transaction aborts and zero facts land. PAST
 // FIXED holds end-to-end.

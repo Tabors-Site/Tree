@@ -26,7 +26,7 @@
 // point the fold answers "detached" and being-parent reads stop. The
 // detach is asymmetric: only the being parent can re-attach (a later
 // be:credential-attach Fact on the being parent's reel naming the
-// target). See [[project-credential-model]].
+// target)..
 
 import Fact from "../../../past/fact/fact.js";
 
