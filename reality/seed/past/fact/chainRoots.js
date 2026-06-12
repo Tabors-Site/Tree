@@ -244,6 +244,33 @@ registerSeeOperation("verify-reel", {
   },
 });
 
+registerSeeOperation("verify-act", {
+  description: "Verify one act's seal signature self-certifyingly (the signer id IS the key; \"i-am\" verifies against the reality key). The wire form of the signed-act badge.",
+  args: {
+    actId: { type: "text", label: "Act id", required: true },
+  },
+  handler: async ({ args }) => {
+    const actId = String(args?.actId || "");
+    const notFound = { actId, found: false, signed: false, verified: false, reason: "not-found" };
+    if (!actId) return notFound;
+    const { default: Act } = await import("../act/act.js");
+    const act = await Act.findById(actId).lean();
+    if (!act) return notFound;
+    const { verifyActSig } = await import("../act/actSig.js");
+    const { getRealityDomain } = await import("../../ibp/address.js");
+    const v = await verifyActSig(act, { localReality: getRealityDomain() });
+    return {
+      actId,
+      found: true,
+      signed: !!act.sig?.value,
+      by: act.sig?.by || null,
+      alg: act.sig?.alg || null,
+      verified: v.ok,
+      reason: v.reason,
+    };
+  },
+});
+
 registerSeeOperation("chain-root", {
   description: "The chain's root hashes: the reality root, or one branch's root.",
   args: {

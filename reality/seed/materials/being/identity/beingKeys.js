@@ -161,3 +161,50 @@ export function verifyWithPublicKeyPem(publicKeyPem, payloadObj, sigB64) {
 export function keyIdFromPublicKeyPem(publicKeyPem) {
   return encodeKeyId(rawPubFromPem(publicKeyPem));
 }
+
+// ── seed-form keys (export/import) ──
+//
+// An ed25519 private key IS a 32-byte seed; PKCS8 wraps it in a fixed
+// 16-byte DER prefix. The seed form is what BIP39 puts on paper
+// (mnemonic.js) and what key-import rebuilds a keypair from. Same key,
+// three skins: PEM (wire/export), seed (paper), keypair (live).
+const PKCS8_ED25519_PREFIX = Buffer.from("302e020100300506032b657004220420", "hex");
+
+/** The raw 32-byte seed of an ed25519 private-key PEM. */
+export function seedFromPrivateKeyPem(privateKeyPem) {
+  const jwk = crypto.createPrivateKey(privateKeyPem).export({ format: "jwk" });
+  if (jwk.crv !== "Ed25519" || !jwk.d) {
+    throw new Error("seedFromPrivateKeyPem: not an ed25519 private key");
+  }
+  const seed = Buffer.from(jwk.d, "base64url");
+  if (seed.length !== 32) throw new Error("seedFromPrivateKeyPem: bad seed length");
+  return seed;
+}
+
+/**
+ * Rebuild the full keypair from a 32-byte seed. The inverse of
+ * seedFromPrivateKeyPem: same seed → same key → same beingId,
+ * deterministically, on any host.
+ * @returns {{ publicKeyPem: string, privateKeyPem: string, beingId: string }}
+ */
+export function keypairFromSeed(seed) {
+  const buf = Buffer.from(seed);
+  if (buf.length !== 32) throw new Error("keypairFromSeed: seed must be 32 bytes");
+  const priv = crypto.createPrivateKey({
+    key: Buffer.concat([PKCS8_ED25519_PREFIX, buf]),
+    format: "der",
+    type: "pkcs8",
+  });
+  const pub = crypto.createPublicKey(priv);
+  const publicKeyPem = pub.export({ type: "spki", format: "pem" });
+  return {
+    publicKeyPem,
+    privateKeyPem: priv.export({ type: "pkcs8", format: "pem" }),
+    beingId: encodeKeyId(rawPubFromPem(publicKeyPem)),
+  };
+}
+
+/** Rebuild the full keypair (incl. beingId) from a private-key PEM. */
+export function keypairFromPrivateKeyPem(privateKeyPem) {
+  return keypairFromSeed(seedFromPrivateKeyPem(privateKeyPem));
+}

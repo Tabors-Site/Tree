@@ -70,10 +70,15 @@
 
 import mongoose from "mongoose";
 import bcrypt from "bcrypt";
-import { v4 as uuidv4 } from "uuid";
 
 const BeingSchema = new mongoose.Schema({
-  _id: { type: String, required: true, default: uuidv4 },
+  // A being's id IS its ed25519 public key (the did:key "z..." form;
+  // beingKeys.js), minted at birth and supplied explicitly by every
+  // creation path (birth.js, sprout.js for the I_AM literal, graft.js).
+  // NO uuid default: an id-less insert must fail loudly via `required`
+  // rather than silently fabricate a non-pubkey identity that can never
+  // sign or be self-certifyingly verified.
+  _id: { type: String, required: true },
 
   // The being's name. Drives the @qualifier in stance addresses
   // (treeos.ai/<path>@<name>). Federation crosses places using

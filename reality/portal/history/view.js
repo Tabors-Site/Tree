@@ -141,7 +141,11 @@ export function createView() {
   // ── Loading ─────────────────────────────────────────────────────
 
   async function load({ reset = false, older = false } = {}) {
-    if (!ctx?.client || loading) return;
+    if (!ctx?.client) return;
+    // Dedupe only the pager: a scope switch or reset must always start
+    // its load even mid-flight (loadSeq makes the latest one win), or
+    // a click during the mount load silently keeps the old feed.
+    if (loading && older) return;
     const src = sourceAddress();
     if (!src) {
       entries = [];
@@ -194,6 +198,7 @@ export function createView() {
     if (!ts) return null;
     const facts = Array.isArray(a.facts) ? a.facts : [];
     return {
+      id: a._id ? String(a._id) : null,
       ts: typeof ts === "string" ? ts : new Date(ts).toISOString(),
       actor: a.startMessage?.source || null,
       action: a.startMessage?.content || null,
@@ -335,10 +340,34 @@ export function createView() {
     if (e.sig) {
       // Signed at the seal: the signature commits the act + its facts.
       // "i-am" = the reality key itself; otherwise the signer's key id.
+      // Click asks the reality to VERIFY it (the verify-act SEE op,
+      // self-certifying against the signer id) — signed is a claim,
+      // verified is a check.
       const g = document.createElement("span");
       g.className = "hv-sig";
       g.textContent = e.sig.by === "i-am" ? "✓ reality-signed" : "✓ signed";
-      g.title = `sealed with ${e.sig.alg} by ${e.sig.by}`;
+      g.title = `sealed with ${e.sig.alg} by ${e.sig.by}\nclick to verify the signature`;
+      if (e.id) {
+        g.addEventListener("click", async (ev) => {
+          ev.stopPropagation();
+          g.textContent = "verifying…";
+          try {
+            const r = await ctx.client.see("verify-act", { args: { actId: e.id } });
+            if (r?.verified) {
+              g.className = "hv-sig hv-sig-verified";
+              g.textContent = "✓ verified";
+              g.title = `signature verified (${r.reason}) against ${r.by}`;
+            } else {
+              g.className = "hv-sig hv-sig-bad";
+              g.textContent = "✗ not verified";
+              g.title = `verification failed: ${r?.reason || "unknown"}`;
+            }
+          } catch (err) {
+            g.textContent = e.sig.by === "i-am" ? "✓ reality-signed" : "✓ signed";
+            g.title = `could not verify: ${err?.code || err?.message || err}`;
+          }
+        });
+      }
       head.appendChild(g);
     }
     body.appendChild(head);

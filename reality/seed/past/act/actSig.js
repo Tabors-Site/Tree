@@ -72,6 +72,20 @@ export async function loadSigningKey(beingId, branch) {
     if (!isKeyId(beingId)) return null;            // not a local key-bearing being
     const { loadProjection } = await import("../../materials/projections.js");
     const slot = await loadProjection("being", beingId, normBranch(branch));
+    // Secondary unlock (IDENTITY.md): a HUMAN's acts are signed only
+    // while their signing session is open. Locked human → unsigned
+    // seal, visibly so (the portal badges it). Scripted/LLM beings and
+    // I_AM are exempt — no hand to type a secret. The TTL slides on
+    // every signed seal so active humans stay unlocked. Cognition
+    // lives at qualities.cognition.defaultKind (not a schema field).
+    const _q = slot?.state?.qualities;
+    const _cog = _q instanceof Map ? _q.get("cognition") : _q?.cognition;
+    if (_cog?.defaultKind === "human") {
+      const { isSigningUnlocked, touchSigning } =
+        await import("../../materials/being/identity/signingSession.js");
+      if (!isSigningUnlocked(beingId)) return null;
+      touchSigning(beingId);
+    }
     const q = slot?.state?.qualities;
     const auth = q instanceof Map ? q.get("auth") : q?.auth;
     const enc = auth?.privateKeyEnc;

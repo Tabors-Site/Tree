@@ -71,6 +71,76 @@ export function dispatchAndWait(carrier, msg) {
 }
 
 /**
+ * Dispatch an IBP envelope and resolve with the MOMENT'S RESULT, not
+ * the wire ack. BE (and transport-act DO/SUMMON) acks `{ correlation,
+ * status: "accepted" }` immediately and pushes the real result later
+ * through the carrier's IBP event — which a real socket receives and
+ * the HTTP stub used to drop (no-op emit). This helper captures that
+ * push and resolves with it, so HTTP callers (the auth shims, the CLI
+ * behind them) get the same result a WS caller does.
+ *
+ * Synchronous acks (errors, non-transport verbs) resolve directly.
+ */
+export function dispatchAndAwaitResult(carrier, msg, { timeoutMs = 30_000 } = {}) {
+  return new Promise((resolve) => {
+    let settled = false;
+    let expecting = null;        // correlation we await, once acked
+    const buffered = [];         // pushes that raced ahead of the ack
+    const finish = (payload) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(payload);
+    };
+    const timer = setTimeout(() => finish({
+      id:     msg?.id || null,
+      status: "error",
+      error:  { code: IBP_ERR.INTERNAL, message: "Timed out awaiting the moment's result" },
+    }), timeoutMs);
+    timer.unref?.();
+
+    const tryConsume = (p) => {
+      if (!p || !expecting || p.correlation !== expecting) return false;
+      if (p.result && typeof p.result === "object" && p.result.error) {
+        finish({
+          id:     msg?.id || null,
+          status: "error",
+          error:  { code: p.result.error.code || IBP_ERR.INTERNAL, message: p.result.error.message || "Moment failed" },
+        });
+      } else {
+        finish({ id: msg?.id || null, status: "ok", data: p.result });
+      }
+      return true;
+    };
+
+    // The push path checks carrier.connected before emitting.
+    carrier.connected = true;
+    carrier.emit = (event, envelope) => {
+      const p = envelope?.payload;
+      if (!p) return;
+      if (!tryConsume(p)) buffered.push(p);
+    };
+
+    Promise.resolve()
+      .then(() => dispatchIbp(carrier, msg, (ackPayload) => {
+        if (settled) return;
+        if (ackPayload?.status !== "ok" || ackPayload?.data?.status !== "accepted") {
+          // Synchronous result or refusal — nothing more is coming.
+          return finish(ackPayload);
+        }
+        expecting = ackPayload.data.correlation || null;
+        if (!expecting) return finish(ackPayload);
+        for (const p of buffered.splice(0)) if (tryConsume(p)) return;
+      }))
+      .catch((err) => finish({
+        id:     msg?.id || null,
+        status: "error",
+        error:  { code: IBP_ERR.INTERNAL, message: err.message || "Internal portal error" },
+      }));
+  });
+}
+
+/**
  * Translate an IBP ack payload into an HTTP response. Status derives
  * from the IBP code via httpStatusFor(); body is the ack as-is.
  */

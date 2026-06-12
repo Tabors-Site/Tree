@@ -66,3 +66,23 @@
 /* Post-register overlay sizing */
 .idp-birth { max-width: 460px; }
 .idp-birth .idp-section { background: #0e1311; }
+
+/* Paper key (24 BIP39 words) */
+.idp-words {
+  display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0;
+}
+.idp-word {
+  font-family: ui-monospace, monospace; font-size: 10px;
+  color: #c8d3cb; background: #0a0d0c;
+  border: 1px solid #2c3a32; border-radius: 3px;
+  padding: 2px 6px;
+}
+
+/* Inline inputs (unlock, succession) */
+.idp-input {
+  box-sizing: border-box; padding: 5px 8px; margin: 4px 6px 4px 0;
+  background: #0a0d0c; color: #c8d3cb;
+  border: 1px solid #2c3a32; border-radius: 3px;
+  font-family: inherit; font-size: 12px;
+}
+.idp-input:focus { outline: none; border-color: #8fbf9f; }

@@ -1386,6 +1386,10 @@ async function identityBlock(identity, { until = null, branch } = {}) {
   // anonymously, so the user doesn't sit logged in as a ghost and
   // hit BEING_NOT_FOUND on every action.
   let stale = false;
+  // Secondary-unlock latch (signingSession.js): true/false for humans,
+  // null for everyone else (scripted/LLM beings are never gated). The
+  // portal paints the lock indicator from this.
+  let signingUnlocked = null;
   if (identity.beingId) {
     try {
       if (until) {
@@ -1428,6 +1432,12 @@ async function identityBlock(identity, { until = null, branch } = {}) {
         const quals = slot?.state?.qualities;
         const coordQ = quals instanceof Map ? quals.get("coord") : quals?.coord;
         coord = coordQ || slot?.state?.coord || null;
+        // Cognition lives at qualities.cognition.defaultKind.
+        const cog = quals instanceof Map ? quals.get("cognition") : quals?.cognition;
+        if (cog?.defaultKind === "human") {
+          const { isSigningUnlocked } = await import("../materials/being/identity/signingSession.js");
+          signingUnlocked = isSigningUnlocked(String(identity.beingId));
+        }
         // Visibility for the "freshly-registered being lands off-grid"
         // class of bugs. When the slot resolved but position is null,
         // something upstream (the be:birth reducer, the post-seal
@@ -1469,6 +1479,7 @@ async function identityBlock(identity, { until = null, branch } = {}) {
     homeSpace,
     coord,
     stale,
+    signingUnlocked,
   };
 }
 

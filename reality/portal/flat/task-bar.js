@@ -283,6 +283,8 @@ export function openIdentityAction() {
     state: flat.state,
     doOp: flat.doOp,
     see: flat.see,
+    beOp: flat.beOp,
+    signIn: flat.signIn,
     signOut: flat.signOut,
   });
 }

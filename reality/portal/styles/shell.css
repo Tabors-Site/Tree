@@ -93,6 +93,11 @@ html, body {
 #conn-dot.conn-err  { background: #a04545; box-shadow: 0 0 5px rgba(160,69,69,0.7); }
 #conn-dot.conn-idle { background: #3a4a40; }
 
+/* Signing-session latch (humans). Open = acts seal signed. */
+#lock-dot { font-size: 12px; padding: 3px 8px; line-height: 1; }
+#lock-dot.lock-open { border-color: #2f6b48; }
+#lock-dot.lock-shut { border-color: #6b5320; color: #e8b762; }
+
 /* Keyboard focus — visible, consistent, professional. */
 #portal-shell button:focus-visible,
 #portal-shell input:focus-visible {

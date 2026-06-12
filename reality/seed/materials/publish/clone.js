@@ -462,6 +462,16 @@ export async function cloneSubtree(scopeSpaceId, opts = {}) {
   // identity IS its hash — same doctrine as facts and matter bytes.
   bundle.meta.bundleHash = await computeBundleHash(bundle);
 
+  // The PUBKEY half: sign the bundle's identity (bundleHash) with the
+  // producer's key, so a receiver proves WHO vouches for this snapshot
+  // self-certifyingly, with no callback home. Unsigned when the operator
+  // has no available key (e.g. a locked human signing session) — the
+  // bundle still travels and is accepted under the transport sig.
+  {
+    const { signBundle } = await import("./bundleSig.js");
+    await signBundle(bundle, opts.operatorBeingId || null, opts.branch || "0");
+  }
+
   return bundle;
 }
 

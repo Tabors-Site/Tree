@@ -152,8 +152,8 @@ export function mountFlatView(rootContainer, ctx) {
   flat.navigate = (address) => {
     if (typeof ctx.onNavigate === "function") ctx.onNavigate(address);
   };
-  flat.signIn  = async (op, name, password) => {
-    if (typeof ctx.onSignIn === "function") return ctx.onSignIn(op, name, password);
+  flat.signIn  = async (op, name, password, opts = {}) => {
+    if (typeof ctx.onSignIn === "function") return ctx.onSignIn(op, name, password, opts);
   };
   flat.signOut = async () => {
     if (typeof ctx.onSignOut === "function") return ctx.onSignOut();

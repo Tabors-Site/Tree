@@ -250,14 +250,19 @@ export function createPortalContext({ id = "main", persist = true, session = nul
 
   // BE birth/connect against the reality root, then reconnect the
   // socket under the returned identity token.
-  async function signIn(op, name, password) {
+  async function signIn(op, name, password, { importKey = null } = {}) {
     if (op !== "birth" && op !== "connect") {
       throw new Error(`signIn: unsupported op "${op}"`);
     }
     if (!ctx.client) throw new Error("signIn: no client");
     const reality = state.get("discovery")?.reality;
     if (!reality) throw new Error("signIn: no reality");
-    const result = await ctx.client.be(op, reality, { name, password });
+    // importKey (birth only): an exported private-key PEM or its
+    // 24-word paper form — the being is born WITH that identity.
+    // The wire layer holds it out of the chain (secret stash).
+    const payload = { name, password };
+    if (op === "birth" && importKey) payload.importKey = importKey;
+    const result = await ctx.client.be(op, reality, payload);
     await adoptSession(result, name);
     // A birth minted a fresh keypair: show the permanent identity and
     // offer the key backup right away. Body-level overlay (lazy module)

@@ -197,6 +197,18 @@ function exportSection(parent, { doOp, stance, name }) {
       if (!r.hasKey || !r.privateKeyPem) {
         noteLine(out, "this being has no exportable key (born before keys, or foreign).");
       } else {
+        if (r.mnemonic) {
+          // The paper form first: 24 words ARE the key (BIP39 of the
+          // ed25519 seed). Write them down; they rebuild everything.
+          noteLine(out, "your key as 24 words — write these on paper:", "idp-sub");
+          const words = el("div", "idp-words");
+          r.mnemonic.split(" ").forEach((w, i) => {
+            const chip = el("span", "idp-word", `${i + 1} ${w}`);
+            words.appendChild(chip);
+          });
+          out.appendChild(words);
+          out.appendChild(copyBtn(r.mnemonic, "copy words"));
+        }
         const ta = el("textarea", "idp-pem");
         ta.readOnly = true;
         ta.value = r.privateKeyPem;
@@ -206,8 +218,9 @@ function exportSection(parent, { doOp, stance, name }) {
         row.appendChild(copyBtn(r.privateKeyPem, "copy key"));
         out.appendChild(row);
         noteLine(out,
-          "Anyone holding this key can sign as you. Keep it offline. " +
-          "The reality keeps its encrypted copy; this export is recorded on your chain (the key itself is not).",
+          "Anyone holding the words or the key can sign as you. Keep them offline. " +
+          "The reality keeps its encrypted copy; this export is recorded on your chain (the key itself is not). " +
+          "Importing them on a reality you control births you there with this same identity.",
           "idp-warn");
       }
     } catch (err) {
@@ -217,6 +230,108 @@ function exportSection(parent, { doOp, stance, name }) {
     btn.textContent = "export private key";
   };
   s.appendChild(btn);
+  s.appendChild(out);
+}
+
+// The secondary-unlock latch, panel form. The shell's lock dot shows
+// the live state; this section explains it and offers both moves.
+function signingSection(parent, { state, doOp, stance }) {
+  const unlocked = state?.descriptor?.identity?.signingUnlocked;
+  if (unlocked === null || unlocked === undefined) return; // not gated (non-human)
+  const s = section(parent, "signing");
+  const status = el("div", "idp-label",
+    unlocked ? "🔓 unlocked — your acts seal signed" : "🔒 locked — your acts seal unsigned");
+  s.appendChild(status);
+  noteLine(s,
+    "The reality holds your key but only signs for you while this session is unlocked " +
+    "with your password. It re-locks on idle and on sign-out.");
+  const row = el("div", "idp-row");
+  const out = el("div", "idp-export-out");
+  if (unlocked) {
+    const lock = el("button", "idp-btn", "lock signing");
+    lock.onclick = async () => {
+      try {
+        await doOp(stance, "signing-lock", {});
+        status.textContent = "🔒 locked — your acts seal unsigned";
+      } catch (err) { noteLine(out, `refused: ${err?.message || err}`, "idp-warn"); }
+    };
+    row.appendChild(lock);
+  } else {
+    const pw = el("input", "idp-input");
+    pw.type = "password";
+    pw.placeholder = "your password";
+    const unlock = el("button", "idp-btn idp-primary", "unlock signing");
+    unlock.onclick = async () => {
+      out.innerHTML = "";
+      try {
+        await doOp(stance, "signing-unlock", { password: pw.value });
+        status.textContent = "🔓 unlocked — your acts seal signed";
+        pw.value = "";
+      } catch (err) { noteLine(out, `refused: ${err?.message || err}`, "idp-warn"); }
+    };
+    row.appendChild(pw);
+    row.appendChild(unlock);
+  }
+  s.appendChild(row);
+  s.appendChild(out);
+}
+
+// Succession — the recovery story (IDENTITY.md "No rotation, only
+// succession"). Births a successor (a CHILD of this being, so the
+// mother-line records the handover), marks qualities.succession on
+// this being, and offers the switch. Closing the old being stays with
+// the reality's operator (be:death is I_AM-only today).
+function successionSection(parent, { state, doOp, beOp, signIn, stance }) {
+  const s = section(parent, "succession");
+  noteLine(s,
+    "There is no key rotation: the key IS the id. If this key is compromised (or you " +
+    "just want a fresh one), succeed this being: a successor is born with a new keypair " +
+    "as your child, you carry forward what you choose, and this identity is left to close.");
+  const nameIn = el("input", "idp-input");
+  nameIn.placeholder = "successor name";
+  const passIn = el("input", "idp-input");
+  passIn.type = "password";
+  passIn.placeholder = "successor password";
+  const go = el("button", "idp-btn", "succeed this being");
+  const out = el("div", "idp-export-out");
+  go.onclick = async () => {
+    const name = nameIn.value.trim();
+    const pass = passIn.value;
+    if (!name || !pass) { out.textContent = "name + password required"; return; }
+    go.disabled = true;
+    out.textContent = "birthing successor…";
+    try {
+      const born = await beOp("birth", stance, { name, password: pass });
+      const newId = born?.beingId || null;
+      out.textContent = "recording the succession…";
+      try {
+        await doOp(stance, "set-being", {
+          field: "qualities.succession",
+          value: { succeededBy: newId || name, at: new Date().toISOString() },
+          merge: true,
+        });
+      } catch { /* the lineage (parent pointer) still records it */ }
+      out.innerHTML = "";
+      noteLine(out, `@${name} is born${newId ? ` (${String(newId).slice(0, 12)}…)` : ""} as your successor.`);
+      noteLine(out,
+        "This being stays open until the reality's operator closes it (be:death is the " +
+        "operator's act today). Export the successor's key from its own identity panel.",
+        "idp-warn");
+      if (signIn) {
+        const sw = el("button", "idp-btn idp-primary", `continue as @${name}`);
+        sw.onclick = () => signIn("connect", name, pass);
+        out.appendChild(sw);
+      }
+    } catch (err) {
+      out.textContent = `refused: ${err?.message || err}`;
+    }
+    go.disabled = false;
+  };
+  s.appendChild(nameIn);
+  s.appendChild(passIn);
+  const row = el("div", "idp-row");
+  row.appendChild(go);
+  s.appendChild(row);
   s.appendChild(out);
 }
 
@@ -282,7 +397,7 @@ function credentialSection(parent, { doOp, stance }) {
  * @param {HTMLElement} body
  * @param {{ state: object, doOp?: Function, signOut?: Function, being?: object }} opts
  */
-export function renderIdentityPanel(body, { state, doOp, see, signOut, being = null }) {
+export function renderIdentityPanel(body, { state, doOp, see, beOp, signIn, signOut, being = null }) {
   body.innerHTML = "";
   const wrap = el("div", "identity-panel");
   body.appendChild(wrap);
@@ -322,8 +437,10 @@ export function renderIdentityPanel(body, { state, doOp, see, signOut, being = n
   if (session?.token && doOp) {
     const stance = session.beingAddress
       || `${state?.discovery?.reality || ""}/@${name}`;
+    signingSection(wrap, { state, doOp, stance });
     exportSection(wrap, { doOp, stance, name });
     credentialSection(wrap, { doOp, stance });
+    if (beOp) successionSection(wrap, { state, doOp, beOp, signIn, stance });
   }
 
   provenanceSection(wrap, state?.discovery, see);

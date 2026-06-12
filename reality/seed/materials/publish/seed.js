@@ -262,6 +262,19 @@ export async function captureSeed(opts = {}) {
     casManifest,
   };
 
+  // Sign the genome's chain fingerprint (meta.realityRoot) with the
+  // reality key, so a planter proves the bundle is an AUTHENTIC genome of
+  // this reality self-certifyingly — the same signed-root provenance
+  // chainRoots.signedRealityRoot/verifyRealityRootSig give live, now
+  // carried in the artifact. signerId = realityId (the reality pubkey id).
+  if (bundle.meta?.realityRoot) {
+    try {
+      const { getRealityIdentity, signData } = await import("../../realityIdentity.js");
+      const rid = getRealityIdentity();
+      bundle.meta.realitySig = { signerId: rid.realityId, value: signData(bundle.meta.realityRoot) };
+    } catch { /* unsigned genome (advisory); plant still recomputes + walks the chain */ }
+  }
+
   const elapsedMs = Date.now() - startedAt;
   log.info("Seed", `genome captured in ${elapsedMs}ms`);
 
@@ -337,6 +350,28 @@ export function assertValidSeed(bundle) {
  */
 export async function plantSeed(bundle) {
   assertValidSeed(bundle);
+
+  // ── 0. PROVENANCE gate (before touching the substrate) ──
+  // If the genome carries a reality-root signature, verify it self-
+  // certifyingly over meta.realityRoot — "this genome was vouched for by
+  // the holder of realityId (the reality key)." The post-plant recompute
+  // below then proves THIS substrate reproduces that same root. Together:
+  // authentic genome AND provable replay. Absent signature is advisory
+  // (older genomes). Verifiable without the DB, so it gates cold.
+  {
+    const rsig = bundle.meta?.realitySig;
+    if (rsig?.value && bundle.meta?.realityRoot) {
+      const { verifyRealityRootSig } = await import("../../past/fact/chainRoots.js");
+      const ok = await verifyRealityRootSig(bundle.meta.realityRoot, rsig.signerId, rsig.value);
+      if (!ok) {
+        throw new Error(
+          `plantSeed: genome reality-root SIGNATURE invalid (signer ` +
+          `${String(rsig.signerId || "").slice(0, 14)}…) — refusing before planting.`,
+        );
+      }
+      log.info("Seed", `genome provenance verified — vouched by ${String(rsig.signerId).slice(0, 14)}…`);
+    }
+  }
 
   // ── 1. Refuse if DB isn't fresh ──
   // Plant is destructive on a live reality. The substrate refuses to

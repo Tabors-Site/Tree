@@ -39,6 +39,7 @@ import { randomUUID } from "crypto";
 import InboxProjection from "../../past/projections/inbox/inboxProjection.js";
 import { emitFact } from "../../past/fact/facts.js";
 import { assertBranchOrThrow } from "../../materials/projections.js";
+import { stashSecrets, restoreSecrets } from "./secretStash.js";
 
 // Place-level cap on pending intake entries. Counts InboxProjection
 // rows (cheap to query on demand; the cached counter is a soft hint
@@ -82,6 +83,13 @@ export async function enqueueIntake(spaceId, beingId, entry) {
   const sentAt = entry.sentAt || new Date().toISOString();
   const correlation = entry.correlation || randomUUID();
   const rootCorrelation = entry.rootCorrelation || correlation;
+
+  // Secrets never ride the chain. The entry is about to be stamped
+  // into a summon fact (and mirrored by the inbox projection) — pull
+  // credential leaves (password, importKey, ...) into the in-memory
+  // stash; "[held]" markers ride in their place and the pick path
+  // grafts the values back (see secretStash.js).
+  entry = stashSecrets(correlation, entry);
 
   // Idempotency on the projection's _id (which is the correlation).
   const existing = await InboxProjection.findById(correlation).lean();
@@ -196,13 +204,20 @@ export async function pickNextIntake(spaceId, beingId, opts = {}) {
   // Shape the return for back-compat with callers that destructure
   // { entry, index }. `index` is no longer meaningful (no array
   // position); we pass the correlation as a stand-in identifier.
+  //
+  // Secret leaves (password, importKey, ...) ride the chain as
+  // "[held]" markers; restoreSecrets grafts the real values back from
+  // the in-memory stash, keyed by the correlation (= row._id). The
+  // restore covers the whole content (the stash paths are entry-
+  // rooted), so the surfaced act below inherits the real values.
+  const content = row.content ? restoreSecrets(row._id, row.content) : row.content;
   return {
     entry: {
-      kind:            row.content?.kind || (row.content?.transportAct ? "transport-act" : "summon"),
+      kind:            content?.kind || (content?.transportAct ? "transport-act" : "summon"),
       correlation:     row._id,
       rootCorrelation: row.rootCorrelation,
       from:            row.sender,
-      content:         row.content,
+      content,
       // Envelope intent. Surfaced here so the receiver's role handler
       // (LLM cognition, scripted summon(), or the human inbox panel)
       // can dispatch on the caller's stated purpose without re-reading
@@ -218,8 +233,8 @@ export async function pickNextIntake(spaceId, beingId, opts = {}) {
       // under row.content (enqueueIntake stuffs it there). Surface the
       // act payload + identity so runTransportAct in momentum.js gets
       // them on summonCtx without re-reading row.content.
-      act:             row.content?.act || null,
-      identity:        row.content?.identity || null,
+      act:             content?.act || null,
+      identity:        content?.identity || null,
       // Branch the moment will run in. Sourced from the inbox row's
       // branch field (written by the fold from the be:summon fact's
       // branch). assign.js reads entry.branch to seed summonCtx.

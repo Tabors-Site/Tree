@@ -85,7 +85,7 @@ const FactoryIntegrity = () => {
           That is the difference between "we believe this is intact"
           and "we can prove it is intact." Conventional systems offer
           the first. TreeOS offers the second, structurally, for every
-          file, every act, and every history it holds.
+          matter, every act, and every history it holds.
         </p>
       </section>
 

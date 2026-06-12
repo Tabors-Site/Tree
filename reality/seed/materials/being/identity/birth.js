@@ -76,6 +76,31 @@ function validatePassword(password) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, `Password must be ${MAX_PASSWORD} characters or fewer`);
 }
 
+// Resolve an imported key into the full keypair. Two skins accepted:
+// the exported PKCS8 PEM, or its 24-word BIP39 paper form (both come
+// out of the key-export op). Same key, same beingId, deterministically.
+async function resolveImportedKeypair(importKey, name) {
+  if (typeof importKey !== "string" || !importKey.trim()) {
+    throw new IbpError(IBP_ERR.INVALID_INPUT, `birthBeing("${name}"): importKey must be a non-empty string`);
+  }
+  const text = importKey.trim();
+  try {
+    if (text.includes("PRIVATE KEY")) {
+      const { keypairFromPrivateKeyPem } = await import("./beingKeys.js");
+      return keypairFromPrivateKeyPem(text);
+    }
+    const { mnemonicToEntropy } = await import("./mnemonic.js");
+    const { keypairFromSeed } = await import("./beingKeys.js");
+    return keypairFromSeed(mnemonicToEntropy(text));
+  } catch (err) {
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      `birthBeing("${name}"): importKey is neither a valid ed25519 private-key PEM ` +
+        `nor a valid 24-word recovery phrase (${err.message})`,
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // BIRTH
 // ─────────────────────────────────────────────────────────────────────
@@ -389,7 +414,30 @@ export async function birthBeing({ spec, identity, summonCtx = null, branch = nu
   // exception (ensureIAm in sprout.js): its id is the literal "i-am" and
   // its signing key is the reality key. Every other being, including the
   // seed delegates, gets its own independent keypair here.
-  const keypair = generateBeingKeypair();
+  //
+  // IMPORT: a caller holding an exported key (the PEM, or its 24-word
+  // paper form) births the being WITH that identity instead of a fresh
+  // one — recovery, and moving your identity onto a reality you
+  // control. Same id, because the id IS the key. Refused when the id
+  // already lives here (that being exists; connect to it instead).
+  // spec.importKey never reaches the fact: the wire layer holds it in
+  // the secret stash and this file puts only the ENCRYPTED key into
+  // qualities.
+  let keypair;
+  if (spec.importKey) {
+    keypair = await resolveImportedKeypair(spec.importKey, name);
+    const { loadOrFold } = await import("../../projections.js");
+    const existing = await loadOrFold("being", keypair.beingId, branch).catch(() => null);
+    if (existing) {
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        `birthBeing("${name}"): this identity (${keypair.beingId.slice(0, 12)}…) ` +
+          `already lives on this reality — BE:connect to it instead of importing`,
+      );
+    }
+  } else {
+    keypair = generateBeingKeypair();
+  }
   const id = keypair.beingId;
 
   // ── Credentials ──

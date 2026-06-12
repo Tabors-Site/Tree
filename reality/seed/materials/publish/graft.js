@@ -33,6 +33,9 @@ import { remapRefs } from "../refWalker.js";
 import { assertValidBundle } from "./bundle.js";
 import { emitFact } from "../../past/fact/facts.js";
 import { withBeingAct } from "../../sprout.js";
+import { generateBeingKeypair } from "../being/identity/beingKeys.js";
+import { encryptCredential } from "../being/identity/credentials.js";
+import { matterContentId } from "../matter/matterId.js";
 import log from "../../seedReality/log.js";
 
 /**
@@ -79,6 +82,28 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
     }
   } else {
     log.warn("Graft", "bundle carries no meta.bundleHash (pre-integrity capture) — grafting unverified");
+  }
+
+  // ── Bundle PROVENANCE gate (still before anything stamps) ──
+  // Content integrity (above) proves the BYTES are what bundleHash says;
+  // this proves WHO vouched for them. If the bundle carries a producer
+  // signature, verify it self-certifyingly against its signerId (a pubkey
+  // id) — no callback to the source reality. Present-but-invalid is a hard
+  // refusal; absent is advisory (pre-signature bundles / unsigned
+  // producers). The verified signer rides into the graft-completed fact.
+  let bundleSigner = null;
+  {
+    const { verifyBundleSig } = await import("./bundleSig.js");
+    const v = await verifyBundleSig(bundle);
+    if (!v.ok) {
+      throw new Error(
+        `graftClone: BUNDLE SIGNATURE FAILED (${v.reason}` +
+        (v.signerId ? `, signer ${String(v.signerId).slice(0, 14)}…` : "") +
+        `). Refusing before any fact stamps.`,
+      );
+    }
+    bundleSigner = v.signerId;  // null when unsigned-advisory
+    if (bundleSigner) log.info("Graft", `bundle signature verified — vouched by ${String(bundleSigner).slice(0, 14)}…`);
   }
 
   // ── CAS blobs land FIRST (still before any fact stamps) ──
@@ -259,12 +284,27 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
   }
 
   // ── 3. Build the remap table. ──
-  // Each bundle aggregate gets a fresh uuid. The remap table feeds the
-  // walker (`remapRefs`) when we substitute Refs in each entry's fields.
+  // Each bundle aggregate gets a fresh local id, but the RECIPE differs
+  // by kind, to match the identity model every native aggregate obeys:
+  //   - SPACE  → random uuid (a space is not content/key-addressed).
+  //   - BEING  → a fresh ed25519 keypair; the new local id IS its public
+  //              key (beingId invariant). A grafted being is a NEW being,
+  //              so it gets its own keypair and can sign its own acts; a
+  //              uuid would leave it unsigned and not self-certifying.
+  //   - MATTER → matterContentId of its REMAPPED birth spec (a content
+  //              hash), computed in the depth-ordered pre-pass below.
+  // The remap table feeds the walker (`remapRefs`) when we substitute
+  // Refs in each entry's fields.
   const remapTable = new Map();  // sourceId → newLocalId
   for (const s of bundle.content.spaces) remapTable.set(s.sourceId, uuidv4());
-  for (const b of bundle.content.beings) remapTable.set(b.sourceId, uuidv4());
-  for (const m of bundle.content.matter) remapTable.set(m.sourceId, uuidv4());
+  const graftedKeypairs = new Map();  // being sourceId → keypair (private key → privateKeyEnc at birth)
+  for (const b of bundle.content.beings) {
+    const kp = generateBeingKeypair();
+    graftedKeypairs.set(b.sourceId, kp);
+    remapTable.set(b.sourceId, kp.beingId);
+  }
+  // Matter ids are filled by the pre-pass below (they hash the remapped
+  // spec, which needs space + being ids already in the table).
 
   // The walker callback: turns a Ref or sentinel into a bare-string id
   // (or null). Substrate consumers downstream of the reducers read bare
@@ -336,6 +376,48 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
   // grafter or insertion point).
   const remapInBundleField = (value) => remapRefs(substituteParams(value), resolveRef);
 
+  // ── 3b. Matter id pre-pass (content-addressed, depth-ordered). ──
+  // A grafted matter's row id is matterContentId of its REMAPPED birth
+  // spec — the same recipe native matter uses (matter/ops.js). The hash
+  // folds in spaceId, beingId, and parentMatterId, which are all remapped
+  // ids, so the spec is built AFTER spaces+beings are in the table and in
+  // parent-before-child order (a child's id includes its parent's). We
+  // resolve every matter id up front, BEFORE any stamping, so forward
+  // Refs from a space/being field to a matter still resolve to a real id.
+  // The exact spec we hash is stowed in matterSpecs and reused verbatim
+  // as the create-matter params, so the hashed identity is byte-identical
+  // to what the reducer folds.
+  const matterById = new Map(bundle.content.matter.map((m) => [m.sourceId, m]));
+  const matterDepth = new Map();
+  const computeMatterDepth = (m) => {
+    if (matterDepth.has(m.sourceId)) return matterDepth.get(m.sourceId);
+    const parentRef = m.parentMatterId;
+    if (!isAggregateRef(parentRef)) { matterDepth.set(m.sourceId, 0); return 0; }
+    const parent = matterById.get(parentRef.id);
+    if (!parent) { matterDepth.set(m.sourceId, 0); return 0; }
+    const d = 1 + computeMatterDepth(parent);
+    matterDepth.set(m.sourceId, d);
+    return d;
+  };
+  for (const m of bundle.content.matter) computeMatterDepth(m);
+  const orderedMatter = [...bundle.content.matter].sort(
+    (a, b) => (matterDepth.get(a.sourceId) || 0) - (matterDepth.get(b.sourceId) || 0),
+  );
+  const matterSpecs = new Map();  // sourceId → the exact spec that rides the create-matter fact
+  for (const m of orderedMatter) {
+    const spec = {
+      name:           remapInBundleField(m.name),
+      type:           m.type || "generic",
+      content:        remapInBundleField(m.content),
+      spaceId:        remapInBundleField(m.spaceId),
+      beingId:        remapInBundleField(m.beingId),
+      parentMatterId: remapInBundleField(m.parentMatterId),
+      qualities:      remapInBundleField(m.qualities),
+    };
+    remapTable.set(m.sourceId, matterContentId(spec));
+    matterSpecs.set(m.sourceId, spec);
+  }
+
   // ── 4. Stamp create-space facts in depth order. ──
   // bundle.content.spaces is already depth-ordered by cloneSubtree;
   // we trust that. Each space's parent is either INSERTION_POINT (→
@@ -396,7 +478,15 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
 
   // ── 5. Stamp be:birth facts for each captured being. ──
   for (const b of bundle.content.beings) {
-    const newId = remapTable.get(b.sourceId);
+    const newId = remapTable.get(b.sourceId);  // = the keypair's beingId (pubkey)
+    const kp = graftedKeypairs.get(b.sourceId);
+    // The grafted being holds its OWN encrypted private key in
+    // qualities.auth.privateKeyEnc, exactly as birth.js, so it can sign
+    // its own acts. newId IS the public key; the identity descriptor
+    // mirrors the canonical birth fact.
+    const remapped = remapInBundleField(b.qualities);
+    const qualities = (remapped && typeof remapped === "object" && !Array.isArray(remapped)) ? remapped : {};
+    qualities.auth = { ...(qualities.auth || {}), privateKeyEnc: encryptCredential(kp.privateKeyPem) };
     const spec = {
       name:          remapInBundleField(b.name),
       // Beings in the bundle are non-human (cloneSubtree filtered
@@ -409,13 +499,20 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
       parentBeingId: remapInBundleField(b.parentBeingId),
       homeSpace:     remapInBundleField(b.homeSpace),
       position:      remapInBundleField(b.position),
-      qualities:     remapInBundleField(b.qualities),
+      qualities,
+      // Key scheme descriptor (same as birth.js); the pubkey IS newId.
+      identity:      { alg: "ed25519", keyEnc: "did:key:ed25519-multibase", v: 1 },
       ...(b.coord !== undefined ? { coord: remapInBundleField(b.coord) } : {}),
     };
-    // be:birth is special — the new being self-stamps (beingIn=newId).
-    // Open the act under the NEW being so the birth lands as their
-    // first act on their own reel. Same one-fact-per-act discipline.
-    await withBeingAct(newId, `graft:birth ${spec.name}`, branch, async (ctx) => {
+    // The be:birth FACT lands on the new being's own reel (beingId=newId,
+    // single-writer: the fact's doer is the new being), but the framing
+    // ACT is the OPERATOR's — exactly as canonical birth.js rides the
+    // mother's act. A being cannot sign its own birth: its key isn't
+    // foldable until this very fact creates the projection it lives in.
+    // So the operator (the grafter, the one birthing it here) signs the
+    // act that covers the birth; the being's own self-signed acts begin
+    // when it first acts. Same one-fact-per-act discipline.
+    await withBeingAct(opts.operatorBeingId, `graft:birth ${spec.name}`, branch, async (ctx) => {
       await emitFact({
         verb:    "be",
         action:  "birth",
@@ -431,43 +528,13 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
   }
 
   // ── 6. Stamp create-matter facts. ──
-  // Matter depth: parentMatterId chains within the bundle; we need
-  // parents-before-children order. The bundle preserves source order
-  // which isn't depth-guaranteed; sort here for safety.
-  const matterById = new Map(bundle.content.matter.map((m) => [m.sourceId, m]));
-  const matterDepth = new Map();
-  const computeMatterDepth = (m) => {
-    if (matterDepth.has(m.sourceId)) return matterDepth.get(m.sourceId);
-    const parentRef = m.parentMatterId;
-    if (!isAggregateRef(parentRef)) {
-      matterDepth.set(m.sourceId, 0);
-      return 0;
-    }
-    const parent = matterById.get(parentRef.id);
-    if (!parent) {
-      matterDepth.set(m.sourceId, 0);
-      return 0;
-    }
-    const d = 1 + computeMatterDepth(parent);
-    matterDepth.set(m.sourceId, d);
-    return d;
-  };
-  for (const m of bundle.content.matter) computeMatterDepth(m);
-  const orderedMatter = [...bundle.content.matter].sort(
-    (a, b) => (matterDepth.get(a.sourceId) || 0) - (matterDepth.get(b.sourceId) || 0),
-  );
-
+  // Depth order + the remapped specs were both resolved in the pre-pass
+  // (step 3b); we stamp in that order and reuse the exact spec we hashed
+  // the id from, so the create-matter params are byte-identical to the
+  // matterContentId pre-image.
   for (const m of orderedMatter) {
     const newId = remapTable.get(m.sourceId);
-    const spec = {
-      name:           remapInBundleField(m.name),
-      type:           m.type || "generic",
-      content:        remapInBundleField(m.content),
-      spaceId:        remapInBundleField(m.spaceId),
-      beingId:        remapInBundleField(m.beingId),
-      parentMatterId: remapInBundleField(m.parentMatterId),
-      qualities:      remapInBundleField(m.qualities),
-    };
+    const spec = matterSpecs.get(m.sourceId);
     await withBeingAct(opts.operatorBeingId, `graft:create-matter ${spec.name}`, branch, async (ctx) => {
       await emitFact({
         verb:    "do",
@@ -552,6 +619,9 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
         sourceScopeSpaceId: bundle.meta.sourceScopeSpaceId || null,
         sourceScopeName:    bundle.meta.sourceScopeName || null,
         bundleCreatedAt:    bundle.meta.createdAt || null,
+        // WHO provably vouched for the snapshot (a pubkey id), or null
+        // when the bundle was unsigned. The audit fact records provenance.
+        bundleSigner,
         counts,
       },
       actId:  opts.summonCtx.actId,
@@ -660,6 +730,7 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
     // (always run; reaching here means it passed).
     verified: {
       bundle: bundleVerified,
+      bundleSigner,        // pubkey id that vouched for the bundle (null = unsigned)
       casBlobs: casVerified,
       chain: true,
     },

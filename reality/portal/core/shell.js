@@ -37,6 +37,7 @@ const SHELL_DOM = `
     <button class="nav-btn" id="nav-home"  title="Your home" disabled>~</button>
     <span id="branch-button-slot" style="display:flex"></span>
     <nav id="view-switcher" title="views (Alt+1..5)"></nav>
+    <button class="nav-btn" id="lock-dot" style="display:none" title="signing session"></button>
     <span id="conn-dot" class="conn-idle" title="socket"></span>
   </header>
   <div id="portal-tabs"></div>
@@ -112,9 +113,58 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
         : "conn-idle";
       dot.title = `socket: ${m.connection || "idle"}`;
     }
+    // Signing-session latch (humans only; identity.signingUnlocked is
+    // null for everyone else and the latch hides). Unlocked = acts
+    // seal signed; locked = acts still land, unsigned. Click toggles:
+    // lock directly, unlock via password prompt (the secondary unlock).
+    const lock = rootEl.querySelector("#lock-dot");
+    if (lock) {
+      const unlocked = m.descriptor?.identity?.signingUnlocked;
+      if (unlocked === null || unlocked === undefined || !m.session?.token) {
+        lock.style.display = "none";
+      } else {
+        lock.style.display = "";
+        lock.textContent = unlocked ? "🔓" : "🔒";
+        lock.className = "nav-btn" + (unlocked ? " lock-open" : " lock-shut");
+        lock.title = unlocked
+          ? "signing UNLOCKED — your acts seal signed (click to lock)"
+          : "signing LOCKED — your acts seal unsigned (click to unlock)";
+      }
+    }
     // Ghost cue follows the active tab's descriptor.
     document.body.classList.toggle("ghost-view", !!m.descriptor?.isHistorical);
     repaintSwitcher();
+  }
+
+  // The latch toggle. Lock is immediate; unlock asks for the password
+  // (the user's secret gates WHEN the reality signs for them). The
+  // descriptor refetch repaints the dot from the server's truth.
+  async function toggleSigningLatch() {
+    if (!activeCtx) return;
+    const m = activeCtx.state.get();
+    const unlocked = m.descriptor?.identity?.signingUnlocked;
+    if (unlocked === null || unlocked === undefined) return;
+    const stance = m.session?.beingAddress
+      || `${m.discovery?.reality || ""}/@${m.session?.username}`;
+    try {
+      if (unlocked) {
+        await activeCtx.client.do(stance, "signing-lock", {});
+      } else {
+        const password = window.prompt("Unlock signing — your password:");
+        if (!password) return;
+        await activeCtx.client.do(stance, "signing-unlock", { password });
+      }
+      // Repaint from the op's success without a refetch; the next SEE
+      // carries the server's truth either way.
+      const desc = activeCtx.state.get("descriptor");
+      if (desc?.identity) {
+        activeCtx.state.set({
+          descriptor: { ...desc, identity: { ...desc.identity, signingUnlocked: !unlocked } },
+        }, { reason: "live" });
+      }
+    } catch (err) {
+      console.warn("[portal:shell] signing latch:", err?.code || err?.message || err);
+    }
   }
 
   function repaintTabs() {
@@ -357,6 +407,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
   els.forward.addEventListener("click", () => activeCtx?.navigation.forward());
   els.place.addEventListener("click",   () => activeCtx?.navigation.navigate("/").catch(() => {}));
   els.home.addEventListener("click",    () => activeCtx?.navigation.navigate("/~").catch(() => {}));
+  rootEl.querySelector("#lock-dot")?.addEventListener("click", () => { toggleSigningLatch(); });
   // The send arrow submits whatever is typed in the IBPA's receiving
   // side — the click-equivalent of pressing Enter in the address.
   els.send.addEventListener("click", () => {

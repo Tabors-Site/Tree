@@ -17,14 +17,24 @@ So we split naming into two clean categories:
 
 A public key is just the content address of a secret, so this is one idea, not two: everything is named by a cryptographic value of what it is.
 
+## What gets which id (the derivation rule)
+
+The rule underneath both categories is: **an id is derived from the thing's nature.** There are three natures, so three derivations:
+
+- **Content** has bytes and context. Address it by the **hash** of those: facts, acts, matter (the row id is `SHA-256` of its birth spec), and eventually rules. Same content anywhere, same id.
+- **Agents** have a keypair. Address them by the **public key**: beings and realities. The id IS the verification key.
+- **Position** has neither bytes nor a key. A **space** is a slot in the tree, and its nature is to be a *stable handle that survives renames and structural moves*. The honest representation of that nature is an **opaque, locally unique id** — a uuid. A space's real identity is its position (the parent chain); the row id is just the stable name of the slot. Hashing `{parent, name}` would only hash its position-label, buys no dedup (siblings are already name unique), and would wrongly make two different realities' identically-named heaven slots share an id — they are different slots and must be different ids.
+
+So the uuid on a space is not a holdout from the old world; it is the correct id for a position. This is the **one** place in the substrate where an opaque random id is honest, precisely because opacity-with-stability IS what a space is. Everywhere else, the id derives from content or from a key. If you ever see a random uuid standing in for a fact, act, matter, being, or reality, that is the bug; a random uuid naming a space is the rule.
+
 ## The wallet model
 
 Creating a being is creating a wallet.
 
 - You get a **public key**. That is your permanent global address, your `beingId`. It is what other beings reference for stances, mates, vessels, summons. It works in every reality. Your display NAME can change per branch or per reality (names fold from facts), but this underlying identity never moves.
-- You get a **private key**. It signs your acts and proves you are you. The home reality holds it encrypted and signs on your behalf (custodial). You can also EXPORT it: an encrypted private key plus an optional BIP39 seed phrase you can write on paper. The exported key is only useful when imported into another reality you control. It is your recovery and your exit.
+- You get a **private key**. It signs your acts and proves you are you. The home reality holds it encrypted and signs on your behalf (custodial). You can also EXPORT it (the auth gated `key-export` op, owner only, direct response channel): the key PEM plus the same key as a 24 word BIP39 phrase you can write on paper. And you can IMPORT it: `be:birth` accepts the exported key (PEM or the 24 words) and births you on that reality WITH this identity — same key, same id. The wire layer holds the imported key OUT of the chain (the secret stash; a credential in a fact would be a plaintext secret in the fixed past). It is your recovery and your exit.
 
-Encoding: a `beingId` is `did:tree:z<base58btc(raw 32-byte ed25519 public key)>`. The `did:tree:` prefix self documents the scheme, the `z` is multibase base58btc (path and URL safe, so the id flows through IBP addresses and WebSocket routes), and it leaves room for a multicodec prefix. Realities use the same encoding for their `realityId`.
+Encoding: a `beingId` is the bare `z<base58btc(0xed01 || raw 32-byte ed25519 public key)>` — the did:key VALUE, deliberately colon free. Ids flow through colon delimited keys everywhere (projection slots `<branch>:<type>:<id>`, reel keys, act-head keys), so a `did:tree:` or `did:key:` prefix would corrupt key parsing; the prefix is display only (`did:key:z...` renders fine in any UI). The `z` is multibase base58btc (path and URL safe, so the id flows through IBP addresses and WebSocket routes) and the `0xed01` multicodec makes the id self describing and algorithm agile. Realities use the same encoding for their `realityId`.
 
 ## What gets signed, and when
 
@@ -32,21 +42,23 @@ Acts are signed at the one seal chokepoint ([sealAct in 4-stamped.js](../../seed
 
 ```
 signingPayload = {
-  beingId,
-  realityId,
-  branch,
   actId,                 // = act._id, already the hash of the full opening
+  beingIn, beingOut,     // the moment's actor tuple
+  reality, branch,
+  p,                     // chain position (prev-hash link)
   factIds: sortedFactIds,
-  timestamp: act.stampedAt
+  time,                  // the seal time (endMessage.time, ISO)
 }
-sig = sign(privateKey, hash(canonical(signingPayload)))
+sig = sign(privateKey, canonical(signingPayload))
 ```
 
-The `sig` rides on the Act row as a closure field, so it does not change `act._id` and replay still dedups.
+The `sig` rides on the Act row as a closure field `{ alg, by, value }` — `by` is the signer's key id (or the literal `i-am`, which verifies against the reality key) — so it does not change `act._id` and replay still dedups. The wire (`serializeAct`) carries `{ alg, by }`; the `verify-act` SEE op verifies on demand.
 
 ### Secondary unlock (the felt control)
 
-The reality holds your key, but it will only sign for you while your session is UNLOCKED with your own secret: a password or PIN that you hold and the reality never stores in plaintext. No active unlocked session, no signing on your behalf. This does not eliminate the custodial risk (a compromised or malicious reality can bypass its own check), but it raises the bar a lot and gives you the real sense that you control your being. It is the practical middle ground given that we are not putting private keys in the browser yet. The unlock secret is independent of the encrypted key the reality holds: it gates WHEN the reality is willing to use the key.
+The reality holds your key, but it will only sign for you while your session is UNLOCKED with your own secret: a password the reality stores only as a hash. No active unlocked session, no signing on your behalf. This does not eliminate the custodial risk (a compromised or malicious reality can bypass its own check), but it raises the bar a lot and gives you the real sense that you control your being. It is the practical middle ground given that we are not putting private keys in the browser yet. The unlock secret gates WHEN the reality is willing to use the key.
+
+Built (2026-06-12): `signing-unlock` / `signing-lock` DO ops (self only; unlock proves the password), birth and connect open the session (the secret was just proven), it re-locks on idle timeout and on sign out, and the gate applies to HUMANS only — scripted and LLM beings have no hand to type a secret, and gating them would just turn the whole tree unsigned. A locked human still acts; the acts seal UNSIGNED, visibly (the portal badges every act signed/unsigned, and the shell carries the latch). The latch itself is in-memory host state, not facts; the unlock/lock ACTS are on the chain.
 
 ## Cross reality
 
@@ -93,13 +105,13 @@ The human operator (the founder) is NOT the cryptographic root and is NOT requir
 
 I_AM is the one being that breaks the surface pattern, on purpose. Its internal `_id` stays the literal string `i-am`, because that is how the world names itself from inside (and the whole seed already references it that way). But its KEY identity, the `z...` public key it presents to peers, is the reality's public key. Two views of one key: `i-am` from inside, the `z...` id (= realityId) from above. Every OTHER being, the founder, the seed delegates, every human, every vessel-child, gets its own independent keypair at birth, and that key signs its acts. I_AM is the exception that proves the rule: agents are named by their key, and I_AM simply shares its key with the world it is.
 
-## What the frontend builds
+## What the frontend builds (built 2026-06-12, the portal identity panel)
 
-- **Create a being is create a wallet.** Show the new public key as the permanent address. Offer "back up your key": the encrypted key plus the BIP39 seed phrase to write down, with the plain warning that the home reality holds a copy and the paper backup is for recovery and for taking the identity to another reality you control.
-- **Unlock UX.** A being acts only while unlocked. The frontend asks for the user's secret to start a signing session, shows a locked or unlocked indicator, and re-locks on timeout or sign out.
-- **Address display.** Show the `beingId` (the `z...` pubkey, renderable as `did:key:z...`) as the canonical identity, and the per branch or per reality NAME as the friendly label. They are different: the key is permanent, the name is contextual.
-- **Verification surfacing.** When viewing a foreign being or a cross reality act, show whether the being signature verified. Self certifying, so this is a local check.
-- **Recovery and import.** A path to import an exported key into a reality the user controls, proving ownership of an existing being.
+- **Create a being is create a wallet.** The post register overlay shows the new public key as the permanent address and offers the key backup right there: the 24 word phrase to write down plus the PEM download, with the plain warning that the home reality holds a copy and the paper backup is for recovery and for taking the identity to another reality you control.
+- **Unlock UX.** The shell carries the latch (the lock dot beside the socket dot); the identity panel carries the controls. Locked acts seal unsigned and the history view badges them so the control is FELT, not decorative.
+- **Address display.** The `beingId` (the `z...` pubkey, renderable as `did:key:z...`) is the canonical identity everywhere; the per branch or per reality NAME is the friendly label. They are different: the key is permanent, the name is contextual.
+- **Verification surfacing.** Act badges show signed/unsigned from the wire; clicking one asks the reality to verify (the `verify-act` SEE op, self certifying against the signer id). The reality's own signed chain root is verified LOCALLY in the browser (WebCrypto ed25519 against the realityId).
+- **Recovery and import.** Register accepts an exported key (PEM or the 24 words) and births you with that identity; the succession gesture births a successor as your child, records `qualities.succession`, and hands the session over.
 
 ## Accepted boundaries (state these plainly)
 

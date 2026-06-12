@@ -42,6 +42,23 @@ export function showAuthOverlay(reality) {
   card.appendChild(nameField.wrap);
   card.appendChild(passField.wrap);
 
+  // Register-only: import an existing identity. The exported key (the
+  // PEM, or the 24-word paper phrase) births the being WITH that
+  // identity — recovery, or moving yourself onto a reality you
+  // control. Leave empty for a fresh keypair.
+  const importWrap = document.createElement("div");
+  importWrap.className = "field hidden";
+  const importLabel = document.createElement("label");
+  importLabel.textContent = "import key (optional)";
+  const importInput = document.createElement("textarea");
+  importInput.placeholder = "24-word recovery phrase, or the exported key PEM — empty mints a fresh identity";
+  importInput.rows = 2;
+  importInput.style.width = "100%";
+  importInput.style.boxSizing = "border-box";
+  importWrap.appendChild(importLabel);
+  importWrap.appendChild(importInput);
+  card.appendChild(importWrap);
+
   const submit = document.createElement("button");
   submit.className = "btn-primary btn-block";
   submit.textContent = "claim";
@@ -64,11 +81,13 @@ export function showAuthOverlay(reality) {
     mode = "connect";
     setActive(claimTab, registerTab);
     submit.textContent = "connect";
+    importWrap.classList.add("hidden");
   };
   registerTab.onclick = () => {
     mode = "birth";
     setActive(registerTab, claimTab);
     submit.textContent = "register";
+    importWrap.classList.remove("hidden");
   };
 
   submit.onclick = async () => {
@@ -79,7 +98,8 @@ export function showAuthOverlay(reality) {
     try {
       submit.disabled = true;
       submit.textContent = mode === "connect" ? "connecting..." : "registering...";
-      await flat.signIn(mode, name, pass);
+      const importKey = mode === "birth" ? importInput.value.trim() : "";
+      await flat.signIn(mode, name, pass, importKey ? { importKey } : {});
     } catch (e) {
       showErr(err, `${e.code || "error"}: ${e.message || "sign-in failed"}`);
       submit.disabled = false;

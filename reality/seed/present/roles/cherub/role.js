@@ -84,7 +84,13 @@ export const cherubBeing = Object.freeze({
 
 async function birthHandler({ payload, ctx }) {
   const name = payload?.name;
-  const { password } = payload || {};
+  // `importKey` is an optional imported identity: the exported
+  // private-key PEM or its 24-word paper form. The field name matters:
+  // the secret stash holds it OUT of the chain by that name (a generic
+  // `key` would ride the transport-act fact raw). birthBeing turns it
+  // back into the keypair so the being is born WITH that identity
+  // (recovery / moving your identity onto a reality you control).
+  const { password, importKey } = payload || {};
   if (!name || typeof name !== "string") {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "`name` is required");
   }
@@ -119,6 +125,7 @@ async function birthHandler({ payload, ctx }) {
       being = await _registerHumanWithFreshHome({
         name,
         password,
+        importKey,
         parentBeingId: iAm ? String(iAm._id) : null,
         cherubIdentity: { name: "cherub", beingId: cherubBeingId },
         summonCtx: ctx?.summonCtx || null,
@@ -180,6 +187,13 @@ async function birthHandler({ payload, ctx }) {
     }
 
     const identityToken = generateToken(being);
+    // Birth proved the secret (the password was just set by its
+    // holder): open the signing session so the being's first acts
+    // seal signed. See signingSession.js (the secondary unlock).
+    {
+      const { unlockSigning } = await import("../../../materials/being/identity/signingSession.js");
+      unlockSigning(String(being._id));
+    }
     return {
       identityToken,
       beingAddress: `${getRealityDomain()}/@${being.name}`,
@@ -217,6 +231,7 @@ async function birthHandler({ payload, ctx }) {
     being = await _registerHumanWithFreshHome({
       name,
       password,
+      importKey,
       parentBeingId,
       cherubIdentity: { name: "cherub", beingId: parentBeingId },
       summonCtx: ctx?.summonCtx || null,
@@ -233,6 +248,11 @@ async function birthHandler({ payload, ctx }) {
   hooks.run("afterRegister", { user: being, req: ctx?.req }).catch(() => {});
 
   const identityToken = generateToken(being);
+  // Birth proved the secret: open the signing session (secondary unlock).
+  {
+    const { unlockSigning } = await import("../../../materials/being/identity/signingSession.js");
+    unlockSigning(String(being._id));
+  }
   return {
     identityToken,
     beingAddress: `${getRealityDomain()}/@${being.name}`,
@@ -291,6 +311,12 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
       throw new IbpError(IBP_ERR.UNAUTHORIZED, "Invalid credentials");
     }
     const identityToken = generateToken(user);
+    // The password was just verified: open the signing session
+    // (secondary unlock) so this human's acts seal signed.
+    {
+      const { unlockSigning } = await import("../../../materials/being/identity/signingSession.js");
+      unlockSigning(String(user._id));
+    }
     return {
       identityToken,
       beingAddress: `${getRealityDomain()}/@${user.name}`,
@@ -496,6 +522,14 @@ async function releaseHandler({ identity }) {
   // branch they were birthed on, what they own as their present).
   // findHomeBranchOfBeing falls back to the default branch for
   // unknown ids and legacy rows.
+  //
+  // Sign-out closes the signing session: a released identity must not
+  // keep an open unlock latch behind it (secondary unlock re-locks on
+  // sign out, per IDENTITY.md).
+  if (identity?.beingId) {
+    const { lockSigning } = await import("../../../materials/being/identity/signingSession.js");
+    lockSigning(String(identity.beingId));
+  }
   const seatBranch = await findHomeBranchOfBeing(identity?.beingId);
   return { released: true, seatBranch };
 }
@@ -687,6 +721,7 @@ export const cherubBeOps = Object.freeze({
 async function _registerHumanWithFreshHome({
   name,
   password,
+  importKey = null,       // optional imported identity (PEM or 24 words)
   parentBeingId,
   cherubIdentity,
   summonCtx,
@@ -727,6 +762,7 @@ async function _registerHumanWithFreshHome({
       cognition:     "human",
       name,
       password,
+      ...(importKey ? { importKey } : {}),
       defaultRole:   "human",
       homeId:        String(homeId),
       parentBeingId: parentBeingId ? String(parentBeingId) : null,

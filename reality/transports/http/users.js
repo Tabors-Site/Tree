@@ -21,7 +21,7 @@ import log from "../../seed/seedReality/log.js";
 import { sendOk, sendError, IBP_ERR, httpStatusFor } from "../../seed/ibp/protocol.js";
 import { getRealityConfigValue } from "../../seed/realityConfig.js";
 import { getRealityDomain } from "../../seed/ibp/address.js";
-import { makeHttpCarrier, dispatchAndWait } from "./dispatch.js";
+import { makeHttpCarrier, dispatchAndWait, dispatchAndAwaitResult } from "./dispatch.js";
 
 function cookieDomain(req) {
   const host = (req.hostname || req.headers?.host || "").replace(/:\d+$/, "");
@@ -86,7 +86,10 @@ const register = async (req, res) => {
     // Cherub's beforeRegister / afterRegister hooks expect to read
     // the Express request from the carrier.
     const carrier = makeHttpCarrier(req, { _req: req });
-    const ack = await dispatchAndWait(carrier, {
+    // Await the MOMENT'S result, not the "accepted" ack — the cherub's
+    // birth return (token, beingId, name) arrives as the async push a
+    // WS caller would receive. See dispatchAndAwaitResult.
+    const ack = await dispatchAndAwaitResult(carrier, {
       verb:    "be",
       address: getRealityDomain(),
       payload: { op: "birth", name, password },
@@ -116,7 +119,7 @@ const login = async (req, res) => {
       return sendError(res, 400, IBP_ERR.INVALID_INPUT, "Name and password are required");
     }
     const carrier = makeHttpCarrier(req, { _req: req });
-    const ack = await dispatchAndWait(carrier, {
+    const ack = await dispatchAndAwaitResult(carrier, {
       verb:    "be",
       address: getRealityDomain(),
       payload: { op: "connect", name, password },

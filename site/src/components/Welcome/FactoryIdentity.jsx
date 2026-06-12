@@ -34,14 +34,6 @@ const FactoryIdentity = () => {
           different cryptographic primitive: a public key. The principle
           is the same. The address IS the identity.
         </p>
-        <p className="ns-small">
-          Status: being keypairs and the signing primitives just landed
-          (<code>seed/materials/being/identity/beingKeys.js</code>).
-          Custodial signing (the home reality holds your encrypted key)
-          is the current ceiling, mitigated by a secondary unlock and
-          full audit trail. Non-custodial edge signing is a future move
-          named honestly in Section 9.
-        </p>
       </header>
 
       {/* ────────────────────────────────────────────────────────── */}
@@ -54,7 +46,7 @@ const FactoryIdentity = () => {
             Integrity
           </Link>
           , covers how TreeOS names immutable content. Every fact, act,
-          and file has an address derived from its bytes. Same bytes,
+          and matter has an address derived from its bytes. Same bytes,
           same address. The substrate gains verifiable replay, automatic
           dedup, and tamper evidence from this one move.
         </p>
@@ -717,7 +709,7 @@ both are cryptographic values of what they are
         <p>
           This is why content addressing and key addressing feel like
           the same idea expressed in two ways: they are. TreeOS uses
-          one for things that do not act (files, facts, acts as
+          one for things that do not act (matter, facts, acts as
           records) and the other for things that do act (beings,
           realities). The principle stays unified at the bottom.
         </p>

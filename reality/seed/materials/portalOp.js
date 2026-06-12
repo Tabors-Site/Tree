@@ -40,7 +40,7 @@ import { registerOperation } from "../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../ibp/protocol.js";
 import { emitFact } from "../past/fact/facts.js";
 import { detectTargetKind, targetIdOf } from "./_targetShape.js";
-import { v4 as uuidv4 } from "uuid";
+import { matterContentId } from "./matter/matterId.js";
 
 // Matches the IBPA shapes a portal can point at. A portal opens onto
 // a different WORLD (different reality OR different branch); same
@@ -115,7 +115,6 @@ async function formPortalHandler({ target, params, summonCtx, identity }) {
     );
   }
 
-  const matterId = uuidv4();
   const branch = summonCtx?.targetBranch || summonCtx?.actorAct?.branch || "0";
 
   // ONE fact births the typed portal whole: type, the content
@@ -123,29 +122,37 @@ async function formPortalHandler({ target, params, summonCtx, identity }) {
   // the create-matter params (applyCreateMatter copies qualities).
   // The content lives on the foreign reality — the {target} reference
   // shape says so; no separate origin tag.
+  //
+  // Build the spec FIRST, then content-address the row id from it with
+  // matterContentId — the same recipe every other matter uses (matter/
+  // ops.js). Hashing the exact object that rides the fact guarantees the
+  // id is byte-reproducible from its birth spec, never a floating uuid.
+  const createSpec = {
+    spaceId,
+    beingId: actorBeingId,
+    type: "ibpa",
+    content: { target: foreignAddress },
+    name: name || `portal → ${foreignAddress}`,
+    parentMatterId: null,
+    qualities: {
+      // Renderer back-compat + provenance. `content.target` is
+      // canonical; qualities.portal.target mirrors it for the
+      // existing 3D portal-mesh keying.
+      portal: {
+        target:    foreignAddress,
+        createdBy: actorBeingId,
+      },
+    },
+  };
+  const matterId = matterContentId(createSpec);
+
   await emitFact(
     {
       verb: "do",
       action: "create-matter",
       beingId: actorBeingId,
       target: { kind: "matter", id: matterId },
-      params: {
-        spaceId,
-        beingId: actorBeingId,
-        type: "ibpa",
-        content: { target: foreignAddress },
-        name: name || `portal → ${foreignAddress}`,
-        parentMatterId: null,
-        qualities: {
-          // Renderer back-compat + provenance. `content.target` is
-          // canonical; qualities.portal.target mirrors it for the
-          // existing 3D portal-mesh keying.
-          portal: {
-            target:    foreignAddress,
-            createdBy: actorBeingId,
-          },
-        },
-      },
+      params: createSpec,
       actId: summonCtx?.actId || null,
       branch,
     },
