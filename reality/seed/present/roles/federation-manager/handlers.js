@@ -205,7 +205,7 @@ async function handleRejectTemplate(message, ctx) {
 // callback), the canopy signature proves the sender, and the federation-
 // manager grafts on its own (reigning) authority. The being lands VERBATIM
 // (foreign by construction — imported facts keep foreign hashes). This is
-// the peer-to-peer graft path GRAFT-AND-SEED.md / HORIZON.md pin: a being
+// the peer-to-peer graft path GRAFT-AND-SEED.md / ROOTS.md pin: a being
 // crosses between exactly the two realities concerned, never via a catalog.
 //
 // v1 policy is auto-accept (registering the peer IS the opt-in). An

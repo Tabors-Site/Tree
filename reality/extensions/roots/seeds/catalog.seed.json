@@ -1,22 +1,22 @@
 {
   "meta": {
     "bundleVersion": "1.0",
-    "sourceReality": "horizon",
+    "sourceReality": "roots",
     "sourceBranch": "0",
     "sourceScopeName": "catalog",
-    "sourceScopeSpaceId": "horizon-root",
+    "sourceScopeSpaceId": "catalog-root",
     "createdAt": "2026-06-12T00:00:00.000Z",
     "operatorBeingId": null
   },
   "manifest": {
-    "extensions": ["horizon"],
-    "roles": ["horizon:registrar"]
+    "extensions": ["roots"],
+    "roles": ["roots:registrar"]
   },
   "parameters": [
     {
       "name": "spaceName",
       "type": "string",
-      "default": "horizon",
+      "default": "roots",
       "description": "Name of the catalog space."
     },
     {
@@ -29,7 +29,7 @@
   "content": {
     "spaces": [
       {
-        "sourceId": "horizon-root",
+        "sourceId": "catalog-root",
         "name": "$spaceName",
         "type": "domain",
         "parent": { "__ref": "insertion-point" },
@@ -38,17 +38,17 @@
         "contributors": [],
         "size": null,
         "coord": null,
-        "qualities": { "horizon": { "catalog": true } }
+        "qualities": { "roots": { "catalog": true } }
       }
     ],
     "beings": [
       {
         "sourceId": "registrar-being",
         "name": "$beingName",
-        "defaultRole": "horizon:registrar",
+        "defaultRole": "roots:registrar",
         "parentBeingId": { "__ref": "graft-initiator" },
-        "homeSpace": { "__ref": "space", "id": "horizon-root" },
-        "position": { "__ref": "space", "id": "horizon-root" },
+        "homeSpace": { "__ref": "space", "id": "catalog-root" },
+        "position": { "__ref": "space", "id": "catalog-root" },
         "coord": null,
         "qualities": {}
       }

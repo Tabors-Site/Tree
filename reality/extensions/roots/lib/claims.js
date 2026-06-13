@@ -1,10 +1,10 @@
-// Pointer claims and listing hashes for the horizon catalog.
+// Pointer claims and listing hashes for the roots catalog.
 //
 // Everything the catalog stores is named by content: a listing IS the
 // hash of its canonical manifest, and the mutable "current version"
 // layer is a CHAIN of pointer claims, each referencing the hash of the
 // claim before it. Two claims with one parent are a visible fork,
-// provable the same way a forked act-chain is (HORIZON.md: a publisher
+// provable the same way a forked act-chain is (ROOTS.md: a publisher
 // can lie only about pointers, and provably).
 
 import crypto from "node:crypto";
@@ -49,7 +49,7 @@ export function buildClaim({
   state = "current", successor = null, prev = null, seq = 0,
 }) {
   const body = {
-    kind: "horizon-pointer-claim",
+    kind: "roots-pointer-claim",
     publisher, name, version, listingHash, state, successor, prev, seq,
   };
   return { ...body, claimHash: sha256Hex(canonicalJson(body)) };

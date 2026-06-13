@@ -12,7 +12,7 @@ const CONTACT_EMAIL = "taborgreat@gmail.com";
  * LicensePage. The /license page. Explains the dual license on the site
  * itself instead of bouncing straight to GitHub, then links out to the
  * full AGPL text. Scope is the seed only; extensions, roleFlows, and
- * Horizon-posted work are not governed here.
+ * Roots-posted work are not governed here.
  */
 const LicensePage = () => {
   return (
@@ -52,7 +52,7 @@ const LicensePage = () => {
             code under <code>reality/seed/</code> that defines what TreeOS
             is. It does not cover the rest of the project. Extensions,
             roleFlows, clones, portals (browsers), and work you replicate
-            or post to Horizon are your own, under your own terms. The
+            or post through Roots are your own, under your own terms. The
             seed is the sovereign core, and the licensing here is about
             the seed and nothing more.
           </p>

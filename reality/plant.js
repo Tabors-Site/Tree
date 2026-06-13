@@ -312,9 +312,45 @@ async function pickExtensions() {
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
 
-  console.log(`  ${extensions.length} extensions discovered on disk:`);
+  // Roots gets its own question up front. Roots are how this reality
+  // connects to The Root System . the underground network where
+  // realities find each other and share resources. Saying yes here
+  // plants the catalog on first boot (see .first-boot-actions.json
+  // wired into begin.js); saying no leaves this reality isolated, which
+  // is a perfectly valid configuration.
+  let rootsChosen = false;
+  const rootsExt = extensions.find((e) => e.name === "roots");
+  const otherExtensions = rootsExt
+    ? extensions.filter((e) => e.name !== "roots")
+    : extensions;
+  if (rootsExt) {
+    console.log("");
+    console.log("  Roots . the connection to The Root System.");
+    console.log("    Catalogs extensions, seeds, and peer realities.");
+    console.log("    Lets this reality find others and lets others find it.");
+    console.log("    Choosing yes plants the catalog at first boot.");
+    console.log("");
+    const hz = (await rl.question(
+      "  Plant this tree with roots (connect to the federated network)? (Y/n): ",
+    ))
+      .trim()
+      .toLowerCase();
+    rootsChosen = !(hz === "n" || hz === "no");
+    console.log("");
+  }
+
+  if (otherExtensions.length === 0) {
+    rl.close();
+    finalizeExtensionProfile(
+      rootsChosen && rootsExt ? [rootsExt] : [],
+      { rootsChosen },
+    );
+    return;
+  }
+
+  console.log(`  ${otherExtensions.length} more extensions discovered on disk:`);
   console.log("");
-  for (const ext of extensions) {
+  for (const ext of otherExtensions) {
     const desc = ext.description ? ` . ${ext.description}` : "";
     console.log(`    ${ext.name}  v${ext.version}${desc}`);
   }
@@ -331,7 +367,7 @@ async function pickExtensions() {
   let selected;
   if (ans === "p" || ans === "pick") {
     selected = [];
-    for (const ext of extensions) {
+    for (const ext of otherExtensions) {
       const yn = (await rl.question(`    ${ext.name} (y/N): `))
         .trim()
         .toLowerCase();
@@ -340,14 +376,23 @@ async function pickExtensions() {
   } else if (ans === "n" || ans === "no") {
     selected = [];
   } else {
-    selected = extensions;
+    selected = [...otherExtensions];
   }
 
   rl.close();
 
+  if (rootsChosen && rootsExt) selected.unshift(rootsExt);
+
+  finalizeExtensionProfile(selected, { rootsChosen });
+}
+
+function finalizeExtensionProfile(selected, { rootsChosen } = {}) {
   const profilePath = path.join(__dirname, "extensions", ".treeos-profile");
+  const firstBootActionsPath = path.join(__dirname, ".first-boot-actions.json");
+
   if (selected.length === 0) {
     if (fs.existsSync(profilePath)) fs.unlinkSync(profilePath);
+    if (fs.existsSync(firstBootActionsPath)) fs.unlinkSync(firstBootActionsPath);
     console.log("");
     console.log("  Profile cleared. I will awaken seed only.");
     console.log("");
@@ -363,6 +408,24 @@ async function pickExtensions() {
   console.log(
     `  Profile saved. ${selected.length} extensions will wake with me.`,
   );
+
+  // First-boot actions. Consumed by begin.js after extensions load,
+  // before the server listens. The roots catalog plants at the reality
+  // root by default; operators can move it later.
+  if (rootsChosen) {
+    fs.writeFileSync(
+      firstBootActionsPath,
+      JSON.stringify(
+        { plantTemplates: [{ name: "roots:catalog", target: "root" }] },
+        null,
+        2,
+      ) + "\n",
+      "utf8",
+    );
+    console.log("  Roots catalog will plant on first boot.");
+  } else if (fs.existsSync(firstBootActionsPath)) {
+    fs.unlinkSync(firstBootActionsPath);
+  }
   console.log("");
 }
 

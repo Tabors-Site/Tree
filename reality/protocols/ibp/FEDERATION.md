@@ -387,7 +387,7 @@ Pull collapses into push at step 5. The fulfill-request op is one of the two cas
 
 The same push/pull transport carries the OTHER cargo. The template path above moves a SHAPE (fresh ids on planting). The identity path moves the ENTITY ITSELF: a being delivered verbatim, same id, same chain. It is the IDENTITY counterpart to `offer-template`, and it runs the same canopy + `runVerbAsForeignActor` machinery.
 
-Where the template path has a review handshake (offer, accept/reject, deliver, result), the identity path is **one-shot, auto-accepted**. There is no `accept-being` and no `being-result` pair. The reason is that a being-graft is **self-certifying**: the receiver verifies the source reality's signed `graftRoot` with no callback, and the canopy signature proves the sender. The receiver does not need to phone home, so there is nothing to negotiate. It is strictly peer-to-peer, a being crosses between exactly the two realities concerned, never via a catalog or Horizon.
+Where the template path has a review handshake (offer, accept/reject, deliver, result), the identity path is **one-shot, auto-accepted**. There is no `accept-being` and no `being-result` pair. The reason is that a being-graft is **self-certifying**: the receiver verifies the source reality's signed `graftRoot` with no callback, and the canopy signature proves the sender. The receiver does not need to phone home, so there is nothing to negotiate. It is strictly peer-to-peer, a being crosses between exactly the two realities concerned, never via a catalog or Roots node.
 
 ```
 1. Operator on tabors.site: SUMMON localhost/@federation-manager

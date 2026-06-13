@@ -109,7 +109,7 @@ function validateValue(value) {
 // optional chaining for that case.
 var BOOT_ENV_KEYS = new Set([
   "socketMaxBufferSize", "socketPingTimeout", "socketPingInterval", "socketConnectTimeout",
-  "maxConnectionsPerIp", "REALITY_NAME", "realityUrl", "HORIZON_URL",
+  "maxConnectionsPerIp", "REALITY_NAME", "realityUrl",
 ]);
 
 // Every returned value is a deep copy so callers can't pollute the cache.
@@ -271,7 +271,6 @@ export const CONFIG_DEFAULTS = {
   // Identity + federation
   REALITY_NAME: "My Place",
   realityUrl: null,
-  HORIZON_URL: "https://horizon.treeos.ai",
   timezone: null,
   realityLlmConnection: null,
 

@@ -276,65 +276,6 @@ function signingSection(parent, { state, doOp, stance }) {
   s.appendChild(out);
 }
 
-// Succession — the recovery story (IDENTITY.md "No rotation, only
-// succession"). Births a successor (a CHILD of this being, so the
-// mother-line records the handover), marks qualities.succession on
-// this being, and offers the switch. Closing the old being stays with
-// the reality's operator (be:death is I_AM-only today).
-function successionSection(parent, { state, doOp, beOp, signIn, stance }) {
-  const s = section(parent, "succession");
-  noteLine(s,
-    "There is no key rotation: the key IS the id. If this key is compromised (or you " +
-    "just want a fresh one), succeed this being: a successor is born with a new keypair " +
-    "as your child, you carry forward what you choose, and this identity is left to close.");
-  const nameIn = el("input", "idp-input");
-  nameIn.placeholder = "successor name";
-  const passIn = el("input", "idp-input");
-  passIn.type = "password";
-  passIn.placeholder = "successor password";
-  const go = el("button", "idp-btn", "succeed this being");
-  const out = el("div", "idp-export-out");
-  go.onclick = async () => {
-    const name = nameIn.value.trim();
-    const pass = passIn.value;
-    if (!name || !pass) { out.textContent = "name + password required"; return; }
-    go.disabled = true;
-    out.textContent = "birthing successor…";
-    try {
-      const born = await beOp("birth", stance, { name, password: pass });
-      const newId = born?.beingId || null;
-      out.textContent = "recording the succession…";
-      try {
-        await doOp(stance, "set-being", {
-          field: "qualities.succession",
-          value: { succeededBy: newId || name, at: new Date().toISOString() },
-          merge: true,
-        });
-      } catch { /* the lineage (parent pointer) still records it */ }
-      out.innerHTML = "";
-      noteLine(out, `@${name} is born${newId ? ` (${String(newId).slice(0, 12)}…)` : ""} as your successor.`);
-      noteLine(out,
-        "This being stays open until the reality's operator closes it (be:death is the " +
-        "operator's act today). Export the successor's key from its own identity panel.",
-        "idp-warn");
-      if (signIn) {
-        const sw = el("button", "idp-btn idp-primary", `continue as @${name}`);
-        sw.onclick = () => signIn("connect", name, pass);
-        out.appendChild(sw);
-      }
-    } catch (err) {
-      out.textContent = `refused: ${err?.message || err}`;
-    }
-    go.disabled = false;
-  };
-  s.appendChild(nameIn);
-  s.appendChild(passIn);
-  const row = el("div", "idp-row");
-  row.appendChild(go);
-  s.appendChild(row);
-  s.appendChild(out);
-}
-
 function credentialSection(parent, { doOp, stance }) {
   const s = section(parent, "password");
   const out = el("div", "idp-export-out");
@@ -397,7 +338,7 @@ function credentialSection(parent, { doOp, stance }) {
  * @param {HTMLElement} body
  * @param {{ state: object, doOp?: Function, signOut?: Function, being?: object }} opts
  */
-export function renderIdentityPanel(body, { state, doOp, see, beOp, signIn, signOut, being = null }) {
+export function renderIdentityPanel(body, { state, doOp, see, signOut, being = null }) {
   body.innerHTML = "";
   const wrap = el("div", "identity-panel");
   body.appendChild(wrap);
@@ -440,7 +381,6 @@ export function renderIdentityPanel(body, { state, doOp, see, beOp, signIn, sign
     signingSection(wrap, { state, doOp, stance });
     exportSection(wrap, { doOp, stance, name });
     credentialSection(wrap, { doOp, stance });
-    if (beOp) successionSection(wrap, { state, doOp, beOp, signIn, stance });
   }
 
   provenanceSection(wrap, state?.discovery, see);

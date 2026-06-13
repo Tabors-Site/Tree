@@ -1,10 +1,10 @@
-// Horizon registrar handlers. One per intent.
+// Roots registrar handlers. One per intent.
 //
 // The catalog IS the registrar's folded qualities. Every publish or
 // retire is ONE set-being the registrar writes on its OWN being, so a
 // publish is one moment and one fact, exactly the federation-manager
 // pattern. The registrar's reel is the catalog's whole history; its
-// folded qualities.horizon are the catalog now. "Browsing is SEE" means
+// folded qualities.roots are the catalog now. "Browsing is SEE" means
 // SEE the registrar.
 //
 // The write authorizes because the registrar OWNS its home space (the
@@ -17,9 +17,9 @@
 // fold lands at seal, so a synchronous publish cannot create a space,
 // then a listing inside it, then a pointer. One self-qualities write per
 // publish is the shape that fits. Sharding (per-publisher registrars, or
-// a SEE-projection into matter) is the scaling path, noted in HORIZON.md.
+// a SEE-projection into matter) is the scaling path, noted in ROOTS.md.
 //
-// Catalog shape (qualities.horizon.catalog):
+// Catalog shape (qualities.roots.catalog):
 //
 //   "<publisher>": {
 //     "<name>": {
@@ -63,29 +63,42 @@ function frameOf(ctx) {
   return { meId, branch, identity: { beingId: meId, name: ctx?.toBeing?.name || "registrar" } };
 }
 
-/** Load the registrar's folded qualities.horizon (prior moments only). */
-async function readHorizon(meId, branch) {
-  const { loadProjection } = await import("../../seed/materials/projections.js");
-  const slot = await loadProjection("being", meId, branch);
-  const horizon = nsOf(slot?.state?.qualities, "horizon");
-  const catalog = (horizon && typeof horizon.catalog === "object" && horizon.catalog) || {};
-  return { ...(horizon || {}), catalog };
+/**
+ * The publisher's identity: the BEING that summoned the registrar, by
+ * its key. Publishing requires an identified being holding the
+ * roots:publisher role (ROOTS.md). That being may be NATIVE (born
+ * here, or grafted in) or FOREIGN (reaching across in its left stance
+ * over cross-reality IBP); the key is the publisher either way, so names
+ * scope to a key, never to an anonymous domain string. `homeReality`
+ * rides along as a label when the publisher reaches across from a peer
+ * (the cross-reality summon sets askerReality).
+ */
+function publisherOf(ctx) {
+  const beingId = ctx?.askerBeingId
+    || ctx?.actorAct?.beingIn
+    || ctx?.toBeing?._id;
+  if (!beingId) throw new Error("registrar: no publisher being on ctx (who is asking?)");
+  return { key: String(beingId), homeReality: ctx?.askerReality || null };
 }
 
-/** Write the whole horizon namespace back in one self-authorized set-being. */
-async function writeHorizon(frame, ctx, horizon) {
+/** Load the registrar's folded qualities.roots (prior moments only). */
+async function readRoots(meId, branch) {
+  const { loadProjection } = await import("../../seed/materials/projections.js");
+  const slot = await loadProjection("being", meId, branch);
+  const roots = nsOf(slot?.state?.qualities, "roots");
+  const catalog = (roots && typeof roots.catalog === "object" && roots.catalog) || {};
+  return { ...(roots || {}), catalog };
+}
+
+/** Write the whole roots namespace back in one self-authorized set-being. */
+async function writeRoots(frame, ctx, roots) {
   const { doVerb } = await import("../../seed/ibp/verbs/do.js");
   await doVerb(
     { kind: "being", id: frame.meId },
     "set-being",
-    { field: "qualities.horizon", value: horizon, merge: false },
+    { field: "qualities.roots", value: roots, merge: false },
     { identity: frame.identity, summonCtx: ctx },
   );
-}
-
-async function localDomain() {
-  const { getRealityDomain } = await import("../../seed/ibp/address.js");
-  return getRealityDomain();
 }
 
 // ── intents ──────────────────────────────────────────────────────────
@@ -103,7 +116,7 @@ export async function publishListing(fed, ctx) {
 
   if (listingType === "roleflow") {
     return failure(
-      "roleflow listings await their design pass (HORIZON.md build order); publish extensions and seeds today",
+      "roleflow listings await their design pass (ROOTS.md build order); publish extensions and seeds today",
       "unsupported",
     );
   }
@@ -138,17 +151,17 @@ export async function publishListing(fed, ctx) {
   }
 
   const frame = frameOf(ctx);
-  const publisher = ctx?.askerReality || (await localDomain());
+  const { key: publisher, homeReality } = publisherOf(ctx);
   const listingHash = listingHashOf(manifest);
 
-  const horizon = await readHorizon(frame.meId, frame.branch);
-  const nameNode = horizon.catalog[publisher]?.[name] || { pointer: null, versions: {} };
+  const roots = await readRoots(frame.meId, frame.branch);
+  const nameNode = roots.catalog[publisher]?.[name] || { pointer: null, versions: {} };
 
   // Immutability gate: a version is its hash, forever.
   const existing = nameNode.versions[version];
   if (existing) {
     if (existing.listingHash === listingHash) {
-      log.info("Horizon", `re-publish of ${publisher}/${name}@${version} is identical; idempotent ok`);
+      log.info("Roots", `re-publish of ${publisher}/${name}@${version} is identical; idempotent ok`);
       return { kind: "published", idempotent: true, publisher, name, version, listingHash, claimHash: nameNode.pointer?.claimHash || null, seq: nameNode.pointer?.seq ?? null };
     }
     return failure(
@@ -175,17 +188,18 @@ export async function publishListing(fed, ctx) {
         listingHash,
         listingType,
         builtFor: typeof manifest.builtFor === "string" ? manifest.builtFor : null,
+        homeReality,
         status: "listed",
       },
     },
   };
-  horizon.catalog = {
-    ...horizon.catalog,
-    [publisher]: { ...(horizon.catalog[publisher] || {}), [name]: newNameNode },
+  roots.catalog = {
+    ...roots.catalog,
+    [publisher]: { ...(roots.catalog[publisher] || {}), [name]: newNameNode },
   };
-  await writeHorizon(frame, ctx, horizon);
+  await writeRoots(frame, ctx, roots);
 
-  log.info("Horizon", `published ${publisher}/${name}@${version} (${listingType}, ${listingHash.slice(0, 12)}…)`);
+  log.info("Roots", `published ${publisher}/${name}@${version} (${listingType}, ${listingHash.slice(0, 12)}…)`);
   return { kind: "published", publisher, name, version, listingHash, claimHash: claim.claimHash, seq: claim.seq };
 }
 
@@ -193,7 +207,7 @@ export async function publishListing(fed, ctx) {
  * retire-listing
  *   payload: { name, successor? }
  *   Publisher-only sunset: chains a "retired" claim onto the name's
- *   pointer. Distinct from horizon:delist (the operator's lever) and from
+ *   pointer. Distinct from roots:delist (the operator's lever) and from
  *   deletion (which does not exist; the versions remain).
  */
 export async function retireListing(fed, ctx) {
@@ -204,13 +218,16 @@ export async function retireListing(fed, ctx) {
   const successor = typeof fed?.successor === "string" ? fed.successor : null;
 
   const frame = frameOf(ctx);
-  const publisher = ctx?.askerReality || (await localDomain());
+  const { key: publisher } = publisherOf(ctx);
 
-  const horizon = await readHorizon(frame.meId, frame.branch);
-  const nameNode = horizon.catalog[publisher]?.[name];
+  const roots = await readRoots(frame.meId, frame.branch);
+  const nameNode = roots.catalog[publisher]?.[name];
   const prevClaim = nameNode?.pointer || null;
   if (!prevClaim) return failure(`no pointer for "${name}" by ${publisher}`, "not-found");
   if (prevClaim.publisher !== publisher) {
+    // The catalog is keyed by publisher being, so this is belt-and-
+    // suspenders: a different being's summon reads a different catalog
+    // branch and never reaches another publisher's pointer.
     return failure("only the publisher may retire its own name", "forbidden");
   }
   if (prevClaim.state === "retired") {
@@ -226,37 +243,37 @@ export async function retireListing(fed, ctx) {
     prev: prevClaim.claimHash,
     seq: (Number(prevClaim.seq) || 0) + 1,
   });
-  horizon.catalog = {
-    ...horizon.catalog,
-    [publisher]: { ...horizon.catalog[publisher], [name]: { ...nameNode, pointer: claim } },
+  roots.catalog = {
+    ...roots.catalog,
+    [publisher]: { ...roots.catalog[publisher], [name]: { ...nameNode, pointer: claim } },
   };
-  await writeHorizon(frame, ctx, horizon);
+  await writeRoots(frame, ctx, roots);
 
-  log.info("Horizon", `retired ${publisher}/${name}${successor ? ` (successor: ${successor})` : ""}`);
+  log.info("Roots", `retired ${publisher}/${name}${successor ? ` (successor: ${successor})` : ""}`);
   return { kind: "retired", name, publisher, successor, claimHash: claim.claimHash, seq: claim.seq };
 }
 
 /**
- * delist, the horizon operator's editorial lever (called by the delist
+ * delist, the roots operator's editorial lever (called by the delist
  * DO op, not an intent). Marks one (publisher, name, version) delisted in
  * the registrar's catalog. Never a deletion; the version stays, the hash
  * stays, mirrors may still carry it.
  */
 export async function delistVersion(ctx, { publisher, name, version, reason = null }) {
   const frame = frameOf(ctx);
-  const horizon = await readHorizon(frame.meId, frame.branch);
-  const entry = horizon.catalog[publisher]?.[name]?.versions?.[version];
+  const roots = await readRoots(frame.meId, frame.branch);
+  const entry = roots.catalog[publisher]?.[name]?.versions?.[version];
   if (!entry) {
     return { ok: false, reason: `no ${publisher}/${name}@${version} in this catalog` };
   }
-  horizon.catalog[publisher][name] = {
-    ...horizon.catalog[publisher][name],
+  roots.catalog[publisher][name] = {
+    ...roots.catalog[publisher][name],
     versions: {
-      ...horizon.catalog[publisher][name].versions,
+      ...roots.catalog[publisher][name].versions,
       [version]: { ...entry, status: "delisted", ...(reason ? { delistReason: reason } : {}) },
     },
   };
-  await writeHorizon(frame, ctx, horizon);
-  log.info("Horizon", `delisted ${publisher}/${name}@${version}`);
+  await writeRoots(frame, ctx, roots);
+  log.info("Roots", `delisted ${publisher}/${name}@${version}`);
   return { ok: true, publisher, name, version };
 }

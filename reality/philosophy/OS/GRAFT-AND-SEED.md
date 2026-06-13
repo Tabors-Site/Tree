@@ -224,15 +224,18 @@ receiver knows what it is verifying and what is missing.
   in time, accepted as authoritative current-state without folding a full
   chain. Pairs with any of the above for "current state + partial history."
 
-Built today (`capturePartialGraft` / `applyGraft`): **genesis prefix** and
-**signed checkpoint segment** — the two reel-chain shapes, verified by
-`verifyReel` (genesis-rooted) and `verifyReelFrom` (anchored at the
-checkpoint) respectively. **Single branch** is a checkpoint segment whose
-anchor is a fork point rather than a same-branch head (it needs the branch's
-lineage range carried alongside), and **state snapshot** is the distinct
-no-chain shape (a signed folded state, which is also what would let a
-checkpoint segment fold LIVE rather than stand as a verifiable reference).
-Both remain follow-ons.
+All four are built (`capturePartialGraft` / `applyGraft`):
+- **genesis prefix** — the reel from birth to a cutoff, verified by `verifyReel`
+  (genesis-rooted). Carries the being's birth, so it folds; a later graft merges
+  the tail.
+- **signed checkpoint segment** — a contiguous suffix on one branch, anchored at
+  a signed checkpoint and verified by `verifyReelFrom`.
+- **single branch** — every fact of the being on one fork, anchored at the fork
+  point, with the fork's lineage Branch rows carried so the receiver resolves
+  and verifies just that slice. Same anchored verify as checkpoint segment.
+- **state snapshot** — no chain at all: a signed folded state landed as an
+  attested projection (the one projection not folded from local facts). Its own
+  apply path; a later real graft of the reel supersedes it.
 
 What is partial is the HISTORY available, never the identity. In every
 partial graft the key is the same, the included acts verify, and the being

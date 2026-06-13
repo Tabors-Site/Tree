@@ -751,11 +751,11 @@ both are cryptographic values of what they are
           . Content as identity, the hash side of the same principle.
           <br />
           Next.{" "}
-          <Link to="/factory/horizon" className="ns-inline-link">
-            Horizon
+          <Link to="/factory/roots" className="ns-inline-link">
+            Roots
           </Link>
-          . Where realities meet on the network, and where published
-          work lives.
+          . Where realities meet underground, and how the forest shares
+          resources.
         </p>
       </nav>
     </article>

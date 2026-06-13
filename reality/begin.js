@@ -114,6 +114,9 @@
 import express from "express";
 import cors from "cors";
 import http from "http";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import cookieParser from "cookie-parser";
 import mongoose from "mongoose";
 
@@ -127,6 +130,53 @@ import { genesis, printReady } from "./genesis.js";
 import { noteHttpRequest, noteHttpListening, noteHttpShutdown } from "./seed/materials/host/requestLog.js";
 import { getRealityUrl } from "./seed/realityIdentity.js";
 import log from "./seed/seedReality/log.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// First-boot actions. plant.js writes .first-boot-actions.json when the
+// operator opts into something that needs a planting step (e.g. roots).
+// We consume the file once after extensions have registered their seeds,
+// then delete it. Acts as I_AM against the reality root.
+async function runFirstBootActions() {
+  const actionsPath = path.join(__dirname, ".first-boot-actions.json");
+  if (!fs.existsSync(actionsPath)) return;
+  let actions;
+  try {
+    actions = JSON.parse(fs.readFileSync(actionsPath, "utf8"));
+  } catch (err) {
+    log.warn("FirstBoot", `Could not parse .first-boot-actions.json: ${err.message}`);
+    return;
+  }
+  const { getSpaceRootId, getIAmBeingId } = await import("./seed/sprout.js");
+  const { getTemplate } = await import("./seed/materials/publish/templateRegistry.js");
+  const { plantTemplate } = await import("./seed/materials/publish/seedPlant.js");
+  const rootSpaceId = getSpaceRootId();
+  const iAm = getIAmBeingId();
+  let plantedAny = false;
+  for (const action of (actions.plantTemplates || [])) {
+    const entry = getTemplate(action.name);
+    if (!entry) {
+      log.warn("FirstBoot", `Template "${action.name}" not registered; skipping.`);
+      continue;
+    }
+    try {
+      await plantTemplate(entry.bundle, rootSpaceId, {
+        branch: "0",
+        operatorBeingId: iAm,
+        params: action.params || {},
+      });
+      log.info("FirstBoot", `Planted "${action.name}" at reality root.`);
+      plantedAny = true;
+    } catch (err) {
+      log.warn("FirstBoot", `Could not plant "${action.name}": ${err.message}`);
+    }
+  }
+  // Consume the marker only if everything planted (or nothing was asked).
+  // Partial failure leaves the marker so the next boot retries.
+  if ((actions.plantTemplates || []).length === 0 || plantedAny) {
+    try { fs.unlinkSync(actionsPath); } catch { /* best-effort */ }
+  }
+}
 
 function notFoundPage(
   req,
@@ -292,6 +342,12 @@ app.get("/health", (_req, res) => {
 // not yet open. The express app is passed in so extension `init`
 // can attach routes during loadExtensions; nothing is listening yet.
 await genesis(app, { registerRawWebhook });
+
+// First-boot actions written by plant.js (e.g. "include roots →
+// plant roots:catalog at the reality root"). Consumed once and
+// deleted. Extension templates are already in the registry; this is
+// just the planting acting as I_AM at the chosen target.
+await runFirstBootActions();
 
 // Earth is whole. I mount the seed routers onto the app: rate limit,
 // dbHealth, auth, MCP, uploads, IBP HTTP. Extension routes attached

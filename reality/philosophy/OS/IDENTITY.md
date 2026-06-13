@@ -111,7 +111,7 @@ I_AM is the one being that breaks the surface pattern, on purpose. Its internal 
 - **Unlock UX.** The shell carries the latch (the lock dot beside the socket dot); the identity panel carries the controls. Locked acts seal unsigned and the history view badges them so the control is FELT, not decorative.
 - **Address display.** The `beingId` (the `z...` pubkey, renderable as `did:key:z...`) is the canonical identity everywhere; the per branch or per reality NAME is the friendly label. They are different: the key is permanent, the name is contextual.
 - **Verification surfacing.** Act badges show signed/unsigned from the wire; clicking one asks the reality to verify (the `verify-act` SEE op, self certifying against the signer id). The reality's own signed chain root is verified LOCALLY in the browser (WebCrypto ed25519 against the realityId).
-- **Recovery and import.** Register accepts an exported key (PEM or the 24 words) and births you with that identity; the succession gesture births a successor as your child, records `qualities.succession`, and hands the session over.
+- **Recovery and import.** Register accepts an exported key (PEM or the 24 words) and births you with that identity. There is no succession button: a lost key means registering a fresh being and carrying over what you want through ordinary acts. The key is the id and cannot be revoked, so there is nothing to "recover" in place (see "No rotation, only succession" above).
 
 ## Accepted boundaries (state these plainly)
 

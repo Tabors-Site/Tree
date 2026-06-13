@@ -1,10 +1,10 @@
-// horizon:delist. The horizon operator's editorial lever.
+// roots:delist. The roots operator's editorial lever.
 //
 // Marks one (publisher, name, version) delisted in the registrar's
-// catalog: this horizon declines to show it. Never a deletion (the
+// catalog: this roots declines to show it. Never a deletion (the
 // version and its hash remain, mirrors may still carry it) and never the
 // publisher's retire (that chains a pointer claim, via retire-listing).
-// Doctrine: a horizon vouches for availability, never authenticity;
+// Doctrine: a roots vouches for availability, never authenticity;
 // exclusion is its one governance lever.
 //
 // Target is the registrar being whose qualities hold the catalog. The
@@ -12,13 +12,13 @@
 // set-being-on-the-registrar path the registrar's own handlers use.
 
 export default {
-  name: "delist", // becomes horizon:delist after loader namespacing
+  name: "delist", // becomes roots:delist after loader namespacing
   targets: ["being"],
   args: {
     publisher: { type: "text", label: "Publisher reality (the listing's owner)", required: true },
     name:      { type: "text", label: "Listing name", required: true },
     version:   { type: "text", label: "Version to delist", required: true },
-    reason:    { type: "text", label: "Why this horizon declines to show it (optional)", required: false },
+    reason:    { type: "text", label: "Why this roots declines to show it (optional)", required: false },
   },
   skipAudit: true,
 

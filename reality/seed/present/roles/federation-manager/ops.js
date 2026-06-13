@@ -211,7 +211,7 @@ registerOperation("offer-template", {
 // one-shot to the peer's federation-manager via deliver-being. No
 // offer/accept review: a being-graft is self-certifying (the receiver
 // verifies the signed graftRoot, no callback) and the peer auto-accepts
-// by federation policy. Peer-to-peer only — never a horizon/catalog.
+// by federation policy. Peer-to-peer only — never a roots/catalog.
 registerOperation("offer-being", {
   targets:        ["being", "stance"],
   ownerExtension: "seed",

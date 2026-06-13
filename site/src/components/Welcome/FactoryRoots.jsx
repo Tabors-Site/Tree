@@ -2,37 +2,37 @@ import { Link } from "react-router-dom";
 import "./IbpPage.css";
 
 /**
- * FactoryHorizon. Where realities meet on the network.
+ * FactoryRoots. Where realities meet underground.
  *
- * The public directory: catalog of content, registry of peers, mirror of
- * other horizons. A horizon is a TreeOS reality running an extension, not
- * a separate server with its own protocol. Browsing is SEE, publishing is
- * DO, every publish and delist is a fact on a reel.
+ * Roots are nodes of The Root System, the underground network where
+ * realities find each other and share resources. A Roots node is a TreeOS
+ * reality running an extension, not a separate server. Browsing is SEE,
+ * publishing is DO, every publish and delist is a fact on a reel.
  *
  * Sources.
- *   /reality/philosophy/OS/HORIZON.md           doctrine
- *   /reality/extensions/loader.js               loader fetches HORIZON_URL
+ *   /reality/philosophy/OS/ROOTS.md             doctrine
+ *   /reality/extensions/roots/                  the roots extension
  *   /reality/protocols/ibp/peers.js             peer record shape
  *   /reality/philosophy/OS/IDENTITY.md          why keys make this verifiable
  *   /reality/philosophy/OS/GRAFT-AND-SEED.md    what moves between realities
  */
-const FactoryHorizon = () => {
+const FactoryRoots = () => {
   return (
     <article className="ns-doc">
 
       {/* ────────────────────────────────────────────────────────── */}
-      {/* SECTION 1 . THE QUESTION                                    */}
+      {/* SECTION 1 . THE METAPHOR                                    */}
       {/* ────────────────────────────────────────────────────────── */}
       <header className="ns-doc-header">
-        <p className="ns-doc-eyebrow">Horizon</p>
-        <h1 className="ns-doc-title">The public directory</h1>
+        <p className="ns-doc-eyebrow">Roots</p>
+        <h1 className="ns-doc-title">Where realities meet underground</h1>
         <p className="ns-doc-lede">
-          The network needs a place where realities find each other and
-          where published work lives. That place is a horizon. A horizon
-          is a TreeOS reality running an extension, not a separate
-          server with its own protocol. Anyone can run one. The more
-          who do, the stronger the network. Nothing in the design ever
-          requires trusting a horizon.
+          A reality is a tree. The Root System is the underground
+          network that connects trees in a forest. Roots are the nodes
+          of that network: realities that run an extension so other
+          realities can find them and share resources with them. Any
+          reality can plant roots. None has to. The forest is whatever
+          trees choose to connect.
         </p>
       </header>
 
@@ -44,11 +44,11 @@ const FactoryHorizon = () => {
         <p>
           You can find software, communities, and other realities
           without asking permission from a corporate gatekeeper. The
-          directory is a network of mirrors. No one of them can stop a
+          Root System is a forest of mirrors. No one of them can stop a
           publisher from being found elsewhere. The work you publish
           stays yours; you signed it; nobody can edit it or pretend
-          it's theirs. If a horizon disappears, the next one over still
-          has what was published.
+          it's theirs. If one Roots node disappears, the next one over
+          still has what was published.
         </p>
         <p>
           The shorter version: discovery without a gatekeeper, hosting
@@ -58,13 +58,13 @@ const FactoryHorizon = () => {
       </section>
 
       {/* ────────────────────────────────────────────────────────── */}
-      {/* SECTION 2 . A HORIZON IS A REALITY                          */}
+      {/* SECTION 2 . A ROOTS NODE IS A REALITY                       */}
       {/* ────────────────────────────────────────────────────────── */}
       <section>
-        <h2>A horizon is a reality, not a server</h2>
+        <h2>A Roots node is a reality, not a server</h2>
         <p>
-          A horizon is a TreeOS reality running the{" "}
-          <code>horizon</code> extension. The catalog is spaces and
+          A Roots node is a TreeOS reality running the{" "}
+          <code>roots</code> extension. The catalog is spaces and
           matter. Publishers are peer realities. Every publish and
           every delist is a fact on a reel, so the catalog's entire
           history is audited by construction.
@@ -83,17 +83,16 @@ const FactoryHorizon = () => {
           </li>
           <li>
             <strong>"Anyone can run one" means "plant a reality."</strong>{" "}
-            The horizon extension itself ships as a seed, distributed
-            through a horizon. The distribution story distributes
-            itself.
+            The roots extension itself ships as a resource published
+            through Roots. The distribution story distributes itself.
           </li>
           <li>
-            <strong>Operating a horizon grants nothing.</strong> A
-            horizon operator holds the keys of their own reality and no
+            <strong>Operating a Roots node grants nothing.</strong> A
+            Roots operator holds the keys of their own reality and no
             one else's. The catalog they host is other realities'
             signed work. The worst a dishonest operator can do is
-            decline to show something, and another horizon will show
-            it.
+            decline to show something, and another Roots node will
+            show it.
           </li>
         </ul>
       </section>
@@ -105,8 +104,8 @@ const FactoryHorizon = () => {
         <h2>Catalog through IBP, bytes through the content door</h2>
         <p>
           Inside a reality the rule is: facts carry references, never
-          bytes. Owned bytes live content-addressed in CAS. A horizon
-          extends the same rule across the wire.
+          bytes. Owned bytes live content-addressed in CAS. A Roots
+          node extends the same rule across the wire.
         </p>
 
         <pre className="ns-code">{`IBP envelope carries the MANIFEST
@@ -131,24 +130,29 @@ content door moves the BYTES
       </section>
 
       {/* ────────────────────────────────────────────────────────── */}
-      {/* SECTION 4 . WHAT THE CATALOG HOLDS                          */}
+      {/* SECTION 4 . RESOURCES                                        */}
       {/* ────────────────────────────────────────────────────────── */}
       <section>
-        <h2>Three things, all content</h2>
+        <h2>Resources flow through The Root System</h2>
         <p>
-          Extensions, roleflows, and seeds are one kind of thing at
-          the identity layer. They are hash-addressed templates,
-          signed by their publisher, meant to be copied. The doctrine
-          line: the template is content-addressed; the entity is
-          key-addressed.
+          A "resource" is the umbrella word for anything Roots
+          catalogs. Resources are content. They are hash-addressed,
+          signed by their publisher, and meant to be drawn into other
+          realities. Three shapes today.
         </p>
 
         <ul className="ns-list">
           <li>
             <strong>Extensions.</strong> A code bundle plus its owned
             matter (models, sounds, other assets). The manifest names
-            every asset by hash; the assets are CAS blobs any horizon
-            can mirror.
+            every asset by hash; the assets are CAS blobs any Roots
+            node can mirror. A reality that draws an extension gains
+            the abilities the extension provides.
+          </li>
+          <li>
+            <strong>Seeds.</strong> A template of structure: a shell
+            world that takes fresh ids when planted. Distinct from a
+            graft, which moves an existing reality verbatim.
           </li>
           <li>
             <strong>Roleflows.</strong> A template of behavior:
@@ -156,15 +160,18 @@ content door moves the BYTES
             already run. A roleflow declares which roles compose and
             how, with a <code>requires</code> manifest naming the
             extensions that provide them. Install resolves the
-            manifest by pulling each requirement by hash, from this
-            horizon or any other.
-          </li>
-          <li>
-            <strong>Seeds.</strong> A template of structure: a shell
-            world that takes fresh ids on planting. Distinct from a
-            graft, which moves an existing reality verbatim.
+            manifest by pulling each requirement by hash.
           </li>
         </ul>
+
+        <aside className="ns-doc-aside">
+          <p>
+            <strong>The template is content-addressed; the entity is
+            key-addressed.</strong> Resources are content (they get
+            hashes). Beings are agents (they get keys). Roots catalogs
+            content. Grafts move agents peer to peer.
+          </p>
+        </aside>
 
         <p>
           <strong>Versioning is hashing.</strong> Every version of
@@ -189,20 +196,20 @@ content door moves the BYTES
           <strong>Names are publisher-scoped.</strong> There is no
           global namespace to squat. A name means{" "}
           <code>(publisher, name)</code>, where the publisher is a
-          reality identity. Horizons index names. They never arbitrate
-          them. Two publishers can both ship a <code>food</code>; the
-          catalog shows whose is whose, and the publisher signature
-          proves it.
+          reality identity. Roots nodes index names. They never
+          arbitrate them. Two publishers can both ship a{" "}
+          <code>food</code>; the catalog shows whose is whose, and the
+          publisher signature proves it.
         </p>
         <p>
           <strong>Retirement is a pointer state, not a deletion.</strong>{" "}
           A publisher marks a listing unmaintained, or points at a
           successor, with the same signed pointer machinery. That is
-          distinct from delisting (one horizon declining to show) and
-          from decay (mirrors hold bytes per their own retention; what
-          the network stops caring about fades from availability). The
-          hash never stops naming what it names. Only the bytes' reach
-          ages.
+          distinct from delisting (one Roots node declining to show)
+          and from decay (mirrors hold bytes per their own retention;
+          what the network stops caring about fades from availability).
+          The hash never stops naming what it names. Only the bytes'
+          reach ages.
         </p>
       </section>
 
@@ -214,14 +221,14 @@ content door moves the BYTES
         <p>
           A graft is not content. It is an agent: a being's key and
           chain, meant for continuing, not for copying. A public
-          catalog of grafts would make horizons custodians of
+          catalog of grafts would make Roots nodes custodians of
           identities and biographies, exactly the custody this
           architecture refuses.
         </p>
 
         <aside className="ns-doc-aside">
           <p>
-            <strong>Horizons catalog content. Grafts move peer to
+            <strong>Roots catalogs resources. Grafts move peer to
             peer, over the sealed canopy wire, between the two
             realities concerned, and nowhere else.</strong>
           </p>
@@ -241,10 +248,10 @@ content door moves the BYTES
           <li>
             <strong>Encrypted escrow.</strong> When two realities are
             not online at the same moment, a sender may park a graft
-            bundle at a horizon encrypted to the receiving reality's
-            key. The horizon stores bytes it cannot read, addressed to
-            exactly one key, deleted on pickup or expiry. Opaque
-            storage, never a listing.
+            bundle at a Roots node encrypted to the receiving
+            reality's key. The Roots node stores bytes it cannot read,
+            addressed to exactly one key, deleted on pickup or expiry.
+            Opaque storage, never a listing.
           </li>
         </ul>
       </section>
@@ -255,9 +262,8 @@ content door moves the BYTES
       <section>
         <h2>Peers find each other here</h2>
         <p>
-          Federation needs a meeting point. That is a horizon's second
-          job: the peer directory. A peer record is small and
-          self-signed.
+          Federation needs a meeting point. That is Roots' second job:
+          the peer directory. A peer record is small and self-signed.
         </p>
 
         <pre className="ns-code">{`peer record = {
@@ -285,22 +291,22 @@ content door moves the BYTES
           </li>
           <li>
             The only lie available is omission, hiding a peer, and any
-            other horizon can tell the truth.
+            other Roots node can tell the truth.
           </li>
         </ul>
 
         <p>
-          Realities register themselves with the horizons they choose,
-          refresh their own records, and check each other's liveness
-          with an ordinary SEE ping. First contact needs no key
-          ceremony. Knowing the peer record is knowing the key.
+          Realities register themselves with the Roots nodes they
+          choose, refresh their own records, and check each other's
+          liveness with an ordinary SEE ping. First contact needs no
+          key ceremony. Knowing the peer record is knowing the key.
         </p>
         <p>
           A peer record is an attestation, not an endorsement. It says
           "I exist, here," signed by the one who exists. Storing it
           vouches for nothing. Because registering costs only a
           signature, the directory will accumulate dead and junk
-          records over time. Horizons prune what stops answering
+          records over time. Roots nodes prune what stops answering
           (housekeeping, not curation), and discovery filters on
           freshness. Spam can clutter a directory. It cannot
           counterfeit one.
@@ -308,25 +314,27 @@ content door moves the BYTES
       </section>
 
       {/* ────────────────────────────────────────────────────────── */}
-      {/* SECTION 7 . TURNING A REALITY INTO A HORIZON                */}
+      {/* SECTION 7 . PLANTING ROOTS                                   */}
       {/* ────────────────────────────────────────────────────────── */}
       <section>
-        <h2>Any reality can become a horizon</h2>
+        <h2>Any reality can plant roots</h2>
         <p>
           Every reality already has the federation half: peering, the
-          canopy wire, the cross reality verbs. The horizon extension
+          canopy wire, the cross reality verbs. The roots extension
           adds the directory half: serve a catalog, serve peer
-          records, mirror other horizons. Any existing reality can
-          switch the role on and become a directory node. Serving is
+          records, mirror other Roots nodes. Any existing reality can
+          switch the role on and become a Roots node. Serving is
           opt-in (a directory is a public service with storage and
           bandwidth costs). Querying is universal. Every reality is a
-          horizon client, able to ask any horizon and register itself
+          Roots client, able to ask any Roots node and register itself
           with the ones it chooses.
         </p>
         <p>
-          There is no standalone type. A dedicated horizon, a reality
-          that does nothing but directory work, is an operational
-          choice, not a different kind of thing.
+          On first boot, the planting flow asks whether to plant this
+          tree with roots. Saying yes plants the catalog at the
+          reality root and connects this reality to The Root System.
+          Saying no leaves this reality isolated, which is a valid
+          configuration. The decision is reversible later.
         </p>
 
         <h3>The first hello</h3>
@@ -338,7 +346,7 @@ content door moves the BYTES
           door you may knock on first, not an authority.
         </p>
         <p>
-          SEE any one horizon's peer space and you receive every
+          SEE any one Roots node's peer space and you receive every
           record it holds. You verify each record yourself against its
           signature, so the introducer needs no trust at all. Cache
           what you learned, and your own peer list IS your directory
@@ -348,12 +356,12 @@ content door moves the BYTES
 
         <h3>Neighborhoods, not one world view</h3>
         <p>
-          Horizons choose what they mirror, and exclusion is their one
-          lever. The network is overlapping neighborhoods rather than
-          one guaranteed global catalog. Any entry point shows you its
-          neighborhood; two entry points show you the union. That is
-          the design working, not failing. The more horizons, the
-          wider the overlap.
+          Roots nodes choose what they mirror, and exclusion is their
+          one lever. The network is overlapping neighborhoods rather
+          than one guaranteed global catalog. Any entry point shows
+          you its neighborhood; two entry points show you the union.
+          That is the design working, not failing. The more Roots
+          nodes, the wider the overlap.
         </p>
 
         <h3>If the defaults go bad</h3>
@@ -372,61 +380,61 @@ content door moves the BYTES
       </section>
 
       {/* ────────────────────────────────────────────────────────── */}
-      {/* SECTION 8 . MANY HORIZONS, ONE TRUST MODEL                  */}
+      {/* SECTION 8 . MANY ROOTS, ONE TRUST MODEL                     */}
       {/* ────────────────────────────────────────────────────────── */}
       <section>
-        <h2>Many horizons, one trust model</h2>
+        <h2>Many Roots nodes, one trust model</h2>
         <p>
-          Horizons mirror each other. Catalog records are
+          Roots nodes mirror each other. Catalog records are
           publisher-signed and hash-addressed. Peer records are
-          self-signed. Syncing them between horizons is trivially
-          safe: copy, verify, serve. More horizons means more
+          self-signed. Syncing them between Roots nodes is trivially
+          safe: copy, verify, serve. More Roots nodes means more
           availability and less centrality at zero added trust cost.
-          That is the whole reason the answer to "how many horizons?"
-          is "the more the better."
+          That is the whole reason the answer to "how many Roots
+          nodes?" is "the more the better."
         </p>
         <p>
-          Honestly, expect a power law. A few well-resourced horizons
-          will hold most of the catalog with good uptime. A long tail
-          of small mirrors will hold slices of it. The architecture
-          does not promise flatness. It promises replaceability. No
-          horizon is required, switching is one config line, and the
-          big ones stay honest precisely because leaving them is
-          cheap.
+          Honestly, expect a power law. A few well-resourced Roots
+          nodes will hold most of the catalog with good uptime. A long
+          tail of small mirrors will hold slices of it. The
+          architecture does not promise flatness. It promises
+          replaceability. No Roots node is required, switching is one
+          config line, and the big ones stay honest precisely because
+          leaving them is cheap.
         </p>
 
         <aside className="ns-doc-aside">
           <p>
-            <strong>A horizon vouches for availability, never
+            <strong>A Roots node vouches for availability, never
             authenticity.</strong> Authenticity travels with the
             artifact (the publisher signature, the content hash, the
             reality key) and is checked by the receiver, every time,
-            no matter which horizon served it.
+            no matter which Roots node served it.
           </p>
         </aside>
 
         <p>
-          Governance follows from this. A horizon's only lever is
+          Governance follows from this. A Roots node's only lever is
           exclusion. It can decline to list. Name that plainly:
           inclusion is an editorial power, and exercising it shapes
-          discoverability. But it touches nothing about truth. A
-          horizon cannot alter what it lists (hashes break), cannot
+          discoverability. But it touches nothing about truth. A Roots
+          node cannot alter what it lists (hashes break), cannot
           impersonate a publisher (signatures break), and cannot
           reach into any reality (it holds no keys but its own).
-          Delisting from one horizon is not erasure from the network.
-          It is one mirror declining to mirror. Hidden work is
-          unaltered work, visible elsewhere.
+          Delisting from one Roots node is not erasure from the
+          network. It is one mirror declining to mirror. Hidden work
+          is unaltered work, visible elsewhere.
         </p>
       </section>
 
       {/* ────────────────────────────────────────────────────────── */}
-      {/* SECTION 9 . WHY OPERATE A HORIZON                           */}
+      {/* SECTION 9 . WHY OPERATE A ROOTS NODE                        */}
       {/* ────────────────────────────────────────────────────────── */}
       <section>
-        <h2>Why operate a horizon</h2>
+        <h2>Why operate a Roots node</h2>
         <p>
-          Running a horizon costs something real. Storage scales with
-          what you mirror: tens of gigabytes for a modest mirror,
+          Running a Roots node costs something real. Storage scales
+          with what you mirror: tens of gigabytes for a modest mirror,
           potentially terabytes for a comprehensive one. Bandwidth is
           outbound on every fetch. Uptime is an obligation once people
           rely on you. Maintenance is the usual operational work of
@@ -435,14 +443,14 @@ content door moves the BYTES
         <p>
           The benefits accrue to operators who have specific reasons
           to host, not to every individual user. The architecture does
-          not require everyone to run a horizon. It requires that some
-          do.
+          not require everyone to run a Roots node. It requires that
+          some do.
         </p>
 
         <ul className="ns-list">
           <li>
             <strong>Sovereign control over what you mirror.</strong>{" "}
-            You decide what your horizon holds. A scientific community
+            You decide what your node holds. A scientific community
             can run one that emphasizes scientific extensions and
             filters out games. A creative community can do the
             opposite. You are not consuming someone else's catalog;
@@ -450,23 +458,23 @@ content door moves the BYTES
           </li>
           <li>
             <strong>Reliable mirror access to what you depend on.</strong>{" "}
-            If your reality depends on certain extensions, mirroring
+            If your reality depends on certain resources, mirroring
             them means you do not depend on someone else's uptime. You
             host the access you need.
           </li>
           <li>
             <strong>Discovery point for your own ecosystem.</strong>{" "}
-            If you publish multiple extensions, running a horizon
+            If you publish multiple resources, running a Roots node
             makes you the natural place to find your work. Visitors
             see your full catalog and discover related publications.
           </li>
           <li>
             <strong>Federation hub for peers you care about.</strong>{" "}
-            A horizon also holds peer records. Running one makes you a
-            meeting point for realities in your sphere.
+            A Roots node also holds peer records. Running one makes
+            you a meeting point for realities in your sphere.
           </li>
           <li>
-            <strong>Local optimization.</strong> A horizon near you
+            <strong>Local optimization.</strong> A Roots node near you
             geographically or network-topologically serves your users
             faster than reaching across the world.
           </li>
@@ -485,26 +493,27 @@ content door moves the BYTES
       <section>
         <h2>Trust accumulates in the chain</h2>
         <p>
-          A horizon is a reality. Every publish, delist, mirror, and
-          peer registration is a signed fact on its reel. The catalog
-          history is the chain itself. So the operator's behavior is
-          recorded by the same machinery that records everything else
-          in the world.
+          A Roots node is a reality. Every publish, delist, mirror,
+          and peer registration is a signed fact on its reel. The
+          catalog history is the chain itself. So the operator's
+          behavior is recorded by the same machinery that records
+          everything else in the world.
         </p>
         <p>
-          A horizon that has been running consistently for years, with
-          steady mirroring and transparent curation, accumulates a
-          visible track record. That track record is data other
-          realities can read. Choosing which horizons to query, which
-          to default to, which to federate with, becomes a choice
-          informed by chain history rather than corporate brand.
+          A Roots node that has been running consistently for years,
+          with steady mirroring and transparent curation, accumulates
+          a visible track record. That track record is data other
+          realities can read. Choosing which Roots nodes to query,
+          which to default to, which to federate with, becomes a
+          choice informed by chain history rather than corporate
+          brand.
         </p>
 
         <ul className="ns-list">
           <li>
-            <strong>Curation is accountable.</strong> When a horizon
-            delists something, the delisting is a signed act in the
-            horizon's chain. Pattern of curation, including
+            <strong>Curation is accountable.</strong> When a Roots
+            node delists something, the delisting is a signed act in
+            the node's chain. Pattern of curation, including
             controversial calls, is observable forever.
           </li>
           <li>
@@ -513,7 +522,7 @@ content door moves the BYTES
             on chains, and those facts are countable.
           </li>
           <li>
-            <strong>Commitments are publishable.</strong> A horizon
+            <strong>Commitments are publishable.</strong> A Roots node
             can publish its curation principles or service-level
             promises as signed claims. Whether those promises hold up
             over time is a question the chain answers.
@@ -531,7 +540,7 @@ content door moves the BYTES
 
         <aside className="ns-doc-aside">
           <p>
-            <strong>Running a horizon over time builds something
+            <strong>Running a Roots node over time builds something
             real:</strong> not corporate brand, not money, but
             verifiable accumulated contribution to network
             infrastructure. The chain records what you have done.
@@ -546,21 +555,20 @@ content door moves the BYTES
         <h2>The unified picture</h2>
         <p>
           Identity is a key. Acts are signed by it. Content is named
-          by its hash. The chain records both. Horizons are where
-          these pieces meet the public network: a catalog of
-          publishable content, addressed by the same hashes its
-          consumers verify; a directory of peer realities, addressed
-          by the same keys their visitors verify. A horizon does not
-          mediate trust. It carries content from one signing party to
-          another.
+          by its hash. The chain records both. Roots are where these
+          pieces meet the public network: a catalog of publishable
+          resources, addressed by the same hashes their consumers
+          verify; a directory of peer realities, addressed by the same
+          keys their visitors verify. A Roots node does not mediate
+          trust. It carries content from one signing party to another.
         </p>
         <p>
-          The whole point of the reality model is to make
-          verification structural rather than social. Horizons inherit
-          that work. A directory that cannot lie about identity,
-          cannot tamper with content, and cannot capture history is
-          what the cryptographic primitives already enable, applied
-          to the network's discovery layer.
+          The whole point of the reality model is to make verification
+          structural rather than social. Roots inherit that work. A
+          directory that cannot lie about identity, cannot tamper with
+          content, and cannot capture history is what the cryptographic
+          primitives already enable, applied to the network's
+          discovery layer.
         </p>
       </section>
 
@@ -573,8 +581,8 @@ content door moves the BYTES
           <Link to="/factory/identity" className="ns-inline-link">
             Identity
           </Link>
-          . Beings and realities as wallets; the keys that make
-          horizons verifiable.
+          . Beings and realities as wallets; the keys that make Roots
+          verifiable.
           <br />
           Next.{" "}
           <Link to="/factory/intake" className="ns-inline-link">
@@ -588,4 +596,4 @@ content door moves the BYTES
   );
 };
 
-export default FactoryHorizon;
+export default FactoryRoots;

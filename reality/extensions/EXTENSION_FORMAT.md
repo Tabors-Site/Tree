@@ -1568,7 +1568,7 @@ Extensions run in the same Node.js process as reality. There is no sandbox or im
 
 ## Package Types: Extensions, Bundles, and OS
 
-The Horizon directory organizes publishable packages into three types. All use the same publishing pipeline, versioning, ownership, and tombstone system. A `type` field in the manifest distinguishes them.
+A Roots catalog organizes publishable resources into three types. All use the same publishing pipeline, versioning, ownership, and tombstone system. A `type` field in the manifest distinguishes them.
 
 ### Extension (default)
 
@@ -1591,7 +1591,7 @@ export default {
 - `"treeos-base"`: needs that bundle's extensions to be present.
 - `"FarmOS"`: built specifically for that OS distribution.
 
-The Horizon directory groups extensions by `builtFor` automatically. Publish with `builtFor: "FarmOS"` and it appears under FarmOS in the directory. No manual curation.
+A Roots catalog groups extensions by `builtFor` automatically. Publish with `builtFor: "FarmOS"` and it appears under FarmOS in the catalog. No manual curation.
 
 ### Bundle
 
@@ -1617,7 +1617,7 @@ export default {
 - `type: "bundle"` is required.
 - `includes` lists the extensions in this bundle with version constraints. Must have at least 2.
 - Bundles do not need `index.js`. Only `manifest.js` is required.
-- All listed extensions must exist in the Horizon directory at publish time.
+- All listed extensions must exist in a reachable Roots catalog at publish time.
 - Installing a bundle (`treeos bundle install <name>`) installs all member extensions.
 
 ### OS
@@ -1679,26 +1679,26 @@ treeos bundle install <name>    Install all member extensions.
 
 ## Collaboration
 
-Code lives on your reality. You build extensions in `extensions/my-extension/`, test them locally, and publish to Horizon when ready. If you want others to contribute, push the code to GitHub (or any git host) and link it with `repoUrl`. If you don't need collaboration, skip the repo. The extension works either way.
+Code lives on your reality. You build extensions in `extensions/my-extension/`, test them locally, and publish through your Roots node when ready. If you want others to contribute, push the code to GitHub (or any git host) and link it with `repoUrl`. If you don't need collaboration, skip the repo. The extension works either way.
 
 ### Workflow
 
 1. **Build** locally. Create your extension in `extensions/`. Test it on your reality.
-2. **Publish** to Horizon. `treeos ext publish my-extension --notes "what changed"`. Horizon stores the package.
-3. **Others install** from Horizon. `treeos ext install my-extension`. They get the published version.
+2. **Publish** through Roots. `treeos ext publish my-extension --notes "what changed"`. Your Roots node stores the package.
+3. **Others install** from any Roots node. `treeos ext install my-extension`. They get the published version.
 4. **Collaborate** (optional). Push to GitHub. Others fork, PR, contribute. You publish the next version.
 
 ### Linking code and packages
 
-If your code is on a public repo, include `repoUrl` when publishing so Horizon can link to the source:
+If your code is on a public repo, include `repoUrl` when publishing so the catalog can link to the source:
 
 ```js
 // In your manifest or publish command
 repoUrl: "https://github.com/yourname/my-extension"
 ```
 
-Horizon displays this on the extension detail page as a "Source Code" button. Browse cards show a "source" indicator when repoUrl is present.
+A Roots node displays this on the extension detail page as a "Source Code" button. Browse cards show a "source" indicator when repoUrl is present.
 
 ### If the author is inactive
 
-Fork the repo. Publish under a new name. Horizon tracks name ownership (first publisher owns the name), not code ownership. The ecosystem grows through open contribution. If you improve an abandoned extension, publish your version and let operators choose.
+Fork the repo. Publish under a new name. Roots tracks name ownership (first publisher owns the name), not code ownership. The ecosystem grows through open contribution. If you improve an abandoned extension, publish your version and let operators choose.
