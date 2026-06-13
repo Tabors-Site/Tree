@@ -21,6 +21,7 @@ const CHAPTERS = [
   { to: "/factory/integrity",   label: "Integrity"           },
   { to: "/factory/identity",    label: "Identity"            },
   { to: "/factory/roots",       label: "Roots"               },
+  { to: "/factory/graft",       label: "Graft & seed"        },
   { to: "/factory/intake",      label: "1. Intake"           },
   { to: "/factory/assign",      label: "2. Assign"           },
   { to: "/factory/fold",        label: "3. Fold"             },

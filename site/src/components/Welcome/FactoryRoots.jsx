@@ -585,11 +585,11 @@ content door moves the BYTES
           verifiable.
           <br />
           Next.{" "}
-          <Link to="/factory/intake" className="ns-inline-link">
-            1. Intake
+          <Link to="/factory/graft" className="ns-inline-link">
+            Graft &amp; seed
           </Link>
-          . A summon arrives in the being's inbox and the cycle
-          begins.
+          . What moves between realities: bring the thing, or bring
+          the shape.
         </p>
       </nav>
     </article>

@@ -275,7 +275,7 @@ async function interactiveSetup(existingEnv = {}) {
 // dormant.
 
 async function discoverLocalExtensions() {
-  const extDir = path.join(__dirname, "extensions");
+  const extDir = path.join(__dirname, "resources", "extensions");
   if (!fs.existsSync(extDir)) return [];
 
   const out = [];
@@ -387,7 +387,7 @@ async function pickExtensions() {
 }
 
 function finalizeExtensionProfile(selected, { rootsChosen } = {}) {
-  const profilePath = path.join(__dirname, "extensions", ".treeos-profile");
+  const profilePath = path.join(__dirname, "resources", "extensions", ".treeos-profile");
   const firstBootActionsPath = path.join(__dirname, ".first-boot-actions.json");
 
   if (selected.length === 0) {

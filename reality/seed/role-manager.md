@@ -676,7 +676,7 @@ Op Purpose Refusal mode
 set-role Create/replace live role at ./roles/<name> AND hot-register into the in-memory registry Persisted to .roles mirror; in-memory hot-register error surfaces but mirror write succeeds
 delete-role Remove a live role Refuses with usage list when any being's roleFlow or defaultRole references it; force:true bypasses
 set-world-signal Write <reality-root>.qualities.world.<namespace>.<key> Validates kebab-case namespace + key segments
-Plumbing change in seed/extensions/scopedReality.js: declare.registerRole now auto-passes manifest.name as the third arg, so extension-registered roles get origin: "<ext-name>" instead of falsely tagged as "seed".
+Plumbing change in seed/scopedReality (now resources/extensions/scopedReality.js): declare.registerRole now auto-passes manifest.name as the third arg, so extension-registered roles get origin: "<ext-name>" instead of falsely tagged as "seed".
 
 BE:birth extended in seed/ibp/verbs/be.js: Payload now accepts roleFlow (array or JSON string). Threads through summonCreateBeing → createBeingWithHome → createBeing → stamps qualities.roleFlow at birth.
 
@@ -692,7 +692,7 @@ Dropped the roles[] carry-check entirely
 Past this boundary, the rest of the runner (assemble.js, momentum.js, llmMoment.js, summon.js) reads the composed spec as if it were a regular role — they don't know stacking exists.
 
 5. Extensions
-   extensions/emotions/ — modifier-role pack. Eight roles: emotions:bored / tired / focused / curious / cautious / urgent / playful / formal. Each is a short prompt, no can\* entries, intent: "modifier" tag (docs-only).
+   resources/extensions/emotions/ — modifier-role pack. Eight roles: emotions:bored / tired / focused / curious / cautious / urgent / playful / formal. Each is a short prompt, no can\* entries, intent: "modifier" tag (docs-only).
 
 6. Portal changes
    Shared module (reality/portal/shared/):
@@ -775,7 +775,7 @@ seed/present/roles/roleComposer.js — composer
 seed/present/roles/role-manager/ops.js — the three live-author ops
 seed/present/beats/1-assign.js — where everything plugs into the moment
 portal/shared/role-manager-panel.js + being-flow-panel.js — UI
-extensions/emotions/ — example modifier extension
+resources/extensions/emotions/ — example modifier extension
 .test/scripts/verify-roleflow-determinism.js — purity contract
 site/src/components/Welcome/FactoryRoles.jsx — the public explanation
 That's the full RoleFlow build from the spec, what's wired, and what's left if you want to push further.
