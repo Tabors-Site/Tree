@@ -1,9 +1,10 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Graft. Apply a clone bundle into this reality, producing fresh
-// spaces / beings / matter with new local IDs.
+// Seed plant. Apply a seed (template) bundle into this reality,
+// producing fresh spaces / beings / matter with new local ids.
 //
-// The graft is the inverse of clone:
+// Planting is structure-instantiation (the inverse of capturing a seed
+// in seedTemplate.js):
 //
 //   - Each captured aggregate gets a fresh uuid in the target's
 //     namespace.
@@ -20,12 +21,13 @@
 //     graft elsewhere, or delete the conflicting child first). Future
 //     versions can wire the merge mediator.
 //
-// History does not transfer — that's the clone-vs-seed distinction.
-// A grafted subtree begins its life on the target's reels at the
-// moment of the graft; subsequent reads see fresh facts only. The
+// History does not transfer — that's the seed-vs-graft distinction.
+// A planted subtree begins its life on the target's reels at the
+// moment of the plant; subsequent reads see fresh facts only. The
 // bundle's sourceReality / sourceBranch are recorded in the
-// graft-completed meta-fact for audit, not replayed. For full-biography
-// transfer (acts preserved, identity continuation), see seed.js + plant.
+// seed-planted meta-fact for audit, not replayed. For full-biography
+// transfer (acts preserved, identity continuation, the thing itself),
+// see graft.js — GRAFT-AND-SEED.md draws the line.
 
 import { v4 as uuidv4 } from "uuid";
 import { isSentinelRef, isAggregateRef, refKind, refId } from "../ref.js";
@@ -50,13 +52,13 @@ import log from "../../seedReality/log.js";
  * @param {object} [opts.summonCtx]    if invoked inside an existing moment; otherwise the eager-fold singleton path is used
  * @returns {Promise<{ rootSpaceId, counts, remapTable }>}
  */
-export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
+export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
   assertValidBundle(bundle);
   if (!targetParentSpaceId || typeof targetParentSpaceId !== "string") {
-    throw new Error("graftClone: targetParentSpaceId is required");
+    throw new Error("plantTemplate: targetParentSpaceId is required");
   }
   if (!opts.operatorBeingId || typeof opts.operatorBeingId !== "string") {
-    throw new Error("graftClone: opts.operatorBeingId is required (identifies the grafter for GRAFT_INITIATOR + audit)");
+    throw new Error("plantTemplate: opts.operatorBeingId is required (identifies the grafter for GRAFT_INITIATOR + audit)");
   }
   const branch = opts.branch || "0";
 
@@ -70,12 +72,12 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
   // additionally pins the hash against the offered manifest.
   let bundleVerified = null;
   if (bundle.meta?.bundleHash) {
-    const { computeBundleHash } = await import("./clone.js");
+    const { computeBundleHash } = await import("./seedTemplate.js");
     const recomputed = await computeBundleHash(bundle);
     bundleVerified = recomputed === bundle.meta.bundleHash;
     if (!bundleVerified) {
       throw new Error(
-        `graftClone: BUNDLE INTEGRITY FAILED — meta.bundleHash ${bundle.meta.bundleHash.slice(0, 16)}… ` +
+        `plantTemplate: BUNDLE INTEGRITY FAILED — meta.bundleHash ${bundle.meta.bundleHash.slice(0, 16)}… ` +
         `but the received content recomputes ${recomputed.slice(0, 16)}…. ` +
         `The bundle was altered after capture. Refusing before any fact stamps.`,
       );
@@ -90,14 +92,14 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
   // signature, verify it self-certifyingly against its signerId (a pubkey
   // id) — no callback to the source reality. Present-but-invalid is a hard
   // refusal; absent is advisory (pre-signature bundles / unsigned
-  // producers). The verified signer rides into the graft-completed fact.
+  // producers). The verified signer rides into the template-planted fact.
   let bundleSigner = null;
   {
     const { verifyBundleSig } = await import("./bundleSig.js");
     const v = await verifyBundleSig(bundle);
     if (!v.ok) {
       throw new Error(
-        `graftClone: BUNDLE SIGNATURE FAILED (${v.reason}` +
+        `plantTemplate: BUNDLE SIGNATURE FAILED (${v.reason}` +
         (v.signerId ? `, signer ${String(v.signerId).slice(0, 14)}…` : "") +
         `). Refusing before any fact stamps.`,
       );
@@ -138,14 +140,14 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
         });
         if (stored.hash !== hash) {
           throw new Error(
-            `graftClone: CAS BLOB INTEGRITY FAILED — bundle claims ${hash.slice(0, 16)}… but the ` +
+            `plantTemplate: CAS BLOB INTEGRITY FAILED — bundle claims ${hash.slice(0, 16)}… but the ` +
             `bytes hash to ${stored.hash.slice(0, 16)}…. Refusing before any fact stamps. ` +
             `(The mis-claimed bytes sit under their true hash; the retention sweeper owns them.)`,
           );
         }
         if (claimedMeta.has(hash) && claimedMeta.get(hash).size !== buf.length) {
           throw new Error(
-            `graftClone: casManifest size mismatch for ${hash.slice(0, 16)}… — refusing.`,
+            `plantTemplate: casManifest size mismatch for ${hash.slice(0, 16)}… — refusing.`,
           );
         }
       }
@@ -166,7 +168,7 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
   // ── Manifest gate ──
   // The bundle declares what it needs to FUNCTION here: the
   // extensions whose roles/ops/data the captured content references,
-  // and the role names its beings wear (cloneSubtree derives both at
+  // and the role names its beings wear (captureTemplate derives both at
   // capture). Grafting without the extensions produces beings that
   // can't wake and qualities nothing consumes — refuse loud. Roles
   // are softer: a missing role may arrive via the bundle's own
@@ -184,7 +186,7 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
       const missing = required.filter((name) => !loadedExt.has(name));
       if (missing.length > 0) {
         throw new Error(
-          `graftClone: bundle requires extension(s) not loaded here: ` +
+          `plantTemplate: bundle requires extension(s) not loaded here: ` +
           `${missing.join(", ")}. Install/enable them (extension profile) ` +
           `and re-graft, or edit bundle.manifest.extensions if you know ` +
           `the content doesn't need them.`,
@@ -225,7 +227,7 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
       paramTable.set(decl.name, decl.default);
     } else {
       throw new Error(
-        `graftClone: missing required parameter "${decl.name}". ` +
+        `plantTemplate: missing required parameter "${decl.name}". ` +
         `Provide it in opts.params or declare a default in the bundle.`,
       );
     }
@@ -235,7 +237,7 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
   for (const name of Object.keys(supplied)) {
     if (!paramTable.has(name)) {
       throw new Error(
-        `graftClone: opts.params["${name}"] supplied but bundle declares no parameter named "${name}".`,
+        `plantTemplate: opts.params["${name}"] supplied but bundle declares no parameter named "${name}".`,
       );
     }
   }
@@ -249,7 +251,7 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
   // "target parent space not found" when grafting onto a sub-branch.
   const targetParentSlot = await loadOrFold("space", targetParentSpaceId, branch);
   if (!targetParentSlot) {
-    throw new Error(`graftClone: target parent space "${targetParentSpaceId}" not found in branch "${branch}"`);
+    throw new Error(`plantTemplate: target parent space "${targetParentSpaceId}" not found in branch "${branch}"`);
   }
   // Heaven space refuse — but allow the place root ("space-root").
   // Tier-3 heaven spaces (identity, config, tools, etc.) are substrate
@@ -258,7 +260,7 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
   // top-level grafts (where the old seed system planted).
   const targetHeaven = targetParentSlot.state?.heavenSpace;
   if (targetHeaven && targetHeaven !== "space-root") {
-    throw new Error(`graftClone: cannot graft under heaven space "${targetHeaven}"`);
+    throw new Error(`plantTemplate: cannot graft under heaven space "${targetHeaven}"`);
   }
 
   // ── 2. Conflict check: name collision at the insertion point. ──
@@ -268,7 +270,7 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
     (s) => s.sourceId === bundle.meta.sourceScopeSpaceId,
   );
   if (!rootBundleSpace) {
-    throw new Error("graftClone: bundle.content.spaces is missing the scope root");
+    throw new Error("plantTemplate: bundle.content.spaces is missing the scope root");
   }
   const targetSiblings = await Projection.find({
     branch, type: "space",
@@ -278,7 +280,7 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
   }).select("id").lean();
   if (targetSiblings.length > 0) {
     throw new Error(
-      `graftClone: a sibling named "${rootBundleSpace.name}" already exists at the insertion point. ` +
+      `plantTemplate: a sibling named "${rootBundleSpace.name}" already exists at the insertion point. ` +
       `Rename the bundle's scope root, graft into a different parent, or remove the conflicting sibling first.`,
     );
   }
@@ -313,13 +315,13 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
     if (isSentinelRef(r)) {
       if (refKind(r) === "graft-initiator") return opts.operatorBeingId;
       if (refKind(r) === "insertion-point") return targetParentSpaceId;
-      throw new Error(`graftClone: unknown sentinel kind "${refKind(r)}"`);
+      throw new Error(`plantTemplate: unknown sentinel kind "${refKind(r)}"`);
     }
     if (isAggregateRef(r)) {
       const sourceId = r.id;
       const newId = remapTable.get(sourceId);
       if (!newId) {
-        throw new Error(`graftClone: bundle references unknown sourceId "${sourceId}" (not in content)`);
+        throw new Error(`plantTemplate: bundle references unknown sourceId "${sourceId}" (not in content)`);
       }
       // Return the bare-string id; the receiver substrate stores bare.
       return newId;
@@ -344,7 +346,7 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
       const name = value.slice(1);
       if (!paramTable.has(name)) {
         throw new Error(
-          `graftClone: bundle field references "$${name}" but no parameter by that name is declared.`,
+          `plantTemplate: bundle field references "$${name}" but no parameter by that name is declared.`,
         );
       }
       return paramTable.get(name);
@@ -419,7 +421,7 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
   }
 
   // ── 4. Stamp create-space facts in depth order. ──
-  // bundle.content.spaces is already depth-ordered by cloneSubtree;
+  // bundle.content.spaces is already depth-ordered by captureTemplate;
   // we trust that. Each space's parent is either INSERTION_POINT (→
   // targetParentSpaceId) or another bundle space (→ remapTable lookup).
   //
@@ -489,7 +491,7 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
     qualities.auth = { ...(qualities.auth || {}), privateKeyEnc: encryptCredential(kp.privateKeyPem) };
     const spec = {
       name:          remapInBundleField(b.name),
-      // Beings in the bundle are non-human (cloneSubtree filtered
+      // Beings in the bundle are non-human (captureTemplate filtered
       // password-bearing ones). Birth needs a password field on the
       // reducer path; we plant an empty hash since these beings can't
       // be auth-driven by humans anyway.
@@ -595,14 +597,14 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
       const v = await verifyReel(kind, id, branch);
       if (!v.ok) {
         throw new Error(
-          `graftClone: POST-GRAFT CHAIN VERIFICATION FAILED on ${kind}:${id.slice(0, 8)} ` +
+          `plantTemplate: POST-GRAFT CHAIN VERIFICATION FAILED on ${kind}:${id.slice(0, 8)} ` +
           `(${v.reason} at seq ${v.brokenAt}) — rolling the graft back.`,
         );
       }
     }
   }
 
-  // ── 8. Stamp a graft-completed meta-fact on the new root's reel. ──
+  // ── 8. Stamp a template-planted meta-fact on the new root's reel. ──
   // Records provenance: where this came from, who applied it, what
   // counts landed. Rides the OUTER wire moment (opts.summonCtx) when
   // present so the operator's transport act records "I grafted X."
@@ -610,7 +612,7 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
   if (opts.summonCtx) {
     await emitFact({
       verb:    "do",
-      action:  "graft-completed",
+      action:  "template-planted",
       beingId: opts.operatorBeingId,
       target:  { kind: "space", id: rootSpaceId },
       params:  {
@@ -631,7 +633,7 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
     await withBeingAct(opts.operatorBeingId, "graft:completed", branch, async (ctx) => {
       await emitFact({
         verb:    "do",
-        action:  "graft-completed",
+        action:  "template-planted",
         beingId: opts.operatorBeingId,
         target:  { kind: "space", id: rootSpaceId },
         params:  {
@@ -680,7 +682,7 @@ export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
       } catch (rollbackErr) {
         // Best-effort. Log via console — log import would be circular.
         // eslint-disable-next-line no-console
-        console.error(`graftClone rollback: ${endAction[kind]} on ${id.slice(0,8)} failed: ${rollbackErr.message}`);
+        console.error(`plantTemplate rollback: ${endAction[kind]} on ${id.slice(0,8)} failed: ${rollbackErr.message}`);
       }
     }
     // Audit: the graft failed. Stamps even when rollback is partial

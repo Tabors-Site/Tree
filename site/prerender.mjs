@@ -25,6 +25,7 @@ const NEW_ROUTES = [
   "/factory/branches",
   "/factory/integrity",
   "/factory/identity",
+  "/factory/horizon",
   "/factory/intake",
   "/factory/assign",
   "/factory/fold",
@@ -137,6 +138,10 @@ const PAGE_META = {
   "/factory/identity": {
     title: "Beings and Realities as Wallets . The Factory",
     description: "Beings and realities are named by their public key. Creating a being is creating a wallet: a global identity that works in any reality, signs its own acts, and verifies without directories. Same principle as content addressing, applied to agents.",
+  },
+  "/factory/horizon": {
+    title: "The Public Directory . The Factory",
+    description: "Horizon is the public directory where realities find each other and where published work lives. A horizon is a TreeOS reality running an extension, not a separate server. It catalogs content, holds peer records, mirrors other horizons, and vouches for availability never authenticity. Anyone can run one.",
   },
   "/factory/intake": {
     title: "Intake . Beat 1 . The Factory",

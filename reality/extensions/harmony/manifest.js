@@ -32,8 +32,8 @@ export default {
     // dancers + per-dancer drum-tick subscription + drummer wake
     // schedule, all as static facts (~30 entries). See
     // seed/done/Chain-Rebuild.md for the bundle format.
-    clones: {
-      "dance-floor": "./clones/dance-floor.clone.json",
+    seeds: {
+      "dance-floor": "./seeds/dance-floor.seed.json",
     },
     hooks: { fires: [], listens: [] },
 

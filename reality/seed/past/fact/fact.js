@@ -37,7 +37,7 @@
 // same fact — identity is intrinsic, not assigned. No random ids;
 // the stamper computes the identity at seal time (past/fact/hash.js
 // owns the digest; facts.js logFact is the only minting path —
-// plantSeed re-inserts rows verbatim WITH their identities, which is
+// plantGraft re-inserts rows verbatim WITH their identities, which is
 // what content addressing makes safe). Storage dedup, transport
 // ("do you have this hash?"), and tamper-evidence are properties of
 // the addressing scheme, not separate mechanisms.

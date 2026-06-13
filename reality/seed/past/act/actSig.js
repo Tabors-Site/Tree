@@ -179,8 +179,15 @@ export async function verifyActSig(act, { localReality = null } = {}) {
  * The canonical bytes a cross-reality envelope-sig attests to. `kind`
  * domain-separates it from an act-sig so neither can be replayed as the
  * other. Same serializer both sides use.
+ *
+ * `time` is the signing moment (ISO). It rides the wire as beingSig.time
+ * and is BOUND into the signature, so a captured being-sig cannot be
+ * re-wrapped in a fresh canopy body and replayed outside its freshness
+ * window. The canopy-level signedAt only proves the WRAPPER is fresh
+ * (the peer reality signs that); this proves the DEED is fresh (the
+ * being signs this).
  */
-export function buildEnvelopeSigPayload({ verb, address, payload, beingId, actId, branch, reality }) {
+export function buildEnvelopeSigPayload({ verb, address, payload, beingId, actId, branch, reality, time }) {
   return {
     kind:    "cross-reality-envelope",
     verb:    verb || null,
@@ -190,7 +197,18 @@ export function buildEnvelopeSigPayload({ verb, address, payload, beingId, actId
     actId:   actId || null,
     branch:  normBranch(branch),
     reality: reality || null,
+    time:    time || null,
   };
+}
+
+/**
+ * Freshness window for envelope being-sigs. Wider than the canopy wrapper
+ * window (60s) because the being signs at dispatch time and the wrapper
+ * may be built or retried later; 5 minutes bounds rewrap-replay while
+ * absorbing slow links and clock skew. Read per call so tests can tune it.
+ */
+function envelopeSigWindowMs() {
+  return Number(process.env.CROSS_ENVELOPE_SIG_WINDOW_MS || 5 * 60_000);
 }
 
 /**
@@ -207,8 +225,9 @@ export async function signEnvelopeBeingSig(env, pem) {
   if (!pem) return null;
   try {
     const { signAsBeing } = await import("../../materials/being/identity/beingKeys.js");
-    const value = signAsBeing(pem, buildEnvelopeSigPayload(env));
-    return { alg: "ed25519", by: env.beingId, value };
+    const time = new Date().toISOString();
+    const value = signAsBeing(pem, buildEnvelopeSigPayload({ ...env, time }));
+    return { alg: "ed25519", by: env.beingId, value, time };
   } catch (err) {
     log.warn("CrossWorld", `envelope signing failed for ${String(env?.beingId || "").slice(0, 10)}: ${err.message}`);
     return null;
@@ -226,12 +245,23 @@ export async function signEnvelopeBeingSig(env, pem) {
  * A PRESENT sig that fails is a hard ok:false.
  *
  * @param {object} env       same shape as signEnvelopeBeingSig's env
- * @param {object|null} beingSig  { alg, by, value }
+ * @param {object|null} beingSig  { alg, by, value, time }
  */
 export async function verifyEnvelopeBeingSig(env, beingSig) {
   if (!beingSig?.value) return { ok: true, reason: "unsigned-advisory" };
   const { isKeyId, verifyBeingSig } = await import("../../materials/being/identity/beingKeys.js");
   const by = env?.beingId;
   if (!isKeyId(by)) return { ok: true, reason: "non-key-signer" };
-  return { ok: verifyBeingSig(by, buildEnvelopeSigPayload(env), beingSig.value), reason: "being" };
+  // Freshness gate. The signing time is part of the signed payload, so a
+  // stale or missing time on a PRESENT sig is a hard refusal: without it
+  // a compromised peer could replay a captured being-sig forever inside
+  // freshly signed canopy wrappers. Sigs minted before this field landed
+  // fail here by design; re-dispatch signs fresh.
+  const t = Date.parse(beingSig.time || "");
+  if (Number.isNaN(t)) return { ok: false, reason: "missing-time" };
+  if (Math.abs(Date.now() - t) > envelopeSigWindowMs()) return { ok: false, reason: "stale-sig" };
+  return {
+    ok: verifyBeingSig(by, buildEnvelopeSigPayload({ ...env, time: beingSig.time }), beingSig.value),
+    reason: "being",
+  };
 }

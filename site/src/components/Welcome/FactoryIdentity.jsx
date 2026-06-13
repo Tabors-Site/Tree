@@ -466,9 +466,10 @@ treeos.ai#main/library@taborTHEGREAT
           (your reality booted on your own laptop, your beings
           federating into other realities, your private key never
           leaving your device) is what those primitives build toward,
-          not what runs end to end today. The current ceiling is still
-          custodial signing inside a reality you trust, named in the
-          open question section below. Easy first boot on a personal
+          not what runs end to end today. The current ceiling for
+          users who join a reality rather than host one is custodial
+          signing inside a reality they trust, named in the host-or-join
+          section below. Easy first boot on a personal
           machine, identity discovery across the network, and paper
           phrase recovery onto new hardware are extensions of what is
           already there, not separate projects.
@@ -656,33 +657,46 @@ treeos.ai#main/library@taborTHEGREAT
       {/* SECTION 12 . ONE OPEN QUESTION                              */}
       {/* ────────────────────────────────────────────────────────── */}
       <section>
-        <h2>One open question, named honestly</h2>
+        <h2>Self-host or join, named honestly</h2>
         <p>
-          The home reality holds every hosted being's private key
-          (every being, that is, whose user has not exported it and
-          moved offline). That means the reality CAN technically forge
-          any act by any of those beings. The signature proves "this
-          reality vouches for this being's act," not "this being
+          When you run your own reality on your own machine, the
+          reality IS your client. Your I_AM keypair, your being
+          keypairs, and the process that signs on their behalf are all
+          on the same box. There is no second party to entrust a key
+          to, and there is no separate "edge signing" layer the
+          architecture has to grow. The reality on your machine
+          already is the edge.
+        </p>
+        <p>
+          The honest open question is what happens for users who
+          don't self-host. Many will join community realities or
+          service realities other operators run. In that case the
+          joined reality holds the encrypted private keys of beings
+          hosted there and signs on their behalf when the user's
+          secondary unlock is supplied. The reality CAN technically
+          forge an act by one of those beings. The signature proves
+          "this reality vouches for this act," not "this being
           personally pressed the button." Custodial signing is the
-          inherent ceiling of "let the reality sign on your behalf."
+          inherent ceiling of letting someone else's reality sign on
+          your behalf.
         </p>
         <p>
-          Two mitigations are in play. The secondary unlock (a user
-          secret the reality never stores in plaintext) gates when the
-          reality is willing to sign at all, so the bar for silent
-          forgery is much higher than just having the encrypted key.
-          The full Merkle audit trail makes any forgery permanently
-          attributable. Together they make custodial signing acceptable
-          for most usage: users run their own reality, or join
-          realities they trust.
+          Two mitigations stand. The secondary unlock (a user secret
+          the reality never stores in plaintext) gates when the
+          reality is willing to sign at all, so silent forgery is well
+          above the bar of just having the encrypted key. The Merkle
+          audit trail makes any forgery permanently attributable to
+          the reality that signed it. Together they make joining
+          acceptable: a user joins a reality they trust, and the
+          trust is bounded by audit math.
         </p>
         <p>
-          The full closure is non custodial edge signing: the private
-          key lives only in your client, and signs before the act
-          reaches the reality at all. That is a future move. The
-          current model is honest about what it does and does not
-          guarantee, which is the prerequisite for the move when it
-          comes.
+          The architecture is honest about both paths. Joining is the
+          convenience case for users who do not run their own
+          reality. Self-hosting is the answer for users who do not
+          want to extend trust to a host they do not control. Both
+          paths work today on the same primitives. Neither requires a
+          new client layer to be built.
         </p>
       </section>
 
@@ -737,10 +751,11 @@ both are cryptographic values of what they are
           . Content as identity, the hash side of the same principle.
           <br />
           Next.{" "}
-          <Link to="/factory/intake" className="ns-inline-link">
-            1. Intake
+          <Link to="/factory/horizon" className="ns-inline-link">
+            Horizon
           </Link>
-          . A summon arrives in the being's inbox and the cycle begins.
+          . Where realities meet on the network, and where published
+          work lives.
         </p>
       </nav>
     </article>

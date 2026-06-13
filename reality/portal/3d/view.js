@@ -15,7 +15,7 @@ import "../styles/scene-hud.css";
 import { Scene } from "./scene.js";
 import { mountIbpConsole } from "./ibp-console.js";
 import { initHotbar, destroyHotbar } from "./hotbar.js";
-import { promptForName, plantSeed as runPlantSeed, isPlanterOpen, closePrompt } from "./planter.js";
+import { promptForName, plantGraft as runPlantSeed, isPlanterOpen, closePrompt } from "./planter.js";
 import {
   setHud,
   showSummonPanel,

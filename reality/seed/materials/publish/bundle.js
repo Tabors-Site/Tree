@@ -157,7 +157,7 @@ export function emptyBundle({ sourceReality, sourceBranch, sourceScopeName, sour
       sourceBranch:      sourceBranch || "0",
       sourceScopeName:   sourceScopeName || null,
       sourceScopeSpaceId: sourceScopeSpaceId || null,
-      createdAt:         null,  // stamped by cloneSubtree at completion
+      createdAt:         null,  // stamped by captureTemplate at completion
       operatorBeingId:   operatorBeingId || null,
     },
     manifest: {

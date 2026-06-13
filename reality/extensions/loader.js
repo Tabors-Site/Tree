@@ -861,25 +861,25 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       }
 
       // Extension-shipped clone bundles. Each entry in
-      // manifest.provides.clones is a relative path to a static JSON
+      // manifest.provides.seeds is a relative path to a static JSON
       // bundle (the shape lives in seed/materials/publish/bundle.js).
       // The loader reads + validates each and registers it as
       // `<ext>:<localName>` so the portal's graft UI surfaces it
       // alongside other extensions' bundles. Operators graft via
-      // `reality.do(<position>, "graft-clone", { bundle, params })`.
+      // `reality.do(<position>, "plant-template", { bundle, params })`.
       // Replaces the retired seed-scaffold pattern. See
       // seed/done/Chain-Rebuild.md for the bundle format + parameter
       // substitution doctrine.
-      if (manifest.provides?.clones && typeof manifest.provides.clones === "object") {
-        const { registerClone } = await import("../seed/materials/publish/cloneRegistry.js");
+      if (manifest.provides?.seeds && typeof manifest.provides.seeds === "object") {
+        const { registerTemplate } = await import("../seed/materials/publish/templateRegistry.js");
         const { readFile } = await import("fs/promises");
         const namespace = (localName) => `${manifest.name}:${localName}`;
-        for (const [localName, relPath] of Object.entries(manifest.provides.clones)) {
+        for (const [localName, relPath] of Object.entries(manifest.provides.seeds)) {
           try {
             const resolved = path.resolve(dir, relPath);
             const json = await readFile(resolved, "utf8");
             const bundle = JSON.parse(json);
-            registerClone(namespace(localName), bundle, manifest.name);
+            registerTemplate(namespace(localName), bundle, manifest.name);
             log.info("Loader", `${manifest.name}: registered clone "${namespace(localName)}"`);
           } catch (err) {
             log.warn(
@@ -1611,9 +1611,9 @@ export async function uninstallExtension(name) {
       unregisterToolsForExtension(name, getToolOwner);
     } catch {}
     try {
-      const { unregisterClonesFromExtension } =
-        await import("../seed/materials/publish/cloneRegistry.js");
-      unregisterClonesFromExtension(name);
+      const { unregisterTemplatesFromExtension } =
+        await import("../seed/materials/publish/templateRegistry.js");
+      unregisterTemplatesFromExtension(name);
     } catch {}
     try {
       const { unregisterMatterTypesFromExtension } =

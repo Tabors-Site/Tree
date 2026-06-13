@@ -1,21 +1,23 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Seed — capture the full reality as a portable genetic encoding.
+// Graft — identity-preserving transport: bring the thing ITSELF, verbatim.
 //
-// **A seed is the genome.** It captures every fact, every act, every
-// branch, every reel head — the complete experiential biography of the
-// reality. Original IDs are preserved verbatim so a planted seed
-// CONTINUES the reality on a new substrate, not duplicates it.
+// A graft moves a being (or a branch, or the whole reality) WITH its
+// identity intact: same pubkey id, same act-chain, same fact hashes,
+// byte-for-byte as it was at home. No id remapping; an imported chain is
+// foreign by construction and lands by verbatim insert, never emitFact
+// (the digest binds branch + provenance, so re-homing is impossible).
 //
-// Compare with `clone.js`:
-//   - Clone captures the SETUP (current shape). Hollow face. Graft-only.
-//     For setup transfer: "install my configuration elsewhere."
-//   - Seed captures the WHOLE REALITY (chains + biography). Plant-only.
-//     For continuation: "continue my computational life elsewhere."
+// Scope ranges across one module:
+//   - captureGraft({beingId}) / applyGraft  — a BEING into a LIVING reality.
+//   - capturePartialGraft                    — a coherent SUBSET of a being.
+//   - captureGraft() / plantGraft            — the GENOME (whole reality at
+//     the root, boot-only into an empty DB; carries realityId so the result
+//     IS the same reality — a mirror/migration).
 //
-// See `seed/done/Chain-Rebuild.md` for the doctrine: clone and seed are two
-// distinct artifacts with two distinct purposes, not one artifact at
-// two fidelity levels.
+// The SHELL counterpart (a structural template, fresh ids on planting) is
+// seedTemplate.js / seedPlant.js. See philosophy/OS/GRAFT-AND-SEED.md:
+// graft brings the thing itself; seed brings the shape of the thing.
 //
 // Plant is the receive-side operation (boot-time only, lives in
 // `genesis.js`). The substrate refuses to expose runtime plant because
@@ -57,15 +59,15 @@ const REGENERABLE_COLLECTIONS = new Set([
   "spaces", "beings", "matters", "stamps",
 ]);
 
-export const SEED_BUNDLE_VERSION = "1.0";
+export const GRAFT_BUNDLE_VERSION = "1.0";
 
 // Canonical seeds folder: reality/seeds/, sibling of reality/extensions/.
 // Operator artifacts (genome backups) live here, NOT inside the
 // sovereign seed/ substrate folder.
-// seed.js lives at reality/seed/materials/publish/seed.js
+// seed.js lives at reality/seed/materials/publish/graft.js
 // reality/seeds is three levels up.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-export const SEEDS_FOLDER = path.resolve(__dirname, "..", "..", "..", "seeds");
+export const GRAFTS_FOLDER = path.resolve(__dirname, "..", "..", "..", "grafts");
 
 /**
  * Capture the full reality as a portable seed bundle.
@@ -75,7 +77,7 @@ export const SEEDS_FOLDER = path.resolve(__dirname, "..", "..", "..", "seeds");
  * to expose a runtime plant; the receiving deployer plants at boot via
  * `genesis.js` mode.
  *
- * By default, writes the captured seed to `reality/seeds/<realityName>-<timestamp>.seed.json`.
+ * By default, writes the captured seed to `reality/seeds/<realityName>-<timestamp>.graft.json`.
  * Pass `returnOnly: true` to skip the write and just return the bundle
  * (for callers who want to ship it over the wire or stash elsewhere).
  *
@@ -86,9 +88,13 @@ export const SEEDS_FOLDER = path.resolve(__dirname, "..", "..", "..", "seeds");
  * @param {boolean} [opts.returnOnly] if true, skip the disk write and just return the bundle
  * @returns {Promise<object>} { bundle, savedTo? } — bundle is the seed; savedTo is the disk path (when written)
  */
-export async function captureSeed(opts = {}) {
+export async function captureGraft(opts = {}) {
+  // Scope dispatch: a beingId narrows the graft to one being (its reel,
+  // act-chain, lineage). No beingId = the whole reality (genome = graft at
+  // maximal scope). Same operation, same verbatim-identity discipline.
+  if (opts.beingId) return captureBeingGraft(opts);
   const startedAt = Date.now();
-  log.info("Seed", "capturing reality genome...");
+  log.info("Graft", "capturing reality genome...");
 
   // ── 1. Collect every Fact ──
   // The substantive change chain. Each fact has its hash chain (p/h)
@@ -96,27 +102,27 @@ export async function captureSeed(opts = {}) {
   // chain matches the source's exactly (modulo wall-clock dates which
   // stay as-stamped).
   const facts = await Fact.find({}).sort({ seq: 1, date: 1 }).lean();
-  log.info("Seed", `captured ${facts.length} facts`);
+  log.info("Graft", `captured ${facts.length} facts`);
 
   // ── 2. Collect every Act ──
   // The experiential chain. Each act carries the cognition transcript
   // (startMessage, endMessage, facadeSnapshot) — the biography that
   // makes the reality more than a state snapshot.
   const acts = await Act.find({}).sort({ stampedAt: 1 }).lean();
-  log.info("Seed", `captured ${acts.length} acts`);
+  log.info("Graft", `captured ${acts.length} acts`);
 
   // ── 3. Collect every Branch ──
   // Branch registry: paths, branchPoints (per-reel snapshots of parent
   // heads at create-branch time), scopes, lifecycle flags.
   const branches = await Branch.find({}).lean();
-  log.info("Seed", `captured ${branches.length} branches`);
+  log.info("Graft", `captured ${branches.length} branches`);
 
   // ── 4. Collect every ReelHead ──
   // Per-reel-per-branch seq counters. Without these the receiving
   // substrate would allocate seq 1 for every reel on a fresh boot,
   // breaking the hash chain continuity from the seed's facts.
   const reelHeads = await ReelHead.find({}).lean();
-  log.info("Seed", `captured ${reelHeads.length} reel heads`);
+  log.info("Graft", `captured ${reelHeads.length} reel heads`);
 
   // ── 4b. Collect every ActHead ──
   // Per-being per-branch act-chain tips. Acts are content-addressed
@@ -124,7 +130,7 @@ export async function captureSeed(opts = {}) {
   // genome, not extension luggage.
   const { default: ActHead } = await import("../../past/act/actHead.js");
   const actHeads = await ActHead.find({}).lean();
-  log.info("Seed", `captured ${actHeads.length} act heads`);
+  log.info("Graft", `captured ${actHeads.length} act heads`);
 
   // ── 5. Collect everything else — extension collections et al ──
   // The genome is the WHOLE reality. Extensions may keep their own
@@ -146,11 +152,11 @@ export async function captureSeed(opts = {}) {
       const docs = await db.collection(name).find({}).toArray();
       if (docs.length > 0) {
         extensionData[name] = docs;
-        log.info("Seed", `captured ${docs.length} docs from "${name}"`);
+        log.info("Graft", `captured ${docs.length} docs from "${name}"`);
       }
     }
   } catch (err) {
-    log.warn("Seed", `extension-collection sweep failed: ${err.message}. Core chain still captured.`);
+    log.warn("Graft", `extension-collection sweep failed: ${err.message}. Core chain still captured.`);
   }
 
   // ── 5b. CAS blobs — the genome includes the BYTES ──
@@ -190,7 +196,7 @@ export async function captureSeed(opts = {}) {
           casManifest.omitted.push({ hash, reason: err?.message || "read failed" });
         }
       }
-      log.info("Seed", `captured ${casManifest.included.length}/${hashes.size} content blob(s)` +
+      log.info("Graft", `captured ${casManifest.included.length}/${hashes.size} content blob(s)` +
         (casManifest.omitted.length ? ` — ${casManifest.omitted.length} omitted (see casManifest)` : ""));
     }
   }
@@ -215,8 +221,8 @@ export async function captureSeed(opts = {}) {
 
   // ── 7. Assemble the bundle ──
   const bundle = {
-    kind: "seed",
-    bundleVersion: SEED_BUNDLE_VERSION,
+    kind: "graft",
+    bundleVersion: GRAFT_BUNDLE_VERSION,
     sourceReality: getRealityDomain() || null,
     capturedAt: new Date().toISOString(),
     capturedBy: opts.capturedBy || null,
@@ -236,7 +242,7 @@ export async function captureSeed(opts = {}) {
       // over the captured arrays (not the live DB, which keeps
       // moving while capture runs). A seed's identity IS this root:
       // any substrate planting these parts must recompute the same
-      // root, or determinism broke — plantSeed verifies and reports.
+      // root, or determinism broke — plantGraft verifies and reports.
       // Reproducible realities by construction.
       realityRoot: await (async () => {
         try {
@@ -276,20 +282,20 @@ export async function captureSeed(opts = {}) {
   }
 
   const elapsedMs = Date.now() - startedAt;
-  log.info("Seed", `genome captured in ${elapsedMs}ms`);
+  log.info("Graft", `genome captured in ${elapsedMs}ms`);
 
   // Default behavior: write to reality/seeds/ so there's one canonical
   // place for genome artifacts. Callers wanting the raw bundle pass
   // returnOnly: true.
   if (opts.returnOnly) return { bundle };
 
-  await mkdir(SEEDS_FOLDER, { recursive: true });
+  await mkdir(GRAFTS_FOLDER, { recursive: true });
   const stem = (opts.realityName || bundle.sourceReality || "reality")
     .replace(/[^a-zA-Z0-9._-]/g, "-");
   const stamp = bundle.capturedAt.replace(/[:.]/g, "-").slice(0, 19);
-  const savedTo = path.join(SEEDS_FOLDER, `${stem}-${stamp}.seed.json`);
+  const savedTo = path.join(GRAFTS_FOLDER, `${stem}-${stamp}.graft.json`);
   await writeFile(savedTo, JSON.stringify(bundle));
-  log.info("Seed", `genome saved to ${savedTo}`);
+  log.info("Graft", `genome saved to ${savedTo}`);
   return { bundle, savedTo };
 }
 
@@ -297,16 +303,16 @@ export async function captureSeed(opts = {}) {
  * Validate a seed bundle's structural shape. Throws on mismatch.
  * Plant uses this before touching the substrate.
  */
-export function assertValidSeed(bundle) {
+export function assertValidGraft(bundle) {
   if (!bundle || typeof bundle !== "object") {
     throw new Error("seed: bundle must be an object");
   }
-  if (bundle.kind !== "seed") {
-    throw new Error(`seed: bundle.kind must be "seed" (got "${bundle.kind}")`);
+  if (bundle.kind !== "graft") {
+    throw new Error(`graft: bundle.kind must be "graft" (got "${bundle.kind}")`);
   }
-  if (bundle.bundleVersion !== SEED_BUNDLE_VERSION) {
+  if (bundle.bundleVersion !== GRAFT_BUNDLE_VERSION) {
     throw new Error(
-      `seed: bundleVersion expected ${SEED_BUNDLE_VERSION}, got ${bundle.bundleVersion}`,
+      `seed: bundleVersion expected ${GRAFT_BUNDLE_VERSION}, got ${bundle.bundleVersion}`,
     );
   }
   for (const collection of ["facts", "acts", "branches", "reelHeads"]) {
@@ -348,8 +354,8 @@ export function assertValidSeed(bundle) {
  * @param {object} bundle  the seed bundle (typically parsed from disk)
  * @returns {Promise<{counts: object}>}
  */
-export async function plantSeed(bundle) {
-  assertValidSeed(bundle);
+export async function plantGraft(bundle) {
+  assertValidGraft(bundle);
 
   // ── 0. PROVENANCE gate (before touching the substrate) ──
   // If the genome carries a reality-root signature, verify it self-
@@ -365,11 +371,11 @@ export async function plantSeed(bundle) {
       const ok = await verifyRealityRootSig(bundle.meta.realityRoot, rsig.signerId, rsig.value);
       if (!ok) {
         throw new Error(
-          `plantSeed: genome reality-root SIGNATURE invalid (signer ` +
+          `plantGraft: genome reality-root SIGNATURE invalid (signer ` +
           `${String(rsig.signerId || "").slice(0, 14)}…) — refusing before planting.`,
         );
       }
-      log.info("Seed", `genome provenance verified — vouched by ${String(rsig.signerId).slice(0, 14)}…`);
+      log.info("Graft", `genome provenance verified — vouched by ${String(rsig.signerId).slice(0, 14)}…`);
     }
   }
 
@@ -388,14 +394,14 @@ export async function plantSeed(bundle) {
   const [factCount, actCount, branchCount, reelCount] = checks;
   if (factCount > 0 || actCount > 0 || branchCount > 0 || reelCount > 0) {
     throw new Error(
-      `plantSeed: refusing to plant into a non-empty DB. Found ` +
+      `plantGraft: refusing to plant into a non-empty DB. Found ` +
       `facts=${factCount}, acts=${actCount}, branches=${branchCount}, ` +
       `reelHeads=${reelCount}. Wipe the DB before planting (the deployer's ` +
       `responsibility — plant is destructive by design).`,
     );
   }
 
-  log.info("Seed", "planting reality genome...");
+  log.info("Graft", "planting reality genome...");
   const startedAt = Date.now();
 
   // ── 1b. CAS blobs land FIRST ──
@@ -413,16 +419,16 @@ export async function plantSeed(bundle) {
       const ref = await putContent(buf, { mimeType: "application/octet-stream" });
       if (ref.hash !== hash) {
         throw new Error(
-          `plantSeed: CAS BLOB INTEGRITY FAILED — bundle claims ${String(hash).slice(0, 16)}… but the ` +
+          `plantGraft: CAS BLOB INTEGRITY FAILED — bundle claims ${String(hash).slice(0, 16)}… but the ` +
           `bytes hash to ${ref.hash.slice(0, 16)}…. Refusing before any chain inserts.`,
         );
       }
       stored++;
     }
-    log.info("Seed", `planted ${stored} content blob(s), hash-verified`);
+    log.info("Graft", `planted ${stored} content blob(s), hash-verified`);
   }
   if (Array.isArray(bundle.casManifest?.omitted) && bundle.casManifest.omitted.length > 0) {
-    log.warn("Seed", `seed omitted ${bundle.casManifest.omitted.length} content blob(s) at capture — ` +
+    log.warn("Graft", `seed omitted ${bundle.casManifest.omitted.length} content blob(s) at capture — ` +
       `their refs plant but the bytes are not here.`);
   }
 
@@ -432,7 +438,7 @@ export async function plantSeed(bundle) {
   // and reelHeads.branch; insert them first.
   if (bundle.branches.length > 0) {
     await Branch.insertMany(bundle.branches, { ordered: false });
-    log.info("Seed", `planted ${bundle.branches.length} branches`);
+    log.info("Graft", `planted ${bundle.branches.length} branches`);
   }
 
   // ── 3. ReelHeads ──
@@ -440,7 +446,7 @@ export async function plantSeed(bundle) {
   // don't try to re-allocate seq=1 on every reel.
   if (bundle.reelHeads.length > 0) {
     await ReelHead.insertMany(bundle.reelHeads, { ordered: false });
-    log.info("Seed", `planted ${bundle.reelHeads.length} reel heads`);
+    log.info("Graft", `planted ${bundle.reelHeads.length} reel heads`);
   }
 
   // ── 3b. ActHeads ──
@@ -450,7 +456,7 @@ export async function plantSeed(bundle) {
   if (Array.isArray(bundle.actHeads) && bundle.actHeads.length > 0) {
     const { default: ActHead } = await import("../../past/act/actHead.js");
     await ActHead.insertMany(bundle.actHeads, { ordered: false });
-    log.info("Seed", `planted ${bundle.actHeads.length} act heads`);
+    log.info("Graft", `planted ${bundle.actHeads.length} act heads`);
   }
 
   // ── 4. Facts ──
@@ -458,14 +464,14 @@ export async function plantSeed(bundle) {
   // preserved. The fold engine derives projections from these.
   if (bundle.facts.length > 0) {
     await Fact.insertMany(bundle.facts, { ordered: false });
-    log.info("Seed", `planted ${bundle.facts.length} facts`);
+    log.info("Graft", `planted ${bundle.facts.length} facts`);
   }
 
   // ── 5. Acts ──
   // The experiential chain. Original _id, beingIn/beingOut, transcripts.
   if (bundle.acts.length > 0) {
     await Act.insertMany(bundle.acts, { ordered: false });
-    log.info("Seed", `planted ${bundle.acts.length} acts`);
+    log.info("Graft", `planted ${bundle.acts.length} acts`);
   }
 
   // ── 6. Extension collections et al ──
@@ -481,9 +487,9 @@ export async function plantSeed(bundle) {
       try {
         await db.collection(name).insertMany(docs, { ordered: false });
         extensionCollections++;
-        log.info("Seed", `planted ${docs.length} docs into "${name}"`);
+        log.info("Graft", `planted ${docs.length} docs into "${name}"`);
       } catch (err) {
-        log.warn("Seed", `planting collection "${name}" failed: ${err.message}`);
+        log.warn("Graft", `planting collection "${name}" failed: ${err.message}`);
       }
     }
   }
@@ -543,7 +549,7 @@ export async function plantSeed(bundle) {
       });
       rootVerified = actualRoot === expectedRoot;
       if (rootVerified) {
-        log.info("Seed", `chain root VERIFIED: ${actualRoot.slice(0, 16)}… — this reality is the captured reality`);
+        log.info("Graft", `chain root VERIFIED: ${actualRoot.slice(0, 16)}… — this reality is the captured reality`);
         // ── The root proves the COMMITMENT STRUCTURE; now prove the
         // facts behind it. The planted head rows came verbatim from
         // the bundle — a bundle with tampered fact rows but original
@@ -572,11 +578,11 @@ export async function plantSeed(bundle) {
           }
           if (broken.length > 0) {
             rootVerified = false;
-            log.warn("Seed", `chain walk FAILED on ${broken.length} chain(s): ` +
+            log.warn("Graft", `chain walk FAILED on ${broken.length} chain(s): ` +
               broken.slice(0, 5).map((b) => `${b.kind}:${b.key}(${b.reason})`).join(", ") +
               (broken.length > 5 ? ` …+${broken.length - 5}` : ""));
           } else {
-            log.info("Seed", `chain walk VERIFIED: ${reelsWalked} reel(s) + ${actsWalked} act-chain(s) recompute end to end`);
+            log.info("Graft", `chain walk VERIFIED: ${reelsWalked} reel(s) + ${actsWalked} act-chain(s) recompute end to end`);
           }
         }
       }
@@ -594,7 +600,7 @@ export async function plantSeed(bundle) {
         const why = actualRoot === expectedRoot
           ? "chain walk found broken chains behind a matching root (tampered facts under original heads)"
           : `chain root MISMATCH: expected ${expectedRoot.slice(0, 16)}…, got ${actualRoot.slice(0, 16)}…`;
-        log.warn("Seed", `${why} — UNPLANTING`);
+        log.warn("Graft", `${why} — UNPLANTING`);
         try {
           const db = mongoose.connection.db;
           const toClear = ["facts", "acts", "branches", "reelHeads", "actHeads"];
@@ -606,25 +612,25 @@ export async function plantSeed(bundle) {
           }
           const { invalidateBranchCache } = await import("../branch/branches.js");
           invalidateBranchCache(null);
-          log.warn("Seed", `unplanted ${toClear.length} collection(s); the substrate is empty again. ` +
+          log.warn("Graft", `unplanted ${toClear.length} collection(s); the substrate is empty again. ` +
             `Planted content blobs stay in the store under their true hashes (the retention sweeper owns orphans).`);
         } catch (unplantErr) {
-          log.error("Seed", `UNPLANT FAILED: ${unplantErr.message} — the substrate may hold a partial, ` +
+          log.error("Graft", `UNPLANT FAILED: ${unplantErr.message} — the substrate may hold a partial, ` +
             `unverified chain. Wipe the DB before booting.`);
         }
         throw new Error(
-          `plantSeed: chain verification failed (${why}). ` +
+          `plantGraft: chain verification failed (${why}). ` +
           `The plant was rolled back; the substrate is empty.`,
         );
       }
     } catch (err) {
       if (/chain verification failed/.test(err?.message || "")) throw err;
-      log.warn("Seed", `chain root verification failed to run: ${err.message}`);
+      log.warn("Graft", `chain root verification failed to run: ${err.message}`);
     }
   }
 
   const elapsedMs = Date.now() - startedAt;
-  log.info("Seed", `genome planted in ${elapsedMs}ms`);
+  log.info("Graft", `genome planted in ${elapsedMs}ms`);
 
   return {
     counts: {
@@ -637,4 +643,538 @@ export async function plantSeed(bundle) {
     rootVerified,
     expectedRoot,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// BEING GRAFT — identity-preserving transport of ONE being into a
+// LIVING reality. Scope below the genome: the being's own reel + its
+// full act-chain + its lineage, carried VERBATIM (original pubkey id,
+// original fact/act hashes), deduped by pubkey on arrival. See
+// philosophy/OS/GRAFT-AND-SEED.md.
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Capture ONE being as an identity-preserving graft bundle. The being's
+ * own reel (be:birth + its be-acts + do:set-being + its summons), its
+ * full act-chain, the lineage Branch rows its facts span, the per-branch
+ * reel/act heads, and the CAS blobs its facts reference — all VERBATIM
+ * (original ids, original p/h hashes). meta.lineage carries parentBeingId
+ * + homeReality (bare refs; the referenced beings need NOT be present on
+ * the target). meta.graftRoot is the scoped fingerprint; meta.graftSig is
+ * this reality vouching for the extract.
+ */
+async function captureBeingGraft(opts) {
+  const beingId = String(opts.beingId);
+  const reality = getRealityDomain() || null;
+  const { default: ActHead } = await import("../../past/act/actHead.js");
+  const { actHeadKey } = await import("../../past/act/actHash.js");
+  const { reelKey } = await import("../../past/reel/reelHeads.js");
+  const { loadBranch } = await import("../branch/branches.js");
+  const { loadOrFold } = await import("../projections.js");
+  const { graftRootFromParts } = await import("../../past/fact/chainRoots.js");
+
+  // The being's OWN reel (single-writer: every fact here has the being as
+  // its actor) + its full act-chain.
+  const facts = await Fact.find({ "target.kind": "being", "target.id": beingId }).sort({ seq: 1 }).lean();
+  const acts = await Act.find({ beingIn: beingId }).sort({ stampedAt: 1 }).lean();
+
+  // Lineage branches: every distinct non-main branch the being touched,
+  // plus its ancestor chain, so resolveBranchLineage resolves on the
+  // target. Main ("0") is implicit (no Branch row).
+  const branchSet = new Set();
+  for (const f of facts) branchSet.add(String(f.branch ?? "0"));
+  for (const a of acts) branchSet.add(String(a.branch ?? "0"));
+  branchSet.delete("0");
+  const branchById = new Map();
+  for (const b of branchSet) {
+    let cur = b;
+    while (cur && cur !== "0" && !branchById.has(cur)) {
+      const row = await loadBranch(cur);
+      if (!row) break;
+      branchById.set(cur, row);
+      cur = row.parent ? String(row.parent) : null;
+    }
+  }
+  const branches = [...branchById.values()];
+
+  // Per-branch heads (the being's reel + act-chain tips). Include main.
+  const allBranches = [...new Set([...branchSet, "0", ...branchById.keys()])];
+  const reelKeys = allBranches.map((br) => reelKey(br, "being", beingId));
+  const actKeys = allBranches.map((br) => actHeadKey(br, beingId));
+  const reelHeads = await ReelHead.find({ _id: { $in: reelKeys } }).lean();
+  const actHeads = await ActHead.find({ _id: { $in: actKeys } }).lean();
+
+  // Lineage refs from the being's current projection.
+  const slot = await loadOrFold("being", beingId, opts.branch || "0");
+  const lineage = {
+    parentBeingId: slot?.state?.parentBeingId ?? null,
+    homeReality: slot?.state?.homeReality ?? reality,
+  };
+
+  // CAS blobs referenced by the being's facts (rare on a being reel, but a
+  // do:set-being can carry a cas-backed quality value). Same store-by-true-
+  // hash discipline the genome uses.
+  const casBlobs = {};
+  const casManifest = { included: [], omitted: [] };
+  {
+    const HASH_RE = /^[0-9a-f]{64}$/;
+    const hashes = new Set();
+    for (const f of facts) {
+      for (const c of [f?.params?.content, f?.params?.value]) {
+        if (c?.kind === "cas" && HASH_RE.test(c.hash || "")) hashes.add(c.hash);
+      }
+    }
+    if (hashes.size > 0) {
+      const { getContent } = await import("../matter/contentStore.js");
+      for (const hash of hashes) {
+        try {
+          const buf = await getContent(hash);
+          if (!buf) { casManifest.omitted.push({ hash, reason: "bytes not in local store" }); continue; }
+          casBlobs[hash] = buf.toString("base64");
+          casManifest.included.push({ hash, size: buf.length });
+        } catch (err) { casManifest.omitted.push({ hash, reason: err?.message || "read failed" }); }
+      }
+    }
+  }
+
+  const graftRoot = graftRootFromParts({ beingId, reelHeads, actHeads });
+  const bundle = {
+    kind: "graft",
+    bundleVersion: GRAFT_BUNDLE_VERSION,
+    sourceReality: reality,
+    capturedAt: new Date().toISOString(),
+    capturedBy: opts.capturedBy || null,
+    meta: {
+      beingId,
+      lineage,
+      graftRoot,
+      counts: { facts: facts.length, acts: acts.length, branches: branches.length, reelHeads: reelHeads.length, actHeads: actHeads.length },
+    },
+    facts, acts, branches, reelHeads, actHeads, casBlobs, casManifest,
+  };
+  // Provenance: this reality vouches the extract is authentic. signerId =
+  // realityId (a pubkey id a foreign receiver decodes from the id alone).
+  try {
+    const { getRealityIdentity, signData } = await import("../../realityIdentity.js");
+    const rid = getRealityIdentity();
+    bundle.meta.graftSig = { signerId: rid.realityId, value: signData(graftRoot) };
+  } catch { /* unsigned extract (advisory) */ }
+
+  log.info("Graft", `captured being ${beingId.slice(0, 12)}… — ${facts.length} fact(s), ${acts.length} act(s), ${branches.length} lineage branch(es)`);
+  return { bundle };
+}
+
+/**
+ * Capture a PARTIAL graft — a coherent SUBSET of a being's chain (the four
+ * mechanisms in GRAFT-AND-SEED.md). What is partial is the HISTORY available,
+ * never the identity: the pubkey id is the same, the included facts verify,
+ * the being is unambiguously itself.
+ *
+ * Two mechanisms ride one capture path, distinguished only by where the
+ * captured range STARTS:
+ *
+ *   "genesis-prefix"     — the reel from seq 1 to a cutoff. COMPLETE FROM
+ *     GENESIS, so it carries the being's birth and verifies/folds with the
+ *     stock verifyReel (no anchor). A later full/longer graft MERGES the tail.
+ *
+ *   "checkpoint-segment" — a contiguous SUFFIX [fromSeq..toSeq], anchored at
+ *     the head hash of the fact immediately before fromSeq (carried as a
+ *     signed checkpoint, NOT the fact itself). It verifies with the Phase-2
+ *     verifyReelFrom seeded at that anchor; genesis-rooted verifyReel would
+ *     (correctly) seq-gap. This is "bring my recent history, provably mine,
+ *     without my whole life" — a verifiable reference import. The anchor is
+ *     committed transitively by the segment's hash chain → graftRoot →
+ *     graftSig, so it cannot be forged past the cold provenance gate.
+ *
+ * What is partial is the HISTORY, never the identity: same pubkey id, the
+ * included facts verify, the being is unambiguously itself. meta.partial
+ * declares the shape so the receiver knows what is missing and how to answer
+ * history queries beyond the extract. (single-branch — anchor at a fork point
+ * — and state-snapshot — no reel, a signed folded state — are the remaining
+ * follow-ons; single-branch is checkpoint-segment with a branchPoint anchor,
+ * state-snapshot is the seed that would make a checkpoint-segment FOLD live.)
+ *
+ * @param {object} opts { beingId, mechanism?, cutoffSeq, fromSeq?, toSeq?, branch?, beyondExtract?, capturedBy? }
+ * @returns {Promise<{ bundle }>}
+ */
+export async function capturePartialGraft(opts = {}) {
+  const beingId = String(opts.beingId || "");
+  if (!beingId) throw new Error("capturePartialGraft: opts.beingId is required");
+  const mechanism = opts.mechanism || "genesis-prefix";
+  if (mechanism !== "genesis-prefix" && mechanism !== "checkpoint-segment") {
+    throw new Error(`capturePartialGraft: mechanism must be "genesis-prefix" or "checkpoint-segment" (single-branch / state-snapshot are follow-ons)`);
+  }
+  const branch = opts.branch || "0";
+  const reality = getRealityDomain() || null;
+  const { reelKey } = await import("../../past/reel/reelHeads.js");
+  const { graftRootFromParts } = await import("../../past/fact/chainRoots.js");
+  const { loadOrFold } = await import("../projections.js");
+
+  // Capture the chosen range of the being's reel, and the partial descriptor
+  // that declares its shape to the receiver.
+  let facts, partialMeta;
+  if (mechanism === "genesis-prefix") {
+    const cutoffSeq = Number(opts.cutoffSeq);
+    if (!(Number.isInteger(cutoffSeq) && cutoffSeq > 0)) {
+      throw new Error("capturePartialGraft: cutoffSeq must be a positive integer");
+    }
+    // The being's reel on `branch`, seq 1..cutoff — a genesis-rooted prefix.
+    facts = await Fact.find({ "target.kind": "being", "target.id": beingId, branch, seq: { $lte: cutoffSeq } }).sort({ seq: 1 }).lean();
+    if (facts.length === 0) {
+      throw new Error(`capturePartialGraft: no facts on being ${beingId.slice(0, 10)}… reel (branch ${branch}) at or before seq ${cutoffSeq}`);
+    }
+    partialMeta = { mechanism: "genesis-prefix", branch, cutoffSeq: facts[facts.length - 1].seq, beyondExtract: opts.beyondExtract || "refuse" };
+  } else {
+    // checkpoint-segment: a contiguous SUFFIX [fromSeq..toSeq?]. fromSeq must
+    // be >= 2 (fromSeq 1 IS a genesis-prefix). The anchor is the prev-hash the
+    // first segment fact already chains to — carried as the checkpoint, the
+    // fact before fromSeq is NOT included.
+    const fromSeq = Number(opts.fromSeq);
+    if (!(Number.isInteger(fromSeq) && fromSeq >= 2)) {
+      throw new Error("capturePartialGraft: checkpoint-segment fromSeq must be an integer >= 2 (fromSeq 1 is a genesis-prefix)");
+    }
+    const seqFilter = { $gte: fromSeq };
+    if (opts.toSeq != null) seqFilter.$lte = Number(opts.toSeq);
+    facts = await Fact.find({ "target.kind": "being", "target.id": beingId, branch, seq: seqFilter }).sort({ seq: 1 }).lean();
+    if (facts.length === 0) {
+      throw new Error(`capturePartialGraft: no facts on being ${beingId.slice(0, 10)}… reel (branch ${branch}) at seq ${fromSeq}..`);
+    }
+    if (facts[0].seq !== fromSeq) {
+      throw new Error(`capturePartialGraft: reel has no fact at seq ${fromSeq} (a checkpoint-segment must be contiguous from fromSeq)`);
+    }
+    const anchorPrev = String(facts[0].p);
+    partialMeta = {
+      mechanism: "checkpoint-segment", branch, fromSeq, cutoffSeq: facts[facts.length - 1].seq,
+      // The signed checkpoint: "at seq fromSeq-1 this reel's head was anchorPrev."
+      // The receiver seeds verifyReelFrom here; the value is committed
+      // transitively by the segment chain, so graftSig already vouches it.
+      checkpoint: { branch, seq: fromSeq - 1, headHash: anchorPrev },
+      beyondExtract: opts.beyondExtract || "refuse",
+    };
+  }
+
+  const head = facts[facts.length - 1];
+  // A reelHead AT the captured tip, so the landed extract records its lawful
+  // tip and a later graft can advance from it.
+  const reelHeads = [{ _id: reelKey(branch, "being", beingId), type: "being", id: beingId, branch, head: head.seq, headHash: String(head._id) }];
+
+  const slot = await loadOrFold("being", beingId, branch);
+  const lineage = { parentBeingId: slot?.state?.parentBeingId ?? null, homeReality: slot?.state?.homeReality ?? reality };
+  const graftRoot = graftRootFromParts({ beingId, reelHeads, actHeads: [] });
+
+  const bundle = {
+    kind: "graft",
+    bundleVersion: GRAFT_BUNDLE_VERSION,
+    sourceReality: reality,
+    capturedAt: new Date().toISOString(),
+    capturedBy: opts.capturedBy || null,
+    meta: {
+      beingId,
+      lineage,
+      graftRoot,
+      partial: partialMeta,
+      counts: { facts: facts.length, acts: 0, branches: 0, reelHeads: 1, actHeads: 0 },
+    },
+    facts, acts: [], branches: [], reelHeads, actHeads: [], casBlobs: {}, casManifest: { included: [], omitted: [] },
+  };
+  try {
+    const { getRealityIdentity, signData } = await import("../../realityIdentity.js");
+    bundle.meta.graftSig = { signerId: getRealityIdentity().realityId, value: signData(graftRoot) };
+  } catch { /* unsigned extract (advisory) */ }
+
+  log.info("Graft", mechanism === "genesis-prefix"
+    ? `captured genesis-prefix of being ${beingId.slice(0, 12)}… — seq 1..${head.seq} (${facts.length} fact(s))`
+    : `captured checkpoint-segment of being ${beingId.slice(0, 12)}… — seq ${partialMeta.fromSeq}..${head.seq} anchored at ${String(facts[0].p).slice(0, 10)}… (${facts.length} fact(s))`);
+  return { bundle };
+}
+
+/**
+ * Apply a being-graft bundle into THIS (living) reality, preserving the
+ * being's identity verbatim. NO id remapping — the pubkey id and every
+ * fact/act hash land byte-identical (the digest binds branch + provenance,
+ * so re-homing is impossible; an imported chain is foreign by construction
+ * and goes in by verbatim insert, never emitFact).
+ *
+ * Verify ladder BEFORE any insert (refuse cold): graftSig provenance →
+ * CAS hash-verify → recompute EVERY fact/act _id in memory → dedup by
+ * pubkey. Then verbatim insert of only the rows the target lacks; verify
+ * the landed chain; compensating-facts rollback on any failure (standalone
+ * Mongo, no transactions).
+ *
+ * @param {object} bundle              a being-graft bundle (meta.beingId set)
+ * @param {object} opts
+ * @param {string} opts.operatorBeingId who is grafting (for the audit fact)
+ * @param {string} [opts.branch="0"]    the branch the audit fact rides
+ * @returns {Promise<{ beingId, mode, counts, verified }>}
+ */
+export async function applyGraft(bundle, opts = {}) {
+  assertValidGraft(bundle);
+  const beingId = bundle?.meta?.beingId;
+  if (!beingId || typeof beingId !== "string") {
+    throw new Error("applyGraft: bundle.meta.beingId is required (this is a being-graft, not a genome — use plantGraft for a genome)");
+  }
+  if (!opts.operatorBeingId) {
+    throw new Error("applyGraft: opts.operatorBeingId is required (the grafter, for the audit fact)");
+  }
+  const branch = opts.branch || "0";
+  const { computeHash, contentOf, GENESIS_PREV } = await import("../../past/fact/hash.js");
+  const { computeActId, contentOfAct } = await import("../../past/act/actHash.js");
+  const { default: ActHead } = await import("../../past/act/actHead.js");
+  const { withBeingAct } = await import("../../sprout.js");
+  const { emitFact } = await import("../../past/fact/facts.js");
+
+  // ── 1. Provenance gate (cold, FAIL-CLOSED) ──
+  // A graft into a LIVING reality requires the source's signature over the
+  // extract, verified self-certifyingly against signerId (the source
+  // realityId) — no callback. opts.allowUnsigned is the explicit escape for
+  // a trusted local extract (e.g. a same-reality restore).
+  if (bundle.meta?.graftSig?.value && bundle.meta?.graftRoot) {
+    const { isKeyId } = await import("../being/identity/beingKeys.js");
+    const { verifyRealityRootSig } = await import("../../past/fact/chainRoots.js");
+    const sg = bundle.meta.graftSig;
+    const ok = isKeyId(sg.signerId)
+      ? await verifyRealityRootSig(bundle.meta.graftRoot, sg.signerId, sg.value)
+      : false;
+    if (!ok) throw new Error(`applyGraft: graft SIGNATURE invalid (signer ${String(sg.signerId || "").slice(0, 14)}…). Refusing before any insert.`);
+  } else if (!opts.allowUnsigned) {
+    throw new Error("applyGraft: unsigned graft refused — a signed graftRoot (meta.graftSig) is required. Pass opts.allowUnsigned only for a trusted local extract.");
+  }
+
+  // ── 2. CAS blobs land first (cold hash-verify) ──
+  if (bundle.casBlobs && Object.keys(bundle.casBlobs).length > 0) {
+    const { putContent } = await import("../matter/contentStore.js");
+    for (const [hash, b64] of Object.entries(bundle.casBlobs)) {
+      const buf = Buffer.from(String(b64), "base64");
+      const stored = await putContent(buf, { mimeType: "application/octet-stream" });
+      if (stored.hash !== hash) {
+        throw new Error(`applyGraft: CAS BLOB INTEGRITY FAILED — claims ${hash.slice(0, 16)}… but bytes hash ${stored.hash.slice(0, 16)}…. Refusing.`);
+      }
+    }
+  }
+
+  // ── 3. SCOPE gate (cold): every row must BELONG to meta.beingId ──
+  // Rows are hash-valid by construction, so the recompute gate below does
+  // NOT stop a maliciously-assembled bundle that splices in hash-valid rows
+  // targeting OTHER reels. Bind the whole graft to the being: facts on its
+  // own reel, acts it authored, heads keyed to it. A being-graft is single-
+  // writer on its OWN reel; nothing here may write another being's.
+  for (const f of bundle.facts) {
+    if (!(f.target && f.target.kind === "being" && String(f.target.id) === beingId)) {
+      throw new Error(`applyGraft: BUNDLE SCOPE VIOLATION — a fact targets ${f.target?.kind}:${String(f.target?.id || "").slice(0, 10)}…, not the grafted being's reel. Refusing.`);
+    }
+  }
+  for (const a of bundle.acts) {
+    if (String(a.beingIn) !== beingId) {
+      throw new Error(`applyGraft: BUNDLE SCOPE VIOLATION — an act is authored by ${String(a.beingIn || "").slice(0, 10)}…, not the grafted being. Refusing.`);
+    }
+  }
+  for (const rh of bundle.reelHeads || []) {
+    if (String(rh._id).split(":").slice(1).join(":") !== `being:${beingId}`) {
+      throw new Error(`applyGraft: BUNDLE SCOPE VIOLATION — reelHead ${rh._id} is not the grafted being's reel. Refusing.`);
+    }
+  }
+  for (const ah of bundle.actHeads || []) {
+    if (String(ah._id).split(":").slice(1).join(":") !== String(beingId)) {
+      throw new Error(`applyGraft: BUNDLE SCOPE VIOLATION — actHead ${ah._id} is not the grafted being's act-chain. Refusing.`);
+    }
+  }
+
+  // ── 4. Recompute EVERY fact/act _id in memory (cold tamper gate) ──
+  for (const f of bundle.facts) {
+    if (typeof f._id !== "string" || computeHash(f.p, contentOf(f)) !== f._id) {
+      throw new Error(`applyGraft: FACT INTEGRITY FAILED — fact at seq ${f.seq} (${String(f._id).slice(0, 12)}…) does not reproduce its hash. Refusing before any insert.`);
+    }
+  }
+  for (const a of bundle.acts) {
+    if (typeof a._id !== "string" || computeActId(a.p, contentOfAct(a)) !== a._id) {
+      throw new Error(`applyGraft: ACT INTEGRITY FAILED — act ${String(a._id).slice(0, 12)}… does not reproduce its hash. Refusing before any insert.`);
+    }
+  }
+  // NOTE: the act SEAL signature (act.sig — which additionally binds an act's
+  // full ΔF factIds) is NOT re-verified here. A being-scoped bundle carries
+  // the being's REEL, not every fact its acts produced on other reels, so the
+  // ΔF can't be reconstructed from the bundle alone. The act IDENTITY
+  // (computeActId, which binds beingIn) + the SCOPE gate (beingIn === being)
+  // + the post-insert verifyActChain prove the chain. Full seal-sig
+  // re-verification waits on the subtree-scoped graft (which carries the ΔF).
+
+  // ── 5. Dedup by pubkey ──
+  const factIds = bundle.facts.map((f) => String(f._id));
+  const actIds = bundle.acts.map((a) => String(a._id));
+  const haveFacts = new Set((await Fact.find({ _id: { $in: factIds } }).select("_id").lean()).map((r) => String(r._id)));
+  const haveActs = new Set((await Act.find({ _id: { $in: actIds } }).select("_id").lean()).map((r) => String(r._id)));
+  const newFacts = bundle.facts.filter((f) => !haveFacts.has(String(f._id)));
+  const newActs = bundle.acts.filter((a) => !haveActs.has(String(a._id)));
+  // Mode from the FACTS present, not the projection cache (applyGraft inserts
+  // verbatim and does NOT fold — fold-on-read derives the projection later, so
+  // the cache is empty right after a graft): nothing present → create; all
+  // present → idempotent (re-graft); some present → merge (append the tail).
+  const mode = haveFacts.size === 0 ? "create" : (newFacts.length === 0 ? "idempotent" : "merge");
+
+  // ── 6. Reel-divergence gate (cold) ──
+  // A (branch, seq) on the being's reel that the target already holds with
+  // DIFFERENT content (different _id) is a FORK. The unique (branch, target,
+  // seq) index would throw mid-insert; catch it cold and refuse — a graft
+  // preserves the reel verbatim, it never forks it.
+  if (newFacts.length > 0) {
+    const wantBySeq = new Map();
+    for (const f of newFacts) wantBySeq.set(`${String(f.branch ?? "0")}:${f.seq}`, String(f._id));
+    const seqs = [...new Set(newFacts.map((f) => f.seq))];
+    const clash = await Fact.find({ "target.kind": "being", "target.id": beingId, seq: { $in: seqs } }).select("_id seq branch").lean();
+    for (const e of clash) {
+      const want = wantBySeq.get(`${String(e.branch ?? "0")}:${e.seq}`);
+      if (want && want !== String(e._id)) {
+        throw new Error(`applyGraft: REEL DIVERGENCE — target already holds (branch ${e.branch ?? "0"}, seq ${e.seq}) with different content. Refusing (a graft preserves the reel verbatim).`);
+      }
+    }
+  }
+
+  // ── 7. Branch gate (cold): absent → insert; SAME (parent+branchPoint) →
+  // ok; DIFFERENT → refuse. Comparing parent alone misses a same-path/same-
+  // parent/different-branchPoint row, so compare branchPoint too.
+  const newBranches = [];
+  const normBP = (bp) => (bp instanceof Map ? Object.fromEntries(bp) : (bp || {}));
+  const bpKey = (bp) => JSON.stringify(Object.entries(normBP(bp)).sort());
+  for (const b of bundle.branches || []) {
+    const existing = await Branch.findById(b._id).lean();
+    if (!existing) { newBranches.push(b); continue; }
+    if (existing.parent !== b.parent || bpKey(existing.branchPoint) !== bpKey(b.branchPoint)) {
+      throw new Error(`applyGraft: BRANCH COLLISION — path "${b._id}" already exists on the target with a different parent/branchPoint. Refusing (a graft preserves branch paths verbatim).`);
+    }
+  }
+
+  // ── 8. ActHead fork gate (cold): never regress the chain tip. A present
+  // actHead whose head differs is admitted ONLY when the bundle EXTENDS it
+  // (target head is an ancestor of the bundle head, walked within the
+  // bundle's own acts). Otherwise it's a fork — refuse.
+  const actPrevById = new Map(bundle.acts.map((a) => [String(a._id), String(a.p)]));
+  const advanceActHeads = [];
+  for (const ah of bundle.actHeads || []) {
+    const existing = await ActHead.findById(ah._id).lean();
+    if (!existing) continue;                                    // create path (step 9)
+    if (!ah.headHash || ah.headHash === existing.headHash) continue; // equal: noop
+    let h = String(ah.headHash); let reaches = false;
+    for (let guard = 0; h && h !== GENESIS_PREV && guard < 200000; guard++) {
+      if (h === String(existing.headHash)) { reaches = true; break; }
+      if (!actPrevById.has(h)) break;
+      h = actPrevById.get(h);
+    }
+    if (!reaches) {
+      throw new Error(`applyGraft: ACT-CHAIN FORK — the target's act-chain head for ${ah._id} is not an ancestor of the grafted head. Refusing (won't regress the chain).`);
+    }
+    advanceActHeads.push(ah);
+  }
+
+  // ── 9. Verbatim insert ──
+  // landed[] is recorded BEFORE each insertMany: insertMany(ordered:false)
+  // COMMITS the non-failing docs then throws, so recording after would miss
+  // the committed rows on a partial failure. deleteOne on a never-inserted
+  // _id is a harmless no-op, so rollback then removes exactly what landed.
+  const landed = [];
+  const counts = { facts: 0, acts: 0, branches: 0 };
+  try {
+    if (newBranches.length > 0) {
+      for (const b of newBranches) landed.push({ coll: "Branch", id: b._id });
+      await Branch.insertMany(newBranches, { ordered: false });
+      counts.branches = newBranches.length;
+    }
+    // ReelHeads: create when absent; advance-only when present (never regress).
+    for (const rh of bundle.reelHeads || []) {
+      const existing = await ReelHead.findById(rh._id).select("head").lean();
+      if (!existing) { landed.push({ coll: "ReelHead", id: rh._id }); await ReelHead.create(rh); }
+      else if ((rh.head || 0) > (existing.head || 0)) { await ReelHead.updateOne({ _id: rh._id }, { $set: { head: rh.head, headHash: rh.headHash } }); }
+    }
+    // ActHeads: create when absent; the advance set was vetted as fork-free above.
+    for (const ah of bundle.actHeads || []) {
+      const existing = await ActHead.findById(ah._id).lean();
+      if (!existing) { landed.push({ coll: "ActHead", id: ah._id }); await ActHead.create(ah); }
+    }
+    for (const ah of advanceActHeads) { await ActHead.updateOne({ _id: ah._id }, { $set: { headHash: ah.headHash } }); }
+    if (newFacts.length > 0) {
+      for (const f of newFacts) landed.push({ coll: "Fact", id: f._id });
+      await Fact.insertMany(newFacts, { ordered: false });
+      counts.facts = newFacts.length;
+    }
+    if (newActs.length > 0) {
+      for (const a of newActs) landed.push({ coll: "Act", id: a._id });
+      await Act.insertMany(newActs, { ordered: false });
+      counts.acts = newActs.length;
+    }
+
+    // ── 10. Verify the landed chain (verbatim heads must reproduce). Verify
+    // every branch that received a fact/act, not just the ones with a
+    // captured head row (a fact on a head-less branch must verify too). ──
+    const { verifyActChain } = await import("../../past/act/actHash.js");
+    const partial = bundle.meta?.partial;
+    if (partial?.mechanism === "checkpoint-segment") {
+      // A non-genesis-rooted SUFFIX: verify the anchored segment with the
+      // Phase-2 verifyReelFrom, seeded at the signed checkpoint hash. The
+      // anchor is committed transitively by the segment chain → graftRoot →
+      // graftSig (verified cold in step 1), so a tampered anchor cannot
+      // survive. Genesis-rooted verifyReel would (correctly) seq-gap here.
+      const { verifyReelFrom } = await import("../../past/fact/verifyReelFrom.js");
+      const cp = partial.checkpoint || {};
+      const segBranch = partial.branch || branch;
+      const v = await verifyReelFrom("being", beingId, segBranch, { fromSeq: partial.fromSeq, anchorPrev: String(cp.headHash || GENESIS_PREV) });
+      if (!v.ok) throw new Error(`applyGraft: POST-GRAFT segment verification FAILED on being:${beingId.slice(0, 8)}@${segBranch} (${v.reason} at ${v.brokenAt}); anchor ${String(cp.headHash || "").slice(0, 10)}….`);
+    } else {
+      const { verifyReel } = await import("../../past/fact/verifyReel.js");
+      const reelBranches = [...new Set([...(bundle.reelHeads || []).map((r) => String(r._id).split(":")[0]), ...newFacts.map((f) => String(f.branch ?? "0"))])];
+      for (const br of reelBranches) {
+        const v = await verifyReel("being", beingId, br);
+        if (!v.ok) throw new Error(`applyGraft: POST-GRAFT reel verification FAILED on being:${beingId.slice(0, 8)}@${br} (${v.reason} at ${v.brokenAt}).`);
+      }
+    }
+    const actBranches = [...new Set([...(bundle.actHeads || []).map((r) => String(r._id).split(":")[0]), ...newActs.map((a) => String(a.branch ?? "0"))])];
+    for (const br of actBranches) {
+      const v = await verifyActChain(br, beingId);
+      if (!v.ok) throw new Error(`applyGraft: POST-GRAFT act-chain verification FAILED on being:${beingId.slice(0, 8)}@${br} (${v.reason}).`);
+    }
+
+    // ── 10b. Provable replay: the LANDED heads (read from the DB) must
+    // reproduce the SIGNED graftRoot. Mirrors plantGraft's root proof —
+    // ties the signature's commitment to what actually landed. ──
+    if (bundle.meta?.graftRoot) {
+      const { graftRootFromParts } = await import("../../past/fact/chainRoots.js");
+      const reelKeys = (bundle.reelHeads || []).map((r) => String(r._id));
+      const actKeys = (bundle.actHeads || []).map((r) => String(r._id));
+      const [landedReels, landedActs] = await Promise.all([
+        reelKeys.length ? ReelHead.find({ _id: { $in: reelKeys } }).lean() : [],
+        actKeys.length ? ActHead.find({ _id: { $in: actKeys } }).lean() : [],
+      ]);
+      const reproduced = graftRootFromParts({ beingId, reelHeads: landedReels, actHeads: landedActs });
+      if (reproduced !== bundle.meta.graftRoot) {
+        throw new Error(`applyGraft: GRAFT ROOT MISMATCH — landed heads reproduce ${reproduced.slice(0, 12)}… but the signed graftRoot is ${String(bundle.meta.graftRoot).slice(0, 12)}…. Refusing.`);
+      }
+    }
+  } catch (err) {
+    // ── ROLLBACK: delete exactly what landed (scoped; the target's
+    // pre-existing chain is untouched — this graft only ever inserted rows
+    // it did NOT already have). Standalone Mongo: no transaction. ──
+    const byColl = { Fact, Act, Branch, ReelHead, ActHead };
+    for (let i = landed.length - 1; i >= 0; i--) {
+      const { coll, id } = landed[i];
+      try { await byColl[coll].deleteOne({ _id: id }); }
+      catch (e) { log.warn("Graft", `rollback delete ${coll}:${String(id).slice(0, 10)} failed: ${e.message}`); }
+    }
+    // Failure audit (operator's reel, single-writer). Logged, never silent —
+    // a swallowed audit is how the missing import hid.
+    try {
+      await withBeingAct(opts.operatorBeingId, "graft-being:failed", branch, async (ctx) => {
+        await emitFact({ verb: "do", action: "graft-being-failed", beingId: opts.operatorBeingId, target: { kind: "being", id: opts.operatorBeingId }, params: { graftedBeing: beingId, sourceReality: bundle.sourceReality || null, error: String(err?.message || err) }, actId: ctx.actId, branch }, ctx);
+      });
+    } catch (e) { log.warn("Graft", `failure-audit fact could not be stamped: ${e.message}`); }
+    throw err;
+  }
+
+  // ── 11. Success audit (operator's reel; single-writer — the grafter
+  // records the deed, it must NOT write the grafted being's reel). ──
+  try {
+    await withBeingAct(opts.operatorBeingId, "graft-being:completed", branch, async (ctx) => {
+      await emitFact({ verb: "do", action: "graft-being-completed", beingId: opts.operatorBeingId, target: { kind: "being", id: opts.operatorBeingId }, params: { graftedBeing: beingId, sourceReality: bundle.sourceReality || null, mode, counts, partial: bundle.meta?.partial || null }, actId: ctx.actId, branch }, ctx);
+    });
+  } catch (e) { log.warn("Graft", `completion-audit fact could not be stamped: ${e.message}`); }
+
+  log.info("Graft", `applied being ${beingId.slice(0, 12)}… [${mode}] — ${counts.facts} fact(s), ${counts.acts} act(s) landed verbatim`);
+  return { beingId, mode, counts, verified: { graftSig: !!bundle.meta?.graftSig, chain: true } };
 }

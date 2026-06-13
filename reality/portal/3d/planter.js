@@ -9,7 +9,7 @@
 //      a `params` dict the substrate's graft engine substitutes into
 //      `"$paramName"` references in the bundle's content fields.
 //
-//   2. Calls one DO: `graft-clone-by-name` at the current position
+//   2. Calls one DO: `plant-template-by-name` at the current position
 //      with `{ name, params }`. The substrate looks the bundle up in
 //      the clone registry and replays its facts under the operator's
 //      identity. The clone's wrapper space (or first new aggregate)
@@ -99,7 +99,7 @@ export function isPlanterOpen() {
 
 /**
  * Graft a clone bundle at the operator's current position. ONE DO:
- * graft-clone-by-name. The substrate looks the bundle up in the
+ * plant-template-by-name. The substrate looks the bundle up in the
  * registry and replays it; the bundle's wrapper space (or first
  * aggregate) becomes the new root.
  *
@@ -111,8 +111,8 @@ export function isPlanterOpen() {
  * @param {string} args.cloneName       registered clone name ("<ext>:<localName>")
  * @param {object} [args.params]        parameter values for the bundle
  */
-export async function plantSeed({ client, parentAddress, cloneName, params = {} }) {
-  const result = await client.do(parentAddress, "graft-clone-by-name", {
+export async function plantGraft({ client, parentAddress, cloneName, params = {} }) {
+  const result = await client.do(parentAddress, "plant-template-by-name", {
     name: cloneName,
     params,
   });

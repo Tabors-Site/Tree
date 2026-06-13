@@ -1,4 +1,4 @@
-Yes — and you're catching the right class of concern at the right time, before this becomes a real attack vector. Let me work through what checks are needed and what nested edge cases could break things if not guarded against.
+Yes — and you're catching the right class of concern at the right time, before this becomes a real . Let me work through what checks are needed and what nested edge cases could break things if not guarded against.
 The class of problem you're catching
 When beings can be brought into a reality via key import (graft, succession arrival, federation cache), the substrate is accepting a being whose identity claim is cryptographic but whose presence claim needs to compose with what the substrate already knows. A few specific things could go wrong if not guarded:
 Duplicate presence. Someone tries to import a being whose public key matches a being already living in this reality. Two beings with the same key, different chains, different identities in the substrate. The substrate's identity model breaks because uniqueness-by-key is violated.

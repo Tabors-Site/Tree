@@ -34,6 +34,33 @@ import { handleCrossWorldResponse } from "../past/act/crossWorldResponse.js";
 import { sealFacts } from "../past/fact/facts.js";
 import { getRealityDomain } from "./address.js";
 
+// Foreign act dedup. Every legitimate cross-reality call rides a FRESH
+// home-side attempt act (crossRealityDispatch opens one per dispatch),
+// so a repeated (reality, actId) pair is a replay, never a retry. The
+// canopy layer already refuses byte-identical replays; this catches the
+// stronger attacker, a compromised peer re-wrapping a captured deed in
+// fresh canopy bodies. In-memory: the envelope being-sig freshness
+// window bounds what a restart could let back in.
+const seenForeignActs = new Map(); // "reality|actId" -> expiresAt (ms)
+const SEEN_ACT_TTL_MS = Number(process.env.CROSS_SEEN_ACT_TTL_MS || 10 * 60_000);
+const SEEN_ACT_MAX = 50_000;
+
+function checkAndRecordForeignAct(reality, actId) {
+  const now = Date.now();
+  if (seenForeignActs.size > 1_000 || seenForeignActs.size >= SEEN_ACT_MAX) {
+    for (const [k, exp] of seenForeignActs) {
+      if (exp <= now) seenForeignActs.delete(k);
+    }
+  }
+  // Fail closed on a flooded cache: refusing fresh work is recoverable,
+  // admitting replays is not.
+  if (seenForeignActs.size >= SEEN_ACT_MAX) return false;
+  const key = `${reality}|${actId}`;
+  if (seenForeignActs.has(key)) return false;
+  seenForeignActs.set(key, now + SEEN_ACT_TTL_MS);
+  return true;
+}
+
 /**
  * Outbound cross-reality dispatch. Open a local Act, forward via
  * canopy with the actor's identity tuple, apply the foreign response
@@ -259,6 +286,7 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
   // to the actor's home reality. A present-but-invalid sig is a hard
   // refusal; an absent sig is accepted (the reality-level canopy sig that
   // got us here already vouched, and peers may not sign yet).
+  let beingSigVerified = false;
   {
     const { verifyEnvelopeBeingSig } = await import("../past/act/actSig.js");
     const v = await verifyEnvelopeBeingSig(
@@ -278,6 +306,37 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
         `runVerbAsForeignActor: cross-reality being-sig verification failed (${v.reason})`,
       );
     }
+    // "being" = the actor's OWN signature verified against its key id.
+    // The advisory passes (unsigned peer, non-key signer) flow on under
+    // the canopy domain sig, but downstream high-stakes gates (cherub's
+    // father-admit) can demand the real thing via this flag.
+    beingSigVerified = v.reason === "being";
+
+    // Per-peer strict mode. A peer registered with requireSignedEnvelopes
+    // loses the advisory floor: every envelope from it must carry the
+    // actor's own verified signature. Set it for peers known to sign
+    // (same-generation seeds); leave it off for migration-era peers.
+    // No peer row (direct in-process callers, tests) keeps today's
+    // advisory behavior.
+    if (!beingSigVerified) {
+      const { getPeerByDomain } = await import("../../protocols/ibp/peers.js");
+      const peer = await getPeerByDomain(actor.reality).catch(() => null);
+      if (peer?.requireSignedEnvelopes) {
+        throw new Error(
+          `runVerbAsForeignActor: cross-reality being-sig verification failed ` +
+          `(peer ${actor.reality} requires signed envelopes; got ${v.reason})`,
+        );
+      }
+    }
+  }
+
+  // Foreign act replay gate. AFTER signature checks (a refused envelope
+  // must not burn its actId), BEFORE any verb work or seal.
+  if (!checkAndRecordForeignAct(actor.reality, actor.actId)) {
+    throw new Error(
+      `runVerbAsForeignActor: foreign act ${String(actor.actId).slice(0, 16)}… ` +
+      `from ${actor.reality} was already dispatched (replay refused)`,
+    );
   }
 
   // Synthetic actorAct. NOT a Mongoose row on this substrate. emitFact
@@ -314,6 +373,11 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
     // check) read this to match against the target vessel's
     // qualities.father.reality. See FEDERATION.md "mate + vessel".
     reality: actor.reality,
+    // True only when the actor's own envelope signature verified
+    // against its key id (self-certifying). Father-admit requires it:
+    // taking over a vessel needs the father's OWN key, not just the
+    // peer reality's vouch.
+    beingSigVerified,
   };
 
   let result = null;

@@ -130,7 +130,7 @@ export async function parseUnifiedEnvelope(msg) {
   // SUMMON requires a stance (@being qualifier) and rejects bare-
   // place outright; no normalization is meaningful.
   // SEE-op names ride the SEE verb's address slot ("classify-matter",
-  // "clone-subtree", "<ext>:<name>"). They classify as "place" (no
+  // "capture-template", "<ext>:<name>"). They classify as "place" (no
   // slash) but are NOT places — without this carve-out the place
   // normalization below rewrites them to "<op>/" and the dispatcher
   // walks them as positions (or worse, routes them as foreign

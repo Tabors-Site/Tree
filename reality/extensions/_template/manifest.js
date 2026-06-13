@@ -63,8 +63,8 @@ export default {
     // a position. Replaces the retired scaffold(ctx) seed pattern.
     // Each bundle is a static JSON file under ./clones/ with the
     // shape documented in seed/done/Chain-Rebuild.md.
-    // clones: {
-    //   "example-setup": "./clones/example.clone.json",
+    // seeds: {
+    //   "example-setup": "./clones/example.seed.json",
     // },
 
     // Required env vars. Loader validates on boot and can auto-

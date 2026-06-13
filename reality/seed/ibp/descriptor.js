@@ -46,7 +46,7 @@ import {
 } from "../materials/space/spaces.js";
 import { getInboxSummary } from "../present/intake/inbox.js";
 import { getRole, listRoles } from "../present/roles/registry.js";
-import { listClones } from "../materials/publish/cloneRegistry.js";
+import { listTemplates } from "../materials/publish/templateRegistry.js";
 import { serializeTypeCatalog } from "../materials/matter/classify.js";
 import { listOperations } from "./operations.js";
 import { listBeOpNames, getBeOp } from "./beOps.js";
@@ -142,7 +142,7 @@ export async function buildDiscovery() {
     // discovery payload (unauthenticated) so the portal's hotbar can
     // populate before the operator signs in. The list-clones DO op
     // returns the same data for callers who want a live refresh.
-    clones: listClones(),
+    templates: listTemplates(),
     // The matter-type catalog (registry defs + their claims).
     // Composers classify LOCALLY against this ("will become: web")
     // with zero round-trips; the classify-matter SEE op gives the

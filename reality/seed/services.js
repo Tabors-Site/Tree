@@ -15,7 +15,7 @@ import Fact from "./past/fact/fact.js";
 import Matter from "./materials/matter/matter.js";
 
 import { emitFact } from "./past/fact/facts.js";
-import { captureSeed } from "./materials/publish/seed.js";
+import { captureGraft } from "./materials/publish/graft.js";
 import { resolveSpaceAccess } from "./materials/space/spaces.js";
 import {
   birthBeing,
@@ -289,23 +289,23 @@ export function buildRealityServices({
 
     // Branch-cloning / reality-seeding portable artifacts.
     // - clone (clone.js + graft.js): the SETUP — current shape of a
-    //   subtree, hollow face. Used via the wire DO ops `clone-subtree`
-    //   and `graft-clone` (legacy aliases `replicate-subtree` /
+    //   subtree, hollow face. Used via the wire DO ops `capture-template`
+    //   and `plant-template` (legacy aliases `replicate-subtree` /
     //   `graft-replicate` also registered).
-    // - captureSeed: the WHOLE REALITY — full chains (facts + acts +
+    // - captureGraft: the WHOLE REALITY — full chains (facts + acts +
     //   branches + reelHeads), original IDs preserved. Plant-only on
     //   the receive side (boot mode in genesis.js). See
     //   `seed/done/Chain-Rebuild.md` for the doctrine.
-    captureSeed,
+    captureGraft,
 
     // Plant is boot-only — exposing it here as a runtime verb refuses.
     // The shape exists so future live-plant (when a clean wipe-and-
     // replay-in-place path is designed) can land without breaking the
-    // public API. For now: use PLANT_FROM_SEED env var on boot.
+    // public API. For now: use PLANT_FROM_GRAFT env var on boot.
     plant: () => {
       throw new Error(
         "reality.plant: plant is currently boot-only. Wipe the DB, set " +
-        "PLANT_FROM_SEED=/path/to/seed.json, and restart the substrate. " +
+        "PLANT_FROM_GRAFT=/path/to/graft.json, and restart the substrate. " +
         "Runtime plant (live wipe-and-replay-in-place) is a future arc; " +
         "see seed/done/Chain-Rebuild.md for the doctrine.",
       );

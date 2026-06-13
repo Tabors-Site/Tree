@@ -62,6 +62,37 @@ const REPLAY_WINDOW_MS = Number(
   process.env.CANOPY_REPLAY_WINDOW_MS || 60_000,
 );
 
+// Seen-signature cache. The freshness window above refuses OLD captures;
+// this refuses byte-identical replays INSIDE the window. The canopy
+// signature is unique per body (ed25519 over the exact bytes), so the
+// signature string is the natural dedup key. Entries outlive the window
+// by a margin so an envelope cannot slip back in right as its cache
+// entry expires while its signedAt still passes. In-memory only: a
+// restart reopens at most one window's worth of exposure, which the
+// freshness check then bounds.
+const seenCanopySigs = new Map(); // signature -> expiresAt (ms)
+const SEEN_SIG_MARGIN_MS = 5_000;
+const SEEN_SIG_MAX = 50_000;
+
+function checkAndRecordCanopySig(signature) {
+  const now = Date.now();
+  // Opportunistic sweep; the map stays tiny at any sane request rate.
+  if (seenCanopySigs.size > 1_000 || seenCanopySigs.size >= SEEN_SIG_MAX) {
+    for (const [k, exp] of seenCanopySigs) {
+      if (exp <= now) seenCanopySigs.delete(k);
+    }
+  }
+  if (seenCanopySigs.size >= SEEN_SIG_MAX) {
+    // Cache full of live entries (flood). Fail closed: refusing a fresh
+    // envelope is recoverable (the sender re-signs and retries); letting
+    // replays through is not.
+    return false;
+  }
+  if (seenCanopySigs.has(signature)) return false;
+  seenCanopySigs.set(signature, now + REPLAY_WINDOW_MS + SEEN_SIG_MARGIN_MS);
+  return true;
+}
+
 /**
  * Extract the target place from a raw IBP address string. Stance-pair
  * addresses (left :: right) target the right side. Returns the place
@@ -186,20 +217,67 @@ export async function forwardToPeer(envelope) {
   });
 
   // Sign the raw body bytes. The peer verifies against our public key.
+  // The signature is ALWAYS over the plaintext: when the body travels
+  // sealed, the receiver decrypts first and verifies the same bytes.
   const signature = signData(body);
 
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type":         "application/json",
-        "X-Canopy-Sender":      getRealityDomain(),
-        "X-Canopy-Signature":   signature,
-      },
-      body,
-      signal: AbortSignal.timeout(FORWARD_TIMEOUT_MS),
-    });
+  // Sealed channel (opportunistic). With a live session the body rides
+  // as ChaCha20-Poly1305 ciphertext; without one (older peer, handshake
+  // backoff) it rides as plain signed JSON exactly as before, unless the
+  // operator set CANOPY_REQUIRE_SEALED=1.
+  const {
+    getOutboundSession, invalidateOutboundSession,
+    sealRequest, openResponse, sealedSendRequired, SEALED_CONTENT_TYPE,
+  } = await import("./secureChannel.js");
+  let session = await getOutboundSession(peer);
+  if (!session && sealedSendRequired()) {
+    return ackError(envelope.id, "SEALED_REQUIRED",
+      `Sealed channel with ${target} unavailable and CANOPY_REQUIRE_SEALED is set`);
+  }
 
+  const doFetch = (s) => fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type":       s ? SEALED_CONTENT_TYPE : "application/json",
+      "X-Canopy-Sender":    getRealityDomain(),
+      "X-Canopy-Signature": signature,
+      ...(s ? { "X-Canopy-Session": s.sessionId } : {}),
+    },
+    body: s ? sealRequest(s, body) : body,
+    signal: AbortSignal.timeout(FORWARD_TIMEOUT_MS),
+  });
+
+  try {
+    let res = await doFetch(session);
+
+    // The peer restarted and lost the session table. Re-handshake once
+    // and resend; a second failure falls through as the error it is.
+    if (session && res.status === 401) {
+      const peek = await res.clone().json().catch(() => null);
+      if (peek?.error?.code === "SESSION_UNKNOWN") {
+        invalidateOutboundSession(target);
+        session = await getOutboundSession(peer);
+        if (!session && sealedSendRequired()) {
+          return ackError(envelope.id, "SEALED_REQUIRED",
+            `Sealed channel with ${target} unavailable and CANOPY_REQUIRE_SEALED is set`);
+        }
+        res = await doFetch(session);
+      }
+    }
+
+    // Sealed responses come back under the same session, sealed with the
+    // peer's direction key; everything else is plain JSON (including
+    // middleware refusals, which fire before the session is looked up).
+    const ct = res.headers.get("content-type") || "";
+    if (session && ct.includes(SEALED_CONTENT_TYPE)) {
+      try {
+        const frame = Buffer.from(await res.arrayBuffer());
+        return JSON.parse(openResponse(session, frame));
+      } catch (err) {
+        return ackError(envelope.id, "INTERNAL",
+          `Peer ${target} returned an unreadable sealed response: ${err.message}`);
+      }
+    }
     const json = await res.json().catch(() => ({
       id: envelope.id, status: "error",
       error: { code: "INTERNAL", message: `Peer ${target} returned non-JSON (${res.status})` },
@@ -277,6 +355,16 @@ export async function verifyIncoming(req, res, next) {
         code: "UNAUTHORIZED",
         message: `canopy envelope outside replay window (age=${Math.round(ageMs / 1000)}s, window=${Math.round(REPLAY_WINDOW_MS / 1000)}s)`,
       },
+    });
+  }
+
+  // Replay-within-window: a byte-identical envelope (same signature) is
+  // refused on the second sight even though signature + freshness still
+  // pass. Closes the capture-and-replay gap the window alone leaves open.
+  if (!checkAndRecordCanopySig(signature)) {
+    return res.status(401).json({
+      status: "error",
+      error: { code: "UNAUTHORIZED", message: "canopy envelope replayed (signature already seen inside the window)" },
     });
   }
 

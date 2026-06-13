@@ -1663,3 +1663,29 @@ a.kv-block-value:hover { color: var(--accent); text-decoration: underline; }
   min-height: 60px;
   resize: vertical;
 }
+
+/* ── Federation panels (peers-panel.js / federation-panel.js) ───────── */
+.fed-intro { margin-bottom: 10px; line-height: 1.5; }
+.fed-intro b { color: #c8d3cb; font-weight: 600; }
+.fed-list { display: flex; flex-direction: column; gap: 8px; }
+.fed-result-slot { margin-top: 10px; }
+.fed-empty { padding: 8px 0; }
+
+.fed-row { border: 1px solid #2c3a32; border-radius: 6px; padding: 8px 10px; background: #0d1311; }
+.fed-row-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.fed-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: 0 0 auto; }
+.fed-domain { color: #c8d3cb; font-weight: 600; }
+.fed-row-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.fed-row-form { margin-top: 8px; }
+.fed-row-form:empty { margin-top: 0; }
+.fed-go { margin-top: 6px; background: #15301f; border-color: #2f5d3c; color: #cdeccf; }
+.fed-go:hover { background: #1c4029; }
+
+.fed-section { margin-top: 14px; }
+.fed-section-head { font-size: 12px; letter-spacing: 0.04em; text-transform: uppercase; color: #9fb0a6; border-bottom: 1px solid #1f2a25; padding-bottom: 4px; margin-bottom: 6px; }
+.fed-card { border: 1px solid #2c3a32; border-radius: 6px; padding: 7px 9px; background: #0d1311; margin-bottom: 6px; }
+.fed-card-done { opacity: 0.72; }
+.fed-card-actions { display: flex; gap: 6px; margin-top: 6px; }
+.fed-kv { display: flex; gap: 8px; font-size: 12.5px; line-height: 1.7; }
+.fed-kv > span:first-child { min-width: 92px; flex: 0 0 auto; }
+

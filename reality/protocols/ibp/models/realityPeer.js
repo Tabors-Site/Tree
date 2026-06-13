@@ -33,6 +33,11 @@ const RealityPeerSchema = new mongoose.Schema({
     enum: ["active", "degraded", "unreachable", "dead", "blocked"],
     default: "active",
   },
+  // Strict envelope mode. When true, every cross-reality envelope from
+  // this peer must carry the acting being's own verified signature; the
+  // unsigned-advisory floor (peer-reality vouch alone) is refused. Turn
+  // on for peers known to run a signing seed.
+  requireSignedEnvelopes: { type: Boolean, default: false },
   consecutiveFailures: { type: Number, default: 0 },
   firstFailureAt: { type: Date, default: null },
   lastSuccessAt: { type: Date, default: Date.now },

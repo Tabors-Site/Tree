@@ -37,6 +37,10 @@
 
 import express from "express";
 import { verifyIncoming } from "../../../protocols/ibp/canopy.js";
+import {
+  SEALED_CONTENT_TYPE, handshakeHandler,
+  getInboundSession, openInbound, sealResponse,
+} from "../../../protocols/ibp/secureChannel.js";
 import { decodeToken } from "../../../seed/materials/being/identity.js";
 import { makeHttpCarrier, dispatchAndWait, sendAck } from "../dispatch.js";
 
@@ -153,6 +157,55 @@ async function ibpHttpHandler(req, res) {
   return sendAck(res, ack);
 }
 
+/**
+ * Sealed-channel ingress. A peer with a live session POSTs the canopy
+ * body as ChaCha20-Poly1305 ciphertext (Content-Type marks it; the
+ * X-Canopy-Session header names the session). Decrypt back to the exact
+ * plaintext bytes the sender signed, seat them as req.rawBody + req.body,
+ * and let verifyIncoming + the handler run unchanged. Plain-JSON
+ * requests pass straight through.
+ */
+function unsealIncoming(req, res, next) {
+  if (!req.is(SEALED_CONTENT_TYPE)) return next();
+  const session = getInboundSession(req.headers["x-canopy-session"]);
+  if (!session) {
+    // Distinct code: the sender re-handshakes once on this and resends.
+    return res.status(401).json({
+      status: "error",
+      error: { code: "SESSION_UNKNOWN", message: "sealed session unknown or expired; re-handshake" },
+    });
+  }
+  try {
+    const plaintext = openInbound(session, req.body);
+    req.rawBody = plaintext;
+    req.body = JSON.parse(plaintext);
+    req.sealedSession = session;
+  } catch (err) {
+    return res.status(401).json({
+      status: "error",
+      error: { code: "SEALED_INVALID", message: `sealed frame failed to open: ${err.message}` },
+    });
+  }
+  // Seal the response too: same session, the peer-bound direction key.
+  // Hooking res.json keeps sendAck's status-code mapping intact while
+  // every body (acks and errors alike) leaves encrypted.
+  res.json = (obj) => {
+    try {
+      res.set("Content-Type", SEALED_CONTENT_TYPE);
+      res.set("X-Canopy-Session", session.id);
+      return res.send(sealResponse(session, JSON.stringify(obj)));
+    } catch {
+      // Fail closed: a sealed session never falls back to a plaintext
+      // body. The peer gets an opaque 500; confidentiality outranks
+      // the error detail.
+      res.status(500);
+      res.set("Content-Type", "application/json");
+      return res.send("");
+    }
+  };
+  return next();
+}
+
 // Capture raw body bytes so the canopy verifier can check the signature
 // over what the sender actually signed (not the JSON-roundtripped shape).
 const parseJsonCaptureRaw = express.json({
@@ -160,10 +213,23 @@ const parseJsonCaptureRaw = express.json({
   verify: (req, _res, buf) => { req.rawBody = buf.toString("utf8"); },
 });
 
-// POST handles every verb. Body carries the payload. Cross-place
-// requests carry X-Canopy-Sender + X-Canopy-Signature; verifyIncoming
-// authenticates them, then dispatchIbp runs the verb locally.
-router.post("/ibp/:verb/*", parseJsonCaptureRaw, verifyIncoming, ibpHttpHandler);
+// Sealed frames are binary; the global express.json parser ignores their
+// content type, so this raw parser is what actually reads them.
+const parseSealedRaw = express.raw({ type: SEALED_CONTENT_TYPE, limit: "1mb" });
+
+// Sealed-channel handshake. verifyIncoming authenticates the initiator,
+// enforces the freshness window, and dedupes replays of the handshake
+// body itself; the handler then derives the session keys. Registered
+// before the :verb route on principle (the wildcard pattern would not
+// match this path anyway).
+router.post("/ibp/handshake", parseJsonCaptureRaw, verifyIncoming, handshakeHandler);
+
+// POST handles every verb. Body carries the payload (sealed or plain).
+// Cross-place requests carry X-Canopy-Sender + X-Canopy-Signature;
+// unsealIncoming decrypts sealed frames back to the signed plaintext,
+// verifyIncoming authenticates it, then dispatchIbp runs the verb
+// locally.
+router.post("/ibp/:verb/*", parseSealedRaw, unsealIncoming, parseJsonCaptureRaw, verifyIncoming, ibpHttpHandler);
 
 // GET convenience for SEE only — payload from query params. Reads
 // should be idempotent and cacheable per HTTP semantics; for the

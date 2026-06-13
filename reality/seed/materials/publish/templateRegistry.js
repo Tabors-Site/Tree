@@ -7,15 +7,15 @@
 //
 //   provides: {
 //     clones: {
-//       "greeter":     "./clones/greeter.clone.json",
-//       "dance-floor": "./clones/dance-floor.clone.json",
+//       "greeter":     "./clones/greeter.seed.json",
+//       "dance-floor": "./clones/dance-floor.seed.json",
 //     },
 //   }
 //
 // The loader reads the JSON at load time, validates the bundle, and
-// calls `registerClone(<ext>:<localName>, bundle, <ext>)` for each.
+// calls `registerTemplate(<ext>:<localName>, bundle, <ext>)` for each.
 // The portal queries `list-clones` to populate the graft UI; an
-// operator picks one and dispatches `graft-clone` against the
+// operator picks one and dispatches `plant-template` against the
 // position they want it grafted at.
 
 import { assertValidBundle } from "./bundle.js";
@@ -36,9 +36,9 @@ const _byOwner = new Map(); // ext -> Set<fullName>
  * @param {object} bundle         the parsed clone bundle JSON
  * @param {string} ownerExtension extension that shipped it
  */
-export function registerClone(fullName, bundle, ownerExtension) {
+export function registerTemplate(fullName, bundle, ownerExtension) {
   if (typeof fullName !== "string" || !fullName.length) {
-    throw new Error("registerClone: fullName required");
+    throw new Error("registerTemplate: fullName required");
   }
   // Validate the bundle shape up front so a malformed clone fails at
   // load time, not at graft time.
@@ -64,7 +64,7 @@ export function registerClone(fullName, bundle, ownerExtension) {
  * Unregister one clone by fullName. Returns true when something was
  * removed.
  */
-export function unregisterClone(fullName) {
+export function unregisterTemplate(fullName) {
   const entry = _byName.get(fullName);
   if (!entry) return false;
   _byName.delete(fullName);
@@ -76,7 +76,7 @@ export function unregisterClone(fullName) {
  * Drop every clone owned by an extension. Called when an extension
  * unloads / reinstalls.
  */
-export function unregisterClonesFromExtension(extName) {
+export function unregisterTemplatesFromExtension(extName) {
   const set = _byOwner.get(extName);
   if (!set) return 0;
   let n = 0;
@@ -93,7 +93,7 @@ export function unregisterClonesFromExtension(extName) {
  *
  * @returns {{ bundle, ownerExtension } | null}
  */
-export function getClone(fullName) {
+export function getTemplate(fullName) {
   return _byName.get(fullName) || null;
 }
 
@@ -104,7 +104,7 @@ export function getClone(fullName) {
  * parameters (so the UI can build a form), and the source scope name
  * (a hint for what the bundle plants).
  */
-export function listClones() {
+export function listTemplates() {
   const out = [];
   for (const [name, { bundle, ownerExtension }] of _byName) {
     out.push({
@@ -126,6 +126,6 @@ export function listClones() {
 /**
  * Diagnostic — count of registered clones.
  */
-export function getCloneCount() {
+export function getTemplateCount() {
   return _byName.size;
 }

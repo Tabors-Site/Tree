@@ -70,7 +70,7 @@ export const seedSummonTool = {
       .optional()
       .describe(
         "Optional kebab-case label naming your stated purpose for this summon " +
-          "(e.g. 'role-request', 'offer-graft', 'mate'). The receiver's role " +
+          "(e.g. 'role-request', 'offer-template', 'mate'). The receiver's role " +
           "uses it to route into the right handler arm; the auth gate uses it " +
           "to match canSummon entries that restrict by intent. You cannot " +
           "compel the receiver's response — intent is a stated purpose, not a " +

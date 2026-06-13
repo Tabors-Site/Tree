@@ -149,36 +149,36 @@ export async function genesis(app, opts = {}) {
 
   // ── PLANT MODE ──
   //
-  // If PLANT_FROM_SEED env var points at a seed JSON file, boot by
+  // If PLANT_FROM_GRAFT env var points at a seed JSON file, boot by
   // replaying that seed's chains into the (assumed-empty) DB instead
   // of running default genesis. The reality comes up with the seed's
   // original IDs, original biography, original I-Am — a continuation
   // of the source reality on this substrate.
   //
   // Plant is destructive (the existing DB must be empty). The deployer
-  // is responsible for wiping first. plantSeed itself refuses to plant
+  // is responsible for wiping first. plantGraft itself refuses to plant
   // into a non-empty DB as a guard against misconfigured boots.
   //
   // Plant is continuation, not duplication. Two simultaneously-live
   // substrates with the same reality identity is undefined behavior;
   // the deployer ensures only one is canonical (see done/Chain-Rebuild.md).
   let plantedFromSeed = false;
-  if (process.env.PLANT_FROM_SEED) {
+  if (process.env.PLANT_FROM_GRAFT) {
     const path = await import("path");
-    const { SEEDS_FOLDER, plantSeed } = await import("./seed/materials/publish/seed.js");
-    const raw = process.env.PLANT_FROM_SEED;
+    const { GRAFTS_FOLDER, plantGraft } = await import("./seed/materials/publish/graft.js");
+    const raw = process.env.PLANT_FROM_GRAFT;
     // Filename-only (no separator, not absolute) → resolve against
     // reality/seeds/. Anything with a separator or absolute → use
-    // as-is. This lets operators say PLANT_FROM_SEED=alice.seed.json
+    // as-is. This lets operators say PLANT_FROM_GRAFT=alice.graft.json
     // and have it Just Work from the canonical folder.
     const seedPath = (raw.includes("/") || path.isAbsolute(raw))
       ? raw
-      : path.join(SEEDS_FOLDER, raw);
+      : path.join(GRAFTS_FOLDER, raw);
     log.info("Genesis", `Plant mode: replaying seed from ${seedPath}`);
     const { readFile } = await import("fs/promises");
     const seedJson = await readFile(seedPath, "utf8");
     const bundle = JSON.parse(seedJson);
-    const result = await plantSeed(bundle);
+    const result = await plantGraft(bundle);
     log.info(
       "Genesis",
       `Plant complete: ${result.counts.facts} facts, ${result.counts.acts} acts, ` +
@@ -468,11 +468,12 @@ export async function genesis(app, opts = {}) {
   const { branchManagerRole } = await import("./seed/present/roles/branch-manager/role.js");
   registerRole("branch-manager", branchManagerRole, "seed");
 
-  // federation-manager: negotiates subtree exchange (push / pull) with
-  // peer realities. Operator triggers push-subtree or pull-subtree;
-  // the role's summon handler classifies incoming intents (offer-graft,
-  // accept-graft, deliver-bundle, etc.) from peer federation-managers.
-  // Clone and graft are the data primitives; this role is the social
+  // federation-manager: negotiates transfers (push / pull) with peer
+  // realities. Operator triggers offer-template / offer-being (push) or
+  // request-template (pull); the role's summon handler classifies incoming
+  // intents (offer-template, accept-template, deliver-template, deliver-being,
+  // etc.) from peer federation-managers. Seed and graft are the data
+  // primitives (template = shape, being = entity); this role is the social
   // protocol on top of them. See protocols/ibp/FEDERATION.md.
   const { federationManagerRole } = await import("./seed/present/roles/federation-manager/role.js");
   registerRole("federation-manager", federationManagerRole, "seed");
@@ -730,11 +731,12 @@ export async function genesis(app, opts = {}) {
     await import("./seed/present/roles/branch-manager/ops.js");
   registerBranchManagerOps();
 
-  // federation-manager ops: push-subtree, pull-subtree, accept-offer,
-  // reject-offer, accept-request, reject-request. The substrate helpers
-  // (cloneSubtree, graftClone, crossRealityDispatch) do the heavy
-  // lifting; the ops are thin handlers that thread negotiation state
-  // through the federation-manager being's qualities.
+  // federation-manager ops: offer-template, offer-being, request-template,
+  // accept-template, reject-template, fulfill-request, refuse-request. The
+  // capture/apply helpers (captureTemplate, plantTemplate, captureGraft,
+  // applyGraft, crossRealityDispatch) do the heavy lifting; the ops are thin
+  // handlers that thread negotiation state through the federation-manager
+  // being's qualities.
   const { registerFederationManagerOps } =
     await import("./seed/present/roles/federation-manager/ops.js");
   registerFederationManagerOps();

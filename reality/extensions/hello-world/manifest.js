@@ -48,8 +48,8 @@ export default {
     // Replaces the retired seed-scaffold pattern. Each bundle's content
     // is a static list of fact specs that replay at graft time. See
     // seed/done/Chain-Rebuild.md for the bundle format + parameter system.
-    clones: {
-      greeter: "./clones/greeter.clone.json",
+    seeds: {
+      greeter: "./seeds/greeter.seed.json",
     },
     hooks: { fires: [], listens: [] },
     // defaultPermissions retired (seed/RolesAreAuth.md). To make

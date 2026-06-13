@@ -410,7 +410,25 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
           String(candidateFather.beingId) === String(identity.beingId) &&
           String(candidateFather.reality) === String(requesterReality)
         ) {
-          asFather = true;
+          // The tuple matches. For a CROSS-REALITY father the tuple
+          // alone is only the peer reality's word; since the father's
+          // beingId IS his public key, demand his OWN envelope
+          // signature (runVerbAsForeignActor verifies it and threads
+          // beingSigVerified). Vessel takeover is the highest-stakes
+          // cross-reality act — the key proves the father, not the
+          // peer. Local fathers authenticated by session are exempt.
+          const isCrossReality =
+            String(candidateFather.reality) !== String(getRealityDomain());
+          if (isCrossReality && identity?.beingSigVerified !== true) {
+            log.warn(
+              "Cherub",
+              `father-admit refused for @${targetName}: cross-reality father ` +
+              `${String(identity.beingId).slice(0, 12)}… arrived without his own ` +
+              `verified being-signature (peer vouch is not enough to take a vessel).`,
+            );
+          } else {
+            asFather = true;
+          }
         }
       }
       if (asAncestor || asFather) {

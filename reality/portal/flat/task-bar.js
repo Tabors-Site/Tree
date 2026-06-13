@@ -28,6 +28,8 @@ import { renderLlmPanel } from "./llm-panel.js";
 import { renderInboxPanel } from "./inbox-panel.js";
 import { renderMatterComposer } from "./matter-composer.js";
 import { renderIdentityPanel } from "../shared/identity-panel.js";
+import { renderPeersPanel } from "./peers-panel.js";
+import { renderFederationPanel } from "./federation-panel.js";
 
 // One outside-click listener at a time. The bar re-renders on every SEE;
 // we drop the previous listener before wiring a new one so they can't
@@ -65,6 +67,7 @@ export function renderTaskBar(container, { descriptor, discovery, session } = {}
     { id: "reality", label: "Reality", actions: realityActions(rootAddress) },
     { id: "branch", label: "Branch", actions: branchActions(positionAddress) },
     { id: "place", label: "Place", actions: placeActions(positionAddress, desc) },
+    { id: "federation", label: "Federation", actions: federationActions() },
   ];
 
   // The @being menu — narrowest scope, keyed off the IBPA's right
@@ -244,6 +247,12 @@ function openAction(action, opByName) {
   if (action.special === "inbox") {
     return renderInboxPanel(body, action, opByName, { refreshView });
   }
+  if (action.special === "federation-peers") {
+    return renderPeersPanel(body, action, opByName, { refreshView });
+  }
+  if (action.special === "federation-activity") {
+    return renderFederationPanel(body, action, opByName, { refreshView });
+  }
   if (action.special === "branch-info") {
     return renderBranchInfo(body);
   }
@@ -314,16 +323,16 @@ function renderEditSpace(body, action) {
   });
 }
 
-// clone-subtree is a SEE op (pure read; no Fact stamped). The portal
+// capture-template is a SEE op (pure read; no Fact stamped). The portal
 // downloads the returned bundle as JSON rather than printing it.
 // Custom dispatcher wraps the download and returns a summary.
 function renderClone(body, action, _opByName) {
-  // Synthetic op-form spec — clone-subtree is a SEE op, so it's not in
+  // Synthetic op-form spec — capture-template is a SEE op, so it's not in
   // the DO opByName map. We render a one-field form for the optional
   // clone name, then dispatch via flat.state.client.see with the
   // current spaceId.
   const op = {
-    name: "clone-subtree",
+    name: "capture-template",
     args: { name: { type: "text", label: "Clone name (optional)", required: false } },
   };
   renderOpForm(body, {
@@ -335,7 +344,7 @@ function renderClone(body, action, _opByName) {
         || flat.state.descriptor?.position?.spaceId
         || null;
       if (!spaceId) throw new Error("no spaceId on current descriptor to clone from");
-      const r = await flat.state.client.see("clone-subtree", {
+      const r = await flat.state.client.see("capture-template", {
         args: { spaceId, name: payload.name || null },
       });
       const bundle = r?.bundle;
@@ -346,14 +355,14 @@ function renderClone(body, action, _opByName) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${label}-${stamp}.clone.json`;
+      a.download = `${label}-${stamp}.seed.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       const c = bundle.content || {};
       return {
-        downloaded: `${label}-${stamp}.clone.json`,
+        downloaded: `${label}-${stamp}.seed.json`,
         spaces: c.spaces?.length || 0,
         beings: c.beings?.length || 0,
         matter: c.matter?.length || 0,
@@ -706,14 +715,14 @@ function branchActions(address) {
     { label: "undelete branch", op: "undelete-branch", address },
     { label: "set pointer", op: "set-pointer", address },
     { label: "delete pointer", op: "delete-pointer", address },
-    { label: "save clone (download)", op: "clone-subtree", special: "clone", address },
-    { label: "graft a clone here", op: "graft-clone", address },
+    { label: "save clone (download)", op: "capture-template", special: "clone", address },
+    { label: "graft a clone here", op: "plant-template", address },
   ];
 }
 
 function realityActions(address) {
   return [
-    { label: "form seed of reality", op: "capture-seed", address },
+    { label: "form seed of reality", op: "capture-graft", address },
     { label: "set config", op: "set-config", address },
     { label: "delete config", op: "delete-config", address },
     // Reality-level roles. The reality root hosts the foundational
@@ -727,6 +736,17 @@ function realityActions(address) {
     // default fallback list, per-role slots, force flags.
     { label: "llm (reality defaults)", special: "llm-reality", address },
     { label: "⚠ close reality (exit server)", op: "close-reality", special: "close-reality", address, danger: true },
+  ];
+}
+
+// Federation tab — reality-scoped peer transfers. Both panels act on the
+// local @federation-manager: peers is the outbound surface (graft a being,
+// offer / request a template), activity is the incoming / in-flight queue.
+// No `op` field: these are special panels, always shown (not catalog-gated).
+function federationActions() {
+  return [
+    { label: "peers (graft / send / request)", special: "federation-peers" },
+    { label: "activity (incoming / in flight)", special: "federation-activity" },
   ];
 }
 

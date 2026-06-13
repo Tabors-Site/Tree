@@ -2,11 +2,11 @@
 //
 // publish/ops.js — DO + SEE operations for clone + graft + seed.
 //
-//   clone-subtree      — SEE op: extract a subtree's current shape into
+//   capture-template      — SEE op: extract a subtree's current shape into
 //                        a portable clone bundle (facts-only, no acts)
-//   graft-clone        — DO op: apply a clone bundle into a target subtree
-//   graft-clone-by-name — DO op: apply an extension-registered clone by name
-//   capture-seed       — DO op: capture the FULL reality (facts + acts +
+//   plant-template        — DO op: apply a clone bundle into a target subtree
+//   plant-template-by-name — DO op: apply an extension-registered clone by name
+//   capture-graft       — DO op: capture the FULL reality (facts + acts +
 //                        branches + reelHeads) as a portable seed
 //   clones             — SEE op: discovery of registered extension clones
 //
@@ -25,10 +25,10 @@ import { registerSeeOperation } from "../../ibp/seeOps.js";
 import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
 import { detectTargetKind, targetIdOf } from "../_targetShape.js";
 import { loadOrFold } from "../projections.js";
-import { listClones, getClone } from "./cloneRegistry.js";
+import { listTemplates, getTemplate } from "./templateRegistry.js";
 
 // ─────────────────────────────────────────────────────────────────────
-// clone-subtree
+// capture-template
 // ─────────────────────────────────────────────────────────────────────
 //
 // target: { kind: "space", id }  — the scope root to clone
@@ -36,11 +36,11 @@ import { listClones, getClone } from "./cloneRegistry.js";
 //
 // Returns: { bundle }  (the bundle is the substrate's wire payload)
 
-// clone-subtree is a pure READ — extracts the subtree's current shape
+// capture-template is a pure READ — extracts the subtree's current shape
 // into a portable clone bundle. No state changes; no Fact emitted.
 // SEE op (doctrinal shape).
 
-registerSeeOperation("clone-subtree", {
+registerSeeOperation("capture-template", {
   ownerExtension: "seed",
   description: "Extract a subtree's current shape into a portable clone bundle",
   args: {
@@ -52,15 +52,15 @@ registerSeeOperation("clone-subtree", {
     if (!identity?.beingId) {
       throw new IbpError(
         IBP_ERR.UNAUTHORIZED,
-        "clone-subtree: identity required (the operator's beingId)",
+        "capture-template: identity required (the operator's beingId)",
       );
     }
     const scopeSpaceId = args?.spaceId;
     if (!scopeSpaceId) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "clone-subtree: `spaceId` is required");
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "capture-template: `spaceId` is required");
     }
-    const { cloneSubtree } = await import("./clone.js");
-    const bundle = await cloneSubtree(scopeSpaceId, {
+    const { captureTemplate } = await import("./seedTemplate.js");
+    const bundle = await captureTemplate(scopeSpaceId, {
       branch: branch || "0",
       scopeName:       args?.name || null,
       sourceReality:   args?.sourceReality || null,
@@ -71,7 +71,7 @@ registerSeeOperation("clone-subtree", {
 });
 
 // ─────────────────────────────────────────────────────────────────────
-// graft-clone
+// plant-template
 // ─────────────────────────────────────────────────────────────────────
 //
 // target: { kind: "space", id }  — the target parent (insertion point)
@@ -79,56 +79,56 @@ registerSeeOperation("clone-subtree", {
 //
 // Returns: { rootSpaceId, counts, remapTable }
 
-async function graftCloneHandler({ target, params, identity, summonCtx }) {
+async function plantTemplateHandler({ target, params, identity, summonCtx }) {
   const kind = detectTargetKind(target);
   if (kind !== "space") {
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
-      `graft-clone: target must be a space (got ${kind})`,
+      `plant-template: target must be a space (got ${kind})`,
     );
   }
   if (!identity?.beingId) {
     throw new IbpError(
       IBP_ERR.UNAUTHORIZED,
-      "graft-clone: identity required (the operator's beingId)",
+      "plant-template: identity required (the operator's beingId)",
     );
   }
   const { bundle } = params || {};
   if (!bundle) {
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
-      "graft-clone: params.bundle is required",
+      "plant-template: params.bundle is required",
     );
   }
   const targetParentSpaceId = targetIdOf(target);
   const branch = summonCtx?.actorAct?.branch || "0";
 
-  const { graftClone } = await import("./graft.js");
-  const result = await graftClone(bundle, targetParentSpaceId, {
+  const { plantTemplate } = await import("./seedPlant.js");
+  const result = await plantTemplate(bundle, targetParentSpaceId, {
     branch,
     operatorBeingId: String(identity.beingId),
     summonCtx,
   });
 
-  // The graft already stamped a `graft-completed` fact on the new
+  // The graft already stamped a `template-planted` fact on the new
   // root's reel; we don't need the dispatcher to stamp a second audit
   // fact. _skipAudit suppresses it.
   return { ...result, _skipAudit: true };
 }
 
-registerOperation("graft-clone", {
+registerOperation("plant-template", {
   targets: ["space"],
   ownerExtension: "seed",
-  factAction: "graft-clone",
+  factAction: "plant-template",
   skipAudit: true,
   args: {
     bundle: { type: "json", label: "Clone bundle (paste JSON)", required: true },
   },
-  handler: graftCloneHandler,
+  handler: plantTemplateHandler,
 });
 
 // ─────────────────────────────────────────────────────────────────────
-// capture-seed
+// capture-graft
 // ─────────────────────────────────────────────────────────────────────
 //
 // target: { kind: "space", id: <space root id> } OR a heaven space
@@ -146,7 +146,7 @@ async function captureSeedHandler({ target, params, identity, summonCtx }) {
   if (!identity?.beingId) {
     throw new IbpError(
       IBP_ERR.UNAUTHORIZED,
-      "capture-seed: identity required",
+      "capture-graft: identity required",
     );
   }
 
@@ -160,12 +160,12 @@ async function captureSeedHandler({ target, params, identity, summonCtx }) {
   if (!(await hasHeavenAuthority(identity.beingId))) {
     throw new IbpError(
       IBP_ERR.FORBIDDEN,
-      "capture-seed: only beings with heaven authority (owner or angel role) may form a seed of the reality.",
+      "capture-graft: only beings with heaven authority (owner or angel role) may form a seed of the reality.",
     );
   }
 
-  const { captureSeed } = await import("./seed.js");
-  const result = await captureSeed({
+  const { captureGraft } = await import("./graft.js");
+  const result = await captureGraft({
     capturedBy: String(identity.beingId),
     realityName: (params || {}).realityName || null,
   });
@@ -177,13 +177,13 @@ async function captureSeedHandler({ target, params, identity, summonCtx }) {
   };
 }
 
-registerOperation("capture-seed", {
+registerOperation("capture-graft", {
   // Accepts either the place root or a heaven space — both surfaces are
   // "authority surfaces" for the reality. Target identity isn't load-
   // bearing; the handler reads the place root regardless.
   targets: ["space"],
   ownerExtension: "seed",
-  factAction: "capture-seed",
+  factAction: "capture-graft",
   skipAudit: true,
   args: {
     realityName: { type: "text", label: "Reality name (optional)", required: false },
@@ -203,11 +203,11 @@ registerOperation("capture-seed", {
 registerSeeOperation("clones", {
   ownerExtension: "seed",
   description: "Catalog of registered clone bundles (extension-shipped + operator-captured)",
-  handler: () => ({ clones: listClones() }),
+  handler: () => ({ clones: listTemplates() }),
 });
 
 // ─────────────────────────────────────────────────────────────────────
-// graft-clone-by-name — graft a registered extension clone by name
+// plant-template-by-name — graft a registered extension clone by name
 // ─────────────────────────────────────────────────────────────────────
 //
 // target: { kind: "space", id } — the insertion-point
@@ -215,42 +215,42 @@ registerSeeOperation("clones", {
 //
 // Returns: { rootSpaceId, counts, remapTable }
 //
-// Wrapper around graft-clone that looks the bundle up in the clone
+// Wrapper around plant-template that looks the bundle up in the clone
 // registry instead of accepting the bundle JSON over the wire. The
 // portal calls this after the operator picks a clone from the list.
 
-async function graftCloneByNameHandler({ target, params, identity, summonCtx }) {
+async function plantTemplateByNameHandler({ target, params, identity, summonCtx }) {
   const kind = detectTargetKind(target);
   if (kind !== "space") {
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
-      `graft-clone-by-name: target must be a space (got ${kind})`,
+      `plant-template-by-name: target must be a space (got ${kind})`,
     );
   }
   if (!identity?.beingId) {
     throw new IbpError(
       IBP_ERR.UNAUTHORIZED,
-      "graft-clone-by-name: identity required (the operator's beingId)",
+      "plant-template-by-name: identity required (the operator's beingId)",
     );
   }
   const name = (params || {}).name;
   if (typeof name !== "string" || !name.length) {
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
-      "graft-clone-by-name: params.name (clone fullName) is required",
+      "plant-template-by-name: params.name (clone fullName) is required",
     );
   }
-  const entry = getClone(name);
+  const entry = getTemplate(name);
   if (!entry) {
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
-      `graft-clone-by-name: clone "${name}" not registered`,
+      `plant-template-by-name: clone "${name}" not registered`,
     );
   }
   const targetParentSpaceId = targetIdOf(target);
   const branch = summonCtx?.actorAct?.branch || "0";
-  const { graftClone } = await import("./graft.js");
-  const result = await graftClone(entry.bundle, targetParentSpaceId, {
+  const { plantTemplate } = await import("./seedPlant.js");
+  const result = await plantTemplate(entry.bundle, targetParentSpaceId, {
     branch,
     operatorBeingId: String(identity.beingId),
     params: (params || {}).params || {},
@@ -259,14 +259,121 @@ async function graftCloneByNameHandler({ target, params, identity, summonCtx }) 
   return { ...result, _skipAudit: true };
 }
 
-registerOperation("graft-clone-by-name", {
+registerOperation("plant-template-by-name", {
   targets: ["space"],
   ownerExtension: "seed",
-  factAction: "graft-clone-by-name",
+  factAction: "plant-template-by-name",
   skipAudit: true,
   args: {
     name:   { type: "text", label: "Clone name", required: true },
     params: { type: "json", label: "Parameter values (optional)", required: false },
   },
-  handler: graftCloneByNameHandler,
+  handler: plantTemplateByNameHandler,
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// capture-being  — SEE op (pure READ): a being's identity-preserving
+//                  graft bundle (its reel + act-chain + lineage, VERBATIM)
+// ─────────────────────────────────────────────────────────────────────
+//
+// args: { beingId }   Returns: { bundle }
+//
+// READ-ONLY: assembles the bundle from reads, emits no Fact, mutates
+// nothing — the doctrinal SEE shape, same as capture-template.
+//
+// AUTHORITY-GATED (self OR heaven), unlike capture-template. The reason
+// is the hash: a being's be:birth fact folds its WHOLE params into its
+// _id (hash.js contentOf), and that params carries qualities.auth.
+// privateKeyEnc. So the encrypted key is HASH-BOUND — the bundle MUST
+// carry it verbatim or verifyReel breaks on the receiver; it cannot be
+// redacted out (the template family can redact precisely because it
+// re-mints fresh keys). The encrypted key is reality-bound (AES-GCM via
+// HKDF-from-JWT_SECRET — undecryptable on any reality but the source, so
+// a graft to elsewhere can't use it; the owner re-imports their key
+// there). The gate keeps this otherwise-redacted blob from leaking to
+// unauthorized callers. SEE-op returns are NOT auto-redacted (only the
+// descriptor/reels are), so the verbatim bundle reaches the caller intact.
+//
+// Gate breadth, stated plainly: hasHeavenAuthority is coarse by design —
+// the first human and their inheritors all carry it, so in a single-
+// operator reality this gate reads as "self, or the operator." That is
+// the intended breadth (the operator runs migration / backup / federation
+// for every being they host); it is NOT a fine-grained per-being grant.
+// A narrower "who may export THIS being" capability is a future refinement,
+// not a hole — the coarse gate is correct for the sovereign-host model.
+
+registerSeeOperation("capture-being", {
+  ownerExtension: "seed",
+  description: "Capture a being's identity-preserving graft bundle (reel + act-chain + lineage), verbatim. Authority-gated (self or heaven).",
+  args: {
+    beingId: { type: "text", label: "Being id (pubkey) to capture", required: true },
+  },
+  handler: async ({ identity, args }) => {
+    if (!identity?.beingId) {
+      throw new IbpError(IBP_ERR.UNAUTHORIZED, "capture-being: identity required (the operator's beingId)");
+    }
+    const beingId = args?.beingId;
+    if (!beingId || typeof beingId !== "string") {
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "capture-being: `beingId` is required");
+    }
+    // Gate: the being itself (sovereign self-export) OR a heaven-authority
+    // operator (migration / backup / federation). A being's graft bundle
+    // carries its verbatim be:birth fact (with the reality-bound encrypted
+    // key), so it is not freely readable.
+    const isSelf = String(identity.beingId) === String(beingId);
+    if (!isSelf) {
+      const { hasHeavenAuthority } = await import("../space/heavenLineage.js");
+      if (!(await hasHeavenAuthority(identity.beingId))) {
+        throw new IbpError(IBP_ERR.FORBIDDEN, "capture-being: only the being itself or a heaven-authority operator may capture a being's graft bundle.");
+      }
+    }
+    const { captureGraft } = await import("./graft.js");
+    const { bundle } = await captureGraft({ beingId: String(beingId), capturedBy: String(identity.beingId), returnOnly: true });
+    return { bundle };
+  },
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// graft-being  — DO op (actual mutation): apply a being-graft bundle
+//                into THIS (living) reality, identity preserved
+// ─────────────────────────────────────────────────────────────────────
+//
+// target: { kind: "space", id } — an authority surface (not load-bearing;
+//          the being lands at its own verbatim homeSpace ref). Same shape
+//          as capture-graft.
+// params: { bundle }   Returns: { beingId, mode, counts, verified }
+//
+// HEAVEN-GATED on the target reality: admitting another being's full chain
+// into this reality is a reality-operator decision. applyGraft inserts the
+// foreign chain VERBATIM (never emitFact — imported facts are foreign by
+// construction) and stamps its own graft-being-completed audit on the
+// operator's reel, so skipAudit.
+
+async function graftBeingHandler({ params, identity, summonCtx }) {
+  if (!identity?.beingId) {
+    throw new IbpError(IBP_ERR.UNAUTHORIZED, "graft-being: identity required (the operator's beingId)");
+  }
+  const { hasHeavenAuthority } = await import("../space/heavenLineage.js");
+  if (!(await hasHeavenAuthority(identity.beingId))) {
+    throw new IbpError(IBP_ERR.FORBIDDEN, "graft-being: only beings with heaven authority may graft a being into this reality.");
+  }
+  const { bundle } = params || {};
+  if (!bundle) {
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "graft-being: params.bundle is required");
+  }
+  const branch = summonCtx?.actorAct?.branch || "0";
+  const { applyGraft } = await import("./graft.js");
+  const result = await applyGraft(bundle, { operatorBeingId: String(identity.beingId), branch });
+  return { ...result, _skipAudit: true };
+}
+
+registerOperation("graft-being", {
+  targets: ["space"],
+  ownerExtension: "seed",
+  factAction: "graft-being",
+  skipAudit: true,
+  args: {
+    bundle: { type: "json", label: "Being-graft bundle (paste JSON)", required: true },
+  },
+  handler: graftBeingHandler,
 });

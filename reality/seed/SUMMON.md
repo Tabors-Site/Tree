@@ -34,13 +34,13 @@ A being can carry multiple roles. The active role for THIS moment is picked from
 
 ### Intent — the caller's stated purpose
 
-A short kebab case label declared on the envelope. Examples seed uses today: `mate`, `role-request`, `offer-graft`, `request-subtree`, `accept-graft`, `deliver-bundle`, `graft-result`.
+A short kebab case label declared on the envelope. Examples seed uses today: `mate`, `role-request`, `offer-template`, `request-template`, `accept-template`, `deliver-template`, `template-result`.
 
 Intent does three jobs:
 
 1. **Stated purpose.** What the caller says they are reaching out about. Same shape as an email subject line: a short header the receiver reads before opening the body.
 2. **Auth predicate.** Roles declare in `canSummon` which intents they may send (as actor) and which they accept (as receiver). The role walk in `seed/ibp/roleAuth.js#permitsSummon` reads the envelope intent and gates accordingly.
-3. **Routing hint.** When a receiving being carries multiple roles, intent is one of the dispatch keys. A federation manager receiving a SUMMON with intent `offer-graft` routes into a different handler arm than intent `accept-graft`.
+3. **Routing hint.** When a receiving being carries multiple roles, intent is one of the dispatch keys. A federation manager receiving a SUMMON with intent `offer-template` routes into a different handler arm than intent `accept-template`.
 
 Intent is **not**:
 

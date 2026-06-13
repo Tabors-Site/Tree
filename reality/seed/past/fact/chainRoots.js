@@ -113,9 +113,9 @@ function branchRollup(path, meta, reelRows, actRows) {
 
 /**
  * PURE reality root over chain parts (branch rows + reelHead rows) —
- * no DB, no clock. This is the bundle fingerprint: captureSeed
+ * no DB, no clock. This is the bundle fingerprint: captureGraft
  * computes it over the exact arrays it captured (race-free) and
- * plantSeed recomputes it over what landed. The live realityRoot()
+ * plantGraft recomputes it over what landed. The live realityRoot()
  * below builds the same shapes from the DB.
  */
 export function realityRootFromParts({ reality, branches = [], reelHeads = [], actHeads = [] }) {
@@ -141,6 +141,28 @@ export function realityRootFromParts({ reality, branches = [], reelHeads = [], a
     out.push([path, branchRollup(path, meta, rowsByBranch.get(path) || [], actsByBranch.get(path) || [])]);
   }
   return rollup({ reality: reality ?? null, branches: out });
+}
+
+/**
+ * PURE scoped fingerprint for a GRAFT extract — a commitment to exactly
+ * the reels and act-chains a being's graft carries, at the heads it
+ * carries them, plus the being's id. Unlike realityRootFromParts (which
+ * folds the whole-reality branch set AND the reality domain — wrong for a
+ * scoped extract that crosses host realities), this folds ONLY the
+ * in-scope heads, so captureGraft and applyGraft recompute a byte-
+ * identical fingerprint over the same extract with no dependence on the
+ * host reality's other branches. The reelHead/actHead `_id` already
+ * encodes the branch, so a flat sorted list is branch-aware. Same rollup
+ * discipline (one serializer) as every other root in this module.
+ */
+export function graftRootFromParts({ beingId, reelHeads = [], actHeads = [] }) {
+  const reels = (reelHeads || [])
+    .map((r) => [String(r._id), r.headHash || `seq:${r.head}`])
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  const acts = (actHeads || [])
+    .map((r) => [String(r._id), r.headHash || null])
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  return rollup({ beingId: beingId ?? null, reels, acts });
 }
 
 /**

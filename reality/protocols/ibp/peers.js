@@ -32,8 +32,11 @@ function isPrivateHost(hostname) {
  * @param {string} info.realityId      remote place's DID
  * @param {string} [info.baseUrl]   defaults to "https://<domain>"
  * @param {string} [info.name]      friendly name
+ * @param {boolean} [info.requireSignedEnvelopes]  strict mode: refuse
+ *                                  envelopes from this peer that lack
+ *                                  the acting being's own signature
  */
-export async function registerPeer({ domain, publicKey, realityId, baseUrl, name }) {
+export async function registerPeer({ domain, publicKey, realityId, baseUrl, name, requireSignedEnvelopes }) {
   if (!domain || !publicKey || !realityId) {
     throw new Error("registerPeer requires { domain, publicKey, realityId }");
   }
@@ -52,6 +55,9 @@ export async function registerPeer({ domain, publicKey, realityId, baseUrl, name
     existing.baseUrl   = url;
     existing.name      = name || existing.name;
     existing.status    = "active";
+    if (typeof requireSignedEnvelopes === "boolean") {
+      existing.requireSignedEnvelopes = requireSignedEnvelopes;
+    }
     await existing.save();
     return existing;
   }
@@ -63,6 +69,7 @@ export async function registerPeer({ domain, publicKey, realityId, baseUrl, name
     baseUrl: url,
     name: name || "",
     status: "active",
+    requireSignedEnvelopes: requireSignedEnvelopes === true,
   });
 }
 

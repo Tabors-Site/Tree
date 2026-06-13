@@ -129,7 +129,7 @@ export async function init(reality) {
   // ───────────────────────────────────────────────────────────────
   // CLONES — shippable structure. Declare bundles in
   // `manifest.provides.clones`; operators graft them with
-  // `reality.do(space, "graft-clone", { bundle })`. A clone is a
+  // `reality.do(space, "plant-template", { bundle })`. A clone is a
   // static list of fact specs (create-space, be:birth, etc.) — no
   // JS plant code, no scaffold(ctx). The retired seed-scaffold
   // pattern lived here previously. See seed/done/Chain-Rebuild.md for

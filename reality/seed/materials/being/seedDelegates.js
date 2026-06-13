@@ -152,7 +152,7 @@ export const SEED_DELEGATES = [
     cognition: "scripted",
     invocableBy: "owner",
     description:
-      "Negotiates subtree exchange with peer realities. Operator triggers push-subtree (offer one of our subtrees to a peer) or pull-subtree (ask a peer for one of theirs); the role handles incoming offer-graft / request-subtree / deliver-bundle SUMMONs from peers. Clone and graft are the data primitives; push and pull are the social verbs on top.",
+      "Negotiates transfers with peer realities. Operator triggers offer-template / offer-being (push a template or a being to a peer) or request-template (ask a peer for one of theirs); the role handles incoming offer-template / request-template / deliver-template / deliver-being SUMMONs from peers. Seed (the shape, fresh ids) and graft (the entity, verbatim) are the data primitives; push and pull are the social verbs on top.",
   },
   // The host tier (nodeServerTest Phase 1): the running machine as
   // beings. Each is homed at its ./host child space via

@@ -1,55 +1,72 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// federation-manager. The delegate that negotiates subtree exchange
-// with peer realities.
+// federation-manager. The being that negotiates transfers with peer
+// realities on an operator's behalf.
 //
-// Clone and graft are the DATA primitives (capture / apply a bundle).
-// Push and pull are NEGOTIATIONS between sovereign realities: who
-// initiated the transfer, did the receiver consent, did the manifest
-// satisfy the receiver's policy. I am the addressable being who
-// carries out those negotiations on behalf of an operator.
+// Seed and graft are the DATA primitives (capture / apply a bundle): a
+// SEED brings the SHAPE (a template, fresh ids on planting); a GRAFT
+// brings the THING ITSELF (a being, verbatim id + chain). Two cargoes,
+// one transport. Push and pull are the NEGOTIATIONS on top: who initiated
+// the transfer, did the receiver consent, did the manifest satisfy the
+// receiver's policy. I carry those out.
 //
-// I am scripted cognition. The protocol is deterministic: classify
-// the incoming SUMMON by intent, look up or update the negotiation
-// record in my qualities, return a response. No LLM, no prompt.
-// Operators drive me through my DO ops (push-subtree, pull-subtree,
-// accept-offer, reject-offer, accept-request, reject-request); peers
-// reach me through SUMMONs my handler classifies below.
+// I am scripted cognition. The protocol is deterministic: classify the
+// incoming SUMMON by intent, look up or update the negotiation record in
+// my qualities, return a response. No LLM, no prompt.
 //
-// SIX INTENTS (the wire shape).
+// NAMING (verb-object, two cargoes). Every name is <verb>-<cargo>, and
+// the cargo is template (the shape) or being (the entity). The content
+// path and the identity path read as the same act on different cargo:
+//   offer-template   / offer-being     push: I send you cargo
+//   request-template                   pull: I ask you for cargo
+//   deliver-template / deliver-being   the bytes themselves
+//   accept-template  / reject-template the receiver's verdict on an offer
+//   fulfill-request  / refuse-request  the asked side's verdict on a pull
+//   template-result                    terminal outcome report
 //
-//   offer-graft       sender -> peer
-//     "I have a subtree I would like to graft into your reality.
-//      Here is the manifest. Will you accept?"
+// One token, two sides: offer-template (and accept / reject / request-
+// template) names BOTH an operator DO op (the local trigger the operator
+// runs) AND the wire intent it emits to the peer. Same concept seen from
+// the two realities; a log line tells you which by its side. The identity
+// path is the exception that proves the rule: offer-being delivers in one
+// shot (deliver-being, auto-accepted, no offer/accept review), because a
+// graft is self-certifying (the receiver verifies the signed graftRoot
+// with no callback), so there is no accept-being or being-result pair.
+//
+// THE WIRE INTENTS my handler classifies (./handlers.js):
+//
+//   offer-template     sender -> peer
+//     "I have a template I would plant in your reality. Here is the
+//      manifest. Will you accept?"
 //     payload: { negotiationId, manifest, label?, sourceSubtreePath? }
-//     response: { kind: "pending-review", negotiationId } if not
-//      auto-accepted; { kind: "auto-accept" } if policy admits.
+//     response: pending-review, or auto-accept if policy admits.
 //
-//   accept-graft      peer -> sender
-//     "Yes, send the bundle."
-//     payload: { negotiationId }
-//     sender's accept handler then SUMMONs deliver-bundle.
+//   accept-template    peer -> sender
+//     "Yes, send it." payload: { negotiationId }
+//     sender's accept handler then SUMMONs deliver-template.
 //
-//   reject-graft      peer -> sender
-//     "No thanks."
-//     payload: { negotiationId, reason? }
+//   reject-template    peer -> sender
+//     "No thanks." payload: { negotiationId, reason? }
 //
-//   deliver-bundle    sender -> peer
+//   deliver-template   sender -> peer
 //     "Here is the bundle for the negotiation you accepted."
 //     payload: { negotiationId, bundle }
-//     response: { kind: "graft-result", success, summary?, error? }
+//     response: { kind: "template-result", success, summary?, error? }
 //
-//   request-subtree   puller -> offerer
-//     "Would you push your <subtreePath> to me?"
+//   request-template   puller -> offerer
+//     "Would you send me <subtreePath>?"
 //     payload: { negotiationId, subtreePath, label? }
-//     If offerer's policy admits, offerer's accept-request handler
-//     runs push-subtree back at the requester. If not, the offerer's
-//     operator reviews and decides.
+//     If policy admits, the offerer's fulfill-request handler runs
+//     offer-template back at the puller. If not, the operator decides.
 //
-//   graft-result      peer -> sender
-//     "The graft completed (or failed). Here are the details."
+//   template-result    peer -> sender
+//     "The plant completed (or failed). Here are the details."
 //     payload: { negotiationId, success, summary?, error? }
 //     terminal: sender records the outcome and the negotiation seals.
+//
+//   deliver-being      sender -> peer
+//     One-shot identity graft (see NAMING above): auto-accepted, verified
+//     self-certifyingly, lands the being verbatim. No review handshake.
 //
 // NEGOTIATION STATE lives in my qualities.federation map:
 //
@@ -72,7 +89,7 @@ import log from "../../../seedReality/log.js";
 export const federationManagerRole = Object.freeze({
   name: "federation-manager",
   description:
-    "Negotiates subtree exchange with peer realities. Operator triggers push-subtree or pull-subtree DO ops; the role handles incoming offer-graft / request-subtree / deliver-bundle SUMMONs from peer realities.",
+    "Negotiates subtree exchange with peer realities. Operator triggers offer-template or request-template DO ops; the role handles incoming offer-template / request-template / deliver-template SUMMONs from peer realities.",
   requiredCognition: "scripted",
   permissions: ["see", "do", "summon"],
   respondMode: "async",
@@ -95,28 +112,32 @@ export const federationManagerRole = Object.freeze({
   // registerOperation at module load.
   canDo: [
     {
-      action:      "push-subtree",
-      description: "Offer a subtree to a peer reality. Args: { peer, subtreePath, label? }",
+      action:      "offer-template",
+      description: "Offer a template (a subtree's shape, planted with fresh ids) to a peer reality. Args: { peer, subtreePath, label? }",
     },
     {
-      action:      "pull-subtree",
-      description: "Request a subtree from a peer reality. Args: { peer, subtreePath, label? }",
+      action:      "offer-being",
+      description: "Graft a being (identity + chain, verbatim) to a peer reality, one-shot. Args: { peer, beingId }",
     },
     {
-      action:      "accept-offer",
-      description: "Accept an incoming offer-graft from a peer. Args: { negotiationId }",
+      action:      "request-template",
+      description: "Request a template (a subtree's shape) from a peer reality. Args: { peer, subtreePath, label? }",
     },
     {
-      action:      "reject-offer",
-      description: "Reject an incoming offer-graft. Args: { negotiationId, reason? }",
+      action:      "accept-template",
+      description: "Accept an incoming offer-template from a peer. Args: { negotiationId }",
     },
     {
-      action:      "accept-request",
-      description: "Accept an incoming request-subtree (triggers a push back to the requester). Args: { negotiationId }",
+      action:      "reject-template",
+      description: "Reject an incoming offer-template. Args: { negotiationId, reason? }",
     },
     {
-      action:      "reject-request",
-      description: "Reject an incoming request-subtree. Args: { negotiationId, reason? }",
+      action:      "fulfill-request",
+      description: "Accept an incoming request-template (triggers a push back to the requester). Args: { negotiationId }",
+    },
+    {
+      action:      "refuse-request",
+      description: "Reject an incoming request-template. Args: { negotiationId, reason? }",
     },
   ],
 

@@ -1,29 +1,29 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Clone. Capture a subtree's SETUP — beings, roles, qualities,
-// configurations, current shape — into a portable artifact that another
-// reality (or another part of this one) can graft.
+// Seed (capture the template). Capture a subtree's STRUCTURE — beings,
+// roles, qualities, configurations, current shape — into a portable
+// artifact that another reality (or another part of this one) can plant.
 //
-// **A clone is a hollow face by design.** It's setup-transfer: "here's
-// my dance-floor / lab template / blog skeleton — install it elsewhere."
-// The receiver gets the configuration installable, not the history.
-// No acts, no biography, no original IDs preserved. The grafted content
-// lands as fresh facts on the receiver's branch under the grafter's
-// identity; the destination has the shape but no rings, no scars, no
-// history of how it came to be — exactly as intended.
+// **A seed is a shell by design.** It's structure-transfer: "here's the
+// SHAPE of my dance-floor / lab / blog — grow your own copy elsewhere."
+// The receiver gets the structure plantable, not the history. No acts,
+// no biography, no original ids preserved: the planted seed sprouts fresh
+// facts on the receiver's branch under the planter's identity, with the
+// shape but no rings, no scars, no history of how it came to be — exactly
+// as intended.
 //
-// Clones are intentionally lossy. If you want full biography transfer
-// (acts preserved, identity continuation, original IDs intact), that's
-// `seed.js` — the seed artifact is the genome, and is only valid at
-// boot via plant. See `seed/done/Chain-Rebuild.md` for the vocabulary
-// doctrine pinning that clone and seed are two distinct artifacts with
-// two distinct purposes, not one artifact at two fidelity levels.
+// Seeds are intentionally lossy. If you want full biography transfer
+// (acts preserved, identity continuation, original ids intact, the thing
+// ITSELF rather than its shape), that's a GRAFT — see `graft.js`. See
+// philosophy/OS/GRAFT-AND-SEED.md for the doctrine pinning that seed and
+// graft are two distinct artifacts with two distinct purposes (shape vs.
+// identity), not one artifact at two fidelity levels.
 //
 // Implementation: projection-walker. Captures the subtree's CURRENT
 // shape (what would appear in a SEE descriptor at the scope root,
-// recursively); the graft side synthesizes a chain of create-X facts
-// at apply time. History stays out of clones, period — if you want
-// history, you want a seed.
+// recursively); seedPlant.js synthesizes a chain of create-X facts at
+// plant time. History stays out of seeds, period — if you want history,
+// you want a graft.
 //
 // Inside the bundle:
 //
@@ -68,9 +68,9 @@ import { emptyBundle } from "./bundle.js";
  * @param {string} [opts.operatorBeingId] who initiated (for audit meta)
  * @returns {Promise<object>} the clone bundle
  */
-export async function cloneSubtree(scopeSpaceId, opts = {}) {
+export async function captureTemplate(scopeSpaceId, opts = {}) {
   if (!scopeSpaceId || typeof scopeSpaceId !== "string") {
-    throw new Error("cloneSubtree: scopeSpaceId is required");
+    throw new Error("captureTemplate: scopeSpaceId is required");
   }
   const branch = opts.branch || "0";
   // loadOrFold throughout this file: clone walks aggregates on the
@@ -96,7 +96,7 @@ export async function cloneSubtree(scopeSpaceId, opts = {}) {
 
   const rootSlot = await loadOrFold("space", scopeSpaceId, branch);
   if (!rootSlot) {
-    throw new Error(`cloneSubtree: space "${scopeSpaceId}" not found in branch "${branch}"`);
+    throw new Error(`captureTemplate: space "${scopeSpaceId}" not found in branch "${branch}"`);
   }
 
   const bundle = emptyBundle({
@@ -457,9 +457,9 @@ export async function cloneSubtree(scopeSpaceId, opts = {}) {
   // verify individually by their own hashes; hashing the ledger means
   // omitting or substituting a blob still breaks the bundle hash).
   // This is the offer-to-delivery integrity anchor: federation offers
-  // carry it in the manifest, deliver-bundle verifies the delivered
-  // bundle recomputes it, graft refuses cold on mismatch. A clone's
-  // identity IS its hash — same doctrine as facts and matter bytes.
+  // carry it in the manifest, deliver-template verifies the delivered
+  // bundle recomputes it, the plant refuses cold on mismatch. A template's
+  // identity IS its hash, same doctrine as facts and matter bytes.
   bundle.meta.bundleHash = await computeBundleHash(bundle);
 
   // The PUBKEY half: sign the bundle's identity (bundleHash) with the

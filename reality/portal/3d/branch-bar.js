@@ -435,10 +435,10 @@ async function _openPanel() {
       <button type="button" class="bp-merge" title="Merge two branches" style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
         ⇄ Merge
       </button>
-      <button type="button" class="bp-copy" title="Copy this place as a portable clone (facts only — its shape, no history). Downloads a .clone.json you can Graft elsewhere." style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
+      <button type="button" class="bp-copy" title="Copy this place as a portable clone (facts only — its shape, no history). Downloads a .seed.json you can Graft elsewhere." style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
         ⬇ Copy
       </button>
-      <button type="button" class="bp-graft" title="Graft a .clone.json under the current place — replays its facts as fresh local spaces/beings/matter" style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
+      <button type="button" class="bp-graft" title="Graft a .seed.json under the current place — replays its facts as fresh local spaces/beings/matter" style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
         ⬆ Graft
       </button>
       <input type="file" class="bp-graft-file" accept=".json,application/json" style="display:none;">
@@ -2011,15 +2011,15 @@ function _closeNewBranchDialog() {
 // Copy (clone) + graft
 // ────────────────────────────────────────────────────────────────
 //
-// `Copy`: calls reality.see("clone-subtree", { args: { spaceId, name } })
+// `Copy`: calls reality.see("capture-template", { args: { spaceId, name } })
 // — the chain rebuild is a pure read — and downloads the returned bundle
-// as a .clone.json file. The subtree is rooted at the user's current
-// position; the seed's cloneSubtree primitive walks descendants + their
+// as a .seed.json file. The subtree is rooted at the user's current
+// position; the seed's captureTemplate primitive walks descendants + their
 // beings + matter, capturing facts only (the shape, no history) — per
 // done/Chain-Rebuild.md, a clone is a cutting.
 //
 // `Graft`: file-picker → reads JSON → calls do(currentPath,
-// "graft-clone", {bundle}). The bundle's content lands as fresh spaces /
+// "plant-template", {bundle}). The bundle's content lands as fresh spaces /
 // beings / matter under the user's current position. Refs inside the
 // bundle remap to bare-string ids in the target's namespace (the
 // substrate everywhere stores bare; the bundle is the only place Refs
@@ -2042,7 +2042,7 @@ async function _downloadClone() {
   }
   const placeName = _portalState()?.descriptor?.address?.spaceName || "place";
   _showBranchEvent(`copying ${placeName}…`);
-  const result = await _state.client.see("clone-subtree", {
+  const result = await _state.client.see("capture-template", {
     args: { spaceId, name: placeName },
   });
   const bundle = result?.bundle;
@@ -2055,7 +2055,7 @@ async function _downloadClone() {
   const stamp = bundle.meta?.createdAt?.replace(/[:.]/g, "-").slice(0, 19) || "snapshot";
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${placeName}-${stamp}.clone.json`;
+  a.download = `${placeName}-${stamp}.seed.json`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -2078,7 +2078,7 @@ async function _graftFromFile(file) {
   }
   const srcName = bundle?.meta?.sourceScopeName || "bundle";
   _showBranchEvent(`grafting ${srcName} under ${addr}…`);
-  const result = await _state.client.do(addr, "graft-clone", { bundle });
+  const result = await _state.client.do(addr, "plant-template", { bundle });
   const counts = `${result?.counts?.spaces || 0} spaces, ${result?.counts?.beings || 0} beings, ${result?.counts?.matter || 0} matter`;
   _showBranchEvent(`✓ grafted ${srcName} (${counts})`);
   // Refetch the tree so any newly created branches surface (clones

@@ -157,3 +157,40 @@ export async function verifyActChain(branch, beingId) {
   }
   return { ok: true, count, headHash: head?.headHash || null };
 }
+
+/**
+ * verifyActChain's anchored sibling: walk a being's act-chain backward
+ * from its head but STOP at a declared anchor (`stopAtP`) instead of only
+ * GENESIS_PREV. A partial graft carries a CONTIGUOUS act-chain segment
+ * (head .. the act after stopAtP); the act before the segment, stopAtP,
+ * is legitimately absent, so the walk halts there rather than reporting a
+ * missing-act. Degenerate at stopAtP = GENESIS_PREV this IS verifyActChain.
+ *
+ * @param {string} branch
+ * @param {string} beingId
+ * @param {object} [opts]
+ * @param {string} [opts.stopAtP=GENESIS_PREV] identity of the act BEFORE the segment
+ * @param {string} [opts.fromHead] head to walk from (default: the live ActHead)
+ * @returns {{ok:true,count,headHash}|{ok:false,count,brokenAt,reason}}
+ */
+export async function verifyActChainFrom(branch, beingId, { stopAtP = GENESIS_PREV, fromHead } = {}) {
+  const { default: Act } = await import("./act.js");
+  let h = fromHead;
+  if (h === undefined) {
+    const head = await ActHead.findById(actHeadKey(branch, beingId)).select("headHash").lean();
+    h = head?.headHash || GENESIS_PREV;
+  }
+  const headHash = (h && h !== GENESIS_PREV) ? h : null;
+  let count = 0;
+  while (h !== GENESIS_PREV && h !== stopAtP) {
+    const act = await Act.findById(h).lean();
+    if (!act) return { ok: false, count, brokenAt: h, reason: "missing-act" };
+    if (typeof act.p !== "string") return { ok: false, count, brokenAt: h, reason: "unaddressed" };
+    if (computeActId(act.p, contentOfAct(act)) !== act._id) {
+      return { ok: false, count, brokenAt: h, reason: "hash-mismatch" };
+    }
+    count++;
+    h = act.p;
+  }
+  return { ok: true, count, headHash };
+}
