@@ -1,740 +1,640 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Graft. Apply a clone bundle into this reality, producing fresh
-// spaces / beings / matter with new local IDs.
+// Seed — capture the full reality as a portable genetic encoding.
 //
-// The graft is the inverse of clone:
+// **A seed is the genome.** It captures every fact, every act, every
+// branch, every reel head — the complete experiential biography of the
+// reality. Original IDs are preserved verbatim so a planted seed
+// CONTINUES the reality on a new substrate, not duplicates it.
 //
-//   - Each captured aggregate gets a fresh uuid in the target's
-//     namespace.
-//   - Refs inside content get remapped from sourceId-keyed Refs to the
-//     fresh bare-string ids (or sentinels resolve to the operator /
-//     insertion point).
-//   - Facts get stamped in dependency order: spaces first (parents
-//     before children), beings next, matter last.
+// Compare with `clone.js`:
+//   - Clone captures the SETUP (current shape). Hollow face. Graft-only.
+//     For setup transfer: "install my configuration elsewhere."
+//   - Seed captures the WHOLE REALITY (chains + biography). Plant-only.
+//     For continuation: "continue my computational life elsewhere."
 //
-// Conflict resolution (v1):
+// See `seed/done/Chain-Rebuild.md` for the doctrine: clone and seed are two
+// distinct artifacts with two distinct purposes, not one artifact at
+// two fidelity levels.
 //
-//   - Name collision in the insertion-point's children: refuse with a
-//     specific error. The operator chooses (rename in the bundle,
-//     graft elsewhere, or delete the conflicting child first). Future
-//     versions can wire the merge mediator.
+// Plant is the receive-side operation (boot-time only, lives in
+// `genesis.js`). The substrate refuses to expose runtime plant because
+// replacing a live reality is destructive and belongs to the deployer.
 //
-// History does not transfer — that's the clone-vs-seed distinction.
-// A grafted subtree begins its life on the target's reels at the
-// moment of the graft; subsequent reads see fresh facts only. The
-// bundle's sourceReality / sourceBranch are recorded in the
-// graft-completed meta-fact for audit, not replayed. For full-biography
-// transfer (acts preserved, identity continuation), see seed.js + plant.
+// **Plant is continuation, not duplication.** A planted seed has the
+// source's original IDs. Two simultaneously-live substrates with the
+// same reality identity is undefined behavior; the deployer ensures
+// only one is canonical (migration / backup-restore / cold archive —
+// not duplication).
+//
+// V1 implementation: dump-style. Walks each collection with .find().lean()
+// and returns the full snapshot. For realities under ~100k facts this is
+// fine; beyond that, future versions should stream with cursor batching.
+// Per the doctrine — make it work, chisel later.
 
-import { v4 as uuidv4 } from "uuid";
-import { isSentinelRef, isAggregateRef, refKind, refId } from "../ref.js";
-import { remapRefs } from "../refWalker.js";
-import { assertValidBundle } from "./bundle.js";
-import { emitFact } from "../../past/fact/facts.js";
-import { withBeingAct } from "../../sprout.js";
-import { generateBeingKeypair } from "../being/identity/beingKeys.js";
-import { encryptCredential } from "../being/identity/credentials.js";
-import { matterContentId } from "../matter/matterId.js";
+import mongoose from "mongoose";
+import Fact from "../../past/fact/fact.js";
+import Act from "../../past/act/act.js";
+import Branch from "../branch/branch.js";
+import ReelHead from "../../past/reel/reelHead.js";
 import log from "../../seedReality/log.js";
+import { getRealityDomain } from "../../ibp/address.js";
+import { writeFile, mkdir, readdir } from "fs/promises";
+import path from "path";
+import { fileURLToPath } from "url";
+
+// Collections the seed handles explicitly or that are pure caches
+// re-derived from the chain at plant time. Everything ELSE in the
+// database is "the rest of the reality's data" — extension-owned
+// collections, the peer registry, whatever future modules store — and
+// the genome captures it verbatim (a seed is the WHOLE reality; an
+// extension's collection is as much its body as its facts are).
+const SEED_CORE_COLLECTIONS = new Set(["facts", "acts", "branches", "reelHeads", "actHeads"]);
+const REGENERABLE_COLLECTIONS = new Set([
+  // fold caches — plant cold-folds these back from the chain
+  "projections", "inbox_projection", "threads_projection", "position_projection",
+  // legacy row caches of the fold (and the empty pre-rename stamps)
+  "spaces", "beings", "matters", "stamps",
+]);
+
+export const SEED_BUNDLE_VERSION = "1.0";
+
+// Canonical seeds folder: reality/seeds/, sibling of reality/extensions/.
+// Operator artifacts (genome backups) live here, NOT inside the
+// sovereign seed/ substrate folder.
+// seed.js lives at reality/seed/materials/publish/seed.js
+// reality/seeds is three levels up.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+export const SEEDS_FOLDER = path.resolve(__dirname, "..", "..", "..", "seeds");
 
 /**
- * Graft a clone bundle into the target.
+ * Capture the full reality as a portable seed bundle.
  *
- * @param {object} bundle              the clone bundle
- * @param {string} targetParentSpaceId where to insert (the new subtree's parent)
+ * The bundle preserves original IDs verbatim — a planted seed becomes
+ * the same reality continuing on a new substrate. The substrate refuses
+ * to expose a runtime plant; the receiving deployer plants at boot via
+ * `genesis.js` mode.
+ *
+ * By default, writes the captured seed to `reality/seeds/<realityName>-<timestamp>.seed.json`.
+ * Pass `returnOnly: true` to skip the write and just return the bundle
+ * (for callers who want to ship it over the wire or stash elsewhere).
+ *
  * @param {object} opts
- * @param {string} opts.operatorBeingId  who is grafting (must be authenticated; used for GRAFT_INITIATOR + audit)
- * @param {string} [opts.branch]       target branch (default "0")
- * @param {object} [opts.params]       parameter values for the bundle's declared parameter holes ($paramName references in field values)
- * @param {object} [opts.summonCtx]    if invoked inside an existing moment; otherwise the eager-fold singleton path is used
- * @returns {Promise<{ rootSpaceId, counts, remapTable }>}
+ * @param {string} [opts.capturedBy]  the operator beingId who initiated
+ *                                    the capture (for audit meta)
+ * @param {string} [opts.realityName] human label for the bundle meta + filename stem
+ * @param {boolean} [opts.returnOnly] if true, skip the disk write and just return the bundle
+ * @returns {Promise<object>} { bundle, savedTo? } — bundle is the seed; savedTo is the disk path (when written)
  */
-export async function graftClone(bundle, targetParentSpaceId, opts = {}) {
-  assertValidBundle(bundle);
-  if (!targetParentSpaceId || typeof targetParentSpaceId !== "string") {
-    throw new Error("graftClone: targetParentSpaceId is required");
-  }
-  if (!opts.operatorBeingId || typeof opts.operatorBeingId !== "string") {
-    throw new Error("graftClone: opts.operatorBeingId is required (identifies the grafter for GRAFT_INITIATOR + audit)");
-  }
-  const branch = opts.branch || "0";
+export async function captureSeed(opts = {}) {
+  const startedAt = Date.now();
+  log.info("Seed", "capturing reality genome...");
 
-  // ── Bundle integrity gate (BEFORE anything stamps) ──
-  // A captured bundle carries its own identity: meta.bundleHash, the
-  // digest over manifest + parameters + content + casManifest. If the
-  // received bundle doesn't reproduce it, the bundle was altered in
-  // flight (or hand-edited) — refuse COLD, zero facts stamped, no
-  // rollback needed. Bundles from before the hash landed (no
-  // bundleHash) pass with a loud warning; federation's deliver path
-  // additionally pins the hash against the offered manifest.
-  let bundleVerified = null;
-  if (bundle.meta?.bundleHash) {
-    const { computeBundleHash } = await import("./clone.js");
-    const recomputed = await computeBundleHash(bundle);
-    bundleVerified = recomputed === bundle.meta.bundleHash;
-    if (!bundleVerified) {
-      throw new Error(
-        `graftClone: BUNDLE INTEGRITY FAILED — meta.bundleHash ${bundle.meta.bundleHash.slice(0, 16)}… ` +
-        `but the received content recomputes ${recomputed.slice(0, 16)}…. ` +
-        `The bundle was altered after capture. Refusing before any fact stamps.`,
-      );
-    }
-  } else {
-    log.warn("Graft", "bundle carries no meta.bundleHash (pre-integrity capture) — grafting unverified");
-  }
+  // ── 1. Collect every Fact ──
+  // The substantive change chain. Each fact has its hash chain (p/h)
+  // and per-reel seq. Plant replays these verbatim so the destination
+  // chain matches the source's exactly (modulo wall-clock dates which
+  // stay as-stamped).
+  const facts = await Fact.find({}).sort({ seq: 1, date: 1 }).lean();
+  log.info("Seed", `captured ${facts.length} facts`);
 
-  // ── Bundle PROVENANCE gate (still before anything stamps) ──
-  // Content integrity (above) proves the BYTES are what bundleHash says;
-  // this proves WHO vouched for them. If the bundle carries a producer
-  // signature, verify it self-certifyingly against its signerId (a pubkey
-  // id) — no callback to the source reality. Present-but-invalid is a hard
-  // refusal; absent is advisory (pre-signature bundles / unsigned
-  // producers). The verified signer rides into the graft-completed fact.
-  let bundleSigner = null;
-  {
-    const { verifyBundleSig } = await import("./bundleSig.js");
-    const v = await verifyBundleSig(bundle);
-    if (!v.ok) {
-      throw new Error(
-        `graftClone: BUNDLE SIGNATURE FAILED (${v.reason}` +
-        (v.signerId ? `, signer ${String(v.signerId).slice(0, 14)}…` : "") +
-        `). Refusing before any fact stamps.`,
-      );
-    }
-    bundleSigner = v.signerId;  // null when unsigned-advisory
-    if (bundleSigner) log.info("Graft", `bundle signature verified — vouched by ${String(bundleSigner).slice(0, 14)}…`);
-  }
+  // ── 2. Collect every Act ──
+  // The experiential chain. Each act carries the cognition transcript
+  // (startMessage, endMessage, facadeSnapshot) — the biography that
+  // makes the reality more than a state snapshot.
+  const acts = await Act.find({}).sort({ stampedAt: 1 }).lean();
+  log.info("Seed", `captured ${acts.length} acts`);
 
-  // ── CAS blobs land FIRST (still before any fact stamps) ──
-  // Each travelling blob goes through the content store, and the
-  // store's recomputed hash MUST equal the manifest's claimed hash.
-  // putContent stores by actual hash, so a lying blob can't poison
-  // the claimed address — it just proves the lie and refuses the
-  // graft cold. Facts carry refs, never bytes: by the time any
-  // create-matter stamps below, its ref resolves locally.
-  let casVerified = null;
-  {
-    const blobs = bundle.casBlobs && typeof bundle.casBlobs === "object" ? bundle.casBlobs : null;
-    if (blobs && Object.keys(blobs).length > 0) {
-      const { putContent } = await import("../matter/contentStore.js");
-      const claimedMeta = new Map(
-        (bundle.casManifest?.included || []).map((e) => [e.hash, e]),
-      );
-      // Mime/name ride the matter refs; index them so the store's
-      // sidecars land with honest metadata.
-      const refByHash = new Map();
-      for (const m of bundle.content.matter) {
-        const c = m.content;
-        if (c && typeof c === "object" && c.kind === "cas" && c.hash) refByHash.set(c.hash, c);
+  // ── 3. Collect every Branch ──
+  // Branch registry: paths, branchPoints (per-reel snapshots of parent
+  // heads at create-branch time), scopes, lifecycle flags.
+  const branches = await Branch.find({}).lean();
+  log.info("Seed", `captured ${branches.length} branches`);
+
+  // ── 4. Collect every ReelHead ──
+  // Per-reel-per-branch seq counters. Without these the receiving
+  // substrate would allocate seq 1 for every reel on a fresh boot,
+  // breaking the hash chain continuity from the seed's facts.
+  const reelHeads = await ReelHead.find({}).lean();
+  log.info("Seed", `captured ${reelHeads.length} reel heads`);
+
+  // ── 4b. Collect every ActHead ──
+  // Per-being per-branch act-chain tips. Acts are content-addressed
+  // chains; the reality root covers them, so the heads are core
+  // genome, not extension luggage.
+  const { default: ActHead } = await import("../../past/act/actHead.js");
+  const actHeads = await ActHead.find({}).lean();
+  log.info("Seed", `captured ${actHeads.length} act heads`);
+
+  // ── 5. Collect everything else — extension collections et al ──
+  // The genome is the WHOLE reality. Extensions may keep their own
+  // Mongo collections (declared via their manifests); the peer
+  // registry lives in its own collection; future modules will add
+  // more. None of that is derivable from the chain, so the seed
+  // captures every collection that isn't core (handled above) or a
+  // regenerable cache (re-derived by plant's cold-fold). Keyed by
+  // collection name; plant re-inserts verbatim.
+  const extensionData = {};
+  try {
+    const db = mongoose.connection.db;
+    const cols = await db.listCollections().toArray();
+    for (const c of cols) {
+      const name = c.name;
+      if (name.startsWith("system.")) continue;
+      if (SEED_CORE_COLLECTIONS.has(name)) continue;
+      if (REGENERABLE_COLLECTIONS.has(name)) continue;
+      const docs = await db.collection(name).find({}).toArray();
+      if (docs.length > 0) {
+        extensionData[name] = docs;
+        log.info("Seed", `captured ${docs.length} docs from "${name}"`);
       }
-      for (const [hash, b64] of Object.entries(blobs)) {
-        const buf = Buffer.from(String(b64), "base64");
-        const ref = refByHash.get(hash) || {};
-        const stored = await putContent(buf, {
-          mimeType: ref.mimeType || "application/octet-stream",
-          name: ref.name || null,
-          encoding: ref.encoding || null,
-        });
-        if (stored.hash !== hash) {
-          throw new Error(
-            `graftClone: CAS BLOB INTEGRITY FAILED — bundle claims ${hash.slice(0, 16)}… but the ` +
-            `bytes hash to ${stored.hash.slice(0, 16)}…. Refusing before any fact stamps. ` +
-            `(The mis-claimed bytes sit under their true hash; the retention sweeper owns them.)`,
-          );
-        }
-        if (claimedMeta.has(hash) && claimedMeta.get(hash).size !== buf.length) {
-          throw new Error(
-            `graftClone: casManifest size mismatch for ${hash.slice(0, 16)}… — refusing.`,
-          );
+    }
+  } catch (err) {
+    log.warn("Seed", `extension-collection sweep failed: ${err.message}. Core chain still captured.`);
+  }
+
+  // ── 5b. CAS blobs — the genome includes the BYTES ──
+  // The chain holds facts ABOUT content; the bytes live in the
+  // content store. A seed that travels to another machine must carry
+  // them or the planted reality's matter resolves to nothing. Every
+  // cas hash referenced by any fact travels (subject to caps, with
+  // an honest omission ledger — no silent truncation). Plant puts
+  // each blob and verifies its recomputed hash before the chain
+  // inserts.
+  const casBlobs = {};
+  const casManifest = { included: [], omitted: [] };
+  {
+    const maxBlobBytes  = Number(opts.maxCasBlobBytes)  > 0 ? Number(opts.maxCasBlobBytes)  : 64 * 1024 * 1024;
+    const maxTotalBytes = Number(opts.maxCasTotalBytes) > 0 ? Number(opts.maxCasTotalBytes) : 512 * 1024 * 1024;
+    const hashes = new Set();
+    const HASH_RE = /^[0-9a-f]{64}$/;
+    for (const f of facts) {
+      const c = f?.params?.content;
+      if (c?.kind === "cas" && HASH_RE.test(c.hash || "")) hashes.add(c.hash);
+      const v = f?.params?.value;
+      if (v?.kind === "cas" && HASH_RE.test(v.hash || "")) hashes.add(v.hash);
+    }
+    if (hashes.size > 0) {
+      const { getContent } = await import("../matter/contentStore.js");
+      let total = 0;
+      for (const hash of hashes) {
+        try {
+          const buf = await getContent(hash);
+          if (!buf) { casManifest.omitted.push({ hash, reason: "bytes not in local store (purged/reclaimed)" }); continue; }
+          if (buf.length > maxBlobBytes) { casManifest.omitted.push({ hash, size: buf.length, reason: `exceeds per-blob cap ${maxBlobBytes}` }); continue; }
+          if (total + buf.length > maxTotalBytes) { casManifest.omitted.push({ hash, size: buf.length, reason: `seed cas budget ${maxTotalBytes} exhausted` }); continue; }
+          casBlobs[hash] = buf.toString("base64");
+          casManifest.included.push({ hash, size: buf.length });
+          total += buf.length;
+        } catch (err) {
+          casManifest.omitted.push({ hash, reason: err?.message || "read failed" });
         }
       }
-      casVerified = true;
-      log.info("Graft", `casBlobs: ${Object.keys(blobs).length} blob(s) stored and hash-verified`);
-    }
-    const omitted = bundle.casManifest?.omitted || [];
-    if (omitted.length > 0) {
-      log.warn(
-        "Graft",
-        `bundle omitted ${omitted.length} content blob(s) at capture — their matter refs graft ` +
-        `but the bytes stay unresolvable here until fetched: ` +
-        omitted.map((o) => o.hash?.slice(0, 12)).join(", "),
-      );
+      log.info("Seed", `captured ${casManifest.included.length}/${hashes.size} content blob(s)` +
+        (casManifest.omitted.length ? ` — ${casManifest.omitted.length} omitted (see casManifest)` : ""));
     }
   }
 
-  // ── Manifest gate ──
-  // The bundle declares what it needs to FUNCTION here: the
-  // extensions whose roles/ops/data the captured content references,
-  // and the role names its beings wear (cloneSubtree derives both at
-  // capture). Grafting without the extensions produces beings that
-  // can't wake and qualities nothing consumes — refuse loud. Roles
-  // are softer: a missing role may arrive via the bundle's own
-  // content.facts (set-role) or be authored after, so they warn.
+  // ── 6. Record the loaded extensions ──
+  // The reality's behavior depends on which extensions are awake
+  // (their roles, ops, schedules, collections). The receiving
+  // deployer needs the same set for the planted reality to BE the
+  // same reality; plant warns loudly about any that are missing.
+  let extensions = [];
+  try {
+    const { getLoadedExtensionNames, getExtensionManifest } =
+      await import("../../../extensions/loader.js");
+    extensions = getLoadedExtensionNames().map((name) => ({
+      name,
+      version: getExtensionManifest(name)?.version || null,
+    }));
+  } catch {
+    // Headless capture (no loader in this process). The extension
+    // collections above still travel; only the declared list is empty.
+  }
+
+  // ── 7. Assemble the bundle ──
+  const bundle = {
+    kind: "seed",
+    bundleVersion: SEED_BUNDLE_VERSION,
+    sourceReality: getRealityDomain() || null,
+    capturedAt: new Date().toISOString(),
+    capturedBy: opts.capturedBy || null,
+
+    meta: {
+      realityName: opts.realityName || null,
+      extensions,
+      counts: {
+        facts:     facts.length,
+        acts:      acts.length,
+        branches:  branches.length,
+        reelHeads: reelHeads.length,
+        actHeads:  actHeads.length,
+        extensionCollections: Object.keys(extensionData).length,
+      },
+      // The captured reality's chain fingerprint — computed PURELY
+      // over the captured arrays (not the live DB, which keeps
+      // moving while capture runs). A seed's identity IS this root:
+      // any substrate planting these parts must recompute the same
+      // root, or determinism broke — plantSeed verifies and reports.
+      // Reproducible realities by construction.
+      realityRoot: await (async () => {
+        try {
+          const { realityRootFromParts } =
+            await import("../../past/fact/chainRoots.js");
+          return realityRootFromParts({
+            reality: getRealityDomain() || null,
+            branches,
+            reelHeads,
+            actHeads,
+          });
+        } catch { return null; }
+      })(),
+    },
+
+    facts,
+    acts,
+    branches,
+    reelHeads,
+    actHeads,
+    extensionData,
+    casBlobs,
+    casManifest,
+  };
+
+  // Sign the genome's chain fingerprint (meta.realityRoot) with the
+  // reality key, so a planter proves the bundle is an AUTHENTIC genome of
+  // this reality self-certifyingly — the same signed-root provenance
+  // chainRoots.signedRealityRoot/verifyRealityRootSig give live, now
+  // carried in the artifact. signerId = realityId (the reality pubkey id).
+  if (bundle.meta?.realityRoot) {
+    try {
+      const { getRealityIdentity, signData } = await import("../../realityIdentity.js");
+      const rid = getRealityIdentity();
+      bundle.meta.realitySig = { signerId: rid.realityId, value: signData(bundle.meta.realityRoot) };
+    } catch { /* unsigned genome (advisory); plant still recomputes + walks the chain */ }
+  }
+
+  const elapsedMs = Date.now() - startedAt;
+  log.info("Seed", `genome captured in ${elapsedMs}ms`);
+
+  // Default behavior: write to reality/seeds/ so there's one canonical
+  // place for genome artifacts. Callers wanting the raw bundle pass
+  // returnOnly: true.
+  if (opts.returnOnly) return { bundle };
+
+  await mkdir(SEEDS_FOLDER, { recursive: true });
+  const stem = (opts.realityName || bundle.sourceReality || "reality")
+    .replace(/[^a-zA-Z0-9._-]/g, "-");
+  const stamp = bundle.capturedAt.replace(/[:.]/g, "-").slice(0, 19);
+  const savedTo = path.join(SEEDS_FOLDER, `${stem}-${stamp}.seed.json`);
+  await writeFile(savedTo, JSON.stringify(bundle));
+  log.info("Seed", `genome saved to ${savedTo}`);
+  return { bundle, savedTo };
+}
+
+/**
+ * Validate a seed bundle's structural shape. Throws on mismatch.
+ * Plant uses this before touching the substrate.
+ */
+export function assertValidSeed(bundle) {
+  if (!bundle || typeof bundle !== "object") {
+    throw new Error("seed: bundle must be an object");
+  }
+  if (bundle.kind !== "seed") {
+    throw new Error(`seed: bundle.kind must be "seed" (got "${bundle.kind}")`);
+  }
+  if (bundle.bundleVersion !== SEED_BUNDLE_VERSION) {
+    throw new Error(
+      `seed: bundleVersion expected ${SEED_BUNDLE_VERSION}, got ${bundle.bundleVersion}`,
+    );
+  }
+  for (const collection of ["facts", "acts", "branches", "reelHeads"]) {
+    if (!Array.isArray(bundle[collection])) {
+      throw new Error(`seed: bundle.${collection} must be an array`);
+    }
+  }
+  // Optional sections (older bundles predate them): extensionData is a
+  // name → docs[] map; meta.extensions is [{name, version}].
+  if (bundle.extensionData != null && typeof bundle.extensionData !== "object") {
+    throw new Error("seed: bundle.extensionData must be an object when present");
+  }
+  return true;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// PLANT — boot-time only
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Plant a seed into a fresh DB. **Boot-only.** The function refuses to
+ * run if any of the target collections already contain documents — the
+ * deployer is responsible for ensuring a wiped DB before plant.
+ *
+ * Plant is continuation, not duplication. The bundle's original IDs
+ * land verbatim on the new substrate. From this substrate's perspective,
+ * this IS the reality with those IDs. Two simultaneously-live
+ * substrates with the same reality identity is undefined behavior and
+ * is the deployer's responsibility to prevent (see done/Chain-Rebuild.md).
+ *
+ * Replaying steps:
+ *   1. Validate bundle shape
+ *   2. Refuse if any target collection is non-empty (DB must be fresh)
+ *   3. Bulk-insert branches, reelHeads, facts, acts (original IDs)
+ *   4. Caller (genesis.js boot mode) runs cold-fold over every
+ *      aggregate to materialize projections — the chain IS truth, so
+ *      projections are caches; replaying the chain re-derives them.
+ *
+ * @param {object} bundle  the seed bundle (typically parsed from disk)
+ * @returns {Promise<{counts: object}>}
+ */
+export async function plantSeed(bundle) {
+  assertValidSeed(bundle);
+
+  // ── 0. PROVENANCE gate (before touching the substrate) ──
+  // If the genome carries a reality-root signature, verify it self-
+  // certifyingly over meta.realityRoot — "this genome was vouched for by
+  // the holder of realityId (the reality key)." The post-plant recompute
+  // below then proves THIS substrate reproduces that same root. Together:
+  // authentic genome AND provable replay. Absent signature is advisory
+  // (older genomes). Verifiable without the DB, so it gates cold.
   {
-    const required = Array.isArray(bundle.manifest?.extensions)
-      ? bundle.manifest.extensions
-      : [];
-    if (required.length > 0) {
-      let loadedExt = new Set();
-      try {
-        const { getLoadedExtensionNames } = await import("../../../extensions/loader.js");
-        loadedExt = new Set(getLoadedExtensionNames());
-      } catch { /* loader absent — every required extension reads as missing below */ }
-      const missing = required.filter((name) => !loadedExt.has(name));
-      if (missing.length > 0) {
+    const rsig = bundle.meta?.realitySig;
+    if (rsig?.value && bundle.meta?.realityRoot) {
+      const { verifyRealityRootSig } = await import("../../past/fact/chainRoots.js");
+      const ok = await verifyRealityRootSig(bundle.meta.realityRoot, rsig.signerId, rsig.value);
+      if (!ok) {
         throw new Error(
-          `graftClone: bundle requires extension(s) not loaded here: ` +
-          `${missing.join(", ")}. Install/enable them (extension profile) ` +
-          `and re-graft, or edit bundle.manifest.extensions if you know ` +
-          `the content doesn't need them.`,
+          `plantSeed: genome reality-root SIGNATURE invalid (signer ` +
+          `${String(rsig.signerId || "").slice(0, 14)}…) — refusing before planting.`,
         );
       }
-    }
-    const requiredRoles = Array.isArray(bundle.manifest?.roles)
-      ? bundle.manifest.roles
-      : [];
-    if (requiredRoles.length > 0) {
-      try {
-        const { getRole } = await import("../../present/roles/registry.js");
-        const missingRoles = requiredRoles.filter((name) => !getRole(name));
-        if (missingRoles.length > 0) {
-          log.warn(
-            "Graft",
-            `bundle references role(s) not registered here: ` +
-            `${missingRoles.join(", ")}. Beings wearing them won't wake ` +
-            `until the roles exist (the bundle's facts may install them, ` +
-            `or author via set-role).`,
-          );
-        }
-      } catch { /* registry unavailable; the warn is best-effort */ }
+      log.info("Seed", `genome provenance verified — vouched by ${String(rsig.signerId).slice(0, 14)}…`);
     }
   }
 
-  // ── Parameter resolution. ──
-  // Build the substitution table from declared parameters + operator-
-  // supplied opts.params. Missing required parameters refuse up front.
-  // The resolved table is what the field walker consults when it sees
-  // a `"$paramName"` string in any bundle field.
-  const paramTable = new Map();
-  const supplied = opts.params || {};
-  for (const decl of bundle.parameters) {
-    if (Object.prototype.hasOwnProperty.call(supplied, decl.name)) {
-      paramTable.set(decl.name, supplied[decl.name]);
-    } else if (Object.prototype.hasOwnProperty.call(decl, "default")) {
-      paramTable.set(decl.name, decl.default);
-    } else {
-      throw new Error(
-        `graftClone: missing required parameter "${decl.name}". ` +
-        `Provide it in opts.params or declare a default in the bundle.`,
-      );
-    }
-  }
-  // Flag unknown supplied params loudly — the operator likely intended
-  // something the bundle won't apply.
-  for (const name of Object.keys(supplied)) {
-    if (!paramTable.has(name)) {
-      throw new Error(
-        `graftClone: opts.params["${name}"] supplied but bundle declares no parameter named "${name}".`,
-      );
-    }
-  }
-
-  const { loadProjection, loadOrFold } = await import("../projections.js");
-  const { default: Projection } = await import("../branch/projection.js");
-
-  // ── 1. Verify the target parent space exists. ──
-  // loadOrFold: a target parent inherited from the parent branch
-  // resolves via lineage cold-fold. Bare loadProjection threw
-  // "target parent space not found" when grafting onto a sub-branch.
-  const targetParentSlot = await loadOrFold("space", targetParentSpaceId, branch);
-  if (!targetParentSlot) {
-    throw new Error(`graftClone: target parent space "${targetParentSpaceId}" not found in branch "${branch}"`);
-  }
-  // Heaven space refuse — but allow the place root ("space-root").
-  // Tier-3 heaven spaces (identity, config, tools, etc.) are substrate
-  // furniture; grafting user content under them mixes operator state
-  // into kernel territory. The place root is the natural target for
-  // top-level grafts (where the old seed system planted).
-  const targetHeaven = targetParentSlot.state?.heavenSpace;
-  if (targetHeaven && targetHeaven !== "space-root") {
-    throw new Error(`graftClone: cannot graft under heaven space "${targetHeaven}"`);
-  }
-
-  // ── 2. Conflict check: name collision at the insertion point. ──
-  // The bundle's scope root will land as a child of targetParentSpaceId.
-  // Refuse if a sibling with the same name already exists.
-  const rootBundleSpace = bundle.content.spaces.find(
-    (s) => s.sourceId === bundle.meta.sourceScopeSpaceId,
-  );
-  if (!rootBundleSpace) {
-    throw new Error("graftClone: bundle.content.spaces is missing the scope root");
-  }
-  const targetSiblings = await Projection.find({
-    branch, type: "space",
-    "state.parent": targetParentSpaceId,
-    "state.name": rootBundleSpace.name,
-    tombstoned: { $ne: true },
-  }).select("id").lean();
-  if (targetSiblings.length > 0) {
+  // ── 1. Refuse if DB isn't fresh ──
+  // Plant is destructive on a live reality. The substrate refuses to
+  // expose runtime plant for exactly this reason. Boot mode in
+  // `genesis.js` ensures it only runs against a fresh DB — but we
+  // double-check here so a misconfigured boot can't silently corrupt
+  // an existing reality.
+  const checks = await Promise.all([
+    Fact.countDocuments({}),
+    Act.countDocuments({}),
+    Branch.countDocuments({}),
+    ReelHead.countDocuments({}),
+  ]);
+  const [factCount, actCount, branchCount, reelCount] = checks;
+  if (factCount > 0 || actCount > 0 || branchCount > 0 || reelCount > 0) {
     throw new Error(
-      `graftClone: a sibling named "${rootBundleSpace.name}" already exists at the insertion point. ` +
-      `Rename the bundle's scope root, graft into a different parent, or remove the conflicting sibling first.`,
+      `plantSeed: refusing to plant into a non-empty DB. Found ` +
+      `facts=${factCount}, acts=${actCount}, branches=${branchCount}, ` +
+      `reelHeads=${reelCount}. Wipe the DB before planting (the deployer's ` +
+      `responsibility — plant is destructive by design).`,
     );
   }
 
-  // ── 3. Build the remap table. ──
-  // Each bundle aggregate gets a fresh local id, but the RECIPE differs
-  // by kind, to match the identity model every native aggregate obeys:
-  //   - SPACE  → random uuid (a space is not content/key-addressed).
-  //   - BEING  → a fresh ed25519 keypair; the new local id IS its public
-  //              key (beingId invariant). A grafted being is a NEW being,
-  //              so it gets its own keypair and can sign its own acts; a
-  //              uuid would leave it unsigned and not self-certifying.
-  //   - MATTER → matterContentId of its REMAPPED birth spec (a content
-  //              hash), computed in the depth-ordered pre-pass below.
-  // The remap table feeds the walker (`remapRefs`) when we substitute
-  // Refs in each entry's fields.
-  const remapTable = new Map();  // sourceId → newLocalId
-  for (const s of bundle.content.spaces) remapTable.set(s.sourceId, uuidv4());
-  const graftedKeypairs = new Map();  // being sourceId → keypair (private key → privateKeyEnc at birth)
-  for (const b of bundle.content.beings) {
-    const kp = generateBeingKeypair();
-    graftedKeypairs.set(b.sourceId, kp);
-    remapTable.set(b.sourceId, kp.beingId);
-  }
-  // Matter ids are filled by the pre-pass below (they hash the remapped
-  // spec, which needs space + being ids already in the table).
+  log.info("Seed", "planting reality genome...");
+  const startedAt = Date.now();
 
-  // The walker callback: turns a Ref or sentinel into a bare-string id
-  // (or null). Substrate consumers downstream of the reducers read bare
-  // strings; this is the boundary where Refs become bare ids.
-  const resolveRef = (r) => {
-    if (isSentinelRef(r)) {
-      if (refKind(r) === "graft-initiator") return opts.operatorBeingId;
-      if (refKind(r) === "insertion-point") return targetParentSpaceId;
-      throw new Error(`graftClone: unknown sentinel kind "${refKind(r)}"`);
-    }
-    if (isAggregateRef(r)) {
-      const sourceId = r.id;
-      const newId = remapTable.get(sourceId);
-      if (!newId) {
-        throw new Error(`graftClone: bundle references unknown sourceId "${sourceId}" (not in content)`);
-      }
-      // Return the bare-string id; the receiver substrate stores bare.
-      return newId;
-    }
-    return r;
-  };
-
-  // Parameter substitution walker. Any string of the exact form
-  // `"$name"` is replaced with paramTable.get("name"). Strings that
-  // look like `"$name"` but reference an unknown name throw — silent
-  // pass-through would let typos misroute. Refs / sentinels / objects
-  // get recursed into; non-string scalars pass through unchanged.
-  //
-  // `"$$"`-prefixed strings escape: `"$$foo"` becomes the literal
-  // `"$foo"`. Lets authored content include dollar-prefixed text
-  // (uncommon but not impossible: prices, regex patterns, jq queries).
-  const substituteParams = (value) => {
-    if (value === null || typeof value !== "object") {
-      if (typeof value !== "string") return value;
-      if (value.startsWith("$$")) return value.slice(1);
-      if (!value.startsWith("$")) return value;
-      const name = value.slice(1);
-      if (!paramTable.has(name)) {
+  // ── 1b. CAS blobs land FIRST ──
+  // Bytes before facts: by the time the chain inserts, every
+  // travelling content ref resolves locally. Each blob's recomputed
+  // hash MUST equal its claimed hash — a lying blob refuses the
+  // plant cold (nothing inserted yet). Omitted blobs (see
+  // casManifest) warn: their matter resolves to the purged marker
+  // until the bytes arrive another way.
+  if (bundle.casBlobs && typeof bundle.casBlobs === "object" && Object.keys(bundle.casBlobs).length > 0) {
+    const { putContent } = await import("../matter/contentStore.js");
+    let stored = 0;
+    for (const [hash, b64] of Object.entries(bundle.casBlobs)) {
+      const buf = Buffer.from(String(b64), "base64");
+      const ref = await putContent(buf, { mimeType: "application/octet-stream" });
+      if (ref.hash !== hash) {
         throw new Error(
-          `graftClone: bundle field references "$${name}" but no parameter by that name is declared.`,
+          `plantSeed: CAS BLOB INTEGRITY FAILED — bundle claims ${String(hash).slice(0, 16)}… but the ` +
+          `bytes hash to ${ref.hash.slice(0, 16)}…. Refusing before any chain inserts.`,
         );
       }
-      return paramTable.get(name);
+      stored++;
     }
-    if (Array.isArray(value)) return value.map(substituteParams);
-    // Built-in object types that don't expose their state through
-    // Object.entries (Date, RegExp, BSON wrappers). Same defensive
-    // guards as redactSecrets — without these, a Date would flatten
-    // to `{}` and corrupt the bundle silently. Bundles come from JSON
-    // in practice so these are unlikely paths, but the guard is cheap
-    // and aligns the recursive-walker discipline across the codebase.
-    if (value instanceof Date) return value;
-    if (value instanceof RegExp) return value;
-    if (typeof value._bsontype === "string" && typeof value.toJSON === "function") return value;
-    // Plain objects (including Ref shapes) — recurse into values.
-    // Ref objects (`{__ref, id}`) have `id: string` not `id: "$name"`,
-    // so the Ref id passes through this walker untouched and remapRefs
-    // handles it in the next pass.
-    const out = {};
-    for (const [k, v] of Object.entries(value)) {
-      out[k] = substituteParams(v);
-    }
-    return out;
-  };
-
-  // remapInBundleField runs both passes: parameter substitution first
-  // (string `"$name"` → operator-supplied value), then Ref/sentinel
-  // resolution (`{__ref, id: sourceId}` → newLocalId, sentinels →
-  // grafter or insertion point).
-  const remapInBundleField = (value) => remapRefs(substituteParams(value), resolveRef);
-
-  // ── 3b. Matter id pre-pass (content-addressed, depth-ordered). ──
-  // A grafted matter's row id is matterContentId of its REMAPPED birth
-  // spec — the same recipe native matter uses (matter/ops.js). The hash
-  // folds in spaceId, beingId, and parentMatterId, which are all remapped
-  // ids, so the spec is built AFTER spaces+beings are in the table and in
-  // parent-before-child order (a child's id includes its parent's). We
-  // resolve every matter id up front, BEFORE any stamping, so forward
-  // Refs from a space/being field to a matter still resolve to a real id.
-  // The exact spec we hash is stowed in matterSpecs and reused verbatim
-  // as the create-matter params, so the hashed identity is byte-identical
-  // to what the reducer folds.
-  const matterById = new Map(bundle.content.matter.map((m) => [m.sourceId, m]));
-  const matterDepth = new Map();
-  const computeMatterDepth = (m) => {
-    if (matterDepth.has(m.sourceId)) return matterDepth.get(m.sourceId);
-    const parentRef = m.parentMatterId;
-    if (!isAggregateRef(parentRef)) { matterDepth.set(m.sourceId, 0); return 0; }
-    const parent = matterById.get(parentRef.id);
-    if (!parent) { matterDepth.set(m.sourceId, 0); return 0; }
-    const d = 1 + computeMatterDepth(parent);
-    matterDepth.set(m.sourceId, d);
-    return d;
-  };
-  for (const m of bundle.content.matter) computeMatterDepth(m);
-  const orderedMatter = [...bundle.content.matter].sort(
-    (a, b) => (matterDepth.get(a.sourceId) || 0) - (matterDepth.get(b.sourceId) || 0),
-  );
-  const matterSpecs = new Map();  // sourceId → the exact spec that rides the create-matter fact
-  for (const m of orderedMatter) {
-    const spec = {
-      name:           remapInBundleField(m.name),
-      type:           m.type || "generic",
-      content:        remapInBundleField(m.content),
-      spaceId:        remapInBundleField(m.spaceId),
-      beingId:        remapInBundleField(m.beingId),
-      parentMatterId: remapInBundleField(m.parentMatterId),
-      qualities:      remapInBundleField(m.qualities),
-    };
-    remapTable.set(m.sourceId, matterContentId(spec));
-    matterSpecs.set(m.sourceId, spec);
+    log.info("Seed", `planted ${stored} content blob(s), hash-verified`);
+  }
+  if (Array.isArray(bundle.casManifest?.omitted) && bundle.casManifest.omitted.length > 0) {
+    log.warn("Seed", `seed omitted ${bundle.casManifest.omitted.length} content blob(s) at capture — ` +
+      `their refs plant but the bytes are not here.`);
   }
 
-  // ── 4. Stamp create-space facts in depth order. ──
-  // bundle.content.spaces is already depth-ordered by cloneSubtree;
-  // we trust that. Each space's parent is either INSERTION_POINT (→
-  // targetParentSpaceId) or another bundle space (→ remapTable lookup).
-  //
-  // ROLLBACK doctrine: the substrate is append-only — we can't UN-stamp
-  // facts. But on graft failure, we CAN stamp the reversal facts
-  // (end-space, end-being, end-matter) for every aggregate we already
-  // created, restoring the destination's current state to pre-graft.
-  // The chain remembers BOTH the creates AND the reversals (a graft-
-  // failed audit fact ties them together). This matches doctrine:
-  // chain = truth, current state = fold of chain. We track committed
-  // aggregates in `committed` and walk it in reverse on catch.
-  const counts = { spaces: 0, beings: 0, matter: 0 };
-  let rootSpaceId = null;
-  const committed = [];  // { kind, id } in commit order; reversed on rollback
-
-  try {
-
-  for (const s of bundle.content.spaces) {
-    const newId = remapTable.get(s.sourceId);
-    if (!rootSpaceId) rootSpaceId = newId;  // first space (depth 0) is the graft root
-
-    // Every field flows through remapInBundleField so parameter holes
-    // (`"$name"` strings) resolve uniformly across scalar fields (name,
-    // type, size, coord) and Ref-bearing fields (parent, owner,
-    // qualities). Refs and sentinels in scalar fields are a noop;
-    // parameter substitution in Ref fields is also a noop because Ref
-    // `id` values are not parameter names.
-    const spec = {
-      name:         remapInBundleField(s.name),
-      type:         remapInBundleField(s.type),
-      parent:       remapInBundleField(s.parent),
-      owner:        s.owner !== undefined ? remapInBundleField(s.owner) : null,
-      qualities:    remapInBundleField(s.qualities),
-      ...(s.size  !== undefined ? { size:  remapInBundleField(s.size)  } : {}),
-      ...(s.coord !== undefined ? { coord: remapInBundleField(s.coord) } : {}),
-    };
-    // Doctrine: each grafted fact is the grafter doing one logical
-    // thing on their reel. One act, one fact. Batching many facts into
-    // a single ΔF triggers nonlinear fold/append-lock back-pressure
-    // (40 qualities writes inside one moment serialize on the same
-    // per-reel lock and choke); per-fact small acts fold independently.
-    await withBeingAct(opts.operatorBeingId, `graft:create-space ${s.name}`, branch, async (ctx) => {
-      await emitFact({
-        verb:    "do",
-        action:  "create-space",
-        beingId: opts.operatorBeingId,
-        target:  { kind: "space", id: newId },
-        params:  spec,
-        actId:   ctx.actId,
-        branch,
-      }, ctx);
-    });
-    committed.push({ kind: "space", id: newId });
-    counts.spaces++;
+  // ── 2. Branches first ──
+  // Plant order matters for foreign-key-like references inside the
+  // substrate's read paths. Branches are referenced by facts.branch
+  // and reelHeads.branch; insert them first.
+  if (bundle.branches.length > 0) {
+    await Branch.insertMany(bundle.branches, { ordered: false });
+    log.info("Seed", `planted ${bundle.branches.length} branches`);
   }
 
-  // ── 5. Stamp be:birth facts for each captured being. ──
-  for (const b of bundle.content.beings) {
-    const newId = remapTable.get(b.sourceId);  // = the keypair's beingId (pubkey)
-    const kp = graftedKeypairs.get(b.sourceId);
-    // The grafted being holds its OWN encrypted private key in
-    // qualities.auth.privateKeyEnc, exactly as birth.js, so it can sign
-    // its own acts. newId IS the public key; the identity descriptor
-    // mirrors the canonical birth fact.
-    const remapped = remapInBundleField(b.qualities);
-    const qualities = (remapped && typeof remapped === "object" && !Array.isArray(remapped)) ? remapped : {};
-    qualities.auth = { ...(qualities.auth || {}), privateKeyEnc: encryptCredential(kp.privateKeyPem) };
-    const spec = {
-      name:          remapInBundleField(b.name),
-      // Beings in the bundle are non-human (cloneSubtree filtered
-      // password-bearing ones). Birth needs a password field on the
-      // reducer path; we plant an empty hash since these beings can't
-      // be auth-driven by humans anyway.
-      password:      "",
-      defaultRole:   remapInBundleField(b.defaultRole || null),
-      cognition:     "scripted",  // v1 default; future revisions can carry cognition in bundle
-      parentBeingId: remapInBundleField(b.parentBeingId),
-      homeSpace:     remapInBundleField(b.homeSpace),
-      position:      remapInBundleField(b.position),
-      qualities,
-      // Key scheme descriptor (same as birth.js); the pubkey IS newId.
-      identity:      { alg: "ed25519", keyEnc: "did:key:ed25519-multibase", v: 1 },
-      ...(b.coord !== undefined ? { coord: remapInBundleField(b.coord) } : {}),
-    };
-    // The be:birth FACT lands on the new being's own reel (beingId=newId,
-    // single-writer: the fact's doer is the new being), but the framing
-    // ACT is the OPERATOR's — exactly as canonical birth.js rides the
-    // mother's act. A being cannot sign its own birth: its key isn't
-    // foldable until this very fact creates the projection it lives in.
-    // So the operator (the grafter, the one birthing it here) signs the
-    // act that covers the birth; the being's own self-signed acts begin
-    // when it first acts. Same one-fact-per-act discipline.
-    await withBeingAct(opts.operatorBeingId, `graft:birth ${spec.name}`, branch, async (ctx) => {
-      await emitFact({
-        verb:    "be",
-        action:  "birth",
-        beingId: newId,
-        target:  { kind: "being", id: newId },
-        params:  spec,
-        actId:   ctx.actId,
-        branch,
-      }, ctx);
-    });
-    committed.push({ kind: "being", id: newId });
-    counts.beings++;
+  // ── 3. ReelHeads ──
+  // Per-reel seq counters. Needed before facts so allocSeq paths
+  // don't try to re-allocate seq=1 on every reel.
+  if (bundle.reelHeads.length > 0) {
+    await ReelHead.insertMany(bundle.reelHeads, { ordered: false });
+    log.info("Seed", `planted ${bundle.reelHeads.length} reel heads`);
   }
 
-  // ── 6. Stamp create-matter facts. ──
-  // Depth order + the remapped specs were both resolved in the pre-pass
-  // (step 3b); we stamp in that order and reuse the exact spec we hashed
-  // the id from, so the create-matter params are byte-identical to the
-  // matterContentId pre-image.
-  for (const m of orderedMatter) {
-    const newId = remapTable.get(m.sourceId);
-    const spec = matterSpecs.get(m.sourceId);
-    await withBeingAct(opts.operatorBeingId, `graft:create-matter ${spec.name}`, branch, async (ctx) => {
-      await emitFact({
-        verb:    "do",
-        action:  "create-matter",
-        beingId: opts.operatorBeingId,
-        target:  { kind: "matter", id: newId },
-        params:  spec,
-        actId:   ctx.actId,
-        branch,
-      }, ctx);
-    });
-    committed.push({ kind: "matter", id: newId });
-    counts.matter++;
+  // ── 3b. ActHeads ──
+  // Act-chain tips. Needed before any new moment seals so the next
+  // act chains from the planted biography, and before verification
+  // (the reality root covers act chains).
+  if (Array.isArray(bundle.actHeads) && bundle.actHeads.length > 0) {
+    const { default: ActHead } = await import("../../past/act/actHead.js");
+    await ActHead.insertMany(bundle.actHeads, { ordered: false });
+    log.info("Seed", `planted ${bundle.actHeads.length} act heads`);
   }
 
-  // ── 7. Stamp `content.facts[]` in order. ──
-  // The spaces/beings/matter arrays handle CREATE (one fact each).
-  // content.facts[] handles everything else — set-X, subscription-
-  // registered, wake-scheduled, qualities writes. Each entry's target
-  // and params flow through the substitution + remap walker so $params
-  // and Refs to bundle sourceIds resolve correctly. Per the same
-  // one-fact-per-act doctrine: each entry rides its own moment under
-  // the actor named by its f.beingId field (or the grafter by default).
-  const factsBlock = Array.isArray(bundle.content.facts) ? bundle.content.facts : [];
-  counts.facts = 0;
-  for (const f of factsBlock) {
-    const target = f.target ? {
-      kind: f.target.kind,
-      id:   remapInBundleField(f.target.id),  // bundle sourceId → new local id
-    } : null;
-    const actorBeingId = f.beingId
-      ? remapInBundleField(f.beingId)
-      : opts.operatorBeingId;
-    await withBeingAct(actorBeingId, `graft:${f.action}`, branch, async (ctx) => {
-      await emitFact({
-        verb:    f.verb,
-        action:  f.action,
-        beingId: actorBeingId,
-        target,
-        params:  remapInBundleField(f.params || {}),
-        actId:   ctx.actId,
-        branch,
-      }, ctx);
-    });
-    counts.facts++;
+  // ── 4. Facts ──
+  // The substantive chain. Original _id, seq, branch, p/h hashes
+  // preserved. The fold engine derives projections from these.
+  if (bundle.facts.length > 0) {
+    await Fact.insertMany(bundle.facts, { ordered: false });
+    log.info("Seed", `planted ${bundle.facts.length} facts`);
   }
 
-  // ── 7b. VERIFY what landed (still inside the try — a failure here
-  // throws into the rollback below, which stamps the compensating
-  // end-X facts one act at a time until the destination is back to
-  // its pre-graft state). Every aggregate this graft created gets its
-  // reel walked: hash chain intact, identities recompute, no gaps.
-  // The graft isn't "done" because the loop finished — it's done
-  // because the chain PROVES it landed whole.
-  {
-    const { verifyReel } = await import("../../past/fact/verifyReel.js");
-    for (const { kind, id } of committed) {
-      const v = await verifyReel(kind, id, branch);
-      if (!v.ok) {
-        throw new Error(
-          `graftClone: POST-GRAFT CHAIN VERIFICATION FAILED on ${kind}:${id.slice(0, 8)} ` +
-          `(${v.reason} at seq ${v.brokenAt}) — rolling the graft back.`,
-        );
-      }
-    }
+  // ── 5. Acts ──
+  // The experiential chain. Original _id, beingIn/beingOut, transcripts.
+  if (bundle.acts.length > 0) {
+    await Act.insertMany(bundle.acts, { ordered: false });
+    log.info("Seed", `planted ${bundle.acts.length} acts`);
   }
 
-  // ── 8. Stamp a graft-completed meta-fact on the new root's reel. ──
-  // Records provenance: where this came from, who applied it, what
-  // counts landed. Rides the OUTER wire moment (opts.summonCtx) when
-  // present so the operator's transport act records "I grafted X."
-  // When called standalone, opens its own act under the grafter.
-  if (opts.summonCtx) {
-    await emitFact({
-      verb:    "do",
-      action:  "graft-completed",
-      beingId: opts.operatorBeingId,
-      target:  { kind: "space", id: rootSpaceId },
-      params:  {
-        sourceReality:      bundle.meta.sourceReality || null,
-        sourceBranch:       bundle.meta.sourceBranch || null,
-        sourceScopeSpaceId: bundle.meta.sourceScopeSpaceId || null,
-        sourceScopeName:    bundle.meta.sourceScopeName || null,
-        bundleCreatedAt:    bundle.meta.createdAt || null,
-        // WHO provably vouched for the snapshot (a pubkey id), or null
-        // when the bundle was unsigned. The audit fact records provenance.
-        bundleSigner,
-        counts,
-      },
-      actId:  opts.summonCtx.actId,
-      branch,
-    }, opts.summonCtx);
-  } else {
-    await withBeingAct(opts.operatorBeingId, "graft:completed", branch, async (ctx) => {
-      await emitFact({
-        verb:    "do",
-        action:  "graft-completed",
-        beingId: opts.operatorBeingId,
-        target:  { kind: "space", id: rootSpaceId },
-        params:  {
-          sourceReality:      bundle.meta.sourceReality || null,
-          sourceBranch:       bundle.meta.sourceBranch || null,
-          sourceScopeSpaceId: bundle.meta.sourceScopeSpaceId || null,
-          sourceScopeName:    bundle.meta.sourceScopeName || null,
-          bundleCreatedAt:    bundle.meta.createdAt || null,
-          counts,
-        },
-        actId: ctx.actId,
-        branch,
-      }, ctx);
-    });
-  }
-  } catch (err) {
-    // ── ROLLBACK ──
-    // Per-fact acts already committed; we can't UN-stamp them. Append
-    // the reversal: end-X fact for every aggregate we created, in
-    // REVERSE order (children before parents), so the current state
-    // restores to pre-graft. Each reversal is its own act under the
-    // grafter. The chain remembers both the creates AND the reversals
-    // — fold sees create then end-X, the projection ends tombstoned.
-    // A graft-failed audit fact ties them together.
-    //
-    // If a reversal itself throws (e.g., the aggregate is already
-    // tombstoned by something else, or the substrate is unhealthy),
-    // we log and continue — partial-rollback is still better than
-    // none. The original error is re-thrown at the end so the caller
-    // sees what actually broke.
-    const endAction = { space: "end-space", being: "end-being", matter: "end-matter" };
-    for (let i = committed.length - 1; i >= 0; i--) {
-      const { kind, id } = committed[i];
+  // ── 6. Extension collections et al ──
+  // Everything the capture swept beyond the chain (extension-owned
+  // collections, the peer registry). Re-inserted verbatim; the DB was
+  // verified empty above, so there is nothing to collide with.
+  let extensionCollections = 0;
+  if (bundle.extensionData && typeof bundle.extensionData === "object") {
+    const db = mongoose.connection.db;
+    for (const [name, docs] of Object.entries(bundle.extensionData)) {
+      if (!Array.isArray(docs) || docs.length === 0) continue;
+      if (name.startsWith("system.")) continue;
       try {
-        await withBeingAct(opts.operatorBeingId, `graft:rollback ${endAction[kind]}`, branch, async (ctx) => {
-          await emitFact({
-            verb:    "do",
-            action:  endAction[kind],
-            beingId: opts.operatorBeingId,
-            target:  { kind, id },
-            params:  { reason: "graft rollback" },
-            actId:   ctx.actId,
-            branch,
-          }, ctx);
-        });
-      } catch (rollbackErr) {
-        // Best-effort. Log via console — log import would be circular.
-        // eslint-disable-next-line no-console
-        console.error(`graftClone rollback: ${endAction[kind]} on ${id.slice(0,8)} failed: ${rollbackErr.message}`);
+        await db.collection(name).insertMany(docs, { ordered: false });
+        extensionCollections++;
+        log.info("Seed", `planted ${docs.length} docs into "${name}"`);
+      } catch (err) {
+        log.warn("Seed", `planting collection "${name}" failed: ${err.message}`);
       }
     }
-    // Audit: the graft failed. Stamps even when rollback is partial
-    // so the operator's reel records "I tried to graft X and it failed."
-    try {
-      if (opts.summonCtx) {
-        await emitFact({
-          verb:    "do",
-          action:  "graft-failed",
-          beingId: opts.operatorBeingId,
-          target:  null,
-          params: {
-            sourceScopeName: bundle.meta.sourceScopeName || null,
-            error:           String(err?.message || err),
-            committedCount:  committed.length,
-          },
-          actId:  opts.summonCtx.actId,
-          branch,
-        }, opts.summonCtx);
-      } else {
-        await withBeingAct(opts.operatorBeingId, "graft:failed", branch, async (ctx) => {
-          await emitFact({
-            verb:    "do",
-            action:  "graft-failed",
-            beingId: opts.operatorBeingId,
-            target:  null,
-            params: {
-              sourceScopeName: bundle.meta.sourceScopeName || null,
-              error:           String(err?.message || err),
-              committedCount:  committed.length,
-            },
-            actId: ctx.actId,
-            branch,
-          }, ctx);
-        });
-      }
-    } catch {}
-    throw err;
   }
+
+  // ── 7. Extension presence check ──
+  // The bundle names the extensions the source reality ran with. The
+  // planted reality needs the same set to behave the same (roles, ops,
+  // schedules, collection consumers). Warn LOUDLY for any not present
+  // on this substrate's disk — the operator fixes the extension folder
+  // or the .treeos-profile before beings start acting.
+  const declared = Array.isArray(bundle.meta?.extensions) ? bundle.meta.extensions : [];
+  if (declared.length > 0) {
+    let onDisk = new Set();
+    try {
+      const extensionsDir = path.resolve(__dirname, "..", "..", "..", "extensions");
+      const entries = await readdir(extensionsDir, { withFileTypes: true });
+      onDisk = new Set(entries.filter((e) => e.isDirectory()).map((e) => e.name));
+    } catch { /* no extensions dir at all — everything below warns */ }
+    for (const ext of declared) {
+      const name = typeof ext === "string" ? ext : ext?.name;
+      if (!name) continue;
+      if (!onDisk.has(name)) {
+        log.warn(
+          "Seed",
+          `planted reality expects extension "${name}"${ext?.version ? ` (v${ext.version})` : ""} ` +
+          `but it is not present in extensions/. Its beings, roles, ops, and data ` +
+          `will be inert until it's installed.`,
+        );
+      }
+    }
+  }
+
+  // ── 8. Provable replay ──
+  // Recompute the planted chain's reality root over what LANDED
+  // (branch + reelHead rows read straight back from the DB) and
+  // compare to the bundle's captured fingerprint. Match = this
+  // reality IS the captured reality, mathematically. Mismatch =
+  // determinism broke (or the bundle was altered) — warn loudly,
+  // never silently. Anchored to the bundle's sourceReality so the
+  // same chain verifies regardless of the host's own domain.
+  let rootVerified = null;
+  const expectedRoot = bundle.meta?.realityRoot || null;
+  if (expectedRoot) {
+    try {
+      const { realityRootFromParts } = await import("../../past/fact/chainRoots.js");
+      const { default: ActHead } = await import("../../past/act/actHead.js");
+      const [dbBranches, dbHeads, dbActHeads] = await Promise.all([
+        Branch.find({}).lean(),
+        ReelHead.find({}).select("_id branch head headHash").lean(),
+        ActHead.find({}).select("_id branch headHash").lean(),
+      ]);
+      const actualRoot = realityRootFromParts({
+        reality: bundle.sourceReality || null,
+        branches: dbBranches,
+        reelHeads: dbHeads,
+        actHeads: dbActHeads,
+      });
+      rootVerified = actualRoot === expectedRoot;
+      if (rootVerified) {
+        log.info("Seed", `chain root VERIFIED: ${actualRoot.slice(0, 16)}… — this reality is the captured reality`);
+        // ── The root proves the COMMITMENT STRUCTURE; now prove the
+        // facts behind it. The planted head rows came verbatim from
+        // the bundle — a bundle with tampered fact rows but original
+        // heads would pass the root match alone. Walk every reel
+        // (hash chain end to end, branch-aware) and every act-chain
+        // back to genesis. Broken anywhere → unplant, same as a root
+        // mismatch. Skippable for very large genomes via
+        // opts-on-bundle escape; ON by default because "provable
+        // replay" should mean the proof actually ran.
+        if (bundle.skipChainWalk !== true) {
+          const { verifyReel } = await import("../../past/fact/verifyReel.js");
+          const { verifyActChain } = await import("../../past/act/actHash.js");
+          const broken = [];
+          let reelsWalked = 0;
+          let actsWalked = 0;
+          for (const rh of dbHeads) {
+            const v = await verifyReel(rh.type ?? rh._id?.split(":")[1], rh.id ?? rh._id?.split(":")[2], rh.branch || "0");
+            reelsWalked++;
+            if (!v.ok) broken.push({ kind: "reel", key: rh._id, reason: v.reason, at: v.brokenAt });
+          }
+          for (const ah of dbActHeads) {
+            const beingId = ah.beingId ?? ah._id?.split(":")[1];
+            const v = await verifyActChain(ah.branch || "0", beingId);
+            actsWalked++;
+            if (!v.ok) broken.push({ kind: "act-chain", key: ah._id, reason: v.reason, at: v.brokenAt });
+          }
+          if (broken.length > 0) {
+            rootVerified = false;
+            log.warn("Seed", `chain walk FAILED on ${broken.length} chain(s): ` +
+              broken.slice(0, 5).map((b) => `${b.kind}:${b.key}(${b.reason})`).join(", ") +
+              (broken.length > 5 ? ` …+${broken.length - 5}` : ""));
+          } else {
+            log.info("Seed", `chain walk VERIFIED: ${reelsWalked} reel(s) + ${actsWalked} act-chain(s) recompute end to end`);
+          }
+        }
+      }
+      if (!rootVerified) {
+        // ── UNPLANT ──
+        // The planted chain does not reproduce the captured root: the
+        // bundle was altered or determinism broke. Plant runs against
+        // an EMPTY substrate (gated above), so "back to before the
+        // attempt" is emptiness — remove everything this plant
+        // inserted, loudly, and refuse. (This is the plant-time
+        // sibling of graft's compensating rollback: graft unstamps
+        // into a LIVING chain with end-X facts; plant restores the
+        // void it started from. No pre-existing chain is touched —
+        // there wasn't one.)
+        const why = actualRoot === expectedRoot
+          ? "chain walk found broken chains behind a matching root (tampered facts under original heads)"
+          : `chain root MISMATCH: expected ${expectedRoot.slice(0, 16)}…, got ${actualRoot.slice(0, 16)}…`;
+        log.warn("Seed", `${why} — UNPLANTING`);
+        try {
+          const db = mongoose.connection.db;
+          const toClear = ["facts", "acts", "branches", "reelHeads", "actHeads"];
+          for (const name of Object.keys(bundle.extensionData || {})) {
+            if (!name.startsWith("system.")) toClear.push(name);
+          }
+          for (const name of toClear) {
+            try { await db.collection(name).deleteMany({}); } catch { /* collection may not exist */ }
+          }
+          const { invalidateBranchCache } = await import("../branch/branches.js");
+          invalidateBranchCache(null);
+          log.warn("Seed", `unplanted ${toClear.length} collection(s); the substrate is empty again. ` +
+            `Planted content blobs stay in the store under their true hashes (the retention sweeper owns orphans).`);
+        } catch (unplantErr) {
+          log.error("Seed", `UNPLANT FAILED: ${unplantErr.message} — the substrate may hold a partial, ` +
+            `unverified chain. Wipe the DB before booting.`);
+        }
+        throw new Error(
+          `plantSeed: chain verification failed (${why}). ` +
+          `The plant was rolled back; the substrate is empty.`,
+        );
+      }
+    } catch (err) {
+      if (/chain verification failed/.test(err?.message || "")) throw err;
+      log.warn("Seed", `chain root verification failed to run: ${err.message}`);
+    }
+  }
+
+  const elapsedMs = Date.now() - startedAt;
+  log.info("Seed", `genome planted in ${elapsedMs}ms`);
 
   return {
-    rootSpaceId,
-    counts,
-    // Verification verdicts: bundle integrity (meta.bundleHash
-    // recomputed; null = pre-integrity bundle), cas blob hashes
-    // (null = no blobs travelled), and the post-graft chain walk
-    // (always run; reaching here means it passed).
-    verified: {
-      bundle: bundleVerified,
-      bundleSigner,        // pubkey id that vouched for the bundle (null = unsigned)
-      casBlobs: casVerified,
-      chain: true,
+    counts: {
+      facts:     bundle.facts.length,
+      acts:      bundle.acts.length,
+      branches:  bundle.branches.length,
+      reelHeads: bundle.reelHeads.length,
+      extensionCollections,
     },
-    // remapTable converted to a plain object for the wire return.
-    remapTable: Object.fromEntries(remapTable),
+    rootVerified,
+    expectedRoot,
   };
 }
