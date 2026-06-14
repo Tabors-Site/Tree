@@ -96,7 +96,7 @@ const LOCKFILE_PATH = path.join(__dirname, ".lockfile.json");
 //
 // At boot, every file under each discovered resource is read and
 // `contentStore.putContent`'d into localStore (the reality's CAS at
-// uploads/cas/). This means every resource byte the substrate holds
+// localStore/cas/). This means every resource byte the reality holds
 // lives in the same store as user-uploaded matter, addressed by hash.
 //
 // The lockfile snapshot at .lockfile.json records per-file CAS refs

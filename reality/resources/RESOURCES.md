@@ -51,14 +51,14 @@ when resources migrate from disk to substrate.
 
 ## localStore: every reality's unconditional CAS
 
-Every reality has a **localStore** — a content-addressable store of
+Every reality has a **localStore**, a content-addressable store of
 owned bytes, hash-sharded and deduplicated. It's populated automatically
 whenever matter is created via [contentStore.js](../seed/materials/matter/contentStore.js).
 "Every tree has one no matter what."
 
 ```
-reality/uploads/cas/<hash[0..2]>/<hash>     the bytes
-                                  <hash>.meta.json  { mimeType, size, name }
+reality/localStore/cas/<hash[0..2]>/<hash>     the bytes
+                                     <hash>.meta.json  { mimeType, size, name }
 ```
 
 Not all bytes in localStore are "installed" or "active":
@@ -72,7 +72,7 @@ localStore is the foundation under the four-layer network model:
 | Layer | Always there? | What it is |
 |---|---|---|
 | localStore | Yes | The CAS of all owned bytes. |
-| Substrate federation | Yes | Canopy wire, cross-reality verbs, GRAFTs. |
+| Federation | Yes | Canopy wire, cross-reality verbs, GRAFTs. |
 | Peering pack | Opt-in | Be findable in a peer directory. |
 | Store pack | Opt-in | Host a publishable catalog. |
 
@@ -83,19 +83,19 @@ A reality can plant either pack independently. See
 
 When the loader discovers resources, every file under each resource's
 folder is read once and put into localStore via
-`contentStore.putContent`. The bytes land in `uploads/cas/<shard>/<hash>`
-alongside user-uploaded matter — same store, same dedup, same content
+`contentStore.putContent`. The bytes land in `localStore/cas/<shard>/<hash>`
+alongside user-uploaded matter, same store, same dedup, same content
 door for serving. The lockfile at `reality/resources/.lockfile.json`
 records the per-file CAS refs plus a `rootHash` per resource (merkle of
 sorted file hashes). After boot, peers asking for any byte by hash get
 served through the existing CAS path regardless of whether the bytes
-came from a user upload or a substrate-shipped resource file.
+came from a user upload or a reality-shipped resource file.
 
-The on-disk files don't go away — Node still imports code from
+The on-disk files don't go away. Node still imports code from
 filesystem paths. But the canonical byte storage is localStore;
 publishing a resource (when the store pack is planted) becomes "sign
 the existing rootHash + metadata," no separate byte-upload step.
-**Dropping the Mongo db never touches localStore** — your CAS persists
+**Dropping the Mongo db never touches localStore.** Your CAS persists
 across chain resets. Old bytes from prior runs become orphaned
 references (no fact in the new chain points at them) and the retention
 sweeper eventually reclaims them.

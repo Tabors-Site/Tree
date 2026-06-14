@@ -60,7 +60,7 @@ const DEFAULT_IGNORE = new Set([
   ".git",
   ".github",
   "node_modules",
-  "uploads",
+  "localStore",
   "data",
   "logs",
   "tmp",

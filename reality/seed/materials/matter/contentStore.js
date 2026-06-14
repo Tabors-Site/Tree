@@ -26,8 +26,8 @@
 //
 // Layout on disk:
 //
-//   <uploads>/cas/<hash[0..2]>/<hash>            the bytes
-//   <uploads>/cas/<hash[0..2]>/<hash>.meta.json  { mimeType, size, name }
+//   <localStore>/cas/<hash[0..2]>/<hash>            the bytes
+//   <localStore>/cas/<hash[0..2]>/<hash>.meta.json  { mimeType, size, name }
 //
 // The two-hex shard dir keeps directory fan-out sane. The sidecar
 // lets the HTTP serving route answer Content-Type without a DB read.
@@ -51,11 +51,11 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Same resolution matters.js uses: env override, else reality/uploads.
-const uploadsFolder = process.env.UPLOADS_DIR
-  ? path.resolve(process.env.UPLOADS_DIR)
-  : path.resolve(__dirname, "../../../uploads");
-const CAS_ROOT = path.join(uploadsFolder, "cas");
+// localStore root: env override, else reality/localStore.
+const localStoreFolder = process.env.LOCALSTORE_DIR
+  ? path.resolve(process.env.LOCALSTORE_DIR)
+  : path.resolve(__dirname, "../../../localStore");
+const CAS_ROOT = path.join(localStoreFolder, "cas");
 
 const HASH_RE = /^[0-9a-f]{64}$/;
 
