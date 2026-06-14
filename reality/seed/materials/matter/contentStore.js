@@ -3,6 +3,15 @@
 // contentStore — the content-addressable store. Bytes live HERE;
 // the chain holds facts ABOUT bytes.
 //
+// Doctrinally this is the reality's **localStore**: the unconditional
+// CAS layer that every reality has, populated automatically by
+// putContent whenever owned bytes are created. Not all bytes here are
+// "installed" or "active" — they're just stored. The optional store
+// pack (reality/resources/store/) sits on top of this layer and lets a
+// reality choose which localStore items to expose as publishable
+// resources. See philosophy/OS/ROOTS.md for the four-layer model
+// (localStore, federation, peering, store).
+//
 // Every piece of matter content (text and binary alike) is addressed
 // by what it IS: the SHA-256 of its bytes. Facts and projections
 // carry a content ref `{ kind:"cas", hash, size, mimeType, name,

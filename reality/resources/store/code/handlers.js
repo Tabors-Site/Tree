@@ -1,10 +1,10 @@
-// Roots registrar handlers. One per intent.
+// Store registrar handlers. One per intent.
 //
 // The catalog IS the registrar's folded qualities. Every publish or
 // retire is ONE set-being the registrar writes on its OWN being, so a
 // publish is one moment and one fact, exactly the federation-manager
 // pattern. The registrar's reel is the catalog's whole history; its
-// folded qualities.roots are the catalog now. "Browsing is SEE" means
+// folded qualities.store are the catalog now. "Browsing is SEE" means
 // SEE the registrar.
 //
 // The write authorizes because the registrar OWNS its home space (the
@@ -19,7 +19,7 @@
 // publish is the shape that fits. Sharding (per-publisher registrars, or
 // a SEE-projection into matter) is the scaling path, noted in ROOTS.md.
 //
-// Catalog shape (qualities.roots.catalog):
+// Catalog shape (qualities.store.catalog):
 //
 //   "<publisher>": {
 //     "<name>": {
@@ -66,7 +66,7 @@ function frameOf(ctx) {
 /**
  * The publisher's identity: the BEING that summoned the registrar, by
  * its key. Publishing requires an identified being holding the
- * roots:publisher role (ROOTS.md). That being may be NATIVE (born
+ * store:publisher role (ROOTS.md). That being may be NATIVE (born
  * here, or grafted in) or FOREIGN (reaching across in its left stance
  * over cross-reality IBP); the key is the publisher either way, so names
  * scope to a key, never to an anonymous domain string. `homeReality`
@@ -81,22 +81,22 @@ function publisherOf(ctx) {
   return { key: String(beingId), homeReality: ctx?.askerReality || null };
 }
 
-/** Load the registrar's folded qualities.roots (prior moments only). */
-async function readRoots(meId, branch) {
+/** Load the registrar's folded qualities.store (prior moments only). */
+async function readStore(meId, branch) {
   const { loadProjection } = await import("../../seed/materials/projections.js");
   const slot = await loadProjection("being", meId, branch);
-  const roots = nsOf(slot?.state?.qualities, "roots");
-  const catalog = (roots && typeof roots.catalog === "object" && roots.catalog) || {};
-  return { ...(roots || {}), catalog };
+  const store = nsOf(slot?.state?.qualities, "store");
+  const catalog = (store && typeof store.catalog === "object" && store.catalog) || {};
+  return { ...(store || {}), catalog };
 }
 
-/** Write the whole roots namespace back in one self-authorized set-being. */
-async function writeRoots(frame, ctx, roots) {
+/** Write the whole store namespace back in one self-authorized set-being. */
+async function writeStore(frame, ctx, store) {
   const { doVerb } = await import("../../seed/ibp/verbs/do.js");
   await doVerb(
     { kind: "being", id: frame.meId },
     "set-being",
-    { field: "qualities.roots", value: roots, merge: false },
+    { field: "qualities.store", value: store, merge: false },
     { identity: frame.identity, summonCtx: ctx },
   );
 }
@@ -154,14 +154,14 @@ export async function publishListing(fed, ctx) {
   const { key: publisher, homeReality } = publisherOf(ctx);
   const listingHash = listingHashOf(manifest);
 
-  const roots = await readRoots(frame.meId, frame.branch);
-  const nameNode = roots.catalog[publisher]?.[name] || { pointer: null, versions: {} };
+  const store = await readStore(frame.meId, frame.branch);
+  const nameNode = store.catalog[publisher]?.[name] || { pointer: null, versions: {} };
 
   // Immutability gate: a version is its hash, forever.
   const existing = nameNode.versions[version];
   if (existing) {
     if (existing.listingHash === listingHash) {
-      log.info("Roots", `re-publish of ${publisher}/${name}@${version} is identical; idempotent ok`);
+      log.info("Store", `re-publish of ${publisher}/${name}@${version} is identical; idempotent ok`);
       return { kind: "published", idempotent: true, publisher, name, version, listingHash, claimHash: nameNode.pointer?.claimHash || null, seq: nameNode.pointer?.seq ?? null };
     }
     return failure(
@@ -193,13 +193,13 @@ export async function publishListing(fed, ctx) {
       },
     },
   };
-  roots.catalog = {
-    ...roots.catalog,
-    [publisher]: { ...(roots.catalog[publisher] || {}), [name]: newNameNode },
+  store.catalog = {
+    ...store.catalog,
+    [publisher]: { ...(store.catalog[publisher] || {}), [name]: newNameNode },
   };
-  await writeRoots(frame, ctx, roots);
+  await writeStore(frame, ctx, store);
 
-  log.info("Roots", `published ${publisher}/${name}@${version} (${listingType}, ${listingHash.slice(0, 12)}…)`);
+  log.info("Store", `published ${publisher}/${name}@${version} (${listingType}, ${listingHash.slice(0, 12)}…)`);
   return { kind: "published", publisher, name, version, listingHash, claimHash: claim.claimHash, seq: claim.seq };
 }
 
@@ -207,7 +207,7 @@ export async function publishListing(fed, ctx) {
  * retire-listing
  *   payload: { name, successor? }
  *   Publisher-only sunset: chains a "retired" claim onto the name's
- *   pointer. Distinct from roots:delist (the operator's lever) and from
+ *   pointer. Distinct from store:delist (the operator's lever) and from
  *   deletion (which does not exist; the versions remain).
  */
 export async function retireListing(fed, ctx) {
@@ -220,8 +220,8 @@ export async function retireListing(fed, ctx) {
   const frame = frameOf(ctx);
   const { key: publisher } = publisherOf(ctx);
 
-  const roots = await readRoots(frame.meId, frame.branch);
-  const nameNode = roots.catalog[publisher]?.[name];
+  const store = await readStore(frame.meId, frame.branch);
+  const nameNode = store.catalog[publisher]?.[name];
   const prevClaim = nameNode?.pointer || null;
   if (!prevClaim) return failure(`no pointer for "${name}" by ${publisher}`, "not-found");
   if (prevClaim.publisher !== publisher) {
@@ -243,37 +243,37 @@ export async function retireListing(fed, ctx) {
     prev: prevClaim.claimHash,
     seq: (Number(prevClaim.seq) || 0) + 1,
   });
-  roots.catalog = {
-    ...roots.catalog,
-    [publisher]: { ...roots.catalog[publisher], [name]: { ...nameNode, pointer: claim } },
+  store.catalog = {
+    ...store.catalog,
+    [publisher]: { ...store.catalog[publisher], [name]: { ...nameNode, pointer: claim } },
   };
-  await writeRoots(frame, ctx, roots);
+  await writeStore(frame, ctx, store);
 
-  log.info("Roots", `retired ${publisher}/${name}${successor ? ` (successor: ${successor})` : ""}`);
+  log.info("Store", `retired ${publisher}/${name}${successor ? ` (successor: ${successor})` : ""}`);
   return { kind: "retired", name, publisher, successor, claimHash: claim.claimHash, seq: claim.seq };
 }
 
 /**
- * delist, the roots operator's editorial lever (called by the delist
+ * delist, the store operator's editorial lever (called by the delist
  * DO op, not an intent). Marks one (publisher, name, version) delisted in
  * the registrar's catalog. Never a deletion; the version stays, the hash
  * stays, mirrors may still carry it.
  */
 export async function delistVersion(ctx, { publisher, name, version, reason = null }) {
   const frame = frameOf(ctx);
-  const roots = await readRoots(frame.meId, frame.branch);
-  const entry = roots.catalog[publisher]?.[name]?.versions?.[version];
+  const store = await readStore(frame.meId, frame.branch);
+  const entry = store.catalog[publisher]?.[name]?.versions?.[version];
   if (!entry) {
     return { ok: false, reason: `no ${publisher}/${name}@${version} in this catalog` };
   }
-  roots.catalog[publisher][name] = {
-    ...roots.catalog[publisher][name],
+  store.catalog[publisher][name] = {
+    ...store.catalog[publisher][name],
     versions: {
-      ...roots.catalog[publisher][name].versions,
+      ...store.catalog[publisher][name].versions,
       [version]: { ...entry, status: "delisted", ...(reason ? { delistReason: reason } : {}) },
     },
   };
-  await writeRoots(frame, ctx, roots);
-  log.info("Roots", `delisted ${publisher}/${name}@${version}`);
+  await writeStore(frame, ctx, store);
+  log.info("Store", `delisted ${publisher}/${name}@${version}`);
   return { ok: true, publisher, name, version };
 }

@@ -1,7 +1,7 @@
-// roots/code — entry point for the roots pack's code piece.
+// store/code — entry point for the store pack's code piece.
 //
-// Registers (auto-namespaced to roots:<name> by scopedReality):
-//   - roots:delist   DO op (the operator's editorial lever; marks one
+// Registers (auto-namespaced to store:<name> by scopedReality):
+//   - store:delist   DO op (the operator's editorial lever; marks one
 //                     version delisted, never deletes)
 //
 // The registrar and publisher roles register through the loader's
@@ -21,6 +21,6 @@ import delistOp from "./ops/delist.js";
 
 export async function init(reality) {
   reality.do.registerOperation("delist", delistOp);
-  log.verbose("Roots", "registered: delist op");
+  log.verbose("Store", "registered: delist op");
   return {};
 }

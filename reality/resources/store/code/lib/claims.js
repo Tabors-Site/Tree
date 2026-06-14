@@ -1,4 +1,4 @@
-// Pointer claims and listing hashes for the roots catalog.
+// Pointer claims and listing hashes for the store catalog.
 //
 // Everything the catalog stores is named by content: a listing IS the
 // hash of its canonical manifest, and the mutable "current version"
@@ -49,7 +49,7 @@ export function buildClaim({
   state = "current", successor = null, prev = null, seq = 0,
 }) {
   const body = {
-    kind: "roots-pointer-claim",
+    kind: "store-pointer-claim",
     publisher, name, version, listingHash, state, successor, prev, seq,
   };
   return { ...body, claimHash: sha256Hex(canonicalJson(body)) };

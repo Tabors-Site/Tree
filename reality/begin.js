@@ -134,7 +134,7 @@ import log from "./seed/seedReality/log.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // First-boot actions. plant.js writes .first-boot-actions.json when the
-// operator opts into something that needs a planting step (e.g. roots).
+// operator opts into something that needs a planting step (e.g. store, peering).
 // We consume the file once after extensions have registered their seeds,
 // then delete it. Acts as I_AM against the reality root.
 async function runFirstBootActions() {
@@ -343,8 +343,8 @@ app.get("/health", (_req, res) => {
 // can attach routes during loadExtensions; nothing is listening yet.
 await genesis(app, { registerRawWebhook });
 
-// First-boot actions written by plant.js (e.g. "include roots →
-// plant roots:catalog at the reality root"). Consumed once and
+// First-boot actions written by plant.js (e.g. "include store →
+// plant store:catalog at the reality root"). Consumed once and
 // deleted. Extension templates are already in the registry; this is
 // just the planting acting as I_AM at the chosen target.
 await runFirstBootActions();

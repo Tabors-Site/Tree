@@ -312,39 +312,59 @@ async function pickExtensions() {
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
 
-  // Roots gets its own question up front. Roots are how this reality
-  // connects to The Root System . the underground network where
-  // realities find each other and share resources. Saying yes here
-  // plants the catalog on first boot (see .first-boot-actions.json
-  // wired into begin.js); saying no leaves this reality isolated, which
-  // is a perfectly valid configuration.
-  let rootsChosen = false;
-  const rootsExt = extensions.find((e) => e.name === "roots");
-  const otherExtensions = rootsExt
-    ? extensions.filter((e) => e.name !== "roots")
-    : extensions;
-  if (rootsExt) {
+  // Peering + Store get their own questions up front. They were one
+  // pack ("roots") until split (see philosophy/OS/ROOTS.md). A reality
+  // can plant either, both, or neither — substrate federation (canopy
+  // wire, cross-reality SUMMONs, GRAFTs) is always there regardless.
+  //
+  //   peering — be FINDABLE in a peer directory.
+  //   store   — host a CATALOG of resources others can draw.
+  let peeringChosen = false;
+  let storeChosen   = false;
+  const peeringExt  = extensions.find((e) => e.name === "peering");
+  const storeExt    = extensions.find((e) => e.name === "store");
+  const otherExtensions = extensions.filter(
+    (e) => e.name !== "peering" && e.name !== "store",
+  );
+
+  if (peeringExt) {
     console.log("");
-    console.log("  Roots . the connection to The Root System.");
-    console.log("    Catalogs extensions, seeds, and peer realities.");
-    console.log("    Lets this reality find others and lets others find it.");
-    console.log("    Choosing yes plants the catalog at first boot.");
+    console.log("  Peering . the discovery directory layer.");
+    console.log("    Lets this reality be findable on the network and find others.");
+    console.log("    The substrate's wire (cross-reality SUMMONs, GRAFTs) works regardless;");
+    console.log("    peering only adds the discoverability layer.");
     console.log("");
     const hz = (await rl.question(
-      "  Plant this tree with roots (connect to the federated network)? (Y/n): ",
+      "  Plant this tree with peering (be discoverable on the network)? (Y/n): ",
     ))
       .trim()
       .toLowerCase();
-    rootsChosen = !(hz === "n" || hz === "no");
+    peeringChosen = !(hz === "n" || hz === "no");
+    console.log("");
+  }
+
+  if (storeExt) {
+    console.log("");
+    console.log("  Store . the publishable catalog layer.");
+    console.log("    Lets this reality publish a catalog of resources others can draw.");
+    console.log("    Works standalone (private catalog reachable if address known) or with peering.");
+    console.log("    Choosing yes plants the catalog at first boot.");
+    console.log("");
+    const hz = (await rl.question(
+      "  Plant this tree with a store (host a publishable catalog)? (Y/n): ",
+    ))
+      .trim()
+      .toLowerCase();
+    storeChosen = !(hz === "n" || hz === "no");
     console.log("");
   }
 
   if (otherExtensions.length === 0) {
     rl.close();
-    finalizeExtensionProfile(
-      rootsChosen && rootsExt ? [rootsExt] : [],
-      { rootsChosen },
-    );
+    const selected = [];
+    if (peeringChosen && peeringExt) selected.push(peeringExt);
+    if (storeChosen   && storeExt)   selected.push(storeExt);
+    finalizeExtensionProfile(selected, { peeringChosen, storeChosen });
     return;
   }
 
@@ -381,12 +401,14 @@ async function pickExtensions() {
 
   rl.close();
 
-  if (rootsChosen && rootsExt) selected.unshift(rootsExt);
+  // Peering + Store sit at the head of the profile if chosen.
+  if (storeChosen   && storeExt)   selected.unshift(storeExt);
+  if (peeringChosen && peeringExt) selected.unshift(peeringExt);
 
-  finalizeExtensionProfile(selected, { rootsChosen });
+  finalizeExtensionProfile(selected, { peeringChosen, storeChosen });
 }
 
-function finalizeExtensionProfile(selected, { rootsChosen } = {}) {
+function finalizeExtensionProfile(selected, { peeringChosen, storeChosen } = {}) {
   const profilePath = path.join(__dirname, "resources", ".treeos-profile");
   const firstBootActionsPath = path.join(__dirname, ".first-boot-actions.json");
 
@@ -410,19 +432,20 @@ function finalizeExtensionProfile(selected, { rootsChosen } = {}) {
   );
 
   // First-boot actions. Consumed by begin.js after extensions load,
-  // before the server listens. The roots catalog plants at the reality
-  // root by default; operators can move it later.
-  if (rootsChosen) {
+  // before the server listens. The store catalog plants at the reality
+  // root by default; the peering directory likewise. Operators can move
+  // them later.
+  const plantTemplates = [];
+  if (storeChosen)   plantTemplates.push({ name: "store:catalog",        target: "root" });
+  if (peeringChosen) plantTemplates.push({ name: "peering:peer-directory", target: "root" });
+  if (plantTemplates.length > 0) {
     fs.writeFileSync(
       firstBootActionsPath,
-      JSON.stringify(
-        { plantTemplates: [{ name: "roots:catalog", target: "root" }] },
-        null,
-        2,
-      ) + "\n",
+      JSON.stringify({ plantTemplates }, null, 2) + "\n",
       "utf8",
     );
-    console.log("  Roots catalog will plant on first boot.");
+    if (storeChosen)   console.log("  Store catalog will plant on first boot.");
+    if (peeringChosen) console.log("  Peering directory will plant on first boot (when the peering pack ships its seed).");
   } else if (fs.existsSync(firstBootActionsPath)) {
     fs.unlinkSync(firstBootActionsPath);
   }

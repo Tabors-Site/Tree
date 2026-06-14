@@ -1,7 +1,7 @@
 {
   "meta": {
     "bundleVersion": "1.0",
-    "sourceReality": "roots",
+    "sourceReality": "store",
     "sourceBranch": "0",
     "sourceScopeName": "catalog",
     "sourceScopeSpaceId": "catalog-root",
@@ -9,14 +9,14 @@
     "operatorBeingId": null
   },
   "manifest": {
-    "extensions": ["roots"],
-    "roles": ["roots:registrar"]
+    "extensions": ["store"],
+    "roles": ["store:registrar"]
   },
   "parameters": [
     {
       "name": "spaceName",
       "type": "string",
-      "default": "roots",
+      "default": "store",
       "description": "Name of the catalog space."
     },
     {
@@ -38,14 +38,14 @@
         "contributors": [],
         "size": null,
         "coord": null,
-        "qualities": { "roots": { "catalog": true } }
+        "qualities": { "store": { "catalog": true } }
       }
     ],
     "beings": [
       {
         "sourceId": "registrar-being",
         "name": "$beingName",
-        "defaultRole": "roots:registrar",
+        "defaultRole": "store:registrar",
         "parentBeingId": { "__ref": "graft-initiator" },
         "homeSpace": { "__ref": "space", "id": "catalog-root" },
         "position": { "__ref": "space", "id": "catalog-root" },

@@ -6,12 +6,16 @@ import "./IbpPage.css";
  *
  * Roots are nodes of The Root System, the underground network where
  * realities find each other and share resources. A Roots node is a TreeOS
- * reality running the roots resource pack, not a separate server. Browsing is SEE,
- * publishing is DO, every publish and delist is a fact on a reel.
+ * reality running the store + peering packs (post-split), not a separate
+ * server. Browsing is SEE, publishing is DO, every publish and delist is
+ * a fact on a reel.
  *
  * Sources.
- *   /reality/philosophy/OS/ROOTS.md             doctrine
- *   /reality/resources/roots/                  the roots resource pack
+ *   /reality/philosophy/OS/ROOTS.md             umbrella doctrine
+ *   /reality/philosophy/OS/STORE.md             catalog doctrine
+ *   /reality/philosophy/OS/PEERING.md           directory doctrine
+ *   /reality/resources/store/                   the store resource pack
+ *   /reality/resources/peering/                 the peering resource pack (scaffold)
  *   /reality/protocols/ibp/peers.js             peer record shape
  *   /reality/philosophy/OS/IDENTITY.md          why keys make this verifiable
  *   /reality/philosophy/OS/GRAFT-AND-SEED.md    what moves between realities
@@ -28,11 +32,14 @@ const FactoryRoots = () => {
         <h1 className="ns-doc-title">Where realities meet underground</h1>
         <p className="ns-doc-lede">
           A reality is a tree. The Root System is the underground
-          network that connects trees in a forest. Roots are the nodes
-          of that network: realities that run the roots resource so other
-          realities can find them and share resources with them. Any
-          reality can plant roots. None has to. The forest is whatever
-          trees choose to connect.
+          network that connects trees in a forest. Every reality has
+          two things built in: a <strong>localStore</strong> (the CAS of
+          its owned bytes) and the substrate wire that lets it talk to
+          anyone whose address it knows. On top of those, a reality
+          chooses two optional packs: <strong>peering</strong> (be
+          discoverable in a peer directory) and <strong>store</strong>
+          {" "}(host a publishable catalog). Plant either, both, or
+          neither. The forest is whatever trees choose to connect.
         </p>
       </header>
 
@@ -63,36 +70,57 @@ const FactoryRoots = () => {
       <section>
         <h2>A Roots node is a reality, not a server</h2>
         <p>
-          A Roots node is a TreeOS reality running the{" "}
-          <code>roots</code> resource pack. The catalog is spaces and
-          matter. Publishers are peer realities. Every publish and
-          every delist is a fact on a reel, so the catalog's entire
-          history is audited by construction.
+          A "Roots node" is shorthand for a reality running both opt-in
+          packs: the <strong>store</strong> pack (hosts a publishable
+          catalog) and the <strong>peering</strong> pack (registers in a
+          peer directory). They were one bundle until split — now you
+          can plant either independently:
         </p>
+        <ul className="ns-list">
+          <li>
+            <strong>Store only.</strong> Hosts a catalog reachable by
+            anyone with the address, but not in any directory. Useful
+            for private/internal stores, family realities, internal
+            company hosting.
+          </li>
+          <li>
+            <strong>Peering only.</strong> Findable in directories;
+            offers no catalog. A discoverable participant.
+          </li>
+          <li>
+            <strong>Both.</strong> The full Roots-node shape:
+            discoverable AND publishes a catalog.
+          </li>
+          <li>
+            <strong>Neither.</strong> A private reality. Substrate
+            federation still works — anyone with your address can
+            reach you — but you're not in directories and you publish
+            nothing. The default after first boot.
+          </li>
+        </ul>
         <p>
-          One decision buys the rest of the architecture.
+          Whichever packs you plant, the substrate guarantees apply:
         </p>
 
         <ul className="ns-list">
           <li>
             <strong>The protocol IS the API.</strong> Browsing is SEE.
             Publishing is DO. There is no second wire dialect to
-            maintain, and the directory inherits every hardening the
-            wire already has: canopy signatures, being signatures,
-            sealed sessions, replay refusal.
+            maintain; both packs inherit every hardening the wire
+            already has: canopy signatures, being signatures, sealed
+            sessions, replay refusal.
           </li>
           <li>
             <strong>"Anyone can run one" means "plant a reality."</strong>{" "}
-            The roots pack itself ships as a resource published
-            through Roots. The distribution story distributes itself.
+            Both packs ship as resources published through Roots. The
+            distribution story distributes itself.
           </li>
           <li>
             <strong>Operating a Roots node grants nothing.</strong> A
             Roots operator holds the keys of their own reality and no
             one else's. The catalog they host is other realities'
             signed work. The worst a dishonest operator can do is
-            decline to show something, and another Roots node will
-            show it.
+            decline to show something, and another node will show it.
           </li>
         </ul>
       </section>

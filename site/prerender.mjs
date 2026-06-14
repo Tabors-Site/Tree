@@ -141,7 +141,7 @@ const PAGE_META = {
   },
   "/factory/roots": {
     title: "Where Realities Meet Underground . The Factory",
-    description: "Roots are the nodes of The Root System, the underground network where realities find each other and share resources. A Roots node is a TreeOS reality running an extension, not a separate server. It catalogs resources, holds peer records, mirrors other Roots nodes, and vouches for availability never authenticity. Any reality can plant roots.",
+    description: "The Root System is built from four layers. Every reality has localStore (CAS of owned bytes) and substrate federation (the wire). On top, two opt-in packs: peering (be findable in a directory) and store (host a publishable catalog). Plant either, both, or neither. Any reality can connect to the forest.",
   },
   "/factory/intake": {
     title: "Intake . Beat 1 . The Factory",

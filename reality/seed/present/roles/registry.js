@@ -111,8 +111,8 @@ export function listRoles() {
 
 /**
  * Register a code-cognition handler for a role by name. When a code
- * resource (e.g. roots/code/) wants to drive the cognition for a role
- * defined as a standalone resource (e.g. roots/roles/registrar/), it
+ * resource (e.g. store/code/) wants to drive the cognition for a role
+ * defined as a standalone resource (e.g. store/roles/registrar/), it
  * calls this at init. The handler runs in place of the default LLM
  * cognition when the role is summoned.
  *
