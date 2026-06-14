@@ -222,6 +222,17 @@ export function buildScopedReality(manifest, fullReality, availableServices) {
             { ...spec, ownerExtension: extName },
           )
         : undefined,
+      // RESOURCES.md: a code resource registers code-cognition handlers
+      // for role resources by name. Same auto-namespace rule as
+      // registerRole — bare role names pick up the extension prefix
+      // so an extension calling
+      //   reality.declare.registerRoleHandler("registrar", handlerFn)
+      // registers the handler under "<ext>:registrar", matching where
+      // the role's spec was registered. Cross-extension references
+      // (already-prefixed names) pass through.
+      registerRoleHandler: origDeclare.registerRoleHandler
+        ? (name, handler) => origDeclare.registerRoleHandler(prefixRoleName(name), handler, extName)
+        : undefined,
     };
   }
 

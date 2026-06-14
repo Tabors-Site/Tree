@@ -1,49 +1,41 @@
-// TreeOS extension: emotions.
+// emotions pack (RESOURCES.md).
 //
-// Ships a small set of modifier roles that beings stack onto their
-// primary role via RoleFlow `stack: true` clauses. Each modifier is a
-// short prompt body the LLM weighs alongside the primary frame; the
-// substrate composes them by concatenating each role's prompt with a
-// divider (`\n\n---\n\n`), so a being acting as `factory_worker` with
-// `bored` stacked sees both intent frames at once.
+// Eight modifier roles that beings stack onto their primary role via
+// RoleFlow `stack: true` clauses. Each modifier is a short prompt
+// body the LLM weighs alongside the primary frame; the substrate
+// composes them by concatenating each role's prompt with a divider,
+// so a being acting as `factory_worker` with `bored` stacked sees
+// both intent frames at once.
 //
-// None of these roles are summonable on their own — they're shape-
-// modifiers, not jobs. Their canSee/canDo/canSummon/canBe lists are
-// empty; they add nothing to capability surface, only to tone.
+// PACK CONTENTS:
+//   roles/bored/         — easily distracted, drawn to novelty
+//   roles/tired/         — shorter responses, prefers rest
+//   roles/focused/       — declines tangents, orients to the goal
+//   roles/curious/       — probes the unexplained, asks questions
+//   roles/cautious/      — verifies before acting, reversible steps
+//   roles/urgent/        — fastest acceptable over best
+//   roles/playful/       — unexpected angles, willing to be unobvious
+//   roles/formal/        — measured language, observes protocol
 //
-// Authoring pattern:
-//
-//   qualities.roleFlow = [
-//     { role: "factory_worker" },  // primary
-//     { stack: true, when: { "time.sinceLastMoment": { gte: 60 } },
-//       role: "emotions:bored" },
-//     { stack: true, when: { "world.weather.condition": "storm" },
-//       role: "emotions:cautious" },
-//   ]
-//
-// Worker stays a worker; the stacked modifiers shape how the LLM
-// reads the situation. Stacking is additive; remove a modifier by
-// changing the world such that its `when` no longer matches.
+// No code piece. The role-kind handler registers each modifier
+// directly from its role.js. None carry capability (no can* entries);
+// they're prompt-only voice shapers.
 
 export default {
-  name: "emotions",
+  kind:    "pack",
+  name:    "emotions",
   version: "1.0.0",
   description:
     "Eight modifier roles (bored, tired, focused, curious, cautious, urgent, playful, formal) for stacking onto primary roles via RoleFlow.",
 
-  needs: {
-    services: ["declare"],
-    models:   [],
-    extensions: [],
-  },
-
-  optional: { services: [], extensions: [] },
-
-  provides: {
-    roles: true,
-    routes: false,
-    tools: false,
-    jobs: false,
-    models: {},
-  },
+  requires: [
+    { type: "role", ref: "emotions:bored"    },
+    { type: "role", ref: "emotions:tired"    },
+    { type: "role", ref: "emotions:focused"  },
+    { type: "role", ref: "emotions:curious"  },
+    { type: "role", ref: "emotions:cautious" },
+    { type: "role", ref: "emotions:urgent"   },
+    { type: "role", ref: "emotions:playful"  },
+    { type: "role", ref: "emotions:formal"   },
+  ],
 };

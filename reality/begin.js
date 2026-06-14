@@ -124,7 +124,7 @@ import registerRoutes from "./transports/http/handler.js";
 import { initWebSocketServer } from "./transports/ws/websocket.js";
 import { initIBPHttp, initIBPWS } from "./protocols/ibp/index.js";
 import { sendOk, sendError, IBP_ERR } from "./seed/ibp/protocol.js";
-import { getExtension } from "./resources/extensions/loader.js";
+import { getExtension } from "./resources/loader.js";
 import securityHeaders from "./transports/http/middleware/securityHeaders.js";
 import { genesis, printReady } from "./genesis.js";
 import { noteHttpRequest, noteHttpListening, noteHttpShutdown } from "./seed/materials/host/requestLog.js";

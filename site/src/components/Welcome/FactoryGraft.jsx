@@ -50,13 +50,13 @@ const FactoryGraft = () => {
           they move in different ways.
         </p>
         <p>
-          <strong>Content circulates.</strong> Code, models, assets,
-          templates, behavioral patterns. Content is meant to be copied,
-          used in many realities at once, found widely through the
-          network. When a reality wants a new capability, it draws the
-          content through{" "}
+          <strong>Resources circulate.</strong> Code, roles, roleflows,
+          seeds, assets, and the packs that bundle them. A resource is
+          meant to be copied, used in many realities at once, found widely
+          through the network. When a reality wants a new capability, it
+          draws the resource through{" "}
           <Link to="/factory/roots" className="ns-inline-link">Roots</Link>,
-          the underground catalog. Content is public substance.
+          the underground catalog. A resource is public substance.
         </p>
         <p>
           <strong>Beings migrate.</strong> A being is an identity: a key
@@ -279,9 +279,10 @@ const FactoryGraft = () => {
         </p>
         <div className="ns-grammar">
           <div className="ns-grammar-row">
-            <code className="ns-grammar-form">extension</code>
+            <code className="ns-grammar-form">code resource</code>
             <span className="ns-grammar-meaning">
-              add a capability to your reality. A resource, drawn through Roots.
+              add a capability to your reality. The resource kind once
+              called an extension, drawn through Roots.
             </span>
           </div>
           <div className="ns-grammar-row">

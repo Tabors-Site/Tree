@@ -209,7 +209,7 @@ export async function captureGraft(opts = {}) {
   let extensions = [];
   try {
     const { getLoadedExtensionNames, getExtensionManifest } =
-      await import("../../../resources/extensions/loader.js");
+      await import("../../../resources/loader.js");
     extensions = getLoadedExtensionNames().map((name) => ({
       name,
       version: getExtensionManifest(name)?.version || null,
@@ -504,7 +504,7 @@ export async function plantGraft(bundle) {
   if (declared.length > 0) {
     let onDisk = new Set();
     try {
-      const extensionsDir = path.resolve(__dirname, "..", "..", "..", "resources", "extensions");
+      const extensionsDir = path.resolve(__dirname, "..", "..", "..", "resources");
       const entries = await readdir(extensionsDir, { withFileTypes: true });
       onDisk = new Set(entries.filter((e) => e.isDirectory()).map((e) => e.name));
     } catch { /* no extensions dir at all — everything below warns */ }

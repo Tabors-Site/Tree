@@ -20,9 +20,10 @@ uploads
 
 # Per land extension profile. Operator's choices for which extensions
 # wake with the I-Am. Not part of the kernel.
-resources/extensions/.disabled
-resources/extensions/.treeos-profile
-resources/extensions/.staging-*
+resources/.disabled
+resources/.treeos-profile
+resources/.staging-*
+resources/.lockfile.json
 
 # Old experiments kept for reference, not for shipping.
 .oldExtensions

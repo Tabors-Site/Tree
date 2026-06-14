@@ -66,7 +66,7 @@ several patterns; not knowing they are gone is the #1 way to overbuild.
 Two files. Copy [`_template/`](./_template/) and edit.
 
 ```
-resources/extensions/hello/
+resources/hello/
 ├── manifest.js
 └── index.js
 ```
@@ -740,7 +740,7 @@ position. The loader records ownership at op registration.
 Collects short notes at any space. One op, one role, one hook, one
 see. Two files.
 
-**`resources/extensions/feedback/manifest.js`**
+**`resources/feedback/manifest.js`**
 
 ```js
 export default {
@@ -752,7 +752,7 @@ export default {
 };
 ```
 
-**`resources/extensions/feedback/index.js`**
+**`resources/feedback/index.js`**
 
 ```js
 export async function init(reality) {

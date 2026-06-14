@@ -87,7 +87,7 @@ them; the hash proves them.
 ## Who may publish is just roles
 
 Publishing happens by a being that holds the `roots:publisher` role
-([extensions/roots/roles/publisher.js](../../resources/extensions/roots/roles/publisher.js))
+([extensions/roots/roles/publisher.js](../../resources/roots/roles/publisher.js))
 summoning the registrar with intent `publish-listing` or
 `retire-listing`. The role declares the receiver names + arg shapes; the
 substrate's existing role-walk is the auth. Two configurations fall out
@@ -310,12 +310,12 @@ hidden work is unaltered work, visible elsewhere.
 
 ## Where roots lives in the codebase
 
-The roots extension lives at [extensions/roots/](../../resources/extensions/roots/).
+The roots extension lives at [extensions/roots/](../../resources/roots/).
 The registrar role holds the catalog in its own qualities; publish-listing
 and retire-listing are SUMMON intents; chained pointer claims live in
-[lib/claims.js](../../resources/extensions/roots/lib/claims.js); delist is the
+[lib/claims.js](../../resources/roots/lib/claims.js); delist is the
 operator's DO op; the catalog plants from
-[seeds/catalog.seed.json](../../resources/extensions/roots/seeds/catalog.seed.json).
+[seeds/catalog.seed.json](../../resources/roots/seeds/catalog.seed.json).
 [plant.js](../../plant.js) offers roots during initial setup and writes a
 `.first-boot-actions.json` marker that [begin.js](../../begin.js) consumes
 once to plant the catalog at the reality root. Extensions and seeds
@@ -340,7 +340,7 @@ that deserve a clean answer.
 
 - **Extension roles cannot be granted bare seed ops.** The scoped loader
   auto-namespaces a role's `canDo` entries to the extension
-  ([scopedReality.js](../../resources/extensions/scopedReality.js)), so
+  ([scopedReality.js](../../resources/scopedReality.js)), so
   `canDo: ["create-matter"]` becomes `roots:create-matter`, which is not
   a real op. An extension being that maintains shared state therefore
   cannot be granted seed write ops by role; it must either OWN the

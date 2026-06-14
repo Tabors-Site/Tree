@@ -90,6 +90,100 @@ function withExtensionTimeout(router, extName) {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DISABLED_FILE = path.join(__dirname, ".disabled");
+const LOCKFILE_PATH = path.join(__dirname, ".lockfile.json");
+
+// Lockfile (RESOURCES.md).
+//
+// Compute a deterministic SHA-256 over the files of a resource folder
+// (sorted by relative path, content concatenated). The lockfile snapshot
+// is the (kind, name, hash) triple per discovered resource. On every
+// boot the loader writes the current snapshot to .lockfile.json. If a
+// prior lockfile exists and any recorded hash no longer matches, the
+// loader logs the drift (a future hardening will refuse-on-mismatch).
+//
+// Files this hash ignores: node_modules, the lockfile itself, hidden
+// dotfiles. The hash is for the resource's authored shape, not its
+// runtime state.
+
+function computeResourceHash(resourceDir) {
+  if (!fs.existsSync(resourceDir)) return null;
+  const SKIP = new Set(["node_modules", ".lockfile.json"]);
+  const files = [];
+  function walk(dir, prefix = "") {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (e.name.startsWith(".") || SKIP.has(e.name)) continue;
+      const sub = prefix ? `${prefix}/${e.name}` : e.name;
+      const full = path.join(dir, e.name);
+      if (e.isDirectory()) walk(full, sub);
+      else if (e.isFile()) files.push({ rel: sub, full });
+    }
+  }
+  walk(resourceDir);
+  files.sort((a, b) => a.rel.localeCompare(b.rel));
+  const hash = crypto.createHash("sha256");
+  for (const f of files) {
+    hash.update(f.rel);
+    hash.update("\0");
+    try { hash.update(fs.readFileSync(f.full)); } catch { /* unreadable file → skip */ }
+    hash.update("\0");
+  }
+  return hash.digest("hex");
+}
+
+function readLockfile() {
+  if (!fs.existsSync(LOCKFILE_PATH)) return null;
+  try { return JSON.parse(fs.readFileSync(LOCKFILE_PATH, "utf8")); }
+  catch (err) {
+    log.warn("Loader", `.lockfile.json unreadable: ${err.message}. Will regenerate.`);
+    return null;
+  }
+}
+
+function writeLockfile(snapshot) {
+  try {
+    fs.writeFileSync(LOCKFILE_PATH, JSON.stringify(snapshot, null, 2) + "\n", "utf8");
+  } catch (err) {
+    log.warn("Loader", `Could not write .lockfile.json: ${err.message}`);
+  }
+}
+
+function reconcileLockfile(discovered) {
+  // discovered: [{ manifest, dir, kind, pack? }, ...]
+  const snapshot = {
+    version:  1,
+    writtenAt: new Date().toISOString(),
+    resources: {},
+  };
+  for (const r of discovered) {
+    if (!r.manifest?.name) continue;
+    const hash = computeResourceHash(r.dir);
+    if (!hash) continue;
+    snapshot.resources[r.manifest.name] = {
+      kind:    r.kind,
+      pack:    r.pack || null,
+      version: r.manifest.version || "0.0.0",
+      hash,
+    };
+  }
+  const prior = readLockfile();
+  if (prior?.resources) {
+    const drifted = [];
+    for (const [name, entry] of Object.entries(snapshot.resources)) {
+      const priorEntry = prior.resources[name];
+      if (priorEntry && priorEntry.hash !== entry.hash) drifted.push(name);
+    }
+    if (drifted.length > 0) {
+      log.info(
+        "Loader",
+        `Lockfile drift detected for ${drifted.length} resource(s): ${drifted.join(", ")}. New snapshot written.`,
+      );
+    }
+  }
+  writeLockfile(snapshot);
+  return snapshot;
+}
 
 // Profile filter: if .treeos-profile exists, only listed extensions load.
 // Written by plant.js when the operator picks a profile. One name per line.
@@ -538,20 +632,59 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
     Object.keys(realityServices).filter((k) => k !== "models"),
   );
 
-  // Discover manifests
+  // Discover manifests (now pack-aware per RESOURCES.md).
   const manifests = await discoverManifests();
 
   if (manifests.length === 0) {
-    log.info("Extensions", "No extension manifests found");
+    log.info("Loader", "No resource manifests found");
     return loaded;
+  }
+
+  // Lockfile reconcile: compute current hashes, compare against prior
+  // snapshot, write the new snapshot. Drift is logged but not enforced
+  // yet (refuse-on-mismatch hardening lands later). The lockfile gives
+  // operators a record of what was on disk this boot.
+  try { reconcileLockfile(manifests); } catch (err) {
+    log.warn("Loader", `Lockfile reconcile failed: ${err.message}`);
+  }
+
+  // Kind dispatcher. Code resources go through the existing extension
+  // flow below; role + seed pieces install via their kind handlers
+  // here, BEFORE code's init runs (so code can registerRoleHandler
+  // against role names that already exist in the registry). Pack
+  // manifests carry no install path (they're glue metadata).
+  // Roleflow and asset kinds are discovered but install handlers
+  // aren't built yet — flagged as pending.
+  const codeManifests = manifests.filter((m) => (m.kind || "code") === "code");
+  const rolePieces    = manifests.filter((m) => m.kind === "role");
+  const seedPieces    = manifests.filter((m) => m.kind === "seed");
+  const assetPieces   = manifests.filter((m) => m.kind === "asset");
+  const packCount     = manifests.filter((m) => m.kind === "pack").length;
+  const otherPieces   = manifests.filter((m) => m.kind && !["code", "pack", "role", "seed", "asset"].includes(m.kind));
+  log.info(
+    "Loader",
+    `Discovered ${manifests.length} resources (${codeManifests.length} code; ${rolePieces.length} role; ${seedPieces.length} seed; ${assetPieces.length} asset; ${packCount} pack; ${otherPieces.length} other-kind)`,
+  );
+  // Install role pieces first so code resources can reference them.
+  for (const piece of rolePieces)  await installRolePiece(piece);
+  // Install seed pieces next so plant-template-by-name finds them.
+  for (const piece of seedPieces)  await installSeedPiece(piece);
+  // Install asset pieces (needs the express app to mount the bundles).
+  for (const piece of assetPieces) await installAssetPiece(piece, app);
+  // Pending kinds: log so operators see what was found but not loaded.
+  for (const r of otherPieces) {
+    log.info(
+      "Loader",
+      `  pending kind=${r.kind}: ${r.manifest.name}${r.pack ? ` (in pack ${r.pack})` : ""}`,
+    );
   }
 
   // Check disabled list (env var + reality config)
   const disabled = getDisabledExtensions(opts.getConfigValue);
-  const enabled = manifests.filter(({ manifest }) => {
+  const enabled = codeManifests.filter(({ manifest }) => {
     if (disabled.has(manifest.name)) {
       log.verbose(
-        "Extensions",
+        "Loader",
         `Disabled: ${manifest.name} (DISABLED_EXTENSIONS)`,
       );
       return false;
@@ -1119,10 +1252,36 @@ function levenshtein(a, b) {
 /**
  * Validate a manifest object. Returns an array of error strings (empty = valid).
  */
+const VALID_KINDS = new Set([
+  "code", "role", "roleflow", "seed", "asset", "pack",
+]);
+
 function validateManifest(manifest, dirName) {
   const errors = [];
   if (!manifest || typeof manifest !== "object") {
     return [`${dirName}: manifest is not an object`];
+  }
+  // RESOURCES.md: every manifest declares a kind. Defaults to "code"
+  // when absent so older extension manifests still validate. The
+  // legacy extension-only validator was code-kind-specific; non-code
+  // kinds (pack/role/seed/asset/roleflow) skip the code-only checks
+  // (description-required, npm/provides shape, etc).
+  const kind = manifest.kind || "code";
+  if (!VALID_KINDS.has(kind)) {
+    errors.push(`${dirName}: invalid kind "${kind}". Must be one of: ${[...VALID_KINDS].join(", ")}`);
+    return errors;
+  }
+  if (manifest.requires !== undefined) {
+    if (!Array.isArray(manifest.requires)) {
+      errors.push(`${dirName}: "requires" must be an array of { type, ref } entries`);
+    } else {
+      for (const r of manifest.requires) {
+        if (!r || typeof r !== "object" || typeof r.type !== "string" || typeof r.ref !== "string") {
+          errors.push(`${dirName}: each "requires" entry must be { type, ref } both strings`);
+          break;
+        }
+      }
+    }
   }
   if (!manifest.name || typeof manifest.name !== "string") {
     errors.push(`${dirName}: missing or invalid "name"`);
@@ -1138,9 +1297,15 @@ function validateManifest(manifest, dirName) {
   if (!manifest.version || typeof manifest.version !== "string") {
     errors.push(`${dirName}: missing or invalid "version"`);
   }
-  if (!manifest.description || typeof manifest.description !== "string") {
+  // Non-code kinds may omit description (they're often terse data); the
+  // existing extension format required it. Keep the requirement for
+  // code-kind manifests only.
+  if (kind === "code" && (!manifest.description || typeof manifest.description !== "string")) {
     errors.push(`${dirName}: missing or invalid "description"`);
   }
+  // Non-code kinds don't carry the rest of the legacy extension fields.
+  // Skip the code-only validators below for them.
+  if (kind !== "code") return errors;
   // Validate needs
   if (manifest.needs) {
     if (manifest.needs.services && !Array.isArray(manifest.needs.services)) {
@@ -1211,6 +1376,96 @@ function validateManifest(manifest, dirName) {
   return errors;
 }
 
+// Pack-aware discovery (RESOURCES.md).
+//
+// Each top-level folder under reality/resources/ is one resource. The
+// manifest's `kind` field says what it is:
+//   - kind: "code"   → today's extension. Requires index.js. Goes
+//                      through the existing extension-load path.
+//   - kind: "pack"   → a meta-resource. The pack folder contains kind
+//                      subfolders (code/, roles/, roleflows/, seeds/,
+//                      assets/) each holding pieces. The loader recurses
+//                      into them to find pieces.
+//   - other kinds    → a standalone single-kind resource (role/seed/
+//                      asset/roleflow). Discovered but not yet loaded
+//                      by this loader; kind handlers land in Phase 2b.
+//
+// Pieces inside a pack are also returned in the results list with their
+// own kind. Each result carries: { manifest, dir, entryPath, kind,
+// pack? } where `pack` names the owning pack for piece entries.
+
+// Map a pack's kind-folder name to the piece kind we expect inside.
+// Plural folder names; the "code" folder holds a single code piece
+// directly (no per-piece subfolder), while the other folders hold
+// multiple pieces each in their own subfolder.
+const PACK_KIND_FOLDERS = [
+  { folder: "code",      pieceKind: "code",     multiPiece: false },
+  { folder: "roles",     pieceKind: "role",     multiPiece: true  },
+  { folder: "roleflows", pieceKind: "roleflow", multiPiece: true  },
+  { folder: "seeds",     pieceKind: "seed",     multiPiece: true  },
+  { folder: "assets",    pieceKind: "asset",    multiPiece: true  },
+];
+
+async function discoverPackPieces(packDir, packName) {
+  const pieces = [];
+  for (const { folder, pieceKind, multiPiece } of PACK_KIND_FOLDERS) {
+    const kindDir = path.join(packDir, folder);
+    if (!fs.existsSync(kindDir)) continue;
+
+    if (multiPiece) {
+      const subEntries = fs.readdirSync(kindDir, { withFileTypes: true });
+      for (const sub of subEntries) {
+        if (!sub.isDirectory()) continue;
+        const pieceDir = path.join(kindDir, sub.name);
+        const piece = await readPieceManifest(pieceDir, sub.name, pieceKind, packName);
+        if (piece) pieces.push(piece);
+      }
+    } else {
+      // code/ holds a single piece directly (manifest.js + index.js at
+      // the kind folder's root, no extra <piece>/ nesting).
+      const piece = await readPieceManifest(kindDir, "code", "code", packName);
+      if (piece) pieces.push(piece);
+    }
+  }
+  return pieces;
+}
+
+async function readPieceManifest(pieceDir, pieceLocalName, expectedKind, packName) {
+  const manifestPath = path.join(pieceDir, "manifest.js");
+  if (!fs.existsSync(manifestPath)) return null;
+  try {
+    const { default: manifest } = await import(toImportURL(manifestPath));
+    const errors = validateManifest(manifest, `${packName}/${pieceLocalName}`);
+    if (errors.length > 0) {
+      for (const err of errors) log.error("Loader", `Manifest validation: ${err}`);
+      log.warn("Loader", `Skipping piece "${packName}/${pieceLocalName}" due to invalid manifest`);
+      return null;
+    }
+    const kind = manifest.kind || expectedKind;
+    if (kind !== expectedKind) {
+      log.warn(
+        "Loader",
+        `Piece "${packName}/${pieceLocalName}": kind "${kind}" doesn't match its folder kind "${expectedKind}"; using manifest's kind`,
+      );
+    }
+    const entryPath = kind === "code" ? path.join(pieceDir, "index.js") : null;
+    if (kind === "code" && !fs.existsSync(entryPath)) {
+      log.warn("Loader", `Piece "${packName}/${pieceLocalName}": kind=code but missing index.js`);
+      return null;
+    }
+    return {
+      manifest,
+      dir: pieceDir,
+      entryPath,
+      kind,
+      pack: packName,
+    };
+  } catch (err) {
+    log.error("Loader", `Error reading piece manifest "${packName}/${pieceLocalName}": ${err.message}`);
+    return null;
+  }
+}
+
 async function discoverManifests() {
   const results = [];
 
@@ -1223,34 +1478,46 @@ async function discoverManifests() {
       // Skip template and hidden directories
       if (entry.name.startsWith("_") || entry.name.startsWith(".")) continue;
 
-      // Profile filter: if .treeos-profile exists, only load listed extensions
+      // Profile filter: if .treeos-profile exists, only load listed resources
       if (_profileFilter && !_profileFilter.has(entry.name)) continue;
 
       if (entry.isDirectory()) {
-        const manifestPath = path.join(__dirname, entry.name, "manifest.js");
-        const indexPath = path.join(__dirname, entry.name, "index.js");
+        const resourceDir = path.join(__dirname, entry.name);
+        const manifestPath = path.join(resourceDir, "manifest.js");
+        if (!fs.existsSync(manifestPath)) continue;
 
-        if (fs.existsSync(manifestPath) && fs.existsSync(indexPath)) {
-          const { default: manifest } = await import(toImportURL(manifestPath));
+        const { default: manifest } = await import(toImportURL(manifestPath));
+        const errors = validateManifest(manifest, entry.name);
+        if (errors.length > 0) {
+          for (const err of errors) log.error("Loader", `Manifest validation: ${err}`);
+          log.warn("Loader", `Skipping "${entry.name}" due to invalid manifest`);
+          continue;
+        }
 
-          const errors = validateManifest(manifest, entry.name);
-          if (errors.length > 0) {
-            for (const err of errors)
-              log.error("Extensions", `Manifest validation: ${err}`);
-            log.warn(
-              "Extensions",
-              `Skipping "${entry.name}" due to invalid manifest`,
-            );
+        const kind = manifest.kind || "code";
+
+        if (kind === "code") {
+          // Single code resource at the top level (today's extension shape).
+          const indexPath = path.join(resourceDir, "index.js");
+          if (!fs.existsSync(indexPath)) {
+            log.warn("Loader", `Skipping "${entry.name}": kind=code but missing index.js`);
             continue;
           }
-
-          results.push({
-            manifest,
-            dir: path.join(__dirname, entry.name),
-            entryPath: indexPath,
-          });
+          results.push({ manifest, dir: resourceDir, entryPath: indexPath, kind });
+        } else if (kind === "pack") {
+          // The pack itself (no install path — pack is glue).
+          results.push({ manifest, dir: resourceDir, entryPath: null, kind });
+          // Pieces inside the pack.
+          const pieces = await discoverPackPieces(resourceDir, entry.name);
+          results.push(...pieces);
+        } else {
+          // Standalone non-code/non-pack resource (role/seed/asset/roleflow).
+          // Discovered but Phase 2b kind handlers haven't landed yet; the
+          // load step below filters these out with a clear message.
+          results.push({ manifest, dir: resourceDir, entryPath: null, kind });
         }
       } else if (entry.name.endsWith(".manifest.js")) {
+        // Legacy: standalone <name>.manifest.js + <name>.js shape.
         const name = entry.name.replace(".manifest.js", "");
         const entryPath = path.join(__dirname, `${name}.js`);
 
@@ -1263,17 +1530,18 @@ async function discoverManifests() {
             manifest,
             dir: __dirname,
             entryPath,
+            kind: manifest.kind || "code",
           });
         } else {
           log.warn(
-            "Extensions",
+            "Loader",
             `Manifest "${entry.name}" found but no entry point "${name}.js"`,
           );
         }
       }
     } catch (err) {
       log.error(
-        "Extensions",
+        "Loader",
         `Error reading manifest for "${entry.name}":`,
         err.message,
       );
@@ -1281,6 +1549,127 @@ async function discoverManifests() {
   }
 
   return results;
+}
+
+// ---------------------------------------------------------------------------
+// Kind install handlers (RESOURCES.md).
+//
+// These are the install paths for non-code resource kinds. The code
+// kind goes through the existing extension flow (init + provides), so
+// it isn't a handler here. Pack pieces always carry a `pack` field;
+// standalone single-kind resources don't, and would register under
+// their own bare name (a future shape, no examples on disk today).
+// ---------------------------------------------------------------------------
+
+// Mirror of scopedReality.js's auto-prefix rule for role specs. A
+// pack-piece role spec writes bare action names (e.g. canDo: ["tick"]);
+// the pack's namespace gets prefixed at registration so it matches the
+// ops the pack's code piece registered.
+function prefixSpecActions(spec, packName) {
+  if (!spec || typeof spec !== "object" || !packName) return spec;
+  const prefixIfNeeded = (entry) => {
+    if (typeof entry === "string") {
+      return entry.includes(":") ? entry : `${packName}:${entry}`;
+    }
+    if (entry && typeof entry === "object" && typeof entry.action === "string") {
+      return entry.action.includes(":")
+        ? entry
+        : { ...entry, action: `${packName}:${entry.action}` };
+    }
+    return entry;
+  };
+  const out = { ...spec };
+  if (Array.isArray(spec.canDo))     out.canDo     = spec.canDo.map(prefixIfNeeded);
+  if (Array.isArray(spec.canSummon)) out.canSummon = spec.canSummon.map(prefixIfNeeded);
+  if (Array.isArray(spec.canBe))     out.canBe     = spec.canBe.map(prefixIfNeeded);
+  return out;
+}
+
+async function installRolePiece(entry) {
+  const { manifest, dir, pack } = entry;
+  const roleJsPath = path.join(dir, "role.js");
+  if (!fs.existsSync(roleJsPath)) {
+    log.warn("Loader", `Role piece "${manifest.name}" at ${dir}: missing role.js`);
+    return;
+  }
+  try {
+    const mod = await import(toImportURL(roleJsPath));
+    // Find the role spec. Try default export first, then any named
+    // export whose value looks like a role spec (has a `name` field).
+    let spec = mod.default;
+    if (!spec || typeof spec !== "object") {
+      const exports = Object.entries(mod).filter(([k]) => k !== "default");
+      const found = exports.find(([_, v]) => v && typeof v === "object" && typeof v.name === "string");
+      if (found) spec = found[1];
+    }
+    if (!spec || typeof spec !== "object") {
+      log.warn("Loader", `Role piece "${manifest.name}": role.js export shape not recognized`);
+      return;
+    }
+    const fullName  = pack ? `${pack}:${manifest.name}` : manifest.name;
+    const rewritten = prefixSpecActions({ ...spec, name: fullName }, pack);
+    const { registerRole } = await import("../seed/present/roles/registry.js");
+    registerRole(fullName, rewritten, pack || manifest.name);
+    log.info("Loader", `Registered role piece: ${fullName}`);
+  } catch (err) {
+    log.error("Loader", `Failed to load role piece "${manifest.name}": ${err.message}`);
+  }
+}
+
+async function installSeedPiece(entry) {
+  const { manifest, dir, pack } = entry;
+  const seedJsonPath = path.join(dir, "seed.json");
+  if (!fs.existsSync(seedJsonPath)) {
+    log.warn("Loader", `Seed piece "${manifest.name}" at ${dir}: missing seed.json`);
+    return;
+  }
+  try {
+    const bundle = JSON.parse(fs.readFileSync(seedJsonPath, "utf8"));
+    const fullName = pack ? `${pack}:${manifest.name}` : manifest.name;
+    const { registerTemplate } = await import("../seed/materials/publish/templateRegistry.js");
+    registerTemplate(fullName, bundle, pack || manifest.name);
+    log.info("Loader", `Registered seed piece: ${fullName}`);
+  } catch (err) {
+    log.error("Loader", `Failed to load seed piece "${manifest.name}": ${err.message}`);
+  }
+}
+
+async function installAssetPiece(entry, app) {
+  const { manifest, dir, pack } = entry;
+  const fullName = pack ? `${pack}:${manifest.name}` : manifest.name;
+  if (!app) {
+    log.warn("Loader", `Asset piece "${fullName}": no express app to mount (skipping)`);
+    return;
+  }
+  if (!fs.existsSync(dir)) {
+    log.warn("Loader", `Asset piece "${fullName}" at ${dir}: directory missing`);
+    return;
+  }
+  try {
+    const express = (await import("express")).default;
+    // URL convention for asset pieces: /assets/<pack>/<bundle>/<file>.
+    // Standalone (no-pack) asset bundles mount at /assets/<bundle>/.
+    const mountUrl = pack
+      ? `/assets/${pack}/${manifest.name}`
+      : `/assets/${manifest.name}`;
+    // Synthetic /manifest.json the portal can ask for to discover the
+    // bundle's named catalog. Registered BEFORE the static mount so the
+    // JSON wins over any file at that path.
+    app.get(`${mountUrl}/manifest.json`, (_req, res) => {
+      res.json({
+        kind:        "asset",
+        pack:        pack || null,
+        name:        manifest.name,
+        version:     manifest.version,
+        description: manifest.description || null,
+        files:       manifest.files || {},
+      });
+    });
+    app.use(mountUrl, express.static(dir));
+    log.info("Loader", `Registered asset piece: ${fullName} mounted at ${mountUrl}/`);
+  } catch (err) {
+    log.error("Loader", `Failed to mount asset piece "${fullName}": ${err.message}`);
+  }
 }
 
 // ---------------------------------------------------------------------------

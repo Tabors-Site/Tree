@@ -27,7 +27,7 @@
 // roots operator's editorial lever is the separate roots:delist DO
 // op, not an intent: delisting is the operator's act, not the publisher's.
 
-import log from "../../../seed/seedReality/log.js";
+import log from "../../../../seed/seedReality/log.js";
 
 export const registrarRole = Object.freeze({
   name: "roots:registrar",
@@ -75,7 +75,7 @@ export const registrarRole = Object.freeze({
     log.info("Roots",
       `registrar routing intent="${intent}" askerReality=${ctx?.askerReality || "(local)"}`);
     try {
-      const handlers = await import("../handlers.js");
+      const handlers = await import("../../code/handlers.js");
       if (intent === "publish-listing") return await handlers.publishListing(fedMessage, ctx);
       if (intent === "retire-listing")  return await handlers.retireListing(fedMessage, ctx);
       log.warn("Roots", `unknown intent "${intent}"`);

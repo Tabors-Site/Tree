@@ -72,6 +72,23 @@ import log from "../../seedReality/log.js";
 // extensions add theirs the same way.
 const REGISTRY = new Map();
 
+// Role-handler registry (RESOURCES.md: registerRoleHandler).
+//
+// A role resource ships pure data: name, canSee/Do/Summon/Be, prompt,
+// defaultOrientation. A code resource OPTIONALLY registers a
+// code-cognition handler for that role by name. When summon dispatches
+// to a role, the role registry consults HANDLERS first; if a handler
+// is registered, the role runs through that handler (scripted cognition).
+// If no handler is registered, the role runs through the substrate's
+// default LLM cognition.
+//
+// Today's scripted roles carry their `summon` function inline on the
+// role spec; that path keeps working. The handler registry is the
+// future-shape seam: a role resource published as kind:"role" cannot
+// carry an inline `summon` (it's pure data), so a paired code resource
+// registers the handler at boot through this API.
+const HANDLERS = new Map();
+
 const VALID_PERMISSIONS = new Set(["see", "do", "summon", "be"]);
 const VALID_REPLY_MODES = new Set(["asker", "chain-initial"]);
 
@@ -90,6 +107,47 @@ export function getRole(name) {
 
 export function listRoles() {
   return Array.from(REGISTRY.keys());
+}
+
+/**
+ * Register a code-cognition handler for a role by name. When a code
+ * resource (e.g. roots/code/) wants to drive the cognition for a role
+ * defined as a standalone resource (e.g. roots/roles/registrar/), it
+ * calls this at init. The handler runs in place of the default LLM
+ * cognition when the role is summoned.
+ *
+ * The role spec does not need to exist at handler-registration time;
+ * the loader's topological order means roles install before code, but
+ * the handler will look up the role at dispatch time regardless.
+ *
+ * @param {string} roleName
+ * @param {Function} handler  async (message, ctx) => CognitionResult
+ * @param {string} [ownerExtension]
+ */
+export function registerRoleHandler(roleName, handler, ownerExtension = "code-resource") {
+  if (!roleName || typeof roleName !== "string") {
+    throw new Error("registerRoleHandler requires a non-empty role name");
+  }
+  if (typeof handler !== "function") {
+    throw new Error(`registerRoleHandler("${roleName}") requires a handler function`);
+  }
+  const prior = HANDLERS.get(roleName);
+  if (prior && prior.ownerExtension !== ownerExtension) {
+    log.warn(
+      "Roles",
+      `registerRoleHandler("${roleName}"): owner changed from "${prior.ownerExtension}" to "${ownerExtension}". Last writer wins.`,
+    );
+  }
+  HANDLERS.set(roleName, { handler, ownerExtension });
+}
+
+export function getRoleHandler(roleName) {
+  const entry = HANDLERS.get(roleName);
+  return entry ? entry.handler : null;
+}
+
+export function unregisterRoleHandler(roleName) {
+  HANDLERS.delete(roleName);
 }
 
 /**

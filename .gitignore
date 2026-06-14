@@ -9,8 +9,9 @@ reality/node_modules
 reality/uploads
 reality/.place/
 reality/.env
-reality/resources/extensions/.disabled
-reality/resources/extensions/.treeos-profile
+reality/resources/.disabled
+reality/resources/.treeos-profile
+reality/resources/.lockfile.json
 reality/.first-boot-actions.json
 reality/.place/
 reality/oldExtensions/

@@ -12,7 +12,7 @@
 // structured world face. The seed enforces grid bounds via
 // Space.size at set-being:coord time.
 
-import log from "../../../seed/seedReality/log.js";
+import log from "../../../../seed/seedReality/log.js";
 
 const DIRS = [
   { key: "N",  dx:  0, dy: -1 },

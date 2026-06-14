@@ -1,32 +1,26 @@
-// TreeOS extension: roots.
+// roots/code — entry point for the roots pack's code piece.
 //
-// init(reality) registers the registrar role (which writes the catalog
-// into its own qualities, one self-authorized set-being per publish) and
-// the operator's delist op. The catalog itself is planted structure:
-// `do <space> plant-template-by-name { bundle: "roots:catalog" }`
-// creates the catalog space and its registrar being wherever the operator
-// chooses.
+// Registers (auto-namespaced to roots:<name> by scopedReality):
+//   - roots:delist   DO op (the operator's editorial lever; marks one
+//                     version delisted, never deletes)
+//
+// The registrar and publisher roles register through the loader's
+// role-kind handler (RESOURCES.md). The registrar's role.js imports
+// handlers.js from this code piece when its summon needs to fire
+// (the registrar's intent dispatcher pulls publishListing /
+// retireListing from here). The catalog seed registers through the
+// seed-kind handler.
 //
 // Doctrine: philosophy/OS/ROOTS.md. The catalog is the registrar's
-// folded qualities (the directory being's state); grafts are refused by
-// construction (no intent exists for them); browsing is SEE on the
-// registrar.
+// folded qualities; grafts are refused by construction (no intent
+// exists for them); browsing is plain SEE on the spaces and matter
+// the registrar keeps.
 
-import log from "../../seed/seedReality/log.js";
+import log from "../../../seed/seedReality/log.js";
 import delistOp from "./ops/delist.js";
-import { registrarRole } from "./roles/registrar.js";
-import { publisherRole } from "./roles/publisher.js";
 
 export async function init(reality) {
-  // The operator's editorial lever (auto-namespaced to roots:delist).
   reality.do.registerOperation("delist", delistOp);
-
-  // The catalog's writer, and the public role a being picks up to
-  // publish into it. Full namespaced names: the role registry does not
-  // auto-prefix an already-qualified first argument.
-  reality.declare.registerRole("roots:registrar", registrarRole);
-  reality.declare.registerRole("roots:publisher", publisherRole);
-
-  log.verbose("Roots", "registered: delist op, registrar + publisher roles");
+  log.verbose("Roots", "registered: delist op");
   return {};
 }

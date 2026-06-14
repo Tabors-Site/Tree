@@ -1679,7 +1679,7 @@ treeos bundle install <name>    Install all member extensions.
 
 ## Collaboration
 
-Code lives on your reality. You build extensions in `resources/extensions/my-extension/`, test them locally, and publish through your Roots node when ready. If you want others to contribute, push the code to GitHub (or any git host) and link it with `repoUrl`. If you don't need collaboration, skip the repo. The extension works either way.
+Code lives on your reality. You build extensions in `resources/my-extension/`, test them locally, and publish through your Roots node when ready. If you want others to contribute, push the code to GitHub (or any git host) and link it with `repoUrl`. If you don't need collaboration, skip the repo. The extension works either way.
 
 ### Workflow
 

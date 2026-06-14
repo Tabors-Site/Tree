@@ -1557,7 +1557,7 @@ list is what the LLM SEES, the verb is the truth.
 I assemble `reality` in [services.js](services.js) and hand a
 per-extension scoped view to each extension's `init(reality)`. The
 scoping logic lives in
-[extensions/scopedReality.js](../resources/extensions/scopedReality.js) and
+[extensions/scopedReality.js](../resources/scopedReality.js) and
 enforces namespace ownership: `reality.do.registerOperation(name, ...)`
 auto-prefixes to `<ext>:<name>`; `reality.websocket.emitToBeing(...)`
 auto-prefixes the event name; `reality.auth.registerStrategy(name, ...)`

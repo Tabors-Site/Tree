@@ -7,7 +7,7 @@ The canonical example extension for TreeOS. One file, one role, one seed:
 
 ## Try it
 
-The extension loads at boot when placed under `resources/extensions/hello-world/`. After boot:
+The extension loads at boot when placed under `resources/hello-world/`. After boot:
 
 ```bash
 # Plant the seed at the place root.

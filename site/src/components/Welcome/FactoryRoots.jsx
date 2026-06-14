@@ -6,12 +6,12 @@ import "./IbpPage.css";
  *
  * Roots are nodes of The Root System, the underground network where
  * realities find each other and share resources. A Roots node is a TreeOS
- * reality running an extension, not a separate server. Browsing is SEE,
+ * reality running the roots resource pack, not a separate server. Browsing is SEE,
  * publishing is DO, every publish and delist is a fact on a reel.
  *
  * Sources.
  *   /reality/philosophy/OS/ROOTS.md             doctrine
- *   /reality/extensions/roots/                  the roots extension
+ *   /reality/resources/roots/                  the roots resource pack
  *   /reality/protocols/ibp/peers.js             peer record shape
  *   /reality/philosophy/OS/IDENTITY.md          why keys make this verifiable
  *   /reality/philosophy/OS/GRAFT-AND-SEED.md    what moves between realities
@@ -29,7 +29,7 @@ const FactoryRoots = () => {
         <p className="ns-doc-lede">
           A reality is a tree. The Root System is the underground
           network that connects trees in a forest. Roots are the nodes
-          of that network: realities that run an extension so other
+          of that network: realities that run the roots resource so other
           realities can find them and share resources with them. Any
           reality can plant roots. None has to. The forest is whatever
           trees choose to connect.
@@ -64,7 +64,7 @@ const FactoryRoots = () => {
         <h2>A Roots node is a reality, not a server</h2>
         <p>
           A Roots node is a TreeOS reality running the{" "}
-          <code>roots</code> extension. The catalog is spaces and
+          <code>roots</code> resource pack. The catalog is spaces and
           matter. Publishers are peer realities. Every publish and
           every delist is a fact on a reel, so the catalog's entire
           history is audited by construction.
@@ -83,7 +83,7 @@ const FactoryRoots = () => {
           </li>
           <li>
             <strong>"Anyone can run one" means "plant a reality."</strong>{" "}
-            The roots extension itself ships as a resource published
+            The roots pack itself ships as a resource published
             through Roots. The distribution story distributes itself.
           </li>
           <li>
@@ -109,8 +109,8 @@ const FactoryRoots = () => {
         </p>
 
         <pre className="ns-code">{`IBP envelope carries the MANIFEST
-   name, version, publisher, signature,
-   dependency list, hash of every asset
+   name, version, kind, publisher, signature,
+   requires (dependency edges), hash of every asset
                 ↓
 content door moves the BYTES
    fetched by hash, verified by hashing on arrival
@@ -135,32 +135,51 @@ content door moves the BYTES
       <section>
         <h2>Resources flow through The Root System</h2>
         <p>
-          A "resource" is the umbrella word for anything Roots
-          catalogs. Resources are content. They are hash-addressed,
-          signed by their publisher, and meant to be drawn into other
-          realities. Three shapes today.
+          A resource is anything that flows through Roots from tree to
+          tree for new abilities. The substrate exposes one primitive,{" "}
+          <code>resource</code>, with typed KINDS. Each kind ships its own
+          manifest shape and registers with a kind-specific registry when
+          it installs. The kind registry is open: new kinds are added
+          without changing the catalog or the wire. Six kinds today.
         </p>
 
         <ul className="ns-list">
           <li>
-            <strong>Extensions.</strong> A code bundle plus its owned
-            matter (models, sounds, other assets). The manifest names
-            every asset by hash; the assets are CAS blobs any Roots
-            node can mirror. A reality that draws an extension gains
-            the abilities the extension provides.
+            <strong><code>code</code>.</strong> Substrate code that gives a
+            reality new abilities: DO ops, cognition handlers for roles,
+            hooks, routes, jobs. This is what used to be called an
+            "extension."
           </li>
           <li>
-            <strong>Seeds.</strong> A template of structure: a shell
-            world that takes fresh ids when planted. Distinct from a
-            graft, which moves an existing reality verbatim.
+            <strong><code>role</code>.</strong> A standalone role spec
+            (canSee, canDo, canSummon, canBe, prompt), pure data. It runs on
+            the default LLM cognition unless a <code>code</code> resource
+            registers a handler for it by name.
           </li>
           <li>
-            <strong>Roleflows.</strong> A template of behavior:
-            composition data over the role machinery realities
-            already run. A roleflow declares which roles compose and
-            how, with a <code>requires</code> manifest naming the
-            extensions that provide them. Install resolves the
-            manifest by pulling each requirement by hash.
+            <strong><code>roleflow</code>.</strong> Composition data: an
+            ordered set of clauses that compose roles per moment from world
+            state. It references the roles it composes by name.
+          </li>
+          <li>
+            <strong><code>seed</code>.</strong> A structural template, a
+            shell world of spaces, matter, and beings that gets planted at a
+            chosen position with fresh ids. (Distinct from a graft, which
+            moves an existing being verbatim. See{" "}
+            <Link to="/factory/graft" className="ns-inline-link">Graft &amp; seed</Link>.)
+          </li>
+          <li>
+            <strong><code>asset</code>.</strong> Standalone owned bytes:
+            models, sounds, large data. Hash-addressed; other resources
+            reference them by hash through the content door.
+          </li>
+          <li>
+            <strong><code>pack</code>.</strong> The meta-kind. A group of
+            resources that travel together as one unit, like an npm package.
+            A pack has no content of its own beyond a manifest that names its
+            pieces. What used to be one "extension" (roots, harmony) is now a
+            pack of pieces: code plus the roles it hosts plus the seeds it
+            plants. Drawing a pack pulls every member of its closure.
           </li>
         </ul>
 
@@ -211,6 +230,265 @@ content door moves the BYTES
           The hash never stops naming what it names. Only the bytes'
           reach ages.
         </p>
+      </section>
+
+      {/* ────────────────────────────────────────────────────────── */}
+      {/* SECTION 4a . WHY THIS SHAPE                                 */}
+      {/* ────────────────────────────────────────────────────────── */}
+      <section>
+        <h2>The kernel is fixed; abilities arrive as resources</h2>
+        <p>
+          The whole shape follows from one decision: the kernel stays
+          small and sovereign and never grows. The four verbs, the fold,
+          the chain, and identity are fixed. What grows is the set of open
+          registries behind them, and every registry is a seam a resource
+          can register into.
+        </p>
+
+        <div className="ns-grammar">
+          <div className="ns-grammar-row">
+            <code className="ns-grammar-form">registerOperation</code>
+            <span className="ns-grammar-meaning">new DO verbs of meaning</span>
+          </div>
+          <div className="ns-grammar-row">
+            <code className="ns-grammar-form">registerMatterType</code>
+            <span className="ns-grammar-meaning">new nouns, new kinds of matter</span>
+          </div>
+          <div className="ns-grammar-row">
+            <code className="ns-grammar-form">registerRole</code>
+            <span className="ns-grammar-meaning">new actors</span>
+          </div>
+          <div className="ns-grammar-row">
+            <code className="ns-grammar-form">registerSeeOperation</code>
+            <span className="ns-grammar-meaning">new perceptions</span>
+          </div>
+          <div className="ns-grammar-row">
+            <code className="ns-grammar-form">hooks</code>
+            <span className="ns-grammar-meaning">new reactions at lifecycle points</span>
+          </div>
+          <div className="ns-grammar-row">
+            <code className="ns-grammar-form">cognition handlers</code>
+            <span className="ns-grammar-meaning">new minds behind a role</span>
+          </div>
+        </div>
+
+        <p>
+          A <code>code</code> resource is just "something that registers
+          into those seams." A role, roleflow, seed, or asset is "something
+          the seams already know how to plant or store." So you never fork
+          the kernel to add an ability. You draw a resource, and Roots makes
+          that ability portable tree to tree. The kind registry being open
+          means even a seam nobody has imagined yet gets a kind.
+        </p>
+
+        <p>
+          Two edges keep "anything" precise rather than hand-wavy.
+        </p>
+
+        <h3>New abilities, not new physics</h3>
+        <p>
+          You can bring anything that composes from the primitives: a new
+          op, a new matter type, a new role, new structure, new bytes. You
+          cannot bring anything that breaks them. There is no seam to make
+          facts mutable, skip signing, add a fifth verb, or change the hash
+          rule. Those are invariants, not extension points. "Anything" means
+          anything expressible in the four verbs and the fold, which is
+          enormous, but it has a floor, and that floor is what keeps every
+          drawn-in ability safe to run.
+        </p>
+
+        <h3>The power gradient is the trust gradient</h3>
+        <p>
+          Code actually executes: its <code>init(reality)</code> runs in
+          your process, so it is the powerful and the dangerous kind, which
+          is exactly why it is publisher-signed, hash-verified, and only
+          runs because the operator chose to draw it. The other kinds are
+          pure data. A role, a seed, a roleflow, an asset can only ever do
+          what the registries already permit, so they are safe by
+          construction no matter who authored them. Power scales with trust,
+          and the resource model makes that gradient explicit instead of
+          hiding it.
+        </p>
+
+        <aside className="ns-doc-aside">
+          <p>
+            <strong>The tree is the kernel; the resources are everything it
+            has learned to do.</strong> The core stays sovereign and small,
+            every ability lives outside it as a signed, verifiable resource,
+            and a reality becomes whatever set of resources it has drawn.
+          </p>
+        </aside>
+      </section>
+
+      {/* ────────────────────────────────────────────────────────── */}
+      {/* SECTION 4b . THE DEPENDENCY GRAPH                           */}
+      {/* ────────────────────────────────────────────────────────── */}
+      <section>
+        <h2>Resources form a verified dependency graph</h2>
+        <p>
+          Resources reference each other through a <code>requires</code>{" "}
+          manifest, and those edges form a graph. Draw a roleflow and you
+          pull the roles it composes, which pull the code that hosts them,
+          which pull the assets they use. A pack is just a named root whose
+          closure is the whole pack. Grouping is not a folder layout; it is
+          the transitive closure of the graph.
+        </p>
+        <p>
+          Each edge names a kind and a ref, and a ref is one of two things,
+          the same pointer-or-hash split that versions use, now as
+          dependency edges.
+        </p>
+
+        <div className="ns-grammar">
+          <div className="ns-grammar-row">
+            <code className="ns-grammar-form">sha256:&lt;hash&gt;</code>
+            <span className="ns-grammar-meaning">
+              an exact, reproducible-forever reference. A dependency named by
+              hash can never be tampered or swapped, so the supply-chain
+              attack by dependency substitution is structurally impossible.
+            </span>
+          </div>
+          <div className="ns-grammar-row">
+            <code className="ns-grammar-form">publisher/name@range</code>
+            <span className="ns-grammar-meaning">
+              a flexible pointer that follows the publisher's claims, so
+              fixes flow. Authors write against pointers; install resolves
+              the closure and freezes it to a hash-locked set.
+            </span>
+          </div>
+        </div>
+
+        <p>
+          The frozen set is the lockfile. Re-resolving a reality's resources
+          is an explicit, auditable act that stamps a fact on the reality's
+          reel, never silent drift, so the chain records "this reality moved
+          from hash set A to hash set B at time T."
+        </p>
+        <p>
+          Two integrity questions stay separate, so a broken dependency
+          always resolves to exactly one of them.
+        </p>
+
+        <ul className="ns-list">
+          <li>
+            <strong>Resolvable</strong> is the cryptographic question: does
+            every hash in the closure name content that verifies? Always
+            answerable locally, by hashing the bytes.
+          </li>
+          <li>
+            <strong>Available</strong> is the network question: will some
+            Roots node actually serve those bytes? This can genuinely fail
+            (a dependency delisted everywhere, no mirror left), and more
+            Roots nodes are the only mitigation. It is the same availability
+            concern the Roots trust model already carries.
+          </li>
+        </ul>
+
+        <p>
+          Install is atomic per closure. A reality draws a resource,
+          resolves the full closure, fetches every member by hash, verifies
+          each, and installs in dependency order: assets first, then code,
+          then roles, then the roleflows that compose them. Any missing or
+          failing dependency refuses the entire install. There is no
+          half-installed state.
+        </p>
+
+        <p>
+          A catalog listing carries the resource's <code>kind</code> and its{" "}
+          <code>requires</code>, plus a status the registrar computes by
+          walking those dependencies against its own catalog:{" "}
+          <code>complete</code> when every dependency is reachable through
+          this Roots node, <code>incomplete</code> when the listing is real
+          but installs will fail until the missing pieces land, or{" "}
+          <code>delisted</code>. Lying about dependencies is detectable at
+          publish time, before any reality draws the resource.
+        </p>
+      </section>
+
+      {/* ────────────────────────────────────────────────────────── */}
+      {/* SECTION 4c . WHAT THIS UNLOCKS                              */}
+      {/* ────────────────────────────────────────────────────────── */}
+      <section>
+        <h2>Borrow freely, and the part that stays hard</h2>
+        <p>
+          Because a dependency is a hash, signed, and verified the moment it
+          lands, borrowing is safe by construction, and that is the quiet
+          win. In an npm or a plugin store, pulling in someone's code is a
+          supply-chain gamble: you are trusting a mutable version that can
+          change under you. Here the version you depend on cannot change,
+          cannot be swapped, and is checked on arrival. "Borrow freely" is
+          honest instead of a risk, which removes the tax that normally makes
+          people reluctant to compose at all.
+        </p>
+
+        <p>Three real unlocks follow.</p>
+        <ul className="ns-list">
+          <li>
+            <strong>Assembly over authoring.</strong> Most building becomes
+            wiring verified pieces together: a roleflow naming the roles it
+            composes, a seed naming the code it needs, instead of writing
+            from scratch.
+          </li>
+          <li>
+            <strong>Redefine without forking.</strong> Take someone's role,
+            change it, republish under your own key, and your version is its
+            own sovereign resource, not a fork drifting from an upstream you
+            have to chase. Each redefinition is just another keyed thing in
+            the catalog.
+          </li>
+          <li>
+            <strong>No kernel fork, ever.</strong> You never hit the wall of
+            "to do X I have to patch the core." Every ability is a resource,
+            so the frontier stays open without touching anything
+            load-bearing.
+          </li>
+        </ul>
+
+        <p>
+          But the protocol does not make composition automatically easy. It
+          makes it possible and safe. Three things decide whether it feels
+          like building blocks or a junk drawer, and none of them are the
+          protocol.
+        </p>
+        <ul className="ns-list">
+          <li>
+            <strong>Semantic fit.</strong> A hash guarantees you got the
+            exact bytes you asked for. It does not guarantee the role
+            actually does what the roleflow expects. Versions pin bytes, not
+            behavior. Mechanical composition gets easier; judging whether
+            pieces truly fit stays human, and it leans entirely on clean,
+            documented interfaces: what a role expects, what an op's params
+            are.
+          </li>
+          <li>
+            <strong>Granularity.</strong> More small pieces means more edges.
+            For someone who knows the landscape that is leverage; for a
+            newcomer, fifty tiny resources to assemble can be harder than one
+            monolith that just works. Composability rewards the person who
+            already knows the pieces.
+          </li>
+          <li>
+            <strong>Discovery and curation.</strong> "Borrow anything" only
+            helps if you can find the right one. Ten thousand listings need
+            search, examples, reputation, and good default packs, or
+            abundance becomes paralysis. That is portal and convention work,
+            not protocol work.
+          </li>
+        </ul>
+
+        <aside className="ns-doc-aside">
+          <p>
+            <strong>The honest split is by who.</strong> For people
+            assembling from known-good pieces, especially behind solid packs
+            and templates, this is much easier, and safe borrowing is a
+            genuine and underrated win. For people at the frontier writing
+            new code resources, it makes distributing and composing their
+            work far easier, but the creative work itself is unchanged. The
+            architecture made the pieces verifiable, portable, and sovereign;
+            whether mix-and-match feels effortless is then decided by
+            interface discipline and curation, the conventions grown on top.
+          </p>
+        </aside>
       </section>
 
       {/* ────────────────────────────────────────────────────────── */}
@@ -320,7 +598,7 @@ content door moves the BYTES
         <h2>Any reality can plant roots</h2>
         <p>
           Every reality already has the federation half: peering, the
-          canopy wire, the cross reality verbs. The roots extension
+          canopy wire, the cross reality verbs. The roots resource
           adds the directory half: serve a catalog, serve peer
           records, mirror other Roots nodes. Any existing reality can
           switch the role on and become a Roots node. Serving is
@@ -451,7 +729,7 @@ content door moves the BYTES
           <li>
             <strong>Sovereign control over what you mirror.</strong>{" "}
             You decide what your node holds. A scientific community
-            can run one that emphasizes scientific extensions and
+            can run one that emphasizes scientific resources and
             filters out games. A creative community can do the
             opposite. You are not consuming someone else's catalog;
             you are shaping what your community sees.

@@ -133,6 +133,8 @@ import {
 import {
   registerRole as ibpRegisterRole,
   unregisterRole as ibpUnregisterRole,
+  registerRoleHandler as ibpRegisterRoleHandler,
+  unregisterRoleHandler as ibpUnregisterRoleHandler,
 } from "./present/roles/registry.js";
 import {
   registerSeeOperation as ibpRegisterSeeOperation,
@@ -491,6 +493,18 @@ export function buildRealityServices({
       // is what runs.
       registerRole: ibpRegisterRole,
       unregisterRole: ibpUnregisterRole,
+
+      // RESOURCES.md: a code resource registers a code-cognition
+      // handler for a role resource by name. The role spec stays pure
+      // data (canSee/canDo/canSummon/canBe/prompt); the handler is the
+      // function the substrate runs when the role is summoned and the
+      // being's cognition is scripted. Without a registered handler, a
+      // scripted role falls through to whatever its inline `summon` is;
+      // an LLM role with no handler runs default LLM cognition. The
+      // scoped reality auto-namespaces the role name to the registering
+      // extension (scopedReality.js).
+      registerRoleHandler:   ibpRegisterRoleHandler,
+      unregisterRoleHandler: ibpUnregisterRoleHandler,
 
       // Register a named SEE operation. A SEE op is a named
       // perception — the substrate's read-side parallel to DO ops.

@@ -5,7 +5,7 @@
 // and tries to step toward it. Out-of-bounds throws at
 // set-being:coord; the dancer refaces to the secondary axis.
 
-import log from "../../../seed/seedReality/log.js";
+import log from "../../../../seed/seedReality/log.js";
 
 const DEFAULT_GRID_W = 10;
 const DEFAULT_GRID_H = 10;

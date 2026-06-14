@@ -700,7 +700,7 @@ space.quality.ambient.tone = "quiet"
           </li>
           <li>
             Modifier roles (the emotions extension):{" "}
-            <code>extensions/emotions/</code>
+            <code>resources/emotions/</code>
           </li>
           <li>
             The full doctrine + build plan:{" "}

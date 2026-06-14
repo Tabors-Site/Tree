@@ -20,7 +20,7 @@ import "./PortalPage.css";
  *   /reality/portal/3d-app/src/actionRenderer.js      action menu / form
  *   /reality/portal/flat-app/                         2D renderer
  *   /reality/seed/ibp/descriptor.js                   wire shape SEE returns
- *   /reality/extensions/assets.md                     sensory pipeline doctrine
+ *   /reality/resources/assets.md                     sensory pipeline doctrine
  */
 const PortalPage = () => {
   return (
@@ -212,9 +212,9 @@ const PortalPage = () => {
             and schedules, all under one moment on the chain.
           </p>
           <p>
-            Seeds are how extensions become real worlds. An extension
-            registers what its beings ARE (roles), what they can DO (ops),
-            and what assets they ship (models, sounds). The seed describes
+            Seeds are how a resource pack becomes a real world. A pack
+            bundles what its beings ARE (roles), what they can DO (code and
+            ops), and what assets they ship (models, sounds). The seed describes
             how to assemble those into a working scene . one drum here,
             five dancers around it, one schedule waking the drummer every
             tick. The operator decides when to plant; the substrate stamps

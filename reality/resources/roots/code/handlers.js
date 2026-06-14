@@ -33,7 +33,7 @@
 // DIFFERENT manifest hash is refused; identical re-publish is idempotent.
 // The pointer is the only mutable thing, and it mutates by chaining.
 
-import log from "../../seed/seedReality/log.js";
+import log from "../../../seed/seedReality/log.js";
 import { buildClaim, listingHashOf } from "./lib/claims.js";
 
 const LISTING_TYPES = new Set(["extension", "seed"]);
