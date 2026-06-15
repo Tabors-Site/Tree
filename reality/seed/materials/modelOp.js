@@ -40,7 +40,7 @@
 // Targets being/space/matter — the cross-kind shape lives at
 // materials/ root beside moveOp.js / portalOp.js for the same reason.
 
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID as uuidv4 } from "node:crypto";
 import { registerOperation } from "../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../ibp/protocol.js";
 import { detectTargetKind, targetIdOf } from "./_targetShape.js";

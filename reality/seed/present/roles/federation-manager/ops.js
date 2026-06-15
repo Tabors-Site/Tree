@@ -41,7 +41,7 @@
 // operator policy (auto-accept particular peers, throttle pulls, etc.)
 // lives in roleFlow on the @federation-manager being.
 
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID as uuidv4 } from "node:crypto";
 import log from "../../../seedReality/log.js";
 import { registerOperation } from "../../../ibp/operations.js";
 import { registerSeeOperation } from "../../../ibp/seeOps.js";

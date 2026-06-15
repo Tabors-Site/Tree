@@ -29,6 +29,7 @@
 
 import { generateBeingKeypair } from "../materials/name/keys.js";
 import { encryptCredential } from "../materials/being/identity/credentials.js";
+import { encryptWithPassword } from "../materials/name/passwordKey.js";
 import { I_AM } from "../materials/being/seedBeings.js";
 import { IbpError, IBP_ERR } from "./protocol.js";
 
@@ -37,19 +38,39 @@ import { IbpError, IBP_ERR } from "./protocol.js";
 // keypair is generated here — this is where key-minting LIVES now (it left
 // birth.js when a being stopped being its own identity).
 async function declareHandler({ payload }) {
+  // Real-name UNIQUE per reality: at most one Name per real-name, so the
+  // registry resolves a real-name to exactly one Name. Names live on main.
+  if (payload?.name) {
+    const { findByName } = await import("../materials/projections.js");
+    if (await findByName("name", payload.name, "0")) {
+      throw new IbpError(
+        IBP_ERR.RESOURCE_CONFLICT,
+        `real-name "${payload.name}" is already taken on this reality`,
+      );
+    }
+  }
   const keypair = generateBeingKeypair();
   const nameId = keypair.beingId; // the did:key public key IS the Name's id
   const spec = {
     // Flat lineage: every declared Name is a facet of the reality's I_AM,
     // one layer down — never a Name-of-a-Name hierarchy.
     parentNameId:  I_AM,
-    // Custodial: the reality holds the key encrypted; the owner can export
-    // it (the paper-key op, later). Only the ENCRYPTED key rides the fact.
-    privateKeyEnc: encryptCredential(keypair.privateKeyPem),
+    // The key at rest. PASSWORD given -> encrypt with a KDF(password) so the
+    // server canNOT auto-decrypt it (only login decrypts it into the
+    // session); NO password -> system-encrypted (the server signs
+    // automatically). Both name + password are OPTIONAL; only the ENCRYPTED
+    // key ever rides the fact, and the holder can always act with the raw pk.
+    privateKeyEnc: payload?.password
+      ? encryptWithPassword(keypair.privateKeyPem, payload.password)
+      : encryptCredential(keypair.privateKeyPem),
     identity:      { alg: "ed25519", keyEnc: "did:key:ed25519-multibase", v: 1 },
     // The soul this Name decides with (human | llm | scripted). Out of this
     // plan's scope beyond recording it; null when unspecified.
     soulType:      payload?.soulType ?? null,
+    // The real name (trueName.name) — OPTIONAL human handle. Easier server
+    // access (sign in by real-name + password) but never required; you can
+    // always act with the private key. Reality-scoped. null when unspecified.
+    name:          payload?.name ?? null,
   };
   return { nameId, spec };
 }

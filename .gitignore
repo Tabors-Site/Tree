@@ -5,19 +5,6 @@ dist/
 
 .claude/
 
-reality/node_modules
-reality/localStore
-reality/.place/
-reality/.env
-reality/resources/.disabled
-reality/resources/.treeos-profile
-reality/resources/.lockfile.json
-reality/.first-boot-actions.json
-reality/.place/
-reality/oldExtensions/
-reality/.oldExtensions/
-reality/.test/
-
 /site/
 /cli/
 

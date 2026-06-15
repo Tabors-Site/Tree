@@ -25,7 +25,7 @@ import { getInternalConfigValue } from "../internalConfig.js";
 import { hooks } from "../hooks.js";
 import { getRealityConfigValue } from "../realityConfig.js";
 
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID as uuidv4 } from "node:crypto";
 
 // ─────────────────────────────────────────────────────────────────────────
 // SESSION TYPES

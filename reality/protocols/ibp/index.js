@@ -17,6 +17,7 @@
 import log from "../../seed/seedReality/log.js";
 import { registerIbpBootstrap } from "./bootstrap-route.js";
 import { attachIbpHandlers } from "./protocol.js";
+import { attachNameSession } from "./nameSession.js";
 import { hooks } from "../../seed/hooks.js";
 import Space from "../../seed/materials/space/space.js";
 import { emitPositionInvalidate, emitPositionDelta } from "./live.js";
@@ -201,6 +202,9 @@ export function initIBPWS(io) {
   // AnimationMixer + Web Audio renderers off it.
   registerFactPush();
   attachIbpHandlers(io);
+  // Pre-world NAME channel: declare / login / logout / whoami for a
+  // connection with no being yet (the Name Form at the bare realityDomain).
+  attachNameSession(io);
   // Rehydrate runtime state. Both subscriptions and schedules now
   // fold from the fact chain. Each walker reads its action's facts
   // (subscription-registered/cancelled, wake-scheduled/cancelled)

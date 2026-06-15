@@ -75,6 +75,16 @@ const NameSchema = new mongoose.Schema({
   // Name itself (the root of the reality's identity layer).
   parentNameId: { type: String, ref: "Name", default: null },
 
+  // The REAL NAME — the human-readable label for this Name (trueName.name),
+  // OPTIONAL. A trueName has THREE parts: `.pub` = `_id` (the public key),
+  // `.priv` = `privateKeyEnc` (the private key), `.name` = this label. It is
+  // the easier-server-access handle: people sign in with real-name + password
+  // instead of handling the raw private key, but it is ALWAYS optional — you
+  // can act with the private key directly. Reality-scoped (resolved via
+  // findByName("name", <realName>, "0")); distinct from being.name (a being's
+  // world label). Folded from the name:declare spec.
+  name: { type: String, default: null },
+
   // The encrypted private key (PKCS8 PEM, AES-256-GCM via
   // credentials.encryptCredential). Custodial: the home reality holds
   // it so the Name can sign while unlocked. Folded from the name:mint

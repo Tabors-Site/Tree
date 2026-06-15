@@ -24,6 +24,7 @@ import { getRealityDomain } from "../address.js";
 import { I_AM } from "../../materials/being/seedBeings.js";
 import { emitFact } from "../../past/fact/facts.js";
 import { getNameOp } from "../nameOps.js";
+import { resolveNameId } from "../../materials/name/registry.js";
 import {
   assertVerbCaller,
   normalizeIdentity,
@@ -79,7 +80,10 @@ export async function nameVerb(operation, payload = {}, opts = {}) {
   const branch = resolveBranchForFact(summonCtx, currentBranch, "name");
   const realityDomain = currentReality || getRealityDomain();
 
-  const { reality, nameId: addressedNameId } = parseNameAddress(address);
+  const { reality, nameId: addressedToken } = parseNameAddress(address);
+  // A name-address token can be a PUBKEY or a REAL-NAME; resolve it via the
+  // registry to the nameId (the real-name -> pubkey auto-translation).
+  const addressedNameId = addressedToken ? await resolveNameId(addressedToken) : null;
   if (reality && reality !== realityDomain) {
     throw new IbpError(
       IBP_ERR.SPACE_NOT_FOUND,
@@ -99,7 +103,12 @@ export async function nameVerb(operation, payload = {}, opts = {}) {
   // Anyone can call NAME for now, but a caller identity is required (the
   // fact needs an actor). No role-walk / authorize() yet — permissions
   // (declare-open, banish-self-only) land later.
-  assertVerbCaller("name", opts);
+  // NAME `declare` is a PRE-WORLD bootstrap — callable with NO identity (the
+  // Name Form pre-panel, before you have a name); its fact's actor is I_AM.
+  // The Name layer is outside the world: you need a name to do anything, and
+  // making the first name can't itself require one. banish (and later ops)
+  // require a caller. Anyone may call either for now (permissions later).
+  if (operation !== "declare") assertVerbCaller("name", opts);
   const identity = normalizeIdentity(opts.identity);
 
   const result = await nameOp.handler({

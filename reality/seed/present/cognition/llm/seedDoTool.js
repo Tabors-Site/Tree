@@ -50,7 +50,7 @@ export const seedDoTool = {
         "Leading '.' resolves against the reality root. Defaults to the " +
         "reality root for ops that operate at the root.",
     ),
-    args: z.record(z.any()).optional().describe(
+    args: z.record(z.string(), z.any()).optional().describe(
       "Operation-specific args. See <reality>/./operations for each op's expected shape.",
     ),
     beingId: z.string().describe("Injected by server. Ignore."),

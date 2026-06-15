@@ -59,7 +59,7 @@
 import OpenAI from "openai";
 import { getInternalConfigValue } from "../../../internalConfig.js";
 import crypto from "crypto";
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID as uuidv4 } from "node:crypto";
 import log from "../../../seedReality/log.js";
 import Being from "../../../materials/being/being.js";
 import Space from "../../../materials/space/space.js";

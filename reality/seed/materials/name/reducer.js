@@ -34,6 +34,8 @@ function applyMintName(state, fact) {
     privateKeyEnc: spec.privateKeyEnc ?? null,
     identity:      spec.identity ?? null,
     soulType:      spec.soulType ?? null,
+    // The real name (trueName.name) — the optional human handle.
+    name:          spec.name ?? null,
     createdAt:     state.createdAt ?? fact.date,
     updatedAt:     fact.date,
   };

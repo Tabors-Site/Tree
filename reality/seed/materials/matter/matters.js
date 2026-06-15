@@ -39,7 +39,7 @@
 
 import log from "../../seedReality/log.js";
 import { getInternalConfigValue } from "../../internalConfig.js";
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID as uuidv4 } from "node:crypto";
 import Matter from "./matter.js";
 import Space from "../space/space.js";
 import { loadProjection, loadOrFold, assertBranchOrThrow, listMatterNamesInFolder } from "../projections.js";

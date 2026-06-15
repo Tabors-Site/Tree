@@ -298,7 +298,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     // do:create-space themselves and pass homeId.
     if (!childHomeId && childHomeParent) {
       const { emitFact: _emitFact } = await import("../../past/fact/facts.js");
-      const { v4: _uuidv4 } = await import("uuid");
+      const { randomUUID: _uuidv4 } = await import("node:crypto");
       const newHomeId = _uuidv4();
       await _emitFact({
         verb:    "do",
@@ -540,9 +540,18 @@ export async function beVerb(operation, payload = {}, opts = {}) {
         "be:truename requires an explicit target being in the address (e.g. <reality>/@<being>)",
       );
     }
-    const newTrueName = payload?.trueName;
-    if (typeof newTrueName !== "string" || !newTrueName) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "be:truename requires payload.trueName (a declared Name id)");
+    const trueNameToken = payload?.trueName;
+    if (typeof trueNameToken !== "string" || !trueNameToken) {
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "be:truename requires payload.trueName (a Name pubkey or real-name)");
+    }
+    // The target can be a pubkey OR a real-name; resolve via the registry.
+    const { resolveNameId } = await import("../../materials/name/registry.js");
+    const newTrueName = await resolveNameId(trueNameToken);
+    if (!newTrueName) {
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        `be:truename: no Name resolves for "${String(trueNameToken).slice(0, 16)}…" (pubkey or real-name)`,
+      );
     }
     const { findByName, loadProjection } = await import("../../materials/projections.js");
     const targetSlot = await findByName("being", beingName, branch);
@@ -582,7 +591,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     await writeBeFact({
       operation,
       identity,
-      authResult: { ...result, targetBeingId },
+      authResult: { ...result, targetBeingId, trueName: newTrueName },
       payload,
       beingName,
       actId: summonCtx?.actId || null,
@@ -842,7 +851,9 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
       );
     }
     target = { kind: "being", id: String(targetBeingId) };
-    connectionParams = { trueName: String(payload?.trueName) };
+    // The RESOLVED nameId (a pubkey), threaded from beVerb's truename branch
+    // — NOT the raw payload token, which may be a real-name.
+    connectionParams = { trueName: String(authResult?.trueName) };
   } else if (operation === "switch") {
     // Per-session branch change on the caller's own being. Target =
     // the caller's being; params record from/to so the audit fact

@@ -184,7 +184,6 @@ export async function registerToolBundle(tools, { ownerExt }) {
   if (!ownerExt) throw new Error("registerToolBundle: ownerExt is required");
 
   const { z } = await import("zod");
-  const { zodToJsonSchema } = await import("zod-to-json-schema");
   const { registerToolOwner, getToolOwner } =
     await import("../../../materials/space/extensionScope.js");
 
@@ -223,7 +222,7 @@ export async function registerToolBundle(tools, { ownerExt }) {
     let jsonSchema;
     try {
       const zodObj = z.object(tool.schema);
-      jsonSchema = zodToJsonSchema(zodObj);
+      jsonSchema = z.toJSONSchema(zodObj);
       delete jsonSchema.$schema;
       // zod renders `z.record(z.any())` as `{ type:"object",
       // additionalProperties: {} }`. The empty object is JSON Schema's

@@ -25,7 +25,6 @@
 //                                             revocation check
 
 import bcrypt from "bcrypt";
-import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import Being from "../being.js";
 import { loadProjection } from "../../projections.js";
@@ -50,6 +49,63 @@ const CREDENTIAL_KEY = Buffer.from(
     32,
   ),
 );
+
+// ─────────────────────────────────────────────────────────────────────
+// HS256 JWT (sync, node:crypto HMAC)
+//
+// These being-tokens are signed AND decoded on synchronous hot paths
+// (the IBP HTTP adapter's extractIdentity, the host request log, WS
+// connect). jose, the project's other JWT library, is async-only, so
+// using it here would force those paths async and ripple through every
+// caller. A symmetric HS256 token is just base64url(header).base64url(
+// payload).base64url(HMAC-SHA256), a few lines of node:crypto, so we
+// mint and verify them directly and carry no JWT dependency at all.
+// jose stays for the ASYMMETRIC reality-identity tokens
+// (realityIdentity.js), the case it is actually built for.
+// ─────────────────────────────────────────────────────────────────────
+
+const UNIT_SECONDS = { s: 1, m: 60, h: 3600, d: 86400 };
+
+// "30d" | "24h" | "60s" | <number of seconds> → seconds.
+function expiresInToSeconds(expiresIn) {
+  if (typeof expiresIn === "number") return Math.floor(expiresIn);
+  const m = String(expiresIn).match(/^(\d+)\s*([smhd])?$/);
+  if (!m) throw new Error(`invalid expiresIn: ${expiresIn}`);
+  return Number(m[1]) * UNIT_SECONDS[m[2] || "s"];
+}
+
+const b64urlJson = (obj) =>
+  Buffer.from(JSON.stringify(obj), "utf8").toString("base64url");
+
+function signJwtHS256(payload, secret, { expiresIn } = {}) {
+  const iat = Math.floor(Date.now() / 1000);
+  const body = { ...payload, iat };
+  if (expiresIn != null) body.exp = iat + expiresInToSeconds(expiresIn);
+  const data = `${b64urlJson({ alg: "HS256", typ: "JWT" })}.${b64urlJson(body)}`;
+  const sig = crypto.createHmac("sha256", secret).update(data).digest("base64url");
+  return `${data}.${sig}`;
+}
+
+// Verifies signature + expiry, mirroring jsonwebtoken's jwt.verify
+// defaults. Throws on any failure (malformed, bad signature, expired);
+// decodeToken catches and returns null.
+function verifyJwtHS256(token, secret) {
+  const parts = String(token).split(".");
+  if (parts.length !== 3) throw new Error("malformed token");
+  const [header, body, sig] = parts;
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(`${header}.${body}`)
+    .digest("base64url");
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b))
+    throw new Error("bad signature");
+  const decoded = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
+  if (decoded.exp != null && Math.floor(Date.now() / 1000) >= decoded.exp)
+    throw new Error("token expired");
+  return decoded;
+}
 
 // ─────────────────────────────────────────────────────────────────────
 // CREDENTIAL ENCRYPTION
@@ -164,7 +220,7 @@ export function generateToken(being) {
     ? `${Math.max(1, Math.min(Number(getRealityConfigValue("jwtExpiryDays")), 365))}d`
     : "30d";
 
-  return jwt.sign(
+  return signJwtHS256(
     {
       beingId: being._id,
       name: being.name,
@@ -205,7 +261,7 @@ export function signInternalToken({
     name: name || null,
   };
   if (clientSessionId) payload.clientSessionId = clientSessionId;
-  return jwt.sign(payload, JWT_SECRET, { expiresIn });
+  return signJwtHS256(payload, JWT_SECRET, { expiresIn });
 }
 
 /**
@@ -220,7 +276,7 @@ export function signInternalToken({
 export function decodeToken(token) {
   if (typeof token !== "string" || !token) return null;
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = verifyJwtHS256(token, JWT_SECRET);
     return {
       beingId: decoded.beingId,
       name: decoded.name,

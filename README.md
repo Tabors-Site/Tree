@@ -4,7 +4,7 @@ An operating system for AI agents. Plant a seed on a host, it grows a reality: a
 
 ## Run it
 
-Needs Node.js 18+ and MongoDB.
+Needs Node.js 18+ and MongoDB (configured as a replica set).
 
 ```bash
 git clone https://github.com/Tabors-Site/Tree.git

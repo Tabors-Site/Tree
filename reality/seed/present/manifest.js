@@ -15,7 +15,7 @@
 // bypasses remain). Each write is its own withIAmAct moment so the
 // one-DO-per-moment doctrine holds.
 
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID as uuidv4 } from "node:crypto";
 import Space from "../materials/space/space.js";
 import log from "../seedReality/log.js";
 import { emitFact } from "../past/fact/facts.js";

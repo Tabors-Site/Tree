@@ -767,7 +767,7 @@ async function _registerHumanWithFreshHome({
   summonCtx,
   fatherBeingId = null,   // who REQUESTED the mint (arrival for register, parent for sub-births)
 }) {
-  const { v4: uuidv4 } = await import("uuid");
+  const { randomUUID: uuidv4 } = await import("node:crypto");
   const { emitFact } = await import("../../../past/fact/facts.js");
   const { I_AM } = await import("../../../materials/being/seedBeings.js");
 

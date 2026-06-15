@@ -29,7 +29,7 @@
 // transfer (acts preserved, identity continuation, the thing itself),
 // see graft.js — GRAFT-AND-SEED.md draws the line.
 
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID as uuidv4 } from "node:crypto";
 import { isSentinelRef, isAggregateRef, refKind, refId } from "../ref.js";
 import { remapRefs } from "../refWalker.js";
 import { assertValidBundle } from "./bundle.js";

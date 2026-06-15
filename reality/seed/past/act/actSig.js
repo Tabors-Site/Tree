@@ -73,20 +73,24 @@ export async function loadSigningKey(nameId, branch) {
     if (!isKeyId(nameId)) return null;             // not a key-bearing Name
     const { loadProjection } = await import("../../materials/projections.js");
     const slot = await loadProjection("name", nameId, normBranch(branch));
-    // Secondary unlock (IDENTITY.md): a HUMAN name's acts are signed only
-    // while its signing session is open. Locked human → unsigned seal,
-    // visibly so (the portal badges it). Scripted/LLM names and I_AM are
-    // exempt — no hand to type a secret. The TTL slides on every signed
-    // seal so active humans stay unlocked. The soul lives on the Name
-    // (soulType), since the name (not the being) is who acts.
-    if (slot?.state?.soulType === "human") {
-      const { isSigningUnlocked, touchSigning } =
-        await import("../../materials/name/signingSession.js");
-      if (!isSigningUnlocked(nameId)) return null;
-      touchSigning(nameId);
-    }
+    // The signing-session lock is NOT soul-type-gated — ALL Names are the
+    // same (Tabor). It applies to PASSWORD-LOCKED Names, never by soul.
     const enc = slot?.state?.privateKeyEnc;
     if (!enc) return null;
+    const { isPasswordLocked } = await import("../../materials/name/passwordKey.js");
+    if (isPasswordLocked(enc)) {
+      // The server canNOT decrypt a password-locked key; the decrypted PEM
+      // lives only in the session (held by login). Not logged in / expired ->
+      // null and the act seals UNSIGNED until the next login. real-name +
+      // password are optional; the holder may also act with the raw pk.
+      const { getSigningKey, touchSigning } =
+        await import("../../materials/name/signingSession.js");
+      const sessionKey = getSigningKey(nameId);
+      if (!sessionKey) return null;
+      touchSigning(nameId);
+      return sessionKey;
+    }
+    // System-encrypted: the server holds the key and signs automatically.
     const { decryptCredential } = await import("../../materials/being/identity/credentials.js");
     return decryptCredential(enc);                 // null on bad blob/key
   } catch {

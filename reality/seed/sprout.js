@@ -38,7 +38,7 @@
 // return" short-circuits).
 
 import log from "./seedReality/log.js";
-import { v4 as uuidv4 } from "uuid";
+import { randomUUID as uuidv4 } from "node:crypto";
 import Space from "./materials/space/space.js";
 import { findByHeavenSpace, loadProjection, findByParent as findByParentSlot, countByParent as countByParentSlot } from "./materials/projections.js";
 

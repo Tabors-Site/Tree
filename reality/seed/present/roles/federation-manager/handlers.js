@@ -150,7 +150,7 @@ async function readBucket(ctx, bucket, key) {
 // manager. Fire and forget at this layer; the protocol's correlation
 // is the negotiationId, not the wire return.
 async function dispatchToPeer(ctx, peerReality, message) {
-  const { v4: uuidv4 } = await import("uuid");
+  const { randomUUID: uuidv4 } = await import("node:crypto");
   const { crossRealityDispatch } = await import("../../../ibp/crossWorld.js");
   // Use the local federation-manager (beingOut) as actor — not the
   // foreign asker (beingIn). The cross reality act we open is OUR

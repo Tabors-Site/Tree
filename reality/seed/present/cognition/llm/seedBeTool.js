@@ -35,7 +35,7 @@ export const seedBeTool = {
     operation: z.string().describe(
       "BE operation name. Common: 'switch'. Extensions may register more.",
     ),
-    payload: z.record(z.any()).optional().describe(
+    payload: z.record(z.string(), z.any()).optional().describe(
       "Operation-specific payload. switch expects { newRole }.",
     ),
     address: z.string().optional().describe(
