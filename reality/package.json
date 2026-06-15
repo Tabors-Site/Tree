@@ -29,6 +29,7 @@
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "express": "^4.21.1",
+    "express-rate-limit": "^8.5.2",
     "file-type": "^21.2.0",
     "fuse-native": "^2.2.6",
     "jsonwebtoken": "^9.0.2",

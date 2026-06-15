@@ -1,7 +1,0 @@
-/* PortalPage . piggybacks on the .ns-doc prose styles from IbpPage.css.
-   Any portal-specific accents land here. Scope via .ns-portal so the
-   blue IBP eyebrow stays blue everywhere else. */
-
-.ns-portal .ns-doc-eyebrow {
-  color: #8fbf9f;
-}

@@ -1,4 +1,0 @@
-Site: TreeOS
-Owner: Tabor Holly
-Contact: mailto:taborgreat@gmail.com
-URL: https://treeOS.ai

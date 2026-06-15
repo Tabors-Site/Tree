@@ -18,14 +18,8 @@ reality/oldExtensions/
 reality/.oldExtensions/
 reality/.test/
 
-create-treeos/template/localStore
-create-treeos/template/.env
-create-treeos/template/.treeos-profile
-create-treeos/template/node_modules
-create-treeos/template/.place/
-
-site/node_modules
-site/dist/
+/site/
+/cli/
 
 # Binary sensory assets shipped by extensions.
 # Models, audio, raw source. These should live in object storage or
