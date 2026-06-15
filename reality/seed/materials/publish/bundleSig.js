@@ -10,9 +10,10 @@
 // reality envelope-sig and the signed reality root already give, now
 // carried INSIDE the artifact rather than only on the transport.
 //
-// signerId is a pubkey id: a being's beingId, or realityId when the
-// reality (I_AM) vouches — the reality key's id, NOT the literal "i-am",
-// so a foreign receiver decodes the key from the id alone. Absent
+// signerId is a pubkey id: the producer's NAME id (the Name's _id IS its
+// pubkey — a being never signs, the Name it expresses does), or realityId
+// when the reality (I_AM) vouches — the reality key's id, NOT the literal
+// "i-am", so a foreign receiver decodes the key from the id alone. Absent
 // signature => advisory-accepted (pre-signature bundles + producers with
 // no local key); a PRESENT signature that fails verification is a hard
 // refusal at the receiver.
@@ -34,7 +35,10 @@ function sigPayload(bundleHash, signerId) {
  * is accepted under the transport sig.
  *
  * @param {object} bundle           a clone bundle WITH meta.bundleHash set
- * @param {string} producerBeingId  the vouching agent (operator, or I_AM for a reality-vouched snapshot)
+ * @param {string} producerBeingId  the vouching agent's BEING id (operator,
+ *                                  or I_AM for a reality-vouched snapshot).
+ *                                  Its NAME (trueName) is resolved and is
+ *                                  what actually signs — a being never signs.
  * @param {string} [branch]
  */
 export async function signBundle(bundle, producerBeingId, branch = "0") {
@@ -46,14 +50,31 @@ export async function signBundle(bundle, producerBeingId, branch = "0") {
   // over the OLD bundleHash would otherwise fail the receiver's gate. No
   // signature → unsigned-advisory; a present one always matches the hash.
   if (!producerBeingId) { delete bundle.meta.signature; return bundle; }
+
+  // The NAME is the signer. A being never signs — it expresses a trueName
+  // whose key signs. I_AM's name id is the literal "i-am" (loadSigningKey
+  // maps it to the reality key). Any other producer is a BEING id (a content
+  // hash, NOT a key after the split), so resolve its trueName; signing with
+  // the bare beingId would silently produce an unsigned bundle (loadSigningKey
+  // returns null for a non-key id).
+  let nameId;
+  if (producerBeingId === I_AM) {
+    nameId = I_AM;
+  } else {
+    const { loadOrFold } = await import("../../materials/projections.js");
+    const slot = await loadOrFold("being", String(producerBeingId), branch);
+    nameId = slot?.state?.trueName || null;
+  }
+  if (!nameId) { delete bundle.meta.signature; return bundle; }
+
   const { loadSigningKey } = await import("../../past/act/actSig.js");
-  const pem = await loadSigningKey(producerBeingId, branch);
+  const pem = await loadSigningKey(nameId, branch);
   if (!pem) { delete bundle.meta.signature; return bundle; }
   // signerId is the pubkey id the sig verifies against. For I_AM the
   // signing key IS the reality key, whose id is realityId (a key id);
-  // any other being's beingId already IS its pubkey.
-  let signerId = producerBeingId;
-  if (producerBeingId === I_AM) {
+  // any other Name's id already IS its pubkey.
+  let signerId = nameId;
+  if (nameId === I_AM) {
     const { getRealityIdentity } = await import("../../realityIdentity.js");
     signerId = getRealityIdentity().realityId;
   }

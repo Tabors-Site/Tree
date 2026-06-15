@@ -132,14 +132,14 @@ function nextId() { return `c-${++_idCounter}`; }
 function runVerb(client, verb, address, payload) {
   switch (verb) {
     case "see":    return client.see(address, payload);
-    case "do":     return client.do(address, payload.action, payload.args || {});
+    case "do":     return client.do(address, payload.act, payload.args || {});
     case "summon": {
       const { message, ...threading } = payload;
       return client.summon(address, message, threading);
     }
     case "be": {
-      const { op, ...credentials } = payload;
-      return client.be(op, address, credentials);
+      const { act, ...credentials } = payload;
+      return client.be(act, address, credentials);
     }
     default:
       throw new Error(`Unknown verb: ${verb}`);
@@ -149,9 +149,9 @@ function runVerb(client, verb, address, payload) {
 function defaultPayloadFor(verb) {
   switch (verb) {
     case "see":    return JSON.stringify({ live: false }, null, 2);
-    case "do":     return JSON.stringify({ action: "", args: {} }, null, 2);
+    case "do":     return JSON.stringify({ act: "", args: {} }, null, 2);
     case "summon": return JSON.stringify({ message: { content: "" } }, null, 2);
-    case "be":     return JSON.stringify({ op: "connect", name: "", password: "" }, null, 2);
+    case "be":     return JSON.stringify({ act: "connect", name: "", password: "" }, null, 2);
     default:       return "{}";
   }
 }
@@ -159,9 +159,9 @@ function defaultPayloadFor(verb) {
 function payloadHintFor(verb) {
   switch (verb) {
     case "see":    return "options for SEE: { live }";
-    case "do":     return "DO: { action: \"create-child\" | \"set-meta\" | …, args: { … } }";
+    case "do":     return "DO: { act: \"create-child\" | \"set-meta\" | …, args: { … } }";
     case "summon": return "SUMMON: { message: { content, … }, from?, inReplyTo?, correlation? }";
-    case "be":     return `BE: { op: "${BE_OPS.join(" | ")}", name?, password?, … }`;
+    case "be":     return `BE: { act: "${BE_OPS.join(" | ")}", name?, password?, … }`;
     default:       return "";
   }
 }

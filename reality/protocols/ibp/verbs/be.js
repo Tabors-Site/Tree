@@ -10,8 +10,8 @@
 // === null. The impersonation gate only fires when BOTH sides are
 // set, so arrival-cherub flows are unaffected.
 //
-// `payload.op` is one of "birth" | "connect" | "release" | "switch"
-// | "death".
+// `payload.act` is one of "birth" | "connect" | "release" | "switch"
+// | "death" (the operation in flight; the seal records it as fact.action).
 // Remaining payload fields carry operation-specific credentials/state.
 // `payload.correlation` is the client-generated idempotency key —
 // retries with the same correlation collapse to one moment.
@@ -118,9 +118,9 @@ export async function handleBe(socket, env, ack) {
   const id = env?.id || null;
   try {
     const { address, addressKind, payload } = env;
-    const operation = payload?.op || payload?.operation;
+    const operation = payload?.act;
     if (!operation) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "BE payload must include `op`");
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "BE payload must include `act`");
     }
 
     if (operation === "connect" || operation === "birth") {
@@ -137,9 +137,9 @@ export async function handleBe(socket, env, ack) {
     // `nameId` is STRIPPED here: ownership of a being is proved by the
     // server-side socket.nameId (the HMAC-verified portal identity), NEVER by
     // a client-supplied field. Dropping it from opPayload means a forged
-    // { op:"connect", nameId:"<victimTrueName>" } cannot reach the handler as
+    // { act:"connect", nameId:"<victimTrueName>" } cannot reach the handler as
     // payload; the only nameId the handler ever sees is callerNameId below.
-    const { op: _op, operation: _operation, identity: _identityField, nameId: _nameIdField, correlation: clientCorrelation, ...opPayload } = payload || {};
+    const { act: _act, op: _op, operation: _operation, identity: _identityField, nameId: _nameIdField, correlation: clientCorrelation, ...opPayload } = payload || {};
 
     const callerIdentity = socket.beingId ? { beingId: socket.beingId, name: socket.name } : null;
     // The connection's signed-in Name (server ground truth from the verified
@@ -249,10 +249,9 @@ export async function handleBe(socket, env, ack) {
       beingId:     cherubBeingId,
       correlation: clientCorrelation,
       act: {
-        verb:   "be",
-        target: operation,           // BE.beVerb's first arg is the operation name
-        action: operation,           // descriptive; runTransportAct passes target as the verb op
-        args:   {
+        verb: "be",
+        act:  operation,             // the operation in flight (birth/connect/...); the seal records it as fact.action
+        args: {
           opPayload,
           address,
           addressKind,

@@ -11,8 +11,8 @@
 //
 //   verb     "see" | "do" | "summon" | "be"
 //   address  position / stance / place string
-//   payload  per-verb: { live? } for SEE, { action, args } for DO,
-//            { op, credentials } for BE, { message, ... } for SUMMON
+//   payload  per-verb: { live? } for SEE, { act, args } for DO,
+//            { act, credentials } for BE, { message, ... } for SUMMON
 //   identity caller's JWT-decoded { beingId, name } when applicable
 //
 // Sync response: returned through the ack callback as

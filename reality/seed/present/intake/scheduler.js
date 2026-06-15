@@ -333,7 +333,7 @@ async function runLoop(beingId) {
             // Keep the bare read so a future intake refactor can't reintroduce
             // a silent default here.
             const entryBranch = picked.entry.branch;
-            const innerAction = picked.entry?.act?.action || null;
+            const innerAction = picked.entry?.act?.act || null;
             const isPauseLifecycleOp =
               picked.entry?.act?.verb === "do" &&
               (innerAction === "pause-branch" ||

@@ -454,6 +454,13 @@ async function _dispatchSummon({
     verb:    "summon",
     action:  "summon",
     beingId: summonerBeingId,
+    // The actor NAME (the summoner's signing identity). In-moment summons
+    // would have emitFact derive this from summonCtx.actorAct.nameId; we
+    // set it explicitly so the MOMENT-LESS wire summon (no summonCtx.actorAct,
+    // the summon becomes the RECIPIENT's moment) still links to the
+    // summoner's Name. Precedence mirrors emitFact: moment's actor name,
+    // then the caller's signed-in Name, then I_AM for seed-internal flows.
+    nameId:  summonCtx?.actorAct?.nameId ?? identity?.nameId ?? (summonerBeingId === I_AM ? I_AM : null),
     target:  { kind: "being", id: recipientBeingId }, // right stance
     params:  {
       correlation:     messageId,

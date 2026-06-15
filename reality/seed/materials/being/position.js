@@ -91,22 +91,36 @@ function persistBeingPosition(beingId, spaceId, summonCtx = null) {
     branch:  summonCtx?.actorAct?.branch || "0",
   };
   // Inside a moment: push synchronously to ctx.deltaF (rides the
-  // existing Act). Outside a moment (boot, system housekeeping):
-  // wrap in withIAmAct so the Fact still rides an Act on the I-Am's
-  // chain. "Every fact comes from an act" (MOMENT.md) — no orphan
-  // facts.
+  // existing Act). The push bypasses emitFact (whose async crossOrigin
+  // derivation could race the seal), so set the actor NAME here the
+  // same way emitFact would — from the moment's actorAct. The being
+  // occupies its OWN position, so the actor name is the being's own
+  // (or, when a father drives the vessel, the inhabitor's — exactly
+  // who signs the moment).
   if (summonCtx && Array.isArray(summonCtx.deltaF)) {
+    spec.nameId = summonCtx.actorAct?.nameId ?? null;
     summonCtx.deltaF.push(spec);
     return;
   }
+  // Outside the accumulating moment (system housekeeping): the being
+  // acts as ITSELF, on its own chain, signed by its own Name — via
+  // withBeingAct. (Previously wrapped in withIAmAct, which mis-attributed
+  // the position change to I_AM even though the being is the one moving.)
+  // emitFact derives nameId from the being's act context. "Every fact
+  // comes from an act" (MOMENT.md) — no orphan facts.
   (async () => {
     try {
-      const { withIAmAct } = await import("../../sprout.js");
-      await withIAmAct(`Position: persist @${String(beingId).slice(0, 8)}`, async (ctx) => {
-        // Re-stamp the spec with the I-Am's act context so the Fact
-        // carries actId pointing at this moment.
-        await emitFact({ ...spec, actId: ctx.actId }, ctx);
-      });
+      const { withBeingAct } = await import("../../sprout.js");
+      await withBeingAct(
+        String(beingId),
+        `Position: persist @${String(beingId).slice(0, 8)}`,
+        spec.branch,
+        async (ctx) => {
+          // Re-stamp with the being's act context (spec.nameId stays
+          // unset so emitFact resolves it from ctx.actorAct.nameId).
+          await emitFact({ ...spec, actId: ctx.actId }, ctx);
+        },
+      );
     } catch (err) {
       log.debug(
         "Position",

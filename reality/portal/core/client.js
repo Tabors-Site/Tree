@@ -207,16 +207,16 @@ export class PortalClient {
    * second call will receive the same result.
    *
    * @param {string} address  position (or stance; @being is stripped server-side)
-   * @param {string} action   registered op name ("create-space", "set-being", "end-matter", "plant", "<ext>:<action>", ...)
+   * @param {string} act      registered op name ("create-space", "set-being", "end-matter", "plant", "<ext>:<act>", ...)
    * @param {object} [args]   op-specific arguments
    * @param {object} [opts]   { correlation?: string, timeoutMs?: number,
    *                            matterId?: string — target a MATTER at the
    *                            addressed position (addresses name spaces
    *                            and beings; matter rides this reserved key) }
    */
-  async do(address, action, args = {}, opts = {}) {
-    if (typeof action !== "string" || !action) {
-      throw new Error("DO requires an action (string)");
+  async do(address, act, args = {}, opts = {}) {
+    if (typeof act !== "string" || !act) {
+      throw new Error("DO requires an act (string)");
     }
     const correlation = opts.correlation || cryptoRandomId();
     const timeoutMs   = opts.timeoutMs   || 90000;
@@ -234,7 +234,7 @@ export class PortalClient {
     });
 
     try {
-      const payload = { action, args, correlation };
+      const payload = { act, args, correlation };
       if (typeof opts.matterId === "string" && opts.matterId) payload.matterId = opts.matterId;
       const ack = await this._call("do", normalize(address), payload);
       if (!ack || ack.status !== "accepted") {
@@ -268,13 +268,13 @@ export class PortalClient {
   /**
    * BE: identity operations on a stance / place.
    *
-   * @param {string} op           "birth" | "connect" | "release"
+   * @param {string} act           "birth" | "connect" | "release" | "switch" | "death"
    * @param {string} address      stance ("<place>/@cherub", "<place>/@<name>") or bare place ("<place>")
    * @param {object} [credentials] op-specific fields ({ name, password, ... })
    */
-  async be(op, address, credentials = {}) {
-    if (typeof op !== "string" || !op) {
-      throw new Error("BE requires an op (string)");
+  async be(act, address, credentials = {}) {
+    if (typeof act !== "string" || !act) {
+      throw new Error("BE requires an act (string)");
     }
     const correlation = credentials.correlation || cryptoRandomId();
     const timeoutMs   = credentials.timeoutMs   || 30000;
@@ -296,7 +296,7 @@ export class PortalClient {
 
     try {
       const { correlation: _c, timeoutMs: _t, ...payload } = credentials;
-      const ack = await this._call("be", normalize(address), { op, correlation, ...payload });
+      const ack = await this._call("be", normalize(address), { act, correlation, ...payload });
       if (!ack || ack.status !== "accepted") {
         this._pendingMoments.delete(correlation);
         throw new Error(`ibp BE not accepted: ${JSON.stringify(ack)}`);
@@ -388,9 +388,9 @@ export class PortalClient {
 
   /**
    * The NAME channel emit path. Mirrors `_call` but rides the "name"
-   * socket event with a `{ id, op, ...payload }` shape (the nameSession
-   * wire reads the fields directly off the message). Same synchronous ack:
-   *   { id, status: "ok", data } | { id, status: "error", error }.
+   * socket event with a `{ id, act, ...payload }` shape (the nameSession
+   * wire reads the op off `msg.act`, matching the BE wire's payload.act).
+   * Same synchronous ack: { id, status: "ok", data } | { id, status: "error", error }.
    */
   _callName(op, payload, { timeoutMs = 15000 } = {}) {
     return new Promise((resolve, reject) => {
@@ -404,7 +404,7 @@ export class PortalClient {
         err.code = "TIMEOUT";
         reject(err);
       }, timeoutMs);
-      this.socket.emit("name", { id, op, ...payload }, (response) => {
+      this.socket.emit("name", { id, act: op, ...payload }, (response) => {
         clearTimeout(timer);
         if (!response) {
           const err = new Error(`name:${op} returned no response`);

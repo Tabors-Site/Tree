@@ -2,7 +2,7 @@
 //
 // Consumes the unified envelope:
 //
-//   { id, verb: "do", address, payload: { action, args?, correlation? } }
+//   { id, verb: "do", address, payload: { act, args?, correlation? } }
 //
 // `address` is a position; a stance shape is accepted but its @being
 // qualifier is informational (stripped). The world is data at positions;
@@ -15,7 +15,8 @@
 // explicit left stance with a different @being than the socket
 // authenticated, the wire refuses (impersonation gate).
 //
-// `payload.action` names the registered DO operation. `payload.args`
+// `payload.act` names the registered DO operation (the operation in
+// flight; the seal records it as fact.action). `payload.args`
 // carries the operation's arguments (legacy: any non-reserved field).
 // `payload.correlation` is the client-generated idempotency key — a
 // retry with the same correlation collapses to one moment.
@@ -68,9 +69,9 @@ export async function handleDo(socket, env, ack) {
     }
 
     const { address, payload } = env;
-    const action = typeof payload?.action === "string" ? payload.action : null;
+    const action = typeof payload?.act === "string" ? payload.act : null;
     if (!action) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "ibp DO payload must include `action`");
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "ibp DO payload must include `act`");
     }
     if (!getOperation(action)) {
       throw new IbpError(
@@ -240,7 +241,7 @@ export async function handleDo(socket, env, ack) {
       act: {
         verb:   "do",
         target,
-        action,
+        act: action,
         args,
       },
       correlation,

@@ -80,9 +80,9 @@ export function attachNameSession(io) {
 
 export async function handleNameSession(socket, msg, ack) {
   const id = msg?.id || null;
-  const op = msg?.op;
+  const op = msg?.act;
   if (typeof op !== "string" || !op.length) {
-    return ackError(ack, id, IBP_ERR.INVALID_INPUT, "name: requires { op }");
+    return ackError(ack, id, IBP_ERR.INVALID_INPUT, "name: requires { act }");
   }
   try {
     switch (op) {

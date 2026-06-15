@@ -62,6 +62,46 @@ function checkAndRecordForeignAct(reality, actId) {
 }
 
 /**
+ * Resolve the LOCAL target branch from an inbound cross-reality address.
+ *
+ * The Fact lands on the TARGET's reel, on the TARGET's branch — and for
+ * an inbound foreign actor the target lives on THIS substrate. Without
+ * this, the synthetic summonCtx's targetBranch stays null and
+ * resolveBranchForFact falls through to summonCtx.actorAct.branch — the
+ * FOREIGN actor's branch — so the foreign-attributed fact would land on
+ * a foreign-named branch reel instead of the local target's. See
+ * CROSS-WORLD.md "The Fact lands on the target."
+ *
+ * The address may arrive as a full bridge (`home::local/space@being`);
+ * we keep only the RIGHT (callee) stance so the cross-branch-bridge gate
+ * (which compares left/right branches) can't refuse a legitimately
+ * cross-reality address. The right stance is expanded against THIS
+ * reality with the local default branch as the implicit context, so an
+ * address with no explicit branch resolves to local main (never the
+ * foreign actor's branch). No literal "0" — the #main pointer resolves
+ * through getDefaultBranch.
+ */
+async function resolveLocalTargetBranch(address) {
+  const { getDefaultBranch } = await import("../materials/branch/branchRegistry.js");
+  const localDefault = await getDefaultBranch();
+  try {
+    const { parse, expand, resolveBranchPointers } = await import("./address.js");
+    const raw = String(address || "");
+    const rhs = raw.includes("::") ? raw.split("::").pop().trim() : raw;
+    if (!rhs) return localDefault;
+    const expandCtx = { currentReality: getRealityDomain(), currentBranch: localDefault };
+    const parsed = parse(rhs);
+    const expanded = await resolveBranchPointers(expand(parsed, expandCtx), expandCtx);
+    return expanded?.right?.branch || localDefault;
+  } catch {
+    // Parse failure: fall back to local main. Worst case the verb path
+    // re-parses and surfaces the real address error; we never let the
+    // fact silently land on the foreign actor's branch.
+    return localDefault;
+  }
+}
+
+/**
  * Outbound cross-reality dispatch. Open a local Act, forward via
  * canopy with the actor's identity tuple, apply the foreign response
  * back to the Act.
@@ -357,17 +397,19 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
   };
 
   // Synthetic summonCtx. Carries actorAct + deltaF for emitFact to push
-  // onto. targetBranch will be filled in by the verb handler from the
-  // parsed target address (it's the local target's branch on THIS
-  // substrate).
+  // onto. targetBranch is the LOCAL target's branch on THIS substrate,
+  // resolved from the inbound address: the Fact lands on the target's
+  // reel/branch, NOT the foreign actor's branch (actorAct.branch). The
+  // precedence in resolveBranchForFact puts targetBranch above
+  // actorAct.branch, so seating it here is what keeps a foreign-named
+  // fact on the correct local reel.
+  const targetBranch = await resolveLocalTargetBranch(address);
   const summonCtx = {
     actId: actor.actId,
     actorAct,
     deltaF: [],
     afterSeal: [],
-    // targetBranch is the LOCAL target's branch — verb handler fills
-    // it in from the parsed address before dispatching ops.
-    targetBranch: null,
+    targetBranch,
   };
 
   const identity = {
@@ -400,7 +442,7 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
     const { doVerb } = await import("./verbs/do.js");
     result = await doVerb(
       payload?.target || null,
-      payload?.action,
+      payload?.act,
       payload?.args || {},
       { identity, summonCtx },
     );
@@ -414,7 +456,7 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
   } else if (verb === "be") {
     const { beVerb } = await import("./verbs/be.js");
     result = await beVerb(
-      payload?.op,
+      payload?.act,
       payload?.opPayload,
       { identity, summonCtx },
     );

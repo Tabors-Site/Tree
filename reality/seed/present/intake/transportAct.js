@@ -111,7 +111,7 @@ const DEFAULT_TIMEOUT_MS = 60_000;
  *
  * @param {object} opts
  * @param {string} opts.beingId        — the acting being's id
- * @param {object} opts.act            — { verb: "do"|"be"|"summon", target, action, args }
+ * @param {object} opts.act            — { verb: "do"|"be"|"name", act, target, args } (`act` = the operation in flight)
  * @param {string} [opts.correlation]  — client-supplied idempotency key (recommended); auto-generated if omitted
  * @param {string} [opts.spaceId]      — intake-storing space; defaults to Being.homeSpace
  * @param {object} [opts.identity]     — { beingId, name }

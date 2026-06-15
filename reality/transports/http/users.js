@@ -92,7 +92,7 @@ const register = async (req, res) => {
     const ack = await dispatchAndAwaitResult(carrier, {
       verb:    "be",
       address: getRealityDomain(),
-      payload: { op: "birth", name, password },
+      payload: { act: "birth", name, password },
     });
 
     if (ack.status === "error") return sendAckError(res, ack, "Registration failed");
@@ -122,7 +122,7 @@ const login = async (req, res) => {
     const ack = await dispatchAndAwaitResult(carrier, {
       verb:    "be",
       address: getRealityDomain(),
-      payload: { op: "connect", name, password },
+      payload: { act: "connect", name, password },
     });
 
     if (ack.status === "error") return sendAckError(res, ack, "Invalid credentials");
@@ -151,7 +151,7 @@ const logout = async (req, res) => {
       await dispatchAndWait(carrier, {
         verb:    "be",
         address: heldStance,
-        payload: { op: "release" },
+        payload: { act: "release" },
       });
     }
     clearAuthCookie(res, req);

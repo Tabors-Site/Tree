@@ -70,9 +70,8 @@ async function dispatchRelease(beingId, name, branch) {
   await dispatchTransportAct({
     beingId: String(cherubSlot.id),
     act: {
-      verb:   "be",
-      target: "release",
-      action: "release",
+      verb: "be",
+      act:  "release",
       args: {
         opPayload:      {},
         address,

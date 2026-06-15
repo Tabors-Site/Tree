@@ -59,7 +59,10 @@ function extractIdentity(req) {
   if (!token) return null;
   const decoded = decodeToken(token);
   if (!decoded) return null;
-  return { beingId: decoded.beingId, name: decoded.name, jwt: token };
+  // nameId = the signed-in Name on the token (the actor). Carried alongside
+  // beingId so an act over HTTP attributes to the driving Name, not the
+  // being's own trueName (mirrors socket.nameId on the WS path).
+  return { beingId: decoded.beingId, name: decoded.name, nameId: decoded.nameId || null, jwt: token };
 }
 
 /**
@@ -104,6 +107,7 @@ async function ibpHttpHandler(req, res) {
   if (identity) {
     req.beingId = identity.beingId;
     req.name    = identity.name;
+    req.nameId  = identity.nameId || null;
   }
   // Cross-world actor tuple. When the request arrived from a peer
   // reality via canopy (req.canopySender is set), construct the

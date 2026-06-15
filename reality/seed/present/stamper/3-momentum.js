@@ -123,19 +123,19 @@ export async function momentum(setup = {}) {
  * The wrapped verb runs through doVerb / beVerb with summonCtx
  * threaded so the auto-Fact rides the ambient actId.
  *
- * Transport-act payloads carry { verb, target, action, args }. The
- * shape's meaning differs by verb because doVerb and beVerb have
+ * Transport-act payloads carry { verb, act, target, args }. `act` is
+ * the operation in flight (the seal records it as fact.action); the
+ * rest's meaning differs by verb because doVerb and beVerb have
  * different signatures:
  *
- *   verb: "do"  → doVerb(target, action, args, opts)
+ *   verb: "do"  → doVerb(target, act, args, opts)
+ *     act     = DO op name ("create-space", "set-being", ...)
  *     target  = resolved position/stance object
- *     action  = DO op name ("create-space", "set-being", ...)
  *     args    = op-specific params
  *
- *   verb: "be"  → beVerb(operation, opPayload, ctx)
- *     target  = BE op name ("birth", "connect", "release")
+ *   verb: "be"  → beVerb(act, opPayload, ctx)
+ *     act     = BE op name ("birth", "connect", "release")
  *     args    = { opPayload, address, addressKind, callerIdentity }
- *     action  = ignored
  *
  * SEE never reaches here — reads are synchronous folds that bypass
  * intake entirely.
@@ -144,11 +144,11 @@ export async function momentum(setup = {}) {
  * cognitionFailure.
  */
 async function runTransportAct(summonCtx) {
-  const act = summonCtx?.act;
-  if (!act || typeof act !== "object") {
+  const transportAct = summonCtx?.act;
+  if (!transportAct || typeof transportAct !== "object") {
     throw new Error("moment: transport-act missing `act` payload");
   }
-  const { verb, target, action, args } = act;
+  const { verb, act, target, args } = transportAct;
   if (verb !== "do" && verb !== "be" && verb !== "name") {
     throw new Error(`moment: transport-act verb must be "do", "be", or "name" (got "${verb}")`);
   }
@@ -164,7 +164,7 @@ async function runTransportAct(summonCtx) {
   // outer Act's deltaF would stay empty — sealAct's invariant gate
   // would then refuse the Act (content:null + deltaF:[] = orphan).
   if (verb === "do") {
-    return doVerb(target, action, args || {}, {
+    return doVerb(target, act, args || {}, {
       identity:  summonCtx.identity || null,
       summonCtx,
     });
@@ -173,7 +173,7 @@ async function runTransportAct(summonCtx) {
   if (verb === "be") {
     // verb === "be" — cherub-as-actor path
     const { opPayload = {}, address, addressKind, callerIdentity = null, callerNameId = null } = args || {};
-    return beVerb(target, opPayload, {
+    return beVerb(act, opPayload, {
       address,
       addressKind,
       identity:  callerIdentity,
@@ -182,12 +182,12 @@ async function runTransportAct(summonCtx) {
     });
   }
 
-  // verb === "name" — the identity layer (declare / banish a name). `target`
+  // verb === "name" — the identity layer (declare / banish a name). `act`
   // is the op name (declare | banish); the address is reality-only
   // (<realityDomain>) or <nameId>@<realityDomain>.
   const { nameVerb } = await import("../../ibp/verbs/name.js");
   const { opPayload = {}, address, callerIdentity = null } = args || {};
-  return nameVerb(target, opPayload, {
+  return nameVerb(act, opPayload, {
     address,
     identity: callerIdentity || summonCtx.identity || null,
     summonCtx,

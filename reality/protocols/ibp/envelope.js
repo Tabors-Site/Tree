@@ -15,10 +15,10 @@
 //
 // `payload` carries operation-specific data per verb:
 //   SEE     { live?: boolean, ... }
-//   DO      { action: string, args?: object, ... }
+//   DO      { act: string, args?: object, ... }
 //   SUMMON  { message, from?, inReplyTo?, rootCorrelation?, priority?,
 //             activeRole?, correlation? }
-//   BE      { op: "birth"|"connect"|"release", ...credentials }
+//   BE      { act: "birth"|"connect"|"release", ...credentials }
 //
 // `identity` is the caller's auth token (when applicable). Verb handlers
 // read it from the parsed envelope, no per-verb-field destructuring.

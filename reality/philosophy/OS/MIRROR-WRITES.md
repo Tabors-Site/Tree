@@ -13,19 +13,19 @@ when you want to know what happened.
 Anything that writes through the kernel's normal file IO becomes a
 sealed fact on the I-Am's chain. Concretely:
 
-| Command                         | What it produces                                          |
-|---------------------------------|-----------------------------------------------------------|
-| `echo "x" > reality/mirror/foo` | `do:create-matter` (new file matter, content in CAS)      |
-| `cat > reality/mirror/foo`      | Same, with the content from stdin                         |
-| `vim reality/mirror/foo` `:wq`  | Atomic rename-replace: `do:end-matter` + `do:rename-matter` in one moment |
-| `nano`, `emacs`, VS Code save   | Same atomic rename-replace pattern                         |
-| `sed -i s/a/b/ file`            | Read CAS bytes, splice, `do:set-matter` with new content  |
-| `mv a b` (same dir)             | `do:rename-matter`                                        |
-| `mv a/x b/x` (cross dir, same name) | `do:set-matter` field=spaceId                          |
-| `rm file`                       | `do:end-matter` (soft tombstone)                          |
-| `mkdir dir`                     | `do:create-matter` with type=folder                       |
-| `cp src dst`                    | Read from src, create dst as new matter (two acts)        |
-| `chmod`                         | Silent no-op (mode bits not yet modeled)                  |
+| Command                             | What it produces                                                          |
+| ----------------------------------- | ------------------------------------------------------------------------- |
+| `echo "x" > reality/mirror/foo`     | `do:create-matter` (new file matter, content in CAS)                      |
+| `cat > reality/mirror/foo`          | Same, with the content from stdin                                         |
+| `vim reality/mirror/foo` `:wq`      | Atomic rename-replace: `do:end-matter` + `do:rename-matter` in one moment |
+| `nano`, `emacs`, VS Code save       | Same atomic rename-replace pattern                                        |
+| `sed -i s/a/b/ file`                | Read CAS bytes, splice, `do:set-matter` with new content                  |
+| `mv a b` (same dir)                 | `do:rename-matter`                                                        |
+| `mv a/x b/x` (cross dir, same name) | `do:set-matter` field=spaceId                                             |
+| `rm file`                           | `do:end-matter` (soft tombstone)                                          |
+| `mkdir dir`                         | `do:create-matter` with type=folder                                       |
+| `cp src dst`                        | Read from src, create dst as new matter (two acts)                        |
+| `chmod`                             | Silent no-op (mode bits not yet modeled)                                  |
 
 Anything that reads (`ls`, `cat`, `grep`, `find`, `node -e 'import(...)'`)
 works exactly as it did in the read-only step 1. Reads stream bytes
@@ -297,3 +297,23 @@ content for a being to see).
 - [../names/innerFace.md](../names/innerFace.md): how the kernel
   perceives the world. The mirror is the inverse side: how
   filesystem actions shape what the kernel perceives next.
+
+Now Tabor's question: yes, with one wrinkle that matters.
+
+The fact chain DOES update live. That's what step 2 just wired. Edit any matter through reality/mirror/..., the kernel signs an act under I-Am, the fact lands on the chain, the matter row reflects the new content hash, anything subscribing (innerFaceLive humans on a stance whose weave includes that reel) wakes up and refolds. The whole substrate machinery flows. That's already true today for any matter you edit through the mount.
+
+The wrinkle: kernel code runs from what Node imported at boot, not from the chain. If you edit reality/seed/foo.js through the mirror today, the matter row's content hash changes, the fact is on the chain, but the live Node process still executes the bytes it imported at startup. The kernel doesn't know its own source moved. A restart picks up the new bytes; until then the fact chain says "current code is X" while the running process is still at "Y."
+
+So the distinction:
+
+Content matter (docs, scratch files, configs, beings' authored data): updates are live in every sense. Edit, fold, perceive. Done.
+Code matter (kernel modules, role handlers, see-op handlers): the byte change is live in the chain but the running interpreter is stale until reload.
+Closing that gap is the "hot OS" payoff. The pieces: a Node loader hook that resolves treeos://hash/<sha> to bytes streamed from CAS, plus a fact-arrival subscription on the role/code matter that triggers import.meta invalidation when the matter content hash changes. The kernel would then perceive its own source change (via the same dep-set / weave subscription humans use), reload the affected modules, and proceed with new code. Smalltalk / Emacs / Lisp Machine style: the running system reads its own source from the chain and edits land live.
+
+The deepest version is what level-3 TreeOS becomes: the kernel IS the substrate, edits to any matter (including the kernel's own modules) take effect immediately because there's no separate "compiled binary" layer in front of the chain. The OS is what the chain says it is, right now, no restart between the edit and the effect.
+
+Today: step 2 puts you halfway there. The chain updates live. The code execution lags. The remaining step is module hot-reload + Node loader integration, which the mirror has made plausible (bytes by hash via CAS; subscribe via the weave; reload on invalidation).
+
+So yes, theoretically and partially already, a being could edit the running OS through vim reality/mirror/seed/... and have everything (chain, matter rows, projections) reflect it immediately. The last gap is making the JavaScript runtime perceive its own change. That's the next interesting build.
+
+reference_mirror_writes_guide.md

@@ -501,20 +501,19 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
 // startMessage. The full payload lives on the intake entry; this is
 // what shows up when humans skim a Summon row.
 //
-// For DO: target is a typed object ({kind, id}); render as "<verb>
-// <action> on <kind>/<id>".  For BE: target is the op-name string
-// itself (e.g. "connect"); render as "BE <op>". Previously this used a
-// raw `${target}` interpolation, which silently produced "[object
-// Object]" for every DO row in the audit history.
+// `act.act` is the operation in flight (the seal records it as
+// fact.action). For DO: act.target is a typed object ({kind, id});
+// render as "<verb> <act> on <kind>/<id>". For BE/NAME the op stands
+// alone; render as "BE <act>" / "NAME <act>".
 function describeTransportAct(act) {
   if (!act || typeof act !== "object") return "[transport-act]";
-  const verb   = (act.verb || "?").toUpperCase();
-  const target = formatTransportTarget(act.target);
-  const action = typeof act.action === "string" ? act.action : null;
-  if (verb === "BE") {
-    return action ? `BE ${target} ${action}` : `BE ${target}`;
+  const verb = (act.verb || "?").toUpperCase();
+  const op   = typeof act.act === "string" ? act.act : null;
+  if (verb === "BE" || verb === "NAME") {
+    return op ? `${verb} ${op}` : verb;
   }
-  return action ? `${verb} ${action} on ${target}` : `${verb} on ${target}`;
+  const target = formatTransportTarget(act.target);
+  return op ? `${verb} ${op} on ${target}` : `${verb} on ${target}`;
 }
 
 function formatTransportTarget(t) {

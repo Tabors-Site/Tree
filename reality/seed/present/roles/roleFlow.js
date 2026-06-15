@@ -327,10 +327,10 @@ function buildCtx({
     const act = entry?.act || null;
     if (act?.verb === "do") {
       verb = "do";
-      action = act.action || null;
+      action = act.act || null;
     } else if (act?.verb === "be") {
       verb = "be";
-      operation = act.target || null;
+      operation = act.act || null;
     }
   }
 

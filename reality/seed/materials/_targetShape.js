@@ -124,10 +124,17 @@ export async function loadTargetRow(target, expectedKind, { summonCtx = null } =
   if (!expectedKind || !KINDS.has(expectedKind)) {
     throw new Error(`loadTargetRow: expectedKind must be space/being/matter; got "${expectedKind}"`);
   }
-  // Branch the lookup happens on. The moment carries the caller's
-  // branch via summonCtx; handlers get a row-shaped view scoped to
-  // that branch.
-  const branch = summonCtx?.actorAct?.branch || "0";
+  // Branch the lookup happens on. The moment carries TWO branches: the
+  // actor's (summonCtx.actorAct.branch — where their Act seals) and the
+  // target's (summonCtx.targetBranch — where the row LIVES and the Fact
+  // lands). A LOCAL target row lives on the TARGET branch, so we prefer
+  // it. For a same-world moment the two are equal (assign seats them
+  // so), so this is a no-op there; for a cross-reality INBOUND moment
+  // actorAct.branch is the FOREIGN home branch and the local target only
+  // resolves on summonCtx.targetBranch. Same precedence (targetBranch
+  // before actorAct.branch) that resolveTargetBranch / resolveBranchForFact
+  // use for the fact-landing side.
+  const branch = summonCtx?.targetBranch || summonCtx?.actorAct?.branch || "0";
   // loadOrFold (not loadProjection): every DO/BE/SUMMON op flows through
   // loadTargetRow. On a fresh branch the target's slot hasn't been
   // cold-folded yet — bare loadProjection returns null, the handler

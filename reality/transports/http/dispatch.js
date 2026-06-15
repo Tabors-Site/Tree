@@ -31,6 +31,7 @@ export function makeHttpCarrier(req, extra = {}) {
   return {
     beingId:    req.beingId    || null,
     name:       req.name       || null,
+    nameId:     req.nameId     || null,
     handshake:  { headers: req.headers, address: req.ip },
     connected:  false,
     emit:  () => {},

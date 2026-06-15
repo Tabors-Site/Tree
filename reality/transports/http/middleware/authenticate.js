@@ -34,6 +34,7 @@ export default async function authenticate(req, res, next) {
       }
       req.beingId  = result.beingId;
       req.name     = result.name;
+      req.nameId   = result.nameId || null;
       req.authType = "jwt";
       return next();
     }
@@ -45,6 +46,7 @@ export default async function authenticate(req, res, next) {
         if (result) {
           req.beingId  = result.beingId;
           req.name     = result.name;
+          req.nameId   = result.nameId || null;
           req.authType = name;
           // Strategies can attach extra context under a namespaced key.
           // Never assign directly onto req — that could overwrite Express
@@ -81,6 +83,7 @@ export async function authenticateOptional(req, res, next) {
       if (result) {
         req.beingId  = result.beingId;
         req.name     = result.name;
+        req.nameId   = result.nameId || null;
         req.authType = "jwt";
         return next();
       }
@@ -92,6 +95,7 @@ export async function authenticateOptional(req, res, next) {
         if (result) {
           req.beingId  = result.beingId;
           req.name     = result.name;
+          req.nameId   = result.nameId || null;
           req.authType = name;
           if (result.extra && typeof result.extra === "object") {
             req.strategyExtra = Object.freeze({ ...result.extra });
