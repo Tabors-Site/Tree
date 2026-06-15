@@ -458,29 +458,39 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
       );
       let asFather = false;
       const candidateFather = candidate.qualities?.father || null;
-      if (candidateFather?.beingId && candidateFather?.reality) {
+      if (candidateFather?.reality) {
         const requesterReality = identity?.reality || getRealityDomain();
-        if (
-          String(candidateFather.beingId) === String(identity.beingId) &&
-          String(candidateFather.reality) === String(requesterReality)
-        ) {
-          // The tuple matches. For a CROSS-REALITY father the tuple
-          // alone is only the peer reality's word; since the father's
-          // beingId IS his public key, demand his OWN envelope
-          // signature (runVerbAsForeignActor verifies it and threads
-          // beingSigVerified). Vessel takeover is the highest-stakes
-          // cross-reality act — the key proves the father, not the
-          // peer. Local fathers authenticated by session are exempt.
-          const isCrossReality =
-            String(candidateFather.reality) !== String(getRealityDomain());
-          if (isCrossReality && identity?.beingSigVerified !== true) {
+        const realityMatches = String(candidateFather.reality) === String(requesterReality);
+        const isCrossReality = String(candidateFather.reality) !== String(getRealityDomain());
+        if (realityMatches && isCrossReality) {
+          // CROSS-REALITY father: match on the NAME (the cryptographically
+          // PROVEN id — verifyEnvelopeBeingSig checked the father's own
+          // envelope sig against this nameId, setting beingSigVerified), and
+          // NEVER on the client-supplied beingId. Matching beingId would
+          // DECOUPLE the authorized id from the proven id: a malicious peer
+          // could present the victim father's PUBLIC beingId (passing a
+          // beingId match) plus a valid sig over his OWN name (passing
+          // beingSigVerified) and seize the vessel. So the vessel takeover
+          // demands the father's own KEY over the matched name, full stop.
+          if (
+            candidateFather.nameId &&
+            identity?.nameId &&
+            String(candidateFather.nameId) === String(identity.nameId) &&
+            identity?.beingSigVerified === true
+          ) {
+            asFather = true;
+          } else {
             log.warn(
               "Cherub",
-              `father-admit refused for @${targetName}: cross-reality father ` +
-              `${String(identity.beingId).slice(0, 12)}… arrived without his own ` +
-              `verified being-signature (peer vouch is not enough to take a vessel).`,
+              `father-admit refused for @${targetName}: cross-reality father must match the ` +
+              `stored father NAME and arrive with his own verified envelope signature ` +
+              `(nameId match + beingSigVerified). Peer vouch / a beingId match is not enough.`,
             );
-          } else {
+          }
+        } else if (realityMatches) {
+          // LOCAL father: authenticated by the live session; the local
+          // being-tree id is the credential (no foreign key to verify).
+          if (candidateFather.beingId && String(candidateFather.beingId) === String(identity.beingId)) {
             asFather = true;
           }
         }

@@ -318,6 +318,10 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   // For same-reality summons, askerReality is null (the local
   // domain is implicit). See FEDERATION.md "mate + vessel".
   const askerReality = handoff?.identity?.reality || null;
+  // The asker's NAME (the signer), threaded from the verified identity. The
+  // birther records it as the vessel's qualities.father.nameId so cherub's
+  // cross-reality father-admit matches the cryptographically-proven name.
+  const askerNameId = handoff?.identity?.nameId || null;
   const baseCtx = {
     kind,
     spaceId,
@@ -331,6 +335,7 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     askerBeingId,
     askerName,
     askerReality,
+    askerNameId,
     // Branch-aware aggregate reader. Extensions and roles call
     // `await ctx.read("being"|"space"|"matter", id)` and get the
     // row-shaped object back (or null). Internally walks lineage via

@@ -306,6 +306,32 @@ async function setOnMatterHandler({ target, params, summonCtx }) {
     return { matterId: String(target._id), name: value };
   }
 
+  // content: the matter's bytes. Accepts a CAS ref ({kind:"cas",
+  // hash, ...}) the caller has already put into the content store
+  // (mirror-mount writes flow through here; vim splices, FUSE
+  // truncate, etc.), or null to clear. The handler verifies the
+  // hash actually lives in the store so a fact never references
+  // missing bytes.
+  if (field === "content") {
+    if (value === null) {
+      return { matterId: String(target._id), content: null };
+    }
+    const { isCasRef, hasContent } = await import("./contentStore.js");
+    if (!isCasRef(value)) {
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "set-matter: content value must be a CAS ref ({kind:\"cas\", hash, ...}) or null",
+      );
+    }
+    if (!(await hasContent(value.hash))) {
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        `set-matter: unknown content hash "${String(value.hash).slice(0, 12)}..." (bytes not in store)`,
+      );
+    }
+    return { matterId: String(target._id), content: value };
+  }
+
   // spaceId: where the matter sits. Two valid value shapes:
   //   - bare space-id (transfer to a new space)
   //   - DELETED sentinel ("deleted") (soft-delete marker)
@@ -351,8 +377,66 @@ async function setOnMatterHandler({ target, params, summonCtx }) {
   }
 
   throw new Error(
-    `set-matter: unknown field "${field}". Supported: name, coord, qualities.<namespace>[.<innerKey>]`,
+    `set-matter: unknown field "${field}". Supported: name, content, spaceId, beingId, coord, qualities.<namespace>[.<innerKey>]`,
   );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// rename-matter
+// ─────────────────────────────────────────────────────────────────────
+//
+// First-class verb for "the matter's name changes." Live writes
+// (mirror-mount FUSE rename, future portal rename gestures) come
+// through here so the audit trail names the intent ("I renamed this
+// matter") instead of recording a bare set-matter on the name field.
+//
+// Per-parent uniqueness check runs in the handler (pre-flight on the
+// live projection), matching the matter-naming doctrine: name scope
+// is the folder (spaceId + parentMatterId). The reducer side reuses
+// applySetField on the name field — rename-matter is added to
+// SET_ACTIONS in reducerHelpers.js so the same fold path applies.
+
+async function renameMatterHandler({ target, params, summonCtx }) {
+  const newName = params?.name;
+  if (typeof newName !== "string" || !newName.length) {
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "rename-matter: `name` is required and must be a non-empty string");
+  }
+  // `allowReplace` opts out of the per-folder uniqueness check. The
+  // caller is responsible for ensuring the colliding row is ended in
+  // the same moment (i.e. an end-matter fact for it is in this
+  // summonCtx.deltaF ahead of this rename). The atomic-rename-replace
+  // path the mirror mount uses for editor save patterns (vim writes a
+  // temp file then renames over the original) goes through here.
+  const allowReplace = params?.allowReplace === true;
+  target = await loadTargetRow(target, "matter", { summonCtx });
+  const matterId = String(target._id);
+  const branch = summonCtx?.actorAct?.branch || "0";
+  const spaceId = target.spaceId ? String(target.spaceId) : null;
+  const parentMatterId = target.parentMatterId ? String(target.parentMatterId) : null;
+  if (!spaceId) {
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "rename-matter: matter has no spaceId");
+  }
+  if (!allowReplace) {
+    // Per-(spaceId, parentMatterId) uniqueness check on the live
+    // projection. A name collision throws INVALID_INPUT carrying a
+    // tag the IPC bridge maps to EEXIST.
+    const { listMatterNamesInFolder } = await import("../projections.js");
+    const existing = await listMatterNamesInFolder(branch, spaceId, parentMatterId);
+    const taken = new Set(existing.map((n) => String(n).toLowerCase()));
+    // Strip the current name from the taken set so renaming to the
+    // same name is a no-op (not a collision).
+    if (typeof target.name === "string") {
+      taken.delete(target.name.toLowerCase());
+    }
+    if (taken.has(newName.toLowerCase())) {
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        `rename-matter: name "${newName}" already in use in this folder`,
+        { reason: "name-in-use" },
+      );
+    }
+  }
+  return { matterId, name: newName };
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -525,6 +609,16 @@ registerOperation("set-matter", {
     merge: { type: "bool", label: "Merge (for qualities objects)", default: true, required: false },
   },
   handler: setOnMatterHandler,
+});
+
+registerOperation("rename-matter", {
+  targets: ["matter"],
+  ownerExtension: "seed",
+  factAction: "rename-matter",
+  args: {
+    name: { type: "text", label: "New name (per-folder uniqueness enforced)", required: true },
+  },
+  handler: renameMatterHandler,
 });
 
 registerOperation("end-matter", {

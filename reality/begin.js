@@ -377,9 +377,289 @@ try {
       log.info("Mirror", `mount exited (${signal || `code ${code}`})`);
       mirrorProc = null;
     });
+    // MIRROR step 2: write-bridge. Each FUSE write/truncate/create/
+    // unlink/rename/mkdir lands here as a typed ipc request; we run
+    // it inside withIAmAct so the act seals on the I-Am's chain
+    // (per the Name primitive, nameId=I_AM signs), reply with a
+    // status the child maps back to a posix errno, and push a
+    // mount-invalidate so the child's tree reflects the new content
+    // on the next read. Out-of-band invalidation (other beings
+    // writing the same matter through the portal) is step 3.
+    mirrorProc.on("message", (msg) => {
+      if (!msg || msg.type !== "mount-write") return;
+      handleMirrorWrite(msg).catch((err) => {
+        log.warn("Mirror", `bridge handler crashed: ${err?.message}`);
+      });
+    });
   }
 } catch (err) {
   log.warn("Mirror", `mount spawn failed: ${err.message}`);
+}
+
+async function handleMirrorWrite(msg) {
+  if (!mirrorProc) return;
+  const cid = msg.cid;
+  const reply = (status, payload) => {
+    try { mirrorProc?.send({ type: "mount-reply", cid, status, ...payload }); }
+    catch { /* child gone */ }
+  };
+  const pushInvalidate = (payload) => {
+    try { mirrorProc?.send({ type: "mount-invalidate", ...payload }); }
+    catch { /* child gone */ }
+  };
+  let result;
+  try {
+    result = await dispatchMirrorOp(msg, pushInvalidate);
+    reply("ok", { data: result || {} });
+  } catch (err) {
+    const code = mapMirrorError(err);
+    reply("error", { error: { code, message: err?.message || String(err) } });
+  }
+}
+
+function mapMirrorError(err) {
+  if (!err) return "EIO";
+  if (err.code === "EACCES" || err.code === "EEXIST" || err.code === "ENOENT"
+      || err.code === "ENOSPC" || err.code === "EXDEV" || err.code === "ENOTEMPTY"
+      || err.code === "EINVAL" || err.code === "EROFS" || err.code === "EIO") {
+    return err.code;
+  }
+  // IbpError kinds: map to posix family.
+  if (err.name === "IbpError") {
+    if (err.code === "FORBIDDEN" || err.code === "UNAUTHORIZED") return "EACCES";
+    if (err.code === "SOURCE_READ_ONLY") return "EROFS";
+    if (err.code === "RESOURCE_CONFLICT") return "EEXIST";
+    if (err.code === "INVALID_INPUT") {
+      // The rename-matter handler tags name-in-use specifically.
+      if (err.detail?.reason === "name-in-use") return "EEXIST";
+      return "EINVAL";
+    }
+    if (err.code === "MATTER_NOT_FOUND" || err.code === "SPACE_NOT_FOUND") return "ENOENT";
+  }
+  return "EIO";
+}
+
+async function dispatchMirrorOp(msg, pushInvalidate) {
+  const { withIAmAct } = await import("./seed/sprout.js");
+  const { I_AM } = await import("./seed/materials/being/seedBeings.js");
+  const { doVerb } = await import("./seed/ibp/verbs/do.js");
+  const { putContent, getContent, isCasRef } =
+    await import("./seed/materials/matter/contentStore.js");
+  const { loadOrFold } = await import("./seed/materials/projections.js");
+  const { getSourceSpaceId } = await import("./seed/materials/space/source.js");
+
+  const op = msg.op;
+
+  // Helper: read the matter's current bytes (for write/truncate splice).
+  // Source matter pre-step-2 carries a {path, hash, ...} reference;
+  // a chain write replaces it with a CAS ref. Either way we read the
+  // hash if there is one; otherwise we start from empty bytes.
+  async function readCurrentBytes(matterId) {
+    const slot = await loadOrFold("matter", String(matterId), "0");
+    if (!slot) {
+      throw Object.assign(new Error(`matter ${matterId} not found`), { code: "ENOENT" });
+    }
+    const content = slot.state?.content;
+    if (isCasRef(content) && content.hash) {
+      const buf = await getContent(content.hash);
+      return buf || Buffer.alloc(0);
+    }
+    // Source-shaped ref: { path, kind, hash? }. Use hash when present.
+    if (content && typeof content === "object" && typeof content.hash === "string") {
+      const buf = await getContent(content.hash);
+      return buf || Buffer.alloc(0);
+    }
+    return Buffer.alloc(0);
+  }
+
+  if (op === "write") {
+    const matterId = String(msg.matterId);
+    const offset = Number(msg.offset) || 0;
+    const incoming = Buffer.from(msg.bytes || "", "base64");
+    const cur = await readCurrentBytes(matterId);
+    const end = offset + incoming.length;
+    const out = Buffer.alloc(Math.max(cur.length, end));
+    cur.copy(out, 0);
+    incoming.copy(out, offset);
+    const ref = await putContent(out, { encoding: null, name: null });
+    await withIAmAct(`mirror:write`, async (ctx) => {
+      await doVerb(
+        { kind: "matter", id: matterId },
+        "set-matter",
+        { field: "content", value: ref },
+        { identity: I_AM, summonCtx: ctx },
+      );
+    });
+    pushInvalidate({ path: msg.path, kind: "file", matterId, hash: ref.hash, size: ref.size });
+    return { hash: ref.hash, size: ref.size };
+  }
+
+  if (op === "truncate") {
+    const matterId = String(msg.matterId);
+    const size = Math.max(0, Number(msg.size) || 0);
+    let out;
+    if (size === 0) {
+      out = Buffer.alloc(0);
+    } else {
+      const cur = await readCurrentBytes(matterId);
+      if (size <= cur.length) out = cur.subarray(0, size);
+      else {
+        out = Buffer.alloc(size);
+        cur.copy(out, 0);
+      }
+    }
+    const ref = await putContent(out, { encoding: null, name: null });
+    await withIAmAct(`mirror:truncate`, async (ctx) => {
+      await doVerb(
+        { kind: "matter", id: matterId },
+        "set-matter",
+        { field: "content", value: ref },
+        { identity: I_AM, summonCtx: ctx },
+      );
+    });
+    pushInvalidate({ path: msg.path, kind: "file", matterId, hash: ref.hash, size: ref.size });
+    return { hash: ref.hash, size: ref.size };
+  }
+
+  if (op === "create") {
+    const parentMatterId = msg.parentMatterId ? String(msg.parentMatterId) : null;
+    const name = String(msg.name || "");
+    const sourceSpaceId = getSourceSpaceId();
+    const target = parentMatterId
+      ? { kind: "matter", id: parentMatterId }
+      : (sourceSpaceId ? { kind: "space", id: sourceSpaceId } : null);
+    if (!target) {
+      throw Object.assign(new Error("mirror: no parent target"), { code: "ENOENT" });
+    }
+    // Empty file at birth; vim et al. will subsequently write contents.
+    // Encoding="utf8" treats the empty bytes as text so editors get the
+    // text contentKind; a later binary write replaces the ref.
+    const ref = await putContent("", { encoding: "utf8", name });
+    let resultMatterId = null;
+    await withIAmAct(`mirror:create`, async (ctx) => {
+      const r = await doVerb(
+        target,
+        "create-matter",
+        { name, type: "source", content: ref },
+        { identity: I_AM, summonCtx: ctx },
+      );
+      resultMatterId = r?.matterId || null;
+    });
+    pushInvalidate({ path: msg.path, kind: "file", matterId: resultMatterId, hash: ref.hash, size: ref.size });
+    return { matterId: resultMatterId, hash: ref.hash, size: ref.size };
+  }
+
+  if (op === "unlink") {
+    const matterId = String(msg.matterId);
+    await withIAmAct(`mirror:unlink`, async (ctx) => {
+      await doVerb(
+        { kind: "matter", id: matterId },
+        "end-matter",
+        {},
+        { identity: I_AM, summonCtx: ctx },
+      );
+    });
+    pushInvalidate({ path: msg.path, removed: true, matterId });
+    return { removed: true };
+  }
+
+  if (op === "rename") {
+    const matterId = String(msg.matterId);
+    const replaceMatterId = msg.replace && msg.replaceMatterId
+      ? String(msg.replaceMatterId)
+      : null;
+    if (msg.sameParent) {
+      // Atomic rename-replace: end the displaced row and rename the
+      // source row in one moment so the destination path is never
+      // empty between facts. The rename-matter handler skips its
+      // per-folder uniqueness check when allowReplace is set; the
+      // caller (this branch) is responsible for ensuring the
+      // colliding row is ended in the same withIAmAct, which is what
+      // happens here.
+      await withIAmAct(`mirror:rename`, async (ctx) => {
+        if (replaceMatterId) {
+          await doVerb(
+            { kind: "matter", id: replaceMatterId },
+            "end-matter",
+            {},
+            { identity: I_AM, summonCtx: ctx },
+          );
+        }
+        await doVerb(
+          { kind: "matter", id: matterId },
+          "rename-matter",
+          { name: String(msg.newName || ""), allowReplace: !!replaceMatterId },
+          { identity: I_AM, summonCtx: ctx },
+        );
+      });
+      if (replaceMatterId) {
+        pushInvalidate({ path: msg.path, removed: true, matterId: replaceMatterId });
+      }
+      pushInvalidate({ renamed: true, from: msg.from, path: msg.path, matterId });
+      return { renamed: true, replaced: !!replaceMatterId };
+    }
+    // Cross-parent rename: the simplest honest path (step 2) is a
+    // spaceId move when the new parent is a top-level space and a
+    // rename when the leaf name also changes. Nested parentMatterId
+    // moves are a step-3 seam (the verb fold for moving across
+    // folders that are themselves matter rows).
+    if (msg.newParentMatterId) {
+      throw Object.assign(
+        new Error("mirror: cross-folder rename across matter folders is step 3"),
+        { code: "EXDEV" },
+      );
+    }
+    const sourceSpaceId = getSourceSpaceId();
+    if (!sourceSpaceId) {
+      throw Object.assign(new Error("mirror: no source space"), { code: "EIO" });
+    }
+    await withIAmAct(`mirror:rename-move`, async (ctx) => {
+      await doVerb(
+        { kind: "matter", id: matterId },
+        "set-matter",
+        { field: "spaceId", value: sourceSpaceId },
+        { identity: I_AM, summonCtx: ctx },
+      );
+    });
+    if (msg.newName) {
+      await withIAmAct(`mirror:rename`, async (ctx) => {
+        await doVerb(
+          { kind: "matter", id: matterId },
+          "rename-matter",
+          { name: String(msg.newName) },
+          { identity: I_AM, summonCtx: ctx },
+        );
+      });
+    }
+    pushInvalidate({ renamed: true, from: msg.from, path: msg.path, matterId });
+    return { renamed: true };
+  }
+
+  if (op === "mkdir") {
+    const parentMatterId = msg.parentMatterId ? String(msg.parentMatterId) : null;
+    const name = String(msg.name || "");
+    const sourceSpaceId = getSourceSpaceId();
+    const target = parentMatterId
+      ? { kind: "matter", id: parentMatterId }
+      : (sourceSpaceId ? { kind: "space", id: sourceSpaceId } : null);
+    if (!target) {
+      throw Object.assign(new Error("mirror: no parent target"), { code: "ENOENT" });
+    }
+    let resultMatterId = null;
+    await withIAmAct(`mirror:mkdir`, async (ctx) => {
+      const r = await doVerb(
+        target,
+        "create-matter",
+        { name, type: "source", content: { kind: "directory", path: null } },
+        { identity: I_AM, summonCtx: ctx },
+      );
+      resultMatterId = r?.matterId || null;
+    });
+    pushInvalidate({ path: msg.path, kind: "dir", matterId: resultMatterId });
+    return { matterId: resultMatterId };
+  }
+
+  throw Object.assign(new Error(`mirror: unknown op "${op}"`), { code: "EINVAL" });
 }
 
 // Earth is whole. I mount the seed routers onto the app: rate limit,
@@ -428,10 +708,14 @@ async function shutdown(signal) {
 
   // Unmount the mirror first; let it answer one final round of FUSE
   // callbacks then teardown. SIGINT triggers mirror-mount's teardown
-  // handler which calls fuse.unmount before exit.
+  // handler which rejects all pending ipc requests with EIO so any
+  // FUSE callback blocked on the bridge unwinds, then calls
+  // fuse.unmount before exit. With step-2 write traffic in flight we
+  // give the unmount a longer window than the read-only step 1
+  // baseline (800ms → 3s) to drain.
   if (mirrorProc) {
     try { mirrorProc.kill("SIGINT"); } catch {}
-    await new Promise((r) => setTimeout(r, 800));
+    await new Promise((r) => setTimeout(r, 3000));
   }
 
   // Host observation: stop stamping the disconnect storm (the next

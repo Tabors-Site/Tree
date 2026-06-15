@@ -28,7 +28,11 @@ const QUALITIES_PREFIX = "qualities.";
 // hold those grants wherever they happen to stand. To the reducer
 // it's one more qualities write; the target kind routes it to the
 // right aggregate's reel.
-const SET_ACTIONS = new Set(["set-space", "set-being", "set-matter", "set-model"]);
+// rename-matter rides the same reducer path as set-matter:name. The
+// verb separates the intent (an audit-trail "rename") from the bare
+// scalar write, but the fold is the same one-field update on the
+// matter row's name. See materials/matter/ops.js renameMatterHandler.
+const SET_ACTIONS = new Set(["set-space", "set-being", "set-matter", "set-model", "rename-matter"]);
 const CREATE_ACTIONS = new Set(["create-space", "create-matter"]);
 
 // Plain scalar/array fields the `do:set` op writes on a single

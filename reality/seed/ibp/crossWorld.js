@@ -110,9 +110,13 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
   const { withActChainLock } = await import("../past/act/actChainLock.js");
   const { loadSigningKey, signActDoc, signEnvelopeBeingSig } =
     await import("../past/act/actSig.js");
-  // Load the actor's key once. The home reality holds it custodially; for
-  // a being running its OWN reality, the custodian is the being itself.
-  const signingPem = await loadSigningKey(actor.beingId, actor.branch);
+  // Load the actor's NAME key once (the name is the signer; the being is
+  // what it acts through). The home reality holds it custodially. Fall back to
+  // beingId only for the pre-split / i-am case where they coincide; an
+  // ordinary post-split being whose id is a content hash only resolves a key
+  // via its nameId.
+  const actorNameId = actor.nameId || actor.beingId;
+  const signingPem = await loadSigningKey(actorNameId, actor.branch);
   const opening = {
     beingIn: actor.beingId,
     beingOut: actor.beingId,
@@ -139,13 +143,14 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
     // true. ΔF is empty (the consequences land on the foreign chain), so
     // factIds = [].
     const sig = await signActDoc(
-      { _id: id, p, beingIn: actor.beingId, beingOut: actor.beingId, reality, branch: actor.branch },
+      { _id: id, p, nameId: actorNameId, beingIn: actor.beingId, beingOut: actor.beingId, reality, branch: actor.branch },
       [],
       signingPem,
     );
     await Act.create({
       _id: id,
       p,
+      nameId: actorNameId,
       beingIn: actor.beingId,
       beingOut: actor.beingId,
       ibpAddress: envelope.address,
@@ -187,17 +192,18 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
   // forwardToPeer import is lazy so this seed module doesn't pull
   // protocols/ at module-load time.
   const { forwardToPeer } = await import("../../protocols/ibp/canopy.js");
-  // Sign the deed with the actor's own key: this verb, on this address,
-  // with this payload, tied to the home act just opened. The receiving
-  // reality verifies it self-certifyingly against actor.beingId — no
-  // callback home. Null when the actor has no local key (anonymous /
-  // keyless); the call still forwards under the reality-level canopy sig.
+  // Sign the deed with the actor's own NAME key: this verb, on this address,
+  // with this payload, tied to the home act just opened. The receiving reality
+  // verifies it self-certifyingly against the NAME (actorNameId) — no callback
+  // home. Null when the actor has no local name key (anonymous / keyless, or a
+  // foreign name with no local custody); the call still forwards under the
+  // reality-level canopy sig (and a strict peer refuses the unsigned envelope).
   const beingSig = await signEnvelopeBeingSig(
     {
       verb: envelope.verb,
       address: envelope.address,
       payload: envelope.payload,
-      beingId: actor.beingId,
+      nameId: actorNameId,
       actId,
       branch: actor.branch,
       reality,
@@ -206,7 +212,7 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
   );
   const peerAck = await forwardToPeer({
     ...envelope,
-    identity: identity || { beingId: actor.beingId, name: null },
+    identity: identity || { beingId: actor.beingId, name: null, nameId: actor.nameId || null },
     actorBranch: actor.branch,
     actorActId: actId,
     beingSig,
@@ -281,11 +287,12 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
 
   // Cross-reality being-sig gate, BEFORE any verb work or seal. If the
   // envelope carries the actor's own signature over { verb, address,
-  // payload, beingId, actId, branch, reality }, verify it against the
-  // actor's beingId (which IS the pubkey) — self-certifying, no callback
-  // to the actor's home reality. A present-but-invalid sig is a hard
-  // refusal; an absent sig is accepted (the reality-level canopy sig that
-  // got us here already vouched, and peers may not sign yet).
+  // payload, nameId, actId, branch, reality }, verify it against the actor's
+  // NAME (which IS the pubkey) — self-certifying, no callback to the actor's
+  // home reality. A present-but-invalid sig is a hard refusal; an absent sig
+  // is accepted (the reality-level canopy sig that got us here already
+  // vouched, and peers may not sign yet).
+  const actorNameId = actor.nameId || actor.beingId;
   let beingSigVerified = false;
   {
     const { verifyEnvelopeBeingSig } = await import("../past/act/actSig.js");
@@ -294,7 +301,7 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
         verb,
         address,
         payload,
-        beingId: actor.beingId,
+        nameId: actorNameId,
         actId: actor.actId,
         branch: actor.branch,
         reality: actor.reality,
@@ -343,6 +350,7 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
   // reads the four identity fields off it to derive crossOrigin.
   const actorAct = {
     _id: actor.actId,
+    nameId: actorNameId,
     beingIn: actor.beingId,
     reality: actor.reality,
     branch: actor.branch,
@@ -365,6 +373,10 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
   const identity = {
     beingId: actor.beingId,
     name: null,
+    // The NAME the foreign actor signed as (verified self-certifyingly above).
+    // Cherub's father-admit matches the vessel's qualities.father.nameId
+    // against THIS (the proven id), never the client-supplied beingId.
+    nameId: actorNameId,
     // The verifyIncoming middleware will already have stamped
     // req.canopySender; authorize sees it via carrier.
     canopyVerifiedSender: actor.reality,

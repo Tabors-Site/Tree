@@ -84,6 +84,9 @@ export async function dispatchIbp(carrier, msg, ack) {
       // Act on this side.
       const actorBeingId = carrier?.beingId || null;
       const actorBranch = carrier?.currentBranch || "0";
+      // The NAME the actor signs as (carrier-only, never client payload). It
+      // is what a foreign reality verifies the cross-world deed against.
+      const actorNameId = carrier?.nameId || null;
       if (actorBeingId) {
         try {
           const { crossRealityDispatch } = await import(
@@ -91,8 +94,8 @@ export async function dispatchIbp(carrier, msg, ack) {
           );
           const { peerAck } = await crossRealityDispatch({
             envelope: env,
-            actor: { beingId: actorBeingId, branch: actorBranch },
-            identity: { beingId: actorBeingId, name: carrier?.name || null },
+            actor: { beingId: actorBeingId, branch: actorBranch, nameId: actorNameId },
+            identity: { beingId: actorBeingId, name: carrier?.name || null, nameId: actorNameId },
           });
           if (typeof ack === "function") ack(peerAck);
           return;

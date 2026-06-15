@@ -16,23 +16,11 @@ It replaces the parts of the web stack that are centralized or fragile, and keep
 - **Transport (replaces HTTP and WebSocket).** IBP envelopes ride a lean protocol directly over TCP or UDP, signed cryptographically. No HTTP overhead, no CA dependency. An HTTPS gateway stays available for browsers.
 - **Identity (replaces CAs).** The I_AM public key is the root of trust. A hijacked DNS record or a coerced certificate authority cannot impersonate a reality, because neither can produce the I_AM signature.
 - **Packet delivery (keeps IP).** IP still moves the bytes. Replacing IP means an overlay network (I2P, Yggdrasil), a separate and much larger undertaking that is not worth it. IP is fine; the layers above it are the problem.
+  YES KEEP IP LOL THAT IS LOWER ON OSI THAN NEEDED FOR NOW
 
 ## What it would be
 
 An independent networking stack, not an app on top of the web. The web stack is HTTP plus DNS plus CAs plus browsers plus servers. The TreeOS stack is IBP plus Peering plus cryptographic identity plus native clients, with an HTTP gateway at the edge for compatibility. Trust is cryptographic, not institutional, so the centralized layers (DNS, CAs) are simply not in the trust path. This makes the substrate's existing commitments operationally real: self sovereign identity, federation by verification, local first computing, censorship resistance, and durability when external infrastructure changes.
-
-## The address after the shift
-
-Reality identifiers stop being DNS names and become I_AM keys with a readable alias on top. The recommended shape:
-
-```
-alias::path@name           default. the alias resolves through Peering, not DNS
-alias#pubkey::path@name     pinned. the alias that resolves to exactly this key
-pubkey::path@name           raw. when no alias is known or trusted
-alias  or  pubkey           identity layer (NAME verb), no position
-```
-
-The alias is convenience; the pubkey is canonical. Clients show the alias and reveal the key on request, the way OpenSSH shows a hostname but verifies a key fingerprint. Aliases are claimable but not exclusive: Peering returns every signed claimant for a name, and the asker's trust policy (or a pinned `#pubkey`) decides, so no central authority owns a name. Using `::` for the reality boundary also retires the email collision, because `alias::path@name` no longer looks like `local@domain`.
 
 ## The plan
 
@@ -75,27 +63,7 @@ tabor@gmail.com and tabor@treeos.ai look identical in shape to email addresses b
 This is a real ambiguity for human-readable addresses. Email has owned the local@domain shape for decades. Anything that looks like that gets interpreted as email by default.
 
 A few ways to handle it:
-
-Distinct sigil. Use something other than @ for reality-scoped identity. Like tabor::treeos.ai or tabor/treeos.ai or tabor%treeos.ai. Breaks the email shape, removes ambiguity, but loses the readable familiarity.
-
-Different separator order. treeos.ai/tabor or treeos.ai::tabor — reality first, Name second. This is closer to how URLs work (domain first, path second). Doesn't conflict with email at all.
-
-Distinct domain suffix. If TreeOS realities are .treeos or similar instead of .com/.ai, then tabor@treeos.ai would be email but tabor@tabors.treeos would be unambiguously a TreeOS reference. Requires TreeOS to control or differentiate the namespace.
-
-Context-aware. Same syntax, different interpretation depending on where you see it. A TreeOS client sees tabor@treeos.ai and interprets it as a Name reference; an email client sees it and tries to send mail. This works but creates confusion for users.
-
-Probably the cleanest is using a different separator. tabor::treeos.ai doesn't collide with anything and signals that you're in a different namespace. The double-colon is already used in TreeOS for layered addressing; extending it to identity references is consistent.
-
-But the more interesting question you're asking is whether TreeOS could replace the routing infrastructure itself.
-
-TreeOS as its own routing layer
-Right now TreeOS uses DNS (for public realities) and would use mDNS (for LAN). Both are external infrastructure that TreeOS depends on. Your question is whether TreeOS could route packets itself without depending on DNS or HTTP.
-
-Let me think about what this would actually involve.
-
-The packet routing problem. When reality A wants to send something to reality B, the substrate needs to know where B is on the network. Currently this means: A queries DNS for B's domain, gets an IP, opens a WebSocket to that IP on a specific port, sends bytes through. Three pieces of external infrastructure: DNS (resolution), IP routing (network layer), TCP/HTTP (transport).
-
-A TreeOS-native routing system could replace each of these:
+ould replace each of these:
 
 Replacing DNS: TreeOS could maintain its own directory of reality identities to network addresses. We discussed this earlier — address facts stamped by each reality, federated through the substrate, queryable through Peering nodes. A reality looking for B queries the Peering network, finds B's signed address facts, uses the addresses listed. No DNS needed.
 
@@ -233,53 +201,6 @@ Show me what ibp address would look lik after and a short demo plan
 
 6:07 AM
 Right — DNS servers are just forwarders that resolve names to addresses. Every TreeOS instance can be one, because every instance already knows its own reality's identity and can resolve queries about other realities it knows. The Peering layer is essentially a distributed DNS where the records are signed by I_AM keys instead of authorized by registrars.
-
-Let me work through what addressing looks like and a demo plan.
-
-IBPA after the shift
-The current shape uses DNS-like reality identifiers:
-
-SEE tabors-site::lab/equipment@tabor
-NAME tabors-site
-SUMMON bobs-site::workshop/forge@bob
-After TreeOS becomes its own resolution layer, reality identifiers become I_AM public keys (or short forms of them). A few options for how this looks:
-
-Option A: Raw pubkey addresses.
-
-SEE z6Mk7nF8...::lab/equipment@tabor
-NAME z6Mk7nF8...
-SUMMON z6Mq2pR4...::workshop/forge@bob
-Cryptographically pure but unreadable. Good for machines, terrible for humans.
-
-Option B: Pubkey with optional alias.
-
-SEE z6Mk7nF8...(tabors-site)::lab/equipment@tabor
-NAME z6Mk7nF8...(tabors-site)
-The pubkey is canonical, the alias in parens is human-readable. The alias is metadata that any reality can choose to display; the pubkey is what's actually addressed.
-
-Option C: Aliased addresses with substrate-level resolution.
-
-SEE tabors-site::lab/equipment@tabor
-Looks the same as today, but tabors-site is now resolved through the TreeOS Peering layer (querying for "which I_AM is known by the human-readable name tabors-site"). Aliases are claimed and verified through the Peering layer, not DNS.
-
-Option D: Composite — alias preferred, pubkey for disambiguation.
-
-SEE tabors-site::lab/equipment@tabor (most common — alias resolves)
-SEE tabors-site#z6Mk7nF8::lab/equipment@tabor (alias + pubkey suffix for explicit pinning)
-SEE z6Mk7nF8::lab/equipment@tabor (raw pubkey when no alias known)
-This is probably the cleanest. Aliases work normally. When you need disambiguation (two realities claiming the same alias, security-sensitive contexts), you can pin the pubkey suffix.
-
-The pubkey suffix uses # because @ and :: are already taken. It says "the alias 'tabors-site' that specifically resolves to this pubkey, not any other claimant of that alias."
-
-Resolution flow
-When a TreeOS instance encounters tabors-site::lab/equipment@tabor:
-
-Check local Peering cache for tabors-site → if found, use the I_AM pubkey from cache
-If not cached, query known Peering nodes for tabors-site
-Peering nodes return signed claims: "this alias is claimed by I_AM pubkey X, signed by X with this address fact"
-Verify the claim cryptographically (the I_AM signed both the alias claim and the current address facts)
-Connect to the address using the verified pubkey for further auth
-This is exactly DNS-shaped, but with cryptographic claims instead of administrative authority. The Peering nodes are the resolvers. Each TreeOS instance can be a Peering node for the realities it knows about.
 
 Alias conflicts
 Multiple realities might claim the alias tabors-site. The Peering layer handles this differently than DNS:

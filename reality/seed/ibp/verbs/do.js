@@ -70,16 +70,17 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
   // both are absent — silent default to "0" hid threading bugs.
   const branch = resolveBranchForFact(opts.summonCtx, opts.currentBranch, "do");
 
-  // Read-only source gate. DO is always a write; if the target is
-  // source matter (the seed's disk mirror) or anything under the
-  // .source self-tree, reject before the handler runs. Type-driven:
-  // typed {kind,id} matter targets are loaded and checked — the old
-  // check read `target.origin` off row-shaped targets, which typed
-  // identities never carry, so it had silently gone dead.
-  const denial = await checkReadOnlySource(target, branch);
-  if (denial) {
-    throw new IbpError(IBP_ERR.SOURCE_READ_ONLY, denial);
-  }
+  // Source matter joins the normal chain rule (philosophy/OS/MIRROR.md
+  // step 2). Writes through the mirror mount land as sealed facts on
+  // the I-Am's chain; the old SOURCE_READ_ONLY gate is retired so the
+  // FUSE write path can reach the matter handlers. The disk-fold
+  // populator in materials/space/source.js keeps its own carve-out
+  // (the single sanctioned exception): it patches source matter rows
+  // directly through initProjection, bypassing the chain on purpose,
+  // because the disk walk is the populator's truth. checkReadOnlySource
+  // stays exported below so the populator can still consult it if it
+  // wants to refuse a redundant write; nothing in the seed calls it
+  // anymore.
 
   // Matter-type gate. An op that declares `matterTypes` applies only
   // to matter of those types — the enforcement half of the type
@@ -325,11 +326,12 @@ async function resolveAuthSpaceId(target, auditTarget, branch) {
 
 /**
  * Returns null when the DO target is writable, or a reason string
- * when it is read-only: matter of type "source" (the seed's disk
- * mirror — bytes live in the repo checkout; an extension would have
- * to register a write-through handler to change that), or anything
- * under the .source self-tree. The caller throws
- * IbpError(SOURCE_READ_ONLY, reason).
+ * when it would have been the old source-read-only refusal. After
+ * MIRROR.md step 2 the do-verb path no longer calls this; source
+ * matter joins the normal chain rule. The helper stays available
+ * for materials/space/source.js (the disk-fold populator's own
+ * sanctioned carve-out) should it want to consult it. Nothing in
+ * the seed calls this anymore.
  */
 async function checkReadOnlySource(target, branch) {
   if (!target || typeof target !== "object") return null;

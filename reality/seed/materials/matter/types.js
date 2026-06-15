@@ -274,14 +274,17 @@ registerMatterType("model", {
 
 registerMatterType("source", {
   description:
-    "The seed's read-only disk mirror — one matter row per file/dir " +
-    "under the repo checkout, surfaced at the ./source heaven space. " +
-    "Content is the reference `{ path, kind, size?, mtime?, " +
-    "mimeType? }`; bytes live in the checkout. DO writes refuse " +
-    "(SOURCE_READ_ONLY gate in ibp/verbs/do.js) — the mirror syncs " +
-    "one way, disk → matter.",
-  contentKinds: ["none"],
-  ops: [],
+    "Source matter — one matter row per file/dir under the repo " +
+    "checkout, surfaced at the ./source heaven space and projected " +
+    "onto disk by the mirror mount (philosophy/OS/MIRROR.md step 2). " +
+    "The disk-fold populator (materials/space/source.js) births rows " +
+    "with the reference `{ path, kind, size?, mtime?, mimeType?, " +
+    "hash? }`; live writes through the mirror mount replace content " +
+    "with a CAS ref (`{ kind:\"cas\", hash, ... }`) the same way file " +
+    "matter does. Both content shapes are legal here; the mount " +
+    "rendering layer reads whichever the row currently carries.",
+  contentKinds: ["text", "binary", "none"],
+  ops: ["create-matter", "set-matter", "end-matter", "rename-matter"],
   render: { icon: "code", mode: "source" },
 });
 

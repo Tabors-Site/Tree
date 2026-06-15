@@ -150,6 +150,82 @@ A staged path that keeps the reality bootable at every step:
    mounted as a working path; the substrate for future
    filesystem-shaped flows.
 
+## Step 2 landed
+
+Write-back is wired. The mount is a forked child of the reality
+(begin.js opens stdio[3]="ipc"); each FUSE upcall the mount cannot
+answer locally rides that ipc channel to the parent. The parent runs
+the call inside `withIAmAct`, dispatches a DO verb, seals one act on
+the I-Am's chain, and replies with a status the child maps to a
+posix errno.
+
+Bridge choice: ipc-to-parent. In-process couples the FUSE event
+loop to the reality (a stuck callback freezes genesis). IBP-to-
+localhost forces the mount to authenticate as a Name over a
+WebSocket. IPC preserves the actor boundary (mount crash is
+contained, SIGINT teardown stays simple), keeps acts signed where
+the authority sits, and the message schema is small (six op tags,
+one request/reply correlation id).
+
+Tier-1 op mappings (the six FUSE upcalls that produce facts):
+
+- write     -> do:set-matter (field=content)
+- truncate  -> do:set-matter (field=content)
+- create    -> do:create-matter (type=source, empty content)
+- unlink    -> do:end-matter
+- rename    -> do:rename-matter (same parent)
+- mkdir     -> do:create-matter (type=source, kind=directory)
+
+`do:rename-matter` is the one new verb (materials/matter/ops.js).
+It runs a per-(spaceId, parentMatterId) uniqueness check on the
+live projection, then writes the matter's name through the same
+SCALAR_SET_FIELDS path set-matter:name uses. SET_ACTIONS in
+materials/reducerHelpers.js grew to include "rename-matter" so the
+fold path applies.
+
+Tier-2 ops are deferred. chmod returns 0 silently (matter has no
+mode bits yet); chown, symlink, rmdir return ENOTSUP until folder
+matter carries an emptiness predicate and matter qualities carry
+a posix namespace.
+
+`SOURCE_READ_ONLY` retires from `ibp/verbs/do.js`. Source matter
+joins the normal chain rule: a mount write replaces its content
+field with a CAS ref the same way a file matter edit does. The
+disk-fold populator in `materials/space/source.js` keeps its own
+carve-out (the single sanctioned exception): it patches source
+matter rows directly through `initProjection`, bypassing the chain
+on purpose, because the disk walk is the populator's truth. The
+SOURCE_READ_ONLY error code stays in `protocol.js` as a vestigial
+slot the populator can still raise.
+
+Authority: writes flow as I-Am (the bootstrap axiom in
+`ibp/authorize.js`). The Name primitive is honored in the ipc
+envelope (`nameId: "i-am"`) so a future per-uid mount Name is a
+clean swap.
+
+Concurrency: the existing actChainLock on (branch="0", being=I-Am)
+serializes concurrent FUSE writes through the same open->seal
+protocol used elsewhere. CAS conflicts surface as IbpError -> EIO
+so the editor retries.
+
+Atomic rename-replace: POSIX `rename(2)` semantics replace the
+destination when it exists; vim, sed, and most editors save through
+this pattern (write a temp file, rename it over the original). The
+mount forwards the displaced matter id on `rename` over IPC; the
+parent ends the displaced matter and renames the source in one
+moment, the rename-matter handler accepts `allowReplace: true` to
+skip its per-folder uniqueness check when the caller guarantees the
+collider is being ended in the same `deltaF`. Editor save patterns
+work.
+
+What this leaves open: write batching (vim keystroke storm seals
+one fact per write today), out-of-band invalidation (a portal-side
+edit while the mount is up does not refresh the child tree),
+cross-folder rename across nested parent matters (returns EXDEV),
+cross-folder rename-replace (only same-parent atomic replace is
+supported today; cross-folder replace would need a richer cross-
+folder move verb).
+
 ## Open seams
 
 - **Per-OS glue.** FUSE on Linux is mature; Windows wants Dokany;

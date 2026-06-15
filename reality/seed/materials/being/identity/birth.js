@@ -449,6 +449,10 @@ export async function birthBeing({ spec, identity, summonCtx = null, branch = nu
     qualities.father = {
       reality: spec.father.reality,
       beingId: spec.father.beingId,
+      // The father's NAME — what cherub's cross-reality father-admit matches
+      // against (the cryptographically-proven id), NOT the beingId. Defaults
+      // to the beingId for a pre-split father whose being id IS his pubkey.
+      nameId:  spec.father.nameId || spec.father.beingId,
     };
   }
 

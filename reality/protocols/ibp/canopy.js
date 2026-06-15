@@ -394,6 +394,11 @@ export function actorTupleFromRequest(req) {
   if (!req?.canopySender) return null;
   const body = req.body || {};
   const beingId  = body?.identity?.beingId || null;
+  // The NAME the actor signed as. Client-supplied like beingId, but its
+  // integrity rests ENTIRELY on the envelope being-sig (verified
+  // self-certifyingly against this nameId downstream), so a forged nameId can
+  // never verify. reality stays req.canopySender (ground truth) below.
+  const nameId   = body?.identity?.nameId || null;
   const branch   = body?.actorBranch || null;
   const actId    = body?.actorActId  || null;
   const beingSig = body?.beingSig    || null;
@@ -421,6 +426,7 @@ export function actorTupleFromRequest(req) {
     reality: req.canopySender,
     branch,
     beingId,
+    nameId,
     actId,
     beingSig,
   };

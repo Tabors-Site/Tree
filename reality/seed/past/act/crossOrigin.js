@@ -83,7 +83,11 @@ export function deriveCrossOrigin(actorAct, target) {
     // shapes uniformly.
     reality: actorReality === targetReality ? null : actorReality,
     branch:  actorBranch,
+    // beingId = the POSITION the act came through (stays the dedupe key with
+    // actId). nameId = the SIGNER-of-record (the foreign actor's name), so a
+    // foreign father's facts attribute to HIS name, not the vessel's owner.
     beingId: actorAct.beingIn,
+    nameId:  actorAct.nameId ?? null,
     actId:   actorAct._id,
   };
 }

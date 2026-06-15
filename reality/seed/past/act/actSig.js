@@ -188,13 +188,16 @@ export async function verifyActSig(act, { localReality = null } = {}) {
  * (the peer reality signs that); this proves the DEED is fresh (the
  * being signs this).
  */
-export function buildEnvelopeSigPayload({ verb, address, payload, beingId, actId, branch, reality, time }) {
+export function buildEnvelopeSigPayload({ verb, address, payload, nameId, actId, branch, reality, time }) {
   return {
     kind:    "cross-reality-envelope",
     verb:    verb || null,
     address: address || null,
     payload: payload ?? null,
-    beingId: beingId || null,
+    // The SIGNER is the NAME (an ed25519 pubkey id), not the being it acts
+    // through — so a foreign actor's cross-world deed verifies self-certifyingly
+    // against the name it controls. (Was beingId before the Name/Being split.)
+    nameId:  nameId || null,
     actId:   actId || null,
     branch:  normBranch(branch),
     reality: reality || null,
@@ -222,27 +225,28 @@ function envelopeSigWindowMs() {
  * @param {string|null} pem  the actor's private key PEM (preloaded)
  */
 export async function signEnvelopeBeingSig(env, pem) {
-  if (pem === undefined) pem = await loadSigningKey(env.beingId, env.branch);
+  if (pem === undefined) pem = await loadSigningKey(env.nameId, env.branch);
   if (!pem) return null;
   try {
     const { signAsBeing } = await import("../../materials/name/keys.js");
     const time = new Date().toISOString();
     const value = signAsBeing(pem, buildEnvelopeSigPayload({ ...env, time }));
-    return { alg: "ed25519", by: env.beingId, value, time };
+    return { alg: "ed25519", by: env.nameId, value, time };
   } catch (err) {
-    log.warn("CrossWorld", `envelope signing failed for ${String(env?.beingId || "").slice(0, 10)}: ${err.message}`);
+    log.warn("CrossWorld", `envelope signing failed for ${String(env?.nameId || "").slice(0, 10)}: ${err.message}`);
     return null;
   }
 }
 
 /**
  * Verify a cross-reality envelope-sig self-certifyingly. The actor tuple's
- * beingId is the source of truth (it also drives crossOrigin), so the sig
- * is checked against env.beingId, NOT against beingSig.by — the sig must be
- * the actor's own. Returns { ok, reason }:
+ * NAME (nameId) is the source of truth (it also drives crossOrigin's signer),
+ * so the sig is checked against env.nameId, NOT against beingSig.by — the sig
+ * must be the actor's own name. nameId IS an ed25519 key id, so the pubkey is
+ * recovered straight from it (no directory, no callback home). Returns { ok, reason }:
  *   - no sig         → ok:true  "unsigned-advisory"   (reality sig vouched)
  *   - non-key actor  → ok:true  "non-key-signer"      (i-am / anon; reality sig vouches)
- *   - key actor      → verified against env.beingId
+ *   - key actor      → verified against env.nameId
  * A PRESENT sig that fails is a hard ok:false.
  *
  * @param {object} env       same shape as signEnvelopeBeingSig's env
@@ -251,7 +255,7 @@ export async function signEnvelopeBeingSig(env, pem) {
 export async function verifyEnvelopeBeingSig(env, beingSig) {
   if (!beingSig?.value) return { ok: true, reason: "unsigned-advisory" };
   const { isKeyId, verifyBeingSig } = await import("../../materials/name/keys.js");
-  const by = env?.beingId;
+  const by = env?.nameId;
   if (!isKeyId(by)) return { ok: true, reason: "non-key-signer" };
   // Freshness gate. The signing time is part of the signed payload, so a
   // stale or missing time on a PRESENT sig is a hard refusal: without it

@@ -190,6 +190,10 @@ async function handleMateRequest(message, ctx, precomputedName = null) {
   const father = {
     reality: fatherReality,
     beingId: String(askerBeingId),
+    // The father's NAME (the signer) — cherub's cross-reality father-admit
+    // matches THIS (the cryptographically-proven id), not the beingId.
+    // Falls back to the beingId for a pre-split father (beingId IS his pubkey).
+    nameId:  ctx?.askerNameId ? String(ctx.askerNameId) : String(askerBeingId),
   };
 
   // Resolve the homeSpace for the new vessel. Default: the reality
