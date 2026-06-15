@@ -88,12 +88,68 @@ async function banishHandler({ addressedNameId, payload }) {
   return { nameId };
 }
 
+// connect — bind the name to a session (the identity-layer be:connect). The
+// fact folds connected:true on the name's reel. GATE: a name can't connect
+// TWICE — one active session per name (release first). Also refused for a
+// banished name (it can never act again).
+async function connectNameHandler({ addressedNameId, payload }) {
+  const nameId = addressedNameId || payload?.nameId || null;
+  if (!nameId) {
+    throw new IbpError(IBP_ERR.INVALID_INPUT,
+      "name connect requires a target name (address it <nameId>@<realityDomain>)");
+  }
+  const { loadProjection } = await import("../materials/projections.js");
+  const slot = await loadProjection("name", String(nameId), "0");
+  if (!slot?.state) {
+    throw new IbpError(IBP_ERR.NAME_NOT_FOUND, `no such name: ${nameId}`);
+  }
+  const { isNameBanished } = await import("../materials/name/closure.js");
+  if (await isNameBanished(String(nameId))) {
+    throw new IbpError(IBP_ERR.FORBIDDEN, "name is banished; it cannot connect");
+  }
+  if (slot.state.connected === true) {
+    throw new IbpError(IBP_ERR.RESOURCE_CONFLICT,
+      "name is already connected — release it first (one active session per name)");
+  }
+  return { nameId };
+}
+
+// release — release the name from its session (the name's own be:release). The
+// fact folds connected:false. GATE: a name can't release when it is not
+// connected (nothing to release).
+async function releaseNameHandler({ addressedNameId, payload }) {
+  const nameId = addressedNameId || payload?.nameId || null;
+  if (!nameId) {
+    throw new IbpError(IBP_ERR.INVALID_INPUT,
+      "name release requires a target name (address it <nameId>@<realityDomain>)");
+  }
+  const { loadProjection } = await import("../materials/projections.js");
+  const slot = await loadProjection("name", String(nameId), "0");
+  if (!slot?.state?.connected) {
+    throw new IbpError(IBP_ERR.RESOURCE_CONFLICT,
+      "name is not connected — nothing to release");
+  }
+  return { nameId };
+}
+
 export const NAME_OPS = Object.freeze({
   declare: {
     description: "Mint a new name (a facet of the reality's I_AM) with its own keypair.",
     label:       "Declare name",
     args:        { soulType: { type: "string", label: "Soul", required: false } },
     handler:     declareHandler,
+  },
+  connect: {
+    description: "Bind the name to a session (the identity-layer be:connect); folds connected on its reel.",
+    label:       "Connect name",
+    args:        {},
+    handler:     connectNameHandler,
+  },
+  release: {
+    description: "Release the name from its session (the name's be:release); folds released on its reel.",
+    label:       "Release name",
+    args:        {},
+    handler:     releaseNameHandler,
   },
   banish: {
     description: "The name tombstones itself; it can never sign a new fact again.",

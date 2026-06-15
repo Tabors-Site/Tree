@@ -25,8 +25,8 @@
 
 import log from "../../../seedReality/log.js";
 import { registerSeeOperation } from "../../../ibp/seeOps.js";
-import { buildInnerFace } from "../../beats/2-fold/innerFace.js";
-import { foldPlace } from "../../beats/2-fold/foldPlace.js";
+import { buildInnerFace } from "../../stamper/2-fold/innerFace.js";
+import { foldPlace } from "../../stamper/2-fold/foldPlace.js";
 import { loadOrFold } from "../../../materials/projections.js";
 import { getRole } from "../../roles/registry.js";
 

@@ -30,7 +30,7 @@ import {
   applyRefold,
   emitInnerFace,
 } from "./innerFaceLive.js";
-import { reelKey } from "../../seed/present/beats/2-fold/weave.js";
+import { reelKey } from "../../seed/present/stamper/2-fold/weave.js";
 import { getSeeOperation } from "../../seed/ibp/seeOps.js";
 
 // Seed-signal-to-live-emit bridge. When seed events touch data that

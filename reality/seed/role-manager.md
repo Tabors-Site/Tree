@@ -681,7 +681,7 @@ Plumbing change in seed/scopedReality (now resources/scopedReality.js): declare.
 BE:birth extended in seed/ibp/verbs/be.js: Payload now accepts roleFlow (array or JSON string). Threads through summonCreateBeing → createBeingWithHome → createBeing → stamps qualities.roleFlow at birth.
 
 4. Moment runner integration
-   seed/present/beats/1-assign.js:
+   seed/present/stamper/1-assign.js:
 
 Loads being + space row (the space row now selects qualities too)
 Async-precomputes callerEnrichment = { cognition, isAncestor, isDescendant } (Being.findById + isAncestorOf × 2)
@@ -773,7 +773,7 @@ seed/role-manager.md — canonical spec
 seed/present/roles/roleFlow.js — evaluator
 seed/present/roles/roleComposer.js — composer
 seed/present/roles/role-manager/ops.js — the three live-author ops
-seed/present/beats/1-assign.js — where everything plugs into the moment
+seed/present/stamper/1-assign.js — where everything plugs into the moment
 portal/shared/role-manager-panel.js + being-flow-panel.js — UI
 resources/emotions/ — example modifier extension
 .test/scripts/verify-roleflow-determinism.js — purity contract

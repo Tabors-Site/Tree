@@ -30,7 +30,7 @@
 // resolver or a failing address fetch never blocks the moment . the
 // being just does not see that block.
 //
-// Lives in beats/2-fold/ (not under cognition/llm/) because canSee
+// Lives in stamper/2-fold/ (not under cognition/llm/) because canSee
 // resolution is part of the fold beat per philosophy/names/innerFace.md.
 // All three souls share the same resolved blocks; only the formatting
 // differs.

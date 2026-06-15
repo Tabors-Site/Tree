@@ -282,13 +282,13 @@ the future is ever stored. The doctrine made structural.
 The present is the one moment that is live. I run each moment through
 four beats: **assign** (open the moment, resolve the being), **fold**
 (mount the face), **momentum** (the act), **stamped** (seal). The
-beats live grouped in `beats/`, numbered so `ls` tells the order;
+beats live grouped in `stamper/`, numbered so `ls` tells the order;
 `moment.js` at the root is the conductor that walks them.
 
 ```
 present/
 ├── moment.js            the conductor; walks the four beats in order
-├── beats/               the four-beat sequence, visibly ordered
+├── stamper/             the four-beat sequence, visibly ordered
 │   ├── 1-assign.js         mint actId, plan Act, resolve role + summonCtx
 │   ├── 2-fold/             the read side; one cross-reel weave per moment
 │   │   ├── foldEngine.js      generic per-aggregate fold + cross-cutting registry
@@ -362,7 +362,7 @@ past/
 ```
 
 An **Act** is one sealed moment of one being, opened at assign, closed
-at the seal in [4-stamped.js](present/beats/4-stamped.js). A **Fact** is the
+at the seal in [4-stamped.js](present/stamper/4-stamped.js). A **Fact** is the
 trace one act leaves on the reel of the thing it changed. Acts belong
 to the doer; Facts belong to the things done-to; one act leads to many
 facts, one per aggregate it touched. A **reel** is the per-aggregate
@@ -460,7 +460,7 @@ and [internalConfig.js](internalConfig.js) (the config stores).
 
 ## The fold
 
-The fold engine ([present/beats/2-fold/foldEngine.js](present/beats/2-fold/foldEngine.js))
+The fold engine ([present/stamper/2-fold/foldEngine.js](present/stamper/2-fold/foldEngine.js))
 is generic over material type. It knows aggregates, facts, reducers,
 projections; never "being" or "space" or "matter" by name. Per-type
 logic lives in pluggable reducers under [materials/](materials/); the
@@ -501,7 +501,7 @@ changes. Per FOLD.md, the engine never grows; the materials catalog
 does. Extended, the cross-cutting registry grows; the engine never
 grows.
 
-**foldPlace** ([present/beats/2-fold/foldPlace.js](present/beats/2-fold/foldPlace.js))
+**foldPlace** ([present/stamper/2-fold/foldPlace.js](present/stamper/2-fold/foldPlace.js))
 is the cross-reel weave for one being's moment. It folds the being,
 its space, and that space's occupants. Per FOLD.md, reach is one hop.
 Child spaces are listed but not deep-folded; a being deep-folds a
@@ -512,14 +512,14 @@ child space only when it moves in.
 Folds come in two flavors. Both share the reducer; they differ in
 whether the computation commits anything.
 
-**Live folds** ([present/beats/2-fold/foldEngine.js#fold](present/beats/2-fold/foldEngine.js))
+**Live folds** ([present/stamper/2-fold/foldEngine.js#fold](present/stamper/2-fold/foldEngine.js))
 advance current-state projections and dispatch cross-cutting handlers
 as side effects of reading current truth. `fold("being", id)` writes
 the new projection row via `applyProjection`, fires every registered
 cross-cutting handler for each applied fact, and returns the
 current-as-of-now state.
 
-**Historical folds** ([present/beats/2-fold/foldAt.js#foldAt](present/beats/2-fold/foldAt.js))
+**Historical folds** ([present/stamper/2-fold/foldAt.js#foldAt](present/stamper/2-fold/foldAt.js))
 compute past projections as pure functions of the chain, with no side
 effects. `foldAt("being", id, { atSeq: 12347 })` walks the reel from
 genesis to seq 12347, applies the reducer cold from `initial()`, and
@@ -546,7 +546,7 @@ Every reel-bearing Fact carries two temporal fields:
 Historical queries internally always operate on `seq`. The
 `atTimestamp` shape on `foldAt` is a human helper: it resolves to the
 highest seq with `date <= target` via a two-step query
-([foldAt.js#resolveUntil](present/beats/2-fold/foldAt.js)), THEN
+([foldAt.js#resolveUntil](present/stamper/2-fold/foldAt.js)), THEN
 folds. Timestamps translate to seq before any fold work begins.
 
 **Cross-reel ordering by timestamp is never trusted.** There is no
@@ -570,7 +570,7 @@ foldAt(type, id, until)
 | Result clamps to current head   | When `atSeq` is greater than the reel's current head, foldAt returns the current state (without writing to the projection cache). |
 
 Callers who want graceful "didn't exist" handling catch
-`NoSuchHistoricalState` ([foldAt.js#NoSuchHistoricalState](present/beats/2-fold/foldAt.js))
+`NoSuchHistoricalState` ([foldAt.js#NoSuchHistoricalState](present/stamper/2-fold/foldAt.js))
 specifically — the named class distinguishes "this thing did not
 exist yet" from any other failure.
 
@@ -827,7 +827,7 @@ Only self-summons may carry non-forward orientation. The
 forward — a being can turn itself; it cannot turn another being.
 
 **Inner vs outer acts.** A classifier in
-[orientation.js](present/beats/2-fold/orientation.js) reads the ΔF and the doer:
+[orientation.js](present/stamper/2-fold/orientation.js) reads the ΔF and the doer:
 inner when every fact targets the doer's own reel AND no
 `be:summon` names another recipient; outer otherwise. This is
 single-writer read as a classifier — no new category, no new
@@ -928,7 +928,7 @@ emitFact(spec, summonCtx)           ← handlers never call logFact directly
   ↓
 ... more handlers fire inside the same moment, each pushing to ΔF ...
   ↓
-sealAct (beats/4-stamped.js) when momentum returns ok:true
+sealAct (stamper/4-stamped.js) when momentum returns ok:true
   ↓ if ΔF=0: Act.create()             ← single-doc atomic
   ↓ if ΔF≥1: withTransaction(session):
       appendDeltaFInSession(ΔF)        ← each fact under per-reel lock
@@ -1170,9 +1170,9 @@ moment running under root A emits a fresh top-level summon),
 (`{ content, time, stopped }` written at the seal), `severedAt` (set
 by markThreadSevered when a cut runs through this Act's rootCorrelation),
 `priority` (HUMAN | GATEWAY | INTERACTIVE | BACKGROUND), `receivedAt`,
-`stampedAt`. PLANNED in [beats/1-assign.js](present/beats/1-assign.js)
+`stampedAt`. PLANNED in [stamper/1-assign.js](present/stamper/1-assign.js)
 (no Mongo write); CREATED in
-[beats/4-stamped.js](present/beats/4-stamped.js) at the seal, inside
+[stamper/4-stamped.js](present/stamper/4-stamped.js) at the seal, inside
 the same transaction that commits the moment's ΔF. Every Fact emitted
 during the moment carries this Act's `_id` as `actId`.
 

@@ -115,7 +115,7 @@ import {
 } from "./connect.js";
 import { resolveLlmConnectionChain } from "./resolution.js";
 import { callWithFailover } from "./call.js";
-import { presenceKeyFor } from "../../beats/2-fold/reel.js";
+import { presenceKeyFor } from "../../stamper/2-fold/reel.js";
 import { computeIbpStampAddress } from "../../../ibp/address.js";
 
 // Orientations the fold supports. Default everywhere is "forward":

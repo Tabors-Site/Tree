@@ -20,7 +20,7 @@ import { getRealityConfigValue } from "../realityConfig.js";
 import { getInternalConfigValue } from "../internalConfig.js";
 import { setLlmTimeout } from "./cognition/llm/connect.js";
 import { setFailoverTimeout } from "./cognition/llm/call.js";
-import { setMaxPresenceReels, setStalePresenceMs } from "./beats/2-fold/reel.js";
+import { setMaxPresenceReels, setStalePresenceMs } from "./stamper/2-fold/reel.js";
 
 // ─────────────────────────────────────────────────────────────────
 // LOCAL BUDGET STATE

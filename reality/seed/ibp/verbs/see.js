@@ -52,7 +52,7 @@ import {
 import {
   foldAt,
   NoSuchHistoricalState,
-} from "../../present/beats/2-fold/foldAt.js";
+} from "../../present/stamper/2-fold/foldAt.js";
 // The historical SEE path routes most of its work through
 // buildPlaceDescriptor with `until`, where descriptor.js's foldRead
 // handles the foldAt / NoSuchHistoricalState boundary internally.

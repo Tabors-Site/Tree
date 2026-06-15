@@ -157,7 +157,7 @@ const ActSchema = new mongoose.Schema({
   // read (residue of canSee + foldPlace gating), captured at fold
   // build time and immutable at seal. Subscription dispatch, audit,
   // and replay all key off this same object. See
-  // present/beats/2-fold/weave.js for the canonical shape and
+  // present/stamper/2-fold/weave.js for the canonical shape and
   // helpers. Mixed type already accepts the new field on new acts; no
   // schema migration.
   innerFace: { type: mongoose.Schema.Types.Mixed, default: null },

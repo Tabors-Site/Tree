@@ -54,7 +54,7 @@ import { HEAVEN_SPACE } from "./materials/space/heavenSpaces.js";
 import { I_AM } from "./materials/being/seedBeings.js";
 import { createRealityHeavenSpace, assertValidSpaceSize } from "./materials/space/spaces.js";
 import { emitFact } from "./past/fact/facts.js";
-import { sealAct } from "./present/beats/4-stamped.js";
+import { sealAct } from "./present/stamper/4-stamped.js";
 
 let spaceRootCache = null;
 let iAmBeingIdCache = null;

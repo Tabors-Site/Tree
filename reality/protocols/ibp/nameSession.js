@@ -132,6 +132,25 @@ async function doDeclare(socket, msg, ack, id) {
   return ackOk(ack, id, { ok: true, nameId });
 }
 
+// Stamp a name:connect / name:release fact on the name's reel via an I_AM
+// moment (the pre-world bootstrap path, same as declare). The NAME op handler
+// gates the transition (already-connected for connect, not-connected for
+// release) and THROWS on a bad one — that throw propagates to the caller, who
+// decides what to do with the live session.
+async function stampNameSession(op, nameId) {
+  const { withIAmAct } = await import("../../seed/sprout.js");
+  const { nameVerb } = await import("../../seed/ibp/verbs/name.js");
+  const { getRealityDomain } = await import("../../seed/ibp/address.js");
+  const realityDomain = getRealityDomain();
+  await withIAmAct(`name:${op}`, async (ctx) => {
+    await nameVerb(op, {}, {
+      address:       `${nameId}@${realityDomain}`,
+      summonCtx:     ctx,
+      currentBranch: "0",
+    });
+  });
+}
+
 // connect — resolve the name (real-name or pubkey), decrypt its key with
 // the password into the signing session, and BIND the connection to it.
 // socket.nameId is the session's identity from here on (the identity-layer
@@ -148,6 +167,21 @@ async function doConnect(socket, msg, ack, id) {
     return ackError(ack, id, IBP_ERR.INVALID_INPUT,
       "name connect requires { token (real-name or pubkey), password }");
   }
+  // PRE-CHECK the reel: a name can't connect twice (one active session per
+  // name). Check BEFORE unlocking, because the signing session is nameId-keyed
+  // and SHARED — if another session already holds this name connected, the
+  // undo below would lock the key out from under THEM. Refusing here never
+  // touches the shared session. (The op gate re-checks authoritatively.)
+  const { resolveNameId } = await import("../../seed/materials/name/registry.js");
+  const preNameId = await resolveNameId(token);
+  if (preNameId) {
+    const { loadProjection } = await import("../../seed/materials/projections.js");
+    const pre = await loadProjection("name", preNameId, "0");
+    if (pre?.state?.connected === true) {
+      return ackError(ack, id, IBP_ERR.RESOURCE_CONFLICT,
+        "name is already connected — release it first (one active session per name)");
+    }
+  }
   const { nameConnect } = await import("../../seed/materials/name/login.js");
   const result = await nameConnect(token, password);
   if (!result.ok) {
@@ -155,16 +189,38 @@ async function doConnect(socket, msg, ack, id) {
     // password is wrong (both read as a refused connect to the client).
     return ackError(ack, id, IBP_ERR.UNAUTHORIZED, `connect refused: ${result.reason}`);
   }
+  // Stamp the name:connect fact (folds connected:true on the name's reel). The
+  // op gate refuses a DOUBLE connect (one active session per name); the
+  // pre-check above means no OTHER session is connected here, so undoing the
+  // unlock on a (racy) refusal only locks what THIS attempt just unlocked.
+  try {
+    await stampNameSession("connect", result.nameId);
+  } catch (err) {
+    const { nameRelease } = await import("../../seed/materials/name/login.js");
+    nameRelease(result.nameId);
+    if (err?.code) return ackError(ack, id, err.code, err.message, err.detail);
+    log.error("IBP", `name connect fact failed: ${err.message}`);
+    return ackError(ack, id, IBP_ERR.INTERNAL, "name connect error");
+  }
   socket.nameId = result.nameId;
   log.debug("IBP", `socket ${socket.id} connected as name ${result.nameId}`);
   return ackOk(ack, id, { ok: true, nameId: result.nameId });
 }
 
-// release — wipe the held key and unbind the connection (the name releasing
-// itself; back to the bare reality / the Name menu).
+// release — stamp the name:release fact (folds connected:false), wipe the held
+// key, and unbind the connection (the name releasing itself; back to the bare
+// reality / the Name menu).
 async function doRelease(socket, msg, ack, id) {
   const nameId = socket.nameId || null;
   if (nameId) {
+    // Record the release on the reel; the gate refuses release-when-not-
+    // connected, but we still unbind the live session either way (a socket
+    // must never be left holding a name the reel says isn't connected).
+    try {
+      await stampNameSession("release", nameId);
+    } catch (err) {
+      log.warn("IBP", `name release fact refused for ${nameId}: ${err.message}; unbinding session anyway`);
+    }
     const { nameRelease } = await import("../../seed/materials/name/login.js");
     nameRelease(nameId);
     socket.nameId = null;

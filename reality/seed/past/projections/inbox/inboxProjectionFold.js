@@ -32,7 +32,7 @@
 // — upsert and delete-by-key both tolerate replay.
 
 import InboxProjection, { priorityRankOf } from "./inboxProjection.js";
-import { registerCrossCuttingHandler } from "../../../present/beats/2-fold/foldEngine.js";
+import { registerCrossCuttingHandler } from "../../../present/stamper/2-fold/foldEngine.js";
 import { assertBranchOrThrow } from "../../../materials/projections.js";
 
 async function handleSummon(fact /*, type, id*/) {

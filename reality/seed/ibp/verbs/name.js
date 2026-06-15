@@ -100,15 +100,14 @@ export async function nameVerb(operation, payload = {}, opts = {}) {
     );
   }
 
-  // Anyone can call NAME for now, but a caller identity is required (the
-  // fact needs an actor). No role-walk / authorize() yet — permissions
-  // (declare-open, banish-self-only) land later.
-  // NAME `declare` is a PRE-WORLD bootstrap — callable with NO identity (the
-  // Name Form pre-panel, before you have a name); its fact's actor is I_AM.
-  // The Name layer is outside the world: you need a name to do anything, and
-  // making the first name can't itself require one. banish (and later ops)
-  // require a caller. Anyone may call either for now (permissions later).
-  if (operation !== "declare") assertVerbCaller("name", opts);
+  // PRE-WORLD ops (declare / connect / release) are callable with NO being
+  // identity — they ARE the front door, before you have a name or a being
+  // (the Name Form): declare mints, connect/release bind/unbind the session,
+  // all with the fact's actor resolving to I_AM. (connect is gated by the
+  // password proof in the session channel + the already-connected reel gate;
+  // release by the not-connected gate.) banish (and later ops) require a
+  // caller. Anyone may call any of them for now (real permissions land later).
+  if (operation === "banish") assertVerbCaller("name", opts);
   const identity = normalizeIdentity(opts.identity);
 
   const result = await nameOp.handler({

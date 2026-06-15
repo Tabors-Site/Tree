@@ -103,6 +103,15 @@ const NameSchema = new mongoose.Schema({
   // Soul layer to read; the Soul implementation is a separate effort.
   soulType: { type: String, default: null },
 
+  // SESSION LIFECYCLE — folded from the name:connect / name:release facts on
+  // this reel (the identity-layer be:connect / be:release). The reel IS the
+  // truth of whether the Name is connected (a live session holds its key);
+  // the op handlers gate the transitions off this (can't connect twice, can't
+  // release when not connected). `connected` defaults false (a fresh Name has
+  // never connected). No timestamp field — WHEN it connected/released is the
+  // fact's own position on the reel (the fact-reel is the time).
+  connected: { type: Boolean, default: false },
+
   // No `homeBranch`, `isRemote`, or `homeReality`. A Name's identity is
   // above the branch timeline (no branch seating) and its row only ever
   // exists on its home reality (the reality is implicit — a reality's

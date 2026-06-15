@@ -528,7 +528,7 @@ export async function logFact(input, opts = {}) {
     // wasted reads against pre-commit state.
     if (!skipEagerFold) {
       try {
-        const { fold } = await import("../../present/beats/2-fold/foldEngine.js");
+        const { fold } = await import("../../present/stamper/2-fold/foldEngine.js");
         // Fold runs on the SAME branch the fact landed on. Without
         // threading branch the fold engine throws "branch is required"
         // (post-doctrine-shift) and the seal aborts.
@@ -764,7 +764,7 @@ export async function appendDeltaFInSession(deltaF, session) {
  */
 export async function foldAfterCommit(sortedReels) {
   try {
-    const { fold } = await import("../../present/beats/2-fold/foldEngine.js");
+    const { fold } = await import("../../present/stamper/2-fold/foldEngine.js");
     // DB-health gate. When Mongoose dropped its connection between the
     // commit and the post-seal fold (most commonly: a long synchronous
     // burst starves the heartbeat), every fold below will fail the

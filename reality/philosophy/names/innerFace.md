@@ -39,7 +39,7 @@ innerFace = {
 ```
 
 Built once per moment by `buildInnerFace(role, ctx)` at
-[reality/seed/present/beats/2-fold/innerFace.js](../../seed/present/beats/2-fold/innerFace.js).
+[reality/seed/present/stamper/2-fold/innerFace.js](../../seed/present/stamper/2-fold/innerFace.js).
 Lives on `summonCtx.innerFace` during the moment, sealed onto
 `Act.innerFace` at moment seal.
 
@@ -49,7 +49,7 @@ Lives on `summonCtx.innerFace` during the moment, sealed onto
 (`"./inbox"`, `"/foo/bar"`, `"<other-reality>/..."`) or a registered
 named-see name (`"my-inbox"`, `"federation-status"`, etc.). The 2-fold
 beat's resolver
-([canSeeResolver.js](../../seed/present/beats/2-fold/canSeeResolver.js))
+([canSeeResolver.js](../../seed/present/stamper/2-fold/canSeeResolver.js))
 runs each entry, producing a structured block:
 
 ```
@@ -214,17 +214,17 @@ relaying its weave-keyed events. Real but explicit deferred work.
 
 ## Files
 
-- [reality/seed/present/beats/2-fold/innerFace.js](../../seed/present/beats/2-fold/innerFace.js)
+- [reality/seed/present/stamper/2-fold/innerFace.js](../../seed/present/stamper/2-fold/innerFace.js)
   builds the canonical face (`buildInnerFace`, `clampForRender`,
   `normalizeForeignDescriptor`).
-- [reality/seed/present/beats/2-fold/canSeeResolver.js](../../seed/present/beats/2-fold/canSeeResolver.js)
+- [reality/seed/present/stamper/2-fold/canSeeResolver.js](../../seed/present/stamper/2-fold/canSeeResolver.js)
   resolves canSee entries into blocks and records the weave.
-- [reality/seed/present/beats/2-fold/weave.js](../../seed/present/beats/2-fold/weave.js)
+- [reality/seed/present/stamper/2-fold/weave.js](../../seed/present/stamper/2-fold/weave.js)
   defines the weave shape and helpers (`addReel`, `mergeWeaves`,
   `reelKey`).
-- [reality/seed/present/beats/2-fold/foldPlace.js](../../seed/present/beats/2-fold/foldPlace.js)
+- [reality/seed/present/stamper/2-fold/foldPlace.js](../../seed/present/stamper/2-fold/foldPlace.js)
   folds the forward face and contributes the space reel to the weave.
-- [reality/seed/present/beats/2-fold/foldBeat.js](../../seed/present/beats/2-fold/foldBeat.js)
+- [reality/seed/present/stamper/2-fold/foldBeat.js](../../seed/present/stamper/2-fold/foldBeat.js)
   is the conductor that threads role into the fold.
 - [reality/seed/past/act/act.js](../../seed/past/act/act.js) carries
   `Act.innerFace` as the storage field.

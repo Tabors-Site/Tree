@@ -24,7 +24,7 @@
 // reasoned-about past AND the reasoning. The chain stitches
 // thinking the same way it stitches deeds.
 
-import { clampForRender } from "../../beats/2-fold/innerFace.js";
+import { clampForRender } from "../../stamper/2-fold/innerFace.js";
 
 const NULL_SECTION_BANNER =
   "(older acts; less context available . entries below predate inner-face capture)";

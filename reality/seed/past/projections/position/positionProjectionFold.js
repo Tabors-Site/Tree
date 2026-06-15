@@ -25,7 +25,7 @@
 
 import mongoose from "mongoose";
 import PositionProjection, { positionRowId } from "./positionProjection.js";
-import { registerCrossCuttingHandler } from "../../../present/beats/2-fold/foldEngine.js";
+import { registerCrossCuttingHandler } from "../../../present/stamper/2-fold/foldEngine.js";
 import { hooks } from "../../../hooks.js";
 import log from "../../../seedReality/log.js";
 

@@ -41,7 +41,7 @@ import { emitFact } from "../../past/fact/facts.js";
 import {
   ORIENTATION,
   validateOrientation,
-} from "../../present/beats/2-fold/orientation.js";
+} from "../../present/stamper/2-fold/orientation.js";
 import { IbpError, IBP_ERR } from "../protocol.js";
 import { I_AM } from "../../materials/being/seedBeings.js";
 import { parseWithContext, expand, resolveBranchPointers, getRealityDomain } from "../address.js";

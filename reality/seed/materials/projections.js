@@ -186,7 +186,7 @@ export async function loadOrFold(type, id, branch) {
   // Cold-fold via the engine. fold writes to the branch slot via
   // initProjection on the way out; the next loadProjection hits cache.
   try {
-    const { fold } = await import("../present/beats/2-fold/foldEngine.js");
+    const { fold } = await import("../present/stamper/2-fold/foldEngine.js");
     const { state, foldedSeq } = await fold(type, id, { branch: effectiveBranch });
     if (!state || Object.keys(state).length === 0) return null;
     // Re-read the slot — fold's initProjection landed the canonical

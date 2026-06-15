@@ -34,7 +34,7 @@
 import log from "../../seed/seedReality/log.js";
 import Being from "../../seed/materials/being/being.js";
 import Matter from "../../seed/materials/matter/matter.js";
-import { registerCrossCuttingHandler } from "../../seed/present/beats/2-fold/foldEngine.js";
+import { registerCrossCuttingHandler } from "../../seed/present/stamper/2-fold/foldEngine.js";
 import { emitPositionDelta } from "./live.js";
 import { IBP_EVENT } from "./events.js";
 

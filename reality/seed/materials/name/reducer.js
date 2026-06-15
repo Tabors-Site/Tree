@@ -51,6 +51,21 @@ function applyCloseName(state, fact) {
   return { ...state, closedAt: fact.date, updatedAt: fact.date };
 }
 
+// name:connect / name:release — the session lifecycle, mirroring be:connect /
+// be:release at the identity layer. The reel IS the truth of whether the Name
+// is connected (a live session holds its key): connect folds connected:true,
+// release folds connected:false. The handlers gate the transitions (can't
+// connect twice, can't release when not connected) by reading this state. No
+// wall-clock timestamp here — WHEN it connected/released is the connect/release
+// fact's own position on the reel (the fact-reel IS the time); the folded
+// state only needs the boolean.
+function applyNameSession(state, fact) {
+  if (fact?.verb !== "name") return state;
+  if (fact.action === "connect") return { ...state, connected: true };
+  if (fact.action === "release") return { ...state, connected: false };
+  return state;
+}
+
 /**
  * Apply one fact to the Name state.
  *
@@ -66,6 +81,9 @@ export function reduce(state, fact) {
 
   // name:close — locks the Name's lifecycle (history persists).
   next = applyCloseName(next, fact);
+
+  // name:connect / name:release — the session lifecycle on the reel.
+  next = applyNameSession(next, fact);
 
   // do:set on this Name — scalar fields + qualities paths (e.g. a soul
   // transition writing qualities.soul, or auth carve-outs). Reuses the

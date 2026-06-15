@@ -37,13 +37,13 @@
 // business.
 
 import log from "../seedReality/log.js";
-import { assign }   from "./beats/1-assign.js";
-import { momentum } from "./beats/3-momentum.js";
-import { sealAct }  from "./beats/4-stamped.js";
+import { assign }   from "./stamper/1-assign.js";
+import { momentum } from "./stamper/3-momentum.js";
+import { sealAct }  from "./stamper/4-stamped.js";
 import { markIntakeRunning, markIntakeComplete } from "./intake/intake.js";
 import { closeInboxOnAnswer } from "../past/projections/inbox/inboxProjectionFold.js";
 import { buildResponseEntry } from "./replies.js";
-import { runFoldBeat } from "./beats/2-fold/foldBeat.js";
+import { runFoldBeat } from "./stamper/2-fold/foldBeat.js";
 
 /**
  * Run one moment for a being. Walks all four beats; never throws —

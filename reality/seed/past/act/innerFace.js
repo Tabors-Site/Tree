@@ -30,7 +30,7 @@
 
 import crypto from "crypto";
 import Act from "./act.js";
-import { normalizeForeignDescriptor } from "../../present/beats/2-fold/innerFace.js";
+import { normalizeForeignDescriptor } from "../../present/stamper/2-fold/innerFace.js";
 
 /**
  * Attach the target world's descriptor as an inner-face observation

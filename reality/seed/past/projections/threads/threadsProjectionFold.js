@@ -27,7 +27,7 @@
 //                appends.
 
 import ThreadsProjection from "./threadsProjection.js";
-import { registerCrossCuttingHandler } from "../../../present/beats/2-fold/foldEngine.js";
+import { registerCrossCuttingHandler } from "../../../present/stamper/2-fold/foldEngine.js";
 
 async function handleSummonForThreads(fact /*, type, id*/) {
   if (fact?.verb !== "summon") return;

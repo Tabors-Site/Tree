@@ -27,7 +27,7 @@
 
 import log from "../../seed/seedReality/log.js";
 import { IBP_EVENT } from "./events.js";
-import { reelKey } from "../../seed/present/beats/2-fold/weave.js";
+import { reelKey } from "../../seed/present/stamper/2-fold/weave.js";
 
 // subId -> { socket, beingId, branch, weave, faceSeq }
 const _subs = new Map();

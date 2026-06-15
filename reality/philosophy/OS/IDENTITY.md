@@ -38,7 +38,7 @@ Encoding: a `beingId` is the bare `z<base58btc(0xed01 || raw 32-byte ed25519 pub
 
 ## What gets signed, and when
 
-Acts are signed at the one seal chokepoint ([sealAct in 4-stamped.js](../../seed/present/beats/4-stamped.js)). The signature commits to both the act and exactly its facts, so neither can be swapped:
+Acts are signed at the one seal chokepoint ([sealAct in 4-stamped.js](../../seed/present/stamper/4-stamped.js)). The signature commits to both the act and exactly its facts, so neither can be swapped:
 
 ```
 signingPayload = {
