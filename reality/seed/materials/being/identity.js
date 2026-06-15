@@ -41,6 +41,7 @@ export {
 export {
   verifyPassword,
   generateToken,
+  generateNameToken,
   signInternalToken,
   decodeToken,
   verifyTokenStrict,

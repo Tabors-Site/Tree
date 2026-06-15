@@ -232,6 +232,42 @@ export function createPortalContext({ id = "main", persist = true, session = nul
     if (landed) events.emit("connected", { anonymous: false });
   }
 
+  // Connect with a NAME-only session token (a name:connect persisted across a
+  // refresh). The socket re-seats socket.nameId from the token but has no
+  // being, so we land anonymous — at the (now name-aware) arrival floor, where
+  // the name's beings are listed. No be-session land; the picker/world gate in
+  // the shell takes it from there.
+  async function connectNameOnly(sess) {
+    const client = buildClient({
+      placeUrl: sess.placeUrl || config.placeUrl,
+      token: sess.token,
+      useProxy: typeof sess.placeIsProxied === "boolean" ? sess.placeIsProxied : config.useProxy,
+    });
+    client.connect();
+    await waitForConnect(client);
+    await ctx.navigation.landAnonymous();
+    events.emit("connected", { anonymous: false, nameOnly: true });
+  }
+
+  // Persist a name-only session (the name:connect token) WITHOUT reconnecting —
+  // the live socket is already name-bound; this just stores the token so the
+  // NEXT boot re-seats the name (and a refresh lands at the name's beings, not
+  // back at the Name Form). beingId null marks it as a name-only session.
+  function adoptNameSession(token, nameId) {
+    if (!token) return;
+    const placeUrl = state.get("session")?.placeUrl || config.placeUrl;
+    saveSession({
+      placeUrl,
+      placeIsProxied: resolvePlaceConfig({ placeUrl }).useProxy,
+      token,
+      nameId: nameId || null,
+      beingId: null,
+      username: null,
+      beingAddress: null,
+    });
+  }
+  ctx.adoptNameSession = adoptNameSession;
+
   async function dropStaleSessionAndReconnect() {
     console.warn("[portal] stored session is no longer valid; dropping it.");
     const dropped = state.get("session");
@@ -327,7 +363,11 @@ export function createPortalContext({ id = "main", persist = true, session = nul
     const discovery = await PortalClient.bootstrap(placeUrl, { useProxy });
     state.set({ discovery });
     events.emit("status", `connected to ${discovery.reality}`);
-    if (sess?.token) await connectAndPlace(sess);
+    // A being-session (token + beingId) lands at the being; a NAME-only session
+    // (token, no being) re-seats the name and lands at the arrival/picker; no
+    // token at all is a fresh anonymous arrival -> the Name Form.
+    if (sess?.token && sess?.beingId) await connectAndPlace(sess);
+    else if (sess?.token) await connectNameOnly(sess);
     else await connectAnonymous(placeUrl, useProxy);
   }
 
@@ -360,6 +400,7 @@ export function createPortalContext({ id = "main", persist = true, session = nul
   ctx.signOut = signOut;
   ctx.adoptSession = adoptSession;
   ctx.saveSession = saveSession;
+  ctx.clearSession = clearSession;
   ctx.clearSession = clearSession;
   ctx.refreshDiscovery = refreshDiscovery;
   ctx.destroy = destroy;

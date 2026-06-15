@@ -21,6 +21,8 @@ import { setPortalStatus } from "../shared/portal-status.js";
 import { createViewHost, VIEW_NAMES } from "./views.js";
 import { createPortalContext } from "./context.js";
 import { resolvePlaceConfig } from "./config.js";
+import { showNameForm, hideNameForm } from "../shared/name-form.js";
+import { showBeingPicker, hideBeingPicker } from "../shared/being-picker.js";
 
 // The IBPA stance bar is PINNED TO THE VERY TOP — the portal's one
 // constant surface. The being-tab strip rides directly under it and
@@ -136,36 +138,82 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     repaintSwitcher();
   }
 
-  // The latch toggle. Lock is immediate; unlock asks for the password
-  // (the user's secret gates WHEN the reality signs for them). The
-  // descriptor refetch repaints the dot from the server's truth.
+  // The lock button is the NAME's own be:release. Clicking it signs OUT of the
+  // name (name:release) and drops back to the bare reality domain — the Name
+  // menu. This is distinct from releasing a BEING (a tab close), which keeps
+  // the name; the lock is the full sign-out, "the name calling its own
+  // release." (Was the old do:signing-lock latch, now moved to the name.)
   async function toggleSigningLatch() {
     if (!activeCtx) return;
-    const m = activeCtx.state.get();
-    const unlocked = m.descriptor?.identity?.signingUnlocked;
-    if (unlocked === null || unlocked === undefined) return;
-    const stance = m.session?.beingAddress
-      || `${m.discovery?.reality || ""}/@${m.session?.username}`;
     try {
-      if (unlocked) {
-        await activeCtx.client.do(stance, "signing-lock", {});
-      } else {
-        const password = window.prompt("Unlock signing — your password:");
-        if (!password) return;
-        await activeCtx.client.do(stance, "signing-unlock", { password });
-      }
-      // Repaint from the op's success without a refetch; the next SEE
-      // carries the server's truth either way.
-      const desc = activeCtx.state.get("descriptor");
-      if (desc?.identity) {
-        activeCtx.state.set({
-          descriptor: { ...desc, identity: { ...desc.identity, signingUnlocked: !unlocked } },
-        }, { reason: "live" });
-      }
+      await activeCtx.client?.nameRelease();
     } catch (err) {
-      console.warn("[portal:shell] signing latch:", err?.code || err?.message || err);
+      console.warn("[portal:shell] name release:", err?.code || err?.message || err);
     }
+    // Drop the stored name-session so a refresh doesn't re-seat the released
+    // name; back to the bare reality (the Name menu).
+    try { activeCtx.clearSession?.(); } catch { /* best-effort */ }
+    presentNameForm(activeCtx);
   }
+
+  // Show the Name Form over the bare reality. On connect it persists the
+  // name-only token and re-runs the gate (which now lands at the Being Picker).
+  function presentNameForm(ctx) {
+    if (!ctx?.client) return;
+    hideBeingPicker();
+    const reality = ctx.state.get("discovery")?.reality || "";
+    showNameForm({
+      client:        ctx.client,
+      realityDomain: reality,
+      onConnected:   async (result) => {
+        try { ctx.adoptNameSession?.(result?.token, result?.nameId); } catch { /* best-effort */ }
+        await presentNameGate(ctx);
+      },
+    });
+  }
+
+  // Show the Being Picker (signed-in name, no being). Pick a being you own and
+  // connect into it — passwordless (owned connect), on the chosen branch. The
+  // be:connect issues the being-JWT; adoptSession reconnects this tab as that
+  // being and lands the world.
+  function presentBeingPicker(ctx, nameId) {
+    if (!ctx?.client) return;
+    hideNameForm();
+    const reality = ctx.state.get("discovery")?.reality || "";
+    showBeingPicker({
+      client:        ctx.client,
+      realityDomain: reality,
+      nameId,
+      onSignOut:     async () => {
+        try { await ctx.client?.nameRelease(); } catch { /* best-effort */ }
+        try { ctx.clearSession?.(); } catch { /* best-effort */ }
+        presentNameForm(ctx);
+      },
+      onConnect:     async (beingName, branch) => {
+        const result = await ctx.client.be("connect", `${reality}/@${beingName}`, {});
+        await ctx.adoptSession(result, beingName);
+        // Branch pick: if it differs from where connect seated us, switch.
+        if (branch && result?.seatBranch && branch !== String(result.seatBranch)) {
+          try { await ctx.client.be("switch", `${reality}/@${beingName}`, { branch }); } catch { /* stay on home */ }
+        }
+        repaintChrome();
+      },
+    });
+  }
+
+  // The Name gate: run after the primary context lands (and after each name
+  // connect/release). Three states — no name -> the Name Form (the Name layer
+  // is in front of the world); a name but no being -> the Being Picker; a name
+  // + a being -> the landed world (overlays down).
+  async function presentNameGate(ctx = primaryCtx) {
+    let who = null;
+    try { who = await ctx.client?.nameWhoami(); } catch { /* fall through to world */ return; }
+    if (!who?.nameId) { hideBeingPicker(); presentNameForm(ctx); return; }
+    const sess = ctx.state.get("session");
+    if (!sess?.beingId) { presentBeingPicker(ctx, who.nameId); return; }
+    hideNameForm(); hideBeingPicker();
+  }
+  const maybeShowNameForm = () => presentNameGate(primaryCtx);
 
   function repaintTabs() {
     els.tabs.innerHTML = "";
@@ -502,6 +550,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     get activeCtx() { return activeCtx; },
     async startPrimary() {
       await primaryCtx.start();
+      await maybeShowNameForm();
       await ensureBranchBar();
       repaintChrome();
     },

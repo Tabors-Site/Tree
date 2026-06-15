@@ -287,6 +287,25 @@ export function generateToken(being) {
 }
 
 /**
+ * Mint a NAME-only session token — the "name, no being yet" state (a
+ * name:connect with no being selected). Carries `nameId` and NO `beingId`, so
+ * a reconnect re-seats socket.nameId (the portal lands at the Name's beings
+ * picker) without forcing a re-entry of the password. The signing key is NOT
+ * in this token (it lives in the in-memory signing session from the password
+ * unlock); the token persists only the IDENTITY, not the ability to sign.
+ */
+export function generateNameToken(nameId) {
+  const expiresIn = getRealityConfigValue("jwtExpiryDays")
+    ? `${Math.max(1, Math.min(Number(getRealityConfigValue("jwtExpiryDays")), 365))}d`
+    : "30d";
+  return signJwtHS256(
+    { beingId: null, name: null, nameId: String(nameId), jti: crypto.randomUUID() },
+    JWT_SECRET,
+    { expiresIn },
+  );
+}
+
+/**
  * Sign an internal server-to-server JWT. Used by the conversation
  * runtime to authorize tool calls against the local MCP server — the
  * token forwards the originating being's identity so the MCP layer
@@ -359,6 +378,18 @@ export function decodeToken(token) {
 export async function verifyTokenStrict(token, { loadBeing = true } = {}) {
   const decoded = decodeToken(token);
   if (!decoded) return null;
+
+  // NAME-only token (a name:connect session, no being yet). There is no being
+  // to look up; verify the Name still exists and isn't banished, then seat the
+  // session's nameId with NO being (the portal lands at the picker). Acts
+  // still need the signing session unlocked (the key isn't in the token).
+  if (!decoded.beingId && decoded.nameId) {
+    const nameSlot = await loadProjection("name", decoded.nameId, "0");
+    if (!nameSlot?.state) return null;
+    const { isNameBanished } = await import("../../name/closure.js");
+    if (await isNameBanished(decoded.nameId)) return null;
+    return { beingId: null, name: null, nameId: decoded.nameId, jwt: token, being: null };
+  }
 
   const slot = await loadProjection("being", decoded.beingId, "0");
   if (!slot || slot.tombstoned) return null;

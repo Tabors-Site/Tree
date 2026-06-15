@@ -203,8 +203,19 @@ async function doConnect(socket, msg, ack, id) {
     return ackError(ack, id, IBP_ERR.INTERNAL, "name connect error");
   }
   socket.nameId = result.nameId;
+  // Mint a NAME-only session token so a reconnect/refresh re-seats this name
+  // (the portal lands at the picker) without re-entering the password. Carries
+  // the nameId, no being; the signing key stays in the in-memory session.
+  let nameToken = null;
+  try {
+    const { generateNameToken } = await import("../../seed/materials/being/identity.js");
+    nameToken = generateNameToken(result.nameId);
+    socket.jwt = nameToken;
+  } catch (err) {
+    log.warn("IBP", `name token mint failed for ${result.nameId}: ${err.message}`);
+  }
   log.debug("IBP", `socket ${socket.id} connected as name ${result.nameId}`);
-  return ackOk(ack, id, { ok: true, nameId: result.nameId });
+  return ackOk(ack, id, { ok: true, nameId: result.nameId, token: nameToken });
 }
 
 // release — stamp the name:release fact (folds connected:false), wipe the held
