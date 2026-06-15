@@ -10,13 +10,12 @@
 //   half   — world + recalled set. The forward face stays; the
 //            past-face surfaces the braid-walked subset.
 //
-// Each past-act entry is rendered from its facadeSnapshot (the
-// bounded record of the face the act was committed under). The
-// renderer applies clampForRender so the LLM-budget caps land here,
-// not at storage. Acts that pre-date the snapshot field render
-// reduced (timestamp + in / out only) and the section is preceded
-// by a banner so the LLM doesn't read the absence of role / at /
-// capabilities as significance.
+// Each past-act entry is rendered from its innerFace (the canonical
+// face the act was committed under). The renderer applies
+// clampForRender so the LLM-budget caps land here, not at storage.
+// Acts that pre-date the field render reduced (timestamp + in / out
+// only) and the section is preceded by a banner so the LLM doesn't
+// read the absence of role / at / capabilities as significance.
 //
 // This is the room a being walks into when it turns. Not just
 // memory — a reasoning surface. An inward moment can seal inner
@@ -25,10 +24,10 @@
 // reasoned-about past AND the reasoning. The chain stitches
 // thinking the same way it stitches deeds.
 
-import { clampForRender } from "../../beats/2-fold/facadeSnapshot.js";
+import { clampForRender } from "../../beats/2-fold/innerFace.js";
 
 const NULL_SECTION_BANNER =
-  "(older acts; less context available — entries below predate facade capture)";
+  "(older acts; less context available . entries below predate inner-face capture)";
 
 /**
  * Format the start / end message content into a single readable
@@ -50,29 +49,9 @@ function formatMessage(msg) {
 }
 
 /**
- * Compact occupant list for a single entry. Empty list returns
- * "(nothing)". The trailing truncation sentinel from clampForRender
- * (or storage) becomes "+N more".
- */
-function formatOccupants(occupants) {
-  if (!Array.isArray(occupants) || occupants.length === 0) return "(nothing)";
-  const parts = [];
-  for (const o of occupants) {
-    if (!o) continue;
-    if (o.kind === "truncated") {
-      parts.push(`+${o.count} more`);
-      continue;
-    }
-    const label = o.name || o.id || "(?)";
-    const kind = o.kind ? `${o.kind}:` : "";
-    parts.push(`${kind}${label}`);
-  }
-  return parts.length > 0 ? parts.join(", ") : "(nothing)";
-}
-
-/**
- * Compact capability list for a single entry. Same truncation-
- * sentinel handling. Empty list collapses to "[]".
+ * Compact capability list for a single entry. Truncation-sentinel
+ * handling: {kind:"truncated", count:N} becomes "+N more". Empty list
+ * collapses to "[]".
  */
 function formatCapList(list) {
   if (!Array.isArray(list) || list.length === 0) return "[]";
@@ -85,12 +64,18 @@ function formatCapList(list) {
 
 /**
  * Render one past-act entry. The clamp is applied before formatting
- * so the LLM never sees a 50KB occupant name. Null snapshots render
- * reduced (timestamp + in / out only) so legacy entries don't crash
- * and don't fabricate context.
+ * so the LLM never sees a 50KB payload. Null faces render reduced
+ * (timestamp + in / out only) so legacy entries don't crash and don't
+ * fabricate context.
+ *
+ * The face shape carries position as a structural field; occupants
+ * and other canSee-declared content live inside `blocks`. For the
+ * past-face headline we surface "at <position name>" when the face
+ * has one and let the blocks (when present) speak for themselves
+ * via a compact key list.
  */
 function renderEntry(index, row) {
-  const snap = clampForRender(row?.facadeSnapshot);
+  const snap = clampForRender(row?.innerFace);
   const stamp = row?.stampedAt ? new Date(row.stampedAt).toISOString() : "(no time)";
   const inLine = formatMessage(row?.startMessage);
   const outLine = formatMessage(row?.endMessage);
@@ -104,14 +89,22 @@ function renderEntry(index, row) {
   }
 
   const headerSuffix = snap.role ? `  role: ${snap.role}` : "";
-  const where = snap.space?.name
-    ? `at ${snap.space.name} with ${formatOccupants(snap.occupants)}`
+  const where = snap.position?.name
+    ? `at ${snap.position.name}`
     : null;
   const could = `do=${formatCapList(snap.capabilities?.canDo)}, summon=${formatCapList(snap.capabilities?.canSummon)}, be=${formatCapList(snap.capabilities?.canBe)}`;
+  const blockKeys = Array.isArray(snap.blocks)
+    ? snap.blocks
+        .filter(b => b && b.kind !== "truncated")
+        .map(b => b?.label || b?.key || null)
+        .filter(Boolean)
+    : [];
+  const sawLine = blockKeys.length > 0 ? `  saw: ${blockKeys.join(", ")}` : null;
 
   const lines = [`[${index}] ${stamp}${headerSuffix}`];
   if (where) lines.push(`  ${where}`);
   lines.push(`  could: ${could}`);
+  if (sawLine) lines.push(sawLine);
   if (inLine)  lines.push(`  in:  ${inLine}`);
   if (outLine) lines.push(`  out: ${outLine}`);
   return lines.join("\n");
@@ -134,7 +127,7 @@ export function renderInwardPastFace(actChain) {
     return "[Inward fold]\nYour act-chain is empty. No prior acts to reflect on.";
   }
 
-  const anyLegacy = acts.some(r => !r?.facadeSnapshot);
+  const anyLegacy = acts.some(r => !r?.innerFace);
   const header = anyLegacy
     ? `[Inward fold]\nYour acts so far, in order:\n${NULL_SECTION_BANNER}`
     : "[Inward fold]\nYour acts so far, in order:";
@@ -158,7 +151,7 @@ export function renderHalfPastFace(recalled) {
   const acts = Array.isArray(recalled) ? recalled : [];
   if (acts.length === 0) return "";
 
-  const anyLegacy = acts.some(r => !r?.facadeSnapshot);
+  const anyLegacy = acts.some(r => !r?.innerFace);
 
   const byReel = new Map();
   for (const row of acts) {

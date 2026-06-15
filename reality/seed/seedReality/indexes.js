@@ -39,7 +39,7 @@ const REQUIRED_INDEXES = [
   // Spaces — child lookups by parent+name, and recency queries scoped
   // to a tree root.
   { collection: "spaces", fields: { parent: 1, name: 1 } },
-  { collection: "spaces", fields: { owner: 1, dateCreated: -1 } },
+  { collection: "spaces", fields: { owner: 1, createdAt: -1 } },
   { collection: "spaces", fields: { parent: 1, heavenSpace: 1 }, options: { sparse: true } },
 ];
 

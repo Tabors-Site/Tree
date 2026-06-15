@@ -6,7 +6,7 @@ dist/
 .claude/
 
 reality/node_modules
-reality/uploads
+reality/localStore
 reality/.place/
 reality/.env
 reality/resources/.disabled
@@ -18,7 +18,7 @@ reality/oldExtensions/
 reality/.oldExtensions/
 reality/.test/
 
-create-treeos/template/uploads
+create-treeos/template/localStore
 create-treeos/template/.env
 create-treeos/template/.treeos-profile
 create-treeos/template/node_modules

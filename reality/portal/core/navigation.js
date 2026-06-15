@@ -190,7 +190,19 @@ export function createNavigation(ctx) {
       // keep it so a live event doesn't blow away the selection.
       const priorSpaceId = state.get("descriptor")?.address?.spaceId || null;
       const nextSpaceId = desc?.address?.spaceId || null;
-      const partial = { descriptor: desc, currentAddress: address };
+
+      // Also fetch the caller's canonical inner face at the new
+      // stance. Same shape every soul reads (LLM, scripted, human).
+      // Best-effort: a failure here just hides the face panel; the
+      // existing position descriptor stays the primary view.
+      let innerFace = null;
+      try {
+        innerFace = await client.see("my-inner-face");
+      } catch {
+        innerFace = null;
+      }
+
+      const partial = { descriptor: desc, currentAddress: address, innerFace };
       if (priorSpaceId && nextSpaceId && priorSpaceId !== nextSpaceId) {
         partial.selectedBeing = null;
       }

@@ -102,7 +102,7 @@ async function assertCoordInBounds(beingDoc, raw, branch = "0") {
 // params: { field, value, merge=true }
 // field paths:
 //   "name" / "roles" / "defaultRole" / "homeSpace" /
-//   "llmDefault" / "parentBeingId"                  → schema-field writes
+//   "parentBeingId"                                  → schema-field writes
 //   "qualities.<namespace>"                          → set/merge that namespace
 //   "qualities.<namespace>.<innerKey>"               → merge one inner key
 //   value=null on a qualities path                   → unset
@@ -171,23 +171,6 @@ async function setOnBeingHandler({ target, params, summonCtx }) {
       );
     }
     return { beingId: String(target._id), parentBeingId: value };
-  }
-
-  if (field === "llmDefault") {
-    if (value !== null && value !== undefined && typeof value !== "string") {
-      throw new Error("set-being: `llmDefault` value must be a connectionId string or null");
-    }
-    if (value) {
-      const conns =
-        target.qualities instanceof Map
-          ? target.qualities.get("llmConnections")
-          : target.qualities?.llmConnections;
-      if (!conns || !conns[value]) {
-        throw new Error(`set-being: connection "${value}" not found on @${target.name}`);
-      }
-      return { beingId: String(target._id), llmDefault: value };
-    }
-    return { beingId: String(target._id), llmDefault: null };
   }
 
   if (field === "defaultRole") {
@@ -262,7 +245,7 @@ async function setOnBeingHandler({ target, params, summonCtx }) {
   }
 
   throw new Error(
-    `set-being: unknown field "${field}". Supported: name, defaultRole, homeSpace, llmDefault, parentBeingId, password, position, coord, qualities.<namespace>[.<innerKey>]`,
+    `set-being: unknown field "${field}". Supported: name, defaultRole, homeSpace, parentBeingId, password, position, coord, qualities.<namespace>[.<innerKey>]`,
   );
 }
 
@@ -300,7 +283,8 @@ async function addLlmConnectionHandler({ target, params, identity, summonCtx }) 
       "add-llm-connection: `name`, `baseUrl`, and `model` are required",
     );
   }
-  // Load the row to read llmDefault for the auto-assign-on-first-connection branch.
+  // Load the row to read the current main slot for the
+  // auto-assign-on-first-connection branch.
   const beingRow = await loadTargetRow(target, "being", { summonCtx });
   const { addLlmConnection, assignConnection } = await import(
     "../../present/cognition/llm/connect.js"
@@ -312,7 +296,12 @@ async function addLlmConnectionHandler({ target, params, identity, summonCtx }) 
     { identity, summonCtx },
   );
   try {
-    if (!beingRow.llmDefault) {
+    const beingLlm =
+      beingRow.qualities instanceof Map
+        ? beingRow.qualities.get("beingLlm")
+        : beingRow.qualities?.beingLlm;
+    const currentMain = beingLlm?.slots?.main;
+    if (!currentMain) {
       await assignConnection(beingId, "main", connection._id, {
         identity, summonCtx,
       });

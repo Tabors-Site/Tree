@@ -113,12 +113,12 @@
 // block. The capability rows are the structural lock; the contents
 // vary by what each role declares.
 //
-// canSee is preload, not menu. Every entry is rendered into the face
-// at moment-open . either an IBP address (preloaded via seeVerb) or
-// a registered see name (preloaded via the seeResolver registry).
-// The being does not pick from a list and there is no see tool; the
-// face IS the perception. To see more, the being moves (DO), changes
-// role (BE / roleFlow), or the role spec is edited.
+// canSee is preload, not menu. Every entry is resolved at the 2-fold
+// beat (kernel-side) into the canonical inner face's blocks; here we
+// reformat those blocks into the LLM prompt's perception section. The
+// being does not pick from a list and there is no see tool; the face
+// IS the perception. To see more, the being moves (DO), changes role
+// (BE / roleFlow), or the role spec is edited.
 //
 // Ordering. Identity + capabilities + role-intent come FIRST (the
 // question: who you are, what you can do, why you exist). canSee
@@ -147,7 +147,7 @@
 import log from "../../../seedReality/log.js";
 import { getToolDescription, resolveTools } from "./tools.js";
 import { resolveCanStar } from "../../roles/canStarResolver.js";
-import { resolveCanSee } from "./canSeeResolver.js";
+import { formatInnerFaceBlocksForPrompt } from "./innerFaceFormat.js";
 import { getSpaceName } from "../../../materials/space/spaces.js";
 // Side-effect import: registers the foundational seed SEE ops (place,
 // roles, tools, operations, identity, config, peers, extensions) in
@@ -238,7 +238,7 @@ export async function buildPrompt(role, ctx) {
   // forward path's preloaded canSee blocks are passed empty so the
   // world drops out. The renderer (renderInwardPastFace /
   // renderHalfPastFace, in llmMoment.js) has already applied the
-  // render-time clamps to the per-act facadeSnapshots; we just
+  // render-time clamps to the per-act innerFace; we just
   // splice the rendered string in.
   const pastFaceBlock = typeof ctx?.pastFaceBlock === "string" ? ctx.pastFaceBlock : "";
 
@@ -274,11 +274,12 @@ export async function buildPrompt(role, ctx) {
 // canSee face blocks (preloaded perception)
 // ────────────────────────────────────────────────────────────────────
 
-async function renderCanSeeBlocks(role, ctx) {
-  if (!Array.isArray(role.canSee) || role.canSee.length === 0) return "";
-  const blocks = await resolveCanSee(role.canSee, ctx);
-  if (blocks.length === 0) return "";
-  return blocks.join("\n\n");
+function renderCanSeeBlocks(role, ctx) {
+  // canSee was already resolved at the 2-fold beat into
+  // ctx.innerFace.blocks. We just reformat those blocks into the LLM
+  // prompt prose shape ([<label>]\n<JSON>). No per-soul resolution.
+  void role;
+  return formatInnerFaceBlocksForPrompt(ctx?.innerFace);
 }
 
 // ────────────────────────────────────────────────────────────────────

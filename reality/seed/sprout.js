@@ -156,6 +156,8 @@ export async function withIAmAct(sourceLabel, fn) {
   const plannedAct = {
     _id: actId,
     p,
+    // I_AM the being expresses I_AM the Name (its key is the reality key).
+    nameId:   I_AM,
     beingIn:  I_AM,
     beingOut: I_AM,
     ibpAddress:      null,
@@ -253,11 +255,23 @@ export async function withBeingAct(beingId, sourceLabel, branch, fn) {
     reality: getRealityDomain(),
     branch,
   };
+  // The actor NAME — the being expresses a trueName (the name whose key
+  // signs). No fallback: a being with no trueName cannot act.
+  const { loadOrFold } = await import("./materials/projections.js");
+  const actorSlot = await loadOrFold("being", beingId, branch);
+  const nameId = actorSlot?.state?.trueName;
+  if (!nameId) {
+    throw new Error(
+      `withBeingAct: being ${String(beingId).slice(0, 8)} has no trueName; ` +
+      `cannot resolve the name that signs.`,
+    );
+  }
   const p = await readActHead(branch, beingId);
   const actId = computeActId(p, opening);
   const plannedAct = {
     _id: actId,
     p,
+    nameId,
     beingIn:  beingId,
     beingOut: beingId,
     ibpAddress:      null,
@@ -685,6 +699,29 @@ export async function ensureIAm() {
   };
 
   await withIAmAct("I am that I am", async (ctx) => {
+    // I_AM is first a NAME (the root identity, parentNameId=null) and then
+    // a being that expresses it. The name:declare folds the i-am Name row;
+    // the being born just below belongs to it (trueName=I_AM). The i-am
+    // Name signs with the reality key (realityIdentity), so it stores no
+    // privateKeyEnc — loadSigningKey special-cases the i-am name to the
+    // reality key. The name reel is the most primitive reel.
+    await emitFact({
+      verb: "name",
+      action: "declare",
+      beingId: id, // self-stamping — i-am declares its own name
+      target: { kind: "name", id },
+      params: {
+        spec: {
+          parentNameId:  null,  // the root name, a facet of nothing above
+          privateKeyEnc: null,  // signs with the reality key, not a stored key
+          identity:      { alg: "ed25519", keyEnc: "reality-key", v: 1 },
+          soulType:      "scripted",
+        },
+      },
+      actId: ctx.actId,
+      branch: "0",
+    }, ctx);
+
     await emitFact({
       verb: "be",
       action: "birth",
@@ -695,6 +732,9 @@ export async function ensureIAm() {
         password: credential.hash,
         roles: [],
         defaultRole: null,
+        // The being expresses the i-am Name (the root identity). Every
+        // being birthed under i-am inherits this trueName.
+        trueName: I_AM,
         // Root of the being-tree.
         parentBeingId: null,
         // homeSpace is null at birth. A later step in the genesis
@@ -704,8 +744,8 @@ export async function ensureIAm() {
         // to the place root (or treating the being as unhomed).
         homeSpace: null,
         position: null,
-        // Optional traits (llmDefault / isRemote / homeReality) ride
-        // birth facts only when set — the reducer defaults absence.
+        // Optional traits (isRemote / homeReality) ride birth facts
+        // only when set, the reducer defaults absence.
         qualities,
       },
       actId: ctx.actId,

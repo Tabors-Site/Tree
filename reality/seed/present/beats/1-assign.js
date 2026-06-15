@@ -656,6 +656,21 @@ async function planActRow(opts = {}) {
   // crossOrigin derivation) reads from here. See CROSS-WORLD.md.
   const { getRealityDomain } = await import("../../ibp/address.js");
   const { computeActId, readActHead } = await import("../../past/act/actHash.js");
+
+  // The actor NAME — the acting being expresses a trueName (the name that
+  // signs the act and that every fact attributes). Resolved onto the row,
+  // NOT into the opening/digest, so act._id is unchanged. No fallback: a
+  // being with no trueName cannot act.
+  const { loadOrFold } = await import("../../materials/projections.js");
+  const actorSlot = await loadOrFold("being", beingIn, branch);
+  const nameId = actorSlot?.state?.trueName;
+  if (!nameId) {
+    throw new Error(
+      `planActRow: acting being ${String(beingIn).slice(0, 8)} has no trueName; ` +
+      `cannot resolve the name that signs.`,
+    );
+  }
+
   const opening = {
     beingIn,
     beingOut: beingOut || null,
@@ -676,6 +691,7 @@ async function planActRow(opts = {}) {
   return {
     _id: actId,
     p,
+    nameId,
     beingIn,
     beingOut: beingOut || null,
     ibpAddress,

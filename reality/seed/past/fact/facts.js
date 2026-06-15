@@ -46,7 +46,7 @@ import { withReelLock } from "../reel/appendLock.js";
 // Reel-bearing target kinds — those with their own seq counter. Other
 // kinds (place, stance) and target-less facts carry seq:null and stay
 // outside the fold model for now.
-const REEL_KINDS = new Set(["being", "space", "matter"]);
+const REEL_KINDS = new Set(["being", "space", "matter", "name"]);
 
 // ─────────────────────────────────────────────────────────────────────────
 // WRITE
@@ -61,11 +61,12 @@ const MAX_ACTION_LENGTH = 100;
 //   - do: action on a target (right stance). target.kind ∈ {space, matter, being, place, stance}.
 //   - be: identity acting on self (left stance). target.kind === "being".
 //   - summon: one being calling another (right stance, the recipient). target.kind === "being".
-const VALID_VERBS = new Set(["do", "be", "summon"]);
+const VALID_VERBS = new Set(["do", "be", "summon", "name"]);
 const VALID_TARGET_KINDS = new Set([
   "space",
   "matter",
   "being",
+  "name",
   "place",
   "stance",
 ]);
@@ -114,6 +115,7 @@ export async function logFact(input, opts = {}) {
   let branch;
   const {
     beingId,
+    nameId = null,
     verb = "do",
     action,
     target = null,
@@ -318,6 +320,24 @@ export async function logFact(input, opts = {}) {
     }
   }
 
+  // Banish gate — the Name layer's be:death. Refuse to stamp any fact whose
+  // ACTOR name (nameId) is banished. The lone exception is the name:banish
+  // fact itself, so the tombstone can seal. A Name is reality-wide (its reel
+  // does not fork), so this reads on main regardless of the fact's branch;
+  // isNameBanished short-circuits I_AM, so today's all-i-am traffic skips the
+  // read. See materials/name/closure.js.
+  const { isNameBanished, isBanishFact } = await import(
+    "../../materials/name/closure.js"
+  );
+  if (!isBanishFact({ verb, action }) && nameId && await isNameBanished(nameId)) {
+    throw new IbpError(
+      IBP_ERR.FORBIDDEN,
+      `logFact: name ${String(nameId).slice(0, 8)} is banished. ` +
+      `No new fact can be signed by it.`,
+      { nameId },
+    );
+  }
+
   // beforeFact hook . extensions can modify or cancel. The hook sees a
   // mutable view; only `params` and `result` are conventionally mutated
   // for enrichment. Cancellations short-circuit the stamp.
@@ -378,6 +398,7 @@ export async function logFact(input, opts = {}) {
 
   const baseDoc = {
     beingId,
+    nameId,
     verb,
     action,
     target: finalTarget,
@@ -850,6 +871,13 @@ export async function emitFact(spec, summonCtx = null) {
   ) {
     const key = `${spec.target.kind}:${spec.target.id}`;
     spec.foldSeq = summonCtx.foldedSeqs.get(key) ?? null;
+  }
+
+  // The actor NAME — every fact links DIRECTLY to the name that did it,
+  // taken from the moment's act (actorAct.nameId), never re-resolved per
+  // fact. An already-set nameId wins (manual authors retain control).
+  if (spec && spec.nameId === undefined) {
+    spec.nameId = summonCtx?.actorAct?.nameId ?? null;
   }
 
   // Cross-world provenance. When the actor's Act seats on summonCtx

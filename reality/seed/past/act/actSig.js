@@ -46,7 +46,8 @@ function timeISO(act) {
 export function buildActSigPayload(act, factIds) {
   return {
     actId:    String(act._id),
-    beingIn:  act.beingIn,
+    nameId:   act.nameId ?? null,   // the actor: the name whose key signs
+    beingIn:  act.beingIn,          // the being the name acted through
     beingOut: act.beingOut ?? null,
     reality:  act.reality ?? null,
     branch:   normBranch(act.branch),
@@ -62,33 +63,29 @@ export function buildActSigPayload(act, factIds) {
  * local key (foreign cross-reality, missing/corrupt blob) — the seal
  * then proceeds unsigned. Never throws.
  */
-export async function loadSigningKey(beingId, branch) {
+export async function loadSigningKey(nameId, branch) {
   try {
-    if (beingId === I_AM) {
+    if (nameId === I_AM) {
       const { getRealityIdentity } = await import("../../realityIdentity.js");
       return getRealityIdentity().privateKey;     // reality ed25519 PEM
     }
-    const { isKeyId } = await import("../../materials/being/identity/beingKeys.js");
-    if (!isKeyId(beingId)) return null;            // not a local key-bearing being
+    const { isKeyId } = await import("../../materials/name/keys.js");
+    if (!isKeyId(nameId)) return null;             // not a key-bearing Name
     const { loadProjection } = await import("../../materials/projections.js");
-    const slot = await loadProjection("being", beingId, normBranch(branch));
-    // Secondary unlock (IDENTITY.md): a HUMAN's acts are signed only
-    // while their signing session is open. Locked human → unsigned
-    // seal, visibly so (the portal badges it). Scripted/LLM beings and
-    // I_AM are exempt — no hand to type a secret. The TTL slides on
-    // every signed seal so active humans stay unlocked. Cognition
-    // lives at qualities.cognition.defaultKind (not a schema field).
-    const _q = slot?.state?.qualities;
-    const _cog = _q instanceof Map ? _q.get("cognition") : _q?.cognition;
-    if (_cog?.defaultKind === "human") {
+    const slot = await loadProjection("name", nameId, normBranch(branch));
+    // Secondary unlock (IDENTITY.md): a HUMAN name's acts are signed only
+    // while its signing session is open. Locked human → unsigned seal,
+    // visibly so (the portal badges it). Scripted/LLM names and I_AM are
+    // exempt — no hand to type a secret. The TTL slides on every signed
+    // seal so active humans stay unlocked. The soul lives on the Name
+    // (soulType), since the name (not the being) is who acts.
+    if (slot?.state?.soulType === "human") {
       const { isSigningUnlocked, touchSigning } =
-        await import("../../materials/being/identity/signingSession.js");
-      if (!isSigningUnlocked(beingId)) return null;
-      touchSigning(beingId);
+        await import("../../materials/name/signingSession.js");
+      if (!isSigningUnlocked(nameId)) return null;
+      touchSigning(nameId);
     }
-    const q = slot?.state?.qualities;
-    const auth = q instanceof Map ? q.get("auth") : q?.auth;
-    const enc = auth?.privateKeyEnc;
+    const enc = slot?.state?.privateKeyEnc;
     if (!enc) return null;
     const { decryptCredential } = await import("../../materials/being/identity/credentials.js");
     return decryptCredential(enc);                 // null on bad blob/key
@@ -107,12 +104,12 @@ export async function loadSigningKey(beingId, branch) {
  * @param {string|null} pem     the signer's private key PEM (preloaded)
  */
 export async function signActDoc(actDoc, factIds, pem) {
-  if (pem === undefined) pem = await loadSigningKey(actDoc.beingIn, actDoc.branch);
+  if (pem === undefined) pem = await loadSigningKey(actDoc.nameId, actDoc.branch);
   if (!pem) return null;
   try {
-    const { signAsBeing } = await import("../../materials/being/identity/beingKeys.js");
+    const { signAsBeing } = await import("../../materials/name/keys.js");
     const value = signAsBeing(pem, buildActSigPayload(actDoc, factIds));
-    return { alg: "ed25519", by: actDoc.beingIn, value };
+    return { alg: "ed25519", by: actDoc.nameId, value };
   } catch (err) {
     log.warn("Stamped", `signing failed for act ${String(actDoc?._id || "").slice(0, 8)}: ${err.message}`);
     return null;
@@ -144,13 +141,13 @@ export async function verifyActSig(act, { localReality = null } = {}) {
 
   if (by === I_AM) {
     const { getRealityIdentity } = await import("../../realityIdentity.js");
-    const { verifyWithPublicKeyPem } = await import("../../materials/being/identity/beingKeys.js");
+    const { verifyWithPublicKeyPem } = await import("../../materials/name/keys.js");
     return {
       ok: verifyWithPublicKeyPem(getRealityIdentity().publicKey, payload, sig.value),
       reason: "i-am",
     };
   }
-  const { isKeyId, verifyBeingSig } = await import("../../materials/being/identity/beingKeys.js");
+  const { isKeyId, verifyBeingSig } = await import("../../materials/name/keys.js");
   if (isKeyId(by)) {
     return { ok: verifyBeingSig(by, payload, sig.value), reason: "being" };
   }
@@ -224,7 +221,7 @@ export async function signEnvelopeBeingSig(env, pem) {
   if (pem === undefined) pem = await loadSigningKey(env.beingId, env.branch);
   if (!pem) return null;
   try {
-    const { signAsBeing } = await import("../../materials/being/identity/beingKeys.js");
+    const { signAsBeing } = await import("../../materials/name/keys.js");
     const time = new Date().toISOString();
     const value = signAsBeing(pem, buildEnvelopeSigPayload({ ...env, time }));
     return { alg: "ed25519", by: env.beingId, value, time };
@@ -249,7 +246,7 @@ export async function signEnvelopeBeingSig(env, pem) {
  */
 export async function verifyEnvelopeBeingSig(env, beingSig) {
   if (!beingSig?.value) return { ok: true, reason: "unsigned-advisory" };
-  const { isKeyId, verifyBeingSig } = await import("../../materials/being/identity/beingKeys.js");
+  const { isKeyId, verifyBeingSig } = await import("../../materials/name/keys.js");
   const by = env?.beingId;
   if (!isKeyId(by)) return { ok: true, reason: "non-key-signer" };
   // Freshness gate. The signing time is part of the signed payload, so a

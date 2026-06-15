@@ -11,7 +11,7 @@
 // The identity is the MOMENT'S OPENING, not its outcome — facts
 // stamped during the moment carry actId, so the identity must exist
 // at assign time, before anything sealed. The closure (status,
-// endMessage, facadeSnapshot, answers) is row bookkeeping OUTSIDE the
+// endMessage, innerFace, answers) is row bookkeeping OUTSIDE the
 // digest: it mutates by design (attempted → answered, the seal's
 // closing utterance) and the chain's truth about what HAPPENED lives
 // in the facts the act produced, which are themselves hash-chained.

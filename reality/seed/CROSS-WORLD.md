@@ -193,11 +193,18 @@ The portal extension renders the foreign side as a doorway. Whether you step thr
 The descriptor returned from the receiving substrate (the cansee / cando / cansummon / canbe shape at that position in that moment) is captured by the receiving substrate's normal descriptor pipeline — the same code that builds descriptors for ordinary local SEEs. The cross-world transport ships it back to the actor over the wire. The actor attaches it to their Act:
 
 ```js
-Act.qualities.innerFace = {
+Act.innerFace = {
+  orientation,
+  role,
+  position,
+  capabilities,
+  blocks,
+  origin: "foreign",
   hash: <sha256-of-descriptor-json>,
-  descriptor: <the-descriptor-json>,
 }
 ```
+
+Same unified canonical field used by both the local fold (`origin: "local"`) and the cross-world override (`origin: "foreign"`). The foreign descriptor is normalized into the canonical inner face shape before storage so every consumer reads one structure.
 
 Hashable for tamper-detection: if the foreign reality later returns a different descriptor for the same position at the same time, the hash proves the change. Useful for scam detection, drift detection, and historical comparison ("I remember this looked different last week").
 
@@ -237,7 +244,7 @@ This is the build target. The full three-way separation — identity local, posi
 3. Tabor's Act opens on #0's act-chain.
 4. SEE handler dispatches against #4's substrate.
 5. #4's descriptor pipeline builds the cansee/cando/cansummon snapshot.
-6. Snapshot returns to the actor; hash + descriptor attach to Act as `qualities.innerFace`.
+6. Snapshot returns to the actor; the foreign descriptor normalizes into the canonical inner face shape and attaches to `Act.innerFace` (with `origin: "foreign"` and a sibling `hash`).
 7. Act seals on #0's act-chain with `status: "sealed"`.
 8. Tabor has a hashable record of "what #4 looked like at T."
 
@@ -284,7 +291,7 @@ All eight prereq + build-order items below shipped. The doctrine is now structur
 | 3 | Position accepts foreign address | LANDED | `seed/materials/being/positionAddress.js` (`parsePositionAddress`, `formatPositionAddress`, `isPositionCrossWorld`) |
 | 4 | Address-resolver cross-world flag | LANDED | `seed/ibp/address.js` + `seed/ibp/resolver.js`; cross-branch + cross-reality detection in parseBoth |
 | 5 | Cross-branch + cross-reality dispatch in DO/SEE/SUMMON/BE | LANDED | `seed/past/act/crossWorldResponse.js` + `runVerbAsForeignActor` |
-| 6 | Inner-face attachment on the Act | LANDED | `seed/past/act/innerFace.js` — `qualities.innerFace = { hash, descriptor }` |
+| 6 | Inner-face attachment on the Act | LANDED | `seed/past/act/innerFace.js` . `Act.innerFace = { orientation, role, position, capabilities, blocks, origin: "foreign", hash }` (same unified canonical field the local fold writes) |
 | 7 | Pull-back safety (boot scan) | LANDED | `seed/materials/being/pullBack.js` + wired into `genesis.js` startup |
 | 8 | Canopy transport (cross-reality) | LANDED | `protocols/ibp/canopy.js` (verifyIncoming + forwardToPeer + signedAt freshness window) |
 

@@ -106,7 +106,7 @@ export async function captureGraft(opts = {}) {
 
   // ── 2. Collect every Act ──
   // The experiential chain. Each act carries the cognition transcript
-  // (startMessage, endMessage, facadeSnapshot) — the biography that
+  // (startMessage, endMessage, innerFace) . the biography that
   // makes the reality more than a state snapshot.
   const acts = await Act.find({}).sort({ stampedAt: 1 }).lean();
   log.info("Graft", `captured ${acts.length} acts`);
@@ -1032,7 +1032,7 @@ export async function applyGraft(bundle, opts = {}) {
   // realityId) — no callback. opts.allowUnsigned is the explicit escape for
   // a trusted local extract (e.g. a same-reality restore).
   if (bundle.meta?.graftSig?.value && bundle.meta?.graftRoot) {
-    const { isKeyId } = await import("../being/identity/beingKeys.js");
+    const { isKeyId } = await import("../name/keys.js");
     const { verifyRealityRootSig } = await import("../../past/fact/chainRoots.js");
     const sg = bundle.meta.graftSig;
     const ok = isKeyId(sg.signerId)
@@ -1330,7 +1330,7 @@ async function applyStateSnapshot(bundle, opts = {}) {
 
   // ── 1. Provenance gate (cold, fail-closed). ──
   if (bundle.meta?.graftSig?.value && bundle.meta?.graftRoot) {
-    const { isKeyId } = await import("../being/identity/beingKeys.js");
+    const { isKeyId } = await import("../name/keys.js");
     const { verifyRealityRootSig } = await import("../../past/fact/chainRoots.js");
     const sg = bundle.meta.graftSig;
     const ok = isKeyId(sg.signerId) ? await verifyRealityRootSig(bundle.meta.graftRoot, sg.signerId, sg.value) : false;

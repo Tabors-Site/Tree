@@ -31,7 +31,7 @@ import {
 } from "../../../materials/branch/branches.js";
 import log from "../../../seedReality/log.js";
 
-const REEL_TYPES = new Set(["being", "space", "matter"]);
+const REEL_TYPES = new Set(["being", "space", "matter", "name"]);
 
 // Name-collision self-heal. The per-branch unique index on
 // (branch, type, state.name) is a backstop on a CACHE — when two live

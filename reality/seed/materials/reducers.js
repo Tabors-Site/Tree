@@ -11,11 +11,13 @@
 import * as being  from "./being/reducer.js";
 import * as space  from "./space/reducer.js";
 import * as matter from "./matter/reducer.js";
+import * as name   from "./name/reducer.js";
 
 const _registry = {
   being,
   space,
   matter,
+  name,
 };
 
 /**

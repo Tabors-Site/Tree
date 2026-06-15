@@ -19,7 +19,7 @@
 import ReelHead from "./reelHead.js";
 import { getBranchPoint, isMain, MAIN } from "../../materials/branch/branches.js";
 
-const VALID_TYPES = new Set(["being", "space", "matter"]);
+const VALID_TYPES = new Set(["being", "space", "matter", "name"]);
 
 // `_id` shape is `<branch>:<type>:<id>` for all branches. Main is `"0"`
 // — explicit, not implicit-by-absence — so queries that filter on

@@ -54,12 +54,19 @@ const FactSchema = new mongoose.Schema({
   // (pre-being scaffold flows: server boot, migrations).
   beingId: { type: String, ref: "Being", required: true },
 
+  // The actor NAME — the Name (identity) that DID this fact, taken
+  // DIRECTLY from the moment's act (act.nameId), never re-resolved here.
+  // `beingId` above is the being the name acted THROUGH (the presence).
+  // Additive + NOT in contentOf (hash.js), so the fact _id is unchanged.
+  // See materials/name/name.js.
+  nameId: { type: String, ref: "Name", default: null },
+
   // Which verb stamped the Fact. DO for operations on a target
   // (right stance), BE for the closed identity set (birth / connect
   // / release — left stance, the actor itself), SUMMON for one
   // being calling another (right stance: the recipient). The three
   // stamping verbs are peers; SEE never appends a Fact.
-  verb:   { type: String, enum: ["do", "be", "summon"], default: "do", index: true },
+  verb:   { type: String, enum: ["do", "be", "summon", "name"], default: "do", index: true },
 
   // The operation or sub-event name. Operations register a
   // `factAction` (defaults to the operation name); helpers may write
@@ -69,7 +76,7 @@ const FactSchema = new mongoose.Schema({
   // What was acted on. Optional — some acts (multi-being ops,
   // place-level config) have no single positional target.
   target: {
-    kind: { type: String, enum: ["space", "matter", "being", "place", "stance"] },
+    kind: { type: String, enum: ["space", "matter", "being", "name", "place", "stance"] },
     id:   { type: String },
     _id:  false,
   },

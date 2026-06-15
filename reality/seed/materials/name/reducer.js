@@ -39,11 +39,12 @@ function applyMintName(state, fact) {
   };
 }
 
-// name:close — the Name declares itself no longer active. Future acts
-// can't be signed by it (the gate lives upstream, like be:death). The
-// history persists; this just folds the close marker. Idempotent.
+// name:banish (a.k.a. close) — the Name tombstones itself: no fact can ever
+// be signed by it again (the gate lives upstream in logFact, like be:death).
+// The history persists; this just folds the closed marker. Idempotent.
 function applyCloseName(state, fact) {
-  if (fact?.verb !== "name" || fact.action !== "close") return state;
+  if (fact?.verb !== "name") return state;
+  if (fact.action !== "banish" && fact.action !== "close") return state;
   if (state.closedAt) return state;
   return { ...state, closedAt: fact.date, updatedAt: fact.date };
 }

@@ -12,9 +12,9 @@
 // `resolveBareCapabilities` runs the same resolver path the LLM
 // cognition's prompt builder uses (assemble.js's renderCapabilities)
 // but returns bare-name string lists instead of the rendered prompt
-// blocks. This is what the substrate consumes when building a
-// facadeSnapshot — it doesn't care HOW the LLM rendered the menu,
-// only WHAT the being was licensed to dispatch at the moment.
+// blocks. This is what the kernel consumes when building an
+// innerFace . it doesn't care HOW the LLM rendered the menu, only
+// WHAT the being was licensed to dispatch at the moment.
 //
 // Lives in present/roles/ because the role spec is where can* lists
 // originate; cognition modules (cognition/llm/, future scripted /
@@ -26,7 +26,7 @@ import { resolveCanStar } from "./canStarResolver.js";
 
 /**
  * Resolve the role's three act-capable can* lists down to bare name
- * strings, suitable for facadeSnapshot capture or any other
+ * strings, suitable for innerFace capture or any other
  * cognition-agnostic introspection of "what was the being licensed
  * to dispatch this moment?"
  *

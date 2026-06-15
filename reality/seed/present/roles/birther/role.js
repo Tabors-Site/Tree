@@ -60,9 +60,18 @@ export const birtherRole = Object.freeze({
   ],
 
   async summon(message, ctx) {
+    // ctx.innerFace carries the canonical inner face the kernel built
+    // for this moment (orientation + role + position + capabilities +
+    // role.canSee-resolved blocks). Scripted roles read it as data:
+    //   ctx.innerFace.blocks . [{ key, source, label, payload }, ...]
+    // Same shape the LLM mouth reformats and the human portal renders.
+    // This birther role doesn't filter on it today; the breadcrumb is
+    // here so anyone wiring a new scripted role knows where the face
+    // lives.
+    //
     // Dispatch by intent in the message. Today's intents:
     //
-    //   "mate" — cross-world citizenship request. The summoner becomes
+    //   "mate" . cross-world citizenship request. The summoner becomes
     //            father; this birther becomes mother; child is birthed
     //            on this reality. See FEDERATION.md.
     //

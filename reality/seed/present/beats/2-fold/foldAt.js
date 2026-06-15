@@ -49,7 +49,7 @@ import * as reducers from "../../../materials/reducers.js";
 import { readReelBetween } from "./foldEngine.js";
 import { assertBranchOrThrow } from "../../../materials/projections.js";
 
-const REEL_TYPES = new Set(["being", "space", "matter"]);
+const REEL_TYPES = new Set(["being", "space", "matter", "name"]);
 
 /**
  * Thrown when a historical fold is requested for a target that had no

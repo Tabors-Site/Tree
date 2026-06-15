@@ -31,11 +31,14 @@
 import { cherubBeOps } from "../present/roles/cherub/role.js";
 
 export const BE_OPS = Object.freeze({
-  birth:   cherubBeOps.birth,
-  connect: cherubBeOps.connect,
-  release: cherubBeOps.release,
-  switch:  cherubBeOps.switch,
-  death:   cherubBeOps.death,
+  birth:    cherubBeOps.birth,
+  connect:  cherubBeOps.connect,
+  release:  cherubBeOps.release,
+  switch:   cherubBeOps.switch,
+  death:    cherubBeOps.death,
+  // truename — hand a being to a (declared) Name: re-point its trueName.
+  // Identity-level, so it rides BE, not do:set-being.
+  truename: cherubBeOps.truename,
 });
 
 /**

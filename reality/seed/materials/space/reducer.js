@@ -44,8 +44,8 @@ export function reduce(state, fact) {
   // legacy birth facts that lack .spec; safe to compose now.
   next = applyCreateSpace(next, fact);
 
-  // do:set — scalar fields (name, type, parent, owner, llmDefault, ...)
-  // and qualities paths. Both appliers gate themselves on their own
+  // do:set — scalar fields (name, type, parent, owner, ...) and
+  // qualities paths. Both appliers gate themselves on their own
   // field-shape prefixes, so they're safe to compose; only one will
   // mutate state for any given fact.
   next = applySetField(next, fact);
@@ -68,6 +68,16 @@ export function reduce(state, fact) {
   // where the new value rides params.value.)
   if (fact?.action === "set-space" && fact?.params?.field === "parent") {
     next = { ...next, position: fact.params.value ?? null };
+  }
+
+  // updatedAt is reducer-owned (no Mongoose timestamps on Space). On
+  // any state-mutating apply, bump to the current fact's date so
+  // rebuild from the reel produces the same value the live fold
+  // landed on. applyCreateSpace already seeds both createdAt and
+  // updatedAt on do:birth; this catches every later mutating fact
+  // and keeps the row deterministic from the reel alone.
+  if (next !== state) {
+    next = { ...next, updatedAt: fact.date };
   }
 
   return next === state ? { ...state } : next;

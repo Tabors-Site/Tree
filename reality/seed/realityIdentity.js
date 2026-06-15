@@ -5,7 +5,7 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { SignJWT, jwtVerify, importPKCS8, importSPKI } from "jose";
-import { keyIdFromPublicKeyPem } from "./materials/being/identity/beingKeys.js";
+import { keyIdFromPublicKeyPem } from "./materials/name/keys.js";
 
 const ALGORITHM = "Ed25519";
 const TOKEN_EXPIRY = "5m";

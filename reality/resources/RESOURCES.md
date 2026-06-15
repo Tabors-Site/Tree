@@ -79,26 +79,39 @@ localStore is the foundation under the four-layer network model:
 A reality can plant either pack independently. See
 [philosophy/OS/ROOTS.md](../philosophy/OS/ROOTS.md) for the doctrine.
 
-### Resources auto-anchor into localStore at boot
+### Resources are paths in the reality's source tree
 
-When the loader discovers resources, every file under each resource's
-folder is read once and put into localStore via
-`contentStore.putContent`. The bytes land in `localStore/cas/<shard>/<hash>`
-alongside user-uploaded matter, same store, same dedup, same content
-door for serving. The lockfile at `reality/resources/.lockfile.json`
-records the per-file CAS refs plus a `rootHash` per resource (merkle of
-sorted file hashes). After boot, peers asking for any byte by hash get
-served through the existing CAS path regardless of whether the bytes
-came from a user upload or a reality-shipped resource file.
+There is no separate "resource anchor" pass. The reality is walked
+once at boot by [source.js](../seed/materials/space/source.js): every
+file under the repo (including `reality/resources/<name>/...`) gets
+its bytes put into localStore via `contentStore.putContent` and the
+hash recorded on the source matter row's `content.hash`. Resources
+appear in source matter like any other folder; to look up a resource
+file's bytes by hash, query source matter for the path
+`resources/<name>/<rel>` and read `content.hash`.
 
-The on-disk files don't go away. Node still imports code from
-filesystem paths. But the canonical byte storage is localStore;
-publishing a resource (when the store pack is planted) becomes "sign
-the existing rootHash + metadata," no separate byte-upload step.
+The loader's job is now thin: walk `reality/resources/` for manifest
+discovery (registering the resources' shape with the loader's
+registry) and dispatch by kind. No anchoring, no lockfile. Byte
+canonicity flows through source matter.
+
+Publishing a resource is "build a tree blob of source matter rows
+under that resource's path prefix, sign its hash" (see
+[philosophy/OS/STORE.md](../philosophy/OS/STORE.md) +
+[reality/scripts/publish-reality.mjs](../scripts/publish-reality.mjs)
+for the whole-reality case; the per-resource case is the same with a
+narrower prefix).
+
 **Dropping the Mongo db never touches localStore.** Your CAS persists
 across chain resets. Old bytes from prior runs become orphaned
 references (no fact in the new chain points at them) and the retention
 sweeper eventually reclaims them.
+
+The on-disk files still being the import surface is the half that's
+not done yet. See [philosophy/OS/MIRROR.md](../philosophy/OS/MIRROR.md)
+for the next step: the filesystem as a live projection of matter, so
+the on-disk path becomes a window onto CAS instead of a copy of it.
+Source anchor is the first half of that arc; the mount is the second.
 
 ---
 

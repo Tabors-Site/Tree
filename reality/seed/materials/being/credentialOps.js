@@ -105,8 +105,8 @@ registerOperation("key-export", {
     let mnemonic = null;
     if (privateKeyPem) {
       try {
-        const { seedFromPrivateKeyPem } = await import("./identity/beingKeys.js");
-        const { entropyToMnemonic } = await import("./identity/mnemonic.js");
+        const { seedFromPrivateKeyPem } = await import("../name/keys.js");
+        const { entropyToMnemonic } = await import("../name/mnemonic.js");
         mnemonic = entropyToMnemonic(seedFromPrivateKeyPem(privateKeyPem));
       } catch { /* PEM-only export */ }
     }
@@ -161,7 +161,7 @@ registerOperation("signing-unlock", {
     if (!ok) {
       throw new IbpError(IBP_ERR.UNAUTHORIZED, "Invalid credentials");
     }
-    const { unlockSigning } = await import("./identity/signingSession.js");
+    const { unlockSigning } = await import("../name/signingSession.js");
     unlockSigning(targetBeingId);
     await emitFact({
       verb:    "do",
@@ -187,7 +187,7 @@ registerOperation("signing-lock", {
     if (askerBeingId !== targetBeingId) {
       throw new IbpError(IBP_ERR.FORBIDDEN, "signing-lock is self-only", { askerBeingId, targetBeingId });
     }
-    const { lockSigning } = await import("./identity/signingSession.js");
+    const { lockSigning } = await import("../name/signingSession.js");
     // Latch closes AFTER the seal so the "I lock" act itself still
     // seals signed (the last signed act of the session, honestly so).
     if (summonCtx?.afterSeal) {

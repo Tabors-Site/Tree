@@ -32,15 +32,6 @@ const SpaceSchema = new mongoose.Schema({
   name: { type: String, required: true },
   type: { type: String, default: null },
 
-  // Reducer-owned. NO `default: Date.now` — applyCreateSpace seeds
-  // this from fact.date on do:create. A schema default would inject
-  // wall-clock on inserts where the reducer didn't set it
-  // (second-writer bug — same shape as Being's removed `timestamps`).
-  dateCreated: { type: Date, default: null },
-
-  // Connection uuid key into the owning being's qualities.llmConnections.
-  llmDefault: { type: String, default: null },
-
   parent: { type: String, ref: "Space", default: null },
   // children[] retired (2026-05-23). The parent-side cache is gone;
   // `parent` on each child is the single source of truth for the
@@ -109,6 +100,15 @@ const SpaceSchema = new mongoose.Schema({
   // regression when concurrent folds race.
   foldedSeq: { type: Number, default: null },
   position:  { type: String, default: null },
+
+  // Reducer-owned timestamps. NO `default: Date.now` and NO pre-save
+  // hook. Mongoose-managed defaults would fire when the reducer
+  // doesn't set them and inject wall-clock values the reel never saw
+  // (second-writer bug, same shape as Being's removed `timestamps: true`).
+  // applyCreateSpace seeds both from fact.date on do:create; space
+  // reducer's catch-all bumps updatedAt on any mutating apply.
+  createdAt: { type: Date, default: null },
+  updatedAt: { type: Date, default: null },
 });
 
 // Soft-delete only. Deleting a Space sets `parent = DELETED`

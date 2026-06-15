@@ -24,6 +24,11 @@ import { registerSeeOperation } from "../../../ibp/seeOps.js";
 import { seeVerb } from "../../../ibp/verbs/see.js";
 import { getRealityDomain } from "../../../ibp/address.js";
 import log from "../../../seedReality/log.js";
+// Side-effect import: registers the my-inner-face SEE op (the live
+// canonical inner face for the caller's active stance). Roles can
+// declare `canSee: ["my-inner-face"]` to preload their own face; the
+// human portal calls client.see("my-inner-face") to render it.
+import "../human/myInnerFace.js";
 
 const HEAVEN_SEES = [
   "roles",

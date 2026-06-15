@@ -39,10 +39,10 @@
 // at step 3 by default (no actor side).
 //
 // Legacy reads (deprecation window): older containers stored
-// `beingLlm.slots`, `beingLlm.preferOwn`, `beingLlm.locked`,
-// `qualities.llm.enforced`, plus the scalar `llmDefault`. The
-// normalizer below reads both shapes and merges them so existing data
-// keeps working until operators re-write via the new ops.
+// `beingLlm.slots`, `beingLlm.preferOwn`, `beingLlm.locked`, and
+// `qualities.llm.enforced`. The normalizer below reads both shapes
+// and merges them so existing data keeps working until operators
+// re-write via the new ops.
 
 import { getAncestorChain } from "../../../materials/space/ancestorCache.js";
 import { getRealityConfigValue } from "../../../realityConfig.js";
@@ -78,7 +78,7 @@ function readQualitiesField(qualities, name) {
 /**
  * Read a container's `qualities.llm` into the uniform shape used by
  * the chain walker. Reads legacy `beingLlm` / `enforced` / `locked`
- * + scalar `llmDefault` so pre-rewire data still resolves.
+ * so pre-rewire qualities data still resolves.
  *
  * Returns { defaultList, slotList(role), preferOwn, forceActor,
  * forceReceiver }.
@@ -95,18 +95,9 @@ export function readContainerLlm(container, role) {
   }
   const llm = readQualitiesField(container.qualities, "llm");
   const beingLlm = readQualitiesField(container.qualities, "beingLlm");
-  const scalarDefault = typeof container.llmDefault === "string"
-    && container.llmDefault.length > 0
-    && container.llmDefault.length <= MAX_CONNECTION_ID_LENGTH
-    ? container.llmDefault
-    : null;
 
-  // default list = new `qualities.llm.default[]` then scalar `llmDefault`
-  // (deprecation back-compat).
-  const newDefault = toIdList(llm?.default);
-  const defaultList = newDefault.length > 0
-    ? newDefault
-    : (scalarDefault ? [scalarDefault] : []);
+  // default list = new `qualities.llm.default[]`.
+  const defaultList = toIdList(llm?.default);
 
   // role-slot list — check new shape first, then legacy `slots` /
   // `beingLlm.slots`. Reject prototype-polluted slot names + invalid
@@ -137,15 +128,9 @@ export function readContainerLlm(container, role) {
   if (beingLlm?.locked === true) {
     forceReceiver = true;
     // locked means "no LLM" — empty out lists so the cap produces no
-    // candidates.
+    // candidates. An operator who wrote to qualities.llm.default[]
+    // explicitly meant to override the lock; that array survives.
     slotList = [];
-    if (newDefault.length === 0) {
-      // Don't preserve scalar fallback under lock.
-      // (newDefault was empty → defaultList came from scalar; clear it.)
-      // The if-guard means we only clear when the operator didn't
-      // explicitly add to the new array shape — they may have meant
-      // to override the lock.
-    }
   }
 
   // Mutual exclusion: if a container somehow has both flags set
@@ -156,7 +141,7 @@ export function readContainerLlm(container, role) {
 
   // Lockout: an empty container with `forceReceiver=true` legacy-locked
   // path produces zero candidates at this step.
-  if (beingLlm?.locked === true && newDefault.length === 0) {
+  if (beingLlm?.locked === true && defaultList.length === 0) {
     return { defaultList: [], slotList: [], preferOwn, forceActor: false, forceReceiver: true };
   }
 

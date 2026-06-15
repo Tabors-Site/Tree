@@ -521,6 +521,77 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     return { ...result, targetBeingId };
   }
 
+  // ── be:truename — hand a being to a (declared) Name. ────────────
+  // Identity-level: re-point the target being's trueName at an EXISTING,
+  // non-banished Name. OPEN for now (assertVerbCaller only, NO role-walk —
+  // mirror the NAME verb); owner-only is a permission added later. The
+  // be:truename fact lands on the TARGET being's reel; the new nameId rides
+  // params.trueName (the fact target stays {kind:being}, satisfying
+  // BEING_ONLY_TARGET_VERBS). The being's _id (its frozen birth-event hash)
+  // is untouched, so its reel + chain stay intact across the transfer.
+  if (operation === "truename") {
+    assertVerbCaller("be", opts);
+    if (!identity?.beingId) {
+      throw new IbpError(IBP_ERR.UNAUTHORIZED, "be:truename requires an authenticated caller");
+    }
+    if (!beingName) {
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "be:truename requires an explicit target being in the address (e.g. <reality>/@<being>)",
+      );
+    }
+    const newTrueName = payload?.trueName;
+    if (typeof newTrueName !== "string" || !newTrueName) {
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "be:truename requires payload.trueName (a declared Name id)");
+    }
+    const { findByName, loadProjection } = await import("../../materials/projections.js");
+    const targetSlot = await findByName("being", beingName, branch);
+    if (!targetSlot) {
+      throw new IbpError(
+        IBP_ERR.BEING_NOT_FOUND,
+        `be:truename target @${beingName} not found on branch #${branch}`,
+        { beingName, branch },
+      );
+    }
+    const targetBeingId = String(targetSlot.id);
+    // The target Name must exist and not be banished. Names live on main
+    // (identity is above the branch timeline); isNameBanished returns false
+    // for a MISSING name too, so assert existence separately.
+    const nameSlot = await loadProjection("name", String(newTrueName), "0");
+    if (!nameSlot?.state) {
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        `be:truename: target Name "${String(newTrueName).slice(0, 12)}…" does not exist`,
+        { trueName: newTrueName },
+      );
+    }
+    const { isNameBanished } = await import("../../materials/name/closure.js");
+    if (await isNameBanished(newTrueName)) {
+      throw new IbpError(
+        IBP_ERR.FORBIDDEN,
+        `be:truename: target Name "${String(newTrueName).slice(0, 12)}…" is banished`,
+        { trueName: newTrueName },
+      );
+    }
+    const truenameOp = getBeOp("truename");
+    const result = await truenameOp.handler({
+      address, addressKind, payload, identity,
+      ctx: { socket, address: { kind: addressKind, value: address }, identity, req, summonCtx },
+      summonCtx,
+    });
+    await writeBeFact({
+      operation,
+      identity,
+      authResult: { ...result, targetBeingId },
+      payload,
+      beingName,
+      actId: summonCtx?.actId || null,
+      summonCtx,
+      branch,
+    });
+    return { ...result, targetBeingId };
+  }
+
   // ── Inhabit-connect path. ───────────────────────────────────────
   // BE:connect on a non-cherub being. Cherub's handler implements the
   // inhabit auth path (Mode 3: caller is authenticated AND target is
@@ -758,6 +829,20 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
     }
     target = { kind: "being", id: String(targetBeingId) };
     connectionParams = { byActor: String(actorBeingId) };
+  } else if (operation === "truename") {
+    // The being whose trueName changes was resolved in beVerb's truename
+    // branch and threaded via authResult.targetBeingId. The new Name id
+    // rides params.trueName; the fact lands on that being's reel, and the
+    // being reducer's applyTrueName folds it onto the row.
+    const targetBeingId = authResult?.targetBeingId;
+    if (!targetBeingId) {
+      throw new IbpError(
+        IBP_ERR.INTERNAL,
+        "be:truename requires a resolved target being id (set by beVerb's truename branch).",
+      );
+    }
+    target = { kind: "being", id: String(targetBeingId) };
+    connectionParams = { trueName: String(payload?.trueName) };
   } else if (operation === "switch") {
     // Per-session branch change on the caller's own being. Target =
     // the caller's being; params record from/to so the audit fact

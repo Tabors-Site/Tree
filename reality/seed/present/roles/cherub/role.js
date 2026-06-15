@@ -191,7 +191,7 @@ async function birthHandler({ payload, ctx }) {
     // holder): open the signing session so the being's first acts
     // seal signed. See signingSession.js (the secondary unlock).
     {
-      const { unlockSigning } = await import("../../../materials/being/identity/signingSession.js");
+      const { unlockSigning } = await import("../../../materials/name/signingSession.js");
       unlockSigning(String(being._id));
     }
     return {
@@ -250,7 +250,7 @@ async function birthHandler({ payload, ctx }) {
   const identityToken = generateToken(being);
   // Birth proved the secret: open the signing session (secondary unlock).
   {
-    const { unlockSigning } = await import("../../../materials/being/identity/signingSession.js");
+    const { unlockSigning } = await import("../../../materials/name/signingSession.js");
     unlockSigning(String(being._id));
   }
   return {
@@ -314,7 +314,7 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
     // The password was just verified: open the signing session
     // (secondary unlock) so this human's acts seal signed.
     {
-      const { unlockSigning } = await import("../../../materials/being/identity/signingSession.js");
+      const { unlockSigning } = await import("../../../materials/name/signingSession.js");
       unlockSigning(String(user._id));
     }
     return {
@@ -545,7 +545,7 @@ async function releaseHandler({ identity }) {
   // keep an open unlock latch behind it (secondary unlock re-locks on
   // sign out, per IDENTITY.md).
   if (identity?.beingId) {
-    const { lockSigning } = await import("../../../materials/being/identity/signingSession.js");
+    const { lockSigning } = await import("../../../materials/name/signingSession.js");
     lockSigning(String(identity.beingId));
   }
   const seatBranch = await findHomeBranchOfBeing(identity?.beingId);
@@ -666,6 +666,19 @@ async function deathHandler({ address, identity }) {
   };
 }
 
+// be:truename — hand a being to a (declared) Name: re-point its trueName.
+// Inert, like deathHandler: beVerb owns the lookups (target being exists,
+// target Name exists + not banished) and threads the resolved ids through
+// authResult; this just returns a summary.
+async function truenameHandler({ address, identity, payload }) {
+  return {
+    granted:  true,
+    address:  address || null,
+    trueName: payload?.trueName || null,
+    byActor:  identity?.beingId || null,
+  };
+}
+
 // ────────────────────────────────────────────────────────────────────
 // Op definitions. Five handlers + their static schemas. The seed
 // imports these into the canonical BE_OPS table at ibp/beOps.js .
@@ -716,6 +729,15 @@ export const cherubBeOps = Object.freeze({
     label: "Close being",
     args: {},
     handler: deathHandler,
+  },
+  truename: {
+    description: "Hand this being to a Name: set its trueName to a declared Name id. " +
+                 "Anyone for now; owner-only later.",
+    label: "Set true name",
+    args: {
+      trueName: { type: "text", label: "Target Name id", required: true },
+    },
+    handler: truenameHandler,
   },
 });
 

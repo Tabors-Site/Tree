@@ -1,17 +1,24 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// attachInnerFace — store the target world's descriptor snapshot
+// attachInnerFace . store the target world's descriptor snapshot
 // on the actor's Act as a hashable observation artifact.
 //
-// Per CROSS-WORLD.md "The Inner Face":
+// Per CROSS-WORLD.md "The Inner Face" + philosophy/names/innerFace.md:
 //
 //   The descriptor returned from the receiving substrate (the cansee
 //   / cando / cansummon / canbe shape at that position in that
 //   moment) is captured by the receiving substrate's normal
 //   descriptor pipeline. The cross-world transport ships it back to
-//   the actor over the wire. The actor attaches it to their Act:
+//   the actor over the wire. The actor attaches it to their Act,
+//   normalized into the canonical inner face shape so it supersedes
+//   the local face under the SAME field that every other consumer
+//   reads:
 //
-//     Act.qualities.innerFace = { hash, descriptor }
+//     Act.innerFace = {
+//       orientation, role, position, capabilities, blocks,
+//       origin: "foreign",
+//       hash,
+//     }
 //
 //   Hashable for tamper-detection: if the foreign reality later
 //   returns a different descriptor for the same position at the same
@@ -23,6 +30,7 @@
 
 import crypto from "crypto";
 import Act from "./act.js";
+import { normalizeForeignDescriptor } from "../../present/beats/2-fold/innerFace.js";
 
 /**
  * Attach the target world's descriptor as an inner-face observation
@@ -47,11 +55,12 @@ export async function attachInnerFace(actId, descriptor) {
     throw new Error("attachInnerFace: descriptor must be a non-null object");
   }
   const hash = hashDescriptor(descriptor);
+  const normalized = normalizeForeignDescriptor(descriptor);
   const update = await Act.findOneAndUpdate(
     { _id: String(actId) },
     {
       $set: {
-        "qualities.innerFace": { hash, descriptor },
+        innerFace: { ...normalized, hash },
       },
     },
     { new: true },

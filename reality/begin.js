@@ -127,6 +127,7 @@ import { sendOk, sendError, IBP_ERR } from "./seed/ibp/protocol.js";
 import { getExtension } from "./resources/loader.js";
 import securityHeaders from "./transports/http/middleware/securityHeaders.js";
 import { genesis, printReady } from "./genesis.js";
+import { fork } from "child_process";
 import { noteHttpRequest, noteHttpListening, noteHttpShutdown } from "./seed/materials/host/requestLog.js";
 import { getRealityUrl } from "./seed/realityIdentity.js";
 import log from "./seed/seedReality/log.js";
@@ -349,6 +350,38 @@ await genesis(app, { registerRawWebhook });
 // just the planting acting as I_AM at the chosen target.
 await runFirstBootActions();
 
+// Mirror mount (philosophy/OS/MIRROR.md). Source matter is populated
+// by genesis (source.js anchored each file's bytes into CAS); the
+// mount spawns as a child process so it owns its own FUSE event loop
+// and any crash is isolated from the reality. Best-effort: a mount
+// failure logs a warning and the reality keeps booting.
+let mirrorProc = null;
+try {
+  const scriptPath = path.join(__dirname, "scripts", "mirror-mount.mjs");
+  if (!fs.existsSync(scriptPath)) {
+    log.warn("Mirror", `mount script missing at ${scriptPath}`);
+  } else {
+    mirrorProc = fork(scriptPath, [], {
+      stdio: ["ignore", "pipe", "pipe", "ipc"],
+      env:   process.env,
+    });
+    mirrorProc.stdout?.on("data", (b) => {
+      const msg = String(b).trim();
+      if (msg) log.info("Mirror", msg);
+    });
+    mirrorProc.stderr?.on("data", (b) => {
+      const msg = String(b).trim();
+      if (msg) log.warn("Mirror", msg);
+    });
+    mirrorProc.on("exit", (code, signal) => {
+      log.info("Mirror", `mount exited (${signal || `code ${code}`})`);
+      mirrorProc = null;
+    });
+  }
+} catch (err) {
+  log.warn("Mirror", `mount spawn failed: ${err.message}`);
+}
+
 // Earth is whole. I mount the seed routers onto the app: rate limit,
 // dbHealth, auth, MCP, uploads, IBP HTTP. Extension routes attached
 // during loadExtensions are already on the app; these wrap around
@@ -392,6 +425,14 @@ server.listen(PORT, "0.0.0.0", () => {
 // tracked to me.
 async function shutdown(signal) {
   log.info("Seed", `${signal} received. Closing senses.`);
+
+  // Unmount the mirror first; let it answer one final round of FUSE
+  // callbacks then teardown. SIGINT triggers mirror-mount's teardown
+  // handler which calls fuse.unmount before exit.
+  if (mirrorProc) {
+    try { mirrorProc.kill("SIGINT"); } catch {}
+    await new Promise((r) => setTimeout(r, 800));
+  }
 
   // Host observation: stop stamping the disconnect storm (the next
   // boot's reconcile sweep owns those rows), record the shutdown,

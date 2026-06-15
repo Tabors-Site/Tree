@@ -18,7 +18,7 @@
 // seed/realityIdentity.js (Node native crypto, no new dependency).
 
 import crypto from "crypto";
-import { canonicalize } from "../../../past/fact/hash.js";
+import { canonicalize } from "../../past/fact/hash.js";
 
 // ── base58btc (Bitcoin / IPFS alphabet) ──
 const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";

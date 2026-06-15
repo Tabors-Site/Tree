@@ -31,9 +31,13 @@
 // bloat the chain with state the repo already versions). It is the
 // one aggregate family whose cache is disk-folded instead of
 // chain-folded: the walk writes the slot directly, the way a normal
-// fold writes a slot after replaying a reel. The OS port must keep
-// this exception explicit or move the mirror behind its own
-// projection kind.
+// fold writes a slot after replaying a reel.
+//
+// Planned retirement: philosophy/OS/MIRROR.md. Under the mirror,
+// source matter joins the rule (bytes in CAS, facts in the chain,
+// projection on read) and the disk path becomes a window rendered
+// from matter instead of a separate cache. The exception goes away
+// when this whole file does.
 
 import fs from "fs";
 import path from "path";
@@ -44,6 +48,19 @@ import { HEAVEN_SPACE } from "./heavenSpaces.js";
 import { I_AM } from "../being/seedBeings.js";
 import { initProjection, tombstoneProjection } from "../projections.js";
 import ProjectionModel, { projectionKey } from "../branch/projection.js";
+import { anchorFile } from "../matter/anchor.js";
+
+// Lazy putContent; same boot-order rationale as the loader's lazy
+// load (the matter content store is heavier than this file needs at
+// import time). Memoized so the source walk doesn't re-import per
+// file.
+let _putContent = null;
+async function getPutContent() {
+  if (_putContent) return _putContent;
+  const m = await import("../matter/contentStore.js");
+  _putContent = m.putContent;
+  return _putContent;
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -61,6 +78,7 @@ const DEFAULT_IGNORE = new Set([
   ".github",
   "node_modules",
   "localStore",
+  "mirror",
   "data",
   "logs",
   "tmp",
@@ -338,12 +356,30 @@ async function reconcileChildren({
     }
 
     const oversize = st.size > DEFAULT_MAX_FILE_BYTES;
+
+    // Anchor the bytes into localStore CAS. Oversize files keep their
+    // matter row but skip anchoring (a 50MB+ file every boot would
+    // be expensive; putContent dedups on hash, but the read is still
+    // a hit). The hash on `content.hash` is what the mirror mount
+    // reads from. Without a hash, the mount can't render the file.
+    let hash = null;
+    if (!oversize) {
+      try {
+        const putContent = await getPutContent();
+        const ref = await anchorFile(full, name, putContent);
+        if (ref) hash = ref.hash;
+      } catch (err) {
+        log.warn("Source", `CAS anchor failed for ${full}: ${err.message}`);
+      }
+    }
+
     const desiredContent = {
       path: full,
       kind: "file",
       size: st.size,
       mtime: st.mtime,
       mimeType: mimeTypeFor(name),
+      ...(hash ? { hash } : {}),
       ...(oversize ? { oversize: true } : {}),
     };
 
@@ -357,6 +393,7 @@ async function reconcileChildren({
         size: st.size,
         mtime: st.mtime,
         mimeType: desiredContent.mimeType,
+        hash,
         oversize,
       });
       stats.created++;
@@ -371,6 +408,7 @@ async function reconcileChildren({
         size: st.size,
         mtime: st.mtime,
         mimeType: desiredContent.mimeType,
+        hash,
         oversize,
       });
       stats.created++;
@@ -414,6 +452,7 @@ function contentChanged(prev, next) {
   if (!prev || !next) return true;
   if (prev.path !== next.path) return true;
   if (prev.kind !== next.kind) return true;
+  if ((prev.hash || null) !== (next.hash || null)) return true;
   if (Number(prev.size) !== Number(next.size)) return true;
   const prevMtime = prev.mtime ? new Date(prev.mtime).getTime() : 0;
   const nextMtime = next.mtime ? new Date(next.mtime).getTime() : 0;
@@ -439,12 +478,14 @@ async function createSourceMatter({
   size = null,
   mtime = null,
   mimeType = null,
+  hash = null,
   oversize = false,
 }) {
   const content = { path: diskPath, kind };
   if (size != null) content.size = size;
   if (mtime != null) content.mtime = mtime;
   if (mimeType != null) content.mimeType = mimeType;
+  if (hash) content.hash = hash;
   if (oversize) content.oversize = true;
 
   // Content-addressed id from the STABLE identity (where it lives + what

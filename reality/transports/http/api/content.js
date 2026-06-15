@@ -33,6 +33,8 @@
 
 import express from "express";
 import multer from "multer";
+import { fileTypeFromBuffer } from "file-type";
+import log from "../../../seed/seedReality/log.js";
 import authenticate from "../middleware/authenticate.js";
 import preUploadCheck from "../middleware/preUploadCheck.js";
 import { getRealityConfigValue } from "../../../seed/realityConfig.js";
@@ -85,7 +87,23 @@ router.post(
         return sendError(res, 413, IBP_ERR.UPLOAD_TOO_LARGE,
           `Upload exceeds maximum size (${Math.round(maxUploadBytes() / 1048576)}MB)`);
       }
-      const mimeType = file.mimetype || "application/octet-stream";
+      // A declared mimetype is the uploader's CLAIM and is spoofable: an
+      // executable can announce itself as image/png and sail past an
+      // allowlist that only checks the claim. So sniff the actual bytes.
+      // file-type reads magic bytes; when it recognizes the format we
+      // trust the BYTES over the claim, so both the allowlist gate below
+      // and the stored mimeType reflect what the file really is. file-type
+      // only knows binary formats (it returns undefined for
+      // text/json/svg/csv...), so those keep the declared type, which is
+      // the best signal available for them.
+      const declared = file.mimetype || "application/octet-stream";
+      const bareDeclared = declared.split(";")[0].trim().toLowerCase();
+      const sniffed = await fileTypeFromBuffer(file.buffer).catch(() => null);
+      if (sniffed?.mime && sniffed.mime !== bareDeclared) {
+        log.warn("Content",
+          `upload mimetype mismatch: declared "${declared}", bytes are "${sniffed.mime}" — trusting the bytes`);
+      }
+      const mimeType = sniffed?.mime || declared;
       if (!fileMimeAllowed(mimeType)) {
         return sendError(res, 415, IBP_ERR.UPLOAD_MIME_REJECTED,
           `File type "${mimeType}" not allowed on this reality`);

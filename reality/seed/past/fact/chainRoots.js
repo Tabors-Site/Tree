@@ -239,7 +239,7 @@ export async function signedRealityRoot() {
 export async function verifyRealityRootSig(realityRoot, realityId, sig) {
   if (!realityRoot || !sig) return false;
   try {
-    const { keyIdToPublicKey } = await import("../../materials/being/identity/beingKeys.js");
+    const { keyIdToPublicKey } = await import("../../materials/name/keys.js");
     const pub = keyIdToPublicKey(realityId);
     return crypto.verify(null, Buffer.from(String(realityRoot), "utf8"), pub, Buffer.from(sig, "base64"));
   } catch {

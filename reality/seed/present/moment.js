@@ -43,8 +43,7 @@ import { sealAct }  from "./beats/4-stamped.js";
 import { markIntakeRunning, markIntakeComplete } from "./intake/intake.js";
 import { closeInboxOnAnswer } from "../past/projections/inbox/inboxProjectionFold.js";
 import { buildResponseEntry } from "./replies.js";
-import { buildFacadeSnapshot } from "./beats/2-fold/facadeSnapshot.js";
-import { resolveBareCapabilities } from "./roles/capabilities.js";
+import { runFoldBeat } from "./beats/2-fold/foldBeat.js";
 
 /**
  * Run one moment for a being. Walks all four beats; never throws —
@@ -110,6 +109,17 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
       return { actId: null, result: null, responseEntry: null };
     }
 
+    // ── Beat 2: fold mounts the face. Computes summonCtx.foldedFace
+    //    and summonCtx.innerFace (the canonical inner face all three
+    //    souls read from). canSee resolution happens here, once. ──
+    try {
+      await runFoldBeat(setup);
+    } catch (foldErr) {
+      // Fold trouble must never block the beat chain. innerFace stays
+      // null on summonCtx; downstream consumers tolerate that.
+      log.warn("Moment", `runFoldBeat failed: ${foldErr.message}`);
+    }
+
     // ── Beat 3: momentum runs the act. Returns CognitionResult. ──
     cognition = await momentum(setup);
   } catch (err) {
@@ -169,17 +179,13 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
         });
       }
 
-      // Carry the bounded record of the face the cognition acted
-      // under onto the Act row. The LLM cognition mouth builds and
-      // stashes it on summonCtx during the prompt assembly. Scripted
-      // cognitions and transport-acts don't go through that path, so
-      // we build a fallback snapshot here from whatever the moment
-      // resolved (role + summonCtx) — universal capture per INNER-
-      // FOLD §6, no half-records on the act-chain.
-      if (!setup.summonCtx?.facadeSnapshot) {
-        await applyFallbackSnapshot({ setup, beingId, isTransportAct });
-      }
-      setup.plannedAct.facadeSnapshot = setup.summonCtx?.facadeSnapshot ?? null;
+      // Carry the canonical inner face the moment ran under onto the
+      // Act row. Beat 2 (runFoldBeat) built it once on summonCtx.innerFace;
+      // all three souls (LLM, scripted, human-inhabited) and transport-
+      // acts read the same field. INNER-FOLD §6: every act-chain entry
+      // carries the bounded record of the face the act was committed
+      // under; no half-records.
+      setup.plannedAct.innerFace = setup.summonCtx?.innerFace ?? null;
 
       actInserted = await sealAct(setup.plannedAct, {
         content: sealContent,
@@ -362,67 +368,5 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
     result: rawResult,
     responseEntry,
   };
-}
-
-/**
- * Build a fallback facadeSnapshot for moments whose cognition path
- * didn't already build one (scripted-cognition roles, transport-acts,
- * and anything else that lands an act through momentum without going
- * through llmMoment's snapshot capture). Universal capture per
- * INNER-FOLD §6: every act-chain entry carries the bounded record of
- * the face the act was committed under; no half-records.
- *
- * For transport-acts the snapshot still records orientation + role +
- * capabilities + position. The "act was pre-decided" framing doesn't
- * change what the chain stores — the chain stores what was around
- * the being when the deed sealed, regardless of who decided.
- *
- * Failures swallow with a warn — never block a seal on snapshot
- * build trouble; null persists fine and the renderer falls back.
- */
-async function applyFallbackSnapshot({ setup, beingId, isTransportAct }) {
-  try {
-    const role = setup?.role;
-    const summonCtx = setup?.summonCtx;
-    if (!role || !summonCtx) return;
-
-    const orientation = summonCtx.orientation || "forward";
-    const currentSpace =
-      summonCtx.currentSpace ||
-      setup.plannedAct?.currentSpace ||
-      null;
-
-    const beingCtx = {
-      being: summonCtx.being || null,
-      role,
-      currentSpace,
-      rootId: summonCtx.rootId || null,
-      name: summonCtx.name || null,
-    };
-    const capabilities = await resolveBareCapabilities(role, beingCtx);
-
-    const snapshot = buildFacadeSnapshot({
-      orientation,
-      role: role?.name || null,
-      // Non-LLM paths don't run foldPlace as part of their dispatch
-      // (transport-act runs the verb directly; scripted roles do
-      // whatever code they do). The face here records the bare
-      // position id without a folded occupant list — the chain
-      // still carries the orientation, role, capabilities, and the
-      // where. A richer fold could land later if any future scripted
-      // cognition wants its forward face captured.
-      face: {
-        space: currentSpace ? { _id: currentSpace, name: null } : null,
-        occupants: [],
-      },
-      capabilities,
-    });
-    summonCtx.facadeSnapshot = snapshot;
-    if (isTransportAct) {
-      log.debug("Moment", `transport-act snapshot captured for being=${beingId.slice(0, 8)}`);
-    }
-  } catch (err) {
-    log.warn("Moment", `fallback facadeSnapshot build failed: ${err.message}`);
-  }
 }
 

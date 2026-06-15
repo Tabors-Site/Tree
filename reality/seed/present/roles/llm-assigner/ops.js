@@ -396,8 +396,7 @@ export function registerLlmAssignerOps() {
   });
 
   // Bind one of the caller's connections to a slot on their own being.
-  // Slot "main" updates Being.llmDefault; named slots write into
-  // Being.qualities.beingLlm.slots.
+  // All slots (including "main") write into Being.qualities.beingLlm.slots.
   registerOperation("assign-slot", {
     targets: ["space"],
     ownerExtension: "seed",
@@ -425,8 +424,8 @@ export function registerLlmAssignerOps() {
   // op (see registerSeeOperation block at the bottom of this file).
 
   // Delete one of the caller's connections. The seed cascades the
-  // removal across Being.llmDefault, qualities.beingLlm slots, and
-  // Space.qualities.llm.slots references.
+  // removal across qualities.beingLlm slots and qualities.llm.slots
+  // references.
   registerOperation("delete-llm", {
     targets: ["space"],
     ownerExtension: "seed",

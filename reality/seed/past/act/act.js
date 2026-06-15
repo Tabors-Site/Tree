@@ -34,7 +34,7 @@
 // chained per (branch, being) — `p` is the being's previous sealed
 // act's identity (ActHead). The identity is minted at assign so the
 // moment's Facts can carry actId; the closure fields below (status,
-// endMessage, facadeSnapshot, answers) are bookkeeping OUTSIDE the
+// endMessage, innerFace, answers) are bookkeeping OUTSIDE the
 // digest — they mutate by design, and the truth of what happened is
 // the hash-chained Facts. Wall-clock fields (receivedAt, stampedAt)
 // are human-time display helpers, never identity (see hash.js).
@@ -49,6 +49,16 @@ const ActSchema = new mongoose.Schema({
   // The act-chain link: the being's previous sealed act's identity
   // on this branch (GENESIS_PREV for the first).
   p: { type: String, default: null },
+
+  // The ACTOR — the Name (identity) that authored this act and whose key
+  // signs it. The acting being expresses this trueName; the name's key
+  // (i-am → the reality key, else the Name's privateKeyEnc) produces
+  // act.sig. The act-chain itself stays keyed per (branch, beingIn): a
+  // name owns many beings' PARALLEL chains (name → branch → being → acts),
+  // so the name is the owner + signer, NOT the chain key. NOT part of
+  // contentOfAct (the digest), so it never changes act._id. `beingIn`
+  // below is the being the name acted THROUGH. See materials/name/name.js.
+  nameId: { type: String, ref: "Name", default: null, index: true },
 
   beingIn:  { type: String, ref: "Being", required: true, index: true },
   beingOut: { type: String, ref: "Being", default: null, index: true },
@@ -126,19 +136,20 @@ const ActSchema = new mongoose.Schema({
     default: "INTERACTIVE",
   },
 
-  // The bounded record of the face this act was committed under:
-  // orientation, role, what was seen at the position (space +
-  // occupants by name/id/kind), and the canDo/canSummon/canBe
-  // lists the cognition had at that moment. Captured uniformly
-  // across LLM, scripted, and human-inhabited cognitions so the
-  // act-chain never carries half-records. Read only by turned
-  // folds (half/inward); the forward path never reads it. Stored
-  // at defensive caps (10KB per field, 1000-entry lists) to keep
-  // pathological cases bounded; render-time clamps (1000 chars,
-  // 64 entries) are applied separately by prompt builders. The
-  // chain is the truth; this is a bounded record of the face;
-  // full face reconstruction goes through the chain, not here.
-  facadeSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
+  // The canonical inner face the act was committed under: orientation,
+  // role, position (id/name), capabilities, and the role.canSee-
+  // resolved blocks. Captured uniformly across LLM, scripted, and
+  // human-inhabited cognitions so the act-chain never carries half-
+  // records. Origin is "local" for fold-built faces; cross-world
+  // overrides supersede the local face post-seal with origin:
+  // "foreign". Read by turned folds (half/inward), the portal act-
+  // chain display, and any consumer of the moment's perception
+  // record. Stored at defensive caps (10KB per field, 1000-entry
+  // lists); render-time clamps (1000 chars, 64 entries) are applied
+  // separately by prompt builders. The chain is the truth; this is
+  // a bounded record of the face; full face reconstruction goes
+  // through the chain, not here.
+  innerFace: { type: mongoose.Schema.Types.Mixed, default: null },
 
   // Reality the actor was acting from when this Act was stamped.
   // For local Acts on this substrate, this is the substrate's own
@@ -204,6 +215,9 @@ const ActSchema = new mongoose.Schema({
 ActSchema.index({ rootCorrelation: 1, stampedAt: 1 }, { sparse: true });
 // Per-Being newest-first activity, scoped by branch.
 ActSchema.index({ beingIn: 1, branch: 1, stampedAt: -1 });
+// Per-Name activity — the "name → branch → acts" folder view; a name's
+// whole biography across every being it acts through.
+ActSchema.index({ nameId: 1, branch: 1, stampedAt: -1 }, { sparse: true });
 ActSchema.index({ beingOut: 1, branch: 1, stampedAt: -1 });
 // Conversation between two Beings.
 ActSchema.index({ beingIn: 1, beingOut: 1, stampedAt: -1 }, { sparse: true });

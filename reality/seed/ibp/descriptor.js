@@ -1435,7 +1435,7 @@ async function identityBlock(identity, { until = null, branch } = {}) {
         // Cognition lives at qualities.cognition.defaultKind.
         const cog = quals instanceof Map ? quals.get("cognition") : quals?.cognition;
         if (cog?.defaultKind === "human") {
-          const { isSigningUnlocked } = await import("../materials/being/identity/signingSession.js");
+          const { isSigningUnlocked } = await import("../materials/name/signingSession.js");
           signingUnlocked = isSigningUnlocked(String(identity.beingId));
         }
         // Visibility for the "freshly-registered being lands off-grid"

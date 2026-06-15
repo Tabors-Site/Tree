@@ -41,13 +41,6 @@ const CREATE_ACTIONS = new Set(["create-space", "create-matter"]);
 // other scalar. Every other authority shape lives in qualities.roles
 // + qualities.rolesGranted per seed/RolesAreAuth.md.
 //
-// `llmDefault` lives here as of slice F-llm (2026-05-23). It writes
-// to the same scalar field on both Being and Space aggregates; the
-// reducer for each just records value. Slot-name validation + per-being
-// connection-ownership happen in the verb handler before the fact
-// stamps. Cache invalidation (clearBeingClientCache) is the
-// connection helper's responsibility, after doVerb returns.
-//
 // A parent reassignment is one write on one aggregate now; downward
 // walks query by parent / parentBeingId, no cross-aggregate update
 // needed. The Space reducer also derives `position` from a parent
@@ -56,7 +49,6 @@ const SCALAR_SET_FIELDS = new Set([
   "name",
   "type",
   "owner",
-  "llmDefault",
   "parent",
   "parentBeingId",
   // Being identity scalars added during genesis cleanup (2026-05-23).
@@ -365,6 +357,23 @@ export function applyDeath(state, fact) {
 }
 
 /**
+ * Apply a be:truename fact: re-point this being's trueName at an EXISTING
+ * Name (the verb handler validated it before the stamp). Identity-level (a
+ * BE op), folded onto this being's OWN reel. The being's _id (its frozen
+ * birth-event hash) is unaffected, so the reel key + chain stay intact
+ * across the transfer. Idempotent: re-folding the same value is a no-op.
+ */
+export function applyTrueName(state, fact) {
+  if (fact?.verb !== "be") return state;
+  if (fact?.action !== "truename") return state;
+  if (fact?.target?.kind !== "being") return state;
+  const trueName = fact?.params?.trueName;
+  if (typeof trueName !== "string" || !trueName) return state;
+  if (state.trueName === trueName) return state;
+  return { ...state, trueName, updatedAt: fact?.date || state.updatedAt };
+}
+
+/**
  * Apply do:grant-role / do:revoke-role facts to the being's
  * qualities.rolesGranted projection (seed/RolesAreAuth.md).
  *
@@ -467,10 +476,12 @@ export function applyCreateBeing(state, fact) {
     name:          spec.name,
     password:      spec.password,
     defaultRole,
+    // The trueName this presence expresses (the mother's trueName at
+    // birth; host-transferable later). Folds from the be:birth spec.
+    trueName:      spec.trueName ?? null,
     parentBeingId: spec.parentBeingId ?? null,
     homeSpace:     spec.homeSpace ?? null,
     homeBranch:    spec.homeBranch ?? null,
-    llmDefault:    spec.llmDefault ?? null,
     isRemote:      Boolean(spec.isRemote),
     homeReality:   spec.homeReality ?? null,
     // Cognition (closed-set: "llm" | "human" | "scripted") lives at
@@ -537,14 +548,14 @@ export function applyCreateSpace(state, fact) {
     parent:       spec.parent ?? spec.parentId ?? null,
     owner:        initialOwner,
     heavenSpace:    spec.heavenSpace ?? null,
-    llmDefault:   spec.llmDefault ?? null,
     size:         spec.size ?? null,
     // Space's own coord within its parent. The createSpace handler
     // assigns a random coord inside the parent's size when none was
     // passed; the reducer just records it.
     coord:        spec.coord ?? null,
     qualities:    spec.qualities ?? {},
-    dateCreated:  fact.date,
+    createdAt:    fact.date,
+    updatedAt:    fact.date,
     position:     spec.parent ?? spec.parentId ?? null,
   };
 }

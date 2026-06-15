@@ -805,7 +805,7 @@ export async function deleteSpaceBranch(
 }
 
 // reorderChildren retired (2026-05-23) along with the children[] cache.
-// Sibling order is derived from dateCreated by listSpaceChildren; an
+// Sibling order is derived from createdAt by listSpaceChildren; an
 // explicit-order feature would live in qualities (e.g. qualities.order
 // keyed by child id) and be applied by the reader.
 
@@ -949,7 +949,7 @@ export async function listSpaceChildren(parentId, { exclude = null, limit = 500,
 
   if (branch === "0") {
     const rows = await Projection.find(buildQuery("0"))
-      .sort({ "state.dateCreated": 1 })
+      .sort({ "state.createdAt": 1 })
       .limit(limit)
       .lean();
     return rows.map(toRow);
@@ -982,8 +982,8 @@ export async function listSpaceChildren(parentId, { exclude = null, limit = 500,
   }
   const all = [...mainOut, ...branchOut];
   all.sort((a, b) => {
-    const at = a.dateCreated ? new Date(a.dateCreated).getTime() : 0;
-    const bt = b.dateCreated ? new Date(b.dateCreated).getTime() : 0;
+    const at = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+    const bt = b.createdAt ? new Date(b.createdAt).getTime() : 0;
     return at - bt;
   });
   return all.slice(0, limit);

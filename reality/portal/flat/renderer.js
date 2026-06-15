@@ -1449,9 +1449,9 @@ function renderActBlock(a, discovery) {
   if (Array.isArray(a.facts) && a.facts.length) {
     detail.appendChild(jsonKv(`facts (${a.facts.length})`, a.facts));
   }
-  // The face this moment ran under — what the being saw and could do.
+  // The face this moment ran under . what the being saw and could do.
   // Stamped on every act; renders a faint marker when absent (legacy).
-  detail.appendChild(renderFace(a.facadeSnapshot, discovery));
+  detail.appendChild(renderFace(a.innerFace, discovery));
   if (a.severedAt)       detail.appendChild(kvBlock("severed at", String(a.severedAt)));
   if (a.receivedAt)      detail.appendChild(kvBlock("received at", String(a.receivedAt)));
   if (a.stampedAt)       detail.appendChild(kvBlock("stamped at", String(a.stampedAt)));
@@ -1647,12 +1647,13 @@ function joinFaceList(list) {
   return { text: text || "(none)", shown: names.length, more };
 }
 
-// Render an act's "face" — the bounded snapshot of orientation, role,
-// space, occupants, and capabilities the being had on hand when this
-// moment stamped. Stamped on every act regardless of cognition; null on
-// legacy acts predating the field (render a faint marker rather than
-// breaking the block). Returns a stacked kv container for the detail.
-function renderFace(snapshot, discovery) {
+// Render an act's "face" . the canonical inner face the being had on
+// hand when this moment stamped. Carries orientation, role, position,
+// capabilities, the role.canSee-resolved blocks, and origin
+// ("local" or "foreign"). Stamped on every act regardless of cognition;
+// null on legacy acts predating the field (render a faint marker
+// rather than breaking the block). Returns a stacked kv container.
+function renderFace(face, discovery) {
   const wrap = document.createElement("div");
   wrap.className = "kv-block kv-block-stack block-face";
   const l = document.createElement("span");
@@ -1660,7 +1661,7 @@ function renderFace(snapshot, discovery) {
   l.textContent = "face";
   wrap.appendChild(l);
 
-  if (!snapshot) {
+  if (!face) {
     const none = document.createElement("span");
     none.className = "kv-block-value dim";
     none.textContent = "(no face recorded)";
@@ -1671,31 +1672,59 @@ function renderFace(snapshot, discovery) {
   const body = document.createElement("div");
   body.className = "face-body";
 
-  if (snapshot.orientation) body.appendChild(kvBlock("orientation", snapshot.orientation));
-  if (snapshot.role)        body.appendChild(kvBlock("role", snapshot.role));
-
-  if (snapshot.space) {
-    const spaceName = snapshot.space.name || snapshot.space.id || "(space)";
-    const link = (snapshot.space.id && discovery?.reality)
-      ? `#${discovery.reality}/.reel/space/${snapshot.space.id}`
-      : null;
-    body.appendChild(kvBlock("space", spaceName, { link }));
+  if (face.orientation) body.appendChild(kvBlock("orientation", face.orientation));
+  if (face.role)        body.appendChild(kvBlock("role", face.role));
+  if (face.origin && face.origin !== "local") {
+    body.appendChild(kvBlock("origin", face.origin));
   }
 
-  if (Array.isArray(snapshot.occupants) && snapshot.occupants.length) {
-    const { text, shown, more } = joinFaceList(snapshot.occupants);
-    body.appendChild(kvBlock(`occupants (${shown}${more ? "+" : ""})`, text));
+  if (face.position) {
+    const positionName = face.position.name || face.position.id || "(position)";
+    const link = (face.position.id && discovery?.reality)
+      ? `#${discovery.reality}/.reel/space/${face.position.id}`
+      : null;
+    body.appendChild(kvBlock("position", positionName, { link }));
   }
 
   // Capabilities: one row per present capability key (canDo / canSummon /
-  // canBe today), iterated generically so a later-added key like canSee
-  // surfaces automatically. Skip empty lists.
-  const caps = snapshot.capabilities;
+  // canBe today), iterated generically. Skip empty lists.
+  const caps = face.capabilities;
   if (caps && typeof caps === "object") {
     for (const key of Object.keys(caps)) {
       if (!Array.isArray(caps[key]) || !caps[key].length) continue;
       const { text } = joinFaceList(caps[key]);
       body.appendChild(kvBlock(key, text));
+    }
+  }
+
+  // canSee-resolved blocks: one row per block, labeled by the block's
+  // label, with a compact preview of the payload. The full payload is
+  // available to anyone hitting the act-chain SEE directly; here we
+  // surface enough to badge what the role admitted into perception.
+  if (Array.isArray(face.blocks) && face.blocks.length) {
+    for (const b of face.blocks) {
+      if (!b || b.kind === "truncated") {
+        if (b && b.kind === "truncated") {
+          body.appendChild(kvBlock("blocks", `+${b.count} more`));
+        }
+        continue;
+      }
+      const label = b.label || b.key || "(block)";
+      let preview;
+      if (typeof b.payload === "string") {
+        preview = b.payload.length > 80 ? b.payload.slice(0, 80) + "..." : b.payload;
+      } else if (b.payload != null) {
+        try {
+          const s = JSON.stringify(b.payload);
+          preview = s.length > 80 ? s.slice(0, 80) + "..." : s;
+        } catch {
+          preview = "(unrenderable)";
+        }
+      } else {
+        preview = "(empty)";
+      }
+      const sourceTag = b.source ? ` <${b.source}>` : "";
+      body.appendChild(kvBlock(`saw ${label}${sourceTag}`, preview));
     }
   }
 

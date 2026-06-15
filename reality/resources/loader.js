@@ -90,232 +90,14 @@ function withExtensionTimeout(router, extName) {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DISABLED_FILE = path.join(__dirname, ".disabled");
-const LOCKFILE_PATH = path.join(__dirname, ".lockfile.json");
 
-// Lockfile + CAS anchor (RESOURCES.md).
-//
-// At boot, every file under each discovered resource is read and
-// `contentStore.putContent`'d into localStore (the reality's CAS at
-// localStore/cas/). This means every resource byte the reality holds
-// lives in the same store as user-uploaded matter, addressed by hash.
-//
-// The lockfile snapshot at .lockfile.json records per-file CAS refs
-// plus a per-resource rootHash (merkle of sorted file hashes). On
-// subsequent boots, the loader recomputes from disk and logs drift
-// against the prior snapshot (a future hardening can refuse-on-
-// mismatch). Drift just means the on-disk content changed — the old
-// hashes still resolve in CAS as orphaned blobs until retention
-// reclaims them. The chain may be reset (db dropped) and the CAS
-// keeps on holding the bytes — useful, doctrinally true, and
-// matches how localStore is supposed to behave.
-//
-// Files this skips: node_modules, the lockfile itself, hidden
-// dotfiles, the staging/disabled markers.
-
-const SKIP_NAMES = new Set([
-  "node_modules", ".lockfile.json", ".disabled", ".treeos-profile",
-]);
-
-// Minimal mime map for files the substrate ships. Anything not listed
-// falls through to application/octet-stream (binary) — putContent
-// stores the bytes either way; mime is metadata for the content door.
-const MIME_BY_EXT = {
-  js:    "application/javascript",
-  mjs:   "application/javascript",
-  cjs:   "application/javascript",
-  json:  "application/json",
-  md:    "text/markdown; charset=utf-8",
-  txt:   "text/plain; charset=utf-8",
-  yaml:  "application/yaml",
-  yml:   "application/yaml",
-  toml:  "application/toml",
-  glb:   "model/gltf-binary",
-  gltf:  "model/gltf+json",
-  mp3:   "audio/mpeg",
-  wav:   "audio/wav",
-  ogg:   "audio/ogg",
-  png:   "image/png",
-  jpg:   "image/jpeg",
-  jpeg:  "image/jpeg",
-  gif:   "image/gif",
-  webp:  "image/webp",
-  svg:   "image/svg+xml",
-  fbx:   "application/octet-stream",
-};
-
-function mimeFromName(name) {
-  const dot = name.lastIndexOf(".");
-  if (dot < 0) return "application/octet-stream";
-  const ext = name.slice(dot + 1).toLowerCase();
-  return MIME_BY_EXT[ext] || "application/octet-stream";
-}
-
-function isTextMime(mime) {
-  if (!mime) return false;
-  return mime.startsWith("text/")
-    || mime === "application/javascript"
-    || mime === "application/json"
-    || mime === "application/yaml"
-    || mime === "application/toml"
-    || mime === "model/gltf+json"
-    || mime === "image/svg+xml";
-}
-
-// Walk a resource directory and return its file list with relative
-// paths + bytes. Skips known noise.
-function walkResourceFiles(resourceDir) {
-  const files = [];
-  function walk(dir, prefix = "") {
-    let entries;
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
-    for (const e of entries) {
-      if (e.name.startsWith(".") || SKIP_NAMES.has(e.name)) continue;
-      const sub  = prefix ? `${prefix}/${e.name}` : e.name;
-      const full = path.join(dir, e.name);
-      if (e.isDirectory()) walk(full, sub);
-      else if (e.isFile()) files.push({ rel: sub, full });
-    }
-  }
-  walk(resourceDir);
-  files.sort((a, b) => a.rel.localeCompare(b.rel));
-  return files;
-}
-
-// Anchor a resource's files into localStore. Returns the per-file CAS
-// refs (path + hash + size + mimeType) plus a rootHash that uniquely
-// identifies the resource by reference to its CAS content.
-async function casAnchorResource(resourceDir, putContent) {
-  const fileEntries = walkResourceFiles(resourceDir);
-  const files = [];
-  for (const f of fileEntries) {
-    let bytes;
-    try { bytes = fs.readFileSync(f.full); } catch { continue; /* unreadable → skip */ }
-    const mimeType = mimeFromName(f.rel);
-    const opts = {
-      name:     f.rel,
-      mimeType,
-      encoding: isTextMime(mimeType) ? "utf8" : null,
-    };
-    let ref;
-    try { ref = await putContent(bytes, opts); }
-    catch (err) {
-      log.warn("Loader", `CAS put failed for ${f.rel}: ${err.message}`);
-      continue;
-    }
-    files.push({
-      path:     f.rel,
-      hash:     ref.hash,
-      size:     ref.size,
-      mimeType: ref.mimeType,
-    });
-  }
-  // rootHash: deterministic merkle-style sha256 over the sorted file
-  // hashes. Same root → same content; any file edit changes the root.
-  const merkle = crypto.createHash("sha256");
-  for (const f of files) {
-    merkle.update(f.path);
-    merkle.update("\0");
-    merkle.update(f.hash);
-    merkle.update("\0");
-  }
-  return { files, rootHash: merkle.digest("hex") };
-}
-
-function readLockfile() {
-  if (!fs.existsSync(LOCKFILE_PATH)) return null;
-  try { return JSON.parse(fs.readFileSync(LOCKFILE_PATH, "utf8")); }
-  catch (err) {
-    log.warn("Loader", `.lockfile.json unreadable: ${err.message}. Will regenerate.`);
-    return null;
-  }
-}
-
-function writeLockfile(snapshot) {
-  try {
-    fs.writeFileSync(LOCKFILE_PATH, JSON.stringify(snapshot, null, 2) + "\n", "utf8");
-  } catch (err) {
-    log.warn("Loader", `Could not write .lockfile.json: ${err.message}`);
-  }
-}
-
-async function reconcileLockfile(discovered) {
-  // discovered: [{ manifest, dir, kind, pack? }, ...]
-  //
-  // Lazy-load contentStore so the loader can be imported in places
-  // that don't have the substrate fully initialized (the seed boots
-  // before extensions and the import is heavier than what we need).
-  let putContent;
-  try {
-    ({ putContent } = await import("../seed/materials/matter/contentStore.js"));
-  } catch (err) {
-    log.warn("Loader", `Lockfile CAS-anchor disabled (contentStore unavailable): ${err.message}`);
-    return;
-  }
-
-  const snapshot = {
-    version:   2,                  // bumped from 1: now records per-file CAS refs
-    writtenAt: new Date().toISOString(),
-    resources: {},
-  };
-  let totalFiles = 0, totalBytes = 0;
-  for (const r of discovered) {
-    if (!r.manifest?.name) continue;
-    let anchored;
-    try { anchored = await casAnchorResource(r.dir, putContent); }
-    catch (err) {
-      log.warn("Loader", `CAS anchor failed for "${r.manifest.name}": ${err.message}`);
-      continue;
-    }
-    if (!anchored || anchored.files.length === 0) continue;
-    snapshot.resources[r.manifest.name] = {
-      kind:     r.kind,
-      pack:     r.pack || null,
-      version:  r.manifest.version || "0.0.0",
-      rootHash: anchored.rootHash,
-      files:    anchored.files,
-    };
-    totalFiles += anchored.files.length;
-    for (const f of anchored.files) totalBytes += f.size;
-  }
-
-  const prior = readLockfile();
-  if (prior?.resources) {
-    const drifted = [];
-    for (const [name, entry] of Object.entries(snapshot.resources)) {
-      const priorEntry = prior.resources[name];
-      const priorRoot = priorEntry?.rootHash || priorEntry?.hash; // v1 → v2 compat
-      if (priorEntry && priorRoot !== entry.rootHash) drifted.push(name);
-    }
-    if (drifted.length > 0) {
-      log.info(
-        "Loader",
-        `Lockfile drift detected for ${drifted.length} resource(s): ${drifted.join(", ")}. New snapshot written; old CAS entries become unreferenced until retention sweeps.`,
-      );
-    }
-  }
-  writeLockfile(snapshot);
-  log.info(
-    "Loader",
-    `CAS-anchored ${totalFiles} files (${Math.round(totalBytes / 1024)} KB) across ${Object.keys(snapshot.resources).length} resources to localStore.`,
-  );
-  return snapshot;
-}
-
-// Resolve a file inside a resource by name+relative-path through the
-// lockfile. Returns the CAS ref { hash, size, mimeType } or null. Used
-// by callers that want to fetch resource bytes by hash from
-// contentStore (or stream them to peers) without re-reading from disk.
-export function getResourceFile(resourceName, relativePath) {
-  const lock = readLockfile();
-  const entry = lock?.resources?.[resourceName];
-  if (!entry?.files) return null;
-  return entry.files.find((f) => f.path === relativePath) || null;
-}
-
-export function getResourceManifestHash(resourceName) {
-  const lock = readLockfile();
-  return lock?.resources?.[resourceName]?.rootHash || null;
-}
+// CAS anchoring of resource bytes happens during the source walk
+// (seed/materials/space/source.js). source.js walks the whole reality
+// once, putContent's every file into localStore, and stores the hash
+// on the matter row. The loader has no separate anchor pass; resources
+// are just paths inside the reality's source tree. To look up a
+// resource's bytes by hash, query source matter for the path
+// `resources/<name>/<rel>` and read `state.content.hash`.
 
 // Profile filter: if .treeos-profile exists, only listed extensions load.
 // Written by plant.js when the operator picks a profile. One name per line.
@@ -772,13 +554,10 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
     return loaded;
   }
 
-  // Lockfile reconcile: compute current hashes, compare against prior
-  // snapshot, write the new snapshot. Drift is logged but not enforced
-  // yet (refuse-on-mismatch hardening lands later). The lockfile gives
-  // operators a record of what was on disk this boot.
-  try { await reconcileLockfile(manifests); } catch (err) {
-    log.warn("Loader", `Lockfile reconcile failed: ${err.message}`);
-  }
+  // CAS anchoring happens in source.js during the source walk
+  // (it sees these files as part of the reality tree and putContent's
+  // each one). The loader doesn't anchor; resources are paths in the
+  // source tree like any other folder. See the header note + MIRROR.md.
 
   // Kind dispatcher. Code resources go through the existing extension
   // flow below; role + seed pieces install via their kind handlers

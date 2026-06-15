@@ -1,8 +1,7 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// canSeeResolver.js . resolve a role's canSee list into the face
-// blocks the being already sees the instant its frame goes through
-// inference.
+// canSeeResolver.js . resolve a role's canSee list into the structured
+// blocks the inner face carries this moment.
 //
 // canSee is the unified declaration of a being's perception this
 // moment. Each entry is either:
@@ -14,20 +13,27 @@
 //                              seeResolver function; the structured
 //                              return becomes a face block.
 //
-// Either shape produces structured JSON inlined into the system
-// prompt under a `[<label>]` header. There is no see-tool menu; the
-// being does not pick from a list. The face IS the perception.
+// Either shape produces a structured block of the form
+//   { key, source: "address"|"see", label, payload }
+// where payload is the raw structured return (object or string). Per-
+// soul reformatting (LLM prompt prose, scripted-role data dispatch,
+// human portal panels) happens at the presentation layer, not here.
 //
 // Address classification. Anything starting with ".", "/", or "<"
 // is an address; everything else is a see name. The leading "." is
-// heaven shorthand (`.config` → `<reality>/./config`); "./" is the
-// explicit child form (`./config` → `<reality>/./config`); "<" is
+// heaven shorthand (`.config` becomes `<reality>/./config`); "./" is the
+// explicit child form (`./config` becomes `<reality>/./config`); "<" is
 // a fully-qualified address (`<reality>/...`); "/" is a tree path
 // from the reality root.
 //
 // Failures are logged and dropped from the face. A missing see
 // resolver or a failing address fetch never blocks the moment . the
 // being just does not see that block.
+//
+// Lives in beats/2-fold/ (not under cognition/llm/) because canSee
+// resolution is part of the fold beat per philosophy/names/innerFace.md.
+// All three souls share the same resolved blocks; only the formatting
+// differs.
 
 import log from "../../../seedReality/log.js";
 import { getSeeOperation } from "../../../ibp/seeOps.js";
@@ -35,11 +41,11 @@ import { seeVerb } from "../../../ibp/verbs/see.js";
 import { getRealityDomain } from "../../../ibp/address.js";
 
 /**
- * Resolve canSee entries into pre-rendered face blocks.
+ * Resolve canSee entries into structured face blocks.
  *
  * @param {Array<string>} entries . role.canSee values
  * @param {object} ctx             . moment ctx (carries being, position, branch, ...)
- * @returns {Promise<string[]>}   . non-empty face blocks, declaration order
+ * @returns {Promise<Array<{key:string, source:string, label:string, payload:any}>>}
  */
 export async function resolveCanSee(entries, ctx) {
   if (!Array.isArray(entries) || entries.length === 0) return [];
@@ -73,7 +79,13 @@ async function resolveAddress(entry, ctx) {
         : null,
     });
     if (descriptor == null) return null;
-    return renderBlock(labelForAddress(entry), descriptor);
+    const label = labelForAddress(entry);
+    return {
+      key:     entry,
+      source:  "address",
+      label,
+      payload: descriptor,
+    };
   } catch (err) {
     log.warn(
       "CanSeeResolver",
@@ -83,8 +95,8 @@ async function resolveAddress(entry, ctx) {
   }
 }
 
-// Heaven shorthand. Bare "." → heaven itself. ".X" with no slash →
-// heaven child X. "./X" → heaven child X. Other leading-"." shapes
+// Heaven shorthand. Bare "." . heaven itself. ".X" with no slash .
+// heaven child X. "./X" . heaven child X. Other leading-"." shapes
 // pass through to seeVerb's address grammar.
 function expandAddress(entry) {
   if (entry === ".") return `${getRealityDomain()}/.`;
@@ -114,32 +126,30 @@ async function resolveNamedSee(name, ctx) {
       ? { beingId, name: ctx?.being?.name || null }
       : null;
     const out = await op.handler({ identity, args: {}, ctx, branch: ctx?.branch || "0" });
-    return renderNamedOutput(name, out);
+    if (out == null) return null;
+    if (typeof out === "string") {
+      if (out.length === 0) return null;
+      return {
+        key:     name,
+        source:  "see",
+        label:   labelForSeeName(name),
+        payload: out,
+      };
+    }
+    if (typeof out !== "object") return null;
+    return {
+      key:     name,
+      source:  "see",
+      label:   labelForSeeName(name),
+      payload: out,
+    };
   } catch (err) {
     log.warn("CanSeeResolver", `see "${name}" failed: ${err.message}`);
     return null;
   }
 }
 
-// Mirrors seeResolvers.renderResolverOutput. Structured objects
-// become `[<label>]\n<JSON>` blocks the LLM folds cleanly; strings
-// pass through verbatim (the resolver framed its own block).
-function renderNamedOutput(name, out) {
-  if (out == null) return null;
-  if (typeof out === "string") return out.length > 0 ? out : null;
-  if (typeof out !== "object") return null;
-  return renderBlock(labelForSeeName(name), out);
-}
-
 function labelForSeeName(name) {
   const idx = name.indexOf(":");
   return idx >= 0 ? name.slice(idx + 1) : name;
-}
-
-function renderBlock(label, payload) {
-  try {
-    return `[${label}]\n${JSON.stringify(payload, null, 2)}`;
-  } catch {
-    return null;
-  }
 }

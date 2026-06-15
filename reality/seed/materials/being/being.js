@@ -72,18 +72,34 @@ import mongoose from "mongoose";
 import bcrypt from "bcrypt";
 
 const BeingSchema = new mongoose.Schema({
-  // A being's id IS its ed25519 public key (the did:key "z..." form;
-  // beingKeys.js), minted at birth and supplied explicitly by every
-  // creation path (birth.js, sprout.js for the I_AM literal, graft.js).
-  // NO uuid default: an id-less insert must fail loudly via `required`
-  // rather than silently fabricate a non-pubkey identity that can never
-  // sign or be self-certifyingly verified.
+  // A being's id IS the content hash of its birth (CAS, like matter and
+  // facts; materials/being/beingId.js#beingContentId), supplied explicitly
+  // by every creation path (birth.js; sprout.js uses the literal "i-am" for
+  // the genesis being). NOT a pubkey — that is the Name now (trueName), the
+  // identity that signs — and NOT a uuid (a uuid is honest only for a
+  // space, where position has no defining content to hash). The being holds
+  // no key; once identity left for the Name, the being is pure presence,
+  // defined by its birth. NO default: an id-less insert must fail loudly.
   _id: { type: String, required: true },
 
   // The being's name. Drives the @qualifier in stance addresses
   // (treeos.ai/<path>@<name>). Federation crosses places using
   // <name>@<realityDomain>. Unique on this reality.
   name: { type: String, required: true, unique: true },
+
+  // The trueName this being belongs to — the identity it EXPRESSES. A
+  // being is a presence; the trueName (a Name) is the identity that signs
+  // it into being and acts through it. At the Name layer the public key is
+  // the "name" (the public face, the referenceable id) and the private key
+  // is the "trueName" (the power, the secret); to a being, its `trueName`
+  // is the WHOLE identity (both), referenced here by the owning Name's
+  // public-key id. Default = the mother's trueName at birth (transitionally
+  // the being's own pubkey id until the uuid-split). Host-transferable to a
+  // foreign father's trueName. Distinct from who is currently ACTING
+  // THROUGH the being (the inhabitor, qualities.connection.inhabitedBy) and
+  // from lineage (parentBeingId = mother, qualities.father = father). See
+  // materials/name/name.js.
+  trueName: { type: String, ref: "Name", default: null },
 
   // Cognition (how this being thinks) USED to live here as
   // `operatingMode`. It has moved to qualities.cognition.defaultKind
@@ -170,14 +186,6 @@ const BeingSchema = new mongoose.Schema({
     z: { type: Number, default: null },
     _id: false,
   },
-
-  // For llm-mode beings: the LLM that drives their cognition each
-  // summoning. For humans: the LLM used when they request AI help.
-  // Null falls back through the resolution chain (extension slot →
-  // tree → reality default). Same field shape as Space.llmDefault so
-  // the resolver treats both uniformly.
-  // Connection uuid key into this being's qualities.llmConnections.
-  llmDefault: { type: String, default: null },
 
   // Federation. `isRemote: true` means this being is mirrored from
   // another reality; `homeReality` carries the canonical reality's domain.

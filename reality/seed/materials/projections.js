@@ -26,11 +26,11 @@
 import Projection, { projectionKey } from "./branch/projection.js";
 
 const MAIN = "0";
-const VALID_TYPES = new Set(["being", "space", "matter"]);
+const VALID_TYPES = new Set(["being", "space", "matter", "name"]);
 
 function assertType(type) {
   if (!VALID_TYPES.has(type)) {
-    throw new Error(`projections: unknown type "${type}" (expected being|space|matter)`);
+    throw new Error(`projections: unknown type "${type}" (expected being|space|matter|name)`);
   }
 }
 

@@ -69,8 +69,7 @@ async function createSpaceHandler(ctx) {
 //
 // params: { field, value, merge=true }
 // field paths:
-//   "name" / "type" / "parent" / "llmDefault" / "rootOwner"
-//                                                    → schema-field writes
+//   "name" / "type" / "parent" / "rootOwner"        → schema-field writes
 //   "qualities.<namespace>"                          → set/merge that namespace
 //   "qualities.<namespace>.<innerKey>"               → merge one inner key
 //   value=null on a qualities path                   → unset
@@ -235,14 +234,6 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
     return { spaceId, parent: value };
   }
 
-  if (field === "llmDefault") {
-    if (value !== null && value !== undefined && typeof value !== "string") {
-      throw new Error("set-space: `llmDefault` value must be a connectionId string or null");
-    }
-    const spaceId = targetIdOf(target);
-    return { spaceId, llmDefault: value || null };
-  }
-
   // owner — the position's structural owner. Value is a beingId
   // string or null. Handler-level authorization (current owner
   // authorizes transfer; parent owner claims unowned position) lives
@@ -325,7 +316,7 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
   }
 
   throw new Error(
-    `set-space: unknown field "${field}". Supported: name, type, parent, owner, llmDefault, size, coord, qualities.<namespace>[.<innerKey>]`,
+    `set-space: unknown field "${field}". Supported: name, type, parent, owner, size, coord, qualities.<namespace>[.<innerKey>]`,
   );
 }
 

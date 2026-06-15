@@ -40,8 +40,8 @@ import { escapeRegex } from "../../../utils.js";
 import { IBP_ERR, IbpError } from "../../../ibp/protocol.js";
 import log from "../../../seedReality/log.js";
 import { emitFact } from "../../../past/fact/facts.js";
-import { mintCredentialSpec, encryptCredential } from "./credentials.js";
-import { generateBeingKeypair } from "./beingKeys.js";
+import { mintCredentialSpec } from "./credentials.js";
+import { beingContentId } from "../beingId.js";
 import { I_AM } from "../seedBeings.js";
 import { getRealityDomain } from "../../../ibp/address.js";
 
@@ -74,31 +74,6 @@ function validatePassword(password) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, `Password must be at least ${MIN_PASSWORD} characters`);
   if (password.length > MAX_PASSWORD)
     throw new IbpError(IBP_ERR.INVALID_INPUT, `Password must be ${MAX_PASSWORD} characters or fewer`);
-}
-
-// Resolve an imported key into the full keypair. Two skins accepted:
-// the exported PKCS8 PEM, or its 24-word BIP39 paper form (both come
-// out of the key-export op). Same key, same beingId, deterministically.
-async function resolveImportedKeypair(importKey, name) {
-  if (typeof importKey !== "string" || !importKey.trim()) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, `birthBeing("${name}"): importKey must be a non-empty string`);
-  }
-  const text = importKey.trim();
-  try {
-    if (text.includes("PRIVATE KEY")) {
-      const { keypairFromPrivateKeyPem } = await import("./beingKeys.js");
-      return keypairFromPrivateKeyPem(text);
-    }
-    const { mnemonicToEntropy } = await import("./mnemonic.js");
-    const { keypairFromSeed } = await import("./beingKeys.js");
-    return keypairFromSeed(mnemonicToEntropy(text));
-  } catch (err) {
-    throw new IbpError(
-      IBP_ERR.INVALID_INPUT,
-      `birthBeing("${name}"): importKey is neither a valid ed25519 private-key PEM ` +
-        `nor a valid 24-word recovery phrase (${err.message})`,
-    );
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -163,7 +138,6 @@ async function resolveImportedKeypair(importKey, name) {
  *   spec.isRemote       For mirror-only beings (default false).
  *   spec.homeReality    URL of the reality where this being's
  *                       authoritative row lives (default null).
- *   spec.llmDefault     Per-being LLM connection key (default null).
  *   spec.father         { reality, beingId } | null. Recorded on the
  *                       child as qualities.father. The verified
  *                       identity tuple of a being from another world
@@ -289,22 +263,36 @@ export async function birthBeing({ spec, identity, summonCtx = null, branch = nu
   // where the parent's be:birth is earlier in the same ΔF.
   const { loadOrFold, findByName, findByNamePattern } = await import("../../projections.js");
   const parentSlot = await loadOrFold("being", parentBeingId, branch);
-  if (!parentSlot) {
-    const parentPending = summonCtx?.deltaF?.find(
-      (f) =>
-        f?.verb === "be" &&
-        f?.action === "birth" &&
-        f?.target?.kind === "being" &&
-        String(f?.target?.id) === String(parentBeingId),
+  const parentPending = parentSlot ? null : summonCtx?.deltaF?.find(
+    (f) =>
+      f?.verb === "be" &&
+      f?.action === "birth" &&
+      f?.target?.kind === "being" &&
+      String(f?.target?.id) === String(parentBeingId),
+  );
+  if (!parentSlot && !parentPending) {
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      `birthBeing("${name}"): parentBeingId "${String(parentBeingId).slice(0, 8)}" does not ` +
+        `resolve to an existing being and is not pending earlier in this ` +
+        `moment's ΔF. The being-tree would have a dangling reference.`,
     );
-    if (!parentPending) {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        `birthBeing("${name}"): parentBeingId "${String(parentBeingId).slice(0, 8)}" does not ` +
-          `resolve to an existing being and is not pending earlier in this ` +
-          `moment's ΔF. The being-tree would have a dangling reference.`,
-      );
-    }
+  }
+
+  // The being expresses the MOTHER's trueName — the name that births it
+  // (parentSlot for a folded mother; the pending be:birth's spec for a
+  // mother born earlier in this same ΔF). No fallback: a mother with no
+  // trueName is a wiring gap to SEE, not to paper over.
+  const motherTrueName = parentSlot
+    ? parentSlot.state?.trueName
+    : parentPending?.params?.trueName;
+  if (!motherTrueName) {
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      `birthBeing("${name}"): the mother (parentBeingId ` +
+        `"${String(parentBeingId).slice(0, 8)}") carries no trueName; a being ` +
+        `must express the name that births it.`,
+    );
   }
 
   // ── Home space exists (or is pending in this moment) ──
@@ -407,55 +395,32 @@ export async function birthBeing({ spec, identity, summonCtx = null, branch = nu
     } catch { /* defensive: any lookup failure leaves coord null */ }
   }
 
-  // ── Identity keypair (the being is a wallet) ──
-  // beingId IS the public key; the private key signs the being's acts.
-  // The reality holds it encrypted (custodial, qualities.auth.privateKeyEnc)
-  // and the owner can export it (the key-export op). I_AM is the one
-  // exception (ensureIAm in sprout.js): its id is the literal "i-am" and
-  // its signing key is the reality key. Every other being, including the
-  // seed delegates, gets its own independent keypair here.
-  //
-  // IMPORT: a caller holding an exported key (the PEM, or its 24-word
-  // paper form) births the being WITH that identity instead of a fresh
-  // one — recovery, and moving your identity onto a reality you
-  // control. Same id, because the id IS the key. Refused when the id
-  // already lives here (that being exists; connect to it instead).
-  // spec.importKey never reaches the fact: the wire layer holds it in
-  // the secret stash and this file puts only the ENCRYPTED key into
-  // qualities.
-  let keypair;
+  // ── Identity belongs to the NAME, not the being ──
+  // A being holds NO key. Its _id is the CAS hash of its birth (computed
+  // below from the finalized spec, the same way matter's id is content-
+  // addressed); the NAME it expresses (trueName) is the keypair that signs
+  // its acts. Importing an identity is a NAME concern (declare a name with
+  // an imported key, then hand a being to it), so it never reaches birth.
   if (spec.importKey) {
-    keypair = await resolveImportedKeypair(spec.importKey, name);
-    const { loadOrFold } = await import("../../projections.js");
-    const existing = await loadOrFold("being", keypair.beingId, branch).catch(() => null);
-    if (existing) {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        `birthBeing("${name}"): this identity (${keypair.beingId.slice(0, 12)}…) ` +
-          `already lives on this reality — BE:connect to it instead of importing`,
-      );
-    }
-  } else {
-    keypair = generateBeingKeypair();
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      `birthBeing("${name}"): importKey is not a birth concern — an identity is a ` +
+        `Name; declare it (the NAME verb) and hand a being to it, don't import at birth`,
+    );
   }
-  const id = keypair.beingId;
 
   // ── Credentials ──
   const credential = await mintCredentialSpec(spec.password || null);
 
   // ── Qualities ──
   // Caller-provided initial qualities deep-merge with the seeds
-  // (auth.credentialPlain, auth.privateKeyEnc, cognition.defaultKind,
-  // optional roleFlow).
+  // (auth.credentialPlain, cognition.defaultKind, optional roleFlow). No
+  // signing key here — the key lives on the Name (trueName), not the being.
   const qualities = (spec.qualities && typeof spec.qualities === "object")
     ? { ...spec.qualities }
     : {};
-  qualities.auth = {
-    ...(qualities.auth || {}),
-    privateKeyEnc: encryptCredential(keypair.privateKeyPem),
-  };
   if (credential.plain) {
-    qualities.auth.credentialPlain = credential.plain;
+    qualities.auth = { ...(qualities.auth || {}), credentialPlain: credential.plain };
   }
   qualities.cognition = { ...(qualities.cognition || {}), defaultKind: cognition };
   if (Array.isArray(spec.roleFlow)) {
@@ -498,11 +463,11 @@ export async function birthBeing({ spec, identity, summonCtx = null, branch = nu
     name,
     password: credential.hash,
     defaultRole,
+    // The trueName this being expresses: the MOTHER's trueName, the name
+    // that births it. Beings under i-am inherit i-am.
+    trueName: motherTrueName,
     parentBeingId,
     homeSpace: homeId,
-    // Key scheme descriptor for cross-reality importers and rotation.
-    // The public key IS target.id, so the raw key is not duplicated here.
-    identity: { alg: "ed25519", keyEnc: "did:key:ed25519-multibase", v: 1 },
     // The being's home branch = the stamper's branch (the branch THIS
     // be:birth fact is being stamped on). Everything is relative: a
     // being birthed on #7a owns #7a as their present; BE:connect/
@@ -520,16 +485,30 @@ export async function birthBeing({ spec, identity, summonCtx = null, branch = nu
     position,
     ...(resolvedCoord ? { coord: resolvedCoord } : {}),
     // Optional traits ride the fact only when SET. The reducer
-    // (applyCreateBeing) defaults absent llmDefault → null,
-    // isRemote → false, homeReality → null, so omission folds
-    // identically and the chain stops carrying null/false noise on
-    // every plain birth.
-    ...(spec.llmDefault ? { llmDefault: spec.llmDefault } : {}),
+    // (applyCreateBeing) defaults absent isRemote → false,
+    // homeReality → null, so omission folds identically and the
+    // chain stops carrying false/null noise on every plain birth.
     ...(spec.isRemote ? { isRemote: true } : {}),
     ...(spec.homeReality ? { homeReality: spec.homeReality } : {}),
     qualities,
   };
 
+  // The being's id IS the content hash of its BIRTH EVENT — the one
+  // immutable thing about a being (its live attributes all change). Who
+  // birthed it + its birth name + branch + the birth MOMENT (bornAt = this
+  // moment's act id, which makes each birth unique). Frozen here, carried
+  // as target.id below; later set-being / be:rename rewrite the row, never
+  // this id, so the reel stays intact. The shareable IDENTITY is the Name
+  // (trueName); this is just the local presence handle. See ../beingId.js.
+  const id = beingContentId({ ...factSpec, bornAt: summonCtx?.actId ?? null });
+
+  // NOTE: be:birth does NOT mint a trueName. A trueName is its own thing,
+  // minted separately through the NAME verb (declare-name) — the way an
+  // actId is minted in its own beat, not derived per-fact. Birth only
+  // REFERENCES one: the being expresses the MOTHER's trueName
+  // (factSpec.trueName above), the name that births it. Under i-am, every
+  // being inherits i-am until a separate name is declared and a being is
+  // handed to it (be:rename).
   try {
     await emitFact({
       verb:    "be",

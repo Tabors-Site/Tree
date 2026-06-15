@@ -36,7 +36,14 @@
 import log from "../../../seed/seedReality/log.js";
 import { buildClaim, listingHashOf } from "./lib/claims.js";
 
-const LISTING_TYPES = new Set(["extension", "seed"]);
+// Listing types ARE the resource kinds (RESOURCES.md). Six total:
+// code, role, roleflow, seed, asset, pack. A whole-reality publish is
+// a "pack" listing whose tree happens to span the entire repo,  no
+// separate type; same primitive at a larger scope. The roleflow
+// listing path is soft-rejected below pending its design pass.
+const LISTING_TYPES = new Set([
+  "code", "role", "roleflow", "seed", "asset", "pack",
+]);
 const NAME_RE = /^[a-z][a-z0-9-]*$/;
 const VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9.+-]*$/;
 const MAX_MANIFEST_BYTES = 64 * 1024;

@@ -35,7 +35,7 @@ import { remapRefs } from "../refWalker.js";
 import { assertValidBundle } from "./bundle.js";
 import { emitFact } from "../../past/fact/facts.js";
 import { withBeingAct } from "../../sprout.js";
-import { generateBeingKeypair } from "../being/identity/beingKeys.js";
+import { generateBeingKeypair } from "../name/keys.js";
 import { encryptCredential } from "../being/identity/credentials.js";
 import { matterContentId } from "../matter/matterId.js";
 import log from "../../seedReality/log.js";

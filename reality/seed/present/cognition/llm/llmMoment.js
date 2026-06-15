@@ -103,10 +103,7 @@ import {
   isCognitionFailure,
 } from "../cognitionResult.js";
 import { buildSystemPromptForRole } from "./assemble.js";
-import { resolveBareCapabilities } from "../../roles/capabilities.js";
 import { renderInwardPastFace, renderHalfPastFace } from "./pastFaceRender.js";
-import { foldPlace } from "../../beats/2-fold/foldPlace.js";
-import { buildFacadeSnapshot } from "../../beats/2-fold/facadeSnapshot.js";
 import {
   resolveToolsForPosition,
   executeTool,
@@ -298,24 +295,21 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
   // precedence chain envelope > summonCtx > role default > forward.
   const orientation = pickOrientation(envelope, role, summonCtx);
 
-  // One foldPlace call per moment, at the moment's orientation. The
-  // returned face does double duty: its forward axis (space +
-  // occupants) feeds the facadeSnapshot's "what was seen" field;
-  // its past axis (actChain for inward, recalled for half) feeds
-  // the past-face block in the prompt. Forward moments still call
-  // foldPlace — they don't need a past-face block, but they DO
-  // need the structured forward face for the snapshot.
-  let foldedFace = null;
+  // Beat 2 (runFoldBeat in moment.js) already ran foldPlace at this
+  // orientation and stashed both the spatial fold and the canonical
+  // inner face on summonCtx. We just read them through. Inward and
+  // half synthesize a past-face prompt block from the foldedFace's
+  // past axis (actChain / recalled); forward leaves it empty.
+  const foldedFace = summonCtx?.foldedFace || null;
   let pastFaceBlock = "";
   try {
-    foldedFace = await foldPlace(beingId, orientation, { summonCtx, branch });
     if (orientation === "inward") {
       pastFaceBlock = renderInwardPastFace(foldedFace?.actChain);
     } else if (orientation === "half") {
       pastFaceBlock = renderHalfPastFace(foldedFace?.recalled);
     }
-  } catch (foldErr) {
-    log.warn("LLM", `foldPlace(${orientation}) failed for being=${beingId.slice(0, 8)}: ${foldErr.message}`);
+  } catch (faceErr) {
+    log.warn("LLM", `past-face render(${orientation}) failed for being=${beingId.slice(0, 8)}: ${faceErr.message}`);
     if (orientation === "inward") {
       pastFaceBlock = "[Inward fold]\n(act-chain unavailable this moment)";
     }
@@ -355,6 +349,10 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
     being,
     orientation,
     pastFaceBlock,
+    // The canonical inner face built at beat 2. assemble.js reads
+    // ctx.innerFace.blocks via innerFaceFormat to render the canSee
+    // section of the prompt; no per-soul rebuild.
+    innerFace: summonCtx?.innerFace || null,
     suppressCanSee: orientation === "inward",
     branch: _summonBranch,
     read: async (kind, id) => {
@@ -367,30 +365,9 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
   };
   const systemPrompt = await buildSystemPromptForRole(role, promptCtx);
 
-  // Capture the bounded record of the face this moment ran under
-  // and stash it on summonCtx so the seal carries it onto the Act.
-  // Universal capture — every cognition mouth (LLM here, scripted
-  // and human-inhabited at their own runners) builds the snapshot.
-  // Inner-fold §6 forbids half-records on the act-chain.
-  try {
-    const capabilities = await resolveBareCapabilities(role, promptCtx);
-    // For forward/half the foldedFace has {space, occupants}. For
-    // inward the world drops out; pass an empty face — the snapshot
-    // records orientation + role + capabilities and leaves space /
-    // occupants null, matching the doctrine that inward = A_b only.
-    const snapshotFace = orientation === "inward"
-      ? { space: null, occupants: [] }
-      : { space: foldedFace?.space || null, occupants: foldedFace?.occupants || [] };
-    const snapshot = buildFacadeSnapshot({
-      orientation,
-      role: role?.name || null,
-      face: snapshotFace,
-      capabilities,
-    });
-    if (summonCtx) summonCtx.facadeSnapshot = snapshot;
-  } catch (snapErr) {
-    log.warn("LLM", `facadeSnapshot build skipped for being=${beingId.slice(0, 8)}: ${snapErr.message}`);
-  }
+  // The canonical inner face was built once at beat 2 (runFoldBeat)
+  // and lives on summonCtx.innerFace. The seal carries it onto the
+  // Act in moment.js's seal branch. No per-soul rebuild here.
   const userTurn = {
     role: "user",
     content:

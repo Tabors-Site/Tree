@@ -25,7 +25,7 @@
 
 import "../styles/identity-panel.css";
 
-// ── base58btc (mirror of seed/materials/being/identity/beingKeys.js) ──
+// ── base58btc (mirror of seed/materials/name/keys.js) ──
 const B58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
 function b58decode(str) {

@@ -25,6 +25,7 @@ import {
   applyCreateBeing,
   applyConnectionState,
   applyDeath,
+  applyTrueName,
   applyRoleGrants,
 } from "../reducerHelpers.js";
 
@@ -69,6 +70,11 @@ export function reduce(state, fact) {
   // remain valid; new acts targeting this being refuse upstream
   // (beVerb + summonVerb gate on isDead).
   next = applyDeath(next, fact);
+
+  // be:truename — re-point this being at a declared Name (the trueName
+  // transfer). Folds state.trueName onto the row; the being's _id (frozen
+  // birth-event hash) is untouched, so the reel + chain survive the move.
+  next = applyTrueName(next, fact);
 
   // do:set — scalar fields (name/type) and qualities paths.
   next = applySetField(next, fact);

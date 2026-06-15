@@ -161,6 +161,7 @@ import { doVerb }     from "./ibp/verbs/do.js";
 import { seeVerb }    from "./ibp/verbs/see.js";
 import { summonVerb } from "./ibp/verbs/summon.js";
 import { beVerb }     from "./ibp/verbs/be.js";
+import { nameVerb }   from "./ibp/verbs/name.js";
 // Side-effect imports. Each material owns the ops that target it; the
 // modules self-register with the operation registry on load. Seeds and
 // reality-config ops live alongside their respective subjects.
@@ -288,6 +289,7 @@ export function buildRealityServices({
     do: doVerb,
     summon: summonVerb,
     be: beVerb,
+    name: nameVerb,
 
     // Branch-cloning / reality-seeding portable artifacts.
     // - clone (clone.js + graft.js): the SETUP — current shape of a

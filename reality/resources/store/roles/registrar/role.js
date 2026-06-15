@@ -10,8 +10,10 @@
 //
 //   publish-listing    publisher -> store
 //     "List this. Here is the manifest."
-//     payload: { listingType: "extension"|"seed",
+//     payload: { listingType: "code"|"role"|"roleflow"|"seed"|"asset"|"pack",
 //                manifest: { name, version, builtFor?, assets?, requires? } }
+//     A whole-reality publish is a "pack" listing whose tree spans
+//     the entire repo. Same primitive, larger scope.
 //     response: { kind: "published", listingHash, claimHash, seq }
 //     Versions are immutable: same (name, version) with a different
 //     hash refuses; identical re-publish is idempotent.

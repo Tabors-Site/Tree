@@ -34,7 +34,7 @@
 //
 // Cognition-agnostic. Lives in present/roles/ because the can*
 // lists originate on the role spec; every cognition that consumes
-// them (LLM prompt assembly, scripted introspection, facadeSnapshot
+// them (LLM prompt assembly, scripted introspection, innerFace
 // capture) imports from here. Previously lived in cognition/llm/
 // which was the wrong dependency direction.
 

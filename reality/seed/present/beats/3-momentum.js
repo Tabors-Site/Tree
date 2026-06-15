@@ -137,8 +137,8 @@ async function runTransportAct(summonCtx) {
     throw new Error("moment: transport-act missing `act` payload");
   }
   const { verb, target, action, args } = act;
-  if (verb !== "do" && verb !== "be") {
-    throw new Error(`moment: transport-act verb must be "do" or "be" (got "${verb}")`);
+  if (verb !== "do" && verb !== "be" && verb !== "name") {
+    throw new Error(`moment: transport-act verb must be "do", "be", or "name" (got "${verb}")`);
   }
 
   // Lazy-import the verbs to avoid a circular import at module load.
@@ -158,12 +158,25 @@ async function runTransportAct(summonCtx) {
     });
   }
 
-  // verb === "be" — cherub-as-actor path
-  const { opPayload = {}, address, addressKind, callerIdentity = null } = args || {};
-  return beVerb(target, opPayload, {
+  if (verb === "be") {
+    // verb === "be" — cherub-as-actor path
+    const { opPayload = {}, address, addressKind, callerIdentity = null } = args || {};
+    return beVerb(target, opPayload, {
+      address,
+      addressKind,
+      identity:  callerIdentity,
+      summonCtx,
+    });
+  }
+
+  // verb === "name" — the identity layer (declare / banish a name). `target`
+  // is the op name (declare | banish); the address is reality-only
+  // (<realityDomain>) or <nameId>@<realityDomain>.
+  const { nameVerb } = await import("../../ibp/verbs/name.js");
+  const { opPayload = {}, address, callerIdentity = null } = args || {};
+  return nameVerb(target, opPayload, {
     address,
-    addressKind,
-    identity:  callerIdentity,
+    identity: callerIdentity || summonCtx.identity || null,
     summonCtx,
   });
 }

@@ -1,8 +1,0 @@
-# Saved seeds are reality genomes — operator artifacts, not source code.
-# They contain original IDs, biographies, and possibly private state.
-# Don't commit them to the repo.
-*.seed.json
-
-# Keep this folder + .gitignore + README in source.
-!.gitignore
-!README.md

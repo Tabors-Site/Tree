@@ -184,9 +184,8 @@ const MAX_SLOTS = 50;
 //     `enforced`   lock IN this assignment for descendants. Space
 //                  enforcement wins over being enforcement when both
 //                  apply; both override being.preferOwn.
-//     `locked`     lock OUT all LLM usage for descendants. Mirrors
-//                  space.llmDefault === "none"; sovereign — stops
-//                  the resolver entirely.
+//     `locked`     lock OUT all LLM usage for descendants. Sovereign,
+//                  stops the resolver entirely.
 //     `preferOwn`  (being only) invert the chain so the being's own
 //                  LLM ranks above the position's.
 
@@ -212,9 +211,10 @@ function asBool(v) {
 
 /**
  * LLM assignments for a space.
- * Reads `space.llmDefault`, `space.qualities.llm.slots`, and
- * `space.qualities.llm.enforced`. Returns
- * `{ default, [slot]: connId, enforced }`.
+ * Reads `space.qualities.llm.slots` and `space.qualities.llm.enforced`.
+ * Returns `{ default, [slot]: connId, enforced }`. `default` reads
+ * from `qualities.llm.slots.main` (the slot the "main" assignment
+ * writes to).
  */
 export function getSpaceLlmAssignments(space) {
   if (!space) return { default: null, enforced: false };
@@ -224,19 +224,16 @@ export function getSpaceLlmAssignments(space) {
       : space.qualities?.llm;
   const slots = sanitizeSlots(meta?.slots);
   const result = { ...slots };
-  result.default =
-    typeof space.llmDefault === "string" && space.llmDefault.length <= 100
-      ? space.llmDefault
-      : null;
+  result.default = typeof slots.main === "string" ? slots.main : null;
   result.enforced = asBool(meta?.enforced);
   return result;
 }
 
 /**
  * LLM assignments for a being.
- * Reads `being.llmDefault`, `being.qualities.beingLlm.slots`, and
- * the authority flags. Returns
- * `{ main, [slot]: connId, enforced, locked, preferOwn }`.
+ * Reads `being.qualities.beingLlm.slots` and the authority flags.
+ * Returns `{ main, [slot]: connId, enforced, locked, preferOwn }`.
+ * `main` reads from `qualities.beingLlm.slots.main`.
  */
 export function getBeingLlmAssignments(being) {
   if (!being)
@@ -247,10 +244,7 @@ export function getBeingLlmAssignments(being) {
       : being.qualities?.beingLlm;
   const slots = sanitizeSlots(meta?.slots);
   const result = { ...slots };
-  result.main =
-    typeof being.llmDefault === "string" && being.llmDefault.length <= 100
-      ? being.llmDefault
-      : null;
+  result.main = typeof slots.main === "string" ? slots.main : null;
   result.enforced = asBool(meta?.enforced);
   result.locked = asBool(meta?.locked);
   result.preferOwn = asBool(meta?.preferOwn);
@@ -593,10 +587,7 @@ export async function updateLlmConnection(
       ? being.qualities.get("beingLlm")
       : being.qualities?.beingLlm;
   const beingSlots = beingLlmMeta?.slots || {};
-  if (
-    being.llmDefault === connectionId ||
-    Object.values(beingSlots).includes(connectionId)
-  ) {
+  if (Object.values(beingSlots).includes(connectionId)) {
     clearBeingClientCache(beingId);
   }
 
@@ -636,17 +627,7 @@ export async function deleteLlmConnection(beingId, connectionId, { identity, sum
     opts,
   );
 
-  // Clear being's main slot if it pointed here.
-  if (being.llmDefault === connectionId) {
-    await doVerb(
-    { kind: "being", id: String(being._id) },
-      "set-being",
-      { field: "llmDefault", value: null },
-      opts,
-    );
-  }
-
-  // Clear being's named slots that pointed here.
+  // Clear any being slots (including "main") that pointed here.
   const beingLlmMeta =
     being.qualities instanceof Map
       ? being.qualities.get("beingLlm")
@@ -704,26 +685,15 @@ export async function assignConnection(beingId, slot, connectionId, { identity, 
     ? { identity, summonCtx }
     : { identity: I_AM, summonCtx };
 
-  // "main" slot goes to llmDefault (scalar field); other slots go to
-  // qualities.beingLlm.slots.<slot> (qualities-path). Both routes
-  // through do.set so the fact insert IS the commit; the reducer
-  // (applySetField for scalar, applySetQualities for qualities path)
-  // writes the projection.
-  if (slot === "main") {
-    await doVerb(
+  // All slots (including "main") route through
+  // qualities.beingLlm.slots.<slot>. do.set carries the write; the
+  // reducer's applySetQualities writes the projection.
+  await doVerb(
     { kind: "being", id: String(being._id) },
-      "set-being",
-      { field: "llmDefault", value: safeConnId },
-      opts,
-    );
-  } else {
-    await doVerb(
-    { kind: "being", id: String(being._id) },
-      "set-being",
-      { field: `qualities.beingLlm.slots.${slot}`, value: safeConnId },
-      opts,
-    );
-  }
+    "set-being",
+    { field: `qualities.beingLlm.slots.${slot}`, value: safeConnId },
+    opts,
+  );
 
   clearBeingClientCache(beingId);
 
@@ -732,9 +702,9 @@ export async function assignConnection(beingId, slot, connectionId, { identity, 
 
 /**
  * Space-scope counterpart to `assignConnection`. Writes the
- * tree-level step of the resolution chain. "main" goes to
- * `space.llmDefault`; other slots write to
- * `space.qualities.llm.slots.<slot>`. Pass `connectionId: null` to clear.
+ * tree-level step of the resolution chain. All slots (including
+ * "main") write to `space.qualities.llm.slots.<slot>`. Pass
+ * `connectionId: null` to clear.
  */
 export async function assignSpaceConnection(
   spaceId,
@@ -770,24 +740,15 @@ export async function assignSpaceConnection(
     ? { identity, summonCtx }
     : { identity: I_AM, summonCtx };
 
-  // "main" slot writes the Space's scalar llmDefault; other slots write
-  // the qualities path. Both flow through do.set; null clears.
+  // All slots (including "main") write to qualities.llm.slots.<slot>.
+  // do.set carries the write; null clears.
   const spaceTarget = { kind: "space", id: String(space._id) };
-  if (slot === "main") {
-    await doVerb(
-      spaceTarget,
-      "set-space",
-      { field: "llmDefault", value: safeConnId },
-      opts,
-    );
-  } else {
-    await doVerb(
-      spaceTarget,
-      "set-space",
-      { field: `qualities.llm.slots.${slot}`, value: safeConnId },
-      opts,
-    );
-  }
+  await doVerb(
+    spaceTarget,
+    "set-space",
+    { field: `qualities.llm.slots.${slot}`, value: safeConnId },
+    opts,
+  );
 
   return { spaceId: String(spaceId), slot, connectionId: safeConnId };
 }
@@ -901,7 +862,8 @@ export async function resolveConnection(beingId, connectionId, cacheKey, { summo
  * Resolve the LLM client for a being on a specific branch. Chain:
  *   1. overrideConnectionId (from a tree's role-slot resolution)
  *   2. being slot assignment (qualities.beingLlm.slots[slot])
- *   3. being default (Being.llmDefault), if slot wasn't "main"
+ *   3. being main slot (qualities.beingLlm.slots.main), if slot
+ *      wasn't already "main"
  *   4. place-level default (realityLlmConnection)
  *   5. noLlm sentinel
  *
@@ -956,7 +918,7 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId, bra
     }
   }
 
-  // 2 + 3. Slot-based resolution from being's llmDefault + qualities.beingLlm.
+  // 2 + 3. Slot-based resolution from qualities.beingLlm.slots.
   // Cache key includes branch so divergent views don't share entries.
   const cacheKey = beingId + ":" + slot + ":" + branch;
   const cached = beingClientCache.get(cacheKey);
@@ -970,12 +932,12 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId, bra
     const being = slotProj ? { _id: slotProj.id, ...slotProj.state } : null;
     const quals = being?.qualities || {};
     const extSlots = quals?.beingLlm?.slots || {};
-    let connectionId =
-      slot === "main" ? being?.llmDefault : extSlots[slot] || null;
+    let connectionId = extSlots[slot] || null;
 
-    // Fall back to "main" (llmDefault) if the specific slot has no assignment
-    if (!connectionId && slot !== "main" && being?.llmDefault) {
-      connectionId = being.llmDefault;
+    // Fall back to the "main" slot if the requested slot has no
+    // assignment of its own.
+    if (!connectionId && slot !== "main") {
+      connectionId = extSlots.main || null;
     }
 
     if (connectionId) {

@@ -281,11 +281,14 @@ function serializeAct(a) {
     // Branch this Act was stamped on. Null on legacy acts predating
     // the field; clients should treat that as main.
     branch:          a.branch || null,
-    // The bounded face this act ran under — orientation + role + space +
-    // occupants + capabilities, stamped on every act regardless of the
-    // being's cognition. Null on legacy acts predating the field. Clients
-    // render it as the act's "what I saw and could do" record.
-    facadeSnapshot:  a.facadeSnapshot || null,
+    // The canonical inner face this act ran under . orientation + role
+    // + position + capabilities + role.canSee-resolved blocks, stamped
+    // on every act regardless of the being's cognition. origin is
+    // "local" for fold-built faces; cross-world overrides supersede
+    // the local face post-seal with origin "foreign". Null on legacy
+    // acts predating the field. Clients render it as the act's "what
+    // I saw and could do" record.
+    innerFace:  a.innerFace || null,
     // Seal-signature presence. The full sig (incl. value) stays on the
     // row; the wire carries who signed and the scheme so clients can
     // badge signed acts. by is a key id (self-certifying) or "i-am".

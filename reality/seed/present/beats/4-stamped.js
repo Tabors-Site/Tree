@@ -211,11 +211,11 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
     status: "attempted",
   };
 
-  // Preload the actor's signing key BEFORE the seal so the transaction
-  // stays lean (the key never changes during the moment). Null for a
-  // foreign cross-reality actor or a missing key — the act then seals
-  // unsigned. The key lives only here, never on the row.
-  const signingPem = await loadSigningKey(actDoc.beingIn, actDoc.branch);
+  // Preload the actor NAME's signing key BEFORE the seal so the
+  // transaction stays lean (the key never changes during the moment).
+  // Null for a foreign cross-reality actor or a missing key — the act
+  // then seals unsigned. The key lives only here, never on the row.
+  const signingPem = await loadSigningKey(actDoc.nameId, actDoc.branch);
 
   let inserted = null;
   let sortedReels = [];
