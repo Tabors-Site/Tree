@@ -26,6 +26,15 @@
 //
 // Birther is scripted-cognition: its summon function dispatches by
 // intent in the message envelope. No LLM frame.
+//
+// Birther is also the doctrine demonstrator for the unified inner
+// face (philosophy/names/innerFace.md). canSee: ["place"] tells the
+// kernel to fold the position descriptor into ctx.innerFace.blocks;
+// on summon:mate the summon handler reads that block to detect a
+// name collision against current occupants and refuses with
+// kind:"failure", shape:"refused" before commissioning the vessel.
+// First scripted role in the repo that turns canSee into a real
+// perception-aware decision.
 
 import log from "../../../seedReality/log.js";
 
@@ -39,6 +48,7 @@ export const birtherRole = Object.freeze({
   permissions: ["be"],
   respondMode: "async",
   triggerOn: [],
+  canSee: ["place"],
   canBe: ["birth"],
 
   // canSummon participation. `as` discriminates the side of the
@@ -65,9 +75,12 @@ export const birtherRole = Object.freeze({
     // role.canSee-resolved blocks). Scripted roles read it as data:
     //   ctx.innerFace.blocks . [{ key, source, label, payload }, ...]
     // Same shape the LLM mouth reformats and the human portal renders.
-    // This birther role doesn't filter on it today; the breadcrumb is
-    // here so anyone wiring a new scripted role knows where the face
-    // lives.
+    // This birther role uses it as a perception-aware pre-flight gate
+    // for the "mate" intent: before commissioning a vessel, it looks
+    // at the "place" block (resolved from canSee:["place"]) and refuses
+    // when an occupant already carries the prospective vessel name.
+    // Honest preview of the in-place uniqueness check, answered from
+    // the inner face the kernel folded for this moment.
     //
     // Dispatch by intent in the message. Today's intents:
     //
@@ -82,12 +95,65 @@ export const birtherRole = Object.freeze({
       : null;
 
     if (intent === "mate") {
-      return await handleMateRequest(message, ctx);
+      // Perception-aware pre-flight. Compute the prospective vessel
+      // name with the same suggested-or-fallback rule handleMateRequest
+      // uses, then scan the "place" block from ctx.innerFace for a
+      // name collision against current beings[]/residents[]. Refusing
+      // here turns the in-place uniqueness throw into a structured
+      // see-and-refuse, which is what the inner face is for.
+      const prospectiveName = await resolveBeingName(message, ctx);
+      const blocks = Array.isArray(ctx?.innerFace?.blocks)
+        ? ctx.innerFace.blocks
+        : [];
+      const placeBlock = blocks.find((b) => b && b.key === "place");
+      const payload = placeBlock?.payload || {};
+      const occupants = [
+        ...(Array.isArray(payload.beings)    ? payload.beings    : []),
+        ...(Array.isArray(payload.residents) ? payload.residents : []),
+      ];
+      const collision = prospectiveName
+        ? occupants.find((o) => {
+            const occName = (o && (o.being || o.name)) || null;
+            return occName && occName === prospectiveName;
+          })
+        : null;
+      if (collision) {
+        log.warn(
+          "Birther",
+          `mate refused: name collision "${prospectiveName}" at homeSpace`,
+        );
+        return ctx.failure?.("refused", `vessel name "${prospectiveName}" already at home space`)
+          || { kind: "failure", ok: false, shape: "refused", reason: `name collision: ${prospectiveName}` };
+      }
+      return await handleMateRequest(message, ctx, prospectiveName);
     }
 
     return null;
   },
 });
+
+// Vessel name. Suggested (from message.name) wins; otherwise the
+// `vessel-<reality>-<short>` fallback. Reality is the asker's when
+// carried (cross-realm); otherwise the local domain. The perception-
+// aware gate and handleMateRequest both call this so the name they
+// guard against is the same name handleMateRequest commits to.
+async function resolveBeingName(message, ctx) {
+  const messageObj = (typeof message === "object" && message !== null) ? message : {};
+  const suggested = typeof messageObj.name === "string" && messageObj.name.length
+    ? messageObj.name.trim()
+    : null;
+  if (suggested) return suggested;
+  const askerBeingId = ctx?.askerBeingId || null;
+  if (!askerBeingId) return null;
+  let fatherReality = ctx?.askerReality || null;
+  if (!fatherReality) {
+    const { getRealityDomain } = await import("../../../ibp/address.js");
+    fatherReality = getRealityDomain();
+  }
+  return `${DEFAULT_BIRTHER_NAME_PREFIX}-${
+    fatherReality.replace(/[^a-z0-9]/gi, "")
+  }-${String(askerBeingId).slice(0, 6)}`;
+}
 
 // ────────────────────────────────────────────────────────────────────
 // summon:mate auto-accept.
@@ -104,7 +170,7 @@ export const birtherRole = Object.freeze({
 // birther becomes a father of a child here.)
 // ────────────────────────────────────────────────────────────────────
 
-async function handleMateRequest(message, ctx) {
+async function handleMateRequest(message, ctx, precomputedName = null) {
   const askerBeingId = ctx?.askerBeingId || null;
   const askerReality = ctx?.askerReality || null;
   if (!askerBeingId) {
@@ -147,16 +213,16 @@ async function handleMateRequest(message, ctx) {
       || { kind: "failure", ok: false, shape: "internal", reason: "no home space" };
   }
 
-  // Vessel name. Caller can suggest; otherwise birther picks a
-  // domain-keyed default ("vessel-<reality>-<shortBeingId>"). Names
-  // are uniqueness-checked inside birthBeing.
-  const suggested = typeof messageObj.name === "string" && messageObj.name.length
-    ? messageObj.name.trim()
-    : null;
-  const fallbackName = `${DEFAULT_BIRTHER_NAME_PREFIX}-${
-    fatherReality.replace(/[^a-z0-9]/gi, "")
-  }-${String(askerBeingId).slice(0, 6)}`;
-  const name = suggested || fallbackName;
+  // Vessel name. Pre-resolved by the summon dispatcher via
+  // resolveBeingName (single source of truth across the
+  // perception-aware gate and this call). Recompute defensively if
+  // the dispatcher didn't pass one (direct call path that bypasses
+  // summon()).
+  const name = precomputedName || await resolveBeingName(message, ctx);
+  if (!name) {
+    return ctx.failure?.("internal", "vessel name unresolvable (no suggestion and no asker identity)")
+      || { kind: "failure", ok: false, shape: "internal", reason: "no vessel name" };
+  }
 
   // Birther's own being id (= the actor of be:birth = the mother).
   const birtherBeingId = ctx?.toBeing?._id

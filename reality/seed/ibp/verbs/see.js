@@ -149,6 +149,32 @@ export async function seeVerb(target, opts = {}) {
     return buildDiscovery();
   }
 
+  // Name-address short-circuit. `<token>@<realityDomain>` (a name id or real
+  // name, then the SERVED reality) is the IDENTITY layer's read — "who is this
+  // name" (biographic) — distinct from a position stance
+  // `<reality>/<path>@<being>` (geographic), which ALWAYS carries a "/". So an
+  // "@" with no "/" whose suffix is this reality is a name address: resolve the
+  // token and return the Name descriptor (never the key — buildNameDescriptor
+  // field-picks). A relative stance `path@being` (suffix is a being, not the
+  // reality) and a bare `@being` (empty token) fall through to the position
+  // parse below.
+  if (typeof addrString === "string" && addrString.includes("@") && !/[/#]/.test(addrString)) {
+    const at = addrString.indexOf("@");
+    const token = addrString.slice(0, at);
+    const reality = addrString.slice(at + 1);
+    const { getRealityDomain } = await import("../address.js");
+    if (token && reality && reality === getRealityDomain()) {
+      const { resolveNameId } = await import("../../materials/name/registry.js");
+      const { buildNameDescriptor } = await import("../descriptor.js");
+      const nameId = await resolveNameId(token);
+      const descriptor = nameId ? await buildNameDescriptor(nameId) : null;
+      if (!descriptor) {
+        throw new IbpError(IBP_ERR.NAME_NOT_FOUND, `no such name: ${token}`);
+      }
+      return descriptor;
+    }
+  }
+
   // Registered SEE op dispatch. The target is a bare op name (no
   // address sigils) AND it matches a registry entry → run the op's
   // handler instead of building a position descriptor. Same shape as

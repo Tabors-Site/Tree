@@ -94,8 +94,13 @@ async function birthHandler({ payload, ctx }) {
   if (!name || typeof name !== "string") {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "`name` is required");
   }
-  if (!password || typeof password !== "string") {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "`password` is required");
+  // Password is OPTIONAL. You can only reach cherub from INSIDE the world,
+  // which means you already hold a NAME — and the Name is the auth. A being's
+  // password is just for SHARED inhabitation (letting another person be:connect
+  // to this being); when absent, birthBeing auto-generates a credential. So
+  // birth never requires a password.
+  if (password !== undefined && password !== null && typeof password !== "string") {
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "`password`, if given, must be a string");
   }
 
   // ── First-being bootstrap ──
@@ -187,12 +192,13 @@ async function birthHandler({ payload, ctx }) {
     }
 
     const identityToken = generateToken(being);
-    // Birth proved the secret (the password was just set by its
-    // holder): open the signing session so the being's first acts
-    // seal signed. See signingSession.js (the secondary unlock).
+    // Open the signing session keyed by the being's NAME (its trueName) —
+    // loadSigningKey reads the session by nameId, not being id. A fresh
+    // being's trueName is its mother's (e.g. i-am), which system-signs
+    // regardless; a pw-locked sovereign name unlocks via name:connect.
     {
       const { unlockSigning } = await import("../../../materials/name/signingSession.js");
-      unlockSigning(String(being._id));
+      if (being.trueName) unlockSigning(String(being.trueName));
     }
     return {
       identityToken,
@@ -248,10 +254,11 @@ async function birthHandler({ payload, ctx }) {
   hooks.run("afterRegister", { user: being, req: ctx?.req }).catch(() => {});
 
   const identityToken = generateToken(being);
-  // Birth proved the secret: open the signing session (secondary unlock).
+  // Open the signing session keyed by the being's NAME (its trueName), not
+  // the being id (loadSigningKey reads the session by nameId).
   {
     const { unlockSigning } = await import("../../../materials/name/signingSession.js");
-    unlockSigning(String(being._id));
+    if (being.trueName) unlockSigning(String(being.trueName));
   }
   return {
     identityToken,
@@ -298,36 +305,36 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
     // password disambiguates. Candidate count is capped to bound the
     // bcrypt cost per attempt.
     const candidates = (await findBeingCandidatesByName(name)).slice(0, 5);
-    let user = null;
+    let being = null;
     for (const candidate of candidates) {
       if (candidate.isRemote) continue;
-      if (await verifyPassword(candidate, password)) { user = candidate; break; }
+      if (await verifyPassword(candidate, password)) { being = candidate; break; }
     }
-    if (!user) {
+    if (!being) {
       // Constant-time rejection: when nothing matched, still run one
       // bcrypt so timing doesn't disclose existence.
       const DUMMY_HASH = "$2b$12$0000000000000000000000000000000000000000000000000000";
       await verifyPassword({ password: DUMMY_HASH }, password);
       throw new IbpError(IBP_ERR.UNAUTHORIZED, "Invalid credentials");
     }
-    const identityToken = generateToken(user);
-    // The password was just verified: open the signing session
-    // (secondary unlock) so this human's acts seal signed.
+    const identityToken = generateToken(being);
+    // Password verified: open the signing session keyed by the being's NAME
+    // (its trueName), not the being id (loadSigningKey reads it by nameId).
     {
       const { unlockSigning } = await import("../../../materials/name/signingSession.js");
-      unlockSigning(String(user._id));
+      if (being.trueName) unlockSigning(String(being.trueName));
     }
     return {
       identityToken,
-      beingAddress: `${getRealityDomain()}/@${user.name}`,
-      beingId:      String(user._id),
-      name:         user.name,
+      beingAddress: `${getRealityDomain()}/@${being.name}`,
+      beingId:      String(being._id),
+      name:         being.name,
       // The branch this being owns as their present. The transport
       // (the only layer that holds the socket) seats
       // socket.currentBranch from this after the moment seals. Same
       // model for birth/connect/release/switch: BE results are the
       // only writers of socket.currentBranch.
-      seatBranch:   user.homeBranch || null,
+      seatBranch:   being.homeBranch || null,
     };
   }
 

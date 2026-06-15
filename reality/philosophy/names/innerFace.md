@@ -189,12 +189,18 @@ LLMs and scripts work on their moment-start snapshot.
 
 ## Open
 
-**Scripted demonstrator.** The mechanism is wired but no scripted role
-in the repo reads `ctx.innerFace.blocks` for perception-aware
-decisions yet. When the first scripted consumer lands, the doctrine
-gets a concrete example to point at. Until then, the "all three souls
-see the same canSee" doctrine is structurally true but only
-demonstrably exercised by LLM + human.
+**Scripted demonstrator (landed 2026-06-15).** The [birther role](../../seed/present/roles/birther/role.js)
+is the first scripted role that consumes `ctx.innerFace.blocks` for a
+real perception-aware decision. It declares `canSee: ["place"]`; on a
+`summon:mate` request, its summon handler reads the resolved `place`
+block's `payload.beings[]` / `payload.residents[]` and refuses with
+`kind: "failure", shape: "refused"` when an occupant already carries
+the prospective vessel name. The refusal is honest: birthBeing would
+throw on uniqueness anyway, but answering at the perception layer
+makes the gate visible (the audit shows the role saw and declined)
+and distinct from infra failure (`shape: "refused"` vs the infra
+shapes). The "all three souls see the same canSee" doctrine is now
+demonstrably true across LLM, scripted, and human.
 
 **Non-descriptor named-see ops and the weave.** Handlers like
 `my-inbox`, `connections`, `federation-status`, `llm-connections`,

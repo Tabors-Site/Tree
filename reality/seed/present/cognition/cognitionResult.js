@@ -33,12 +33,20 @@
 // because the old code branches on it heavily; new code should branch
 // on kind.
 
+// timeout / http-error / garbage / aborted / internal are infra
+// failures: the cognition tried to act and the rails failed. "refused"
+// is a domain failure: the cognition perceived the situation and
+// deliberately declined. Scripted roles use this to surface
+// perception-aware refusals (e.g. birther sees a name collision in
+// ctx.innerFace.blocks and refuses the mate request without going
+// through the in-place uniqueness throw).
 const FAILURE_SHAPES = new Set([
   "timeout",
   "http-error",
   "garbage",
   "aborted",
   "internal",
+  "refused",
 ]);
 
 /**

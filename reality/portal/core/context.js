@@ -314,6 +314,14 @@ export function createPortalContext({ id = "main", persist = true, session = nul
   // Swap the live connection to a session minted elsewhere (cherub
   // action form, inhabit ack). Saves, disconnects, reconnects, lands.
   async function adoptSession(result, fallbackName = null) {
+    // The NAME that signs (the being's trueName). Prefer an explicit field;
+    // else read it off the token payload (unverified, display-only — the
+    // server verifies on use). The being's `name` is its world label; this is
+    // the identity behind it.
+    let nameId = result.nameId || null;
+    if (!nameId && result.identityToken) {
+      try { nameId = JSON.parse(atob(result.identityToken.split(".")[1] || ""))?.nameId || null; } catch { /* opaque token */ }
+    }
     const sess = {
       placeUrl: state.get("session")?.placeUrl || config.placeUrl,
       placeIsProxied: resolvePlaceConfig({
@@ -321,6 +329,7 @@ export function createPortalContext({ id = "main", persist = true, session = nul
       }).useProxy,
       token: result.identityToken,
       username: result.name || fallbackName,
+      nameId,
       beingAddress: result.beingAddress,
       // The being's permanent identity: its ed25519 public key (the
       // z... did:key value). The name above is the contextual label;

@@ -363,16 +363,28 @@ export function renderIdentityPanel(body, { state, doOp, see, signOut, being = n
   const identity = state?.descriptor?.identity;
   const name = session?.username || identity?.name || "arrival";
   const beingId = session?.beingId || identity?.beingId || null;
+  const nameId = session?.nameId || identity?.nameId || null;
 
+  // THE NAME — your identity, the thing that SIGNS. The same name across every
+  // being you drive and every branch/reality; its public key is below. This is
+  // the permanent identity (the being below is just the presence it acts through).
+  if (nameId) {
+    const nm = section(wrap, "your name");
+    noteLine(nm, "your identity — the name that signs your acts, the same across every being you drive", "idp-sub");
+    keyRow(nm, String(nameId));
+  }
+
+  // THE BEING — the presence you're driving. `@name` is a world label (it can
+  // differ per branch/reality); the id is a local presence handle (a content
+  // hash of the birth), NOT the signing key — that's the Name above.
   const who = section(wrap, `@${name}`);
-  noteLine(who, "your name — the contextual label (it can differ per branch and per reality)", "idp-sub");
+  noteLine(who, "the being you're driving — its name is a world label; the id below is a local presence handle", "idp-sub");
   if (beingId) {
     keyRow(who, String(beingId));
-    noteLine(who, "your permanent identity: this key never changes; every act you seal is signed with it");
   } else if (session?.token) {
-    noteLine(who, "(id not in this session — sign out and back in to pick it up)");
+    noteLine(who, "(no being on this session — you're signed in as a name; pick a being to drive)");
   } else {
-    noteLine(who, "anonymous arrival — claim or register to get an identity (a fresh ed25519 keypair)");
+    noteLine(who, "anonymous arrival — connect a name to enter");
   }
 
   if (session?.token && doOp) {
