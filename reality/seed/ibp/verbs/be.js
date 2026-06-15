@@ -58,6 +58,10 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     address     = null,
     addressKind = null,
     identity    = null,
+    // The connection's signed-in Name (server ground truth, threaded from the
+    // wire's socket.nameId). Lets connect admit an OWNED being with no
+    // password. NEVER sourced from the client payload.
+    nameId      = null,
     socket      = null,
     req         = null,
     currentReality = null,
@@ -639,7 +643,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       addressKind,
       payload,
       identity,
-      ctx: { socket, address: { kind: addressKind, value: address }, identity, req, summonCtx },
+      ctx: { socket, address: { kind: addressKind, value: address }, identity, req, summonCtx, nameId },
       summonCtx,
     });
     await writeBeFact({
@@ -704,7 +708,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
         addressKind,
         payload,
         identity,
-        ctx: { socket, address: { kind: addressKind, value: address }, identity, req, summonCtx },
+        ctx: { socket, address: { kind: addressKind, value: address }, identity, req, summonCtx, nameId },
         summonCtx,
       });
     } finally {

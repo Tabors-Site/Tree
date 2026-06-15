@@ -71,7 +71,7 @@ export async function handleSummon(socket, env, ack) {
       activeRole: payload.message.activeRole || payload.activeRole || null,
     };
 
-    const identity = socket.beingId ? { beingId: socket.beingId, name: socket.name } : null;
+    const identity = socket.beingId ? { beingId: socket.beingId, name: socket.name, nameId: socket.nameId || null } : null;
 
     // Cross-branch gate at the wire boundary. The caller's first-person
     // frame is the socket's tracked branch; the target stance's branch

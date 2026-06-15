@@ -356,3 +356,23 @@ This keeps each concern separated. Identity (Name), presence (Being), capability
 Worth pinning. The Soul layer becomes consistent with how the rest of the architecture works — declarative, composable, with sensible defaults and explicit overrides where they matter.
 
 Good thinking. These are the kinds of refinements that turn an architecture from "mostly clean" to "actually elegant." Each concern has its proper home; nothing overlaps; the composition is natural.
+
+---
+
+## LANDED 2026-06-15
+
+The role-scoped fold this doc described has shipped. Concrete implementation:
+
+- **One inner face per moment** is built at the 2-fold beat by `buildInnerFace(role, ctx)` at [reality/seed/present/beats/2-fold/innerFace.js](../../seed/present/beats/2-fold/innerFace.js). All three souls (LLM, scripted, human) consume the same object via `summonCtx.innerFace`. The doctrine moved from `facadeSnapshot` (local) + `Act.qualities.innerFace` (cross-world) into the unified `Act.innerFace` field.
+- **canSee is the load-bearing filter.** The 2-fold beat resolves `role.canSee` once via [canSeeResolver.js](../../seed/present/beats/2-fold/canSeeResolver.js); each block records exactly which reels it read, populating a `weave` on the face. Empty canSee yields a face with the bare self + position only.
+- **The weave IS the role-scoped fold residue.** Built at [weave.js](../../seed/present/beats/2-fold/weave.js). Captured at fold time, sealed immutably on `Act.innerFace.weave`, used for audit, replay, and subscription dispatch.
+- **Reactive perception** for humans falls out from the weave. See [innerFaceLive.md](innerFaceLive.md) for the full doctrine. Per-stance subscription registry at [reality/protocols/ibp/innerFaceLive.js](../../protocols/ibp/innerFaceLive.js); reel-arrival hook at [past/fact/facts.js](../../seed/past/fact/facts.js); per-soul behavior: LLMs and scripted hold a frozen snapshot for the duration of the moment, humans subscribe per-stance and receive pushed updates when any reel in the weave gains a fact.
+- **Soul as cognition routing** (not a primary entity, just a label) is doctrinally settled but the field is still named `cognition` in the code (`qualities.cognition.defaultKind`). The rename to `soul` is mechanical (~500 references) and deferred.
+
+What's still aspirational from this doc:
+
+- **A scripted role that demonstrates ctx.innerFace.blocks consumption.** The mechanism is wired across all three souls, but no scripted role in the repo today reads its inner face for perception-aware decisions. First consumer wanted.
+- **Soul multi-layer resolution** (Name default → Being override → Role constraint, Option D from the conversation). Today the cognition layer lives at `qualities.cognition.defaultKind` on the being with inhabit override. The Name-level default waits on the Name primitive refactor ([plan.md](plan.md)).
+- **Non-descriptor named-see ops** (`my-inbox`, `connections`, `federation-status`, etc.) don't declare their reel reads, so reactive subscriptions don't wake on those views. Permanent upper bound vs handler-by-handler migration is an open call.
+- **Portal-side faceSeq ordering gate** for burst-load races. Recorded on each subscription, not yet enforced on receive.
+- **Foreign reactive push channel.** Cross-world faces carry empty weave locally; reactive updates for foreign-side changes need a federation push mechanism that doesn't exist yet.

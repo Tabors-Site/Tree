@@ -9,15 +9,18 @@
 // cherub. The Name layer answers to neither: it is the gate in front of
 // the world, so a being can act at all.)
 //
-// Four pre-world ops — the Name Form's whole surface:
+// The NAME ops mirror BE (declare = the name's "birth", connect/release bind/
+// unbind the session, banish = its death). This channel carries the pre-world
+// surface — the Name Form's whole reach:
 //   declare  mint a name (the unauthed bootstrap; the fact's actor is
 //            I_AM, every name being a facet of the reality's I_AM). FACT.
-//   login    real-name + password -> decrypt the key into the signing
-//            session + bind socket.nameId. SESSION, not a fact. Login is
-//            the portal's convenience for using a name without presenting
-//            the private key each act; a holder can always act with the
-//            raw key over the API instead.
-//   logout   wipe the held key + clear socket.nameId. SESSION.
+//   connect  real-name + password -> decrypt the key into the signing
+//            session + bind socket.nameId (the identity-layer be:connect).
+//            SESSION, not a fact. It is the portal's convenience for using a
+//            name without presenting the private key each act; a holder can
+//            always act with the raw key over the API instead.
+//   release  wipe the held key + clear socket.nameId (the identity-layer
+//            be:release — "the name calling its own release"). SESSION.
 //   whoami   report the connection's bound nameId (or null).
 //
 // declare is the only fact-producing op here, and it opens an I_AM
@@ -32,11 +35,11 @@ import { IBP_ERR } from "../../seed/ibp/protocol.js";
 // Per-IP throttle, mirroring the BE wire's unauthenticated-entry limiter
 // (protocols/ibp/verbs/be.js). `declare` writes a permanent fact + a new
 // keypair into the append-only chain, so it is rate-limited like `birth`;
-// `login` is a password surface, so it is rate-limited like `connect` to
+// `connect` is a password surface, so it is rate-limited like be:connect to
 // blunt brute force. Fixed window per (op, ip); entries expire lazily.
 const NAME_RATE = {
   declare: { max: 5,  windowMs: 60 * 60 * 1000 },
-  login:   { max: 10, windowMs: 15 * 60 * 1000 },
+  connect: { max: 10, windowMs: 15 * 60 * 1000 },
 };
 const _nameRateBuckets = new Map(); // "op:ip" -> { count, resetAt }
 function checkNameRate(op, ip) {
@@ -84,19 +87,24 @@ export async function handleNameSession(socket, msg, ack) {
   try {
     switch (op) {
       case "declare": return await doDeclare(socket, msg, ack, id);
-      case "login":   return await doLogin(socket, msg, ack, id);
-      case "logout":  return await doLogout(socket, msg, ack, id);
+      case "connect": return await doConnect(socket, msg, ack, id);
+      case "release": return await doRelease(socket, msg, ack, id);
+      case "see":     return await doSee(socket, msg, ack, id);
       case "whoami":  return ackOk(ack, id, { nameId: socket.nameId || null });
       default:
         return ackError(
           ack, id, IBP_ERR.ACTION_NOT_SUPPORTED,
-          `name: unknown session op "${op}" (declare | login | logout | whoami)`,
+          `name: unknown session op "${op}" (declare | connect | release | see | whoami)`,
         );
     }
   } catch (err) {
+    // Intentional IbpErrors carry safe, client-facing messages (kept). A bare
+    // Error is an internal fault: log the detail server-side, return a GENERIC
+    // message — this is an unauthenticated pre-world channel, so never echo
+    // raw error text (DB strings, paths) back to the client.
     if (err?.code) return ackError(ack, id, err.code, err.message, err.detail);
     log.error("IBP", `name session "${op}" failed: ${err.message}`);
-    return ackError(ack, id, IBP_ERR.INTERNAL, err.message || "name session error");
+    return ackError(ack, id, IBP_ERR.INTERNAL, "name session error");
   }
 }
 
@@ -124,40 +132,67 @@ async function doDeclare(socket, msg, ack, id) {
   return ackOk(ack, id, { ok: true, nameId });
 }
 
-// login — resolve the name (real-name or pubkey), decrypt its key with
+// connect — resolve the name (real-name or pubkey), decrypt its key with
 // the password into the signing session, and BIND the connection to it.
-// socket.nameId is the session's identity from here on.
-async function doLogin(socket, msg, ack, id) {
-  if (!checkNameRate("login", socketIp(socket))) {
+// socket.nameId is the session's identity from here on (the identity-layer
+// be:connect).
+async function doConnect(socket, msg, ack, id) {
+  if (!checkNameRate("connect", socketIp(socket))) {
     return ackError(ack, id, IBP_ERR.FORBIDDEN,
-      "Too many login attempts from this address; retry later");
+      "Too many connect attempts from this address; retry later");
   }
   const src = msg?.payload || msg || {};
   const token = src.token ?? src.name ?? null;
   const password = src.password ?? null;
   if (!token || !password) {
     return ackError(ack, id, IBP_ERR.INVALID_INPUT,
-      "name login requires { token (real-name or pubkey), password }");
+      "name connect requires { token (real-name or pubkey), password }");
   }
-  const { nameLogin } = await import("../../seed/materials/name/login.js");
-  const result = await nameLogin(token, password);
+  const { nameConnect } = await import("../../seed/materials/name/login.js");
+  const result = await nameConnect(token, password);
   if (!result.ok) {
     // Uniform failure surface — never leak whether the name exists vs the
-    // password is wrong (both read as a refused login to the client).
-    return ackError(ack, id, IBP_ERR.UNAUTHORIZED, `login refused: ${result.reason}`);
+    // password is wrong (both read as a refused connect to the client).
+    return ackError(ack, id, IBP_ERR.UNAUTHORIZED, `connect refused: ${result.reason}`);
   }
   socket.nameId = result.nameId;
-  log.debug("IBP", `socket ${socket.id} logged in as name ${result.nameId}`);
+  log.debug("IBP", `socket ${socket.id} connected as name ${result.nameId}`);
   return ackOk(ack, id, { ok: true, nameId: result.nameId });
 }
 
-// logout — wipe the held key and unbind the connection.
-async function doLogout(socket, msg, ack, id) {
+// release — wipe the held key and unbind the connection (the name releasing
+// itself; back to the bare reality / the Name menu).
+async function doRelease(socket, msg, ack, id) {
   const nameId = socket.nameId || null;
   if (nameId) {
-    const { nameLogout } = await import("../../seed/materials/name/login.js");
-    nameLogout(nameId);
+    const { nameRelease } = await import("../../seed/materials/name/login.js");
+    nameRelease(nameId);
     socket.nameId = null;
   }
   return ackOk(ack, id, { ok: true, nameId });
+}
+
+// see — the Name Form's READ surface: resolve a token (real-name or pubkey)
+// and return the name's BIOGRAPHIC descriptor ("who is this name"). Read-only,
+// session-only: no moment, no fact, no authorize (a biographic name is public
+// so a user can pick which name to log into). The descriptor never carries the
+// private key (buildNameDescriptor field-picks).
+async function doSee(socket, msg, ack, id) {
+  const src = msg?.payload || msg || {};
+  const token = src.token ?? src.name ?? src.nameId ?? null;
+  if (!token) {
+    return ackError(ack, id, IBP_ERR.INVALID_INPUT,
+      "name see requires { token (real-name or pubkey) }");
+  }
+  const { resolveNameId } = await import("../../seed/materials/name/registry.js");
+  const nameId = await resolveNameId(token);
+  if (!nameId) {
+    return ackError(ack, id, IBP_ERR.NAME_NOT_FOUND, `no such name: ${token}`);
+  }
+  const { buildNameDescriptor } = await import("../../seed/ibp/descriptor.js");
+  const descriptor = await buildNameDescriptor(nameId);
+  if (!descriptor) {
+    return ackError(ack, id, IBP_ERR.NAME_NOT_FOUND, `no such name: ${token}`);
+  }
+  return ackOk(ack, id, descriptor);
 }

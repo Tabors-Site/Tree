@@ -51,11 +51,13 @@ export async function runFoldBeat(setup = {}) {
 
   // foldPlace runs the spatial weave. summonCtx is threaded through so
   // foldPlace can stash foldedSeqs (PARALLEL FACTS §1.3) and read the
-  // moment's branch from summonCtx.actorAct.
+  // moment's branch from summonCtx.actorAct. Role rides through so
+  // occupant folds are gated pre-fold by role.canSee . the dep set
+  // then matches what we actually read.
   let foldedFace = null;
   if (beingId && branch) {
     try {
-      foldedFace = await foldPlace(beingId, orientation, { summonCtx, branch });
+      foldedFace = await foldPlace(beingId, orientation, { summonCtx, branch, role });
     } catch {
       foldedFace = null;
     }

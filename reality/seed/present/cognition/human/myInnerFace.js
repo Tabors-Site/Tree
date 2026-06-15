@@ -60,9 +60,15 @@ registerSeeOperation("my-inner-face", {
     // Forward orientation . the human portal looks at "right now".
     // Inward / half are operations the soul invokes via self-summon
     // with an orientation parameter; the SEE op stays forward.
+    //
+    // Role is threaded in so foldPlace gates occupant folds against
+    // role.canSee . the foldedFace returns with a weave that
+    // matches what was actually read. buildInnerFace then merges that
+    // with the canSee-side weave so the face the portal subscribes
+    // against is the exact residue of what perception admitted.
     let foldedFace = null;
     try {
-      foldedFace = await foldPlace(String(beingId), "forward", { branch: _branch });
+      foldedFace = await foldPlace(String(beingId), "forward", { branch: _branch, role });
     } catch (err) {
       log.debug("MyInnerFace", `foldPlace failed: ${err.message}`);
       foldedFace = null;

@@ -69,7 +69,6 @@
 // (multi-doc Mongo transactions, replica-set required).
 
 import mongoose from "mongoose";
-import bcrypt from "bcrypt";
 
 const BeingSchema = new mongoose.Schema({
   // A being's id IS the content hash of its birth (CAS, like matter and
@@ -93,8 +92,8 @@ const BeingSchema = new mongoose.Schema({
   // the "name" (the public face, the referenceable id) and the private key
   // is the "trueName" (the power, the secret); to a being, its `trueName`
   // is the WHOLE identity (both), referenced here by the owning Name's
-  // public-key id. Default = the mother's trueName at birth (transitionally
-  // the being's own pubkey id until the uuid-split). Host-transferable to a
+  // public-key id. Default = the mother's trueName at birth (every being
+  // expresses the name that births it). Host-transferable to a
   // foreign father's trueName. Distinct from who is currently ACTING
   // THROUGH the being (the inhabitor, qualities.connection.inhabitedBy) and
   // from lineage (parentBeingId = mother, qualities.father = father). See
@@ -236,11 +235,14 @@ BeingSchema.index({ position: 1 }, { sparse: true });
 // password; the fold engine writes the row via $set which skips
 // pre-save hooks. The hook served the legacy `new Being(...).save()`
 // flow, which is gone. Password verification (comparePassword) stays
-// — it reads the already-hashed row and bcrypt-compares.
+// — it reads the already-hashed row and scrypt-compares. The compare
+// lives in credentials.js (the password-hashing home); a lazy import
+// avoids a static cycle, since credentials.js imports this model.
 
 BeingSchema.methods.comparePassword = async function (candidatePassword) {
   if (!this.password) return false;
-  return bcrypt.compare(candidatePassword, this.password);
+  const { comparePassword } = await import("./identity/credentials.js");
+  return comparePassword(candidatePassword, this.password);
 };
 
 const Being = mongoose.model("Being", BeingSchema, "beings");

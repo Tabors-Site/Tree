@@ -237,6 +237,14 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   const askerName = kind === "transport-act"
     ? (entry?.identity?.name || null)
     : (handoff?.identity?.name || null);
+  // The session's signed-in Name (the INHABITOR driving this being). Same
+  // fork as askerName, sourced from the verified-token identity threaded by
+  // the wire. When the driver differs from the being's own trueName (a father
+  // driving the mother's vessel), this is who SIGNS. Null for place/scheduler
+  // wakes with no live session -> the seal falls back to the being's trueName.
+  const sessionNameId = kind === "transport-act"
+    ? (entry?.identity?.nameId || null)
+    : (handoff?.identity?.nameId || null);
 
   const actMessage = kind === "transport-act"
     ? describeTransportAct(entry.act)
@@ -253,6 +261,9 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   const plannedAct = await planActRow({
     beingIn:           String(askerBeingId),
     beingOut:          String(beingId),
+    // Who signs: the session's Name (the inhabitor) when present, else the
+    // acting being's own trueName (resolved inside planActRow).
+    inhabitorNameId:   sessionNameId,
     addresseePosition: spaceId,
     askerPosition:    handoff?.resolved?.spaceId || null,
     message:           actMessage,
@@ -561,6 +572,7 @@ async function planActRow(opts = {}) {
   const {
     beingIn,
     beingOut = null,
+    inhabitorNameId = null,
     askerPosition = null,
     addresseePosition = null,
     message,
@@ -657,17 +669,23 @@ async function planActRow(opts = {}) {
   const { getRealityDomain } = await import("../../ibp/address.js");
   const { computeActId, readActHead } = await import("../../past/act/actHash.js");
 
-  // The actor NAME — the acting being expresses a trueName (the name that
-  // signs the act and that every fact attributes). Resolved onto the row,
-  // NOT into the opening/digest, so act._id is unchanged. No fallback: a
-  // being with no trueName cannot act.
+  // The actor NAME — who SIGNS the act and whom every fact attributes.
+  // Resolved onto the row, NOT into the opening/digest, so act._id is
+  // unchanged. THE INHABITOR SIGNS: prefer the session's signed-in Name (a
+  // father driving the mother's vessel signs as the father), else the acting
+  // being's own trueName (its owner, for self-driven acts + place/scheduler
+  // wakes with no live session). Key-gated: only a real key-bearing Name id
+  // can be the signer, so a null / non-key inhabitor never downgrades or
+  // hijacks it. No fallback to nothing: a being with no signer cannot act.
   const { loadOrFold } = await import("../../materials/projections.js");
+  const { isKeyId } = await import("../../materials/name/keys.js");
   const actorSlot = await loadOrFold("being", beingIn, branch);
-  const nameId = actorSlot?.state?.trueName;
+  const ownTrueName = actorSlot?.state?.trueName || null;
+  const nameId = (inhabitorNameId && isKeyId(inhabitorNameId)) ? inhabitorNameId : ownTrueName;
   if (!nameId) {
     throw new Error(
-      `planActRow: acting being ${String(beingIn).slice(0, 8)} has no trueName; ` +
-      `cannot resolve the name that signs.`,
+      `planActRow: acting being ${String(beingIn).slice(0, 8)} has no signer name ` +
+      `(no session inhabitor, no trueName).`,
     );
   }
 

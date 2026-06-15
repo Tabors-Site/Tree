@@ -134,9 +134,18 @@ export async function handleBe(socket, env, ack) {
       }
     }
 
-    const { op: _op, operation: _operation, identity: _identityField, correlation: clientCorrelation, ...opPayload } = payload || {};
+    // `nameId` is STRIPPED here: ownership of a being is proved by the
+    // server-side socket.nameId (the HMAC-verified portal identity), NEVER by
+    // a client-supplied field. Dropping it from opPayload means a forged
+    // { op:"connect", nameId:"<victimTrueName>" } cannot reach the handler as
+    // payload; the only nameId the handler ever sees is callerNameId below.
+    const { op: _op, operation: _operation, identity: _identityField, nameId: _nameIdField, correlation: clientCorrelation, ...opPayload } = payload || {};
 
     const callerIdentity = socket.beingId ? { beingId: socket.beingId, name: socket.name } : null;
+    // The connection's signed-in Name (server ground truth from the verified
+    // JWT / name:login). Threaded as a first-class act-arg so the connect
+    // handler can let a name drive a being it OWNS without a password.
+    const callerNameId = socket.nameId || null;
 
     const cherubBeingId = await getCherubBeingId();
 
@@ -248,6 +257,7 @@ export async function handleBe(socket, env, ack) {
           address,
           addressKind,
           callerIdentity,
+          callerNameId,
         },
       },
       identity: callerIdentity || { beingId: cherubBeingId, name: "cherub" },

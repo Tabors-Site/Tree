@@ -86,6 +86,18 @@ export async function momentum(setup = {}) {
   }
 
   // Default: summon-kind. Role's summon handler dispatches.
+  //
+  // Snapshot doctrine: the scripted role reads summonCtx.innerFace
+  // (built at beat 2) ONCE and never re-reads. No reactive
+  // subscription. Reels referenced by the face's weave may change
+  // mid-moment; the seal path trusts the existing chain CAS + reel-
+  // head locks to surface any real conflict at sealAct time. On
+  // conflict the moment fails, its inbox row stays open, the
+  // scheduler re-picks it up, the next pass rebuilds innerFace fresh
+  // (with a fresh weave) and retries. No new conflict-check
+  // machinery here . the doctrine is snapshot at fold, retry via
+  // existing refold path if seal fails. Reactive subscriptions live
+  // on the human portal only (see protocols/ibp/innerFaceLive).
   let raw;
   try {
     raw = await role.summon(summonCtx.message, summonCtx);
@@ -160,11 +172,12 @@ async function runTransportAct(summonCtx) {
 
   if (verb === "be") {
     // verb === "be" — cherub-as-actor path
-    const { opPayload = {}, address, addressKind, callerIdentity = null } = args || {};
+    const { opPayload = {}, address, addressKind, callerIdentity = null, callerNameId = null } = args || {};
     return beVerb(target, opPayload, {
       address,
       addressKind,
       identity:  callerIdentity,
+      nameId:    callerNameId,
       summonCtx,
     });
   }

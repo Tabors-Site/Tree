@@ -161,7 +161,7 @@ export async function handleDo(socket, env, ack) {
     }
 
     const resolved = await resolveStance(expanded.right, {
-      identity: { beingId, name: socket.name },
+      identity: { beingId, name: socket.name, nameId: socket.nameId || null },
     });
 
     // Hand the verb layer a typed identity, not a Mongoose row. The
@@ -223,7 +223,12 @@ export async function handleDo(socket, env, ack) {
           return rest;
         })();
 
-    const identity = { beingId, name: socket.name };
+    // nameId is the session's signed-in Name (server ground truth from the
+    // verified token). It rides the identity so the seal can sign as the
+    // INHABITOR (e.g. a father driving the mother's vessel) rather than the
+    // being's own trueName. Sourced from socket.nameId ONLY, never the
+    // payload — a forged payload.nameId is ignored by the signer resolution.
+    const identity = { beingId, name: socket.name, nameId: socket.nameId || null };
     const correlation = typeof payload?.correlation === "string" ? payload.correlation : null;
 
     // Enqueue the transport-act. Returns immediately with the

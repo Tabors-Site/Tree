@@ -56,6 +56,9 @@ import { foldAt, NoSuchHistoricalState } from "../present/beats/2-fold/foldAt.js
 import { loadProjection } from "../materials/projections.js";
 import { redactSecrets } from "../materials/redact.js";
 import { BE_OPS } from "./beOps.js";
+import Act from "../past/act/act.js";
+import Projection from "../materials/branch/projection.js";
+import { isNameBanished } from "../materials/name/closure.js";
 
 // Fold an aggregate before reading its qualities. Per FOLD.md: the
 // projection IS the cache, and fold() catches it up to the reel head
@@ -434,6 +437,90 @@ async function inferActivityTarget(summon) {
  * @param {object} [opts.until]    — historical anchor: { atSeq?, atTimestamp? }
  * @returns {object} Place descriptor
  */
+// Cap the vessel list so a prolific Name stays bounded on the wire; the
+// exact total rides alongside as `beingCount`.
+const NAME_BEING_CAP = 200;
+
+/**
+ * Build a Name's BIOGRAPHIC descriptor ("who is this name") — distinct from
+ * the place descriptor's "what is here" (geographic). This is what the Name
+ * Form (the pre-world pre-panel) shows for a name: its real-name + public key,
+ * lineage toward I_AM, soul, banished state, the beings it acts through, and
+ * its activity counts. Caller resolves the token to a nameId first
+ * (resolveNameId); pass the resolved nameId here.
+ *
+ * SECRET DISCIPLINE: the Name's encrypted private key (`privateKeyEnc`) sits
+ * at the TOP of the folded name state. This builder FIELD-PICKS every value it
+ * returns and NEVER spreads `state` — the field-pick is the load-bearing guard
+ * that keeps the key (and any future secret leaf) off the wire. Only
+ * public/biographic data crosses.
+ *
+ * @param {string} nameId — an already-resolved Name id (the ed25519 pubkey, or "i-am")
+ * @returns {Promise<object|null>} the Name descriptor, or null when no such Name
+ */
+export async function buildNameDescriptor(nameId) {
+  if (!nameId) return null;
+
+  // Names live on main ("0") and never fork — the name reel is reality-wide,
+  // above the branch timeline (materials/name/name.js, closure.js). Read the
+  // name on "0" via loadProjection (the cached fold of the name reel), NOT
+  // fold(): fold() returns a truthy empty {} for an id that has no facts, so a
+  // bogus pubkey would mint an empty descriptor instead of a clean 404.
+  // loadProjection returns null when no name slot exists — the honest "no such
+  // name". Every name fact (declare/banish) writes this slot, so it is current.
+  const slot = await loadProjection("name", String(nameId), "0");
+  if (!slot || !slot.state) return null;
+  const state = slot.state;
+
+  const banished = await isNameBanished(String(nameId));
+
+  // The beings this Name acts through (the presences expressing its trueName).
+  // Read from the projections cache (the live store), FIELD-PICKING only the
+  // safe state subfields — never `state.password` / never the whole `state`
+  // (it carries password + the qualities map). Capped list + exact count. The
+  // `state.trueName` filter is an unindexed scan, bounded + fine for a Name
+  // Form read; main-scoped (names + their beings live on "0").
+  const rows = await Projection
+    .find({ branch: "0", type: "being", "state.trueName": String(nameId), tombstoned: { $ne: true } })
+    .select("id state.name state.defaultRole state.homeSpace state.homeBranch")
+    .sort({ id: 1 })
+    .limit(NAME_BEING_CAP)
+    .lean();
+  const beings = rows.map((r) => ({
+    beingId:     String(r.id),
+    name:        r.state?.name || null,
+    defaultRole: r.state?.defaultRole || null,
+    homeSpace:   r.state?.homeSpace ? String(r.state.homeSpace) : null,
+    homeBranch:  r.state?.homeBranch || null,
+  }));
+  const beingCount = await Projection.countDocuments({
+    branch: "0", type: "being", "state.trueName": String(nameId), tombstoned: { $ne: true },
+  });
+  // The Name's whole biography of acts, across every being it acts through
+  // (act.nameId is index-backed). factCount is deliberately omitted — Fact has
+  // no nameId index and i-am is a full-collection-scan pathology.
+  const actCount = await Act.countDocuments({ nameId: String(nameId) });
+
+  // FIELD-PICK — never `{ ...state }`. privateKeyEnc never appears here.
+  // `identity` is the key SCHEME only (alg / encoding / version), no key bytes.
+  return {
+    isName:            true,
+    nameId:            String(nameId),
+    name:              state.name ?? null,
+    parentNameId:      state.parentNameId ?? null,
+    soulType:          state.soulType ?? null,
+    identity:          state.identity ?? null,
+    isBanished:        banished,
+    closedAt:          state.closedAt ?? null,
+    createdAt:         state.createdAt ?? null,
+    updatedAt:         state.updatedAt ?? null,
+    beings,
+    beingCount,
+    actCount,
+    descriptorVersion: DESCRIPTOR_VERSION,
+  };
+}
+
 export async function buildPlaceDescriptor(resolved, opts = {}) {
   // Branch flows from the resolved stance (Pass 4 substrate). Threaded
   // through every descriptor helper alongside `until` so each fold lands

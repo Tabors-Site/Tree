@@ -310,6 +310,36 @@ export class PortalClient {
   }
 
   // ────────────────────────────────────────────────────────────────
+  // NAME — the pre-world identity channel. Rides its OWN socket event
+  // ("name"), NOT the world `ibp` channel: the Name layer sits in FRONT
+  // of the world (you need a name before you can do anything). Synchronous
+  // ack, same shape as the verbs. See protocols/ibp/nameSession.js.
+  // ────────────────────────────────────────────────────────────────
+
+  /** Mint a new name (real-name + password both optional). Pre-world bootstrap. */
+  nameDeclare({ name = null, password = null, soulType = null } = {}) {
+    return this._callName("declare", { name, password, soulType });
+  }
+  /** Connect a name to the session (real-name or pubkey + password) — the
+   *  identity-layer be:connect. Binds the session's name. */
+  nameConnect(token, password) {
+    return this._callName("connect", { token, password });
+  }
+  /** Release the name from the session (the name's be:release) — back to the
+   *  bare reality domain (the Name menu). */
+  nameRelease() {
+    return this._callName("release", {});
+  }
+  /** The session's bound name id, or null when no name is signed in. */
+  nameWhoami() {
+    return this._callName("whoami", {});
+  }
+  /** A name's BIOGRAPHIC descriptor (who is this name) by real-name or pubkey. */
+  nameSee(token) {
+    return this._callName("see", { token });
+  }
+
+  // ────────────────────────────────────────────────────────────────
   // Internals
   // ────────────────────────────────────────────────────────────────
 
@@ -346,6 +376,44 @@ export class PortalClient {
         }
         if (response.status === "error") {
           const err = new Error(response.error?.message || `ibp:${verb} failed`);
+          err.code   = response.error?.code;
+          err.detail = response.error?.detail;
+          reject(err);
+          return;
+        }
+        resolve(response.data);
+      });
+    });
+  }
+
+  /**
+   * The NAME channel emit path. Mirrors `_call` but rides the "name"
+   * socket event with a `{ id, op, ...payload }` shape (the nameSession
+   * wire reads the fields directly off the message). Same synchronous ack:
+   *   { id, status: "ok", data } | { id, status: "error", error }.
+   */
+  _callName(op, payload, { timeoutMs = 15000 } = {}) {
+    return new Promise((resolve, reject) => {
+      if (!this.socket || !this.connected) {
+        reject(new Error("Portal socket not connected"));
+        return;
+      }
+      const id = this._nextId();
+      const timer = setTimeout(() => {
+        const err = new Error(`name:${op} timed out`);
+        err.code = "TIMEOUT";
+        reject(err);
+      }, timeoutMs);
+      this.socket.emit("name", { id, op, ...payload }, (response) => {
+        clearTimeout(timer);
+        if (!response) {
+          const err = new Error(`name:${op} returned no response`);
+          err.code = "NO_RESPONSE";
+          reject(err);
+          return;
+        }
+        if (response.status === "error") {
+          const err = new Error(response.error?.message || `name:${op} failed`);
           err.code   = response.error?.code;
           err.detail = response.error?.detail;
           reject(err);

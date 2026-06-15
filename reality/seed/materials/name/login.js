@@ -1,27 +1,30 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// login — open / close a Name's signing session with real-name + password.
+// name connect / release — bind / unbind a Name to the session, mirroring
+// be:connect / be:release at the identity layer. (The NAME lifecycle mirrors
+// BE: declare = the name's "birth", connect/release bind/unbind the session,
+// banish = its death.) connect resolves the Name (by real-name or pubkey),
+// decrypts its password-locked key with the password, and HANDS THE DECRYPTED
+// KEY to the signing session, which holds it; the stamper's loadSigningKey
+// reads the held key. release wipes it ("the name calling its own release").
 //
-// This is the OPTIONAL easier-access path. A Name whose key is password-
-// locked (declared with a password) can only sign while logged in: login
-// resolves the Name (by real-name or pubkey), decrypts its key with the
-// password, and HANDS THE DECRYPTED KEY to the signing session, which holds
-// it for the session. The stamper's loadSigningKey then reads the held key.
-// Logout wipes it. A Name with no password is system-key (the server signs
-// automatically — no login); and a holder can always act with the raw
-// private key directly. So login is purely a convenience over the keypair.
+// This is the OPTIONAL easier-access path. A Name with no password is
+// system-key (the server signs automatically — no connect needed); and a
+// holder can always act with the raw private key directly. So name:connect is
+// purely a convenience over the keypair.
 
 import { resolveNameId } from "./registry.js";
 import { decryptWithPassword, isPasswordLocked } from "./passwordKey.js";
 import { unlockSigning, lockSigning } from "./signingSession.js";
 
 /**
- * Log in to a Name. `token` is a real-name or a pubkey; `password` decrypts
- * the password-locked key into the session.
+ * Connect a Name to the session (the identity-layer be:connect). `token` is a
+ * real-name or a pubkey; `password` decrypts the password-locked key into the
+ * signing session.
  *
  * @returns {Promise<{ok:true, nameId:string} | {ok:false, reason:string}>}
  */
-export async function nameLogin(token, password) {
+export async function nameConnect(token, password) {
   const nameId = await resolveNameId(token);
   if (!nameId) return { ok: false, reason: "no-such-name" };
   if (nameId === "i-am") return { ok: false, reason: "i-am-is-the-reality" };
@@ -43,8 +46,9 @@ export async function nameLogin(token, password) {
   return { ok: true, nameId };
 }
 
-/** Log out a Name: wipe its held key and close the session. */
-export function nameLogout(nameId) {
+/** Release a Name from the session: wipe its held key and unbind it (the
+ *  identity-layer be:release — "the name calling its own release"). */
+export function nameRelease(nameId) {
   if (!nameId) return { ok: false, reason: "no-name" };
   lockSigning(nameId);
   return { ok: true, nameId };

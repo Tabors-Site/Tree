@@ -137,18 +137,29 @@ const ActSchema = new mongoose.Schema({
   },
 
   // The canonical inner face the act was committed under: orientation,
-  // role, position (id/name), capabilities, and the role.canSee-
-  // resolved blocks. Captured uniformly across LLM, scripted, and
-  // human-inhabited cognitions so the act-chain never carries half-
-  // records. Origin is "local" for fold-built faces; cross-world
-  // overrides supersede the local face post-seal with origin:
-  // "foreign". Read by turned folds (half/inward), the portal act-
-  // chain display, and any consumer of the moment's perception
-  // record. Stored at defensive caps (10KB per field, 1000-entry
-  // lists); render-time clamps (1000 chars, 64 entries) are applied
-  // separately by prompt builders. The chain is the truth; this is
-  // a bounded record of the face; full face reconstruction goes
-  // through the chain, not here.
+  // role, position (id/name), capabilities, the role.canSee-resolved
+  // blocks, and weave (the reels the fold actually read). Captured
+  // uniformly across LLM, scripted, and human-inhabited cognitions so
+  // the act-chain never carries half-records. Origin is "local" for
+  // fold-built faces; cross-world overrides supersede the local face
+  // post-seal with origin: "foreign". Read by turned folds
+  // (half/inward), the portal act-chain display, and any consumer of
+  // the moment's perception record. Stored at defensive caps (10KB
+  // per field, 1000-entry lists); render-time clamps (1000 chars, 64
+  // entries) are applied separately by prompt builders. The chain is
+  // the truth; this is a bounded record of the face; full face
+  // reconstruction goes through the chain, not here.
+  //
+  // Shape:
+  //   { orientation, role, position, capabilities, blocks, weave, origin }
+  //
+  // weave: [{reelKind, reelId, branch}] . the reels the fold actually
+  // read (residue of canSee + foldPlace gating), captured at fold
+  // build time and immutable at seal. Subscription dispatch, audit,
+  // and replay all key off this same object. See
+  // present/beats/2-fold/weave.js for the canonical shape and
+  // helpers. Mixed type already accepts the new field on new acts; no
+  // schema migration.
   innerFace: { type: mongoose.Schema.Types.Mixed, default: null },
 
   // Reality the actor was acting from when this Act was stamped.

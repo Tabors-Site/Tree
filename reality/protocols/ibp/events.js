@@ -56,6 +56,15 @@ export const SEE_PUSH = Object.freeze({
   // Body is minimal . the portal looks the action up against the
   // target entity's cached qualities.render block.
   FACT:       "fact",
+  // Per-stance inner-face refold push. Payload shape:
+  //   { kind: "inner-face", face }
+  // Fired by the innerFaceLive registry after a reel that the
+  // subscription's weave indexes received a fact. The face is the
+  // freshly-folded canonical inner face (orientation, role, position,
+  // capabilities, blocks, weave, origin). Reuses the existing SEE
+  // envelope so the portal client routes through its standard
+  // SEE-event path. See protocols/ibp/innerFaceLive.js.
+  INNER_FACE: "inner-face",
 });
 
 /**

@@ -69,7 +69,7 @@ export async function updateActStatus(actId, status, meta = null) {
   const result = await Act.findOneAndUpdate(
     { _id: String(actId), status: "attempted" },
     update,
-    { new: true },
+    { returnDocument: "after" },
   );
   return result || null;
 }

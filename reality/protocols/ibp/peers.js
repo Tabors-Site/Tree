@@ -78,11 +78,11 @@ export async function removePeer(domain) {
 }
 
 export async function blockPeer(domain) {
-  return RealityPeer.findOneAndUpdate({ domain }, { status: "blocked" }, { new: true });
+  return RealityPeer.findOneAndUpdate({ domain }, { status: "blocked" }, { returnDocument: "after" });
 }
 
 export async function unblockPeer(domain) {
-  return RealityPeer.findOneAndUpdate({ domain }, { status: "active" }, { new: true });
+  return RealityPeer.findOneAndUpdate({ domain }, { status: "active" }, { returnDocument: "after" });
 }
 
 export async function getPeerByDomain(domain) {

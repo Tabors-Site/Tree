@@ -331,6 +331,53 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
     };
   }
 
+  // Mode "owned": a logged-in NAME drives a being it OWNS — no password.
+  // Placed BEFORE the `if (identity)` block on purpose: an arrival socket is
+  // NOT identity-null (the wire binds it to @arrival's beingId), so without
+  // this the owned connect would fall into the descendant/father gate below
+  // and be refused. The driving name is `ctx.nameId`, set ONLY from the
+  // server-verified socket.nameId (the HMAC-minted JWT or a name:login) —
+  // NEVER the client payload (the wire strips payload.nameId, and we read ctx,
+  // not payload). Ownership = exact equality against the target being's
+  // CURRENT trueName, re-read fresh from its projection at connect time (not
+  // the candidate sweep's spread, which can lag a be:truename re-point). This
+  // is the portal-name model: once your name is signed in you attach to your
+  // own beings freely; the per-being password (Mode 1, @cherub) survives only
+  // for SHARED beings you do not own.
+  const ownerNameId = ctx?.nameId || null;
+  if (ownerNameId && !isCherubAddress) {
+    const ownedTargetName = extractTargetName(address);
+    if (ownedTargetName) {
+      const { loadProjection } = await import("../../../materials/projections.js");
+      const candidates = (await findBeingCandidatesByName(ownedTargetName))
+        .filter((c) => !c.isRemote)
+        .slice(0, 5);
+      for (const candidate of candidates) {
+        const fresh = await loadProjection(
+          "being", String(candidate._id), candidate.homeBranch || "0",
+        );
+        const currentTrueName = fresh?.state?.trueName ?? null;
+        if (currentTrueName && String(currentTrueName) === String(ownerNameId)) {
+          // The token carries the VERIFIED current trueName as its nameId, so
+          // the new session's portal identity matches what we just checked.
+          const identityToken = generateToken({ ...candidate, trueName: currentTrueName });
+          return {
+            identityToken,
+            beingAddress: `${getRealityDomain()}/@${candidate.name}`,
+            beingId:      String(candidate._id),
+            name:         candidate.name,
+            owned:        true,
+            // Seat the session on the being's home branch, same as the
+            // credential/inherit connects.
+            seatBranch:   candidate.homeBranch || null,
+          };
+        }
+      }
+    }
+    // Not owned: fall through. A shared being is reached via the @cherub
+    // password path (Mode 1) or the ancestor/father path (Mode 3) below.
+  }
+
   // Mode 2: token re-claim against an already-held stance.
   if (identity) {
     const expectedStance = `${getRealityDomain()}/@${identity.name}`;
@@ -496,7 +543,26 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
       }
     }
 
-    const identityToken = generateToken(targetBeing);
+    // SIGNER = THE INHABITOR. When the FATHER drives the mother's vessel
+    // (father-admit), his acts must sign as HIM, not as the vessel's trueName
+    // (the mother). So the token's nameId becomes the FATHER's name while
+    // beingId/name stay the vessel's (he drives THROUGH it; the mother still
+    // OWNS it and keeps the kill power). His name is: his LOCAL trueName if he
+    // is a local being, else his own foreign id — which has NO local Name key,
+    // so his acts seal UNSIGNED here (his home reality signs + vouches them
+    // via federation later) rather than ever falling back to the mother.
+    // CRITICAL: never default a foreign father to targetBeing.trueName, or a
+    // cross-reality father would sign as the mother. The ancestor/inherit
+    // (non-father) connect keeps the vessel's own trueName.
+    let driverTrueName = targetBeing.trueName;
+    if (canInhabitAsFather) {
+      const { loadProjection } = await import("../../../materials/projections.js");
+      const fatherSlot = await loadProjection(
+        "being", String(identity.beingId), targetBeing.homeBranch || "0",
+      );
+      driverTrueName = fatherSlot?.state?.trueName || String(identity.beingId);
+    }
+    const identityToken = generateToken({ ...targetBeing, trueName: driverTrueName });
     return {
       identityToken,
       beingAddress: `${getRealityDomain()}/@${targetBeing.name}`,
@@ -544,6 +610,14 @@ async function releaseHandler({ identity }) {
   // Sign-out closes the signing session: a released identity must not
   // keep an open unlock latch behind it (secondary unlock re-locks on
   // sign out, per IDENTITY.md).
+  //
+  // RELEASE DROPS THE BEING, NOT THE NAME. This locks only the
+  // transitional being-keyed latch (lockSigning(beingId)); it must NEVER
+  // clear the connection's NAME session (socket.nameId / lockSigning(nameId)
+  // / nameRelease). In the portal-name model one name drives many beings
+  // across tabs, so releasing one being leaves you logged in at the auth
+  // floor (still your name), free to connect another owned being or birth
+  // one. Logging the name out is name:logout's job alone (nameSession.js).
   if (identity?.beingId) {
     const { lockSigning } = await import("../../../materials/name/signingSession.js");
     lockSigning(String(identity.beingId));

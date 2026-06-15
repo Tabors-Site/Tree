@@ -25,6 +25,7 @@ import { getRealityDomain } from "../../seed/ibp/address.js";
 import { getRealityConfigValue } from "../../seed/realityConfig.js";
 import { setPushChannel, IBP_EVENT } from "../../seed/ibp/pushChannel.js";
 import { noteSocketConnected, noteSocketDisconnected } from "../../seed/materials/host/host.js";
+import { scheduleAutoRelease, cancelAutoRelease } from "./autoRelease.js";
 
 // Transport-private events. Not protocol surface — socket.io
 // housekeeping. The IBP wire is a single event (`IBP_EVENT = "ibp"`);
@@ -210,6 +211,10 @@ export function initWebSocketServer(httpServer, originPolicy) {
       if (verified) {
         socket.beingId = verified.beingId;
         socket.name = verified.name;
+        // Portal identity: the Name on the token (one per portal, inherited
+        // by every tab). Trustworthy — set ONLY from the HMAC-verified token
+        // here (or from a verified name:login). Never client-supplied.
+        socket.nameId = verified.nameId || null;
         socket.jwt = token;
       } else {
         log.debug("WS", `Invalid/revoked token from ${ip}`);
@@ -294,7 +299,12 @@ export function initWebSocketServer(httpServer, originPolicy) {
     // layer whenever a switch re-seats the socket.
     socket.emit("branch", { branch: socket.currentBranch || "0" });
 
-    if (beingId) addAuthSession(beingId, socket.id);
+    if (beingId) {
+      addAuthSession(beingId, socket.id);
+      // A (re)connect for this being cancels any pending auto-release: the
+      // tab came back inside the grace window, so don't drop the being.
+      cancelAutoRelease(beingId);
+    }
 
     // Auto-bind authenticated sockets. The stable
     // `${beingId}:${clientKind}:${clientInstance}` key gives each tab
@@ -348,7 +358,15 @@ export function initWebSocketServer(httpServer, originPolicy) {
       log.debug("WS", `disconnected: ${socket.id} (${reason})`);
       // Host observation: end this connection's matter.
       noteSocketDisconnected({ socketId: socket.id, reason });
-      if (beingId) removeAuthSession(beingId, socket.id);
+      if (beingId) {
+        removeAuthSession(beingId, socket.id);
+        // Last tab for this being just closed -> schedule its release after a
+        // grace window (a reconnect cancels it). Only for an authenticated
+        // being, never the anonymous @arrival floor.
+        if (socket.jwt && socket.name !== "arrival" && getAuthSocketIds(beingId).length === 0) {
+          scheduleAutoRelease(beingId, { name: socket.name, branch: socket.currentBranch || "0" });
+        }
+      }
       if (
         socket.clientSessionId &&
         userSockets.get(socket.clientSessionId) === socket.id

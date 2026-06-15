@@ -72,9 +72,14 @@ function extractIdentity(req) {
  */
 async function ibpHttpHandler(req, res) {
   const verb = String(req.params.verb || "").toLowerCase();
-  // Express captures the wildcard tail in req.params[0]; URL
-  // decoding for path segments is automatic.
-  const address = req.params[0] || "";
+  // Express 5 captures the named wildcard tail (`*splat`) as
+  // req.params.splat: an array of URL-decoded path segments (or a
+  // string for a single segment). Rejoin with "/" to recover the
+  // address. An encoded slash (localhost%2F) is one segment that
+  // decodes to "localhost/"; literal slashes are multiple segments,
+  // both rejoin to the same address.
+  const splat = req.params.splat;
+  const address = Array.isArray(splat) ? splat.join("/") : (splat || "");
 
   const body = req.body && typeof req.body === "object" ? req.body : {};
 
@@ -229,11 +234,11 @@ router.post("/ibp/handshake", parseJsonCaptureRaw, verifyIncoming, handshakeHand
 // unsealIncoming decrypts sealed frames back to the signed plaintext,
 // verifyIncoming authenticates it, then dispatchIbp runs the verb
 // locally.
-router.post("/ibp/:verb/*", parseSealedRaw, unsealIncoming, parseJsonCaptureRaw, verifyIncoming, ibpHttpHandler);
+router.post("/ibp/:verb/*splat", parseSealedRaw, unsealIncoming, parseJsonCaptureRaw, verifyIncoming, ibpHttpHandler);
 
 // GET convenience for SEE only — payload from query params. Reads
 // should be idempotent and cacheable per HTTP semantics; for the
 // other three verbs (DO, SUMMON, BE) clients use POST.
-router.get("/ibp/see/*", verifyIncoming, ibpHttpHandler);
+router.get("/ibp/see/*splat", verifyIncoming, ibpHttpHandler);
 
 export default router;

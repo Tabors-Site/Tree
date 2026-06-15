@@ -75,7 +75,7 @@ export async function allocSeq(type, id, opts = {}) {
         $inc: { head: 1 },
         $setOnInsert: { branch, type, id },
       },
-      { upsert: true, new: true, lean: true, ...baseOpts },
+      { upsert: true, returnDocument: "after", lean: true, ...baseOpts },
     );
     return doc.head;
   }
@@ -97,7 +97,7 @@ export async function allocSeq(type, id, opts = {}) {
   const existing = await ReelHead.findOneAndUpdate(
     { _id: key },
     { $inc: { head: 1 } },
-    { new: true, lean: true, ...baseOpts },
+    { returnDocument: "after", lean: true, ...baseOpts },
   );
   if (existing) return existing.head;
 
@@ -113,7 +113,7 @@ export async function allocSeq(type, id, opts = {}) {
   const incremented = await ReelHead.findOneAndUpdate(
     { _id: key },
     { $inc: { head: 1 } },
-    { new: true, lean: true, ...baseOpts },
+    { returnDocument: "after", lean: true, ...baseOpts },
   );
   return incremented.head;
 }
@@ -168,7 +168,7 @@ export async function ensureHeadAtLeast(type, id, minHead, opts = {}) {
   const doc = await ReelHead.findOneAndUpdate(
     { _id: key, head: { $lt: minHead } },
     { $set: { head: minHead, branch, type, id } },
-    { upsert: false, new: true, lean: true },
+    { upsert: false, returnDocument: "after", lean: true },
   );
   if (doc) return doc.head;
   const existing = await ReelHead.findById(key).select("head").lean();
@@ -176,7 +176,7 @@ export async function ensureHeadAtLeast(type, id, minHead, opts = {}) {
   const created = await ReelHead.findOneAndUpdate(
     { _id: key },
     { $setOnInsert: { branch, type, id, head: minHead } },
-    { upsert: true, new: true, lean: true },
+    { upsert: true, returnDocument: "after", lean: true },
   );
   return created.head;
 }

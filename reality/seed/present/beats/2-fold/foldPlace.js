@@ -38,6 +38,8 @@ import { findByPosition, assertBranchOrThrow } from "../../../materials/projecti
 import { ORIENTATION, validateOrientation } from "./orientation.js";
 import Act from "../../../past/act/act.js";
 import Fact from "../../../past/fact/fact.js";
+import { emptyWeave, addReel } from "./weave.js";
+import { canSeeAdmitsReel } from "./canSeeResolver.js";
 
 // Cap on how many recalled past-acts surface in a half-turn face.
 // Long-lived beings can have many stitch-points; the recall set has
@@ -76,7 +78,13 @@ const DEFAULT_RECALL_CAP = 16;
  * @param {string} [orientation="forward"]  one of forward|half|inward
  * @param {object} [opts]
  * @param {number} [opts.recallCap=16]      half-fold recall cap
+ * @param {object} [opts.role]              the active role spec; when
+ *   present, occupant folds are pre-gated against role.canSee so the
+ *   fold only reads reels the role would admit. Legacy callers (no
+ *   role) get the unfiltered forward face they have today.
  * @returns {Promise<object>}
+ *   foldedFace augmented with `_weave` (the reels the fold actually
+ *   read). buildInnerFace merges this with the canSee-side weave.
  */
 export async function foldPlace(beingId, orientation = ORIENTATION.FORWARD, opts = {}) {
   if (!beingId) throw new Error("foldPlace: beingId is required");
@@ -104,6 +112,17 @@ export async function foldPlace(beingId, orientation = ORIENTATION.FORWARD, opts
     if (seqs) seqs.set(`${kind}:${id}`, foldedSeq);
   };
 
+  // weave . the reels this fold actually reads. Self is always in
+  // (every orientation reads it). Position-space and admitted occupants
+  // are added inside buildForwardFace. Inward folds only include self
+  // because the world drops out.
+  const weave = emptyWeave();
+  addReel(weave, { reelKind: "being", reelId: String(beingId), branch });
+
+  // Role spec, when present, gates occupant folds. Legacy callers (no
+  // role) get unfiltered behavior.
+  const role = opts.role || null;
+
   // The being itself is always folded — every orientation shows
   // the being to itself (the self is the carrier of orientation).
   const { state: self, foldedSeq: selfFoldedSeq } = await fold("being", beingId, { branch });
@@ -112,28 +131,37 @@ export async function foldPlace(beingId, orientation = ORIENTATION.FORWARD, opts
   // Inward: the world drops out. The face is A_b in act-order.
   if (ω === ORIENTATION.INWARD) {
     const actChain = await loadActChain(beingId);
-    return { orientation: ω, self, actChain };
+    return { orientation: ω, self, actChain, _weave: weave };
   }
 
   // Forward AND half need the forward face built first.
-  const forwardFace = await buildForwardFace(beingId, self, stash, branch);
+  const forwardFace = await buildForwardFace(beingId, self, stash, branch, role, weave);
 
   if (ω === ORIENTATION.FORWARD) {
-    return { orientation: ω, ...forwardFace };
+    return { orientation: ω, ...forwardFace, _weave: weave };
   }
 
   // Half: forward face PLUS the recalled slice of A_b.
   const recalled = await recallByBraid(beingId, forwardFace, {
     cap: opts.recallCap || DEFAULT_RECALL_CAP,
   });
-  return { orientation: ω, ...forwardFace, recalled };
+  return { orientation: ω, ...forwardFace, recalled, _weave: weave };
 }
 
 /**
  * Build the forward face: being's space + occupants. Used by both
  * the forward and half folds.
+ *
+ * The weave contribution from this function is only the space reel
+ * (the position itself). Occupant entries are NOT added here even
+ * when they're folded, because the inner face's weave is the residue
+ * of what the FACE actually uses, and occupants only land in the face
+ * through the canSee resolver (which records its own reel reads from
+ * the descriptor it returns). Folding occupants here for the forward-
+ * face return value is a legacy-caller convenience; the role-scoped
+ * filter still trims that work when a role is on hand.
  */
-async function buildForwardFace(beingId, self, stash, branch = "0") {
+async function buildForwardFace(beingId, self, stash, branch = "0", role = null, weave = null) {
   const spaceId = self?.position || null;
   if (!spaceId) {
     return { self, space: null, occupants: [] };
@@ -141,6 +169,7 @@ async function buildForwardFace(beingId, self, stash, branch = "0") {
 
   const { state: space, foldedSeq: spaceFoldedSeq } = await fold("space", spaceId, { branch });
   stash?.("space", spaceId, spaceFoldedSeq);
+  if (weave) addReel(weave, { reelKind: "space", reelId: String(spaceId), branch });
   const occupantRefs = await findByPosition(spaceId, branch);
 
   // Self is its own occupant of its position; filter it out so the
@@ -149,11 +178,18 @@ async function buildForwardFace(beingId, self, stash, branch = "0") {
     (o) => !(o.type === "being" && o.id === String(beingId)),
   );
 
-  // Fold each occupant. Folds run in parallel — different reels, no
+  // Optional role-scoped fold filter. Trims work for legacy callers
+  // that still consume the occupants[] return value. The weave is
+  // unaffected either way; the canSee resolver is the weave authority.
+  const admitted = role
+    ? others.filter((o) => canSeeAdmitsReel(role.canSee, o))
+    : others;
+
+  // Fold each occupant. Folds run in parallel . different reels, no
   // contention. If one fold throws, surface it but don't block the
   // others; the caller decides whether to fail the moment.
   const occupants = await Promise.all(
-    others.map(async (o) => {
+    admitted.map(async (o) => {
       try {
         const { state, foldedSeq } = await fold(o.type, o.id, { branch });
         stash?.(o.type, o.id, foldedSeq);

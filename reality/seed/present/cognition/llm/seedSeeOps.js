@@ -117,7 +117,6 @@ registerSeeOperation("arrival-view", {
     // descriptor fetch, not a delegation of the caller's authority.
     const { I_AM } = await import("../../../materials/being/seedBeings.js");
     const iAmIdentity = { beingId: I_AM, name: "I-Am" };
-    void identity;  // caller identity is unused; the surface is uniform for all anon visitors
     try {
       const full = await seeVerb(address, { identity: iAmIdentity });
       if (!full) return null;
@@ -154,6 +153,38 @@ registerSeeOperation("arrival-view", {
         return { ...cherub, actions };
       });
 
+      // Name-aware floor: when the socket carries a logged-in NAME (the
+      // portal identity), enrich the landing face with THAT name's own
+      // beings so the holder can pick one to drive (be:connect) or birth a
+      // new one — the "name, no being" state. Gated on a present nameId: an
+      // anonymous visitor (no nameId) never triggers the roster read and
+      // sees only cherub, so nothing leaks and the hot anon path stays
+      // cheap. buildNameDescriptor is leak-safe (field-picked, no key).
+      let myBeings = [];
+      if (identity?.nameId) {
+        try {
+          const { buildNameDescriptor } = await import("../../../ibp/descriptor.js");
+          const reality = getRealityDomain();
+          const nameDesc = await buildNameDescriptor(identity.nameId);
+          myBeings = (nameDesc?.beings || []).map((b) => ({
+            being:      b.name,
+            name:       b.name,
+            beingId:    b.beingId,
+            homeBranch: b.homeBranch || null,
+            mine:       true,
+            actions:    (BE_OPS.connect && b.name) ? [{
+              verb:        "be",
+              action:      "connect",
+              label:       `Use ${b.name}`,
+              description: "Drive a being you own (no password — your name is signed in)",
+              address:     `${reality}/@${b.name}`,
+            }] : [],
+          }));
+        } catch (err) {
+          log.warn("SeedSees", `arrival-view name roster failed: ${err.message}`);
+        }
+      }
+
       return {
         kind:    full.kind || "place",
         address: full.address,
@@ -164,7 +195,7 @@ registerSeeOperation("arrival-view", {
           size:  full.space.size  || null,
           coord: full.space.coord || null,
         } : null,
-        beings,
+        beings:   [...beings, ...myBeings],
         matter:   [],
         children: [],
         // qualities intentionally dropped — anonymous callers don't see

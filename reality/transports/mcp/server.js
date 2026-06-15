@@ -30,6 +30,29 @@
 // dormant, a doorway that knows how to open.
 //
 // ─────────────────────────────────────────────────────────────────
+// DEPENDENCY REMOVED — read before re-enabling
+// ─────────────────────────────────────────────────────────────────
+//
+// `@modelcontextprotocol/sdk` is NO LONGER a declared dependency. It
+// was dropped during the 2026-06 dependency cleanup (MCP was dormant,
+// and the sdk was the only thing dragging in transitive packages the
+// seed actually used directly, e.g. jose, now a direct dep). The
+// imports below therefore will NOT resolve until you reinstall it.
+// To re-enable MCP:
+//
+//   1. npm install @modelcontextprotocol/sdk
+//   2. Wire this transport into boot: import + start it from
+//      genesis.js (or behind a reality-config flag), passing the
+//      express app + the authenticate seat for inbound calls.
+//   3. The per-tool JSON schema is now produced by zod 4's built-in
+//      z.toJSONSchema (the retired zod-to-json-schema package is gone),
+//      so confirm the enumeration in "Shape" step 2 still matches.
+//
+// Nothing imports this file at boot, so the missing dependency does
+// not affect the running reality; it only matters the day you turn
+// MCP back on.
+//
+// ─────────────────────────────────────────────────────────────────
 // Shape (when activated)
 // ─────────────────────────────────────────────────────────────────
 //
@@ -38,7 +61,7 @@
 //   2. Enumerate my seed tool registry. For each tool, register it
 //      with the MCP server using:
 //        - the tool's existing JSON schema (already built by
-//          zod-to-json-schema inside seed/present/cognition/llm/tools.js).
+//          z.toJSONSchema inside seed/present/cognition/llm/tools.js).
 //        - a thin handler that calls getToolHandler(name)(args) and
 //          wraps the return as MCP's { content: [{ type: "text", text }] }.
 //   3. Mount three HTTP routes (POST / GET / DELETE /mcp) protected

@@ -368,6 +368,16 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
   // The canonical inner face was built once at beat 2 (runFoldBeat)
   // and lives on summonCtx.innerFace. The seal carries it onto the
   // Act in moment.js's seal branch. No per-soul rebuild here.
+  //
+  // Snapshot doctrine: the LLM reads summonCtx.innerFace ONCE here at
+  // moment open and never re-reads. No reactive subscription. Reels
+  // referenced by the face's weave may change mid-moment; the seal
+  // path trusts the existing chain CAS + reel-head locks to surface
+  // any real conflict at sealAct time. On conflict the moment fails,
+  // its inbox row stays open, the scheduler re-picks it up, the next
+  // pass rebuilds innerFace fresh (with a fresh weave) and retries.
+  // No new conflict-check machinery here . the doctrine is snapshot
+  // at fold, retry via existing refold path if seal fails.
   const userTurn = {
     role: "user",
     content:

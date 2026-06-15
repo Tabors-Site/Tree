@@ -49,6 +49,7 @@
 import { validateOrientation } from "./orientation.js";
 import { resolveBareCapabilities } from "../../roles/capabilities.js";
 import { resolveCanSee } from "./canSeeResolver.js";
+import { emptyWeave, addReel, mergeWeaves } from "./weave.js";
 
 const STORAGE_FIELD_MAX = 10_000;  // 10KB per string field . defensive
 const STORAGE_LIST_MAX  = 1_000;   // 1000 entries per list . defensive
@@ -159,16 +160,38 @@ export async function buildInnerFace(role, ctx = {}) {
   // inward orientation drops the world: canSee is the world; we
   // skip the resolution and let the inward past-face stand alone.
   let blocks = [];
+  let canSeeWeave = emptyWeave();
   if (orientation !== "inward" && Array.isArray(role?.canSee) && role.canSee.length > 0) {
     try {
       const resolved = await resolveCanSee(role.canSee, ctx);
-      blocks = Array.isArray(resolved) ? resolved : [];
+      blocks = Array.isArray(resolved?.blocks) ? resolved.blocks : [];
+      if (Array.isArray(resolved?.weave)) canSeeWeave = resolved.weave;
     } catch {
       blocks = [];
+      canSeeWeave = emptyWeave();
     }
   }
 
   const position = extractPosition(foldedFace);
+
+  // weave . merge the canSee-side reads with the foldedFace-side
+  // reads (foldPlace gating). The fold-side weave already contains
+  // self (and position-space + admitted occupants on forward/half);
+  // merging preserves its ordering invariants and only appends new
+  // canSee reads at the tail.
+  let weave = mergeWeaves(foldedFace?._weave || [], canSeeWeave);
+
+  // Empty-canSee invariant. Even when canSee admitted nothing, the
+  // weave must contain at least the self being reel so a self-fact
+  // wakes the subscriber. Roles are not reel-backed today (the role
+  // registry is an in-memory Map, not a fact-chain), so role flips
+  // manifest as facts on the being's reel (via qualities.roleFlow);
+  // the self entry already covers the role-flip wakeup. If the role
+  // primitive ever becomes reel-backed, append it here.
+  const branch = typeof ctx?.branch === "string" && ctx.branch.length ? ctx.branch : "0";
+  if (weave.length === 0 && ctx?.beingId) {
+    addReel(weave, { reelKind: "being", reelId: String(ctx.beingId), branch });
+  }
 
   return {
     orientation,
@@ -184,6 +207,7 @@ export async function buildInnerFace(role, ctx = {}) {
       blocks.map(b => clampBlock(b, STORAGE_FIELD_MAX)),
       STORAGE_LIST_MAX,
     ),
+    weave,
     origin:       "local",
   };
 }
@@ -225,6 +249,10 @@ export function clampForRender(face) {
     position,
     capabilities: clampCapabilities(face.capabilities, RENDER_FIELD_MAX, RENDER_LIST_MAX),
     blocks:       blocksClamped,
+    // weave rides through render-clamp unchanged. It is metadata
+    // (audit + subscription dispatch); renderers ignore it but
+    // diagnostic consumers need to see what the face was bound to.
+    weave:        Array.isArray(face.weave) ? face.weave : [],
     origin:       face.origin || "local",
   };
 }
@@ -254,6 +282,7 @@ export function normalizeForeignDescriptor(descriptor) {
       position:     null,
       capabilities: { canDo: [], canSummon: [], canBe: [] },
       blocks:       [],
+      weave:        [],
       origin:       "foreign",
     };
   }
@@ -332,6 +361,10 @@ export function normalizeForeignDescriptor(descriptor) {
       blocks.map(b => clampBlock(b, STORAGE_FIELD_MAX)),
       STORAGE_LIST_MAX,
     ),
+    // weave has no meaning for a foreign descriptor (we did not fold
+    // the foreign reality's reels). The foreign push channel, when it
+    // lands, is the channel of record for foreign updates.
+    weave:        [],
     origin:       "foreign",
   };
 }

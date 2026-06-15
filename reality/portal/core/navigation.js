@@ -193,11 +193,18 @@ export function createNavigation(ctx) {
 
       // Also fetch the caller's canonical inner face at the new
       // stance. Same shape every soul reads (LLM, scripted, human).
+      // Live subscribe so reel arrivals on the face's weave refold
+      // and push a fresh face. The wire layer registers the per-
+      // stance subscription against the weave on this returned face;
+      // subsequent calls on the same socket+stance rotate the weave
+      // rather than minting a new id. A stance switch lands here too:
+      // the new live SEE replaces the prior subscription's weave in
+      // one round-trip (no history replay).
       // Best-effort: a failure here just hides the face panel; the
       // existing position descriptor stays the primary view.
       let innerFace = null;
       try {
-        innerFace = await client.see("my-inner-face");
+        innerFace = await client.see("my-inner-face", { live: true });
       } catch {
         innerFace = null;
       }
@@ -362,6 +369,20 @@ export function createNavigation(ctx) {
     // this) so history visibly accumulates beyond the cursor.
     if (state.get("descriptor")?.isHistorical) {
       events.emit("live-while-historical", event);
+      return;
+    }
+    // Inner-face push: a reel the current stance's weave indexes
+    // received a fact; the server refolded and pushed the fresh face.
+    // Update state.innerFace; consumers (portal face panel, prompt
+    // previews) subscribe to that key and re-render. No refetch
+    // round-trip; the server already did the work.
+    if (event?.kind === "inner-face") {
+      // The face rides in event.payload (the client routes
+      // envelope.payload.data into the event.payload slot).
+      const face = event?.payload || null;
+      if (face) {
+        state.set({ innerFace: face }, { reason: "live", resetCamera: false });
+      }
       return;
     }
     if (event?.kind === "position" || event?.kind === "fact") {

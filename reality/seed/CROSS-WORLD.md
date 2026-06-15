@@ -200,11 +200,14 @@ Act.innerFace = {
   capabilities,
   blocks,
   origin: "foreign",
+  weave: [],                       // empty for foreign, see below
   hash: <sha256-of-descriptor-json>,
 }
 ```
 
 Same unified canonical field used by both the local fold (`origin: "local"`) and the cross-world override (`origin: "foreign"`). The foreign descriptor is normalized into the canonical inner face shape before storage so every consumer reads one structure.
+
+**The weave is empty for foreign faces.** A local face's weave records the reels the local fold actually read so the per-stance subscription registry (innerFaceLive.md) can wake on relevant fact arrivals. A foreign face's reels live on the OTHER reality; the local registry has nothing to subscribe to here. The portal renders the foreign blocks once on receive and they stay until the human re-navigates. Reactive updates for foreign-side changes would require a federation push channel from the foreign reality, which doesn't exist yet. Real but explicit deferred work.
 
 Hashable for tamper-detection: if the foreign reality later returns a different descriptor for the same position at the same time, the hash proves the change. Useful for scam detection, drift detection, and historical comparison ("I remember this looked different last week").
 

@@ -24,6 +24,14 @@ import { emitPositionInvalidate, emitPositionDelta } from "./live.js";
 import { registerFactPush } from "./factPush.js";
 import { emitToSubscribers } from "../../seed/present/wakes/subscriptions.js";
 import { startTickLoop as startScheduleTick } from "../../seed/present/wakes/wakeSchedule.js";
+import {
+  getSubscribersForReel,
+  getInnerFaceSub,
+  applyRefold,
+  emitInnerFace,
+} from "./innerFaceLive.js";
+import { reelKey } from "../../seed/present/beats/2-fold/weave.js";
+import { getSeeOperation } from "../../seed/ibp/seeOps.js";
 
 // Seed-signal-to-live-emit bridge. When seed events touch data that
 // the Position Description reads, invalidate subscribers so they refetch.
@@ -173,7 +181,54 @@ export function wireLiveHooks() {
   hooks.register("afterMatter",        (payload) => emitToSubscribers("afterMatter",        payload), "ibp-subscriptions");
   hooks.register("afterQualityWrite", (payload) => emitToSubscribers("afterQualityWrite", payload), "ibp-subscriptions");
 
-  log.info("IBP", "live SEE hooks wired (afterMetadataWrite, afterSpace*, afterMatter, afterToolCall); DO-trigger subscriptions wired (afterMatter, afterMetadataWrite)");
+  // Reactive inner-face dispatch. Every batch of reels that received
+  // facts in the just-committed seal fans into the innerFaceLive
+  // registry: subscriptions whose weave indexes any of these reels
+  // are coalesced by subId (so one act touching N of a sub's reels
+  // triggers ONE refold), refolded via the my-inner-face SEE op's
+  // handler, and pushed back through the existing IBP SEE envelope
+  // under SEE_PUSH.INNER_FACE. The weave on the new face replaces
+  // the indexed entry atomically inside applyRefold.
+  //
+  // Coalescing strategy: collect subIds across the whole batch into
+  // one Set, then iterate. The afterReelArrival hook already fires
+  // ONCE per seal (not once per reel), so an extra microtask queue
+  // would only matter if seals burst at sub-millisecond cadence; if
+  // that becomes a concern, a microtask-batched queue keyed by subId
+  // is the next optimization. The current shape is correct for the
+  // present workload.
+  hooks.register("afterReelArrival", async ({ reels }) => {
+    if (!Array.isArray(reels) || reels.length === 0) return;
+    const subIds = new Set();
+    for (const reel of reels) {
+      const key = reelKey(reel);
+      if (!key) continue;
+      const bucket = getSubscribersForReel(key);
+      for (const subId of bucket) subIds.add(subId);
+    }
+    if (subIds.size === 0) return;
+    const op = getSeeOperation("my-inner-face");
+    if (!op || typeof op.handler !== "function") return;
+    for (const subId of subIds) {
+      const sub = getInnerFaceSub(subId);
+      if (!sub || !sub.socket?.connected) continue;
+      try {
+        const face = await op.handler({
+          identity: { beingId: sub.beingId, name: null },
+          args:     {},
+          ctx:      null,
+          branch:   sub.branch,
+        });
+        if (!face) continue;
+        applyRefold(subId, face);
+        emitInnerFace(sub.socket, face);
+      } catch (err) {
+        log.warn("InnerFaceLive", `refold dispatch failed for sub ${subId}: ${err.message}`);
+      }
+    }
+  }, "ibp-inner-face-live");
+
+  log.info("IBP", "live SEE hooks wired (afterMetadataWrite, afterSpace*, afterMatter, afterToolCall, afterReelArrival); DO-trigger subscriptions wired (afterMatter, afterMetadataWrite)");
 }
 
 /**

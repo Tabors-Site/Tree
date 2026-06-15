@@ -801,6 +801,31 @@ export async function foldAfterCommit(sortedReels) {
         );
       }
     }
+    // afterReelArrival . one batch-level notifier for every reel that
+    // received facts in this seal. Reactive inner-face subscriptions
+    // (protocols/ibp/innerFaceLive) listen here and refold the subs
+    // whose weave indexes any of these reels. Firing ONCE per batch
+    // (with the whole reels list) keeps the fan-out O(1) per act;
+    // the subscription registry expands the batch internally against
+    // its reelKey index and coalesces by subId so one act touching N
+    // of a sub's reels triggers ONE refold.
+    //
+    // Shape of payload.reels: [{ reelKind, reelId, branch }]. Mirrors
+    // the weave entry shape so the dispatcher can hash directly via
+    // reelKey() without renormalizing.
+    if (sortedReels.length > 0) {
+      try {
+        await hooks.run("afterReelArrival", {
+          reels: sortedReels.map((r) => ({
+            reelKind: r.kind,
+            reelId:   String(r.id),
+            branch:   r.branch,
+          })),
+        });
+      } catch (err) {
+        log.warn("Fold", `afterReelArrival fan failed: ${err.message}`);
+      }
+    }
   } catch (err) {
     log.warn("Fold", `foldAfterCommit unexpected error: ${err.message}`);
   }

@@ -63,7 +63,7 @@ export async function attachInnerFace(actId, descriptor) {
         innerFace: { ...normalized, hash },
       },
     },
-    { new: true },
+    { returnDocument: "after" },
   );
   return { hash, attached: !!update };
 }

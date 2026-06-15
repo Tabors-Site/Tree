@@ -23,6 +23,7 @@ import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
 import { ackOk, ackError } from "../envelope.js";
 import { seeVerb } from "../../../seed/ibp/verbs/see.js";
 import { subscribePosition } from "../live.js";
+import { subscribeInnerFace } from "../innerFaceLive.js";
 
 export async function handleSee(socket, env, ack) {
   const id = env?.id || null;
@@ -36,8 +37,8 @@ export async function handleSee(socket, env, ack) {
     // SEE default `requires: {}` admits. Per-position rules at
     // private trees can still tighten..
     const identity = socket.beingId
-      ? { beingId: socket.beingId, name: socket.name }
-      : { beingId: null, name: "arrival" };
+      ? { beingId: socket.beingId, name: socket.name, nameId: socket.nameId || null }
+      : { beingId: null, name: "arrival", nameId: socket.nameId || null };
 
     const descriptor = await seeVerb(address, {
       identity,
@@ -69,6 +70,34 @@ export async function handleSee(socket, env, ack) {
       !descriptor?.isHistorical
     ) {
       subscribePosition(socket, descriptor.address.spaceId);
+    }
+
+    // Inner-face live subscription. When the address resolved to the
+    // my-inner-face SEE op (or any future op flagged liveInnerFace by
+    // returning a face with weave), and the caller asked for live,
+    // register the per-stance subscription so subsequent reel arrivals
+    // refold and push back. The portal calls this on every navigate;
+    // resubscribing on the same socket+stance rotates the weave
+    // rather than minting a new id (innerFaceLive owns that policy).
+    if (
+      payload?.live === true &&
+      socket?.id &&
+      socket.beingId &&
+      descriptor &&
+      Array.isArray(descriptor.weave)
+    ) {
+      try {
+        subscribeInnerFace(
+          socket,
+          {
+            beingId: socket.beingId,
+            branch:  socket.currentBranch || "0",
+          },
+          descriptor,
+        );
+      } catch (err) {
+        log.warn("IBP", `subscribeInnerFace failed: ${err.message}`);
+      }
     }
 
     // Track first-person stance from the resolved descriptor. Every

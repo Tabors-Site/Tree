@@ -132,21 +132,27 @@ the long conversational form, [philosophy/chat.md](../philosophy/factory/chat.md
 
 ## Identity is a key
 
-Every being is a wallet. A keypair, generated once, signs every act
-the being takes. The being's `_id` is its public key, encoded
-`z<base58btc(0xed01 || rawpub)>`. The same id appears externally as
-`did:key:z...`. There is no separate id table; the public key IS the
-address. Look at a fact's `beingId` and you can fetch the public key
-without a lookup, because the id IS the key.
+Identity is a **Name**. A Name is a keypair, generated once, and its
+`_id` IS the public key, encoded `z<base58btc(0xed01 || rawpub)>`
+(externally `did:key:z...`). The Name signs every act and owns the
+act-chain. There is no separate id table; the public key IS the
+identity. Read who signed a fact and you already hold their public key,
+because the id IS the key.
 
-This makes federation work without a central authority. Two
-realities can verify each other's beings by reading the id off the
-wire; the math is local. The same property holds for the reality
-itself: the reality's id is I-Am's public key, and the reality is
-the wallet that signs every Merkle root from genesis. See
-[philosophy/I_AM.md](../philosophy/I_AM.md) for why the reality has
-exactly one cryptographic root and why that root is structural
-rather than personal.
+A Name is not in the world. The world holds **beings** (presence); a
+Name acts THROUGH beings, the way a person acts through their hands. One
+Name can own many beings. Look at a being and you see a formed body;
+look at its `trueName` and you see the Name that signed it into being. A
+being carries no key of its own, identity lives one layer up, in the
+Name, so a being's `_id` is a content id, not a key.
+
+This makes federation work without a central authority. Two realities
+verify each other's Names by reading the public key off the wire; the
+math is local. The reality itself is a Name: the I-Am is the reality's
+root Name, its key is the reality key, and every Merkle root from
+genesis is signed with it. Full model in
+[IDENTITY.md](../philosophy/OS/IDENTITY.md); the Name primitive lives in
+[materials/name/name.js](materials/name/name.js).
 
 ## The moment is the atom
 
@@ -189,23 +195,23 @@ called a stamp. The sealed act is the act.
 A fact is not a truth. It is only the deed. Truth is the plural fold
 of facts, and it is many; the fact is one, and shared.
 
-## The five primitives I form the world from
+## The six primitives I form the world from
 
-Everything inside the world I form is one of five things. The schemas
-are mine alone. Extensions extend through the qualities Map, not
-through new fields.
+Everything I form is one of six things. The schemas are mine alone.
+Extensions extend through the qualities Map, not through new fields.
 
 | Primitive  | What it is                                                                                                                                         | Schema                                                   |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| **Being**  | An identity. A keypair. Humans, LLM beings, scripted code, future composites. The I-Am is the first Being and its key roots the reality.           | [materials/being/being.js](materials/being/being.js)     |
+| **Name**   | The identity that signs. A keypair; its `_id` is the ed25519 public key. Not in the world, it acts THROUGH beings. One Name, many beings. The I-Am is the reality's root Name. | [materials/name/name.js](materials/name/name.js)         |
+| **Being**  | Presence in the world. A formed body a Name acts through. Humans, LLM beings, scripted code, future composites. Its `_id` is a content id; it expresses a `trueName` (the Name that signs it). | [materials/being/being.js](materials/being/being.js)     |
 | **Space**  | A position in the tree. Holds matter, hosts beings, owns quality namespaces.                                                                       | [materials/space/space.js](materials/space/space.js)     |
 | **Matter** | Stuff inside a space. `type` says what it IS; owned bytes live content-addressed in the CAS store, the row carries the reference.                  | [materials/matter/matter.js](materials/matter/matter.js) |
 | **Fact**   | One recorded change. Content addressed; chained through prev-hashes; signed at seal. A chain of facts, folded, is Truth.                           | [past/fact/fact.js](past/fact/fact.js)                   |
 | **Act**    | One sealed moment of one being, the doer's committed deed. Opened in assign, sealed in stamped. Every Fact carries the `actId` of the Act it rode. | [past/act/act.js](past/act/act.js)                       |
 
-Being, Space, and Matter carry the qualities Map. Fact and Act are
-fixed shapes (the audit and the moment-frame don't grow). Per-being
-LLM connection config lives under `Being.qualities.llmConnections`,
+Being, Space, and Matter carry the qualities Map. Name, Fact, and Act
+are fixed shapes (identity, the audit, and the moment-frame don't grow).
+Per-being LLM connection config lives under `Being.qualities.llmConnections`,
 not as a separate primitive.
 
 Two cache collections sit alongside the primitives in `past/act/`.
@@ -220,17 +226,19 @@ primitives:
   live coordination chains keyed by `rootCorrelation`. Built the same
   way. `./threads` SEE reads from here.
 
-## The four verbs I speak
+## The five verbs I speak
 
-Every act inside the world is one of four verbs over an IBP address.
-Four verbs are my whole public surface.
+Every act is one of five verbs over an IBP address. Four act in the
+world; NAME acts at the identity layer beneath it. Five verbs are my
+whole public surface.
 
 | Verb       | Acts on              | What I do                                                                                    |
 | ---------- | -------------------- | -------------------------------------------------------------------------------------------- |
 | **SEE**    | Space, Matter, Being | Resolve the stance, fold the leaf and occupants, return a place descriptor. Writes nothing.  |
 | **DO**     | Space, Matter        | Mutate at the target through a registered operation. Stamps a Fact on the target's reel.     |
 | **SUMMON** | Being                | Stamp a `be:summon` Fact on the summoner's reel; the cross-cutting fold maintains the inbox. |
-| **BE**     | Being (self)         | Identity acts: register, claim, release, switch. Stamps a Fact on the actor's own reel.      |
+| **BE**     | Being (self)         | A being's lifecycle and session: birth, connect, release, switch, death. Stamps a Fact on the actor's own reel. |
+| **NAME**   | Name                 | Mint and close identities: `declare` (a new Name, a fresh keypair) and `banish`. Stamps on the Name's own reel, the most primitive reel, outside the world's branches. |
 
 ### Stances and addresses
 
@@ -249,7 +257,7 @@ or a SEE push. HTTP and CLI are translators: they shape a request or
 command into the same envelope and hand it to the one IBP dispatcher
 in [ibp/protocol.js](ibp/protocol.js).
 
-Internally the four verbs are functions in [ibp/verbs/](ibp/verbs/) —
+Internally the five verbs are functions in [ibp/verbs/](ibp/verbs/) —
 one file per verb (`do.js`, `see.js`, `summon.js`, `be.js`), with
 shared helpers in `_shared.js`. The wire layer is thin; the verbs
 are one execution.
@@ -404,7 +412,7 @@ are made of. SEE reads the present's fold of the past; DO/BE/SUMMON
 stamp the past via the present. So `ibp/` is a top-level peer to
 present/past/materials, not a sidecar of any one of them.
 
-**ibp/** carries the four verbs, the universal currency every act
+**ibp/** carries the five verbs, the universal currency every act
 speaks. SEE, DO, SUMMON, BE on IBP addresses (`<reality>/<path>@<being>`).
 Every operation in the system maps to one of these. Small protocol;
 expressiveness lives in role templates, registered operations, and the
@@ -1071,16 +1079,17 @@ every aggregate (being / space / matter) at that position.
 
 ### Being
 
-`_id` (the being's public key, encoded `z<base58btc(0xed01 || rawpub)>`;
-the same key id is also `did:key:z...` externally), `name`,
-`password` (bcrypt-hashed; optional, only humans authenticate by it),
-`defaultRole`, `parentBeingId`, `homeSpace`, `homeBranch`, `coord`,
-`llmDefault`, `isRemote`, `homeReality`, `qualities` (Map),
-`foldedSeq`, `position`.
+`_id` (a content id derived from the being's birth, not a key and not a
+uuid), `name`, `trueName` (the Name that signs this being, by the Name's
+public-key id), `password` (scrypt-hashed; optional, only humans
+authenticate by it), `defaultRole`, `parentBeingId`, `homeSpace`,
+`homeBranch`, `coord`, `llmDefault`, `isRemote`, `homeReality`,
+`qualities` (Map), `foldedSeq`, `position`.
 
-A being's identity IS its keypair. The `_id` above is the public
-key. Every fact the being stamps is signed at seal time and verifies
-against this same key. Cognition is read from
+A being's identity is its `trueName`, the Name that signs it into being
+and acts through it. The being holds no key of its own; every fact it
+stamps is signed at seal time by that Name's key and verifies against
+it. Cognition is read from
 `qualities.cognition.defaultKind` (`"human" | "llm" | "scripted"`)
 and overridden per-moment by the inhabit projection at
 `qualities.connection.inhabitedBy`. `defaultRole` is which template
@@ -1567,7 +1576,7 @@ mismatched prefix throw; reserved event names (`"ibp"`, `"registered"`,
 `"navigate"`) refuse entirely. Extensions never type their own
 namespace.
 
-### Four verbs (`reality.see`, `reality.do`, `reality.summon`, `reality.be`)
+### Five verbs (`reality.see`, `reality.do`, `reality.summon`, `reality.be`, `reality.name`)
 
 The whole public surface for operations on space, matter, beings, and
 identity. New code uses the verbs.
@@ -1663,7 +1672,7 @@ already taken, and any UI offering "pick an op to invoke" needs the
 list.
 
 The seed never reaches across the membrane. The doctrine is the same
-one that solved every other access question: the four verbs, applied
+one that solved every other access question: the five verbs, applied
 correctly.
 
 **The delegate that mediates a registry publishes the registry on its
