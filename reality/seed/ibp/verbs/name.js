@@ -128,7 +128,10 @@ export async function nameVerb(operation, payload = {}, opts = {}) {
     branch,
   });
 
-  return { ok: true, operation, nameId: result.nameId };
+  // `reveal` (declare only) carries the freshly minted key ONCE for backup —
+  // private key + 24 words + public key. It rode the handler return, never the
+  // fact. Null for banish/connect/release and for imported keys.
+  return { ok: true, operation, nameId: result.nameId, reveal: result.reveal || null };
 }
 
 /**

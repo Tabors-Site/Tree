@@ -7,7 +7,7 @@
 //
 // Deliberately NOT here: PBKDF2 mnemonic-to-seed stretching, passphrase
 // salting, BIP32 HD-wallet derivation. The entropy IS the key seed; a
-// being's keypair is rebuilt from these 32 bytes directly, so the extra
+// name's keypair is rebuilt from these 32 bytes directly, so the extra
 // wallet machinery would only add places to lose bits. Node native
 // crypto for sha256, the wordlist beside it, no new dependency.
 

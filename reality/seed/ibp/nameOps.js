@@ -27,11 +27,28 @@
 // a keypair + spec, banish just names its target — and nameVerb stamps the
 // name:declare / name:banish fact.
 
-import { generateBeingKeypair } from "../materials/name/keys.js";
+import { generateNameKeypair, keypairFromPrivateKeyPem, keypairFromSeed, seedFromPrivateKeyPem } from "../materials/name/keys.js";
+import { mnemonicToEntropy, entropyToMnemonic } from "../materials/name/mnemonic.js";
 import { encryptCredential } from "../materials/being/identity/credentials.js";
 import { encryptWithPassword } from "../materials/name/passwordKey.js";
 import { I_AM } from "../materials/being/seedBeings.js";
 import { IbpError, IBP_ERR } from "./protocol.js";
+
+// Rebuild a keypair from an imported key — the IMPORT half of key custody
+// (symmetric to key-export in materials/name/keyOps.js). Accepts either a
+// PKCS8 private-key PEM or the 24 BIP39 words key-export hands out; same
+// key either skin, same resulting nameId (the pubkey) on any host.
+function keypairFromImport(importKey) {
+  const s = String(importKey || "").trim();
+  if (!s) throw new IbpError(IBP_ERR.INVALID_INPUT, "name declare: importKey is empty");
+  const words = s.split(/\s+/);
+  if (words.length === 24) return keypairFromSeed(mnemonicToEntropy(s));
+  if (/PRIVATE KEY/.test(s)) return keypairFromPrivateKeyPem(s);
+  throw new IbpError(
+    IBP_ERR.INVALID_INPUT,
+    "name declare: importKey must be a PKCS8 private-key PEM or 24 BIP39 words",
+  );
+}
 
 // declare — mint a new Name as a facet of the reality's I_AM. Returns the
 // new nameId + the spec the fact carries (applyMintName folds it). The
@@ -49,8 +66,21 @@ async function declareHandler({ payload }) {
       );
     }
   }
-  const keypair = generateBeingKeypair();
-  const nameId = keypair.beingId; // the did:key public key IS the Name's id
+  // Mint fresh, OR rebuild from an imported key (PEM / 24 words) — bringing
+  // a Name you already hold onto this reality. The imported key's pubkey IS
+  // the nameId, so a re-import of a Name that already exists here is a
+  // conflict (you connect to it, you don't re-declare it).
+  const keypair = payload?.importKey ? keypairFromImport(payload.importKey) : generateNameKeypair();
+  const nameId = keypair.nameId; // the did:key public key IS the Name's id
+  if (payload?.importKey) {
+    const { loadProjection } = await import("../materials/projections.js");
+    if (await loadProjection("name", nameId, "0")) {
+      throw new IbpError(
+        IBP_ERR.RESOURCE_CONFLICT,
+        `imported Name ${String(nameId).slice(0, 12)}… already exists on this reality; connect to it instead of re-declaring`,
+      );
+    }
+  }
   const spec = {
     // Flat lineage: every declared Name is a facet of the reality's I_AM,
     // one layer down — never a Name-of-a-Name hierarchy.
@@ -72,7 +102,19 @@ async function declareHandler({ payload }) {
     // always act with the private key. Reality-scoped. null when unspecified.
     name:          payload?.name ?? null,
   };
-  return { nameId, spec };
+  // The key REVEAL — returned ONCE on the direct response, NEVER in the fact
+  // (writeNameFact only stamps result.spec, whose key is encrypted). This is
+  // the holder's one chance to back up their identity: the private key + its
+  // 24-word paper form + the public key (the nameId). Same "show it once at
+  // birth" the being-wallet used to do, now at the Name. An IMPORTED key needs
+  // no reveal (the caller already holds it).
+  const reveal = payload?.importKey ? null : {
+    nameId,
+    publicKeyPem:  keypair.publicKeyPem,
+    privateKeyPem: keypair.privateKeyPem,
+    mnemonic:      entropyToMnemonic(seedFromPrivateKeyPem(keypair.privateKeyPem)),
+  };
+  return { nameId, spec, reveal };
 }
 
 // banish — the Name marks itself closed. The target Name is the one
@@ -89,9 +131,15 @@ async function banishHandler({ addressedNameId, payload }) {
 }
 
 // connect — bind the name to a session (the identity-layer be:connect). The
-// fact folds connected:true on the name's reel. GATE: a name can't connect
-// TWICE — one active session per name (release first). Also refused for a
-// banished name (it can never act again).
+// fact folds connected:true on the name's reel. Idempotent / TAKEOVER: a
+// connect with the right password (proven upstream in nameConnect) always
+// succeeds, re-claiming the session even if the reel still shows connected
+// (a prior session whose socket dropped without a clean release — a crash,
+// refresh, or network blip). This is what prevents the lockout: a
+// connected:true reel can never wedge a legitimate holder out. The shared
+// signing session is nameId-keyed, so the takeover re-unlocks the SAME key
+// (same password → same PEM) and never disrupts another live socket. Only a
+// banished name is refused (it can never act again).
 async function connectNameHandler({ addressedNameId, payload }) {
   const nameId = addressedNameId || payload?.nameId || null;
   if (!nameId) {
@@ -106,10 +154,6 @@ async function connectNameHandler({ addressedNameId, payload }) {
   const { isNameBanished } = await import("../materials/name/closure.js");
   if (await isNameBanished(String(nameId))) {
     throw new IbpError(IBP_ERR.FORBIDDEN, "name is banished; it cannot connect");
-  }
-  if (slot.state.connected === true) {
-    throw new IbpError(IBP_ERR.RESOURCE_CONFLICT,
-      "name is already connected — release it first (one active session per name)");
   }
   return { nameId };
 }

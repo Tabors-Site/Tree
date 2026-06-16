@@ -86,11 +86,16 @@ function saveStoredSession(s) {
 }
 
 function clearStoredSession() {
-  try {
-    const store = _isInheriterTab ? sessionStorage : localStorage;
-    store.removeItem(SESSION_KEY);
-    store.removeItem(LEGACY_SESSION_KEY);
-  } catch {}
+  // Nuke BOTH keys in BOTH stores. A stale session (e.g. after a dev DB wipe)
+  // could linger under the legacy key or in the other storage; clearing only
+  // the active store leaves a phantom identity that re-seats on the next boot.
+  for (const store of [
+    typeof localStorage !== "undefined" ? localStorage : null,
+    typeof sessionStorage !== "undefined" ? sessionStorage : null,
+  ]) {
+    if (!store) continue;
+    try { store.removeItem(SESSION_KEY); store.removeItem(LEGACY_SESSION_KEY); } catch {}
+  }
 }
 
 // ── Events ─────────────────────────────────────────────────────────
@@ -245,6 +250,22 @@ export function createPortalContext({ id = "main", persist = true, session = nul
     });
     client.connect();
     await waitForConnect(client);
+    // VALIDATE the name-token against the server before trusting the stored
+    // session. After a dev DB wipe the name is gone and verifyTokenStrict
+    // rejects the token, so the socket binds NO name. If we don't check, the
+    // portal lingers on a phantom identity (the "still old being / glitching"
+    // bug). Confirm the server seated THIS name; if not, the session is stale —
+    // drop it and start fresh at the Name Form.
+    let who = null;
+    try { who = await client.nameWhoami(); } catch { /* treat as unbound */ }
+    if (!who?.nameId || (sess.nameId && who.nameId !== sess.nameId)) {
+      console.warn("[portal] stored name session is no longer valid; dropping it.");
+      clearSession();
+      ctx.navigation.clearLocationHash();
+      await ctx.navigation.landAnonymous();
+      events.emit("connected", { anonymous: true, staleCleared: true });
+      return;
+    }
     await ctx.navigation.landAnonymous();
     events.emit("connected", { anonymous: false, nameOnly: true });
   }
@@ -265,6 +286,11 @@ export function createPortalContext({ id = "main", persist = true, session = nul
       username: null,
       beingAddress: null,
     });
+    // Push the name-token onto the LIVE socket so its reconnects stay
+    // name-bound (socket.nameId persists). The connect set socket.nameId on
+    // the current socket; this keeps it across blips so name:release / signing
+    // never silently break on a dropped-and-reconnected socket.
+    try { ctx.client?.setToken?.(token); } catch { /* best-effort */ }
   }
   ctx.adoptNameSession = adoptNameSession;
 

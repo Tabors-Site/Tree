@@ -95,8 +95,8 @@ function persistBeingPosition(beingId, spaceId, summonCtx = null) {
   // derivation could race the seal), so set the actor NAME here the
   // same way emitFact would — from the moment's actorAct. The being
   // occupies its OWN position, so the actor name is the being's own
-  // (or, when a father drives the vessel, the inhabitor's — exactly
-  // who signs the moment).
+  // (or, when a father drives a being he's connected to, the
+  // inhabitor's name — exactly who signs the moment).
   if (summonCtx && Array.isArray(summonCtx.deltaF)) {
     spec.nameId = summonCtx.actorAct?.nameId ?? null;
     summonCtx.deltaF.push(spec);

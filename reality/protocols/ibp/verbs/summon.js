@@ -71,7 +71,30 @@ export async function handleSummon(socket, env, ack) {
       activeRole: payload.message.activeRole || payload.activeRole || null,
     };
 
-    const identity = socket.beingId ? { beingId: socket.beingId, name: socket.name, nameId: socket.nameId || null } : null;
+    // A socket DRIVING a being acts as it (signed by socket.nameId). A socket
+    // that has a NAME but NO being yet (a fresh name at the arrival floor) acts
+    // THROUGH the shared @arrival being — the vessel it uses to reach cherub —
+    // SIGNED BY ITS NAME. So the actor is a real being (@arrival, which carries
+    // the arrival role that permits SUMMON @cherub:mate), and the nameId rides
+    // as the signer so cherub's mate handler sees askerNameId = the connected
+    // name and births the name's first being. Nothing bodiless: a name always
+    // acts through a being.
+    let identity = socket.beingId
+      ? { beingId: socket.beingId, name: socket.name, nameId: socket.nameId || null }
+      : null;
+    if (!identity && socket.nameId) {
+      // A name can NEVER sign a world act bodiless — it acts THROUGH a being
+      // (the invariant; only NAME-verb facts sign bodiless). A name with no
+      // being of its own uses the shared @arrival being to reach cherub.
+      // Resolve @arrival as the actor, signed by the name. If @arrival can't be
+      // resolved, fall to ANONYMOUS (identity null) — never a bodiless name
+      // signature (that would be the funk the invariant forbids).
+      try {
+        const { findByName } = await import("../../../seed/materials/projections.js");
+        const arrival = await findByName("being", "arrival", "0");
+        if (arrival?.id) identity = { beingId: String(arrival.id), name: "arrival", nameId: socket.nameId };
+      } catch { /* fall to anonymous */ }
+    }
 
     // Cross-branch gate at the wire boundary. The caller's first-person
     // frame is the socket's tracked branch; the target stance's branch

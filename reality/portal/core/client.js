@@ -86,6 +86,17 @@ export class PortalClient {
   // Connection
   // ────────────────────────────────────────────────────────────────
 
+  // Update the auth token on the LIVE socket so reconnects carry it. Without
+  // this, a client built anonymously (token:null) that later binds a name via
+  // the "name" channel loses socket.nameId on the next socket.io reconnect
+  // (the handshake re-sends the original null token), which silently breaks
+  // name:release / signing. socket.io re-reads socket.auth on every (re)connect,
+  // so mutating it here makes the binding durable.
+  setToken(token) {
+    this.token = token || null;
+    if (this.socket) this.socket.auth = { ...(this.socket.auth || {}), token: this.token };
+  }
+
   connect() {
     if (this.socket) return;
     const target = this.useProxy ? undefined : this.placeUrl;
@@ -324,6 +335,12 @@ export class PortalClient {
    *  identity-layer be:connect. Binds the session's name. */
   nameConnect(token, password) {
     return this._callName("connect", { token, password });
+  }
+  /** Connect with the PRIVATE KEY directly (a PKCS8 PEM or the 24-word
+   *  recovery phrase) — no password; possessing the key IS the proof. The
+   *  key's pubkey IS the name id. Same wire op, the privateKey field path. */
+  nameConnectKey(privateKey) {
+    return this._callName("connect", { privateKey });
   }
   /** Release the name from the session (the name's be:release) — back to the
    *  bare reality domain (the Name menu). */

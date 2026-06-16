@@ -111,8 +111,8 @@ export async function signActDoc(actDoc, factIds, pem) {
   if (pem === undefined) pem = await loadSigningKey(actDoc.nameId, actDoc.branch);
   if (!pem) return null;
   try {
-    const { signAsBeing } = await import("../../materials/name/keys.js");
-    const value = signAsBeing(pem, buildActSigPayload(actDoc, factIds));
+    const { signAsName } = await import("../../materials/name/keys.js");
+    const value = signAsName(pem, buildActSigPayload(actDoc, factIds));
     return { alg: "ed25519", by: actDoc.nameId, value };
   } catch (err) {
     log.warn("Stamped", `signing failed for act ${String(actDoc?._id || "").slice(0, 8)}: ${err.message}`);
@@ -151,9 +151,9 @@ export async function verifyActSig(act, { localReality = null } = {}) {
       reason: "i-am",
     };
   }
-  const { isKeyId, verifyBeingSig } = await import("../../materials/name/keys.js");
+  const { isKeyId, verifyNameSig } = await import("../../materials/name/keys.js");
   if (isKeyId(by)) {
-    return { ok: verifyBeingSig(by, payload, sig.value), reason: "being" };
+    return { ok: verifyNameSig(by, payload, sig.value), reason: "being" };
   }
   return { ok: false, reason: "unknown-signer" };
 }
@@ -228,9 +228,9 @@ export async function signEnvelopeBeingSig(env, pem) {
   if (pem === undefined) pem = await loadSigningKey(env.nameId, env.branch);
   if (!pem) return null;
   try {
-    const { signAsBeing } = await import("../../materials/name/keys.js");
+    const { signAsName } = await import("../../materials/name/keys.js");
     const time = new Date().toISOString();
-    const value = signAsBeing(pem, buildEnvelopeSigPayload({ ...env, time }));
+    const value = signAsName(pem, buildEnvelopeSigPayload({ ...env, time }));
     return { alg: "ed25519", by: env.nameId, value, time };
   } catch (err) {
     log.warn("CrossWorld", `envelope signing failed for ${String(env?.nameId || "").slice(0, 10)}: ${err.message}`);
@@ -254,7 +254,7 @@ export async function signEnvelopeBeingSig(env, pem) {
  */
 export async function verifyEnvelopeBeingSig(env, beingSig) {
   if (!beingSig?.value) return { ok: true, reason: "unsigned-advisory" };
-  const { isKeyId, verifyBeingSig } = await import("../../materials/name/keys.js");
+  const { isKeyId, verifyNameSig } = await import("../../materials/name/keys.js");
   const by = env?.nameId;
   if (!isKeyId(by)) return { ok: true, reason: "non-key-signer" };
   // Freshness gate. The signing time is part of the signed payload, so a
@@ -266,7 +266,7 @@ export async function verifyEnvelopeBeingSig(env, beingSig) {
   if (Number.isNaN(t)) return { ok: false, reason: "missing-time" };
   if (Math.abs(Date.now() - t) > envelopeSigWindowMs()) return { ok: false, reason: "stale-sig" };
   return {
-    ok: verifyBeingSig(by, buildEnvelopeSigPayload({ ...env, time: beingSig.time }), beingSig.value),
+    ok: verifyNameSig(by, buildEnvelopeSigPayload({ ...env, time: beingSig.time }), beingSig.value),
     reason: "being",
   };
 }

@@ -134,6 +134,8 @@ async function birthHandler({ payload, ctx }) {
         parentBeingId: iAm ? String(iAm._id) : null,
         cherubIdentity: { name: "cherub", beingId: cherubBeingId },
         summonCtx: ctx?.summonCtx || null,
+        // The being belongs to the signed-in NAME (its trueName), not i-am.
+        ownerNameId: (ctx?.nameId && String(ctx.nameId) !== "i-am") ? String(ctx.nameId) : null,
       });
     } catch (err) {
       throw mapSeedError(err);
@@ -241,6 +243,8 @@ async function birthHandler({ payload, ctx }) {
       parentBeingId,
       cherubIdentity: { name: "cherub", beingId: parentBeingId },
       summonCtx: ctx?.summonCtx || null,
+      // The being belongs to the signed-in NAME (its trueName), not i-am.
+      ownerNameId: (ctx?.nameId && String(ctx.nameId) !== "i-am") ? String(ctx.nameId) : null,
     });
   } catch (err) {
     throw mapSeedError(err);
@@ -780,28 +784,28 @@ async function truenameHandler({ address, identity, payload }) {
 
 export const cherubBeOps = Object.freeze({
   birth: {
-    description: "Create a new identity and start at your home.",
-    label: "Register",
+    description: "Create a top-level being owned by your name (cherub is right below I_AM). You're already signed in as your name — no password needed.",
+    label: "Create a top-level being",
     args: {
-      name:     { type: "text",     label: "Username", required: true },
-      password: { type: "password", label: "Password", required: true, minLength: 1 },
+      name:     { type: "text",     label: "Name your being", required: true },
+      password: { type: "password", label: "Password (optional — only for sharing this being)", required: false },
     },
     handler: birthHandler,
     bootstrap: true,   // arrival has no identity yet; assertVerbCaller skipped
   },
   connect: {
-    description: "Bind this session to an existing identity.",
-    label: "Log in",
+    description: "Connect to a being you already own (no password — your name owns it).",
+    label: "Connect to one of your beings",
     args: {
-      name:     { type: "text",     label: "Username", required: true },
-      password: { type: "password", label: "Password", required: true },
+      name:     { type: "text",     label: "Being name", required: true },
+      password: { type: "password", label: "Password (only for a shared being you don't own)", required: false },
     },
     handler: connectHandler,
     bootstrap: true,
   },
   release: {
-    description: "Drop this session's binding.",
-    label: "Log out",
+    description: "Stop driving this being (close it). Your name stays signed in.",
+    label: "Release this being",
     args: {},
     handler: releaseHandler,
   },
@@ -857,6 +861,7 @@ async function _registerHumanWithFreshHome({
   cherubIdentity,
   summonCtx,
   fatherBeingId = null,   // who REQUESTED the mint (arrival for register, parent for sub-births)
+  ownerNameId = null,     // the connected NAME this being belongs to (its trueName); null -> mother's default (i-am)
 }) {
   const { randomUUID: uuidv4 } = await import("node:crypto");
   const { emitFact } = await import("../../../past/fact/facts.js");
@@ -894,6 +899,13 @@ async function _registerHumanWithFreshHome({
       name,
       password,
       ...(importKey ? { importKey } : {}),
+      // OWNED BY THE CONNECTED NAME. A being cherub mints for a signed-in name
+      // is that NAME's own (sovereign trueName), NOT a child of i-am. Without
+      // this, a name's being defaults to the mother's trueName (i-am) — the
+      // funk where the being shows as I_AM and its key-export would surface the
+      // reality key. Null only for the anonymous/pre-name path (no connected
+      // name), where the mother's default is correct.
+      ...(ownerNameId ? { trueName: String(ownerNameId) } : {}),
       defaultRole:   "human",
       homeId:        String(homeId),
       parentBeingId: parentBeingId ? String(parentBeingId) : null,
@@ -1000,7 +1012,7 @@ function mapSeedError(err) {
 export const cherubRole = Object.freeze({
   name: "cherub",
   description:
-    "The gate. Processes the three BE ops (birth/connect/release). Identity territory; no summon dispatch.",
+    "The gate, right below I_AM. Processes the three BE ops (birth/connect/release) AND summon:mate — a connected name births its first TOP-LEVEL being through cherub (owned by the name). Down the chain, names reuse summon:mate on @birther / be:birth on their own beings.",
   // Seed delegate role — hosted on the reality root. The cherub being
   // gets this role granted at boot by the I-Am. canDo includes
   // grant-role:human + grant-role:global so cherub can anoint new
@@ -1030,7 +1042,7 @@ export const cherubRole = Object.freeze({
     {
       intent: "mate",
       as: "receiver",
-      description: "Accepts arrival's registration request; mints a new human being and binds the session",
+      description: "Birth your first being through your name — a top-level being, owned by you (cherub is right below I_AM)",
     },
   ],
 
@@ -1042,7 +1054,86 @@ export const cherubRole = Object.freeze({
   // shape.
   canBe: ["birth", "connect", "release"],
 
-  async summon(_message, _ctx) {
+  // summon:mate — a connected NAME, acting through @arrival, asks cherub to
+  // birth its FIRST being. Cherub is right below I_AM, so it mints TOP-LEVEL
+  // beings; the child is OWNED by the summoner's name (sovereign trueName),
+  // not a vessel of cherub. Down the chain the name reuses summon:mate against
+  // @birther / be:birth on its own beings. (A name CAN be given beings without
+  // ever using cherub; this is just the typical first-being path on land.)
+  async summon(message, ctx) {
+    const intent = (typeof message === "object" && message !== null)
+      ? (message.intent || message.kind || null)
+      : null;
+    if (intent === "mate") return await handleCherubMate(message, ctx);
     return null;
   },
 });
+
+// summon:mate → cherub births the name's first TOP-LEVEL being, owned by the
+// summoner's NAME (its trueName = the connected name). The name then
+// be:connects to it passwordless (owned connect). Mirrors birther's
+// handleMateRequest, but the child is the name's OWN (sovereign), not a vessel.
+async function handleCherubMate(message, ctx) {
+  const askerNameId = ctx?.askerNameId ? String(ctx.askerNameId) : null;
+  if (!askerNameId || askerNameId === "i-am") {
+    return ctx.failure?.("refused", "summon:mate against cherub needs a connected name — sign in your name first")
+      || { kind: "failure", ok: false, shape: "refused", reason: "no name" };
+  }
+  const messageObj = (typeof message === "object" && message !== null) ? message : {};
+  const beingName = (typeof messageObj.name === "string" && messageObj.name.trim())
+    ? messageObj.name.trim()
+    : null;
+  if (!beingName) {
+    return ctx.failure?.("refused", "give your first being a name (message.name)")
+      || { kind: "failure", ok: false, shape: "refused", reason: "no being name" };
+  }
+  const cherubBeingId = ctx?.toBeing?._id || ctx?.toBeing?.id || null;
+  if (!cherubBeingId) {
+    return ctx.failure?.("internal", "cherub beingId unresolved in ctx")
+      || { kind: "failure", ok: false, shape: "internal", reason: "no cherub id" };
+  }
+  // Top-level: at the reality root, parented under cherub (right below I_AM).
+  let homeSpaceId = messageObj.homeSpaceId || null;
+  if (!homeSpaceId) {
+    try {
+      const { findRoot } = await import("../../../materials/projections.js");
+      const branch = ctx?.actorAct?.branch || "0";
+      const roots = await findRoot("space", branch);
+      homeSpaceId = roots?.[0]?.id || null;
+    } catch { homeSpaceId = null; }
+  }
+  if (!homeSpaceId) {
+    return ctx.failure?.("internal", "cannot resolve the reality root for the new being")
+      || { kind: "failure", ok: false, shape: "internal", reason: "no home space" };
+  }
+
+  let result;
+  try {
+    result = await birthBeing({
+      spec: {
+        name: beingName,
+        // SOVEREIGN: trueName = the summoner's name, so the being is the
+        // name's OWN top-level being (not a vessel of cherub). Owned connect
+        // (passwordless) follows from the name owning it.
+        trueName: askerNameId,
+        cognition: messageObj.cognition || "human",
+        defaultRole: messageObj.defaultRole || "global",
+        parentBeingId: cherubBeingId,
+        homeId: homeSpaceId,
+      },
+      identity: { beingId: cherubBeingId, name: "cherub" },
+      summonCtx: ctx,
+    });
+  } catch (err) {
+    log.warn("Cherub", `summon:mate first-being birth failed: ${err.message}`);
+    return ctx.failure?.("internal", `birth failed: ${err.message}`)
+      || { kind: "failure", ok: false, shape: "internal", reason: err.message };
+  }
+
+  const summary = `your first being "${result?.name || beingName}" is born — ` +
+    `top-level under cherub, owned by your name`;
+  return ctx.act?.(summary) || {
+    kind: "act", ok: true, content: summary,
+    childBeingId: result?.beingId, childName: result?.name, trueName: askerNameId,
+  };
+}

@@ -521,6 +521,49 @@ export async function buildNameDescriptor(nameId) {
   };
 }
 
+/**
+ * The being a NAME last be:connected and has NOT since be:released — its OPEN
+ * session, to AUTO-RESUME on the name's next connect (Tabor: "look at the name's
+ * act chain for the last be:connect with no be:release; if none, go to the
+ * being menu / arrival"). Reads the name's be:connect / be:release facts in
+ * time order; a being whose LATEST be-action is "connect" is still open, and
+ * the most-recently-connected such being wins. Returns { beingId, beingName,
+ * homeBranch } or null.
+ */
+export async function lastOpenBeingForName(nameId, branch = "0") {
+  if (!nameId || String(nameId) === "i-am") return null;
+  const { default: Fact } = await import("../past/fact/fact.js");
+  // The name's own be:connect / be:release facts, oldest-first. nameId is the
+  // signer (the name acting); target is the being connected/released.
+  const facts = await Fact.find({
+    nameId: String(nameId),
+    verb:   "be",
+    action: { $in: ["connect", "release"] },
+  }).sort({ date: 1 }).select("action target date").lean();
+
+  const latest = new Map(); // beingId -> { action, date } (its most recent be-action)
+  for (const f of facts) {
+    const bid = f.target?.id ? String(f.target.id) : null;
+    if (!bid) continue;
+    latest.set(bid, { action: f.action, date: f.date });
+  }
+  let best = null;
+  for (const [bid, la] of latest) {
+    if (la.action === "connect" && (!best || la.date > best.date)) best = { beingId: bid, date: la.date };
+  }
+  if (!best) return null;
+
+  // Resolve the open being's name + home branch so the portal can drive it.
+  // Skip a tombstoned/closed being (you can't resume a dead being).
+  const slot = await loadProjection("being", best.beingId, branch);
+  if (!slot?.state || slot.tombstoned) return null;
+  return {
+    beingId:    best.beingId,
+    beingName:  slot.state.name || null,
+    homeBranch: slot.state.homeBranch || "0",
+  };
+}
+
 export async function buildPlaceDescriptor(resolved, opts = {}) {
   // Branch flows from the resolved stance (Pass 4 substrate). Threaded
   // through every descriptor helper alongside `until` so each fold lands
@@ -1523,7 +1566,12 @@ async function identityBlock(identity, { until = null, branch } = {}) {
         const cog = quals instanceof Map ? quals.get("cognition") : quals?.cognition;
         if (cog?.defaultKind === "human") {
           const { isSigningUnlocked } = await import("../materials/name/signingSession.js");
-          signingUnlocked = isSigningUnlocked(String(identity.beingId));
+          // The signing session is keyed by NAMEID (the Name's key is what
+          // signs), not beingId — a being's _id is a content hash post-split.
+          // Read the viewer's name; absent name => not unlocked.
+          signingUnlocked = identity.nameId
+            ? isSigningUnlocked(String(identity.nameId))
+            : false;
         }
         // Visibility for the "freshly-registered being lands off-grid"
         // class of bugs. When the slot resolved but position is null,

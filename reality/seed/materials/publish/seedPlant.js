@@ -35,7 +35,7 @@ import { remapRefs } from "../refWalker.js";
 import { assertValidBundle } from "./bundle.js";
 import { emitFact } from "../../past/fact/facts.js";
 import { withBeingAct } from "../../sprout.js";
-import { generateBeingKeypair } from "../name/keys.js";
+import { generateNameKeypair } from "../name/keys.js";
 import { encryptCredential } from "../being/identity/credentials.js";
 import { matterContentId } from "../matter/matterId.js";
 import log from "../../seedReality/log.js";
@@ -301,9 +301,9 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
   for (const s of bundle.content.spaces) remapTable.set(s.sourceId, uuidv4());
   const graftedKeypairs = new Map();  // being sourceId → keypair (private key → privateKeyEnc at birth)
   for (const b of bundle.content.beings) {
-    const kp = generateBeingKeypair();
+    const kp = generateNameKeypair();
     graftedKeypairs.set(b.sourceId, kp);
-    remapTable.set(b.sourceId, kp.beingId);
+    remapTable.set(b.sourceId, kp.nameId);
   }
   // Matter ids are filled by the pre-pass below (they hash the remapped
   // spec, which needs space + being ids already in the table).

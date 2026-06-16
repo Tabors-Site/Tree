@@ -295,6 +295,35 @@ export async function birthBeing({ spec, identity, summonCtx = null, branch = nu
     );
   }
 
+  // SOVEREIGN OVERRIDE. By default a being expresses the MOTHER's trueName
+  // (a vessel of the one that birthed it). An EXPLICIT spec.trueName makes the
+  // being the NAMED's OWN instead — sovereign, owned directly by that Name.
+  // This is how a name births its FIRST being through cherub (summon:mate):
+  // the child's trueName = the summoner's NAME, so the name owns it and
+  // be:connects passwordless (owned). The named Name must be declared here and
+  // not banished. (FORK 1: "birth takes an explicit trueName for sovereign
+  // beings, overriding the mother's-name default.")
+  let effectiveTrueName = motherTrueName;
+  if (spec.trueName && String(spec.trueName) !== String(motherTrueName)) {
+    const { loadProjection } = await import("../../projections.js");
+    const nameSlot = await loadProjection("name", String(spec.trueName), "0");
+    if (!nameSlot?.state) {
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        `birthBeing("${name}"): explicit trueName "${String(spec.trueName).slice(0, 12)}…" ` +
+          `is not a declared Name on this reality.`,
+      );
+    }
+    const { isNameBanished } = await import("../../name/closure.js");
+    if (await isNameBanished(String(spec.trueName))) {
+      throw new IbpError(
+        IBP_ERR.FORBIDDEN,
+        `birthBeing("${name}"): trueName "${String(spec.trueName).slice(0, 12)}…" is banished.`,
+      );
+    }
+    effectiveTrueName = String(spec.trueName);
+  }
+
   // ── Home space exists (or is pending in this moment) ──
   // Same shape: an in-moment do:create-space for homeId is legitimate
   // because both facts commit in the same transaction.
@@ -467,9 +496,11 @@ export async function birthBeing({ spec, identity, summonCtx = null, branch = nu
     name,
     password: credential.hash,
     defaultRole,
-    // The trueName this being expresses: the MOTHER's trueName, the name
-    // that births it. Beings under i-am inherit i-am.
-    trueName: motherTrueName,
+    // The trueName this being expresses: the MOTHER's trueName by default
+    // (the name that births it), OR an explicit sovereign override (the being
+    // is the named's own — e.g. a name's first being through cherub). Beings
+    // under i-am inherit i-am.
+    trueName: effectiveTrueName,
     parentBeingId,
     homeSpace: homeId,
     // The being's home branch = the stamper's branch (the branch THIS

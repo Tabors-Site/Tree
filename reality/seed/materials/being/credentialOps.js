@@ -60,153 +60,21 @@ function readCredentialPlainFromBeing(being) {
   return auth?.credentialPlain || null;
 }
 
-function readPrivateKeyEncFromBeing(being) {
-  const q = being?.qualities;
-  if (!q) return null;
-  const auth = q instanceof Map ? q.get("auth") : q.auth;
-  return auth?.privateKeyEnc || null;
-}
+// key-export MOVED to seed/materials/name/keyOps.js. The key is a NAME
+// concern post-split (a being holds no key — it expresses a trueName
+// whose key signs), and the old being-targeted version read
+// being.qualities.auth.privateKeyEnc, a field birth.js no longer writes,
+// so it returned hasKey:false for every post-split being. The Name-owned
+// op resolves the being's trueName and exports the Name's key.
 
-// key-export. Return the being's PRIVATE KEY (decrypted PEM) to the
-// authorized owner. The wallet "back up your key" / "take your identity
-// to another reality" path. The key NEVER leaves the reality except
-// through this explicit, auth-gated, owner-initiated op: it is redacted
-// out of every descriptor, fact, and clone bundle (qualities.auth.*),
-// and never the JWT. Returned only on the direct DO response channel.
-//
-// skipAudit: the normal auto-audit copies the handler's RESULT into the
-// stored fact (summarizeAuditResult), which would persist the key. So
-// this op opts out and stamps its OWN audit fact recording WHO exported
-// WHOSE key WHEN, with the key nowhere in it.
-registerOperation("key-export", {
-  targets: ["being"],
-  ownerExtension: "seed",
-  factAction: "key-export",
-  skipAudit: true,
-  handler: async ({ target, identity, summonCtx }) => {
-    const targetBeingId = targetBeingIdOf(target);
-    const askerBeingId = askerBeingIdOf(identity);
-    const ok = await hasCredentialAuthority(askerBeingId, targetBeingId);
-    if (!ok) {
-      throw new IbpError(
-        IBP_ERR.FORBIDDEN,
-        "Asker has no authority to export this being's key",
-        { askerBeingId, targetBeingId },
-      );
-    }
-    const { loadTargetRow } = await import("../_targetShape.js");
-    const beingRow = await loadTargetRow(target, "being", { summonCtx });
-    const blob = readPrivateKeyEncFromBeing(beingRow);
-    const privateKeyPem = blob ? decryptCredential(blob) : null;
-
-    // Paper form: the key's 32-byte seed as 24 BIP39 words. Same key,
-    // writable by hand; key-import rebuilds the keypair from either
-    // skin. Null when the key shape can't yield a seed (foreign blob).
-    let mnemonic = null;
-    if (privateKeyPem) {
-      try {
-        const { seedFromPrivateKeyPem } = await import("../name/keys.js");
-        const { entropyToMnemonic } = await import("../name/mnemonic.js");
-        mnemonic = entropyToMnemonic(seedFromPrivateKeyPem(privateKeyPem));
-      } catch { /* PEM-only export */ }
-    }
-
-    // Audit fact on the asker's reel: who exported whose key. Never the
-    // key. Branch threaded from the moment, never defaulted.
-    await emitFact({
-      verb:    "do",
-      action:  "key-export",
-      beingId: askerBeingId,
-      target:  { kind: "being", id: askerBeingId },
-      params:  { exportedBeingId: targetBeingId },
-      actId:   summonCtx?.actId || null,
-      branch:  summonCtx?.actorAct?.branch,
-    }, summonCtx);
-
-    return {
-      targetBeingId,
-      beingId: targetBeingId,       // the public key / wallet address
-      hasKey: privateKeyPem !== null,
-      privateKeyPem,                // the owner's signing key (PEM)
-      mnemonic,                     // the same key as 24 BIP39 words
-    };
-  },
-});
-
-// signing-unlock / signing-lock — the secondary unlock latch
-// (IDENTITY.md "the felt control", signingSession.js for the model).
-// Self-only: only the being itself opens or closes its own signing
-// session. Unlock proves the secret (the login password, bcrypt
-// checked constant-time like connect); lock needs no proof. Both are
-// skipAudit + manual fact so the password never rides the dispatcher's
-// auto-audit; the fact records THAT the latch moved, never the secret.
-registerOperation("signing-unlock", {
-  targets: ["being"],
-  ownerExtension: "seed",
-  factAction: "signing-unlock",
-  skipAudit: true,
-  args: {
-    password: { type: "text", label: "Your password", required: true },
-  },
-  handler: async ({ target, identity, params, summonCtx }) => {
-    const targetBeingId = targetBeingIdOf(target);
-    const askerBeingId = askerBeingIdOf(identity);
-    if (askerBeingId !== targetBeingId) {
-      throw new IbpError(IBP_ERR.FORBIDDEN, "signing-unlock is self-only", { askerBeingId, targetBeingId });
-    }
-    const { loadTargetRow } = await import("../_targetShape.js");
-    const beingRow = await loadTargetRow(target, "being", { summonCtx });
-    const { verifyPassword } = await import("./identity/credentials.js");
-    const ok = await verifyPassword(beingRow, String(params?.password || ""));
-    if (!ok) {
-      throw new IbpError(IBP_ERR.UNAUTHORIZED, "Invalid credentials");
-    }
-    const { unlockSigning } = await import("../name/signingSession.js");
-    unlockSigning(targetBeingId);
-    await emitFact({
-      verb:    "do",
-      action:  "signing-unlock",
-      beingId: askerBeingId,
-      target:  { kind: "being", id: askerBeingId },
-      params:  {},
-      actId:   summonCtx?.actId || null,
-      branch:  summonCtx?.actorAct?.branch,
-    }, summonCtx);
-    return { targetBeingId, unlocked: true };
-  },
-});
-
-registerOperation("signing-lock", {
-  targets: ["being"],
-  ownerExtension: "seed",
-  factAction: "signing-lock",
-  skipAudit: true,
-  handler: async ({ target, identity, summonCtx }) => {
-    const targetBeingId = targetBeingIdOf(target);
-    const askerBeingId = askerBeingIdOf(identity);
-    if (askerBeingId !== targetBeingId) {
-      throw new IbpError(IBP_ERR.FORBIDDEN, "signing-lock is self-only", { askerBeingId, targetBeingId });
-    }
-    const { lockSigning } = await import("../name/signingSession.js");
-    // Latch closes AFTER the seal so the "I lock" act itself still
-    // seals signed (the last signed act of the session, honestly so).
-    if (summonCtx?.afterSeal) {
-      summonCtx.afterSeal.push(() => lockSigning(targetBeingId));
-    } else {
-      lockSigning(targetBeingId);
-    }
-    await emitFact({
-      verb:    "do",
-      action:  "signing-lock",
-      beingId: askerBeingId,
-      target:  { kind: "being", id: askerBeingId },
-      params:  {},
-      actId:   summonCtx?.actId || null,
-      branch:  summonCtx?.actorAct?.branch,
-    }, summonCtx);
-    return { targetBeingId, unlocked: false };
-  },
-});
+// signing-unlock / signing-lock REMOVED. They were the pre-split per-BEING
+// signing latch — they keyed unlockSigning/lockSigning by beingId (a content
+// hash), but signing is a NAME concern: the signing session is nameId-keyed
+// and loadSigningKey only ever reads it by nameId, so these were dead no-ops.
+// The real signing latch is the NAME session: name:connect unlocks (decrypts
+// the key into the session), name:release locks. In the portal that is the ONE
+// top-right name lock (sign out of the name + see name/public key); a being is
+// driven/dropped by be:connect / be:release, never a separate signing toggle.
 
 // credential-read. Return the auto-generated plaintext (if any) to
 // the authorized asker. The Fact written by the dispatcher carries

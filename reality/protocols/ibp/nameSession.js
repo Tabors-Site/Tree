@@ -90,7 +90,7 @@ export async function handleNameSession(socket, msg, ack) {
       case "connect": return await doConnect(socket, msg, ack, id);
       case "release": return await doRelease(socket, msg, ack, id);
       case "see":     return await doSee(socket, msg, ack, id);
-      case "whoami":  return ackOk(ack, id, { nameId: socket.nameId || null });
+      case "whoami":  return await doWhoami(socket, ack, id);
       default:
         return ackError(
           ack, id, IBP_ERR.ACTION_NOT_SUPPORTED,
@@ -106,6 +106,21 @@ export async function handleNameSession(socket, msg, ack) {
     log.error("IBP", `name session "${op}" failed: ${err.message}`);
     return ackError(ack, id, IBP_ERR.INTERNAL, "name session error");
   }
+}
+
+// whoami — report the bound nameId AND the being to AUTO-RESUME (the name's
+// last be:connect with no be:release). The portal uses lastBeing to drive the
+// name straight back to its last being; null -> the arrival floor / being menu.
+async function doWhoami(socket, ack, id) {
+  const nameId = socket.nameId || null;
+  let lastBeing = null;
+  if (nameId) {
+    try {
+      const { lastOpenBeingForName } = await import("../../seed/ibp/descriptor.js");
+      lastBeing = await lastOpenBeingForName(nameId);
+    } catch { /* best-effort; fall to the being menu */ }
+  }
+  return ackOk(ack, id, { nameId, lastBeing });
 }
 
 // declare — the pre-world bootstrap. Opens an I_AM moment (no being
@@ -125,11 +140,16 @@ async function doDeclare(socket, msg, ack, id) {
   const { withIAmAct } = await import("../../seed/sprout.js");
   const { nameVerb } = await import("../../seed/ibp/verbs/name.js");
   let nameId = null;
+  let reveal = null;
   await withIAmAct("name:declare (pre-world)", async (ctx) => {
     const r = await nameVerb("declare", payload, { summonCtx: ctx, currentBranch: "0" });
     nameId = r.nameId;
+    reveal = r.reveal || null;
   });
-  return ackOk(ack, id, { ok: true, nameId });
+  // `reveal` carries the freshly minted key ONCE (private key + 24 words +
+  // public key) so the holder can back up their identity now. It never touched
+  // a fact; the server does not retain the plaintext after this response.
+  return ackOk(ack, id, { ok: true, nameId, reveal });
 }
 
 // Stamp a name:connect / name:release fact on the name's reel via an I_AM
@@ -163,36 +183,34 @@ async function doConnect(socket, msg, ack, id) {
   const src = msg?.payload || msg || {};
   const token = src.token ?? src.name ?? null;
   const password = src.password ?? null;
-  if (!token || !password) {
+  const privateKey = src.privateKey ?? null;
+
+  // Two ways to prove the holder, both always legitimate (re)claims — no
+  // "already connected" refusal (that gate wedged the holder out: the lockout
+  // bug). The signing session is nameId-keyed and SHARED, so a takeover
+  // re-installs the SAME key and never disrupts another live socket.
+  //   1. PRIVATE KEY — the true name itself. Possessing it IS the proof (its
+  //      pubkey IS the nameId); no password. The doctrine "you can always act
+  //      with the raw key" as a portal login.
+  //   2. real-name/pubkey + PASSWORD — decrypts the custodial key into the
+  //      session. The portal convenience for not presenting the key each time.
+  let result;
+  if (privateKey) {
+    const { nameConnectWithKey } = await import("../../seed/materials/name/login.js");
+    result = await nameConnectWithKey(privateKey);
+  } else if (token && password) {
+    const { nameConnect } = await import("../../seed/materials/name/login.js");
+    result = await nameConnect(token, password);
+  } else {
     return ackError(ack, id, IBP_ERR.INVALID_INPUT,
-      "name connect requires { token (real-name or pubkey), password }");
+      "name connect requires { token (real-name or pubkey), password } or { privateKey }");
   }
-  // PRE-CHECK the reel: a name can't connect twice (one active session per
-  // name). Check BEFORE unlocking, because the signing session is nameId-keyed
-  // and SHARED — if another session already holds this name connected, the
-  // undo below would lock the key out from under THEM. Refusing here never
-  // touches the shared session. (The op gate re-checks authoritatively.)
-  const { resolveNameId } = await import("../../seed/materials/name/registry.js");
-  const preNameId = await resolveNameId(token);
-  if (preNameId) {
-    const { loadProjection } = await import("../../seed/materials/projections.js");
-    const pre = await loadProjection("name", preNameId, "0");
-    if (pre?.state?.connected === true) {
-      return ackError(ack, id, IBP_ERR.RESOURCE_CONFLICT,
-        "name is already connected — release it first (one active session per name)");
-    }
-  }
-  const { nameConnect } = await import("../../seed/materials/name/login.js");
-  const result = await nameConnect(token, password);
   if (!result.ok) {
     // Uniform failure surface — never leak whether the name exists vs the
-    // password is wrong (both read as a refused connect to the client).
+    // secret is wrong (both read as a refused connect to the client).
     return ackError(ack, id, IBP_ERR.UNAUTHORIZED, `connect refused: ${result.reason}`);
   }
-  // Stamp the name:connect fact (folds connected:true on the name's reel). The
-  // op gate refuses a DOUBLE connect (one active session per name); the
-  // pre-check above means no OTHER session is connected here, so undoing the
-  // unlock on a (racy) refusal only locks what THIS attempt just unlocked.
+  // Stamp the name:connect fact (folds connected:true on the name's reel).
   try {
     await stampNameSession("connect", result.nameId);
   } catch (err) {

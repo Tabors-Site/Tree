@@ -30,6 +30,10 @@ export function createView() {
       onSelectBeing: (beingId, name) => ctx.navigation.selectBeing(beingId, name),
       onSignIn: (op, name, password, opts) => ctx.signIn(op, name, password, opts),
       onSignOut: () => ctx.signOut(),
+      // The name layer is the single auth path: re-present the shell's Name Form
+      // / being menu (NOT a flat-local claim/register overlay — that bypassed
+      // the name layer and could mint an i-am being).
+      onNameAuth: () => ctx.shell?.presentNameGate?.(),
       onClose: () => ctx.shell?.switchView("3d"),
     });
   }

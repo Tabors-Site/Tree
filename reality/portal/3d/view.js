@@ -75,6 +75,12 @@ export function createView() {
   const state = () => ctx.state.get();
   const client = () => ctx.client;
   const isAuthed = () => !!ctx.state.get("session")?.token;
+  // EMBODIED = actually driving a being (has a beingId), distinct from merely
+  // having a NAME (a token). A name with no being is signed in but bodiless:
+  // it lands on the ARRIVAL FLOOR (the cherub gate), not the full world. The
+  // SCENE keys off embodiment; the action gates still key off the token (a
+  // name CAN summon:mate cherub to birth its first being from the floor).
+  const isEmbodied = () => !!ctx.state.get("session")?.beingId;
 
   function setSelectedBeing(beingId, name) {
     // Selection rides the shared model: the IBPA's right stance gains
@@ -229,7 +235,9 @@ export function createView() {
         console.warn("[3D] preload failed:", err?.message);
       }
       if (seq !== renderSeq || !scene) return; // superseded mid-preload
-      scene.renderDescriptor(desc, { isAuthenticated: isAuthed() });
+      // Pass EMBODIMENT (driving a being), not the token: a name with no being
+      // sees the arrival floor (cherub gate), not the full world.
+      scene.renderDescriptor(desc, { isAuthenticated: isEmbodied() });
       setHud(formatLocation(desc));
       lastEmittedCoord = null;
       startSelfPositionLoop();
@@ -238,7 +246,7 @@ export function createView() {
 
     // live / rewind / now: same place, new state — keep the camera.
     scene.renderDescriptor(desc, {
-      isAuthenticated: isAuthed(),
+      isAuthenticated: isEmbodied(),
       resetCamera: meta.resetCamera === true,
     });
   }

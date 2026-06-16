@@ -193,6 +193,10 @@ import "./materials/modelOp.js";
 import "./materials/portalOp.js";
 import "./materials/being/ops.js";
 import "./materials/being/credentialOps.js";
+// Side-effect import. Registers `do key-export` — the NAME's key custody
+// ("back up your key / your exit"). Lives in name/ because the key is a
+// Name concern post-split (a being holds no key). See materials/name/keyOps.js.
+import "./materials/name/keyOps.js";
 // Side-effect import. Registers the role-acquisition ops: ask-role
 // (host policy decides: auto, queue, or refuse) and take-role
 // (walk-in for grabbed:true roles). The acquisition module lives in

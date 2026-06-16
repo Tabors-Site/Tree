@@ -1,8 +1,8 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Being keys — a being is a wallet.
+// Name keys — a name is a wallet.
 //
-// A being's id IS its ed25519 public key, encoded as the colon-free
+// A Name's id IS its ed25519 public key, encoded as the colon-free
 // multibase multicodec form `z<base58btc(0xed01 || rawpub)>` (the
 // did:key value for ed25519, renderable as `did:key:z...` for external
 // display). Colon-free on purpose: ids flow through projection keys
@@ -10,10 +10,12 @@
 // colon-delimited, so a `did:tree:` prefix with colons would corrupt
 // key parsing. The `z` is multibase base58btc; the `0xed01` is the
 // multicodec varint for ed25519-pub, so the id is self-describing and
-// algorithm-agile.
+// algorithm-agile. (A being's _id is now a content hash, not a key —
+// the key lives here, on the Name the being expresses; "names are
+// wallets, beings are presences".)
 //
 // Because the id IS the verification key, signatures are SELF
-// CERTIFYING: verifyBeingSig decodes the key straight from the id, no
+// CERTIFYING: verifyNameSig decodes the key straight from the id, no
 // directory. Mirrors the ed25519 path the reality already uses in
 // seed/realityIdentity.js (Node native crypto, no new dependency).
 
@@ -69,7 +71,7 @@ function rawPubFromPem(publicKeyPem) {
   return Buffer.from(jwk.x, "base64url"); // raw 32-byte ed25519 public key
 }
 
-/** Encode a raw 32-byte ed25519 public key as a being/reality id. */
+/** Encode a raw 32-byte ed25519 public key as a name/reality id. */
 export function encodeKeyId(rawPub) {
   return ID_PREFIX + b58encode(Buffer.concat([MULTICODEC_ED25519_PUB, rawPub]));
 }
@@ -101,10 +103,10 @@ export function keyIdToPublicKey(keyId) {
 }
 
 /**
- * Generate a fresh being keypair. The public key IS the being id.
- * @returns {{ publicKeyPem: string, privateKeyPem: string, beingId: string }}
+ * Generate a fresh name keypair. The public key IS the name id.
+ * @returns {{ publicKeyPem: string, privateKeyPem: string, nameId: string }}
  */
-export function generateBeingKeypair() {
+export function generateNameKeypair() {
   const { publicKey, privateKey } = crypto.generateKeyPairSync("ed25519", {
     publicKeyEncoding: { type: "spki", format: "pem" },
     privateKeyEncoding: { type: "pkcs8", format: "pem" },
@@ -112,29 +114,30 @@ export function generateBeingKeypair() {
   return {
     publicKeyPem: publicKey,
     privateKeyPem: privateKey,
-    beingId: encodeKeyId(rawPubFromPem(publicKey)),
+    nameId: encodeKeyId(rawPubFromPem(publicKey)),
   };
 }
 
 /**
- * Sign a payload object with a being's private key (PEM). The payload
+ * Sign a payload object with a name's private key (PEM). The payload
  * is serialized with the SAME canonicalizer facts use, so signer and
- * verifier produce byte-identical input.
+ * verifier produce byte-identical input. (A being never signs — the
+ * Name it expresses does.)
  * @returns {string} base64 signature
  */
-export function signAsBeing(privateKeyPem, payloadObj) {
+export function signAsName(privateKeyPem, payloadObj) {
   const msg = Buffer.from(canonicalize(payloadObj), "utf8");
   return crypto.sign(null, msg, privateKeyPem).toString("base64");
 }
 
 /**
- * Verify a signature against a being id (the public key). Self
+ * Verify a signature against a name id (the public key). Self
  * certifying: the key is decoded from the id, no directory. Returns
  * false on any decode/verify failure rather than throwing.
  */
-export function verifyBeingSig(beingId, payloadObj, sigB64) {
+export function verifyNameSig(nameId, payloadObj, sigB64) {
   try {
-    const pub = keyIdToPublicKey(beingId);
+    const pub = keyIdToPublicKey(nameId);
     const msg = Buffer.from(canonicalize(payloadObj), "utf8");
     return crypto.verify(null, msg, pub, Buffer.from(sigB64, "base64"));
   } catch {
@@ -146,7 +149,7 @@ export function verifyBeingSig(beingId, payloadObj, sigB64) {
  * Verify a signature against a raw SPKI public-key PEM, not a key id.
  * Used where the signer's id is NOT its public key: I_AM, whose id is
  * the literal "i-am" and whose key is the reality key (realityIdentity).
- * Same canonicalizer as signAsBeing, so the two are symmetric.
+ * Same canonicalizer as signAsName, so the two are symmetric.
  */
 export function verifyWithPublicKeyPem(publicKeyPem, payloadObj, sigB64) {
   try {
@@ -157,7 +160,7 @@ export function verifyWithPublicKeyPem(publicKeyPem, payloadObj, sigB64) {
   }
 }
 
-/** Encode a being/reality id from its SPKI public-key PEM. */
+/** Encode a name/reality id from its SPKI public-key PEM. */
 export function keyIdFromPublicKeyPem(publicKeyPem) {
   return encodeKeyId(rawPubFromPem(publicKeyPem));
 }
@@ -183,9 +186,9 @@ export function seedFromPrivateKeyPem(privateKeyPem) {
 
 /**
  * Rebuild the full keypair from a 32-byte seed. The inverse of
- * seedFromPrivateKeyPem: same seed → same key → same beingId,
+ * seedFromPrivateKeyPem: same seed → same key → same nameId,
  * deterministically, on any host.
- * @returns {{ publicKeyPem: string, privateKeyPem: string, beingId: string }}
+ * @returns {{ publicKeyPem: string, privateKeyPem: string, nameId: string }}
  */
 export function keypairFromSeed(seed) {
   const buf = Buffer.from(seed);
@@ -200,11 +203,11 @@ export function keypairFromSeed(seed) {
   return {
     publicKeyPem,
     privateKeyPem: priv.export({ type: "pkcs8", format: "pem" }),
-    beingId: encodeKeyId(rawPubFromPem(publicKeyPem)),
+    nameId: encodeKeyId(rawPubFromPem(publicKeyPem)),
   };
 }
 
-/** Rebuild the full keypair (incl. beingId) from a private-key PEM. */
+/** Rebuild the full keypair (incl. nameId) from a private-key PEM. */
 export function keypairFromPrivateKeyPem(privateKeyPem) {
   return keypairFromSeed(seedFromPrivateKeyPem(privateKeyPem));
 }

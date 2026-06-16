@@ -158,6 +158,11 @@ export function mountFlatView(rootContainer, ctx) {
   flat.signOut = async () => {
     if (typeof ctx.onSignOut === "function") return ctx.onSignOut();
   };
+  // Re-present the name layer (the shell's Name Form / being menu) — the single
+  // auth path. The flat identity chip uses this instead of a local overlay.
+  flat.presentNameAuth = () => {
+    if (typeof ctx.onNameAuth === "function") return ctx.onNameAuth();
+  };
   flat.sendSummon = async (stance, content, opts = {}) => {
     if (!ctx.client) throw new Error("flat.sendSummon: no client");
     const reality   = ctx.discovery?.reality;

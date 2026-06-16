@@ -155,6 +155,16 @@ export async function logFact(input, opts = {}) {
     );
   }
 
+  // EMBODIMENT invariant (Tabor): a name makes WORLD facts (do / be / summon)
+  // ONLY by acting THROUGH a being — every world fact carries the actor being
+  // (the `beingId` REQUIRED above is that structural guarantee; there is no
+  // bodiless world fact). The only thing a name acts on WITHOUT a being is the
+  // name chain itself — NAME-verb facts (verb:"name": declare/connect/release/
+  // banish), the identity layer outside the world. SEE never reaches logFact (a
+  // read, no fact). A name with no being of its OWN acts through the shared
+  // @arrival being; the wire (protocols/ibp/verbs/*) seats @arrival as the
+  // actor for a name-only socket's world verb, so it is never bodiless.
+
   let normalizedTarget = null;
   if (target && typeof target === "object") {
     if (target.kind && !VALID_TARGET_KINDS.has(target.kind)) {

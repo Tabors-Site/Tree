@@ -233,48 +233,10 @@ function exportSection(parent, { doOp, stance, name }) {
   s.appendChild(out);
 }
 
-// The secondary-unlock latch, panel form. The shell's lock dot shows
-// the live state; this section explains it and offers both moves.
-function signingSection(parent, { state, doOp, stance }) {
-  const unlocked = state?.descriptor?.identity?.signingUnlocked;
-  if (unlocked === null || unlocked === undefined) return; // not gated (non-human)
-  const s = section(parent, "signing");
-  const status = el("div", "idp-label",
-    unlocked ? "🔓 unlocked — your acts seal signed" : "🔒 locked — your acts seal unsigned");
-  s.appendChild(status);
-  noteLine(s,
-    "The reality holds your key but only signs for you while this session is unlocked " +
-    "with your password. It re-locks on idle and on sign-out.");
-  const row = el("div", "idp-row");
-  const out = el("div", "idp-export-out");
-  if (unlocked) {
-    const lock = el("button", "idp-btn", "lock signing");
-    lock.onclick = async () => {
-      try {
-        await doOp(stance, "signing-lock", {});
-        status.textContent = "🔒 locked — your acts seal unsigned";
-      } catch (err) { noteLine(out, `refused: ${err?.message || err}`, "idp-warn"); }
-    };
-    row.appendChild(lock);
-  } else {
-    const pw = el("input", "idp-input");
-    pw.type = "password";
-    pw.placeholder = "your password";
-    const unlock = el("button", "idp-btn idp-primary", "unlock signing");
-    unlock.onclick = async () => {
-      out.innerHTML = "";
-      try {
-        await doOp(stance, "signing-unlock", { password: pw.value });
-        status.textContent = "🔓 unlocked — your acts seal signed";
-        pw.value = "";
-      } catch (err) { noteLine(out, `refused: ${err?.message || err}`, "idp-warn"); }
-    };
-    row.appendChild(pw);
-    row.appendChild(unlock);
-  }
-  s.appendChild(row);
-  s.appendChild(out);
-}
+// (The per-being "signing" section was removed. Signing belongs to the NAME,
+// not the being: it is unlocked/locked by the ONE top-right name lock
+// — name:connect / name:release — never a separate per-being toggle. The dead
+// signing-unlock / signing-lock DO ops were removed with it.)
 
 function credentialSection(parent, { doOp, stance }) {
   const s = section(parent, "password");
@@ -390,7 +352,9 @@ export function renderIdentityPanel(body, { state, doOp, see, signOut, being = n
   if (session?.token && doOp) {
     const stance = session.beingAddress
       || `${state?.discovery?.reality || ""}/@${name}`;
-    signingSection(wrap, { state, doOp, stance });
+    // No signing section here: signing is the NAME's, toggled by the ONE
+    // top-right name lock (name:connect/release). The identity panel is about
+    // the being you're driving — export (the Name's key) + the being password.
     exportSection(wrap, { doOp, stance, name });
     credentialSection(wrap, { doOp, stance });
   }

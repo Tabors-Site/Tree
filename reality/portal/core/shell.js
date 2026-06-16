@@ -115,22 +115,20 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
         : "conn-idle";
       dot.title = `socket: ${m.connection || "idle"}`;
     }
-    // Signing-session latch (humans only; identity.signingUnlocked is
-    // null for everyone else and the latch hides). Unlocked = acts
-    // seal signed; locked = acts still land, unsigned. Click toggles:
-    // lock directly, unlock via password prompt (the secondary unlock).
+    // The NAME lock. It is the ONE place to sign out of your name
+    // (name:release) — so it shows whenever you are signed into a name
+    // (session.token present), at the arrival floor or driving any being.
+    // It does NOT depend on a per-being human signing latch (that was the
+    // old dead latch, removed): a name is signed in or it isn't.
     const lock = rootEl.querySelector("#lock-dot");
     if (lock) {
-      const unlocked = m.descriptor?.identity?.signingUnlocked;
-      if (unlocked === null || unlocked === undefined || !m.session?.token) {
+      if (!m.session?.token) {
         lock.style.display = "none";
       } else {
         lock.style.display = "";
-        lock.textContent = unlocked ? "🔓" : "🔒";
-        lock.className = "nav-btn" + (unlocked ? " lock-open" : " lock-shut");
-        lock.title = unlocked
-          ? "signing UNLOCKED — your acts seal signed (click to lock)"
-          : "signing LOCKED — your acts seal unsigned (click to unlock)";
+        lock.textContent = "🔒";
+        lock.className = "nav-btn lock-name";
+        lock.title = "signed in as your name — click to sign out (name:release)";
       }
     }
     // Ghost cue follows the active tab's descriptor.
@@ -198,19 +196,64 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
         }
         repaintChrome();
       },
+      // Birth the name's FIRST being through cherub (summon:mate). The socket is
+      // a bodiless name at the arrival floor; the wire seats @arrival as the
+      // vessel, signed by the name, so cherub births a TOP-LEVEL being owned by
+      // the name. Then drive it (owned connect, passwordless) + land the world.
+      onBirthFirst:  async (beingName) => {
+        await ctx.client.summon(`${reality}/@cherub`, {
+          from: `${reality}/@arrival`,
+          content: { name: beingName },
+          intent: "mate",
+        });
+        // Cherub births on its own moment (async); poll the name's roster.
+        let appeared = null;
+        for (let i = 0; i < 60 && !appeared; i++) {
+          await new Promise((r) => setTimeout(r, 300));
+          try {
+            const d = await ctx.client.nameSee(nameId);
+            appeared = (d?.beings || []).find((b) => b.name === beingName) || null;
+          } catch { /* keep polling */ }
+        }
+        if (!appeared) throw new Error("birth is taking a while — open 'your beings' to connect once it lands");
+        const result = await ctx.client.be("connect", `${reality}/@${beingName}`, {});
+        await ctx.adoptSession(result, beingName);
+        repaintChrome();
+      },
     });
   }
 
   // The Name gate: run after the primary context lands (and after each name
   // connect/release). Three states — no name -> the Name Form (the Name layer
-  // is in front of the world); a name but no being -> the Being Picker; a name
-  // + a being -> the landed world (overlays down).
+  // is in front of the world, the one BLOCKING gate, since you need a name to
+  // do anything); a name but NO being -> the world stands at the ARRIVAL FLOOR
+  // (you're signed in, bodiless, facing cherub) with a NON-BLOCKING "your
+  // beings" panel to drive an existing being or birth your first; a name + a
+  // being -> the landed world (panels down).
   async function presentNameGate(ctx = primaryCtx) {
     let who = null;
     try { who = await ctx.client?.nameWhoami(); } catch { /* fall through to world */ return; }
     if (!who?.nameId) { hideBeingPicker(); presentNameForm(ctx); return; }
     const sess = ctx.state.get("session");
-    if (!sess?.beingId) { presentBeingPicker(ctx, who.nameId); return; }
+    if (!sess?.beingId) {
+      hideNameForm();
+      // RESUME the name's last open being (its last be:connect with no
+      // be:release, read off the name's chain — who.lastBeing). Drive it
+      // straight (owned connect, passwordless). If there is none, the name
+      // stands at the arrival floor with the non-blocking being menu.
+      if (who.lastBeing?.beingName) {
+        try {
+          const reality = ctx.state.get("discovery")?.reality || "";
+          const result = await ctx.client.be("connect", `${reality}/@${who.lastBeing.beingName}`, {});
+          await ctx.adoptSession(result, who.lastBeing.beingName);
+          hideBeingPicker();
+          repaintChrome();
+          return;
+        } catch { /* being gone / connect failed -> fall to the being menu */ }
+      }
+      presentBeingPicker(ctx, who.nameId);
+      return;
+    }
     hideNameForm(); hideBeingPicker();
   }
   const maybeShowNameForm = () => presentNameGate(primaryCtx);
@@ -534,6 +577,10 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     switchView,
     addTabFromSession,
     addTabFromAck,
+    // The single name-auth path (the Name layer in front of the world). Views
+    // reach it so e.g. the flat identity chip re-presents the Name Form / being
+    // menu instead of any view-local auth overlay.
+    presentNameGate: (c = activeCtx) => presentNameGate(c),
     get activeView() { return viewHost.activeName; },
   };
 

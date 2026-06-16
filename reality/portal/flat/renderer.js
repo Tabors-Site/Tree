@@ -13,7 +13,6 @@
 
 import { flat } from "./host.js";
 import { openChatFor, isChatOpen, getChatBeing } from "./chat.js";
-import { showAuthOverlay } from "./identity.js";
 import { renderRoleManagerPanel } from "../shared/role-manager-panel.js";
 import { renderBeingFlowPanel } from "../shared/being-flow-panel.js";
 import { renderTimelineSection } from "./being-timeline.js";
@@ -125,10 +124,13 @@ function renderIdentityChip(session, discovery) {
   chip.textContent = session?.token ? `@${username}` : `@arrival`;
   chip.title = session?.token
     ? `signed in as @${username}\nbeing: ${session.beingAddress || "(unknown)"}\nid: ${session.beingId || "(not in session)"}\nclick for identity (key, export, sign out)`
-    : "click to claim or register";
+    : "click to sign in with your name";
   chip.onclick = () => {
     if (session?.token) openIdentityAction();
-    else showAuthOverlay(reality);
+    // The name layer is the single auth path (Name Form / being menu) — not a
+    // flat-local claim/register overlay (which bypassed names + could mint an
+    // i-am being).
+    else flat.presentNameAuth?.();
   };
   idEl.appendChild(chip);
 }
@@ -262,7 +264,9 @@ function renderBeings(desc, { session, discovery }) {
       for (const offer of b.canSummon) {
         if (offer?.as !== "receiver" || !offer?.intent) continue;
         const btn = document.createElement("button");
-        btn.textContent = offer.intent;
+        btn.textContent = offer.intent === "mate"
+          ? (b.being === "cherub" ? "birth your first being" : "birth a child")
+          : offer.intent;
         btn.className = "btn-sm";
         btn.title = offer.description || `summon @${b.being} with intent="${offer.intent}"`;
         btn.onclick = () => openIntentSummon(b, offer);
@@ -285,8 +289,11 @@ function renderBeings(desc, { session, discovery }) {
 // the birther's handler. The summoner (you) becomes the father of
 // the vessel-child; the target being becomes the mother.
 function openIntentSummon(beingEntry, offer) {
+  const isCherub = beingEntry.being === "cherub";
   const promptText = offer.intent === "mate"
-    ? `Summon @${beingEntry.being} to mate. The new vessel-child will have @${beingEntry.being} as mother and you as father. Optional: vessel name. (Leave blank for auto-generated.)`
+    ? (isCherub
+        ? `Birth your first being through your name. It will be a top-level being, owned by you (cherub is right below I_AM). Name it:`
+        : `Summon @${beingEntry.being} to mate. The new child has @${beingEntry.being} as mother and you as father. Optional: child name. (Leave blank for auto-generated.)`)
     : `Summon @${beingEntry.being} with intent="${offer.intent}". Optional message:`;
   const userInput = window.prompt(promptText, "");
   if (userInput === null) return;

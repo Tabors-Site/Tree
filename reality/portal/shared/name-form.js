@@ -95,7 +95,8 @@ export function showNameForm({ client, realityDomain = "", onConnected = () => {
     (tabs.find((t) => t.key === active) || tabs[0]).render();
   }
 
-  // ── Connect: real-name (or pubkey) + password -> enter the world.
+  // ── Connect: real-name (or pubkey) + password, OR the private key / 24-word
+  //    recovery phrase directly (no password — the key IS the proof).
   function renderConnect() {
     const token = field(body, "Name (real name or public key)");
     const pw = field(body, "Password", "password");
@@ -114,10 +115,35 @@ export function showNameForm({ client, realityDomain = "", onConnected = () => {
       }
     };
     body.appendChild(go);
+
+    // The key path: your private key (PEM) or your 24-word recovery phrase.
+    // Possessing it IS the proof; no password needed (and it recovers a name
+    // whose password you've lost).
+    body.appendChild(el("div", "nf-or", "— or use your key / recovery phrase —"));
+    const keyInput = el("textarea", "nf-pem");
+    keyInput.placeholder = "paste your private key (PEM) or your 24-word recovery phrase";
+    body.appendChild(keyInput);
+    const goKey = el("button", "nf-btn", "Connect with key / recovery phrase");
+    goKey.onclick = async () => {
+      if (!keyInput.value.trim()) { setStatus("Paste your private key or 24 words.", "err"); return; }
+      busy(goKey, true); setStatus("Connecting with your key…");
+      try {
+        const r = await client.nameConnectKey(keyInput.value.trim());
+        setStatus("Connected.", "ok");
+        hideNameForm();
+        onConnected(r || null);
+      } catch (err) {
+        setStatus(`Connect refused: ${err?.message || err}`, "err");
+        busy(goKey, false);
+      }
+    };
+    body.appendChild(goKey);
     token.focus();
   }
 
-  // ── Create: mint a new name (the name's "birth"), then offer to connect it.
+  // ── Create: mint a new name (the name's "birth"). Reveal the key ONCE for
+  // backup (public key + private key + 24 words — same as the being-wallet
+  // used to show at birth), THEN enter.
   function renderCreate() {
     const name = field(body, "Real name (your handle)");
     const pw = field(body, "Password", "password");
@@ -128,16 +154,8 @@ export function showNameForm({ client, realityDomain = "", onConnected = () => {
       if (pw.value !== pw2.value) { setStatus("Passwords don't match.", "err"); return; }
       busy(go, true); setStatus("Minting your name…");
       try {
-        await client.nameDeclare({ name: name.value.trim(), password: pw.value || null, soulType: "human" });
-        setStatus(`Created "${name.value.trim()}". Connecting…`, "ok");
-        if (pw.value) {
-          const r = await client.nameConnect(name.value.trim(), pw.value);
-          hideNameForm();
-          onConnected(r?.nameId || null);
-        } else {
-          setStatus(`Created "${name.value.trim()}". It has no password — connect with its private key over the API.`, "ok");
-          busy(go, false);
-        }
+        const dec = await client.nameDeclare({ name: name.value.trim(), password: pw.value || null, soulType: "human" });
+        showReveal(dec?.reveal || null, name.value.trim(), pw.value || null);
       } catch (err) {
         setStatus(`Couldn't create: ${err?.message || err}`, "err");
         busy(go, false);
@@ -145,6 +163,77 @@ export function showNameForm({ client, realityDomain = "", onConnected = () => {
     };
     body.appendChild(go);
     name.focus();
+  }
+
+  // The key reveal — shown ONCE after create. The private key + 24 words ARE
+  // the identity; the public key is the name's id. Back it up, then enter.
+  function showReveal(reveal, realName, password) {
+    body.innerHTML = "";
+    // Lock the form to the reveal: hide the Connect/Create/Look-up tabs so the
+    // holder can't navigate away from the ONE-TIME key backup. The only way
+    // forward is the "I saved it" button below.
+    tabsRow.style.display = "none";
+    setStatus(`Created "${realName}". Back up your key — this is the ONLY time it is shown.`, "ok");
+    if (!reveal) {
+      // No reveal came back (shouldn't happen for a fresh mint) — fall through
+      // to entering, but warn.
+      setStatus(`Created "${realName}", but the key reveal was unavailable. Export it from the lock menu.`, "err");
+    } else {
+      const wrap = el("div", "nf-reveal");
+      wrap.appendChild(el("div", "nf-reveal-label", "public key (your name's id)"));
+      wrap.appendChild(codeBox(reveal.nameId));
+      wrap.appendChild(copyRow(reveal.nameId, "copy public key"));
+
+      if (reveal.mnemonic) {
+        wrap.appendChild(el("div", "nf-reveal-label", "your key as 24 words — WRITE THESE DOWN"));
+        const words = el("div", "nf-words");
+        reveal.mnemonic.split(/\s+/).forEach((w, i) => words.appendChild(el("span", "nf-word", `${i + 1} ${w}`)));
+        wrap.appendChild(words);
+        wrap.appendChild(copyRow(reveal.mnemonic, "copy words"));
+      }
+
+      wrap.appendChild(el("div", "nf-reveal-label", "private key (PEM)"));
+      const ta = el("textarea", "nf-pem"); ta.readOnly = true; ta.value = reveal.privateKeyPem;
+      wrap.appendChild(ta);
+      wrap.appendChild(copyRow(reveal.privateKeyPem, "copy private key"));
+      body.appendChild(wrap);
+    }
+
+    const enter = el("button", "nf-btn nf-primary", password ? "I saved it — enter" : "I saved it");
+    enter.onclick = async () => {
+      busy(enter, true);
+      if (password) {
+        try {
+          const r = await client.nameConnect(realName, password);
+          hideNameForm();
+          // Pass the FULL connect result ({ token, nameId }) so the shell can
+          // persist the name-token — passing only nameId loses it (a refresh
+          // would bounce back to the Name Form).
+          onConnected(r || { nameId: reveal?.nameId || null });
+        } catch (err) {
+          setStatus(`Saved, but connect failed: ${err?.message || err}`, "err");
+          busy(enter, false);
+        }
+      } else {
+        // No password: the portal can't open a session (connect needs the
+        // password to decrypt the key into the session). The holder enters by
+        // importing the private key as a password-bearing name, or acts over
+        // the API with the raw key. Guide them back to Connect.
+        setStatus("No password set — set one (or re-create with a password) to use this name in the portal. Your key is your backup.", "err");
+        busy(enter, false);
+      }
+    };
+    body.appendChild(enter);
+  }
+
+  // tiny inline helpers (the Name Form is self-contained, no shared deps).
+  function codeBox(text) { const c = el("code", "nf-code", text); return c; }
+  function copyRow(text, label) {
+    const row = el("div", "nf-row");
+    const b = el("button", "nf-mini", label);
+    b.onclick = () => { try { navigator.clipboard?.writeText(text); b.textContent = "copied"; setTimeout(() => (b.textContent = label), 1200); } catch { /* ignore */ } };
+    row.appendChild(b);
+    return row;
   }
 
   // ── Look up: a name's biographic card (no key, ever).
@@ -212,6 +301,19 @@ function injectStyles() {
 .nf-err{color:#f0795f;}
 .nf-lookup{margin-top:12px;padding:12px;background:#0b0f15;border:1px solid #232a36;border-radius:8px;
   font-family:ui-monospace,monospace;font-size:12px;white-space:pre-wrap;color:#c7d0df;}
+.nf-reveal{margin-top:6px;max-height:46vh;overflow:auto;}
+.nf-reveal-label{margin:12px 0 5px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8b97ab;}
+.nf-code{display:block;padding:8px 10px;background:#0b0f15;border:1px solid #232a36;border-radius:6px;
+  font-family:ui-monospace,monospace;font-size:11.5px;color:#9fd0ff;word-break:break-all;}
+.nf-words{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;}
+.nf-word{padding:6px 7px;background:#0b0f15;border:1px solid #232a36;border-radius:6px;
+  font-family:ui-monospace,monospace;font-size:11px;color:#c7d0df;}
+.nf-pem{width:100%;height:84px;padding:8px 10px;background:#0b0f15;border:1px solid #232a36;border-radius:6px;
+  font-family:ui-monospace,monospace;font-size:10.5px;color:#9aa6ba;resize:vertical;}
+.nf-row{margin-top:6px;}
+.nf-mini{padding:5px 9px;border:1px solid #2a3240;background:#161d28;color:#c7d0df;border-radius:6px;
+  font-size:11.5px;cursor:pointer;}
+.nf-or{margin:16px 0 10px;text-align:center;font-size:11.5px;color:#7d8aa0;letter-spacing:.03em;}
 `;
   const style = document.createElement("style");
   style.textContent = css;
