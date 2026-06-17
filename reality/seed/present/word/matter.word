@@ -1,0 +1,29 @@
+# matter.word — the matter type registry + what a matter IS.
+# The world strand of seed/materials/matter; the host classify/fold/CAS stay.
+
+# The registered types. Each: the content it accepts, the ops it carries,
+# and any classification claims it stakes. "It" refers to the type just named
+# (rule 19: a kind stays lowercase; only beings and I / I_AM are capitalized).
+A generic is a matter type.
+It accepts text or no content.
+It carries set-matter and end-matter.
+
+A file is a matter type.
+It accepts binary or text content.
+It carries set-matter, end-matter, and purge-content.
+
+A model is a matter type.
+It accepts binary content.
+It carries set-matter, end-matter, and purge-content.
+It claims a glb or gltf extension.
+
+A source is a matter type.
+It accepts text, binary, or no content.
+It carries create-matter, set-matter, end-matter, and rename-matter.
+
+# What a matter is (the structure every matter carries).
+A matter has an owner, the being that created it.
+A matter has a type, a registered name.
+A matter has content, a shape matching its type.
+A matter has qualities, the properties it carries.
+A matter has a position in its space.

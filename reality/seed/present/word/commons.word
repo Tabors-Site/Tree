@@ -1,0 +1,23 @@
+# commons.word — the governance commons (4.md example 5).
+# The LAW portion (roles + capabilities) parses now. The FLOWS ("when most
+# members back a proposal, it passes", "when a steward closes it, no member can
+# back it") wait on the engine queue: quantifier evaluation, prohibition
+# precedence (rule 14), and the role/capability enforcement.
+
+A commons is a space.
+A commons contains proposals and a roster of members.
+
+A member is a role for a commons.
+A member can see every proposal and the roster.
+A member can raise a proposal.
+A member can back a proposal.
+A member can summon a steward with a concern.
+
+A steward is a role for a commons.
+A steward extends member.
+A steward can admit a being to the roster.
+A steward can close a proposal.
+
+A visitor is a role for a commons.
+A visitor can see the open proposals.
+A visitor can summon a steward to ask to join.

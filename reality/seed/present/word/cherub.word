@@ -1,0 +1,14 @@
+# cherub.word — Cherub births a new Name's first being.
+# Surfacing what _registerHumanWithFreshHome assumed silently (the deliverable):
+#   - I_AM acts THROUGH Cherub (rule 9 + the implicit-actor rule): the five
+#     unqualified acts below are all by I_AM, through Cherub.
+#   - Cherub is the MOTHER; Arrival (the new Name's vessel at the floor) is the
+#     FATHER; the being is the new Name's OWN (its trueName), not I_AM's.
+#   - birthBeing (the key-mint) stays host, reached via the escape hatch.
+
+When Cherub births a being for a new Name, with a name and a password:
+  make a home space.
+  form the being as the new Name's own.
+  make the being the home's owner.
+  grant the being the human role.
+  record the being's lineage.
