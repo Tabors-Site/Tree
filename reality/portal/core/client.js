@@ -355,6 +355,14 @@ export class PortalClient {
   nameSee(token) {
     return this._callName("see", { token });
   }
+  /**
+   * YOUR being-tree on one branch (the hierarchy view + grant surface).
+   * Branch-scoped: pass the branch you stand on; the tree + its inheritation
+   * points reflect that timeline. Requires a connected name.
+   */
+  nameTree(branch) {
+    return this._callName("tree", { branch: branch || null });
+  }
 
   // ────────────────────────────────────────────────────────────────
   // Internals

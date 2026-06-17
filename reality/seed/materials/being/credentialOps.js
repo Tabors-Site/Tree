@@ -89,10 +89,10 @@ registerOperation("credential-read", {
   targets: ["being"],
   ownerExtension: "seed",
   factAction: "credential-read",
-  handler: async ({ target, identity, summonCtx }) => {
+  handler: async ({ target, identity, summonCtx, branch }) => {
     const targetBeingId = targetBeingIdOf(target);
     const askerBeingId = askerBeingIdOf(identity);
-    const ok = await hasCredentialAuthority(askerBeingId, targetBeingId);
+    const ok = await hasCredentialAuthority(askerBeingId, targetBeingId, branch);
     if (!ok) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
@@ -128,10 +128,10 @@ registerOperation("credential-reset", {
   targets: ["being"],
   ownerExtension: "seed",
   factAction: "credential-reset",
-  handler: async ({ target, identity, summonCtx }) => {
+  handler: async ({ target, identity, summonCtx, branch }) => {
     const targetBeingId = targetBeingIdOf(target);
     const askerBeingId = askerBeingIdOf(identity);
-    const ok = await hasCredentialAuthority(askerBeingId, targetBeingId);
+    const ok = await hasCredentialAuthority(askerBeingId, targetBeingId, branch);
     if (!ok) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,

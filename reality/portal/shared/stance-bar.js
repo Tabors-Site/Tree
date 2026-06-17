@@ -4,15 +4,19 @@
 // the flat (text) portal. One DOM node, re-parented between hosts,
 // so the two views can never disagree:
 //
-//   [ reality#aBranch/@you ] :: [ reality#vBranch/path@being ]
+//   [ reality#aBranch/@being ] :: [ reality#vBranch/path@being ]
 //        the actor stance          the receiving stance
 //
+// The LEFT stance ALWAYS shows the being you are using (the one your
+// acts ride through) — `@arrival` when you are bodiless at the floor,
+// `@<yourBeing>` when driving one. Never a placeholder.
+//
 // Both sides are editable and both auto-update:
-//   - LEFT (who you are, where your acts land): the only actionable
-//     edit is the #branch segment — typing a different branch and
-//     pressing Enter performs the BE switch (your being seats on the
-//     destination, the address follows). You cannot type yourself
-//     into being someone else; other edits restore on blur.
+//   - LEFT (who you are, where your acts land): edit the @being to
+//     SWITCH to another being your name owns, and/or the #branch to
+//     switch timeline, then Enter. A being you don't own / that isn't
+//     on that branch comes back as a name error ("that name doesn't
+//     have @<being> on #<branch>"); other garbled edits restore on blur.
 //   - RIGHT (what you are looking at): a normal address input; Enter
 //     navigates. Same id (#address-input) the portals always used,
 //     so existing styling and the flat portal's "/" focus shortcut
@@ -49,7 +53,10 @@ function _branchAliases(path) {
 }
 
 function _actorValue() {
-  const name = _ctx.signedIn ? (_ctx.username || "you") : "arrival";
+  // The being you're USING. Bodiless at the floor → @arrival; driving a
+  // being → its name. Never a placeholder — the left stance always names
+  // the presence your acts ride through.
+  const name = _ctx.username || "arrival";
   const p = _ctx.actorPath || "/";
   return `${_ctx.reality || ""}#${_ctx.actorBranch}${p === "/" ? "/" : p}@${name}`;
 }
@@ -74,8 +81,8 @@ function _paint() {
   right.style.color = text;
   sep.style.color = crossed ? "#e2c574" : "";
   left.title =
-    `your stance — acts land on #${_ctx.actorBranch}${_branchAliases(_ctx.actorBranch)}\n` +
-    `edit the #branch and press Enter to BE-switch; everything else is who you are`;
+    `you are @${_ctx.username || "arrival"} — acts land on #${_ctx.actorBranch}${_branchAliases(_ctx.actorBranch)}\n` +
+    `edit @being to drive another being you own, and/or #branch to switch timeline, then Enter`;
   right.title = `the receiving stance — what you're looking at` +
     `${_branchAliases(_ctx.viewBranch) ? `\nbranch${_branchAliases(_ctx.viewBranch)}` : ""}`;
   sep.title = crossed
@@ -90,13 +97,22 @@ function _parseBranchEdit(raw) {
   return m ? m[1] : null;
 }
 
+// Pull the @being segment out of an actor-stance string: the trailing
+// "@<being>". Null when absent. "reality#1a/@coder" → "coder".
+function _parseBeingEdit(raw) {
+  const m = String(raw).match(/@([^/@#\s]+)\s*$/);
+  return m ? m[1] : null;
+}
+
 /**
  * Create the bar once. Callbacks:
- *   onNavigate(raw)       — right-side Enter (a normal address)
- *   onSwitchBranch(path)  — left-side Enter with a changed #branch
+ *   onNavigate(raw)            — right-side Enter (a normal address)
+ *   onSwitchBranch(path)       — left-side Enter, only the #branch changed
+ *   onSwitchBeing(being, path) — left-side Enter, the @being changed (drive
+ *                                another being your name owns, on `path`)
  */
-export function initStanceBar({ onNavigate, onSwitchBranch } = {}) {
-  _cbs = { onNavigate, onSwitchBranch };
+export function initStanceBar({ onNavigate, onSwitchBranch, onSwitchBeing } = {}) {
+  _cbs = { onNavigate, onSwitchBranch, onSwitchBeing };
   if (_bar) return _bar.el;
 
   const el = document.createElement("div");
@@ -130,12 +146,20 @@ export function initStanceBar({ onNavigate, onSwitchBranch } = {}) {
   left.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { left.blur(); _paint(); return; }
     if (e.key !== "Enter") return;
-    const target = _parseBranchEdit(left.value.trim());
+    const raw = left.value.trim();
+    const targetBranch = _parseBranchEdit(raw) || _ctx.actorBranch;
+    const targetBeing = _parseBeingEdit(raw);
+    const curBeing = _ctx.username || "arrival";
     left.blur();
-    if (target && target !== _ctx.actorBranch && _cbs.onSwitchBranch) {
-      _cbs.onSwitchBranch(target);
+    // A changed @being wins: drive that being (on the parsed branch). Else a
+    // changed #branch alone is a BE switch (keep the being). Else restore —
+    // the left side names who you are, not a free-text field.
+    if (targetBeing && targetBeing !== curBeing && _cbs.onSwitchBeing) {
+      _cbs.onSwitchBeing(targetBeing, targetBranch);
+    } else if (targetBranch !== _ctx.actorBranch && _cbs.onSwitchBranch) {
+      _cbs.onSwitchBranch(targetBranch);
     } else {
-      _paint(); // restore — the left side is identity, not navigation
+      _paint();
     }
   });
   left.addEventListener("blur", () => _paint());

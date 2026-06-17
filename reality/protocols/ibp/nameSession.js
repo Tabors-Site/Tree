@@ -90,11 +90,12 @@ export async function handleNameSession(socket, msg, ack) {
       case "connect": return await doConnect(socket, msg, ack, id);
       case "release": return await doRelease(socket, msg, ack, id);
       case "see":     return await doSee(socket, msg, ack, id);
+      case "tree":    return await doTree(socket, msg, ack, id);
       case "whoami":  return await doWhoami(socket, ack, id);
       default:
         return ackError(
           ack, id, IBP_ERR.ACTION_NOT_SUPPORTED,
-          `name: unknown session op "${op}" (declare | connect | release | see | whoami)`,
+          `name: unknown session op "${op}" (declare | connect | release | see | tree | whoami)`,
         );
     }
   } catch (err) {
@@ -280,4 +281,26 @@ async function doSee(socket, msg, ack, id) {
     return ackError(ack, id, IBP_ERR.NAME_NOT_FOUND, `no such name: ${token}`);
   }
   return ackOk(ack, id, descriptor);
+}
+
+// tree — YOUR being-tree on one branch (the hierarchy view + grant surface).
+// Requires a bound name (it's your own beings). Branch comes from the portal's
+// current left stance (msg.payload.branch); a grant you make from this view
+// lands on that branch, so the tree you see is exactly the access you give.
+// Session-only read: no moment, no fact (the grant/revoke acts ride the normal
+// DO verb separately).
+async function doTree(socket, msg, ack, id) {
+  const nameId = socket.nameId || null;
+  if (!nameId) {
+    return ackError(ack, id, IBP_ERR.UNAUTHORIZED,
+      "name tree requires a connected name (sign in first)");
+  }
+  const src = msg?.payload || msg || {};
+  const branch = src.branch || socket.currentBranch || null;
+  const { buildNameTree } = await import("../../seed/ibp/descriptor.js");
+  const tree = await buildNameTree(nameId, branch);
+  if (!tree) {
+    return ackError(ack, id, IBP_ERR.NAME_NOT_FOUND, `no such name: ${nameId}`);
+  }
+  return ackOk(ack, id, tree);
 }

@@ -308,7 +308,7 @@ export function renderIdentityPanel(body, { state, doOp, see, signOut, being = n
   if (being) {
     const name = being.being || being.name || "?";
     const s = section(wrap, `@${name}`);
-    noteLine(s, "the name is the contextual label; the id below is the permanent identity", "idp-sub");
+    noteLine(s, "a being is a presence, not an identity — the id below is its stable presence handle (a content hash); the NAME it expresses is what signs", "idp-sub");
     if (being.beingId) {
       keyRow(s, String(being.beingId));
       if (String(being.beingId) === "i-am") {

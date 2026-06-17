@@ -170,6 +170,14 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
       target: { kind: "position", spaceId: spaceIdForAuth, branch },
       action: authAction,
       namespace,
+      // The being this DO acts ON (when it's a being op). authorize uses
+      // it for the inheritation-coverage fallback: a Name with authority
+      // over this being's tree-subtree may act on it even without a role
+      // grant. Null for space/matter ops (no being-tree position).
+      auditBeingId:
+        auditTarget && auditTarget.kind === "being" && auditTarget.id
+          ? String(auditTarget.id)
+          : null,
       summonCtx: opts.summonCtx,
       // The caller's branch (session.currentBranch). Their grants
       // live there; target may be on a different branch. See
@@ -190,6 +198,11 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     params: params || {},
     identity: opts.identity,
     summonCtx: opts.summonCtx || null,
+    // The branch this DO's Fact lands on (resolved once at verb entry,
+    // same value authorize() gates against). Ops that resolve other
+    // material on this branch (e.g. inheritation name lookups) read it
+    // here instead of re-deriving from summonCtx.
+    branch,
   };
 
   // Top-level operation count for the moment (one-moment-one-act

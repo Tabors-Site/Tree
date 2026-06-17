@@ -139,8 +139,13 @@ export const birtherRole = Object.freeze({
 // guard against is the same name handleMateRequest commits to.
 async function resolveBeingName(message, ctx) {
   const messageObj = (typeof message === "object" && message !== null) ? message : {};
-  const suggested = typeof messageObj.name === "string" && messageObj.name.length
-    ? messageObj.name.trim()
+  // The suggested name rides in message.content (the summon payload); accept a
+  // top-level .name too (direct callers). 1-assign seats content at
+  // summonCtx.message.content.
+  const content = (messageObj.content && typeof messageObj.content === "object") ? messageObj.content : null;
+  const suggested =
+    (content && typeof content.name === "string" && content.name.length) ? content.name.trim()
+    : (typeof messageObj.name === "string" && messageObj.name.length) ? messageObj.name.trim()
     : null;
   if (suggested) return suggested;
   const askerBeingId = ctx?.askerBeingId || null;

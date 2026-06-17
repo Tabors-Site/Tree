@@ -23,6 +23,7 @@ import { createPortalContext } from "./context.js";
 import { resolvePlaceConfig } from "./config.js";
 import { showNameForm, hideNameForm } from "../shared/name-form.js";
 import { showBeingPicker, hideBeingPicker } from "../shared/being-picker.js";
+import { showNameTree, hideNameTree, isNameTreeOpen } from "../shared/name-tree-panel.js";
 
 // The IBPA stance bar is PINNED TO THE VERY TOP — the portal's one
 // constant surface. The being-tab strip rides directly under it and
@@ -39,6 +40,7 @@ const SHELL_DOM = `
     <button class="nav-btn" id="nav-home"  title="Your home" disabled>~</button>
     <span id="branch-button-slot" style="display:flex"></span>
     <nav id="view-switcher" title="views (Alt+1..5)"></nav>
+    <button class="nav-btn" id="nav-tree" style="display:none" title="your being hierarchy — see it on this branch, grant a name access">&#127795;</button>
     <button class="nav-btn" id="lock-dot" style="display:none" title="signing session"></button>
     <span id="conn-dot" class="conn-idle" title="socket"></span>
   </header>
@@ -61,6 +63,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     place:    rootEl.querySelector("#nav-place"),
     home:     rootEl.querySelector("#nav-home"),
     switcher: rootEl.querySelector("#view-switcher"),
+    tree:     rootEl.querySelector("#nav-tree"),
     viewRoot: rootEl.querySelector("#view-root"),
   };
 
@@ -131,6 +134,12 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
         lock.title = "signed in as your name — click to sign out (name:release)";
       }
     }
+    // The hierarchy button rides with the lock: visible whenever a name is
+    // signed in (it's your Name's being-tree). Text view only — the 3d world
+    // shows the tree spatially; this panel is the text surface.
+    if (els.tree) {
+      els.tree.style.display = (m.session?.token && viewHost.activeName === "text") ? "" : "none";
+    }
     // Ghost cue follows the active tab's descriptor.
     document.body.classList.toggle("ghost-view", !!m.descriptor?.isHistorical);
     repaintSwitcher();
@@ -151,6 +160,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     // Drop the stored name-session so a refresh doesn't re-seat the released
     // name; back to the bare reality (the Name menu).
     try { activeCtx.clearSession?.(); } catch { /* best-effort */ }
+    hideNameTree();
     presentNameForm(activeCtx);
   }
 
@@ -201,6 +211,22 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
       // vessel, signed by the name, so cherub births a TOP-LEVEL being owned by
       // the name. Then drive it (owned connect, passwordless) + land the world.
       onBirthFirst:  async (beingName) => {
+        // Pre-flight the ONE error the async birth can't report back. Cherub
+        // births on its OWN moment, so a failure there (e.g. the being name is
+        // already taken — names are the branch-wide being handle) never returns
+        // through this summon's ack; it's logged + the inbox row evicted. The
+        // common cause is a name collision, which we CAN see synchronously: if
+        // SEE resolves a being by that name, the birth would fail, so refuse now
+        // with a clear message instead of a confusing 18s timeout.
+        try {
+          const seen = await ctx.client.see(`${reality}/@${beingName}`);
+          if (seen?.identity?.beingId) {
+            throw new Error(`@${beingName} is already taken on this reality — pick another name`);
+          }
+        } catch (err) {
+          if (/already taken/i.test(err?.message || "")) throw err;
+          /* NAME/BEING_NOT_FOUND → the name is free; proceed */
+        }
         await ctx.client.summon(`${reality}/@cherub`, {
           from: `${reality}/@arrival`,
           content: { name: beingName },
@@ -215,11 +241,35 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
             appeared = (d?.beings || []).find((b) => b.name === beingName) || null;
           } catch { /* keep polling */ }
         }
-        if (!appeared) throw new Error("birth is taking a while — open 'your beings' to connect once it lands");
+        if (!appeared) throw new Error("birth didn't land — the name may be taken, or cherub is busy. Try another name or reopen 'your beings'.");
         const result = await ctx.client.be("connect", `${reality}/@${beingName}`, {});
         await ctx.adoptSession(result, beingName);
         repaintChrome();
       },
+    });
+  }
+
+  // The Name Hierarchy panel (text view). Your Name's being-tree on the branch
+  // you stand on (the IBPA left stance) + the grant surface. Reading the tree
+  // is bodiless (the name channel); GRANTING/REVOKING are world acts, so canAct
+  // reflects whether you're driving a being. reopen() re-reads the CURRENT
+  // branch each call, so the ⟳ refresh re-scopes after a branch switch, and a
+  // grant/revoke refreshes in place.
+  async function presentNameHierarchy(ctx = activeCtx) {
+    if (!ctx?.client) return;
+    let nameId = null;
+    try { nameId = (await ctx.client.nameWhoami())?.nameId || null; } catch { /* not signed in */ }
+    if (!nameId) { presentNameForm(ctx); return; }
+    const reality = ctx.state.get("discovery")?.reality || "";
+    const branch  = ctx.state.get("descriptor")?.address?.branch || "0";
+    const canAct  = !!ctx.state.get("session")?.beingId;
+    await showNameTree({
+      client: ctx.client,
+      reality,
+      nameId,
+      branch,
+      canAct,
+      reopen: () => presentNameHierarchy(ctx),
     });
   }
 
@@ -251,7 +301,11 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
           return;
         } catch { /* being gone / connect failed -> fall to the being menu */ }
       }
-      presentBeingPicker(ctx, who.nameId);
+      // The being menu ("Your beings") is the TEXT view's surface; in the 3D
+      // world you stand at the arrival floor and reach cherub there directly.
+      // So only pop the panel in text view; hide it in 3D.
+      if (viewHost.activeName === "text") presentBeingPicker(ctx, who.nameId);
+      else hideBeingPicker();
       return;
     }
     hideNameForm(); hideBeingPicker();
@@ -383,16 +437,18 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     if (i < 0 || ctx === tabs[0].ctx) return;   // primary tab stays
     const [t] = tabs.splice(i, 1);
     for (const u of t.unsubs) u();
-    // An inherited body releases when its tab closes (borrowed presence).
-    if (ctx.state.get("session")?.inherited) {
-      try {
-        const reality = ctx.state.get("discovery")?.reality;
-        const username = ctx.state.get("session")?.username;
-        if (reality && username) {
-          await ctx.client?.be("release", `${reality}/@${username}`, {});
-        }
-      } catch { /* best effort */ }
-    }
+    // Closing a being's tab RELEASES that being (be:release). You stop driving
+    // it; your NAME stays signed in (the name's session persists, not the
+    // being's). Because it's an explicit release, the last-being auto-resume
+    // won't bring it back — you closed it on purpose. Best-effort; the
+    // disconnect auto-release safety net covers a hard close.
+    try {
+      const reality   = ctx.state.get("discovery")?.reality;
+      const beingName = ctx.state.get("session")?.username;
+      if (reality && beingName && ctx.state.get("session")?.beingId) {
+        await ctx.client?.be("release", `${reality}/@${beingName}`, {});
+      }
+    } catch { /* best effort; the disconnect auto-release covers a hard close */ }
     ctx.destroy();
     if (activeCtx === ctx) await switchTab(tabs[0].ctx);
     else repaintTabs();
@@ -479,6 +535,12 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     if (!activeCtx) return;
     await viewHost.switchView(name, activeCtx);
     repaintSwitcher();
+    // The hierarchy panel is text-view-only (the 3d world shows the tree
+    // spatially); drop it when leaving text.
+    if (viewHost.activeName !== "text") hideNameTree();
+    // The being menu is text-view-only: re-run the name gate so it appears in
+    // text and hides in 3D (the arrival floor) when the name has no being.
+    presentNameGate(activeCtx).catch(() => {});
   }
 
   // ── Stance bar + nav buttons ────────────────────────────────────
@@ -491,6 +553,57 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
         .then((m) => m.switchIntoBranch(branchPath))
         .catch((err) => console.warn("[shell] branch switch failed:", err?.message || err));
     },
+    // Drive another being your name owns from the left stance. For EVERY BE op
+    // the actor is your NAME, acting THROUGH the being it's currently using — a
+    // being never calls BE on itself or on another being. So setting the stance
+    // to @arrival isn't switching to a being and isn't arrival doing anything:
+    // it's your name calling be:release on the being it's using. That being
+    // drops, your name goes bodiless, and the floor (where @arrival is the auth
+    // being a bodiless name rides) is simply where a bodiless name stands. Any
+    // other being is an OWNED switch: your name be:connects it, after we confirm
+    // it's one of your beings ON that branch (the name tree), so a being you
+    // don't own / that isn't there comes back as a clear name error instead of
+    // a confusing low-level connect failure.
+    onSwitchBeing: async (being, branch) => {
+      const ctx = activeCtx;
+      if (!ctx?.client) return;
+      const reality = ctx.state.get("discovery")?.reality || "";
+      const hash = branch && branch !== "0" ? branch : "main";
+      try {
+        if (being === "arrival") {
+          // Your NAME releases the being it's currently using (cur): the name is
+          // the actor, calling be:release THROUGH cur; cur is the being released.
+          // The live socket stays name-bound, so we keep the name (token+nameId)
+          // and only clear the being — bodiless, the name stands at the floor.
+          const cur = ctx.state.get("session")?.username;
+          if (!cur) return; // already bodiless
+          try { await ctx.client.be("release", `${reality}/@${cur}`, {}); } catch { /* best-effort */ }
+          const s = ctx.state.get("session") || {};
+          try { ctx.saveSession?.({ ...s, beingId: null, username: null, beingAddress: null }); } catch { /* best-effort */ }
+          try { await ctx.navigation.landAnonymous(); } catch { /* best-effort */ }
+          await presentNameGate(ctx);
+          repaintChrome();
+          return;
+        }
+        // Confirm ownership on this branch via the name tree (your beings there).
+        const tree = await ctx.client.nameTree(branch);
+        const owned = new Set();
+        const walk = (ns) => (ns || []).forEach((n) => { if (n?.name) owned.add(n.name); walk(n.children); });
+        walk(tree?.roots);
+        if (!owned.has(being)) {
+          setPortalStatus(`that name doesn't have @${being} on #${hash}`);
+          return; // bar already restored on blur
+        }
+        const result = await ctx.client.be("connect", `${reality}/@${being}`, {});
+        await ctx.adoptSession(result, being);
+        if (branch && result?.seatBranch && branch !== String(result.seatBranch)) {
+          try { await ctx.client.be("switch", `${reality}/@${being}`, { branch }); } catch { /* stay on home */ }
+        }
+        repaintChrome();
+      } catch (err) {
+        setPortalStatus(`couldn't drive @${being} on #${hash}: ${err?.code || err?.message || err}`);
+      }
+    },
   });
   placeStanceBar(rootEl.querySelector("#stance-slot"));
 
@@ -499,6 +612,11 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
   els.place.addEventListener("click",   () => activeCtx?.navigation.navigate("/").catch(() => {}));
   els.home.addEventListener("click",    () => activeCtx?.navigation.navigate("/~").catch(() => {}));
   rootEl.querySelector("#lock-dot")?.addEventListener("click", () => { toggleSigningLatch(); });
+  // The hierarchy button: toggle the Name Hierarchy panel for the active tab.
+  els.tree?.addEventListener("click", () => {
+    if (isNameTreeOpen()) hideNameTree();
+    else presentNameHierarchy(activeCtx).catch(() => {});
+  });
   // The send arrow submits whatever is typed in the IBPA's receiving
   // side — the click-equivalent of pressing Enter in the address.
   els.send.addEventListener("click", () => {

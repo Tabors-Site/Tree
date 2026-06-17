@@ -522,6 +522,100 @@ export async function buildNameDescriptor(nameId) {
 }
 
 /**
+ * The NAME's being-tree ON ONE BRANCH — the hierarchy view + grant surface.
+ *
+ * Branch-scoped on purpose: you stand on a branch (the IBPA left stance), and
+ * this shows the beings your Name owns on THAT branch's timeline, nested by
+ * parentBeingId, each tagged with the live inheritation points granted there.
+ * Switch branch to see (and grant on) another timeline — a grant lands on the
+ * branch you're standing on, so the tree you see is exactly the access you give.
+ *
+ * "Beings on this branch" = your beings whose fold lives anywhere on the
+ * branch's reel-lineage (a being born on main is inherited by every sub-branch;
+ * a being born on a sub-branch shows only there). De-duped to the row closest
+ * to the branch. Beings whose parent your Name does NOT own (e.g. parented
+ * under @cherub) surface as roots, tagged with the parent's name for context.
+ *
+ * Leak-safe like buildNameDescriptor: field-picks only safe state, never the
+ * key or password.
+ */
+export async function buildNameTree(nameId, branch) {
+  if (!nameId) return null;
+  const nameSlot = await loadProjection("name", String(nameId), "0");
+  if (!nameSlot || !nameSlot.state) return null;
+
+  // Resolve the branch (never literal "0"): the caller's current branch, or
+  // the operator default if none was threaded.
+  let br = branch ? String(branch) : null;
+  if (!br) {
+    const { getDefaultBranch } = await import("../materials/branch/branchRegistry.js");
+    br = await getDefaultBranch();
+  }
+  const { resolveBranchLineage } = await import("../materials/branch/branches.js");
+  const { livePointsAt } = await import("../materials/being/identity/inheritation.js");
+  const lineage = await resolveBranchLineage(br);
+  const rank = new Map(lineage.map((b, i) => [b, i]));
+
+  // The Name's beings whose fold-cache row lives anywhere on this branch's
+  // lineage. Bounded scan, capped — same shape as buildNameDescriptor.
+  const rows = await Projection
+    .find({ branch: { $in: lineage }, type: "being", "state.trueName": String(nameId), tombstoned: { $ne: true } })
+    .select("id branch state.name state.trueName state.parentBeingId state.homeBranch state.defaultRole")
+    .limit(NAME_BEING_CAP)
+    .lean();
+
+  // De-dupe by beingId, keeping the row on the branch CLOSEST to `br` (the
+  // deepest lineage rank — the most current fold for where you stand).
+  const byId = new Map();
+  for (const r of rows) {
+    const id = String(r.id);
+    const prev = byId.get(id);
+    if (!prev || (rank.get(r.branch) ?? -1) > (rank.get(prev.branch) ?? -1)) byId.set(id, r);
+  }
+
+  // Build a node per being, with its branch-scoped live inheritation points.
+  const nodes = new Map();
+  for (const r of byId.values()) {
+    const id = String(r.id);
+    const points = await livePointsAt(id, br);
+    nodes.set(id, {
+      beingId:       id,
+      name:          r.state?.name || null,
+      trueName:      r.state?.trueName || null,
+      parentBeingId: r.state?.parentBeingId ? String(r.state.parentBeingId) : null,
+      homeBranch:    r.state?.homeBranch || null,
+      defaultRole:   r.state?.defaultRole || null,
+      points:        [...points],
+      children:      [],
+    });
+  }
+
+  // Nest: a being whose parent your Name also owns becomes that parent's child;
+  // otherwise it's a root. Resolve each root's foreign parent name for context.
+  const roots = [];
+  for (const node of nodes.values()) {
+    const parent = node.parentBeingId ? nodes.get(node.parentBeingId) : null;
+    if (parent) parent.children.push(node);
+    else roots.push(node);
+  }
+  for (const root of roots) {
+    if (!root.parentBeingId) { root.parentName = null; continue; }
+    const p = await loadProjection("being", root.parentBeingId, br);
+    root.parentName = p?.state?.name || null;
+  }
+
+  return {
+    isNameTree:        true,
+    nameId:            String(nameId),
+    name:              nameSlot.state.name ?? null,
+    branch:            br,
+    roots,
+    beingCount:        nodes.size,
+    descriptorVersion: DESCRIPTOR_VERSION,
+  };
+}
+
+/**
  * The being a NAME last be:connected and has NOT since be:released — its OPEN
  * session, to AUTO-RESUME on the name's next connect (Tabor: "look at the name's
  * act chain for the last be:connect with no be:release; if none, go to the

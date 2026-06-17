@@ -1080,11 +1080,16 @@ async function handleCherubMate(message, ctx) {
       || { kind: "failure", ok: false, shape: "refused", reason: "no name" };
   }
   const messageObj = (typeof message === "object" && message !== null) ? message : {};
-  const beingName = (typeof messageObj.name === "string" && messageObj.name.trim())
-    ? messageObj.name.trim()
+  // The being's name rides in message.content (the summon's content payload),
+  // which 1-assign seats at summonCtx.message.content. Accept the top-level
+  // .name too as a fallback for direct callers.
+  const content = (messageObj.content && typeof messageObj.content === "object") ? messageObj.content : null;
+  const beingName =
+    (content && typeof content.name === "string" && content.name.trim()) ? content.name.trim()
+    : (typeof messageObj.name === "string" && messageObj.name.trim()) ? messageObj.name.trim()
     : null;
   if (!beingName) {
-    return ctx.failure?.("refused", "give your first being a name (message.name)")
+    return ctx.failure?.("refused", "give your first being a name (in the summon content)")
       || { kind: "failure", ok: false, shape: "refused", reason: "no being name" };
   }
   const cherubBeingId = ctx?.toBeing?._id || ctx?.toBeing?.id || null;

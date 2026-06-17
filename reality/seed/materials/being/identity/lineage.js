@@ -116,26 +116,45 @@ export async function isDetachedFromBeingParent(beingId) {
 /**
  * Does `askerBeingId` have credential authority over `targetBeingId`?
  *
- *   self          → yes, always
- *   I_AM          → yes, always (universal authority on its own reality)
- *   being parent  → yes, unless target has detached and not re-attached
- *   anyone else   → no
+ * THIN SHIM over the being-tree authority axis (inheritation.js). The
+ * asker is a BEING; the authority that matters is its NAME's authority
+ * over the target's tree position:
  *
- * Authority is direct-lineage only between regular beings — not
- * transitive. Cherub's children answer to cherub, not their
- * grandparent. The I-Am has a separate universal override because
- * it's the source of all authority on its own reality (parallel to
- * authorize.js's I_AM short-circuit); seed-internal credential ops
- * that act through `identity: I_AM` go through this path.
+ *   self   → yes, always (a being may touch its own credential)
+ *   I_AM   → yes, always (the reality is the source of all authority)
+ *   else   → the asker's NAME (its trueName) has authority over the
+ *            target — it owns the target or an ancestor, or holds an
+ *            inheritation point covering it (hasAuthorityOver).
+ *
+ * This SUPERSEDES the pre-inheritation direct-being-parent rule (and
+ * its credential-detach escape hatch): owning an ancestor is exactly
+ * the parent case, generalized up the tree and opened to delegation.
+ * `credential-detach`/`credential-attach` no longer change the
+ * authority answer — the being-tree (ownership + points) is the one
+ * authority model now; `isDetachedFromBeingParent` remains for any
+ * direct reader but is authority-inert here.
  */
-export async function hasCredentialAuthority(askerBeingId, targetBeingId) {
+export async function hasCredentialAuthority(askerBeingId, targetBeingId, branch) {
   if (!askerBeingId || !targetBeingId) return false;
   if (String(askerBeingId) === String(targetBeingId)) return true;
   const { I_AM } = await import("../seedBeings.js");
   if (String(askerBeingId) === String(I_AM)) return true;
-  const parentBeingId = await findBeingParent(targetBeingId);
-  if (!parentBeingId || String(parentBeingId) !== String(askerBeingId)) return false;
-  const detached = await isDetachedFromBeingParent(targetBeingId);
-  return !detached;
+
+  // Resolve a branch to read the tree on (never literal "0").
+  let b = branch;
+  if (!b) {
+    const { getDefaultBranch } = await import("../../branch/branchRegistry.js");
+    b = await getDefaultBranch();
+  }
+
+  // The asker's NAME (the being's trueName) is what actually holds
+  // authority. Resolve it, then ask the being-tree.
+  const { loadProjection } = await import("../../projections.js");
+  const askerSlot = await loadProjection("being", String(askerBeingId), b);
+  const askerName = askerSlot?.state?.trueName;
+  if (!askerName) return false;
+
+  const { hasAuthorityOver } = await import("./inheritation.js");
+  return await hasAuthorityOver(String(askerName), String(targetBeingId), b);
 }
 

@@ -188,9 +188,30 @@ export async function authorize(args) {
 
   // Adapt to the verb-dispatch return shape. roleAuth returns
   // {ok, role?, anchor?, reason?}; verb dispatchers expect {ok, actor, reason?}.
+  if (result.ok) {
+    return { ok: true, actor: result.role || "permitted", reason: result.reason || null };
+  }
+
+  // 5. Inheritation coverage (fallback, DO-on-being only). The role-walk
+  // is the CAPABILITY axis; the being-tree is the orthogonal DOWNWARD-
+  // AUTHORITY axis. A Name that owns the target being (or any ancestor),
+  // or holds an inheritation point covering it, has authority over it
+  // even with no role grant — the same authority that lets it grant/
+  // revoke points there. Consulted ONLY after a role denial, so role-
+  // authorized acts (the hot path) never pay for the tree walk. Purely
+  // additive: it can GRANT but never deny.
+  if (verb === "do" && identity?.nameId && args.auditBeingId) {
+    const { hasAuthorityOver } = await import(
+      "../materials/being/identity/inheritation.js"
+    );
+    if (await hasAuthorityOver(identity.nameId, String(args.auditBeingId), targetBranch)) {
+      return { ok: true, actor: String(identity.nameId) };
+    }
+  }
+
   return {
-    ok:     result.ok,
-    actor:  result.role || (result.ok ? "permitted" : "anonymous"),
+    ok:     false,
+    actor:  "anonymous",
     reason: result.reason || null,
   };
 }

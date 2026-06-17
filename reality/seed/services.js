@@ -193,6 +193,11 @@ import "./materials/modelOp.js";
 import "./materials/portalOp.js";
 import "./materials/being/ops.js";
 import "./materials/being/credentialOps.js";
+// Side-effect import. Registers `do grant-inheritation` / `do
+// revoke-inheritation` — authority over a being-tree subtree, handed
+// between Names (delegation) or held by ownership. The being-tree's
+// downward-authority axis, read by being/identity/inheritation.js.
+import "./materials/being/inheritationOps.js";
 // Side-effect import. Registers `do key-export` — the NAME's key custody
 // ("back up your key / your exit"). Lives in name/ because the key is a
 // Name concern post-split (a being holds no key). See materials/name/keyOps.js.

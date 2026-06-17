@@ -295,6 +295,54 @@ export async function birthBeing({ spec, identity, summonCtx = null, branch = nu
     );
   }
 
+  // BIRTH-GATE (inheritation). You may attach a child under a being-tree
+  // position only where you have authority over it. Three cases are
+  // inherently allowed and skip the walk:
+  //   • root admission   (parent = I_AM) — how new top-level beings enter;
+  //                       WHO may do this is gated at the SUMMON/BE layer
+  //                       (cherub's arrival role), not by the being-tree.
+  //   • self-birth       (parent = the minter) — a being births its own
+  //                       children; self-authority is implicit.
+  //   • pending parent   (mother born earlier in this same ΔF) — an atomic
+  //                       seed-internal multi-birth; inherently trusted.
+  // For a birth under ANY OTHER position, the MINTER's Name (the identity
+  // performing the birth, not the child's owner) must cover the parent —
+  // own it or an ancestor, or hold an inheritation point on it. This is
+  // what stops a Name grafting a child under a subtree it doesn't control.
+  {
+    const minterBeingId = identity?.beingId ? String(identity.beingId) : null;
+    const isIAmMinter = minterBeingId === String(I_AM) || identity?.name === I_AM;
+    const underRoot   = String(parentBeingId) === String(I_AM);
+    const underSelf   = minterBeingId && String(parentBeingId) === minterBeingId;
+    if (!isIAmMinter && !underRoot && !underSelf && !parentPending) {
+      let gateBranch = branch;
+      if (!gateBranch) {
+        const { getDefaultBranch } = await import("../../branch/branchRegistry.js");
+        gateBranch = await getDefaultBranch();
+      }
+      // The minter's Name: its nameId if the act carried one, else the
+      // minter being's trueName.
+      let minterName = identity?.nameId ? String(identity.nameId) : null;
+      if (!minterName && minterBeingId) {
+        const { loadProjection } = await import("../../projections.js");
+        const minterSlot = await loadProjection("being", minterBeingId, gateBranch);
+        minterName = minterSlot?.state?.trueName ? String(minterSlot.state.trueName) : null;
+      }
+      const { hasAuthorityOver } = await import("./inheritation.js");
+      const covered = minterName
+        ? await hasAuthorityOver(minterName, String(parentBeingId), gateBranch)
+        : false;
+      if (!covered) {
+        throw new IbpError(
+          IBP_ERR.FORBIDDEN,
+          `birthBeing("${name}"): the minting Name has no authority over parent ` +
+            `position "${String(parentBeingId).slice(0, 8)}" — you may only birth under a ` +
+            `position you own or hold an inheritation point on.`,
+        );
+      }
+    }
+  }
+
   // SOVEREIGN OVERRIDE. By default a being expresses the MOTHER's trueName
   // (a vessel of the one that birthed it). An EXPLICIT spec.trueName makes the
   // being the NAMED's OWN instead — sovereign, owned directly by that Name.
