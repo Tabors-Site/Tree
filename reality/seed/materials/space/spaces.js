@@ -256,7 +256,7 @@ export async function createSpace({
   validatedBeing = null,
   actId = null,
   sessionId = null,
-  summonCtx = null,
+  moment = null,
 } = {}) {
   name = assertValidSpaceName(name);
   type = assertValidSpaceType(type);
@@ -272,7 +272,7 @@ export async function createSpace({
   // Branch the create runs on. Threaded from the moment ctx so a
   // create under #1 reads parents from #1's lineage (with branchPoint
   // fall-through) and stamps its birth fact onto #1's reel.
-  const branch = summonCtx?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.branch || "0";
 
   // Assign a default coord inside the parent's size when the caller
   // didn't pass one. Without this every child space falls back to the
@@ -394,14 +394,14 @@ export async function createSpace({
       const parentSpace = _pSlot3 ? { heavenSpace: _pSlot3.state?.heavenSpace } : null;
       // The parent may be pending earlier in this same moment's ΔF
       // (forward reference within one act) — accept either a
-      // materialized row or a pending fact in summonCtx.deltaF.
+      // materialized row or a pending fact in moment.deltaF.
       if (!parentSpace) {
-        const pendingInBatch = summonCtx?.deltaF?.find(
+        const pendingInBatch = moment?.deltaF?.find(
           (f) =>
             f?.verb === "do" &&
-            f?.action === "create-space" &&
-            f?.target?.kind === "space" &&
-            String(f?.target?.id) === String(parentId),
+            f?.act === "create-space" &&
+            f?.of?.kind === "space" &&
+            String(f?.of?.id) === String(parentId),
         );
         if (!pendingInBatch) throw new Error("Parent space not found");
       } else if (
@@ -434,18 +434,18 @@ export async function createSpace({
       }
     }
 
-    // Stamp the birth Fact. Inside a moment (summonCtx provided) the
+    // Stamp the birth Fact. Inside a moment (moment provided) the
     // fact joins ctx.deltaF and seals with the rest of the moment.
-    // Outside any moment (legacy standalone callers without summonCtx),
+    // Outside any moment (legacy standalone callers without moment),
     // emitFact falls back to sealFacts singleton — eager commit.
     const specQualities = hookData.qualities instanceof Map
       ? Object.fromEntries(hookData.qualities)
       : (hookData.qualities || {});
     await emitFact({
       verb:    "do",
-      action:  "create-space",
-      beingId: String(being._id),
-      target:  { kind: "space", id },
+      act:     "create-space",
+      through: String(being._id),
+      of:      { kind: "space", id },
       params:  {
         name,
         type:      type ?? null,
@@ -457,12 +457,12 @@ export async function createSpace({
         ...(size  ? { size }  : {}),
         ...(coord ? { coord } : {}),
       },
-      actId: summonCtx?.actId || actId,
+      actId: moment?.actId || actId,
       sessionId,
       // Branch this space is created on — a plant under #1 must land
       // its child-space facts on #1's reel so reads on #1 see them.
-      branch: summonCtx?.actorAct?.branch || "0",
-    }, summonCtx);
+      branch: moment?.actorAct?.branch || "0",
+    }, moment);
   } finally {
     if (lockTarget) releaseSpaceLock(lockTarget, sessionId);
   }
@@ -471,7 +471,7 @@ export async function createSpace({
   // view carrying the id so the caller can keep operating without a
   // read-back. Outside a moment the eager singleton commit ran, so
   // the row exists and we read it back.
-  if (summonCtx) {
+  if (moment) {
     return {
       _id: id,
       _pending: true,
@@ -494,7 +494,7 @@ export async function createSpace({
       spaceId: newSpace._id,
       actId,
       sessionId,
-      summonCtx,
+      moment,
     });
   }
 
@@ -556,9 +556,9 @@ export async function createRealityHeavenSpace({
   await withIAmAct(`I create the ${name} heaven space`, async (ctx) => {
     await emitFact({
       verb:    "do",
-      action:  "create-space",
-      beingId: I_AM,
-      target:  { kind: "space", id },
+      act:     "create-space",
+      through: I_AM,
+      of:      { kind: "space", id },
       params:  {
         name,
         type:      null,
@@ -779,7 +779,7 @@ export async function deleteSpaceBranch(
     const { doVerb } = await import("../../ibp/verbs/do.js");
     const opts = {
       identity: beingId ? { beingId: String(beingId) } : I_AM,
-      summonCtx: actId ? { actId } : null,
+      moment: actId ? { actId } : null,
     };
     const target = { kind: "space", id: String(spaceId) };
     await doVerb(

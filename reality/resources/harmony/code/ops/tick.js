@@ -11,7 +11,7 @@ export default {
   name: "tick",  // becomes harmony:tick after loader namespacing
   targets: ["matter"],
 
-  async handler({ target, identity, summonCtx }) {
+  async handler({ target, identity, moment }) {
     // Load the drum row so we can read its current tick count. The
     // verb layer hands handlers a typed identity ({kind,id}) or a
     // string id — not the row. The previous code read
@@ -34,7 +34,7 @@ export default {
     // calls this op via reality.do(drumMatterId, "harmony:tick", ...);
     // the wire shape stays uniform with other state changes by routing
     // through do.set-matter explicitly. The handler runs inside doVerb
-    // already, so opts.summonCtx is what threads the moment's actId
+    // already, so opts.moment is what threads the moment's actId
     // and deltaF accumulator.
     const { doVerb } = await import("../../../seed/ibp/verbs/do.js");
     await doVerb(
@@ -44,7 +44,7 @@ export default {
         field: "qualities.harmony.tick",
         value: next,
       },
-      { identity, summonCtx },
+      { identity, moment },
     );
 
     return { tick: next.n, at: next.at };

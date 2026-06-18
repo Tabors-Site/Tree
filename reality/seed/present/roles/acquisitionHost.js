@@ -3,14 +3,14 @@
 // lookup, the take/asked policies, the already-holds check, the grant-role emit, and
 // the queue-path owner summon. No reimplementation — only the env adapter the `.word`
 // reaches through `host:` escapes (the strand the cut deletes). callHost invokes each as
-// `fn({ args }, ctx)`; the write op reads ctx.summonCtx to lay its fact into the live
+// `fn({ args }, ctx)`; the write op reads ctx.moment to lay its fact into the live
 // moment.
 import { getRoleSpecForGrant } from "./spaceLookup.js";
 import { normalizeAcquisition, alreadyHoldsRole } from "./acquisition.js";
 import { loadOrFold } from "../../materials/projections.js";
 import { emitInternalGrant } from "./acquisitionOps.js";
 
-const branchOf = (ctx) => ctx?.summonCtx?.actorAct?.branch || ctx?.branch || "0";
+const branchOf = (ctx) => ctx?.moment?.actorAct?.branch || ctx?.branch || "0";
 
 export function acquisitionHostEnv() {
   return {
@@ -40,7 +40,7 @@ export function acquisitionHostEnv() {
         role:           String(role),
         anchorSpaceId:  found?.anchor,
         grantedBy:      String(caller),
-        summonCtx:      ctx?.summonCtx || null,
+        moment:      ctx?.moment || null,
         branch:         branchOf(ctx),
       });
       return true;

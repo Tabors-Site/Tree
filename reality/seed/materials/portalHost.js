@@ -11,19 +11,19 @@
 // the SAME matterContentId, then lays the SAME do:create-matter fact the JS
 // handler emits via the SAME emitFact. It attributes to the CALLER (the portal is
 // born BY the actor; qualities.portal.createdBy = the actor) and lands on the real
-// moment, so it reads ctx.summonCtx rather than being a plain do-act the bridge
+// moment, so it reads ctx.moment rather than being a plain do-act the bridge
 // would re-attribute to I_AM. See the cut-spec note.
 
 import { emitFact } from "../past/fact/facts.js";
 import { IBPA_RE } from "./portalOp.js";
 import { matterContentId } from "./matter/matterId.js";
 
-const actBranchOf = (ctx) => ctx?.summonCtx?.actorAct?.branch || ctx?.branch || "0";
+const actBranchOf = (ctx) => ctx?.moment?.actorAct?.branch || ctx?.branch || "0";
 // The fact-landing branch: same precedence the JS handler uses for the emit
 // (targetBranch before the actor's branch), so a cross-reality inbound moment
 // lands the portal on the target's branch.
 const factBranchOf = (ctx) =>
-  ctx?.summonCtx?.targetBranch || ctx?.summonCtx?.actorAct?.branch || ctx?.branch || "0";
+  ctx?.moment?.targetBranch || ctx?.moment?.actorAct?.branch || ctx?.branch || "0";
 
 export function portalHostEnv() {
   return {
@@ -62,10 +62,10 @@ export function portalHostEnv() {
     // content {target}, qualities.portal provenance with createdBy = the actor),
     // content-addresses the row id from it with the SAME matterContentId, and lays
     // the SAME do:create-matter fact via the SAME emitFact. Attributes to the
-    // CALLER (beingId = the actor), reads the real summonCtx for actId + the
+    // CALLER (through = the actor), reads the real moment for actId + the
     // fact-landing branch. Returns { matterId } the .word's §7 return surfaces.
     createPortalMatter: async ({ args: [caller, spaceId, foreignAddress, name] }, ctx) => {
-      const sc = ctx?.summonCtx || null;
+      const sc = ctx?.moment || null;
       const actorBeingId = String(caller);
       const createSpec = {
         spaceId: String(spaceId),
@@ -85,9 +85,9 @@ export function portalHostEnv() {
       await emitFact(
         {
           verb: "do",
-          action: "create-matter",
-          beingId: actorBeingId,
-          target: { kind: "matter", id: matterId },
+          act: "create-matter",
+          through: actorBeingId,
+          of: { kind: "matter", id: matterId },
           params: createSpec,
           actId: sc?.actId || null,
           branch: factBranchOf(ctx),

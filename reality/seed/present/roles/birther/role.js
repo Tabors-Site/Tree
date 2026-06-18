@@ -145,7 +145,7 @@ async function resolveBeingName(message, ctx) {
   const messageObj = (typeof message === "object" && message !== null) ? message : {};
   // The suggested name rides in message.content (the summon payload); accept a
   // top-level .name too (direct callers). 1-assign seats content at
-  // summonCtx.message.content.
+  // moment.message.content.
   const content = (messageObj.content && typeof messageObj.content === "object") ? messageObj.content : null;
   const suggested =
     (content && typeof content.name === "string" && content.name.length) ? content.name.trim()
@@ -267,7 +267,7 @@ async function handleMateRequest(message, ctx, precomputedName = null) {
         father,
       },
       identity: { beingId: birtherBeingId, name: "birther" },
-      summonCtx: ctx,
+      moment: ctx,
     });
   } catch (err) {
     log.warn("Birther", `mate-request birth failed: ${err.message}`);

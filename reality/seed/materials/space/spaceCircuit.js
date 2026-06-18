@@ -127,11 +127,11 @@ export async function checkTreeHealth(treeId) {
       {
         $match: {
           date: { $gte: since },
-          "target.kind": "space",
+          "of.kind": "space",
           "params.error": { $exists: true },
         },
       },
-      { $lookup: { from: "spaces", localField: "target.id", foreignField: "_id", as: "_space" } },
+      { $lookup: { from: "spaces", localField: "of.id", foreignField: "_id", as: "_space" } },
       { $unwind: "$_space" },
       { $match: { "_space.owner": treeId } },
       { $count: "total" },
@@ -203,9 +203,9 @@ export async function tripTree(treeId, reason, opts = {}) {
   await withIAmAct(`Circuit: trip tree ${String(treeId).slice(0, 8)} on #${branch}`, async (ctx) => {
     await emitFact({
       verb:    "do",
-      action:  "set-space",
-      beingId: I_AM,
-      target:  { kind: "space", id: String(treeId) },
+      act:     "set-space",
+      through: I_AM,
+      of:      { kind: "space", id: String(treeId) },
       params:  { field: "qualities.circuit", value: circuit, merge: false },
       // Each branch carries its own circuit state. A tree that goes
       // haywire on branch #4 stays alive on main; operators see the
@@ -259,9 +259,9 @@ export async function reviveTree(treeId, beingId, branch) {
   await withBeingAct(String(beingId), `Circuit: revive tree ${String(treeId).slice(0, 8)} on #${branch}`, branch, async (ctx) => {
     await emitFact({
       verb:    "do",
-      action:  "set-space",
-      beingId: String(beingId),
-      target:  { kind: "space", id: String(treeId) },
+      act:     "set-space",
+      through: String(beingId),
+      of:      { kind: "space", id: String(treeId) },
       params:  { field: "qualities.circuit", value: { tripped: false }, merge: false },
       branch,
     }, ctx);

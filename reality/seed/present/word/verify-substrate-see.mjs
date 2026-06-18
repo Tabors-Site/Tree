@@ -47,9 +47,9 @@ const poll = async (fn, t = 60000, e = 250) => { const t0 = Date.now(); while (D
 const ident = { beingId: I_AM, name: "i-am", nameId: "i-am" };
 
 async function drive(target, op, params) {
-  const sc = { actId: randomUUID(), actorAct: { branch: "0", nameId: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc = { actId: randomUUID(), actorAct: { branch: "0", by: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   try {
-    const res = await doVerb(target, op, params, { identity: ident, summonCtx: sc });
+    const res = await doVerb(target, op, params, { identity: ident, moment: sc });
     if (sc.deltaF.length) await sealFacts(sc.deltaF);
     return { result: res?.result ?? res, deltaF: sc.deltaF, refused: null };
   } catch (e) { if (e && (e.name === "IbpError" || e.code)) return { result: null, deltaF: sc.deltaF, refused: e }; throw e; }
@@ -72,9 +72,9 @@ try {
     : bad(`create-matter`, cm.refused?.message || cm.result);
 
   // ── 3. the do:create-matter fact landed (the held emitBirth still emits). ──
-  (cm.deltaF || []).some((f) => f.action === "create-matter")
+  (cm.deltaF || []).some((f) => f.act === "create-matter")
     ? ok(`one do:create-matter fact on the reel`)
-    : bad(`create-matter fact`, (cm.deltaF || []).map((f) => f.action));
+    : bad(`create-matter fact`, (cm.deltaF || []).map((f) => f.act));
 
   // ── 4. the matter folds into the space (the conversion is behavior-preserving). ──
   const m = await loadOrFold("matter", String(cm.result?.matterId), "0");

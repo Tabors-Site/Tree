@@ -1193,20 +1193,20 @@ function renderFactBlock(f, discovery, chainStatus = "edge") {
 
   const action = document.createElement("span");
   action.className = "block-action";
-  action.textContent = `${f.verb}:${f.action}`;
+  action.textContent = `${f.verb}:${f.act}`;
   summary.appendChild(action);
 
   const target = document.createElement("span");
   target.className = "block-target dim";
-  const tk = f.target?.kind || "?";
-  const ti = f.target?.id ? short(String(f.target.id)) : "?";
+  const tk = f.of?.kind || "?";
+  const ti = f.of?.id ? short(String(f.of.id)) : "?";
   target.textContent = `→ ${tk}/${ti}`;
   summary.appendChild(target);
 
   const doer = document.createElement("span");
   doer.className = "block-doer";
-  doer.textContent = f.beingName ? `@${f.beingName}` : (f.beingId ? short(f.beingId) : "?");
-  doer.title = f.beingId || "";
+  doer.textContent = f.beingName ? `@${f.beingName}` : (f.through ? short(f.through) : "?");
+  doer.title = f.through || "";
   summary.appendChild(doer);
 
   const ts = document.createElement("span");
@@ -1248,22 +1248,22 @@ function renderFactBlock(f, discovery, chainStatus = "edge") {
 
   detail.appendChild(kvBlock("identity (hash)", f._id || "(none)", { mono: true }));
   detail.appendChild(kvBlock("p (prev)", f.p || "(genesis)", { mono: true }));
-  if (f.actId) detail.appendChild(kvBlock("act id", f.actId, { mono: true, link: discovery && f.beingId ? `#${discovery.reality}/.acts/${f.beingId}` : null }));
+  if (f.actId) detail.appendChild(kvBlock("act id", f.actId, { mono: true, link: discovery && f.through ? `#${discovery.reality}/.acts/${f.through}` : null }));
   if (f.params != null) detail.appendChild(jsonKv("params", f.params));
   if (f.result != null) detail.appendChild(jsonKv("result", f.result));
   // Target link — clickable for navigation into the target's own reel.
-  if (discovery?.reality && f.target?.kind && f.target?.id) {
-    const linkText = `${f.target.kind}/${f.target.id}`;
+  if (discovery?.reality && f.of?.kind && f.of?.id) {
+    const linkText = `${f.of.kind}/${f.of.id}`;
     detail.appendChild(kvBlock("target", linkText, {
       mono: true,
-      link: `#${discovery.reality}/.reel/${f.target.kind}/${f.target.id}`,
+      link: `#${discovery.reality}/.reel/${f.of.kind}/${f.of.id}`,
     }));
   }
   // Doer link — to the doer's own facts.
-  if (discovery?.reality && f.beingId) {
-    detail.appendChild(kvBlock("doer", f.beingName || f.beingId, {
+  if (discovery?.reality && f.through) {
+    detail.appendChild(kvBlock("doer", f.beingName || f.through, {
       mono: true,
-      link: `#${discovery.reality}/.reel/being/${f.beingId}`,
+      link: `#${discovery.reality}/.reel/being/${f.through}`,
     }));
   }
 
@@ -1439,10 +1439,10 @@ function renderActBlock(a, discovery) {
   if (a.ibpAddress) detail.appendChild(kvBlock("ibp address", a.ibpAddress, { mono: true }));
   if (a.activeRole) detail.appendChild(kvBlock("role", a.activeRole));
   if (a.priority) detail.appendChild(kvBlock("priority", a.priority));
-  if (a.beingOut && discovery?.reality) {
-    detail.appendChild(kvBlock("being out", a.beingOut, {
+  if (a.to && discovery?.reality) {
+    detail.appendChild(kvBlock("being out", a.to, {
       mono: true,
-      link: `#${discovery.reality}/.reel/being/${a.beingOut}`,
+      link: `#${discovery.reality}/.reel/being/${a.to}`,
     }));
   }
   if (a.rootCorrelation) detail.appendChild(kvBlock("rootCorrelation", a.rootCorrelation, { mono: true }));
@@ -1486,9 +1486,9 @@ function renderActBlock(a, discovery) {
 // action name carries the verb intent; factSummaryLine carries the
 // payload. Returns null only for a fact with no action at all.
 function factActionLabel(f) {
-  if (!f || !f.action) return null;
+  if (!f || !f.act) return null;
   const summary = factSummaryLine(f);
-  return summary ? `${f.action} ${summary}` : f.action;
+  return summary ? `${f.act} ${summary}` : f.act;
 }
 
 // Derive a one-line content summary from a fact's verb/action/params.
@@ -1505,19 +1505,19 @@ function factSummaryLine(f) {
     }
   }
   // be:register / be:claim / be:birth — name on the spec / params.
-  if (f.verb === "be" && (f.action === "register" || f.action === "claim")) {
+  if (f.verb === "be" && (f.act === "register" || f.act === "claim")) {
     if (p?.name) return `@${p.name}`;
   }
-  if (f.verb === "be" && f.action === "birth" && p?.spec?.name) {
+  if (f.verb === "be" && f.act === "birth" && p?.spec?.name) {
     return `@${p.spec.name}`;
   }
   // create-* — name on the spec.
-  if (/^create/.test(f.action) && p?.spec?.name) {
+  if (/^create/.test(f.act) && p?.spec?.name) {
     return `name "${p.spec.name}"${p.spec.type ? ` (type ${p.spec.type})` : ""}`;
   }
   // set-* — field = value. coord renders as a position so a dancer's
   // step reads "→ (5, 4)" rather than "coord = {"x":5,"y":4}".
-  if (/^set/.test(f.action) && p?.field) {
+  if (/^set/.test(f.act) && p?.field) {
     const v = p.value;
     if (p.field === "coord" && v && typeof v.x === "number" && typeof v.y === "number") {
       return `→ (${v.x}, ${v.y})`;
@@ -1528,7 +1528,7 @@ function factSummaryLine(f) {
     return `${p.field} = ${vs}`;
   }
   // place-being / move — coords or path.
-  if (/place|move/.test(f.action) && p) {
+  if (/place|move/.test(f.act) && p) {
     if (typeof p.x === "number" && typeof p.y === "number") return `→ (${p.x}, ${p.y})`;
     if (p.path) return `→ ${p.path}`;
   }

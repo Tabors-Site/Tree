@@ -158,7 +158,7 @@ async function ensureRequestLogMatter() {
         content: null,
         qualities: { requestLog: { count: 0, since: new Date().toISOString() } },
       },
-      { identity: identityFor("http"), summonCtx: ctx },
+      { identity: identityFor("http"), moment: ctx },
     );
     ids.requestLogMatter = String(res.matterId);
   });
@@ -189,7 +189,7 @@ export async function reconcileStaleConnections() {
         { kind: "matter", id: String(row.id) },
         "end-matter",
         {},
-        { identity: identityFor("ws"), summonCtx: ctx },
+        { identity: identityFor("ws"), moment: ctx },
       ));
   }
   if (swept > 0) {
@@ -227,7 +227,7 @@ export function noteSocketConnected({ socketId, beingId, name, branch } = {}) {
         // Full socketId: matter names are unique per kind per branch
         // (the projections name index), and truncated ids collide.
         { name: `conn-${socketId}`, type: "connection", content: null, qualities },
-        { identity: identityFor("ws"), summonCtx: ctx },
+        { identity: identityFor("ws"), moment: ctx },
       );
       socketMatter.set(socketId, String(res.matterId));
     });
@@ -247,7 +247,7 @@ export function noteSocketBranchRebound({ socketId, branch } = {}) {
         { kind: "matter", id: matterId },
         "set-matter",
         { field: "qualities.connection.branch", value: branch },
-        { identity: identityFor("ws"), summonCtx: ctx },
+        { identity: identityFor("ws"), moment: ctx },
       );
     });
   } catch (err) {
@@ -269,7 +269,7 @@ export function noteSocketDisconnected({ socketId, reason } = {}) {
         { kind: "matter", id: matterId },
         "end-matter",
         {},
-        { identity: identityFor("ws"), summonCtx: ctx },
+        { identity: identityFor("ws"), moment: ctx },
       );
     });
   } catch (err) {

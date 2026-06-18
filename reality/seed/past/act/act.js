@@ -53,15 +53,15 @@ const ActSchema = new mongoose.Schema({
   // The ACTOR — the Name (identity) that authored this act and whose key
   // signs it. The acting being expresses this trueName; the name's key
   // (i-am → the reality key, else the Name's privateKeyEnc) produces
-  // act.sig. The act-chain itself stays keyed per (branch, beingIn): a
+  // act.sig. The act-chain itself stays keyed per (branch, through): a
   // name owns many beings' PARALLEL chains (name → branch → being → acts),
   // so the name is the owner + signer, NOT the chain key. NOT part of
-  // contentOfAct (the digest), so it never changes act._id. `beingIn`
+  // contentOfAct (the digest), so it never changes act._id. `through`
   // below is the being the name acted THROUGH. See materials/name/name.js.
-  nameId: { type: String, ref: "Name", default: null, index: true },
+  by: { type: String, ref: "Name", default: null, index: true },
 
-  beingIn:  { type: String, ref: "Being", required: true, index: true },
-  beingOut: { type: String, ref: "Being", default: null, index: true },
+  through: { type: String, ref: "Being", required: true, index: true },
+  to:      { type: String, ref: "Being", default: null, index: true },
 
   ibpAddress: { type: String, default: null, index: true },
   activeRole: { type: String, default: null, index: true },
@@ -225,15 +225,15 @@ const ActSchema = new mongoose.Schema({
 // All Acts under one chain (rootCorrelation walk).
 ActSchema.index({ rootCorrelation: 1, stampedAt: 1 }, { sparse: true });
 // Per-Being newest-first activity, scoped by branch.
-ActSchema.index({ beingIn: 1, branch: 1, stampedAt: -1 });
+ActSchema.index({ through: 1, branch: 1, stampedAt: -1 });
 // Per-Name activity — the "name → branch → acts" folder view; a name's
 // whole biography across every being it acts through.
-ActSchema.index({ nameId: 1, branch: 1, stampedAt: -1 }, { sparse: true });
-ActSchema.index({ beingOut: 1, branch: 1, stampedAt: -1 });
+ActSchema.index({ by: 1, branch: 1, stampedAt: -1 }, { sparse: true });
+ActSchema.index({ to: 1, branch: 1, stampedAt: -1 });
 // Conversation between two Beings.
-ActSchema.index({ beingIn: 1, beingOut: 1, stampedAt: -1 }, { sparse: true });
-// "Every time beingOut acted in activeRole" — audit query.
-ActSchema.index({ beingOut: 1, activeRole: 1, stampedAt: -1 }, { sparse: true });
+ActSchema.index({ through: 1, to: 1, stampedAt: -1 }, { sparse: true });
+// "Every time to acted in activeRole" — audit query.
+ActSchema.index({ to: 1, activeRole: 1, stampedAt: -1 }, { sparse: true });
 // All Acts at one IBPA (the thread).
 ActSchema.index({ ibpAddress: 1, stampedAt: -1 }, { sparse: true });
 // Retention sweep cursor.

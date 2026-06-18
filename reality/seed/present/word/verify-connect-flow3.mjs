@@ -53,7 +53,7 @@ const cherub = await poll(() => findByName("being", "cherub", "0"));
 const birth = async (name, extraSpec = {}) => {
   let bid = null;
   await withIAmAct(`birth ${name}`, async (ctx) => {
-    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global", ...extraSpec }, identity: I_AM, summonCtx: ctx, branch: "0" });
+    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global", ...extraSpec }, identity: I_AM, moment: ctx, branch: "0" });
     bid = b.beingId;
   });
   return bid;
@@ -62,12 +62,12 @@ const birth = async (name, extraSpec = {}) => {
 // drive flow 3 (inherit) through the bridge
 async function inherit(targetName, caller) {
   const branch = "0";
-  const summonCtx = { actId: randomUUID(), actorAct: { branch }, identity: { beingId: caller?.beingId || "x" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const moment = { actId: randomUUID(), actorAct: { branch }, identity: { beingId: caller?.beingId || "x" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   const flow = selectConnectFlow(resolveRoleWord("cherub", "connect"), "inherit");
   try {
-    const { result, deltaF } = await runRoleWord([flow], { summonCtx, branch, trigger: { address: `${localDomain}/@${targetName}`, caller }, env: { host: connectHostEnv() } });
+    const { result, deltaF } = await runRoleWord([flow], { moment, branch, trigger: { address: `${localDomain}/@${targetName}`, caller }, env: { host: connectHostEnv() } });
     return { result, deltaF, refused: null };
-  } catch (e) { if (e && e.__wordRefusal) return { result: null, deltaF: summonCtx.deltaF, refused: e }; throw e; }
+  } catch (e) { if (e && e.__wordRefusal) return { result: null, deltaF: moment.deltaF, refused: e }; throw e; }
 }
 
 console.log(`\n  verify-connect-flow3 (inherit / father-admit, ZERO stubs, + the security property)\n  DB: ${SCRATCH_DB.split("/").pop()}\n`);

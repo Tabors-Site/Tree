@@ -6,9 +6,9 @@
 // acts + grants stay valid (facts at the time stand). Going forward:
 //
 //   - The dead being cannot act. No new Acts open on its chain;
-//     no new Facts stamp with it as `beingId` (actor).
+//     no new Facts stamp with it as `through` (the vessel acted through).
 //   - The dead being cannot be acted upon. No new Facts stamp with
-//     it as `target.id` (recipient). Summons refuse. BE ops on it
+//     it as `of.id` (recipient). Summons refuse. BE ops on it
 //     refuse. Role grants/revocations refuse.
 //
 // The reducer (applyDeath in reducerHelpers.js) lands the projection
@@ -47,7 +47,7 @@ export async function isBeingDead(beingId, branch) {
   if (typeof branch !== "string" || !branch.length) {
     throw new Error(
       "isBeingDead requires branch as a non-empty string. " +
-      "Pass summonCtx?.actorAct?.branch or the explicit branch the " +
+      "Pass moment?.actorAct?.branch or the explicit branch the " +
       "read is happening on — no main-bias default.",
     );
   }
@@ -66,5 +66,5 @@ export async function isBeingDead(beingId, branch) {
  * @returns {boolean}
  */
 export function isDeathFact(fact) {
-  return fact?.verb === "be" && fact?.action === "death";
+  return fact?.verb === "be" && fact?.act === "death";
 }

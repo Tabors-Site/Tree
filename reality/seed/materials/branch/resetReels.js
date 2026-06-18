@@ -78,10 +78,10 @@ async function _inhabitResetFacts({ mergedBranch, ancestor, actorBeingId }) {
     const beingId = String(row.id);
     facts.push({
       verb:    "be",
-      action:  "release",
-      beingId: String(actorBeingId),
+      act:     "release",
+      through: String(actorBeingId),
       branch:  mergedBranch,
-      target:  { kind: "being", id: beingId },
+      of:      { kind: "being", id: beingId },
       params:  {
         inhabitedBy: null,
         _merge: {

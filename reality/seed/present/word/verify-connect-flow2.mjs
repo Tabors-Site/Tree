@@ -48,17 +48,17 @@ const poll = async (fn, t = 60000, e = 250) => { const t0 = Date.now(); while (D
 
 async function register({ name, password, nameId }) {
   const branch = "0";
-  const summonCtx = { actId: randomUUID(), actorAct: { branch, nameId: nameId || "i-am" }, identity: { beingId: "i-am", name: "i-am", nameId: nameId || "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [], _inOp: true };
-  const res = await cherubBeOps.birth.handler({ payload: { name, password }, ctx: { nameId: nameId || null, summonCtx, req: {} } });
-  await sealFacts(summonCtx.deltaF);
-  for (const fn of summonCtx.afterSeal || []) { try { await fn(); } catch { /* angel grant; tolerated */ } }
+  const moment = { actId: randomUUID(), actorAct: { branch, by: nameId || "i-am" }, identity: { beingId: "i-am", name: "i-am", nameId: nameId || "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [], _inOp: true };
+  const res = await cherubBeOps.birth.handler({ payload: { name, password }, ctx: { nameId: nameId || null, moment, req: {} } });
+  await sealFacts(moment.deltaF);
+  for (const fn of moment.afterSeal || []) { try { await fn(); } catch { /* angel grant; tolerated */ } }
   return res;
 }
 
 async function declareName(name, password) {
   const branch = "0";
-  const sc = { actId: randomUUID(), actorAct: { branch, nameId: "i-am" }, identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
-  const r = await nameVerb("declare", { name, password, soulType: "human" }, { identity: sc.identity, summonCtx: sc, currentBranch: branch });
+  const sc = { actId: randomUUID(), actorAct: { branch, by: "i-am" }, identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const r = await nameVerb("declare", { name, password, soulType: "human" }, { identity: sc.identity, moment: sc, currentBranch: branch });
   await sealFacts(sc.deltaF);
   return r.nameId;
 }
@@ -66,9 +66,9 @@ async function declareName(name, password) {
 // drive flow 2 through the bridge: a signed-in Name (caller) connects to a being it owns
 async function connectOwned(name, caller) {
   const branch = "0";
-  const summonCtx = { actId: randomUUID(), actorAct: { branch }, identity: { beingId: "arrival", name: "arrival" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const moment = { actId: randomUUID(), actorAct: { branch }, identity: { beingId: "arrival", name: "arrival" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   const flow = selectConnectFlow(resolveRoleWord("cherub", "connect"), "owned");
-  const { result } = await runRoleWord([flow], { summonCtx, branch, trigger: { name, caller }, env: { host: connectHostEnv() } });
+  const { result } = await runRoleWord([flow], { moment, branch, trigger: { name, caller }, env: { host: connectHostEnv() } });
   return result;
 }
 

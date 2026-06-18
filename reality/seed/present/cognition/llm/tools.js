@@ -701,23 +701,23 @@ export async function executeTool(toolCall, session, ctx, presenceKey) {
       throw new Error(`Tool "${resolvedToolName}" has no registered handler`);
     }
     // Per-call context for the handler. Carries the ambient moment so
-    // a tool that delegates to doVerb / beVerb can thread summonCtx
+    // a tool that delegates to doVerb / beVerb can thread moment
     // and the Fact rides the open Act. Without this every extension
     // tool would have to repack ctx fields from args by hand and
     // forgetting throws "missing ambient actId" mid-stream.
     // Thread the live moment ctx so a tool that delegates to
     // doVerb/summonVerb/beVerb pushes its Fact onto THIS moment's ΔF.
-    // ctx.summonCtx is the deltaF/foldedSeqs/afterSeal-bearing object
+    // ctx.moment is the deltaF/foldedSeqs/afterSeal-bearing object
     // assign built and the seal drains; we spread it (preserving the
     // deltaF/afterSeal array references and the foldedSeqs Map) and add
     // the wake/reply fields the seed summon tool reads. Rebuilding a
     // deltaF-less copy here was the bug: the handler's emitFact then
     // self-sealed its Fact outside the moment and the Act orphaned. The
     // minimal fallback covers standalone tool paths with no live moment.
-    const liveCtx = ctx.summonCtx || null;
+    const liveCtx = ctx.moment || null;
     const callCtx = {
       identity: { beingId: ctx.beingId, name: ctx.username || null },
-      summonCtx: liveCtx
+      moment: liveCtx
         ? {
             ...liveCtx,
             rootActId: liveCtx.rootActId || ctx.rootActId || ctx.actId || null,

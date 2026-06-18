@@ -51,7 +51,7 @@ function assertBranch(branch) {
   if (typeof branch !== "string" || !branch.length) {
     throw new Error(
       `projections: branch is required (got ${JSON.stringify(branch)}). ` +
-      `Internal callers must thread branch from the moment's summonCtx or the wire layer.`,
+      `Internal callers must thread branch from the moment's moment or the wire layer.`,
     );
   }
 }

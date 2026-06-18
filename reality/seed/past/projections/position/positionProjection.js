@@ -29,7 +29,7 @@
 // Both writers upsert the same row; whichever carries the higher
 // lastMoveSeq wins. Idempotent under any replay shape.
 //
-// What "the space" means here. The fact carries `target = { kind:
+// What "the space" means here. The fact carries `of = { kind:
 // "being", id: beingId }` — there's no spaceId in the fact body
 // because single-writer landed it on the being's reel. The fold
 // handler reads the being's current `position` to know which row to

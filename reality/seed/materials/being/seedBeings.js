@@ -32,6 +32,6 @@ export const I_AM = "i-am";
 // / `identity.name` uniformly. Seed-internal calls that used to pass
 // the retired `scaffold: true` flag now pass `identity: I_AM`. This
 // is safe during genesis (when the I-Am Being row is still pending in
-// summonCtx.deltaF): authorize() short-circuits on
+// moment.deltaF): authorize() short-circuits on
 // `identity?.name === I_AM` without a DB read, and fact attribution
 // just stamps the string. No lookup, no chicken-and-egg.

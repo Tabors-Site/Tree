@@ -54,7 +54,7 @@ const MAX_TREE_DEPTH = 256; // cycle/runaway guard for the upward walk.
  * agnostic union (any grant anywhere) — used where authority is read
  * without a branch in hand.
  *
- * Both facts land on the POSITION being's reel (target.id = position),
+ * Both facts land on the POSITION being's reel (of.id = position),
  * attributed to the granting/revoking Name (the actor). The granted
  * Name rides in params.name.
  */
@@ -70,20 +70,20 @@ export async function livePointsAt(beingId, branch) {
 
   const [grants, revokes] = await Promise.all([
     Fact.find({
-      "target.kind": "being",
-      "target.id": position,
+      "of.kind": "being",
+      "of.id": position,
       verb: "do",
-      action: "grant-inheritation",
+      act: "grant-inheritation",
       ...branchClause,
     })
       .sort({ seq: 1, date: 1 })
       .select("params date")
       .lean(),
     Fact.find({
-      "target.kind": "being",
-      "target.id": position,
+      "of.kind": "being",
+      "of.id": position,
       verb: "do",
-      action: "revoke-inheritation",
+      act: "revoke-inheritation",
       ...branchClause,
     })
       .sort({ seq: 1, date: 1 })

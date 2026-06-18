@@ -16,7 +16,7 @@
 // authenticated, the wire refuses (impersonation gate).
 //
 // `payload.act` names the registered DO operation (the operation in
-// flight; the seal records it as fact.action). `payload.args`
+// flight; the seal records it as fact.act). `payload.args`
 // carries the operation's arguments (legacy: any non-reserved field).
 // `payload.correlation` is the client-generated idempotency key — a
 // retry with the same correlation collapses to one moment.

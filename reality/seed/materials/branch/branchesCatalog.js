@@ -271,10 +271,10 @@ function _summarizeFact(fact) {
   return {
     seq: fact.seq,
     verb: fact.verb,
-    action: fact.action,
+    act: fact.act,
     branch: fact.branch,
     date: fact.date ? new Date(fact.date).toISOString() : null,
-    beingId: fact.beingId || null,
+    through: fact.through || null,
     params: fact.params || null,
   };
 }
@@ -305,7 +305,7 @@ async function _readMergeResolutions(mergedBranch, reelKeys) {
   if (kindToIds.size === 0) return new Map();
   const orClauses = [];
   for (const [kind, ids] of kindToIds) {
-    orClauses.push({ "target.kind": kind, "target.id": { $in: ids } });
+    orClauses.push({ "of.kind": kind, "of.id": { $in: ids } });
   }
   const facts = await Fact.find({
     branch: mergedBranch,
@@ -316,7 +316,7 @@ async function _readMergeResolutions(mergedBranch, reelKeys) {
   // once, the most recent decision is what's authoritative).
   const byReel = new Map();
   for (const f of facts) {
-    const key = `${f.target.kind}:${f.target.id}`;
+    const key = `${f.of.kind}:${f.of.id}`;
     byReel.set(key, f);
   }
   return byReel;
@@ -325,10 +325,10 @@ async function _readMergeResolutions(mergedBranch, reelKeys) {
 function _summarizeResolution(fact) {
   return {
     seq: fact.seq,
-    action: fact.action,
+    act: fact.act,
     branch: fact.branch,
     date: fact.date ? new Date(fact.date).toISOString() : null,
-    beingId: fact.beingId || null,
+    through: fact.through || null,
     strategy: fact.params?._merge?.strategy || null,
     sourceBranch: fact.params?._merge?.sourceBranch || null,
     note: fact.params?._merge?.note || null,

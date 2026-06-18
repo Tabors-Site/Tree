@@ -9,9 +9,9 @@
 //   place    — a world + position (e.g. tabors.site#0/home)
 //
 // An Act records the actor's identity tuple { reality, branch,
-// beingIn, _id }. summonCtx.actorAct points to it. Every downstream
+// through, _id }. moment.actorAct points to it. Every downstream
 // consumer reads identity through these helpers — no direct legacy
-// `summonCtx.branch` reads (the retired path; throw hard).
+// `moment.branch` reads (the retired path; throw hard).
 //
 // A Fact targets a reel that lives in some world (reality+branch).
 // The Fact carries a `crossOrigin` block in its params iff the
@@ -24,15 +24,15 @@
 // being built). The helper handles both uniformly.
 
 /**
- * Read the actor's branch off a summonCtx. Throws hard if actorAct
+ * Read the actor's branch off a moment. Throws hard if actorAct
  * is missing — no silent main-bias, no fallback. Use at every site
  * that needs the moment's branch.
  */
-export function actorBranchFrom(summonCtx, hint) {
-  const branch = summonCtx?.actorAct?.branch;
+export function actorBranchFrom(moment, hint) {
+  const branch = moment?.actorAct?.branch;
   if (typeof branch !== "string" || !branch.length) {
     throw new Error(
-      `actorBranchFrom: summonCtx.actorAct.branch missing${hint ? ` (${hint})` : ""}. ` +
+      `actorBranchFrom: moment.actorAct.branch missing${hint ? ` (${hint})` : ""}. ` +
       `Every moment opener (planActRow, withIAmAct, withBeingAct) must seat the Act on the ctx.`
     );
   }
@@ -40,14 +40,14 @@ export function actorBranchFrom(summonCtx, hint) {
 }
 
 /**
- * Read the actor's reality off a summonCtx. Same contract as
+ * Read the actor's reality off a moment. Same contract as
  * actorBranchFrom.
  */
-export function actorRealityFrom(summonCtx, hint) {
-  const reality = summonCtx?.actorAct?.reality;
+export function actorRealityFrom(moment, hint) {
+  const reality = moment?.actorAct?.reality;
   if (typeof reality !== "string" || !reality.length) {
     throw new Error(
-      `actorRealityFrom: summonCtx.actorAct.reality missing${hint ? ` (${hint})` : ""}.`
+      `actorRealityFrom: moment.actorAct.reality missing${hint ? ` (${hint})` : ""}.`
     );
   }
   return reality;
@@ -59,7 +59,7 @@ export function actorRealityFrom(summonCtx, hint) {
  * Fact stays in the actor's home world (no provenance block needed).
  *
  * @param {object} actorAct  the Act row (must carry reality + branch
- *                           + beingIn + _id).
+ *                           + through + _id).
  * @param {object} target    { world: { reality, branch } } the
  *                           resolved world of the Fact's target reel.
  * @returns {object|null}    { reality, branch, beingId, actId, ... }
@@ -86,8 +86,8 @@ export function deriveCrossOrigin(actorAct, target) {
     // beingId = the POSITION the act came through (stays the dedupe key with
     // actId). nameId = the SIGNER-of-record (the foreign actor's name), so a
     // foreign father's facts attribute to HIS name, not the vessel's owner.
-    beingId: actorAct.beingIn,
-    nameId:  actorAct.nameId ?? null,
+    beingId: actorAct.through,
+    nameId:  actorAct.by ?? null,
     actId:   actorAct._id,
   };
 }

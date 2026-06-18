@@ -113,7 +113,7 @@ async function ibpHttpHandler(req, res) {
   // reality via canopy (req.canopySender is set), construct the
   // actor's identity tuple — { reality, branch, beingId, actId } —
   // from the trusted canopy sender + envelope fields. The receiving
-  // verb handler uses this to seat summonCtx.actorAct so emitFact
+  // verb handler uses this to seat moment.actorAct so emitFact
   // attaches crossOrigin correctly when stamping facts on local
   // reels. Local calls (no canopySender) get null and the carrier
   // path opens a local Act as normal.
@@ -144,7 +144,7 @@ async function ibpHttpHandler(req, res) {
     canopyVerifiedSender: req.canopySender || null,
     // The foreign actor's identity tuple — populated only on cross-
     // reality inbound. Receiving verb handlers consume this to build
-    // a synthetic summonCtx.actorAct (the actor's local Act lives on
+    // a synthetic moment.actorAct (the actor's local Act lives on
     // the SENDER's substrate, not here, so we don't open a local Act
     // row; we seat actorAct as a JS object representing the foreign
     // actor and let emitFact stamp crossOrigin from it).

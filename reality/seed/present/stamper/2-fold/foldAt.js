@@ -135,8 +135,8 @@ export async function resolveUntil(type, id, until, opts = {}) {
   const branch = assertBranchOrThrow(opts.branch || until.branch, "resolveUntil(opts)");
   if (branch === "0") {
     const row = await Fact.findOne({
-      "target.kind": type,
-      "target.id":   id,
+      "of.kind": type,
+      "of.id":   id,
       seq:           { $type: "number" },
       date:          { $lte: at },
       $or:           [{ branch: "0" }, { branch: { $exists: false } }],
@@ -157,8 +157,8 @@ export async function resolveUntil(type, id, until, opts = {}) {
       : { branch: b },
   );
   const row = await Fact.findOne({
-    "target.kind": type,
-    "target.id":   id,
+    "of.kind": type,
+    "of.id":   id,
     seq:           { $type: "number" },
     date:          { $lte: at },
     $or:           orClauses,

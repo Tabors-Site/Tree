@@ -11,7 +11,7 @@
 // set, so arrival-cherub flows are unaffected.
 //
 // `payload.act` is one of "birth" | "connect" | "release" | "switch"
-// | "death" (the operation in flight; the seal records it as fact.action).
+// | "death" (the operation in flight; the seal records it as fact.act).
 // Remaining payload fields carry operation-specific credentials/state.
 // `payload.correlation` is the client-generated idempotency key —
 // retries with the same correlation collapse to one moment.
@@ -250,7 +250,7 @@ export async function handleBe(socket, env, ack) {
       correlation: clientCorrelation,
       act: {
         verb: "be",
-        act:  operation,             // the operation in flight (birth/connect/...); the seal records it as fact.action
+        act:  operation,             // the operation in flight (birth/connect/...); the seal records it as fact.act
         args: {
           opPayload,
           address,

@@ -43,9 +43,9 @@ export function getSpaceOwner(spaceRow) {
  * keeps NO implicit write access on transfer — under RolesAreAuth,
  * any continued authority requires a granted role.
  */
-export async function setSpaceOwner(spaceId, newOwnerId, actor, branch, summonCtx = null) {
+export async function setSpaceOwner(spaceId, newOwnerId, actor, branch, moment = null) {
   if (typeof branch !== "string" || !branch) {
-    throw new Error("setSpaceOwner: branch is required (thread from summonCtx).");
+    throw new Error("setSpaceOwner: branch is required (thread from moment).");
   }
   if (!newOwnerId) throw new Error("setSpaceOwner: newOwnerId is required");
 
@@ -89,7 +89,7 @@ export async function setSpaceOwner(spaceId, newOwnerId, actor, branch, summonCt
       throw new Error("Ownership changed concurrently. Retry the operation.");
     }
 
-    await emitOwnerFact(spaceId, String(newOwnerId), actor, branch, summonCtx);
+    await emitOwnerFact(spaceId, String(newOwnerId), actor, branch, moment);
 
     invalidateSpace(spaceId);
     hooks.run("afterMembersChange", {
@@ -108,9 +108,9 @@ export async function setSpaceOwner(spaceId, newOwnerId, actor, branch, summonCt
  * After the call, the space has no owner at this position, so the
  * walker inherits ownership from the parent again.
  */
-export async function removeSpaceOwner(spaceId, actor, branch, summonCtx = null) {
+export async function removeSpaceOwner(spaceId, actor, branch, moment = null) {
   if (typeof branch !== "string" || !branch) {
-    throw new Error("removeSpaceOwner: branch is required (thread from summonCtx).");
+    throw new Error("removeSpaceOwner: branch is required (thread from moment).");
   }
   const { loadOrFold } = await import("../projections.js");
   const slot = await loadOrFold("space", spaceId, branch);
@@ -132,7 +132,7 @@ export async function removeSpaceOwner(spaceId, actor, branch, summonCtx = null)
   const locked = await acquireSpaceLock(spaceId, actor);
   if (!locked) throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Space ownership is being modified");
   try {
-    await emitOwnerFact(spaceId, null, actor, branch, summonCtx);
+    await emitOwnerFact(spaceId, null, actor, branch, moment);
     invalidateSpace(spaceId);
     hooks.run("afterMembersChange", {
       spaceId, action: "removeSpaceOwner", targetUserId: removedOwnerId,
@@ -144,14 +144,14 @@ export async function removeSpaceOwner(spaceId, actor, branch, summonCtx = null)
 
 // ── Internal plumbing ─────────────────────────────────────────────
 
-async function emitOwnerFact(spaceId, ownerId, actor, branch, summonCtx) {
+async function emitOwnerFact(spaceId, ownerId, actor, branch, moment) {
   const target = { kind: "space", id: String(spaceId) };
   const { doVerb } = await import("../../ibp/verbs/do.js");
   await doVerb(
     target,
     "set-space",
     { field: "owner", value: ownerId },
-    { identity: { beingId: actor }, currentBranch: branch, summonCtx },
+    { identity: { beingId: actor }, currentBranch: branch, moment },
   );
 }
 

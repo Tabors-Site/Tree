@@ -5,7 +5,7 @@
 //
 // Per philosophy/names/innerFace.md: every moment computes ONE inner
 // face; all three souls (LLM, scripted, human) read the same shape.
-// The LLM mouth reads it from summonCtx; the scripted role reads it
+// The LLM mouth reads it from moment; the scripted role reads it
 // from ctx.innerFace; the human portal calls this SEE op to see the
 // same role-filtered, canSee-resolved view at the caller's current
 // stance.

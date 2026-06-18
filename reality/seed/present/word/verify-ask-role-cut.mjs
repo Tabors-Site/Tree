@@ -55,7 +55,7 @@ const cherub = await poll(() => findByName("being", "cherub", "0"));
 const birth = async (name) => {
   let bid = null;
   await withIAmAct(`birth ${name}`, async (ctx) => {
-    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, summonCtx: ctx, branch: "0" });
+    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: ctx, branch: "0" });
     bid = b.beingId;
   });
   return bid;
@@ -64,9 +64,9 @@ const birth = async (name) => {
 // drive the REAL ask-role op via doVerb → the cut handler → ask-role.word; seal here
 async function askRole(caller, role, space) {
   const branch = "0";
-  const sc = { actId: randomUUID(), actorAct: { branch, nameId: "i-am" }, identity: { beingId: String(caller) }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc = { actId: randomUUID(), actorAct: { branch, by: "i-am" }, identity: { beingId: String(caller) }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   try {
-    const res = await doVerb({ kind: "space", id: String(space) }, "ask-role", { role }, { identity: { beingId: String(caller) }, summonCtx: sc });
+    const res = await doVerb({ kind: "space", id: String(space) }, "ask-role", { role }, { identity: { beingId: String(caller) }, moment: sc });
     if (sc.deltaF.length) await sealFacts(sc.deltaF);
     const result = res?.result ?? res;
     return { result, deltaF: sc.deltaF, refused: null };
@@ -82,11 +82,11 @@ try {
   // arena with three asked-policies: greeter=auto, member=queue, sage=false
   let arena = null;
   await withIAmAct("create arena", async (ctx) => {
-    const res = await doVerb({ kind: "space", id: String(getSpaceRootId()) }, "create-space", { name: "askarena", type: "generic" }, { identity: I_AM, summonCtx: ctx });
+    const res = await doVerb({ kind: "space", id: String(getSpaceRootId()) }, "create-space", { name: "askarena", type: "generic" }, { identity: I_AM, moment: ctx });
     arena = String(res.spaceId);
   });
   const installRole = (name, acquisition) => withIAmAct(`install ${name}`, async (ctx) => {
-    await doVerb({ kind: "space", id: arena }, "set-space", { field: `qualities.roles.${name}`, value: { canSee: [], canDo: [], canSummon: [], acquisition }, merge: false }, { identity: I_AM, summonCtx: ctx });
+    await doVerb({ kind: "space", id: arena }, "set-space", { field: `qualities.roles.${name}`, value: { canSee: [], canDo: [], canSummon: [], acquisition }, merge: false }, { identity: I_AM, moment: ctx });
   });
   await installRole("greeter", { asked: "auto" });
   await installRole("member", { asked: "queue" });
@@ -95,7 +95,7 @@ try {
   // an owner the queue path can address
   const owner = await birth("askowner");
   await withIAmAct("set arena owner", async (ctx) => {
-    await doVerb({ kind: "space", id: arena }, "set-space", { field: "owner", value: String(owner), merge: false }, { identity: I_AM, summonCtx: ctx });
+    await doVerb({ kind: "space", id: arena }, "set-space", { field: "owner", value: String(owner), merge: false }, { identity: I_AM, moment: ctx });
   });
   const asker = await birth("asker");
   arena ? ok(`arena: greeter(auto) + member(queue) + sage(false), owner @askowner`) : bad(`arena`, "no space");
@@ -104,17 +104,17 @@ try {
   // ── 1. AUTO policy → granted immediately, a real grant-role fact, the asker holds it ──
   const a = await askRole(asker, "greeter", arena);
   a.result?.granted === true && a.result?.path === "auto" ? ok(`ask greeter (asked:auto) → granted:true, path:auto`) : bad(`auto granted`, a.refused?.message || a.result);
-  (a.deltaF || []).some((f) => f.action === "grant-role" && f.params?.role === "greeter") ? ok(`a real grant-role fact laid (the lone WORLD fact)`) : bad(`grant fact`, a.deltaF?.map((f) => f.action));
+  (a.deltaF || []).some((f) => f.act === "grant-role" && f.params?.role === "greeter") ? ok(`a real grant-role fact laid (the lone WORLD fact)`) : bad(`grant fact`, a.deltaF?.map((f) => f.act));
   const slot = await loadOrFold("being", String(asker), "0");
   (slot?.state?.qualities?.rolesGranted || []).some((r) => (r.role || r) === "greeter") ? ok(`@asker now HOLDS the greeter role`) : bad(`holds`, slot?.state?.qualities?.rolesGranted);
 
   // ── 2. idempotent re-ask → already:true, NO second grant ──
   const a2 = await askRole(asker, "greeter", arena);
-  a2.result?.already === true && !(a2.deltaF || []).some((f) => f.action === "grant-role") ? ok(`re-ask greeter → already:true, NO new grant`) : bad(`idempotent`, a2.result || a2.deltaF?.map((f) => f.action));
+  a2.result?.already === true && !(a2.deltaF || []).some((f) => f.act === "grant-role") ? ok(`re-ask greeter → already:true, NO new grant`) : bad(`idempotent`, a2.result || a2.deltaF?.map((f) => f.act));
 
   // ── 3. QUEUE policy → summon the owner, granted:false, NO grant fact ──
   const a3 = await askRole(asker, "member", arena);
-  a3.result?.granted === false && a3.result?.path === "queue" && /Requested/i.test(a3.result?.message || "") && !(a3.deltaF || []).some((f) => f.action === "grant-role")
+  a3.result?.granted === false && a3.result?.path === "queue" && /Requested/i.test(a3.result?.message || "") && !(a3.deltaF || []).some((f) => f.act === "grant-role")
     ? ok(`ask member (asked:queue) → granted:false, path:queue, owner summoned ("${a3.result.message}"), NO grant`)
     : bad(`queue`, a3.refused?.message || a3.result);
 

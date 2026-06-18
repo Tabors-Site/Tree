@@ -17,7 +17,7 @@ import Space from "./space/space.js";
 import { IbpError, IBP_ERR } from "../ibp/protocol.js";
 import { detectTargetKind, targetIdOf } from "./_targetShape.js";
 
-const branchOf = (ctx) => ctx?.summonCtx?.actorAct?.branch || ctx?.branch || "0";
+const branchOf = (ctx) => ctx?.moment?.actorAct?.branch || ctx?.branch || "0";
 
 // The subject kind from the same {kind,id} / string contract the handler uses.
 function subjectKind(subject) {

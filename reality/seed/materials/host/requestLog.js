@@ -215,7 +215,7 @@ async function stampRollingCounter() {
         value: { count: totalStamped, lastAt: new Date().toISOString() },
         merge: true,
       },
-      { identity: { beingId: httpBeingId, name: "http-server" }, summonCtx: ctx },
+      { identity: { beingId: httpBeingId, name: "http-server" }, moment: ctx },
     ));
 }
 

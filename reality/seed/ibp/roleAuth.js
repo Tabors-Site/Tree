@@ -67,7 +67,7 @@ export async function authorizeViaRoles(args) {
   if (typeof branch !== "string" || !branch.length) {
     throw new Error(
       "authorizeViaRoles requires `branch` as a non-empty string. " +
-      "Callers must pass summonCtx.actorAct?.branch (or '0' for genesis / pre-summon paths) " +
+      "Callers must pass moment.actorAct?.branch (or '0' for genesis / pre-summon paths) " +
       "explicitly; no silent default.",
     );
   }

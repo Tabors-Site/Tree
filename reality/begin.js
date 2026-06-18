@@ -487,7 +487,7 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
         { kind: "matter", id: matterId },
         "set-matter",
         { field: "content", value: ref },
-        { identity: I_AM, summonCtx: ctx },
+        { identity: I_AM, moment: ctx },
       );
     });
     pushInvalidate({ path: msg.path, kind: "file", matterId, hash: ref.hash, size: ref.size });
@@ -514,7 +514,7 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
         { kind: "matter", id: matterId },
         "set-matter",
         { field: "content", value: ref },
-        { identity: I_AM, summonCtx: ctx },
+        { identity: I_AM, moment: ctx },
       );
     });
     pushInvalidate({ path: msg.path, kind: "file", matterId, hash: ref.hash, size: ref.size });
@@ -541,7 +541,7 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
         target,
         "create-matter",
         { name, type: "source", content: ref },
-        { identity: I_AM, summonCtx: ctx },
+        { identity: I_AM, moment: ctx },
       );
       resultMatterId = r?.matterId || null;
     });
@@ -556,7 +556,7 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
         { kind: "matter", id: matterId },
         "end-matter",
         {},
-        { identity: I_AM, summonCtx: ctx },
+        { identity: I_AM, moment: ctx },
       );
     });
     pushInvalidate({ path: msg.path, removed: true, matterId });
@@ -582,14 +582,14 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
             { kind: "matter", id: replaceMatterId },
             "end-matter",
             {},
-            { identity: I_AM, summonCtx: ctx },
+            { identity: I_AM, moment: ctx },
           );
         }
         await doVerb(
           { kind: "matter", id: matterId },
           "rename-matter",
           { name: String(msg.newName || ""), allowReplace: !!replaceMatterId },
-          { identity: I_AM, summonCtx: ctx },
+          { identity: I_AM, moment: ctx },
         );
       });
       if (replaceMatterId) {
@@ -618,7 +618,7 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
         { kind: "matter", id: matterId },
         "set-matter",
         { field: "spaceId", value: sourceSpaceId },
-        { identity: I_AM, summonCtx: ctx },
+        { identity: I_AM, moment: ctx },
       );
     });
     if (msg.newName) {
@@ -627,7 +627,7 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
           { kind: "matter", id: matterId },
           "rename-matter",
           { name: String(msg.newName) },
-          { identity: I_AM, summonCtx: ctx },
+          { identity: I_AM, moment: ctx },
         );
       });
     }
@@ -651,7 +651,7 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
         target,
         "create-matter",
         { name, type: "source", content: { kind: "directory", path: null } },
-        { identity: I_AM, summonCtx: ctx },
+        { identity: I_AM, moment: ctx },
       );
       resultMatterId = r?.matterId || null;
     });

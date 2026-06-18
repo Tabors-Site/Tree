@@ -2233,7 +2233,7 @@ export function getRegisteredJobs() {
  *
  * Called from genesis.js after DB connect.
  */
-export async function runExtensionMigrations(summonCtx) {
+export async function runExtensionMigrations(moment) {
   let Space;
   try {
     Space = (await import("../seed/materials/space/space.js")).default;
@@ -2324,7 +2324,7 @@ export async function runExtensionMigrations(summonCtx) {
           { kind: "space", id: String(extSpace._id) },
           "set-space",
           { field: "qualities.schemaVersion", value: targetVersion },
-          { scaffold: true, summonCtx },
+          { scaffold: true, moment },
         );
         log.verbose(
           "Extensions",

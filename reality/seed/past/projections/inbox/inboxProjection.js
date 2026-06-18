@@ -3,7 +3,7 @@
 // InboxProjection. The cross-cutting fold of open summons per being.
 //
 // A SUMMON is the summoner's act and deposits a `be:summon` fact on
-// the summoner's reel, with `target = { kind: "being", id: recipient }`.
+// the summoner's reel, with `of = { kind: "being", id: recipient }`.
 // Single-writer holds — no one writes another being's reel — so the
 // summon-fact never lands on the recipient's reel.
 //
@@ -14,7 +14,7 @@
 //
 // Lifecycle:
 //   `be:summon` fact appears on any reel → upsert row keyed by
-//      correlation, with recipient = target.id, plus the summon's
+//      correlation, with recipient = of.id, plus the summon's
 //      params for the scheduler to read.
 //   `be:sever` fact appears on any reel → delete rows whose
 //      rootCorrelation matches the fact's params.rootCorrelation. The
@@ -87,7 +87,7 @@ const InboxProjectionSchema = new mongoose.Schema({
   // Orientation (INNER-FOLD §1): which way the recipient's moment
   // folds when this summon is picked. External summons carry forward;
   // self-summons may carry half or inward. Read by assign and put on
-  // summonCtx so the moment's fold knows where to look.
+  // moment so the moment's fold knows where to look.
   orientation: {
     type: String,
     enum: ["forward", "half", "inward"],

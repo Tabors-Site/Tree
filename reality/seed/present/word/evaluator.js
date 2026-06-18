@@ -9,7 +9,7 @@
 //   - dryRun: facts are collected into ctx.deltaF only (no DB, no real birth).
 //     Use this to diff the evaluator's facts against the JS handler's facts,
 //     the Phase 2 gate.
-//   - live: facts go through emitFact into the real moment (summonCtx.deltaF),
+//   - live: facts go through emitFact into the real moment (moment.deltaF),
 //     and form-being dispatches to the real birthBeing primitive.
 //
 // Faithful to the cherub birth flow mapped from the JS handlers:
@@ -40,7 +40,7 @@ class WordRefusal extends Error {
 }
 
 // Run a program (a node or an array of nodes) against a context, return ctx.deltaF.
-// ctx = { summonCtx, identity, branch, trigger, env, bindings?, deltaF?, dryRun? }
+// ctx = { moment, identity, branch, trigger, env, bindings?, deltaF?, dryRun? }
 // A §7 `return` sets ctx.result and unwinds here (benign); a §7 `refuse` propagates.
 export async function evaluate(program, ctx) {
   ctx.bindings ??= {};
@@ -61,6 +61,7 @@ async function evalNode(node, ctx) {
     case "act":     return evalAct(node, ctx);
     case "see":     return evalSee(node, ctx);      // the READ verb: query the substrate, no fact
     case "call":    return evalCall(node, ctx);     // the CALL verb: reach another being (space), lays the reach record
+    case "recall":  return evalRecall(node, ctx);   // the RECALL verb: reach back across TIME into a chain (no fact); a verdict records the conclusion
     case "closure": return evalClosure(node, ctx);
     case "if":      return evalIf(node, ctx);       // §2: branch in the moment
     case "mark":    return evalMark(node, ctx);     // §5: a flow-local flag a sibling cond reads
@@ -143,9 +144,9 @@ async function evalSee(node, ctx) {
   // Dispatch its backing fn (ctx.env.host, the role's see-op handlers) — PERCEPTION, lays
   // NO fact, exactly like every other see. The verb IS the nature; no tag. (A compute is
   // see-shaped: it perceives an output from its inputs, changing nothing in the world.)
-  if (node.op) {
+  if (node.act) {
     const args = (node.args || []).map((a) => resolveValue(a, ctx));
-    result = await callHost(node.op, { args }, ctx);
+    result = await callHost(node.act, { args }, ctx);
     if (node.bind) ctx.bindings[node.bind] = result;
     return result;
   }
@@ -230,8 +231,68 @@ async function seeRead(subject, quality, fresh, branch) {
   return String(quality).split(".").reduce((o, k) => (o == null ? o : o[k]), src) ?? null;
 }
 
+// ── recall (the SIXTH verb): reach back across TIME into a chain — the inner fold ──────
+//
+// CALL reaches across SPACE (a being, now); RECALL reaches across TIME (a chain, the past) —
+// the "re-" is the temporal vector, one reaching at two distances. Reading a chain back lays
+// NO fact (private cognition). The OBJECT decides BOTH the rendering and the gate: your OWN
+// thread (recalled, always yours) or the WORLD you stand in (saw, the space's thread you can
+// see); a foreign being's thread is private. What WRITES is the VERDICT — `recall <X> that
+// <Y>` publishes the conclusion as a do:verdict fact; the two ends surface (what recalled +
+// what concluded), the reflecting between stays silent. "saw … that it was good": the watching
+// is private, the JUDGMENT is the fact. IR: { kind:"recall", of:<ref|"world">, as?, that? }.
+async function evalRecall(node, ctx) {
+  const branch = ctx.branch ?? "0";
+  const ownBeing = ctx.identity?.beingId != null ? String(ctx.identity.beingId) : null;
+  const ownName  = ctx.identity?.nameId  != null ? String(ctx.identity.nameId)  : (ctx.identity?.name != null ? String(ctx.identity.name) : null);
+
+  // which thread? → the rendering (saw/recalled) + the access gate
+  const isWorld = node.of === "world" || node.of?.ref === "world";
+  let query, mode, ofLabel;
+  if (isWorld) {
+    query = { branch }; mode = "saw"; ofLabel = "the world";            // the world-space you stand in
+  } else {
+    const ref = (node.of && typeof node.of === "object" && node.of.ref != null) ? getPath(node.of.ref, ctx) : resolveValue(node.of, ctx);
+    const id = String(ref?._id ?? ref?.id ?? ref ?? ownBeing);
+    if (id === ownBeing || id === ownName) {
+      query = { branch, $or: [{ through: ownBeing }, { by: ownName }] }; mode = "recalled"; ofLabel = "my own thread"; // your own thread, always yours
+    } else {
+      // your own thread is always yours; the world you can see; a foreign thread is private.
+      // (Per-space saw-access for a specific other space is the next refinement.)
+      throw new WordRefusal(`recall: that thread is not yours to recall`, "FORBIDDEN");
+    }
+  }
+
+  if (ctx.dryRun) {
+    if (node.as) ctx.bindings[node.as] = `<${mode}>`;
+    if (node.that !== undefined) ctx.deltaF.push({ verb: "do", act: "verdict", params: { mode, of: ofLabel, that: resolveValue(node.that, ctx), ...(node.because !== undefined ? { because: resolveValue(node.because, ctx) } : {}) } });
+    return mode;
+  }
+
+  // READ the chain back — the thread (NO fact: the inner fold the cognition reflects on)
+  const { default: Fact } = await import("../../past/fact/fact.js");
+  const thread = await Fact.find(query).sort({ date: 1, seq: 1 }).lean();
+  if (node.as) ctx.bindings[node.as] = thread;
+
+  // the VERDICT — the conclusion AND the why, published as one memory-write. CRITICAL (Tabor):
+  // the recorded `because` is the being's DECLARED ACCOUNT of its reasoning — an authored Word
+  // claim — NOT the live inference. The actual thinking stays silent and unstored ("refuse to
+  // narrate the thinking"; the because is a pulled word, output not process). So the why on the
+  // chain is the being's CLAIM about why (a self-report, possibly partial/self-serving), not its
+  // computation: continuity for a stateless being, NOT transparency-of-thought. The being's own
+  // chain is its memory; this verdict is the note it leaves itself, in the Word (the new-test form).
+  if (node.that !== undefined) {
+    await emit({
+      verb: "do", act: "verdict", by: ownName, through: ownBeing,
+      of: { kind: "being", id: ownBeing },   // the memory lands on the being's OWN reel — its chain is its memory
+      params: { mode, of: ofLabel, that: resolveValue(node.that, ctx), ...(node.because !== undefined ? { because: resolveValue(node.because, ctx) } : {}) },
+    }, ctx);
+  }
+  return thread;
+}
+
 // ── call (the CALL verb): reach ANOTHER being across SPACE, now — summon them to act or to
-// talk. Lays the reach RECORD as a fact THROUGH summonCtx, so it rides the moment + the
+// talk. Lays the reach RECORD as a fact THROUGH moment, so it rides the moment + the
 // stamper (never a bare emit). `.word` surface: `call <being>, saying <content>` (talk) and
 // `call <being> to <intent>, with <content>` (summon-to-act) — the parser maps the surface
 // to { being, intent?, content }. The backing is TreeOS's summon machinery (summonVerb),
@@ -262,11 +323,16 @@ async function evalCall(node, ctx) {
     if (id) toName = (await loadOrFold("being", String(id), ctx.branch || "0"))?.state?.name;
   }
   if (!toName) throw new WordRefusal("call: cannot address the target being", "INVALID_INPUT");
-  // the caller (the Name acting through its being) is the `from` stance
-  const fromName = ctx.identity?.name || ctx.identity?.nameId;
+  // the caller (the Name acting through its being) is the `from` stance. When the moment carries
+  // only a beingId (a role-op threading its actor without a name), resolve the name off the being
+  // so the `from` is a real stance — otherwise summon authorizes @undefined as anonymous.
+  let fromName = ctx.identity?.name || ctx.identity?.nameId;
+  if (!fromName && ctx.identity?.beingId) {
+    fromName = (await loadOrFold("being", String(ctx.identity.beingId), ctx.branch || "0"))?.state?.name;
+  }
   const message = { from: `${reality}/@${fromName}`, content, ...(node.intent ? { intent: node.intent } : {}) };
   const { summonVerb } = await import("../../ibp/verbs/summon.js");
-  const result = await summonVerb(`${reality}/@${toName}`, message, { identity: ctx.identity, summonCtx: ctx.summonCtx });
+  const result = await summonVerb(`${reality}/@${toName}`, message, { identity: ctx.identity, moment: ctx.moment });
   if (node.bind) ctx.bindings[node.bind] = result;
   return result;
 }
@@ -375,9 +441,9 @@ async function evalDerive(node, ctx) {
   const [verb, action] = String(node.fact?.type || "do:derive").split(":");
   return emit({
     verb,
-    action,
-    beingId: node.attributedTo ? resolveName(node.attributedTo, ctx) : (ctx.identity?.nameId ?? ctx.identity?.beingId ?? null),
-    target: node.of ? resolveTarget(node.of, ctx) : undefined,
+    act: action,
+    through: node.attributedTo ? resolveName(node.attributedTo, ctx) : (ctx.identity?.nameId ?? ctx.identity?.beingId ?? null),
+    of: node.of ? resolveTarget(node.of, ctx) : undefined,
     params: resolveValue(node.params, ctx) || {},
   }, ctx);
 }
@@ -415,7 +481,7 @@ export async function pump(ctx) {
 function matches(when, fact, ctx) {
   if (!when) return false;
   if (when.on) return fact._event === when.on;            // a named event (a beat)
-  if (when.act) return fact.verb === when.act.verb && (!when.act.op || fact.action === when.act.op);
+  if (when.act) return fact.verb === when.act.verb && (!when.act.act || fact.act === when.act.act);
   if (when.state) return stateMatches(when.state, ctx?.state || {}); // a world state (rule 6 over state)
   return false;
 }
@@ -469,7 +535,7 @@ async function evalAct(act, ctx) {
 
   // be:form-being dispatches to the host birth primitive (one act, many facts:
   // birthBeing lays be:birth + the inherited-role grants + the global grant)
-  if (act.verb === "be" && act.op === "form-being") {
+  if (act.verb === "be" && act.act === "form-being") {
     const res = await formBeing(params, ctx);
     if (act.bind) ctx.bindings[act.bind] = res.beingId;
     return res;
@@ -483,14 +549,14 @@ async function evalAct(act, ctx) {
     const { doVerb } = await import("../../ibp/verbs/do.js");
     let target = resolveTarget(act.of, ctx);
     let p = params;
-    if (act.op === "create-space") {
+    if (act.act === "create-space") {
       // "I make <X>": X NAMES the new space; create-space raises it UNDER its target, which
       // is where the actor STANDS (the position the session reports) — of names the child,
       // not the parent. So the noun becomes the name and the position becomes the target.
       if (act.of?.id && !(p && p.name != null)) p = { ...(p || {}), name: act.of.id };
       if (ctx.position) target = { kind: "space", id: String(ctx.position) };
     }
-    const res = await doVerb(target, act.op, p, { identity: ctx.identity, summonCtx: ctx.summonCtx });
+    const res = await doVerb(target, act.act, p, { identity: ctx.identity, moment: ctx.moment });
     // bind the id the op actually created (the home space), so later acts
     // (form-being's homeId, set-space's owner target) reference the real id and
     // not the pre-mint. create-space returns { spaceId } (space/ops.js).
@@ -501,9 +567,10 @@ async function evalAct(act, ctx) {
   // every other verb emits its own fact (the act, sealed)
   return emit({
     verb: act.verb,
-    action: act.op,                 // the operation within the verb (do:create-space, ...)
-    beingId: through || by,         // the deed lands under the acting being / Name
-    target: resolveTarget(act.of, ctx),
+    act: act.act,                   // the operation within the verb (do:create-space, ...)
+    through: through || by,         // the deed lands under the acting being / Name
+    by,                             // the actor Name (rule 9)
+    of: resolveTarget(act.of, ctx),
     to: act.to !== undefined ? resolveBeing(act.to, ctx) : undefined, // the receiver (rule 17)
     params,
     _event: act.event,              // a derived event this act counts as ("that is a beat")
@@ -514,9 +581,9 @@ async function evalAct(act, ctx) {
 // rule 13: a closure names a bounded span
 async function evalClosure(node, ctx) {
   return emit({
-    verb: "do", action: "close-span",
-    beingId: resolveName(node.by, ctx),
-    target: { kind: "span" },
+    verb: "do", act: "close-span",
+    through: resolveName(node.by, ctx),
+    of: { kind: "span" },
     params: { name: node.name },
   }, ctx);
 }
@@ -525,17 +592,17 @@ async function evalClosure(node, ctx) {
 
 // emit a fact: dry-run collects it into ctx.deltaF; live sends it through emitFact
 // into the moment. The two paths are EXCLUSIVE: emitFact itself appends the spec
-// to summonCtx.deltaF (facts.js:934), so when live + ctx.deltaF === summonCtx.deltaF
+// to moment.deltaF (facts.js:934), so when live + ctx.deltaF === moment.deltaF
 // (runRoleWord shares the array), also doing ctx.deltaF.push would DOUBLE-LIST the
 // fact. Live → emitFact owns the append; dry-run → ctx.deltaF.push (no live moment).
 async function emit(spec, ctx) {
-  const fact = { ...spec, actId: ctx.summonCtx?.actId, branch: ctx.branch };
+  const fact = { ...spec, actId: ctx.moment?.actId, branch: ctx.branch };
   if (spec._sets) Object.assign((ctx.state ??= {}), spec._sets); // the fold: a fact updates state
   if (ctx.dryRun) {
     ctx.deltaF.push(fact);
   } else {
     const { emitFact } = await import("../../past/fact/facts.js");
-    await emitFact(fact, ctx.summonCtx); // appends to summonCtx.deltaF itself
+    await emitFact(fact, ctx.moment); // appends to moment.deltaF itself
   }
   (ctx._queue ??= []).push(fact); // a sealed fact may fire standing watches (the choq)
   return fact;
@@ -546,19 +613,19 @@ async function formBeing(spec, ctx) {
   if (ctx.dryRun) {
     const beingId = `<being:${spec.name}>`; // birthBeing computes a content hash; placeholder here
     ctx.deltaF.push({
-      verb: "be", action: "birth", beingId, target: { kind: "being", id: beingId },
-      params: spec, actId: ctx.summonCtx?.actId, branch: ctx.branch,
+      verb: "be", act: "birth", through: beingId, of: { kind: "being", id: beingId },
+      params: spec, actId: ctx.moment?.actId, branch: ctx.branch,
     });
     return { beingId, name: spec.name };
   }
   const { birthBeing } = await import("../../materials/being/identity/birth.js");
-  return birthBeing({ spec, identity: ctx.identity, summonCtx: ctx.summonCtx, branch: ctx.branch });
+  return birthBeing({ spec, identity: ctx.identity, moment: ctx.moment, branch: ctx.branch });
 }
 
 async function callHost(builtin, params, ctx) {
   const fn = ctx.env?.host?.[builtin];
   // pass the eval ctx as a 2nd arg so a host op that lays a fact (e.g. the be:release
-  // displacement) can reach ctx.summonCtx; pure ops ignore it.
+  // displacement) can reach ctx.moment; pure ops ignore it.
   if (fn) return fn(params, ctx);
   if (ctx.dryRun) return `<host:${builtin}>`; // placeholder in dry-run
   throw new Error(`word: no host builtin "${builtin}"`);

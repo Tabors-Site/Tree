@@ -20,7 +20,7 @@ check("cherub.word is one flow with 5 effects", flow?.kind === "flow" && flow.ef
 
 // the five acts, in order (verb:op) — the world strand the JS handler lays
 const EXPECT = ["do:create-space", "be:form-being", "do:set-space", "do:grant-role", "do:set-being"];
-const got = (flow.effects || []).map((e) => `${e.verb}:${e.op}`);
+const got = (flow.effects || []).map((e) => `${e.verb}:${e.act}`);
 check("the five acts are in the right order", JSON.stringify(got) === JSON.stringify(EXPECT), got.join(", "));
 
 // the implicit-actor model: every act by "I" (the Name), through Cherub (the vessel)
@@ -28,22 +28,22 @@ const allThrough = (flow.effects || []).every((e) => e.by === "I" && e.through =
 check("every act is by I (the Name) through Cherub (the mother vessel)", allThrough);
 
 // the being is the new Name's own (trueName), not I_AM's
-const fb = (flow.effects || []).find((e) => e.op === "form-being");
+const fb = (flow.effects || []).find((e) => e.act === "form-being");
 check("form-being sets the being's trueName to the new Name", fb?.params?.trueName === "$ownerName", String(fb?.params?.trueName));
 
 // lineage: mother Cherub, father Arrival
-const lin = (flow.effects || []).find((e) => e.op === "set-being")?.params?.value;
+const lin = (flow.effects || []).find((e) => e.act === "set-being")?.params?.value;
 check("lineage records mother Cherub, father Arrival", lin?.mother === "Cherub" && lin?.father === "Arrival", JSON.stringify(lin));
 
 // dry-run lays exactly the five facts, in order
 const ctx = {
-  dryRun: true, branch: "main", summonCtx: { actId: "<actId>" },
+  dryRun: true, branch: "main", moment: { actId: "<actId>" },
   identity: { beingId: "Cherub", name: "cherub", nameId: "I_AM" },
   trigger: { name: "tabor-prime", password: "pw" },
   env: { iam: "I_AM" }, bindings: { placeRoot: "<placeRoot>", ownerName: "tabor" },
 };
 const facts = await evaluate(flow, ctx);
-const factShape = facts.map((f) => `${f.verb}:${f.action}`);
+const factShape = facts.map((f) => `${f.verb}:${f.act}`);
 check("dry-run lays the five facts in order", JSON.stringify(factShape) === JSON.stringify(["do:create-space", "be:birth", "do:set-space", "do:grant-role", "do:set-being"]), factShape.join(", "));
 
 const failures = results.filter((r) => r.startsWith("FAIL")).length;

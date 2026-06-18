@@ -13,7 +13,7 @@ const ir = parse(source);
 console.log(`\nparsed ${ir.length} clauses from harmony.word\n`);
 
 const ctx = {
-  dryRun: true, branch: "main", summonCtx: { actId: "<actId>" },
+  dryRun: true, branch: "main", moment: { actId: "<actId>" },
   bindings: {}, deltaF: [], flows: [], beats: 0, maxBeats: 4, env: {},
 };
 

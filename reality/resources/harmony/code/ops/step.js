@@ -31,7 +31,7 @@ export default {
   name: "step",
   targets: ["being"],
 
-  async handler({ target, params, identity, summonCtx }) {
+  async handler({ target, params, identity, moment }) {
     // A dancer steps ITSELF. The acting being is the caller. The seed
     // `do` tool defaults an unspecified target to the reality root, so
     // we must NOT read the being from `target` unless it explicitly
@@ -63,7 +63,7 @@ export default {
       );
     }
 
-    const me = await summonCtx.read("being", beingId);
+    const me = await moment.read("being", beingId);
     const meCoord = me?.coord || me?.qualities?.coord;
     const cur = (meCoord && Number.isFinite(meCoord.x) && Number.isFinite(meCoord.y))
       ? { x: meCoord.x, y: meCoord.y }
@@ -76,7 +76,7 @@ export default {
     // is to the same value the row already holds; the seed records
     // the fact so the dancer's reel shows a deliberate hold, not
     // a silent gap.
-    await summonCtx.do(
+    await moment.do(
       { kind: "being", id: beingId },
       "set-being",
       { field: "coord", value: next },

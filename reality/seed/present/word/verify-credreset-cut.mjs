@@ -55,7 +55,7 @@ const cherub = await poll(() => findByName("being", "cherub", "0"));
 const birth = async (name) => {
   let bid = null;
   await withIAmAct(`birth ${name}`, async (ctx) => {
-    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, summonCtx: ctx, branch: "0" });
+    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: ctx, branch: "0" });
     bid = b.beingId;
   });
   return bid;
@@ -72,10 +72,10 @@ try {
   const beforeHash = before?.state?.password;
 
   // ── 1. authorized reset (via the REAL op, I_AM authority) → re-mints the credential ──
-  const sc = { actId: randomUUID(), actorAct: { branch: "0", nameId: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc = { actId: randomUUID(), actorAct: { branch: "0", by: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   let res = null, refused = null;
   try {
-    res = await doVerb({ kind: "being", id: String(victim) }, "credential-reset", {}, { identity: ident, summonCtx: sc });
+    res = await doVerb({ kind: "being", id: String(victim) }, "credential-reset", {}, { identity: ident, moment: sc });
     if (sc.deltaF.length) await sealFacts(sc.deltaF);
   } catch (e) { refused = e; }
   const r = res?.result ?? res;
@@ -84,7 +84,7 @@ try {
     : bad(`reset`, refused?.message || r);
 
   // ── 2. three NATIVE do:set-being facts (password + the two inner-key auth writes) ──
-  const setBeings = (sc.deltaF || []).filter((f) => f.action === "set-being");
+  const setBeings = (sc.deltaF || []).filter((f) => f.act === "set-being");
   const fields = setBeings.map((f) => f.params?.field);
   setBeings.length === 3 && fields.includes("password") && fields.includes("qualities.auth.credentialPlain") && fields.includes("qualities.auth.tokensInvalidBefore")
     ? ok(`three NATIVE do:set-being facts: password + qualities.auth.credentialPlain + tokensInvalidBefore (verb-native writes)`)
@@ -120,7 +120,7 @@ try {
     JSON.stringify(f.result ?? null).includes(r.plaintext) || JSON.stringify(f.params ?? null).includes(r.plaintext));
   !leakAnywhere
     ? ok(`rule 7 (audit): the cleartext appears in NO fact at all (the do-op audit result is stripped)`)
-    : bad(`rule7-audit`, (sc.deltaF || []).filter((f) => JSON.stringify(f.result ?? f.params ?? "").includes(r.plaintext)).map((f) => f.action));
+    : bad(`rule7-audit`, (sc.deltaF || []).filter((f) => JSON.stringify(f.result ?? f.params ?? "").includes(r.plaintext)).map((f) => f.act));
 
   // ── 4. an asker with NO credential authority → refuse, NO writes ──
   // (Harness note: every I_AM-birthed being resolves to I_AM authority — trueName
@@ -129,14 +129,14 @@ try {
   //  closed on. The authority FOLD itself is the SAME hasCredentialAuthority the JS
   //  calls, unchanged; this proves the .word's `If not authorized: refuse` wiring.)
   const noAuth = "noauth-" + randomUUID();
-  const sc2 = { actId: randomUUID(), actorAct: { branch: "0", nameId: noAuth }, identity: { beingId: noAuth }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc2 = { actId: randomUUID(), actorAct: { branch: "0", by: noAuth }, identity: { beingId: noAuth }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   let gateRefused = null;
   try {
-    await runRoleWord(ir, { summonCtx: sc2, branch: "0", trigger: { caller: noAuth, target: String(victim), branch: "0" }, env: { host: credentialHostEnv() } });
+    await runRoleWord(ir, { moment: sc2, branch: "0", trigger: { caller: noAuth, target: String(victim), branch: "0" }, env: { host: credentialHostEnv() } });
   } catch (e) { gateRefused = e; }
-  gateRefused && /no credential authority/i.test(gateRefused.message) && !(sc2.deltaF || []).some((f) => f.action === "set-being")
+  gateRefused && /no credential authority/i.test(gateRefused.message) && !(sc2.deltaF || []).some((f) => f.act === "set-being")
     ? ok(`an asker with no credential authority → refuse "no credential authority", NO writes`)
-    : bad(`gate`, gateRefused?.message || (sc2.deltaF || []).map((f) => f.action));
+    : bad(`gate`, gateRefused?.message || (sc2.deltaF || []).map((f) => f.act));
 
   console.log(`\n  ${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);

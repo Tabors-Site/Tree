@@ -49,7 +49,7 @@
 //
 // Lifecycle.
 //   . Captured at fold build time (buildInnerFace owns the merge).
-//   . Carried on summonCtx.innerFace.weave during the moment.
+//   . Carried on moment.innerFace.weave during the moment.
 //   . Sealed immutably on Act.innerFace.weave at stamped.
 //   . Subscription registry rotates the indexed entry by subId on
 //     refold; the prior weave is replaced atomically, never mutated.

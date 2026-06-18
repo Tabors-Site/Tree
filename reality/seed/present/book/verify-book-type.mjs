@@ -59,7 +59,7 @@ try {
   let typed = null, err = null;
   await withIAmAct("type into book", async (sc) => {
     try {
-      typed = await typeIntoBook("I make notebook.", { summonCtx: sc, identity, branch: "0", position: cherub.state?.homeSpace });
+      typed = await typeIntoBook("I make notebook.", { moment: sc, identity, branch: "0", position: cherub.state?.homeSpace });
       if (sc.deltaF.length) await sealFacts(sc.deltaF);
     } catch (e) { err = e; }
   });

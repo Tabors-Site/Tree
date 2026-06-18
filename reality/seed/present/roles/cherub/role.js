@@ -134,7 +134,7 @@ async function birthHandler({ payload, ctx }) {
         importKey,
         parentBeingId: iAm ? String(iAm._id) : null,
         cherubIdentity: { name: "cherub", beingId: cherubBeingId },
-        summonCtx: ctx?.summonCtx || null,
+        moment: ctx?.moment || null,
         // The being belongs to the signed-in NAME (its trueName), not i-am.
         ownerNameId: (ctx?.nameId && String(ctx.nameId) !== "i-am") ? String(ctx.nameId) : null,
       });
@@ -154,14 +154,14 @@ async function birthHandler({ payload, ctx }) {
     //
     // Timing: must run AFTER cherub's compound act seals. The new
     // being's `be:birth` fact is still pending in cherub's
-    // summonCtx.deltaF; opening a separate `withIAmAct` here from a
+    // moment.deltaF; opening a separate `withIAmAct` here from a
     // pre-seal moment can't see the not-yet-sealed being.
-    // summonCtx.afterSeal queues for post-commit when the being's
+    // moment.afterSeal queues for post-commit when the being's
     // projection has materialized.
     const beingName = being.name;
     const newBeingId = String(being._id);
-    if (ctx?.summonCtx?.afterSeal) {
-      ctx.summonCtx.afterSeal.push(async () => {
+    if (ctx?.moment?.afterSeal) {
+      ctx.moment.afterSeal.push(async () => {
         try {
           const { withIAmAct } = await import("../../../sprout.js");
           const { findByHeavenSpace } = await import("../../../materials/projections.js");
@@ -179,7 +179,7 @@ async function birthHandler({ payload, ctx }) {
                   anchorSpaceId: String(heaven.id),
                   anchorBeingId: null,
                 },
-                { identity: { beingId: I_AM, name: "I-Am" }, summonCtx: anointCtx },
+                { identity: { beingId: I_AM, name: "I-Am" }, moment: anointCtx },
               );
             });
           }
@@ -209,7 +209,7 @@ async function birthHandler({ payload, ctx }) {
       // First-being birth: the transport seats the session's
       // currentBranch to the new being's homeBranch (which the birth
       // fact set to this moment's branch).
-      seatBranch:   ctx?.summonCtx?.actorAct?.branch || null,
+      seatBranch:   ctx?.moment?.actorAct?.branch || null,
       // The new being is placed inside this home space (with a coord).
       // Surface it so the portal can land the camera at home directly,
       // without waiting for the post-seal projection fold to expose
@@ -232,7 +232,7 @@ async function birthHandler({ payload, ctx }) {
   }
 
   const { findByName } = await import("../../../materials/projections.js");
-  const branch = ctx?.summonCtx?.actorAct?.branch || "0";
+  const branch = ctx?.moment?.actorAct?.branch || "0";
   const cherubParent = await findByName("being", "cherub", branch);
   const parentBeingId = cherubParent ? String(cherubParent.id) : null;
   // The being belongs to the signed-in NAME (its trueName), not i-am.
@@ -246,7 +246,7 @@ async function birthHandler({ payload, ctx }) {
     // session strand below reads `being` either way, so the cut is a swap.
     being = await _birthViaWordOrJs({
       name, password, importKey, parentBeingId, ownerNameId, branch,
-      summonCtx: ctx?.summonCtx || null,
+      moment: ctx?.moment || null,
     });
   } catch (err) {
     throw mapSeedError(err);
@@ -272,7 +272,7 @@ async function birthHandler({ payload, ctx }) {
     // Subsequent-user birth: the transport seats the session's
     // currentBranch to the new being's homeBranch (the moment's
     // branch). Same shape as the first-user return above.
-    seatBranch:   ctx?.summonCtx?.actorAct?.branch || null,
+    seatBranch:   ctx?.moment?.actorAct?.branch || null,
     // See first-user branch above: lets the portal land at home directly
     // and dodge the post-seal projection-fold race.
     homeSpaceId:  being.homeSpace ? String(being.homeSpace) : null,
@@ -309,7 +309,7 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
     // cherub-connect.word, run through the bridge (the CONTROL strand is `.word`; the
     // session ops are `host:` escapes). The JS body below stays as the clean-miss
     // fallback. Behavior-preserving — a refusal replicates the JS dummy-verify exactly.
-    const viaWord = await _connectViaWordOrJs({ name, password, summonCtx: ctx?.summonCtx });
+    const viaWord = await _connectViaWordOrJs({ name, password, moment: ctx?.moment });
     if (viaWord) return viaWord;
 
     // Connect runs before the session has a branch seated, so the
@@ -368,7 +368,7 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
   if (ownerNameId && !isCherubAddress) {
     // THE CONVERSION: the owned-connect is cherub-connect.word flow 2. Owned → return;
     // not owned → null → fall through (Mode-2/Mode-3). The JS loop below is the fallback.
-    const viaWord = await _connectOwnedViaWord({ address, callerNameId: ownerNameId, summonCtx: ctx?.summonCtx });
+    const viaWord = await _connectOwnedViaWord({ address, callerNameId: ownerNameId, moment: ctx?.moment });
     if (viaWord) return viaWord;
     const ownedTargetName = extractTargetName(address);
     if (ownedTargetName) {
@@ -433,7 +433,7 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
     // THE CONVERSION: inherit-connect / father-admit is cherub-connect.word flow 3. The
     // .word is authoritative (it returns the response or its refusal becomes the IbpError);
     // the JS Mode-3 below is the clean-miss fallback (resolveRoleWord null).
-    const viaWord = await _connectInheritViaWord({ address, identity, summonCtx: ctx?.summonCtx });
+    const viaWord = await _connectInheritViaWord({ address, identity, moment: ctx?.moment });
     if (viaWord) return viaWord;
     const targetName = extractTargetName(address);
     if (!targetName) {
@@ -557,22 +557,22 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
       if (currentInhabitor && String(currentInhabitor) !== String(identity.beingId)) {
         try {
           const { emitFact } = await import("../../../past/fact/facts.js");
-          const summonCtx = ctx?.summonCtx || null;
+          const moment = ctx?.moment || null;
           await emitFact(
             {
               verb:    "be",
-              action:  "release",
-              beingId: String(currentInhabitor),
-              target:  { kind: "being", id: String(targetBeing._id) },
+              act:     "release",
+              through: String(currentInhabitor),
+              of:      { kind: "being", id: String(targetBeing._id) },
               params:  {
                 releasedBy: "father-priority",
                 fatherBeingId: String(identity.beingId),
                 fatherReality: targetBeing.qualities.father?.reality || getRealityDomain(),
               },
-              actId:   summonCtx?.actId || null,
-              branch:  summonCtx?.actorAct?.branch || "0",
+              actId:   moment?.actId || null,
+              branch:  moment?.actorAct?.branch || "0",
             },
-            summonCtx,
+            moment,
           );
         } catch (err) {
           log.warn(
@@ -688,7 +688,7 @@ async function releaseHandler({ identity }) {
 // after T" without an explicit terminator.
 // ────────────────────────────────────────────────────────────────────
 
-async function switchHandler({ payload, identity, summonCtx }) {
+async function switchHandler({ payload, identity, moment }) {
   const targetBranch = String(payload?.branch || "").trim();
   if (!targetBranch) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "be:switch requires `branch`");
@@ -742,7 +742,7 @@ async function switchHandler({ payload, identity, summonCtx }) {
   // branch they were seated on.
   const fromBranch =
     (typeof payload?.fromBranch === "string" && payload.fromBranch) ||
-    summonCtx?.actorAct?.branch ||
+    moment?.actorAct?.branch ||
     null;
 
   return {
@@ -863,7 +863,7 @@ export const cherubBeOps = Object.freeze({
  * Register a human: create their fresh home space under the place
  * root, birth the being into it, set the new being as the home's
  * owner. Three facts (do:create-space, be:birth, do:set-space)
- * all ride the same `summonCtx.deltaF` so they seal atomically.
+ * all ride the same `moment.deltaF` so they seal atomically.
  *
  * Inlined from the retired `createBeingWithHome` orchestrator —
  * cherub is the only register flow that needs the "fresh child
@@ -878,7 +878,7 @@ async function _registerHumanWithFreshHome({
   importKey = null,       // optional imported identity (PEM or 24 words)
   parentBeingId,
   cherubIdentity,
-  summonCtx,
+  moment,
   fatherBeingId = null,   // who REQUESTED the mint (arrival for register, parent for sub-births)
   ownerNameId = null,     // the connected NAME this being belongs to (its trueName); null -> mother's default (i-am)
 }) {
@@ -895,9 +895,9 @@ async function _registerHumanWithFreshHome({
   const actorId = cherubIdentity?.beingId || I_AM;
   await emitFact({
     verb:   "do",
-    action: "create-space",
-    beingId: String(actorId),
-    target: { kind: "space", id: homeId },
+    act:    "create-space",
+    through: String(actorId),
+    of:     { kind: "space", id: homeId },
     params: {
       name,                           // home space is named for the user
       type: "home-territory",
@@ -907,9 +907,9 @@ async function _registerHumanWithFreshHome({
       size: { x: 100, y: 100 },
       qualities: {},
     },
-    actId:  summonCtx?.actId || null,
-    branch: summonCtx?.actorAct?.branch || "0",
-  }, summonCtx);
+    actId:  moment?.actId || null,
+    branch: moment?.actorAct?.branch || "0",
+  }, moment);
 
   // ── 2. Birth the being into the new home ──
   const result = await birthBeing({
@@ -932,7 +932,7 @@ async function _registerHumanWithFreshHome({
       // own home, which is what registration semantically means.
     },
     identity:  cherubIdentity,
-    summonCtx,
+    moment,
   });
 
   // ── 3. Set the new being as owner of the home ──
@@ -945,7 +945,7 @@ async function _registerHumanWithFreshHome({
     { kind: "space", id: homeId },
     "set-space",
     { field: "owner", value: String(result.beingId) },
-    { identity: I_AM, summonCtx },
+    { identity: I_AM, moment },
   );
 
   // ── 4. Anoint the new human with the human role ──
@@ -965,7 +965,7 @@ async function _registerHumanWithFreshHome({
       anchorSpaceId: String(placeRootId),
       anchorBeingId: null,
     },
-    { identity: cherubIdentity, summonCtx },
+    { identity: cherubIdentity, moment },
   );
 
   // ── 5. Record lineage (mother + father). ──
@@ -999,7 +999,7 @@ async function _registerHumanWithFreshHome({
       value: { mother: motherBeingId, father: resolvedFatherId },
       merge: false,
     },
-    { identity: I_AM, summonCtx },
+    { identity: I_AM, moment },
   );
 
   return result.being;
@@ -1015,11 +1015,11 @@ async function _registerHumanWithFreshHome({
  * reads the returned being via `bornBeingFrom`, so the caller is unchanged either way.
  * See word/roleWordRegistry.js + word/bridge.md.
  */
-async function _birthViaWordOrJs({ name, password, importKey, parentBeingId, ownerNameId, branch, summonCtx }) {
+async function _birthViaWordOrJs({ name, password, importKey, parentBeingId, ownerNameId, branch, moment }) {
   const jsBirth = () => _registerHumanWithFreshHome({
     name, password, importKey, parentBeingId,
     cherubIdentity: { name: "cherub", beingId: parentBeingId },
-    summonCtx, ownerNameId,
+    moment, ownerNameId,
   });
 
   // Two cases cherub.word doesn't model yet, so the JS handler owns them:
@@ -1033,15 +1033,15 @@ async function _birthViaWordOrJs({ name, password, importKey, parentBeingId, own
   if (importKey || !ownerNameId) return jsBirth();
 
   const { resolveRoleWord, runRoleWord, bornBeingFrom } = await import("../../word/roleWordRegistry.js");
-  const ir = resolveRoleWord("cherub", "birth", summonCtx?.actorAct?.branch);
-  if (!ir || !summonCtx) return jsBirth(); // not converted, or no moment → JS
+  const ir = resolveRoleWord("cherub", "birth", moment?.actorAct?.branch);
+  if (!ir || !moment) return jsBirth(); // not converted, or no moment → JS
 
   const { findByName } = await import("../../../materials/projections.js");
-  const before = Array.isArray(summonCtx.deltaF) ? summonCtx.deltaF.length : 0;
+  const before = Array.isArray(moment.deltaF) ? moment.deltaF.length : 0;
   try {
     const arrivalSlot = await findByName("being", "arrival", branch);
     await runRoleWord(ir, {
-      summonCtx, branch,
+      moment, branch,
       trigger: { name, password },
       // ownerName = the arriving Name (its own trueName); placeRoot = the reality
       // root the home space is made under (create-space's parent).
@@ -1054,16 +1054,16 @@ async function _birthViaWordOrJs({ name, password, importKey, parentBeingId, own
       through: String(parentBeingId), // I_AM acts THROUGH Cherub (cherub.word)
     });
   } catch (err) {
-    const laid = (Array.isArray(summonCtx.deltaF) ? summonCtx.deltaF.length : 0) - before;
+    const laid = (Array.isArray(moment.deltaF) ? moment.deltaF.length : 0) - before;
     if (laid > 0) throw err; // dirty moment: fail honestly, never double-lay JS facts
     log.warn("Cherub", `cherub.word birth missed cleanly (${err.message}); JS handler`);
     return jsBirth();
   }
 
-  const being = bornBeingFrom(summonCtx.deltaF);
+  const being = bornBeingFrom(moment.deltaF);
   if (being && being._id) return being;
   // ran but produced no usable be:birth: a clean miss only if nothing landed.
-  const laid = (Array.isArray(summonCtx.deltaF) ? summonCtx.deltaF.length : 0) - before;
+  const laid = (Array.isArray(moment.deltaF) ? moment.deltaF.length : 0) - before;
   if (laid > 0) throw new Error("cherub.word ran but laid no be:birth fact");
   return jsBirth();
 }
@@ -1088,11 +1088,11 @@ async function _constantTimeReject(password) {
  * runs. A WordRefusal is the "Invalid credentials" path: behavior-preserving, it replays
  * the JS dummy-verify (including its known ineffectiveness — a PRE-EXISTING timing oracle
  * flagged in 6.md, NOT introduced here) before the same UNAUTHORIZED refusal. Connect
- * lays no fact, so a fresh minimal moment keeps the caller's summonCtx untouched.
+ * lays no fact, so a fresh minimal moment keeps the caller's moment untouched.
  */
-async function _connectViaWordOrJs({ name, password, summonCtx }) {
+async function _connectViaWordOrJs({ name, password, moment }) {
   const { resolveRoleWord, runRoleWord } = await import("../../word/roleWordRegistry.js");
-  const ir = resolveRoleWord("cherub", "connect", summonCtx?.actorAct?.branch);
+  const ir = resolveRoleWord("cherub", "connect", moment?.actorAct?.branch);
   if (!ir) return null; // not converted → JS
   const { connectHostEnv, selectConnectFlow } = await import("./connectHost.js");
   // run ONLY the credential flow — the file also holds the owned/inherit flows, which
@@ -1100,10 +1100,10 @@ async function _connectViaWordOrJs({ name, password, summonCtx }) {
   const flow = selectConnectFlow(ir, "credential");
   if (!flow) return null;
   const { randomUUID } = await import("node:crypto");
-  const branch = summonCtx?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.branch || "0";
   const sc = { actId: randomUUID(), actorAct: { branch }, identity: { beingId: "arrival", name: "arrival" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   try {
-    const { result } = await runRoleWord([flow], { summonCtx: sc, branch, trigger: { name, password }, env: { host: connectHostEnv() } });
+    const { result } = await runRoleWord([flow], { moment: sc, branch, trigger: { name, password }, env: { host: connectHostEnv() } });
     if (!result?.token) return null; // produced nothing usable → JS
     const { decodeToken } = await import("../../../materials/being/identity/credentials.js");
     const decoded = decodeToken(result.token);
@@ -1131,9 +1131,9 @@ async function _connectViaWordOrJs({ name, password, summonCtx }) {
  * full connect response when owned, or null (not owned / not converted) so the caller
  * falls through to Mode-2/Mode-3. Lays no fact.
  */
-async function _connectOwnedViaWord({ address, callerNameId, summonCtx }) {
+async function _connectOwnedViaWord({ address, callerNameId, moment }) {
   const { resolveRoleWord, runRoleWord } = await import("../../word/roleWordRegistry.js");
-  const ir = resolveRoleWord("cherub", "connect", summonCtx?.actorAct?.branch);
+  const ir = resolveRoleWord("cherub", "connect", moment?.actorAct?.branch);
   if (!ir) return null;
   const targetName = extractTargetName(address);
   if (!targetName) return null;
@@ -1141,9 +1141,9 @@ async function _connectOwnedViaWord({ address, callerNameId, summonCtx }) {
   const flow = selectConnectFlow(ir, "owned");
   if (!flow) return null;
   const { randomUUID } = await import("node:crypto");
-  const branch = summonCtx?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.branch || "0";
   const sc = { actId: randomUUID(), actorAct: { branch }, identity: { beingId: "name", name: "name" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
-  const { result } = await runRoleWord([flow], { summonCtx: sc, branch, trigger: { name: targetName, caller: String(callerNameId) }, env: { host: connectHostEnv() } });
+  const { result } = await runRoleWord([flow], { moment: sc, branch, trigger: { name: targetName, caller: String(callerNameId) }, env: { host: connectHostEnv() } });
   if (!result?.token || result.owned !== true) return null; // not owned → fall through
   const { decodeToken } = await import("../../../materials/being/identity/credentials.js");
   const decoded = decodeToken(result.token);
@@ -1166,19 +1166,19 @@ async function _connectOwnedViaWord({ address, callerNameId, summonCtx }) {
  * the JS Mode-3 is the clean-miss fallback. The lone world fact (the be:release
  * displacement) is sealed here (it landed on the fresh moment, not the caller's).
  */
-async function _connectInheritViaWord({ address, identity, summonCtx }) {
+async function _connectInheritViaWord({ address, identity, moment }) {
   const { resolveRoleWord, runRoleWord } = await import("../../word/roleWordRegistry.js");
-  const ir = resolveRoleWord("cherub", "connect", summonCtx?.actorAct?.branch);
+  const ir = resolveRoleWord("cherub", "connect", moment?.actorAct?.branch);
   if (!ir) return null;
   const { connectHostEnv, selectConnectFlow } = await import("./connectHost.js");
   const flow = selectConnectFlow(ir, "inherit");
   if (!flow) return null;
   const { randomUUID } = await import("node:crypto");
-  const branch = summonCtx?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.branch || "0";
   const sc = { actId: randomUUID(), actorAct: { branch }, identity: { beingId: identity?.beingId }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   let result;
   try {
-    ({ result } = await runRoleWord([flow], { summonCtx: sc, branch, trigger: { address, caller: identity }, env: { host: connectHostEnv() } }));
+    ({ result } = await runRoleWord([flow], { moment: sc, branch, trigger: { address, caller: identity }, env: { host: connectHostEnv() } }));
   } catch (e) {
     if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.FORBIDDEN, e.message); // the .word's refusal IS the answer
     throw e;
@@ -1295,7 +1295,7 @@ async function handleCherubMate(message, ctx) {
   }
   const messageObj = (typeof message === "object" && message !== null) ? message : {};
   // The being's name rides in message.content (the summon's content payload),
-  // which 1-assign seats at summonCtx.message.content. Accept the top-level
+  // which 1-assign seats at moment.message.content. Accept the top-level
   // .name too as a fallback for direct callers.
   const content = (messageObj.content && typeof messageObj.content === "object") ? messageObj.content : null;
   const beingName =
@@ -1341,7 +1341,7 @@ async function handleCherubMate(message, ctx) {
         homeId: homeSpaceId,
       },
       identity: { beingId: cherubBeingId, name: "cherub" },
-      summonCtx: ctx,
+      moment: ctx,
     });
   } catch (err) {
     log.warn("Cherub", `summon:mate first-being birth failed: ${err.message}`);

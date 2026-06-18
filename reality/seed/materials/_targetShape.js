@@ -6,7 +6,7 @@
 //
 //   1. Typed identity:   { kind: "space"|"being"|"matter", id: <uuid> }
 //      The canonical form. Every wire-resolved target, every typed
-//      in-process caller, every fact's target field. Carries the
+//      in-process caller, every fact's `of` field. Carries the
 //      minimum needed to identify what the verb acts on; nothing
 //      more, no row fields, no ORM coupling.
 //
@@ -113,28 +113,28 @@ export function targetIdOf(target) {
  * kind matches what the handler expects). Throws when the kind
  * doesn't match or the row isn't found.
  *
- * `opts.summonCtx`, when threaded by a handler running inside a moment,
+ * `opts.moment`, when threaded by a handler running inside a moment,
  * lets the loader fall back to in-flight create-<kind> specs in
- * `summonCtx.deltaF` when the row hasn't materialized in Mongo yet.
+ * `moment.deltaF` when the row hasn't materialized in Mongo yet.
  * Returns a sparse row (`_id` + the create spec's fields, `_pending:true`).
  * Handlers needing rich row data should fetch it via the spec's
  * spaceId/parent fields rather than expecting a full Mongoose doc.
  */
-export async function loadTargetRow(target, expectedKind, { summonCtx = null } = {}) {
+export async function loadTargetRow(target, expectedKind, { moment = null } = {}) {
   if (!expectedKind || !KINDS.has(expectedKind)) {
     throw new Error(`loadTargetRow: expectedKind must be space/being/matter; got "${expectedKind}"`);
   }
   // Branch the lookup happens on. The moment carries TWO branches: the
-  // actor's (summonCtx.actorAct.branch — where their Act seals) and the
-  // target's (summonCtx.targetBranch — where the row LIVES and the Fact
+  // actor's (moment.actorAct.branch — where their Act seals) and the
+  // target's (moment.targetBranch — where the row LIVES and the Fact
   // lands). A LOCAL target row lives on the TARGET branch, so we prefer
   // it. For a same-world moment the two are equal (assign seats them
   // so), so this is a no-op there; for a cross-reality INBOUND moment
   // actorAct.branch is the FOREIGN home branch and the local target only
-  // resolves on summonCtx.targetBranch. Same precedence (targetBranch
+  // resolves on moment.targetBranch. Same precedence (targetBranch
   // before actorAct.branch) that resolveTargetBranch / resolveBranchForFact
   // use for the fact-landing side.
-  const branch = summonCtx?.targetBranch || summonCtx?.actorAct?.branch || "0";
+  const branch = moment?.targetBranch || moment?.actorAct?.branch || "0";
   // loadOrFold (not loadProjection): every DO/BE/SUMMON op flows through
   // loadTargetRow. On a fresh branch the target's slot hasn't been
   // cold-folded yet — bare loadProjection returns null, the handler
@@ -196,22 +196,22 @@ export async function loadTargetRow(target, expectedKind, { summonCtx = null } =
   // reads Space.size) still go through their own lookups — but those
   // lookups land at the target's spaceId, which is in the spec.
   // Create-fact shape varies by kind: space and matter ride do:create-*,
-  // being rides be:birth. The expected (verb, action) pair per kind:
+  // being rides be:birth. The expected (verb, act) pair per kind:
   const CREATE_FACT = {
-    space:  { verb: "do", action: "create-space" },
-    matter: { verb: "do", action: "create-matter" },
-    being:  { verb: "be", action: "birth" },
+    space:  { verb: "do", act: "create-space" },
+    matter: { verb: "do", act: "create-matter" },
+    being:  { verb: "be", act: "birth" },
   };
-  const deltaF = Array.isArray(summonCtx?.deltaF) ? summonCtx.deltaF : null;
+  const deltaF = Array.isArray(moment?.deltaF) ? moment.deltaF : null;
   if (deltaF && deltaF.length) {
     const create = CREATE_FACT[expectedKind];
     const pending = create
       ? deltaF.find(
           (f) =>
             f?.verb === create.verb &&
-            f?.action === create.action &&
-            f?.target?.kind === expectedKind &&
-            String(f?.target?.id) === id,
+            f?.act === create.act &&
+            f?.of?.kind === expectedKind &&
+            String(f?.of?.id) === id,
         )
       : null;
     if (pending) {

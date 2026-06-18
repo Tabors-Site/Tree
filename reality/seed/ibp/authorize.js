@@ -59,11 +59,11 @@ import { resolveTargetBranch } from "./branchResolve.js";
  * @param {string} [args.intent]   SUMMON intent
  * @param {string} [args.operation] BE operation
  * @param {string} [args.seeOp]    SEE op name (when target is a SEE op call)
- * @param {object} [args.summonCtx] caller's moment context
+ * @param {object} [args.moment] caller's moment context
  * @returns {Promise<{ ok: boolean, actor: string, reason?: string }>}
  */
 export async function authorize(args) {
-  const { identity, verb, target, summonCtx = null } = args;
+  const { identity, verb, target, moment = null } = args;
 
   // 1. I-Am bypass. The bootstrap axiom.
   if (identity?.name === I_AM || identity?.beingId === I_AM) {
@@ -134,13 +134,13 @@ export async function authorize(args) {
   // can re-point main. Authenticated callers with no branch anywhere
   // are a perimeter threading bug: fail loud.
   // Shared precedence (PORT-NOTES #10): target.branch →
-  // summonCtx.targetBranch → summonCtx.actorAct.branch → the caller's
+  // moment.targetBranch → moment.actorAct.branch → the caller's
   // seated branch (args.actorBranch here). Identical chain to the verb
   // layer's resolveBranchForFact, so the branch that GATES an act and
   // the branch a fact STAMPS on can never diverge.
   let targetBranch = resolveTargetBranch({
     target,
-    summonCtx,
+    moment,
     currentBranch: args.actorBranch,
   });
   if (!targetBranch) {
@@ -152,7 +152,7 @@ export async function authorize(args) {
       throw new Error(
         `authorize: branch could not be resolved for ${verb}:${args.action || args.seeOp || args.operation || args.intent || "?"} ` +
         `(identity=${identity?.name || identity?.beingId || "anonymous"}). ` +
-        `Pass summonCtx, include branch on the parsed target, or thread actorBranch.`,
+        `Pass moment, include branch on the parsed target, or thread actorBranch.`,
       );
     }
   }
@@ -168,11 +168,11 @@ export async function authorize(args) {
   // foreign actor holds HERE were granted here, on local branches, so
   // their grants read from the target's branch instead.
   const actorActIsLocal =
-    !summonCtx?.actorAct?.reality ||
-    summonCtx.actorAct.reality === getRealityDomain();
+    !moment?.actorAct?.reality ||
+    moment.actorAct.reality === getRealityDomain();
   const actorBranch =
     args.actorBranch ||
-    (actorActIsLocal ? summonCtx?.actorAct?.branch : null) ||
+    (actorActIsLocal ? moment?.actorAct?.branch : null) ||
     targetBranch;
   const result = await authorizeViaRoles({
     identity,

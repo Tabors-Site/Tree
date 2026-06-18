@@ -48,7 +48,7 @@ async function createChildByFact({ parentId, name, type, qualities }) {
     ? Object.fromEntries(qualities)
     : (qualities || {});
   // One-DO-per-moment doctrine: each create-space is its own act.
-  // The wrapping withIAmAct opens a fresh summonCtx so emitFact's
+  // The wrapping withIAmAct opens a fresh moment so emitFact's
   // counter sees an isolated op, sealAct gets opCount=1.
   const { withIAmAct } = await import("../sprout.js");
   await withIAmAct(`manifest:create ${name}`, async (ctx) => {
@@ -96,7 +96,7 @@ async function refreshQualitiesByFact(spaceId, qualities) {
         { kind: "space", id: String(refreshed.id) },
         "set-space",
         { field: `qualities.${ns}`, value, merge: false },
-        { identity: I_AM, summonCtx: ctx },
+        { identity: I_AM, moment: ctx },
       );
     });
   }
@@ -113,7 +113,7 @@ async function deleteChildByFact(childId) {
       { kind: "space", id: String(childId) },
       "end-space",
       {},
-      { identity: I_AM, summonCtx: ctx },
+      { identity: I_AM, moment: ctx },
     );
   });
 }
@@ -123,7 +123,7 @@ export async function manifestItems({
   items,
   itemType = "resource",
 }) {
-  // No summonCtx parameter — each per-item write opens its own
+  // No moment parameter — each per-item write opens its own
   // moment via withIAmAct inside createChildByFact /
   // refreshQualitiesByFact / deleteChildByFact. Callers don't need
   // to wrap (per the one-DO-per-moment doctrine: each item-sync is
@@ -207,11 +207,11 @@ export async function addManifestChild({
   name,
   qualities = null,
   itemType = "resource",
-  summonCtx,
+  moment,
 }) {
-  if (!summonCtx) {
+  if (!moment) {
     throw new Error(
-      "addManifestChild requires summonCtx. Wrap the call in withIAmAct(...).",
+      "addManifestChild requires moment. Wrap the call in withIAmAct(...).",
     );
   }
   if (!name) return null;
@@ -229,7 +229,7 @@ export async function addManifestChild({
   }).select("id").lean();
   if (existing) {
     if (qualities) {
-      await refreshQualitiesByFact(existing.id, qualities, summonCtx);
+      await refreshQualitiesByFact(existing.id, qualities, moment);
     }
     return existing.id;
   }
@@ -238,7 +238,7 @@ export async function addManifestChild({
     name,
     type: itemType,
     qualities,
-    summonCtx,
+    moment,
   });
 }
 
@@ -246,11 +246,11 @@ export async function removeManifestChild({
   heavenSpace,
   name,
   itemType = "resource",
-  summonCtx,
+  moment,
 }) {
-  if (!summonCtx) {
+  if (!moment) {
     throw new Error(
-      "removeManifestChild requires summonCtx. Wrap the call in withIAmAct(...).",
+      "removeManifestChild requires moment. Wrap the call in withIAmAct(...).",
     );
   }
   if (!name) return false;
@@ -266,6 +266,6 @@ export async function removeManifestChild({
     tombstoned: { $ne: true },
   }).select("id").lean();
   if (!child) return false;
-  await deleteChildByFact(child.id, summonCtx);
+  await deleteChildByFact(child.id, moment);
   return true;
 }

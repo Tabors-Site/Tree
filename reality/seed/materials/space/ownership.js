@@ -25,8 +25,8 @@ import {
  * primitive's invariants (owner is a singleton; transfers replace
  * atomically).
  */
-export async function setOwner(spaceId, newOwnerId, beingId, branch, summonCtx = null) {
-  return setSpaceOwner(spaceId, newOwnerId, beingId, branch, summonCtx);
+export async function setOwner(spaceId, newOwnerId, beingId, branch, moment = null) {
+  return setSpaceOwner(spaceId, newOwnerId, beingId, branch, moment);
 }
 
 /**

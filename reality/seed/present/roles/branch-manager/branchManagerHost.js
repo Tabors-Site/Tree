@@ -14,7 +14,7 @@
 // through loadHeavenProjection / findHeavenSpace by the BRANCHES enum), which no `see`
 // QUERY/READ form can shape today (see blockers); (c) the lone WORLD write, kept host
 // like take-role.word's grantInternal so it calls the SAME doVerb(set-space) the JS
-// handler calls, reading ctx.summonCtx to lay its fact into the live moment.
+// handler calls, reading ctx.moment to lay its fact into the live moment.
 //
 // callHost invokes each builtin as `fn({ args: [...] }, ctx)`. NONE lay a fact now: the
 // validators + the map merge/prune are pure computes (see-ops), the pointer-map + .branches
@@ -34,7 +34,7 @@ import {
 const CANONICAL_PATH_RE = /^(?:0|\d+(?:[a-z]+\d+)*(?:[a-z]+)?)$/;
 
 // branch the write rides: the moment's act branch, else the eval ctx branch, else main.
-const branchOf = (ctx) => ctx?.summonCtx?.actorAct?.branch || ctx?.branch || "0";
+const branchOf = (ctx) => ctx?.moment?.actorAct?.branch || ctx?.branch || "0";
 
 export function branchManagerHostEnv() {
   return {

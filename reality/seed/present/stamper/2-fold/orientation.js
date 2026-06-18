@@ -79,19 +79,19 @@ export const DEFAULT_ORIENTATION = ORIENTATION.FORWARD;
 // classifier — no new primitive, no new category. Every act is
 // inner or outer by where its facts land.
 //
-//   Inner:  ∀ f ∈ ΔF : target(f).kind = "being" ∧ target(f).id = doer
-//   Outer:  ∃ f ∈ ΔF : target(f).kind ≠ "being" ∨ target(f).id ≠ doer
+//   Inner:  ∀ f ∈ ΔF : of(f).kind = "being" ∧ of(f).id = doer
+//   Outer:  ∃ f ∈ ΔF : of(f).kind ≠ "being" ∨ of(f).id ≠ doer
 //
 // Examples:
-//   - self-summon (turn): one summon fact, target=self/being.
-//     INNER — the canonical inner act (target.id === actor).
-//   - DO create matter: do:create fact, target=matter/<newId>.
+//   - self-summon (turn): one summon fact, of=self/being.
+//     INNER — the canonical inner act (of.id === actor).
+//   - DO create matter: do:create fact, of=matter/<newId>.
 //     OUTER — touched another reel.
-//   - SUMMON another being: verb=summon, target=recipient/being.
-//     OUTER — target.id !== actor; the right-stance target IS the
-//     recipient, so the general target check catches it. SUMMON
-//     joined DO in stamping its target with the right stance on
-//     2026-06-03; before then it stamped target=doer and the
+//   - SUMMON another being: verb=summon, of=recipient/being.
+//     OUTER — of.id !== actor; the right-stance object IS the
+//     recipient, so the general of check catches it. SUMMON
+//     joined DO in stamping its of with the right stance on
+//     2026-06-03; before then it stamped of=doer and the
 //     classifier had to read params.recipient as a special case.
 
 export const ACT_KIND = Object.freeze({
@@ -102,11 +102,11 @@ export const ACT_KIND = Object.freeze({
 /**
  * Classify an in-memory ΔF as inner or outer for a given doer.
  *
- * Returns "inner" only when every fact's target is the doer being.
- * The general target check covers all three stamping verbs uniformly
- * now that SUMMON stamps target=recipient (right stance) like DO
- * stamps target=thing-acted-upon. A self-summon has target.id===doer
- * and is INNER; a cross-being summon has target.id!==doer and is
+ * Returns "inner" only when every fact's of is the doer being.
+ * The general of check covers all three stamping verbs uniformly
+ * now that SUMMON stamps of=recipient (right stance) like DO
+ * stamps of=thing-acted-upon. A self-summon has of.id===doer
+ * and is INNER; a cross-being summon has of.id!==doer and is
  * OUTER. No verb-specific special case needed.
  *
  * @param {Array<object>} deltaF  fact specs (logFact shape)
@@ -117,11 +117,11 @@ export function classifyDeltaF(deltaF, doerId) {
   if (!Array.isArray(deltaF) || deltaF.length === 0) return ACT_KIND.INNER;
   const doer = String(doerId);
   for (const f of deltaF) {
-    const target = f?.target;
-    // Any non-being target is outer (space, matter, place, stance).
-    if (target?.kind && target.kind !== "being") return ACT_KIND.OUTER;
-    // Any being target other than the doer is outer.
-    if (target?.id && String(target.id) !== doer) return ACT_KIND.OUTER;
+    const of = f?.of;
+    // Any non-being object is outer (space, matter, place, stance).
+    if (of?.kind && of.kind !== "being") return ACT_KIND.OUTER;
+    // Any being object other than the doer is outer.
+    if (of?.id && String(of.id) !== doer) return ACT_KIND.OUTER;
   }
   return ACT_KIND.INNER;
 }
@@ -130,7 +130,7 @@ export function classifyDeltaF(deltaF, doerId) {
  * Classify a committed Act row by reading its facts from Mongo.
  *
  * @param {string} actId
- * @param {string} doerId  the being who acted (Act.beingOut typically)
+ * @param {string} doerId  the being who acted (Act.to typically)
  * @param {object} [opts]
  * @param {object} [opts.FactModel]  inject for tests
  * @returns {Promise<"inner" | "outer">}
@@ -139,7 +139,7 @@ export async function classifyActById(actId, doerId, opts = {}) {
   const FactModel = opts.FactModel
     || (await import("../../../past/fact/fact.js")).default;
   const facts = await FactModel.find({ actId: String(actId) })
-    .select("verb action target params")
+    .select("verb act of params")
     .lean();
   return classifyDeltaF(facts, doerId);
 }

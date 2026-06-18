@@ -81,8 +81,8 @@ try {
   // can be its own (form-being's trueName = a declared Name).
   let ownerName = null;
   await withRetry(async () => {
-    const sc = { actId: randomUUID(), actorAct: { branch, nameId: "i-am" }, identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
-    ownerName = (await nameVerb("declare", { name: "tabor", password: "pw12345678", soulType: "human" }, { identity: sc.identity, summonCtx: sc, currentBranch: branch })).nameId;
+    const sc = { actId: randomUUID(), actorAct: { branch, by: "i-am" }, identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+    ownerName = (await nameVerb("declare", { name: "tabor", password: "pw12345678", soulType: "human" }, { identity: sc.identity, moment: sc, currentBranch: branch })).nameId;
     await sealFacts(sc.deltaF);
   });
   console.log(`  arriving Name (father) = ${String(ownerName).slice(0, 14)}…\n`);
@@ -94,47 +94,47 @@ try {
   // "by I_AM, through Cherub"). name = "i-am" short-circuits authorize (the
   // bootstrap axiom), beingId = cherub is the vessel. _inOp mirrors runRoleWord
   // (the whole flow is one op; do-acts dispatch as nested sub-ops).
-  const summonCtx = { actId: randomUUID(), actorAct: { branch, nameId: "i-am" }, identity: { beingId: String(cherub.id), name: "i-am", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [], _inOp: true };
+  const moment = { actId: randomUUID(), actorAct: { branch, by: "i-am" }, identity: { beingId: String(cherub.id), name: "i-am", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [], _inOp: true };
   const ctx = {
-    dryRun: false, branch, summonCtx,
-    identity: summonCtx.identity,
+    dryRun: false, branch, moment,
+    identity: moment.identity,
     env: { iam: "i-am", mintId: () => randomUUID() }, // pre-mint ids for `bind` sites (the home)
     bindings: { name: "tabor-prime", password: "wordpass", ownerName: String(ownerName), placeRoot: String(spaceRoot._id) },
     beings: { Cherub: String(cherub.id), ...(arrival ? { Arrival: String(arrival.id) } : {}) }, // proper-name -> id (7.md)
     trigger: { name: "tabor-prime", password: "wordpass" },
-    deltaF: summonCtx.deltaF, flows: [],
+    deltaF: moment.deltaF, flows: [],
   };
   await withRetry(() => evaluate(flow, ctx));
 
-  console.log(`  cherub.word laid ${summonCtx.deltaF.length} fact(s):`);
-  for (const f of summonCtx.deltaF) console.log(`    ${f.verb}:${f.action} -> ${f.target?.kind}:${String(f.target?.id ?? "").slice(0, 10)}`);
+  console.log(`  cherub.word laid ${moment.deltaF.length} fact(s):`);
+  for (const f of moment.deltaF) console.log(`    ${f.verb}:${f.act} -> ${f.of?.kind}:${String(f.of?.id ?? "").slice(0, 10)}`);
   console.log("");
 
-  const shape = summonCtx.deltaF.map((f) => `${f.verb}:${f.action}`);
+  const shape = moment.deltaF.map((f) => `${f.verb}:${f.act}`);
   const EXPECT = ["do:create-space", "be:birth", "do:set-space", "do:grant-role", "do:set-being"];
   EXPECT.every((e) => shape.includes(e))
     ? ok(`all five world acts present (${shape.join(", ")})`) : bad(`five acts present`, shape.join(", "));
 
-  const birth = summonCtx.deltaF.find((f) => f.verb === "be" && f.action === "birth");
+  const birth = moment.deltaF.find((f) => f.verb === "be" && f.act === "birth");
   birth?.params?.name === "tabor-prime" ? ok(`be:birth names @tabor-prime`) : bad(`be:birth names @tabor-prime`, birth?.params?.name);
   String(birth?.params?.trueName) === String(ownerName) ? ok(`being is the new Name's own (trueName = the arriving Name)`) : bad(`trueName = arriving Name`, `got ${birth?.params?.trueName}`);
-  const newBeingId = String(birth?.target?.id ?? birth?.beingId);
+  const newBeingId = String(birth?.of?.id ?? birth?.through);
 
   // the home owner = the new being (JS handler step 3: set-space owner = result.beingId)
-  const setSpace = summonCtx.deltaF.find((f) => f.action === "set-space");
+  const setSpace = moment.deltaF.find((f) => f.act === "set-space");
   String(setSpace?.params?.value ?? setSpace?.params?.owner) === newBeingId
     ? ok(`home owner set to the new being`) : bad(`home owner = new being`, JSON.stringify(setSpace?.params));
 
   // the human role is granted (JS handler step 4, the explicit grant cherub.word reproduces)
-  const humanGrant = summonCtx.deltaF.find((f) => f.action === "grant-role" && f.params?.role === "human");
+  const humanGrant = moment.deltaF.find((f) => f.act === "grant-role" && f.params?.role === "human");
   humanGrant ? ok(`human role granted on the new being`) : bad(`human role granted`, "no human grant-role fact");
 
   // lineage mother = Cherub, father = Arrival, resolved to being ids (JS handler step 5)
-  const lv = summonCtx.deltaF.find((f) => f.action === "set-being")?.params?.value;
+  const lv = moment.deltaF.find((f) => f.act === "set-being")?.params?.value;
   (String(lv?.mother) === String(cherub.id) && (!arrival || String(lv?.father) === String(arrival.id)))
     ? ok(`lineage: mother=Cherub, father=Arrival (proper names resolved to ids)`) : bad(`lineage`, JSON.stringify(lv));
 
-  await sealFacts(summonCtx.deltaF);
+  await sealFacts(moment.deltaF);
   const born = await findByName("being", "tabor-prime", branch);
   born ? ok(`@tabor-prime materializes after seal (${String(born.id).slice(0, 10)}…)`) : bad(`@tabor-prime materializes`, "no row");
 
@@ -142,9 +142,9 @@ try {
   // deltaF (as runRoleWord sets) must list the fact ONCE, not twice. cherub.word
   // never reaches emit() (all doVerb/form-being), but the rich slices will, so
   // probe emit() directly: a be-op != form-being falls through evalAct to emit().
-  const probeSc = { actId: randomUUID(), actorAct: { branch, nameId: "i-am" }, identity: { beingId: String(cherub.id), name: "i-am", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [], _inOp: true };
-  const probeCtx = { dryRun: false, branch, summonCtx: probeSc, identity: probeSc.identity, env: { iam: "i-am" }, bindings: {}, flows: [], deltaF: probeSc.deltaF /* SHARED, as runRoleWord does */ };
-  await evaluate([{ kind: "act", verb: "be", op: "probe-emit", by: "I" }], probeCtx);
+  const probeSc = { actId: randomUUID(), actorAct: { branch, by: "i-am" }, identity: { beingId: String(cherub.id), name: "i-am", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [], _inOp: true };
+  const probeCtx = { dryRun: false, branch, moment: probeSc, identity: probeSc.identity, env: { iam: "i-am" }, bindings: {}, flows: [], deltaF: probeSc.deltaF /* SHARED, as runRoleWord does */ };
+  await evaluate([{ kind: "act", verb: "be", act: "probe-emit", by: "I" }], probeCtx);
   probeSc.deltaF.length === 1
     ? ok(`live plain emit() lists the fact ONCE (no double-push on shared deltaF)`)
     : bad(`emit() double-push guard`, `deltaF.length=${probeSc.deltaF.length} (expected 1)`);

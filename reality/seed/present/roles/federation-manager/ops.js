@@ -136,7 +136,7 @@ registerOperation("offer-template", {
 
     // 1. Resolve subtreePath to a spaceId. Accepts both a raw uuid and
     // a slash-separated path.
-    const branch = ctx.summonCtx?.actorAct?.branch || "0";
+    const branch = ctx.moment?.actorAct?.branch || "0";
     const spaceId = await resolveSubtreeSpaceId(subtreePath, branch);
     if (!spaceId) {
       throw new IbpError(IBP_ERR.NOT_FOUND,
@@ -431,7 +431,7 @@ registerOperation("fulfill-request", {
     // offer-template code path so the receiver side runs the same
     // offer-template handling regardless of whether the push was operator
     // initiated or pull driven.
-    const branch = ctx.summonCtx?.actorAct?.branch || "0";
+    const branch = ctx.moment?.actorAct?.branch || "0";
     const spaceId = await resolveSubtreeSpaceId(request.subtreePath, branch);
     if (!spaceId) {
       throw new IbpError(IBP_ERR.NOT_FOUND,
@@ -525,8 +525,8 @@ registerOperation("refuse-request", {
 
 async function sendIntent(ctx, peerReality, message) {
   const { crossRealityDispatch } = await import("../../../ibp/crossWorld.js");
-  const actorBeingId = ctx.summonCtx?.actorAct?.beingIn || ctx.identity?.beingId;
-  const actorBranch  = ctx.summonCtx?.actorAct?.branch  || "0";
+  const actorBeingId = ctx.moment?.actorAct?.through || ctx.identity?.beingId;
+  const actorBranch  = ctx.moment?.actorAct?.branch  || "0";
   if (!actorBeingId) {
     throw new IbpError(IBP_ERR.INTERNAL, "sendIntent: no actor beingId in ctx");
   }
@@ -607,14 +607,14 @@ async function writeNegotiation(ctx, bucket, negotiationId, value) {
 }
 
 async function readNegotiation(ctx, bucket, negotiationId) {
-  const myBeingId = ctx.summonCtx?.actorAct?.beingIn || ctx.identity?.beingId;
+  const myBeingId = ctx.moment?.actorAct?.through || ctx.identity?.beingId;
   if (!myBeingId) return null;
   // Read directly from the projection. The role being is the
   // federation-manager being itself; in v1 we read its own state.
   // For an operator calling do:accept-template on @federation-manager,
   // the addressed being is the federation-manager (whose qualities
   // hold the negotiation state).
-  const branch = ctx.summonCtx?.actorAct?.branch || "0";
+  const branch = ctx.moment?.actorAct?.branch || "0";
   const { loadOrFold } = await import("../../../materials/projections.js");
   // Resolve the federation-manager being by name (not the caller's
   // beingId, which is the operator). The negotiation state lives on
@@ -651,7 +651,7 @@ async function setQualityField(ctx, subPath, value) {
   // Resolve the federation-manager being. The operator's op handler
   // ctx has the operator as actor; the negotiation state lives on the
   // federation-manager being, addressed by name.
-  const branch = ctx.summonCtx?.actorAct?.branch || "0";
+  const branch = ctx.moment?.actorAct?.branch || "0";
   const { findByName } = await import("../../../materials/projections.js");
   const slot = await findByName("being", "federation-manager", branch);
   if (!slot) {
@@ -669,14 +669,14 @@ async function setQualityField(ctx, subPath, value) {
     },
     {
       identity:      ctx.identity || { beingId: myBeingId, name: "federation-manager" },
-      summonCtx:     ctx.summonCtx,
+      moment:     ctx.moment,
       currentBranch: branch,
     },
   );
 }
 
 function iso(ctx) {
-  return ctx.summonCtx?.actorAct?.date
-    ? new Date(ctx.summonCtx.actorAct.date).toISOString()
+  return ctx.moment?.actorAct?.date
+    ? new Date(ctx.moment.actorAct.date).toISOString()
     : null;
 }

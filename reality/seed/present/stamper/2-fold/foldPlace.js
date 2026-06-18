@@ -63,7 +63,7 @@ const DEFAULT_RECALL_CAP = 16;
  *   {
  *     orientation: "inward",
  *     self:      <being state, folded>,
- *     actChain:  [<{actId, beingIn, beingOut, stampedAt, startMessage,
+ *     actChain:  [<{actId, through, to, stampedAt, startMessage,
  *                   endMessage, rootCorrelation, activeRole}>, ...],
  *   }
  *
@@ -90,7 +90,7 @@ export async function foldPlace(beingId, orientation = ORIENTATION.FORWARD, opts
   if (!beingId) throw new Error("foldPlace: beingId is required");
   const ω = validateOrientation(orientation);
 
-  // Branch this fold runs in. Sourced from summonCtx (the moment
+  // Branch this fold runs in. Sourced from moment (the moment
   // already carries the caller's branch via Pass 4 substrate) or an
   // explicit opts.branch from non-moment callers. Every sub-fold
   // inside this place-fold inherits the same branch so the whole
@@ -98,16 +98,16 @@ export async function foldPlace(beingId, orientation = ORIENTATION.FORWARD, opts
   // a missing branch here means a perimeter threading bug, surfaced
   // loud at the fold seam.
   const branch = assertBranchOrThrow(
-    opts.summonCtx?.actorAct?.branch || opts.branch,
+    opts.moment?.actorAct?.branch || opts.branch,
     "foldPlace(opts)",
   );
 
-  // Optional summonCtx for the stale-detection key (PARALLEL FACTS §1.3).
-  // When the moment-open caller passes summonCtx, every reel we fold
-  // here records its foldedSeq into summonCtx.foldedSeqs. emitFact
+  // Optional moment for the stale-detection key (PARALLEL FACTS §1.3).
+  // When the moment-open caller passes moment, every reel we fold
+  // here records its foldedSeq into moment.foldedSeqs. emitFact
   // later reads that map to stamp foldSeq on facts targeting those
   // reels. Map is initialized in assign; we only set keys.
-  const seqs = opts.summonCtx?.foldedSeqs || null;
+  const seqs = opts.moment?.foldedSeqs || null;
   const stash = (kind, id, foldedSeq) => {
     if (seqs) seqs.set(`${kind}:${id}`, foldedSeq);
   };
@@ -205,7 +205,7 @@ async function buildForwardFace(beingId, self, stash, branch = "0", role = null,
 
 /**
  * Load the being's act-chain A_b in act-order (oldest first). Returns
- * one row per Act where the being was the actor (beingOut). The
+ * one row per Act where the being was the actor (to). The
  * Act-chain is a stored, first-class component of the being per
  * MODEL.md b = (id_b, R_b, A_b) — not a projection of the reel.
  *
@@ -216,17 +216,17 @@ async function buildForwardFace(beingId, self, stash, branch = "0", role = null,
  */
 async function loadActChain(beingId) {
   const rows = await Act.find({
-    beingOut: String(beingId),
+    to: String(beingId),
     severedAt: null,
   })
     .sort({ stampedAt: 1 })
-    .select("_id beingIn beingOut activeRole stampedAt startMessage endMessage rootCorrelation inReplyTo answers parentThread innerFace")
+    .select("_id through to activeRole stampedAt startMessage endMessage rootCorrelation inReplyTo answers parentThread innerFace")
     .lean();
 
   return rows.map(r => ({
     actId:           String(r._id),
-    beingIn:         r.beingIn,
-    beingOut:        r.beingOut,
+    through:         r.through,
+    to:              r.to,
     activeRole:      r.activeRole,
     stampedAt:       r.stampedAt,
     startMessage:    r.startMessage,
@@ -252,7 +252,7 @@ async function loadActChain(beingId) {
  * being is at, the matter and beings at that space). For each, find
  * the facts on its reel — those are the stitch-points where the
  * being's own acts may have touched it. Filter to facts whose actor
- * (Fact.beingId) is the recipient being itself. Each such fact came
+ * (Fact.through) is the recipient being itself. Each such fact came
  * from an act this being performed that touched the now-current
  * entity. The Act rows for those facts are the recalled set.
  *
@@ -281,17 +281,17 @@ async function recallByBraid(beingId, forwardFace, { cap }) {
   // fact's actId points at the Act row that produced it — the act
   // we recall.
   const orClauses = entities.map(e => ({
-    "target.kind": e.kind,
-    "target.id":   e.id,
+    "of.kind": e.kind,
+    "of.id":   e.id,
   }));
   const stitchFacts = await Fact.find({
-    beingId: String(beingId),
+    through: String(beingId),
     actId:   { $ne: null },
     $or:     orClauses,
   })
     .sort({ date: -1 }) // most-recent stitches first (braid-distance proxy)
     .limit(cap)
-    .select("actId target date")
+    .select("actId of date")
     .lean();
 
   if (stitchFacts.length === 0) return [];
@@ -300,7 +300,7 @@ async function recallByBraid(beingId, forwardFace, { cap }) {
   // from one act (a single act stitches multiple entities).
   const actIds = [...new Set(stitchFacts.map(f => f.actId))];
   const acts = await Act.find({ _id: { $in: actIds }, severedAt: null })
-    .select("_id beingIn beingOut activeRole stampedAt startMessage endMessage rootCorrelation innerFace")
+    .select("_id through to activeRole stampedAt startMessage endMessage rootCorrelation innerFace")
     .lean();
 
   // Order acts to match the stitch-fact order so braid-distance
@@ -316,8 +316,8 @@ async function recallByBraid(beingId, forwardFace, { cap }) {
     seen.add(id);
     ordered.push({
       actId:           String(act._id),
-      beingIn:         act.beingIn,
-      beingOut:        act.beingOut,
+      through:         act.through,
+      to:              act.to,
       activeRole:      act.activeRole,
       stampedAt:       act.stampedAt,
       startMessage:    act.startMessage,
@@ -325,7 +325,7 @@ async function recallByBraid(beingId, forwardFace, { cap }) {
       rootCorrelation: act.rootCorrelation,
       // The reel this stitch was found on — useful for the face to
       // say WHY this act surfaced (which entity it touched).
-      stitchedReel:    { kind: f.target.kind, id: f.target.id },
+      stitchedReel:    { kind: f.of.kind, id: f.of.id },
       // The canonical inner face the act was committed under. Null on
       // legacy Acts; renderers clamp + fall back gracefully.
       innerFace:  act.innerFace ?? null,

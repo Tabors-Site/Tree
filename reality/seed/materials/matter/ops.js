@@ -82,7 +82,7 @@ const RESERVED_SET_META_NS = new Set([
 // applyCreateMatter to materialize the row. One Fact per birth.
 
 async function createMatterHandler(ctx) {
-  const { target, params, identity, summonCtx } = ctx;
+  const { target, params, identity, moment } = ctx;
   const spec = params || {};
   const targetKind = detectTargetKind(target);
 
@@ -97,7 +97,7 @@ async function createMatterHandler(ctx) {
   let spaceId = targetKind === "space" ? targetIdOf(target) : (spec.spaceId || null);
   if (!spaceId && parentMatterId) {
     const { loadOrFold } = await import("../projections.js");
-    const parentSlot = await loadOrFold("matter", String(parentMatterId), summonCtx?.actorAct?.branch || "0");
+    const parentSlot = await loadOrFold("matter", String(parentMatterId), moment?.actorAct?.branch || "0");
     spaceId = parentSlot?.state?.spaceId || null;
   }
 
@@ -194,7 +194,7 @@ async function createMatterHandler(ctx) {
     name: spec.name,
     content,
     type: matterType,
-    branch: summonCtx?.actorAct?.branch || "0",
+    branch: moment?.actorAct?.branch || "0",
     spaceId,
     parentMatterId,
   });
@@ -207,7 +207,7 @@ async function createMatterHandler(ctx) {
     coord = await assertMatterCoordInBounds(
       { spaceId },
       spec.coord,
-      summonCtx?.actorAct?.branch || "0",
+      moment?.actorAct?.branch || "0",
     );
   }
 
@@ -240,16 +240,16 @@ async function createMatterHandler(ctx) {
   await emitFact(
     {
       verb: "do",
-      action: "create-matter",
-      beingId: String(actorBeingId),
-      target: { kind: "matter", id: matterId },
+      act: "create-matter",
+      through: String(actorBeingId),
+      of: { kind: "matter", id: matterId },
       params: enrichedSpec,
-      actId: summonCtx?.actId || null,
+      actId: moment?.actId || null,
       // Branch this matter is created on — sourced from the moment ctx
       // so a plant under #1 lands matter on #1's reel, not main's.
-      branch: summonCtx?.actorAct?.branch || "0",
+      branch: moment?.actorAct?.branch || "0",
     },
-    summonCtx,
+    moment,
   );
   return {
     matterId,
@@ -269,17 +269,17 @@ async function createMatterHandler(ctx) {
 //   "qualities.<namespace>.<innerKey>"               → merge one inner key
 //   value=null on a qualities path                   → unset
 
-async function setOnMatterHandler({ target, params, summonCtx }) {
+async function setOnMatterHandler({ target, params, moment }) {
   const { field, value, merge = true } = params || {};
   if (!field || typeof field !== "string") {
     throw new Error("set-matter: `field` is required");
   }
   // Load the row at the top — set-matter needs spaceId for coord
   // clamping plus the doc for id-emitting return shapes. Passes
-  // summonCtx so an in-moment chain (create-matter → set-matter
+  // moment so an in-moment chain (create-matter → set-matter
   // before seal) reads the in-flight spec from deltaF when the row
   // hasn't materialized yet.
-  target = await loadTargetRow(target, "matter", { summonCtx });
+  target = await loadTargetRow(target, "matter", { moment });
 
   // ── qualities paths ────────────────────────────────────
   if (field.startsWith("qualities.")) {
@@ -379,7 +379,7 @@ async function setOnMatterHandler({ target, params, summonCtx }) {
     if (typeof value !== "object" || Array.isArray(value)) {
       throw new Error("set-matter: `coord` value must be an object {x,y,z?} or null");
     }
-    const clamped = await assertMatterCoordInBounds(target, value, summonCtx?.actorAct?.branch || "0");
+    const clamped = await assertMatterCoordInBounds(target, value, moment?.actorAct?.branch || "0");
     return { matterId: String(target._id), coord: clamped };
   }
 
@@ -403,7 +403,7 @@ async function setOnMatterHandler({ target, params, summonCtx }) {
 // applySetField on the name field — rename-matter is added to
 // SET_ACTIONS in reducerHelpers.js so the same fold path applies.
 
-async function renameMatterHandler({ target, params, summonCtx }) {
+async function renameMatterHandler({ target, params, moment }) {
   const newName = params?.name;
   if (typeof newName !== "string" || !newName.length) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "rename-matter: `name` is required and must be a non-empty string");
@@ -411,13 +411,13 @@ async function renameMatterHandler({ target, params, summonCtx }) {
   // `allowReplace` opts out of the per-folder uniqueness check. The
   // caller is responsible for ensuring the colliding row is ended in
   // the same moment (i.e. an end-matter fact for it is in this
-  // summonCtx.deltaF ahead of this rename). The atomic-rename-replace
+  // moment.deltaF ahead of this rename). The atomic-rename-replace
   // path the mirror mount uses for editor save patterns (vim writes a
   // temp file then renames over the original) goes through here.
   const allowReplace = params?.allowReplace === true;
-  target = await loadTargetRow(target, "matter", { summonCtx });
+  target = await loadTargetRow(target, "matter", { moment });
   const matterId = String(target._id);
-  const branch = summonCtx?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.branch || "0";
   const spaceId = target.spaceId ? String(target.spaceId) : null;
   const parentMatterId = target.parentMatterId ? String(target.parentMatterId) : null;
   if (!spaceId) {
@@ -450,10 +450,10 @@ async function renameMatterHandler({ target, params, summonCtx }) {
 // end-matter
 // ─────────────────────────────────────────────────────────────────────
 
-async function endMatterHandler({ target, identity, summonCtx }) {
+async function endMatterHandler({ target, identity, moment }) {
   const matterId = targetIdOf(target);
   if (!matterId) throw new Error("end-matter: matterId required");
-  const branch = summonCtx?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.branch || "0";
   const { deleteMatterAndFile } = await import("./matters.js");
   let beingId = identity?.beingId;
   if (!beingId) {
@@ -464,9 +464,9 @@ async function endMatterHandler({ target, identity, summonCtx }) {
   await deleteMatterAndFile({
     matterId,
     beingId: String(beingId || ""),
-    actId: summonCtx?.actId || null,
-    sessionId: summonCtx?.sessionId || null,
-    summonCtx,
+    actId: moment?.actId || null,
+    sessionId: moment?.sessionId || null,
+    moment,
   });
   return { removed: true, matterId };
 }
@@ -490,13 +490,13 @@ async function endMatterHandler({ target, identity, summonCtx }) {
 // file/model types); the handler additionally enforces
 // author-or-root-owner, same shape as deleteMatterAndFile.
 
-async function purgeContentHandler({ target, params, identity, summonCtx }) {
+async function purgeContentHandler({ target, params, identity, moment }) {
   const matterId = targetIdOf(target);
   if (!matterId) throw new IbpError(IBP_ERR.INVALID_INPUT, "purge-content: matter target required");
   if (!identity?.beingId) {
     throw new IbpError(IBP_ERR.UNAUTHORIZED, "purge-content: identity required");
   }
-  const branch = summonCtx?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.branch || "0";
 
   const { loadOrFold } = await import("../projections.js");
   const slot = await loadOrFold("matter", String(matterId), branch);
@@ -556,20 +556,20 @@ async function purgeContentHandler({ target, params, identity, summonCtx }) {
   const { emitFact: _emit } = await import("../../past/fact/facts.js");
   await _emit({
     verb:    "do",
-    action:  "purge-content",
-    beingId: String(identity.beingId),
-    target:  { kind: "matter", id: String(matterId) },
+    act:     "purge-content",
+    through: String(identity.beingId),
+    of:      { kind: "matter", id: String(matterId) },
     params:  { hash, force, referents: others.length },
-    actId:   summonCtx?.actId || null,
+    actId:   moment?.actId || null,
     branch,
-  }, summonCtx);
+  }, moment);
 
   const doDelete = async () => {
     const { deleteContent } = await import("./contentStore.js");
     await deleteContent(hash);
   };
-  if (summonCtx?.afterSeal) {
-    summonCtx.afterSeal.push(doDelete);
+  if (moment?.afterSeal) {
+    moment.afterSeal.push(doDelete);
   } else {
     await doDelete();
   }

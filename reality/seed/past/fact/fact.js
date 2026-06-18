@@ -50,16 +50,16 @@ const FactSchema = new mongoose.Schema({
   _id:  { type: String },
   date: { type: Date,   default: Date.now },
 
-  // The actor. I am the actor only when no being yet exists
-  // (pre-being scaffold flows: server boot, migrations).
-  beingId: { type: String, ref: "Being", required: true },
+  // The vessel being the name acted THROUGH. I am the actor only when
+  // no being yet exists (pre-being scaffold flows: server boot, migrations).
+  through: { type: String, ref: "Being", required: true },
 
   // The actor NAME — the Name (identity) that DID this fact, taken
-  // DIRECTLY from the moment's act (act.nameId), never re-resolved here.
-  // `beingId` above is the being the name acted THROUGH (the presence).
+  // DIRECTLY from the moment's act (act.by), never re-resolved here.
+  // `through` above is the being the name acted THROUGH (the presence).
   // Additive + NOT in contentOf (hash.js), so the fact _id is unchanged.
   // See materials/name/name.js.
-  nameId: { type: String, ref: "Name", default: null },
+  by: { type: String, ref: "Name", default: null },
 
   // Which verb stamped the Fact. DO for operations on a target
   // (right stance), BE for the closed identity set (birth / connect
@@ -71,11 +71,11 @@ const FactSchema = new mongoose.Schema({
   // The operation or sub-event name. Operations register a
   // `factAction` (defaults to the operation name); helpers may write
   // their own kebab-case event names.
-  action: { type: String, required: true },
+  act: { type: String, required: true },
 
   // What was acted on. Optional — some acts (multi-being ops,
   // place-level config) have no single positional target.
-  target: {
+  of: {
     kind: { type: String, enum: ["space", "matter", "being", "name", "place", "stance"] },
     id:   { type: String },
     _id:  false,
@@ -83,7 +83,7 @@ const FactSchema = new mongoose.Schema({
 
   // Per-reel monotonic seq, allocated atomically at append time. The
   // fold sorts by seq, never by date (clock skew can invert order).
-  // Only set when target.kind ∈ {being,space,matter} AND target.id is
+  // Only set when of.kind ∈ {being,space,matter} AND of.id is
   // present — those are the reel-bearing aggregates. Place-level and
   // target-less facts carry seq:null and stay outside the fold model
   // for now. See [seed/present/STAMPER.md](../factory/stamper/STAMPER.md).
@@ -114,7 +114,7 @@ const FactSchema = new mongoose.Schema({
   //         this fact into its identity.
   //   _id — the self-hash (see header). There is no separate `h`.
   //
-  // Per-reel, not global. Each (branch, target.kind, target.id) reel
+  // Per-reel, not global. Each (branch, of.kind, of.id) reel
   // is its own chain. The chain DETECTS tampering — alter any past
   // fact and its recomputed identity changes, breaking the `p` link
   // of the next. The chain does not REPAIR. Repair is replication's
@@ -122,7 +122,7 @@ const FactSchema = new mongoose.Schema({
   // facts are handled by appending a correction fact, never by
   // rewriting the chain.
   //
-  // Non-reel-bearing facts (target.kind ∈ {place, stance} or
+  // Non-reel-bearing facts (of.kind ∈ {place, stance} or
   // target-less) carry p=GENESIS_PREV and a content-hash _id like
   // every other fact — they have identity without a chain; only
   // reel verification skips them. See verifyReel.js.
@@ -161,26 +161,26 @@ const FactSchema = new mongoose.Schema({
   branch: { type: String, default: "0", index: true },
 });
 
-FactSchema.index({ beingId: 1, date: -1 });                                          // a being's reel
-FactSchema.index({ "target.kind": 1, "target.id": 1, date: -1 }, { sparse: true }); // a target's reel (date-ordered, legacy)
-FactSchema.index({ "target.kind": 1, "target.id": 1, seq: 1 }, {                     // a target's reel (seq-ordered, fold path; main / branch-implicit)
+FactSchema.index({ through: 1, date: -1 });                                          // a being's reel
+FactSchema.index({ "of.kind": 1, "of.id": 1, date: -1 }, { sparse: true }); // a target's reel (date-ordered, legacy)
+FactSchema.index({ "of.kind": 1, "of.id": 1, seq: 1 }, {                     // a target's reel (seq-ordered, fold path; main / branch-implicit)
   partialFilterExpression: { seq: { $type: "number" } },
 });
 // Per-reel uniqueness backstop — branch-aware. Reel identity is
-// (branch, target.kind, target.id); seq is per-reel. The old
+// (branch, of.kind, of.id); seq is per-reel. The old
 // branch-blind unique index collided whenever main and a branch
 // both held seq N on the same target, even though they're separate
 // reels. The unique constraint MUST include branch.
 //
 // Old index name `target_seq_unique` (without branch) is dropped at
 // startup by the index-sync repair to release the collision.
-FactSchema.index({ branch: 1, "target.kind": 1, "target.id": 1, seq: 1 }, {
+FactSchema.index({ branch: 1, "of.kind": 1, "of.id": 1, seq: 1 }, {
   unique: true,
   partialFilterExpression: { seq: { $type: "number" } },
   name: "branch_target_seq_unique",
 });
 FactSchema.index({ actId: 1 }, { sparse: true });                                 // facts within a summon
-FactSchema.index({ verb: 1, action: 1, date: -1 });                                  // "every register, newest first"
+FactSchema.index({ verb: 1, act: 1, date: -1 });                                  // "every register, newest first"
 
 const Fact = mongoose.model("Fact", FactSchema, "facts");
 export default Fact;

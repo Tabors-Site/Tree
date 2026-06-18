@@ -37,7 +37,7 @@ export async function readInbox(spaceId, beingId, options = {}) {
   if (!spaceId || !beingId) return [];
   // Branch is required: an inbox query without it would scan every
   // branch's rows and return a cross-branch grab-bag. Caller must
-  // attach branch from the moment's summonCtx or the wire layer.
+  // attach branch from the moment's moment or the wire layer.
   const branch = assertBranchOrThrow(options.branch, "readInbox(options)");
   const q = { recipient: String(beingId), inboxSpaceId: String(spaceId), branch };
   if (options.since) q.sentAt = { $gte: new Date(options.since) };

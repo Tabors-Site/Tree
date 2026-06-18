@@ -150,10 +150,10 @@ export function getActiveRunTurnCount() {
  *                                  ibpAddress, actId, sessionId, ...)
  * @param {object} opts.role      . the active role spec
  * @param {AbortSignal} [opts.signal] . cancellation
- * @param {object} [opts.summonCtx]   . ambient moment ctx (actId/sessionId)
+ * @param {object} [opts.moment]   . ambient moment ctx (actId/sessionId)
  * @returns {Promise<CognitionResult>}
  */
-export async function runLlmMoment({ being, envelope, role, signal, summonCtx } = {}) {
+export async function runLlmMoment({ being, envelope, role, signal, moment } = {}) {
   if (!being || !role || !envelope) {
     return cognitionFailure("internal", "runLlmMoment requires being, role, envelope");
   }
@@ -163,22 +163,22 @@ export async function runLlmMoment({ being, envelope, role, signal, summonCtx } 
 
   _activeRunTurns++;
   try {
-    return await runLlmMomentInner({ being, envelope, role, signal, summonCtx });
+    return await runLlmMomentInner({ being, envelope, role, signal, moment });
   } finally {
     _activeRunTurns--;
   }
 }
 
-async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
+async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
   const beingId = String(being._id);
   const username = being.name || null;
 
   // The branch this moment runs on. The wire layer attaches it to the
-  // envelope from the parsed address; summonCtx carries it forward
+  // envelope from the parsed address; moment carries it forward
   // through every internal call. No default . if branch is missing,
   // assertBranch in the projection layer will throw and the moment
   // fails loud rather than silently folding on main.
-  const branch = summonCtx?.actorAct?.branch || envelope?.branch;
+  const branch = moment?.actorAct?.branch || envelope?.branch;
 
   // The conversation lane. IBPA when both stances are resolvable; else
   // an ephemeral pipeline key. The reel fold reads this; the system
@@ -196,13 +196,13 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
       });
   const presenceKey = _ibpAddress
     || envelope.ibpAddress
-    || summonCtx?.ibpAddress
+    || moment?.ibpAddress
     || `pipeline:ephemeral:${crypto.randomUUID()}`;
 
   // 1. Plant the being at its space. rootId derives from setCurrentSpace.
   const spaceId =
     being.currentPositionId || being.homePositionId || null;
-  if (spaceId) await setCurrentSpace(beingId, spaceId, summonCtx);
+  if (spaceId) await setCurrentSpace(beingId, spaceId, moment);
   const currentSpace = getCurrentSpace(beingId);
   const rootId = getRootIdFor(beingId);
 
@@ -233,12 +233,12 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
   // primary, the rest feed the failover loop in call.js. Empty chain
   // means no connection is available — surface noLlm.
   const askerBeingId =
-    summonCtx?.plannedAct?.beingIn ||
+    moment?.plannedAct?.through ||
     envelope.fromBeingId ||
     envelope.askerBeingId ||
     null;
   const askerSpaceId =
-    summonCtx?.plannedAct?.askerPosition ||
+    moment?.plannedAct?.askerPosition ||
     envelope.askerSpaceId ||
     null;
   const chainResult = await resolveLlmConnectionChain({
@@ -292,15 +292,15 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
   // Orientation rides on the summon (INNER-FOLD §4). A being only
   // turns by self-summoning with a new ω; external callers always
   // arrive forward. The pickOrientation helper enforces the
-  // precedence chain envelope > summonCtx > role default > forward.
-  const orientation = pickOrientation(envelope, role, summonCtx);
+  // precedence chain envelope > moment > role default > forward.
+  const orientation = pickOrientation(envelope, role, moment);
 
   // Beat 2 (runFoldBeat in moment.js) already ran foldPlace at this
   // orientation and stashed both the spatial fold and the canonical
-  // inner face on summonCtx. We just read them through. Inward and
+  // inner face on moment. We just read them through. Inward and
   // half synthesize a past-face prompt block from the foldedFace's
   // past axis (actChain / recalled); forward leaves it empty.
-  const foldedFace = summonCtx?.foldedFace || null;
+  const foldedFace = moment?.foldedFace || null;
   let pastFaceBlock = "";
   try {
     if (orientation === "inward") {
@@ -333,12 +333,12 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
   // assembly; suppressCanSee tells the assembler to skip the role's
   // preloaded canSee blocks on inward (world drops out).
   // Branch-aware aggregate reader for see-resolvers and prompt builders.
-  // Same shape as ctx.read on summonCtx (see 1-assign.js baseCtx): hides
+  // Same shape as ctx.read on moment (see 1-assign.js baseCtx): hides
   // loadOrFold + branch threading behind one call. SEE-resolvers run
   // inside the prompt-build phase BEFORE the summon dispatch — they
-  // don't get a summonCtx, only this promptCtx — so the reader has to
+  // don't get a moment, only this promptCtx — so the reader has to
   // live here too.
-  const _summonBranch = summonCtx?.actorAct?.branch || "0";
+  const _summonBranch = moment?.actorAct?.branch || "0";
   const promptCtx = {
     name: username,
     beingId,
@@ -352,7 +352,7 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
     // The canonical inner face built at beat 2. assemble.js reads
     // ctx.innerFace.blocks via innerFaceFormat to render the canSee
     // section of the prompt; no per-soul rebuild.
-    innerFace: summonCtx?.innerFace || null,
+    innerFace: moment?.innerFace || null,
     suppressCanSee: orientation === "inward",
     branch: _summonBranch,
     read: async (kind, id) => {
@@ -366,10 +366,10 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
   const systemPrompt = await buildSystemPromptForRole(role, promptCtx);
 
   // The canonical inner face was built once at beat 2 (runFoldBeat)
-  // and lives on summonCtx.innerFace. The seal carries it onto the
+  // and lives on moment.innerFace. The seal carries it onto the
   // Act in moment.js's seal branch. No per-soul rebuild here.
   //
-  // Snapshot doctrine: the LLM reads summonCtx.innerFace ONCE here at
+  // Snapshot doctrine: the LLM reads moment.innerFace ONCE here at
   // moment open and never re-reads. No reactive subscription. Reels
   // referenced by the face's weave may change mid-moment; the seal
   // path trusts the existing chain CAS + reel-head locks to surface
@@ -448,8 +448,8 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
     hasTools: tools.length > 0,
     messages,
     spaceId: currentSpace || rootId || null,
-    actId: summonCtx?.actId || envelope.actId || null,
-    sessionId: summonCtx?.sessionId || null,
+    actId: moment?.actId || envelope.actId || null,
+    sessionId: moment?.sessionId || null,
     parentActId: null,
   };
   const beforeRes = await hooks.run("beforeLLMCall", llmHookData);
@@ -506,8 +506,8 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
       model,
       usage: response?.usage || null,
       hasToolCalls: !!response?.choices?.[0]?.message?.tool_calls?.length,
-      actId: summonCtx?.actId || envelope.actId || null,
-      sessionId: summonCtx?.sessionId || null,
+      actId: moment?.actId || envelope.actId || null,
+      sessionId: moment?.sessionId || null,
       responseText: response?.choices?.[0]?.message?.content || null,
     })
     .catch(() => {});
@@ -552,8 +552,8 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
       );
     }
     const firstCall = toolCalls[0];
-    const deltaFBefore = Array.isArray(summonCtx?.deltaF)
-      ? summonCtx.deltaF.length
+    const deltaFBefore = Array.isArray(moment?.deltaF)
+      ? moment.deltaF.length
       : 0;
     let toolResult;
     try {
@@ -564,13 +564,13 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
           beingId,
           rootId,
           currentSpace,
-          actId: summonCtx?.actId || envelope.actId || null,
-          sessionId: summonCtx?.sessionId || null,
-          rootActId: summonCtx?.rootActId || summonCtx?.actId || envelope.actId || null,
+          actId: moment?.actId || envelope.actId || null,
+          sessionId: moment?.sessionId || null,
+          rootActId: moment?.rootActId || moment?.actId || envelope.actId || null,
           signal,
           username,
           // Wake context. The summon tool (and any other tool that
-          // wants to reply-thread) reads these off callCtx.summonCtx
+          // wants to reply-thread) reads these off callCtx.moment
           // to default `target` to the asker and `inReplyTo` to the
           // wake's correlation. The LLM doesn't have to track
           // correlations . a bare `summon({content:"..."})` is a
@@ -579,11 +579,11 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
           wakeCorrelation: envelope?.correlation || null,
           // The live moment ctx, threaded UNMODIFIED. This is the
           // deltaF/foldedSeqs/afterSeal-bearing object the seal drains.
-          // executeTool hands it to the tool handler as callCtx.summonCtx
+          // executeTool hands it to the tool handler as callCtx.moment
           // so a tool that delegates to doVerb/summonVerb/beVerb pushes
           // its Fact onto THIS moment's ΔF and seals atomically with the
           // Act. Dropping it self-seals the Fact and orphans the Act.
-          summonCtx,
+          moment,
         },
         presenceKey,
       );
@@ -628,7 +628,7 @@ async function runLlmMomentInner({ being, envelope, role, signal, summonCtx }) {
     // orphan an empty Act. With this guard the orphan gate at sealAct
     // becomes unreachable from the LLM path.
     const emittedFact =
-      (Array.isArray(summonCtx?.deltaF) ? summonCtx.deltaF.length : 0) >
+      (Array.isArray(moment?.deltaF) ? moment.deltaF.length : 0) >
       deltaFBefore;
     const hasProse = typeof prose === "string" && prose.trim().length > 0;
     if (!emittedFact && !hasProse) {
@@ -788,7 +788,7 @@ async function shapedAct(text, role, beingId, rootId) {
  * Pick the moment's orientation. Order of precedence:
  *   1. envelope.orientation . the summon that opened this moment
  *      explicitly named one (the canonical channel per INNER-FOLD §4)
- *   2. summonCtx.orientation . threaded by the caller
+ *   2. moment.orientation . threaded by the caller
  *   3. role.defaultOrientation . the role's standing posture
  *   4. "forward" . the substrate's default
  *
@@ -800,10 +800,10 @@ async function shapedAct(text, role, beingId, rootId) {
  * Unknown values fall back to forward with a warn log so an
  * envelope-shape regression can never silently inject the past.
  */
-function pickOrientation(envelope, role, summonCtx) {
+function pickOrientation(envelope, role, moment) {
   const raw =
     envelope?.orientation ||
-    summonCtx?.orientation ||
+    moment?.orientation ||
     role?.defaultOrientation ||
     "forward";
   if (!ORIENTATIONS.has(raw)) {

@@ -27,7 +27,7 @@ export async function draftWord(candidate, { branch = "0", position = null } = {
   // ground: does each line have what it needs in the world as it stands? (validity by
   // construction — refuse to call pressable a line that would not resolve)
   for (const s of statements) {
-    if (s.kind === "act" && s.op === "create-space" && !position) {
+    if (s.kind === "act" && s.act === "create-space" && !position) {
       issues.push("you are nowhere to make this — stand in a space first");
     }
   }

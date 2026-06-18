@@ -83,13 +83,13 @@ const RULES = [
   // or a watch; rule 9, "I" is the Name). Rendered forward from the root, this is
   // the creation story. Rule 19 disambiguates "I make X": a Capital X is a being
   // (birth it); a lowercase X is a space (create it).
-  [/^I am that I am\.$/i, () => ({ kind: "act", verb: "name", op: "i-am", by: "I" })],
+  [/^I am that I am\.$/i, () => ({ kind: "act", verb: "name", act: "i-am", by: "I" })],
   [/^I make ([A-Z][\w.-]*)(?:, (.+?))?\.$/,
-    (m) => ({ kind: "act", verb: "be", op: "birth", by: "I", of: { kind: "being", id: m[1] }, params: { role: m[1].toLowerCase(), ...(m[2] ? { description: m[2] } : {}) } })],
+    (m) => ({ kind: "act", verb: "be", act: "birth", by: "I", of: { kind: "being", id: m[1] }, params: { role: m[1].toLowerCase(), ...(m[2] ? { description: m[2] } : {}) } })],
   [/^I make (?:the )?([a-z][\w.-]*)(?:, (.+?))?\.$/,
-    (m) => ({ kind: "act", verb: "do", op: "create-space", by: "I", of: { kind: "space", id: m[1] }, ...(m[2] ? { params: { gloss: m[2] } } : {}) })],
+    (m) => ({ kind: "act", verb: "do", act: "create-space", by: "I", of: { kind: "space", id: m[1] }, ...(m[2] ? { params: { gloss: m[2] } } : {}) })],
   [/^I stand in (?:the )?([\w.-]+)\.$/i,
-    (m) => ({ kind: "act", verb: "do", op: "move", by: "I", of: { kind: "space", id: m[1] } })],
+    (m) => ({ kind: "act", verb: "do", act: "move", by: "I", of: { kind: "space", id: m[1] } })],
 
   // a transfer with a RECEIVER (rule 17): the `to` is the being it hands to.
   // "I give the drum to Claude." (Claude is a being — Capital, rule 19.) The
@@ -97,7 +97,7 @@ const RULES = [
   // does not yet carry `to` into the emitted fact (a 1-line engine follow-up);
   // the parse is complete.
   [/^I give the ([\w.-]+) to ([A-Z][\w.-]*)\.$/,
-    (m, c) => ({ kind: "act", verb: "do", op: "give", by: "I", of: objRef(m[1], c), to: m[2] })],
+    (m, c) => ({ kind: "act", verb: "do", act: "give", by: "I", of: objRef(m[1], c), to: m[2] })],
 ];
 
 // ── effect (body) forms: the imperative acts inside a multi-effect flow ───────
@@ -120,12 +120,12 @@ const EFFECT_RULES = [
   // binding the CREATED space's id as `home` (create-space mints its own child id
   // and returns { spaceId }; the home's parent is the target).
   [/^make a (\w+) space\.$/i,
-    (m, c) => ({ kind: "act", verb: "do", op: "create-space", by: "I", through: c.vessel, bind: m[1].toLowerCase(),
+    (m, c) => ({ kind: "act", verb: "do", act: "create-space", by: "I", through: c.vessel, bind: m[1].toLowerCase(),
       of: { kind: "space", ref: "placeRoot" }, params: { name: "$name", type: "home-territory" } })],
   // "form the being as the new Name's own." -> be:form-being -> birthBeing.
   // The being expresses the new (arriving) Name: trueName = the new Name.
   [/^form the being as the new Name's own\.$/i,
-    (m, c) => ({ kind: "act", verb: "be", op: "form-being", by: "I", through: c.vessel, bind: "child",
+    (m, c) => ({ kind: "act", verb: "be", act: "form-being", by: "I", through: c.vessel, bind: "child",
       params: { name: "$name", password: "$password", cognition: "human", defaultRole: "human", parentBeingId: c.vessel, homeId: "$home", trueName: "$ownerName" } })],
   // "make the being the home's owner." -> do:set-space owner = the new being
   [/^make the being the (\w+)'s owner\.$/i,
@@ -141,7 +141,7 @@ const EFFECT_RULES = [
   // host builtin and binds its result (the session/transport strand stays host; this is
   // how the .word reaches it). evalAct runs act.host via callHost + binds act.bind.
   [/^host:\s*(\w+)\(([^)]*)\)\s*(?:as\s+(\w+))?\.?$/i,
-    (m) => ({ kind: "act", verb: "do", op: m[1], host: m[1], params: { args: argList(m[2], "$") }, ...(m[3] ? { bind: m[3] } : {}) })],
+    (m) => ({ kind: "act", verb: "do", act: m[1], host: m[1], params: { args: argList(m[2], "$") }, ...(m[3] ? { bind: m[3] } : {}) })],
 
   // ── §5 mark + §7 control-flow terminators (inline body effects) ──────────────
   // a reflexive state-mark (§5): "the being is found." -> a flow-local flag a sibling
@@ -203,7 +203,7 @@ const EFFECT_RULES = [
   // backing (crypto, a lookup, a walk). args optional + $-ref'd. The negative lookahead
   // keeps `see the …` (READ/QUERY) and `see whether …` (PREDICATE) on their own rules.
   [/^see\s+(?!the\b|whether\b)([\w-]+)(?:\(([^)]*)\))?\s+as\s+(\w+)\.?$/i,
-    (m) => ({ kind: "see", op: m[1], args: m[2] !== undefined ? argList(m[2], "$") : [], bind: m[3] })],
+    (m) => ({ kind: "see", act: m[1], args: m[2] !== undefined ? argList(m[2], "$") : [], bind: m[3] })],
 
   // ── WRITE: the substrate write verb (THE WALL's write side) → do:set-<kind>.
   // TARGETED write (a BOUND entity, not the flow's vessel) + a literal or $-ref field (for
@@ -247,9 +247,9 @@ const EFFECT_RULES = [
   // generic acts (LAST, the catch-all): "<Subject> <verbs> the <obj>." (SVO) and
   // "<verb> the <obj>." (imperative, the flow's actor). Specific rules above win first.
   [/^([A-Z][\w.-]*) (\w+) (?:the|a|an) ([\w.-]+)\.$/,
-    (m, c) => ({ kind: "act", verb: "do", op: verb(m[2]), of: objRef(m[3], c), by: "I", through: m[1] })],
+    (m, c) => ({ kind: "act", verb: "do", act: verb(m[2]), of: objRef(m[3], c), by: "I", through: m[1] })],
   [/^(\w+) (?:the|a|an) ([\w.-]+)\.$/i,
-    (m, c) => ({ kind: "act", verb: "do", op: verb(m[1]), of: objRef(m[2], c), by: "I", ...(c.vessel ? { through: c.vessel } : {}) })],
+    (m, c) => ({ kind: "act", verb: "do", act: verb(m[1]), of: objRef(m[2], c), by: "I", ...(c.vessel ? { through: c.vessel } : {}) })],
 ];
 
 // ── headers (the trigger line of a multi-effect flow, ends with ":") ──────────
@@ -616,7 +616,7 @@ function parseBinds(clause) {
 // header). The implicit-actor rule — a flow's body acts inherit its actor and
 // vessel rather than restating them; here, I_AM through Cherub.
 function vesselAct(c, verbName, op, of, params) {
-  const a = { kind: "act", verb: verbName, op, by: "I", through: c.vessel };
+  const a = { kind: "act", verb: verbName, act: op, by: "I", through: c.vessel };
   if (of) a.of = of;
   if (params) a.params = params;
   return a;
@@ -656,7 +656,7 @@ function parseDoTarget(s) {
 // doVerb. Peel `as <bind>` off the end, then `on <target>` (up to `with`) and `with
 // <params>` (quote-aware comma split; each `k: v` a {ref}-or-literal value).
 function doOpAct(op, rest, c) {
-  const act = { kind: "act", verb: "do", op };
+  const act = { kind: "act", verb: "do", act: op };
   const asM = rest.match(/\s+as\s+(\w+)$/i);
   if (asM) { act.bind = asM[1]; rest = rest.slice(0, asM.index).trim(); }
   let paramsStr = "";
@@ -679,7 +679,7 @@ function stateFlow(stateVar, value, effect) {
 }
 // an act under a state-watch; `sets` folds the next state (the wheel), absent for a rider.
 function stateAct(role, op, obj, sets, c) {
-  const a = { kind: "act", verb: "do", op, by: capitalize(role) };
+  const a = { kind: "act", verb: "do", act: op, by: capitalize(role) };
   if (obj) a.of = objRef(obj, c);
   if (sets) a.sets = sets;
   return a;
@@ -689,7 +689,7 @@ function eventFlow(event, effect) {
   return { kind: "flow", when: { on: event }, effects: [effect] };
 }
 function eventAct(role, op, obj, c) {
-  const a = { kind: "act", verb: "do", op, by: capitalize(role) };
+  const a = { kind: "act", verb: "do", act: op, by: capitalize(role) };
   if (obj) a.of = objRef(obj, c);
   if (c.events[op]) a.event = c.events[op]; // this verb counts as a derived event
   return a;

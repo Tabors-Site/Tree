@@ -66,7 +66,7 @@ export function reduce(state, fact) {
   // branch above handles facts that ship a parent in params directly,
   // e.g. spec-bearing birth facts; this branch handles the do:set shape
   // where the new value rides params.value.)
-  if (fact?.action === "set-space" && fact?.params?.field === "parent") {
+  if (fact?.act === "set-space" && fact?.params?.field === "parent") {
     next = { ...next, position: fact.params.value ?? null };
   }
 

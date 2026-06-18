@@ -19,7 +19,7 @@ export async function init(reality) {
 
   // ─────────────────────────────────────────────────────────────────
   // DO operations. Auto-prefixed to <pack>:<name>. Each handler gets
-  // { target, params, identity, summonCtx }; stamps a Fact unless
+  // { target, params, identity, moment }; stamps a Fact unless
   // skipAudit:true.
   // ─────────────────────────────────────────────────────────────────
   //
@@ -95,8 +95,8 @@ export async function init(reality) {
   //   intervalMs: 60_000 * 30,
   //   content:    { event: "tick" },
   //   priority:   4,
-  //   branch:     summonCtx.branch,
-  //   summonCtx,
+  //   branch:     moment.branch,
+  //   moment,
   // });
 
   // ─────────────────────────────────────────────────────────────────

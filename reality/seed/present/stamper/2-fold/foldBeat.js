@@ -8,7 +8,7 @@
 //
 // Per philosophy/names/innerFace.md: the fold beat computes the inner
 // face exactly once per moment. The three souls (LLM, scripted, human)
-// all consume the same face via summonCtx.innerFace. canSee resolution
+// all consume the same face via moment.innerFace. canSee resolution
 // happens HERE, not inside the LLM mouth . the kernel owns the face.
 //
 // The face the fold mounts has two halves:
@@ -22,42 +22,42 @@
 //                 + canSee-resolved blocks. origin: "local" (cross-
 //                 world overrides supersede post-seal via the responder).
 //
-// Both rid on summonCtx so beat 3 (momentum) and beat 4 (stamped)
+// Both rid on moment so beat 3 (momentum) and beat 4 (stamped)
 // can read them without touching the fold seam again.
 
 import { foldPlace } from "./foldPlace.js";
 import { buildInnerFace } from "./innerFace.js";
 
 /**
- * Run the 2-fold beat. Mounts the face on summonCtx.
+ * Run the 2-fold beat. Mounts the face on moment.
  *
  * @param {object} setup . the result of assign(...)
  *   setup.role          . active role spec
- *   setup.summonCtx     . the moment ctx assign built
+ *   setup.moment     . the moment ctx assign built
  * @returns {Promise<{foldedFace, innerFace}>}
  */
 export async function runFoldBeat(setup = {}) {
-  const { role, summonCtx } = setup;
-  if (!summonCtx) return { foldedFace: null, innerFace: null };
+  const { role, moment } = setup;
+  if (!moment) return { foldedFace: null, innerFace: null };
 
   // Inputs the fold needs: who is acting, where, on what branch, at
-  // what orientation. assign seated these on summonCtx; we read them
+  // what orientation. assign seated these on moment; we read them
   // through.
   const beingId =
-    (summonCtx.toBeing && String(summonCtx.toBeing._id)) ||
-    (summonCtx.being && summonCtx.being._id ? String(summonCtx.being._id) : null);
-  const orientation = summonCtx.orientation || "forward";
-  const branch = summonCtx.actorAct?.branch || summonCtx.branch || null;
+    (moment.toBeing && String(moment.toBeing._id)) ||
+    (moment.being && moment.being._id ? String(moment.being._id) : null);
+  const orientation = moment.orientation || "forward";
+  const branch = moment.actorAct?.branch || moment.branch || null;
 
-  // foldPlace runs the spatial weave. summonCtx is threaded through so
+  // foldPlace runs the spatial weave. moment is threaded through so
   // foldPlace can stash foldedSeqs (PARALLEL FACTS §1.3) and read the
-  // moment's branch from summonCtx.actorAct. Role rides through so
+  // moment's branch from moment.actorAct. Role rides through so
   // occupant folds are gated pre-fold by role.canSee . the dep set
   // then matches what we actually read.
   let foldedFace = null;
   if (beingId && branch) {
     try {
-      foldedFace = await foldPlace(beingId, orientation, { summonCtx, branch, role });
+      foldedFace = await foldPlace(beingId, orientation, { moment, branch, role });
     } catch {
       foldedFace = null;
     }
@@ -71,18 +71,18 @@ export async function runFoldBeat(setup = {}) {
   let innerFace = null;
   try {
     const beingState =
-      summonCtx.toBeing
-        ? { _id: summonCtx.toBeing._id, name: summonCtx.toBeing.name || null }
-        : (summonCtx.being || null);
+      moment.toBeing
+        ? { _id: moment.toBeing._id, name: moment.toBeing.name || null }
+        : (moment.being || null);
     const buildCtx = {
       being:        beingState,
       beingId,
       role,
       orientation,
       branch,
-      currentSpace: summonCtx.spaceId || null,
-      rootId:       summonCtx.rootId || null,
-      name:         summonCtx.toBeing?.name || null,
+      currentSpace: moment.spaceId || null,
+      rootId:       moment.rootId || null,
+      name:         moment.toBeing?.name || null,
       foldedFace,
     };
     innerFace = await buildInnerFace(role, buildCtx);
@@ -90,8 +90,8 @@ export async function runFoldBeat(setup = {}) {
     innerFace = null;
   }
 
-  summonCtx.foldedFace = foldedFace;
-  summonCtx.innerFace  = innerFace;
+  moment.foldedFace = foldedFace;
+  moment.innerFace  = innerFace;
 
   return { foldedFace, innerFace };
 }

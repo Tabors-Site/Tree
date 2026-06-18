@@ -53,9 +53,9 @@ const ident = { beingId: I_AM, name: "i-am", nameId: "i-am" };
 // drive the REAL set-world-signal op via doVerb → the cut handler → role-manager.word
 async function publish(namespace, key, value) {
   const branch = "0";
-  const sc = { actId: randomUUID(), actorAct: { branch, nameId: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc = { actId: randomUUID(), actorAct: { branch, by: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   try {
-    const res = await doVerb({ kind: "space", id: String(getSpaceRootId()) }, "set-world-signal", { namespace, key, value }, { identity: ident, summonCtx: sc });
+    const res = await doVerb({ kind: "space", id: String(getSpaceRootId()) }, "set-world-signal", { namespace, key, value }, { identity: ident, moment: sc });
     if (sc.deltaF.length) await sealFacts(sc.deltaF);
     return { result: res?.result ?? res, deltaF: sc.deltaF, refused: null };
   } catch (e) { if (e && (e.name === "IbpError" || e.code)) return { result: null, deltaF: sc.deltaF, refused: e }; throw e; }
@@ -74,10 +74,10 @@ try {
     : bad(`publish`, p.refused?.message || p.result);
 
   // ── 2. exactly one do:set-space fact at the world field ──
-  const sig = (p.deltaF || []).filter((f) => f.action === "set-space" && f.params?.field === "qualities.world.harmony.tick.alive");
+  const sig = (p.deltaF || []).filter((f) => f.act === "set-space" && f.params?.field === "qualities.world.harmony.tick.alive");
   sig.length === 1 && sig[0].params?.value === true
     ? ok(`one do:set-space fact at qualities.world.harmony.tick.alive = true (the lone WORLD fact)`)
-    : bad(`fact`, (p.deltaF || []).map((f) => `${f.action}:${f.params?.field}`));
+    : bad(`fact`, (p.deltaF || []).map((f) => `${f.act}:${f.params?.field}`));
 
   // ── 3. the reality root folds the signal ──
   const root = await loadOrFold("space", String(getSpaceRootId()), "0");
@@ -87,7 +87,7 @@ try {
 
   // ── 4. a non-kebab namespace → refuse, no fact ──
   const r = await publish("Bad NS", "k", "1");
-  r.refused && /kebab-case/i.test(r.refused.message) && !(r.deltaF || []).some((f) => f.action === "set-space")
+  r.refused && /kebab-case/i.test(r.refused.message) && !(r.deltaF || []).some((f) => f.act === "set-space")
     ? ok(`publish "Bad NS" → refuse "must be kebab-case", NO fact`)
     : bad(`refuse`, r.refused?.message || r.result);
 

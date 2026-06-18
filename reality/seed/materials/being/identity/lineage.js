@@ -46,9 +46,9 @@ export async function findBeingParent(targetBeingId) {
   if (!targetBeingId) return null;
   const fact = await Fact.findOne({
     verb: "be",
-    action: "birth",
-    "target.kind": "being",
-    "target.id": String(targetBeingId),
+    act: "birth",
+    "of.kind": "being",
+    "of.id": String(targetBeingId),
   })
     .sort({ seq: 1, date: 1 })
     .select("params")
@@ -61,9 +61,9 @@ export async function findBeingParent(targetBeingId) {
  * because SINGLE-WRITER places each fact on its actor's reel:
  *
  *   - credential-detach   self-stamped on the CHILD's reel
- *                         (target.kind=being, target.id=child)
+ *                         (of.kind=being, of.id=child)
  *   - credential-attach   self-stamped on the BEING PARENT's reel
- *                         (target.kind=being, target.id=parentBeing),
+ *                         (of.kind=being, of.id=parentBeing),
  *                         with `result.targetBeingId === child`
  *
  * The latest of the two (by Fact.date — wall-clock at seal) decides
@@ -81,10 +81,10 @@ export async function isDetachedFromBeingParent(beingId) {
   const parentBeingId = await findBeingParent(childId);
 
   const detachQuery = Fact.findOne({
-    "target.kind": "being",
-    "target.id": childId,
+    "of.kind": "being",
+    "of.id": childId,
     verb: "do",
-    action: "credential-detach",
+    act: "credential-detach",
   })
     .sort({ seq: -1, date: -1 })
     .select("date")
@@ -92,10 +92,10 @@ export async function isDetachedFromBeingParent(beingId) {
 
   const attachQuery = parentBeingId
     ? Fact.findOne({
-        "target.kind": "being",
-        "target.id": String(parentBeingId),
+        "of.kind": "being",
+        "of.id": String(parentBeingId),
         verb: "do",
-        action: "credential-attach",
+        act: "credential-attach",
         "result.targetBeingId": childId,
       })
         .sort({ seq: -1, date: -1 })

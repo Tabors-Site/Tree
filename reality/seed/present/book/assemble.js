@@ -1,135 +1,225 @@
-// The BOOK — a branch's story, woven from its facts (the threads), genesis → the live edge.
+// The BOOK / STORY — facts woven into the story they tell, genesis → the live edge.
 //
-// STRUCTURE (Tabor): an ACT is the head; its FACTS are the landings — one per reel it WROTE
-// (SEE never stamps, so reads don't appear; only writes land). A fact = (act, reel): the act
-// seen from a target it changed. We GROUP by actId to show the act-view, while storage stays
-// per-reel/denormalized so each reel's incremental fold stays LOCAL (the optimization is a
-// view, not a storage change). A single-landing act COLLAPSES to one line: the fact is just
-// the act. No special rule — it falls out of the grouping.
+// FOUR STORY VIEWS (Tabor) — one panel you could live in (read, watch, act):
+//   world    — the whole branch and all its activity. The WORLD's story.
+//   place    — only the parts of the fold that made one moment. The MOMENT's story.
+//   being    — every act/fact from a being's start, its own thread. The BEING's story.
+//   lineage  — a being and all its children (choose a stopping point). The FAMILY's story.
+// (3d / text / directory are MOMENT/PLACE views; the old flat "history" view is retired —
+// these four replace it.)
 //
-// TENSE (Tabor): the act is the live head (present, as you TYPE it — see type.js); its facts
-// are the sealed landings (PAST, everywhere it landed). The book is the record, so it reads in
-// PAST TENSE, in the Word — never JSON, never verb:op. The present tense lives only at the
-// live edge where you type; once pressed, every line is past.
+// STRUCTURE: an ACT is the head, its FACTS the landings (a fact = (act, reel); group by actId,
+// dedup identical deeds, single-landing collapses). RENDER: past-tense WORD, never JSON/verb:op;
+// deeds of one act joined with "and"; ids resolved to proper names. ORDER: time (seq is
+// per-reel; the timeline scrubs by date; `since` is the chunk window). Secret-safe gloss.
 //
-// NAMES (Tabor): ids resolve to PROPER NAMES — the book reads "Cherub made the space identity",
-// not "966aafcb made 50b6d98b". Resolved from the reel slots (state.name), the live half of
-// 7.md's proper-name bridge. i-am reads as I_AM.
-//
-// PER-NAME view (the face): `opts.nameId` renders the reader's own thread in first person
-// ("I made…", recall) and the world's in third ("Cherub made…", saw).
-//
-// ORDER: `seq` is PER-REEL (a new reel starts at 1), so the GLOBAL story order — what the
-// timeline scrubs — is the seal time (date). `since` is the scrub point (a Date): the chunk
-// after it. Secret-safe: the gloss never prints password/credential/key/token/mnemonic values.
+// CLAUSE NAMES: facts carry the Word's clause properties — `by` (actor Name), `through` (the
+// being the act ran through), `of` (the object), `act` (the operation), `to` (the receiver —
+// always a being; its owning Names respond). The accessors below read exactly those.
 
 import { pastOf } from "../word/verbTense.js";
 
-export async function assembleBook(branch = "0", { nameId = null, limit = 0, since = null } = {}) {
+// ── fact-field accessors (the Word's clause names) ──────────────────────────────────
+const actorName = (f) => f.by ?? null;     // the actor Name (rule 9)
+const beingOf   = (f) => f.through ?? null; // the being the act ran through (rule 9)
+const objOf     = (f) => f.of ?? null;      // the object acted on { kind, id }
+const opOf      = (f) => f.act ?? f.verb;   // the operation (act); the verb names the family
+const recv      = (f) => f.to ?? null;      // the receiver (rule 17)
+
+// ── the four story views ────────────────────────────────────────────────────────────
+export async function assembleStory(
+  scope = "world",
+  {
+    branch = "0",
+    being = null,
+    moment = null,
+    depth = null,
+    nameId = null,
+    limit = 0,
+    since = null,
+  } = {},
+) {
   const { default: Fact } = await import("../../past/fact/fact.js");
   const q = { branch: String(branch) };
   if (since) q.date = { $gt: since instanceof Date ? since : new Date(since) };
+
+  if (scope === "being" && being) {
+    // the being's own thread, from its start — the being it ran through, or a Name that is it
+    q.$or = [{ through: String(being) }, { by: String(being) }];
+  } else if (scope === "place" && moment) {
+    // one moment's story — the facts that act laid (its landings on every reel it touched)
+    q.actId = String(moment);
+  } else if (scope === "lineage" && being) {
+    // the being + its descendants (the birth tree), to an optional stopping depth
+    const ids = await descendantsOf(String(being), depth, String(branch));
+    q.through = { $in: ids };
+  }
+  // scope "world" → the whole branch (no extra filter)
+
   let cursor = Fact.find(q).sort({ date: 1, seq: 1 }).lean();
   if (limit) cursor = cursor.limit(limit);
   const facts = await cursor;
+  const names = await resolveNames(facts, String(branch));
+  // first-person ("I …", recall) for the FOCAL being's own lines; third-person (saw) otherwise
+  const focal =
+    nameId ?? (scope === "being" || scope === "lineage" ? being : null);
+  return weave(facts, focal, names);
+}
 
-  const names = await resolveNames(facts, String(branch)); // id → proper name (Cherub, identity…)
+// the world story is the default book; keep the name the read/write halves already call
+export async function assembleBook(branch = "0", opts = {}) {
+  return assembleStory("world", { branch, ...opts });
+}
 
+// walk the birth tree from a being down to its descendants, bounded by `depth` (null = all)
+async function descendantsOf(beingId, depth, _branch) {
+  const { default: Being } = await import("../../materials/being/being.js");
+  const ids = [String(beingId)];
+  let frontier = [String(beingId)];
+  let remaining = depth == null ? Infinity : Number(depth);
+  while (frontier.length && remaining-- > 0) {
+    const kids = await Being.find({ parentBeingId: { $in: frontier } })
+      .select("_id")
+      .lean();
+    const next = kids
+      .map((k) => String(k._id))
+      .filter((id) => !ids.includes(id));
+    if (!next.length) break;
+    ids.push(...next);
+    frontier = next;
+  }
+  return ids;
+}
+
+// ── weave: group facts into acts, render each as one past-tense Word sentence ─────────
+function weave(facts, focalBeing, names) {
   const acts = [];
   const byAct = new Map();
   for (const f of facts) {
     const key = f.actId ? `act:${f.actId}` : `solo:${f._id}`;
     let act = byAct.get(key);
     if (!act) {
+      const isMine =
+        focalBeing != null &&
+        (String(actorName(f)) === String(focalBeing) ||
+          String(beingOf(f)) === String(focalBeing));
       act = {
         actId: f.actId || null,
-        byName: f.nameId || null, byBeing: f.beingId || null,
-        mine: nameId ? String(f.nameId) === String(nameId) : null,
-        seq: f.seq, date: f.date, landings: [],
+        byName: actorName(f),
+        byBeing: beingOf(f),
+        mine: focalBeing != null ? isMine : null,
+        seq: f.seq,
+        date: f.date,
+        landings: [],
       };
       byAct.set(key, act);
       acts.push(act);
     }
     act.landings.push({ seq: f.seq, did: pastPhrase(f, names) }); // the past-tense deed on this reel
   }
-
   return acts.map((a) => {
     const subject = a.mine ? "I" : displayActor(a, names);
     return {
-      actId: a.actId, seq: a.seq, date: a.date, by: a.byName || a.byBeing, mine: a.mine,
+      actId: a.actId,
+      seq: a.seq,
+      date: a.date,
+      by: a.byName || a.byBeing,
+      mine: a.mine,
       subject,
-      landings: a.landings,                                  // [{seq, did}] — the past-tense deeds
-      // all of an act's deeds in ONE past-tense sentence, joined by "and" (the waw-consecutive,
-      // Genesis's "And he did X and Y"): "I_AM gave birth to Cherub and granted it the role".
-      // DEDUP identical deeds: a fact = (act, reel), so the SAME deed landing on several reels
-      // (create-space on the child and its parent) is one deed seen twice — shown once.
+      landings: a.landings,
       line: `${subject} ${joinDeeds([...new Set(a.landings.map((l) => l.did))])}.`,
     };
   });
 }
 
-// ── id → proper name, resolved once per book from the reel slots ─────────────────────
+// ── id → proper name, resolved once per story from the reel slots ────────────────────
 async function resolveNames(facts, branch) {
   const { loadOrFold } = await import("../../materials/projections.js");
-  const want = new Map(); // id → kind, the ids the book references
+  const want = new Map();
   for (const f of facts) {
-    if (f.beingId && f.beingId !== "i-am") want.set(String(f.beingId), "being");
-    if (f.to) want.set(String(f.to), "being");
-    if (f.target?.id) want.set(String(f.target.id), f.target.kind === "stance" ? "space" : (f.target.kind || "being"));
+    const v = beingOf(f);
+    if (v && v !== "i-am") want.set(String(v), "being");
+    const r = recv(f);
+    if (r) want.set(String(r), "being");
+    const o = objOf(f);
+    if (o && o.id)
+      want.set(String(o.id), o.kind === "stance" ? "space" : o.kind || "being");
   }
   const names = new Map([["i-am", "I_AM"]]);
   for (const [id, kind] of want) {
     try {
       const slot = await loadOrFold(kind, id, branch);
       if (slot?.state?.name) names.set(id, slot.state.name);
-    } catch { /* unresolved ids fall back to the short form */ }
+    } catch {
+      /* unresolved ids fall back to the short form */
+    }
   }
   return names;
 }
 
-// ── fact → past-tense Word (the inverse of the parser, in the past) ─────────────────
-// Renders the PREDICATE only (the subject is the act's head). The book never shows
-// `do:create-space` — it shows "made the space notebook".
-
+// ── fact → past-tense Word (the predicate; the subject is the act's head) ─────────────
 function pastPhrase(f, names) {
-  const op = f.action || f.verb || "did";
+  const op = opOf(f);
   const p = f.params || {};
-  // every past comes from the verb's DECLARED past (verbTense / verbs.word), never a literal —
-  // "make → made", "give → gave", "speak → spoke", "grant → granted" by the rule
+  const target = objOf(f);
   switch (op) {
-    case "create-space":  return `${pastOf("make")} the space ${p.name || targetName(f.target, names)}`;
-    case "create-matter": return `${pastOf("make")} ${targetName(f.target, names) || p.name || "something"}`;
-    case "grant-role":    return `${pastOf("grant")}${f.target?.id ? ` ${displayName(f.target.id, names)}` : ""} the ${p.role || "?"} role`;
-    case "revoke-role":   return `${pastOf("take")} the ${p.role || "?"} role${f.target?.id ? ` from ${displayName(f.target.id, names)}` : ""}`;
-    case "declare-word":  return `${pastOf("speak")} the word ${p.role ? p.role + ":" : ""}${p.op || "?"}`;
-    case "disable-word":  return `${pastOf("silence")} the word ${p.op || "?"}`;
+    case "create-space":
+      return `${pastOf("make")} the space ${p.name || targetName(target, names)}`;
+    case "create-matter":
+      return `${pastOf("make")} ${targetName(target, names) || p.name || "something"}`;
+    case "grant-role":
+      return `${pastOf("grant")}${target?.id ? ` ${displayName(target.id, names)}` : ""} the ${p.role || "?"} role`;
+    case "revoke-role":
+      return `${pastOf("take")} the ${p.role || "?"} role${target?.id ? ` from ${displayName(target.id, names)}` : ""}`;
+    case "declare-word":
+      return `${pastOf("speak")} the word ${p.role ? p.role + ":" : ""}${p.op || "?"}`;
+    case "disable-word":
+      return `${pastOf("silence")} the word ${p.op || "?"}`;
     case "set-space":
     case "set-being":
-    case "set-matter":    return `${pastOf("set")} ${fieldGloss(p.field)}`;
-    case "move":          return `${pastOf("move")} to ${targetName(f.target, names) || "the space"}`;
-    case "give":          return `${pastOf("give")} ${targetName(f.target, names) || "it"}${f.to ? ` to ${displayName(f.to, names)}` : ""}`;
+    case "set-matter":
+      return `${pastOf("set")} ${fieldGloss(p.field)}`;
+    case "move":
+      return `${pastOf("move")} to ${targetName(target, names) || "the space"}`;
+    case "give":
+      return `${pastOf("give")} ${targetName(target, names) || "it"}${recv(f) ? ` to ${displayName(recv(f), names)}` : ""}`;
     case "birth":
-    case "form-being":    return `${pastOf("give")} birth to ${targetName(f.target, names) || p.name || "a being"}`;
-    case "declare":       return `${pastOf("declare")} ${p.name || targetName(f.target, names) || displayName(f.beingId, names)}`.trimEnd();
-    case "summon":        return `${pastOf("call")} ${targetName(f.target, names) || displayName(f.to, names) || "someone"}`;
-    case "i-am":          return `${pastOf("speak")} its own name`;
-    default:              return `${humanize(op)}${f.target ? ` ${targetName(f.target, names)}` : ""}`;
+    case "form-being":
+      return `${pastOf("give")} birth to ${targetName(target, names) || p.name || "a being"}`;
+    case "declare":
+      return `${pastOf("declare")} ${p.name || targetName(target, names) || displayName(beingOf(f), names)}`.trimEnd();
+    case "summon":
+      return `${pastOf("call")} ${targetName(target, names) || displayName(recv(f), names) || "someone"}`;
+    case "verdict": {
+      // the recorded memory of a recall — "saw the world that it was good (because …)". The
+      // mode renders by chain (recalled=own, saw=world); the reason is the why, kept for next time.
+      const what = typeof p.that === "string" ? p.that : JSON.stringify(p.that);
+      return `${p.mode || "saw"}${p.of ? ` ${p.of}` : ""} that ${what}${p.because ? ` (because ${p.because})` : ""}`;
+    }
+    case "i-am":
+      return `${pastOf("speak")} its own name`;
+    default:
+      return `${humanize(op)}${target ? ` ${targetName(target, names)}` : ""}`;
   }
 }
 
 function fieldGloss(field) {
   if (!field) return "a quality";
   const f = String(field).replace(/^qualities\./, "");
-  if (f.startsWith("roles."))   return `the ${f.slice(6)} role`;
-  if (f.startsWith("world."))   return `the ${f.split(".").pop()} signal`;
-  if (f === "pointers")          return "the pointers";
-  if (f === "owner")             return "the owner";
+  if (f.startsWith("roles.")) return `the ${f.slice(6)} role`;
+  if (f.startsWith("world.")) return `the ${f.split(".").pop()} signal`;
+  if (f === "pointers") return "the pointers";
+  if (f === "owner") return "the owner";
   return `the ${f.replace(/\./g, " ")}`;
 }
 
 function displayActor(a, names) {
   if (a.byName === "i-am") return "I_AM";
-  return names.get(String(a.byBeing)) || names.get(String(a.byName)) || displayName(a.byBeing || a.byName, names);
+  return (
+    names.get(String(a.byBeing)) ||
+    names.get(String(a.byName)) ||
+    displayName(a.byBeing || a.byName, names)
+  );
 }
 
 function targetName(t, names) {
@@ -140,8 +230,9 @@ function targetName(t, names) {
 function displayName(id, names) {
   if (id == null) return "someone";
   const s = String(id);
-  const out = (names && names.has(s)) ? names.get(s) : (s.length > 14 ? s.slice(0, 8) : s);
-  return out === "i-am" ? "I_AM" : out;                 // i-am reads as I_AM, resolved or raw
+  const out =
+    names && names.has(s) ? names.get(s) : s.length > 14 ? s.slice(0, 8) : s;
+  return out === "i-am" ? "I_AM" : out;
 }
 
 // join an act's deeds into one sentence: "A", "A and B", "A, B, and C"
@@ -152,8 +243,7 @@ function joinDeeds(deeds) {
   return `${d.slice(0, -1).join(", ")}, and ${d[d.length - 1]}`;
 }
 
-// the fallback: any op the book hasn't given a hand-tuned phrase to still reads PAST tense —
-// past-tense the leading verb via the declared past (verbTense), keep the rest as the object.
+// the fallback: any op without a hand-tuned phrase still reads PAST tense via the declared past
 function humanize(op) {
   const words = String(op).split("-");
   words[0] = pastOf(words[0]);

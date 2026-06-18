@@ -30,7 +30,7 @@
 //   isBranchPaused(path)         — read the pause projection
 //
 // Pass 3 adds: create-branch, pause/unpause facts + reducer. Pass 4
-// adds: IBP address parser + summonCtx threading + the cross-branch
+// adds: IBP address parser + moment threading + the cross-branch
 // dispatch gate. Pass 6.5 adds: REALITY_PAUSED verb-gate using
 // isBranchPaused.
 //
@@ -268,13 +268,13 @@ export async function divergentFactsSince(branch, ancestor) {
   const { default: Fact } = await import("../../past/fact/fact.js");
   const facts = await Fact.find({
     branch: { $in: divergentBranches },
-    "target.kind": { $in: ["being", "space", "matter"] },
-    "target.id":   { $exists: true, $ne: null },
+    "of.kind": { $in: ["being", "space", "matter"] },
+    "of.id":   { $exists: true, $ne: null },
   }).sort({ seq: 1 }).lean();
 
   const byReel = new Map();
   for (const f of facts) {
-    const key = `${f.target.kind}:${f.target.id}`;
+    const key = `${f.of.kind}:${f.of.id}`;
     let bucket = byReel.get(key);
     if (!bucket) {
       bucket = [];

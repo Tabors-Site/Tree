@@ -54,7 +54,7 @@ const cherub = await poll(() => findByName("being", "cherub", "0"));
 const birth = async (name) => {
   let bid = null;
   await withIAmAct(`birth ${name}`, async (ctx) => {
-    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, summonCtx: ctx, branch: "0" });
+    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: ctx, branch: "0" });
     bid = b.beingId;
   });
   return bid;
@@ -66,7 +66,7 @@ async function takeRole(caller, role, space) {
   const sc = { actId: randomUUID(), actorAct: { branch }, identity: { beingId: String(caller) }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   const ir = resolveRoleWord("acquisition", "take-role");
   try {
-    const { result } = await runRoleWord(ir, { summonCtx: sc, branch, trigger: { caller: String(caller), role, space: String(space), branch }, env: { host: acquisitionHostEnv() } });
+    const { result } = await runRoleWord(ir, { moment: sc, branch, trigger: { caller: String(caller), role, space: String(space), branch }, env: { host: acquisitionHostEnv() } });
     if (sc.deltaF.length) await sealFacts(sc.deltaF);
     return { result, deltaF: sc.deltaF, refused: null };
   } catch (e) { if (e && e.__wordRefusal) return { result: null, deltaF: sc.deltaF, refused: e }; throw e; }
@@ -81,15 +81,15 @@ try {
   // a space with a GRABBABLE role (warrior) + a NON-grabbable role (sage)
   let arena = null;
   await withIAmAct("create arena", async (ctx) => {
-    const res = await doVerb({ kind: "space", id: String(getSpaceRootId()) }, "create-space", { name: "arena", type: "generic" }, { identity: I_AM, summonCtx: ctx });
+    const res = await doVerb({ kind: "space", id: String(getSpaceRootId()) }, "create-space", { name: "arena", type: "generic" }, { identity: I_AM, moment: ctx });
     arena = String(res.spaceId);
   });
   // real install path (host.js): one role per do:set-space at qualities.roles.<name>
   await withIAmAct("install warrior", async (ctx) => {
-    await doVerb({ kind: "space", id: arena }, "set-space", { field: "qualities.roles.warrior", value: { canSee: [], canDo: [], canSummon: [], acquisition: { grabbed: true } }, merge: false }, { identity: I_AM, summonCtx: ctx });
+    await doVerb({ kind: "space", id: arena }, "set-space", { field: "qualities.roles.warrior", value: { canSee: [], canDo: [], canSummon: [], acquisition: { grabbed: true } }, merge: false }, { identity: I_AM, moment: ctx });
   });
   await withIAmAct("install sage", async (ctx) => {
-    await doVerb({ kind: "space", id: arena }, "set-space", { field: "qualities.roles.sage", value: { canSee: [], canDo: [], canSummon: [], acquisition: { grabbed: false } }, merge: false }, { identity: I_AM, summonCtx: ctx });
+    await doVerb({ kind: "space", id: arena }, "set-space", { field: "qualities.roles.sage", value: { canSee: [], canDo: [], canSummon: [], acquisition: { grabbed: false } }, merge: false }, { identity: I_AM, moment: ctx });
   });
   arena ? ok(`arena space created with a grabbable role (warrior) + a non-grabbable (sage)`) : bad(`arena`, "no space");
 
@@ -100,7 +100,7 @@ try {
   // ── 1. take a grabbable role → granted, a real grant-role fact, the being holds it ──
   const t = await takeRole(taker, "warrior", arena);
   t.result?.granted === true && t.result?.role === "warrior" ? ok(`take warrior → granted:true`) : bad(`granted`, t.refused?.message || t.result);
-  (t.deltaF || []).some((f) => f.action === "grant-role" && f.params?.role === "warrior") ? ok(`a real grant-role fact laid (the lone WORLD fact)`) : bad(`grant fact`, t.deltaF?.map((f) => f.action));
+  (t.deltaF || []).some((f) => f.act === "grant-role" && f.params?.role === "warrior") ? ok(`a real grant-role fact laid (the lone WORLD fact)`) : bad(`grant fact`, t.deltaF?.map((f) => f.act));
   const slot = await loadOrFold("being", String(taker), "0");
   (slot?.state?.qualities?.rolesGranted || []).some((r) => (r.role || r) === "warrior") ? ok(`@taker now HOLDS the warrior role (rolesGranted)`) : bad(`holds role`, slot?.state?.qualities?.rolesGranted);
 

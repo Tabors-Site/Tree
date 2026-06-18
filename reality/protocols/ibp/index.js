@@ -134,7 +134,7 @@ export function wireLiveHooks() {
 
   // Act seal: the being's activity flips from "acting" to "said" (the
   // endMessage prose). Without this fire the bubble keeps showing the
-  // last fact's action(params) signature until the next moment's tool
+  // last fact's act(params) signature until the next moment's tool
   // call triggers a refetch. Invalidate the being's current space so
   // the descriptor's sealed-fallback path lands the spoken text above
   // the mesh.

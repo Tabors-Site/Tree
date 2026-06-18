@@ -53,26 +53,26 @@ const cherub = await poll(() => findByName("being", "cherub", "0"));
 const birth = async (name, extraSpec = {}) => {
   let bid = null;
   await withIAmAct(`birth ${name}`, async (ctx) => {
-    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global", ...extraSpec }, identity: I_AM, summonCtx: ctx, branch: "0" });
+    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global", ...extraSpec }, identity: I_AM, moment: ctx, branch: "0" });
     bid = b.beingId;
   });
   return bid;
 };
 async function register({ name, password, nameId }) {
-  const summonCtx = { actId: randomUUID(), actorAct: { branch: "0", nameId: nameId || "i-am" }, identity: { beingId: "i-am", name: "i-am", nameId: nameId || "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [], _inOp: true };
-  await cherubBeOps.birth.handler({ payload: { name, password }, ctx: { nameId: nameId || null, summonCtx, req: {} } });
-  await sealFacts(summonCtx.deltaF);
-  for (const fn of summonCtx.afterSeal || []) { try { await fn(); } catch {} }
+  const moment = { actId: randomUUID(), actorAct: { branch: "0", by: nameId || "i-am" }, identity: { beingId: "i-am", name: "i-am", nameId: nameId || "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [], _inOp: true };
+  await cherubBeOps.birth.handler({ payload: { name, password }, ctx: { nameId: nameId || null, moment, req: {} } });
+  await sealFacts(moment.deltaF);
+  for (const fn of moment.afterSeal || []) { try { await fn(); } catch {} }
 }
 async function declareName(name, password) {
-  const sc = { actId: randomUUID(), actorAct: { branch: "0", nameId: "i-am" }, identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
-  const r = await nameVerb("declare", { name, password, soulType: "human" }, { identity: sc.identity, summonCtx: sc, currentBranch: "0" });
+  const sc = { actId: randomUUID(), actorAct: { branch: "0", by: "i-am" }, identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const r = await nameVerb("declare", { name, password, soulType: "human" }, { identity: sc.identity, moment: sc, currentBranch: "0" });
   await sealFacts(sc.deltaF);
   return r.nameId;
 }
 // drive the REAL connect handler
 async function connect({ address, identity = null, nameId = null }) {
-  const ctx = { summonCtx: { actId: randomUUID(), actorAct: { branch: "0" }, identity: identity || { beingId: "arrival" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] }, nameId };
+  const ctx = { moment: { actId: randomUUID(), actorAct: { branch: "0" }, identity: identity || { beingId: "arrival" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] }, nameId };
   try {
     const res = await cherubBeOps.connect.handler({ address, addressKind: "stance", payload: {}, identity, ctx });
     return { res, refused: null };

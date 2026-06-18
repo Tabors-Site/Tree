@@ -21,7 +21,7 @@
 //
 // **Phase 2 (this round).** sealAct is the moment's commit boundary.
 // One act → one ΔF → one transaction. The Act row AND every Fact
-// emitted during the moment (summonCtx.deltaF) commit together or
+// emitted during the moment (moment.deltaF) commit together or
 // not at all. Verb handlers contribute Facts to ctx.deltaF; sealAct
 // drains the array, appends inside one withTransaction along with
 // the Act.create, and runs eager-folds after commit. ΔF=0 moments
@@ -127,7 +127,7 @@ export function capContent(s) {
  *   is unused). In that case ΔF must be non-empty.
  * @param {Array<object>} [opts.deltaF=[]] — Fact specs the moment
  *   produced (verb handlers and material helpers pushed onto
- *   summonCtx.deltaF during cognition). Committed atomically with
+ *   moment.deltaF during cognition). Committed atomically with
  *   the Act row.
  * @param {Array<Function>} [opts.afterSeal=[]] — callbacks the moment
  *   queued for post-commit firing (e.g. scheduler wakes that need
@@ -168,9 +168,9 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
   // multiple unrelated ops into one moment.
   //
   // How counting works: doVerb / beVerb / summonVerb at the entry
-  // layer bumps `summonCtx._opCount` once per top-level call.
+  // layer bumps `moment._opCount` once per top-level call.
   // Recursive DO dispatches (set-render → set-being) are gated by
-  // `summonCtx._inOp` and don't re-count. At seal time, opCount > 1
+  // `moment._inOp` and don't re-count. At seal time, opCount > 1
   // means the moment ran multiple top-level operations — that's a
   // bug, not a configuration.
   //
@@ -188,7 +188,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
     opCount > 1
   ) {
     throw new Error(
-      `sealAct: Act ${String(plannedAct._id).slice(0, 8)} (${plannedAct.beingOut?.slice?.(0, 8) || "?"}) ` +
+      `sealAct: Act ${String(plannedAct._id).slice(0, 8)} (${plannedAct.to?.slice?.(0, 8) || "?"}) ` +
       `would seal ${opCount} top-level operations (${deltaF.length} facts). ` +
       `Doctrine (philosophy/MOMENT.md): one moment = one DO/BE/SUMMON. ` +
       `Split into separate moments — open each in its own withIAmAct / withBeingAct.`,
@@ -215,7 +215,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
   // transaction stays lean (the key never changes during the moment).
   // Null for a foreign cross-reality actor or a missing key — the act
   // then seals unsigned. The key lives only here, never on the row.
-  const signingPem = await loadSigningKey(actDoc.nameId, actDoc.branch);
+  const signingPem = await loadSigningKey(actDoc.by, actDoc.branch);
 
   let inserted = null;
   let sortedReels = [];
@@ -294,7 +294,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
             // chain. The moment fails loudly; its inbox row stays
             // open; the retry re-opens from the new head.
             const { advanceActHead } = await import("../../past/act/actHash.js");
-            await advanceActHead(actDoc.branch || "0", actDoc.beingIn, actDoc._id, {
+            await advanceActHead(actDoc.branch || "0", actDoc.through, actDoc._id, {
               session, expectPrev: actDoc.p,
             });
           });
@@ -325,7 +325,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
   if (!Array.isArray(deltaF) || deltaF.length === 0) {
     const { advanceActHead } = await import("../../past/act/actHash.js");
     try {
-      await advanceActHead(actDoc.branch || "0", actDoc.beingIn, actDoc._id, {
+      await advanceActHead(actDoc.branch || "0", actDoc.through, actDoc._id, {
         expectPrev: actDoc.p,
       });
     } catch (err) {
@@ -396,9 +396,9 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
   if (Array.isArray(deltaF) && deltaF.length > 0) {
     for (const f of deltaF) {
       if (f?.verb !== "do") continue;
-      const action = f.action;
-      const target = f.target ? { kind: f.target.kind, id: String(f.target.id) } : null;
-      const baseBeing = f.beingId ? String(f.beingId) : null;
+      const action = f.act;
+      const target = f.of ? { kind: f.of.kind, id: String(f.of.id) } : null;
+      const baseBeing = f.through ? String(f.through) : null;
       const baseActId = f.actId ? String(f.actId) : null;
 
       // Set-* writes. Qualities paths get their own seam (namespace-
@@ -555,8 +555,8 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
   try {
     await hooks.run("afterAct", {
       actId: String(inserted._id),
-      beingOut: inserted.beingOut ? String(inserted.beingOut) : null,
-      beingIn: inserted.beingIn ? String(inserted.beingIn) : null,
+      beingOut: inserted.to ? String(inserted.to) : null,
+      beingIn: inserted.through ? String(inserted.through) : null,
       activeRole: inserted.activeRole || null,
       endMessage: inserted.endMessage || null,
       stoppedAt: endTime,

@@ -12,7 +12,7 @@
 // pure crypto (no fact). The third, recordExport, is the lone WORLD fact — the audit
 // (who exported which Name's key, the key NOWHERE in it). It is HOST, not a plain
 // do-act, on purpose: the audit attributes to the ASKER and lands on the ASKER's reel
-// (NOT I_AM-through-a-vessel, the cherub shape), so it reads the real summonCtx here
+// (NOT I_AM-through-a-vessel, the cherub shape), so it reads the real moment here
 // rather than being a do-act the bridge would re-attribute. See the cut-spec note.
 
 import { loadSigningKey } from "../../past/act/actSig.js";
@@ -20,7 +20,7 @@ import { seedFromPrivateKeyPem } from "./keys.js";
 import { entropyToMnemonic } from "./mnemonic.js";
 import { emitFact } from "../../past/fact/facts.js";
 
-const branchOf = (ctx) => ctx?.summonCtx?.actorAct?.branch || ctx?.branch || "0";
+const branchOf = (ctx) => ctx?.moment?.actorAct?.branch || ctx?.branch || "0";
 
 export function keyHostEnv() {
   return {
@@ -47,19 +47,19 @@ export function keyHostEnv() {
 
     // recordExport(askerBeingId, exportedNameId) → the lone WORLD fact: the audit on
     // the ASKER's reel recording WHO exported WHICH Name's key WHEN, the key nowhere in
-    // it. The SAME emitFact shape the JS handler lays (verb:"do", action:"key-export",
-    // beingId = the asker, target = the asker, params:{exportedNameId}). Attributes to
-    // the asker (reads the real summonCtx), not I_AM. No-op when there is no asker, as
+    // it. The SAME emitFact shape the JS handler lays (verb:"do", act:"key-export",
+    // through = the asker, of = the asker, params:{exportedNameId}). Attributes to
+    // the asker (reads the real moment), not I_AM. No-op when there is no asker, as
     // the JS guards (`if (askerBeingId)`).
     recordExport: async ({ args: [askerBeingId, exportedNameId] }, ctx) => {
       const asker = askerBeingId ? String(askerBeingId) : null;
       if (!asker) return false;
-      const sc = ctx?.summonCtx || null;
+      const sc = ctx?.moment || null;
       await emitFact({
         verb:    "do",
-        action:  "key-export",
-        beingId: asker,
-        target:  { kind: "being", id: asker },
+        act:     "key-export",
+        through: asker,
+        of:      { kind: "being", id: asker },
         params:  { exportedNameId: String(exportedNameId) },
         actId:   sc?.actId || null,
         branch:  branchOf(ctx),

@@ -59,7 +59,7 @@ registerOperation("set-being-roleflow", {
       required: false,
     },
   },
-  handler: async ({ target, params, identity, summonCtx }) => {
+  handler: async ({ target, params, identity, moment }) => {
     // Resolve the target being. Explicit beingId in params wins (the
     // roleflow-composer helper passes it when authoring against a
     // being it's not standing as). Otherwise the verb's target is the
@@ -122,7 +122,7 @@ registerOperation("set-being-roleflow", {
       { kind: "being", id: beingId },
       "set-being",
       { field: "qualities.roleFlow", value: validated, merge: false },
-      { identity, summonCtx },
+      { identity, moment },
     );
 
     return {

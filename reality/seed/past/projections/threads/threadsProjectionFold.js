@@ -8,7 +8,7 @@
 // One handler per fact-action that affects thread state:
 //
 //   be:summon  → upsert row keyed by params.rootCorrelation. Add
-//                summoner (fact.beingId) + recipient
+//                summoner (fact.through) + recipient
 //                (params.recipient) to participants. Bump lastAct.
 //                If params.parentThread is set (the fact records
 //                the asker spawned this thread under another live
@@ -35,12 +35,12 @@ async function handleSummonForThreads(fact /*, type, id*/) {
   const root = params.rootCorrelation || params.correlation;
   if (!root) return;
 
-  // Recipient is now the fact's target (right stance). Summoner is
-  // beingId (the actor). Renamed from be:summon on 2026-06-03.
+  // Recipient is now the fact's object (right stance). Summoner is
+  // through (the actor). Renamed from be:summon on 2026-06-03.
   const participants = new Set();
-  if (fact.beingId) participants.add(String(fact.beingId));
-  if (fact?.target?.kind === "being" && fact?.target?.id) {
-    participants.add(String(fact.target.id));
+  if (fact.through) participants.add(String(fact.through));
+  if (fact?.of?.kind === "being" && fact?.of?.id) {
+    participants.add(String(fact.of.id));
   }
 
   const lastAct = params.sentAt
@@ -70,7 +70,7 @@ async function handleSummonForThreads(fact /*, type, id*/) {
 }
 
 async function handleBeSeverForThreads(fact /*, type, id*/) {
-  if (fact?.verb !== "be" || fact?.action !== "sever") return;
+  if (fact?.verb !== "be" || fact?.act !== "sever") return;
   const root = fact.params?.rootCorrelation;
   if (!root) return;
   const at = fact.date || new Date();

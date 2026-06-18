@@ -50,9 +50,9 @@ const ident = { beingId: I_AM, name: "i-am", nameId: "i-am" };
 
 const cherub = await poll(() => findByName("being", "cherub", "0"));
 const drive = async (op, params) => {
-  const sc = { actId: randomUUID(), actorAct: { branch: "0", nameId: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc = { actId: randomUUID(), actorAct: { branch: "0", by: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   try {
-    const res = await doVerb({ kind: "being", id: String(cherub.id) }, op, params, { identity: ident, summonCtx: sc });
+    const res = await doVerb({ kind: "being", id: String(cherub.id) }, op, params, { identity: ident, moment: sc });
     if (sc.deltaF.length) await sealFacts(sc.deltaF);
     return { result: res?.result ?? res, deltaF: sc.deltaF, refused: null };
   } catch (e) { if (e && (e.name === "IbpError" || e.code)) return { result: null, deltaF: sc.deltaF, refused: e }; throw e; }
@@ -74,7 +74,7 @@ try {
 
   // ── 2. delete an ABSENT pointer → no-op, alreadyAbsent (no fact) ──
   const d2 = await drive("delete-pointer", { name: "ghostptr" });
-  d2.result?.deleted === false && d2.result?.alreadyAbsent === true && !(d2.deltaF || []).some((f) => f.action === "set-space")
+  d2.result?.deleted === false && d2.result?.alreadyAbsent === true && !(d2.deltaF || []).some((f) => f.act === "set-space")
     ? ok(`delete an ABSENT pointer → deleted:false, alreadyAbsent:true, NO set-space fact`)
     : bad(`absent`, d2.refused?.message || d2.result);
 

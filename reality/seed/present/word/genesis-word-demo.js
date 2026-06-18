@@ -15,7 +15,7 @@ const ir = parse(readFileSync(new URL("./genesis.word", import.meta.url), "utf8"
 console.log(`\nparsed ${ir.length} acts from genesis.word (the creation narrative)\n`);
 
 const ctx = {
-  dryRun: true, branch: "main", summonCtx: { actId: "<genesis>" },
+  dryRun: true, branch: "main", moment: { actId: "<genesis>" },
   identity: { nameId: "I_AM", name: "I_AM" }, env: { iam: "I_AM" }, bindings: {},
 };
 

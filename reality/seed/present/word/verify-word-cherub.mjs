@@ -84,9 +84,9 @@ try {
   // a fresh Name for the child (the "mint a new Name (host: keys.generate)" step)
   const { nameId } = generateNameKeypair();
 
-  const summonCtx = {
+  const moment = {
     actId: randomUUID(),
-    actorAct: { branch, nameId: cherub.trueName },
+    actorAct: { branch, by: cherub.trueName },
     identity: { beingId: String(cherub.id), name: "cherub", nameId: cherub.trueName },
     deltaF: [],
     foldedSeqs: new Map(),
@@ -95,12 +95,12 @@ try {
 
   // run the Word form-being live: the evaluator dispatches to the real birthBeing
   const ctx = {
-    dryRun: false, branch, summonCtx,
-    identity: summonCtx.identity, env: { iam: String(cherub.id) },
+    dryRun: false, branch, moment,
+    identity: moment.identity, env: { iam: String(cherub.id) },
     bindings: {}, deltaF: [], flows: [],
   };
   const formBeing = {
-    kind: "act", verb: "be", op: "form-being", by: "Cherub", bind: "child",
+    kind: "act", verb: "be", act: "form-being", by: "Cherub", bind: "child",
     params: {
       name: "worduser", password: "wordpass", cognition: "human",
       defaultRole: "human", parentBeingId: String(cherub.id),
@@ -111,12 +111,12 @@ try {
   };
 
   await withRetry(() => evaluate([formBeing], ctx), "form-being");
-  console.log(`  evaluator laid ${summonCtx.deltaF.length} fact(s) into deltaF:`);
-  for (const f of summonCtx.deltaF) console.log(`    ${f.verb}:${f.action} -> ${f.target?.kind}:${f.target?.id}`);
+  console.log(`  evaluator laid ${moment.deltaF.length} fact(s) into deltaF:`);
+  for (const f of moment.deltaF) console.log(`    ${f.verb}:${f.act} -> ${f.of?.kind}:${f.of?.id}`);
 
-  const birthFact = summonCtx.deltaF.find((f) => f.verb === "be" && f.action === "birth");
+  const birthFact = moment.deltaF.find((f) => f.verb === "be" && f.act === "birth");
   birthFact ? ok(`form-being produced a be:birth fact`)
-            : bad(`a be:birth fact is in deltaF`, JSON.stringify(summonCtx.deltaF).slice(0, 300));
+            : bad(`a be:birth fact is in deltaF`, JSON.stringify(moment.deltaF).slice(0, 300));
 
   // the Word IR's params reached the real birthBeing (the fact is authoritative)
   birthFact?.params?.name === "worduser"
@@ -125,14 +125,14 @@ try {
     ? ok(`be:birth parents to cherub`) : bad(`be:birth parents to cherub`, `parent=${birthFact?.params?.parentBeingId}`);
 
   // one act, many facts: birthBeing also lays the inherited + global role grants
-  const grants = summonCtx.deltaF.filter(
-    (f) => f.verb === "do" && f.action === "grant-role" && f.target?.id === birthFact?.target?.id,
+  const grants = moment.deltaF.filter(
+    (f) => f.verb === "do" && f.act === "grant-role" && f.of?.id === birthFact?.of?.id,
   );
   grants.length >= 1
     ? ok(`birthBeing laid ${grants.length} role grant(s) on the new being`) : bad(`role grants laid`, "none");
 
   // seal the moment, then confirm the being materializes from the chain
-  await sealFacts(summonCtx.deltaF);
+  await sealFacts(moment.deltaF);
   const born = await findByName("being", "worduser", branch); // fold-aware read
   born
     ? ok(`@worduser materializes after seal (id ${String(born.id).slice(0, 12)}…)`)

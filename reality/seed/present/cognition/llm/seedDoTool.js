@@ -81,8 +81,8 @@ export const seedDoTool = {
         // ΔF; a truncated copy makes emitFact fall back to a sealFacts
         // singleton, self-sealing the Fact outside the moment and
         // leaving the outer Act's deltaF empty (orphan, refused by
-        // sealAct). callCtx.summonCtx already carries deltaF.
-        summonCtx: callCtx?.summonCtx || null,
+        // sealAct). callCtx.moment already carries deltaF.
+        moment: callCtx?.moment || null,
       });
       return {
         content: [{

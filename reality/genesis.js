@@ -284,7 +284,7 @@ export async function genesis(app, opts = {}) {
             { kind: "space", id: String(getSpaceRootId()) },
             "set-space",
             { field: "qualities.beings", value: seedDelegateRoster, merge: true },
-            { identity: I_AM, summonCtx: ctx },
+            { identity: I_AM, moment: ctx },
           );
         });
       }
@@ -678,7 +678,7 @@ export async function genesis(app, opts = {}) {
           await withIAmAct(`operator-being mint @${plantCtx.operatorName}`, async (ctx) => {
             await cherubBeing.register(
               { name: plantCtx.operatorName, password: plantCtx.operatorPassword },
-              { scaffold: true, summonCtx: ctx },
+              { scaffold: true, moment: ctx },
             );
           });
           log.info("Genesis", `I create @${plantCtx.operatorName}.`);

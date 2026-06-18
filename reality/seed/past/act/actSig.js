@@ -46,9 +46,9 @@ function timeISO(act) {
 export function buildActSigPayload(act, factIds) {
   return {
     actId:    String(act._id),
-    nameId:   act.nameId ?? null,   // the actor: the name whose key signs
-    beingIn:  act.beingIn,          // the being the name acted through
-    beingOut: act.beingOut ?? null,
+    by:       act.by ?? null,       // the actor: the name whose key signs
+    through:  act.through,          // the being the name acted through
+    to:       act.to ?? null,
     reality:  act.reality ?? null,
     branch:   normBranch(act.branch),
     p:        act.p ?? null,
@@ -108,12 +108,12 @@ export async function loadSigningKey(nameId, branch) {
  * @param {string|null} pem     the signer's private key PEM (preloaded)
  */
 export async function signActDoc(actDoc, factIds, pem) {
-  if (pem === undefined) pem = await loadSigningKey(actDoc.nameId, actDoc.branch);
+  if (pem === undefined) pem = await loadSigningKey(actDoc.by, actDoc.branch);
   if (!pem) return null;
   try {
     const { signAsName } = await import("../../materials/name/keys.js");
     const value = signAsName(pem, buildActSigPayload(actDoc, factIds));
-    return { alg: "ed25519", by: actDoc.nameId, value };
+    return { alg: "ed25519", by: actDoc.by, value };
   } catch (err) {
     log.warn("Stamped", `signing failed for act ${String(actDoc?._id || "").slice(0, 8)}: ${err.message}`);
     return null;

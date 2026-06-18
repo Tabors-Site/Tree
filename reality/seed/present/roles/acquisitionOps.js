@@ -54,7 +54,7 @@ registerOperation("ask-role", {
   args: {
     role: { type: "text", label: "Role to ask for", required: true },
   },
-  handler: async ({ target, params, identity, summonCtx }) => {
+  handler: async ({ target, params, identity, moment }) => {
     if (!identity?.beingId) {
       throw new IbpError(IBP_ERR.UNAUTHORIZED, "ask-role: identity required");
     }
@@ -69,10 +69,10 @@ registerOperation("ask-role", {
 
     // THE CONVERSION: ask-role's world strand is ask-role.word, run through the bridge.
     // The JS below is the clean-miss fallback.
-    const viaWord = await _askRoleViaWord({ caller: identity.beingId, role: roleName, space: hostSpaceId, summonCtx });
+    const viaWord = await _askRoleViaWord({ caller: identity.beingId, role: roleName, space: hostSpaceId, moment, identity });
     if (viaWord) return viaWord;
 
-    const branch = summonCtx?.actorAct?.branch || "0";
+    const branch = moment?.actorAct?.branch || "0";
     const { spec, hostSpaceId: foundHost } = await getRoleSpecForGrant(
       { role: roleName, anchorSpaceId: hostSpaceId },
       branch,
@@ -111,7 +111,7 @@ registerOperation("ask-role", {
         role:           roleName,
         anchorSpaceId:  foundHost,
         grantedBy:      String(identity.beingId), // self-grant via the role's auto policy
-        summonCtx,
+        moment,
         branch,
       });
       return {
@@ -174,7 +174,7 @@ registerOperation("ask-role", {
             reason:        target?.reason || null,
           },
         },
-        { identity, summonCtx },
+        { identity, moment },
       );
     } catch (err) {
       return {
@@ -210,16 +210,20 @@ registerOperation("ask-role", {
 // The auto path's grant is I_AM-authority (like take-role); the queue path reaches the
 // owner with the CALL verb (see owner-of + see role-request build the payload, which keeps
 // the asker identified in the inbox content regardless of the call envelope's `from`).
-async function _askRoleViaWord({ caller, role, space, summonCtx }) {
-  if (!summonCtx) return null;
+async function _askRoleViaWord({ caller, role, space, moment, identity }) {
+  if (!moment) return null;
+  // The .word runs AS the asker. runRoleWord reads the identity off the moment, but a kernel
+  // moment carries no `.identity` — thread the asker's FULL identity (name included), so
+  // evalCall's queue summon builds a real `from` stance and authorizes the asker, not anonymous.
+  if (!moment.identity?.beingId) moment.identity = identity || { beingId: String(caller) };
   const { resolveRoleWord, runRoleWord } = await import("../word/roleWordRegistry.js");
-  const ir = resolveRoleWord("acquisition", "ask-role", summonCtx?.actorAct?.branch);
+  const ir = resolveRoleWord("acquisition", "ask-role", moment?.actorAct?.branch);
   if (!ir) return null;
   const { acquisitionHostEnv } = await import("./acquisitionHost.js");
-  const branch = summonCtx?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.branch || "0";
   try {
     const { result } = await runRoleWord(ir, {
-      summonCtx, branch,
+      moment, branch,
       trigger: { caller: String(caller), role: String(role), space: String(space), branch },
       env: { host: acquisitionHostEnv() },
     });
@@ -230,16 +234,19 @@ async function _askRoleViaWord({ caller, role, space, summonCtx }) {
   }
 }
 
-async function _takeRoleViaWord({ caller, role, space, summonCtx }) {
-  if (!summonCtx) return null;
+async function _takeRoleViaWord({ caller, role, space, moment }) {
+  if (!moment) return null;
+  // The .word runs AS the taker — thread the identity onto the moment (a kernel moment has none),
+  // so the .word's acts resolve to the caller, not anonymous.
+  if (!moment.identity?.beingId) moment.identity = { beingId: String(caller) };
   const { resolveRoleWord, runRoleWord } = await import("../word/roleWordRegistry.js");
-  const ir = resolveRoleWord("acquisition", "take-role", summonCtx?.actorAct?.branch);
+  const ir = resolveRoleWord("acquisition", "take-role", moment?.actorAct?.branch);
   if (!ir) return null;
   const { acquisitionHostEnv } = await import("./acquisitionHost.js");
-  const branch = summonCtx?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.branch || "0";
   try {
     const { result } = await runRoleWord(ir, {
-      summonCtx, branch,
+      moment, branch,
       trigger: { caller: String(caller), role: String(role), space: String(space), branch },
       env: { host: acquisitionHostEnv() },
     });
@@ -257,7 +264,7 @@ registerOperation("take-role", {
   args: {
     role: { type: "text", label: "Role to take", required: true },
   },
-  handler: async ({ target, params, identity, summonCtx }) => {
+  handler: async ({ target, params, identity, moment }) => {
     if (!identity?.beingId) {
       throw new IbpError(IBP_ERR.UNAUTHORIZED, "take-role: identity required");
     }
@@ -274,10 +281,10 @@ registerOperation("take-role", {
     // through the bridge. The JS below is the clean-miss fallback. The grant lands on the
     // real moment (emitInternalGrant's beingId=I_AM — the policy IS the substrate's
     // authority, grantedBy the taker); a WordRefusal becomes the same IbpError.
-    const viaWord = await _takeRoleViaWord({ caller: identity.beingId, role: roleName, space: hostSpaceId, summonCtx });
+    const viaWord = await _takeRoleViaWord({ caller: identity.beingId, role: roleName, space: hostSpaceId, moment });
     if (viaWord) return viaWord;
 
-    const branch = summonCtx?.actorAct?.branch || "0";
+    const branch = moment?.actorAct?.branch || "0";
     const { spec, hostSpaceId: foundHost } = await getRoleSpecForGrant(
       { role: roleName, anchorSpaceId: hostSpaceId },
       branch,
@@ -312,7 +319,7 @@ registerOperation("take-role", {
       role:           roleName,
       anchorSpaceId:  foundHost,
       grantedBy:      String(identity.beingId),
-      summonCtx,
+      moment,
       branch,
     });
     return {
@@ -338,15 +345,15 @@ export async function emitInternalGrant({
   role,
   anchorSpaceId,
   grantedBy,
-  summonCtx,
+  moment,
   branch = null,
 }) {
   const { emitFact } = await import("../../past/fact/facts.js");
   await emitFact({
     verb:    "do",
-    action:  "grant-role",
-    beingId: I_AM,
-    target:  { kind: "being", id: String(granteeBeingId) },
+    act:     "grant-role",
+    through: I_AM,
+    of:      { kind: "being", id: String(granteeBeingId) },
     params:  {
       role,
       anchorSpaceId: anchorSpaceId ? String(anchorSpaceId) : null,
@@ -361,7 +368,7 @@ export async function emitInternalGrant({
     // auto-grant onto main — invisible on the branch where the
     // commons lives (the fork predates the grant), and a
     // foreign-world write onto main's reel.
-    branch: branch || summonCtx?.actorAct?.branch || "0",
-    actId:  summonCtx?.actId || null,
-  }, summonCtx);
+    branch: branch || moment?.actorAct?.branch || "0",
+    actId:  moment?.actId || null,
+  }, moment);
 }

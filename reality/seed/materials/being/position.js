@@ -79,16 +79,16 @@ function getBeingPositionRecord(beingId) {
 //
 // `beingId` doubles as actor and target — the being is acting on
 // itself (the being occupies a new position).
-function persistBeingPosition(beingId, spaceId, summonCtx = null) {
+function persistBeingPosition(beingId, spaceId, moment = null) {
   if (!beingId) return;
   const spec = {
     verb:    "be",
-    action:  "occupy",
-    beingId: String(beingId),
-    target:  { kind: "being", id: String(beingId) },
+    act:     "occupy",
+    through: String(beingId),
+    of:      { kind: "being", id: String(beingId) },
     params:  { toPosition: spaceId || null },
-    actId:   summonCtx?.actId || null,
-    branch:  summonCtx?.actorAct?.branch || "0",
+    actId:   moment?.actId || null,
+    branch:  moment?.actorAct?.branch || "0",
   };
   // Inside a moment: push synchronously to ctx.deltaF (rides the
   // existing Act). The push bypasses emitFact (whose async crossOrigin
@@ -97,9 +97,9 @@ function persistBeingPosition(beingId, spaceId, summonCtx = null) {
   // occupies its OWN position, so the actor name is the being's own
   // (or, when a father drives a being he's connected to, the
   // inhabitor's name — exactly who signs the moment).
-  if (summonCtx && Array.isArray(summonCtx.deltaF)) {
-    spec.nameId = summonCtx.actorAct?.nameId ?? null;
-    summonCtx.deltaF.push(spec);
+  if (moment && Array.isArray(moment.deltaF)) {
+    spec.by = moment.actorAct?.by ?? null;
+    moment.deltaF.push(spec);
     return;
   }
   // Outside the accumulating moment (system housekeeping): the being
@@ -117,7 +117,7 @@ function persistBeingPosition(beingId, spaceId, summonCtx = null) {
         spec.branch,
         async (ctx) => {
           // Re-stamp with the being's act context (spec.nameId stays
-          // unset so emitFact resolves it from ctx.actorAct.nameId).
+          // unset so emitFact resolves it from ctx.actorAct.by).
           await emitFact({ ...spec, actId: ctx.actId }, ctx);
         },
       );
@@ -158,19 +158,19 @@ async function deriveSpaceRootId(spaceId, branch) {
 /**
  * Set the being's current position. Async because deriving rootId
  * walks the ancestor chain. The fact emission is fire-and-forget for
- * hot-path latency (wrapped in withIAmAct when no summonCtx); the
+ * hot-path latency (wrapped in withIAmAct when no moment); the
  * ancestor walk is served by the in-memory cache on the warm path.
  */
-export async function setCurrentSpace(beingId, spaceId, summonCtx) {
+export async function setCurrentSpace(beingId, spaceId, moment) {
   if (!beingId) return;
-  const branch = summonCtx?.actorAct?.branch;
+  const branch = moment?.actorAct?.branch;
   if (typeof branch !== "string" || !branch) {
-    throw new Error("setCurrentSpace: summonCtx.actorAct.branch is required; planting a being at a position needs the actor's branch to derive the right tree-root.");
+    throw new Error("setCurrentSpace: moment.actorAct.branch is required; planting a being at a position needs the actor's branch to derive the right tree-root.");
   }
   const p = getBeingPositionRecord(beingId);
   p.position = spaceId || null;
   p.rootId = await deriveSpaceRootId(spaceId, branch);
-  persistBeingPosition(beingId, spaceId, summonCtx);
+  persistBeingPosition(beingId, spaceId, moment);
 }
 
 export function getCurrentSpace(beingId) {

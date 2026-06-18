@@ -45,7 +45,7 @@ export async function findChainOpener(actId, maxDepth = 100) {
   let depth = 0;
   while (current && current.inReplyTo && depth < maxDepth) {
     const next = await Act.findById(current.inReplyTo)
-      .select("_id inReplyTo from beingIn beingOut rootCorrelation ibpAddress")
+      .select("_id inReplyTo from through to rootCorrelation ibpAddress")
       .lean();
     if (!next) break;
     current = next;
@@ -95,23 +95,23 @@ export async function findByIbpAddress(ibpAddress, opts = {}) {
 
 /**
  * The most recently opened Act where the given being is the
- * responder (beingOut) and the moment is still un-sealed
+ * responder (to) and the moment is still un-sealed
  * (endMessage.time is null). Used by descriptor.js to surface
  * "this being is currently doing X" — the live activity readout
  * for a Position Description.
  *
- * @param {string} beingOut
+ * @param {string} to
  * @returns {Promise<object|null>}
  */
-export async function findOpenForBeing(beingOut) {
-  if (!beingOut) return null;
+export async function findOpenForBeing(to) {
+  if (!to) return null;
   try {
     return await Act.findOne({
-      beingOut,
+      to,
       "endMessage.time": null,
     })
       .select(
-        "_id startMessage activeRole inReplyTo rootCorrelation beingIn beingOut ibpAddress stampedAt",
+        "_id startMessage activeRole inReplyTo rootCorrelation through to ibpAddress stampedAt",
       )
       .sort({ stampedAt: -1 })
       .lean();
@@ -127,14 +127,14 @@ export async function findOpenForBeing(beingOut) {
  * with its endMessage attached, or null when the being has never
  * sealed an Act.
  *
- * @param {string} beingOut
+ * @param {string} to
  * @returns {Promise<object|null>}
  */
-export async function findLastSealedForBeing(beingOut) {
-  if (!beingOut) return null;
+export async function findLastSealedForBeing(to) {
+  if (!to) return null;
   try {
     return await Act.findOne({
-      beingOut,
+      to,
       "endMessage.time": { $ne: null },
     })
       .select("_id endMessage activeRole stampedAt")
@@ -160,9 +160,9 @@ export async function findByBeing(beingId, opts = {}) {
   if (!beingId) return [];
   const side = opts.side || "either";
   let q;
-  if (side === "in") q = Act.find({ beingIn: beingId });
-  else if (side === "out") q = Act.find({ beingOut: beingId });
-  else q = Act.find({ $or: [{ beingIn: beingId }, { beingOut: beingId }] });
+  if (side === "in") q = Act.find({ through: beingId });
+  else if (side === "out") q = Act.find({ to: beingId });
+  else q = Act.find({ $or: [{ through: beingId }, { to: beingId }] });
   return q
     .sort({ createdAt: -1 })
     .limit(opts.limit || 50)

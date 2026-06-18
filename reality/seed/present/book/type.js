@@ -9,9 +9,9 @@
 // Returns what was laid (the new beads) so the view can re-read just the tail (the live
 // update) rather than the whole book.
 
-export async function typeIntoBook(wordText, { summonCtx, identity, branch = "0", position = null, bindings = {}, env = {} } = {}) {
-  if (!summonCtx || !Array.isArray(summonCtx.deltaF)) {
-    throw new Error("typeIntoBook: needs an OPEN act (summonCtx with deltaF) — the press happens inside a moment");
+export async function typeIntoBook(wordText, { moment, identity, branch = "0", position = null, bindings = {}, env = {} } = {}) {
+  if (!moment || !Array.isArray(moment.deltaF)) {
+    throw new Error("typeIntoBook: needs an OPEN act (moment with deltaF) — the press happens inside a moment");
   }
   const { parse } = await import("../word/parser.js");
   const { evaluate } = await import("../word/evaluator.js");
@@ -24,11 +24,11 @@ export async function typeIntoBook(wordText, { summonCtx, identity, branch = "0"
   }
 
   const ctx = {
-    dryRun: false, branch, summonCtx, identity,
+    dryRun: false, branch, moment, identity,
     position,                               // where the typist stands — "make here" parents to it
-    env, bindings, deltaF: summonCtx.deltaF, flows: [],
+    env, bindings, deltaF: moment.deltaF, flows: [],
   };
-  const before = summonCtx.deltaF.length;
+  const before = moment.deltaF.length;
 
   try {
     for (const stmt of statements) await evaluate(stmt, ctx);
@@ -36,11 +36,11 @@ export async function typeIntoBook(wordText, { summonCtx, identity, branch = "0"
     // a Word refusal (a gate said no) or a real fault — the press fails, nothing forced
     return {
       ok: false, where: "evaluate", error: err.message, refusal: !!err.__wordRefusal,
-      statements: statements.length, laid: summonCtx.deltaF.slice(before).map(glance),
+      statements: statements.length, laid: moment.deltaF.slice(before).map(glance),
     };
   }
 
-  const laid = summonCtx.deltaF.slice(before);
+  const laid = moment.deltaF.slice(before);
   return {
     ok: true, statements: statements.length,
     laid: laid.map(glance),                 // the new lines, as they'll read in the book
@@ -48,4 +48,4 @@ export async function typeIntoBook(wordText, { summonCtx, identity, branch = "0"
   };
 }
 
-const glance = (f) => `${f.verb}:${f.action}${f.target ? ` → ${f.target.kind}:${String(f.target.id ?? "").slice(0, 12)}` : ""}`;
+const glance = (f) => `${f.verb}:${f.act}${f.of ? ` → ${f.of.kind}:${String(f.of.id ?? "").slice(0, 12)}` : ""}`;

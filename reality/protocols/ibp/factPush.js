@@ -158,12 +158,12 @@ async function _resolveSpaceId(targetKind, targetId, branch = "0") {
  */
 async function _handleFact(fact, _type, _id) {
   if (!fact) return;
-  const targetKind = fact?.target?.kind;
-  const targetId   = fact?.target?.id;
+  const targetKind = fact?.of?.kind;
+  const targetId   = fact?.of?.id;
   if (!targetKind || !targetId) return;
   if (targetKind !== "being" && targetKind !== "matter") return;
 
-  const action = fact?.action;
+  const action = fact?.act;
   if (!action) return;
   if (_SKIP_ACTIONS.has(action)) return;
 

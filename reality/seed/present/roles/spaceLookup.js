@@ -21,7 +21,7 @@
 // role pick consistent — same grant, same spec lookup, same reach
 // answer.
 
-import { getRole } from "./registry.js";
+import { getRole, canViews } from "./registry.js";
 import { getAncestorChain } from "../../materials/space/ancestorCache.js";
 import { getSpaceRootId } from "../../sprout.js";
 
@@ -70,7 +70,12 @@ export async function getRoleSpecForGrant(grant, branch) {
       for (const node of chain) {
         const roles = node?.qualities?.roles;
         const found = roles && typeof roles === "object" ? roles[name] : null;
-        if (found) return { spec: found, hostSpaceId: String(node._id) };
+        // A spec synced to a space stores the canonical `can`; derive the four group-by-verb
+        // views when they're absent, so the role-walk (permitsDo/See/Summon/Be) reads them.
+        if (found) {
+          const spec = (Array.isArray(found.can) && !Array.isArray(found.canDo)) ? { ...found, ...canViews(found.can) } : found;
+          return { spec, hostSpaceId: String(node._id) };
+        }
       }
     }
   }

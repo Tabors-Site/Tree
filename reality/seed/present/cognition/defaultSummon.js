@@ -92,7 +92,7 @@ export async function defaultSummon({ message, ctx, role }) {
       // then refused that Act as an orphan (no content, no Facts). Pass
       // the same object so a handler's emitFact pushes onto the very ΔF
       // the seal commits. This mirrors runTransportAct in 3-momentum.js.
-      summonCtx: ctx,
+      moment: ctx,
     });
   } catch (err) {
     if (ctx.signal?.aborted) {
@@ -188,7 +188,7 @@ async function maybeEmitReply({
       scopeNodeId,
       beingId,
       rootCorrelation,
-      { branch: ctx?.summonCtx?.actorAct?.branch || "0" },
+      { branch: ctx?.moment?.actorAct?.branch || "0" },
     );
     if (askerStance) {
       await emitReplyToStance({

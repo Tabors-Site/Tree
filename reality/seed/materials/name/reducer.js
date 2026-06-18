@@ -25,7 +25,7 @@ export function initial() {
 // the default Soul, and the federation markers. No-op for any other fact.
 function applyMintName(state, fact) {
   if (fact?.verb !== "name") return state;
-  if (fact.action !== "declare" && fact.action !== "mint") return state;
+  if (fact.act !== "declare" && fact.act !== "mint") return state;
   const spec = fact?.params?.spec;
   if (!spec || typeof spec !== "object") return state;
   return {
@@ -46,7 +46,7 @@ function applyMintName(state, fact) {
 // The history persists; this just folds the closed marker. Idempotent.
 function applyCloseName(state, fact) {
   if (fact?.verb !== "name") return state;
-  if (fact.action !== "banish" && fact.action !== "close") return state;
+  if (fact.act !== "banish" && fact.act !== "close") return state;
   if (state.closedAt) return state;
   return { ...state, closedAt: fact.date, updatedAt: fact.date };
 }
@@ -61,8 +61,8 @@ function applyCloseName(state, fact) {
 // state only needs the boolean.
 function applyNameSession(state, fact) {
   if (fact?.verb !== "name") return state;
-  if (fact.action === "connect") return { ...state, connected: true };
-  if (fact.action === "release") return { ...state, connected: false };
+  if (fact.act === "connect") return { ...state, connected: true };
+  if (fact.act === "release") return { ...state, connected: false };
   return state;
 }
 

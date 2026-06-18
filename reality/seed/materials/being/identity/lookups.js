@@ -148,7 +148,7 @@ export async function findRootOperator(branch = "0") {
  * the cherub. Used by the first-boot path (and by cherub.birth) to
  * decide whether to take the first-being bootstrap branch — which
  * sets the new human as a direct child of I_AM and queues the heaven
- * anoint via summonCtx.afterSeal.
+ * anoint via moment.afterSeal.
  *
  * Uses a cognition-based query rather than a name-list exclusion so
  * the answer doesn't drift when the seed delegate roster changes

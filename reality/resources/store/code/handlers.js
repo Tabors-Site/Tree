@@ -104,7 +104,7 @@ async function writeStore(frame, ctx, store) {
     { kind: "being", id: frame.meId },
     "set-being",
     { field: "qualities.store", value: store, merge: false },
-    { identity: frame.identity, summonCtx: ctx },
+    { identity: frame.identity, moment: ctx },
   );
 }
 

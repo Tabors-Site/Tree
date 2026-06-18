@@ -49,7 +49,7 @@ import { stripForAudit } from "../../materials/redact.js";
  *                                   used to pass `scaffold: true` now
  *                                   pass `identity: I_AM_IDENTITY`;
  *                                   authorize() short-circuits on I_AM.
- * @param {object} [opts.summonCtx]  for summon correlation on the Fact
+ * @param {object} [opts.moment]  for summon correlation on the Fact
  * @param {boolean}[opts.skipAudit]  skip the Fact stamp (seed-internal only)
  * @returns the handler's return value
  */
@@ -65,11 +65,11 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     throw new Error(`Unknown DO operation: "${operation}". Use reality.do.listOperations() to see available operations.`);
   }
 
-  // Resolve branch ONCE at the entry point. summonCtx.actorAct?.branch wins when
+  // Resolve branch ONCE at the entry point. moment.actorAct?.branch wins when
   // inside an existing moment (continuation); otherwise opts.currentBranch
   // from the wire layer. resolveBranchForFact throws MISSING_BRANCH if
   // both are absent — silent default to "0" hid threading bugs.
-  const branch = resolveBranchForFact(opts.summonCtx, opts.currentBranch, "do");
+  const branch = resolveBranchForFact(opts.moment, opts.currentBranch, "do");
 
   // Source matter joins the normal chain rule (philosophy/OS/MIRROR.md
   // step 2). Writes through the mirror mount land as sealed facts on
@@ -110,10 +110,10 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
   // to be split between a scaffold-specific check and the universal
   // check below; the scaffold version retired with the flag because
   // it's the same invariant.
-  if (!opts.summonCtx?.actId) {
+  if (!opts.moment?.actId) {
     throw new IbpError(
       IBP_ERR.INTERNAL,
-      `DO ${operation}: missing ambient actId. Every act rides an open Act. Thread opts.summonCtx from the caller's moment, or open one via withIAmAct(...) / withBeingAct(...).`,
+      `DO ${operation}: missing ambient actId. Every act rides an open Act. Thread opts.moment from the caller's moment, or open one via withIAmAct(...) / withBeingAct(...).`,
       { operation },
     );
   }
@@ -179,7 +179,7 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
         auditTarget && auditTarget.kind === "being" && auditTarget.id
           ? String(auditTarget.id)
           : null,
-      summonCtx: opts.summonCtx,
+      moment: opts.moment,
       // The caller's branch (session.currentBranch). Their grants
       // live there; target may be on a different branch. See
       // authorize.js "actorBranch vs targetBranch."
@@ -198,21 +198,21 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     target,
     params: params || {},
     identity: opts.identity,
-    summonCtx: opts.summonCtx || null,
+    moment: opts.moment || null,
     // The branch this DO's Fact lands on (resolved once at verb entry,
     // same value authorize() gates against). Ops that resolve other
     // material on this branch (e.g. inheritation name lookups) read it
-    // here instead of re-deriving from summonCtx.
+    // here instead of re-deriving from moment.
     branch,
   };
 
   // Top-level operation count for the moment (one-moment-one-act
-  // doctrine; sealAct reads opCount from summonCtx and throws if it
+  // doctrine; sealAct reads opCount from moment and throws if it
   // would seal more than one op). Increments only at the OUTERMOST
-  // doVerb on this summonCtx. Recursive dispatches (set-render →
+  // doVerb on this moment. Recursive dispatches (set-render →
   // set-being / set-matter / set-space) see `_inOp:true` and skip
   // the increment so a single sugared call still counts as one op.
-  const _ctx = opts.summonCtx;
+  const _ctx = opts.moment;
   const _wasInOp = !!(_ctx && _ctx._inOp);
   if (_ctx && !_wasInOp) {
     _ctx._inOp = true;
@@ -230,30 +230,30 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
   // opts.skipAudit (seed-trusted batches only).
   //
   // Presentism: every act lives in a moment. assign opens the Act;
-  // momentum threads actId through summonCtx. The entry-point guard
-  // above already required summonCtx.actId, so by the time we get
+  // momentum threads actId through moment. The entry-point guard
+  // above already required moment.actId, so by the time we get
   // here the act has a frame.
   const shouldAudit = !op.skipAudit && !opts.skipAudit;
   if (shouldAudit) {
-    const actId = opts.summonCtx.actId;
+    const actId = opts.moment.actId;
     const actorBeingId = opts.identity.beingId;
     // Phase 2: contribute to ctx.deltaF (if inside a moment) instead
     // of committing eagerly. sealAct will commit this Fact + the Act
     // row + any other Facts the moment produced in one transaction.
     await emitFact({
       verb:    "do",
-      action:  op.factAction,
-      beingId: actorBeingId,
-      target:  resolveAuditTarget(target, result, op),
+      act:     op.factAction,
+      through: actorBeingId,
+      of:      resolveAuditTarget(target, result, op),
       params:  ctx.params,
       result:  summarizeAuditResult(result),
       actId,
       // Branch this fact lands on, pre-resolved at the entry. Inherited
-      // from the moment's summonCtx (set by assign from the intake
+      // from the moment's moment (set by assign from the intake
       // entry, which the wire layer fills from the parsed `#`
       // qualifier) or attached as opts.currentBranch by the wire.
       branch,
-    }, opts.summonCtx);
+    }, opts.moment);
   }
 
   return result;

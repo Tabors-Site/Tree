@@ -53,16 +53,16 @@ const poll = async (fn, t = 60000, e = 250) => { const t0 = Date.now(); while (D
 // seal, then drain afterSeal (the first-being angel grant).
 async function register({ name, password, nameId }) {
   const branch = "0";
-  const summonCtx = {
+  const moment = {
     actId: randomUUID(),
-    actorAct: { branch, nameId: nameId || "i-am" },
+    actorAct: { branch, by: nameId || "i-am" },
     identity: { beingId: "i-am", name: "i-am", nameId: nameId || "i-am" },
     deltaF: [], foldedSeqs: new Map(), afterSeal: [], _inOp: true,
   };
-  const res = await cherubBeOps.birth.handler({ payload: { name, password }, ctx: { nameId: nameId || null, summonCtx, req: {} } });
-  await sealFacts(summonCtx.deltaF);
-  for (const fn of summonCtx.afterSeal || []) { try { await fn(); } catch { /* angel grant; tolerated */ } }
-  return { res, deltaF: summonCtx.deltaF };
+  const res = await cherubBeOps.birth.handler({ payload: { name, password }, ctx: { nameId: nameId || null, moment, req: {} } });
+  await sealFacts(moment.deltaF);
+  for (const fn of moment.afterSeal || []) { try { await fn(); } catch { /* angel grant; tolerated */ } }
+  return { res, deltaF: moment.deltaF };
 }
 
 console.log(`\n  verify-cherub-cut (birthHandler subsequent path, the cut site)\n  DB: ${SCRATCH_DB.split("/").pop()}\n`);
@@ -81,8 +81,8 @@ try {
   // ── 2. the arriving NAME for the subsequent being ──
   let ownerName = null;
   {
-    const sc = { actId: randomUUID(), actorAct: { branch, nameId: "i-am" }, identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
-    ownerName = (await nameVerb("declare", { name: "newcomer", password: "pw12345678", soulType: "human" }, { identity: sc.identity, summonCtx: sc, currentBranch: branch })).nameId;
+    const sc = { actId: randomUUID(), actorAct: { branch, by: "i-am" }, identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+    ownerName = (await nameVerb("declare", { name: "newcomer", password: "pw12345678", soulType: "human" }, { identity: sc.identity, moment: sc, currentBranch: branch })).nameId;
     await sealFacts(sc.deltaF);
   }
   console.log(`  arriving Name = ${String(ownerName).slice(0, 14)}…\n`);

@@ -54,7 +54,7 @@ const cherub = await poll(() => findByName("being", "cherub", "0"));
 const birth = async (name) => {
   let bid = null;
   await withIAmAct(`birth ${name}`, async (ctx) => {
-    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, summonCtx: ctx, branch: "0" });
+    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: ctx, branch: "0" });
     bid = b.beingId;
   });
   return bid;
@@ -63,9 +63,9 @@ const birth = async (name) => {
 // drive the REAL take-role op via doVerb → the cut handler → take-role.word; seal here
 async function takeRole(caller, role, space) {
   const branch = "0";
-  const sc = { actId: randomUUID(), actorAct: { branch, nameId: String(caller) }, identity: { beingId: String(caller), nameId: String(caller) }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc = { actId: randomUUID(), actorAct: { branch, by: String(caller) }, identity: { beingId: String(caller), nameId: String(caller) }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   try {
-    const res = await doVerb({ kind: "space", id: String(space) }, "take-role", { role }, { identity: { beingId: String(caller) }, summonCtx: sc });
+    const res = await doVerb({ kind: "space", id: String(space) }, "take-role", { role }, { identity: { beingId: String(caller) }, moment: sc });
     if (sc.deltaF.length) await sealFacts(sc.deltaF);
     const result = res?.result ?? res; // doVerb may wrap the handler return
     return { result, deltaF: sc.deltaF, refused: null };
@@ -81,15 +81,15 @@ try {
   // a space with a GRABBABLE role (warrior) + a NON-grabbable role (sage)
   let arena = null;
   await withIAmAct("create arena", async (ctx) => {
-    const res = await doVerb({ kind: "space", id: String(getSpaceRootId()) }, "create-space", { name: "arena", type: "generic" }, { identity: I_AM, summonCtx: ctx });
+    const res = await doVerb({ kind: "space", id: String(getSpaceRootId()) }, "create-space", { name: "arena", type: "generic" }, { identity: I_AM, moment: ctx });
     arena = String(res.spaceId);
   });
   // real install path (host.js): one role per do:set-space at qualities.roles.<name>
   await withIAmAct("install warrior", async (ctx) => {
-    await doVerb({ kind: "space", id: arena }, "set-space", { field: "qualities.roles.warrior", value: { canSee: [], canDo: [], canSummon: [], acquisition: { grabbed: true } }, merge: false }, { identity: I_AM, summonCtx: ctx });
+    await doVerb({ kind: "space", id: arena }, "set-space", { field: "qualities.roles.warrior", value: { canSee: [], canDo: [], canSummon: [], acquisition: { grabbed: true } }, merge: false }, { identity: I_AM, moment: ctx });
   });
   await withIAmAct("install sage", async (ctx) => {
-    await doVerb({ kind: "space", id: arena }, "set-space", { field: "qualities.roles.sage", value: { canSee: [], canDo: [], canSummon: [], acquisition: { grabbed: false } }, merge: false }, { identity: I_AM, summonCtx: ctx });
+    await doVerb({ kind: "space", id: arena }, "set-space", { field: "qualities.roles.sage", value: { canSee: [], canDo: [], canSummon: [], acquisition: { grabbed: false } }, merge: false }, { identity: I_AM, moment: ctx });
   });
   arena ? ok(`arena space created with a grabbable role (warrior) + a non-grabbable (sage)`) : bad(`arena`, "no space");
 
@@ -100,15 +100,15 @@ try {
   // ── 1. take a grabbable role → granted, a real grant-role fact, the being holds it ──
   const t = await takeRole(taker, "warrior", arena);
   t.result?.granted === true && t.result?.role === "warrior" ? ok(`take warrior → granted:true`) : bad(`granted`, t.refused?.message || t.result);
-  const grantFact = (t.deltaF || []).find((f) => f.action === "grant-role" && f.params?.role === "warrior");
-  grantFact ? ok(`a real grant-role fact laid (the lone WORLD fact)`) : bad(`grant fact`, t.deltaF?.map((f) => f.action));
-  String(grantFact?.nameId) === String(taker) ? ok(`grant attributes to the CALLER (nameId = @taker, not i-am) — caller-attribution default`) : bad(`caller attribution`, `nameId=${grantFact?.nameId}, want ${String(taker).slice(0,10)}`);
+  const grantFact = (t.deltaF || []).find((f) => f.act === "grant-role" && f.params?.role === "warrior");
+  grantFact ? ok(`a real grant-role fact laid (the lone WORLD fact)`) : bad(`grant fact`, t.deltaF?.map((f) => f.act));
+  String(grantFact?.by) === String(taker) ? ok(`grant attributes to the CALLER (nameId = @taker, not i-am) — caller-attribution default`) : bad(`caller attribution`, `nameId=${grantFact?.by}, want ${String(taker).slice(0,10)}`);
   const slot = await loadOrFold("being", String(taker), "0");
   (slot?.state?.qualities?.rolesGranted || []).some((r) => (r.role || r) === "warrior") ? ok(`@taker now HOLDS the warrior role (rolesGranted)`) : bad(`holds role`, slot?.state?.qualities?.rolesGranted);
 
   // ── 2. idempotent re-take → already:true, NO second grant ──
   const t2 = await takeRole(taker, "warrior", arena);
-  t2.result?.already === true && !(t2.deltaF || []).some((f) => f.action === "grant-role") ? ok(`re-take warrior → already:true, NO new grant (idempotent; the do:take-role op record via doVerb is expected)`) : bad(`idempotent`, t2.result || t2.deltaF);
+  t2.result?.already === true && !(t2.deltaF || []).some((f) => f.act === "grant-role") ? ok(`re-take warrior → already:true, NO new grant (idempotent; the do:take-role op record via doVerb is expected)`) : bad(`idempotent`, t2.result || t2.deltaF);
 
   // ── 3. a NON-grabbable role → refuse ──
   const t3 = await takeRole(taker, "sage", arena);

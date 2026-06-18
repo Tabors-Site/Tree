@@ -101,7 +101,7 @@ registerOperation("set-role", {
     canBe:     { type: "multiline", label: "canBe — BE op names",                     required: false },
     prompt:    { type: "multiline", label: "Prompt (system prompt body, LLM cognition)", required: false },
   },
-  handler: async ({ params, summonCtx }) => {
+  handler: async ({ params, moment }) => {
     const name = String(params?.name || "").trim();
     if (!name || !ROLE_NAME_RE.test(name)) {
       throw new IbpError(
@@ -156,7 +156,7 @@ registerOperation("set-role", {
       name,
       qualities: new Map([["role", roleQualities]]),
       itemType:  "resource",
-      summonCtx,
+      moment,
     });
 
     // Hot-register. The mirror write above persists across restarts
@@ -208,7 +208,7 @@ registerOperation("delete-role", {
       default: false,
     },
   },
-  handler: async ({ params, summonCtx }) => {
+  handler: async ({ params, moment }) => {
     const name = String(params?.name || "").trim();
     if (!name) {
       throw new IbpError(IBP_ERR.INVALID_INPUT, "delete-role: `name` is required");
@@ -247,7 +247,7 @@ registerOperation("delete-role", {
       heavenSpace: HEAVEN_SPACE.ROLES,
       name,
       itemType:  "resource",
-      summonCtx,
+      moment,
     });
     unregisterRole(name);
 
@@ -273,16 +273,16 @@ registerOperation("delete-role", {
 // CALLER mode (no `through`): the signal-publish set-space attributes to the real
 // publisher, not I_AM. Returns the {published,namespace,key,value} result, or null
 // on a clean miss (not converted / no moment) so the JS body runs.
-async function _setWorldSignalViaWord({ namespace, key, value, summonCtx }) {
-  if (!summonCtx) return null;
+async function _setWorldSignalViaWord({ namespace, key, value, moment }) {
+  if (!moment) return null;
   const { resolveRoleWord, runRoleWord } = await import("../../word/roleWordRegistry.js");
-  const ir = resolveRoleWord("role-manager", "set-world-signal", summonCtx?.actorAct?.branch);
+  const ir = resolveRoleWord("role-manager", "set-world-signal", moment?.actorAct?.branch);
   if (!ir) return null;
   const { roleManagerHostEnv } = await import("./role-managerHost.js");
-  const branch = summonCtx?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.branch || "0";
   try {
     const { result } = await runRoleWord(ir, {
-      summonCtx, branch,
+      moment, branch,
       trigger: { namespace, key, value, branch },
       env: { host: roleManagerHostEnv() },
     });
@@ -302,11 +302,11 @@ registerOperation("set-world-signal", {
     key:       { type: "text", label: "Key path (e.g. \"tick.alive\" or \"weather\")", required: true },
     value:     { type: "text", label: "Value (JSON for non-strings; bare for strings)", required: true },
   },
-  handler: async ({ params, identity, summonCtx }) => {
+  handler: async ({ params, identity, moment }) => {
     // THE CONVERSION: set-world-signal's world strand is role-manager.word, run through
     // the bridge in CALLER mode (no `through` — the signal attributes to the publisher).
     // The JS below is the clean-miss fallback.
-    const viaWord = await _setWorldSignalViaWord({ namespace: params?.namespace, key: params?.key, value: params?.value, summonCtx });
+    const viaWord = await _setWorldSignalViaWord({ namespace: params?.namespace, key: params?.key, value: params?.value, moment });
     if (viaWord) return viaWord;
 
     const namespace = String(params?.namespace || "").trim();
@@ -340,7 +340,7 @@ registerOperation("set-world-signal", {
       { kind: "space", id: String(rootId) },
       "set-space",
       { field, value },
-      { identity, summonCtx },
+      { identity, moment },
     );
 
     return { published: true, namespace, key, value };

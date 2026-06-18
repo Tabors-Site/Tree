@@ -8,7 +8,7 @@
 // checks role-carry, mints the actId, computes the act's derived
 // fields (ibpAddress, rootCorrelation, parentThread), and builds the
 // summon context the moment's dispatch needs. It returns
-// { actId, plannedAct, role, summonCtx } for moment to dispatch, or
+// { actId, plannedAct, role, moment } for moment to dispatch, or
 // { skipped } when the entry can't run.
 //
 // **assign no longer writes the Act row to Mongo** (Round 5).
@@ -16,7 +16,7 @@
 // cognition returned ok:true. On ok:false the Act row never
 // materializes — that's how "no Act row for the failed moment" is
 // structurally enforced. Tool-calls during the moment do NOT write
-// Facts directly either: emitFact accumulates into summonCtx.deltaF
+// Facts directly either: emitFact accumulates into moment.deltaF
 // and the whole ΔF commits atomically with the Act at seal (Phase 2,
 // facts.js / 4-stamped.js). A failed moment therefore leaves NOTHING
 // on the chain — no orphan facts, no act row. See
@@ -26,12 +26,12 @@
 // Two intake kinds reach assign:
 //
 //   kind: "summon"
-//     A SUMMON the being received. summonCtx carries the message
+//     A SUMMON the being received. moment carries the message
 //     shape; moment.js calls role.summon(message, ctx).
 //
 //   kind: "transport-act"
 //     The being acted from their own transport (portal/browser/CLI).
-//     summonCtx carries the act payload { verb, target, action, args };
+//     moment carries the act payload { verb, target, action, args };
 //     moment.js dispatches it directly through doVerb/beVerb. No
 //     role.summon handler runs — the act was already decided
 //     externally.
@@ -84,10 +84,10 @@ import { getSpaceRootId } from "../../sprout.js";
  * @param {object} [opts.handoff]     — runtime context stashed by SUMMON (identity, resolved, ...)
  * @param {AbortSignal} [opts.signal] — abort propagating from the scheduler's controller
  *
- * @returns {Promise<{ actId?, role?, summonCtx?, skipped? }>}
+ * @returns {Promise<{ actId?, role?, moment?, skipped? }>}
  *   actId    — the Act row this moment opened (always present on success)
  *   role       — resolved role spec
- *   summonCtx  — the prepared context moment.js dispatches on (carries actId + kind)
+ *   moment  — the prepared context moment.js dispatches on (carries actId + kind)
  *   skipped    — reason string when the entry can't run
  *                ("being-not-found" | "role-not-carried" | "role-unavailable")
  */
@@ -99,7 +99,7 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   // ACTOR's branch (where the moment runs and where the Act seals).
   // `targetBranch` is where the Fact lands; for same-world calls it
   // matches `branch`, for cross-world it differs. Both attach to
-  // summonCtx so verbs invoked inside the moment route correctly.
+  // moment so verbs invoked inside the moment route correctly.
   // See seed/CROSS-WORLD.md.
   const branch = assertBranchOrThrow(
     entry?.branch || entry?.act?.branch,
@@ -257,10 +257,10 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   // created at seal-time by stamped.js, only when cognition
   // returned ok:true. plannedAct carries the derived fields the
   // seal needs (ibpAddress, rootCorrelation, parentThread); moment
-  // threads it through to stamped via summonCtx.plannedAct.
+  // threads it through to stamped via moment.plannedAct.
   const plannedAct = await planActRow({
-    beingIn:           String(askerBeingId),
-    beingOut:          String(beingId),
+    through:           String(askerBeingId),
+    to:                String(beingId),
     // Who signs: the session's Name (the inhabitor) when present, else the
     // acting being's own trueName (resolved inside planActRow).
     inhabitorNameId:   sessionNameId,
@@ -294,14 +294,14 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   const orientation = validateOrientation(entry?.orientation, DEFAULT_ORIENTATION);
 
   // `branch` was extracted up top alongside the projection load; it
-  // becomes the actorAct.branch seated on summonCtx, which every Fact
+  // becomes the actorAct.branch seated on moment, which every Fact
   // this moment emits inherits as its actor-side branch. The cross-
-  // branch dispatch path routes targets via summonCtx.targetBranch
+  // branch dispatch path routes targets via moment.targetBranch
   // (set just below); same-world moments have actorAct.branch ===
   // targetBranch.
 
   // The actor's Act is the single carrier of the identity tuple
-  // (reality, branch, beingIn, _id). summonCtx.actorAct points to it;
+  // (reality, branch, through, _id). moment.actorAct points to it;
   // every downstream consumer (emitFact, foldEngine, the Stamper,
   // verb handlers) reads identity from the Act, never from
   // independently-threaded fields.
@@ -394,9 +394,9 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
       shape:  String(shape || "internal"),
       reason: String(reason || ""),
     }),
-    // The four verbs, pre-bound with this moment's identity + summonCtx.
+    // The four verbs, pre-bound with this moment's identity + moment.
     // Extensions don't need to import doVerb/seeVerb/beVerb/summon* and
-    // they don't need to thread { identity, summonCtx: ctx } on every
+    // they don't need to thread { identity, moment: ctx } on every
     // call. The wrapped form is the canonical handler-side surface:
     //   await ctx.do(target, action, args)
     //   await ctx.see(address, opts)
@@ -406,7 +406,7 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
       const { doVerb } = await import("../../ibp/verbs/do.js");
       return doVerb(target, action, args, {
         identity: handoff?.identity || entry?.identity || null,
-        summonCtx: baseCtx,
+        moment: baseCtx,
       });
     },
     see: async (address, opts = {}) => {
@@ -414,21 +414,21 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
       return seeVerb(address, {
         ...opts,
         identity: opts.identity || handoff?.identity || entry?.identity || null,
-        summonCtx: baseCtx,
+        moment: baseCtx,
       });
     },
     be: async (operation, payload = {}) => {
       const { beVerb } = await import("../../ibp/verbs/be.js");
       return beVerb(operation, payload, {
         identity: handoff?.identity || entry?.identity || null,
-        summonCtx: baseCtx,
+        moment: baseCtx,
       });
     },
     summon: async (address, message) => {
       const { summonVerb } = await import("../../ibp/verbs/summon.js");
       return summonVerb(address, message, {
         identity: handoff?.identity || entry?.identity || null,
-        summonCtx: baseCtx,
+        moment: baseCtx,
       });
     },
     resolved: handoff?.resolved || {
@@ -460,14 +460,14 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     afterSeal: [],
   };
 
-  let summonCtx;
+  let moment;
   if (kind === "transport-act") {
-    summonCtx = {
+    moment = {
       ...baseCtx,
       act: entry.act || null,
     };
   } else {
-    summonCtx = {
+    moment = {
       ...baseCtx,
       message: {
         from:            entry.from,
@@ -490,11 +490,11 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   }
 
   // plannedAct rides on the return so moment.js can hand it to
-  // stamped.js for the seal-time write. The summonCtx carries
+  // stamped.js for the seal-time write. The moment carries
   // actId (so DO/BE Facts stamped during the moment reference
   // this Act); plannedAct stays separate because the cognition
   // shouldn't see or care about the Act's structural fields.
-  return { actId, plannedAct, role, summonCtx };
+  return { actId, plannedAct, role, moment };
 }
 
 // Render a one-line description of a transport-act for the Act's
@@ -502,7 +502,7 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
 // what shows up when humans skim a Summon row.
 //
 // `act.act` is the operation in flight (the seal records it as
-// fact.action). For DO: act.target is a typed object ({kind, id});
+// fact.act). For DO: act.target is a typed object ({kind, id});
 // render as "<verb> <act> on <kind>/<id>". For BE/NAME the op stands
 // alone; render as "BE <act>" / "NAME <act>".
 function describeTransportAct(act) {
@@ -570,12 +570,12 @@ function capContent(s) {
  * stamped inside the moment can carry it; the row itself does NOT
  * exist in Mongo until the seal step writes it.
  *
- * Returns null when the inputs are invalid (beingIn missing).
+ * Returns null when the inputs are invalid (through missing).
  */
 async function planActRow(opts = {}) {
   const {
-    beingIn,
-    beingOut = null,
+    through,
+    to = null,
     inhabitorNameId = null,
     askerPosition = null,
     addresseePosition = null,
@@ -597,8 +597,8 @@ async function planActRow(opts = {}) {
     throw new Error("planActRow: branch is required (no silent main-bias)");
   }
 
-  if (!beingIn) {
-    log.warn("Assign", "planActRow called without beingIn");
+  if (!through) {
+    log.warn("Assign", "planActRow called without through");
     return null;
   }
 
@@ -635,7 +635,7 @@ async function planActRow(opts = {}) {
   if (!inReplyTo) {
     try {
       const { getCurrentRootCorrelation } = await import("../intake/scheduler.js");
-      const currentRoot = getCurrentRootCorrelation(String(beingIn));
+      const currentRoot = getCurrentRootCorrelation(String(through));
       if (currentRoot && currentRoot !== resolvedRoot) {
         resolvedParentThread = currentRoot;
       }
@@ -645,9 +645,9 @@ async function planActRow(opts = {}) {
   }
 
   const ibpAddress = await computeIbpStampAddress({
-    askerBeingId: beingIn,
+    askerBeingId: through,
     askerPosition,
-    addresseeBeingId: beingOut,
+    addresseeBeingId: to,
     addresseePosition,
     // The moment's branch: scopes the being lookups (branch-born
     // beings compose) and renders into the lane identity.
@@ -667,7 +667,7 @@ async function planActRow(opts = {}) {
   // only at seal so crashed moments never enter the chain). See
   // past/act/actHash.js for what the digest covers and excludes.
   //
-  // Identity tuple (reality, branch, beingIn, _id) lives on this row.
+  // Identity tuple (reality, branch, through, _id) lives on this row.
   // Everything downstream (Facts in deltaF, inner face attachment,
   // crossOrigin derivation) reads from here. See CROSS-WORLD.md.
   const { getRealityDomain } = await import("../../ibp/address.js");
@@ -683,19 +683,19 @@ async function planActRow(opts = {}) {
   // hijacks it. No fallback to nothing: a being with no signer cannot act.
   const { loadOrFold } = await import("../../materials/projections.js");
   const { isKeyId } = await import("../../materials/name/keys.js");
-  const actorSlot = await loadOrFold("being", beingIn, branch);
+  const actorSlot = await loadOrFold("being", through, branch);
   const ownTrueName = actorSlot?.state?.trueName || null;
-  const nameId = (inhabitorNameId && isKeyId(inhabitorNameId)) ? inhabitorNameId : ownTrueName;
-  if (!nameId) {
+  const by = (inhabitorNameId && isKeyId(inhabitorNameId)) ? inhabitorNameId : ownTrueName;
+  if (!by) {
     throw new Error(
-      `planActRow: acting being ${String(beingIn).slice(0, 8)} has no signer name ` +
+      `planActRow: acting being ${String(through).slice(0, 8)} has no signer name ` +
       `(no session inhabitor, no trueName).`,
     );
   }
 
   const opening = {
-    beingIn,
-    beingOut: beingOut || null,
+    through,
+    to: to || null,
     ibpAddress,
     activeRole,
     inboxMessageId,
@@ -705,7 +705,7 @@ async function planActRow(opts = {}) {
     reality: getRealityDomain(),
     branch,
   };
-  const p = await readActHead(branch, beingIn);
+  const p = await readActHead(branch, through);
   actId = computeActId(p, opening);
   // A summon with no parent IS its own root.
   if (!resolvedRoot) resolvedRoot = actId;
@@ -713,9 +713,9 @@ async function planActRow(opts = {}) {
   return {
     _id: actId,
     p,
-    nameId,
-    beingIn,
-    beingOut: beingOut || null,
+    by,
+    through,
+    to: to || null,
     ibpAddress,
     activeRole,
     inboxMessageId,

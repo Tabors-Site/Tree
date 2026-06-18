@@ -12,7 +12,7 @@ import { cherubBirth } from "./cherub-birth.ir.js";
 const ctx = {
   dryRun: true,
   branch: "main",
-  summonCtx: { actId: "<actId>" },
+  moment: { actId: "<actId>" },
   identity: { beingId: "Cherub", name: "cherub", nameId: "Cherub" },
   trigger: { name: "tabor", password: "hunter2" }, // the birth summon payload
   env: { iam: "I_AM" },

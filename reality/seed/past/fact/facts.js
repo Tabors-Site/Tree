@@ -14,8 +14,8 @@
 //
 // This file writes and reads that reel. logFact is called from the
 // IBP verb dispatcher every time DO or BE places an act. The Fact
-// row names the actor (beingId), the kind of act (verb, action), the
-// target (space | matter | being | place | stance), and the input /
+// row names the actor (through), the kind of act (verb, act), the
+// object (space | matter | being | place | stance), and the input /
 // output. getFacts and getFactsByBeing return the reel to readers.
 //
 // Universal over substrate. Facts attach to any target kind, so this
@@ -58,9 +58,9 @@ function MAX_PAYLOAD_BYTES() {
 }
 const MAX_ACTION_LENGTH = 100;
 // The three stamping verbs. SEE never appends a Fact.
-//   - do: action on a target (right stance). target.kind ∈ {space, matter, being, place, stance}.
-//   - be: identity acting on self (left stance). target.kind === "being".
-//   - summon: one being calling another (right stance, the recipient). target.kind === "being".
+//   - do: act on an object (right stance). of.kind ∈ {space, matter, being, place, stance}.
+//   - be: identity acting on self (left stance). of.kind === "being".
+//   - summon: one being calling another (right stance, the recipient). of.kind === "being".
 const VALID_VERBS = new Set(["do", "be", "summon", "name"]);
 const VALID_TARGET_KINDS = new Set([
   "space",
@@ -72,7 +72,7 @@ const VALID_TARGET_KINDS = new Set([
 ]);
 // Per-verb target-kind constraint. DO accepts any kind; BE and
 // SUMMON always act on a being. Enforced in logFact below so a
-// caller can't slip a `verb:"be" target:{kind:"matter"}` past the
+// caller can't slip a `verb:"be" of:{kind:"matter"}` past the
 // guard and confuse the fold or the inner/outer classifier.
 const BEING_ONLY_TARGET_VERBS = new Set(["be", "summon"]);
 
@@ -80,11 +80,11 @@ const BEING_ONLY_TARGET_VERBS = new Set(["be", "summon"]);
  * Act a Fact onto the reel.
  *
  * @param {object} params           the fact spec (see fields below)
- * @param {string} params.beingId   actor (I_AM for scaffold flows)
- * @param {string} params.action    operation or sub-event name
+ * @param {string} params.through   actor (I_AM for scaffold flows)
+ * @param {string} params.act       operation or sub-event name
  * @param {string} [params.verb="do"]   "do" | "be" | "summon"
- * @param {{kind:string,id:string}|null} [params.target]  what was acted on.
- *   When verb is "be" or "summon", target.kind MUST be "being" (enforced).
+ * @param {{kind:string,id:string}|null} [params.of]  what was acted on.
+ *   When verb is "be" or "summon", of.kind MUST be "being" (enforced).
  * @param {*} [params.params]       input payload (any JSON; clipped on cap)
  * @param {*} [params.result]       output payload (any JSON; clipped on cap)
  * @param {string|null} [params.actId]   correlation
@@ -114,11 +114,11 @@ export async function logFact(input, opts = {}) {
   // Everything else stays effectively-const.
   let branch;
   const {
-    beingId,
-    nameId = null,
+    through,
+    by = null,
     verb = "do",
-    action,
-    target = null,
+    act,
+    of = null,
     params = null,
     result = null,
     actId = null,
@@ -134,8 +134,8 @@ export async function logFact(input, opts = {}) {
   // CROSS-WORLD.md.
   branch = input.branch;
 
-  if (!beingId || !action) {
-    throw new Error("logFact requires beingId and action");
+  if (!through || !act) {
+    throw new Error("logFact requires through and act");
   }
   if (typeof branch !== "string" || !branch.length) {
     throw new Error(
@@ -144,9 +144,9 @@ export async function logFact(input, opts = {}) {
       `not from the actor's branch.`,
     );
   }
-  if (typeof action !== "string" || action.length > MAX_ACTION_LENGTH) {
+  if (typeof act !== "string" || act.length > MAX_ACTION_LENGTH) {
     throw new Error(
-      `logFact: action must be a string under ${MAX_ACTION_LENGTH} chars`,
+      `logFact: act must be a string under ${MAX_ACTION_LENGTH} chars`,
     );
   }
   if (!VALID_VERBS.has(verb)) {
@@ -157,7 +157,7 @@ export async function logFact(input, opts = {}) {
 
   // EMBODIMENT invariant (Tabor): a name makes WORLD facts (do / be / summon)
   // ONLY by acting THROUGH a being — every world fact carries the actor being
-  // (the `beingId` REQUIRED above is that structural guarantee; there is no
+  // (the `through` REQUIRED above is that structural guarantee; there is no
   // bodiless world fact). The only thing a name acts on WITHOUT a being is the
   // name chain itself — NAME-verb facts (verb:"name": declare/connect/release/
   // banish), the identity layer outside the world. SEE never reaches logFact (a
@@ -166,16 +166,16 @@ export async function logFact(input, opts = {}) {
   // actor for a name-only socket's world verb, so it is never bodiless.
 
   let normalizedTarget = null;
-  if (target && typeof target === "object") {
-    if (target.kind && !VALID_TARGET_KINDS.has(target.kind)) {
+  if (of && typeof of === "object") {
+    if (of.kind && !VALID_TARGET_KINDS.has(of.kind)) {
       throw new Error(
-        `logFact: target.kind must be one of ${[...VALID_TARGET_KINDS].join("|")}`,
+        `logFact: of.kind must be one of ${[...VALID_TARGET_KINDS].join("|")}`,
       );
     }
-    if (target.kind || target.id) {
+    if (of.kind || of.id) {
       normalizedTarget = {
-        kind: target.kind || null,
-        id: target.id != null ? String(target.id) : null,
+        kind: of.kind || null,
+        id: of.id != null ? String(of.id) : null,
       };
     }
   }
@@ -287,7 +287,7 @@ export async function logFact(input, opts = {}) {
   if (BEING_ONLY_TARGET_VERBS.has(verb)) {
     if (!normalizedTarget || normalizedTarget.kind !== "being") {
       throw new Error(
-        `logFact: verb "${verb}" requires target.kind === "being" (got ${normalizedTarget?.kind ?? "(none)"})`,
+        `logFact: verb "${verb}" requires of.kind === "being" (got ${normalizedTarget?.kind ?? "(none)"})`,
       );
     }
   }
@@ -306,19 +306,19 @@ export async function logFact(input, opts = {}) {
   const { isBeingDead, isDeathFact } = await import(
     "../../materials/being/closure.js"
   );
-  if (!isDeathFact({ verb, action })) {
-    if (beingId && await isBeingDead(beingId, branch)) {
+  if (!isDeathFact({ verb, act })) {
+    if (through && await isBeingDead(through, branch)) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
-        `logFact: being ${String(beingId).slice(0, 8)} is closed (be:death). ` +
+        `logFact: being ${String(through).slice(0, 8)} is closed (be:death). ` +
         `The actor chain is frozen; no new facts can ride this being.`,
-        { beingId },
+        { through },
       );
     }
     if (
       normalizedTarget?.kind === "being" &&
       normalizedTarget?.id &&
-      String(normalizedTarget.id) !== String(beingId) &&
+      String(normalizedTarget.id) !== String(through) &&
       await isBeingDead(normalizedTarget.id, branch)
     ) {
       throw new IbpError(
@@ -331,7 +331,7 @@ export async function logFact(input, opts = {}) {
   }
 
   // Banish gate — the Name layer's be:death. Refuse to stamp any fact whose
-  // ACTOR name (nameId) is banished. The lone exception is the name:banish
+  // ACTOR name (by) is banished. The lone exception is the name:banish
   // fact itself, so the tombstone can seal. A Name is reality-wide (its reel
   // does not fork), so this reads on main regardless of the fact's branch;
   // isNameBanished short-circuits I_AM, so today's all-i-am traffic skips the
@@ -339,12 +339,12 @@ export async function logFact(input, opts = {}) {
   const { isNameBanished, isBanishFact } = await import(
     "../../materials/name/closure.js"
   );
-  if (!isBanishFact({ verb, action }) && nameId && await isNameBanished(nameId)) {
+  if (!isBanishFact({ verb, act }) && by && await isNameBanished(by)) {
     throw new IbpError(
       IBP_ERR.FORBIDDEN,
-      `logFact: name ${String(nameId).slice(0, 8)} is banished. ` +
+      `logFact: name ${String(by).slice(0, 8)} is banished. ` +
       `No new fact can be signed by it.`,
-      { nameId },
+      { by },
     );
   }
 
@@ -352,10 +352,10 @@ export async function logFact(input, opts = {}) {
   // mutable view; only `params` and `result` are conventionally mutated
   // for enrichment. Cancellations short-circuit the stamp.
   const hookData = {
-    beingId,
+    through,
     verb,
-    action,
-    target: normalizedTarget,
+    act,
+    of: normalizedTarget,
     params,
     result,
     actId,
@@ -375,7 +375,7 @@ export async function logFact(input, opts = {}) {
   const cappedResult = capPayload(hookData.result, "result");
   const truncated = cappedParams.truncated || cappedResult.truncated;
 
-  const finalTarget = hookData.target || normalizedTarget;
+  const finalTarget = hookData.of || normalizedTarget;
 
   // Foreign-origin idempotency. Per CROSS-WORLD.md "Idempotency on
   // the foreign side": when a Fact arrives carrying a crossOrigin
@@ -394,8 +394,8 @@ export async function logFact(input, opts = {}) {
       // sibling branch holding the same crossOrigin tuple is a
       // different reel and must not suppress this stamp.
       branch,
-      "target.kind": finalTarget.kind,
-      "target.id":   finalTarget.id,
+      "of.kind": finalTarget.kind,
+      "of.id":   finalTarget.id,
       "params.crossOrigin.actId":   incomingCrossOrigin.actId,
       "params.crossOrigin.beingId": incomingCrossOrigin.beingId,
     }).select("_id seq").lean();
@@ -407,11 +407,11 @@ export async function logFact(input, opts = {}) {
   }
 
   const baseDoc = {
-    beingId,
-    nameId,
+    through,
+    by,
     verb,
-    action,
-    target: finalTarget,
+    act,
+    of: finalTarget,
     params: cappedParams.value,
     result: cappedResult.value,
     truncated,
@@ -504,7 +504,7 @@ export async function logFact(input, opts = {}) {
         await withReelLock(branch, finalTarget.kind, finalTarget.id, runAppend);
       }
     } catch (err) {
-      log.error("DB", `Fact append failed (${action} on ${finalTarget.kind}:${finalTarget.id} branch=${branch}): ${err.message}`);
+      log.error("DB", `Fact append failed (${act} on ${finalTarget.kind}:${finalTarget.id} branch=${branch}): ${err.message}`);
       // Carry the underlying message + code through so callers see the
       // actual cause (E11000 duplicate, missing index, schema validation)
       // instead of the bare "Failed to stamp Fact" wrapper.
@@ -516,7 +516,7 @@ export async function logFact(input, opts = {}) {
       // (a collection-creation race that Mongo asks us to retry), and
       // the retry never happens because the wrapped error lost its
       // labels — boot fails on the first write of genesis.
-      const wrapped = new Error(`Failed to stamp Fact (${branch}:${finalTarget.kind}:${finalTarget.id} ${action}): ${err.message}`);
+      const wrapped = new Error(`Failed to stamp Fact (${branch}:${finalTarget.kind}:${finalTarget.id} ${act}): ${err.message}`);
       wrapped.cause = err;
       if (err?.code) wrapped.code = err.code;
       if (err?.errorLabels) wrapped.errorLabels = err.errorLabels;
@@ -563,10 +563,10 @@ export async function logFact(input, opts = {}) {
       }
     } catch (err) {
       if (err?.code === 11000 && /_id_?\b/.test(err?.message || "")) {
-        log.debug("DB", `Fact replay deduped (non-reel ${action})`);
+        log.debug("DB", `Fact replay deduped (non-reel ${act})`);
         return;
       }
-      log.error("DB", `Fact save failed (${action}): ${err.message}`);
+      log.error("DB", `Fact save failed (${act}): ${err.message}`);
       throw new Error("Failed to stamp Fact");
     }
   }
@@ -609,7 +609,7 @@ async function prevHashAt(kind, id, prevSeq, branch, session = null) {
     ? { $or: [{ branch: "0" }, { branch: { $exists: false } }] }
     : { branch: owner };
   let q = Fact.findOne(
-    { "target.kind": kind, "target.id": id, seq: prevSeq, ...branchClause },
+    { "of.kind": kind, "of.id": id, seq: prevSeq, ...branchClause },
     { _id: 1 },
   ).lean();
   if (session) q = q.session(session);
@@ -667,7 +667,7 @@ export function isReplicaSetCluster() {
  * grouping so sealFacts and sealAct produce identical lock-order
  * for the same ΔF.
  *
- *   - Reel-bearing facts (target.kind in REEL_KINDS, target.id set)
+ *   - Reel-bearing facts (of.kind in REEL_KINDS, of.id set)
  *     bucket by "<kind>:<id>".
  *   - Non-reel-bearing facts (place/stance, target-less) accumulate
  *     in orphanFacts and commit without a reel lock — they only
@@ -684,8 +684,8 @@ export function groupByReel(deltaF) {
   const factsByReel = new Map();
   const orphanFacts = [];
   for (const spec of deltaF) {
-    const target = spec?.target;
-    if (target && REEL_KINDS.has(target.kind) && target.id) {
+    const of = spec?.of;
+    if (of && REEL_KINDS.has(of.kind) && of.id) {
       // Reel identity is (branch, kind, id). A fact on branch=1
       // targeting being:X writes a different reel than a fact on
       // branch=0 targeting the same being. logFact already required
@@ -693,14 +693,14 @@ export function groupByReel(deltaF) {
       // remap to main. If branch is absent we throw rather than guess.
       if (typeof spec.branch !== "string" || !spec.branch.length) {
         throw new Error(
-          `groupByReel: fact spec is missing branch (${spec.verb}:${spec.action} on ` +
-          `${target.kind}:${String(target.id).slice(0,8)}). Upstream caller must thread it.`,
+          `groupByReel: fact spec is missing branch (${spec.verb}:${spec.act} on ` +
+          `${of.kind}:${String(of.id).slice(0,8)}). Upstream caller must thread it.`,
         );
       }
       const branch = spec.branch;
-      const key = `${branch}:${target.kind}:${target.id}`;
+      const key = `${branch}:${of.kind}:${of.id}`;
       const entry = factsByReel.get(key)
-        || { branch, kind: target.kind, id: String(target.id), facts: [] };
+        || { branch, kind: of.kind, id: String(of.id), facts: [] };
       entry.facts.push(spec);
       factsByReel.set(key, entry);
     } else {
@@ -874,7 +874,7 @@ function _noteFoldDeferredOnce(reelCount) {
  * Phase 2 single-entry point: handlers never call logFact directly.
  *
  * Two paths:
- *   - Inside a moment (summonCtx.deltaF exists): synchronously
+ *   - Inside a moment (moment.deltaF exists): synchronously
  *     append the spec to ctx.deltaF. The Fact commits at sealAct
  *     time, atomically with every other Fact the moment emits and
  *     with the Act row.
@@ -888,10 +888,10 @@ function _noteFoldDeferredOnce(reelCount) {
  * are the pre-Phase-2 pattern and must not return.
  *
  * @param {object} spec       fact spec (same shape logFact accepts)
- * @param {object} [summonCtx]  the moment's context, if any
+ * @param {object} [moment]  the moment's context, if any
  * @returns {Promise<void>}
  */
-export async function emitFact(spec, summonCtx = null) {
+export async function emitFact(spec, moment = null) {
   // Stamp foldSeq if the moment recorded a fold for this fact's target
   // reel (PARALLEL FACTS §1.3). Already-set foldSeq wins (callers like
   // verify scripts that author facts manually retain control). Null
@@ -900,38 +900,38 @@ export async function emitFact(spec, summonCtx = null) {
   if (
     spec &&
     spec.foldSeq === undefined &&
-    summonCtx?.foldedSeqs instanceof Map &&
-    spec.target?.kind &&
-    spec.target?.id
+    moment?.foldedSeqs instanceof Map &&
+    spec.of?.kind &&
+    spec.of?.id
   ) {
-    const key = `${spec.target.kind}:${spec.target.id}`;
-    spec.foldSeq = summonCtx.foldedSeqs.get(key) ?? null;
+    const key = `${spec.of.kind}:${spec.of.id}`;
+    spec.foldSeq = moment.foldedSeqs.get(key) ?? null;
   }
 
   // The actor NAME — every fact links DIRECTLY to the name that did it,
-  // taken from the moment's act (actorAct.nameId), never re-resolved per
-  // fact. An already-set nameId wins (manual authors retain control).
-  if (spec && spec.nameId === undefined) {
-    spec.nameId = summonCtx?.actorAct?.nameId ?? null;
+  // taken from the moment's act (actorAct.by), never re-resolved per
+  // fact. An already-set by wins (manual authors retain control).
+  if (spec && spec.by === undefined) {
+    spec.by = moment?.actorAct?.by ?? null;
   }
 
-  // Cross-world provenance. When the actor's Act seats on summonCtx
+  // Cross-world provenance. When the actor's Act seats on moment
   // and the target's world differs from the actor's world, derive the
   // crossOrigin block and attach it to params. Same-world facts get
   // null and nothing is attached. The Stamper enforces the contract
   // at insert time. See seed/past/act/crossOrigin.js + CROSS-WORLD.md.
-  if (summonCtx?.actorAct && spec?.target) {
+  if (moment?.actorAct && spec?.of) {
     const { deriveCrossOrigin } = await import("../act/crossOrigin.js");
     const { getRealityDomain } = await import("../../ibp/address.js");
-    const target = inferTargetWorld(spec, summonCtx, getRealityDomain());
-    const crossOrigin = deriveCrossOrigin(summonCtx.actorAct, target);
+    const target = inferTargetWorld(spec, moment, getRealityDomain());
+    const crossOrigin = deriveCrossOrigin(moment.actorAct, target);
     if (crossOrigin) {
       spec.params = { ...(spec.params || {}), crossOrigin };
     }
   }
 
-  if (summonCtx && Array.isArray(summonCtx.deltaF)) {
-    summonCtx.deltaF.push(spec);
+  if (moment && Array.isArray(moment.deltaF)) {
+    moment.deltaF.push(spec);
     return;
   }
   // No moment to accumulate into — boot, migration, scaffold, or a
@@ -943,7 +943,7 @@ export async function emitFact(spec, summonCtx = null) {
 // The spec carries `branch` (where the fact lands); the reality is
 // ALWAYS this substrate — the local stamper only ever writes local
 // reels (cross-reality writes travel over canopy and are stamped by
-// the receiving substrate). The explicit `target.world` override
+// the receiving substrate). The explicit `of.world` override
 // remains for future forwarding shapes.
 //
 // The reality must NOT fall back to actorAct.reality: for an inbound
@@ -957,11 +957,11 @@ export async function emitFact(spec, summonCtx = null) {
 // Always operates on ACTUAL branch paths, never pointers — pointer
 // resolution happens at the address-parsing perimeter before any
 // emit. See CROSS-WORLD.md "pointers vs actual branches."
-function inferTargetWorld(spec, summonCtx, localReality) {
-  if (spec?.target?.world?.reality && spec?.target?.world?.branch) {
-    return { world: spec.target.world };
+function inferTargetWorld(spec, moment, localReality) {
+  if (spec?.of?.world?.reality && spec?.of?.world?.branch) {
+    return { world: spec.of.world };
   }
-  const branch = spec?.branch || summonCtx?.actorAct?.branch || null;
+  const branch = spec?.branch || moment?.actorAct?.branch || null;
   if (!branch || !localReality) return null;
   return { world: { reality: localReality, branch } };
 }
@@ -1119,8 +1119,8 @@ export async function getFacts({
   }
 
   const query = {
-    "target.kind": "space",
-    "target.id": String(spaceId),
+    "of.kind": "space",
+    "of.id": String(spaceId),
     ...buildDateFilter(startDate, endDate),
   };
   const safeLimit = Math.min(
@@ -1130,7 +1130,7 @@ export async function getFacts({
   const safeOffset = Math.max(0, Number(offset) || 0);
 
   const facts = await Fact.find(query)
-    .populate("beingId", "name")
+    .populate("through", "name")
     .sort({ date: -1 })
     .skip(safeOffset)
     .limit(safeLimit)
@@ -1151,12 +1151,12 @@ export async function getReel({ targetKind, targetId, limit, offset, order = "de
   if (!REEL_KINDS.has(targetKind)) {
     throw new Error(`getReel: targetKind must be one of ${[...REEL_KINDS].join("|")}`);
   }
-  const query = { "target.kind": targetKind, "target.id": String(targetId) };
+  const query = { "of.kind": targetKind, "of.id": String(targetId) };
   const safeLimit  = Math.min(Math.max(Number(limit)  || 100, 1), MAX_QUERY_LIMIT());
   const safeOffset = Math.max(0, Number(offset) || 0);
   const dir = order === "asc" ? 1 : -1;
   const facts = await Fact.find(query)
-    .populate("beingId", "name")
+    .populate("through", "name")
     .sort({ seq: dir, date: dir })
     .skip(safeOffset)
     .limit(safeLimit)
@@ -1194,15 +1194,15 @@ function serializeFactForReel(f) {
     _id:       String(f._id),
     seq:       f.seq,
     verb:      f.verb,
-    action:    f.action,
-    target:    f.target,
+    act:       f.act,
+    of:        f.of,
     params:    f.params,
     result:    f.result,
     p:         f.p,
     date:      f.date,
-    beingId:   f.beingId?._id ? String(f.beingId._id)
-               : (f.beingId ? String(f.beingId) : null),
-    beingName: f.beingId?.name || null,
+    through:   f.through?._id ? String(f.through._id)
+               : (f.through ? String(f.through) : null),
+    beingName: f.through?.name || null,
     actId:     f.actId || null,
   };
 }
@@ -1213,14 +1213,14 @@ function serializeFactForReel(f) {
 export async function getFactsByBeing(beingId, limit, startDate, endDate) {
   if (!beingId) throw new Error("Missing required parameter: beingId");
 
-  const query = { beingId, ...buildDateFilter(startDate, endDate) };
+  const query = { through: beingId, ...buildDateFilter(startDate, endDate) };
   const safeLimit = Math.min(
     Math.max(Number(limit) || 100, 1),
     MAX_QUERY_LIMIT(),
   );
 
   const facts = await Fact.find(query)
-    .populate("beingId", "name")
+    .populate("through", "name")
     .sort({ date: -1 })
     .limit(safeLimit)
     .lean();

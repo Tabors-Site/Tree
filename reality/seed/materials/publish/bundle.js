@@ -121,8 +121,8 @@ export function assertValidBundle(bundle) {
       if (typeof f.verb !== "string" || !f.verb) {
         throw new Error("bundle.content.facts: every entry needs a verb string");
       }
-      if (typeof f.action !== "string" || !f.action) {
-        throw new Error("bundle.content.facts: every entry needs an action string");
+      if (typeof f.act !== "string" || !f.act) {
+        throw new Error("bundle.content.facts: every entry needs an act string");
       }
     }
   }

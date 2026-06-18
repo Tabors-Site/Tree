@@ -56,15 +56,15 @@ const cherub = await poll(() => findByName("being", "cherub", "0"));
 const birth = async (name) => {
   let bid = null;
   await withIAmAct(`birth ${name}`, async (ctx) => {
-    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, summonCtx: ctx, branch: "0" });
+    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: ctx, branch: "0" });
     bid = b.beingId;
   });
   return bid;
 };
 const grant = async (target, params) => {
-  const sc = { actId: randomUUID(), actorAct: { branch: "0", nameId: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc = { actId: randomUUID(), actorAct: { branch: "0", by: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   try {
-    const res = await doVerb({ kind: "being", id: String(target) }, "grant-role", params, { identity: ident, summonCtx: sc });
+    const res = await doVerb({ kind: "being", id: String(target) }, "grant-role", params, { identity: ident, moment: sc });
     if (sc.deltaF.length) await sealFacts(sc.deltaF);
     return { result: res?.result ?? res, deltaF: sc.deltaF, refused: null };
   } catch (e) { if (e && (e.name === "IbpError" || e.code)) return { result: null, deltaF: sc.deltaF, refused: e }; throw e; }
@@ -87,7 +87,7 @@ try {
     : bad(`grant`, g.refused?.message || g.result);
 
   // ── 2. the grant-role fact carries the enriched record (grantedBy + grantedAt) ──
-  const gf = (g.deltaF || []).find((f) => f.action === "grant-role");
+  const gf = (g.deltaF || []).find((f) => f.act === "grant-role");
   gf && gf.params?.grantedBy === I_AM && typeof gf.params?.grantedAt === "string"
     ? ok(`the grant-role fact carries grantedBy + grantedAt (the cut's param-enrichment reached the auto-fact)`)
     : bad(`fact params`, gf?.params);

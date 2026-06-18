@@ -92,16 +92,16 @@ export function refuseHistoricalWrite(verb, target, opts) {
 
 /**
  * Resolve which branch a write-verb's Fact lands on. The Fact lives
- * at the TARGET's world; the actor's world is on summonCtx.actorAct.
+ * at the TARGET's world; the actor's world is on moment.actorAct.
  * When they differ, the call is cross-world and emitFact attaches a
  * crossOrigin block automatically. See CROSS-WORLD.md.
  *
  * Precedence — the moment is ground truth:
  *
- *   1. summonCtx.targetBranch — the moment-wide target branch
+ *   1. moment.targetBranch — the moment-wide target branch
  *      seated by assign.js from the inbox entry's targetBranch.
  *      For same-world moments this equals actorAct.branch.
- *   2. summonCtx.actorAct.branch — the actor's branch. The
+ *   2. moment.actorAct.branch — the actor's branch. The
  *      same-world fallback for in-moment continuations without an
  *      explicit target attachment (scaffolds, manifest sync, etc.,
  *      which operate on the actor's own world by construction).
@@ -114,11 +114,11 @@ export function refuseHistoricalWrite(verb, target, opts) {
  * None present is a perimeter bug — throws so the missing-attachment
  * surfaces immediately at the offending call site. No silent "0".
  */
-export function resolveBranchForFact(summonCtx, currentBranch, verb) {
+export function resolveBranchForFact(moment, currentBranch, verb) {
   // Shared precedence (PORT-NOTES #10). Fact emission carries no parsed
-  // `target` here, so the chain reduces to summonCtx.targetBranch →
+  // `target` here, so the chain reduces to moment.targetBranch →
   // actorAct.branch → currentBranch — identical to before.
-  const resolved = resolveTargetBranch({ summonCtx, currentBranch });
+  const resolved = resolveTargetBranch({ moment, currentBranch });
   if (resolved) return resolved;
   // Caller-specific null tail: a missing branch at the verb perimeter
   // is a threading bug — fail loud.
@@ -126,7 +126,7 @@ export function resolveBranchForFact(summonCtx, currentBranch, verb) {
   throw new IbpError(
     IBP_ERR.MISSING_BRANCH || "MISSING_BRANCH",
     `place.${verb}: branch missing at the perimeter (none of ` +
-      `opts.currentBranch, summonCtx.targetBranch, or summonCtx.actorAct.branch ` +
+      `opts.currentBranch, moment.targetBranch, or moment.actorAct.branch ` +
       `was attached). The wire layer must thread the target's branch into the ` +
       `verb opts. (caller: ${frame})`,
   );

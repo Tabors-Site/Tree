@@ -48,5 +48,5 @@ export async function isNameBanished(nameId) {
  * @returns {boolean}
  */
 export function isBanishFact(fact) {
-  return fact?.verb === "name" && (fact?.action === "banish" || fact?.action === "close");
+  return fact?.verb === "name" && (fact?.act === "banish" || fact?.act === "close");
 }

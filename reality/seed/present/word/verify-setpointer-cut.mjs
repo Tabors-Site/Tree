@@ -53,9 +53,9 @@ const cherub = await poll(() => findByName("being", "cherub", "0"));
 // drive the REAL set-pointer op via doVerb → the cut handler → branch-manager.word
 async function setPointer(name, canonical) {
   const branch = "0";
-  const sc = { actId: randomUUID(), actorAct: { branch, nameId: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc = { actId: randomUUID(), actorAct: { branch, by: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   try {
-    const res = await doVerb({ kind: "being", id: String(cherub.id) }, "set-pointer", { name, canonical }, { identity: ident, summonCtx: sc });
+    const res = await doVerb({ kind: "being", id: String(cherub.id) }, "set-pointer", { name, canonical }, { identity: ident, moment: sc });
     if (sc.deltaF.length) await sealFacts(sc.deltaF);
     return { result: res?.result ?? res, deltaF: sc.deltaF, refused: null };
   } catch (e) { if (e && (e.name === "IbpError" || e.code)) return { result: null, deltaF: sc.deltaF, refused: e }; throw e; }
@@ -74,9 +74,9 @@ try {
     : bad(`set`, a.refused?.message || a.result);
 
   // ── 2. one do:set-space fact at qualities.pointers ──
-  (a.deltaF || []).some((f) => f.action === "set-space" && f.params?.field === "qualities.pointers" && f.params?.value?.["release-v2"] === "1a2")
+  (a.deltaF || []).some((f) => f.act === "set-space" && f.params?.field === "qualities.pointers" && f.params?.value?.["release-v2"] === "1a2")
     ? ok(`one do:set-space at qualities.pointers carrying release-v2→1a2 (the lone WORLD fact)`)
-    : bad(`fact`, (a.deltaF || []).map((f) => `${f.action}:${f.params?.field}`));
+    : bad(`fact`, (a.deltaF || []).map((f) => `${f.act}:${f.params?.field}`));
 
   // ── 3. the .branches heaven map folds the pointer ──
   const map = await readPointers();
@@ -88,7 +88,7 @@ try {
 
   // ── 5. invalid name → refuse, exact code (refuse-code form flowing) ──
   const c = await setPointer("1bad", "0");
-  c.refused && /invalid/i.test(c.refused.message) && !(c.deltaF || []).some((f) => f.action === "set-space")
+  c.refused && /invalid/i.test(c.refused.message) && !(c.deltaF || []).some((f) => f.act === "set-space")
     ? ok(`set "1bad" → refuse "invalid" [code ${c.refused.code}], NO fact`)
     : bad(`refuse name`, c.refused?.message || c.result);
   c.refused?.code === "INVALID_INPUT" ? ok(`refuse carries code INVALID_INPUT (refuse-code form end-to-end)`) : bad(`refuse code`, c.refused?.code);

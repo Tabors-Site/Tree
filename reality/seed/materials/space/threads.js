@@ -186,7 +186,7 @@ export async function getThreadsSpaceId() {
 export async function describeThread(rootCorrelation) {
   if (!rootCorrelation) return null;
   const summons = await Act.find({ rootCorrelation })
-    .select("_id beingIn beingOut activeRole ibpAddress inReplyTo parentThread stampedAt receivedAt endMessage severedAt priority")
+    .select("_id through to activeRole ibpAddress inReplyTo parentThread stampedAt receivedAt endMessage severedAt priority")
     .lean();
   if (!summons.length) {
     // A thread can exist in the ThreadsProjection (the cross-cutting
@@ -219,8 +219,8 @@ export async function describeThread(rootCorrelation) {
   let complete = 0;
   let lastAct = null;
   for (const s of summons) {
-    if (s.beingIn)  participants.add(String(s.beingIn));
-    if (s.beingOut) participants.add(String(s.beingOut));
+    if (s.through) participants.add(String(s.through));
+    if (s.to)      participants.add(String(s.to));
     if (s.severedAt) severed++;
     else if (s.endMessage?.time) complete++;
     else live++;
@@ -270,8 +270,8 @@ export async function describeThread(rootCorrelation) {
 function serializeThreadAct(s) {
   return {
     _id:             String(s._id),
-    beingIn:         s.beingIn ? String(s.beingIn) : null,
-    beingOut:        s.beingOut ? String(s.beingOut) : null,
+    through:         s.through ? String(s.through) : null,
+    to:              s.to ? String(s.to) : null,
     activeRole:      s.activeRole || null,
     ibpAddress:      s.ibpAddress || null,
     inReplyTo:       s.inReplyTo || null,
@@ -293,7 +293,7 @@ function serializeThreadAct(s) {
  * Filters (all optional, AND-combined; all pushed down to the
  * aggregation $match so the projection scales):
  *
- *   being     — beingId of a participant (matches beingIn OR beingOut).
+ *   being     — beingId of a participant (matches through OR to).
  *               Pass with or without leading "@".
  *   role      — activeRole the participant wore on the Act.
  *   position  — spaceId fragment; matches threads whose ibpAddress
@@ -358,8 +358,8 @@ export async function markThreadSevered(rootCorrelation, now = new Date()) {
  * Sever a thread. The seed implementation of SUMMON-to-thread.
  *
  * Authorization (participation gate): the asker must be a participant
- * in the chain. A participant is any being that appears as `beingIn`
- * or `beingOut` on a Act under this rootCorrelation. The I_AM has
+ * in the chain. A participant is any being that appears as `through`
+ * or `to` on a Act under this rootCorrelation. The I_AM has
  * universal authority and always passes. Stance auth gates whether
  * the asker can address `.threads` at all (broad gate); this gate
  * narrows to "this specific thread." Both run.
@@ -394,7 +394,7 @@ export async function cutThread({
   priority = "INTERACTIVE",
   reason = "thread cut",
   identity = null,
-  summonCtx = null,
+  moment = null,
 }) {
   if (!rootCorrelation) {
     return { severed: 0, cancelled: 0, aborted: 0 };
@@ -413,7 +413,7 @@ export async function cutThread({
     const askerId = String(identity.beingId);
     const participant = await Act.exists({
       rootCorrelation,
-      $or: [{ beingIn: askerId }, { beingOut: askerId }],
+      $or: [{ through: askerId }, { to: askerId }],
     });
     if (!participant) {
       throw new IbpError(
@@ -446,17 +446,17 @@ export async function cutThread({
     cancelled = await InboxProjection.countDocuments({ rootCorrelation });
     await emitFact({
       verb:    "be",
-      action:  "sever",
-      beingId: severerBeingId,
-      target:  { kind: "being", id: severerBeingId }, // severer's own reel
+      act:     "sever",
+      through: severerBeingId,
+      of:      { kind: "being", id: severerBeingId }, // severer's own reel
       params:  { rootCorrelation, reason, priority },
-      actId:   summonCtx?.actId || null,
-      branch:  summonCtx?.actorAct?.branch || "0",
-    }, summonCtx);
-    // When summonCtx is present, the be:sever Fact lives in the
+      actId:   moment?.actId || null,
+      branch:  moment?.actorAct?.branch || "0",
+    }, moment);
+    // When moment is present, the be:sever Fact lives in the
     // caller's ΔF and commits at sealAct; the cross-cutting fold runs
     // post-commit and clears the InboxProjection rows then. When
-    // summonCtx is null (boot/standalone), emitFact committed
+    // moment is null (boot/standalone), emitFact committed
     // immediately and the eager-fold already ran.
   } catch {
     // Best-effort. Severed Acts + scheduler abort still close the

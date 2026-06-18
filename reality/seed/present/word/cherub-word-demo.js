@@ -16,7 +16,7 @@ const flow = ir[0];
 // cherub the being expresses I_AM (the reality root Name); the arriving Name is
 // "tabor", making its first being "tabor-prime".
 const ctx = {
-  dryRun: true, branch: "main", summonCtx: { actId: "<actId>" },
+  dryRun: true, branch: "main", moment: { actId: "<actId>" },
   identity: { beingId: "Cherub", name: "cherub", nameId: "I_AM" },
   trigger: { name: "tabor-prime", password: "hunter2" },
   env: { iam: "I_AM" },

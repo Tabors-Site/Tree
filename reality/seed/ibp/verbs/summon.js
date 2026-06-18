@@ -92,17 +92,17 @@ export async function summonVerb(stance, message, opts = {}) {
   const {
     identity = null, currentUser = null, currentReality = null,
     currentBranch = null, currentPath = null, actorBranch = null,
-    onResponse = null, onError = null, summonCtx = null,
+    onResponse = null, onError = null, moment = null,
   } = opts;
 
   // Top-level operation count (one-DO/BE/SUMMON-per-moment doctrine;
-  // sealAct reads opCount + batched from summonCtx). Each summon is
+  // sealAct reads opCount + batched from moment). Each summon is
   // one unit of intent — the actor decides to call another being.
   // Unlike DO's set-render → set-being recursion, recursive summons
   // (a role handler that summons another role) are genuinely distinct
   // intents and should count, so no `_inOp` gate here.
-  if (summonCtx) {
-    summonCtx._opCount = (summonCtx._opCount || 0) + 1;
+  if (moment) {
+    moment._opCount = (moment._opCount || 0) + 1;
   }
   const realityDomain = currentReality || getRealityDomain();
 
@@ -114,7 +114,7 @@ export async function summonVerb(stance, message, opts = {}) {
     // wire-threaded value. Without this the seed-side expand fell
     // through to the `#main` pointer for every relative summon and
     // resolveStance walked the wrong branch for off-main callers.
-    currentBranch: summonCtx?.actorAct?.branch || currentBranch || null,
+    currentBranch: moment?.actorAct?.branch || currentBranch || null,
     currentPath:   currentPath || null,
   };
   const parsed = parseWithContext(stance, parseCtx);
@@ -140,7 +140,7 @@ export async function summonVerb(stance, message, opts = {}) {
       identity,
       verb:   "summon",
       target: { kind: "thread", id: targetThreadId, spaceId: threadsSpaceId },
-      summonCtx,
+      moment,
       // The caller's session branch (their grants live there). The
       // wire threads it separately from currentBranch, which carries
       // the FACT's destination branch for this verb.
@@ -162,7 +162,7 @@ export async function summonVerb(stance, message, opts = {}) {
       priority,
       reason,
       identity,
-      summonCtx,
+      moment,
     });
     return {
       status:    "accepted",
@@ -192,10 +192,10 @@ export async function summonVerb(stance, message, opts = {}) {
   // a specific instance uses its name.
   const { findByName, loadOrFold } = await import("../../materials/projections.js");
   // Branch resolution at the perimeter: inside-moment continuations
-  // ride summonCtx.actorAct?.branch; wire-originated calls ride opts.currentBranch.
+  // ride moment.actorAct?.branch; wire-originated calls ride opts.currentBranch.
   // Throws MISSING_BRANCH if neither was attached (a threading bug at
   // the perimeter, surfaced loud per the branch-hardening doctrine).
-  const branch = resolveBranchForFact(summonCtx, currentBranch, "summon");
+  const branch = resolveBranchForFact(moment, currentBranch, "summon");
   let toBeingSlot = await findByName("being", qualifier, branch);
   let toBeing = toBeingSlot ? { _id: toBeingSlot.id, ...toBeingSlot.state } : null;
   if (!toBeing && resolved.spaceId) {
@@ -251,7 +251,7 @@ export async function summonVerb(stance, message, opts = {}) {
   // the fact emission uses the same value.
   return _dispatchSummon({
     resolved, toBeing, activeRole, role, validatedMessage,
-    identity, onResponse, onError, summonCtx, branch,
+    identity, onResponse, onError, moment, branch,
     actorBranch,
   });
 }
@@ -274,10 +274,10 @@ export async function summonVerb(stance, message, opts = {}) {
  * wake calls bypass the envelope contract and are forbidden.
  *
  * Branch precedence (no silent default to "0"):
- *   1. summonCtx.actorAct.branch — inside-moment caller; inherits the moment's branch
+ *   1. moment.actorAct.branch — inside-moment caller; inherits the moment's branch
  *   2. args.branch — explicit attachment from callers without a moment
  *      (subscriptions firing from a hook, scheduler boot paths, internal
- *      bootstraps). Required when summonCtx is null.
+ *      bootstraps). Required when moment is null.
  *   resolveBranchForFact throws MISSING_BRANCH if neither is present.
  *
  * @param {object} args
@@ -287,13 +287,13 @@ export async function summonVerb(stance, message, opts = {}) {
  * @param {string} [args.activeRole]  overrides toBeing.defaultRole
  * @param {object} args.identity      asker identity (typically I_AM)
  * @param {string} [args.branch]      explicit branch for non-moment callers
- * @param {object} [args.summonCtx]   moment ctx for inside-moment callers
+ * @param {object} [args.moment]   moment ctx for inside-moment callers
  */
 export async function summonByResolved(args) {
   const {
     toBeingId, inboxSpaceId, message, activeRole: roleOverride,
     identity: rawIdentity,
-    onResponse, onError, summonCtx = null, branch: argsBranch = null,
+    onResponse, onError, moment = null, branch: argsBranch = null,
   } = args || {};
   // Accept bare-string identity shorthand (typically `I_AM` for seed-
   // internal summons) alongside the regular `{beingId, name}` shape.
@@ -304,7 +304,7 @@ export async function summonByResolved(args) {
   const validatedMessage = validateSummonMessage(message);
 
   const { loadOrFold } = await import("../../materials/projections.js");
-  const branch = resolveBranchForFact(summonCtx, argsBranch, "summon");
+  const branch = resolveBranchForFact(moment, argsBranch, "summon");
   const toSlot = await loadOrFold("being", toBeingId, branch);
   if (!toSlot) {
     throw new IbpError(IBP_ERR.BEING_NOT_FOUND, `No being with id ${toBeingId} on branch ${branch}`);
@@ -323,7 +323,7 @@ export async function summonByResolved(args) {
   return _dispatchSummon({
     resolved: { spaceId: inboxSpaceId, leafId: inboxSpaceId, being: activeRole },
     toBeing, activeRole, role, validatedMessage,
-    identity, onResponse, onError, summonCtx, branch,
+    identity, onResponse, onError, moment, branch,
   });
 }
 
@@ -339,7 +339,7 @@ export async function summonByResolved(args) {
  */
 async function _dispatchSummon({
   resolved, toBeing, activeRole, role, validatedMessage,
-  identity, onResponse, onError, summonCtx = null, branch,
+  identity, onResponse, onError, moment = null, branch,
   actorBranch = null,
 }) {
   const decision = await authorize({
@@ -367,15 +367,15 @@ async function _dispatchSummon({
     // (2026-06-11) closed: intent declarations on canSummon entries
     // were silent no-ops because the verb never plumbed it through.
     intent: validatedMessage.intent || null,
-    summonCtx,
+    moment,
     // The actor's branch, where their grants live. In-moment summons
-    // ride summonCtx.actorAct.branch; wire summons thread the
+    // ride moment.actorAct.branch; wire summons thread the
     // caller's session branch as actorBranch (the `branch` param is
     // the FACT's destination — the wrong side for grants). The final
     // fallback keeps seed-internal callers (scheduler wakes,
     // summonByResolved) working: their actor is the substrate and
     // the destination branch is their world.
-    actorBranch: summonCtx?.actorAct?.branch || actorBranch || branch || null,
+    actorBranch: moment?.actorAct?.branch || actorBranch || branch || null,
   });
   if (!decision.ok) {
     throw new IbpError(
@@ -441,7 +441,7 @@ async function _dispatchSummon({
   // inside a moment) so it commits atomically with the moment's seal.
   // Outside a moment (boot, scaffold, seed-internal flows), emitFact
   // falls back to sealFacts singleton — immediate commit. The actId
-  // rides from the moment's plannedAct (summonCtx.actId) when
+  // rides from the moment's plannedAct (moment.actId) when
   // present; null for boot/scaffold paths.
   //
   // SUMMON is its own verb namespace, peer to DO and BE. The fact's
@@ -452,16 +452,16 @@ async function _dispatchSummon({
   // summoning another being is not a self-act.
   await emitFact({
     verb:    "summon",
-    action:  "summon",
-    beingId: summonerBeingId,
+    act:     "summon",
+    through: summonerBeingId,
     // The actor NAME (the summoner's signing identity). In-moment summons
-    // would have emitFact derive this from summonCtx.actorAct.nameId; we
-    // set it explicitly so the MOMENT-LESS wire summon (no summonCtx.actorAct,
+    // would have emitFact derive this from moment.actorAct.by; we
+    // set it explicitly so the MOMENT-LESS wire summon (no moment.actorAct,
     // the summon becomes the RECIPIENT's moment) still links to the
     // summoner's Name. Precedence mirrors emitFact: moment's actor name,
     // then the caller's signed-in Name, then I_AM for seed-internal flows.
-    nameId:  summonCtx?.actorAct?.nameId ?? identity?.nameId ?? (summonerBeingId === I_AM ? I_AM : null),
-    target:  { kind: "being", id: recipientBeingId }, // right stance
+    by:      moment?.actorAct?.by ?? identity?.nameId ?? (summonerBeingId === I_AM ? I_AM : null),
+    of:      { kind: "being", id: recipientBeingId }, // right stance
     params:  {
       correlation:     messageId,
       rootCorrelation: validatedMessage.rootCorrelation || messageId,
@@ -483,12 +483,12 @@ async function _dispatchSummon({
       sentAt,
       // Cross-branch provenance for MOMENT-LESS summons. In-moment
       // summons get crossOrigin derived by emitFact from
-      // summonCtx.actorAct; a wire summon has no moment (the summon
+      // moment.actorAct; a wire summon has no moment (the summon
       // becomes the RECIPIENT's moment), so when the caller's session
       // branch differs from the fact's destination branch the block
       // is attached here. actId is null — there is no home-side act
       // for a wire summon; the keystroke is not an act.
-      ...(!summonCtx?.actorAct && actorBranch && actorBranch !== branch
+      ...(!moment?.actorAct && actorBranch && actorBranch !== branch
         ? {
             crossOrigin: {
               reality: null,
@@ -499,12 +499,12 @@ async function _dispatchSummon({
           }
         : {}),
     },
-    actId: summonCtx?.actId || null,
+    actId: moment?.actId || null,
     // Branch the summon fact lands on, pre-resolved at the entry point
     // (summonVerb / summonByResolved both call resolveBranchForFact
     // before dispatching here). _dispatchSummon trusts the value.
     branch,
-  }, summonCtx);
+  }, moment);
 
   const innerCtx = {
     spaceId:     inboxNodeId,
@@ -553,12 +553,12 @@ async function _dispatchSummon({
     // moment); the InboxProjection row only materializes when sealAct
     // commits the ΔF + runs foldAfterCommit. Wake-before-fold would
     // nudge the scheduler at an empty projection. Outside a moment
-    // (summonCtx==null), emitFact committed immediately above and the
+    // (moment==null), emitFact committed immediately above and the
     // fold has already run — wake fires inline here.
     if (role.triggerOn?.includes("message")) {
       const fireWake = () => wake(recipientBeingId, inboxNodeId);
-      if (summonCtx && Array.isArray(summonCtx.afterSeal)) {
-        summonCtx.afterSeal.push(fireWake);
+      if (moment && Array.isArray(moment.afterSeal)) {
+        moment.afterSeal.push(fireWake);
       } else {
         fireWake();
       }

@@ -109,14 +109,14 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
       return { actId: null, result: null, responseEntry: null };
     }
 
-    // ── Beat 2: fold mounts the face. Computes summonCtx.foldedFace
-    //    and summonCtx.innerFace (the canonical inner face all three
+    // ── Beat 2: fold mounts the face. Computes moment.foldedFace
+    //    and moment.innerFace (the canonical inner face all three
     //    souls read from). canSee resolution happens here, once. ──
     try {
       await runFoldBeat(setup);
     } catch (foldErr) {
       // Fold trouble must never block the beat chain. innerFace stays
-      // null on summonCtx; downstream consumers tolerate that.
+      // null on moment; downstream consumers tolerate that.
       log.warn("Moment", `runFoldBeat failed: ${foldErr.message}`);
     }
 
@@ -180,18 +180,18 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
       }
 
       // Carry the canonical inner face the moment ran under onto the
-      // Act row. Beat 2 (runFoldBeat) built it once on summonCtx.innerFace;
+      // Act row. Beat 2 (runFoldBeat) built it once on moment.innerFace;
       // all three souls (LLM, scripted, human-inhabited) and transport-
       // acts read the same field. INNER-FOLD §6: every act-chain entry
       // carries the bounded record of the face the act was committed
       // under; no half-records.
-      setup.plannedAct.innerFace = setup.summonCtx?.innerFace ?? null;
+      setup.plannedAct.innerFace = setup.moment?.innerFace ?? null;
 
       actInserted = await sealAct(setup.plannedAct, {
         content: sealContent,
         stopped: false,
-        deltaF:    setup.summonCtx?.deltaF    || [],
-        afterSeal: setup.summonCtx?.afterSeal || [],
+        deltaF:    setup.moment?.deltaF    || [],
+        afterSeal: setup.moment?.afterSeal || [],
       });
 
       // Continuation is the role's call, not the seed's. A being that

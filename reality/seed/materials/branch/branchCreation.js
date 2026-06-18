@@ -177,8 +177,8 @@ async function snapshotParentHeads({ parent, anchor }) {
     }
 
     const matchStage = {
-      "target.kind": { $in: ["being", "space", "matter"] },
-      "target.id":   { $type: "string" },
+      "of.kind": { $in: ["being", "space", "matter"] },
+      "of.id":   { $type: "string" },
       seq:           seqFilter,
       ...branchMatch,
     };
@@ -189,7 +189,7 @@ async function snapshotParentHeads({ parent, anchor }) {
     const agg = await Fact.aggregate([
       { $match: matchStage },
       { $group: {
-        _id:    { kind: "$target.kind", id: "$target.id" },
+        _id:    { kind: "$of.kind", id: "$of.id" },
         maxSeq: { $max: "$seq" },
       } },
     ]);

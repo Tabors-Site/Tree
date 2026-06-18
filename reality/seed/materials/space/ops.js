@@ -51,14 +51,14 @@ const RESERVED_SET_META_NS = new Set([
 // reducer's applyCreateSpace.
 
 async function createSpaceHandler(ctx) {
-  const { target, params, identity, summonCtx } = ctx;
+  const { target, params, identity, moment } = ctx;
   const spec = params || {};
   const targetKind = detectTargetKind(target);
   return createSpaceChild({
     target,
     params: spec,
     identity,
-    summonCtx,
+    moment,
     kind: targetKind,
   });
 }
@@ -74,7 +74,7 @@ async function createSpaceHandler(ctx) {
 //   "qualities.<namespace>.<innerKey>"               → merge one inner key
 //   value=null on a qualities path                   → unset
 
-async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
+async function setOnSpaceHandler({ target, params, identity, moment }) {
   const { field, value, merge = true } = params || {};
   if (!field || typeof field !== "string") {
     throw new Error("set-space: `field` is required");
@@ -90,7 +90,7 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
   // read happens between, the moment holds the act-chain lock).
   try {
     const { invalidateSpace } = await import("./ancestorCache.js");
-    invalidateSpace(String(targetIdOf(target) || ""), summonCtx?.actorAct?.branch || null);
+    invalidateSpace(String(targetIdOf(target) || ""), moment?.actorAct?.branch || null);
   } catch { /* cache module unavailable — nothing to invalidate */ }
 
   // ── qualities paths ────────────────────────────────────
@@ -175,7 +175,7 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
       // handler trusts that. The hasAccess gate via resolveSpaceAccess
       // retired with the contributor class (RolesAreAuth).
       const { loadOrFold } = await import("../projections.js");
-      const _slot1 = await loadOrFold("space", spaceId, summonCtx?.actorAct?.branch || "0");
+      const _slot1 = await loadOrFold("space", spaceId, moment?.actorAct?.branch || "0");
       const row = _slot1 ? { _id: _slot1.id, ...(_slot1.state || {}) } : null;
       if (!row) {
         throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Space not found");
@@ -191,7 +191,7 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
       return { spaceId: String(spaceId), name: normalized };
     }
     // Typed-space path. Identical validation; reducer writes.
-    const row = await loadTargetRow(target, "space", { summonCtx });
+    const row = await loadTargetRow(target, "space", { moment });
     if (row.heavenSpace) {
       throw new Error("set-space: cannot rename heaven spaces");
     }
@@ -215,7 +215,7 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
       // then returns the shape; doVerb auto-stamps do:set-space and
       // the space reducer's applySetField writes Space.type.
       const { loadOrFold } = await import("../projections.js");
-      const _slot2 = await loadOrFold("space", spaceId, summonCtx?.actorAct?.branch || "0");
+      const _slot2 = await loadOrFold("space", spaceId, moment?.actorAct?.branch || "0");
       const row = _slot2 ? { heavenSpace: _slot2.state?.heavenSpace } : null;
       if (!row) {
         throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Space not found");
@@ -288,10 +288,10 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
     // set-being:coord (assertCoordInBounds in being/ops.js): silent
     // clamping was a lie; throw and let cognition reface.
     const { loadOrFold } = await import("../projections.js");
-    const _selfSlot = await loadOrFold("space", spaceId, summonCtx?.actorAct?.branch || "0");
+    const _selfSlot = await loadOrFold("space", spaceId, moment?.actorAct?.branch || "0");
     const parentId = _selfSlot?.state?.parent;
     if (parentId) {
-      const _parentSlot = await loadOrFold("space", parentId, summonCtx?.actorAct?.branch || "0");
+      const _parentSlot = await loadOrFold("space", parentId, moment?.actorAct?.branch || "0");
       const parentRow = _parentSlot ? { size: _parentSlot.state?.size } : null;
       const parentSize = parentRow?.size || null;
       if (parentSize) {
@@ -336,14 +336,14 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
 // end-space
 // ─────────────────────────────────────────────────────────────────────
 
-async function endSpaceHandler({ target, identity, summonCtx }) {
+async function endSpaceHandler({ target, identity, moment }) {
   const spaceId = targetIdOf(target);
   // The actor is whoever called. I_AM-internal flows (registry mirror
   // sync at genesis + boot) pass `identity: I_AM`.
   const actorBeingId = identity?.beingId || null;
   // Forward the open moment's actId so deleteSpaceBranch's internal
   // do.set-space writes ride the same Act.
-  const deleted = await deleteSpaceBranch(spaceId, actorBeingId, summonCtx?.actId || null);
+  const deleted = await deleteSpaceBranch(spaceId, actorBeingId, moment?.actId || null);
   return { deathSpaceId: String(deleted?._id || spaceId) };
 }
 
@@ -459,13 +459,13 @@ registerOperation("set-owner", {
   args: {
     newOwnerId: { type: "text", label: "New owner being id", required: true },
   },
-  handler: async ({ target, params, identity, summonCtx }) => {
+  handler: async ({ target, params, identity, moment }) => {
     const spaceId = spaceIdFromTarget(target);
     const actor = requireActor(identity);
     const newOwnerId = String(params?.newOwnerId || "").trim();
     if (!newOwnerId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`newOwnerId` is required");
     try {
-      await setOwner(spaceId, newOwnerId, actor, summonCtx?.actorAct?.branch || "0", summonCtx);
+      await setOwner(spaceId, newOwnerId, actor, moment?.actorAct?.branch || "0", moment);
     } catch (err) {
       throw mapPatternsToIbpError(err, PERMISSION_ERROR_PATTERNS);
     }
@@ -478,11 +478,11 @@ registerOperation("remove-owner", {
   ownerExtension: "seed",
   skipAudit: true,
   args: {},
-  handler: async ({ target, identity, summonCtx }) => {
+  handler: async ({ target, identity, moment }) => {
     const spaceId = spaceIdFromTarget(target);
     const actor = requireActor(identity);
     try {
-      await removeOwner(spaceId, actor, summonCtx?.actorAct?.branch || "0");
+      await removeOwner(spaceId, actor, moment?.actorAct?.branch || "0");
     } catch (err) {
       throw mapPatternsToIbpError(err, PERMISSION_ERROR_PATTERNS);
     }
@@ -513,9 +513,9 @@ const KERNEL_ERROR_PATTERNS = {
   ],
 };
 
-async function createSpaceChild({ target, params, identity, summonCtx, kind }) {
+async function createSpaceChild({ target, params, identity, moment, kind }) {
   const beingId = identity?.beingId || null;
-  const actId = summonCtx?.actId || null;
+  const actId = moment?.actId || null;
   const { name, type = null, size = null } = params || {};
   if (!name || typeof name !== "string") {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "`name` is required");
@@ -533,7 +533,7 @@ async function createSpaceChild({ target, params, identity, summonCtx, kind }) {
         parentId: targetIdOf(target),
         beingId,
         actId,
-        summonCtx,
+        moment,
       });
       return shapeNewSpace(newSpace);
     } catch (err) {

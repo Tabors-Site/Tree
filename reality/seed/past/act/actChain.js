@@ -3,7 +3,7 @@
 // actChain.js — read-side over the Act collection for a single being.
 //
 // A being's act-chain (MODEL.md: A_b) is the sequence of moments that
-// being authored: every Act row where beingIn = <beingId>. Returns
+// being authored: every Act row where through = <beingId>. Returns
 // newest-first for explorer views; the seq-style chain walk lives on
 // the Fact side (per-reel seq + hash linkage). Acts have no per-being
 // monotonic seq today; we order by stampedAt.
@@ -98,7 +98,7 @@ export async function describeActChain(beingId, opts = {}) {
  * stamped. This surfaces those Facts so the UI can render the action
  * instead of treating the moment as empty.
  *
- * Each fact is reduced to { verb, action, target:{kind,id}, params },
+ * Each fact is reduced to { verb, act, of:{kind,id}, params },
  * params capped so a large write (set-render, matter content) can't
  * bloat the descriptor. Facts ride oldest-first within each Act.
  *
@@ -113,9 +113,9 @@ export async function describeActChain(beingId, opts = {}) {
  *
  * @param {Array<{_id:string}>} serializedActs
  * @param {object} [opts]
- * @param {string} [opts.reelKind] target.kind to filter the seq
+ * @param {string} [opts.reelKind] of.kind to filter the seq
  *   computation by ("being" | "space" | "matter").
- * @param {string} [opts.reelId]   target.id to filter the seq
+ * @param {string} [opts.reelId]   of.id to filter the seq
  *   computation by.
  * @returns {Promise<Array>}
  */
@@ -127,7 +127,7 @@ export async function attachActFacts(serializedActs, opts = {}) {
   let facts = [];
   try {
     facts = await Fact.find({ actId: { $in: ids } })
-      .select("actId verb action target params seq")
+      .select("actId verb act of params seq")
       .sort({ seq: 1, _id: 1 })
       .lean();
   } catch {
@@ -148,7 +148,7 @@ export async function attachActFacts(serializedActs, opts = {}) {
     // seqs are local to each reel.
     if (typeof f.seq === "number") {
       if (reelKind && reelId) {
-        const t = f.target;
+        const t = f.of;
         if (!t || t.kind !== reelKind || String(t.id) !== reelId) continue;
       }
       const prev = lastSeqByAct.get(key);
@@ -188,7 +188,7 @@ async function readActChainLineage({ beingId, branch, limit, before }) {
 
   if (isMain(branch)) {
     const filter = {
-      beingIn: beingId,
+      through: beingId,
       $or: [{ branch: MAIN }, { branch: { $exists: false } }],
     };
     if (beforeOK) filter.stampedAt = { $lt: beforeDate };
@@ -229,7 +229,7 @@ async function readActChainLineage({ beingId, branch, limit, before }) {
       }
     }
     return {
-      beingIn: beingId,
+      through: beingId,
       ...branchClause,
       ...(Object.keys(timeFilter).length > 0 ? { stampedAt: timeFilter } : {}),
     };
@@ -253,9 +253,9 @@ function compactFact(f) {
   }
   return {
     verb:   f.verb || null,
-    action: f.action || null,
-    target: f.target
-      ? { kind: f.target.kind || null, id: f.target.id ? String(f.target.id) : null }
+    act:    f.act || null,
+    of:     f.of
+      ? { kind: f.of.kind || null, id: f.of.id ? String(f.of.id) : null }
       : null,
     params,
   };
@@ -266,8 +266,8 @@ function serializeAct(a) {
     _id:             String(a._id),
     ibpAddress:      a.ibpAddress || null,
     activeRole:      a.activeRole || null,
-    beingIn:         a.beingIn ? String(a.beingIn) : null,
-    beingOut:        a.beingOut ? String(a.beingOut) : null,
+    through:         a.through ? String(a.through) : null,
+    to:              a.to ? String(a.to) : null,
     rootCorrelation: a.rootCorrelation || null,
     inReplyTo:       a.inReplyTo || null,
     parentThread:    a.parentThread || null,

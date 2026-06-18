@@ -15,7 +15,7 @@ const started = ir.start?.sky ?? "dawn";
 console.log(`\nparsed ${ir.length} clauses from sun.word (begins at ${started})\n`);
 
 const ctx = {
-  dryRun: true, branch: "main", summonCtx: { actId: "<actId>" },
+  dryRun: true, branch: "main", moment: { actId: "<actId>" },
   bindings: {}, deltaF: [], flows: [], state: { ...(ir.start || { sky: "dawn" }) }, maxTurns: 8, env: {},
 };
 

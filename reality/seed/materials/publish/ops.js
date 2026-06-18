@@ -79,7 +79,7 @@ registerSeeOperation("capture-template", {
 //
 // Returns: { rootSpaceId, counts, remapTable }
 
-async function plantTemplateHandler({ target, params, identity, summonCtx }) {
+async function plantTemplateHandler({ target, params, identity, moment }) {
   const kind = detectTargetKind(target);
   if (kind !== "space") {
     throw new IbpError(
@@ -101,13 +101,13 @@ async function plantTemplateHandler({ target, params, identity, summonCtx }) {
     );
   }
   const targetParentSpaceId = targetIdOf(target);
-  const branch = summonCtx?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.branch || "0";
 
   const { plantTemplate } = await import("./seedPlant.js");
   const result = await plantTemplate(bundle, targetParentSpaceId, {
     branch,
     operatorBeingId: String(identity.beingId),
-    summonCtx,
+    moment,
   });
 
   // The graft already stamped a `template-planted` fact on the new
@@ -142,7 +142,7 @@ registerOperation("plant-template", {
 // called by any authenticated being because it downloads bytes to
 // the client.
 
-async function captureSeedHandler({ target, params, identity, summonCtx }) {
+async function captureSeedHandler({ target, params, identity, moment }) {
   if (!identity?.beingId) {
     throw new IbpError(
       IBP_ERR.UNAUTHORIZED,
@@ -219,7 +219,7 @@ registerSeeOperation("clones", {
 // registry instead of accepting the bundle JSON over the wire. The
 // portal calls this after the operator picks a clone from the list.
 
-async function plantTemplateByNameHandler({ target, params, identity, summonCtx }) {
+async function plantTemplateByNameHandler({ target, params, identity, moment }) {
   const kind = detectTargetKind(target);
   if (kind !== "space") {
     throw new IbpError(
@@ -248,13 +248,13 @@ async function plantTemplateByNameHandler({ target, params, identity, summonCtx 
     );
   }
   const targetParentSpaceId = targetIdOf(target);
-  const branch = summonCtx?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.branch || "0";
   const { plantTemplate } = await import("./seedPlant.js");
   const result = await plantTemplate(entry.bundle, targetParentSpaceId, {
     branch,
     operatorBeingId: String(identity.beingId),
     params: (params || {}).params || {},
-    summonCtx,
+    moment,
   });
   return { ...result, _skipAudit: true };
 }
@@ -349,7 +349,7 @@ registerSeeOperation("capture-being", {
 // construction) and stamps its own graft-being-completed audit on the
 // operator's reel, so skipAudit.
 
-async function graftBeingHandler({ params, identity, summonCtx }) {
+async function graftBeingHandler({ params, identity, moment }) {
   if (!identity?.beingId) {
     throw new IbpError(IBP_ERR.UNAUTHORIZED, "graft-being: identity required (the operator's beingId)");
   }
@@ -361,7 +361,7 @@ async function graftBeingHandler({ params, identity, summonCtx }) {
   if (!bundle) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "graft-being: params.bundle is required");
   }
-  const branch = summonCtx?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.branch || "0";
   const { applyGraft } = await import("./graft.js");
   const result = await applyGraft(bundle, { operatorBeingId: String(identity.beingId), branch });
   return { ...result, _skipAudit: true };

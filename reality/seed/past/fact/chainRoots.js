@@ -78,7 +78,7 @@ export async function reelRoot(type, id, branch = "0") {
   if (!row) return GENESIS_PREV;
   if (row.headHash) return row.headHash;
   const headFact = await Fact.findOne(
-    { branch, "target.kind": type, "target.id": String(id), seq: row.head },
+    { branch, "of.kind": type, "of.id": String(id), seq: row.head },
     { _id: 1 },
   ).lean();
   return headFact?._id || GENESIS_PREV;

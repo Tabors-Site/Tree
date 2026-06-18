@@ -41,9 +41,9 @@ import { registerRoleWord } from "../../present/word/roleWordRegistry.js";
 registerRoleWord("name", "key-export", new URL("./key.word", import.meta.url));
 
 // Resolve the NAME id this op acts on, from the being target's trueName.
-async function resolveTargetNameId(target, summonCtx) {
+async function resolveTargetNameId(target, moment) {
   const { loadTargetRow } = await import("../_targetShape.js");
-  const beingRow = await loadTargetRow(target, "being", { summonCtx });
+  const beingRow = await loadTargetRow(target, "being", { moment });
   const trueName = beingRow?.trueName || null;
   if (!trueName) {
     throw new IbpError(
@@ -59,17 +59,17 @@ async function resolveTargetNameId(target, summonCtx) {
 // `through`): the audit attributes to the asker. Returns the {nameId,hasKey,
 // privateKeyPem,mnemonic} result (hasKey coerced to a strict boolean — the .word's
 // mark yields true|undefined), or null on a clean miss so the JS body runs.
-async function _keyExportViaWord({ target, caller, asker, summonCtx }) {
-  if (!summonCtx) return null;
+async function _keyExportViaWord({ target, caller, asker, moment }) {
+  if (!moment) return null;
   const { resolveRoleWord, runRoleWord } = await import("../../present/word/roleWordRegistry.js");
-  const ir = resolveRoleWord("name", "key-export", summonCtx?.actorAct?.branch);
+  const ir = resolveRoleWord("name", "key-export", moment?.actorAct?.branch);
   if (!ir) return null;
   const { keyHostEnv } = await import("./keyHost.js");
   const { targetIdOf } = await import("../_targetShape.js");
-  const branch = summonCtx?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.branch || "0";
   try {
     const { result } = await runRoleWord(ir, {
-      summonCtx, branch,
+      moment, branch,
       // `target` is bound as an entity object (kind + id) so the .word's `see the
       // target's trueName` can loadProjection — seeRead needs ._id/.id, not a bare string.
       trigger: { target: { kind: "being", id: String(targetIdOf(target)) }, caller: caller ? String(caller) : null, asker: asker ? String(asker) : null, branch },
@@ -91,14 +91,14 @@ registerOperation("key-export", {
   // fact, which would persist the key. Opt out and stamp our own fact
   // recording WHO exported WHICH name's key WHEN, the key nowhere in it.
   skipAudit: true,
-  handler: async ({ target, identity, summonCtx }) => {
+  handler: async ({ target, identity, moment }) => {
     // THE CONVERSION: key-export's world strand is key.word, run through the bridge.
     // The JS below is the clean-miss fallback.
-    const viaWord = await _keyExportViaWord({ target, caller: identity?.nameId, asker: identity?.beingId, summonCtx });
+    const viaWord = await _keyExportViaWord({ target, caller: identity?.nameId, asker: identity?.beingId, moment });
     if (viaWord) return viaWord;
 
-    const branch = summonCtx?.actorAct?.branch;
-    const nameId = await resolveTargetNameId(target, summonCtx);
+    const branch = moment?.actorAct?.branch;
+    const nameId = await resolveTargetNameId(target, moment);
 
     // NEVER export the reality (I_AM) key. The I_AM "name" id is the literal
     // "i-am", and loadSigningKey maps it to the reality's private key. A being
@@ -153,13 +153,13 @@ registerOperation("key-export", {
     if (askerBeingId) {
       await emitFact({
         verb:    "do",
-        action:  "key-export",
-        beingId: askerBeingId,
-        target:  { kind: "being", id: askerBeingId },
+        act:     "key-export",
+        through: askerBeingId,
+        of:      { kind: "being", id: askerBeingId },
         params:  { exportedNameId: nameId },
-        actId:   summonCtx?.actId || null,
+        actId:   moment?.actId || null,
         branch,
-      }, summonCtx);
+      }, moment);
     }
 
     return {

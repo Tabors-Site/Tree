@@ -110,7 +110,7 @@ async function assertCoordInBounds(beingDoc, raw, branch = "0") {
 //   ("cognition" lives at qualities.cognition.defaultKind, written via
 //    the qualities.* paths, not as a schema-field write.)
 
-async function setOnBeingHandler({ target, params, summonCtx }) {
+async function setOnBeingHandler({ target, params, moment }) {
   const { field, value, merge = true } = params || {};
   if (!field || typeof field !== "string") {
     throw new Error("set-being: `field` is required");
@@ -119,10 +119,10 @@ async function setOnBeingHandler({ target, params, summonCtx }) {
   // string id. set-being needs row contents (qualities namespaces
   // for merge, current name for uniqueness check, current position
   // for the clamp helper). Load the row once at the top — the rest
-  // of the handler reads from the doc. summonCtx threads the moment's
+  // of the handler reads from the doc. moment threads the moment's
   // deltaF so an in-flight being just stamped in the same scaffold
   // can be set without waiting for sealAct.
-  target = await loadTargetRow(target, "being", { summonCtx });
+  target = await loadTargetRow(target, "being", { moment });
 
   // ── qualities paths ────────────────────────────────────
   if (field.startsWith("qualities.")) {
@@ -153,7 +153,7 @@ async function setOnBeingHandler({ target, params, summonCtx }) {
     if (!value || typeof value !== "string") {
       throw new Error("set-being: `value` must be a string for field=name");
     }
-    const branch = summonCtx?.actorAct?.branch || "0";
+    const branch = moment?.actorAct?.branch || "0";
     const { findByName } = await import("../projections.js");
     const existing = await findByName("being", value, branch);
     if (existing && String(existing.id) !== String(target._id)) {
@@ -241,7 +241,7 @@ async function setOnBeingHandler({ target, params, summonCtx }) {
     if (typeof value !== "object" || Array.isArray(value)) {
       throw new Error("set-being: `coord` value must be an object {x,y,z?} or null");
     }
-    const validated = await assertCoordInBounds(target, value, summonCtx?.actorAct?.branch || "0");
+    const validated = await assertCoordInBounds(target, value, moment?.actorAct?.branch || "0");
     return { beingId: String(target._id), coord: validated };
   }
 
@@ -277,7 +277,7 @@ async function endBeingHandler({ target }) {
 // writes through `do.set-being`, and the inner set IS the canonical
 // audit Fact. Without skipAudit the outer op would double-stamp.
 
-async function addLlmConnectionHandler({ target, params, identity, summonCtx }) {
+async function addLlmConnectionHandler({ target, params, identity, moment }) {
   const { name, baseUrl, apiKey, model } = params || {};
   if (!name || !baseUrl || !model) {
     throw new Error(
@@ -286,7 +286,7 @@ async function addLlmConnectionHandler({ target, params, identity, summonCtx }) 
   }
   // Load the row to read the current main slot for the
   // auto-assign-on-first-connection branch.
-  const beingRow = await loadTargetRow(target, "being", { summonCtx });
+  const beingRow = await loadTargetRow(target, "being", { moment });
   const { addLlmConnection, assignConnection } = await import(
     "../../present/cognition/llm/connect.js"
   );
@@ -294,7 +294,7 @@ async function addLlmConnectionHandler({ target, params, identity, summonCtx }) 
   const connection = await addLlmConnection(
     beingId,
     { name, baseUrl, apiKey: apiKey || "none", model },
-    { identity, summonCtx },
+    { identity, moment },
   );
   try {
     const beingLlm =
@@ -304,14 +304,14 @@ async function addLlmConnectionHandler({ target, params, identity, summonCtx }) 
     const currentMain = beingLlm?.slots?.main;
     if (!currentMain) {
       await assignConnection(beingId, "main", connection._id, {
-        identity, summonCtx,
+        identity, moment,
       });
     }
   } catch {}
   return { connection };
 }
 
-async function updateLlmConnectionHandler({ target, params, identity, summonCtx }) {
+async function updateLlmConnectionHandler({ target, params, identity, moment }) {
   const { connectionId, name, baseUrl, apiKey, model } = params || {};
   if (!connectionId)
     throw new Error("update-llm-connection: `connectionId` is required");
@@ -329,23 +329,23 @@ async function updateLlmConnectionHandler({ target, params, identity, summonCtx 
     beingId,
     connectionId,
     { name, baseUrl, apiKey, model },
-    { identity, summonCtx },
+    { identity, moment },
   );
   return { connection };
 }
 
-async function deleteLlmConnectionHandler({ target, params, identity, summonCtx }) {
+async function deleteLlmConnectionHandler({ target, params, identity, moment }) {
   const { connectionId } = params || {};
   if (!connectionId)
     throw new Error("delete-llm-connection: `connectionId` is required");
   const { deleteLlmConnection } = await import(
     "../../present/cognition/llm/connect.js"
   );
-  await deleteLlmConnection(targetIdOf(target), connectionId, { identity, summonCtx });
+  await deleteLlmConnection(targetIdOf(target), connectionId, { identity, moment });
   return { removed: true, connectionId };
 }
 
-async function assignLlmSlotHandler({ target, params, identity, summonCtx }) {
+async function assignLlmSlotHandler({ target, params, identity, moment }) {
   const { slot, connectionId } = params || {};
   if (!slot) throw new Error("assign-llm-slot: `slot` is required");
   const kind = detectTargetKind(target);
@@ -355,14 +355,14 @@ async function assignLlmSlotHandler({ target, params, identity, summonCtx }) {
   );
   if (kind === "being") {
     return assignConnection(id, slot, connectionId || null, {
-      identity, summonCtx,
+      identity, moment,
     });
   }
   if (kind === "space" || kind === "stance") {
     return assignSpaceConnection(id, slot, connectionId || null, {
       ownerBeingId: identity?.beingId || null,
       identity,
-      summonCtx,
+      moment,
     });
   }
   throw new Error(`assign-llm-slot: target kind "${kind}" not supported`);
@@ -420,12 +420,12 @@ registerOperation("end-being", {
 // authored as a grantor for X via the canDo declaration on their
 // role can hand X out. The chain back to I-Am is structural.
 
-async function grantRoleHandler({ target, params, identity, summonCtx }) {
+async function grantRoleHandler({ target, params, identity, moment }) {
   // THE CONVERSION: grant-role's validation + record is grant-role.word (caller mode). The
   // .word returns the record; the cut enriches the op params with grantedBy/grantedAt so
   // the dispatcher's auto-emitted grant-role fact carries them (the being reducer reads
   // them from fact.params). JS body = clean-miss fallback.
-  const viaWord = await _grantRoleViaWord({ caller: identity?.beingId, target, role: params?.role, anchorSpaceId: params?.anchorSpaceId, anchorBeingId: params?.anchorBeingId, summonCtx });
+  const viaWord = await _grantRoleViaWord({ caller: identity?.beingId, target, role: params?.role, anchorSpaceId: params?.anchorSpaceId, anchorBeingId: params?.anchorBeingId, moment });
   if (viaWord) {
     if (params) { params.grantedBy = viaWord.grantedBy; params.grantedAt = viaWord.grantedAt; }
     return viaWord;
@@ -484,7 +484,7 @@ async function grantRoleHandler({ target, params, identity, summonCtx }) {
   };
 }
 
-async function revokeRoleHandler({ target, params, identity, summonCtx }) {
+async function revokeRoleHandler({ target, params, identity, moment }) {
   if (!identity?.beingId) {
     throw new IbpError(
       IBP_ERR.UNAUTHORIZED,
@@ -523,16 +523,16 @@ async function revokeRoleHandler({ target, params, identity, summonCtx }) {
 // record). CALLER mode. Returns {granted, role, granteeBeingId, anchorSpaceId,
 // anchorBeingId, grantedBy, grantedAt} or null on a clean miss so the JS body runs.
 registerRoleWord("being", "grant-role", new URL("./grant-role.word", import.meta.url));
-async function _grantRoleViaWord({ caller, target, role, anchorSpaceId, anchorBeingId, summonCtx }) {
-  if (!summonCtx) return null;
+async function _grantRoleViaWord({ caller, target, role, anchorSpaceId, anchorBeingId, moment }) {
+  if (!moment) return null;
   const { resolveRoleWord, runRoleWord } = await import("../../present/word/roleWordRegistry.js");
-  const ir = resolveRoleWord("being", "grant-role", summonCtx?.actorAct?.branch);
+  const ir = resolveRoleWord("being", "grant-role", moment?.actorAct?.branch);
   if (!ir) return null;
   const { grantHostEnv } = await import("./grantHost.js");
-  const branch = summonCtx?.actorAct?.branch;
+  const branch = moment?.actorAct?.branch;
   try {
     const { result } = await runRoleWord(ir, {
-      summonCtx, branch,
+      moment, branch,
       trigger: { caller: caller ? String(caller) : null, target: target ? String(targetIdOf(target)) : null, role: role ?? null, anchorSpaceId: anchorSpaceId ?? null, anchorBeingId: anchorBeingId ?? null, branch },
       env: { host: grantHostEnv() },
     });

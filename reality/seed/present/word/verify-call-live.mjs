@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // evalCall (the CALL verb) LIVE: a hand-built `call <being>` node reaches a real being
 // through TreeOS's summon machinery (summonVerb), laying the reach RECORD as a fact through
-// summonCtx (the stamper). Proves the engine half of the host:->call dissolution before the
+// moment (the stamper). Proves the engine half of the host:->call dissolution before the
 // parser's `call <being>, saying <intent>` surface lands. Full begin.js boot. Scratch DB.
 
 import fs from "fs";
@@ -49,7 +49,7 @@ const cherub = await poll(() => findByName("being", "cherub", "0"));
 const birth = async (name) => {
   let bid = null;
   await withIAmAct(`birth ${name}`, async (ctx) => {
-    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, summonCtx: ctx, branch: "0" });
+    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: ctx, branch: "0" });
     bid = b.beingId;
   });
   return bid;
@@ -62,19 +62,19 @@ try {
   const ownerSlot = await loadOrFold("being", String(ownerId), "0");
 
   // I_AM calls @owner with a role-request — a hand-built call node (the parser surface lands later)
-  const sc = { actId: randomUUID(), actorAct: { branch: "0", nameId: "i-am" }, identity: { beingId: I_AM, name: "i-am", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
-  const ctx = { dryRun: false, summonCtx: sc, identity: sc.identity, branch: "0", bindings: { owner: ownerSlot }, deltaF: sc.deltaF, env: {} };
+  const sc = { actId: randomUUID(), actorAct: { branch: "0", by: "i-am" }, identity: { beingId: I_AM, name: "i-am", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const ctx = { dryRun: false, moment: sc, identity: sc.identity, branch: "0", bindings: { owner: ownerSlot }, deltaF: sc.deltaF, env: {} };
   const node = { kind: "call", being: { ref: "owner" }, intent: "role-request", content: { role: "warrior", from: "i-am" }, bind: "sent" };
 
   let res = null, err = null;
   try { await evaluate(node, ctx); res = ctx.bindings.sent; if (sc.deltaF.length) await sealFacts(sc.deltaF); } catch (e) { err = e; }
 
   !err ? ok(`call @owner dispatched through summonVerb (no throw) → reached`) : bad(`call dispatch`, err.message || err);
-  // the reach is a RECORD: a fact landed (summon writes the reach through summonCtx)
-  const summonFact = (sc.deltaF || []).find((f) => f.verb === "summon" || /summon|reach|inbox/i.test(String(f.action)));
-  summonFact ? ok(`the reach laid a RECORD fact (verb:${summonFact.verb} action:${summonFact.action}) — through the stamper, not a bare emit`) : bad(`reach record`, (sc.deltaF || []).map((f) => `${f.verb}:${f.action}`));
+  // the reach is a RECORD: a fact landed (summon writes the reach through moment)
+  const summonFact = (sc.deltaF || []).find((f) => f.verb === "summon" || /summon|reach|inbox/i.test(String(f.act)));
+  summonFact ? ok(`the reach laid a RECORD fact (verb:${summonFact.verb} action:${summonFact.act}) — through the stamper, not a bare emit`) : bad(`reach record`, (sc.deltaF || []).map((f) => `${f.verb}:${f.act}`));
   // attribution: the reach is the CALLER's act (i-am here)
-  summonFact && String(summonFact.nameId || summonFact.beingId) ? ok(`reach attributed to the caller (a Name through a being)`) : bad(`attribution`, summonFact);
+  summonFact && String(summonFact.by || summonFact.through) ? ok(`reach attributed to the caller (a Name through a being)`) : bad(`attribution`, summonFact);
 
   console.log(`\n  ${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);

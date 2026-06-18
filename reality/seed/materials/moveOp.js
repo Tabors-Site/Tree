@@ -39,7 +39,7 @@ import { registerRoleWord } from "../present/word/roleWordRegistry.js";
 // wherever a booted reality exists; the cut reads it via the bridge.
 registerRoleWord("move", "move", new URL("./move.word", import.meta.url));
 
-async function moveHandler({ target, params, summonCtx }) {
+async function moveHandler({ target, params, moment }) {
   const { coord, to, target: explicitTarget } = params || {};
 
   if (!coord && !to) {
@@ -111,7 +111,7 @@ async function moveHandler({ target, params, summonCtx }) {
   // post-fold query.
   let fromSpaceId = null;
   const { loadOrFold } = await import("./projections.js");
-  const branch = summonCtx?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.branch || "0";
   if (kind === "space") {
     const slot = await loadOrFold("space", targetId, branch);
     if (!slot) {

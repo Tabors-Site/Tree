@@ -100,7 +100,7 @@ registerOperation("create-branch", {
       required: false,
     },
   },
-  handler: async ({ params, identity, summonCtx }) => {
+  handler: async ({ params, identity, moment }) => {
     const parent  = String(params?.parent || MAIN).trim() || MAIN;
     const label   = params?.label ? String(params.label).trim() : null;
     const pointerName = params?.pointer
@@ -218,7 +218,7 @@ registerOperation("create-branch", {
             { kind: "space", id: branchesSpaceId },
             "set-space",
             { field: "qualities.pointers", value: next, merge: false },
-            { identity, summonCtx },
+            { identity, moment },
           );
           pointerAttached = pointerName;
         }
@@ -248,7 +248,7 @@ registerOperation("create-branch", {
           { kind: "space", id: String(rootSpace.id) },
           "form-portal",
           { target: foreignAddress, name: `Branch #${result.path}` },
-          { identity, summonCtx, currentBranch: "0" },
+          { identity, moment, currentBranch: "0" },
         );
         portalSpawned = foreignAddress;
       }
@@ -305,7 +305,7 @@ registerOperation("pause-branch", {
       required: false,
     },
   },
-  handler: async ({ params, identity, summonCtx }) => {
+  handler: async ({ params, identity, moment }) => {
     const branchPath = String(params?.branch || "").trim();
     if (!branchPath) {
       throw new IbpError(IBP_ERR.INVALID_INPUT, "pause-branch: branch is required");
@@ -562,7 +562,7 @@ registerOperation("merge-branches", {
       default:  "false",
     },
   },
-  handler: async ({ params, identity, summonCtx }) => {
+  handler: async ({ params, identity, moment }) => {
     const sourceA = String(params?.sourceA || "").trim();
     const sourceB = String(params?.sourceB || "").trim();
     const label   = params?.label ? String(params.label).trim() : null;
@@ -649,7 +649,7 @@ registerOperation("merge-branches", {
           actorBeingId,
         });
         for (const spec of resetFacts) {
-          await emitFact(spec, summonCtx);
+          await emitFact(spec, moment);
         }
         resetCount = resetFacts.length;
       }
@@ -750,7 +750,7 @@ registerOperation("merge-branches", {
             { kind: "space", id: branchesSpaceId },
             "set-space",
             { field: "qualities.pointers", value: next, merge: false },
-            { identity, summonCtx },
+            { identity, moment },
           );
           pointersRepointed = pointerNames;
         }
@@ -843,16 +843,16 @@ registerOperation("merge-branches", {
 // bridge in CALLER mode (no `through` — the pointer write attributes to the setter). The
 // heaven reads + the lone set-space stay host. Returns {set,name,canonical,previous}, or
 // null on a clean miss so the JS body below runs.
-async function _setPointerViaWord({ caller, name, canonical, summonCtx }) {
-  if (!summonCtx) return null;
+async function _setPointerViaWord({ caller, name, canonical, moment }) {
+  if (!moment) return null;
   const { resolveRoleWord, runRoleWord } = await import("../../word/roleWordRegistry.js");
-  const ir = resolveRoleWord("branch-manager", "set-pointer", summonCtx?.actorAct?.branch);
+  const ir = resolveRoleWord("branch-manager", "set-pointer", moment?.actorAct?.branch);
   if (!ir) return null;
   const { branchManagerHostEnv } = await import("./branchManagerHost.js");
-  const branch = summonCtx?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.branch || "0";
   try {
     const { result } = await runRoleWord(ir, {
-      summonCtx, branch,
+      moment, branch,
       trigger: { caller: caller ? String(caller) : null, name, canonical, branch },
       env: { host: branchManagerHostEnv() },
     });
@@ -879,9 +879,9 @@ registerOperation("set-pointer", {
       required: true,
     },
   },
-  handler: async ({ params, identity, summonCtx }) => {
+  handler: async ({ params, identity, moment }) => {
     // THE CONVERSION: prefer the bridge; the JS below is the clean-miss fallback.
-    const viaWord = await _setPointerViaWord({ caller: identity?.beingId, name: params?.name, canonical: params?.canonical, summonCtx });
+    const viaWord = await _setPointerViaWord({ caller: identity?.beingId, name: params?.name, canonical: params?.canonical, moment });
     if (viaWord) return viaWord;
 
     if (!identity?.beingId) {
@@ -914,7 +914,7 @@ registerOperation("set-pointer", {
       { kind: "space", id: branchesSpaceId },
       "set-space",
       { field: "qualities.pointers", value: next, merge: false },
-      { identity, summonCtx },
+      { identity, moment },
     );
 
     log.verbose("branch-manager",
@@ -926,16 +926,16 @@ registerOperation("set-pointer", {
 // delete-pointer's world strand is delete-pointer.word (the gate chain), run through the
 // bridge in CALLER mode. The heaven read + the lone pointer-map set-space stay host.
 // Returns {name, deleted, alreadyAbsent} or null on a clean miss so the JS body runs.
-async function _deletePointerViaWord({ caller, name, summonCtx }) {
-  if (!summonCtx) return null;
+async function _deletePointerViaWord({ caller, name, moment }) {
+  if (!moment) return null;
   const { resolveRoleWord, runRoleWord } = await import("../../word/roleWordRegistry.js");
-  const ir = resolveRoleWord("branch-manager", "delete-pointer", summonCtx?.actorAct?.branch);
+  const ir = resolveRoleWord("branch-manager", "delete-pointer", moment?.actorAct?.branch);
   if (!ir) return null;
   const { branchManagerHostEnv } = await import("./branchManagerHost.js");
-  const branch = summonCtx?.actorAct?.branch;
+  const branch = moment?.actorAct?.branch;
   try {
     const { result } = await runRoleWord(ir, {
-      summonCtx, branch,
+      moment, branch,
       trigger: { caller: caller ? String(caller) : null, name, branch },
       env: { host: branchManagerHostEnv() },
     });
@@ -957,9 +957,9 @@ registerOperation("delete-pointer", {
       required: true,
     },
   },
-  handler: async ({ params, identity, summonCtx }) => {
+  handler: async ({ params, identity, moment }) => {
     // THE CONVERSION: prefer the bridge; the JS below is the clean-miss fallback.
-    const viaWord = await _deletePointerViaWord({ caller: identity?.beingId, name: params?.name, summonCtx });
+    const viaWord = await _deletePointerViaWord({ caller: identity?.beingId, name: params?.name, moment });
     if (viaWord) return viaWord;
 
     if (!identity?.beingId) {
@@ -995,7 +995,7 @@ registerOperation("delete-pointer", {
       { kind: "space", id: branchesSpaceId },
       "set-space",
       { field: "qualities.pointers", value: next, merge: false },
-      { identity, summonCtx },
+      { identity, moment },
     );
 
     log.verbose("branch-manager",

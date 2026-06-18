@@ -46,7 +46,7 @@ import { assertVerbCaller, refuseHistoricalWrite, resolveBranchForFact } from ".
  *   socket       optional WS socket passed through to auth hooks
  *   req          optional Express req for HTTP-arrival flows
  *   currentReality  defaults to the current reality domain (getRealityDomain)
- *   summonCtx    moment context (so the audit Fact joins ctx.deltaF)
+ *   moment    moment context (so the audit Fact joins ctx.deltaF)
  */
 export async function beVerb(operation, payload = {}, opts = {}) {
   if (typeof operation !== "string" || !operation.length) {
@@ -66,18 +66,18 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     req         = null,
     currentReality = null,
     currentBranch  = null,
-    summonCtx   = null,
+    moment   = null,
   } = opts;
 
   // Resolve branch ONCE at the entry. Inside a moment the seated
-  // branches win (summonCtx.targetBranch, then actorAct.branch);
+  // branches win (moment.targetBranch, then actorAct.branch);
   // opts.currentBranch covers pre-moment callers only.
   // resolveBranchForFact throws MISSING_BRANCH if all are absent —
   // surfaces a perimeter threading gap loud instead of silently
   // defaulting to heaven. All downstream sites (loadProjection
   // lookups, writeBeFact emissions, birthBeing) use this value rather
   // than re-resolving from scope.
-  const branch = resolveBranchForFact(summonCtx, currentBranch, "be");
+  const branch = resolveBranchForFact(moment, currentBranch, "be");
 
   const realityDomain = currentReality || getRealityDomain();
 
@@ -129,7 +129,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       verb: "be",
       target: { kind: addressKind, value: address },
       operation,
-      summonCtx,
+      moment,
       actorBranch: currentBranch || null,
     });
     if (!decision.ok) {
@@ -151,7 +151,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       // Caller's own data reads from the caller's branch; see the
       // birther path below for the doctrine.
       const { loadOrFold } = await import("../../materials/projections.js");
-      const callerBranch = summonCtx?.actorAct?.branch || branch;
+      const callerBranch = moment?.actorAct?.branch || branch;
       const callerSlot = await loadOrFold("being", identity.beingId, callerBranch);
       childHomeId = callerSlot?.state?.homeSpace || null;
     }
@@ -173,7 +173,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     const result = await birthBeing({
       spec: childSpec,
       identity,
-      summonCtx,
+      moment,
       // The branch this verb resolved at the perimeter. One law: the
       // verb resolves, the primitive receives. birthBeing must not
       // re-derive the branch from scope.
@@ -213,7 +213,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       verb: "be",
       target: { kind: addressKind, value: address },
       operation,
-      summonCtx,
+      moment,
       actorBranch: currentBranch || null,
     });
     if (!decision.ok) {
@@ -284,7 +284,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       // branch-qualified birth address says where the child lands,
       // not where the mother lives.
       const { loadOrFold } = await import("../../materials/projections.js");
-      const callerBranch = summonCtx?.actorAct?.branch || branch;
+      const callerBranch = moment?.actorAct?.branch || branch;
       const callerSlot = await loadOrFold("being", identity.beingId, callerBranch);
       childHomeId = callerSlot?.state?.homeSpace || null;
     }
@@ -306,9 +306,9 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       const newHomeId = _uuidv4();
       await _emitFact({
         verb:    "do",
-        action:  "create-space",
-        beingId: String(identity.beingId),
-        target:  { kind: "space", id: newHomeId },
+        act:     "create-space",
+        through: String(identity.beingId),
+        of:      { kind: "space", id: newHomeId },
         params: {
           name: childName,
           type: "child-home",
@@ -318,11 +318,11 @@ export async function beVerb(operation, payload = {}, opts = {}) {
           size: { x: 100, y: 100 },
           qualities: {},
         },
-        actId:  summonCtx?.actId || null,
+        actId:  moment?.actId || null,
         // The child's home space lands on the same branch as the
         // child's be:birth — the branch this verb resolved.
         branch,
-      }, summonCtx);
+      }, moment);
       childHomeId = newHomeId;
     }
 
@@ -340,7 +340,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     const result = await birthBeing({
       spec: childSpec,
       identity,
-      summonCtx,
+      moment,
       // Same law as the self-birth path: the verb resolves the
       // branch once; the primitive receives it.
       branch,
@@ -377,7 +377,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       verb: "be",
       target: { kind: addressKind, value: address },
       operation,
-      summonCtx,
+      moment,
       actorBranch: currentBranch || null,
     });
     if (!decision.ok) {
@@ -390,8 +390,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     const cherubReleaseOp = getBeOp("release");
     const result = cherubReleaseOp
       ? await cherubReleaseOp.handler({ address, addressKind, payload, identity,
-          ctx: { socket, address: { kind: addressKind, value: address }, identity, req, summonCtx },
-          summonCtx })
+          ctx: { socket, address: { kind: addressKind, value: address }, identity, req, moment },
+          moment })
       : { released: true };
     await writeBeFact({
       operation,
@@ -399,8 +399,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       authResult: result,
       payload,
       beingName,
-      actId: summonCtx?.actId || null,
-      summonCtx,
+      actId: moment?.actId || null,
+      moment,
       branch,
     });
     return result;
@@ -434,8 +434,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       addressKind,
       payload,
       identity,
-      ctx: { socket, address: { kind: addressKind, value: address }, identity, req, summonCtx },
-      summonCtx,
+      ctx: { socket, address: { kind: addressKind, value: address }, identity, req, moment },
+      moment,
     });
     // Stamp the audit fact on the NEW branch (result.toBranch) — the
     // post-switch branch's view of this being records the switch-in.
@@ -445,8 +445,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       authResult: result,
       payload,
       beingName,
-      actId: summonCtx?.actId || null,
-      summonCtx,
+      actId: moment?.actId || null,
+      moment,
       branch: result.toBranch,
     });
     return result;
@@ -488,7 +488,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       verb: "be",
       target: { kind: addressKind, value: address },
       operation,
-      summonCtx,
+      moment,
       actorBranch: currentBranch || null,
     });
     if (!decision.ok) {
@@ -507,8 +507,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       addressKind,
       payload,
       identity,
-      ctx: { socket, address: { kind: addressKind, value: address }, identity, req, summonCtx },
-      summonCtx,
+      ctx: { socket, address: { kind: addressKind, value: address }, identity, req, moment },
+      moment,
     });
     // Thread the resolved targetBeingId into writeBeFact so the
     // be:death fact lands on the dying being's reel (not the actor's).
@@ -518,8 +518,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       authResult: { ...result, targetBeingId },
       payload,
       beingName,
-      actId: summonCtx?.actId || null,
-      summonCtx,
+      actId: moment?.actId || null,
+      moment,
       branch,
     });
     return { ...result, targetBeingId };
@@ -589,8 +589,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     const truenameOp = getBeOp("truename");
     const result = await truenameOp.handler({
       address, addressKind, payload, identity,
-      ctx: { socket, address: { kind: addressKind, value: address }, identity, req, summonCtx },
-      summonCtx,
+      ctx: { socket, address: { kind: addressKind, value: address }, identity, req, moment },
+      moment,
     });
     await writeBeFact({
       operation,
@@ -598,8 +598,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       authResult: { ...result, targetBeingId, trueName: newTrueName },
       payload,
       beingName,
-      actId: summonCtx?.actId || null,
-      summonCtx,
+      actId: moment?.actId || null,
+      moment,
       branch,
     });
     return { ...result, targetBeingId };
@@ -624,7 +624,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       verb: "be",
       target: { kind: addressKind, value: address },
       operation,
-      summonCtx,
+      moment,
       actorBranch: currentBranch || null,
     });
     if (!decision.ok) {
@@ -643,8 +643,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       addressKind,
       payload,
       identity,
-      ctx: { socket, address: { kind: addressKind, value: address }, identity, req, summonCtx, nameId },
-      summonCtx,
+      ctx: { socket, address: { kind: addressKind, value: address }, identity, req, moment, nameId },
+      moment,
     });
     await writeBeFact({
       operation,
@@ -652,8 +652,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       authResult: result,
       payload,
       beingName,
-      actId: summonCtx?.actId || null,
-      summonCtx,
+      actId: moment?.actId || null,
+      moment,
       branch,
     });
     return result;
@@ -682,7 +682,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       verb: "be",
       target: { kind: addressKind, value: address },
       operation,
-      summonCtx,
+      moment,
       actorBranch: currentBranch || null,
     });
     if (!decision.ok) {
@@ -694,8 +694,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     }
 
     // Top-level operation count (one-moment-one-act doctrine; sealAct
-    // throws if it would seal >1 op from this summonCtx).
-    const _bCtx = summonCtx;
+    // throws if it would seal >1 op from this moment).
+    const _bCtx = moment;
     const _bWasInOp = !!(_bCtx && _bCtx._inOp);
     if (_bCtx && !_bWasInOp) {
       _bCtx._inOp = true;
@@ -708,8 +708,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
         addressKind,
         payload,
         identity,
-        ctx: { socket, address: { kind: addressKind, value: address }, identity, req, summonCtx, nameId },
-        summonCtx,
+        ctx: { socket, address: { kind: addressKind, value: address }, identity, req, moment, nameId },
+        moment,
       });
     } finally {
       if (_bCtx && !_bWasInOp) _bCtx._inOp = false;
@@ -732,8 +732,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
         authResult: result,
         payload,
         beingName,
-        actId: summonCtx?.actId || null,
-        summonCtx,
+        actId: moment?.actId || null,
+        moment,
         branch,
       });
     }
@@ -770,11 +770,11 @@ export async function beVerb(operation, payload = {}, opts = {}) {
  * before emitFact runs — an act without a frame doesn't get a Fact,
  * and a BE without a Fact didn't happen.
  */
-async function writeBeFact({ operation, identity, authResult, payload, beingName = "cherub", actId = null, summonCtx = null, branch }) {
+async function writeBeFact({ operation, identity, authResult, payload, beingName = "cherub", actId = null, moment = null, branch }) {
   if (!actId) {
     throw new IbpError(
       IBP_ERR.INTERNAL,
-      `BE ${operation} @${beingName}: missing ambient actId. Thread summonCtx from the caller's moment (runtime), or open one via withIAmAct(...) / withBeingAct(...).`,
+      `BE ${operation} @${beingName}: missing ambient actId. Thread moment from the caller's moment (runtime), or open one via withIAmAct(...) / withBeingAct(...).`,
       { operation, beingName },
     );
   }
@@ -880,9 +880,9 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
 
   await emitFact({
     verb:    "be",
-    action:  operation,
-    beingId: actorBeingId,
-    target,
+    act:     operation,
+    through: actorBeingId,
+    of:      target,
     params:  mergedParams,
     result:  safeResult,
     actId,
@@ -893,7 +893,7 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
     // before B perimeter hardening; missing-branch surfaced as a
     // ReferenceError only when an actual transport-act fired).
     branch,
-  }, summonCtx);
+  }, moment);
 }
 
 // (runClaim retired . both modes (credentials, token re-claim) now

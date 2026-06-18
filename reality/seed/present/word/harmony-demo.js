@@ -11,7 +11,7 @@ import { harmony, firstStrike } from "./harmony.ir.js";
 const ctx = {
   dryRun: true,
   branch: "main",
-  summonCtx: { actId: "<actId>" },
+  moment: { actId: "<actId>" },
   bindings: {},
   deltaF: [],
   flows: [],

@@ -77,10 +77,10 @@ export function contentOf(fact) {
     // row as a witness; the identity does not commit to it, so the
     // same deed replayed at a different wall-clock IS the same fact,
     // and clock skew can never corrupt identity.
-    beingId:     fact.beingId,
+    through:     fact.through,
     verb:        fact.verb,
-    action:      fact.action,
-    target:      fact.target,
+    act:         fact.act,
+    of:          fact.of,
     seq:         fact.seq,
     branch:      typeof fact.branch === "string" && fact.branch.length ? fact.branch : "0",
     params:      fact.params,

@@ -78,7 +78,7 @@ function assertFlagMutex(params) {
 // dispatching set-being / set-space DOs through doVerb. Each field
 // write is its own DO call so the one-moment-one-act doctrine holds.
 // Returns a summary of what was written.
-async function writeLlmFields(targetKind, targetId, params, identity, summonCtx) {
+async function writeLlmFields(targetKind, targetId, params, identity, moment) {
   const verb = targetKind === "being" ? "set-being" : "set-space";
   const written = {};
 
@@ -96,7 +96,7 @@ async function writeLlmFields(targetKind, targetId, params, identity, summonCtx)
       { kind: targetKind, id: String(targetId) },
       verb,
       { field, value: connections, merge: false },
-      { identity, summonCtx },
+      { identity, moment },
     );
     written[field] = connections;
   }
@@ -123,7 +123,7 @@ async function writeLlmFields(targetKind, targetId, params, identity, summonCtx)
       { kind: targetKind, id: String(targetId) },
       verb,
       { field, value, merge: false },
-      { identity, summonCtx },
+      { identity, moment },
     );
     written[field] = value;
   }
@@ -278,7 +278,7 @@ export function registerLlmAssignerOps() {
     targets: ["matter", "space"],
     ownerExtension: OWNER,
     skipAudit: true,
-    handler: async ({ target, params, identity, summonCtx }) => {
+    handler: async ({ target, params, identity, moment }) => {
       log.info("llm-assigner",
         `save-playback hit: matterId=${params?.matterId} t=${params?.currentTime}`);
 
@@ -298,7 +298,7 @@ export function registerLlmAssignerOps() {
       );
 
       const value = { ...tutorialMeta, playbackSeconds: currentTime };
-      const opts = identity ? { identity, summonCtx } : { identity: I_AM, summonCtx };
+      const opts = identity ? { identity, moment } : { identity: I_AM, moment };
       await doVerb(
         { kind: "matter", id: String(matter._id) },
         "set-matter",
@@ -370,7 +370,7 @@ export function registerLlmAssignerOps() {
   registerOperation("add-llm", {
     targets: ["space"],
     ownerExtension: "seed",
-    handler: async ({ params, identity, summonCtx }) => {
+    handler: async ({ params, identity, moment }) => {
       if (!identity?.beingId) {
         throw new IbpError(
           IBP_ERR.UNAUTHORIZED,
@@ -384,7 +384,7 @@ export function registerLlmAssignerOps() {
       const connection = await addLlmConnection(
         String(identity.beingId),
         { name, baseUrl, model, apiKey },
-        { identity, summonCtx },
+        { identity, moment },
       );
       return {
         connectionId: String(connection._id),
@@ -400,7 +400,7 @@ export function registerLlmAssignerOps() {
   registerOperation("assign-slot", {
     targets: ["space"],
     ownerExtension: "seed",
-    handler: async ({ params, identity, summonCtx }) => {
+    handler: async ({ params, identity, moment }) => {
       if (!identity?.beingId) {
         throw new IbpError(
           IBP_ERR.UNAUTHORIZED,
@@ -413,7 +413,7 @@ export function registerLlmAssignerOps() {
         { kind: "being", id: String(identity.beingId) },
         "assign-llm-slot",
         { slot, connectionId: connectionId || null },
-        { identity, summonCtx },
+        { identity, moment },
       );
     },
   });
@@ -429,7 +429,7 @@ export function registerLlmAssignerOps() {
   registerOperation("delete-llm", {
     targets: ["space"],
     ownerExtension: "seed",
-    handler: async ({ params, identity, summonCtx }) => {
+    handler: async ({ params, identity, moment }) => {
       if (!identity?.beingId) {
         throw new IbpError(
           IBP_ERR.UNAUTHORIZED,
@@ -442,7 +442,7 @@ export function registerLlmAssignerOps() {
       await deleteLlmConnection(
         String(identity.beingId),
         connectionId,
-        { identity, summonCtx },
+        { identity, moment },
       );
       return { removed: true, connectionId };
     },
@@ -459,7 +459,7 @@ export function registerLlmAssignerOps() {
   registerOperation("set-reality-llm", {
     targets: ["space"],
     ownerExtension: "seed",
-    handler: async ({ params, identity, summonCtx }) => {
+    handler: async ({ params, identity, moment }) => {
       if (!identity?.beingId) {
         throw new IbpError(
           IBP_ERR.UNAUTHORIZED,
@@ -489,7 +489,7 @@ export function registerLlmAssignerOps() {
         normalized.slot = normalized.slot || "default";
         delete normalized.connectionId;
       }
-      const written = await writeLlmFields("space", rootRow.id, normalized, identity, summonCtx);
+      const written = await writeLlmFields("space", rootRow.id, normalized, identity, moment);
       log.verbose("llm-assigner",
         `reality root LLM updated by ${identity.beingId}: ${Object.keys(written).join(", ") || "(no fields)"}`);
       return { spaceId: String(rootRow.id), written };
@@ -503,7 +503,7 @@ export function registerLlmAssignerOps() {
   registerOperation("set-space-llm", {
     targets: ["space"],
     ownerExtension: "seed",
-    handler: async ({ params, identity, summonCtx }) => {
+    handler: async ({ params, identity, moment }) => {
       if (!identity?.beingId) {
         throw new IbpError(
           IBP_ERR.UNAUTHORIZED,
@@ -522,7 +522,7 @@ export function registerLlmAssignerOps() {
         normalized.slot = normalized.slot || "default";
         delete normalized.connectionId;
       }
-      const written = await writeLlmFields("space", spaceId, normalized, identity, summonCtx);
+      const written = await writeLlmFields("space", spaceId, normalized, identity, moment);
       log.verbose("llm-assigner",
         `space ${spaceId} LLM updated by ${identity.beingId}: ${Object.keys(written).join(", ") || "(no fields)"}`);
       return { spaceId: String(spaceId), written };
@@ -535,7 +535,7 @@ export function registerLlmAssignerOps() {
   registerOperation("set-being-llm", {
     targets: ["space"],
     ownerExtension: "seed",
-    handler: async ({ params, identity, summonCtx }) => {
+    handler: async ({ params, identity, moment }) => {
       if (!identity?.beingId) {
         throw new IbpError(
           IBP_ERR.UNAUTHORIZED,
@@ -549,7 +549,7 @@ export function registerLlmAssignerOps() {
         normalized.slot = normalized.slot || "default";
         delete normalized.connectionId;
       }
-      const written = await writeLlmFields("being", String(identity.beingId), normalized, identity, summonCtx);
+      const written = await writeLlmFields("being", String(identity.beingId), normalized, identity, moment);
       log.verbose("llm-assigner",
         `being ${identity.beingId} LLM updated: ${Object.keys(written).join(", ") || "(no fields)"}`);
       return { beingId: String(identity.beingId), written };

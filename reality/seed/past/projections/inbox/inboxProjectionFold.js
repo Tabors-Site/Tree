@@ -5,19 +5,19 @@
 // handler runs once per fact applied (via dispatchCrossCutting in
 // foldEngine.js).
 //
-// Three handlers, one fact-action each. Since the 2026-06-03
+// Three handlers, one fact-act each. Since the 2026-06-03
 // retarget, the summon fact lands on the RECIPIENT's reel
-// (target = recipient, right stance, like DO) with doer = summoner;
-// the recipient is read from fact.target. Summon facts are
-// figure-inert — the being reducer folds no summon action; this
+// (of = recipient, right stance, like DO) with doer = summoner;
+// the recipient is read from fact.of. Summon facts are
+// figure-inert — the being reducer folds no summon act; this
 // cross-cutting handler is their only consumer.
 //
 //   summon      → upsert InboxProjection row keyed by params.correlation.
-//                 recipient = fact.target.id (the reel it lives on).
+//                 recipient = fact.of.id (the reel it lives on).
 //
 //   be:sever    → delete InboxProjection rows whose rootCorrelation
 //                 matches params.rootCorrelation. Fact lives on the
-//                 severer's reel (target = severer). One fact, many
+//                 severer's reel (of = severer). One fact, many
 //                 rows dropped.
 //
 //   (act seal)  → delete InboxProjection row where _id === act.answers.
@@ -38,11 +38,11 @@ import { assertBranchOrThrow } from "../../../materials/projections.js";
 async function handleSummon(fact /*, type, id*/) {
   if (fact?.verb !== "summon") return;
   const params = fact.params || {};
-  // Recipient is the fact's target (right stance); summoner is
-  // beingId (the actor). Renamed from be:summon (which carried
-  // recipient in params and target=summoner) on 2026-06-03.
-  const recipient = fact?.target?.kind === "being" && fact?.target?.id
-    ? String(fact.target.id)
+  // Recipient is the fact's object (right stance); summoner is
+  // through (the actor). Renamed from be:summon (which carried
+  // recipient in params and of=summoner) on 2026-06-03.
+  const recipient = fact?.of?.kind === "being" && fact?.of?.id
+    ? String(fact.of.id)
     : null;
   if (!params.correlation || !recipient) return;
 
@@ -62,7 +62,7 @@ async function handleSummon(fact /*, type, id*/) {
     {
       $set: {
         recipient,
-        summoner:        fact.beingId ? String(fact.beingId) : null,
+        summoner:        fact.through ? String(fact.through) : null,
         sender:          params.sender || null,
         content:         params.content ?? null,
         activeRole:      params.activeRole || null,
@@ -88,7 +88,7 @@ async function handleSummon(fact /*, type, id*/) {
 }
 
 async function handleBeSever(fact /*, type, id*/) {
-  if (fact?.verb !== "be" || fact?.action !== "sever") return;
+  if (fact?.verb !== "be" || fact?.act !== "sever") return;
   const rootCorrelation = fact.params?.rootCorrelation;
   if (!rootCorrelation) return;
   // Scoped to the sever-fact's branch: severing a thread on one

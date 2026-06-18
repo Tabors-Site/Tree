@@ -39,8 +39,8 @@ import ActHead from "./actHead.js";
 /** The hashable opening of an act. */
 export function contentOfAct(act) {
   return {
-    beingIn:        act.beingIn,
-    beingOut:       act.beingOut ?? null,
+    through:        act.through,
+    to:             act.to ?? null,
     ibpAddress:     act.ibpAddress ?? null,
     activeRole:     act.activeRole ?? null,
     inboxMessageId: act.inboxMessageId ?? null,

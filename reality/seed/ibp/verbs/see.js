@@ -202,7 +202,7 @@ export async function seeVerb(target, opts = {}) {
         verb: "see",
         target: { kind: "see-op", value: addrString },
         seeOp: addrString,
-        summonCtx: opts.summonCtx || null,
+        moment: opts.moment || null,
         // actorBranch = the caller's branch (their session's
         // currentBranch). Lets a being seated on #0 SEE op-dispatch
         // onto any branch without needing to exist there. See
@@ -247,7 +247,7 @@ export async function seeVerb(target, opts = {}) {
     currentReality = null,
     currentBranch = null,
     payload = null,
-    summonCtx = null,
+    moment = null,
   } = opts;
 
   // Historical-read qualifier. When set, SEE returns the substrate's
@@ -276,7 +276,7 @@ export async function seeVerb(target, opts = {}) {
       currentUser,
       currentBranch,
       payload,
-      summonCtx,
+      moment,
       addressKind: opts.addressKind,
     });
   }
@@ -312,7 +312,7 @@ export async function seeVerb(target, opts = {}) {
       identity,
       verb: "see",
       target: { kind: "position", spaceId: threadsSpaceId, isDiscovery: false },
-      summonCtx,
+      moment,
       actorBranch: currentBranch || null,
     });
     if (!decision.ok) {
@@ -363,7 +363,7 @@ export async function seeVerb(target, opts = {}) {
       identity,
       verb: "see",
       target: { kind: "position", spaceId: factoryPresentId, isDiscovery: false },
-      summonCtx,
+      moment,
       actorBranch: currentBranch || null,
     });
     if (!decision.ok) {
@@ -629,7 +629,7 @@ export async function seeVerb(target, opts = {}) {
       branch:  seeBranch,
       isDiscovery: false,
     },
-    summonCtx,
+    moment,
     actorBranch: currentBranch || null,
   });
   if (!decision.ok) {
@@ -656,7 +656,7 @@ export async function seeVerb(target, opts = {}) {
         // operator's `#main` pointer (never literal "0").
         const { getDefaultBranch } = await import("../../materials/branch/branchRegistry.js");
         const arrivalBranch =
-          summonCtx?.actorAct?.branch ||
+          moment?.actorAct?.branch ||
           currentBranch ||
           await getDefaultBranch();
         return await arrivalOp.handler({
@@ -686,14 +686,14 @@ export async function seeVerb(target, opts = {}) {
       identity,
       spaceId: resolved.spaceId,
       branch:  seeBranch,
-      summonCtx,
+      moment,
     });
   }
 
   return buildPlaceDescriptor(resolved, { identity, payload });
 }
 
-async function maybeAutoGrantOnEntry({ identity, spaceId, branch, summonCtx }) {
+async function maybeAutoGrantOnEntry({ identity, spaceId, branch, moment }) {
   if (!spaceId) return;
   try {
     // loadOrFold both reads: the seen space may be inherited on this
@@ -721,7 +721,7 @@ async function maybeAutoGrantOnEntry({ identity, spaceId, branch, summonCtx }) {
         role:           roleName,
         anchorSpaceId:  String(spaceId),
         grantedBy:      "auto-on-entry",
-        summonCtx,
+        moment,
         // The SEE's branch — the world where the commons admitted the
         // visitor. A wire SEE has no moment, and emitInternalGrant's
         // actorAct fallback would land the grant on main, where this
@@ -815,7 +815,7 @@ async function seeAtTime({
   currentUser,
   currentBranch,
   payload,
-  summonCtx,
+  moment,
   addressKind: addressKindHint,
 }) {
   // Reject the short-circuit surfaces. Historical-at doesn't compose
@@ -955,13 +955,13 @@ async function seeAtTime({
       spaceId: resolved.spaceId,
       // Same attachment the live SEE path makes: the branch this
       // historical view folds on. Without it, a wire historical SEE
-      // (no summonCtx) had no target branch and authorize failed loud
+      // (no moment) had no target branch and authorize failed loud
       // for every authenticated caller — the timeline strip's scrub
       // path.
       branch: resolved.branch || currentBranch || null,
       isDiscovery: false,
     },
-    summonCtx,
+    moment,
     actorBranch: currentBranch || null,
   });
   if (!decision.ok) {

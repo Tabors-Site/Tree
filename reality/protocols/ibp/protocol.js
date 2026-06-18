@@ -114,7 +114,7 @@ export async function dispatchIbp(carrier, msg, ack) {
 
   // 3. Cross-reality INBOUND. A verified canopy request carries the
   //    foreign actor's identity tuple on the carrier. Run the verb
-  //    under a synthetic summonCtx that represents the foreign actor;
+  //    under a synthetic moment that represents the foreign actor;
   //    emitFact stamps any local facts with crossOrigin pointing back
   //    at the home substrate. The response embeds the local
   //    descriptor as the actor's inner face. See seed/CROSS-WORLD.md.

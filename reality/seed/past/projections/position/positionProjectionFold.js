@@ -12,9 +12,9 @@
 //                                                  and seq as
 //                                                  lastMoveSeq.
 //
-// The fact lives on the being's reel (target.kind === "being",
-// target.id === beingId). Single-writer holds — only the actor stamps
-// onto their own reel — so the cross-cutting handler reads target.id
+// The fact lives on the being's reel (of.kind === "being",
+// of.id === beingId). Single-writer holds — only the actor stamps
+// onto their own reel — so the cross-cutting handler reads of.id
 // as the beingId and looks up the being's current spaceId to scope
 // the row.
 //
@@ -30,24 +30,24 @@ import { hooks } from "../../../hooks.js";
 import log from "../../../seedReality/log.js";
 
 async function handleSetBeingCoord(fact /*, type, id*/) {
-  if (fact?.verb !== "do" || fact?.action !== "set-being") return;
+  if (fact?.verb !== "do" || fact?.act !== "set-being") return;
   const params = fact.params || {};
   if (params.field !== "coord") return;
-  if (fact.target?.kind !== "being" || !fact.target?.id) return;
+  if (fact.of?.kind !== "being" || !fact.of?.id) return;
   if (typeof fact.seq !== "number") return;
 
   const value = params.value;
   // Null/undefined means "unset coord", which is structurally the
   // same as removing the row (the being has no spatial position).
   if (value === null || value === undefined) {
-    const beingId = String(fact.target.id);
+    const beingId = String(fact.of.id);
     await PositionProjection.deleteMany({ beingId });
     return;
   }
   if (typeof value !== "object" || Array.isArray(value)) return;
   if (!Number.isFinite(value.x) || !Number.isFinite(value.y)) return;
 
-  const beingId = String(fact.target.id);
+  const beingId = String(fact.of.id);
 
   // Resolve which space this coord belongs in. The fact carries the
   // being's reel only; the being's current `position` names the

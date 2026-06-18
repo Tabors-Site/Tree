@@ -99,7 +99,7 @@ let _emitter = _defaultEmitter;
  * schedule id.
  *
  * Emits a wake-scheduled fact on the being's reel for `opts.branch`.
- * When opts.summonCtx is present, the fact rides that act's ΔF and
+ * When opts.moment is present, the fact rides that act's ΔF and
  * commits at sealAct; otherwise it commits standalone via sealFacts.
  *
  * @param {string} beingId
@@ -112,7 +112,7 @@ let _emitter = _defaultEmitter;
  * @param {any}    [opts.content]        SUMMON content; default { kind: "scheduled-wake" }
  * @param {boolean}[opts.skipIfBacklog]  skip wake when being already has unconsumed scheduled-wake (default true)
  * @param {string} [opts.id]             caller-supplied stable id (re-registers replace)
- * @param {object} [opts.summonCtx]      in-flight act ctx; fact rides this ΔF
+ * @param {object} [opts.moment]      in-flight act ctx; fact rides this ΔF
  * @param {string} [opts.actorBeingId]   actor for the fact; default = scheduled being (self-act)
  * @returns {Promise<string>} schedule id
  */
@@ -156,7 +156,7 @@ export async function schedule(beingId, opts = {}) {
     action:  "wake-scheduled",
     target:  { kind: "being", id: beingIdStr },
     params,
-  }, opts.summonCtx || null);
+  }, opts.moment || null);
 
   const now = Date.now();
   _addRegistryEntry({
@@ -188,7 +188,7 @@ export async function schedule(beingId, opts = {}) {
  * @param {string} scheduleId
  * @param {object} opts
  * @param {string} opts.branch          REQUIRED
- * @param {object} [opts.summonCtx]     in-flight act ctx
+ * @param {object} [opts.moment]     in-flight act ctx
  * @param {string} [opts.actorBeingId]  defaults to the schedule's being
  * @returns {Promise<boolean>} true when something was removed
  */
@@ -207,7 +207,7 @@ export async function unschedule(scheduleId, opts = {}) {
     action:  "wake-cancelled",
     target:  { kind: "being", id: entry.beingId },
     params:  { scheduleId },
-  }, opts.summonCtx || null);
+  }, opts.moment || null);
 
   _dropRegistryEntry(scheduleId, branch);
   return true;

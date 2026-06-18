@@ -7,7 +7,7 @@
 // mounts the face; momentum applies the being's motion; stamped
 // seals — ONLY when momentum returned ok:true.
 //
-// momentum dispatches by `summonCtx.kind` — TWO SEMANTIC MODES, same
+// momentum dispatches by `moment.kind` — TWO SEMANTIC MODES, same
 // machinery. Both kinds opened the same way (a wake-call landed in
 // the being's inbox; the scheduler picked it; assign opened the
 // moment). The difference is what the wake-call's payload means:
@@ -45,7 +45,7 @@ import log from "../../seedReality/log.js";
 import { normalizeCognitionResult, cognitionFailure } from "../cognition/cognitionResult.js";
 
 /**
- * Beat 3: run the act. Dispatch by summonCtx.kind. Returns a
+ * Beat 3: run the act. Dispatch by moment.kind. Returns a
  * CognitionResult ({ ok:true, content, verbResult? } | { ok:false,
  * shape, reason }).
  *
@@ -55,23 +55,23 @@ import { normalizeCognitionResult, cognitionFailure } from "../cognition/cogniti
  *
  * @param {object} setup       — the result of assign(...)
  * @param {object} setup.role  — the active role spec
- * @param {object} setup.summonCtx — the summon context the role expects
+ * @param {object} setup.moment — the summon context the role expects
  * @returns {Promise<CognitionResult>}
  */
 export async function momentum(setup = {}) {
-  const { role, summonCtx } = setup;
-  const kind = summonCtx?.kind || "summon";
+  const { role, moment } = setup;
+  const kind = moment?.kind || "summon";
 
   if (kind === "transport-act") {
     try {
-      const verbResult = await runTransportAct(summonCtx);
+      const verbResult = await runTransportAct(moment);
       // If the transport-act's verb is a pure-read op (skipAudit on the
       // registration + no facts pushed into deltaF), the moment closes
       // as a SEE — there's nothing to seal. verbResult still rides
       // through to the handoff so the wire-caller gets its answer.
       // Without this, sealAct refuses no-fact moments and the broken
       // act-shape moment leaves the inbox row open.
-      const facts = summonCtx?.deltaF;
+      const facts = moment?.deltaF;
       if (Array.isArray(facts) && facts.length === 0) {
         return { kind: "see", ok: true, content: "", verbResult };
       }
@@ -87,7 +87,7 @@ export async function momentum(setup = {}) {
 
   // Default: summon-kind. Role's summon handler dispatches.
   //
-  // Snapshot doctrine: the scripted role reads summonCtx.innerFace
+  // Snapshot doctrine: the scripted role reads moment.innerFace
   // (built at beat 2) ONCE and never re-reads. No reactive
   // subscription. Reels referenced by the face's weave may change
   // mid-moment; the seal path trusts the existing chain CAS + reel-
@@ -100,11 +100,11 @@ export async function momentum(setup = {}) {
   // on the human portal only (see protocols/ibp/innerFaceLive).
   let raw;
   try {
-    raw = await role.summon(summonCtx.message, summonCtx);
+    raw = await role.summon(moment.message, moment);
   } catch (err) {
     // Cognition threw. Per MODEL.md, this is a SEE — no act
     // produced. moment.js will not seal.
-    if (summonCtx?.signal?.aborted) {
+    if (moment?.signal?.aborted) {
       return cognitionFailure("aborted", err.message);
     }
     log.warn("Momentum", `role.summon threw: ${err.message}`);
@@ -120,11 +120,11 @@ export async function momentum(setup = {}) {
 
 /**
  * Apply a transport-act payload as the being's act inside the moment.
- * The wrapped verb runs through doVerb / beVerb with summonCtx
+ * The wrapped verb runs through doVerb / beVerb with moment
  * threaded so the auto-Fact rides the ambient actId.
  *
  * Transport-act payloads carry { verb, act, target, args }. `act` is
- * the operation in flight (the seal records it as fact.action); the
+ * the operation in flight (the seal records it as fact.act); the
  * rest's meaning differs by verb because doVerb and beVerb have
  * different signatures:
  *
@@ -143,8 +143,8 @@ export async function momentum(setup = {}) {
  * Throws on verb failure; momentum() catches and converts to
  * cognitionFailure.
  */
-async function runTransportAct(summonCtx) {
-  const transportAct = summonCtx?.act;
+async function runTransportAct(moment) {
+  const transportAct = moment?.act;
   if (!transportAct || typeof transportAct !== "object") {
     throw new Error("moment: transport-act missing `act` payload");
   }
@@ -157,7 +157,7 @@ async function runTransportAct(summonCtx) {
   const { doVerb } = await import("../../ibp/verbs/do.js");
   const { beVerb } = await import("../../ibp/verbs/be.js");
 
-  // Thread the FULL parent summonCtx into the inner verb. The verb's
+  // Thread the FULL parent moment into the inner verb. The verb's
   // emitFact reads ctx.deltaF to push its Fact onto the moment's ΔF;
   // a truncated `{ actId }` would silently make emitFact fall back to
   // a sealFacts singleton, the inner Fact would self-seal, and the
@@ -165,8 +165,8 @@ async function runTransportAct(summonCtx) {
   // would then refuse the Act (content:null + deltaF:[] = orphan).
   if (verb === "do") {
     return doVerb(target, act, args || {}, {
-      identity:  summonCtx.identity || null,
-      summonCtx,
+      identity:  moment.identity || null,
+      moment,
     });
   }
 
@@ -178,7 +178,7 @@ async function runTransportAct(summonCtx) {
       addressKind,
       identity:  callerIdentity,
       nameId:    callerNameId,
-      summonCtx,
+      moment,
     });
   }
 
@@ -189,7 +189,7 @@ async function runTransportAct(summonCtx) {
   const { opPayload = {}, address, callerIdentity = null } = args || {};
   return nameVerb(act, opPayload, {
     address,
-    identity: callerIdentity || summonCtx.identity || null,
-    summonCtx,
+    identity: callerIdentity || moment.identity || null,
+    moment,
   });
 }

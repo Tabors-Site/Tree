@@ -128,11 +128,11 @@ async function handleAcceptTemplate(message, ctx) {
 
 // Read one entry from qualities.federation.<bucket>[id] on the LOCAL
 // federation-manager being. For cross reality incoming SUMMONs, the
-// asker is the foreign federation-manager (ctx.actorAct.beingIn);
-// the LOCAL receiver is beingOut. State lives on the local being.
+// asker is the foreign federation-manager (ctx.actorAct.through);
+// the LOCAL receiver is `to`. State lives on the local being.
 async function readBucket(ctx, bucket, key) {
   const branch    = ctx?.actorAct?.branch || "0";
-  const myBeingId = ctx?.actorAct?.beingOut || ctx?.actorAct?.beingIn;
+  const myBeingId = ctx?.actorAct?.to || ctx?.actorAct?.through;
   if (!myBeingId) return null;
   const { loadOrFold } = await import("../../../materials/projections.js");
   const slot = await loadOrFold("being", String(myBeingId), branch);
@@ -145,17 +145,17 @@ async function readBucket(ctx, bucket, key) {
 }
 
 // Outbound cross-reality SUMMON from inside a handler. Uses the
-// federation-manager itself as the actor (the moment's beingIn) so
+// federation-manager itself as the actor (the moment's `through`) so
 // the canopy round trip is signed federation-manager to federation-
 // manager. Fire and forget at this layer; the protocol's correlation
 // is the negotiationId, not the wire return.
 async function dispatchToPeer(ctx, peerReality, message) {
   const { randomUUID: uuidv4 } = await import("node:crypto");
   const { crossRealityDispatch } = await import("../../../ibp/crossWorld.js");
-  // Use the local federation-manager (beingOut) as actor — not the
-  // foreign asker (beingIn). The cross reality act we open is OUR
+  // Use the local federation-manager (`to`) as actor — not the
+  // foreign asker (`through`). The cross reality act we open is OUR
   // outbound dispatch.
-  const myBeingId = ctx?.actorAct?.beingOut || ctx?.actorAct?.beingIn;
+  const myBeingId = ctx?.actorAct?.to || ctx?.actorAct?.through;
   const branch    = ctx?.actorAct?.branch || "0";
   if (!myBeingId) {
     throw new Error("dispatchToPeer: no actorAct in ctx");
@@ -220,7 +220,7 @@ async function handleDeliverBeing(message, ctx) {
   // The federation-manager grafts on its own authority (same attribution as
   // deliver-template): operatorBeingId is the audit-fact author, not the
   // foreign sender.
-  const operatorBeingId = ctx?.actorAct?.beingOut || ctx?.actorAct?.beingIn;
+  const operatorBeingId = ctx?.actorAct?.to || ctx?.actorAct?.through;
   try {
     const { applyGraft } = await import("../../../materials/publish/graft.js");
     const result = await applyGraft(bundle, { operatorBeingId });
@@ -279,7 +279,7 @@ async function handleDeliverTemplate(message, ctx) {
     // operatorBeingId is the audit-trail attribution (GRAFT_INITIATOR
     // fact author + Act actor); for federation plants that's the
     // federation-manager itself, not the foreign asker.
-    const operatorBeingId = ctx?.actorAct?.beingOut || ctx?.actorAct?.beingIn;
+    const operatorBeingId = ctx?.actorAct?.to || ctx?.actorAct?.through;
     result = await plantTemplate(bundle, targetParentSpaceId, { operatorBeingId });
   } catch (err) {
     error = err.message || String(err);
@@ -397,15 +397,15 @@ async function completeIncomingOffer(ctx, negotiationId, outcome) {
 
 async function setQualityField(ctx, subPath, value) {
   // The actor for the qualities write is the LOCAL federation-manager
-  // (the moment's receiver = beingOut), not the asker. For cross
+  // (the moment's receiver = `to`), not the asker. For cross
   // reality incoming SUMMONs the asker is the foreign federation
   // manager, who has no grants on this reality and would deny the
   // doVerb authorize. The local federation-manager has angel granted
   // at boot via ensureSeedDelegates and is the natural authority over
   // its own qualities.
-  const myBeingId = ctx?.actorAct?.beingOut || ctx?.actorAct?.beingIn;
+  const myBeingId = ctx?.actorAct?.to || ctx?.actorAct?.through;
   if (!myBeingId) {
-    log.warn("FederationManager", "setQualityField: no actorAct.beingOut/beingIn in ctx; skipping write");
+    log.warn("FederationManager", "setQualityField: no actorAct.to/through in ctx; skipping write");
     return;
   }
   const { doVerb } = await import("../../../ibp/verbs/do.js");
@@ -418,7 +418,7 @@ async function setQualityField(ctx, subPath, value) {
     },
     {
       identity:      { beingId: myBeingId, name: "federation-manager" },
-      summonCtx:     ctx,
+      moment:     ctx,
       currentBranch: ctx?.actorAct?.branch || null,
     },
   );

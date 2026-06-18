@@ -112,15 +112,15 @@ export function connectHostEnv() {
 
     // displaceInhabitor(chosen, caller) → father-priority: stamp a be:release on the vessel
     // when a DIFFERENT being currently inhabits it (connectHandler L544-573). The ONE world
-    // fact flow 3 lays; emitted into the moment (ctx.summonCtx).
+    // fact flow 3 lays; emitted into the moment (ctx.moment).
     displaceInhabitor: async ({ args: [chosen, caller] }, ctx) => {
       const current = chosen?.qualities?.connection?.inhabitedBy || null;
       if (!current || String(current) === String(caller?.beingId)) return false;
       const { emitFact } = await import("../../../past/fact/facts.js");
-      const sc = ctx?.summonCtx || null;
+      const sc = ctx?.moment || null;
       await emitFact({
-        verb: "be", action: "release", beingId: String(current),
-        target: { kind: "being", id: String(chosen._id) },
+        verb: "be", act: "release", through: String(current),
+        of: { kind: "being", id: String(chosen._id) },
         params: {
           releasedBy: "father-priority",
           fatherBeingId: String(caller?.beingId),

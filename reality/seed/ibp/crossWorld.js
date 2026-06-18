@@ -8,7 +8,7 @@
 //                           applies the peer's response back to the
 //                           Act (status transition + inner face).
 //
-//   runVerbAsForeignActor — inbound. Builds a synthetic summonCtx
+//   runVerbAsForeignActor — inbound. Builds a synthetic moment
 //                           whose actorAct represents the foreign
 //                           actor (no local Act row on this side),
 //                           runs the substrate verb so emitFact stamps
@@ -27,7 +27,7 @@
 // These helpers are the cross-REALITY transport layer; cross-branch
 // within the same reality runs entirely in-process through the normal
 // inbox / assign / sealAct flow (which already threads crossOrigin
-// correctly via summonCtx.targetBranch).
+// correctly via moment.targetBranch).
 
 import Act from "../past/act/act.js";
 import { handleCrossWorldResponse } from "../past/act/crossWorldResponse.js";
@@ -66,8 +66,8 @@ function checkAndRecordForeignAct(reality, actId) {
  *
  * The Fact lands on the TARGET's reel, on the TARGET's branch — and for
  * an inbound foreign actor the target lives on THIS substrate. Without
- * this, the synthetic summonCtx's targetBranch stays null and
- * resolveBranchForFact falls through to summonCtx.actorAct.branch — the
+ * this, the synthetic moment's targetBranch stays null and
+ * resolveBranchForFact falls through to moment.actorAct.branch — the
  * FOREIGN actor's branch — so the foreign-attributed fact would land on
  * a foreign-named branch reel instead of the local target's. See
  * CROSS-WORLD.md "The Fact lands on the target."
@@ -158,8 +158,8 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
   const actorNameId = actor.nameId || actor.beingId;
   const signingPem = await loadSigningKey(actorNameId, actor.branch);
   const opening = {
-    beingIn: actor.beingId,
-    beingOut: actor.beingId,
+    through: actor.beingId,
+    to: actor.beingId,
     ibpAddress: envelope.address,
     activeRole: null,
     inboxMessageId: null,
@@ -183,16 +183,16 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
     // true. ΔF is empty (the consequences land on the foreign chain), so
     // factIds = [].
     const sig = await signActDoc(
-      { _id: id, p, nameId: actorNameId, beingIn: actor.beingId, beingOut: actor.beingId, reality, branch: actor.branch },
+      { _id: id, p, by: actorNameId, through: actor.beingId, to: actor.beingId, reality, branch: actor.branch },
       [],
       signingPem,
     );
     await Act.create({
       _id: id,
       p,
-      nameId: actorNameId,
-      beingIn: actor.beingId,
-      beingOut: actor.beingId,
+      by: actorNameId,
+      through: actor.beingId,
+      to: actor.beingId,
       ibpAddress: envelope.address,
       activeRole: null,
       inboxMessageId: null,
@@ -296,9 +296,9 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
 
 /**
  * Inbound cross-reality dispatch. Run a substrate verb as the foreign
- * actor. The synthetic summonCtx carries actorAct as a JS object —
+ * actor. The synthetic moment carries actorAct as a JS object —
  * NOT a Mongo row, since the actor's Act lives on their home
- * substrate. emitFact reads { reality, branch, beingIn, _id } off this
+ * substrate. emitFact reads { reality, branch, through, _id } off this
  * object to compute the crossOrigin block for any facts the verb
  * produces. After the verb returns, sealFacts commits the deltaF.
  *
@@ -390,13 +390,13 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
   // reads the four identity fields off it to derive crossOrigin.
   const actorAct = {
     _id: actor.actId,
-    nameId: actorNameId,
-    beingIn: actor.beingId,
+    by: actorNameId,
+    through: actor.beingId,
     reality: actor.reality,
     branch: actor.branch,
   };
 
-  // Synthetic summonCtx. Carries actorAct + deltaF for emitFact to push
+  // Synthetic moment. Carries actorAct + deltaF for emitFact to push
   // onto. targetBranch is the LOCAL target's branch on THIS substrate,
   // resolved from the inbound address: the Fact lands on the target's
   // reel/branch, NOT the foreign actor's branch (actorAct.branch). The
@@ -404,7 +404,7 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
   // actorAct.branch, so seating it here is what keeps a foreign-named
   // fact on the correct local reel.
   const targetBranch = await resolveLocalTargetBranch(address);
-  const summonCtx = {
+  const moment = {
     actId: actor.actId,
     actorAct,
     deltaF: [],
@@ -437,38 +437,38 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
   let result = null;
   if (verb === "see") {
     const { seeVerb } = await import("./verbs/see.js");
-    result = await seeVerb(address, { identity, summonCtx });
+    result = await seeVerb(address, { identity, moment });
   } else if (verb === "do") {
     const { doVerb } = await import("./verbs/do.js");
     result = await doVerb(
       payload?.target || null,
       payload?.act,
       payload?.args || {},
-      { identity, summonCtx },
+      { identity, moment },
     );
   } else if (verb === "summon") {
     const { summonVerb } = await import("./verbs/summon.js");
     result = await summonVerb(
       address,
       payload?.message,
-      { identity, summonCtx },
+      { identity, moment },
     );
   } else if (verb === "be") {
     const { beVerb } = await import("./verbs/be.js");
     result = await beVerb(
       payload?.act,
       payload?.opPayload,
-      { identity, summonCtx },
+      { identity, moment },
     );
   } else {
     throw new Error(`runVerbAsForeignActor: unknown verb "${verb}"`);
   }
 
-  // Commit any facts the verb pushed onto summonCtx.deltaF. emitFact's
+  // Commit any facts the verb pushed onto moment.deltaF. emitFact's
   // crossOrigin attachment already fired (since actorAct's world ≠
   // the local target's world for these facts).
-  if (summonCtx.deltaF.length > 0) {
-    await sealFacts(summonCtx.deltaF);
+  if (moment.deltaF.length > 0) {
+    await sealFacts(moment.deltaF);
   }
 
   // Run afterSeal callbacks. summonByResolved queues `wake()` here when
@@ -479,8 +479,8 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
   // for cross-reality SUMMONs to actually deliver — the normal sealAct
   // path wasn't entered (we have no local Act for the foreign actor),
   // so the seam has to live here.
-  if (Array.isArray(summonCtx.afterSeal) && summonCtx.afterSeal.length > 0) {
-    for (const cb of summonCtx.afterSeal) {
+  if (Array.isArray(moment.afterSeal) && moment.afterSeal.length > 0) {
+    for (const cb of moment.afterSeal) {
       try { await cb(); }
       catch (err) {
         const log = (await import("../seedReality/log.js")).default;
@@ -499,7 +499,7 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
   } else {
     try {
       const { seeVerb } = await import("./verbs/see.js");
-      descriptor = await seeVerb(address, { identity, summonCtx: null });
+      descriptor = await seeVerb(address, { identity, moment: null });
     } catch {
       descriptor = null;
     }

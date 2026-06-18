@@ -84,7 +84,7 @@ try {
   // 3. the draft→press handoff: YOU press the scribe's line → the fact lands
   const priorTime = before.length ? before[before.length - 1].date : new Date(0);
   await withIAmAct("press the scribe's draft", async (sc) => {
-    await typeIntoBook(good.draft, { summonCtx: sc, identity, branch: "0", position: home });
+    await typeIntoBook(good.draft, { moment: sc, identity, branch: "0", position: home });
     if (sc.deltaF.length) await sealFacts(sc.deltaF);
   });
   const fresh = await assembleBook("0", { since: priorTime });

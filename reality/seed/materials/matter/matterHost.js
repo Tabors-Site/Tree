@@ -18,14 +18,14 @@
 //     enriched spec + the derived matterId. NO fact laid here.
 //   emitBirth — the lone WORLD write: the content-addressed do:create-matter
 //     birth fact, reusing the SAME emitFact the JS handler calls, laid into the
-//     live moment via ctx.summonCtx. ATTRIBUTION: the fact's beingId is stamped
+//     live moment via ctx.moment. ATTRIBUTION: the fact's beingId is stamped
 //     from `caller` (the real actor, passed as an arg — survives the bridge's
-//     i-am identity override), and nameId rides summonCtx.actorAct.nameId. So a
+//     i-am identity override), and nameId rides moment.actorAct.by. So a
 //     caller-owned create attributes to the caller; the cut suppresses the i-am
 //     override (pass iam=caller) so nameId is the caller's, matching the JS.
 //
 // callHost invokes each as `fn({ args: [...] }, ctx)`; the write fn reads
-// ctx.summonCtx to lay its fact into the in-flight moment.
+// ctx.moment to lay its fact into the in-flight moment.
 
 import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
 import { emitFact } from "../../past/fact/facts.js";
@@ -34,7 +34,7 @@ import { resolveMatterName } from "./matters.js";
 import { matterContentId } from "./matterId.js";
 
 const branchOf = (ctx) =>
-  ctx?.summonCtx?.actorAct?.branch || ctx?.branch || "0";
+  ctx?.moment?.actorAct?.branch || ctx?.branch || "0";
 
 const COORD_AXES = ["x", "y", "z"];
 
@@ -211,11 +211,11 @@ export function matterHostEnv() {
     // The lone WORLD write: the content-addressed do:create-matter birth fact,
     // reusing the SAME emitFact the JS handler calls, laid into the live moment.
     // beingId is stamped from the real caller (survives the i-am override);
-    // nameId rides summonCtx.actorAct.nameId (the cut suppresses the i-am
+    // nameId rides moment.actorAct.by (the cut suppresses the i-am
     // override so this is the caller's name, matching the JS handler).
     emitBirth: async ({ args: [birth, caller] }, ctx) => {
       const branch = branchOf(ctx);
-      const summonCtx = ctx?.summonCtx || null;
+      const moment = ctx?.moment || null;
       const enrichedSpec = birth?.enrichedSpec || {};
       const matterId = birth?.matterId;
       const actorBeingId = caller ? String(caller) : null;
@@ -228,14 +228,14 @@ export function matterHostEnv() {
       await emitFact(
         {
           verb: "do",
-          action: "create-matter",
-          beingId: actorBeingId,
-          target: { kind: "matter", id: matterId },
+          act: "create-matter",
+          through: actorBeingId,
+          of: { kind: "matter", id: matterId },
           params: enrichedSpec,
-          actId: summonCtx?.actId || null,
+          actId: moment?.actId || null,
           branch,
         },
-        summonCtx,
+        moment,
       );
       return true;
     },

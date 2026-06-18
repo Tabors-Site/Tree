@@ -352,7 +352,7 @@ function summarizeAct(act) {
   if (Array.isArray(act.facts) && act.facts.length) {
     const summaries = act.facts
       .slice(0, 3)
-      .map((f) => `${f.verb}:${f.action}`)
+      .map((f) => `${f.verb}:${f.act}`)
       .filter(Boolean);
     if (summaries.length) {
       const more = act.facts.length > summaries.length ? ` (+${act.facts.length - summaries.length})` : "";

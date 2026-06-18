@@ -118,7 +118,7 @@ const _pendingCoalesce = new Map();
  * @param {string} opts.branch         REQUIRED. Which branch this subscription lives on.
  *                                     No silent default; pass "0" explicitly from
  *                                     genesis / seed-plant paths.
- * @param {object} [opts.summonCtx]    in-flight act ctx; fact rides this ΔF
+ * @param {object} [opts.moment]    in-flight act ctx; fact rides this ΔF
  * @param {string} [opts.actorBeingId] actor on the fact; defaults to the subscriber (self-subscribe)
  * @returns {Promise<string>} subscription id
  */
@@ -184,7 +184,7 @@ export async function subscribe(beingId, sub, opts = {}) {
       priority:       entry.priority,
       coalesceMs:     entry.coalesceMs,
     },
-  }, opts.summonCtx || null);
+  }, opts.moment || null);
 
   _addRegistryEntry(entry);
 
@@ -207,7 +207,7 @@ export async function subscribe(beingId, sub, opts = {}) {
  * @param {string} subscriptionId
  * @param {object} opts
  * @param {string} opts.branch         REQUIRED
- * @param {object} [opts.summonCtx]    in-flight act ctx
+ * @param {object} [opts.moment]    in-flight act ctx
  * @param {string} [opts.actorBeingId] defaults to the subscription's being
  * @returns {Promise<boolean>}
  */
@@ -225,7 +225,7 @@ export async function unsubscribe(subscriptionId, opts = {}) {
     action:  "subscription-cancelled",
     target:  { kind: "being", id: entry.beingId },
     params:  { subscriptionId },
-  }, opts.summonCtx || null);
+  }, opts.moment || null);
 
   _dropRegistryEntry(subscriptionId);
   return true;
@@ -643,7 +643,7 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
 // universally) and dispatches through the standard inbox + role
 // path. There is no direct appendToInbox + wake bypass.
 //
-// Branch rides explicitly as args.branch (not via summonCtx — this
+// Branch rides explicitly as args.branch (not via moment — this
 // path runs from a hook handler, outside any enclosing moment). The
 // triggering hook payload (afterMatter / afterQualityWrite / ...) put
 // the branch here; summonByResolved threads it through to the fact.

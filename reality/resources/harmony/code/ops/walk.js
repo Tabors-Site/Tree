@@ -18,7 +18,7 @@ export default {
   name: "walk",  // becomes harmony:walk after loader namespacing
   targets: ["being"],
 
-  async handler({ target, params, identity, summonCtx }) {
+  async handler({ target, params, identity, moment }) {
     const { loadTargetRow, targetIdOf } = await import("../../../seed/materials/_targetShape.js");
     const being = await loadTargetRow(target, "being");
     const coord = params?.coord;
@@ -27,7 +27,7 @@ export default {
     }
 
     // Delegate to set-being:coord for the actual position write. The
-    // inner doVerb call rides the same summonCtx so the set-being
+    // inner doVerb call rides the same moment so the set-being
     // fact joins this moment's deltaF and seals alongside the outer
     // harmony:walk fact . one moment, two facts on the drummer's
     // reel: harmony:walk (semantic) + set-being (coord change).
@@ -36,7 +36,7 @@ export default {
       { kind: "being", id: String(being._id) },
       "set-being",
       { field: "coord", value: { x: coord.x, y: coord.y } },
-      { identity, summonCtx },
+      { identity, moment },
     );
 
     return { coord: { x: coord.x, y: coord.y } };

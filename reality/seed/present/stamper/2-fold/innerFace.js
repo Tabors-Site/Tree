@@ -25,7 +25,7 @@
 // face is still substantive (orientation + role + position + caps).
 //
 // The face is built ONCE per moment, at the 2-fold beat
-// (foldBeat.runFoldBeat), and rides on summonCtx.innerFace. The LLM
+// (foldBeat.runFoldBeat), and rides on moment.innerFace. The LLM
 // mouth formats blocks into prompt prose via innerFaceFormat.js; the
 // scripted role reads ctx.innerFace as data; the human portal reads
 // the live face via the my-inner-face SEE op (and the stored face off
@@ -35,7 +35,7 @@
 // Two cap profiles live here so the relationship is obvious:
 //
 //   STORAGE caps (defensive). Applied by buildInnerFace before the
-//   face is stashed on summonCtx for the seal. High enough that any
+//   face is stashed on moment for the seal. High enough that any
 //   honest face slips through unclamped; tight enough to prevent a
 //   runaway extension from writing a 50MB occupant list. The
 //   spaces / matter / beings of the reality are the truth; storage

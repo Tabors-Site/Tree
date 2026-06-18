@@ -49,7 +49,7 @@ import log from "../../seedReality/log.js";
  * @param {string} opts.operatorBeingId  who is grafting (must be authenticated; used for GRAFT_INITIATOR + audit)
  * @param {string} [opts.branch]       target branch (default "0")
  * @param {object} [opts.params]       parameter values for the bundle's declared parameter holes ($paramName references in field values)
- * @param {object} [opts.summonCtx]    if invoked inside an existing moment; otherwise the eager-fold singleton path is used
+ * @param {object} [opts.moment]    if invoked inside an existing moment; otherwise the eager-fold singleton path is used
  * @returns {Promise<{ rootSpaceId, counts, remapTable }>}
  */
 export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
@@ -466,9 +466,9 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
     await withBeingAct(opts.operatorBeingId, `graft:create-space ${s.name}`, branch, async (ctx) => {
       await emitFact({
         verb:    "do",
-        action:  "create-space",
-        beingId: opts.operatorBeingId,
-        target:  { kind: "space", id: newId },
+        act:     "create-space",
+        through: opts.operatorBeingId,
+        of:      { kind: "space", id: newId },
         params:  spec,
         actId:   ctx.actId,
         branch,
@@ -517,9 +517,9 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
     await withBeingAct(opts.operatorBeingId, `graft:birth ${spec.name}`, branch, async (ctx) => {
       await emitFact({
         verb:    "be",
-        action:  "birth",
-        beingId: newId,
-        target:  { kind: "being", id: newId },
+        act:     "birth",
+        through: newId,
+        of:      { kind: "being", id: newId },
         params:  spec,
         actId:   ctx.actId,
         branch,
@@ -540,9 +540,9 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
     await withBeingAct(opts.operatorBeingId, `graft:create-matter ${spec.name}`, branch, async (ctx) => {
       await emitFact({
         verb:    "do",
-        action:  "create-matter",
-        beingId: opts.operatorBeingId,
-        target:  { kind: "matter", id: newId },
+        act:     "create-matter",
+        through: opts.operatorBeingId,
+        of:      { kind: "matter", id: newId },
         params:  spec,
         actId:   ctx.actId,
         branch,
@@ -559,23 +559,23 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
   // and params flow through the substitution + remap walker so $params
   // and Refs to bundle sourceIds resolve correctly. Per the same
   // one-fact-per-act doctrine: each entry rides its own moment under
-  // the actor named by its f.beingId field (or the grafter by default).
+  // the actor named by its f.through field (or the grafter by default).
   const factsBlock = Array.isArray(bundle.content.facts) ? bundle.content.facts : [];
   counts.facts = 0;
   for (const f of factsBlock) {
-    const target = f.target ? {
-      kind: f.target.kind,
-      id:   remapInBundleField(f.target.id),  // bundle sourceId → new local id
+    const of = f.of ? {
+      kind: f.of.kind,
+      id:   remapInBundleField(f.of.id),  // bundle sourceId → new local id
     } : null;
-    const actorBeingId = f.beingId
-      ? remapInBundleField(f.beingId)
+    const actorBeingId = f.through
+      ? remapInBundleField(f.through)
       : opts.operatorBeingId;
-    await withBeingAct(actorBeingId, `graft:${f.action}`, branch, async (ctx) => {
+    await withBeingAct(actorBeingId, `graft:${f.act}`, branch, async (ctx) => {
       await emitFact({
         verb:    f.verb,
-        action:  f.action,
-        beingId: actorBeingId,
-        target,
+        act:     f.act,
+        through: actorBeingId,
+        of,
         params:  remapInBundleField(f.params || {}),
         actId:   ctx.actId,
         branch,
@@ -606,15 +606,15 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
 
   // ── 8. Stamp a template-planted meta-fact on the new root's reel. ──
   // Records provenance: where this came from, who applied it, what
-  // counts landed. Rides the OUTER wire moment (opts.summonCtx) when
+  // counts landed. Rides the OUTER wire moment (opts.moment) when
   // present so the operator's transport act records "I grafted X."
   // When called standalone, opens its own act under the grafter.
-  if (opts.summonCtx) {
+  if (opts.moment) {
     await emitFact({
       verb:    "do",
-      action:  "template-planted",
-      beingId: opts.operatorBeingId,
-      target:  { kind: "space", id: rootSpaceId },
+      act:     "template-planted",
+      through: opts.operatorBeingId,
+      of:      { kind: "space", id: rootSpaceId },
       params:  {
         sourceReality:      bundle.meta.sourceReality || null,
         sourceBranch:       bundle.meta.sourceBranch || null,
@@ -626,16 +626,16 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
         bundleSigner,
         counts,
       },
-      actId:  opts.summonCtx.actId,
+      actId:  opts.moment.actId,
       branch,
-    }, opts.summonCtx);
+    }, opts.moment);
   } else {
     await withBeingAct(opts.operatorBeingId, "graft:completed", branch, async (ctx) => {
       await emitFact({
         verb:    "do",
-        action:  "template-planted",
-        beingId: opts.operatorBeingId,
-        target:  { kind: "space", id: rootSpaceId },
+        act:     "template-planted",
+        through: opts.operatorBeingId,
+        of:      { kind: "space", id: rootSpaceId },
         params:  {
           sourceReality:      bundle.meta.sourceReality || null,
           sourceBranch:       bundle.meta.sourceBranch || null,
@@ -671,9 +671,9 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
         await withBeingAct(opts.operatorBeingId, `graft:rollback ${endAction[kind]}`, branch, async (ctx) => {
           await emitFact({
             verb:    "do",
-            action:  endAction[kind],
-            beingId: opts.operatorBeingId,
-            target:  { kind, id },
+            act:     endAction[kind],
+            through: opts.operatorBeingId,
+            of:      { kind, id },
             params:  { reason: "graft rollback" },
             actId:   ctx.actId,
             branch,
@@ -688,27 +688,27 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
     // Audit: the graft failed. Stamps even when rollback is partial
     // so the operator's reel records "I tried to graft X and it failed."
     try {
-      if (opts.summonCtx) {
+      if (opts.moment) {
         await emitFact({
           verb:    "do",
-          action:  "graft-failed",
-          beingId: opts.operatorBeingId,
-          target:  null,
+          act:     "graft-failed",
+          through: opts.operatorBeingId,
+          of:      null,
           params: {
             sourceScopeName: bundle.meta.sourceScopeName || null,
             error:           String(err?.message || err),
             committedCount:  committed.length,
           },
-          actId:  opts.summonCtx.actId,
+          actId:  opts.moment.actId,
           branch,
-        }, opts.summonCtx);
+        }, opts.moment);
       } else {
         await withBeingAct(opts.operatorBeingId, "graft:failed", branch, async (ctx) => {
           await emitFact({
             verb:    "do",
-            action:  "graft-failed",
-            beingId: opts.operatorBeingId,
-            target:  null,
+            act:     "graft-failed",
+            through: opts.operatorBeingId,
+            of:      null,
             params: {
               sourceScopeName: bundle.meta.sourceScopeName || null,
               error:           String(err?.message || err),

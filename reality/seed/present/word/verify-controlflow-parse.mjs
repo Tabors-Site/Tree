@@ -15,14 +15,14 @@ const bad = (l, d) => { fail++; console.log(`  ✗ ${l}`); if (d !== undefined) 
 async function run(src, bindings = {}) {
   const flow = parse(src)[0];
   const ctx = {
-    dryRun: true, branch: "main", summonCtx: { actId: "<a>" },
+    dryRun: true, branch: "main", moment: { actId: "<a>" },
     identity: { beingId: "tester", name: "tester", nameId: "tester" },
     env: {}, bindings: { ...bindings }, deltaF: [], flows: [],
   };
   let refused = null;
   try { await evaluate(flow, ctx); }
   catch (e) { if (e && e.__wordRefusal) refused = e; else throw e; }
-  return { flow, laid: ctx.deltaF.map((f) => `${f.verb}:${f.action}`), bindings: ctx.bindings, result: ctx.result, refused };
+  return { flow, laid: ctx.deltaF.map((f) => `${f.verb}:${f.act}`), bindings: ctx.bindings, result: ctx.result, refused };
 }
 
 console.log("\n  verify-controlflow-parse (.word -> parse -> evaluate)\n");
@@ -115,9 +115,9 @@ console.log("\n  verify-controlflow-parse (.word -> parse -> evaluate)\n");
   const flow = parse(src)[0];
   const node = flow.effects[0];
   const dispatch = async (type) => {
-    const ctx = { dryRun: true, branch: "main", summonCtx: { actId: "<a>" }, identity: { nameId: "t" }, env: {}, bindings: { matter: { type } }, deltaF: [], flows: [] };
+    const ctx = { dryRun: true, branch: "main", moment: { actId: "<a>" }, identity: { nameId: "t" }, env: {}, bindings: { matter: { type } }, deltaF: [], flows: [] };
     await evaluate(flow, ctx);
-    return ctx.deltaF.map((f) => f.action);
+    return ctx.deltaF.map((f) => f.act);
   };
   const file = await dispatch("file"), model = await dispatch("model"), other = await dispatch("zzz");
   (node.kind === "match" && node.on === "matter.type" && node.cases.length === 3 &&

@@ -51,16 +51,16 @@ const cherub = await poll(() => findByName("being", "cherub", "0"));
 const birth = async (name) => {
   let bid = null;
   await withIAmAct(`birth ${name}`, async (ctx) => {
-    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, summonCtx: ctx, branch: "0" });
+    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: ctx, branch: "0" });
     bid = b.beingId;
   });
   return bid;
 };
 const run = async (op, caller, target) => {
-  const sc = { actId: randomUUID(), actorAct: { branch: "0", nameId: "i-am" }, identity: { beingId: String(caller) }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc = { actId: randomUUID(), actorAct: { branch: "0", by: "i-am" }, identity: { beingId: String(caller) }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   try {
     const ir = resolveRoleWord("credential", op);
-    const { result } = await runRoleWord(ir, { summonCtx: sc, branch: "0", trigger: { caller: String(caller), target: String(target), branch: "0" }, env: { host: credentialHostEnv() } });
+    const { result } = await runRoleWord(ir, { moment: sc, branch: "0", trigger: { caller: String(caller), target: String(target), branch: "0" }, env: { host: credentialHostEnv() } });
     return { result, refused: null };
   } catch (e) { return { result: null, refused: e }; }
 };

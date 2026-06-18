@@ -77,7 +77,7 @@ export async function resolveStance(stance, opts = {}) {
   // "default to main" — resolve the operator's `#main` pointer through
   // the registry (which may have been re-pointed away from "0" via
   // set-pointer). Every return shape carries an explicit canonical
-  // branch field; the verb layer reads this to thread into summonCtx
+  // branch field; the verb layer reads this to thread into moment
   // + emitFact.
   const { getDefaultBranch } = await import("../materials/branch/branchRegistry.js");
   const branch = stance.branch || await getDefaultBranch();
@@ -264,7 +264,7 @@ function base(over = {}) {
     being: null,
     leafSpace: null,
     // Branch the stance points at. Default "0" (main). The verb layer
-    // reads this off the resolved stance to thread into summonCtx and
+    // reads this off the resolved stance to thread into moment and
     // emitFact so every fact lands on the right branch's reel.
     branch: "0",
     ...over,

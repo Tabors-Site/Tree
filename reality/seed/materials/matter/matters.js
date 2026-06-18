@@ -194,7 +194,7 @@ async function createMatter({
   actId = null,
   sessionId = null,
   initialQualities = {},
-  summonCtx = null,
+  moment = null,
 }) {
   if (!beingId || !spaceId) {
     throw new Error("Missing required fields: beingId, spaceId");
@@ -205,7 +205,7 @@ async function createMatter({
       `Unknown matter type "${type}". Registered types: seed basics plus extension-registered "<ext>:<type>" names.`,
     );
   }
-  const branch = assertBranchOrThrow(summonCtx?.actorAct?.branch, "matters(summonCtx)");
+  const branch = assertBranchOrThrow(moment?.actorAct?.branch, "matters(moment)");
 
   const { loadOrFold } = await import("../projections.js");
   const { default: Projection } = await import("../branch/projection.js");
@@ -345,9 +345,9 @@ async function createMatter({
   // createBeing.
   await sealFacts([{
     verb:    "do",
-    action:  "create-matter",
-    beingId: String(beingId),
-    target:  { kind: "matter", id: matterId },
+    act:     "create-matter",
+    through: String(beingId),
+    of:      { kind: "matter", id: matterId },
     params:  matterParams,
     actId,
     sessionId,
@@ -392,11 +392,11 @@ async function editMatter({
   matterId, content, beingId,
   lineStart = null, lineEnd = null,
   actId = null, sessionId = null,
-  summonCtx = null,
+  moment = null,
 }) {
   if (!matterId || !beingId) throw new Error("Missing required fields");
 
-  const branch = assertBranchOrThrow(summonCtx?.actorAct?.branch, "matters(summonCtx)");
+  const branch = assertBranchOrThrow(moment?.actorAct?.branch, "matters(moment)");
   const _matterSlot = await loadOrFold("matter", matterId, branch);
   if (!_matterSlot) throw new Error("Matter not found");
   const matter = { _id: _matterSlot.id, ...(_matterSlot.state || {}) };
@@ -480,14 +480,14 @@ async function editMatter({
   // old fact still names its hash, so history reads can resolve it.
   await emitFact({
     verb:    "do",
-    action:  "set-matter",
-    beingId: String(beingId),
-    target:  { kind: "matter", id: String(matter._id) },
+    act:     "set-matter",
+    through: String(beingId),
+    of:      { kind: "matter", id: String(matter._id) },
     params:  { field: "content", value: newRef },
     actId,
     sessionId,
     branch,
-  }, summonCtx);
+  }, moment);
   matter.content = newRef;
 
   // deltaKB threads into afterMatter for downstream reactions. No
@@ -557,9 +557,9 @@ async function getMatters({ spaceId, limit, offset, startDate, endDate, branch }
 async function deleteMatterAndFile({
   matterId, beingId,
   actId = null, sessionId = null,
-  summonCtx = null,
+  moment = null,
 }) {
-  const branch = assertBranchOrThrow(summonCtx?.actorAct?.branch, "matters(summonCtx)");
+  const branch = assertBranchOrThrow(moment?.actorAct?.branch, "matters(moment)");
   const _mSlot = await loadOrFold("matter", matterId, branch);
   if (!_mSlot) throw new Error("Matter not found");
   const matter = { _id: _mSlot.id, ...(_mSlot.state || {}) };
@@ -597,14 +597,14 @@ async function deleteMatterAndFile({
   const setMatterField = (field, value) =>
     emitFact({
       verb:    "do",
-      action:  "set-matter",
-      beingId: String(beingId),
-      target:  { kind: "matter", id: String(matter._id) },
+      act:     "set-matter",
+      through: String(beingId),
+      of:      { kind: "matter", id: String(matter._id) },
       params:  { field, value },
       actId,
       sessionId,
       branch,
-    }, summonCtx);
+    }, moment);
   await setMatterField("spaceId", DELETED);
   await setMatterField("beingId", DELETED);
   matter.spaceId = DELETED;
@@ -628,13 +628,13 @@ async function deleteMatterAndFile({
 async function transferMatter({
   matterId, targetSpace, beingId,
   actId = null, sessionId = null,
-  summonCtx = null,
+  moment = null,
 }) {
   if (!matterId || !targetSpace || !beingId) {
     throw new Error("Missing required fields: matterId, targetSpace, beingId");
   }
 
-  const branch = assertBranchOrThrow(summonCtx?.actorAct?.branch, "matters(summonCtx)");
+  const branch = assertBranchOrThrow(moment?.actorAct?.branch, "matters(moment)");
   const _mSlot2 = await loadOrFold("matter", matterId, branch);
   if (!_mSlot2) throw new Error("Matter not found");
   const matter = { _id: _mSlot2.id, ...(_mSlot2.state || {}) };
@@ -662,14 +662,14 @@ async function transferMatter({
   // applySetField writes the row.
   await emitFact({
     verb:    "do",
-    action:  "set-matter",
-    beingId: String(beingId),
-    target:  { kind: "matter", id: String(matter._id) },
+    act:     "set-matter",
+    through: String(beingId),
+    of:      { kind: "matter", id: String(matter._id) },
     params:  { field: "spaceId", value: targetSpaceBare },
     actId,
     sessionId,
     branch,
-  }, summonCtx);
+  }, moment);
   matter.spaceId = targetSpaceBare;
 
   return { message: "Matter transferred successfully", matterId: matterId.toString(), from: { spaceId: sourceSpaceId }, to: { spaceId: targetSpaceBare } };

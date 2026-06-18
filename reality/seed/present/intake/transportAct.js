@@ -192,7 +192,7 @@ export async function dispatchTransportAct({
     // Two branches carried per the cross-world doctrine:
     //   branch       — the ACTOR's branch; where the moment runs and
     //                  where the Act seals. assign.js reads this when
-    //                  shaping summonCtx and seating the actorAct.
+    //                  shaping moment and seating the actorAct.
     //   targetBranch — where the Fact lands (the TARGET'S branch).
     //                  Defaults to branch (same-world). When different,
     //                  emitFact's deriveCrossOrigin attaches a

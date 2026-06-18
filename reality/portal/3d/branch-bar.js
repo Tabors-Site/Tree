@@ -112,7 +112,7 @@ function _actToMark(a) {
   return {
     ts:    a?.stampedAt || a?.receivedAt || null,
     seq:   a?.lastFactSeq ?? null,
-    label: a?.facts?.[0]?.action
+    label: a?.facts?.[0]?.act
       || (a?.endMessage?.content
         ? String(a.endMessage.content).slice(0, 40)
         : (a?.activeRole || null)),
@@ -2536,7 +2536,7 @@ function _sidePreview(label, fact) {
   }
   const action = document.createElement("div");
   action.style.cssText = "color:#c8d3cb;";
-  action.textContent = fact.action || "(action)";
+  action.textContent = fact.act || "(action)";
   card.appendChild(action);
   if (fact.params) {
     const params = document.createElement("pre");

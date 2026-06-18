@@ -155,7 +155,7 @@ async function run(hookName, data) {
   // that don't pass branch fall to "0" for the scope walk only;
   // safer than swallowing the hook's invocation entirely, but worth
   // surfacing so the caller can be threaded properly.
-  const branch = data?.branch || data?.summonCtx?.actorAct?.branch || "0";
+  const branch = data?.branch || data?.moment?.actorAct?.branch || "0";
   let blockedExtensions = null;
   if (spaceId && _getScopeFn) {
     // DB-health gate. When Mongoose is in a "Client must be connected"

@@ -305,7 +305,7 @@ async function summonToActivity(summon, opts = {}) {
   try {
     lastFact = await Fact.findOne({ actId: summon._id })
       .sort({ date: -1 })
-      .select("action params date")
+      .select("act params date")
       .lean();
   } catch {
     // The descriptor never blocks on a Fact lookup.
@@ -318,7 +318,7 @@ async function summonToActivity(summon, opts = {}) {
     // `→@<recipient> <content>` above this being's avatar. Multiplayer-
     // visible: every viewer sees what this being said to whom because
     // the source is the substrate's fact, not a per-tab UI side-channel.
-    if (lastFact.action === "summon") {
+    if (lastFact.act === "summon") {
       const recipientBeingId = lastFact.params?.recipient
         ? String(lastFact.params.recipient)
         : null;
@@ -346,7 +346,7 @@ async function summonToActivity(summon, opts = {}) {
     return {
       kind: "acting",
       content: truncate(
-        `${lastFact.action}(${summarizeArgs(lastFact.params)})`,
+        `${lastFact.act}(${summarizeArgs(lastFact.params)})`,
         ACTIVITY_CONTENT_CAP,
       ),
       chainstepId: String(summon._id),
@@ -394,18 +394,18 @@ async function inferActivityTarget(summon) {
   try {
     const Act = (await import("../past/act/act.js")).default;
     parent = await Act.findById(summon.inReplyTo)
-      .select("activeRole beingOut")
+      .select("activeRole to")
       .lean();
   } catch {
     return null;
   }
-  if (!parent || !parent.activeRole || !parent.beingOut) return null;
+  if (!parent || !parent.activeRole || !parent.to) return null;
   // Without aiContext/treeContext we no longer have a (spaceId, role)
   // tuple to hand the renderer. Surface the parent being + role so the
   // 3D portal can map "which mesh is this being" via its descriptor entry.
   return {
     kind: "being",
-    beingId: String(parent.beingOut),
+    beingId: String(parent.to),
     role: parent.activeRole,
   };
 }
@@ -499,7 +499,7 @@ export async function buildNameDescriptor(nameId) {
   // The Name's whole biography of acts, across every being it acts through
   // (act.nameId is index-backed). factCount is deliberately omitted — Fact has
   // no nameId index and i-am is a full-collection-scan pathology.
-  const actCount = await Act.countDocuments({ nameId: String(nameId) });
+  const actCount = await Act.countDocuments({ by: String(nameId) });
 
   // FIELD-PICK — never `{ ...state }`. privateKeyEnc never appears here.
   // `identity` is the key SCHEME only (alg / encoding / version), no key bytes.
@@ -630,20 +630,20 @@ export async function lastOpenBeingForName(nameId, branch = "0") {
   // The name's own be:connect / be:release facts, oldest-first. nameId is the
   // signer (the name acting); target is the being connected/released.
   const facts = await Fact.find({
-    nameId: String(nameId),
+    by:     String(nameId),
     verb:   "be",
-    action: { $in: ["connect", "release"] },
-  }).sort({ date: 1 }).select("action target date").lean();
+    act:    { $in: ["connect", "release"] },
+  }).sort({ date: 1 }).select("act of date").lean();
 
-  const latest = new Map(); // beingId -> { action, date } (its most recent be-action)
+  const latest = new Map(); // beingId -> { act, date } (its most recent be-action)
   for (const f of facts) {
-    const bid = f.target?.id ? String(f.target.id) : null;
+    const bid = f.of?.id ? String(f.of.id) : null;
     if (!bid) continue;
-    latest.set(bid, { action: f.action, date: f.date });
+    latest.set(bid, { act: f.act, date: f.date });
   }
   let best = null;
   for (const [bid, la] of latest) {
-    if (la.action === "connect" && (!best || la.date > best.date)) best = { beingId: bid, date: la.date };
+    if (la.act === "connect" && (!best || la.date > best.date)) best = { beingId: bid, date: la.date };
   }
   if (!best) return null;
 

@@ -100,10 +100,10 @@ function discoverMigrations() {
 
 /**
  * Run a single migration with a timeout. The migration receives the
- * caller's summonCtx so every fact it emits joins the I-Am's
+ * caller's moment so every fact it emits joins the I-Am's
  * migrations moment (opened by genesis.js via withIAmAct).
  */
-async function runMigration(version, filePath, summonCtx) {
+async function runMigration(version, filePath, moment) {
   const mod = await import(pathToFileURL(filePath).href);
 
   if (typeof mod.default !== "function") {
@@ -113,7 +113,7 @@ async function runMigration(version, filePath, summonCtx) {
 
   let timer;
   await Promise.race([
-    mod.default(summonCtx),
+    mod.default(moment),
     new Promise((_, reject) => {
       timer = setTimeout(
         () => reject(new Error(`Migration ${version} timed out after ${MIGRATION_TIMEOUT_MS / 1000}s`)),
@@ -132,12 +132,12 @@ async function runMigration(version, filePath, summonCtx) {
  * I-Am's act. If any migration throws, the whole moment aborts; zero
  * partial migration state.
  *
- * @param {object} summonCtx  the I-Am's migrations-moment ctx
+ * @param {object} moment  the I-Am's migrations-moment ctx
  */
-export async function runSeedMigrations(summonCtx) {
-  if (!summonCtx) {
+export async function runSeedMigrations(moment) {
+  if (!moment) {
     throw new Error(
-      "runSeedMigrations requires summonCtx. Wrap the call in withIAmAct(...) so migration writes ride one Act.",
+      "runSeedMigrations requires moment. Wrap the call in withIAmAct(...) so migration writes ride one Act.",
     );
   }
   const storedVersion = getRealityConfigValue("seedVersion") || "0.0.0";
@@ -168,7 +168,7 @@ export async function runSeedMigrations(summonCtx) {
     const startMs = Date.now();
     try {
       log.verbose("Seed", `Running migration ${version}...`);
-      await runMigration(version, file, summonCtx);
+      await runMigration(version, file, moment);
       ran++;
       const elapsed = Date.now() - startMs;
       log.verbose("Seed", `Migration ${version} complete (${elapsed}ms)`);
@@ -184,7 +184,7 @@ export async function runSeedMigrations(summonCtx) {
   // moment's ΔF (same withIAmAct as the migrations themselves) so the
   // version bump commits atomically with whatever the migrations did.
   // scaffold:true bypasses stance auth (this is the I-Am acting on
-  // its own .config space); summonCtx carries the actId.
+  // its own .config space); moment carries the actId.
   const { findByHeavenSpace } = await import("../../materials/projections.js");
   const { HEAVEN_SPACE } = await import("../../materials/space/heavenSpaces.js");
   const { doVerb } = await import("../../ibp/verbs/do.js");
@@ -196,7 +196,7 @@ export async function runSeedMigrations(summonCtx) {
     { kind: "space", id: String(configNode.id) },
     "set-config",
     { key: "seedVersion", value: currentVersion },
-    { identity: I_AM, summonCtx },
+    { identity: I_AM, moment },
   );
 
   if (ran > 0) {

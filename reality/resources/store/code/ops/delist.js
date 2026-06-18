@@ -22,14 +22,14 @@ export default {
   },
   skipAudit: true,
 
-  async handler({ target, params, identity, summonCtx }) {
+  async handler({ target, params, identity, moment }) {
     const { loadTargetRow } = await import("../../../seed/materials/_targetShape.js");
     const registrar = await loadTargetRow(target, "being");
     const { delistVersion } = await import("../handlers.js");
     const ctx = {
-      ...summonCtx,
+      ...moment,
       toBeing: { _id: String(registrar._id), name: registrar.name },
-      branch: summonCtx?.actorAct?.branch || "0",
+      branch: moment?.actorAct?.branch || "0",
     };
     const result = await delistVersion(ctx, {
       publisher: params?.publisher,

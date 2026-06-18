@@ -233,13 +233,13 @@ export async function ensureSeedDelegates(spaceRootId) {
   try {
     const live = (await loadProjection("space", spaceRootId, "0"))?.state || null;
     let size = live?.size || null;
-    if (!size && opts.summonCtx?.deltaF) {
-      const pendingCreate = opts.summonCtx.deltaF.find(
+    if (!size && opts.moment?.deltaF) {
+      const pendingCreate = opts.moment.deltaF.find(
         (f) =>
           f?.verb === "do" &&
-          f?.action === "create-space" &&
-          f?.target?.kind === "space" &&
-          String(f?.target?.id) === String(spaceRootId),
+          f?.act === "create-space" &&
+          f?.of?.kind === "space" &&
+          String(f?.of?.id) === String(spaceRootId),
       );
       size = pendingCreate?.params?.size || null;
     }
@@ -296,7 +296,7 @@ export async function ensureSeedDelegates(spaceRootId) {
         const setFieldInOwnMoment = (label, field, value) =>
           withIAmAct(label, async (ctx) =>
             doVerb(beingTarget, "set-being", { field, value },
-              { identity: I_AM, summonCtx: ctx }));
+              { identity: I_AM, moment: ctx }));
 
         const st = existingSlot.state || {};
         const quals = st.qualities;
@@ -379,7 +379,7 @@ export async function ensureSeedDelegates(spaceRootId) {
               : (circleCoord ? { coord: circleCoord(i) } : {})),
           },
           identity: iAmIdent,
-          summonCtx: ctx,
+          moment: ctx,
         });
       });
 
@@ -502,7 +502,7 @@ export async function grantAngelToSeedDelegates() {
             anchorSpaceId: String(heaven.id),
             anchorBeingId: null,
           },
-          { identity: I_AM, summonCtx: ctx },
+          { identity: I_AM, moment: ctx },
         );
       });
       granted++;
@@ -543,7 +543,7 @@ export async function grantAngelToSeedDelegates() {
             anchorSpaceId: String(rootId),
             anchorBeingId: null,
           },
-          { identity: I_AM, summonCtx: ctx },
+          { identity: I_AM, moment: ctx },
         );
       });
       granted++;

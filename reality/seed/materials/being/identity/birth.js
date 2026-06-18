@@ -18,7 +18,7 @@
 // (an existing space) and `parentBeingId`. Callers that want a fresh
 // child home for the new being create the space FIRST via
 // do:create-space, then call birthBeing with the new space's id. Both
-// facts join the same `summonCtx.deltaF` and seal atomically — the
+// facts join the same `moment.deltaF` and seal atomically — the
 // composition of two verbs (DO + BE), rather than a hidden second
 // emission inside birth. Real-world analog: you build the room before
 // you have the baby, not at the same time.
@@ -86,8 +86,8 @@ function validatePassword(password) {
  * writer doctrine). Returns the new being's id + name and a pending-
  * view of the spec.
  *
- * When inside a moment (`summonCtx` threaded), the Fact joins
- * `summonCtx.deltaF` and commits atomically with the rest of the
+ * When inside a moment (`moment` threaded), the Fact joins
+ * `moment.deltaF` and commits atomically with the rest of the
  * moment at sealAct. When standalone, emitFact's singleton path
  * commits immediately.
  *
@@ -153,7 +153,7 @@ function validatePassword(password) {
  * @param {object} args.identity     { name, beingId } of the caller
  *                                   (must satisfy authorize against
  *                                   spec.homeId for verb=be op=create-being)
- * @param {object} [args.summonCtx]  the moment's context. Required for
+ * @param {object} [args.moment]  the moment's context. Required for
  *                                   runtime calls; genesis-sequence
  *                                   callers (ensureSeedDelegates) pass
  *                                   their per-delegate withIAmAct ctx;
@@ -174,7 +174,7 @@ function validatePassword(password) {
  *   either the pending-view (in-moment) or the materialized row
  *   (standalone).
  */
-export async function birthBeing({ spec, identity, summonCtx = null, branch = null }) {
+export async function birthBeing({ spec, identity, moment = null, branch = null }) {
   if (!spec || typeof spec !== "object") {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "birthBeing requires spec object");
   }
@@ -239,7 +239,7 @@ export async function birthBeing({ spec, identity, summonCtx = null, branch = nu
   // another way here). actorAct covers in-moment primitive callers
   // (cherub's handlers, withIAmAct delegates); the main tail covers
   // standalone scaffold callers only.
-  branch = branch || summonCtx?.actorAct?.branch || "0";
+  branch = branch || moment?.actorAct?.branch || "0";
 
   // No inline authorize call. `birthBeing` is a substrate primitive
   // called from already-authorized contexts:
@@ -263,12 +263,12 @@ export async function birthBeing({ spec, identity, summonCtx = null, branch = nu
   // where the parent's be:birth is earlier in the same ΔF.
   const { loadOrFold, findByName, findByNamePattern } = await import("../../projections.js");
   const parentSlot = await loadOrFold("being", parentBeingId, branch);
-  const parentPending = parentSlot ? null : summonCtx?.deltaF?.find(
+  const parentPending = parentSlot ? null : moment?.deltaF?.find(
     (f) =>
       f?.verb === "be" &&
-      f?.action === "birth" &&
-      f?.target?.kind === "being" &&
-      String(f?.target?.id) === String(parentBeingId),
+      f?.act === "birth" &&
+      f?.of?.kind === "being" &&
+      String(f?.of?.id) === String(parentBeingId),
   );
   if (!parentSlot && !parentPending) {
     throw new IbpError(
@@ -378,12 +378,12 @@ export async function birthBeing({ spec, identity, summonCtx = null, branch = nu
   const homeSlot = await loadOrFold("space", homeId, branch);
   let pendingHomeSize = null;
   if (!homeSlot) {
-    const homePending = summonCtx?.deltaF?.find(
+    const homePending = moment?.deltaF?.find(
       (f) =>
         f?.verb === "do" &&
-        f?.action === "create-space" &&
-        f?.target?.kind === "space" &&
-        String(f?.target?.id) === String(homeId),
+        f?.act === "create-space" &&
+        f?.of?.kind === "space" &&
+        String(f?.of?.id) === String(homeId),
     );
     if (!homePending) {
       throw new IbpError(
@@ -452,12 +452,12 @@ export async function birthBeing({ spec, identity, summonCtx = null, branch = nu
         const posSlot = await loadOrFold("space", positionId, branch);
         size = posSlot?.state?.size || null;
         if (!size) {
-          const posPending = summonCtx?.deltaF?.find(
+          const posPending = moment?.deltaF?.find(
             (f) =>
               f?.verb === "do" &&
-              f?.action === "create-space" &&
-              f?.target?.kind === "space" &&
-              String(f?.target?.id) === positionId,
+              f?.act === "create-space" &&
+              f?.of?.kind === "space" &&
+              String(f?.of?.id) === positionId,
           );
           size = posPending?.params?.size || null;
         }
@@ -580,10 +580,10 @@ export async function birthBeing({ spec, identity, summonCtx = null, branch = nu
   // immutable thing about a being (its live attributes all change). Who
   // birthed it + its birth name + branch + the birth MOMENT (bornAt = this
   // moment's act id, which makes each birth unique). Frozen here, carried
-  // as target.id below; later set-being / be:rename rewrite the row, never
+  // as of.id below; later set-being / be:rename rewrite the row, never
   // this id, so the reel stays intact. The shareable IDENTITY is the Name
   // (trueName); this is just the local presence handle. See ../beingId.js.
-  const id = beingContentId({ ...factSpec, bornAt: summonCtx?.actId ?? null });
+  const id = beingContentId({ ...factSpec, bornAt: moment?.actId ?? null });
 
   // NOTE: be:birth does NOT mint a trueName. A trueName is its own thing,
   // minted separately through the NAME verb (declare-name) — the way an
@@ -595,13 +595,13 @@ export async function birthBeing({ spec, identity, summonCtx = null, branch = nu
   try {
     await emitFact({
       verb:    "be",
-      action:  "birth",
-      beingId: id,
-      target:  { kind: "being", id },
+      act:     "birth",
+      through: id,
+      of:      { kind: "being", id },
       params:  factSpec,
-      actId:   summonCtx?.actId || null,
+      actId:   moment?.actId || null,
       branch,
-    }, summonCtx);
+    }, moment);
   } catch (err) {
     if (err.code === 11000) {
       throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Name already taken");
@@ -630,7 +630,7 @@ export async function birthBeing({ spec, identity, summonCtx = null, branch = nu
     childId: id,
     motherBeingId: parentBeingId,
     fatherBeingId: spec.father?.reality === getRealityDomain() ? spec.father?.beingId : null,
-    summonCtx,
+    moment,
     branch,
   });
 
@@ -657,13 +657,13 @@ export async function birthBeing({ spec, identity, summonCtx = null, branch = nu
     await _anointGlobal({
       childId: id,
       branch,
-      summonCtx,
+      moment,
     });
   }
 
   // In-moment: the row materializes at seal. Return the pending view
   // so callers can use the id + spec fields immediately.
-  if (summonCtx) {
+  if (moment) {
     return {
       status:  "created",
       beingId: id,
@@ -692,7 +692,7 @@ export async function birthBeing({ spec, identity, summonCtx = null, branch = nu
 /**
  * Stamp grant facts on a newly-born child that mirror both parents'
  * granted roles. Each inherited grant rides the SAME moment as the
- * be:birth (via summonCtx.deltaF) so birth + inheritance seal
+ * be:birth (via moment.deltaF) so birth + inheritance seal
  * atomically — the child either exists with both their birth and
  * their inheritance or neither.
  *
@@ -712,10 +712,10 @@ export async function birthBeing({ spec, identity, summonCtx = null, branch = nu
  * @param {string} args.childId
  * @param {string} args.motherBeingId       parentBeingId on the spec
  * @param {string|null} args.fatherBeingId  local beingId of same-reality father, or null
- * @param {object} args.summonCtx           in-flight moment ctx (required)
+ * @param {object} args.moment           in-flight moment ctx (required)
  * @param {string} args.branch
  */
-async function _inheritParentRoles({ childId, motherBeingId, fatherBeingId, summonCtx, branch }) {
+async function _inheritParentRoles({ childId, motherBeingId, fatherBeingId, moment, branch }) {
   // Read each parent's projection on the child's branch (loadOrFold
   // walks lineage so a sub-branch sees its effective view).
   const { loadOrFold } = await import("../../projections.js");
@@ -754,9 +754,9 @@ async function _inheritParentRoles({ childId, motherBeingId, fatherBeingId, summ
   for (const { grant, grantor } of composed) {
     await emitFact({
       verb:    "do",
-      action:  "grant-role",
-      beingId: grantor,
-      target:  { kind: "being", id: String(childId) },
+      act:     "grant-role",
+      through: grantor,
+      of:      { kind: "being", id: String(childId) },
       params:  {
         role:           grant.role,
         anchorSpaceId:  grant.anchorSpaceId || null,
@@ -764,9 +764,9 @@ async function _inheritParentRoles({ childId, motherBeingId, fatherBeingId, summ
         grantedBy:      grantor,
         inheritedFrom:  grantor,   // forensic marker — this came from parent inheritance
       },
-      actId:   summonCtx?.actId || null,
+      actId:   moment?.actId || null,
       branch,
-    }, summonCtx);
+    }, moment);
   }
 }
 
@@ -793,16 +793,16 @@ function _grantKey(grant) {
  * only gate, so universal capabilities MUST live on a role every
  * being holds.
  */
-async function _anointGlobal({ childId, branch, summonCtx }) {
+async function _anointGlobal({ childId, branch, moment }) {
   const { getSpaceRootId } = await import("../../../sprout.js");
   const { I_AM } = await import("../seedBeings.js");
   const rootId = getSpaceRootId();
   if (!rootId) return; // boot-window edge; the I-Am birth itself runs before root materializes
   await emitFact({
     verb:    "do",
-    action:  "grant-role",
-    beingId: I_AM,
-    target:  { kind: "being", id: String(childId) },
+    act:     "grant-role",
+    through: I_AM,
+    of:      { kind: "being", id: String(childId) },
     params:  {
       role:          "global",
       anchorSpaceId: String(rootId),
@@ -810,9 +810,9 @@ async function _anointGlobal({ childId, branch, summonCtx }) {
       grantedBy:     I_AM,
       grantedAt:     new Date().toISOString(),
     },
-    actId:   summonCtx?.actId || null,
+    actId:   moment?.actId || null,
     branch,
-  }, summonCtx);
+  }, moment);
 }
 
 // ─────────────────────────────────────────────────────────────────────

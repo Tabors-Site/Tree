@@ -7,7 +7,7 @@
 // role naturally reaches the host + all descendants via qualities
 // inheritance; the optional `reach` field adjusts that.
 //
-// `hostRoleAt(spaceId, name, spec, identity, summonCtx)`
+// `hostRoleAt(spaceId, name, spec, identity, moment)`
 // emits a `do:set-space` fact targeting the space with
 // field=`qualities.roles.<name>` and value=spec. The space reducer
 // folds into qualities.roles.<name>.
@@ -38,10 +38,10 @@ import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
  * @param {string} name      role name
  * @param {object} spec      the role spec (data fields only — functions are stripped)
  * @param {object} identity  the actor stamping the host fact
- * @param {object} summonCtx the surrounding act ctx (ride this moment's ΔF)
+ * @param {object} moment the surrounding act ctx (ride this moment's ΔF)
  * @returns {Promise<object>} the do:set-space result
  */
-export async function hostRoleAt(spaceId, name, spec, identity, summonCtx) {
+export async function hostRoleAt(spaceId, name, spec, identity, moment) {
   if (!spaceId || typeof spaceId !== "string") {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "hostRoleAt: `spaceId` is required");
   }
@@ -63,7 +63,7 @@ export async function hostRoleAt(spaceId, name, spec, identity, summonCtx) {
       value: data,
       merge: false, // whole-spec replacement, not field-level merge
     },
-    { identity, summonCtx },
+    { identity, moment },
   );
 }
 

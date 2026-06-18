@@ -10,8 +10,8 @@
 //
 // The precedence, highest first:
 //   1. target.branch          — the parsed target already carries a world
-//   2. summonCtx.targetBranch  — the moment resolved the addressee's branch
-//   3. summonCtx.actorAct.branch — the acting moment's own world
+//   2. moment.targetBranch  — the moment resolved the addressee's branch
+//   3. moment.actorAct.branch — the acting moment's own world
 //   4. currentBranch           — the caller's seated branch (socket stance)
 //
 // Returns the first non-empty string, or null when none is present.
@@ -28,15 +28,15 @@ function nonEmpty(s) {
 /**
  * @param {object} args
  * @param {{branch?: string}|null} [args.target]   parsed target (may carry a branch)
- * @param {{targetBranch?: string, actorAct?: {branch?: string}}|null} [args.summonCtx]
+ * @param {{targetBranch?: string, actorAct?: {branch?: string}}|null} [args.moment]
  * @param {string|null} [args.currentBranch]       caller's seated branch
  * @returns {string|null}  the resolved target branch, or null if none present
  */
-export function resolveTargetBranch({ target, summonCtx, currentBranch } = {}) {
+export function resolveTargetBranch({ target, moment, currentBranch } = {}) {
   return (
     nonEmpty(target?.branch) ||
-    nonEmpty(summonCtx?.targetBranch) ||
-    nonEmpty(summonCtx?.actorAct?.branch) ||
+    nonEmpty(moment?.targetBranch) ||
+    nonEmpty(moment?.actorAct?.branch) ||
     nonEmpty(currentBranch) ||
     null
   );

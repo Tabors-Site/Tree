@@ -62,7 +62,7 @@ function parseNameAddress(address) {
  *
  * @param {"declare"|"banish"} operation
  * @param {object} payload   op args (declare: { soulType? }; banish: {})
- * @param {object} opts      { address, identity, currentReality, currentBranch, summonCtx }
+ * @param {object} opts      { address, identity, currentReality, currentBranch, moment }
  */
 export async function nameVerb(operation, payload = {}, opts = {}) {
   if (typeof operation !== "string" || !operation.length) {
@@ -74,10 +74,10 @@ export async function nameVerb(operation, payload = {}, opts = {}) {
     address        = null,
     currentReality = null,
     currentBranch  = null,
-    summonCtx      = null,
+    moment      = null,
   } = opts;
 
-  const branch = resolveBranchForFact(summonCtx, currentBranch, "name");
+  const branch = resolveBranchForFact(moment, currentBranch, "name");
   const realityDomain = currentReality || getRealityDomain();
 
   const { reality, nameId: addressedToken } = parseNameAddress(address);
@@ -115,7 +115,7 @@ export async function nameVerb(operation, payload = {}, opts = {}) {
     identity,
     addressedNameId,
     reality: realityDomain,
-    summonCtx,
+    moment,
     branch,
   });
 
@@ -123,8 +123,8 @@ export async function nameVerb(operation, payload = {}, opts = {}) {
     operation,
     identity,
     result,
-    actId: summonCtx?.actId || null,
-    summonCtx,
+    actId: moment?.actId || null,
+    moment,
     branch,
   });
 
@@ -140,11 +140,11 @@ export async function nameVerb(operation, payload = {}, opts = {}) {
  * The ACTOR (fact.nameId) is filled by emitFact from the moment's act —
  * I_AM today. Mirrors writeBeFact.
  */
-async function writeNameFact({ operation, identity, result, actId, summonCtx, branch }) {
+async function writeNameFact({ operation, identity, result, actId, moment, branch }) {
   if (!actId) {
     throw new IbpError(
       IBP_ERR.INTERNAL,
-      `name ${operation}: missing ambient actId. Thread summonCtx from the caller's moment, ` +
+      `name ${operation}: missing ambient actId. Thread moment from the caller's moment, ` +
         `or open one via withIAmAct(...) / withBeingAct(...).`,
     );
   }
@@ -155,11 +155,11 @@ async function writeNameFact({ operation, identity, result, actId, summonCtx, br
 
   await emitFact({
     verb:    "name",
-    action:  operation,            // "declare" | "banish"
-    beingId: actorBeingId,
-    target:  { kind: "name", id: String(result.nameId) },
+    act:     operation,            // "declare" | "banish"
+    through: actorBeingId,
+    of:      { kind: "name", id: String(result.nameId) },
     params,
     actId,
     branch,
-  }, summonCtx);
+  }, moment);
 }

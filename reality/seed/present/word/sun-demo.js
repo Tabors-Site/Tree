@@ -9,7 +9,7 @@ import { register, drive } from "./evaluator.js";
 import { sun, start } from "./sun.ir.js";
 
 const ctx = {
-  dryRun: true, branch: "main", summonCtx: { actId: "<actId>" },
+  dryRun: true, branch: "main", moment: { actId: "<actId>" },
   bindings: {}, deltaF: [], flows: [], state: { ...start }, maxTurns: 8, env: {},
 };
 

@@ -2,7 +2,7 @@
 //
 // Where a BE op would dispatch to its JS role handler, the stamper first consults
 // this registry; if a `.word` program is present it runs via the evaluator in
-// LIVE mode with the moment's summonCtx, else it falls through to the JS handler
+// LIVE mode with the moment's moment, else it falls through to the JS handler
 // (2.md Phase 4, the dual registry, preferring `.word`). This is the only new
 // host code the conversion needs; the rest is deletion. See bridge.md.
 //
@@ -143,8 +143,8 @@ async function _ensureMainBranch() {
 // Lay facts THROUGH a proper act — a Name making an act, opened by assign and sealed by the
 // stamper — NEVER a bare standalone emit (that would sidestep the stamper). Ride the caller's
 // moment if one was given, else open I_AM's own act (I_AM is the actor that makes the words).
-async function _inAct(summonCtx, label, fn) {
-  if (summonCtx) return fn(summonCtx);
+async function _inAct(moment, label, fn) {
+  if (moment) return fn(moment);
   const { withIAmAct } = await import("../../sprout.js");
   return withIAmAct(label, fn);
 }
@@ -152,7 +152,7 @@ async function _inAct(summonCtx, label, fn) {
 // Lay a `do:declare-word` fact for every registered word not already on the chain (idempotent
 // across restarts). Called once at genesis, AFTER ensureIAm + the chain is writable (the fact
 // needs an actor). Registration buffered the words pre-genesis; this flushes them.
-export async function declareWordsToChain({ summonCtx = null, branch = null, actorBeingId = null } = {}) {
+export async function declareWordsToChain({ moment = null, branch = null, actorBeingId = null } = {}) {
   const { default: Fact } = await import("../../past/fact/fact.js");
   const { emitFact } = await import("../../past/fact/facts.js");
   const actor = await _wordActor(actorBeingId);
@@ -161,17 +161,17 @@ export async function declareWordsToChain({ summonCtx = null, branch = null, act
   // (I_AM's ops stay on heaven; the root vocabulary is inherited by EVERY branch). NOT #main,
   // which people can repoint. An explicit `branch` overrides (e.g. an extension on its branch).
   const br = branch != null ? String(branch) : "0";
-  const existing = await Fact.find({ verb: "do", action: WORD_DECLARE }).select("params").lean();
+  const existing = await Fact.find({ verb: "do", act: WORD_DECLARE }).select("params").lean();
   const onChain = new Set(existing.map((f) => k(f.params?.role, f.params?.op)));
   const pending = [...REGISTRY.values()].filter((w) => !onChain.has(k(w.role, w.op)));
   if (!pending.length) return 0;
   // One I_AM act lays all the declarations (one act, many facts — like genesis), through the
   // stamper. Never a standalone emit.
-  await _inAct(summonCtx, "I declare the words", async (ctx) => {
+  await _inAct(moment, "I declare the words", async (ctx) => {
     for (const w of pending) {
       await emitFact({
-        beingId: actor, branch: br, verb: "do", action: WORD_DECLARE,
-        target: { kind: "being", id: actor },
+        through: actor, branch: br, verb: "do", act: WORD_DECLARE,
+        of: { kind: "being", id: actor },
         params: { role: w.role, op: w.op, source: String(w.fileUrl) },
       }, ctx);
     }
@@ -182,14 +182,14 @@ export async function declareWordsToChain({ summonCtx = null, branch = null, act
 // Disable a word: append a `do:disable-word` fact (permanent) + flip the projection, so
 // resolveRoleWord returns null and acts using it fall through / refuse. The declaration
 // stays on the chain forever; this is itself the "new word that says it can't be used".
-export async function disableWord(role, op, { summonCtx = null, branch = null, actorBeingId = null } = {}) {
+export async function disableWord(role, op, { moment = null, branch = null, actorBeingId = null } = {}) {
   const { emitFact } = await import("../../past/fact/facts.js");
   const actor = await _wordActor(actorBeingId);
   const br = branch != null ? String(branch) : await _ensureMainBranch();
   await _assertMayChange(role, op, actor, br, "disabled");
-  await _inAct(summonCtx, `I disable the word ${role}:${op}`, (ctx) => emitFact({
-    beingId: actor, branch: br, verb: "do", action: WORD_DISABLE,
-    target: { kind: "being", id: actor },
+  await _inAct(moment, `I disable the word ${role}:${op}`, (ctx) => emitFact({
+    through: actor, branch: br, verb: "do", act: WORD_DISABLE,
+    of: { kind: "being", id: actor },
     params: { role, op },
   }, ctx));
   let s = _branchDisabled.get(br);
@@ -198,15 +198,15 @@ export async function disableWord(role, op, { summonCtx = null, branch = null, a
 }
 
 // Re-enable a disabled word: a fresh `do:declare-word` fact (the fold's last action wins).
-export async function enableWord(role, op, { summonCtx = null, branch = null, actorBeingId = null } = {}) {
+export async function enableWord(role, op, { moment = null, branch = null, actorBeingId = null } = {}) {
   const { emitFact } = await import("../../past/fact/facts.js");
   const actor = await _wordActor(actorBeingId);
   const br = branch != null ? String(branch) : await _ensureMainBranch();
   await _assertMayChange(role, op, actor, br, "re-declared");
   const entry0 = REGISTRY.get(k(role, op));
-  await _inAct(summonCtx, `I enable the word ${role}:${op}`, (ctx) => emitFact({
-    beingId: actor, branch: br, verb: "do", action: WORD_DECLARE,
-    target: { kind: "being", id: actor },
+  await _inAct(moment, `I enable the word ${role}:${op}`, (ctx) => emitFact({
+    through: actor, branch: br, verb: "do", act: WORD_DECLARE,
+    of: { kind: "being", id: actor },
     params: { role, op, source: String(entry0?.fileUrl ?? "") },
   }, ctx));
   _branchDisabled.get(br)?.delete(k(role, op)); // re-enabled ON this branch
@@ -221,7 +221,7 @@ export async function enableWord(role, op, { summonCtx = null, branch = null, ac
 export async function rehydrateWordsFromFacts() {
   const { default: Fact } = await import("../../past/fact/fact.js");
   await _ensureMainBranch();
-  const facts = await Fact.find({ verb: "do", action: { $in: [WORD_DECLARE, WORD_DISABLE] } })
+  const facts = await Fact.find({ verb: "do", act: { $in: [WORD_DECLARE, WORD_DISABLE] } })
     .sort({ date: 1, seq: 1 }).lean();
   _branchDisabled.clear();
   _genesisWords.clear();
@@ -231,18 +231,18 @@ export async function rehydrateWordsFromFacts() {
     if (!role || !op) continue;
     const key = k(role, op);
     // BEDROCK: a word I_AM declared on heaven ("0") is genesis — protected from non-I_AM override
-    if (f.action === WORD_DECLARE && String(f.beingId) === iAmId && String(f.branch) === "0") _genesisWords.add(key);
+    if (f.act === WORD_DECLARE && String(f.through) === iAmId && String(f.branch) === "0") _genesisWords.add(key);
     // EXISTENCE (branch-independent): ensure a declared word is in REGISTRY. One declared on
     // the chain but absent from memory (extension/code not loaded) is recorded with its
     // source; resolve returns null for it (the .word file is absent — declared, unbacked).
-    if (f.action === WORD_DECLARE && !REGISTRY.has(key)) {
+    if (f.act === WORD_DECLARE && !REGISTRY.has(key)) {
       REGISTRY.set(key, { role, op, fileUrl: f.params?.source || null });
     }
     // ENABLED state (per EXACT branch): last action on the fact's branch wins (disable adds,
     // declare/enable removes). Facts always carry a branch; fall back to #main, never "0".
     const br = String(f.branch ?? _mainBranch);
     let s = _branchDisabled.get(br);
-    if (f.action === WORD_DISABLE) { if (!s) { s = new Set(); _branchDisabled.set(br, s); } s.add(key); }
+    if (f.act === WORD_DISABLE) { if (!s) { s = new Set(); _branchDisabled.set(br, s); } s.add(key); }
     else if (s) s.delete(key);
   }
   return facts.length;
@@ -250,7 +250,7 @@ export async function rehydrateWordsFromFacts() {
 
 // Run a resolved `.word` program LIVE in the moment, reproducing the exact ctx the
 // green diff proved (verify-cherub-live.mjs, 7/7). The program's acts emit into the
-// moment's summonCtx.deltaF via the evaluator's live path (do-acts -> doVerb, the
+// moment's moment.deltaF via the evaluator's live path (do-acts -> doVerb, the
 // form-being -> the real birthBeing). Returns the deltaF the program laid (the WORLD
 // strand; the token/session strand stays host, reading via bornBeingFrom).
 //
@@ -271,7 +271,7 @@ export async function rehydrateWordsFromFacts() {
 //     (cherub:birth: I_AM through Cherub). The privileged seed acts go through doVerb's
 //     authorize, which short-circuits on name === "i-am" (the bootstrap axiom); an
 //     ordinary summoned name would be denied. So we run under a DERIVED identity (i-am,
-//     beingId = the vessel) and override actorAct.nameId to i-am, so the facts attribute
+//     beingId = the vessel) and override actorAct.by to i-am, so the facts attribute
 //     to I_AM.
 //   CALLER mode (through == null, THE DEFAULT) — the acts are the CALLER's: a DO-op cut
 //     (take-role) or connect, where the being itself acts. We run under the REAL moment's
@@ -281,27 +281,27 @@ export async function rehydrateWordsFromFacts() {
 // facts land on the real chain with seq continuity; only VESSEL mode overrides the actor.
 export async function runRoleWord(
   ir,
-  { summonCtx, branch, trigger = {}, bindings = {}, beings = {}, through = null, iam = "i-am", env = {} },
+  { moment, branch, trigger = {}, bindings = {}, beings = {}, through = null, iam = "i-am", env = {} },
 ) {
-  summonCtx.deltaF ??= [];
+  moment.deltaF ??= [];
   const vessel = through != null;
   const identity = vessel
     ? { beingId: String(through), name: iam, nameId: iam }      // I_AM through the vessel
-    : (summonCtx.identity || { beingId: null });                // the caller (default)
+    : (moment.identity || { beingId: null });                // the caller (default)
   const wordCtx = {
-    ...summonCtx,
+    ...moment,
     identity,
-    ...(vessel ? { actorAct: { ...(summonCtx.actorAct || {}), nameId: iam } } : {}), // caller keeps its actorAct
-    deltaF: summonCtx.deltaF, // SAME array: facts land on the real moment
+    ...(vessel ? { actorAct: { ...(moment.actorAct || {}), by: iam } } : {}), // caller keeps its actorAct
+    deltaF: moment.deltaF, // SAME array: facts land on the real moment
     _inOp: true,              // the whole program is ONE op (see below)
   };
   const ctx = {
-    dryRun: false, summonCtx: wordCtx, identity, branch,
+    dryRun: false, moment: wordCtx, identity, branch,
     // default id-minter for `bind` sites (the home space): create-space honors the
     // target id, so a minted uuid becomes the home's id and later acts reference it.
     // A caller can override via env.mintId.
     env: { iam, mintId: () => randomUUID(), ...env },
-    deltaF: summonCtx.deltaF,
+    deltaF: moment.deltaF,
     bindings: { ...trigger, ...bindings },
     beings,
     trigger: { ...trigger },
@@ -310,26 +310,26 @@ export async function runRoleWord(
   // The whole `.word` program is ONE op (e.g. the birth): `_inOp` stays set across
   // the run so its do-acts dispatch through doVerb as NESTED sub-ops and don't each
   // re-increment `_opCount` and trip sealAct's one-op-per-moment guard (do.js
-  // L214-226). The derived wordCtx carries _inOp; the real summonCtx is untouched.
+  // L214-226). The derived wordCtx carries _inOp; the real moment is untouched.
   await evaluate(ir, ctx); // declarations register; the flow's effects run; §7 return sets ctx.result
   // Return BOTH strands (8.md Q3): the WORLD strand (deltaF, already on the real moment;
   // the birth cut reads it via bornBeingFrom) AND the §7 `return` result the transport
   // reads (token/seat for a connect-style flow, reveal, etc.). A WordRefusal propagates
   // out of evaluate() to the verb layer (no fact, the moment rolls back).
-  return { deltaF: summonCtx.deltaF, result: ctx.result };
+  return { deltaF: moment.deltaF, result: ctx.result };
 }
 
 // Reconstruct the just-born being from the `be:birth` fact a `.word` birth laid,
 // so the host SESSION strand (`generateToken` / `unlockSigning`) can read it
 // without waiting for the projection fold. The cut in birthHandler uses this:
-// run cherub.word via the bridge, then `bornBeingFrom(summonCtx.deltaF)` stands
+// run cherub.word via the bridge, then `bornBeingFrom(moment.deltaF)` stands
 // in for the being that `_registerHumanWithFreshHome` used to return.
 export function bornBeingFrom(deltaF) {
-  const f = (deltaF || []).find((x) => x.verb === "be" && x.action === "birth");
+  const f = (deltaF || []).find((x) => x.verb === "be" && x.act === "birth");
   if (!f) return null;
   const p = f.params || {};
   return {
-    _id: f.target?.id ?? f.beingId,
+    _id: f.of?.id ?? f.through,
     name: p.name,
     trueName: p.trueName,
     homeSpace: p.homeId ?? p.homeSpace ?? null,

@@ -71,7 +71,7 @@ registerRoleWord("portal", "form-portal", new URL("./portal.word", import.meta.u
 export const IBPA_RE =
   /^(?:[a-zA-Z0-9.\-_]+(?:#[^/]+)?|#[^/]+)\/.*$/;
 
-async function formPortalHandler({ target, params, summonCtx, identity }) {
+async function formPortalHandler({ target, params, moment, identity }) {
   const { target: foreignAddress, name } = params || {};
 
   if (typeof foreignAddress !== "string" || !foreignAddress.length) {
@@ -97,7 +97,7 @@ async function formPortalHandler({ target, params, summonCtx, identity }) {
     spaceId = String(targetIdOf(target));
   } else if (kind === "matter") {
     const { loadOrFold } = await import("./projections.js");
-    const branch = summonCtx?.actorAct?.branch || "0";
+    const branch = moment?.actorAct?.branch || "0";
     const matterSlot = await loadOrFold("matter", String(targetIdOf(target)), branch);
     spaceId = matterSlot?.state?.spaceId || null;
     if (!spaceId) {
@@ -123,7 +123,7 @@ async function formPortalHandler({ target, params, summonCtx, identity }) {
     );
   }
 
-  const branch = summonCtx?.targetBranch || summonCtx?.actorAct?.branch || "0";
+  const branch = moment?.targetBranch || moment?.actorAct?.branch || "0";
 
   // ONE fact births the typed portal whole: type, the content
   // reference, and the qualities.portal provenance block all ride
@@ -157,14 +157,14 @@ async function formPortalHandler({ target, params, summonCtx, identity }) {
   await emitFact(
     {
       verb: "do",
-      action: "create-matter",
-      beingId: actorBeingId,
-      target: { kind: "matter", id: matterId },
+      act: "create-matter",
+      through: actorBeingId,
+      of: { kind: "matter", id: matterId },
       params: createSpec,
-      actId: summonCtx?.actId || null,
+      actId: moment?.actId || null,
       branch,
     },
-    summonCtx,
+    moment,
   );
 
   return {

@@ -55,14 +55,14 @@ const cherub = await poll(() => findByName("being", "cherub", "0"));
 const birth = async (name) => {
   let bid = null;
   await withIAmAct(`birth ${name}`, async (ctx) => {
-    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, summonCtx: ctx, branch: "0" });
+    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: ctx, branch: "0" });
     bid = b.beingId;
   });
   return bid;
 };
 const drive = async (op, target) => {
-  const sc = { actId: randomUUID(), actorAct: { branch: "0", nameId: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
-  const res = await doVerb({ kind: "being", id: String(target) }, op, {}, { identity: ident, summonCtx: sc });
+  const sc = { actId: randomUUID(), actorAct: { branch: "0", by: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const res = await doVerb({ kind: "being", id: String(target) }, op, {}, { identity: ident, moment: sc });
   if (sc.deltaF.length) await sealFacts(sc.deltaF);
   return { result: res?.result ?? res, deltaF: sc.deltaF };
 };
@@ -85,7 +85,7 @@ try {
     : bad(`read`, { read: rd.result?.plaintext?.slice?.(0, 8), minted: minted?.slice?.(0, 8) });
 
   // ── 2. RULE 7: the credential-read audit fact NEVER records the cleartext ──
-  const auditFact = (rd.deltaF || []).find((f) => f.action === "credential-read");
+  const auditFact = (rd.deltaF || []).find((f) => f.act === "credential-read");
   const leaks = minted && JSON.stringify(auditFact || {}).includes(minted);
   auditFact && !leaks
     ? ok(`rule 7: the credential-read audit fact records the read but NOT the cleartext (stripForAudit redacts the reveal)`)
@@ -93,10 +93,10 @@ try {
 
   // ── 3. an asker with NO credential authority → refuse, NO reveal ──
   const noAuth = "noauth-" + randomUUID();
-  const sc2 = { actId: randomUUID(), actorAct: { branch: "0", nameId: noAuth }, identity: { beingId: noAuth }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc2 = { actId: randomUUID(), actorAct: { branch: "0", by: noAuth }, identity: { beingId: noAuth }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   let refused = null;
   try {
-    await runRoleWord(ir, { summonCtx: sc2, branch: "0", trigger: { caller: noAuth, target: String(victim), branch: "0" }, env: { host: credentialHostEnv() } });
+    await runRoleWord(ir, { moment: sc2, branch: "0", trigger: { caller: noAuth, target: String(victim), branch: "0" }, env: { host: credentialHostEnv() } });
   } catch (e) { refused = e; }
   refused && /no credential authority/i.test(refused.message)
     ? ok(`an asker with no credential authority → refuse "no credential authority" [code ${refused.code}], NO reveal`)

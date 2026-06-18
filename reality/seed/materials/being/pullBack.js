@@ -90,7 +90,7 @@ export async function pullBackForeignPositions() {
           field: "position",
           value: formatPositionAddress({ spaceId: homeSpaceId }),
         },
-        { identity: { beingId: String(being._id), name: null }, summonCtx: ctx },
+        { identity: { beingId: String(being._id), name: null }, moment: ctx },
       );
     });
     pulled++;

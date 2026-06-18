@@ -125,7 +125,7 @@ export async function listStamperChildren({ limit = 100 } = {}) {
   if (heads.length === 0) return [];
 
   const headActs = await Act.find({ _id: { $in: heads.map((h) => h.headHash) } })
-    .select("stampedAt beingIn").lean();
+    .select("stampedAt through").lean();
   const lastByAct = new Map(headActs.map((a) => [String(a._id), a.stampedAt || null]));
 
   const byBeing = new Map(); // beingId -> { branches, lastAct }
@@ -150,7 +150,7 @@ export async function listStamperChildren({ limit = 100 } = {}) {
       if (slot?.state?.name) name = slot.state.name;
     } catch { /* keep the id stub */ }
     let actCount = 0;
-    try { actCount = await Act.countDocuments({ beingIn: beingId }); } catch { /* best effort */ }
+    try { actCount = await Act.countDocuments({ through: beingId }); } catch { /* best effort */ }
     out.push({
       beingId, name, actCount,
       lastAct: info.lastAct ? new Date(info.lastAct).toISOString() : null,
@@ -235,7 +235,7 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
     let x = 0;
     try {
       x = await Act.countDocuments({
-        beingIn: beingId, ...parentClause,
+        through: beingId, ...parentClause,
         stampedAt: { $lte: meta.createdAt },
       });
     } catch { x = 0; }
@@ -255,10 +255,10 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
     const forkX = await forkXFor(branch);
 
     let total = 0;
-    try { total = await Act.countDocuments({ beingIn: beingId, ...clause }); } catch { /* 0 */ }
+    try { total = await Act.countDocuments({ through: beingId, ...clause }); } catch { /* 0 */ }
 
     const windowDesc = await Act.find({
-      beingIn: beingId, ...clause,
+      through: beingId, ...clause,
       ...(beforeDate ? { stampedAt: { $lt: beforeDate } } : {}),
     }).sort({ stampedAt: -1, _id: -1 }).limit(cap).lean();
     const window = windowDesc.reverse();
@@ -267,7 +267,7 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
     if (window.length > 0) {
       try {
         countOlder = await Act.countDocuments({
-          beingIn: beingId, ...clause,
+          through: beingId, ...clause,
           stampedAt: { $lt: window[0].stampedAt },
         });
       } catch { countOlder = 0; }
@@ -308,7 +308,7 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
           branch: a.branch,
           factCount: (a.facts || []).length,
           facts: (a.facts || []).slice(0, 8).map((f) => ({
-            verb: f.verb, action: f.action, targetKind: f.target?.kind ?? null,
+            verb: f.verb, action: f.act, targetKind: f.of?.kind ?? null,
           })),
           stampedAt: a.stampedAt ? new Date(a.stampedAt).toISOString() : null,
         },

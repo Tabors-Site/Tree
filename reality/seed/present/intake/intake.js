@@ -114,14 +114,14 @@ export async function enqueueIntake(spaceId, beingId, entry) {
   // writer — the being is the actor; target=recipient=self). The
   // verb is `summon` (its own namespace, peer to DO and BE);
   // self-summon is the target.id===actor case. enqueueIntake runs
-  // OUTSIDE a moment (it kicks one off), so emitFact's no-summonCtx
+  // OUTSIDE a moment (it kicks one off), so emitFact's no-moment
   // path applies: immediate commit via sealFacts singleton.
   await emitFact({
     verb:    "summon",
     action:  "summon",
     beingId: String(beingId),
     // The actor NAME. This self-summon is stamped OUTSIDE a moment (it
-    // kicks one off), so emitFact's actorAct.nameId derivation can't
+    // kicks one off), so emitFact's actorAct.by derivation can't
     // fire — thread the caller's signed-in Name off the entry's identity
     // so the wake-call fact links to the name that did it, same as the
     // inner act will when the moment seals. Null for keyless/anonymous
@@ -239,12 +239,12 @@ export async function pickNextIntake(spaceId, beingId, opts = {}) {
       // For transport-act entries the whole original entry is stored
       // under row.content (enqueueIntake stuffs it there). Surface the
       // act payload + identity so runTransportAct in momentum.js gets
-      // them on summonCtx without re-reading row.content.
+      // them on moment without re-reading row.content.
       act:             content?.act || null,
       identity:        content?.identity || null,
       // Branch the moment will run in. Sourced from the inbox row's
       // branch field (written by the fold from the be:summon fact's
-      // branch). assign.js reads entry.branch to seed summonCtx.
+      // branch). assign.js reads entry.branch to seed moment.
       // A row with null branch indicates a data integrity issue — the
       // fold should always have populated it from the originating
       // fact. assert so the corruption surfaces immediately.

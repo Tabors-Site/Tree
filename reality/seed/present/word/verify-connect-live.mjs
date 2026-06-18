@@ -49,23 +49,23 @@ const poll = async (fn, t = 60000, e = 250) => { const t0 = Date.now(); while (D
 
 async function register({ name, password }) {
   const branch = "0";
-  const summonCtx = { actId: randomUUID(), actorAct: { branch, nameId: "i-am" }, identity: { beingId: "i-am", name: "i-am", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [], _inOp: true };
-  const res = await cherubBeOps.birth.handler({ payload: { name, password }, ctx: { nameId: null, summonCtx, req: {} } });
-  await sealFacts(summonCtx.deltaF);
-  for (const fn of summonCtx.afterSeal || []) { try { await fn(); } catch { /* angel grant; tolerated */ } }
+  const moment = { actId: randomUUID(), actorAct: { branch, by: "i-am" }, identity: { beingId: "i-am", name: "i-am", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [], _inOp: true };
+  const res = await cherubBeOps.birth.handler({ payload: { name, password }, ctx: { nameId: null, moment, req: {} } });
+  await sealFacts(moment.deltaF);
+  for (const fn of moment.afterSeal || []) { try { await fn(); } catch { /* angel grant; tolerated */ } }
   return res;
 }
 
 // drive cherub-connect.word flow 1 through the bridge with the REAL host env
 async function connect(name, password) {
   const branch = "0";
-  const summonCtx = { actId: randomUUID(), actorAct: { branch }, identity: { beingId: "arrival", name: "arrival" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const moment = { actId: randomUUID(), actorAct: { branch }, identity: { beingId: "arrival", name: "arrival" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   const ir = resolveRoleWord("cherub", "connect");
   try {
-    const { deltaF, result } = await runRoleWord(ir, { summonCtx, branch, trigger: { name, password }, env: { host: connectHostEnv() } });
+    const { deltaF, result } = await runRoleWord(ir, { moment, branch, trigger: { name, password }, env: { host: connectHostEnv() } });
     return { result, deltaF, refused: null };
   } catch (e) {
-    if (e && e.__wordRefusal) return { result: null, deltaF: summonCtx.deltaF, refused: e };
+    if (e && e.__wordRefusal) return { result: null, deltaF: moment.deltaF, refused: e };
     throw e;
   }
 }

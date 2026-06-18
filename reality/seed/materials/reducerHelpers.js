@@ -132,7 +132,7 @@ const SCALAR_SET_FIELDS = new Set([
  * @returns {object} new state
  */
 export function applySetQualities(state, fact) {
-  if (!SET_ACTIONS.has(fact?.action)) return state;
+  if (!SET_ACTIONS.has(fact?.act)) return state;
   const params = fact.params || {};
   const field = params.field;
   if (typeof field !== "string" || !field.startsWith(QUALITIES_PREFIX)) {
@@ -206,7 +206,7 @@ export function applySetQualities(state, fact) {
  * @returns {object} new state
  */
 export function applySetField(state, fact) {
-  if (!SET_ACTIONS.has(fact?.action)) return state;
+  if (!SET_ACTIONS.has(fact?.act)) return state;
   const { field, value } = fact.params || {};
   if (typeof field !== "string" || !SCALAR_SET_FIELDS.has(field)) {
     return state;
@@ -260,8 +260,8 @@ export function applySetField(state, fact) {
  */
 export function applyConnectionState(state, fact) {
   if (fact?.verb !== "be") return state;
-  if (fact?.target?.kind !== "being") return state;
-  const action = fact?.action;
+  if (fact?.of?.kind !== "being") return state;
+  const action = fact?.act;
   if (action !== "connect" && action !== "release") return state;
 
   // Preserve any other namespaces under qualities by merging at the
@@ -326,8 +326,8 @@ export function applyConnectionState(state, fact) {
  */
 export function applyDeath(state, fact) {
   if (fact?.verb !== "be") return state;
-  if (fact?.action !== "death") return state;
-  if (fact?.target?.kind !== "being") return state;
+  if (fact?.act !== "death") return state;
+  if (fact?.of?.kind !== "being") return state;
 
   const qualities = state.qualities || {};
 
@@ -337,7 +337,7 @@ export function applyDeath(state, fact) {
   if (qualities.death?.time) return state;
 
   const time = fact?.date || null;
-  const byActor = fact?.params?.byActor || fact?.beingId || null;
+  const byActor = fact?.params?.byActor || fact?.through || null;
 
   // Inhabit-state cleared so the "human" cognition flip-up doesn't
   // fire for a dead being even on stale reads.
@@ -369,8 +369,8 @@ export function applyDeath(state, fact) {
  */
 export function applyTrueName(state, fact) {
   if (fact?.verb !== "be") return state;
-  if (fact?.action !== "truename") return state;
-  if (fact?.target?.kind !== "being") return state;
+  if (fact?.act !== "truename") return state;
+  if (fact?.of?.kind !== "being") return state;
   const trueName = fact?.params?.trueName;
   if (typeof trueName !== "string" || !trueName) return state;
   if (state.trueName === trueName) return state;
@@ -406,10 +406,10 @@ export function applyTrueName(state, fact) {
  */
 export function applyRoleGrants(state, fact) {
   if (fact?.verb !== "do") return state;
-  const isGrant  = fact.action === "grant-role";
-  const isRevoke = fact.action === "revoke-role";
+  const isGrant  = fact.act === "grant-role";
+  const isRevoke = fact.act === "revoke-role";
   if (!isGrant && !isRevoke) return state;
-  if (fact?.target?.kind !== "being") return state;
+  if (fact?.of?.kind !== "being") return state;
   const params = fact?.params;
   if (!params || typeof params !== "object") return state;
   const role = params.role;
@@ -468,8 +468,8 @@ export function applyRoleGrants(state, fact) {
 }
 
 export function applyCreateBeing(state, fact) {
-  if (fact?.verb !== "be" || fact?.action !== "birth") return state;
-  if (fact?.target?.kind !== "being") return state;
+  if (fact?.verb !== "be" || fact?.act !== "birth") return state;
+  if (fact?.of?.kind !== "being") return state;
   const spec = fact?.params;
   if (!spec || typeof spec !== "object") return state;
 
@@ -530,8 +530,8 @@ export function applyCreateBeing(state, fact) {
  * @returns {object} new state
  */
 export function applyCreateSpace(state, fact) {
-  if (fact?.verb !== "do" || !CREATE_ACTIONS.has(fact?.action)) return state;
-  if (fact?.target?.kind !== "space") return state;
+  if (fact?.verb !== "do" || !CREATE_ACTIONS.has(fact?.act)) return state;
+  if (fact?.of?.kind !== "space") return state;
   const spec = fact?.params;
   if (!spec || typeof spec !== "object") return state;
 
@@ -599,8 +599,8 @@ export function applyCreateSpace(state, fact) {
  * do TO things in their world.
  */
 export function applyMove(state, fact) {
-  if (fact?.verb !== "do" || fact?.action !== "move") return state;
-  const kind = fact?.target?.kind;
+  if (fact?.verb !== "do" || fact?.act !== "move") return state;
+  const kind = fact?.of?.kind;
   if (kind !== "space" && kind !== "matter") return state;
   const { coord, to } = fact?.params || {};
 
@@ -623,8 +623,8 @@ export function applyMove(state, fact) {
 }
 
 export function applyCreateMatter(state, fact) {
-  if (fact?.verb !== "do" || !CREATE_ACTIONS.has(fact?.action)) return state;
-  if (fact?.target?.kind !== "matter") return state;
+  if (fact?.verb !== "do" || !CREATE_ACTIONS.has(fact?.act)) return state;
+  if (fact?.of?.kind !== "matter") return state;
   const spec = fact?.params || {};
   return {
     ...state,
@@ -661,8 +661,8 @@ export function applyCreateMatter(state, fact) {
  * touch the live ref.
  */
 export function applyPurgeContent(state, fact) {
-  if (fact?.verb !== "do" || fact?.action !== "purge-content") return state;
-  if (fact?.target?.kind !== "matter") return state;
+  if (fact?.verb !== "do" || fact?.act !== "purge-content") return state;
+  if (fact?.of?.kind !== "matter") return state;
   const hash = fact?.params?.hash;
   if (!hash || !state?.content || typeof state.content !== "object") return state;
   if (state.content.hash !== hash) return state;

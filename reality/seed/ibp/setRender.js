@@ -165,7 +165,7 @@ export function validateRenderBlock(input) {
 }
 
 async function setRenderHandler(ctx) {
-  const { target, params, identity, summonCtx } = ctx;
+  const { target, params, identity, moment } = ctx;
   const kind = detectTargetKind(target);
   if (kind !== "matter" && kind !== "space" && kind !== "being") {
     throw new IbpError(
@@ -179,7 +179,7 @@ async function setRenderHandler(ctx) {
 
   // Sugar over set-<kind> with field locked to qualities.render. The
   // inner doVerb runs through the normal DO dispatch (auth, audit,
-  // reducer-friendly fact shape). summonCtx threads through so the
+  // reducer-friendly fact shape). moment threads through so the
   // inner fact joins the caller's moment's deltaF and rides the
   // same actId. set-render itself is skipAudit so we don't stamp two
   // facts for one logical write.
@@ -189,7 +189,7 @@ async function setRenderHandler(ctx) {
     target,
     innerOp,
     { field: "qualities.render", value: block, merge },
-    { identity, summonCtx },
+    { identity, moment },
   );
 }
 

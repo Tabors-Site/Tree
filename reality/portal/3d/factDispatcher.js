@@ -67,11 +67,11 @@ function installFinishedHook(state) {
   });
 }
 
-function fireEntity(state, action) {
+function fireEntity(state, act) {
   const renderBlock = state.renderBlock || {};
 
   // Animation branch.
-  const animName = renderBlock.animations?.[action];
+  const animName = renderBlock.animations?.[act];
   if (animName && state.actions && typeof state.actions.get === "function") {
     const clipAction = state.actions.get(animName);
     if (clipAction) {
@@ -93,7 +93,7 @@ function fireEntity(state, action) {
 
   // Sound branch, parallel and fire-and-forget. Audio policy
   // (tap-to-enable overlay on first load) lives in audioPlayer.
-  const soundId = renderBlock.sounds?.[action];
+  const soundId = renderBlock.sounds?.[act];
   if (soundId) {
     try {
       playSound(soundId);
@@ -115,8 +115,8 @@ export function createFactDispatcher({ scene }) {
     //    non-facts or facts we don't have enough info to act on.
     const data = event && event.payload && event.payload.data;
     if (!data) return;
-    const { action } = data;
-    if (!action) return;
+    const { act } = data;
+    if (!act) return;
 
     // 2. Population-level dispatch. Walk every loaded entity in the
     //    scene's mixer registry; any entity whose render block names
@@ -128,7 +128,7 @@ export function createFactDispatcher({ scene }) {
     const iter = scene.getAllEntityMixerStates?.();
     if (!iter) return;
     for (const state of iter) {
-      fireEntity(state, action);
+      fireEntity(state, act);
     }
   };
 }

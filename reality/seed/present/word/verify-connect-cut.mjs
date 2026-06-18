@@ -49,17 +49,17 @@ const poll = async (fn, t = 60000, e = 250) => { const t0 = Date.now(); while (D
 
 async function register({ name, password }) {
   const branch = "0";
-  const summonCtx = { actId: randomUUID(), actorAct: { branch, nameId: "i-am" }, identity: { beingId: "i-am", name: "i-am", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [], _inOp: true };
-  const res = await cherubBeOps.birth.handler({ payload: { name, password }, ctx: { nameId: null, summonCtx, req: {} } });
-  await sealFacts(summonCtx.deltaF);
-  for (const fn of summonCtx.afterSeal || []) { try { await fn(); } catch { /* angel grant; tolerated */ } }
+  const moment = { actId: randomUUID(), actorAct: { branch, by: "i-am" }, identity: { beingId: "i-am", name: "i-am", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [], _inOp: true };
+  const res = await cherubBeOps.birth.handler({ payload: { name, password }, ctx: { nameId: null, moment, req: {} } });
+  await sealFacts(moment.deltaF);
+  for (const fn of moment.afterSeal || []) { try { await fn(); } catch { /* angel grant; tolerated */ } }
   return res;
 }
 
 // drive the REAL connect handler Mode-1 (@cherub credential), time it (constant-time check)
 async function connect(name, password) {
   const branch = "0";
-  const ctx = { summonCtx: { actId: randomUUID(), actorAct: { branch }, identity: { beingId: "arrival", name: "arrival" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] }, nameId: null };
+  const ctx = { moment: { actId: randomUUID(), actorAct: { branch }, identity: { beingId: "arrival", name: "arrival" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] }, nameId: null };
   const t0 = process.hrtime.bigint();
   try {
     const res = await cherubBeOps.connect.handler({ address: `${realityDomain}/@cherub`, addressKind: "stance", payload: { name, password }, identity: null, ctx });

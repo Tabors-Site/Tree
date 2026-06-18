@@ -58,8 +58,8 @@ export const seedBeTool = {
         // Pass the FULL moment ctx, not a { actId } slice. beVerb's
         // emitFact reads ctx.deltaF to push its Fact onto the moment's
         // ΔF; a truncated copy self-seals it outside the moment and
-        // orphans the outer Act. callCtx.summonCtx carries deltaF.
-        summonCtx: callCtx?.summonCtx || null,
+        // orphans the outer Act. callCtx.moment carries deltaF.
+        moment: callCtx?.moment || null,
       });
       return {
         content: [{

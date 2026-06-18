@@ -195,15 +195,15 @@ async function getConfigSpace() {
   return null;
 }
 
-export async function setRealityConfigValue(key, value, { internal, identity, summonCtx } = {}) {
+export async function setRealityConfigValue(key, value, { internal, identity, moment } = {}) {
   validateKey(key);
   if (PROTECTED_KEYS.has(key) && !internal) {
     throw new Error(`Config key "${key}" is protected and cannot be modified manually`);
   }
   validateValue(value);
-  if (!summonCtx) {
+  if (!moment) {
     throw new Error(
-      `setRealityConfigValue(${key}) requires summonCtx. Runtime callers thread the moment's ctx; seed-internal callers (e.g. migrations) wrap in withIAmAct(...).`,
+      `setRealityConfigValue(${key}) requires moment. Runtime callers thread the moment's ctx; seed-internal callers (e.g. migrations) wrap in withIAmAct(...).`,
     );
   }
 
@@ -218,8 +218,8 @@ export async function setRealityConfigValue(key, value, { internal, identity, su
   // way, the fact joins the wrapping moment's ΔF.
   const { doVerb } = await import("./ibp/verbs/do.js");
   const opts = identity
-    ? { identity, summonCtx }
-    : { identity: I_AM, summonCtx };
+    ? { identity, moment }
+    : { identity: I_AM, moment };
   await doVerb(
     { kind: "space", id: String(configSpace._id) },
     "set-space",
@@ -233,14 +233,14 @@ export async function setRealityConfigValue(key, value, { internal, identity, su
   log.verbose("Reality", `Config set: ${key}`);
 }
 
-export async function deleteRealityConfigValue(key, { internal, identity, summonCtx } = {}) {
+export async function deleteRealityConfigValue(key, { internal, identity, moment } = {}) {
   validateKey(key);
   if (PROTECTED_KEYS.has(key) && !internal) {
     throw new Error(`Config key "${key}" is protected and cannot be deleted manually`);
   }
-  if (!summonCtx) {
+  if (!moment) {
     throw new Error(
-      `deleteRealityConfigValue(${key}) requires summonCtx. Runtime callers thread the moment's ctx; seed-internal callers wrap in withIAmAct(...).`,
+      `deleteRealityConfigValue(${key}) requires moment. Runtime callers thread the moment's ctx; seed-internal callers wrap in withIAmAct(...).`,
     );
   }
 
@@ -251,8 +251,8 @@ export async function deleteRealityConfigValue(key, { internal, identity, summon
 
   const { doVerb } = await import("./ibp/verbs/do.js");
   const opts = identity
-    ? { identity, summonCtx }
-    : { identity: I_AM, summonCtx };
+    ? { identity, moment }
+    : { identity: I_AM, moment };
   await doVerb(
     { kind: "space", id: String(configSpace._id) },
     "set-space",
@@ -389,7 +389,7 @@ registerOperation("set-config", {
     key: { type: "text", label: "Config key", required: true },
     value: { type: "json", label: "Value (JSON)", required: true },
   },
-  handler: async ({ params, identity, summonCtx }) => {
+  handler: async ({ params, identity, moment }) => {
     const { key, value } = params || {};
     if (!key || typeof key !== "string") {
       throw new Error("set-config: `key` is required");
@@ -408,7 +408,7 @@ registerOperation("set-config", {
     await setRealityConfigValue(key, value, {
       internal: identity?.beingId === I_AM,
       identity,
-      summonCtx,
+      moment,
     });
     return { key, value };
   },
@@ -421,7 +421,7 @@ registerOperation("delete-config", {
   args: {
     key: { type: "text", label: "Config key", required: true },
   },
-  handler: async ({ params, identity, summonCtx }) => {
+  handler: async ({ params, identity, moment }) => {
     const { key } = params || {};
     if (!key || typeof key !== "string") {
       throw new Error("delete-config: `key` is required");
@@ -429,7 +429,7 @@ registerOperation("delete-config", {
     await deleteRealityConfigValue(key, {
       internal: identity?.beingId === I_AM,
       identity,
-      summonCtx,
+      moment,
     });
     return { deleted: true, key };
   },

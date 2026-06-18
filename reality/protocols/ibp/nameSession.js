@@ -143,7 +143,7 @@ async function doDeclare(socket, msg, ack, id) {
   let nameId = null;
   let reveal = null;
   await withIAmAct("name:declare (pre-world)", async (ctx) => {
-    const r = await nameVerb("declare", payload, { summonCtx: ctx, currentBranch: "0" });
+    const r = await nameVerb("declare", payload, { moment: ctx, currentBranch: "0" });
     nameId = r.nameId;
     reveal = r.reveal || null;
   });
@@ -166,7 +166,7 @@ async function stampNameSession(op, nameId) {
   await withIAmAct(`name:${op}`, async (ctx) => {
     await nameVerb(op, {}, {
       address:       `${nameId}@${realityDomain}`,
-      summonCtx:     ctx,
+      moment:     ctx,
       currentBranch: "0",
     });
   });

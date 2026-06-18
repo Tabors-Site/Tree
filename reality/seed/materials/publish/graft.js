@@ -675,8 +675,8 @@ async function captureBeingGraft(opts) {
 
   // The being's OWN reel (single-writer: every fact here has the being as
   // its actor) + its full act-chain.
-  const facts = await Fact.find({ "target.kind": "being", "target.id": beingId }).sort({ seq: 1 }).lean();
-  const acts = await Act.find({ beingIn: beingId }).sort({ stampedAt: 1 }).lean();
+  const facts = await Fact.find({ "of.kind": "being", "of.id": beingId }).sort({ seq: 1 }).lean();
+  const acts = await Act.find({ through: beingId }).sort({ stampedAt: 1 }).lean();
 
   // Lineage branches: every distinct non-main branch the being touched,
   // plus its ancestor chain, so resolveBranchLineage resolves on the
@@ -877,7 +877,7 @@ export async function capturePartialGraft(opts = {}) {
       throw new Error("capturePartialGraft: cutoffSeq must be a positive integer");
     }
     // The being's reel on `branch`, seq 1..cutoff — a genesis-rooted prefix.
-    facts = await Fact.find({ "target.kind": "being", "target.id": beingId, branch, seq: { $lte: cutoffSeq } }).sort({ seq: 1 }).lean();
+    facts = await Fact.find({ "of.kind": "being", "of.id": beingId, branch, seq: { $lte: cutoffSeq } }).sort({ seq: 1 }).lean();
     if (facts.length === 0) {
       throw new Error(`capturePartialGraft: no facts on being ${beingId.slice(0, 10)}… reel (branch ${branch}) at or before seq ${cutoffSeq}`);
     }
@@ -893,7 +893,7 @@ export async function capturePartialGraft(opts = {}) {
     }
     const seqFilter = { $gte: fromSeq };
     if (opts.toSeq != null) seqFilter.$lte = Number(opts.toSeq);
-    facts = await Fact.find({ "target.kind": "being", "target.id": beingId, branch, seq: seqFilter }).sort({ seq: 1 }).lean();
+    facts = await Fact.find({ "of.kind": "being", "of.id": beingId, branch, seq: seqFilter }).sort({ seq: 1 }).lean();
     if (facts.length === 0) {
       throw new Error(`capturePartialGraft: no facts on being ${beingId.slice(0, 10)}… reel (branch ${branch}) at seq ${fromSeq}..`);
     }
@@ -922,7 +922,7 @@ export async function capturePartialGraft(opts = {}) {
       throw new Error("capturePartialGraft: single-branch requires a non-main branch (main is the trunk — use genesis-prefix or checkpoint-segment there)");
     }
     captureBranch = targetBranch;
-    facts = await Fact.find({ "target.kind": "being", "target.id": beingId, branch: targetBranch }).sort({ seq: 1 }).lean();
+    facts = await Fact.find({ "of.kind": "being", "of.id": beingId, branch: targetBranch }).sort({ seq: 1 }).lean();
     if (facts.length === 0) {
       throw new Error(`capturePartialGraft: being ${beingId.slice(0, 10)}… has no facts on branch ${targetBranch}`);
     }
@@ -1062,13 +1062,13 @@ export async function applyGraft(bundle, opts = {}) {
   // own reel, acts it authored, heads keyed to it. A being-graft is single-
   // writer on its OWN reel; nothing here may write another being's.
   for (const f of bundle.facts) {
-    if (!(f.target && f.target.kind === "being" && String(f.target.id) === beingId)) {
-      throw new Error(`applyGraft: BUNDLE SCOPE VIOLATION — a fact targets ${f.target?.kind}:${String(f.target?.id || "").slice(0, 10)}…, not the grafted being's reel. Refusing.`);
+    if (!(f.of && f.of.kind === "being" && String(f.of.id) === beingId)) {
+      throw new Error(`applyGraft: BUNDLE SCOPE VIOLATION — a fact targets ${f.of?.kind}:${String(f.of?.id || "").slice(0, 10)}…, not the grafted being's reel. Refusing.`);
     }
   }
   for (const a of bundle.acts) {
-    if (String(a.beingIn) !== beingId) {
-      throw new Error(`applyGraft: BUNDLE SCOPE VIOLATION — an act is authored by ${String(a.beingIn || "").slice(0, 10)}…, not the grafted being. Refusing.`);
+    if (String(a.through) !== beingId) {
+      throw new Error(`applyGraft: BUNDLE SCOPE VIOLATION — an act is authored by ${String(a.through || "").slice(0, 10)}…, not the grafted being. Refusing.`);
     }
   }
   for (const rh of bundle.reelHeads || []) {
@@ -1097,7 +1097,7 @@ export async function applyGraft(bundle, opts = {}) {
   // full ΔF factIds) is NOT re-verified here. A being-scoped bundle carries
   // the being's REEL, not every fact its acts produced on other reels, so the
   // ΔF can't be reconstructed from the bundle alone. The act IDENTITY
-  // (computeActId, which binds beingIn) + the SCOPE gate (beingIn === being)
+  // (computeActId, which binds through) + the SCOPE gate (through === being)
   // + the post-insert verifyActChain prove the chain. Full seal-sig
   // re-verification waits on the subtree-scoped graft (which carries the ΔF).
 
@@ -1123,7 +1123,7 @@ export async function applyGraft(bundle, opts = {}) {
     const wantBySeq = new Map();
     for (const f of newFacts) wantBySeq.set(`${String(f.branch ?? "0")}:${f.seq}`, String(f._id));
     const seqs = [...new Set(newFacts.map((f) => f.seq))];
-    const clash = await Fact.find({ "target.kind": "being", "target.id": beingId, seq: { $in: seqs } }).select("_id seq branch").lean();
+    const clash = await Fact.find({ "of.kind": "being", "of.id": beingId, seq: { $in: seqs } }).select("_id seq branch").lean();
     for (const e of clash) {
       const want = wantBySeq.get(`${String(e.branch ?? "0")}:${e.seq}`);
       if (want && want !== String(e._id)) {
@@ -1353,7 +1353,7 @@ async function applyStateSnapshot(bundle, opts = {}) {
   }
 
   // ── 3. Refuse to downgrade a being whose real chain we already hold. ──
-  const haveFacts = await Fact.countDocuments({ "target.kind": "being", "target.id": beingId });
+  const haveFacts = await Fact.countDocuments({ "of.kind": "being", "of.id": beingId });
   if (haveFacts > 0) {
     throw new Error(`applyStateSnapshot: being ${beingId.slice(0, 8)}… already has ${haveFacts} local fact(s); a snapshot would downgrade the real chain. Refusing.`);
   }

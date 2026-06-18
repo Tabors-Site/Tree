@@ -13,7 +13,7 @@
 // never changes.
 //
 // The fold reads facts whose seq > foldedSeq from the reel-collection
-// view of facts (target.kind + target.id), applies them in order, and
+// view of facts (of.kind + of.id), applies them in order, and
 // advances the projection's `foldedSeq` marker via compare-and-set.
 // CAS prevents marker regression under concurrent folds: reducers are
 // pure, so concurrent computes agree on state; the guard only catches
@@ -169,8 +169,8 @@ export async function readReelBetween(type, id, afterSeq, untilSeq, branch) {
     if (typeof afterSeq === "number") seqFilter.$gt  = afterSeq;
     if (typeof untilSeq === "number") seqFilter.$lte = untilSeq;
     return await Fact.find({
-      "target.kind": type,
-      "target.id":   id,
+      "of.kind": type,
+      "of.id":   id,
       seq:           seqFilter,
       $or: [{ branch: MAIN }, { branch: { $exists: false } }],
     }).sort({ seq: 1 }).lean();
@@ -218,8 +218,8 @@ export async function readReelBetween(type, id, afterSeq, untilSeq, branch) {
       ? { $or: [{ branch: MAIN }, { branch: { $exists: false } }] }
       : { branch: b };
     return {
-      "target.kind": type,
-      "target.id":   id,
+      "of.kind": type,
+      "of.id":   id,
       seq:           seqFilter,
       ...branchClause,
     };
@@ -262,7 +262,7 @@ export async function fold(type, id, opts = {}) {
     throw new Error(
       `fold: opts.branch is required (got ${JSON.stringify(opts.branch)}). ` +
       `Pass it from the fact's branch or the wire layer; in-moment callers ` +
-      `derive it from summonCtx.actorAct.branch or the target's address.`,
+      `derive it from moment.actorAct.branch or the target's address.`,
     );
   }
   const branch = opts.branch;
@@ -374,7 +374,7 @@ export async function rebuild(type, id, opts = {}) {
     throw new Error(
       `rebuild: opts.branch is required (got ${JSON.stringify(opts.branch)}). ` +
       `Pass it from the fact's branch or the wire layer; in-moment callers ` +
-      `derive it from summonCtx.actorAct.branch or the target's address.`,
+      `derive it from moment.actorAct.branch or the target's address.`,
     );
   }
   const branch = opts.branch;

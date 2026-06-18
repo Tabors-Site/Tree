@@ -320,9 +320,16 @@ function unifyCan(def, name) {
   const can = (Array.isArray(def.can) ? def.can : []).map((e) => ({
     verb: e.verb, word: e.word ?? e.action, ...(e.description ? { description: e.description } : {}),
   }));
-  const byVerb = (v) => can.filter((e) => e.verb === v);
+  return { can, ...canViews(can) };
+}
+
+// The group-by-verb VIEWS over `can` (canSee/canDo/canSummon/canBe). Exported because a role spec
+// SYNCED to a space stores the canonical `can`; the auth derives the views here when a stored spec
+// carries `can` but not the four, so the role-walk reads consistent capabilities either way.
+export function canViews(can) {
+  const list = Array.isArray(can) ? can : [];
+  const byVerb = (v) => list.filter((e) => e.verb === v);
   return {
-    can,
     canSee:    byVerb("see").map((e) => e.word),
     canDo:     byVerb("do").map((e) => (e.description ? { action: e.word, description: e.description } : { action: e.word })),
     canSummon: byVerb("summon").map((e) => { const { verb, ...rest } = e; return (Object.keys(rest).length === 1 && rest.word !== undefined) ? rest.word : rest; }),

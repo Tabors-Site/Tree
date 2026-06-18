@@ -16,7 +16,7 @@ import { mintCredentialSpec, decryptCredential } from "./identity/credentials.js
 import { hasCredentialAuthority, findBeingParent } from "./identity/lineage.js";
 import { loadTargetRow } from "../_targetShape.js";
 
-const branchOf = (ctx) => ctx?.summonCtx?.actorAct?.branch || ctx?.branch || "0";
+const branchOf = (ctx) => ctx?.moment?.actorAct?.branch || ctx?.branch || "0";
 
 export function credentialHostEnv() {
   return {
@@ -53,7 +53,7 @@ export function credentialHostEnv() {
     // qualities.auth.credentialPlain read, Map-safe). The cleartext rides the .word's
     // return only; the dispatcher's audit strips it (rule 7).
     "read-credential": async ({ args: [target] }, ctx) => {
-      const beingRow = await loadTargetRow({ kind: "being", id: String(target) }, "being", { summonCtx: ctx?.summonCtx || null });
+      const beingRow = await loadTargetRow({ kind: "being", id: String(target) }, "being", { moment: ctx?.moment || null });
       const q = beingRow?.qualities;
       const auth = q instanceof Map ? q.get("auth") : q?.auth;
       const blob = auth?.credentialPlain || null;
@@ -67,9 +67,9 @@ export function credentialHostEnv() {
     decryptCredential: ({ args: [blob] }) => decryptCredential(blob),
 
     // loadTargetRow(target) -> the being row for credential-read (its
-    // qualities.auth.credentialPlain). Threads summonCtx so an in-flight row resolves.
+    // qualities.auth.credentialPlain). Threads moment so an in-flight row resolves.
     loadTargetRow: async ({ args: [target] }, ctx) =>
-      loadTargetRow({ kind: "being", id: String(target) }, "being", { summonCtx: ctx?.summonCtx || null }),
+      loadTargetRow({ kind: "being", id: String(target) }, "being", { moment: ctx?.moment || null }),
 
     // findBeingParent(target) -> the being-parent beingId for credential-attach's
     // being-parent-only gate (reads the be:birth fact's parentBeingId).

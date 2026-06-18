@@ -77,7 +77,7 @@ export async function verifyReel(targetKind, targetId, branch = "0") {
     const branchClause = isMain(b)
       ? { $or: [{ branch: "0" }, { branch: { $exists: false } }] }
       : { branch: b };
-    return { "target.kind": targetKind, "target.id": id, seq: seqFilter, ...branchClause };
+    return { "of.kind": targetKind, "of.id": id, seq: seqFilter, ...branchClause };
   });
   if (orClauses.length === 0) return { ok: true, count: 0, headHash: null };
 

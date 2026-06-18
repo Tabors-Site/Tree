@@ -55,7 +55,7 @@ const SKINS_SPACE_NAME = "skins";
  * boot (genesis background furniture) so uploads always have a home;
  * idempotent by name-under-root.
  */
-export async function ensureSkinsSpace(branch = "0", summonCtx = null) {
+export async function ensureSkinsSpace(branch = "0", moment = null) {
   const { getSpaceRootId } = await import("../sprout.js");
   const rootId = getSpaceRootId();
   if (!rootId) throw new IbpError(IBP_ERR.INTERNAL, "ensureSkinsSpace: reality root not ready");
@@ -77,9 +77,9 @@ export async function ensureSkinsSpace(branch = "0", summonCtx = null) {
   const { emitFact } = await import("../past/fact/facts.js");
   await emitFact({
     verb:    "do",
-    action:  "create-space",
-    beingId: I_AM,
-    target:  { kind: "space", id },
+    act:     "create-space",
+    through: I_AM,
+    of:      { kind: "space", id },
     params: {
       name:   SKINS_SPACE_NAME,
       type:   "space",
@@ -87,9 +87,9 @@ export async function ensureSkinsSpace(branch = "0", summonCtx = null) {
       size:   { x: 100, y: 100 },
       qualities: {},
     },
-    actId:  summonCtx?.actId || null,
+    actId:  moment?.actId || null,
     branch,
-  }, summonCtx);
+  }, moment);
   return id;
 }
 
@@ -160,14 +160,14 @@ async function isRootOwner(spaceId, actorId) {
   }
 }
 
-async function setModelHandler({ target, params, identity, summonCtx }) {
+async function setModelHandler({ target, params, identity, moment }) {
   if (!identity?.beingId) {
     throw new IbpError(IBP_ERR.UNAUTHORIZED, "set-model: identity required");
   }
   const kind = detectTargetKind(target);
   const targetId = targetIdOf(target);
   if (!targetId) throw new IbpError(IBP_ERR.INVALID_INPUT, "set-model: target required");
-  const branch = summonCtx?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.branch || "0";
 
   await assertMaySetModel(kind, targetId, identity, branch);
 

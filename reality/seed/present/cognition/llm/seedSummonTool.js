@@ -100,9 +100,9 @@ export const seedSummonTool = {
       };
     }
 
-    const wakeFrom = callCtx?.summonCtx?.wakeFrom || null;
-    const wakeCorrelation = callCtx?.summonCtx?.wakeCorrelation || null;
-    const wakeSpaceId = callCtx?.summonCtx?.spaceId || null;
+    const wakeFrom = callCtx?.moment?.wakeFrom || null;
+    const wakeCorrelation = callCtx?.moment?.wakeCorrelation || null;
+    const wakeSpaceId = callCtx?.moment?.spaceId || null;
 
     const targetStance =
       (typeof args?.target === "string" && args.target.length > 0
@@ -157,9 +157,9 @@ export const seedSummonTool = {
           // Pass the FULL moment ctx, not a { actId } slice. summonVerb's
           // emitFact reads ctx.deltaF to push the be:summon Fact onto the
           // moment's ΔF; a truncated copy self-seals it outside the
-          // moment and orphans the outer Act. callCtx.summonCtx carries
+          // moment and orphans the outer Act. callCtx.moment carries
           // deltaF.
-          summonCtx: callCtx?.summonCtx || null,
+          moment: callCtx?.moment || null,
         },
       );
       return {
@@ -199,14 +199,14 @@ export const seedSummonTool = {
 
 /**
  * Build the qualified stance for the actor: <reality>/<spaceId>@<name>.
- * Reads the wake's spaceId from callCtx.summonCtx (filled by llmMoment).
+ * Reads the wake's spaceId from callCtx.moment (filled by llmMoment).
  * Falls back to the reality root if no specific space is known.
  */
 function buildFromStance({ beingId, name, callCtx }) {
   if (!name) return null;
   const domain = getRealityDomain();
   if (!domain) return null;
-  const spaceId = callCtx?.summonCtx?.spaceId || null;
+  const spaceId = callCtx?.moment?.spaceId || null;
   if (!spaceId) return `${domain}@${name}`;
   return `${domain}/${spaceId}@${name}`;
 }

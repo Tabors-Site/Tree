@@ -12,15 +12,15 @@ const bad = (l, d) => { fail++; console.log(`  ✗ ${l}`); if (d !== undefined) 
 
 // run a hand-built flow dry, return the verbs:ops it laid + bindings + result/refusal
 async function run(flow, trigger = {}, bindings = {}, env = {}) {
-  const ctx = { dryRun: true, summonCtx: { actId: "t" }, branch: "0", trigger, bindings: { ...bindings }, deltaF: [], env };
+  const ctx = { dryRun: true, moment: { actId: "t" }, branch: "0", trigger, bindings: { ...bindings }, deltaF: [], env };
   let refused = null;
   try { await evaluate(flow, ctx); }
   catch (e) { if (e && e.__wordRefusal) refused = e; else throw e; }
-  return { laid: ctx.deltaF.map((f) => `${f.verb}:${f.action}`), bindings: ctx.bindings, result: ctx.result, refused, deltaF: ctx.deltaF, laws: ctx.laws || [], readRules: ctx.readRules || [] };
+  return { laid: ctx.deltaF.map((f) => `${f.verb}:${f.act}`), bindings: ctx.bindings, result: ctx.result, refused, deltaF: ctx.deltaF, laws: ctx.laws || [], readRules: ctx.readRules || [] };
 }
 
 // a plain dry-run act (emits one fact through the evaluator's emit path)
-const act = (op) => ({ kind: "act", verb: "do", op, of: { kind: "being", id: "x" }, params: {} });
+const act = (op) => ({ kind: "act", verb: "do", act: op, of: { kind: "being", id: "x" }, params: {} });
 
 console.log(`\n  verify-flow (if + mark through evaluate)\n`);
 
