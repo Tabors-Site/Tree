@@ -20,6 +20,6 @@ export function setRenderHostEnv() {
     // validateRenderBlock(params) -> the validated render block (throws IbpError
     // on an unknown key or a malformed channel). The SAME function the JS handler
     // calls; pure compute, no fact.
-    validateRenderBlock: ({ args: [params] }) => validateRenderBlock(params),
+    "validate-render-block": ({ args: [params] }) => validateRenderBlock(params),
   };
 }

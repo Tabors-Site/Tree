@@ -111,6 +111,27 @@ async function _wordActor(actorBeingId) {
   return String(I_AM); // the origin being declares the seed vocabulary
 }
 
+// I_AM's genesis vocabulary is the BEDROCK — declared by I_AM on heaven ("0"). It can never be
+// disabled or re-declared ON HEAVEN by anyone but I_AM: the one exception to "words stack" (the
+// CORE REALITY terms are all I_AM's, immutable). A branch may still SHADOW a word locally (the
+// per-branch overlay = your own vocabulary, V2), which is NOT a change to the root. _genesisWords
+// is folded from the chain at rehydrate (declare-word facts authored by I_AM on "0").
+const _genesisWords = new Set(); // k(role, op) of words I_AM declared on heaven
+
+let _iAmId = null;
+async function _iAm() {
+  if (_iAmId == null) { const { I_AM } = await import("../../materials/being/seedBeings.js"); _iAmId = String(I_AM); }
+  return _iAmId;
+}
+
+// A non-I_AM actor may not disable / re-declare an I_AM genesis word ON HEAVEN ("0"). Per-branch
+// shadowing (a disable on a non-"0" branch) is allowed — that's the local-vocabulary feature.
+async function _assertMayChange(role, op, actor, br, verb) {
+  if (String(br) === "0" && _genesisWords.has(k(role, op)) && String(actor) !== (await _iAm())) {
+    throw new Error(`the I_AM genesis word ${role}:${op} is bedrock on heaven and cannot be ${verb} by another — only I_AM may, or shadow it on your own branch`);
+  }
+}
+
 // Resolve #main (the pointer), never the literal "0", and cache it for the sync
 // resolveRoleWord. Used wherever a branch isn't given.
 async function _ensureMainBranch() {
@@ -165,6 +186,7 @@ export async function disableWord(role, op, { summonCtx = null, branch = null, a
   const { emitFact } = await import("../../past/fact/facts.js");
   const actor = await _wordActor(actorBeingId);
   const br = branch != null ? String(branch) : await _ensureMainBranch();
+  await _assertMayChange(role, op, actor, br, "disabled");
   await _inAct(summonCtx, `I disable the word ${role}:${op}`, (ctx) => emitFact({
     beingId: actor, branch: br, verb: "do", action: WORD_DISABLE,
     target: { kind: "being", id: actor },
@@ -180,6 +202,7 @@ export async function enableWord(role, op, { summonCtx = null, branch = null, ac
   const { emitFact } = await import("../../past/fact/facts.js");
   const actor = await _wordActor(actorBeingId);
   const br = branch != null ? String(branch) : await _ensureMainBranch();
+  await _assertMayChange(role, op, actor, br, "re-declared");
   const entry0 = REGISTRY.get(k(role, op));
   await _inAct(summonCtx, `I enable the word ${role}:${op}`, (ctx) => emitFact({
     beingId: actor, branch: br, verb: "do", action: WORD_DECLARE,
@@ -201,10 +224,14 @@ export async function rehydrateWordsFromFacts() {
   const facts = await Fact.find({ verb: "do", action: { $in: [WORD_DECLARE, WORD_DISABLE] } })
     .sort({ date: 1, seq: 1 }).lean();
   _branchDisabled.clear();
+  _genesisWords.clear();
+  const iAmId = await _iAm();
   for (const f of facts) {
     const role = f.params?.role, op = f.params?.op;
     if (!role || !op) continue;
     const key = k(role, op);
+    // BEDROCK: a word I_AM declared on heaven ("0") is genesis — protected from non-I_AM override
+    if (f.action === WORD_DECLARE && String(f.beingId) === iAmId && String(f.branch) === "0") _genesisWords.add(key);
     // EXISTENCE (branch-independent): ensure a declared word is in REGISTRY. One declared on
     // the chain but absent from memory (extension/code not loaded) is recorded with its
     // source; resolve returns null for it (the .word file is absent — declared, unbacked).

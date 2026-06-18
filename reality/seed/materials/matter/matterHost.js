@@ -74,7 +74,7 @@ export function matterHostEnv() {
     // The genuine compute: resolve the finalized birth spec + the content-
     // addressed matterId from the target + params + caller. The exact body
     // createMatterHandler ran, calling the same imported primitives. NO fact.
-    resolveBirthSpec: async ({ args: [target, targetKind, params, caller] }, ctx) => {
+    "resolve-birth-spec": async ({ args: [target, targetKind, params, caller] }, ctx) => {
       const branch = branchOf(ctx);
       const spec = params || {};
       const kind = targetKind || detectTargetKind(target);

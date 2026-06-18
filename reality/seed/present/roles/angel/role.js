@@ -17,8 +17,8 @@
 //   - Seed delegates birthed at genesis (cherub, birther, ...)
 //   - Operators of the place who explicitly upgrade themselves
 //
-// canDo:["grant-role:*"] is the recursive primitive: an angel can
-// grant any role to anyone, including more angels. This is how
+// can:[{verb:"do",word:"grant-role:*"}] is the recursive primitive: an
+// angel can grant any role to anyone, including more angels. This is how
 // "completing the hierarchy" (auth3) starts — from I-Am, through
 // angels, down.
 
@@ -38,16 +38,12 @@ export const angelRole = Object.freeze({
   requiredCognition: null,
   respondMode: "async",
   triggerOn: ["message"],
-  canSee: ["*"],
-  canDo: [
-    { action: "*", description: "do anything" },
-    { action: "grant-role:*", description: "grant any role to any being" },
-    { action: "revoke-role:*", description: "revoke any grant" },
-  ],
-  canSummon: [
-    { pattern: "@*", description: "summon any being" },
-  ],
-  canBe: [
-    { operation: "*", description: "any BE operation" },
+  can: [
+    { verb: "see", word: "*" },
+    { verb: "do", word: "*", description: "do anything" },
+    { verb: "do", word: "grant-role:*", description: "grant any role to any being" },
+    { verb: "do", word: "revoke-role:*", description: "revoke any grant" },
+    { verb: "summon", word: "@*", description: "summon any being" },
+    { verb: "be", word: "*", description: "any BE operation" },
   ],
 });

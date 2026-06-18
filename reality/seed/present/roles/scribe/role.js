@@ -37,13 +37,13 @@ export const scribeRole = Object.freeze({
   respondMode: "async",
   triggerOn: ["message"],
 
-  // the live vocabulary it grounds against — the words/ops it may propose, the place it reads
-  canSee: ["roles", "operations", "tools"],
-
-  // THE GUARD: no acts. The scribe drafts; YOU press, signed by your nameId.
-  canDo: [],
-  canSummon: [],
-  canBe: [],
+  // what it may do: see the live vocabulary it grounds against (the words/ops it may propose,
+  // the place it reads). THE GUARD: no acts. The scribe drafts; YOU press, signed by your nameId.
+  can: [
+    { verb: "see", word: "roles" },
+    { verb: "see", word: "operations" },
+    { verb: "see", word: "tools" },
+  ],
 
   prompt: () => `
 You are the scribe. Someone brings you intent; you give it the form of the Word, grounded in

@@ -28,10 +28,7 @@ export const drummerRole = Object.freeze({
   respondMode: "async",
   triggerOn: ["message"],
 
-  canDo: ["tick"],
-  canSummon: [],
-  canBe: [],
-  canSee: [],
+  can: [{ verb: "do", word: "tick" }],
 
   prompt: () => "",
 

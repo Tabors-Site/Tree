@@ -13,10 +13,10 @@
 // summonCtx.actorAct?.branch threading (Pass 4 wires that).
 //
 // Pause / unpause / promote-to-live ship in later passes (6.5 and
-// 10 respectively). The role advertises the canDo entry but the
+// 10 respectively). The role advertises the can entry but the
 // substrate doesn't have those ops yet.
 //
-// I am scripted cognition. The portal renders my canDo as a form;
+// I am scripted cognition. The portal renders my can entries as a form;
 // no LLM apparatus runs here.
 
 export const branchManagerRole = Object.freeze({
@@ -28,9 +28,10 @@ export const branchManagerRole = Object.freeze({
   respondMode: "async",
   triggerOn: [],
 
-  canDo: [
+  can: [
     {
-      action:      "create-branch",
+      verb:        "do",
+      word:        "create-branch",
       description: "fork a new world from a past point of an existing branch. The new branch inherits history up to the anchor; future facts diverge.",
     },
   ],

@@ -236,6 +236,14 @@ const EFFECT_RULES = [
   [/^call\s+(.+?)\s+to\s+([\w-]+)(?:,\s*with\s+(.+?))?(?:\s+as\s+(\w+))?\.?$/i,
     (m) => ({ kind: "call", of: { ref: refKey(m[1]) }, to: m[2].toLowerCase(), ...(m[3] !== undefined ? { with: valueExpr(m[3]) } : {}), ...(m[4] ? { bind: m[4] } : {}) })],
 
+  // ── DO-OP call (the engine's answer 4): "do <op> [on <target>] [with <k>: <v>, …] [as
+  // <bind>]." A registered op run as a verb through doVerb (it authorizes + stamps the fact
+  // from ctx.params). `on <target>` names the acted-on entity (`the <kind> <ref>` or a bound
+  // ref); `with` carries named params; `as` binds the result. For mutations the set/replace
+  // write form cannot shape (a rich create-spec, a cross-being reach the op owns). The
+  // lookahead keeps the generic `do the <obj>` SVO on its own rule below.
+  [/^do\s+(?!the\b|a\b|an\b)([\w-]+)\s*(.*?)\.?$/i, (m, c) => doOpAct(m[1], (m[2] || "").trim(), c)],
+
   // generic acts (LAST, the catch-all): "<Subject> <verbs> the <obj>." (SVO) and
   // "<verb> the <obj>." (imperative, the flow's actor). Specific rules above win first.
   [/^([A-Z][\w.-]*) (\w+) (?:the|a|an) ([\w.-]+)\.$/,
@@ -636,6 +644,34 @@ function writeAct(c, noun, field, value, merge, ref) {
   if (merge !== undefined) params.merge = merge;
   // `ref` (given by the targeted-write form) names a BOUND entity; else the vessel/noun.
   return vesselAct(c, "do", "set-" + kind, { kind, ref: ref !== undefined ? refKey(ref) : k }, params);
+}
+// the DO-OP call target: "the <kind> <ref>" names a kind explicitly; else a bound ref
+// whose kind the evaluator resolves at run time.
+function parseDoTarget(s) {
+  const km = s.match(/^the\s+(being|space|matter)\s+(.+)$/i);
+  if (km) return { kind: km[1].toLowerCase(), ref: refKey(km[2]) };
+  return { ref: refKey(s) };
+}
+// "do <op> [on <target>] [with <k>: <v>, …] [as <bind>]" -> a do-act dispatched through
+// doVerb. Peel `as <bind>` off the end, then `on <target>` (up to `with`) and `with
+// <params>` (quote-aware comma split; each `k: v` a {ref}-or-literal value).
+function doOpAct(op, rest, c) {
+  const act = { kind: "act", verb: "do", op };
+  const asM = rest.match(/\s+as\s+(\w+)$/i);
+  if (asM) { act.bind = asM[1]; rest = rest.slice(0, asM.index).trim(); }
+  let paramsStr = "";
+  const onWith = rest.match(/^on\s+(.+?)(?:\s+with\s+(.+))?$/i);
+  if (onWith) { act.of = parseDoTarget(onWith[1].trim()); if (onWith[2]) paramsStr = onWith[2].trim(); }
+  else { const w = rest.match(/^with\s+(.+)$/i); if (w) paramsStr = w[1].trim(); }
+  if (paramsStr) {
+    const params = {};
+    for (const it of splitTop(paramsStr, /,\s*/)) {
+      const kv = it.match(/^([\w][\w.-]*)\s*:\s*(.+)$/);
+      if (kv) params[camelKey(kv[1])] = refLit(kv[2].trim());
+    }
+    if (Object.keys(params).length) act.params = params;
+  }
+  return act;
 }
 // state-watch flow (rules 6, 12): fires when the state dimension holds `value`.
 function stateFlow(stateVar, value, effect) {

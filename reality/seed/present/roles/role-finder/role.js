@@ -33,31 +33,27 @@ export const roleFinderRole = Object.freeze({
   respondMode: "async",
   triggerOn: ["message"],
 
-  // canSee is the role's preloaded face. Each entry is a registered
-  // see (`roles`, `tools`, `operations` are seed-shipped sees that
-  // wrap the heaven children). The assembler renders each as a face
-  // block at moment-open; no see-tool call needed.
-  canSee: [
-    "roles",
-    "tools",
-    "operations",
-  ],
-
-  canDo: [
+  // `can` is the role's preloaded face + capabilities. Each see entry
+  // is a registered see (`roles`, `tools`, `operations` are seed-shipped
+  // sees that wrap the heaven children); the assembler renders each as a
+  // face block at moment-open, no see-tool call needed. The do entries
+  // license set-role / delete-role. No summon or be entries by design .
+  // the helper doesn't summon other beings, only authors role definitions.
+  can: [
+    { verb: "see", word: "roles" },
+    { verb: "see", word: "tools" },
+    { verb: "see", word: "operations" },
     {
-      action:      "set-role",
+      verb:        "do",
+      word:        "set-role",
       description: "Create or replace a live role at ./roles/<name>. Hot-registers into the in-memory registry.",
     },
     {
-      action:      "delete-role",
+      verb:        "do",
+      word:        "delete-role",
       description: "Remove a live role. Refuses if any being's roleFlow references it (force:true bypasses).",
     },
   ],
-
-  // Empty stance lists by design . the helper doesn't summon other
-  // beings, only authors role definitions.
-  canSummon: [],
-  canBe:     [],
 
   prompt: () => `
 You are role-finder, an authoring assistant for TreeOS roles.

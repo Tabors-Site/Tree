@@ -36,17 +36,13 @@ export const publisherRole = Object.freeze({
   respondMode: "none",
   triggerOn: [],
 
-  canSee: ["identity"],
-  canDo: [],
-
-  // The one capability: summon the catalog's registrar. Names the
-  // registrar by being-name pattern; the publish/retire intents ride
-  // the summon envelope.
-  canSummon: [
-    { pattern: "@registrar", description: "Summon the store registrar to publish or retire a listing." },
+  // The one capability beyond seeing identity: summon the catalog's
+  // registrar. Names the registrar by being-name pattern; the
+  // publish/retire intents ride the summon envelope.
+  can: [
+    { verb: "see", word: "identity" },
+    { verb: "summon", word: "@registrar", description: "Summon the store registrar to publish or retire a listing." },
   ],
-
-  canBe: [],
 
   label: "Store Publisher",
 });

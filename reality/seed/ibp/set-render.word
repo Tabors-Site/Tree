@@ -16,7 +16,7 @@
 # passed merge:false), and `branch`.
 
 When a being sets the render of a target:
-  host: validateRenderBlock(params) as block.
+  see validate-render-block(params) as block.
   Match the kind:
     For being:
       If merge:

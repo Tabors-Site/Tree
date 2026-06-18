@@ -11,7 +11,7 @@
 //
 // role-manager opens a third path: live-authored roles. An operator
 // at the reality root clicks @role-manager, fills in a form (name,
-// cognition guard, canSee/canDo/canSummon/canBe, prompt), and the
+// cognition guard, can (verb+word capabilities), prompt), and the
 // resulting role-definition Fact lands at `./roles/<name>` tagged
 // `origin: "live"`. The set-role op also HOT-REGISTERS the role into
 // the in-memory registry so the next moment-assign picks it up
@@ -28,7 +28,7 @@
 // authoring surface for environmental + coordination patterns
 // (drummer publishes tick.alive; dancers' flows fire off it).
 //
-// I am a scripted-cognition delegate. My canDo lists the three ops;
+// I am a scripted-cognition delegate. My can lists the three do ops;
 // the portal discovers them by reading my descriptor entry's
 // catalogs + actions and renders forms generically.
 
@@ -41,17 +41,20 @@ export const roleManagerRole = Object.freeze({
   respondMode: "async",
   triggerOn: [],
 
-  canDo: [
+  can: [
     {
-      action:      "set-role",
+      verb:        "do",
+      word:        "set-role",
       description: "create or replace a live role. Hot-registers into the in-memory registry; survives restart via the .roles mirror.",
     },
     {
-      action:      "delete-role",
+      verb:        "do",
+      word:        "delete-role",
       description: "remove a live role. Refuses if any being's roleFlow references it (pass force:true to bypass).",
     },
     {
-      action:      "set-world-signal",
+      verb:        "do",
+      word:        "set-world-signal",
       description: "publish a world signal at reality root. Flows that read world.<ns>.<key> see the new value at their next moment-open.",
     },
   ],

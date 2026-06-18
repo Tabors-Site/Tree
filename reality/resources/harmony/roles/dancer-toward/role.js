@@ -17,10 +17,7 @@ export const dancerTowardRole = Object.freeze({
   respondMode: "async",
   triggerOn: ["message"],
 
-  canDo: [],
-  canSummon: [],
-  canBe: [],
-  canSee: [],
+  can: [],
 
   prompt: () => "",
 

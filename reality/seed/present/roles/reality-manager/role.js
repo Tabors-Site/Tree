@@ -27,34 +27,29 @@ export const realityManagerRole = Object.freeze({
   respondMode: "async",
   triggerOn:   ["message"],
 
-  // canSee is the role's preloaded face. Seed-shipped sees
-  // (`identity`, `config`, `peers`, `extensions`, `tools`, `roles`,
-  // `operations`) wrap their heaven children; `./source` stays in
-  // address form (no named see for it). The assembler renders each
-  // as a face block at moment-open; no see-tool call needed.
-  canSee: [
-    "identity",
-    "config",
-    "peers",
-    "extensions",
-    "tools",
-    "roles",
-    "operations",
-    "./source",
-  ],
-
-  canDo: [
-    { action: "set-config",          description: "write a config key. args: { key, value }" },
-    { action: "delete-config",       description: "delete a config key. args: { key }" },
-    { action: "install-extension",   description: "install an extension. args: { name, files, ... }" },
-    { action: "uninstall-extension", description: "remove an installed extension. args: { name }" },
-    { action: "enable-extension",    description: "enable an installed extension. args: { name }" },
-    { action: "disable-extension",   description: "disable an installed extension. args: { name }" },
-  ],
-
-  canSummon: [
-    { stance: "(asker)", description: "reply to whoever woke this moment . default target/inReplyTo" },
-    { stance: "(self)", description: "wake yourself for the next step (continue working). orientation:'inward' to reflect, 'forward' to keep acting." },
+  // can is the role's unified capability list. The `see` entries are
+  // the preloaded face. Seed-shipped sees (`identity`, `config`,
+  // `peers`, `extensions`, `tools`, `roles`, `operations`) wrap their
+  // heaven children; `./source` stays in address form (no named see
+  // for it). The assembler renders each see as a face block at
+  // moment-open; no see-tool call needed.
+  can: [
+    { verb: "see", word: "identity" },
+    { verb: "see", word: "config" },
+    { verb: "see", word: "peers" },
+    { verb: "see", word: "extensions" },
+    { verb: "see", word: "tools" },
+    { verb: "see", word: "roles" },
+    { verb: "see", word: "operations" },
+    { verb: "see", word: "./source" },
+    { verb: "do", word: "set-config",          description: "write a config key. args: { key, value }" },
+    { verb: "do", word: "delete-config",       description: "delete a config key. args: { key }" },
+    { verb: "do", word: "install-extension",   description: "install an extension. args: { name, files, ... }" },
+    { verb: "do", word: "uninstall-extension", description: "remove an installed extension. args: { name }" },
+    { verb: "do", word: "enable-extension",    description: "enable an installed extension. args: { name }" },
+    { verb: "do", word: "disable-extension",   description: "disable an installed extension. args: { name }" },
+    { verb: "summon", word: "(asker)", description: "reply to whoever woke this moment . default target/inReplyTo" },
+    { verb: "summon", word: "(self)", description: "wake yourself for the next step (continue working). orientation:'inward' to reflect, 'forward' to keep acting." },
   ],
 
   label: "Reality Manager",

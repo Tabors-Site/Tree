@@ -192,10 +192,12 @@ export function registerRole(name, def, extName = "role-registry") {
     );
   }
 
-  // Derive permissions from canSee/canDo/canSummon/canBe. Role files
-  // declare what they can do; the verb permissions fall out. Authors
-  // never write permissions[] directly — the registry computes it.
-  const derived = derivePermissions(def);
+  // Unify capabilities: `can` is the canonical granted-word-set; canSee/canDo/canSummon/canBe
+  // are its group-by-verb VIEWS. A role declares EITHER `can` (the collapsed form) OR the four;
+  // the registry keeps both consistent. The verb permissions fall out of `can`. Authors never
+  // write permissions[] directly — the registry computes it.
+  const unified = unifyCan(def, name);
+  const derived = deriveFromCan(unified.can);
   // Allow explicit override only if the role has a code-cognition
   // shape that wants permissions seed cannot derive (e.g., a role
   // with no canX fields that still needs SUMMON permission to emit).
@@ -261,6 +263,11 @@ export function registerRole(name, def, extName = "role-registry") {
   const spec = {
     name,
     ...def,
+    can: unified.can,            // the canonical granted-word-set
+    canSee: unified.canSee,      // group-by-verb VIEWS over `can`, for the rest of the system
+    canDo: unified.canDo,
+    canSummon: unified.canSummon,
+    canBe: unified.canBe,
     permissions,
     respondMode,
     triggerOn,
@@ -298,12 +305,35 @@ export function unregisterRole(name) {
 // Derivation helpers
 // ────────────────────────────────────────────────────────────────────
 
-function derivePermissions(def) {
+// `can` is THE way a role declares capability: a granted-word-set, one entry per word the being
+// may speak — [{verb, word, description?}]. The verb is intrinsic to each word (see/do/summon/be);
+// canSee/canDo/canSummon/canBe are its group-by-verb VIEWS, derived here so the rest of the system
+// reads them unchanged. A role NEVER declares the four directly — that's the collapse. (See
+// project: role-is-a-composite-word; "can X" is the one grant.)
+function unifyCan(def, name) {
+  if (def.canSee || def.canDo || def.canSummon || def.canBe) {
+    throw new Error(
+      `registerRole("${name}"): canSee/canDo/canSummon/canBe are retired — declare \`can\` instead, ` +
+      `a list of { verb, word } (e.g. { verb: "see", word: "roles" }, { verb: "do", word: "set-role" }).`,
+    );
+  }
+  const can = (Array.isArray(def.can) ? def.can : []).map((e) => ({
+    verb: e.verb, word: e.word ?? e.action, ...(e.description ? { description: e.description } : {}),
+  }));
+  const byVerb = (v) => can.filter((e) => e.verb === v);
+  return {
+    can,
+    canSee:    byVerb("see").map((e) => e.word),
+    canDo:     byVerb("do").map((e) => (e.description ? { action: e.word, description: e.description } : { action: e.word })),
+    canSummon: byVerb("summon").map((e) => { const { verb, ...rest } = e; return (Object.keys(rest).length === 1 && rest.word !== undefined) ? rest.word : rest; }),
+    canBe:     byVerb("be").map((e) => e.word),
+  };
+}
+
+// The verb permissions fall out of `can` — the set of verbs its granted words carry.
+function deriveFromCan(can) {
   const verbs = new Set();
-  if (hasEntries(def.canSee))    verbs.add("see");
-  if (hasEntries(def.canDo))     verbs.add("do");
-  if (hasEntries(def.canSummon)) verbs.add("summon");
-  if (hasEntries(def.canBe))     verbs.add("be");
+  for (const e of can) if (e.verb) verbs.add(e.verb);
   return [...verbs];
 }
 
@@ -422,10 +452,7 @@ export async function loadLiveRolesFromSubstrate() {
       registerRole(child.name, {
         description:       `Live role authored via @role-manager.`,
         requiredCognition: role.requiredCognition || null,
-        canSee:    Array.isArray(role.canSee)    ? role.canSee    : [],
-        canDo:     Array.isArray(role.canDo)     ? role.canDo     : [],
-        canSummon: Array.isArray(role.canSummon) ? role.canSummon : [],
-        canBe:     Array.isArray(role.canBe)     ? role.canBe     : [],
+        can:       Array.isArray(role.can) ? role.can : [],
         replyTo:   role.replyTo || null,
         // Wrap the stored string prompt as a prompt function so the
         // role spec matches what defaultSummon / buildPrompt expect.

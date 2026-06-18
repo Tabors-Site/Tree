@@ -9,8 +9,8 @@
 // moment the space becomes a free commons — authorize's owner-check
 // sees public on the chain and admits any caller for any action.
 //
-// Public never acts. canSee/canDo/canSummon/canBe are all empty;
-// triggerOn is empty; the summon handler is a permanent no-op. Public
+// Public never acts. `can` is empty; triggerOn is empty; the summon
+// handler is a permanent no-op. Public
 // can't grant, can't revoke, can't author roles. That silence IS the
 // permanence: there's no actor who could ever transfer a Public-owned
 // space's ownership back.
@@ -32,13 +32,10 @@ export const publicRole = Object.freeze({
   respondMode: "async",
   triggerOn: [], // never auto-processes anything
 
-  // Empty canX. public CANNOT see/do/summon/be anything. The role's
+  // Empty can. public CANNOT see/do/summon/be anything. The role's
   // job isn't to act — it's to be a name-shaped placeholder in
   // members.owner that authorize.owner-check recognizes.
-  canSee:    [],
-  canDo:     [],
-  canSummon: [],
-  canBe:     [],
+  can: [],
 
   /**
    * No-op summon. Anything addressed to @public is silently dropped —

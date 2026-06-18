@@ -36,18 +36,14 @@ export const publicCommonsRole = Object.freeze({
     grabbed:     false,    // no take-role; SEE is the entry point
     autoOnEntry: true,     // silent grant on first SEE of a space hosting this role
   },
-  canSee:    ["*"],
-  canDo: [
-    { action: "move",                description: "move in space" },
-    { action: "set-being:coord",     description: "update your coord" },
-    { action: "set-being:position",  description: "walk to another space" },
-    { action: "create-space",        description: "stake a new sub-space here" },
-    { action: "create-matter",       description: "place matter here" },
-  ],
-  canSummon: [
-    { pattern: "@cherub", description: "address the gate" },
-  ],
-  canBe: [
-    { operation: "release", description: "log out" },
+  can: [
+    { verb: "see", word: "*" },
+    { verb: "do", word: "move",                description: "move in space" },
+    { verb: "do", word: "set-being:coord",     description: "update your coord" },
+    { verb: "do", word: "set-being:position",  description: "walk to another space" },
+    { verb: "do", word: "create-space",        description: "stake a new sub-space here" },
+    { verb: "do", word: "create-matter",       description: "place matter here" },
+    { verb: "summon", word: "@cherub", description: "address the gate" },
+    { verb: "be", word: "release", description: "log out" },
   ],
 });

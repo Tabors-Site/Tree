@@ -136,22 +136,22 @@ export const dancerLlmRole = Object.freeze({
   respondMode: "async",
   triggerOn: ["message"],
 
-  // Declared eyes. canSee is the role's preloaded face. Each entry
-  // resolves at moment-open . a registered see name runs its
-  // resolver and the structured return becomes a JSON face block.
-  // Bare name "neighbors" suffix-matches the extension-scoped key
-  // (`harmony:neighbors`); no prefix needed inside this extension.
-  canSee: ["neighbors"],
-
-  // Declared action surface. The face shows this; the LLM picks
-  // The body of the being. The dancer's only act is to step. The
-  // seed `do` tool is exposed automatically (canDo non-empty); the
-  // LLM calls do({action: "harmony:step", args: {direction}}) and
+  // Declared capabilities. The `can` list is the role's preloaded
+  // face. A see entry resolves at moment-open . a registered see name
+  // runs its resolver and the structured return becomes a JSON face
+  // block. Bare name "neighbors" suffix-matches the extension-scoped
+  // key (`harmony:neighbors`); no prefix needed inside this extension.
+  // A do entry is the declared action surface. The face shows it; the
+  // LLM picks the body of the being. The dancer's only act is to step.
+  // The seed `do` tool is exposed automatically (a do entry present);
+  // the LLM calls do({action: "harmony:step", args: {direction}}) and
   // the op handler resolves gridSpaceId from the dancer's position.
-  // No toolNames field. The role spec IS its can* lists.
-  canDo: [
+  // No toolNames field. The role spec IS its `can` list.
+  can: [
+    { verb: "see", word: "neighbors" },
     {
-      action: "step",
+      verb: "do",
+      word: "step",
       description:
         "Step one cell or stay. args: { direction: 'N'|'NE'|'E'|'SE'|'S'|'SW'|'W'|'NW'|'STAY' }. " +
           "Pick exactly one of legalMoves. STAY records a deliberate hold at the current cell.",

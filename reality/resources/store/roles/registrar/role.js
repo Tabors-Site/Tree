@@ -40,19 +40,14 @@ export const registrarRole = Object.freeze({
   respondMode: "async",
   triggerOn: ["message"],
 
-  canSee: ["identity"],
-
-  // No canDo entries: the registrar writes only its OWN qualities. That
+  // No do entries: the registrar writes only its OWN qualities. That
   // set-being resolves auth to the registrar's home space, which the
   // registrar OWNS (the seed sets the catalog space's owner), so the
   // write authorizes through ownership. No foreign target to gate.
-  canDo: [],
-
-  canSummon: [
-    { stance: "(asker)", description: "Reply to whoever woke this moment." },
+  can: [
+    { verb: "see", word: "identity" },
+    { verb: "summon", word: "(asker)", description: "Reply to whoever woke this moment." },
   ],
-
-  canBe: [],
 
   label: "Store Registrar",
 

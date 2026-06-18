@@ -16,8 +16,8 @@
 //
 // What arrival CANNOT do: DO, SUMMON, BE (except the bootstrap
 // register/claim exception). Under roles-are-auth (seed/RolesAreAuth.md)
-// the arrival role's canX list IS the gate; canBe: ["birth", "connect",
-// "release"] is the only BE surface anonymous callers reach.
+// the arrival role's `can` list IS the gate; the be:birth/connect/release
+// entries are the only BE surface anonymous callers reach.
 //
 // Cognition: scripted, no-op. Arrival doesn't receive SUMMONs (no
 // triggerOn entry for "message"). The role exists as the receptive
@@ -37,39 +37,45 @@ export const arrivalRole = Object.freeze({
   respondMode: "async",
   triggerOn: [], // never auto-processes anything
 
-  // Anonymous visitors see ONLY the arrival-view SEE op — a filtered
-  // landing face that exposes the reality root's layout + cherub.
-  // Raw position SEE refuses (permitsSee requires "*" for bare
-  // addresses, which only the human/angel roles carry).
-  canSee: ["arrival-view"],
-
-  // The doctrinal path for an anonymous visitor: summon @cherub:mate.
-  // Cherub mints the new being (with the human role + the visitor's
-  // chosen password) and binds the session. The visitor RECEIVES the
-  // new being as their own.
+  // The unified capability gate. Order: see, then do, then summon,
+  // then be.
   //
-  // The summon → mate path replaces the legacy be:birth-on-cherub
-  // flow. canBe stays for now because the existing cherub handlers
-  // still drive registration through BE ops; that handler work
-  // migrates to the summon:mate path (see birther's canSummon
-  // receiver entry for the symmetric shape).
-  canSummon: [
+  // see: Anonymous visitors see ONLY the arrival-view SEE op — a
+  // filtered landing face that exposes the reality root's layout +
+  // cherub. Raw position SEE refuses (permitsSee requires "*" for bare
+  // addresses, which only the human/angel roles carry).
+  //
+  // summon: The doctrinal path for an anonymous visitor is summon
+  // @cherub:mate. Cherub mints the new being (with the human role and
+  // the visitor's chosen password) and binds the session. The visitor
+  // RECEIVES the new being as their own. The summon → mate path
+  // replaces the legacy be:birth-on-cherub flow. The be entries stay
+  // for now because the existing cherub handlers still drive
+  // registration through BE ops; that handler work migrates to the
+  // summon:mate path (see birther's summon receiver entry for the
+  // symmetric shape).
+  //
+  // be: Legacy direct-BE registration. Retires when cherub's
+  // summon:mate handler is wired and the portal calls summon
+  // @cherub:mate instead of be:birth.
+  can: [
+    { verb: "see", word: "arrival-view" },
     {
-      pattern: "@cherub",
+      verb: "summon",
+      word: "@cherub",
       intent: "mate",
       as: "actor",
       description: "Request cherub to mint a new being and bind it to the session",
     },
     {
-      pattern: "@federation-manager",
+      verb: "summon",
+      word: "@federation-manager",
       description: "Initiate or respond to a federation negotiation. Open to all callers, including canopy verified foreign federation managers from peer realities, so push and pull negotiations can start without prior grant. The federation manager's own handler decides what to do with the offer.",
     },
+    { verb: "be", word: "birth" },
+    { verb: "be", word: "connect" },
+    { verb: "be", word: "release" },
   ],
-
-  // Legacy direct-BE registration. Retires when cherub's summon:mate
-  // handler is wired and the portal calls summon @cherub:mate instead
-  // of be:birth.
-  canBe: ["birth", "connect", "release"],
   /**
    * No-op. Arrival doesn't receive SUMMONs (no "message" in triggerOn);
    * this handler exists only so the role has a callable summon when

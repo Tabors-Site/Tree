@@ -59,9 +59,9 @@ try {
   let regErr = null;
   try { registerRole(scribeRole.name, scribeRole, "seed"); } catch (e) { regErr = e; }
   !regErr ? ok(`scribe registers as a real summoned role`) : bad(`register`, regErr.message);
-  (scribeRole.canDo.length === 0 && !scribeRole.permissions.includes("do"))
-    ? ok(`the never-press guard: canDo empty, see-only — it cannot commit on your behalf`)
-    : bad(`never-press guard`, { canDo: scribeRole.canDo, permissions: scribeRole.permissions });
+  (!scribeRole.can.some((e) => e.verb === "do") && !scribeRole.permissions.includes("do"))
+    ? ok(`the never-press guard: no \`do\` word in its \`can\`, see-only — it cannot commit on your behalf`)
+    : bad(`never-press guard`, { can: scribeRole.can, permissions: scribeRole.permissions });
   scribeRole.requiredCognition === "llm" ? ok(`llm cognition: intent → the Word`) : bad(`cognition`, scribeRole.requiredCognition);
 
   // 2. drafts + grounds a valid line, refuses what won't resolve — and presses NOTHING

@@ -47,19 +47,17 @@ export const humanRole = Object.freeze({
   // The "root founder" role: do-whatever-you-want in this reality
   // because you registered here. Temporary by design — operators
   // narrow it with custom roles as the reality matures. Only cherub
-  // holds canDo:["grant-role:human"]; no other being hands it out.
+  // holds can:[{ verb:"do", word:"grant-role:human" }]; no other being hands it out.
   //
-  // Broad canX (seed/RolesAreAuth.md "human carries '*'"). Per the
+  // Broad can (seed/RolesAreAuth.md "human carries '*'"). Per the
   // be:birth doctrine, humans can do be:birth directly on themselves
   // (mint a child being parented to them) AND can summon @birther:mate
   // or @cherub:mate as a delegated path.
-  canSee:    ["*"],
-  canDo:     [{ action: "*", description: "any action" }],
-  canSummon: [
-    { pattern: "@*", description: "summon any being" },
-  ],
-  canBe: [
-    { operation: "*", description: "any BE operation, including birth (mint a child being)" },
+  can: [
+    { verb: "see", word: "*" },
+    { verb: "do", word: "*", description: "any action" },
+    { verb: "summon", word: "@*", description: "summon any being" },
+    { verb: "be", word: "*", description: "any BE operation, including birth (mint a child being)" },
   ],
   respondMode: "async",
   // No "message" trigger: humans don't auto-process incoming SUMMONs.

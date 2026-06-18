@@ -27,12 +27,12 @@ export const mongoRole = Object.freeze({
   respondMode: "async",
   triggerOn: ["message"],
 
-  canSee: ["mongo-stats", "connections", "http-stats"],
-
   // Its facts are direct emits on its own moments (mongo-connected,
   // mongo-reconnected are not DO ops); no operator-facing DO surface.
-  canDo: [],
-  canSummon: [],
-  canBe: [],
+  can: [
+    { verb: "see", word: "mongo-stats" },
+    { verb: "see", word: "connections" },
+    { verb: "see", word: "http-stats" },
+  ],
   label: "Mongo Connection",
 });

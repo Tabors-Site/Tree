@@ -28,13 +28,13 @@
 // intent in the message envelope. No LLM frame.
 //
 // Birther is also the doctrine demonstrator for the unified inner
-// face (philosophy/names/innerFace.md). canSee: ["place"] tells the
-// kernel to fold the position descriptor into ctx.innerFace.blocks;
-// on summon:mate the summon handler reads that block to detect a
-// name collision against current occupants and refuses with
-// kind:"failure", shape:"refused" before commissioning the vessel.
-// First scripted role in the repo that turns canSee into a real
-// perception-aware decision.
+// face (philosophy/names/innerFace.md). can: [{ verb:"see", word:"place" }]
+// tells the kernel to fold the position descriptor into
+// ctx.innerFace.blocks; on summon:mate the summon handler reads that
+// block to detect a name collision against current occupants and
+// refuses with kind:"failure", shape:"refused" before commissioning
+// the vessel. First scripted role in the repo that turns a see entry
+// into a real perception-aware decision.
 
 import log from "../../../seedReality/log.js";
 
@@ -48,11 +48,12 @@ export const birtherRole = Object.freeze({
   permissions: ["be"],
   respondMode: "async",
   triggerOn: [],
-  canSee: ["place"],
-  canBe: ["birth"],
 
-  // canSummon participation. `as` discriminates the side of the
-  // summon edge this entry describes:
+  // Unified capability list. Order: all see, then do, then summon,
+  // then be.
+  //
+  // The summon entry carries `as` to discriminate the side of the
+  // summon edge it describes:
   //   "actor"     — caller-side; this role can send (default if absent)
   //   "receiver"  — receiver-side; this role accepts when targeted
   //
@@ -61,24 +62,27 @@ export const birtherRole = Object.freeze({
   // consult `as:"receiver"` entries on the TARGET'S role. One field,
   // two surfaces — same shape as left-stance/right-stance everywhere
   // else in the substrate. See seed/RolesAreAuth.md + FEDERATION.md.
-  canSummon: [
+  can: [
+    { verb: "see", word: "place" },
     {
-      intent: "mate",
+      verb: "summon",
+      word: "mate",
       as: "receiver",
       description: "Auto-accepts mate requests. The summoner becomes father; this birther becomes mother; child is birthed on this reality.",
     },
+    { verb: "be", word: "birth" },
   ],
 
   async summon(message, ctx) {
     // ctx.innerFace carries the canonical inner face the kernel built
     // for this moment (orientation + role + position + capabilities +
-    // role.canSee-resolved blocks). Scripted roles read it as data:
+    // role.can see-entry-resolved blocks). Scripted roles read it as data:
     //   ctx.innerFace.blocks . [{ key, source, label, payload }, ...]
     // Same shape the LLM mouth reformats and the human portal renders.
     // This birther role uses it as a perception-aware pre-flight gate
     // for the "mate" intent: before commissioning a vessel, it looks
-    // at the "place" block (resolved from canSee:["place"]) and refuses
-    // when an occupant already carries the prospective vessel name.
+    // at the "place" block (resolved from the see:"place" entry) and
+    // refuses when an occupant already carries the prospective vessel name.
     // Honest preview of the in-place uniqueness check, answered from
     // the inner face the kernel folded for this moment.
     //

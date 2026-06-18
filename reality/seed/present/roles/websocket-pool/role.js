@@ -24,23 +24,25 @@ export const websocketPoolRole = Object.freeze({
   respondMode: "async",
   triggerOn: ["message"],
 
-  canSee: ["connections", "http-stats", "mongo-stats"],
-
-  canDo: [
+  can: [
+    { verb: "see", word: "connections" },
+    { verb: "see", word: "http-stats" },
+    { verb: "see", word: "mongo-stats" },
     {
-      action:      "create-matter",
+      verb:        "do",
+      word:        "create-matter",
       description: "Create a connection matter when a socket connects",
     },
     {
-      action:      "set-matter",
+      verb:        "do",
+      word:        "set-matter",
       description: "Update a connection's branch on reseat",
     },
     {
-      action:      "end-matter",
+      verb:        "do",
+      word:        "end-matter",
       description: "End a connection matter on disconnect (and sweep stale rows at boot)",
     },
   ],
-  canSummon: [],
-  canBe: [],
   label: "WebSocket Pool",
 });

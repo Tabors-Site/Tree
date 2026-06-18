@@ -2,15 +2,12 @@
 //
 // Modifiers carry no capability. They shape the prompt's tone /
 // attention, not the verbs available. The roleFlow composer unions
-// can*-arrays so adding empty arrays is a structural no-op.
+// the `can` array so adding an empty array is a structural no-op.
 
 export const curiousRole = Object.freeze({
   name: "curious",
   description: `Modifier role: stacks onto a primary role to shape voice as "curious".`,
-  canSee:    [],
-  canDo:     [],
-  canSummon: [],
-  canBe:     [],
+  can: [],
   // No requiredCognition. The substrate stamps the modifier onto any
   // cognition; for "human" cognition the prompt isn't consumed (humans
   // cognize out-of-band) but stacking is structurally harmless. LLM

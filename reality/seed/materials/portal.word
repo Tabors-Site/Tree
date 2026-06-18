@@ -25,13 +25,13 @@
 # IBPA string), `name` (params.name, optional), and `branch`.
 
 When a being forms a portal:
-  host: hasAddress(foreignAddress) as present.
+  see has-address(foreignAddress) as present.
   If not present:
     refuse with "form-portal: target must be a foreign IBPA string (e.g. bing.com#0/library)".
-  host: validAddress(foreignAddress) as valid.
+  see valid-address(foreignAddress) as valid.
   If not valid:
     refuse with "form-portal: target does not look like a foreign IBPA. Expected <reality-domain>[#<branch>]/<position>.".
-  host: resolveContainingSpace(target) as spaceId.
+  see resolve-containing-space(target) as spaceId.
   If no spaceId:
     refuse with "form-portal: cannot determine containing space for the matter target".
   If no caller:

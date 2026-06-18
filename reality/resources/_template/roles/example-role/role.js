@@ -3,10 +3,10 @@
 // Exports the spec as either the default export OR a named export
 // whose value has a `name` field. The role-kind handler finds either.
 //
-// The spec is what the role registry stores. Bare action names in
-// canDo/canSummon/canBe get auto-prefixed by the loader with the
-// pack's namespace; canSee uses its own bare-name suffix-match at
-// resolve time and is not rewritten.
+// The spec is what the role registry stores. Bare words in `can`
+// entries with verb do/summon/be get auto-prefixed by the loader with
+// the pack's namespace; verb see uses its own bare-word suffix-match
+// at resolve time and is not rewritten.
 
 export const exampleRole = Object.freeze({
   // The name field is overwritten by the loader to <pack>:<piece-name>.
@@ -28,23 +28,20 @@ export const exampleRole = Object.freeze({
   // a role only humans should take.
   requiredCognition: null,         // null | "llm" | "human" | "scripted"
 
-  // Reach lists. The role can SEE the named addresses / DOs the named
-  // ops / SUMMONS the named stances / BEs the named ops. Bare names
-  // get auto-prefixed to <pack>:<name> by the loader.
-  canSee:    [
-    // "place",                        // foundational seed see
-    // "example-see",                  // <pack>:<name> resolved at frame-build
-  ],
-  canDo:     [
-    // "example-op",                   // <pack>:<name>
-    // { action: "step", target: "being" },
-  ],
-  canSummon: [
-    // { stance: "(asker)", description: "Reply to whoever woke me." },
-    // { pattern: "@other-being", description: "Reach a specific being." },
-  ],
-  canBe:     [
-    // "release", "switch",
+  // Reach list. Each entry is { verb, word, ... } where verb is
+  // "see" | "do" | "summon" | "be" and word names the address / op /
+  // stance / op. The role can SEE the named addresses, DOs the named
+  // ops, SUMMONS the named stances, BEs the named ops. Bare words get
+  // auto-prefixed to <pack>:<word> by the loader.
+  can: [
+    // { verb: "see", word: "place" },                 // foundational seed see
+    // { verb: "see", word: "example-see" },           // <pack>:<word> resolved at frame-build
+    // { verb: "do", word: "example-op" },             // <pack>:<word>
+    // { verb: "do", word: "step", target: "being" },
+    // { verb: "summon", word: "(asker)", description: "Reply to whoever woke me." },
+    // { verb: "summon", word: "@other-being", description: "Reach a specific being." },
+    // { verb: "be", word: "release" },
+    // { verb: "be", word: "switch" },
   ],
 
   // Default orientation the moment opens at. forward | inward | half.

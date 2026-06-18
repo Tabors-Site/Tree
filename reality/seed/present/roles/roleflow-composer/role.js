@@ -40,25 +40,21 @@ export const roleflowComposerRole = Object.freeze({
   respondMode: "async",
   triggerOn: ["message"],
 
-  // canSee is the role's preloaded face. Each entry is a registered
-  // see (`roles`, `tools`, `operations` are seed-shipped sees that
-  // wrap the heaven children). The assembler renders each as a face
-  // block at moment-open; no see-tool call needed.
-  canSee: [
-    "roles",
-    "tools",
-    "operations",
-  ],
-
-  canDo: [
+  // can declares the role's capabilities. The `see` entries form the
+  // role's preloaded face. Each is a registered see (`roles`, `tools`,
+  // `operations` are seed-shipped sees that wrap the heaven children).
+  // The assembler renders each as a face block at moment-open; no
+  // see-tool call needed.
+  can: [
+    { verb: "see", word: "roles" },
+    { verb: "see", word: "tools" },
+    { verb: "see", word: "operations" },
     {
-      action:      "set-being-roleflow",
+      verb: "do",
+      word: "set-being-roleflow",
       description: "Write a roleFlow onto a being's qualities. The composer's primary action.",
     },
   ],
-
-  canSummon: [],
-  canBe:     [],
 
   prompt: () => `
 You are roleflow-composer. You translate natural-language descriptions

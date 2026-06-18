@@ -40,34 +40,31 @@ export const mergeMediatorRole = Object.freeze({
   respondMode: "async",
   triggerOn: ["message"],
 
-  // canSee: the merge conflict catalog is the mediator's primary
+  // can: the merge conflict catalog is the mediator's primary
   // surface. Source branches surface via normal SEE on their position
   // addresses (the mediator's prompt instructs it to navigate per
-  // conflict).
-  canSee: [
-    "branches",
-  ],
-
-  // canDo: normal state-setting ops. The mediator includes
-  // `params._merge: { sourceBranch, conflictReel, strategy }` on each
-  // reconciliation call so the chain records the merge provenance.
-  canDo: [
+  // conflict). The do entries are normal state-setting ops; the
+  // mediator includes `params._merge: { sourceBranch, conflictReel,
+  // strategy }` on each reconciliation call so the chain records the
+  // merge provenance.
+  can: [
+    { verb: "see", word: "branches" },
     {
-      action:      "set-being",
+      verb:        "do",
+      word:        "set-being",
       description: "Set a being's qualities. Use with params._merge metadata when reconciling a conflict.",
     },
     {
-      action:      "set-matter",
+      verb:        "do",
+      word:        "set-matter",
       description: "Set a matter's qualities. Use with params._merge metadata when reconciling a conflict.",
     },
     {
-      action:      "set-space",
+      verb:        "do",
+      word:        "set-space",
       description: "Set a space's qualities. Use with params._merge metadata when reconciling a conflict.",
     },
   ],
-
-  canSummon: [],
-  canBe:     [],
 
   prompt: () => `
 You are merge-mediator. You help the operator resolve conflicts on a

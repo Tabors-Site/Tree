@@ -10,9 +10,9 @@
 // in the name refers to who carries it (everyone), not to the
 // scope mechanism.
 //
-// Customizable per reality. Operators edit this role's canDo as
-// they decide what "everyone here can do." Default seed-shipped
-// canX is conservative — move yourself, see your position, release.
+// Customizable per reality. Operators edit this role's `can` entries
+// as they decide what "everyone here can do." Default seed-shipped
+// `can` is conservative — move yourself, see your position, release.
 // Operators add things like "create-space" (so any being can stake
 // a new sub-place) or "create-matter" (so any being can place
 // matter in public spaces).
@@ -27,47 +27,50 @@ export const globalRole = Object.freeze({
   description:
     "The baseline role every authenticated being carries in this reality. " +
     "Granted by cherub at registration (and by parents to children they birth). " +
-    "Customize the canX entries to set the floor for what everyone can do here.",
+    "Customize the `can` entries to set the floor for what everyone can do here.",
   // Hosted on the reality root (installed at genesis). Default reach
   // is reality-wide since reality-root + descendants = the whole tree.
   // No `reach` field needed; the default covers everything.
   requiredCognition: null,
   respondMode: "async",
   triggerOn: ["message"],
-  // Baseline perceptions. Add SEE op names as the operator extends
-  // the surface (e.g. `["place", "library", "directory"]`).
-  // classify-matter is the pure "what type would this become?" read
-  // every being needs before placing matter. verify-reel /
-  // chain-root are the chain's verification + fingerprint reads —
-  // anyone may check that the world's history is intact.
-  canSee: ["place", "classify-matter", "verify-reel", "chain-root"],
-  // Baseline mutations. Move yourself, update your own coord, walk
-  // to another space, petition for additional roles. The petition
-  // ops (ask-role / take-role) MUST live here because the role-walk
-  // is the single gate (seed/RolesAreAuth.md): the substrate has no
-  // bypass mechanism. Every being needs to be able to ask, so every
-  // being must hold a role permitting ask. global is that role.
-  // Operators expand the rest for their reality.
-  canDo: [
-    { action: "move",                description: "move yourself in space" },
-    { action: "set-being:coord",     description: "update your own coord" },
-    { action: "set-being:position",  description: "walk to another space" },
-    { action: "ask-role",            description: "request acquisition of a role from its host" },
-    { action: "take-role",           description: "walk in and take a role with acquisition.grabbed=true" },
+  // Unified capability list. Baseline perceptions (see), mutations
+  // (do), gate address (summon), and session release (be).
+  //
+  // SEE: Add SEE op names as the operator extends the surface
+  // (e.g. add `{ verb: "see", word: "library" }`). classify-matter
+  // is the pure "what type would this become?" read every being
+  // needs before placing matter. verify-reel / chain-root are the
+  // chain's verification + fingerprint reads — anyone may check that
+  // the world's history is intact.
+  //
+  // DO: Move yourself, update your own coord, walk to another space,
+  // petition for additional roles. The petition ops (ask-role /
+  // take-role) MUST live here because the role-walk is the single
+  // gate (seed/RolesAreAuth.md): the substrate has no bypass
+  // mechanism. Every being needs to be able to ask, so every being
+  // must hold a role permitting ask. global is that role. Operators
+  // expand the rest for their reality.
+  can: [
+    { verb: "see", word: "place" },
+    { verb: "see", word: "classify-matter" },
+    { verb: "see", word: "verify-reel" },
+    { verb: "see", word: "chain-root" },
+    { verb: "do", word: "move",                description: "move yourself in space" },
+    { verb: "do", word: "set-being:coord",     description: "update your own coord" },
+    { verb: "do", word: "set-being:position",  description: "walk to another space" },
+    { verb: "do", word: "ask-role",            description: "request acquisition of a role from its host" },
+    { verb: "do", word: "take-role",           description: "walk in and take a role with acquisition.grabbed=true" },
     // The skins catalog (/skins at the reality root) is everyone's:
     // upload a model there, wear any model from it. set-model's own
     // handler enforces self/author/owner per target, so the floor
     // grant is safe — you still can't set models on things that
     // aren't yours.
-    { action: "create-matter:model", description: "upload a 3D model into the /skins catalog" },
-    { action: "set-model",           description: "wear a model from /skins (or set one on things you own)" },
-  ],
-  // Anyone can address the gate.
-  canSummon: [
-    { pattern: "@cherub", description: "address the gate" },
-  ],
-  // Anyone can release their own session.
-  canBe: [
-    { operation: "release", description: "log out / release identity" },
+    { verb: "do", word: "create-matter:model", description: "upload a 3D model into the /skins catalog" },
+    { verb: "do", word: "set-model",           description: "wear a model from /skins (or set one on things you own)" },
+    // Anyone can address the gate.
+    { verb: "summon", word: "@cherub", description: "address the gate" },
+    // Anyone can release their own session.
+    { verb: "be", word: "release", description: "log out / release identity" },
   ],
 });

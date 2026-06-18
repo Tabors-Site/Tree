@@ -130,13 +130,22 @@ registerOperation("set-role", {
     const canBe     = parseLines(params?.canBe);
     const prompt    = typeof params?.prompt === "string" ? params.prompt : "";
 
+    // Collapse the picker inputs into the canonical granted-word-set `can` — each picked word
+    // carries its verb. The registry derives the canSee/canDo/canSummon/canBe views + permissions.
+    const can = [
+      ...canSee.map((w) => ({ verb: "see", word: w })),
+      ...canDo.map((w) => ({ verb: "do", word: w })),
+      ...canSummon.map((w) => (typeof w === "string" ? { verb: "summon", word: w } : { verb: "summon", ...w })),
+      ...canBe.map((w) => ({ verb: "be", word: w })),
+    ];
+
     const roleQualities = {
       cognition:         null,                                // live roles don't carry cognition (it's on the being)
       requiredCognition: requiredCognition || null,
-      permissions: derivePermissions({ canSee, canDo, canSummon, canBe }),
+      permissions: [...new Set(can.map((e) => e.verb))],
       respondMode: "async",
       triggerOn:   ["message"],
-      canSee, canDo, canSummon, canBe,
+      can,
       replyTo:     null,
       prompt,
       origin:      "live",
@@ -159,7 +168,7 @@ registerOperation("set-role", {
       registerRole(name, {
         description:       `Live role authored via @role-manager.`,
         requiredCognition: requiredCognition || null,
-        canSee, canDo, canSummon, canBe,
+        can,
         replyTo:           null,
         prompt:            () => prompt,
       }, "live");
@@ -341,17 +350,6 @@ registerOperation("set-world-signal", {
 // ──────────────────────────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────────────────────────
-
-// Mirror of registry.js's derivePermissions but inline so we don't
-// drag the registry module into this op's hot path.
-function derivePermissions({ canSee, canDo, canSummon, canBe }) {
-  const verbs = new Set();
-  if (canSee.length)    verbs.add("see");
-  if (canDo.length)     verbs.add("do");
-  if (canSummon.length) verbs.add("summon");
-  if (canBe.length)     verbs.add("be");
-  return [...verbs];
-}
 
 // Walk every being's roleFlow + defaultRole for references to a role
 // name. Used by delete-role's safety check.

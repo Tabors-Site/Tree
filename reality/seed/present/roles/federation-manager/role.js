@@ -95,62 +95,62 @@ export const federationManagerRole = Object.freeze({
   respondMode: "async",
   triggerOn: ["message"],
 
-  // What I can read locally to do my job. The peer registry (to
-  // validate peer addresses and look up keys) and my own identity
-  // (negotiation state lives in my own qualities, addressable by
-  // reading my own being). The incoming subtree itself does NOT
-  // arrive through SEE . it is carried inside the peer's SUMMON
-  // payload, which lands in my inbox automatically (substrate
-  // intake, not canSee). The bundle bytes are message content, not
-  // a foreign-branch read.
-  canSee: [
-    "identity",
-    "peers",
-  ],
-
-  // Operator-facing DO ops. Each lives in ops.js and registers via
-  // registerOperation at module load.
-  canDo: [
+  // What I can do. SEE: what I can read locally to do my job . the
+  // peer registry (to validate peer addresses and look up keys) and
+  // my own identity (negotiation state lives in my own qualities,
+  // addressable by reading my own being). The incoming subtree itself
+  // does NOT arrive through SEE . it is carried inside the peer's
+  // SUMMON payload, which lands in my inbox automatically (substrate
+  // intake, not a see word). The bundle bytes are message content,
+  // not a foreign-branch read. DO: operator-facing ops, each lives in
+  // ops.js and registers via registerOperation at module load. SUMMON:
+  // who I reply to. BE: peers can address me; I can be addressed by
+  // anyone authenticated (operator policy decides what to do with the
+  // request).
+  can: [
+    { verb: "see", word: "identity" },
+    { verb: "see", word: "peers" },
     {
-      action:      "offer-template",
+      verb:        "do",
+      word:        "offer-template",
       description: "Offer a template (a subtree's shape, planted with fresh ids) to a peer reality. Args: { peer, subtreePath, label? }",
     },
     {
-      action:      "offer-being",
+      verb:        "do",
+      word:        "offer-being",
       description: "Graft a being (identity + chain, verbatim) to a peer reality, one-shot. Args: { peer, beingId }",
     },
     {
-      action:      "request-template",
+      verb:        "do",
+      word:        "request-template",
       description: "Request a template (a subtree's shape) from a peer reality. Args: { peer, subtreePath, label? }",
     },
     {
-      action:      "accept-template",
+      verb:        "do",
+      word:        "accept-template",
       description: "Accept an incoming offer-template from a peer. Args: { negotiationId }",
     },
     {
-      action:      "reject-template",
+      verb:        "do",
+      word:        "reject-template",
       description: "Reject an incoming offer-template. Args: { negotiationId, reason? }",
     },
     {
-      action:      "fulfill-request",
+      verb:        "do",
+      word:        "fulfill-request",
       description: "Accept an incoming request-template (triggers a push back to the requester). Args: { negotiationId }",
     },
     {
-      action:      "refuse-request",
+      verb:        "do",
+      word:        "refuse-request",
       description: "Reject an incoming request-template. Args: { negotiationId, reason? }",
     },
-  ],
-
-  canSummon: [
     {
-      stance:      "(asker)",
+      verb:        "summon",
+      word:        "(asker)",
       description: "Reply to whoever woke this moment (default target / inReplyTo).",
     },
   ],
-
-  // Peers can address me; I can be addressed by anyone authenticated
-  // (operator policy decides what to do with the request).
-  canBe: [],
 
   label: "Federation Manager",
 

@@ -29,12 +29,12 @@ export function portalHostEnv() {
   return {
     // hasAddress(foreignAddress) -> the non-empty-string gate (the JS
     // `typeof foreignAddress !== "string" || !foreignAddress.length` refusal).
-    hasAddress: ({ args: [foreignAddress] }) =>
+    "has-address": ({ args: [foreignAddress] }) =>
       typeof foreignAddress === "string" && foreignAddress.length > 0,
 
     // validAddress(foreignAddress) -> the foreign-IBPA shape match (the SAME
     // IBPA_RE the JS handler tests). Bounded compute; lays no fact.
-    validAddress: ({ args: [foreignAddress] }) =>
+    "valid-address": ({ args: [foreignAddress] }) =>
       typeof foreignAddress === "string" && IBPA_RE.test(foreignAddress),
 
     // resolveContainingSpace(target) -> the space the portal forms in: a space
@@ -44,7 +44,7 @@ export function portalHostEnv() {
     // when the matter has no space (the JS SPACE_NOT_FOUND refusal) or the target
     // is neither kind (the JS INVALID_INPUT refusal — both surface as the .word's
     // "cannot determine containing space" refuse, the INVALID_INPUT code shared).
-    resolveContainingSpace: async ({ args: [target] }, ctx) => {
+    "resolve-containing-space": async ({ args: [target] }, ctx) => {
       const t = target && typeof target === "object" ? target : null;
       const kind = t?.kind;
       const id = t?.id != null ? String(t.id) : null;

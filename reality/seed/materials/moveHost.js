@@ -35,20 +35,20 @@ export function moveHostEnv() {
   return {
     // exactly one of coord / to (the SAME mutual-exclusion the JS handler asserts):
     // both-absent and both-present are the two rejected shapes.
-    requireMode: ({ args: [coordArg, toArg] }) => {
+    "require-mode": ({ args: [coordArg, toArg] }) => {
       const coord = absent(coordArg), to = absent(toArg);
       return !!(coord ? !to : to);
     },
 
     // the subject must be a space or matter (beings move themselves, not via move).
-    requireSubjectKind: ({ args: [subject] }) => {
+    "require-subject-kind": ({ args: [subject] }) => {
       const kind = subjectKind(subject);
       return kind === "space" || kind === "matter";
     },
 
     // coord-mode shape: { x, y[, z] } with finite numbers (true when coord is absent,
     // so a container-mode move passes this gate untouched — the SAME `if (coord)` guard).
-    validCoordShape: ({ args: [coordArg] }) => {
+    "valid-coord-shape": ({ args: [coordArg] }) => {
       const coord = absent(coordArg);
       if (!coord) return true;
       return typeof coord === "object" &&
@@ -57,7 +57,7 @@ export function moveHostEnv() {
 
     // container-mode dest must be a non-empty string id (true when `to` is absent —
     // a coord-mode move passes untouched, the SAME `if (to)` guard).
-    validTo: ({ args: [toArg] }) => {
+    "valid-to": ({ args: [toArg] }) => {
       const to = absent(toArg);
       if (!to) return true;
       return typeof to === "string" && to.length > 0;
@@ -74,7 +74,7 @@ export function moveHostEnv() {
     // loadOrFold over the subject to capture fromSpaceId, and the coord bounds check
     // against the container's size. Reuses the SAME Space.exists / loadOrFold; lays NO
     // fact; throws the SAME IbpError on a missing dest / missing subject / out-of-bounds.
-    resolveSource: async ({ args: [subject, coordArg, toArg, argBranch] }, ctx) => {
+    "resolve-source": async ({ args: [subject, coordArg, toArg, argBranch] }, ctx) => {
       const coord = absent(coordArg), to = absent(toArg);
       const branch = absent(argBranch) || branchOf(ctx);
       const kind = subjectKind(subject);

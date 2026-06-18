@@ -768,7 +768,7 @@ async function switchHandler({ payload, identity, summonCtx }) {
 // Authority gate: today only I_AM may perform be:death. The authorize
 // step in beVerb's dispatch routes through the role-walk which
 // short-circuits true for I_AM and refuses everyone else (no role
-// today declares canBe:["death"]). Future doctrine may extend the
+// today declares a be:death capability). Future doctrine may extend the
 // authority list (mother + governance roles); for now, I_AM only.
 // ────────────────────────────────────────────────────────────────────
 
@@ -955,7 +955,7 @@ async function _registerHumanWithFreshHome({
   // Here cherub adds the registration-specific role:
   //   - human: the "root founder" canX (do whatever you want here)
   // Anchored at the place root with reality-wide reach via descendants.
-  // Cherub holds canDo:grant-role:human (declared in cherubRole.canDo)
+  // Cherub holds do:grant-role:human (declared in cherubRole.can)
   // so authorize permits this emit. grantedBy is cherub for forensics.
   await doVerb(
     { kind: "being", id: String(result.beingId) },
@@ -1228,45 +1228,45 @@ export const cherubRole = Object.freeze({
   description:
     "The gate, right below I_AM. Processes the three BE ops (birth/connect/release) AND summon:mate — a connected name births its first TOP-LEVEL being through cherub (owned by the name). Down the chain, names reuse summon:mate on @birther / be:birth on their own beings.",
   // Seed delegate role — hosted on the reality root. The cherub being
-  // gets this role granted at boot by the I-Am. canDo includes
-  // grant-role:human + grant-role:global so cherub can anoint new
+  // gets this role granted at boot by the I-Am. `can` includes
+  // do:grant-role:human + do:grant-role:global so cherub can anoint new
   // humans on registration. Cherub is the only grantor of the human
   // and global roles in a default reality.
   requiredCognition: "scripted",
   respondMode: "async",
   triggerOn: [],
 
-  // DO actions cherub can perform. The registration flow needs to
-  // emit grant-role facts on the freshly-birthed human (giving them
-  // global + human at the place root). canDo:["grant-role:<role>"]
-  // is the canX entry that lets authorize permit those grants.
-  canDo: [
-    { action: "grant-role:human",  description: "anoint a new human at the place root" },
-    { action: "grant-role:global", description: "give the baseline role to a new human" },
-  ],
-
-  // canSummon participation. `as: "receiver"` declares this role
-  // ACCEPTS summon:mate from anonymous arrivals (the registration
-  // flow): summon @cherub:mate → cherub mints a new being with the
-  // visitor's chosen credentials, grants global + human at the place
-  // root, and binds the session. The summoner RECEIVES the new being.
-  // Mirrors birther's same shape; FEDERATION.md for the federation
-  // counterpart.
-  canSummon: [
+  // Capabilities, unified in `can`:
+  //   - do  actions cherub can perform. The registration flow needs to
+  //     emit grant-role facts on the freshly-birthed human (giving them
+  //     global + human at the place root). do:grant-role:<role> is the
+  //     entry that lets authorize permit those grants.
+  //   - summon participation. `as: "receiver"` declares this role
+  //     ACCEPTS summon:mate from anonymous arrivals (the registration
+  //     flow): summon @cherub:mate → cherub mints a new being with the
+  //     visitor's chosen credentials, grants global + human at the place
+  //     root, and binds the session. The summoner RECEIVES the new being.
+  //     Mirrors birther's same shape; FEDERATION.md for the federation
+  //     counterpart.
+  //   - be licenses. The descriptor's enrichBeings reads these, cross-
+  //     references the seed's static BE_OPS table for each name, and
+  //     builds the per-being `actions[]` block the portal renders as
+  //     menu + form. Schemas live in the seed (cherubBeOps above + BE_OPS
+  //     at ibp/beOps.js), not here . a be entry names the license, not
+  //     the shape.
+  can: [
+    { verb: "do", word: "grant-role:human",  description: "anoint a new human at the place root" },
+    { verb: "do", word: "grant-role:global", description: "give the baseline role to a new human" },
     {
-      intent: "mate",
+      verb: "summon",
+      word: "mate",
       as: "receiver",
       description: "Birth your first being through your name — a top-level being, owned by you (cherub is right below I_AM)",
     },
+    { verb: "be", word: "birth" },
+    { verb: "be", word: "connect" },
+    { verb: "be", word: "release" },
   ],
-
-  // License declaration. The descriptor's enrichBeings reads this list,
-  // cross-references the seed's static BE_OPS table for each name, and
-  // builds the per-being `actions[]` block the portal renders as
-  // menu + form. Schemas live in the seed (cherubBeOps above + BE_OPS
-  // at ibp/beOps.js), not here . canBe names the license, not the
-  // shape.
-  canBe: ["birth", "connect", "release"],
 
   // summon:mate — a connected NAME, acting through @arrival, asks cherub to
   // birth its FIRST being. Cherub is right below I_AM, so it mints TOP-LEVEL
