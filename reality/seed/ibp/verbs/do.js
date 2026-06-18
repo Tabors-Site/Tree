@@ -33,6 +33,7 @@ import { IbpError, IBP_ERR } from "../protocol.js";
 import { isSourceSpaceId } from "../../materials/space/source.js";
 import { authorize } from "../authorize.js";
 import { assertVerbCaller, refuseHistoricalWrite, resolveBranchForFact } from "./_shared.js";
+import { stripForAudit } from "../../materials/redact.js";
 
 /**
  * DO. Run a registered operation against a target, stamp a Fact, return
@@ -449,5 +450,9 @@ function summarizeAuditResult(result) {
   if (typeof result.toObject === "function") {
     try { return { _id: String(result._id) }; } catch { return null; }
   }
-  return result;
+  // Omit one-time reveals (plaintext / private key / mnemonic / token) and transport
+  // plumbing (_factTarget) so the durable audit fact never records cleartext credentials
+  // or key material. The asker still gets the full result over the wire (this strips only
+  // the recorded copy). See redact.js stripForAudit.
+  return stripForAudit(result);
 }

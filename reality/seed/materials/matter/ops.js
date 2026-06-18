@@ -20,6 +20,13 @@ import { I_AM } from "../being/seedBeings.js";
 import { detectTargetKind, targetIdOf, loadTargetRow } from "../_targetShape.js";
 import { resolveMatterName } from "./matters.js";
 import { matterContentId } from "./matterId.js";
+import { registerRoleWord } from "../../present/word/roleWordRegistry.js";
+
+// Self-register this module's co-located `.word` slice (CONVERTING.md):
+// importing ops.js (at seed boot, or in a DRY harness) registers it so
+// resolveRoleWord("matter", "create-matter") finds the create-matter world
+// strand. The host glue it reaches through `host:` escapes is matterHost.js.
+registerRoleWord("matter", "create-matter", new URL("./matter.word", import.meta.url));
 
 const COORD_AXES = ["x", "y", "z"];
 

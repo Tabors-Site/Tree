@@ -280,6 +280,15 @@ export function initIBPWS(io) {
           import("../../seed/present/wakes/wakeSchedule.js"),
         ]);
       await Promise.all([rehydrateSubs(), rehydrateSchedules()]);
+      // The word vocabulary is a fold of the chain too (declare-word / disable-word facts).
+      // Runs after genesis (I_AM exists, chain writable, all roles registered): DECLARE any
+      // word new to the chain (idempotent — a fresh boot lays the seed vocabulary, a restart
+      // lays only newly-added words), then REHYDRATE to apply disables. The in-memory map
+      // already serves the sync resolveRoleWord; this makes the chain the durable truth.
+      const { declareWordsToChain, rehydrateWordsFromFacts } =
+        await import("../../seed/present/word/roleWordRegistry.js");
+      await declareWordsToChain({});
+      await rehydrateWordsFromFacts();
     } catch (err) {
       log.warn("IBP", `rehydrate at boot failed: ${err.message}`);
     }

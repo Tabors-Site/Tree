@@ -1,0 +1,25 @@
+# delete-pointer.word — remove a named branch pointer (ops.js, the delete-pointer op).
+# The set-pointer sibling. The CONTROL strand (the gate chain: a caller, a valid name, a
+# non-reserved name, a resolved .branches space) is `.word`; the heaven reads + the lone
+# set-space (qualities.pointers) stay host (heaven-routed, MAIN-pinned), reusing the SAME
+# isPointerName / RESERVED_POINTERS / readPointers / findPointersSpaceId / doVerb the JS
+# handler calls. The bridge binds `caller` (the acting being id) and `name` (the pointer).
+
+When a being deletes a branch pointer:
+  If no caller:
+    refuse with "delete-pointer requires an authenticated being" as unauthorized.
+  see valid-pointer-name(name) as validName.
+  If no validName:
+    refuse with "pointer name is invalid; must be a lowercase label (no consecutive or trailing hyphens)" as invalid-input.
+  see is-reserved-pointer(validName) as reserved.
+  If reserved:
+    refuse with "that pointer is reserved and cannot be deleted; re-point it via set-pointer instead" as forbidden.
+  see find-pointers-space-id() as branchesSpace.
+  If no branchesSpace:
+    refuse with "the .branches heaven space was not found; reality is not properly bootstrapped" as internal.
+  see read-pointers() as current.
+  see delete-pointer-map(current, validName) as outcome.
+  If no outcome:
+    Return name: $validName, deleted: false, alreadyAbsent: true.
+  replace the space branchesSpace's qualities.pointers with outcome's map.
+  Return name: $validName, deleted: true, alreadyAbsent: false.

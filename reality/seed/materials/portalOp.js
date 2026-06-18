@@ -41,6 +41,14 @@ import { IbpError, IBP_ERR } from "../ibp/protocol.js";
 import { emitFact } from "../past/fact/facts.js";
 import { detectTargetKind, targetIdOf } from "./_targetShape.js";
 import { matterContentId } from "./matter/matterId.js";
+import { registerRoleWord } from "../present/word/roleWordRegistry.js";
+
+// Self-register this module's co-located `.word` slice (CONVERTING.md): importing
+// portalOp.js (at seed boot, or in a DRY harness) registers it so
+// resolveRoleWord("portal", "form-portal") finds the world strand. The cut in the
+// handler runs it through the bridge with portalHostEnv(); the JS body is the
+// clean-miss fallback.
+registerRoleWord("portal", "form-portal", new URL("./portal.word", import.meta.url));
 
 // Matches the IBPA shapes a portal can point at. A portal opens onto
 // a different WORLD (different reality OR different branch); same

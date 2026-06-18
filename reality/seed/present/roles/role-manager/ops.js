@@ -42,6 +42,12 @@ import { registerRole, unregisterRole, getRole } from "../registry.js";
 import Being from "../../../materials/being/being.js";
 import { getSpaceRootId } from "../../../sprout.js";
 import { doVerb } from "../../../ibp/verbs/do.js";
+import { registerRoleWord } from "../../word/roleWordRegistry.js";
+
+// Self-register this module's co-located `.word` slice (CONVERTING.md): importing
+// ops.js (at seed boot, or in a DRY harness) registers it so
+// resolveRoleWord("role-manager", "set-world-signal") finds it.
+registerRoleWord("role-manager", "set-world-signal", new URL("./role-manager.word", import.meta.url));
 
 export function registerRoleManagerOps() {
   // The actual registerOperation call lives at module load (side effect),
@@ -54,8 +60,9 @@ export function registerRoleManagerOps() {
 const ROLE_NAME_RE = /^[a-z][a-z0-9-]*(:[a-z][a-z0-9-]+)?$/;
 // Same regex for world-signal namespaces (extension-style). Keys can be
 // nested dot-paths; we constrain each segment to the kebab-case
-// convention so authoring stays predictable.
-const NS_SEGMENT_RE = /^[a-z][a-z0-9-]*$/;
+// convention so authoring stays predictable. Exported so the `.word`
+// host glue (role-managerHost.js) validates against the SAME regex.
+export const NS_SEGMENT_RE = /^[a-z][a-z0-9-]*$/;
 
 const VALID_COGNITION = new Set(["llm", "human", "scripted"]);
 
@@ -253,6 +260,30 @@ registerOperation("delete-role", {
 // uniform. Direct set-space writes still work for ops that already
 // know the reality-root id; this is the authoring convenience.
 
+// set-world-signal's world strand is role-manager.word, run through the bridge.
+// CALLER mode (no `through`): the signal-publish set-space attributes to the real
+// publisher, not I_AM. Returns the {published,namespace,key,value} result, or null
+// on a clean miss (not converted / no moment) so the JS body runs.
+async function _setWorldSignalViaWord({ namespace, key, value, summonCtx }) {
+  if (!summonCtx) return null;
+  const { resolveRoleWord, runRoleWord } = await import("../../word/roleWordRegistry.js");
+  const ir = resolveRoleWord("role-manager", "set-world-signal", summonCtx?.actorAct?.branch);
+  if (!ir) return null;
+  const { roleManagerHostEnv } = await import("./role-managerHost.js");
+  const branch = summonCtx?.actorAct?.branch || "0";
+  try {
+    const { result } = await runRoleWord(ir, {
+      summonCtx, branch,
+      trigger: { namespace, key, value, branch },
+      env: { host: roleManagerHostEnv() },
+    });
+    return result || null;
+  } catch (e) {
+    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
+    throw e;
+  }
+}
+
 registerOperation("set-world-signal", {
   targets: ["being", "space", "stance"],
   ownerExtension: "seed",
@@ -263,6 +294,12 @@ registerOperation("set-world-signal", {
     value:     { type: "text", label: "Value (JSON for non-strings; bare for strings)", required: true },
   },
   handler: async ({ params, identity, summonCtx }) => {
+    // THE CONVERSION: set-world-signal's world strand is role-manager.word, run through
+    // the bridge in CALLER mode (no `through` — the signal attributes to the publisher).
+    // The JS below is the clean-miss fallback.
+    const viaWord = await _setWorldSignalViaWord({ namespace: params?.namespace, key: params?.key, value: params?.value, summonCtx });
+    if (viaWord) return viaWord;
+
     const namespace = String(params?.namespace || "").trim();
     const key       = String(params?.key       || "").trim();
     if (!namespace || !NS_SEGMENT_RE.test(namespace)) {
@@ -347,7 +384,7 @@ async function findRoleReferences(name) {
 // like "true"/"false"/"null" map to their literal counterparts; bare
 // numbers parse as numbers; anything else is a string. Objects/arrays
 // are passed through if the caller already handed us a parsed value.
-function parseSignalValue(raw) {
+export function parseSignalValue(raw) {
   if (raw === null || raw === undefined) return null;
   if (typeof raw !== "string") return raw; // already a JSON shape
   const trimmed = raw.trim();

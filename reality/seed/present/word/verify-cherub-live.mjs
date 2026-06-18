@@ -138,6 +138,17 @@ try {
   const born = await findByName("being", "tabor-prime", branch);
   born ? ok(`@tabor-prime materializes after seal (${String(born.id).slice(0, 10)}…)`) : bad(`@tabor-prime materializes`, "no row");
 
+  // double-push guard (engine's flag): a LIVE plain-verb emit() with a SHARED
+  // deltaF (as runRoleWord sets) must list the fact ONCE, not twice. cherub.word
+  // never reaches emit() (all doVerb/form-being), but the rich slices will, so
+  // probe emit() directly: a be-op != form-being falls through evalAct to emit().
+  const probeSc = { actId: randomUUID(), actorAct: { branch, nameId: "i-am" }, identity: { beingId: String(cherub.id), name: "i-am", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [], _inOp: true };
+  const probeCtx = { dryRun: false, branch, summonCtx: probeSc, identity: probeSc.identity, env: { iam: "i-am" }, bindings: {}, flows: [], deltaF: probeSc.deltaF /* SHARED, as runRoleWord does */ };
+  await evaluate([{ kind: "act", verb: "be", op: "probe-emit", by: "I" }], probeCtx);
+  probeSc.deltaF.length === 1
+    ? ok(`live plain emit() lists the fact ONCE (no double-push on shared deltaF)`)
+    : bad(`emit() double-push guard`, `deltaF.length=${probeSc.deltaF.length} (expected 1)`);
+
   console.log(`\n  ${pass} passed, ${fail} failed`);
   await mongoose.connection.db.dropDatabase();
   await mongoose.disconnect();

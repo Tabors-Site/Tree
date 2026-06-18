@@ -136,6 +136,112 @@ const EFFECT_RULES = [
   // "record the being's lineage." -> do:set-being qualities.lineage (mother Cherub, father Arrival)
   [/^record the being's lineage\.$/i,
     (m, c) => vesselAct(c, "do", "set-being", { kind: "being", ref: "child" }, { field: "qualities.lineage", value: { mother: c.vessel, father: "Arrival" } })],
+
+  // §7 host escape: "host: searchByName(name) as candidates." -> an act that calls a
+  // host builtin and binds its result (the session/transport strand stays host; this is
+  // how the .word reaches it). evalAct runs act.host via callHost + binds act.bind.
+  [/^host:\s*(\w+)\(([^)]*)\)\s*(?:as\s+(\w+))?\.?$/i,
+    (m) => ({ kind: "act", verb: "do", op: m[1], host: m[1], params: { args: argList(m[2], "$") }, ...(m[3] ? { bind: m[3] } : {}) })],
+
+  // ── §5 mark + §7 control-flow terminators (inline body effects) ──────────────
+  // a reflexive state-mark (§5): "the being is found." -> a flow-local flag a sibling
+  // `if (no being was found)` reads (inferFlag canonicalizes both to one name).
+  [/^the ([\w.-]+) (?:is|are|was|were) (\w+)\.$/i,
+    (m) => ({ kind: "mark", flag: inferFlag(`${m[1]} ${m[2]}`) || camelKey(`${m[1]} ${m[2]}`) })],
+  // break (§3): halts the nearest foreach. "Cherub stops the search." / "stop."
+  [/\bstops? the search\.$/i, () => ({ kind: "break" })],
+  [/^stop\.$/i,              () => ({ kind: "break" })],
+  // refuse (§7): error halt, lays no fact. "Cherub refuses the connection with "X."" / "refuse with "X.""
+  // optional `as <code>` carries the IBP error code (kebab → SCREAMING_SNAKE, e.g.
+  // `as invalid-input` → INVALID_INPUT) so the cut maps the WordRefusal to the exact
+  // IbpError the JS threw (default FORBIDDEN when absent). evalRefuse carries node.code.
+  // `^(?!If\b)`: don't match a refuse buried in an inline `If <cond>, refuse …` — that
+  // line is the inline-if's (below), which carries the condition; the bare consequence
+  // `refuse with "…"` (no leading If) still matches here and inside parseInlineThen.
+  [/^(?!If\b).*?\brefuses?\b.*?\bwith\s+"([^"]+)"(?:\s+as\s+([\w-]+))?\.?$/i,
+    (m) => ({ kind: "refuse", message: m[1], ...(m[2] ? { code: m[2].toUpperCase().replace(/-/g, "_") } : {}) })],
+  // return (§7): success terminator. "Return the address, beingId, name, and seatBranch."
+  // An item "key: value" is an extra kv (literal or flag ref): "Return token, owned: true."
+  [/^Return (.+)\.$/i, (m) => {
+    const values = [], extra = {};
+    for (const it of splitItems(m[1])) {
+      const kv = it.match(/^([\w][\w.-]*)\s*:\s*(.+)$/);
+      if (kv) { const r = oper(kv[2]); extra[camelKey(kv[1])] = r.ref !== undefined ? { ref: r.ref } : r.value; }
+      else values.push(camelKey(it));
+    }
+    return { kind: "return", values, ...(Object.keys(extra).length ? { extra } : {}) };
+  }],
+  // inline if (§2): "If <cond>, X, and Y." -> { if, then:[X,Y] }. The HINGE between the
+  // conditional frame and the consequence reads as a comma, `then`, or `→`/`->` — the same
+  // separating work the colon does for the block form (`If <cond>:` + indent).
+  [/^If (.+?)(?:,| then|\s*(?:→|->))\s+(.+)\.$/i, (m, c) => ({ kind: "if", cond: parseCond(m[1], c), then: parseInlineThen(m[2], c) })],
+  // ── SEE: the READ verb (substrate query, NO fact). evalSee consumes `kind:"see"`.
+  // The wall: reads are VERBS, not host: escapes (only crypto/computation stays host).
+  // PREDICATE (being-tree): "see whether the caller is an ancestor of the candidate as asAncestor."
+  [/^see whether (.+?) is an ancestor of (.+?) as (\w+)\.$/i,
+    (m) => ({ kind: "see", of: { ref: refKey(m[2]) }, descendsFrom: { ref: refKey(m[1]) }, bind: m[3] })],
+  // or stated as descent: "see whether the child descends from the ancestor as isDesc."
+  [/^see whether (.+?) descends from (.+?) as (\w+)\.$/i,
+    (m) => ({ kind: "see", of: { ref: refKey(m[1]) }, descendsFrom: { ref: refKey(m[2]) }, bind: m[3] })],
+  // PREDICATE (authority walk): "see whether the caller has credential authority over
+  // the target as authorized." → evalSee resolves `hasAuthorityOver` (the being-tree
+  // authority fold), exactly as `descendsFrom` resolves via isAncestorOf. The `credential`
+  // flag picks the being→being re-mint walk (hasCredentialAuthority); without it, the
+  // name→being walk (hasAuthorityOver). Contract per the engine's evalSee.
+  [/^see whether (.+?) has( credential)? authority over (.+?) as (\w+)\.$/i,
+    (m) => ({ kind: "see", of: { ref: refKey(m[1]) }, hasAuthorityOver: { ref: refKey(m[3]) }, ...(m[2] ? { credential: true } : {}), bind: m[4] })],
+  // READ a quality fresh from the projection: "see the candidate's trueName as owner."
+  [/^see the (.+?)'s (\w+) as (\w+)\.$/i,
+    (m) => ({ kind: "see", of: { ref: refKey(m[1]) }, read: m[2], fresh: true, bind: m[3] })],
+  // QUERY beings by name: "see the beings named $name as found." (plural → list; singular → one)
+  [/^see the (\w+) named (.+?) as (\w+)\.$/i,
+    (m) => ({ kind: "see", of: m[1].replace(/s$/i, ""), where: { name: m[2].trim().replace(/^"|"$/g, "") }, ...(/s$/i.test(m[1]) ? {} : { one: true }), bind: m[3] })],
+  // SEE-OP call (the host:→see dissolution): "see mint-credential as credential" /
+  // "see resolve-source(subject, to) as fromSpace". A registered see-op run as a VERB:
+  // perception (a substrate READ) or a pure COMPUTE (perceiving an output from inputs) —
+  // either way it lays NO fact, the verb IS the nature (no `do`, no tag). The op IS the
+  // backing (crypto, a lookup, a walk). args optional + $-ref'd. The negative lookahead
+  // keeps `see the …` (READ/QUERY) and `see whether …` (PREDICATE) on their own rules.
+  [/^see\s+(?!the\b|whether\b)([\w-]+)(?:\(([^)]*)\))?\s+as\s+(\w+)\.?$/i,
+    (m) => ({ kind: "see", op: m[1], args: m[2] !== undefined ? argList(m[2], "$") : [], bind: m[3] })],
+
+  // ── WRITE: the substrate write verb (THE WALL's write side) → do:set-<kind>.
+  // TARGETED write (a BOUND entity, not the flow's vessel) + a literal or $-ref field (for
+  // dynamic paths). "set the space branchesSpace's qualities.pointers to $next." /
+  // "set the space root's $signalField to $value." The kind word picks set-being/space/matter.
+  [/^set the (being|space|matter) ([\w-]+)'s (\$?[\w.]+) to (.+?)\.$/i,
+    (m, c) => writeAct(c, m[1], m[3], m[4], undefined, m[2])],
+  [/^replace the (being|space|matter) ([\w-]+)'s (\$?[\w.]+) with (.+?)\.$/i,
+    (m, c) => writeAct(c, m[1], m[3], m[4], false, m[2])],
+  // "set the being's password to $credential.hash." (the vessel; merge = op default, true)
+  [/^set the (\w+)'s ([\w.]+) to (.+?)\.$/i,
+    (m, c) => writeAct(c, m[1], m[2], m[3])],
+  // "replace the being's qualities.auth with $fresh." (force a full replace, merge:false)
+  [/^replace the (\w+)'s ([\w.]+) with (.+?)\.$/i,
+    (m, c) => writeAct(c, m[1], m[2], m[3], false)],
+  // "merge $patch into the being's qualities.auth." (force merge:true)
+  [/^merge (.+?) into the (\w+)'s ([\w.]+)\.$/i,
+    (m, c) => writeAct(c, m[2], m[3], m[1], true)],
+
+  // ── CALL: reach another being (the fifth verb's SPATIAL face), Gen 2:16's two hinges.
+  // evalCall resolves `of` (a {ref}, via getPath) to its stance, the caller to the `from`,
+  // dispatches the summon machinery, and lays the reach as a fact through the stamper,
+  // attributed to the caller. Surface verb `call`; the backing stays `summon` until the
+  // rename. IR keys are the hinge words: `of` (target), `saying` (talk content, intent
+  // defaults "message"), `to` (kebab intent, matched against canSummon) + `with` (payload).
+  //   talk (the quotative hinge): "call the owner, saying $request as queued."
+  [/^call\s+(.+?),\s*saying\s+(.+?)(?:\s+as\s+(\w+))?\.?$/i,
+    (m) => ({ kind: "call", of: { ref: refKey(m[1]) }, saying: valueExpr(m[2]), ...(m[3] ? { bind: m[3] } : {}) })],
+  //   summon-to-act: "call the owner to role-request, with $found as queued." (with? optional)
+  [/^call\s+(.+?)\s+to\s+([\w-]+)(?:,\s*with\s+(.+?))?(?:\s+as\s+(\w+))?\.?$/i,
+    (m) => ({ kind: "call", of: { ref: refKey(m[1]) }, to: m[2].toLowerCase(), ...(m[3] !== undefined ? { with: valueExpr(m[3]) } : {}), ...(m[4] ? { bind: m[4] } : {}) })],
+
+  // generic acts (LAST, the catch-all): "<Subject> <verbs> the <obj>." (SVO) and
+  // "<verb> the <obj>." (imperative, the flow's actor). Specific rules above win first.
+  [/^([A-Z][\w.-]*) (\w+) (?:the|a|an) ([\w.-]+)\.$/,
+    (m, c) => ({ kind: "act", verb: "do", op: verb(m[2]), of: objRef(m[3], c), by: "I", through: m[1] })],
+  [/^(\w+) (?:the|a|an) ([\w.-]+)\.$/i,
+    (m, c) => ({ kind: "act", verb: "do", op: verb(m[1]), of: objRef(m[2], c), by: "I", ...(c.vessel ? { through: c.vessel } : {}) })],
 ];
 
 // ── headers (the trigger line of a multi-effect flow, ends with ":") ──────────
@@ -150,6 +256,17 @@ function parseHeader(line, c) {
   if ((m = line.match(/^When it is (\w+):$/i))) {
     c.vessel = null;
     return { kind: "flow", when: { state: { [c.stateVar]: m[1] } }, binds: [] };
+  }
+  // §0 op-trigger with a `with` bind clause: "When Cherub connects with a name and a password:"
+  // The trigger's payload params bind into flow scope (downstream conds read them).
+  if ((m = line.match(/^When (.+?) with (.+):$/i))) {
+    c.vessel = null;
+    return { kind: "flow", when: { op: { clause: m[1].trim() } }, binds: parseBinds(m[2]) };
+  }
+  // §0 generic event trigger: "When a guest enters:" (a bare act-as-event, no `happens`)
+  if ((m = line.match(/^When (.+):$/i))) {
+    c.vessel = null;
+    return { kind: "flow", when: { event: m[1].trim() }, binds: [] };
   }
   return null;
 }
@@ -219,18 +336,8 @@ export function parse(source) {
       const header = parseHeader(line, c);
       if (!header) throw new Error(`word parser: cannot parse flow header:\n  ${line}`);
       const headerIndent = indentOf(raw[i]);
-      const effects = [];
-      while (i + 1 < raw.length) {
-        const bodyRaw = raw[i + 1];
-        const bodyLine = bodyRaw.trim();
-        if (!bodyLine) break;                            // a blank line ends the body
-        if (indentOf(bodyRaw) <= headerIndent) break;    // a dedent ends the body
-        i++;
-        guardForward(bodyLine);                          // no reasoning inside a flow body either
-        const eff = parseEffect(bodyLine, c);
-        if (!eff) throw new Error(`word parser: cannot parse effect:\n  ${bodyLine}`);
-        effects.push(eff);
-      }
+      const { nodes: effects, nextI } = collectBody(raw, i, headerIndent, c); // §0/§2/§3 nesting
+      i = nextI;
       nodes.push({ ...header, effects });
       continue;
     }
@@ -255,6 +362,240 @@ function apply(line, c, rules) {
   return null;
 }
 
+// ── §0/§2/§3 recursive body: an indented body may NEST blocks (if/foreach) ──────
+// Collects every line deeper than parentIndent into a node list (a flow's effects,
+// or an if's then/else, or a foreach's body). A `:`-opener (If/For each/Otherwise)
+// recurses for its own deeper sub-body; everything else is an inline effect. Blank
+// and comment lines are skipped, never end a body (a dedent does). Returns the nodes
+// + the index consumed so the caller resumes after the block.
+function collectBody(raw, startI, parentIndent, c) {
+  const out = [];
+  let i = startI;
+  while (i + 1 < raw.length) {
+    const r = raw[i + 1];
+    const line = r.trim();
+    if (!line || line.startsWith("#")) { i++; continue; }   // skip blanks/comments within a body
+    if (indentOf(r) <= parentIndent) break;                 // a dedent ends this body
+    i++;
+    guardForward(line);                                     // no reasoning inside a body either
+    if (line.endsWith(":")) {
+      const opener = parseBlockOpener(line, c);
+      if (!opener) throw new Error(`word parser: cannot parse block:\n  ${line}`);
+      if (opener.type === "match") {                          // §9: the body holds cases, not effects
+        const mc = collectCases(raw, i, indentOf(r), c);
+        i = mc.nextI;
+        out.push({ kind: "match", on: opener.on, cases: mc.cases });
+      } else {
+        const sub = collectBody(raw, i, indentOf(r), c);
+        i = sub.nextI;
+        if (opener.type === "else") {
+          const prev = out[out.length - 1];
+          if (!prev || prev.kind !== "if") throw new Error(`word parser: "Otherwise:" with no preceding "If:":\n  ${line}`);
+          prev.else = sub.nodes;
+        } else if (opener.type === "if") {
+          out.push({ kind: "if", cond: opener.cond, then: sub.nodes });
+        } else { // foreach
+          out.push({ kind: "foreach", bind: opener.bind, in: opener.in, ...(opener.ordered ? { ordered: true } : {}), body: sub.nodes });
+        }
+      }
+    } else {
+      const eff = parseEffect(line, c);
+      if (!eff) throw new Error(`word parser: cannot parse effect:\n  ${line}`);
+      out.push(eff);
+    }
+  }
+  return { nodes: out, nextI: i };
+}
+
+// §9 match cases: a Match body holds `For <label>:` cases + an `Otherwise:` default,
+// each opening its own indented effect body. evalMatch dispatches String(getPath(on))
+// === label, else the default — a value-driven type switch kept a flat surface.
+function collectCases(raw, startI, parentIndent, c) {
+  const cases = [];
+  let i = startI;
+  while (i + 1 < raw.length) {
+    const r = raw[i + 1];
+    const line = r.trim();
+    if (!line || line.startsWith("#")) { i++; continue; }
+    if (indentOf(r) <= parentIndent) break;
+    i++;
+    let m;
+    if ((m = line.match(/^For (?!each\b)(.+?):$/i))) {            // a labeled case
+      const sub = collectBody(raw, i, indentOf(r), c); i = sub.nextI;
+      cases.push({ label: matchLabel(m[1]), body: sub.nodes });
+    } else if (/^Otherwise:$/i.test(line)) {                       // the default case
+      const sub = collectBody(raw, i, indentOf(r), c); i = sub.nextI;
+      cases.push({ body: sub.nodes });
+    } else {
+      throw new Error(`word parser: a Match body expects "For <label>:" or "Otherwise:", got:\n  ${line}`);
+    }
+  }
+  return { cases, nextI: i };
+}
+function matchLabel(s) { return s.trim().replace(/^(a|an|the)\s+/i, "").toLowerCase(); } // the value a case dispatches on
+
+// a `:`-terminated block opener inside a body (vs parseHeader, the top-level flow head)
+function parseBlockOpener(line, c) {
+  let m;
+  if ((m = line.match(/^If (.+):$/i)))  return { type: "if", cond: parseCond(m[1], c) };       // §2 block
+  if (/^Otherwise:$/i.test(line))       return { type: "else" };                                // §2 else
+  if ((m = line.match(/^For each (\w+) in (.+?)(\s+in order)?:$/i)))                             // §3 foreach
+    return { type: "foreach", bind: m[1], in: parseSource(m[2], c), ordered: !!m[3] };
+  if ((m = line.match(/^Match (.+):$/i))) return { type: "match", on: refKey(m[1]) };           // §9 value dispatch
+  return null;
+}
+
+// §3 foreach source: `<ref>` | `<ref> whose <cond>` (filter) | `the <a> up to the <b>` (walk)
+function parseSource(text, c) {
+  let m;
+  if ((m = text.match(/^(.+?) whose (.+)$/i))) return { ref: refKey(m[1]), filter: parseCond(m[2], c) };
+  if ((m = text.match(/^the (.+?) up (?:the )?(.+?) to the (.+)$/i)))
+    return { walk: { from: refKey(m[2]), to: refKey(m[3]), direction: "up" } };
+  return { ref: refKey(text) };
+}
+
+// ── §1 condition: the parser lifts STRUCTURE only (connectives, negation, a
+// recognized test/flag skeleton); cond.js resolves MEANING. Leaves: {test}, {flag},
+// or a verbatim {clause} the engine resolves via host. ──────────────────────────
+function parseCond(text, c) {
+  const raw = text.trim();
+  let hm;
+  // an explicit host predicate cond: "host: isAncestorOf(caller, candidate)" -> resolvedBy
+  if ((hm = raw.match(/^host:\s*(\w+)\(([^)]*)\)$/i))) return { resolvedBy: hm[1], args: argList(hm[2]).map((r) => ({ ref: r })) };
+  const t = raw.replace(/\s*\(.*?\)\s*/g, " ").trim();              // drop parenthetical glosses ("(not remote)")
+  const ors = splitTop(t, /,?\s+or\s+/i);     // absorb a comma before the connective ("X, or Y")
+  if (ors.length > 1) return { any: ors.map((p) => parseCond(p, c)) };
+  const ands = splitTop(t, /,?\s+and\s+/i);   // ("X, and Y" -> no trailing comma on X)
+  if (ands.length > 1) return { all: ands.map((p) => parseCond(p, c)) };
+  return parseLeaf(t, c);
+}
+
+function parseLeaf(t, c) {
+  let s = t, negated = false;
+  if (/^no\s+/i.test(s))                          { negated = true; s = s.replace(/^no\s+/i, ""); }
+  else if (/\b(is|are|was|were|does|do)\s+not\b|\bisn't\b|\bdoesn't\b/i.test(s)) { negated = true; s = s.replace(/\s+not\b|n't\b/i, ""); }
+  else if (/\bnot\b/i.test(s))                    { negated = true; s = s.replace(/\bnot\s*/i, ""); }
+  const neg = (node) => (negated ? { ...node, negated: true } : node);
+  let m;
+  // DEIXIS (here/there/where): `there` sets the EXISTENTIAL context, `is/are` makes the
+  // claim within it — so "there is <X>" is a PRESENCE check, "there is no <X>" its absence.
+  // ≡ the bare `[no] <X>` flag, but reads as the natural conditional (the `If` is the
+  // WHERE — the conditional frame; the `:` is the HERE — the consequence that follows).
+  // "there is no caller" → absence of caller; "there is a candidate" → present.
+  if ((m = s.match(/^there\s+(?:is|are)\s+(no\s+|an?\s+)?(.+)$/i))) {
+    const absent = /^no\b/i.test((m[1] || "").trim());
+    const f = inferFlag(m[2]) || refKey(m[2]);
+    return (absent || negated) ? { negated: true, flag: f } : { flag: f };
+  }
+  // EXISTENCE predicates — the implicit "there is", since the conditional frame already
+  // carries it (you don't write the ceremony). All fold to the SAME presence flag as the
+  // bare `[no] <X>`:  "<X> exists" / "<X> is present" → present;  "<X> is missing|absent|
+  // gone" → absent;  "<X> does not exist" → (the negation block above already flipped it)
+  // absent. So `no caller` ≡ `there is no caller` ≡ `caller is missing` ≡ `caller does
+  // not exist`. The negative-existence words (missing/absent/gone) flip presence themselves.
+  if ((m = s.match(/^(.+?)\s+(?:is\s+|does\s+)?(exists?|present|missing|absent|gone)$/i))) {
+    const inherentlyAbsent = /^(missing|absent|gone)$/i.test(m[2]);
+    const finalAbsent = negated ? !inherentlyAbsent : inherentlyAbsent;
+    const f = inferFlag(m[1]) || refKey(m[1]);
+    return finalAbsent ? { negated: true, flag: f } : { flag: f };
+  }
+  // explicit test skeletons (8.md §1): equality is the pervasive case, then compare
+  if ((m = s.match(/^(.+?)\s+equals\s+(.+)$/i)))            return neg({ test: { op: "equals", path: refKey(m[1]), ...operand(m[2]) } });
+  if ((m = s.match(/^(.+?)\s+is at least\s+(.+)$/i)))       return neg({ test: { op: "compare", as: "ge", path: refKey(m[1]), against: refLit(m[2]) } });
+  if ((m = s.match(/^(.+?)\s+is at most\s+(.+)$/i)))        return neg({ test: { op: "compare", as: "le", path: refKey(m[1]), against: refLit(m[2]) } });
+  // a single bareword cond is a flow-local flag read: "signedIn", "asFather"
+  if (/^[A-Za-z]\w*$/.test(s.trim())) { const f = s.trim(); return negated ? { negated: true, flag: f } : { flag: f }; }
+  // a flow-local flag (a reflexive state predicate, §5): "<subj> (is|was) <participle>"
+  const flag = inferFlag(s);
+  if (flag) return negated ? { negated: true, flag } : { flag };
+  // KIND check (§1): "the subject is a space" / "the subject's kind is a matter" -> a
+  // test on the bound entity's STRUCTURAL kind. The ARTICLE ("a"/"an") distinguishes a
+  // kind-check from a state predicate (`is remote`, no article). The bridge binds the
+  // target as an entity {kind, id}, so `subject.kind` reads the kind off the binding (a
+  // presence/kind gate the cond resolver already models — never a host compute).
+  if ((m = s.match(/^(?:the )?(.+?)(?:'s kind)? (?:is|are) (?:a|an) (\w+)$/i))) return neg({ test: { op: "equals", path: refKey(m[1]) + ".kind", value: m[2].toLowerCase() } });
+  // EQUALITY via `is` (the connection-layer upgrade so `is` reads for `equals`): a QUOTED
+  // literal RHS or a REF RHS is an equality test; a bareword RHS falls through to the
+  // flag/predicate below (so `the being is found` stays a flag). `the kind is "space"` /
+  // `the to is the subject's id` read as equality — the quotes / ref-shape are the
+  // discriminator, exactly as `equals` already disambiguates value-vs-ref.
+  if ((m = s.match(/^(.+?)\s+(?:is|are)\s+(.+)$/i))) {
+    const rhs = m[2].trim();
+    if (/^".*"$/.test(rhs)) return neg({ test: { op: "equals", path: refKey(m[1]), value: rhs.slice(1, -1) } });
+    const r = oper(rhs);
+    if (r.ref !== undefined) return neg({ test: { op: "equals", path: refKey(m[1]), against: { ref: r.ref } } });
+  }
+  // "<X> is <pred>" where <pred> is NOT a state-flag word: a host-resolved domain
+  // predicate over X ("the candidate is remote" -> remote(candidate), the host helper
+  // normalizes the field defensively). Convention: `is <word>` = predicate, `equals
+  // <value>` = equality (so values never mis-route here).
+  if ((m = s.match(/^(.+?)\s+(?:is|are)\s+(\w+)$/i))) return neg({ resolvedBy: m[2].toLowerCase(), args: [{ ref: refKey(m[1]) }] });
+  // else a verbatim leaf the engine resolves (host predicate / state read)
+  return neg({ clause: t.trim() });
+}
+
+// split on a separator only at the TOP level, NEVER inside a quoted "..." span, so a
+// refuse message with commas (like "expected 0, 1, 1a") survives as one piece. Mask
+// quoted spans to null-delimited placeholders, split, then restore.
+function splitTop(s, re) {
+  const NUL = String.fromCharCode(0);
+  const held = [];
+  const masked = (s || "").replace(/"[^"]*"/g, (q) => { held.push(q); return NUL + (held.length - 1) + NUL; });
+  return masked.split(re).map((x) => x.replace(new RegExp(NUL + "([0-9]+)" + NUL, "g"), (_, i) => held[+i]).trim()).filter(Boolean);
+}
+// a host-call argument list: "name, password" -> ["$name","$password"] (or bare refs)
+function argList(str, prefix = "") { return splitTop(str || "", /,\s*/).map((a) => prefix + refKey(a)); }
+// a test operand. A bareword (dj, stop, match) is a string LITERAL; a number/bool is
+// a literal; only `$x`, an article phrase (`the quorum`), a possessive, or a dotted
+// path is a REF (a binding read). equals/compare carry it as `value` (against literal)
+// or `against:{ref}` per cond.js's resolveOperand.
+function operand(v) { const r = oper(v); return r.ref !== undefined ? { against: { ref: r.ref } } : { value: r.value }; }
+function refLit(v) { const r = oper(v); return r.ref !== undefined ? { ref: r.ref } : r.value; }
+// a right-side value (call content, etc.): a quoted "..." is a string literal; anything
+// else is refLit (a {ref} for $/possessive/dotted, a bareword-literal otherwise).
+function valueExpr(v) { const x = v.trim(); return /^".*"$/.test(x) ? x.replace(/^"|"$/g, "") : refLit(x); }
+function oper(v) {
+  const x = v.trim();
+  if (/^".*"$/.test(x)) return { value: x.slice(1, -1) };  // a quoted literal FIRST, so "a. b." isn't mistaken for a dotted ref by the path check below
+  if (x.startsWith("$")) return { ref: refKey(x.slice(1)) };
+  if (/^true$/i.test(x)) return { value: true };
+  if (/^false$/i.test(x)) return { value: false };
+  if (/^-?\d+(\.\d+)?$/.test(x)) return { value: Number(x) };
+  if (/'s\b/.test(x)) return { ref: camelKey(x) };  // possessive: kebab props (reset-at) resolve to the stored camelCase key (resetAt)
+  if (/^(the|its|his|her|their|a|an)\s+/i.test(x) || x.includes(".")) return { ref: refKey(x) };
+  return { value: x }; // a bareword -> a string literal
+}
+// a dotted reference: strip a leading article, keep possessive/dotted paths as a key
+function refKey(s) { return s.trim().replace(/[,.;:]+$/, "").replace(/^(the|a|an)\s+/i, "").replace(/'s\s+/g, ".").replace(/\s+/g, "-"); }
+
+// inferFlag (§5): a reflexive state predicate -> a DETERMINISTIC flow-local flag, so a
+// mark ("the being is found") and a sibling read ("if no being was found") name the
+// same flag. Strip articles + auxiliaries, camelCase the content words. Null if it
+// isn't a state predicate (so parseLeaf falls through to a test/clause).
+const FLAG_ART = /^(a|an|the|its|his|her|their|that|this)$/i;
+const FLAG_AUX = /^(is|are|was|were|be|been|has|have|had)$/i; // NOT "being" — that's the subject noun, not the gerund aux, in our .word
+const FLAG_STATE = new Set(["found", "owned", "born", "set", "done", "inhabited", "passed", "live", "sealed", "released", "ready", "verified", "ancestor", "asfather", "chosen", "named"]);
+function inferFlag(clause) {
+  const words = clause.trim().replace(/[."]/g, "").split(/\s+/).filter(Boolean);
+  const content = words.filter((w) => !FLAG_ART.test(w) && !FLAG_AUX.test(w));
+  if (content.length < 1 || content.length > 3) return null;
+  const last = content[content.length - 1].toLowerCase();
+  const stateLike = /(ed|en)$/.test(last) || FLAG_STATE.has(last);
+  if (!stateLike) return null;
+  return content.map((w, i) => (i === 0 ? w.toLowerCase() : w[0].toUpperCase() + w.slice(1))).join(""); // preserve camelCase in the rest (asFather, not Asfather)
+}
+
+// the inline-then of "If <cond>, X, and Y." — a comma/and-joined list of effects
+function parseInlineThen(rest, c) {
+  return splitTop(rest, /,\s*(?:and\s+)?|\s+and\s+/i).map((part) => {
+    const eff = parseEffect(part.trim().replace(/\.$/, "") + ".", c);
+    if (!eff) throw new Error(`word parser: cannot parse inline-then effect:\n  ${part}`);
+    return eff;
+  });
+}
+// "the being's address, beingId, ..." -> ["address","beingId",...] (return values)
+function camelKey(s) { return refKey(s).replace(/-(\w)/g, (_, ch) => ch.toUpperCase()); }
+
 // "a name and a password" -> ["name", "password"] (binds from a `with` clause)
 function parseBinds(clause) {
   if (!clause) return [];
@@ -271,6 +612,30 @@ function vesselAct(c, verbName, op, of, params) {
   if (of) a.of = of;
   if (params) a.params = params;
   return a;
+}
+// THE WALL's write side: a generic substrate WRITE → a do:set-<kind> act binding
+// a field to a value. `noun` names the bound target (kind = being default, or
+// space/matter when the noun is literally that); `field` is a dotted path; `value`
+// is a literal or a $-ref (dotted ok). Merge follows the set-op default (true)
+// unless forced. This is what collapses the host: write-escapes into verbs.
+function writeAct(c, noun, field, value, merge, ref) {
+  const k = noun.toLowerCase();
+  const kind = k === "space" ? "space" : k === "matter" ? "matter" : "being";
+  // a $-prefixed field is a COMPUTED path — a {ref} resolved at eval (dynamic writes like
+  // qualities.world.<ns>.<key>); a plain token is the literal dotted path.
+  const fld = typeof field === "string" && field.startsWith("$") ? { ref: refKey(field.slice(1)) } : field;
+  // resolve the right-side value: a quoted "..." is a literal; a legacy $ref stays a raw
+  // $-string (resolveValue handles it); a possessive/dotted path becomes a {ref} (one ref
+  // shape, resolved by getPath in writes, returns, and conditions alike); a bareword is a
+  // literal.
+  const v = value.trim();
+  const resolved = /^".*"$/.test(v) ? v.replace(/^"|"$/g, "")
+    : v.startsWith("$") ? v
+    : refLit(v);
+  const params = { field: fld, value: resolved };
+  if (merge !== undefined) params.merge = merge;
+  // `ref` (given by the targeted-write form) names a BOUND entity; else the vessel/noun.
+  return vesselAct(c, "do", "set-" + kind, { kind, ref: ref !== undefined ? refKey(ref) : k }, params);
 }
 // state-watch flow (rules 6, 12): fires when the state dimension holds `value`.
 function stateFlow(stateVar, value, effect) {
@@ -301,5 +666,5 @@ function objRef(obj, c) {
 function stripArticle(s) { return s.trim().replace(/^(a|an|the)\s+/i, ""); }
 function splitItems(s) { return s.split(/,\s*and\s+|,\s*or\s+|\s+and\s+|\s+or\s+|,\s*/i).map((x) => x.trim()).filter(Boolean); }
 function indentOf(raw) { return (raw.match(/^(\s*)/)[1] || "").length; }
-function verb(v) { return v.endsWith("s") ? v.slice(0, -1) : v; } // strikes -> strike
+function verb(v) { return /ss$/.test(v) ? v : v.endsWith("s") ? v.slice(0, -1) : v; } // strikes -> strike; pass stays pass
 function capitalize(s) { return s[0].toUpperCase() + s.slice(1); } // drummer -> Drummer (the bearer)

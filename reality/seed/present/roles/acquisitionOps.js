@@ -35,6 +35,13 @@ import { getRoleSpecForGrant } from "./spaceLookup.js";
 import { normalizeAcquisition, alreadyHoldsRole } from "./acquisition.js";
 import { loadOrFold } from "../../materials/projections.js";
 import { I_AM } from "../../materials/being/seedBeings.js";
+import { registerRoleWord } from "../word/roleWordRegistry.js";
+
+// Self-register this module's co-located `.word` slices (CONVERTING.md): importing
+// acquisitionOps.js (at seed boot, or in a DRY harness) registers them so
+// resolveRoleWord("acquisition", <op>) finds them.
+registerRoleWord("acquisition", "take-role", new URL("./take-role.word", import.meta.url));
+registerRoleWord("acquisition", "ask-role", new URL("./ask-role.word", import.meta.url));
 
 // ──────────────────────────────────────────────────────────────────
 // ask-role
@@ -59,6 +66,11 @@ registerOperation("ask-role", {
     if (!hostSpaceId) {
       throw new IbpError(IBP_ERR.INVALID_INPUT, "ask-role: target must be a space");
     }
+
+    // THE CONVERSION: ask-role's world strand is ask-role.word, run through the bridge.
+    // The JS below is the clean-miss fallback.
+    const viaWord = await _askRoleViaWord({ caller: identity.beingId, role: roleName, space: hostSpaceId, summonCtx });
+    if (viaWord) return viaWord;
 
     const branch = summonCtx?.actorAct?.branch || "0";
     const { spec, hostSpaceId: foundHost } = await getRoleSpecForGrant(
@@ -188,6 +200,56 @@ registerOperation("ask-role", {
 // take-role
 // ──────────────────────────────────────────────────────────────────
 
+// The bridge into take-role.word: run the slice's CONTROL strand (the gate chain +
+// idempotency) through the evaluator with the acquisition host escapes; return the
+// {role, anchorSpaceId, granted|already} result, or null on a clean miss (not converted /
+// no moment) so the JS handler runs. The grant fact lands on the real moment. A WordRefusal
+// (not installed / not grabbable) becomes the same IbpError the JS threw.
+// ask-role's world strand is ask-role.word (the gate chain + the asked-policy §9 Match).
+// Same cut shape as take-role: prefer the bridge, the JS body is the clean-miss fallback.
+// The auto path's grant is I_AM-authority (like take-role); the queue path reaches the
+// owner with the CALL verb (see owner-of + see role-request build the payload, which keeps
+// the asker identified in the inbox content regardless of the call envelope's `from`).
+async function _askRoleViaWord({ caller, role, space, summonCtx }) {
+  if (!summonCtx) return null;
+  const { resolveRoleWord, runRoleWord } = await import("../word/roleWordRegistry.js");
+  const ir = resolveRoleWord("acquisition", "ask-role", summonCtx?.actorAct?.branch);
+  if (!ir) return null;
+  const { acquisitionHostEnv } = await import("./acquisitionHost.js");
+  const branch = summonCtx?.actorAct?.branch || "0";
+  try {
+    const { result } = await runRoleWord(ir, {
+      summonCtx, branch,
+      trigger: { caller: String(caller), role: String(role), space: String(space), branch },
+      env: { host: acquisitionHostEnv() },
+    });
+    return result || null;
+  } catch (e) {
+    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.FORBIDDEN, e.message);
+    throw e;
+  }
+}
+
+async function _takeRoleViaWord({ caller, role, space, summonCtx }) {
+  if (!summonCtx) return null;
+  const { resolveRoleWord, runRoleWord } = await import("../word/roleWordRegistry.js");
+  const ir = resolveRoleWord("acquisition", "take-role", summonCtx?.actorAct?.branch);
+  if (!ir) return null;
+  const { acquisitionHostEnv } = await import("./acquisitionHost.js");
+  const branch = summonCtx?.actorAct?.branch || "0";
+  try {
+    const { result } = await runRoleWord(ir, {
+      summonCtx, branch,
+      trigger: { caller: String(caller), role: String(role), space: String(space), branch },
+      env: { host: acquisitionHostEnv() },
+    });
+    return result || null;
+  } catch (e) {
+    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.FORBIDDEN, e.message);
+    throw e;
+  }
+}
+
 registerOperation("take-role", {
   targets: ["space"],
   ownerExtension: "seed",
@@ -207,6 +269,13 @@ registerOperation("take-role", {
     if (!hostSpaceId) {
       throw new IbpError(IBP_ERR.INVALID_INPUT, "take-role: target must be a space");
     }
+
+    // THE CONVERSION (2.md Phase 4): the take-role world-strand is take-role.word, run
+    // through the bridge. The JS below is the clean-miss fallback. The grant lands on the
+    // real moment (emitInternalGrant's beingId=I_AM — the policy IS the substrate's
+    // authority, grantedBy the taker); a WordRefusal becomes the same IbpError.
+    const viaWord = await _takeRoleViaWord({ caller: identity.beingId, role: roleName, space: hostSpaceId, summonCtx });
+    if (viaWord) return viaWord;
 
     const branch = summonCtx?.actorAct?.branch || "0";
     const { spec, hostSpaceId: foundHost } = await getRoleSpecForGrant(

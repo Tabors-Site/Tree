@@ -23,20 +23,36 @@
 //      Here the secret rides under the generic key "value", so a name-only
 //      sweep would miss it; we redact `value` when `field` is a secret path.
 //
-// What this deliberately does NOT touch: the auth handshake channel —
-// `identityToken` (birth/connect result) and the reset `plaintext`
-// (credential-reset result). Those are intentional one-time returns to
-// the asker, not chain/state surfaced for display.
+// What redactSecrets deliberately does NOT touch: the auth handshake channel —
+// `identityToken` (birth/connect result), the reset `plaintext` (credential-reset
+// result), and the key-export `privateKeyPem`/`mnemonic`. Those are intentional
+// one-time returns to the ASKER, so they must pass through serialize-out intact (the
+// asker needs them). The catch: a DO op's result is ALSO auto-recorded into an audit
+// fact (do.js summarizeAuditResult), which DID put those reveals on the durable chain
+// (rule 7 violation). So the audit-record boundary uses stripForAudit (below) to OMIT
+// the reveals — they reach the asker over the wire but never enter a fact.
 
 const REDACTED = "[redacted]";
 
-// Secret leaf keys, redacted wherever they appear by name.
+// Secret leaf keys, redacted wherever they appear by name (serialize-out).
 const SECRET_KEYS = new Set([
   "encryptedApiKey",
   "apiKey",
   "credentialPlain",
   "privateKeyEnc",
   "password",
+]);
+
+// One-time secret RETURNS to the asker (the wire reveal). redactSecrets leaves these
+// alone (the asker needs them), but they must NEVER be recorded in an audit fact, so
+// stripForAudit omits them. Kept separate from SECRET_KEYS precisely because the two
+// boundaries differ: serialize-out keeps the reveal, audit-record drops it.
+const REVEAL_KEYS = new Set([
+  "plaintext",      // credential-reset / credential-read
+  "privateKeyPem",  // key-export (the signing key, PEM)
+  "mnemonic",       // key-export (the same key as 24 BIP39 words)
+  "identityToken",  // birth/connect session token
+  "token",          // session token
 ]);
 
 // A set-<kind> fact whose `field` matches one of these has its sibling
@@ -102,5 +118,35 @@ export function redactSecrets(value, _seen = new WeakSet()) {
       out[k] = redactSecrets(v, _seen);
     }
   }
+  return out;
+}
+
+/**
+ * The audit-record boundary: return a deep copy of an op RESULT with secrets and
+ * one-time reveals OMITTED (not "[redacted]" — gone), so the durable audit fact
+ * (do.js summarizeAuditResult) never carries cleartext credentials/keys. Distinct from
+ * redactSecrets, which keeps the reveal for the asker on serialize-out. Also drops
+ * top-level `_`-prefixed plumbing keys (`_factTarget`, already consumed by
+ * resolveAuditTarget) since they are transport, not a recorded outcome. Never mutates.
+ */
+export function stripForAudit(value, _top = true, _seen = new WeakSet()) {
+  if (value === null || typeof value !== "object") return value;
+  if (_seen.has(value)) return value;
+  if (value instanceof Date || value instanceof RegExp) return value;
+  if (typeof value._bsontype === "string" && typeof value.toJSON === "function") return value;
+  _seen.add(value);
+
+  const omit = (k) =>
+    SECRET_KEYS.has(k) || REVEAL_KEYS.has(k) ||
+    (_top && typeof k === "string" && k.startsWith("_")); // transport plumbing (_factTarget)
+
+  if (Array.isArray(value)) return value.map((v) => stripForAudit(v, false, _seen));
+  if (value instanceof Map) {
+    const out = new Map();
+    for (const [k, v] of value) if (!omit(k)) out.set(k, stripForAudit(v, false, _seen));
+    return out;
+  }
+  const out = {};
+  for (const [k, v] of Object.entries(value)) if (!omit(k)) out[k] = stripForAudit(v, false, _seen);
   return out;
 }

@@ -23,9 +23,9 @@ flow ? ok(`it carries the birth flow with ${flow.effects?.length ?? 0} effects`)
   ? ok("the birth flow has the five world acts (home, form, owner, role, lineage)")
   : bad("the birth flow has five effects", `got ${flow?.effects?.length}`);
 
-resolveRoleWord("cherub", "connect") === null
-  ? ok("cherub:connect falls through to the JS handler (null)")
-  : bad("cherub:connect falls through", "expected null");
+resolveRoleWord("cherub", "connect")
+  ? ok("cherub:connect now resolves to a .word program too (registered built-in)")
+  : bad("cherub:connect resolves", "expected an IR — connect is a registered built-in");
 
 resolveRoleWord("dancer", "step") === null
   ? ok("an unregistered (role, op) falls through (null)")

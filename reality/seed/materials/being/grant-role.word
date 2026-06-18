@@ -1,0 +1,30 @@
+# grant-role.word — grant a role to a being (materials/being/ops.js, the grant-role op).
+# The capability grant the acquisition ops emit internally. The verb-level authorize has
+# already gated the grantor's `grant-role:<role>` capability (authAction), so this strand
+# is the input validation + the grant record.
+#
+# The WORLD effect is the dispatcher's auto-emitted grant-role fact — the being reducer
+# reads {role, anchor, grantedBy, grantedAt} from fact.params and appends to
+# qualities.rolesGranted. So the .word VALIDATES + computes the record and RETURNS it; the
+# cut enriches the op params with grantedBy/grantedAt so the auto-fact carries them.
+#
+# THE WALL: the gates are CONTROL (.word). roleExists is a registry lookup (host) and
+# grantStamp is the grant's wall-clock instant — the one external-resource escape (the
+# reality has no clock of its own; the timestamp rides a host fn, never the eval loop, per
+# the time-doctrine — same shape as credential-reset's resetAt). The bridge binds `caller`
+# (the grantor beingId), `target` (the grantee beingId), `role`, `anchorSpaceId`,
+# `anchorBeingId`.
+
+When a being grants a role to a being:
+  If no caller:
+    refuse with "grant-role: identity required (the grantor's beingId)" as unauthorized.
+  If no role:
+    refuse with "grant-role: role is required" as invalid-input.
+  If no anchorSpaceId, and no anchorBeingId:
+    refuse with "grant-role: one of anchorSpaceId or anchorBeingId is required" as invalid-input.
+  If anchorSpaceId, and anchorBeingId:
+    refuse with "grant-role: only one of anchorSpaceId or anchorBeingId may be set" as invalid-input.
+  see role-exists(role) as known.
+  If no known, refuse with "grant-role: role is not registered" as invalid-input.
+  see grant-stamp() as grantedAt.
+  Return granted: true, role: $role, granteeBeingId: $target, anchorSpaceId: $anchorSpaceId, anchorBeingId: $anchorBeingId, grantedBy: $caller, grantedAt: $grantedAt.

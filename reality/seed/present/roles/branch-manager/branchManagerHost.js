@@ -1,0 +1,93 @@
+// branchManagerHost.js — the host env for branch-manager.word's `host:` escapes (8.md §6/§7).
+//
+// The CONTROL strand (the gate chain: identity present, name valid, canonical valid,
+// .branches space resolved) is the `.word`; the genuine computation + the heaven-routed
+// reads + the lone WORLD write STAY host. This is the thin adapter that wires the SAME
+// branchRegistry primitives the set-pointer JS handler imports into ctx.env.host, so the
+// `.word` reaches the REAL logic with ZERO reimplementation — it calls the exact
+// isPointerName / readPointers / findPointersSpaceId / doVerb the JS handler calls.
+//
+// Why these are host (the wall, 1.md): every space/being READ is a `see` and every WRITE
+// is a do/be verb — EXCEPT (a) genuine computation: the pointer-name + canonical-path
+// regex validation, the map merge; (b) reads the see-registry does not model yet: the
+// pointer map and the .branches heaven-space id are HEAVEN reads (MAIN-pinned, routed
+// through loadHeavenProjection / findHeavenSpace by the BRANCHES enum), which no `see`
+// QUERY/READ form can shape today (see blockers); (c) the lone WORLD write, kept host
+// like take-role.word's grantInternal so it calls the SAME doVerb(set-space) the JS
+// handler calls, reading ctx.summonCtx to lay its fact into the live moment.
+//
+// callHost invokes each builtin as `fn({ args: [...] }, ctx)`. NONE lay a fact now: the
+// validators + the map merge/prune are pure computes (see-ops), the pointer-map + .branches
+// id are heaven reads (see-ops), and the WRITE is the .word's targeted `set/replace the
+// space branchesSpace's qualities.pointers` (the one do:set-space).
+
+import {
+  isPointerName,
+  POINTER_NAME_MAX_LENGTH,
+  RESERVED_POINTERS,
+  readPointers,
+  findPointersSpaceId,
+} from "../../../materials/branch/branchRegistry.js";
+
+// Mirrors CANONICAL_PATH_RE in ops.js (which mirrors BRANCH_RE in address.js). The
+// set-pointer handler rejects structurally-invalid `canonical` arguments with it.
+const CANONICAL_PATH_RE = /^(?:0|\d+(?:[a-z]+\d+)*(?:[a-z]+)?)$/;
+
+// branch the write rides: the moment's act branch, else the eval ctx branch, else main.
+const branchOf = (ctx) => ctx?.summonCtx?.actorAct?.branch || ctx?.branch || "0";
+
+export function branchManagerHostEnv() {
+  return {
+    // ── genuine computation: the two validation regexes (host:, not see) ──────────────
+    // isPointerName(name) → the SAME branchRegistry grammar gate the JS handler calls.
+    // Returns the normalized (lowercased + trimmed) name when valid, else null (the
+    // `.word` reads `If no validName:` to refuse). Normalization rides here so the value
+    // the .word writes is exactly what the JS handler wrote (`name.trim().toLowerCase()`).
+    "valid-pointer-name": ({ args: [name] }) => {
+      const n = String(name ?? "").trim().toLowerCase();
+      return isPointerName(n) ? n : null;
+    },
+    // validCanonical(canonical) → the structural path check. Returns the trimmed path
+    // when it matches CANONICAL_PATH_RE, else null (the `.word` refuses on absence).
+    "valid-canonical": ({ args: [canonical] }) => {
+      const c = String(canonical ?? "").trim();
+      return CANONICAL_PATH_RE.test(c) ? c : null;
+    },
+
+    // ── heaven-routed reads the see-registry does not model yet (host:, see blockers) ──
+    // readPointers() → the full pointer map from the `.branches` heaven space's
+    // qualities.pointers (MAIN-pinned heaven read). The JS handler calls this verbatim.
+    "read-pointers": async () => readPointers(),
+    // findPointersSpaceId() → the `.branches` heaven space's id, or null when heaven
+    // isn't planted (the `.word` refuses INTERNAL on absence, like the JS handler).
+    "find-pointers-space-id": async () => findPointersSpaceId(),
+
+    // ── the merge COMPUTE (a see-op; the WRITE is the .word's targeted set-space) ──────
+    // set-pointer-map(current, name, canonical) → the next pointer map + the previous target
+    // (current[name] || null). A pure perception of the updated map from inputs, NO fact;
+    // the `.word` then stamps it with `replace the space branchesSpace's qualities.pointers`.
+    "set-pointer-map": ({ args: [current, name, canonical] }) => {
+      const map = current && typeof current === "object" ? current : {};
+      const previous = Object.prototype.hasOwnProperty.call(map, name) ? map[name] : null;
+      return { map: { ...map, [name]: canonical }, previous };
+    },
+
+    // ── delete-pointer's helpers ──────────────────────────────────────────────────────
+    // isReservedPointer(name) → genuine computation: the reserved-list membership check
+    // (the SAME RESERVED_POINTERS the JS handler tests), so the `.word` refuses #main etc.
+    "is-reserved-pointer": ({ args: [name] }) => RESERVED_POINTERS.includes(String(name)),
+
+    // delete-pointer-map(current, name) → the PRUNED map when the name is present, else null
+    // (the `.word` reads `If no outcome:` for the no-op, matching the JS early return). A pure
+    // compute, NO fact; the `.word` stamps the pruned map with a targeted set-space.
+    "delete-pointer-map": ({ args: [current, name] }) => {
+      const map = current && typeof current === "object" ? current : {};
+      if (!Object.prototype.hasOwnProperty.call(map, name)) return null;
+      const next = { ...map };
+      delete next[name];
+      return { map: next };
+    },
+  };
+}
+
+export { POINTER_NAME_MAX_LENGTH };

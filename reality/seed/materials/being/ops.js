@@ -20,6 +20,7 @@
 
 import { registerOperation } from "../../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
+import { registerRoleWord } from "../../present/word/roleWordRegistry.js";
 import Being from "./being.js";
 import Space from "../space/space.js";
 import { detectTargetKind, targetIdOf, loadTargetRow } from "../_targetShape.js";
@@ -420,6 +421,16 @@ registerOperation("end-being", {
 // role can hand X out. The chain back to I-Am is structural.
 
 async function grantRoleHandler({ target, params, identity, summonCtx }) {
+  // THE CONVERSION: grant-role's validation + record is grant-role.word (caller mode). The
+  // .word returns the record; the cut enriches the op params with grantedBy/grantedAt so
+  // the dispatcher's auto-emitted grant-role fact carries them (the being reducer reads
+  // them from fact.params). JS body = clean-miss fallback.
+  const viaWord = await _grantRoleViaWord({ caller: identity?.beingId, target, role: params?.role, anchorSpaceId: params?.anchorSpaceId, anchorBeingId: params?.anchorBeingId, summonCtx });
+  if (viaWord) {
+    if (params) { params.grantedBy = viaWord.grantedBy; params.grantedAt = viaWord.grantedAt; }
+    return viaWord;
+  }
+
   if (!identity?.beingId) {
     throw new IbpError(
       IBP_ERR.UNAUTHORIZED,
@@ -506,6 +517,30 @@ async function revokeRoleHandler({ target, params, identity, summonCtx }) {
     anchorBeingId,
     grantedBy: targetGrantedBy,
   };
+}
+
+// grant-role's world strand is grant-role.word (the gates + the role-registry check + the
+// record). CALLER mode. Returns {granted, role, granteeBeingId, anchorSpaceId,
+// anchorBeingId, grantedBy, grantedAt} or null on a clean miss so the JS body runs.
+registerRoleWord("being", "grant-role", new URL("./grant-role.word", import.meta.url));
+async function _grantRoleViaWord({ caller, target, role, anchorSpaceId, anchorBeingId, summonCtx }) {
+  if (!summonCtx) return null;
+  const { resolveRoleWord, runRoleWord } = await import("../../present/word/roleWordRegistry.js");
+  const ir = resolveRoleWord("being", "grant-role", summonCtx?.actorAct?.branch);
+  if (!ir) return null;
+  const { grantHostEnv } = await import("./grantHost.js");
+  const branch = summonCtx?.actorAct?.branch;
+  try {
+    const { result } = await runRoleWord(ir, {
+      summonCtx, branch,
+      trigger: { caller: caller ? String(caller) : null, target: target ? String(targetIdOf(target)) : null, role: role ?? null, anchorSpaceId: anchorSpaceId ?? null, anchorBeingId: anchorBeingId ?? null, branch },
+      env: { host: grantHostEnv() },
+    });
+    return result || null;
+  } catch (e) {
+    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
+    throw e;
+  }
 }
 
 registerOperation("grant-role", {

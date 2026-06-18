@@ -1,0 +1,20 @@
+# take-role.word — walk-in role acquisition (acquisitionOps.js, the take-role op).
+#
+# A being takes an installed, take-acquirable role at a space. The CONTROL strand
+# (the gate chain + the idempotency check) is .word; the acquisition lookups and
+# the grant emit are `host:` escapes wired by acquisitionHost.js (the SAME
+# getRoleSpecForGrant / normalizeAcquisition / loadOrFold+alreadyHoldsRole /
+# emitInternalGrant the JS handler calls — no reimplementation). The lone WORLD
+# fact is the grant-role emit inside grantInternal. The bridge binds `caller` (the
+# acting being), `role`, `space`, `branch`.
+
+When a being takes a role at a space:
+  see role-spec-for-grant(role, space) as found.
+  If no found, refuse with "role is not installed on this space or any ancestor".
+  see is-grabbable(found) as grabbable.
+  If not grabbable, refuse with "role is not take-acquirable; try ask-role".
+  see already-holds(caller, role, found) as held.
+  If held:
+    Return role, anchorSpaceId: $found.anchor, already: true.
+  host: grantInternal(caller, role, found) as granted.
+  Return role, anchorSpaceId: $found.anchor, granted: true.

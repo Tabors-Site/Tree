@@ -41,6 +41,12 @@
 import { registerOperation } from "./operations.js";
 import { IbpError, IBP_ERR } from "./protocol.js";
 import { detectTargetKind } from "../materials/_targetShape.js";
+import { registerRoleWord } from "../present/word/roleWordRegistry.js";
+
+// Self-register the co-located world strand so resolveRoleWord("render",
+// "set-render") finds it (CONVERTING.md step 3). The cut prefers the bridge and
+// falls back to the JS handler on a clean miss.
+registerRoleWord("render", "set-render", new URL("./set-render.word", import.meta.url));
 
 const VALID_KEYS = new Set([
   "model",
@@ -51,7 +57,7 @@ const VALID_KEYS = new Set([
   "merge",
 ]);
 
-function validateRenderBlock(input) {
+export function validateRenderBlock(input) {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "set-render: params must be an object");
   }

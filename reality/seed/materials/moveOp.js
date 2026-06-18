@@ -30,6 +30,14 @@ import Space from "./space/space.js";
 import { registerOperation } from "../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../ibp/protocol.js";
 import { detectTargetKind, targetIdOf } from "./_targetShape.js";
+import { registerRoleWord } from "../present/word/roleWordRegistry.js";
+
+// Self-register this slice's co-located WORLD strand (CONVERTING.md): the bridge
+// resolves ("move", "move") to move.word, its host escapes wired by moveHost.js.
+// Registered at module load (operations.js imports this file at seed boot, and a
+// DRY harness importing moveOp.js triggers it too), so the `.word` is available
+// wherever a booted reality exists; the cut reads it via the bridge.
+registerRoleWord("move", "move", new URL("./move.word", import.meta.url));
 
 async function moveHandler({ target, params, summonCtx }) {
   const { coord, to, target: explicitTarget } = params || {};

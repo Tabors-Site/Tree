@@ -1,0 +1,20 @@
+# model.word — set-model: give a being/space/matter its 3D body (modelOp.js).
+#
+# The CONTROL strand (the clear-vs-set fork + the modelMatterId gate) is .word.
+# The genuine computes stay `host:`: assertMaySetModel (the per-kind auth gate,
+# throws on deny), resolveModelBlock (resolve the model matter + snapshot
+# hash/url/name — content-store work), and writeModel (the cross-kind set-<kind>
+# emit at qualities.render, the field-path dispatch over being/space/matter).
+# The bridge binds `target`, `kind`, `caller`, `branch`, and the params
+# (`modelMatterId`, `scale`, `rotation`, `clear`, `forMatterType`).
+
+When a caller sets a model on a target:
+  host: assertMaySetModel(kind, target, caller).
+  If clear:
+    host: clearModel(target, kind, forMatterType).
+    Return cleared: true.
+  If no modelMatterId:
+    refuse with "modelMatterId required: upload a model matter first, or pass clear=true".
+  host: resolveModelBlock(modelMatterId, scale, rotation) as model.
+  host: writeModel(target, kind, forMatterType, model).
+  Return set: true.

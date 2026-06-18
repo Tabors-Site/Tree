@@ -38,6 +38,65 @@ import {
 import { hasCredentialAuthority } from "./identity/lineage.js";
 import { doVerb } from "../../ibp/verbs/do.js";
 import { emitFact } from "../../past/fact/facts.js";
+import { registerRoleWord } from "../../present/word/roleWordRegistry.js";
+
+// Self-register this module's co-located `.word` slices (CONVERTING.md): importing
+// credentialOps.js (at seed boot, or in a DRY harness) registers them so
+// resolveRoleWord("credential", "credential-reset") finds the world strand. The cut
+// in the handler runs it through the bridge with credentialHostEnv(); the JS body is
+// the clean-miss fallback.
+registerRoleWord("credential", "credential-reset", new URL("./credential-reset.word", import.meta.url));
+registerRoleWord("credential", "credential-read", new URL("./credential-read.word", import.meta.url));
+registerRoleWord("credential", "credential-detach", new URL("./credential-detach.word", import.meta.url));
+registerRoleWord("credential", "credential-attach", new URL("./credential-attach.word", import.meta.url));
+
+// credential-detach / credential-attach: pure-gate world strands (self-only / being-
+// parent-only). The detach/attach RECORD is the dispatcher's audit fact, so the .word
+// only gates + returns. Shared cut helper (CALLER mode); returns {targetBeingId,
+// detached|attached} or null on a clean miss. The cut re-adds _factTarget.
+async function _credentialGateViaWord(opName, { caller, target, summonCtx }) {
+  if (!summonCtx) return null;
+  const { resolveRoleWord, runRoleWord } = await import("../../present/word/roleWordRegistry.js");
+  const ir = resolveRoleWord("credential", opName, summonCtx?.actorAct?.branch);
+  if (!ir) return null;
+  const { credentialHostEnv } = await import("./credentialHost.js");
+  const b = summonCtx?.actorAct?.branch;
+  try {
+    const { result } = await runRoleWord(ir, {
+      summonCtx, branch: b,
+      trigger: { caller: String(caller), target: String(target), branch: b },
+      env: { host: credentialHostEnv() },
+    });
+    return result || null;
+  } catch (e) {
+    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.FORBIDDEN, e.message);
+    throw e;
+  }
+}
+
+// credential-read's world strand is credential-read.word (the gate→read→reveal). CALLER
+// mode. Returns {targetBeingId, hasPlain, plaintext} or null on a clean miss. The cut
+// re-adds _factTarget (the asker's reel) + coerces hasPlain to a strict boolean.
+async function _credentialReadViaWord({ caller, target, branch, summonCtx }) {
+  if (!summonCtx) return null;
+  const { resolveRoleWord, runRoleWord } = await import("../../present/word/roleWordRegistry.js");
+  const ir = resolveRoleWord("credential", "credential-read", summonCtx?.actorAct?.branch);
+  if (!ir) return null;
+  const { credentialHostEnv } = await import("./credentialHost.js");
+  const b = branch || summonCtx?.actorAct?.branch; // the moment's branch; never floor to "0"
+  try {
+    const { result } = await runRoleWord(ir, {
+      summonCtx, branch: b,
+      trigger: { caller: String(caller), target: String(target), branch: b },
+      env: { host: credentialHostEnv() },
+    });
+    if (!result) return null;
+    return { ...result, hasPlain: !!result.hasPlain };
+  } catch (e) {
+    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.FORBIDDEN, e.message);
+    throw e;
+  }
+}
 
 function targetBeingIdOf(target) {
   if (target && typeof target === "object" && target.kind === "being" && target.id) {
@@ -92,6 +151,13 @@ registerOperation("credential-read", {
   handler: async ({ target, identity, summonCtx, branch }) => {
     const targetBeingId = targetBeingIdOf(target);
     const askerBeingId = askerBeingIdOf(identity);
+
+    // THE CONVERSION: credential-read's world strand is credential-read.word (caller
+    // mode). The dispatcher needs _factTarget (the asker's reel) for the audit fact,
+    // which the .word omits — re-add it around the bridge result. JS = clean-miss fallback.
+    const viaWord = await _credentialReadViaWord({ caller: askerBeingId, target: targetBeingId, branch, summonCtx });
+    if (viaWord) return { _factTarget: { kind: "being", id: askerBeingId || targetBeingId }, ...viaWord };
+
     const ok = await hasCredentialAuthority(askerBeingId, targetBeingId, branch);
     if (!ok) {
       throw new IbpError(
@@ -124,6 +190,29 @@ registerOperation("credential-read", {
 //
 // The three set-being Facts below mutate state on the being's reel; the
 // dispatcher's credential-reset Fact records the asker's act.
+// credential-reset's world strand is credential-reset.word (the authority gate, the
+// mint, the three credential writes, the reveal). CALLER mode (no `through`) — the writes
+// attribute to the asker. Returns {targetBeingId, plaintext}, or null on a clean miss.
+async function _credentialResetViaWord({ caller, target, branch, summonCtx }) {
+  if (!summonCtx) return null;
+  const { resolveRoleWord, runRoleWord } = await import("../../present/word/roleWordRegistry.js");
+  const ir = resolveRoleWord("credential", "credential-reset", summonCtx?.actorAct?.branch);
+  if (!ir) return null;
+  const { credentialHostEnv } = await import("./credentialHost.js");
+  const b = branch || summonCtx?.actorAct?.branch; // the moment's branch; never floor to "0"
+  try {
+    const { result } = await runRoleWord(ir, {
+      summonCtx, branch: b,
+      trigger: { caller: String(caller), target: String(target), branch: b },
+      env: { host: credentialHostEnv() },
+    });
+    return result || null;
+  } catch (e) {
+    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.FORBIDDEN, e.message);
+    throw e;
+  }
+}
+
 registerOperation("credential-reset", {
   targets: ["being"],
   ownerExtension: "seed",
@@ -131,6 +220,15 @@ registerOperation("credential-reset", {
   handler: async ({ target, identity, summonCtx, branch }) => {
     const targetBeingId = targetBeingIdOf(target);
     const askerBeingId = askerBeingIdOf(identity);
+
+    // THE CONVERSION: credential-reset's world strand is credential-reset.word, run
+    // through the bridge in CALLER mode (the three set-being writes attribute to the
+    // asker). The dispatcher needs _factTarget (the asker's reel) for its audit fact,
+    // which the .word return omits — re-add it around the bridge result. JS body below
+    // is the clean-miss fallback.
+    const viaWord = await _credentialResetViaWord({ caller: askerBeingId, target: targetBeingId, branch, summonCtx });
+    if (viaWord) return { _factTarget: { kind: "being", id: askerBeingId || targetBeingId }, ...viaWord };
+
     const ok = await hasCredentialAuthority(askerBeingId, targetBeingId, branch);
     if (!ok) {
       throw new IbpError(
@@ -180,9 +278,12 @@ registerOperation("credential-detach", {
   targets: ["being"],
   ownerExtension: "seed",
   factAction: "credential-detach",
-  handler: async ({ target, identity }) => {
+  handler: async ({ target, identity, summonCtx }) => {
     const targetBeingId = targetBeingIdOf(target);
     const askerBeingId = askerBeingIdOf(identity);
+    // THE CONVERSION: the world strand is credential-detach.word (caller mode). JS fallback.
+    const viaWord = await _credentialGateViaWord("credential-detach", { caller: askerBeingId, target: targetBeingId, summonCtx });
+    if (viaWord) return { _factTarget: { kind: "being", id: askerBeingId || targetBeingId }, ...viaWord };
     // Self-only EXCEPT I_AM which has universal authority on its own
     // reality (parallels hasCredentialAuthority's I_AM short-circuit).
     if (askerBeingId !== targetBeingId && askerBeingId !== I_AM) {
@@ -216,9 +317,12 @@ registerOperation("credential-attach", {
   targets: ["being"],
   ownerExtension: "seed",
   factAction: "credential-attach",
-  handler: async ({ target, identity }) => {
+  handler: async ({ target, identity, summonCtx }) => {
     const targetBeingId = targetBeingIdOf(target);
     const askerBeingId = askerBeingIdOf(identity);
+    // THE CONVERSION: the world strand is credential-attach.word (caller mode). JS fallback.
+    const viaWord = await _credentialGateViaWord("credential-attach", { caller: askerBeingId, target: targetBeingId, summonCtx });
+    if (viaWord) return { _factTarget: { kind: "being", id: askerBeingId || targetBeingId }, ...viaWord };
     // Being-parent-only EXCEPT I_AM (universal authority on its own
     // reality).
     if (askerBeingId !== I_AM) {

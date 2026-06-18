@@ -32,6 +32,13 @@
 import { registerOperation } from "../../ibp/operations.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
 import { emitFact } from "../../past/fact/facts.js";
+import { registerRoleWord } from "../../present/word/roleWordRegistry.js";
+
+// Self-register this slice's co-located WORLD strand (CONVERTING.md): the bridge
+// resolves ("name", "key-export") to key.word, its host escapes wired by keyHost.js.
+// Registered at module load (services.js imports this file), so the `.word` is
+// available wherever a booted reality exists; the cut reads it via the bridge.
+registerRoleWord("name", "key-export", new URL("./key.word", import.meta.url));
 
 // Resolve the NAME id this op acts on, from the being target's trueName.
 async function resolveTargetNameId(target, summonCtx) {
@@ -47,6 +54,35 @@ async function resolveTargetNameId(target, summonCtx) {
   return String(trueName);
 }
 
+// key-export's world strand is key.word (resolve the Name via `see`, the double gate,
+// the crypto read, the asker-attributed audit, the §7 return). CALLER mode (no
+// `through`): the audit attributes to the asker. Returns the {nameId,hasKey,
+// privateKeyPem,mnemonic} result (hasKey coerced to a strict boolean — the .word's
+// mark yields true|undefined), or null on a clean miss so the JS body runs.
+async function _keyExportViaWord({ target, caller, asker, summonCtx }) {
+  if (!summonCtx) return null;
+  const { resolveRoleWord, runRoleWord } = await import("../../present/word/roleWordRegistry.js");
+  const ir = resolveRoleWord("name", "key-export", summonCtx?.actorAct?.branch);
+  if (!ir) return null;
+  const { keyHostEnv } = await import("./keyHost.js");
+  const { targetIdOf } = await import("../_targetShape.js");
+  const branch = summonCtx?.actorAct?.branch || "0";
+  try {
+    const { result } = await runRoleWord(ir, {
+      summonCtx, branch,
+      // `target` is bound as an entity object (kind + id) so the .word's `see the
+      // target's trueName` can loadProjection — seeRead needs ._id/.id, not a bare string.
+      trigger: { target: { kind: "being", id: String(targetIdOf(target)) }, caller: caller ? String(caller) : null, asker: asker ? String(asker) : null, branch },
+      env: { host: keyHostEnv() },
+    });
+    if (!result) return null;
+    return { ...result, hasKey: !!result.hasKey };
+  } catch (e) {
+    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.FORBIDDEN, e.message);
+    throw e;
+  }
+}
+
 registerOperation("key-export", {
   targets: ["being"],
   ownerExtension: "seed",
@@ -56,6 +92,11 @@ registerOperation("key-export", {
   // recording WHO exported WHICH name's key WHEN, the key nowhere in it.
   skipAudit: true,
   handler: async ({ target, identity, summonCtx }) => {
+    // THE CONVERSION: key-export's world strand is key.word, run through the bridge.
+    // The JS below is the clean-miss fallback.
+    const viaWord = await _keyExportViaWord({ target, caller: identity?.nameId, asker: identity?.beingId, summonCtx });
+    if (viaWord) return viaWord;
+
     const branch = summonCtx?.actorAct?.branch;
     const nameId = await resolveTargetNameId(target, summonCtx);
 

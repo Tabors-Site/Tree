@@ -15,7 +15,7 @@ import { evaluate } from "./evaluator.js";
 const results = [];
 const check = (label, ok, d = "") => { results.push(`${ok ? "ok  " : "FAIL"} ${label}${d ? " — " + d : ""}`); return ok; };
 
-const flow = parse(readFileSync(new URL("./cherub.word", import.meta.url), "utf8"))[0];
+const flow = parse(readFileSync(new URL("../roles/cherub/cherub.word", import.meta.url), "utf8"))[0];
 check("cherub.word is one flow with 5 effects", flow?.kind === "flow" && flow.effects?.length === 5, `effects=${flow?.effects?.length}`);
 
 // the five acts, in order (verb:op) — the world strand the JS handler lays

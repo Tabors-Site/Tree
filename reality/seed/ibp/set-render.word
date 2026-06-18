@@ -1,0 +1,37 @@
+# set-render.word — the canonical sensory-write op (setRender.js, the set-render DO op).
+#
+# `qualities.render` is the seed-owned namespace any matter/space/being carries:
+# the model it appears as in 3D, the animations + sounds fact-arrivals trigger,
+# and any future sensory channel. set-render writes the whole block in one op.
+#
+# THE WALL. The CONTROL strand (the target-kind gate + the kind dispatch + the
+# merge-vs-replace fork) is .word. The render write is a NATIVE do:set-<kind>
+# act at the static field qualities.render — one WRITE line per kind, the same
+# {field, value, merge} the JS handler's inner doVerb laid (which the
+# applySetQualities reducer applies unchanged). validateRenderBlock STAYS host:
+# it is genuine schema computation (reject unknown keys; validate model/scale/
+# rotation/animations/sounds shapes), not a substrate read. The bridge binds
+# `kind` (matter|space|being), the target id under the noun the WRITE form reads
+# (`being` / `space` / `matter`), `merge` (the op default true unless the caller
+# passed merge:false), and `branch`.
+
+When a being sets the render of a target:
+  host: validateRenderBlock(params) as block.
+  Match the kind:
+    For being:
+      If merge:
+        set the being's qualities.render to $block.
+      Otherwise:
+        replace the being's qualities.render with $block.
+    For space:
+      If merge:
+        set the space's qualities.render to $block.
+      Otherwise:
+        replace the space's qualities.render with $block.
+    For matter:
+      If merge:
+        set the matter's qualities.render to $block.
+      Otherwise:
+        replace the matter's qualities.render with $block.
+    Otherwise:
+      refuse with "set-render: target must be matter, space, or being".

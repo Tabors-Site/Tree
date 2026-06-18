@@ -35,7 +35,16 @@ import {
   isPointerName,
 } from "../../../materials/branch/branchRegistry.js";
 import { doVerb } from "../../../ibp/verbs/do.js";
+import { registerRoleWord } from "../../word/roleWordRegistry.js";
 import log from "../../../seedReality/log.js";
+
+// Self-register this module's co-located `.word` slice (CONVERTING.md): importing
+// ops.js (at seed boot, or in a DRY harness) registers it so resolveRoleWord(
+// "branch-manager", "set-pointer") finds it. The cut wires the bridge into the
+// set-pointer handler (run the .word's CONTROL strand through runRoleWord with
+// branchManagerHostEnv; JS handler stays as the clean-miss fallback).
+registerRoleWord("branch-manager", "set-pointer", new URL("./branch-manager.word", import.meta.url));
+registerRoleWord("branch-manager", "delete-pointer", new URL("./delete-pointer.word", import.meta.url));
 
 // Canonical-path grammar (mirrors BRANCH_RE in address.js). Used by
 // set-pointer to reject structurally-invalid `canonical` arguments.
@@ -830,6 +839,30 @@ registerOperation("merge-branches", {
 // The storage is heaven; the ops live with the branch-manager
 // workflow they participate in (merging frequently re-points main).
 
+// set-pointer's world strand is branch-manager.word (the gate chain), run through the
+// bridge in CALLER mode (no `through` — the pointer write attributes to the setter). The
+// heaven reads + the lone set-space stay host. Returns {set,name,canonical,previous}, or
+// null on a clean miss so the JS body below runs.
+async function _setPointerViaWord({ caller, name, canonical, summonCtx }) {
+  if (!summonCtx) return null;
+  const { resolveRoleWord, runRoleWord } = await import("../../word/roleWordRegistry.js");
+  const ir = resolveRoleWord("branch-manager", "set-pointer", summonCtx?.actorAct?.branch);
+  if (!ir) return null;
+  const { branchManagerHostEnv } = await import("./branchManagerHost.js");
+  const branch = summonCtx?.actorAct?.branch || "0";
+  try {
+    const { result } = await runRoleWord(ir, {
+      summonCtx, branch,
+      trigger: { caller: caller ? String(caller) : null, name, canonical, branch },
+      env: { host: branchManagerHostEnv() },
+    });
+    return result || null;
+  } catch (e) {
+    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
+    throw e;
+  }
+}
+
 registerOperation("set-pointer", {
   targets: ["being", "stance"],
   ownerExtension: "seed",
@@ -847,6 +880,10 @@ registerOperation("set-pointer", {
     },
   },
   handler: async ({ params, identity, summonCtx }) => {
+    // THE CONVERSION: prefer the bridge; the JS below is the clean-miss fallback.
+    const viaWord = await _setPointerViaWord({ caller: identity?.beingId, name: params?.name, canonical: params?.canonical, summonCtx });
+    if (viaWord) return viaWord;
+
     if (!identity?.beingId) {
       throw new IbpError(IBP_ERR.UNAUTHORIZED,
         "set-pointer requires an authenticated being");
@@ -886,6 +923,29 @@ registerOperation("set-pointer", {
   },
 });
 
+// delete-pointer's world strand is delete-pointer.word (the gate chain), run through the
+// bridge in CALLER mode. The heaven read + the lone pointer-map set-space stay host.
+// Returns {name, deleted, alreadyAbsent} or null on a clean miss so the JS body runs.
+async function _deletePointerViaWord({ caller, name, summonCtx }) {
+  if (!summonCtx) return null;
+  const { resolveRoleWord, runRoleWord } = await import("../../word/roleWordRegistry.js");
+  const ir = resolveRoleWord("branch-manager", "delete-pointer", summonCtx?.actorAct?.branch);
+  if (!ir) return null;
+  const { branchManagerHostEnv } = await import("./branchManagerHost.js");
+  const branch = summonCtx?.actorAct?.branch;
+  try {
+    const { result } = await runRoleWord(ir, {
+      summonCtx, branch,
+      trigger: { caller: caller ? String(caller) : null, name, branch },
+      env: { host: branchManagerHostEnv() },
+    });
+    return result || null;
+  } catch (e) {
+    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
+    throw e;
+  }
+}
+
 registerOperation("delete-pointer", {
   targets: ["being", "stance"],
   ownerExtension: "seed",
@@ -898,6 +958,10 @@ registerOperation("delete-pointer", {
     },
   },
   handler: async ({ params, identity, summonCtx }) => {
+    // THE CONVERSION: prefer the bridge; the JS below is the clean-miss fallback.
+    const viaWord = await _deletePointerViaWord({ caller: identity?.beingId, name: params?.name, summonCtx });
+    if (viaWord) return viaWord;
+
     if (!identity?.beingId) {
       throw new IbpError(IBP_ERR.UNAUTHORIZED,
         "delete-pointer requires an authenticated being");

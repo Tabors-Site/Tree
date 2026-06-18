@@ -1,0 +1,46 @@
+# move.word — do:move: pick up a space or matter and put it somewhere else
+# (moveOp.js, the move op; per doctrine do:move is the position change, not be).
+#
+# Two modes discriminated by which param the caller passes: coord-mode (move the
+# subject to a new cell inside its current container) and container-mode (carry the
+# subject across a doorway into a different space). The handler is a GATE + READ +
+# ENRICH strand: it validates the request, reads the source space (so the live-SEE
+# layer can invalidate both ends), and hands the move fact its `fromSpaceId` plus
+# `_factTarget`. The ONE world fact (do:move) is the op's OWN audit fact, stamped by
+# the dispatcher from the enriched params and attributed to the CALLER — the `.word`
+# does NOT emit it (that would double-lay); it RETURNS the enrichment the cut writes
+# back into params/result.
+#
+# THE WALL. The CONTROL strand (the mode fork + every refuse + the return) is `.word`.
+# The genuine computes stay `host:`:
+#   - requireMode / requireSubjectKind / validCoordShape / validTo / notSelfMove:
+#     pure validation over the params (computation, not a read).
+#   - resolveSource: the source-space read — loadOrFold over space/matter for the
+#     subject's parent / containing space, plus the destination-exists check and the
+#     coord bounds check against the container's size. These are multi-step projection
+#     lookups (slot.state.parent / .spaceId / .size) the `see` forms cannot yet shape,
+#     so they are reached as ONE host escape that calls the SAME Space.exists /
+#     loadOrFold the JS handler calls (no reimplementation). It returns the fromSpaceId
+#     the move fact records, or refuses on a missing dest / missing subject / out-of-bounds.
+# The bridge binds `subject` ({kind,id} of the moved thing), `coord`, `to`, `branch`.
+
+When a being brings matter into a space:
+  host: requireMode(coord, to) as modeOk.
+  If not modeOk:
+    refuse with "move: must specify either `coord` (in-space) or `to` (cross-space), not both".
+  host: requireSubjectKind(subject) as kindOk.
+  If not kindOk:
+    refuse with "move: target must be a space or matter".
+  host: validCoordShape(coord) as coordOk.
+  If not coordOk:
+    refuse with "move: `coord` must be { x, y[, z] } with finite numbers".
+  host: validTo(to) as toOk.
+  If not toOk:
+    refuse with "move: `to` must be a space id string".
+  # a space cannot move into itself. A native gate: the predecessor host gates above
+  # guarantee a real typed subject + a real non-empty string `to` reach here, so the plain
+  # `equals` (String-coercing, via idEquals) matches the old host String(to) !== String(id).
+  If the subject's kind equals space and the to equals the subject's id:
+    refuse with "move: cannot move a space into itself".
+  host: resolveSource(subject, coord, to, branch) as fromSpaceId.
+  Return fromSpaceId: $fromSpaceId.

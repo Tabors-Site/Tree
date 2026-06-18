@@ -1,0 +1,28 @@
+# branch-manager.word — set a named branch pointer (ops.js, the set-pointer op).
+#
+# A named pointer (#main, #prod, #release-v2) maps a label to a canonical branch path.
+# The CONTROL strand (the gate chain: a caller, a valid pointer name, a structural
+# canonical path, a resolved .branches space) is .word; the genuine computation (the two
+# validation regexes, the map merge), the HEAVEN reads (readPointers / findPointersSpaceId
+# are MAIN-pinned heaven projections no `see` form shapes yet — see blockers), and the
+# lone WORLD fact (the do:set-space onto the .branches space's qualities.pointers) are
+# `host:` escapes wired by branchManagerHost.js (the SAME isPointerName / readPointers /
+# findPointersSpaceId / doVerb the JS handler calls — no reimplementation). The bridge
+# binds `caller` (the acting being id), `name` (the pointer label), `canonical` (the path).
+
+When a being sets a branch pointer:
+  If no caller:
+    refuse with "set-pointer requires an authenticated being" as unauthorized.
+  see valid-pointer-name(name) as validName.
+  If no validName:
+    refuse with "pointer name is invalid; must be a lowercase label (no consecutive or trailing hyphens)" as invalid-input.
+  see valid-canonical(canonical) as validPath.
+  If no validPath:
+    refuse with "canonical is not a structurally valid branch path (expected 0, 1, 1a, 7b3, ...)" as invalid-input.
+  see read-pointers() as current.
+  see find-pointers-space-id() as branchesSpace.
+  If no branchesSpace:
+    refuse with "the .branches heaven space was not found; reality is not properly bootstrapped" as internal.
+  see set-pointer-map(current, validName, validPath) as updated.
+  replace the space branchesSpace's qualities.pointers with updated's map.
+  Return set: true, name: $validName, canonical: $validPath, previous: updated's previous.

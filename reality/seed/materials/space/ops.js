@@ -81,6 +81,18 @@ async function setOnSpaceHandler({ target, params, identity, summonCtx }) {
   }
   const kind = detectTargetKind(target);
 
+  // Invalidate the ancestor-chain cache for this space: set-space changes qualities /
+  // owner / name, all of which getAncestorChain serves to readers like getRoleSpecForGrant.
+  // Without this, a freshly written quality (e.g. an installed role) stays invisible until
+  // the cache TTL expires — a read-after-write race (the ancestorCache.js header says
+  // setQuality/setOwner SHOULD invalidate; the op was the missing caller). The cache empties
+  // now; the fold writes the new state next; the next read re-fetches fresh (no in-moment
+  // read happens between, the moment holds the act-chain lock).
+  try {
+    const { invalidateSpace } = await import("./ancestorCache.js");
+    invalidateSpace(String(targetIdOf(target) || ""), summonCtx?.actorAct?.branch || null);
+  } catch { /* cache module unavailable — nothing to invalidate */ }
+
   // ── qualities paths ────────────────────────────────────
   //
   // The handler validates input + resolves the target. The actual
