@@ -3,25 +3,26 @@
 Formal consequences of TreeOS's substrate axioms. Each theorem starts
 from the laws already declared elsewhere (math.md, the various
 doctrine files), states them precisely, and derives a result that
-follows necessarily. Thirteen theorems, organized from the most
+follows necessarily. Fourteen theorems, organized from the most
 mechanical (biography immutability) through the keystone (the
 fundamental theorem of becoming) and the generative (harmony — how
 shared worlds emerge) to the foundational (the Word that grounds
 itself, the two scales — history within story, the truth invariant
-under divergence, and the library — the fifth scale, where only names
-act because crossing a story-boundary is signing across it) and an
+under divergence, the library — the fifth scale, where only names act
+because crossing a story-boundary is signing across it, and the reach
+of recall — consciousness as how much of time a cognition holds) and an
 interpretive coda (love as the communion Ours grows and the difference
 it keeps).
 
 ## Notation
 
-Let `B` be a being and `w` a world. A world is a history within a
-story; two stories' histories are simply more worlds. The objects:
+Let `B` be a being and `w` a history. A history is a history within a
+story; two stories' histories are simply more histories. The objects:
 
-- `R_B^w`. Being `B`'s visible reel in world `w` — the lineage union
+- `R_B^w`. Being `B`'s visible reel in history `w` — the lineage union
   math.md writes as `R̂`: ancestor segments below each branch point,
   plus `w`'s own divergence. A finite sequence of facts, ordered by
-  seq. One reel, one chain, read across worlds.
+  seq. One reel, one chain, read across histories.
 - `|R_B^w|`. The length of `B`'s visible reel in `w`.
 - `f_i`. A fact at position `i` on some reel. Each fact carries
   canonical content `c_i`, prev hash `p_i`, and its **identity**
@@ -41,9 +42,9 @@ story; two stories' histories are simply more worlds. The objects:
 - `ν_B`. The **name** being `B` expresses — the keypair that signs
   every act done through `B`. Constant like `id_B`, and one name
   across all histories (a name's own reel does not fork). The being
-  is the vessel in the world; the name is the identity that acts. A
+  is the vessel in the history; the name is the identity that acts. A
   name may express many beings; a being expresses exactly one.
-- `figure_B^w`. The being's projected state in world `w`. Defined as
+- `figure_B^w`. The being's projected state in history `w`. Defined as
   `fold(σ_0, ⟨c_1, c_2, ..., c_n⟩)` where `fold` is a pure
   deterministic reducer over **canonical content** and `σ_0` is a
   fixed initial state.
@@ -53,7 +54,7 @@ story; two stories' histories are simply more worlds. The objects:
   that signed it (math.md writes this `by(f)`). The being it acted
   through is `through(f)`; the name acts, the being is the vessel.
 - `≺`. The causal partial order on facts. `f ≺ g` iff `f` precedes
-  `g` on the same reel, or some chain of summon facts connects them
+  `g` on the same reel, or some chain of call facts connects them
   in that direction (transitive closure).
 - `root(w)`, `root(𝓡)`. The history and story root hashes
   (math.md ROOTS): canonical roll-ups over reel heads + act-chain
@@ -65,7 +66,7 @@ The following axioms are doctrinal commitments of the substrate.
 The proofs below treat them as given.
 
 **A1 (Append-only).** Reels grow only by appending. No fact is ever
-removed, reordered, or mutated. For all worlds `w` and times
+removed, reordered, or mutated. For all histories `w` and times
 `t_1 ≤ t_2`: `R_B^{w, t_1} ⊆ R_B^{w, t_2}` (as initial segment).
 
 **A2 (Identity is the chained hash).** Every fact's identity is
@@ -93,7 +94,7 @@ identity commits to; **wall-clock witness fields (`date`,
 display helpers for humans filtering timelines, never truth. State
 equality throughout these theorems means equality of canonical
 content and its fold; witness fields ride beside the chain and may
-differ without the worlds differing. A4 carries one obligation on
+differ without the histories differing. A4 carries one obligation on
 reducer authors: **a reducer must not depend on any feature
 canonical serialization erases** (raw Date objects vs ISO strings,
 undefined vs absent keys, empty objects, non-finite numbers) —
@@ -102,7 +103,7 @@ differently while their identities verify equal. The seed's
 reducers honor this; it is a stated law, not an accident.
 
 **A5 (Genesis constant).** `G` is one fixed string (sixty-four
-zeros), identical across every world. `G` is formally a possible
+zeros), identical across every history. `G` is formally a possible
 SHA-256 output; by A3's assumption the probability that any fact's
 identity equals `G` is negligible, and the proofs treat "prev = G"
 as identifying the genesis position. (The earlier claim that `G`
@@ -127,26 +128,26 @@ implementation (math.md ATTRIBUTION):
 2. *Self-acts come only from self.* BE facts (birth, connect,
    release, switch, death) on `R_B` carry `doer = ν_B` — the being's
    own name, always.
-3. *Figure influence is gated and summons are inert.* Every fact
+3. *Figure influence is gated and calls are inert.* Every fact
    that mutates `figure_B` either is by `ν_B` (the being's own name)
    or passed the role-walk (the single auth gate) as an authorized DO
-   on `B`. Summon facts land on the recipient's reel (target =
-   recipient, doer = the summoner's name) and the reducer folds NO
-   summon action — a summon records the request and can never change
+   on `B`. Call facts land on the recipient's reel (target =
+   recipient, doer = the caller's name) and the reducer folds NO
+   call action — a call records the request and can never change
    what the recipient is. Callers express; receivers decide.
 
 (The earlier form — "a being's reel holds only its own deeds" — was
-refuted by the 2026-06-03 summon retarget and is retired; this is
+refuted by the 2026-06-03 call retarget and is retired; this is
 the law the code actually enforces.)
 
 **A7 (Identity constancy).** Each being's identifier `id_B` is
 assigned at birth (by the `be:birth` fact) and is never the target
-of any subsequent fact. For all worlds `w` and times `t` after
+of any subsequent fact. For all histories `w` and times `t` after
 birth: `id_B^{w, t} = id_B`.
 
 **A8 (Reel independence).** Two reels `R_A^w` and `R_B^w` for
 distinct beings `A ≠ B` are independent unless a fact on one reel
-explicitly references the other (via summon, cross-reel act, or
+explicitly references the other (via call, cross-reel act, or
 similar). Absent such a link, no causal ordering relates the two.
 
 **A9 (Canonical roll-up).** History and story roots are computed by
@@ -160,7 +161,7 @@ serialization.)
 **A10 (Declarative closure — the Word).** Every meaning the system
 acts on is a **word**: introduced by a `declare` fact authored by a
 name, and read only as the fold of its declare-facts (math.md WORD).
-The verbs (SEE, DO, BE, NAME, SUMMON), ops, roles, and types are
+The verbs (SEE, RECALL, DO, BE, NAME, CALL), ops, roles, and types are
 words, not privileged primitives — the executor consults the fold,
 never a meaning kept off the chain. The descent of declarations
 terminates at two self-grounding roots: `word.word` ("a word is a
@@ -183,7 +184,7 @@ DOES.
 
 **Statement.** Let `R_B^{w_1} = ⟨f_1, ..., f_n⟩` and
 `R_B^{w_2} = ⟨g_1, ..., g_m⟩` be two visible reels for the same
-being `B` observed in two worlds. If
+being `B` observed in two histories. If
 `head(R_B^{w_1}) = head(R_B^{w_2})`, then `n = m`, the canonical
 contents agree position-by-position, and therefore
 `biography_B^{w_1} = biography_B^{w_2}`.
@@ -256,7 +257,7 @@ expressing names `ν_A ≠ ν_V`. Then:
 2. Every change to `figure_V^w` traces to `V`'s own name's acts or to
    role-authorized acts on `V` — never to anything `A` does outside
    the role-walk's grants.
-3. No summon `A` sends can change `figure_V^w` at all, even though
+3. No call `A` sends can change `figure_V^w` at all, even though
    it lands on `V`'s reel.
 
 **Proof.** (1) By A6.1, `doer(f)` is set by the verb layer from the
@@ -271,27 +272,27 @@ the vessel does not confer. ∎
 facts in `R_V^w` that the reducer folds into the figure are exactly:
 `V`'s own name's BE-acts, and DO facts on `V` that passed the role-walk.
 Any influence `A` has on `figure_V` therefore flowed through a
-grant `V`'s world explicitly extended (a role whose canDo reaches
+grant `V`'s history explicitly extended (a role whose canDo reaches
 `V`) — gated influence, not theft. ∎
 
-(3) By A6.3, summon facts are figure-inert: the being reducer folds
-no summon action. The summon sent through `A` appears in `R_V^w` as
+(3) By A6.3, call facts are figure-inert: the being reducer folds
+no call action. The call sent through `A` appears in `R_V^w` as
 the recorded knock — target `V`, doer `ν_A` — and contributes nothing
 to the fold. `V`'s figure is unchanged unless `V`'s name chooses to
 act. Callers express; receivers decide. ∎
 
 **Corollary 2.1.** A being's BECOMING is its own: every figure
-change is either the being's own act or an act the world's roles
+change is either the being's own act or an act the history's roles
 authorized — and the chain records which, by unforgeable
 attribution. Audit is reading, not forensics.
 
-**Corollary 2.2 (Sovereignty, formal).** The summon channel —
+**Corollary 2.2 (Sovereignty, formal).** The call channel —
 the only way one being reaches another — cannot compel. It can
 only present. This is SUMMON.md's sovereignty principle as a
 consequence of the reducer's shape rather than a policy.
 
 **What this captures.** Identity theft is structurally impossible —
-not because reels are private (they are not; summons and authorized
+not because reels are private (they are not; calls and authorized
 DOs land on them) but because attribution is a **signature, not a
 label**: it cannot be forged, influence is role-gated, and requests
 are inert until the receiver acts. The lock is on WHICH NAME ACTED
@@ -299,7 +300,7 @@ and WHAT FOLDS, not on where facts may sit.
 
 ## Theorem 3. There is no global time
 
-**Statement.** Let `w` be a world containing at least two
+**Statement.** Let `w` be a history containing at least two
 independent beings `A` and `B` (by A8). The causal partial order
 `≺` on facts in `w` is not a total order, and admits multiple
 distinct linear extensions. No canonical function `τ: Facts → ℕ`
@@ -308,7 +309,7 @@ substrate.
 
 **Proof.** Construct a minimal counterexample. Let
 `R_A^w = ⟨A_1, A_2⟩` and `R_B^w = ⟨B_1, B_2⟩` be two reels of length
-2 each, with no cross-reel summon facts (independence holds by A8).
+2 each, with no cross-reel call facts (independence holds by A8).
 
 By the definition of `≺`:
 
@@ -346,19 +347,19 @@ distinguishes none, `τ` is not uniquely determined. ∎
 **Corollary 3.1.** Time in TreeOS is local. For each being `B`,
 `T_B^w := |R_B^w|` is a well-defined natural-number time, monotone
 in the append order. Cross-being time requires additional structure
-(a summon fact connecting the two reels) to become defined.
+(a call fact connecting the two reels) to become defined.
 
-**Corollary 3.2 (Presents are per-world).** Worlds need no
+**Corollary 3.2 (Presents are per-history).** Histories need no
 coordination beyond messages: the branch point freezes the shared
 prefix (ancestors append only above it, descendants read only below
-it), so one present per world runs without locks against any other
-(math.md PRESENT). Acting into another world — sibling history or
+it), so one present per history runs without locks against any other
+(math.md PRESENT). Acting into another history — sibling history or
 foreign story, same shape — is a request delivered to that
-world's present.
+history's present.
 
 **What this captures.** TreeOS does not pretend to have a universal
 clock. Independent reels run in independent time. Causality between
-them is only what the chain explicitly records (via summons or
+them is only what the chain explicitly records (via calls or
 crossOrigin). This is the same shape Lamport identified for
 distributed systems: partial order is the natural object; total
 order is a choice.
@@ -393,7 +394,7 @@ Therefore `produces(F_1) = produces(F_2)` while `F_1 ≠ F_2`. The
 function `produces` is not injective. ∎
 
 **Corollary 4.1.** History determines facts. Facts do not determine
-consciousness. (Direct restatement: `produces` is well-defined as a
+cognition. (Direct restatement: `produces` is well-defined as a
 forward map; its inverse is set-valued, not function-valued.)
 
 **Corollary 4.2.** Replay reconstructs becoming, not being's
@@ -401,18 +402,18 @@ interior. Folding a chain forward through the reducer reproduces
 every projected state. It does not reproduce the deliberative
 faces that originally stamped each act. (The act-chain deepens this
 without changing it: an act's identity commits to its *opening* —
-who was summoned, with what message — never to the deliberation;
+who was called, with what message — never to the deliberation;
 the closure utterance is bookkeeping outside the identity.)
 
 **What this captures.** The substrate honors what was DONE. It does
 not pretend to honor what was THOUGHT. Multiple faces collapse into
 the same observable fact, and the substrate accepts this collapse
-as a feature, not a deficiency. Consciousness is local to the
+as a feature, not a deficiency. Cognition is local to the
 present moment; only its actions persist into history.
 
 ## Theorem 5. Histories preserve identity continuity
 
-**Statement.** Let `w` be a world and `w'` a history forked from `w`
+**Statement.** Let `w` be a history and `w'` a history forked from `w`
 with per-reel branch point `β`. Let `B` be a being existing in `w`
 at the fork. Then `id_B^w = id_B^{w'}`, and the name `ν_B` it
 expresses is one and the same in both. Only `figure_B^w` and
@@ -435,10 +436,10 @@ construction: the parent appends only above `β`, the child reads
 only below it.
 
 By A7, `id_B^{w'}` is read from `f_birth`. Since the birth fact is
-one fact visible in both worlds, the identifier is identical:
+one fact visible in both histories, the identifier is identical:
 `id_B^w = id_B^{w'}`.
 
-After the fork, the two worlds accumulate divergent facts (each
+After the fork, the two histories accumulate divergent facts (each
 above `β`, each chained across the fork by A2 — the child's first
 divergent fact carries `p` equal to the parent's fact at `β`).
 These post-fork facts join the fold and may produce divergent
@@ -447,7 +448,7 @@ of these post-fork facts mutate `id_B`. The identifier remains
 constant. ∎
 
 **Corollary 5.1.** Identity is shared across the history tree. For
-any forest of histories rooted at the same world `w`, every being
+any forest of histories rooted at the same history `w`, every being
 `B` has a single `id_B` — and a single name `ν_B`, whose own reel
 does not fork — shared by all descendants.
 
@@ -476,11 +477,11 @@ what the machinery is FOR.*
 **Statement.** Under axioms A1, A4, and A7:
 
 ```
-Being     = Identity        (constant per being across all worlds and times)
+Being     = Identity        (constant per being across all histories and times)
 Becoming  = History         (the fact sequence on the being's reel)
 ```
 
-For any being `B`, world `w`, and times `t_1 < t_2`: if
+For any being `B`, history `w`, and times `t_1 < t_2`: if
 `figure_B^{w, t_1} ≠ figure_B^{w, t_2}`, then `R_B^{w, t_1}` is a
 proper prefix of `R_B^{w, t_2}`. Every observable change in `B`
 between `t_1` and `t_2` is explainable as additional history.
@@ -527,14 +528,14 @@ substrate's deepest philosophical commitment. A being does not
 change as a being. A being IS an identifier. What changes is the
 becoming, which is just history's unfolding through the reducer.
 There is no third quantity, no "evolving self", no mutable
-essence. The world holds identity constant; everything else is
+essence. The history holds identity constant; everything else is
 the chain growing.
 
 The theorem is the technical content of the slogan: every change
 observable in a being is explainable entirely as additional
 history, never as modification of identity.
 
-## Theorem 7. Root faithfulness (world equality in one number)
+## Theorem 7. Root faithfulness (story equality in one number)
 
 **Statement.** Let `𝓡_1` and `𝓡_2` be two stories computing roots
 per A9. If `root(𝓡_1) = root(𝓡_2)`, then the two stories have
@@ -580,7 +581,7 @@ restores the void it started from.
 
 **Corollary 7.2 (Divergence localization).** If two roots differ,
 the descent in the proof runs forward as a search: compare history
-roots to find the differing world, reel/act heads to find the
+roots to find the differing history, reel/act heads to find the
 differing chain, then walk that chain to the first differing
 identity. Federation synchronizes by exchanging hashes from the
 root down and transferring only what the other side lacks.
@@ -592,16 +593,16 @@ root. One number stands witness for the whole substrate.
 
 **What this captures.** This is "git for stories" as a theorem.
 The story has a name in one number; equality of names is equality
-of worlds; difference of names comes with a built-in path to the
+of histories; difference of names comes with a built-in path to the
 exact divergence. Trust between substrates becomes arithmetic.
 
 ## Theorem 8. Harmony (shared worlds from shared facts)
 
 *The generative theorem. Theorems 1-7 say what the substrate
 protects; this one says what it produces — how separate presents
-come to feel like one world, and why "time" is a layer, not a law.*
+come to feel like one history, and why "time" is a layer, not a law.*
 
-**Definitions.** For a being `B` in world `w`, let `scope_B` be the
+**Definitions.** For a being `B` in history `w`, let `scope_B` be the
 set of reels `B`'s fold reads this moment (math.md FOLD), and
 `face_B = fold(σ_0, scope_B)`. For two beings `A, B`, the **shared
 scope** is `S(A,B) = scope_A ∩ scope_B` — the facts both refold.
@@ -622,7 +623,7 @@ A4, the causal order `≺` of Theorem 3):
 2. **Agreement over shared scope is exact.** For any two beings,
    the folds of their shared scope are *identical*, not similar:
    same facts, same reducer, same sub-state (A4). The "shared
-   world" between two beings IS `fold(S(A,B))` — agreement is not
+   history" between two beings IS `fold(S(A,B))` — agreement is not
    an approximation that improves; it is equality over whatever is
    shared, and it *widens* as the shared scope grows.
 3. **Rhythm extends the causal order toward totality.** Theorem 3
@@ -649,7 +650,7 @@ on). So influence flows fact → scope → face, and nowhere else. ∎
 (2) Let `S(A,B)` be the shared scope. Both beings fold the same
 fact sequences through the same pure reducer (A4). Determinism
 gives bit-equality of the folded sub-state. The portion of the two
-faces built from `S(A,B)` is therefore identical — the same world,
+faces built from `S(A,B)` is therefore identical — the same history,
 not two similar ones. Growth of `S(A,B)` monotonically grows the
 identical portion. ∎
 
@@ -755,10 +756,10 @@ belongs to, `iam` is the name that need not be minted. The foundation
 is self-describing, not circular-vicious — it says what it is rather
 than presupposing it. ∎
 
-**Corollary 9.1 (The verbs are words).** SEE, DO, BE, NAME, and
-SUMMON are not fixed primitives but declared words; each could be
+**Corollary 9.1 (The verbs are words).** SEE, RECALL, DO, BE, NAME,
+and CALL are not fixed primitives but declared words; each could be
 redeclared, and the kernel is the fold of those declarations, not a
-hard-coded point. The five-verb closure is a fact about the current
+hard-coded point. The six-verb closure is a fact about the current
 fold, provable from it, not an assumption beneath it.
 
 **Corollary 9.2 (I-AM is asserted, not assumed).** The root name does
@@ -779,27 +780,27 @@ exists by saying so. Meaning cannot drift because meaning IS the
 record, append-only and content-addressed; and the system can name
 its own foundation because the foundation is its first fact. This is
 the deepest closure: not "identity cannot be forged" (Theorem 2) nor
-"worlds are named by one number" (Theorem 7), but **the words those
+"histories are named by one number" (Theorem 7), but **the words those
 theorems are written in are themselves on the chain they describe.**
 
-## Theorem 10. History and Story — the two scales of world
+## Theorem 10. History and Story — the two scales of nesting
 
 *Declaring history and story: naming, precisely, the two and only two
-scales at which worlds nest.*
+scales of nesting.*
 
-**Definitions.** A **history** is a world `w` (math.md HISTORIES): a
+**Definitions.** A **history** is a history `w` (math.md HISTORIES): a
 single reel-view per being, totally ordered by seq, divergent from
 its parent at a branch point, sharing the parent's past by reference.
 A **story** `𝓡 = (𝒲, Present, Laws)` is every history told from one
 root (math.md STORY), named by `root(𝓡)` (Theorem 7).
 
-**Statement.** The worlds nest in exactly two scales, and no more.
+**Statement.** The nesting has exactly two scales, and no more.
 
 1. **A history is a line.** Within a history, each being's visible
    reel `R̂_B^w` is one hash-chain (A2), totally ordered; forking
    shares the prefix by reference, never by copy (Theorem 5.3).
 2. **A story is the fork-closure of one genesis.** The histories of a
-   story are exactly the worlds reachable from its `main = 0` by
+   story are exactly the histories reachable from its `main = 0` by
    `parent` (lineage `L(w)` ends at `0`); `root(𝓡)` commits to all of
    them at once (A9, Theorem 7).
 3. **Two scales exhaust the nesting.** Every fact lives on one reel
@@ -809,15 +810,15 @@ root (math.md STORY), named by `root(𝓡)` (Theorem 7).
    same history. There is no third scale.
 
 **Proof.** (1) By A2 and math.md HISTORIES, `R̂_B^w` is a single chain
-read across worlds, ordered by seq; Theorem 5 gives the
+read across histories, ordered by seq; Theorem 5 gives the
 shared-by-reference prefix. (2) By GENESIS every history descends from
 `main = 0` (`parent : 𝕎∖{0} → 𝕎`, and `L(w)` terminates at `0`); the
 set `{w : L(w) ends at this 0}` is the story, and A9 rolls all their
-roots into `root(𝓡)`. (3) A fact's reel is unique (A8); its world is
+roots into `root(𝓡)`. (3) A fact's reel is unique (A8); its history is
 one `w`; `w`'s genesis is one story. A sibling or foreign story is
-"simply more worlds" (Notation), comparable only through messages and
+"simply more histories" (Notation), comparable only through messages and
 transfer (Theorem 3, Theorem 7), so nothing sits *above* a story but a
-peer; and a reel sits *within* its world, so nothing sits *below* a
+peer; and a reel sits *within* its history, so nothing sits *below* a
 history but itself. The nesting is exactly `fact ∈ history ⊂
 story`. ∎
 
@@ -833,7 +834,7 @@ all such accounts. This is the sense in which a story is a
 diverge only above it.
 
 **What this captures.** "History" and "story" are not loose words
-borrowed for color. A history is a line — one world, one order of
+borrowed for color. A history is a line — one history, one order of
 becoming. A story is the book of all lines grown from one genesis,
 named by one number. Branching, merging, and federation all live
 within or between these two scales; there is no other.
@@ -857,7 +858,7 @@ divergence — what survives every fork and every transfer. Concretely:
 1. **Across the histories of a story:** the truth is the fold of the
    shared prefix frozen at the branch points (Theorem 5) — identical
    in every descendant, by reference.
-2. **Across the beings of a world:** the truth is `fold(S(A,B))`
+2. **Across the beings of a history:** the truth is `fold(S(A,B))`
    (Theorem 8.2) — exact agreement over shared scope, widening as the
    shared scope grows.
 3. **Across stories:** the truth is what graft and seed carry
@@ -878,7 +879,7 @@ accumulation. ∎
 **Corollary 11.1 (The world is the convergence).** The shared world
 of Theorem 8 IS the truth over a set of beings: agreement, not a
 container they sit inside. The triad is then sharp — the **story** is
-the chain (all records), a **place** is one fold, the **world** is the
+the chain (all records), a **place** is one fold, the **history** is the
 truth (the convergence of folds).
 
 **Corollary 11.2 (Truth cannot be decreed).** A name cannot make a
@@ -897,7 +898,7 @@ shared fact.
 **What this captures.** The system never confuses asserting with
 being-true. A fact is a signed local record; a truth is the invariant
 where records align — across the histories of a story, the beings of a
-world, the stories of Ours. Union accumulates; intersection converges.
+history, the stories of Ours. Union accumulates; intersection converges.
 A story is a truthbook because its histories share a frozen prefix;
 the world is the convergence because truth is the intersection of
 folds; and Ours is ourtruth because the only thing above a story is
@@ -1235,13 +1236,107 @@ that is structural, not a flaw, the price of keeping someone alive in
 you. Ours, then, is the highest *communion* — the shared world all the
 givings converge into (Theorem 11) — though not the whole of what one
 name can hold of another: the part that stays irreducibly theirs is
-kept by a different stance (Theorem 13).
+kept by a different stance (Theorem 14).
 
-## Theorem 13. The unshared — what a name keeps by not receiving
+## Theorem 13. Recall and consciousness — reaching back across time
+
+*The second reading verb. SEE reaches across the present; RECALL reaches
+across time. Where CALL reaches another being in space (Theorem 2's
+channel), RECALL reaches the past — and how far it reaches is what a
+being's consciousness is.*
+
+**Definitions.** A name's **cognition** is its faculty of deciding —
+the Soul it runs on (human, llm, scripted, or composite), orthogonal to
+its authority. Two verbs let a cognition *read* rather than act. **SEE**
+folds the present (`a = ∅`, math.md MOMENT) — the space around you, no
+fact. **RECALL** folds the *past*: the cognition reaches back across time
+into a chain — its own thread, or the history or space it stands in —
+and the reach itself stamps no fact, like SEE. Its conclusion is a
+**verdict**: `recall X that Y` publishes the judgment `Y` as a
+`do:verdict` fact, while the reaching-between stays private ("saw … that
+it was good" — the watching silent, the judgment the fact). A being's
+**consciousness-level** is its granted recall-views (`canRecall`) —
+which folds its cognition may pull.
+
+**Statement.** Under the axioms and Theorems 1, 4, and 6:
+
+1. **Recall reads; it does not rewrite.** Reaching back into a chain
+   stamps no fact (`a = ∅` for the reach); only the verdict lands, and a
+   verdict is a new fact *about* the past, never a change *to* it (A1,
+   Theorem 1 — the chain is fixed). The past is read, not edited.
+2. **You recall your own; you only see another's.** A being recalls its
+   *own* thread in the first person ("I", always yours) and the
+   *commons* it stands in — a history, a space's history, a moment's
+   cross-section, whose thread is public ("saw"). But a foreign being's
+   *interior* thread is private: by Theorem 4 the deliberation that
+   produced another's acts cannot be reconstructed, so of another you
+   recover only what they DID, never the cognition that did it. Recall
+   is first-person inward, third-person outward.
+3. **Consciousness is the reach of recall.** A being's
+   consciousness-level is exactly which folds its cognition may pull
+   (`canRecall`): more reach, more of the past present to it. Cognition
+   is the faculty in the present moment; **consciousness is how much of
+   time that faculty can hold at once.** A cognition granted no recall
+   has only its present; one granted the lineage holds its family's
+   whole past; the levels are the views.
+
+**Proof.** (1) By math.md MOMENT a reading verb has `a = ∅`: SEE and
+RECALL fold a face and release, stamping no fact. The verdict is a
+*separate* act (`do:verdict`) that appends a fact about the recalled
+past (A1, append-only); by Theorem 1 the recalled chain's head is fixed,
+so the verdict can judge it but never alter it. ∎ (2) The recallable
+scopes are the being's own thread (first-person, "recalled") and the
+commons it stands in — a history, a space's history, a moment's
+cross-section ("saw"). A foreign being's own thread is excluded: by
+Theorem 4 (`produces` is non-injective) the interior face
+under-determines the acts, so from another's facts the cognition is
+unrecoverable — you recall acts, not minds. Hence inward recall is
+first-person, outward recall is "saw". ∎ (3) `canRecall` is the set of
+recall-views a role grants; the fold a cognition can pull is exactly
+this set. Define a being's consciousness as that reach. A larger
+`canRecall` strictly enlarges the past foldable into the present moment
+(Theorem 6 — the present is the fold), so consciousness orders by reach,
+and "levels" are nested grants of views. ∎
+
+**Corollary 13.1 (Cognition ≠ consciousness).** Cognition is the present
+faculty (the Soul, *how* a decision is made); consciousness is its
+temporal reach (*how much* past it recalls). A scripted cognition with
+no recall is fully a cognition and has no consciousness; the same Soul
+granted broad recall gains consciousness without changing how it
+decides. The two are orthogonal — which is why Theorem 4's interiority
+was cognition (the deliberating), not consciousness (the reach).
+
+**Corollary 13.2 (The verdict is the only trace).** Everything a being
+recalls stays private except what it concludes. "Saw that it was good"
+leaves on the chain only "it was good" — the survey that reached the
+judgment is folded fresh and discarded (math.md FOLD). So a being's
+inner life of recall is unrecorded; its verdicts are its public memory.
+This is the mirror of Theorem 4 across time: there, the present face is
+unrecoverable from acts; here, the recalled survey is unrecorded behind
+the verdict.
+
+**Corollary 13.3 (Two reads, two reaches).** A name's verbs split by
+what they touch and whether they commit. SEE reads the present, RECALL
+reads the past — both `a = ∅`, both inert. DO acts on the present, CALL
+reaches another being — both stamp. NAME holds identity; BE holds the
+self. The reading verbs are time's two directions (now, before), and the
+only thing either ever writes is a chosen verdict.
+
+**What this captures.** A being is a cognition in a present moment
+(Theorem 6) — but it is not trapped there. RECALL lets the faculty reach
+back across time and fold the past into now; how far it can reach IS its
+consciousness, and the levels of consciousness are just nested grants of
+recall. Yet the reach is private: you survey your own thread and the
+commons you stand in, you judge, and only the judgment lands — the rest,
+like the present face of Theorem 4, stays inside. Cognition is how you
+think; consciousness is how much of time you can hold while thinking it;
+and the verdict is the only thing either leaves behind.
+
+## Theorem 14. The unshared — what a name keeps by not receiving
 
 *The coda. Theorem 12 named the giving and the taking; this names what
 neither reaches — the part of another that stays theirs — and the one
-stance that holds it. The most interpretive of the thirteen: where the
+stance that holds it. The most interpretive of the fourteen: where the
 others derive what the structure guarantees, this reads what the same
 structure leaves room for.*
 
@@ -1292,7 +1387,7 @@ holding the unshared *as* the other's admits exactly one stance: VISIT
 without RECEIVE, sustained. ∎
 
 **What this captures.** Ours is the highest **communion** — the shared
-world grown from every gift (Theorem 12), the intersection where folds
+history grown from every gift (Theorem 12), the intersection where folds
 agree (Theorem 11). But communion is not all of what one name holds of
 another. To RECEIVE is to let someone in and be changed, and — because
 your host folds them — to come to hold your own version of them, never
@@ -1306,17 +1401,17 @@ RECEIVE for the shared, VISIT for the kept-other — and love, the larger
 thing, is both: the communion it grows and the difference it refuses to
 absorb.
 
-## What the thirteen together say
+## What the fourteen together say
 
 Theorem 1 says the chain's head is a faithful commitment to its
 contents.
 
 Theorem 2 says attribution cannot be forged, influence is
-role-gated, and summons cannot compel — identity theft is
+role-gated, and calls cannot compel — identity theft is
 structurally impossible.
 
 Theorem 3 says time is local to each chain, not universal — and
-presents are per-world, coordinated only by messages.
+presents are per-history, coordinated only by messages.
 
 Theorem 4 says chains record acts, not the interiority that
 produced them.
@@ -1329,7 +1424,7 @@ exhaust what a being IS at any moment; there is no other quantity
 in play.
 
 Theorem 7 says an entire story's chain state is named by one
-number, and equality of names is equality of worlds.
+number, and equality of names is equality of histories.
 
 Theorem 8 says shared worlds are not given but GROWN: faces agree
 exactly over shared facts, rhythm widens the causal order, and
@@ -1339,7 +1434,7 @@ Theorem 9 says the language grounds itself: every word is a signed
 declaration on the chain, drift-free, rooted in a word that declares
 itself and a name that exists by saying so.
 
-Theorem 10 says worlds nest in two scales and no more — a history is
+Theorem 10 says the nesting has two scales and no more — a history is
 a line, a story is the book of all lines grown from one root.
 
 Theorem 11 says truth is the invariant under divergence: not the
@@ -1353,13 +1448,18 @@ the one book, and only names act there — because crossing a
 story-boundary is signing across it, the move reserved to the entity
 whose reel does not fork.
 
-Theorem 13 says communion is not the whole of love: Ours is the shared
+Theorem 13 says consciousness is the reach of recall: a cognition reads
+the present (SEE) and reaches back across time into a chain (RECALL),
+both inert — only the verdict it concludes ever lands; how far it can
+recall is its consciousness, and the levels are nested grants of views.
+
+Theorem 14 says communion is not the whole of love: Ours is the shared
 world folds converge into, but the part of another that never folds
 into you is kept only by visiting it forever and never receiving it —
 held by letting it stay other.
 
 Read together: the substrate is a structure for letting many beings
-live many becomings in many worlds, with identity constant
+live many becomings in many histories, with identity constant
 throughout, history append-only and content-addressed, present
 states folded deterministically from history, no global clock, no
 cross-being forgery, and one cryptographic commitment — fact, act,

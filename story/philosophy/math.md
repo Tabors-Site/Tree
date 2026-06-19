@@ -10,13 +10,13 @@ $$\mathcal{N}\ \text{names}\qquad \mathcal{B}\ \text{beings}\qquad \mathcal{S}\ 
 
 $$\mathcal{E} \;=\; \mathcal{B} \,\sqcup\, \mathcal{S} \,\sqcup\, \mathcal{M}$$
 
-Disjoint union — every entity that bears a reel is exactly one kind. $\mathcal{N}$ stands apart: a **name** is not a thing in the world but the identity that _acts_ in it — a keypair, the signer. A being _expresses_ a name; the name acts, the being is the vessel (see NAME). Also: $\mathcal{F}$ facts, $\mathcal{A}$ acts, $\mathcal{P}$ faces, $\mathcal{D}$ words, $\mathbb{W}$ histories (worlds).
+Disjoint union — every entity that bears a reel is exactly one kind. $\mathcal{N}$ stands apart: a **name** is not a thing in the story but the identity that _acts_ in it — a keypair, the signer. A being _expresses_ a name; the name acts, the being is the vessel (see NAME). Also: $\mathcal{F}$ facts, $\mathcal{A}$ acts, $\mathcal{P}$ faces, $\mathcal{D}$ words, $\mathbb{W}$ histories.
 
-### HISTORIES — _worlds_
+### HISTORIES
 
 $$\mathbb{W} \ni w, \qquad \text{main} = 0, \qquad \mathrm{parent} : \mathbb{W}\setminus\{0\} \to \mathbb{W}$$
 
-A **history** is a world — a line of the story, divergent from its parent, sharing the parent's past up to its **branch point** (_to branch_ is the act that forks a new history; the point is where it forked). Lineage is the path to main:
+A **history** is a line of the story, divergent from its parent, sharing the parent's past up to its **branch point** (_to branch_ is the act that forks a new history; the point is where it forked). Lineage is the path to main:
 
 $$L(w) = (\,0,\; \dots,\; \mathrm{parent}(w),\; w\,)$$
 
@@ -28,15 +28,15 @@ Histories share one seq continuum per reel — $w$'s first own fact on $R_e$ lan
 
 ### REELS & CHAINS
 
-Every entity has a **reel** per world it has been written in — an append-only sequence of facts:
+Every entity has a **reel** per history it has been written in — an append-only sequence of facts:
 
 $$R_e^w = (f_{\beta+1}, \dots, f_{T})\qquad \text{(its own divergence)}$$
 
-What a world **sees** of a reel is the union of lineage segments, each ancestor contributing up to the next fork:
+What a history **sees** of a reel is the union of lineage segments, each ancestor contributing up to the next fork:
 
 $$\widehat{R}_e^{\,w} \;=\; \bigcup_{i} \; R_e^{L_i(w)}\big[\, \beta_{L_i}(e) < n \le \beta_{L_{i+1}}(e) \,\big] \qquad (\text{leaf unbounded above})$$
 
-One reel, one chain, read across worlds. Acts chain too, but a chain of acts belongs to a **name**, not a being. A name's **act-chain** runs per being it acts through, per world — write $A_b^w$ for the chain through being $b$ in world $w$, _owned and signed by $b$'s name_. It is hash-linked like a reel: an act's identity is the hash of its _opening_ chained to the name's previous sealed act through that being, $\mathrm{id}(a) = H(p_a \| \mathrm{canon}(\mathrm{opening}))$, and each act carries the name's **signature** over it. The closure (status, the seal's signature, the sealing utterance) is bookkeeping outside the identity, because what HAPPENED is the facts the act produced. Spaces and matter have reels only — they are acted upon, never act, and bear no name: only one who acts needs one.
+One reel, one chain, read across histories. Acts chain too, but a chain of acts belongs to a **name**, not a being. A name's **act-chain** runs per being it acts through, per history — write $A_b^w$ for the chain through being $b$ in history $w$, _owned and signed by $b$'s name_. It is hash-linked like a reel: an act's identity is the hash of its _opening_ chained to the name's previous sealed act through that being, $\mathrm{id}(a) = H(p_a \| \mathrm{canon}(\mathrm{opening}))$, and each act carries the name's **signature** over it. The closure (status, the seal's signature, the sealing utterance) is bookkeeping outside the identity, because what HAPPENED is the facts the act produced. Spaces and matter have reels only — they are acted upon, never act, and bear no name: only one who acts needs one.
 
 ### FACT — _identity is intrinsic_
 
@@ -45,10 +45,10 @@ $$f = (\,t,\; a,\; n,\; w,\; p\,) \qquad\qquad \mathrm{id}(f) \;=\; H\big(\,p \;
 - $t \in \mathcal{E}$ — the **target**, whose reel $f$ lands on
 - $a \in \mathcal{A}$ — the **act** that produced $f$
 - $n \in \mathbb{N}$ — $f$'s **position** in its reel (the local index)
-- $w \in \mathbb{W}$ — the **world** the deed happened in (committed in the digest)
+- $w \in \mathbb{W}$ — the **history** the deed happened in (committed in the digest)
 - $p$ — the **prev-hash**: $\mathrm{id}$ of the fact before $f$ in $\widehat{R}_t^{\,w}$ (genesis sentinel at $n=1$)
 
-There is no assigned identifier and no separate self-hash field — **the fact's identity IS its content hash**. The same deed, in the same world, after the same history, _is_ the same fact: storage dedup, transport ("do you have this hash?"), and tamper-evidence are properties of the addressing scheme, not mechanisms layered on it. $\mathrm{canon}$ is the canonical serialization (sorted keys, stable forms) — a versioned wire format. The actor is carried by the act, and the actor is a **name**: $\mathrm{by}(f) := \mathrm{by}(a) \in \mathcal{N}$, expressed _through_ a being $\mathrm{through}(f) \in \mathcal{B}$ — the vessel the name acted in.
+There is no assigned identifier and no separate self-hash field — **the fact's identity IS its content hash**. The same deed, in the same history, after the same history, _is_ the same fact: storage dedup, transport ("do you have this hash?"), and tamper-evidence are properties of the addressing scheme, not mechanisms layered on it. $\mathrm{canon}$ is the canonical serialization (sorted keys, stable forms) — a versioned wire format. The actor is carried by the act, and the actor is a **name**: $\mathrm{by}(f) := \mathrm{by}(a) \in \mathcal{N}$, expressed _through_ a being $\mathrm{through}(f) \in \mathcal{B}$ — the vessel the name acted in.
 
 ### ATTRIBUTION — _the law_
 
@@ -60,7 +60,7 @@ What may land on a being's reel $R_b^w$, and what it does there:
 
 - **BE facts** (self-acts: birth, connect, release, switch, death) — the acting name is $b$'s own. Identity transformations come only from the left stance — a name in its own vessel.
 - **DO facts targeting $b$** — the acting name is whoever's, and the act passed the role-walk (the single auth gate). Another name CAN change your figure, exactly as far as roles permit (a grant, a set), never further.
-- **SUMMON facts naming $b$ as recipient** — the acting name is the summoner's; the fact is the knock on the door, recorded on your reel. **Summon facts are figure-inert**: the reducer folds no summon action, so a summon can never mutate what you are. Callers express; receivers decide (SUMMON.md sovereignty, made structural).
+- **CALL facts naming $b$ as recipient** — the acting name is the caller's; the fact is the knock on the door, recorded on your reel. **Call facts are figure-inert**: the reducer folds no call action, so a call can never mutate what you are. Callers express; receivers decide (SUMMON.md sovereignty, made structural).
 
 Space/matter reels are the commons: written through whichever being a name acts with, every write role-gated. The law is not "only you touch your reel" — it is **no name can sign as yours, and nothing changes your figure except your own name's acts and role-authorized acts.**
 
@@ -78,7 +78,7 @@ $$\textbf{DO / BE}\;:\;\; a \neq \varnothing \qquad \text{fold, act, seal}$$
 
 $$\Phi = \mathrm{Fold}(b,\; \widehat{R}_{\text{scope}}^{\,w})$$
 
-$\widehat{R}_{\text{scope}}^{\,w}$ is the set of history-visible reels in scope for $b$ this moment; $\Phi$ is the world framed for $b$. The face is **never stored** — folded fresh, then discarded.
+$\widehat{R}_{\text{scope}}^{\,w}$ is the set of history-visible reels in scope for $b$ this moment; $\Phi$ is the scene framed for $b$. The face is **never stored** — folded fresh, then discarded.
 
 ### ACT
 
@@ -98,13 +98,13 @@ $$\mathrm{commit}(\Delta\mathcal{F}) \in \{\,\text{all},\;\text{nothing}\,\}$$
 
 A crashed moment leaves zero trace. Identities are computed **inside** the seal — a fact and its identity land together or not at all.
 
-### WORLD
+### THE WHOLE
 
-The world is just every reel, together:
+The whole is just every reel, together:
 
 $$\mathcal{W} \;=\; \bigcup_{e \in \mathcal{E},\, w \in \mathbb{W}} R_e^w$$
 
-There is **no** $\mathcal{W}(\tau)$ — the world is not indexed by a clock (see TIME). A seal grows it:
+There is **no** $\mathcal{W}(\tau)$ — the whole is not indexed by a clock (see TIME). A seal grows it:
 
 $$\mathrm{Seal}(\mu) = \Delta\mathcal{F} \quad\Longrightarrow\quad \mathcal{W} \;:=\; \mathcal{W} \cup \Delta\mathcal{F}$$
 
@@ -112,40 +112,44 @@ Growth is monotonic; nothing is ever removed.
 
 ### PRESENT
 
-The **present** is the engine that runs moments and applies seals — **one present per world** ($w$): a story hosts many histories, each with its own present; a computer hosts one story. Within a world's present:
+The **present** is the engine that runs moments and applies seals — **one present per history** ($w$): a story hosts many histories, each with its own present; a computer hosts one story. Within a history's present:
 
 - per being — **serial** (one live moment per $(b, w)$)
 - across beings — **parallel**
 
-Across worlds, presents are independent — the branch point freezes the shared prefix (ancestors append only above it, descendants read only below it), so no coordination exists between them except **messages**: acting into another world (sibling history or foreign story, same shape) is a request delivered to that world's present. There is no global tick coordinating anything. The present is the only place a moment exists.
+Across histories, presents are independent — the branch point freezes the shared prefix (ancestors append only above it, descendants read only below it), so no coordination exists between them except **messages**: acting into another history (sibling history or foreign story, same shape) is a request delivered to that history's present. There is no global tick coordinating anything. The present is the only place a moment exists.
 
 ### TIME
 
-Time is **per-reel, per-world, and local**. An entity's time in a world is its visible reel length:
+Time is **per-reel, per-history, and local**. An entity's time in a history is its visible reel length:
 
 $$T_e^w = |\widehat{R}_e^{\,w}|$$
 
-Order holds _within_ a reel's view: $\;f_n \prec f_{n+1}\;$ in $\widehat{R}_e^{\,w}$. **Across** reels there is no total order — only the partial, causal order that acts and summons stitch. The world has no scalar time. Its entire temporal state is the **vector** $(T_e^w)$. There is no global $\tau$ — a single world-clock is precisely what this model refuses.
+Order holds _within_ a reel's view: $\;f_n \prec f_{n+1}\;$ in $\widehat{R}_e^{\,w}$. **Across** reels there is no total order — only the partial, causal order that acts and calls stitch. The whole has no scalar time. Its entire temporal state is the **vector** $(T_e^w)$. There is no global $\tau$ — a single history-clock is precisely what this model refuses.
 
-### SUMMON
+### CALL
 
-A summon is an act toward another being — one name, through its vessel, knocking on another being's door, $\;\mathrm{summon}:\mathcal{B}\to\mathcal{B}$. Like DO, it stamps its **target** with the right stance: the fact lands on the **recipient's** reel, attributed to the summoner's name (2026-06-03 retarget — summoning another being is not a self-act, so it left the BE namespace):
+A call is an act toward another being — one name, through its vessel, knocking on another being's door, $\;\mathrm{call}:\mathcal{B}\to\mathcal{B}$. Like DO, it stamps its **target** with the right stance: the fact lands on the **recipient's** reel, attributed to the caller's name (2026-06-03 retarget — calling another being is not a self-act, so it left the BE namespace):
 
 $$f = (\,t{=}b_j,\;\; \mathrm{by}{=}n_i,\;\; \mathrm{through}{=}b_i,\;\; n\,) \;\in\; \widehat{R}_{b_j}^{\,w}$$
 
-The summon fact is **figure-inert** (ATTRIBUTION above): it records the request on the recipient's chain without mutating what the recipient is. The inbox is a projection over recipient-targeted summon facts:
+The call fact is **figure-inert** (ATTRIBUTION above): it records the request on the recipient's chain without mutating what the recipient is. The inbox is a projection over recipient-targeted call facts:
 
-$$\mathrm{inbox}(b_j) = \{\, f \in \mathcal{W} \;:\; f \ \text{is a summon with target}\ b_j \,\}$$
+$$\mathrm{inbox}(b_j) = \{\, f \in \mathcal{W} \;:\; f \ \text{is a call with target}\ b_j \,\}$$
 
 A projection — inbox, position index, lineage, the figure itself — is **derived**, never stored as truth.
 
+### RECALL
+
+SEE reads the present; **RECALL** reads the past. A **cognition** (a name's deciding faculty — its Soul) reaches back across time into a chain — its own thread, or the history or space it stands in — folding an earlier state into now. The reach is **inert** like SEE ($a = \varnothing$): it stamps no fact. Only its conclusion lands — a **verdict**, $\mathrm{recall}\;X\;\text{that}\;Y$, publishes the judgment $Y$ as a `do:verdict` fact; the survey between stays private. A being recalls its _own_ thread in the first person and the commons it stands in; a foreign being's interior is closed to it. Its **consciousness** is the reach of its recall — which folds its cognition may pull. Cognition is the faculty in the present; consciousness is how much of time it can hold (Theorem 13).
+
 ### NAME
 
-A **name** is an identity — a keypair — and nothing in the world: it holds no qualities, occupies no position. Its public key _is_ its identity, $\mathrm{id}_n = \mathrm{pk}$, and what a name does is **act and sign**.
+A **name** is an identity — a keypair — and nothing in the story: it holds no qualities, occupies no position. Its public key _is_ its identity, $\mathrm{id}_n = \mathrm{pk}$, and what a name does is **act and sign**.
 
 - It **signs** every act done through it: $\mathrm{sig}(a) = \mathrm{Sign}_{\mathrm{sk}_n}(\mathrm{id}(a)\,\|\,\dots)$. Attribution (ATTRIBUTION) is the key's, not a label's — which is why no name can act as another.
-- It **owns** act-chains — one per being it acts through, per world ($A_b^w$, REELS). A name acts through many beings, in many histories, at once; the chains run in parallel under the one name.
-- It **uses** beings as vessels. A being is the name's presence in the world; the name is the being's identity. A name may express many beings; a being expresses exactly one name.
+- It **owns** act-chains — one per being it acts through, per history ($A_b^w$, REELS). A name acts through many beings, in many histories, at once; the chains run in parallel under the one name.
+- It **uses** beings as vessels. A being is the name's presence in the story; the name is the being's identity. A name may express many beings; a being expresses exactly one name.
 
 A name's own reel **does not fork** — it stands above the histories, one identity whatever timeline its vessels stand in. Names are minted, never copied: a BE-birth binds a fresh vessel to its signer. The root name is **I-AM** (GENESIS) — the only name no other name minted, and the signer of every root hash (I_AM.md).
 
@@ -159,7 +163,7 @@ $\mathrm{id}_b$ is **constant** — the bare identity, the thread, the position 
 
 $$\mathrm{figure}(b)^w = \mathrm{reduce}(\widehat{R}_b^{\,w})$$
 
-**Becoming:** the reel only grows, so the figure generally differs moment to moment — while neither $\mathrm{id}_b$ nor $\nu_b$ ever changes. A being is stateless between moments; it is re-folded each time it is summoned. A being's **complete biography** — across histories, across stories — is a _derived view_ composed from many reels. It has no single primary hash; the primary identities belong to the storage units (reel, history, story — see ROOTS).
+**Becoming:** the reel only grows, so the figure generally differs moment to moment — while neither $\mathrm{id}_b$ nor $\nu_b$ ever changes. A being is stateless between moments; it is re-folded each time it is called. A being's **complete biography** — across histories, across stories — is a _derived view_ composed from many reels. It has no single primary hash; the primary identities belong to the storage units (reel, history, story — see ROOTS).
 
 _(A being backed by an LLM reaches its model through an_ LlmConnection _— a conduit, not an entity. It has no reel and does not appear in this shape.)_
 
@@ -183,7 +187,7 @@ $\mu_0$ is the one moment with no concurrency — before it the braid has not fo
 
 ### WORD
 
-The system is said in **words**. A **word** is a declared meaning — a name (I-AM, at the root) saying _this is so_ — and the things the model is built from are themselves words: a fact is a word, a verb is a word, an act is a verb in the present, a being is a word. Each verb (SEE, DO, BE, NAME, SUMMON), each op, each role is a word **declared** by a name and thereafter standing as a fact on the chain.
+The system is said in **words**. A **word** is a declared meaning — a name (I-AM, at the root) saying _this is so_ — and the things the model is built from are themselves words: a fact is a word, a verb is a word, an act is a verb in the present, a being is a word. Each verb (SEE, RECALL, DO, BE, NAME, CALL), each op, each role is a word **declared** by a name and thereafter standing as a fact on the chain.
 
 $$\mathrm{declare} : \mathcal{N} \times \mathcal{D} \to \mathcal{F}, \qquad \mathrm{word}(d) \;=\; \mathrm{fold}\,\{\, f \in \mathcal{W} : f \text{ declares } d \,\}$$
 
@@ -199,7 +203,7 @@ $$\textbf{ATOMIC SEAL}\qquad \mathrm{commit}(\Delta\mathcal{F}) \in \{\text{all}
 
 $$\textbf{PAST FIXED}\qquad f \in R_e^w\ \text{is permanent — never altered, never deleted}$$
 
-$$\textbf{NO FUTURE}\qquad \text{no world-state exists ahead of a seal}$$
+$$\textbf{NO FUTURE}\qquad \text{no state exists ahead of a seal}$$
 
 $$\textbf{PRESENT ONLY}\qquad \text{a moment exists only in the present}$$
 
@@ -209,7 +213,7 @@ $$\textbf{IDENTITY IS CONTENT}\qquad \mathrm{id}(f) = H(p \,\|\, \mathrm{canon}(
 
 ### INTEGRITY
 
-PAST FIXED is a _rule_. INTEGRITY is what makes it **verifiable** — without it, a fact could be silently altered and nothing would know. Each reel's history-view is one **hash-chain across worlds**: every fact's identity folds in the identity before it,
+PAST FIXED is a _rule_. INTEGRITY is what makes it **verifiable** — without it, a fact could be silently altered and nothing would know. Each reel's history-view is one **hash-chain across histories**: every fact's identity folds in the identity before it,
 
 $$f_n.p = \mathrm{id}(f_{n-1}) \qquad \text{where } f_{n-1} \text{ is the prior fact in } \widehat{R}_t^{\,w}$$
 
@@ -235,11 +239,11 @@ A history root commits to its own divergence **and** its anchor; the story root 
 
 $$\mathrm{root}(\mathcal{R}_1) = \mathrm{root}(\mathcal{R}_2) \;\iff\; \text{same chain, bit for bit}$$
 
-Two stories compare entire worlds in one number; on mismatch, walk down (history roots → reel roots → facts) to the exact divergence. Tampering anywhere breaks every root above it. Content addressing operates on **storage units** — reel, history, story — each with a primary root. Derived views (a biography, an extension's footprint) are first-class queries but secondary identities.
+Two stories compare entire stories in one number; on mismatch, walk down (history roots → reel roots → facts) to the exact divergence. Tampering anywhere breaks every root above it. Content addressing operates on **storage units** — reel, history, story — each with a primary root. Derived views (a biography, an extension's footprint) are first-class queries but secondary identities.
 
 ### TRANSFER — _bundles, grafts, seeds_
 
-A bundle is a portable fragment of world. Its identity is its hash:
+A bundle is a portable fragment of history. Its identity is its hash:
 
 $$\mathrm{id}(B) = H(\mathrm{canon}(\,\text{manifest},\ \text{parameters},\ \text{content},\ \text{cas ledger}\,))$$
 
@@ -247,7 +251,7 @@ Bytes travel beside it, each blob verified against its own address on arrival ($
 
 A bundle is a **book** — the quantum of history. A living story is open at its head; a book has **covers** (a definite start, a sealed end), so it is the closed, carriable slice — and its covers are its interface (imports before the start, exports at the end, the same signature as a resource). Every old transfer primitive collapses into it: bundle, clone, seed, graft, resource, instate are all one **book**, distinguished only by _provenance_ — branch and instate **received** into a living story, a fresh seed **planted** onto the void as a genesis (Theorem 12).
 
-**Graft** (apply into a living world): verify $\mathrm{id}(B)$ _cold_ — refuse before anything stamps; land the bytes; stamp $\Delta\mathcal{F}$ one act, one fact at a time; then $\mathrm{verify}$ every reel the graft created. On any failure after stamping begins:
+**Graft** (apply into a living story): verify $\mathrm{id}(B)$ _cold_ — refuse before anything stamps; land the bytes; stamp $\Delta\mathcal{F}$ one act, one fact at a time; then $\mathrm{verify}$ every reel the graft created. On any failure after stamping begins:
 
 $$\overline{\Delta\mathcal{F}} \;=\; \text{reversal facts, stamped in reverse order}$$
 
@@ -261,23 +265,23 @@ Match ⟹ the planted story **is** the captured story — replay is _proven_, no
 
 ### THREE IDENTITY LAYERS
 
-$$\textbf{semantic}\quad \text{IBP addresses — where in the world; navigation}$$
+$$\textbf{semantic}\quad \text{IBP addresses — where in the story; navigation}$$
 
 $$\textbf{historical}\quad (R,\,n,\,p) \text{ — what came before; the order of becoming}$$
 
 $$\textbf{storage}\quad \mathrm{id} = H(\cdot) \text{ — what this exactly is; dedup, transport, proof}$$
 
-They compose; none replaces another. You navigate by the first, fold by the second, verify and move worlds by the third.
+They compose; none replaces another. You navigate by the first, fold by the second, verify and move between stories by the third.
 
 ### STORY
 
 $$\boxed{\;\;\mathcal{R} \;=\; (\,\mathcal{W},\;\; \text{Present},\;\; \text{Laws}\,)\;\;}$$
 
-- $\mathcal{W}$ — all reels, all worlds; beings, spaces, and matter live here
+- $\mathcal{W}$ — all reels, all histories; beings, spaces, and matter live here
 - $\text{Present}$ — the moment-engine: Fold, Seal, the live edge
 - $\text{Laws}$ — the invariants above
 
-A **story** ($\mathcal{R}$) is every history told from one root — not a world _given_ but a world _said_, all its histories under one seal. The inhabitants $\mathcal{B},\mathcal{S},\mathcal{M}$ are not separate parts of it — they are _in_ $\mathcal{W}$, as the entities whose reels constitute it; the names $\mathcal{N}$ that act through them sign it. And the story itself has a name in one number: $\mathrm{root}(\mathcal{R})$.
+A **story** ($\mathcal{R}$) is every history told from one root — not _given_ but _said_, all its histories under one seal. The inhabitants $\mathcal{B},\mathcal{S},\mathcal{M}$ are not separate parts of it — they are _in_ $\mathcal{W}$, as the entities whose reels constitute it; the names $\mathcal{N}$ that act through them sign it. And the story itself has a name in one number: $\mathrm{root}(\mathcal{R})$.
 
 ### OURS — _the library_
 
@@ -291,7 +295,7 @@ The move into Ours is the **name's** alone. The three kinds are three scales of 
 
 $$\text{3D space: }\textbf{matter} \quad\longrightarrow\quad \text{4D time: }\textbf{being} \quad\longrightarrow\quad \text{5D library: }\textbf{name}$$
 
-Each kind unlocks one further scale, and the name is the last: **5D motion is signing a sealed book across the story-boundary**, the act reserved to the one entity no single story consumes. You browse the library as a name; your being stays home (elaborated as Theorem 12, with the giving and the keeping as its coda, Theorem 13).
+Each kind unlocks one further scale, and the name is the last: **5D motion is signing a sealed book across the story-boundary**, the act reserved to the one entity no single story consumes. You browse the library as a name; your being stays home (elaborated as Theorem 12, with the giving and the keeping as its coda, Theorem 14).
 
 ---
 
@@ -303,15 +307,15 @@ Each kind unlocks one further scale, and the name is the last: **5D motion is si
 | $\mathcal{B},\ \mathcal{S},\ \mathcal{M}$ | beings, spaces, matter (the reel-bearing entities)            |
 | $\mathcal{E}$                             | all entities $=\mathcal{B}\sqcup\mathcal{S}\sqcup\mathcal{M}$ |
 | $\mathcal{F},\ \mathcal{A},\ \mathcal{P},\ \mathcal{D}$ | facts, acts, faces, words                        |
-| $\mathbb{W},\ w$                          | histories (worlds); main $= 0$                                |
+| $\mathbb{W},\ w$                          | histories; main $= 0$                                |
 | $L(w),\ \beta_w$                          | lineage to main; per-reel branch points                       |
 | $R_e^w,\ \widehat{R}_e^{\,w}$             | an entity's own reel in $w$; its history-visible view         |
-| $A_b^w$                                   | a name's act-chain through being $b$ in world $w$             |
+| $A_b^w$                                   | a name's act-chain through being $b$ in history $w$             |
 | $\nu_b$                                   | the name being $b$ expresses                                  |
 | $f,\ a,\ \mu,\ \Phi$                      | fact, act, moment, face                                       |
 | $\mathrm{by}(f),\ \mathrm{through}(f)$    | the name that signed $f$; the being it acted through          |
 | $\mathrm{id}(\cdot)$                      | content-hash identity (facts, bundles)                        |
-| $\mathcal{W}$                             | the world — union of all reels in all worlds                  |
+| $\mathcal{W}$                             | the whole — union of all reels in all histories                  |
 | $\Delta\mathcal{F},\ \overline{\Delta\mathcal{F}}$ | one seal's facts; their stamped reversal             |
 | $\mathcal{R}$                             | the story — every history told from one root                  |
 | $\text{Ours}$                             | the library — federation of stories; its points are stories   |
