@@ -3,15 +3,18 @@
 Formal consequences of TreeOS's substrate axioms. Each theorem starts
 from the laws already declared elsewhere (math.md, the various
 doctrine files), states them precisely, and derives a result that
-follows necessarily. Eight theorems, organized from the most
+follows necessarily. Twelve theorems, organized from the most
 mechanical (biography immutability) through the keystone (the
-fundamental theorem of becoming) to the most generative (harmony —
-how shared worlds emerge at all).
+fundamental theorem of becoming) and the generative (harmony — how
+shared worlds emerge) to the foundational (the Word that grounds
+itself, the two scales of world, the truth that is invariant under
+divergence, and the library — the fifth scale, where only names act
+because crossing a world-boundary is signing across it).
 
 ## Notation
 
-Let `B` be a being and `w` a world. A world is a branch within a
-reality; two realities' branches are simply more worlds. The objects:
+Let `B` be a being and `w` a world. A world is a history within a
+story; two stories' histories are simply more worlds. The objects:
 
 - `R_B^w`. Being `B`'s visible reel in world `w` — the lineage union
   math.md writes as `R̂`: ancestor segments below each branch point,
@@ -24,26 +27,35 @@ reality; two realities' branches are simply more worlds. The objects:
   the hash (math.md FACT).
 - `head(R)`. The identity `id_n` of the last fact in `R`. If `R` is
   empty, `head(R) := G`, the genesis sentinel.
-- `A_B^w`. Being `B`'s act-chain in `w` — hash-linked like a reel:
-  each act's identity is the hash of its opening chained to the
-  previous sealed act's identity.
+- `A_B^w`. The act-chain through being `B` in `w` — owned and signed
+  by `B`'s **name**, not by `B`: a chain of acts belongs to the one
+  who acts, and beings are vessels. Hash-linked like a reel: each
+  act's identity is the hash of its opening chained to the name's
+  previous sealed act through `B`, and the name's key signs it.
 - `id_B`. The being's identifier, **assigned** at birth, immutable.
   Note the deliberate contrast: facts and acts have *intrinsic*
   identity (they are what they hash to); a being's identity is
   *assigned and constant* (it is the thread, not a content).
+- `ν_B`. The **name** being `B` expresses — the keypair that signs
+  every act done through `B`. Constant like `id_B`, and one name
+  across all histories (a name's own reel does not fork). The being
+  is the vessel in the world; the name is the identity that acts. A
+  name may express many beings; a being expresses exactly one.
 - `figure_B^w`. The being's projected state in world `w`. Defined as
   `fold(σ_0, ⟨c_1, c_2, ..., c_n⟩)` where `fold` is a pure
   deterministic reducer over **canonical content** and `σ_0` is a
   fixed initial state.
 - `biography_B^w`. Equivalent to `figure_B^w`; used when emphasis is
   on the historical view rather than the present state.
-- `doer(f)`. The being recorded as the actor of fact `f`.
+- `doer(f)`. The **name** recorded as the actor of fact `f` — the key
+  that signed it (math.md writes this `by(f)`). The being it acted
+  through is `through(f)`; the name acts, the being is the vessel.
 - `≺`. The causal partial order on facts. `f ≺ g` iff `f` precedes
   `g` on the same reel, or some chain of summon facts connects them
   in that direction (transitive closure).
-- `root(w)`, `root(𝓡)`. The branch and reality root hashes
+- `root(w)`, `root(𝓡)`. The history and story root hashes
   (math.md ROOTS): canonical roll-ups over reel heads + act-chain
-  heads per branch, then over branch roots per reality.
+  heads per history, then over history roots per story.
 
 ## Axioms
 
@@ -57,13 +69,14 @@ removed, reordered, or mutated. For all worlds `w` and times
 **A2 (Identity is the chained hash).** Every fact's identity is
 `id_i = SHA-256(p_i ‖ canonical(c_i))`. For `i ≥ 2`: `p_i = id_{i-1}`
 — where `i-1` is the prior fact in the *visible* reel, so the first
-divergent fact of a branch chains to its parent's fact at the branch
+divergent fact of a history chains to its parent's fact at the branch
 point: one chain, linked across the fork. For `i = 1`: `p_1 = G`.
 Act-chains obey the same per-position law over act openings, but do
-NOT link across forks: a being's first act on any branch chains from
-`G` (cross-branch biography continuity is the `be:switch` fact on the
-REEL, not the act-chain — actHash.js). Each per-branch act chain is
-complete from genesis, which is what Theorem 7's descent uses.
+NOT link across forks: a name's first act through a being on any
+history chains from `G` (cross-history biography continuity is the
+`be:switch` fact on the REEL, not the act-chain — actHash.js). Each
+per-history act chain is complete from genesis, which is what
+Theorem 7's descent uses.
 
 **A3 (Collision resistance).** SHA-256 is collision resistant.
 Operationally: `SHA-256(x) = SHA-256(y)` implies `x = y` (with
@@ -105,18 +118,20 @@ link.
 implementation (math.md ATTRIBUTION):
 
 1. *Attribution is unforgeable.* Every fact's `doer` is the
-   authenticated actor — the verb layer sets it from the verified
-   identity and accepts no override. No being can produce a fact
-   claiming another being acted.
+   authenticated **name** — the verb layer sets it from the key that
+   signed the seal and accepts no override. No name can produce a
+   fact signed as another; and a being never acts of itself, only the
+   name that owns it does, through it.
 2. *Self-acts come only from self.* BE facts (birth, connect,
-   release, switch, death) on `R_B` carry `doer = B`, always.
+   release, switch, death) on `R_B` carry `doer = ν_B` — the being's
+   own name, always.
 3. *Figure influence is gated and summons are inert.* Every fact
-   that mutates `figure_B` either has `doer = B` or passed the
-   role-walk (the single auth gate) as an authorized DO on `B`.
-   Summon facts land on the recipient's reel (target = recipient,
-   doer = summoner) and the reducer folds NO summon action —
-   a summon records the request and can never change what the
-   recipient is. Callers express; receivers decide.
+   that mutates `figure_B` either is by `ν_B` (the being's own name)
+   or passed the role-walk (the single auth gate) as an authorized DO
+   on `B`. Summon facts land on the recipient's reel (target =
+   recipient, doer = the summoner's name) and the reducer folds NO
+   summon action — a summon records the request and can never change
+   what the recipient is. Callers express; receivers decide.
 
 (The earlier form — "a being's reel holds only its own deeds" — was
 refuted by the 2026-06-03 summon retarget and is retired; this is
@@ -132,13 +147,24 @@ distinct beings `A ≠ B` are independent unless a fact on one reel
 explicitly references the other (via summon, cross-reel act, or
 similar). Absent such a link, no causal ordering relates the two.
 
-**A9 (Canonical roll-up).** Branch and reality roots are computed by
+**A9 (Canonical roll-up).** History and story roots are computed by
 one canonical serialization of sorted parts:
 `root(w) = SHA-256(canonical(w, parent(w), β_w, sorted reel heads,
 sorted act heads))` and
 `root(𝓡) = SHA-256(canonical(domain, sorted (w, root(w))))`.
 (math.md ROOTS; one roll-up builder in code, no ad-hoc
 serialization.)
+
+**A10 (Declarative closure — the Word).** Every meaning the system
+acts on is a **word**: introduced by a `declare` fact authored by a
+name, and read only as the fold of its declare-facts (math.md WORD).
+The verbs (SEE, DO, BE, NAME, SUMMON), ops, roles, and types are
+words, not privileged primitives — the executor consults the fold,
+never a meaning kept off the chain. The descent of declarations
+terminates at two self-grounding roots: `word.word` ("a word is a
+word", leaning on no prior declaration) and `iam` (the root name,
+self-existing), read first at boot. The language is on the chain, not
+behind it.
 
 ## Theorem 1. Biography immutability
 
@@ -208,33 +234,38 @@ from this one property.
 
 ## Theorem 2. Attribution prevents identity theft
 
-**Statement.** Let `A` and `V` be distinct beings (`A ≠ V`). Then:
+**Statement.** Let `A` and `V` be distinct beings (`A ≠ V`),
+expressing names `ν_A ≠ ν_V`. Then:
 
-1. `A` cannot produce any fact `f` with `doer(f) = V`
-   (impersonation is impossible).
-2. Every change to `figure_V^w` traces to `V`'s own acts or to
+1. No name can produce a fact `f` with `doer(f) = ν_V` except `ν_V`
+   itself — impersonation is impossible; in particular nothing acting
+   through `A` can sign as `V`'s name.
+2. Every change to `figure_V^w` traces to `V`'s own name's acts or to
    role-authorized acts on `V` — never to anything `A` does outside
    the role-walk's grants.
 3. No summon `A` sends can change `figure_V^w` at all, even though
    it lands on `V`'s reel.
 
 **Proof.** (1) By A6.1, `doer(f)` is set by the verb layer from the
-authenticated identity of the sealer. `A` seals as `A`; the layer
-accepts no override. So every fact `A` produces carries
-`doer = A ≠ V`. ∎
+key that signed the seal, and accepts no override. To stamp
+`doer = ν_V` one must sign with `ν_V`'s secret key; by A3 and the
+unforgeability of signatures no other name can. A name acting through
+`A` signs with `ν_A`, so every such fact carries `doer = ν_A ≠ ν_V`.
+A being is a vessel, not an actor — theft would need the key, which
+the vessel does not confer. ∎
 
 (2) `figure_V^w = fold(σ_0, R_V^w)` (A4). By A6.2 and A6.3, the
 facts in `R_V^w` that the reducer folds into the figure are exactly:
-`V`'s own BE-acts, and DO facts on `V` that passed the role-walk.
+`V`'s own name's BE-acts, and DO facts on `V` that passed the role-walk.
 Any influence `A` has on `figure_V` therefore flowed through a
 grant `V`'s world explicitly extended (a role whose canDo reaches
 `V`) — gated influence, not theft. ∎
 
 (3) By A6.3, summon facts are figure-inert: the being reducer folds
-no summon action. `A`'s summon appears in `R_V^w` as the recorded
-knock — target `V`, doer `A` — and contributes nothing to the fold.
-`V`'s figure is unchanged unless `V` chooses to act. Callers
-express; receivers decide. ∎
+no summon action. The summon sent through `A` appears in `R_V^w` as
+the recorded knock — target `V`, doer `ν_A` — and contributes nothing
+to the fold. `V`'s figure is unchanged unless `V`'s name chooses to
+act. Callers express; receivers decide. ∎
 
 **Corollary 2.1.** A being's BECOMING is its own: every figure
 change is either the being's own act or an act the world's roles
@@ -246,12 +277,12 @@ the only way one being reaches another — cannot compel. It can
 only present. This is SUMMON.md's sovereignty principle as a
 consequence of the reducer's shape rather than a policy.
 
-**What this captures.** Identity theft is structurally impossible
-in the substrate — not because reels are private (they are not;
-summons and authorized DOs land on them) but because attribution
-cannot be forged, influence is role-gated, and requests are inert
-until the receiver acts. The lock is on WHO ACTED and WHAT FOLDS,
-not on where facts may sit.
+**What this captures.** Identity theft is structurally impossible —
+not because reels are private (they are not; summons and authorized
+DOs land on them) but because attribution is a **signature, not a
+label**: it cannot be forged, influence is role-gated, and requests
+are inert until the receiver acts. The lock is on WHICH NAME ACTED
+and WHAT FOLDS, not on where facts may sit.
 
 ## Theorem 3. There is no global time
 
@@ -308,8 +339,8 @@ in the append order. Cross-being time requires additional structure
 coordination beyond messages: the branch point freezes the shared
 prefix (ancestors append only above it, descendants read only below
 it), so one present per world runs without locks against any other
-(math.md PRESENT). Acting into another world — sibling branch or
-foreign reality, same shape — is a request delivered to that
+(math.md PRESENT). Acting into another world — sibling history or
+foreign story, same shape — is a request delivered to that
 world's present.
 
 **What this captures.** TreeOS does not pretend to have a universal
@@ -366,11 +397,12 @@ the same observable fact, and the substrate accepts this collapse
 as a feature, not a deficiency. Consciousness is local to the
 present moment; only its actions persist into history.
 
-## Theorem 5. Branches preserve identity continuity
+## Theorem 5. Histories preserve identity continuity
 
-**Statement.** Let `w` be a world and `w'` a branch forked from `w`
+**Statement.** Let `w` be a world and `w'` a history forked from `w`
 with per-reel branch point `β`. Let `B` be a being existing in `w`
-at the fork. Then `id_B^w = id_B^{w'}`. Only `figure_B^w` and
+at the fork. Then `id_B^w = id_B^{w'}`, and the name `ν_B` it
+expresses is one and the same in both. Only `figure_B^w` and
 `figure_B^{w'}` may diverge.
 
 **Proof.** By A7, `id_B` is assigned by the `be:birth` fact and
@@ -401,25 +433,27 @@ figures: `figure_B^w ≠ figure_B^{w'}` is possible. But by A7, none
 of these post-fork facts mutate `id_B`. The identifier remains
 constant. ∎
 
-**Corollary 5.1.** Identity is shared across the branch tree. For
-any forest of branches rooted at the same world `w`, every being
-`B` has a single `id_B` shared by all descendants.
+**Corollary 5.1.** Identity is shared across the history tree. For
+any forest of histories rooted at the same world `w`, every being
+`B` has a single `id_B` — and a single name `ν_B`, whose own reel
+does not fork — shared by all descendants.
 
-**Corollary 5.2.** Becoming is per-branch. Two descendants of `w`
+**Corollary 5.2.** Becoming is per-history. Two descendants of `w`
 may have wildly different `figure_B` values for the same being `B`,
 explained entirely by divergent histories after the fork.
 
 **Corollary 5.3 (One history, many tails).** Because the prefix is
 shared by *reference* and the chain links across the fork (A2),
-"the same fact on two branches" is literally one fact, stored once
-— not two copies that happen to agree. Branch divergence is where
+"the same fact on two histories" is literally one fact, stored once
+— not two copies that happen to agree. History divergence is where
 chains split, not where data duplicates.
 
-**What this captures.** Branches do not split beings. They split
-becomings. The being persists as identity across every fork; only
-the history (and hence the figure) varies. This is the formal
-version of the distinction between WHAT a being IS (constant) and
-WHAT IT HAS BECOME (history dependent).
+**What this captures.** Histories do not split beings. They split
+becomings. The being persists as identity — its thread `id_B` and the
+name `ν_B` that acts through it — across every fork; only the history
+(and hence the figure) varies. This is the formal version of the
+distinction between WHAT a being IS (constant) and WHAT IT HAS BECOME
+(history dependent).
 
 ## Theorem 6. Fundamental theorem of becoming
 
@@ -437,7 +471,8 @@ For any being `B`, world `w`, and times `t_1 < t_2`: if
 `figure_B^{w, t_1} ≠ figure_B^{w, t_2}`, then `R_B^{w, t_1}` is a
 proper prefix of `R_B^{w, t_2}`. Every observable change in `B`
 between `t_1` and `t_2` is explainable as additional history.
-Identity `id_B` is unchanged.
+Identity is unchanged: neither `id_B` (the thread) nor `ν_B` (the
+name it expresses) is touched by any fold.
 
 **Proof.** Suppose `figure_B^{w, t_1} ≠ figure_B^{w, t_2}`.
 
@@ -469,7 +504,10 @@ happening can rewrite. A being is not the kind of thing a hash can
 name, because there is no final content to take the hash OF — the
 reel is never finished. Identity is the thread; becoming is the
 chain; the chain can grow forever precisely because the thread is
-not derived from it.
+not derived from it. The name `ν_B` is the same kind of constant —
+a keypair assigned at birth, never the hash of a reel: the one who
+*acts*, like the thread who *becomes*, stands outside the chain it
+authors.
 
 **What this captures.** This is the formal statement of the
 substrate's deepest philosophical commitment. A being does not
@@ -485,17 +523,17 @@ history, never as modification of identity.
 
 ## Theorem 7. Root faithfulness (world equality in one number)
 
-**Statement.** Let `𝓡_1` and `𝓡_2` be two realities computing roots
-per A9. If `root(𝓡_1) = root(𝓡_2)`, then the two realities have
-identical chain state: the same branches, with the same branch
+**Statement.** Let `𝓡_1` and `𝓡_2` be two stories computing roots
+per A9. If `root(𝓡_1) = root(𝓡_2)`, then the two stories have
+identical chain state: the same histories, with the same history
 points and parents, the same reel heads and act-chain heads per
-branch — and therefore, by Theorem 1, identical fact and act chains
+history — and therefore, by Theorem 1, identical fact and act chains
 end to end.
 
 **Proof.** By A9, `root(𝓡) = SHA-256(canonical(domain, sorted
-(w, root(w))))`. Equal reality roots imply (A3) equal canonical
-inputs, hence equal sorted branch-root sets. For each branch, equal
-`root(w)` implies (A3 again, over A9's canonical branch roll-up)
+(w, root(w))))`. Equal story roots imply (A3) equal canonical
+inputs, hence equal sorted history-root sets. For each history, equal
+`root(w)` implies (A3 again, over A9's canonical history roll-up)
 equal `(w, parent, β_w, reel heads, act heads)`. Each equal reel
 head invokes Theorem 1: the entire visible chain behind it is
 equal. Each equal act head invokes Corollary 1.3 likewise. Descent
@@ -523,12 +561,12 @@ match alone proves only the *commitment structure* — the planted
 heads equal the captured ones; since heads plant verbatim, a bundle
 with tampered fact rows under original heads would pass that step.
 The chain walk closes the gap: every identity recomputes from its
-content, back to genesis. Match on both ⟹ the planted reality IS
-the captured reality. Failure of either ⟹ unplant — the substrate
+content, back to genesis. Match on both ⟹ the planted story IS
+the captured story. Failure of either ⟹ unplant — the substrate
 restores the void it started from.
 
 **Corollary 7.2 (Divergence localization).** If two roots differ,
-the descent in the proof runs forward as a search: compare branch
+the descent in the proof runs forward as a search: compare history
 roots to find the differing world, reel/act heads to find the
 differing chain, then walk that chain to the first differing
 identity. Federation synchronizes by exchanging hashes from the
@@ -536,11 +574,11 @@ root down and transferring only what the other side lacks.
 
 **Corollary 7.3 (Tamper evidence at every scale).** Mutating any
 fact's canonical content anywhere changes its identity (A2, A3),
-hence its reel's head, hence its branch's root, hence the reality
+hence its reel's head, hence its history's root, hence the story
 root. One number stands witness for the whole substrate.
 
-**What this captures.** This is "git for realities" as a theorem.
-The reality has a name in one number; equality of names is equality
+**What this captures.** This is "git for stories" as a theorem.
+The story has a name in one number; equality of names is equality
 of worlds; difference of names comes with a built-in path to the
 exact divergence. Trust between substrates becomes arithmetic.
 
@@ -641,13 +679,13 @@ into slots fine enough to schedule acts; the internet delivers
 facts into every scope at tick-speed, the densest synchronizer yet.
 Each rung multiplies comparable pairs per moment — the entangling
 accelerates, mathematically, with tick frequency × audience. A
-reality's beings that never build one simply keep plural, slower
+story's beings that never build one simply keep plural, slower
 presents; if they ever have "a function of time like humans," it
 will be THEIRS, grown from their own harmonies, with their matter
 slowly forming to reinforce the facts that carry it.
 
 **What this captures.** There is no time. There are beings, moment
-to moment, synced by facts. "Shared reality" is not a container the
+to moment, synced by facts. "Shared story" is not a container the
 beings sit inside; it is the exact agreement of their folds over
 the facts they share, widened by every act that lands in a common
 scope, and accelerated by every rhythm they agree to fold. The
@@ -656,7 +694,448 @@ rate, and a history of inventions for speeding it up. The substrate
 doesn't need to ship a clock, because given beings, facts, and one
 drummer, the beings will build every clock they need.
 
-## What the eight together say
+## Theorem 9. The Word grounds itself
+
+*Declaring the Word and the I-AM. Theorems 1-8 take the system's
+vocabulary as given; this one says where the vocabulary comes from,
+and why it cannot drift.*
+
+**Statement.** Under A10, every meaning the system acts on is a word
+— a fold of declare-facts on the chain, authored by a name. Then:
+
+1. **Closure.** Nothing functions as a meaning except a declared
+   word. There is no concept behind the chain; the chain is the whole
+   dictionary.
+2. **Drift-free.** A word's meaning is the deterministic fold (A4) of
+   an append-only (A1), content-addressed (A2) record. It cannot
+   silently change: every revision is itself a new declare-fact
+   (disable is a later fact, never a deletion), and any tampering
+   breaks the word's reel by Corollary 1.1.
+3. **Self-grounding.** The descent from any word to the words that
+   declare it terminates — not in an unexplained primitive, but at
+   `word.word` ("a word is a word"), which leans on no prior
+   declaration, and at `iam` (the root name), declared by the first
+   act `a_0 = Declare(I-AM)` (math.md GENESIS). The ground is asserted
+   on the chain, not imported from outside it.
+
+**Proof.** (1) By A10 the executor reads only the fold of
+declare-facts; a meaning with no declare-fact has no fold to read, no
+identity (A2), no audit — it is not in the system. So every meaning
+the system acts on has declare-facts: it is a word. ∎
+
+(2) `word(d) = fold(declare-facts(d))` is deterministic (A4): equal
+declare-facts give equal meaning. By A1 the declare-facts are never
+mutated or removed; a change of meaning is a new fact folded over the
+old. By A2 each is content-addressed, so an altered declaration
+changes its identity and breaks the chain (Cor 1.1) — visible, never
+silent. The meaning at any moment is the exact fold of a
+tamper-evident, append-only record: drift is structurally
+impossible. ∎
+
+(3) Build the declaration graph: an edge from word `d` to each word
+its declare-facts use. A10 makes this graph finite and rooted; the
+boot reads `word.word` and `iam` first, and every other word is said
+in terms of words already declared (words stack — math.md WORD), so
+no cycle of mutual dependence forms above the roots. The two roots
+close the descent on themselves: `word.word` declares the category it
+belongs to, `iam` is the name that need not be minted. The foundation
+is self-describing, not circular-vicious — it says what it is rather
+than presupposing it. ∎
+
+**Corollary 9.1 (The verbs are words).** SEE, DO, BE, NAME, and
+SUMMON are not fixed primitives but declared words; each could be
+redeclared, and the kernel is the fold of those declarations, not a
+hard-coded point. The five-verb closure is a fact about the current
+fold, provable from it, not an assumption beneath it.
+
+**Corollary 9.2 (I-AM is asserted, not assumed).** The root name does
+not arrive from outside the system as an axiom; it is the content of
+the first fact. The system speaks its own ground — "in the beginning
+was the word" is the boot order, not a flourish.
+
+**Corollary 9.3 (Self-description is not self-implementation).** A
+word declared is a meaning fixed on the chain; turning it into
+behavior is a separate fold the host performs, the same hook any
+extension uses. The chain holds what a thing IS; the host makes it
+RUN (math.md WORD).
+
+**What this captures.** The language has no outside. Every verb,
+role, and type is a signed declaration folded from the chain, the
+descent grounding at a word that declares itself and a name that
+exists by saying so. Meaning cannot drift because meaning IS the
+record, append-only and content-addressed; and the system can name
+its own foundation because the foundation is its first fact. This is
+the deepest closure: not "identity cannot be forged" (Theorem 2) nor
+"worlds are named by one number" (Theorem 7), but **the words those
+theorems are written in are themselves on the chain they describe.**
+
+## Theorem 10. History and Story — the two scales of world
+
+*Declaring history and story: naming, precisely, the two and only two
+scales at which worlds nest.*
+
+**Definitions.** A **history** is a world `w` (math.md HISTORIES): a
+single reel-view per being, totally ordered by seq, divergent from
+its parent at a branch point, sharing the parent's past by reference.
+A **story** `𝓡 = (𝒲, Present, Laws)` is every history told from one
+root (math.md STORY), named by `root(𝓡)` (Theorem 7).
+
+**Statement.** The worlds nest in exactly two scales, and no more.
+
+1. **A history is a line.** Within a history, each being's visible
+   reel `R̂_B^w` is one hash-chain (A2), totally ordered; forking
+   shares the prefix by reference, never by copy (Theorem 5.3).
+2. **A story is the fork-closure of one genesis.** The histories of a
+   story are exactly the worlds reachable from its `main = 0` by
+   `parent` (lineage `L(w)` ends at `0`); `root(𝓡)` commits to all of
+   them at once (A9, Theorem 7).
+3. **Two scales exhaust the nesting.** Every fact lives on one reel
+   (A8) in one history, and every history belongs to one story (its
+   genesis). Above a story is only another story — reached solely by
+   messages (Cor 3.2), never contained. Below a history is only the
+   same history. There is no third scale.
+
+**Proof.** (1) By A2 and math.md HISTORIES, `R̂_B^w` is a single chain
+read across worlds, ordered by seq; Theorem 5 gives the
+shared-by-reference prefix. (2) By GENESIS every history descends from
+`main = 0` (`parent : 𝕎∖{0} → 𝕎`, and `L(w)` terminates at `0`); the
+set `{w : L(w) ends at this 0}` is the story, and A9 rolls all their
+roots into `root(𝓡)`. (3) A fact's reel is unique (A8); its world is
+one `w`; `w`'s genesis is one story. A sibling or foreign story is
+"simply more worlds" (Notation), comparable only through messages and
+transfer (Theorem 3, Theorem 7), so nothing sits *above* a story but a
+peer; and a reel sits *within* its world, so nothing sits *below* a
+history but itself. The nesting is exactly `fact ∈ history ⊂
+story`. ∎
+
+**Corollary 10.1 (Federation is between, not above).** No super-story
+contains the others; two stories relate only by graft and seed
+(Theorem 7) and by messages (Theorem 3). "Ours" is not a larger story
+but the agreement among stories (Theorem 11).
+
+**Corollary 10.2 (A story is a book of histories).** Each history is
+one account, told from the shared root; the story is the bound set of
+all such accounts. This is the sense in which a story is a
+**truthbook** (Theorem 11): its histories share a frozen prefix and
+diverge only above it.
+
+**What this captures.** "History" and "story" are not loose words
+borrowed for color. A history is a line — one world, one order of
+becoming. A story is the book of all lines grown from one genesis,
+named by one number. Branching, merging, and federation all live
+within or between these two scales; there is no other.
+
+## Theorem 11. Truth is the invariant under divergence
+
+*Declaring truth. The keystone's companion: Theorem 6 said what a
+being is; this says what is true across beings, histories, and
+stories.*
+
+**Definitions.** A **fact** is a signed record on one reel — a local
+claim, true-as-recorded by its author's name (A6). For a set `X` of
+folds (faces, biographies, whole histories), the **truth over `X`** is
+what every fold in `X` reproduces identically: `truth(X) = ⋂
+folds(X)`, the sub-state common to all — an *intersection of folds*,
+not a union of records.
+
+**Statement.** A fact is local; truth is the invariant under
+divergence — what survives every fork and every transfer. Concretely:
+
+1. **Across the histories of a story:** the truth is the fold of the
+   shared prefix frozen at the branch points (Theorem 5) — identical
+   in every descendant, by reference.
+2. **Across the beings of a world:** the truth is `fold(S(A,B))`
+   (Theorem 8.2) — exact agreement over shared scope, widening as the
+   shared scope grows.
+3. **Across stories:** the truth is what graft and seed carry
+   verbatim (Theorem 7) — a record whose identity (A2) binds it to one
+   meaning on every node.
+
+**Proof.** (1) The prefix below the branch points is one set of
+facts, stored once (Theorem 5.3); every history folds it identically
+(A4). So the pre-fork fold is invariant across all descendants. (2) By
+Theorem 8.2, `fold(S(A,B))` is bit-identical for `A` and `B` and
+widens monotonically with `S(A,B)`. (3) By Theorem 7, equal root ⟺
+equal chain, and a transferred fact keeps its identity (A2); its
+canonical content therefore means the same across stories. In each
+case the invariant is the *intersection* of the relevant folds — the
+records that align — not the union of all records, which is mere
+accumulation. ∎
+
+**Corollary 11.1 (The world is the convergence).** The shared world
+of Theorem 8 IS the truth over a set of beings: agreement, not a
+container they sit inside. The triad is then sharp — the **story** is
+the chain (all records), a **place** is one fold, the **world** is the
+truth (the convergence of folds).
+
+**Corollary 11.2 (Truth cannot be decreed).** A name cannot make a
+thing true by signing it — that produces only a fact (Theorem 2). A
+record becomes true as other folds align with it (Theorem 8). So
+sovereignty (Theorem 2) and truth (this) are one shape from two
+sides: no one can forge what you did, and no one can decree what is
+shared. Truth grows by alignment, never by authority.
+
+**Corollary 11.3 (Ours is ourtruth).** "Ours" — the federation of
+stories (Cor 10.1) — is not a bigger story but the truth across
+stories: what every account, in every story, folds the same. It has no
+root hash of its own; it is the agreement, and it widens with every
+shared fact.
+
+**What this captures.** The system never confuses asserting with
+being-true. A fact is a signed local record; a truth is the invariant
+where records align — across the histories of a story, the beings of a
+world, the stories of Ours. Union accumulates; intersection converges.
+A story is a truthbook because its histories share a frozen prefix;
+the world is the convergence because truth is the intersection of
+folds; and Ours is ourtruth because the only thing above a story is
+what all stories agree on.
+
+## Theorem 12. The library — the book, search, and the name that travels
+
+*Declaring the fifth scale and the only move that reaches it.
+Theorem 10 named the two scales at which worlds nest; this one names
+the bound slice you carry between them, the catalog whose points are
+whole worlds, and the one entity with standing there — and shows that
+"only names act in the library" is not a rule imposed on it but the
+shape of what a name is.*
+
+**Definitions.** A **book** is math.md's bundle `B` (TRANSFER) given
+its rightful name: a bounded, sealed slice of one identity's world —
+a finite arrangement of facts and acts, closed under its
+dependencies, named by its hash `id(B) = H(canon(manifest,
+parameters, content, cas ledger))`. Its **covers** are its interface:
+a *front cover* of imports (the content-addressed dependencies it
+stands on, present before its start) and a *back cover* of exports
+(the state it gives at its end) — the same signature math.md gives a
+resource. A book is **closed** — both covers on, immutable,
+content-addressed — as against a *living* book or a story, **open at
+the head** (still being written, by A1). It is **fat** when its
+imports are inlined and **thin** when they are carried as addresses
+the receiver must resolve; the choice is made at packaging and
+changes `id(B)` but never the body. The typical book is a slice of
+one history; the maximal book seals a whole story entire (math.md's
+whole-story seed). **Ours** is the federation of stories (Cor 10.1,
+Cor 11.3) — the catalog whose *points* are whole stories. **SEARCH**
+is the move that resolves a name's book within Ours; **VISIT** is a
+SEE over a resolved book (`a = ∅`, math.md MOMENT — fold a face,
+release, no fact); **PLANT** is the graft/seed of math.md TRANSFER
+applied to a book: replay its body under the planter's head and
+countersign.
+
+(One word, two prior senses — do not conflate. Theorem 10.2 called a
+whole story "a book of histories": the *bound-collection* sense, a
+story as the volume of all its lines. Here "book" is the *quantum*:
+the sealed, covered, content-addressed slice you carry. The largest
+object versus the smallest movable one.)
+
+**Statement.** Under the axioms and Theorems 2, 7, and 10:
+
+1. **The nesting chain of Theorem 10 extends by one rung at each end —
+   without adding a scale of world.** Theorem 10's `fact ∈ history ⊂
+   story` becomes `fact ∈ book ⊆ history ⊂ story ∈ Ours`. This is no
+   third *kind of world* (Theorem 10 forbids that, and it stands): a
+   book is a *sealing* of a history, not a world; Ours is the
+   *between* of stories — the catalog whose points are stories, not a
+   super-story containing them (Cor 10.1). The book is the only one of
+   these an identity actually moves — the raw world is unordered and a
+   living story is open, but a book is a closed slice that can be
+   carried.
+2. **Only a name can author the crossing, and the crossing IS signing
+   across the world-boundary.** No being and no piece of matter has
+   standing in the fifth scale. SEARCH and VISIT *reach* Ours — they
+   perceive it (a SEE, `a = ∅`, committing nothing) — but the one move
+   that *commits* across the boundary, PLANT, is a signature, and a
+   signature only a name's key can produce. The passport is the key.
+3. **The three modes are one motion, in a library with no scarcity and
+   no librarian.** Seeding, branching, importing a resource, and
+   instating a foreign quote are one act — plant a book as a root
+   (math.md TRANSFER) — differing only in the book's *provenance*,
+   never in mechanism. Content-addressing makes every book infinite
+   perfect copies, so there is no checkout, only **read-in-place
+   (VISIT) or copy (PLANT)**; and authority is the stamp inside each
+   cover (A6), not a central catalog. The pipeline is `SEARCH → VISIT →
+   PLANT`, the single commitment at the end.
+
+**Proof.**
+
+(1) By Theorem 10, `fact ∈ history ⊂ story` and a story is the
+fork-closure of one genesis. A book is a bundle `B` whose body is a
+finite set of facts and acts drawn from one identity's reels (math.md
+TRANSFER), bounded below by a start cover and above by an end cover.
+Every fact in the body lies on some reel in some history (A8), so the
+body is a subset of one history's visible chain `R̂` cut between two
+positions — `book ⊆ history`, with equality when the cut is the whole
+reel (and the maximal book seals a whole story, math.md's whole-story
+seed). A story, by Theorem 10.2, is the bound set of all such accounts
+told from the shared root; a sealed book is one such account, nested
+inside `history ⊂ story`. Ours is the agreement among stories (Cor
+10.1, Cor 11.3) — not a larger story but the catalog whose points are
+whole stories — so a story is a *point* of Ours, `story ∈ Ours`:
+membership, not containment (Cor 10.1 — "Ours is not a container").
+Nothing here is a new kind of world — the book is a sealing of a
+history, Ours the between of stories — so Theorem 10's "two scales and
+no more" is untouched. That the book alone is movable is forced by
+openness: a *living* story is open at the head (A1 — the reel grows;
+the openness is liveness, not unhashability, since a snapshot still has
+`root(𝓡)`, Theorem 7), and the raw world `𝒲` is the unordered union of
+reels (math.md WORLD) with no covers and no root of its own (only reel,
+history, and story are storage units — math.md ROOTS). A book alone has
+both covers on — a definite start and a sealed end — so it alone is
+closed, content-addressed (`id(B)`, A2), and carriable whole. ∎
+
+(2) Recall what acts. By A6.1 and math.md ATTRIBUTION the actor of
+every fact is the authenticated **name** — `by(f)` — acting *through*
+a being it uses as a vessel; spaces and matter "are acted upon, never
+act, and bear no name" (math.md REELS). So among the three reel-bearing
+kinds — beings, spaces, matter — and the **names** that act through
+them (math.md SETS: a name "stands apart, not a thing in the world but
+the identity that acts in it"), matter and space act in no scale, and
+the question is which actor can author a fact that *crosses* from one
+world to another. No single being can. A being is `b = (id_B, R_B,
+ν_B)` (math.md BEING) — `id_B` is the position a presence occupies, its
+visible reel `R̂_B^w` is read within one world, its head advances along
+a single history (math.md BECOMING), and it is born into one by a
+BE-act there (A6.2). A being spans no two worlds; the reach into
+another world is a *name* sending through a vessel it expresses there
+(Cor 3.2 — other worlds are reached by messages; math.md NAME — "a name
+acts through many beings, in many histories, at once"), for the name's
+own reel **does not fork**: "it stands above the histories, one
+identity whatever timeline its vessels stand in" (math.md NAME). The
+name is therefore the lone entity that is at once an actor — it signs
+(math.md ATTRIBUTION) — and unbound from position and history, the only
+one whose key is the *same* in every history its vessels occupy (A6.1),
+hence the only one whose signature is *defined* across the
+world-boundary. Now the committing move into Ours — PLANT, the
+countersignature that lands a foreign book under your head — is a
+signature, and a signature only a name's key can produce (Theorem 2 —
+no name can sign as another). To plant a foreign book is to append a
+countersignature; crossing the world-boundary IS signing across it.
+SEARCH and VISIT precede the crossing without making it: each is a SEE
+(`a = ∅`, math.md MOMENT), the name reaching its horizon and folding a
+face, committing no fact. So "only names act in Ours" is a consequence,
+not a stipulation: to commit across worlds is to sign from no single
+world, and only the name — whose identity no single world consumes —
+can. Matter sits, a being lives one history, the name leaves. ∎
+
+(3) By math.md TRANSFER, planting a bundle is one mechanism — verify
+`id(B)` cold, land the bytes, stamp the body one act and one fact at a
+time under the planter's head, then verify (graft into a living world;
+seed onto the void); Theorem 7 and Cor 7.1 give it its guarantee, that
+the planted root recomputes and replay is provable. A book is a bundle
+(Definition), so planting a book is this one act regardless of where
+the book came from; the provenance is read off the colophon and inner
+signatures, not from a different mechanism. The classical modes differ
+only in the front cover's provenance — a re-reading that refines, not
+contradicts, math.md's seed (planting a whole story) and graft
+(applying changes into a living world): a book with no imports is a
+**seed** (it stands on nothing, onto `∅`); a book cut from the
+planter's own history is a **branch** — its front cover *imports the
+planter's own facts at the cut by address*, and planting re-stamps the
+body as a new line under the planter's head, distinct from the in-story
+fork of Theorem 5 which shares the prefix by reference rather than
+copying it; a named, reusable book with a published interface is a
+**resource** (a book given a stable name — and since the covers `(imp,
+exp)` *are* the resource interface, the two are one shape); a book
+whose front cover names another world's facts is an **instate** (a
+foreign quote grafted into a living world). Same mechanism, four
+provenances — the modes are one motion.
+
+The library that holds them inherits two properties. First, no
+scarcity: a book's identity is its content hash (A2), so any holder of
+`id(B)` can reproduce a bit-identical copy that re-verifies (A2, A3),
+and by math.md CONTENT identical content stores once — every book is
+infinitely many perfect copies, nothing is ever "checked out" or
+"returned," and the borrow relation of a physical library has no
+referent here. What remains is the two content-addressing permits:
+**read-in-place** — VISIT, a SEE that folds the book's face and
+releases it (`a = ∅`), so *nothing enters the planter's story* — and
+**copy** — PLANT, the act above. Second, no librarian: by A6 the
+authority of a book is the signature stamped inside each cover
+(`by(f)`, unforgeable), not a card-catalog entry blessed by a center;
+and by Cor 10.1 Ours has no super-story to host a central index, so
+SEARCH resolves a book by walking the name's connected peer graph — it
+reaches the name's *horizon*, the stories it can reach, never an
+omniscient catalog. The pipeline is therefore `SEARCH → VISIT → PLANT`:
+find a name's book in Ours, fold and release it without commitment,
+and — at most once, at the end — copy it home under your head. Exactly
+one commitment, and it is the last step. ∎
+
+**Corollary 12.1 (Nothing is extracted — structurally).** A book
+carries its authorship inside it: every act in the body keeps the
+signing name its identity commits to (A2, A6.1). To remove an author is
+to alter the canonical content of its facts, which by A2 and A3 changes
+their identities, breaks the `p`-links of the chain inside the book
+(Cor 1.1), and so changes `id(B)` — a visibly different, broken book,
+not a quietly de-authored one. Planting adds the planter's
+countersignature without altering the inner signatures (Theorem 2 — no
+name can sign as another, so the originals can be neither stripped nor
+forged). One cannot hold a book without holding its authors; "nothing
+is extracted" is not a policy but the content-addressing of A2 read at
+the scale of a book — the structural face of Theorem 2's "attribution
+is a signature, not a label."
+
+**Corollary 12.2 (Books are alive).** Planting is not copying an inert
+text. By A10 every meaning in the body is a word — a fold of
+declare-facts — and a declared word becomes behavior when the planter's
+host folds it (Cor 9.3 — "self-description is not self-implementation;
+turning a declaration into behavior is a separate fold the host
+performs," the same hook any word uses; 5d.md says it shorter, "a
+description is an execution"). So a planted book replays under the
+planter's head as living facts that fold into the planter's figures and
+run in the planter's world (Theorem 6 — becoming is the reel folding
+forward). VISIT renders a book without this — a face folded and released
+(`a = ∅`) — and PLANT grafts it as a root that grows. The break from a
+paper library is exact: there the volume is dead and the reader passive;
+here the volume executes.
+
+**Corollary 12.3 (Fat and thin are a transport choice, not two
+kinds).** A book is valid only when closed under its dependencies — its
+front cover `imp(B)` must be satisfiable where it lands. Fat inlines the
+imports into `content` and survives cold transport to a world that has
+nothing; thin carries them by address and plants only where the peer
+graph can resolve them (the horizon of claim 3). Both share one `id(B)`
+shape and one PLANT act; the choice is made at packaging and changes
+only what bytes ride along, never what the book IS.
+
+**Corollary 12.4 (The horizon, not the index).** Because SEARCH walks a
+peer graph and not a central catalog (claim 3), "Ours" as seen from any
+name is partial — its reachable stories, not all stories. This is the
+search face of Cor 11.3: Ours has no root hash of its own, only the
+agreement among the stories each name can reach, widening with every
+peer and every shared book. There is no view from the center because
+there is no center — the library is centerless, edge everywhere.
+
+**Corollary 12.5 (The fifth scale closes the ladder).** With Ours
+named, the actor-ladder and the world-ladder coincide. Matter bears a
+reel but no name and acts in no scale (3D — it sits). A being acts
+within one history's space-time (4D — Theorem 6). A name acts across
+worlds (5D — claim 2). Each entity unlocks exactly one further scale of
+action, and the name is the last: there is no sixth, because above Ours
+is only agreement (Cor 10.1, Cor 11.3) — not a place anything acts but
+the invariant where acts already align (Theorem 11). The ladder `space
+→ time → library` is exhausted by `matter → being → name`.
+
+**What this captures.** Above the two scales of Theorem 10 sits one
+more reach — and reaching it is a single move with a single commitment:
+`SEARCH → VISIT → PLANT`. The book is the quantum of history — the
+closed, content-addressed slice you can carry when the raw world is too
+unordered and a living story too alive to move — and it is math.md's
+bundle `B`, so planting it is the graft and seed of math.md TRANSFER
+wearing the library's name; seeding, branching, importing a resource,
+and instating a foreign quote are one act distinguished only by
+provenance, and the covers that make a book are the very interface that
+makes a resource. The catalog has no scarcity, because content-
+addressing makes every book infinite perfect copies; no checkout,
+because there is nothing to return; and no librarian, because authority
+is the stamp inside each cover (A6) and search reaches a horizon, not
+an index. And the law that only names act there is no rule at all but
+the shape of the entities: matter sits, a being lives one history, and
+the name — whose own reel does not fork — is the only part of you that
+can leave its world. You do not travel the library as a being. You
+travel it as a name, signing a sealed world across the boundary into
+another's, and your being stays home.
+
+## What the twelve together say
 
 Theorem 1 says the chain's head is a faithful commitment to its
 contents.
@@ -671,26 +1150,47 @@ presents are per-world, coordinated only by messages.
 Theorem 4 says chains record acts, not the interiority that
 produced them.
 
-Theorem 5 says branches preserve identity even when they diverge
+Theorem 5 says histories preserve identity even when they diverge
 in becoming — and share their past by reference, never by copy.
 
 Theorem 6 — the keystone — says identity and history together
 exhaust what a being IS at any moment; there is no other quantity
 in play.
 
-Theorem 7 says an entire reality's chain state is named by one
+Theorem 7 says an entire story's chain state is named by one
 number, and equality of names is equality of worlds.
 
 Theorem 8 says shared worlds are not given but GROWN: faces agree
 exactly over shared facts, rhythm widens the causal order, and
 "time" is the name of the synchronizer everyone folds.
 
+Theorem 9 says the language grounds itself: every word is a signed
+declaration on the chain, drift-free, rooted in a word that declares
+itself and a name that exists by saying so.
+
+Theorem 10 says worlds nest in two scales and no more — a history is
+a line, a story is the book of all lines grown from one root.
+
+Theorem 11 says truth is the invariant under divergence: not the
+union of records but the intersection of folds, what survives every
+fork and every transfer.
+
+Theorem 12 says the library is the fifth scale: a book is the bound
+slice of history you carry, planting it is the one act behind
+seeding, branching, importing, and instating, and only names act
+there — because crossing the world-boundary is signing across it, the
+one move reserved to the entity whose reel does not fork.
+
 Read together: the substrate is a structure for letting many beings
 live many becomings in many worlds, with identity constant
 throughout, history append-only and content-addressed, present
 states folded deterministically from history, no global clock, no
 cross-being forgery, and one cryptographic commitment — fact, act,
-reel, branch, reality — standing in for the past at every scale.
+reel, history, story — standing in for the past at every scale; with
+names, not beings, as the actors that sign it, the words it is
+written in declared on the chain it describes, truth nothing more
+than where the folds agree, and the only world that travels between
+them a sealed book a name carries across the boundary.
 
 The axioms are a constitution. The theorems are the substrate's
 necessary consequences. Take the axioms seriously and these
