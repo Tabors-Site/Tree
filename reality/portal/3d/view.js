@@ -896,7 +896,7 @@ export function createView() {
             await client().do(address, action.action, values);
             hideActionPanel();
           } else if (action.verb === "call") {
-            await client().summon(address, { content: values.content || "", from: address });
+            await client().call(address, { content: values.content || "", from: address });
             hideActionPanel();
           } else {
             throw new Error(`unknown verb "${action.verb}"`);
@@ -954,7 +954,7 @@ export function createView() {
       ? `${reality}${bq}/@${state().session.username}`
       : `${reality}${bq}/@arrival`;
     const correlation = `c-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const reply = await client().summon(stance, { from: fromStance, content: text, correlation });
+    const reply = await client().call(stance, { from: fromStance, content: text, correlation });
     if (reply?.status === "accepted") {
       state().pendingSummons.set(correlation, b.being);
     }

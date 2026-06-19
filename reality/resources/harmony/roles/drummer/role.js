@@ -32,7 +32,7 @@ export const drummerRole = Object.freeze({
 
   prompt: () => "",
 
-  async summon(message, ctx) {
+  async call(message, ctx) {
     const wakeContent = message?.content || {};
     const roleCfg = ctx?.toBeing?.qualities?.harmony?.role || {};
     const drumMatterId = wakeContent.drumMatterId || roleCfg.drumMatterId;

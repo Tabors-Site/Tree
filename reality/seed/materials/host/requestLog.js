@@ -149,9 +149,9 @@ async function drain() {
         droppedSinceLastStamp = 0;
         await enqueue(httpBeingId, "http: queue overflow", (ctx) =>
           emitFact({
-            verb: "do", action: "http-queue-overflow",
-            beingId: httpBeingId,
-            target: { kind: "matter", id: requestLogMatterId },
+            verb: "do", act: "http-queue-overflow",
+            through: httpBeingId,
+            of: { kind: "matter", id: requestLogMatterId },
             params: { dropped, at: new Date().toISOString() },
             actId: ctx.actId, branch: "0",
           }, ctx));
@@ -162,9 +162,9 @@ async function drain() {
         for (const e of batch) entries.push(await entryToFactParams(e));
         await enqueue(httpBeingId, `http: batch of ${entries.length}`, (ctx) =>
           emitFact({
-            verb: "do", action: "http-request-batch",
-            beingId: httpBeingId,
-            target: { kind: "matter", id: requestLogMatterId },
+            verb: "do", act: "http-request-batch",
+            through: httpBeingId,
+            of: { kind: "matter", id: requestLogMatterId },
             params: { count: entries.length, entries },
             actId: ctx.actId, branch: "0",
           }, ctx));
@@ -174,9 +174,9 @@ async function drain() {
         const params = await entryToFactParams(e);
         await enqueue(httpBeingId, `http: ${params.method} ${params.path}`, (ctx) =>
           emitFact({
-            verb: "do", action: "http-request",
-            beingId: httpBeingId,
-            target: { kind: "matter", id: requestLogMatterId },
+            verb: "do", act: "http-request",
+            through: httpBeingId,
+            of: { kind: "matter", id: requestLogMatterId },
             params,
             actId: ctx.actId, branch: "0",
           }, ctx));
@@ -226,9 +226,9 @@ export function noteHttpListening({ port } = {}) {
     enqueue(httpBeingId, `http: listening on :${port}`, async (ctx) => {
       const { emitFact } = await import("../../past/fact/facts.js");
       await emitFact({
-        verb: "do", action: "http-listening",
-        beingId: httpBeingId,
-        target: { kind: "space", id: httpSpaceId },
+        verb: "do", act: "http-listening",
+        through: httpBeingId,
+        of: { kind: "space", id: httpSpaceId },
         // The port IS the listener's identity. Route lists are
         // middleware furniture; the moment is the fact's own date.
         params: { port: port ?? null },
@@ -246,9 +246,9 @@ export function noteHttpShutdown(signal) {
     enqueue(httpBeingId, `http: shutdown (${signal || "?"})`, async (ctx) => {
       const { emitFact } = await import("../../past/fact/facts.js");
       await emitFact({
-        verb: "do", action: "http-shutdown",
-        beingId: httpBeingId,
-        target: { kind: "space", id: httpSpaceId },
+        verb: "do", act: "http-shutdown",
+        through: httpBeingId,
+        of: { kind: "space", id: httpSpaceId },
         params: {
           signal: signal || null,
           uptimeSec: Math.round(process.uptime()),

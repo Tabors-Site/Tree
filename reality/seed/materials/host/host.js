@@ -109,9 +109,9 @@ export async function initHostRuntime() {
   await enqueueBeingAct(ids.mongoBeing, "mongo: connected", (ctx) =>
     emitFact({
       verb: "do",
-      action: "mongo-connected",
-      beingId: ids.mongoBeing,
-      target: { kind: "space", id: ids.mongoSpace },
+      act: "mongo-connected",
+      through: ids.mongoBeing,
+      of: { kind: "space", id: ids.mongoSpace },
       params: {
         // Witness fields only. Pool sizing / replica topology are ops
         // tuning, not world truth — they live in env, not the chain.
@@ -294,9 +294,9 @@ export function noteMongoReconnected() {
       const { emitFact } = await import("../../past/fact/facts.js");
       await emitFact({
         verb: "do",
-        action: "mongo-reconnected",
-        beingId: ids.mongoBeing,
-        target: { kind: "space", id: ids.mongoSpace },
+        act: "mongo-reconnected",
+        through: ids.mongoBeing,
+        of: { kind: "space", id: ids.mongoSpace },
         params: {
           // The gap IS the information; the moment it healed is the
           // fact's own date. No duplicate timestamps in params.

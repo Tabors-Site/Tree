@@ -150,11 +150,11 @@ export async function schedule(beingId, opts = {}) {
   };
 
   await emitFact({
-    beingId: String(opts.actorBeingId || beingIdStr),
+    through: String(opts.actorBeingId || beingIdStr),
     branch,
     verb:    "do",
-    action:  "wake-scheduled",
-    target:  { kind: "being", id: beingIdStr },
+    act:     "wake-scheduled",
+    of:      { kind: "being", id: beingIdStr },
     params,
   }, opts.moment || null);
 
@@ -201,11 +201,11 @@ export async function unschedule(scheduleId, opts = {}) {
   if (!entry) return false;
 
   await emitFact({
-    beingId: String(opts.actorBeingId || entry.beingId),
+    through: String(opts.actorBeingId || entry.beingId),
     branch,
     verb:    "do",
-    action:  "wake-cancelled",
-    target:  { kind: "being", id: entry.beingId },
+    act:     "wake-cancelled",
+    of:      { kind: "being", id: entry.beingId },
     params:  { scheduleId },
   }, opts.moment || null);
 

@@ -135,7 +135,7 @@ function runVerb(client, verb, address, payload) {
     case "do":     return client.do(address, payload.act, payload.args || {});
     case "call": {
       const { message, ...threading } = payload;
-      return client.summon(address, message, threading);
+      return client.call(address, message, threading);
     }
     case "be": {
       const { act, ...credentials } = payload;

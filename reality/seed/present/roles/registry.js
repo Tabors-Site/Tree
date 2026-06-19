@@ -362,7 +362,7 @@ function validatePermissions(name, list) {
     if (!VALID_PERMISSIONS.has(p)) {
       throw new Error(
         `registerRole("${name}") permissions must be a subset of ` +
-        `[see, do, summon, be], got "${p}"`,
+        `[see, do, call, be], got "${p}"`,
       );
     }
     seen.add(p);

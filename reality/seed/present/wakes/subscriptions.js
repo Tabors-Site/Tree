@@ -171,11 +171,11 @@ export async function subscribe(beingId, sub, opts = {}) {
   // Stamp the fact. Per-reel append-lock serializes against any
   // concurrent unsubscribe of the same id.
   await emitFact({
-    beingId: String(opts.actorBeingId || beingIdStr),
+    through: String(opts.actorBeingId || beingIdStr),
     branch:  opts.branch,
     verb:    "do",
-    action:  "subscription-registered",
-    target:  { kind: "being", id: beingIdStr },
+    act:     "subscription-registered",
+    of:      { kind: "being", id: beingIdStr },
     params:  {
       subscriptionId: id,
       event:          entry.event,
@@ -219,11 +219,11 @@ export async function unsubscribe(subscriptionId, opts = {}) {
   if (!entry) return false;
 
   await emitFact({
-    beingId: String(opts.actorBeingId || entry.beingId),
+    through: String(opts.actorBeingId || entry.beingId),
     branch:  opts.branch,
     verb:    "do",
-    action:  "subscription-cancelled",
-    target:  { kind: "being", id: entry.beingId },
+    act:     "subscription-cancelled",
+    of:      { kind: "being", id: entry.beingId },
     params:  { subscriptionId },
   }, opts.moment || null);
 

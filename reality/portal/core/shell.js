@@ -227,7 +227,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
           if (/already taken/i.test(err?.message || "")) throw err;
           /* NAME/BEING_NOT_FOUND → the name is free; proceed */
         }
-        await ctx.client.summon(`${reality}/@cherub`, {
+        await ctx.client.call(`${reality}/@cherub`, {
           from: `${reality}/@arrival`,
           content: { name: beingName },
           intent: "mate",

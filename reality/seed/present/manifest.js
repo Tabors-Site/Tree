@@ -54,9 +54,9 @@ async function createChildByFact({ parentId, name, type, qualities }) {
   await withIAmAct(`manifest:create ${name}`, async (ctx) => {
     await emitFact({
       verb:    "do",
-      action:  "create-space",
-      beingId: I_AM,
-      target:  { kind: "space", id },
+      act:     "create-space",
+      through: I_AM,
+      of:      { kind: "space", id },
       params:  {
         name,
         type:      type ?? null,

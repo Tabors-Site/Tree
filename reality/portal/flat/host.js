@@ -181,7 +181,7 @@ export function mountFlatView(rootContainer, ctx) {
       ...(opts.inReplyTo ? { inReplyTo: opts.inReplyTo } : {}),
     };
     const extra = opts.rootCorrelation ? { rootCorrelation: opts.rootCorrelation } : {};
-    const reply = await ctx.client.summon(stance, message, extra);
+    const reply = await ctx.client.call(stance, message, extra);
     return { correlation, reply };
   };
   flat.cancelByRootCorrelation = async (rootCorrelation) => {
@@ -191,7 +191,7 @@ export function mountFlatView(rootContainer, ctx) {
     const stance   = `${reality}/./threads/${rootCorrelation}`;
     const from     = `${reality}/@${username}`;
     try {
-      await ctx.client.summon(
+      await ctx.client.call(
         stance,
         { from, content: "(cancel)", correlation: `cancel-${randomToken()}` },
         { priority: "HUMAN", rootCorrelation },

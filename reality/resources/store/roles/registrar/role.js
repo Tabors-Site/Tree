@@ -46,12 +46,12 @@ export const registrarRole = Object.freeze({
   // write authorizes through ownership. No foreign target to gate.
   can: [
     { verb: "see", word: "identity" },
-    { verb: "summon", word: "(asker)", description: "Reply to whoever woke this moment." },
+    { verb: "call", word: "(asker)", description: "Reply to whoever woke this moment." },
   ],
 
   label: "Store Registrar",
 
-  async summon(message, ctx) {
+  async call(message, ctx) {
     // Cross-reality SUMMONs still ride the payload inside content
     // (same canopy serializer gap the federation-manager documents).
     const fedMessage = (typeof message?.content === "object" && message.content !== null

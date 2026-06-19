@@ -29,6 +29,8 @@ import log from "../../../seedReality/log.js";
 // declare `canSee: ["my-inner-face"]` to preload their own face; the
 // human portal calls client.see("my-inner-face") to render it.
 import "../human/myInnerFace.js";
+// the STORY see-op (the book/recall fold, served to the portal story view)
+import "../../book/storyOp.js";
 
 const HEAVEN_SEES = [
   "roles",

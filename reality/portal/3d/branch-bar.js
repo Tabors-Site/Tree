@@ -2264,7 +2264,7 @@ function _openMergeDialog() {
         // the SUMMON push channel; the conflict catalog SEE on the
         // merged branch reflects each reconciliation fact as it lands.
         try {
-          await _state.client.summon(
+          await _state.client.call(
             `/@merge-mediator`,
             {
               from: "user",
@@ -2559,7 +2559,7 @@ function _actionButton(label, onclick) {
 async function _summonMediatorForBranch(branchPath) {
   try {
     _showBranchEvent("✨ summoning @merge-mediator…");
-    await _state.client.summon(
+    await _state.client.call(
       `/@merge-mediator`,
       {
         from: "user",
@@ -2580,7 +2580,7 @@ async function _summonMediatorForBranch(branchPath) {
 async function _summonMediatorForConflict(item, sourceA, sourceB) {
   try {
     _showBranchEvent("✨ summoning @merge-mediator for one conflict…");
-    await _state.client.summon(
+    await _state.client.call(
       `/@merge-mediator`,
       {
         from: "user",

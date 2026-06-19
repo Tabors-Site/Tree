@@ -16,7 +16,7 @@ export const greeterRole = Object.freeze({
   triggerOn:   ["message"],
   description: "Greets the asker and the world it sees around itself.",
 
-  async summon(message, ctx) {
+  async call(message, ctx) {
     const me = ctx.toBeing;
     const myPosition = ctx.spaceId || me.position || me.homeSpace;
 

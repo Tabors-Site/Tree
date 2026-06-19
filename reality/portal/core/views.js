@@ -26,6 +26,10 @@ const REGISTRY = {
   // biography. Chains the kernel already keeps, rendered as a feed;
   // click a moment and every view folds to it.
   "history":  () => import("../history/view.js"),
+  // The STORY view (2026-06-18): the same `assembleStory` fold the LLM's RECALL reads, painted —
+  // facts woven into past-tense Word, who × when × where. Supersedes "history" (which renders raw
+  // verb:op); kept alongside it until the swap is called.
+  "story":    () => import("../story/view.js"),
 };
 
 export const VIEW_NAMES = Object.keys(REGISTRY);

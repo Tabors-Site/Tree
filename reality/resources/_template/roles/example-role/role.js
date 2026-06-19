@@ -4,7 +4,7 @@
 // whose value has a `name` field. The role-kind handler finds either.
 //
 // The spec is what the role registry stores. Bare words in `can`
-// entries with verb do/summon/be get auto-prefixed by the loader with
+// entries with verb do/call/be get auto-prefixed by the loader with
 // the pack's namespace; verb see uses its own bare-word suffix-match
 // at resolve time and is not rewritten.
 
@@ -18,7 +18,7 @@ export const exampleRole = Object.freeze({
   // Verb permissions (derived from canX automatically when omitted).
   // Explicit override only when you ship a role with NO canX entries
   // but still need a verb permission (rare).
-  // permissions: ["see", "do", "summon", "be"],
+  // permissions: ["see", "do", "call", "be"],
 
   respondMode: "async",            // "async" | "sync" | "none"
   triggerOn:   ["message"],        // ["schedule"] for cadence-driven roles
@@ -38,8 +38,8 @@ export const exampleRole = Object.freeze({
     // { verb: "see", word: "example-see" },           // <pack>:<word> resolved at frame-build
     // { verb: "do", word: "example-op" },             // <pack>:<word>
     // { verb: "do", word: "step", target: "being" },
-    // { verb: "summon", word: "(asker)", description: "Reply to whoever woke me." },
-    // { verb: "summon", word: "@other-being", description: "Reach a specific being." },
+    // { verb: "call", word: "(asker)", description: "Reply to whoever woke me." },
+    // { verb: "call", word: "@other-being", description: "Reach a specific being." },
     // { verb: "be", word: "release" },
     // { verb: "be", word: "switch" },
   ],
@@ -65,7 +65,7 @@ export const exampleRole = Object.freeze({
   // registerRoleHandler instead so the role can travel independently
   // of any specific code piece.
   //
-  // async summon(message, ctx) {
+  // async call(message, ctx) {
   //   const me = ctx.toBeing;
   //   // ... read state, decide, act ...
   //   return ctx.act("response content");

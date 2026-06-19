@@ -267,7 +267,7 @@ export class PortalClient {
    * @param {object} message  { from, content, correlation?, inReplyTo?, attachments? }
    * @param {object} [threading]  optional { rootCorrelation?, priority?, activeRole? }
    */
-  async summon(stance, message, threading = {}) {
+  async call(stance, message, threading = {}) {
     if (!message || typeof message !== "object") {
       throw new Error("SUMMON requires a message object");
     }

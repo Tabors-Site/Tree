@@ -32,7 +32,7 @@ export const publisherRole = Object.freeze({
     "Lets a being publish to this store's catalog. Hold it, then summon @registrar with intent publish-listing or retire-listing. Listings attribute to the holder's key.",
   // No requiredCognition: publishing is cognition-agnostic. An LLM being,
   // a scripted being, or a human all hold this role the same way.
-  permissions: ["see", "summon"],
+  permissions: ["see", "call"],
   respondMode: "none",
   triggerOn: [],
 
@@ -41,7 +41,7 @@ export const publisherRole = Object.freeze({
   // publish/retire intents ride the summon envelope.
   can: [
     { verb: "see", word: "identity" },
-    { verb: "summon", word: "@registrar", description: "Summon the store registrar to publish or retire a listing." },
+    { verb: "call", word: "@registrar", description: "Summon the store registrar to publish or retire a listing." },
   ],
 
   label: "Store Publisher",

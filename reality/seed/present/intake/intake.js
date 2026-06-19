@@ -118,16 +118,16 @@ export async function enqueueIntake(spaceId, beingId, entry) {
   // path applies: immediate commit via sealFacts singleton.
   await emitFact({
     verb:    "call",
-    action:  "call",
-    beingId: String(beingId),
+    act:     "call",
+    through: String(beingId),
     // The actor NAME. This self-summon is stamped OUTSIDE a moment (it
     // kicks one off), so emitFact's actorAct.by derivation can't
     // fire — thread the caller's signed-in Name off the entry's identity
     // so the wake-call fact links to the name that did it, same as the
     // inner act will when the moment seals. Null for keyless/anonymous
     // transport (pre-Name).
-    nameId:  entry.identity?.nameId || null,
-    target:  { kind: "being", id: String(beingId) },
+    by:      entry.identity?.nameId || null,
+    of:      { kind: "being", id: String(beingId) },
     params:  {
       correlation,
       rootCorrelation,

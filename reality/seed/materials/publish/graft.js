@@ -1267,7 +1267,7 @@ export async function applyGraft(bundle, opts = {}) {
     // a swallowed audit is how the missing import hid.
     try {
       await withBeingAct(opts.operatorBeingId, "graft-being:failed", branch, async (ctx) => {
-        await emitFact({ verb: "do", action: "graft-being-failed", beingId: opts.operatorBeingId, target: { kind: "being", id: opts.operatorBeingId }, params: { graftedBeing: beingId, sourceReality: bundle.sourceReality || null, error: String(err?.message || err) }, actId: ctx.actId, branch }, ctx);
+        await emitFact({ verb: "do", act: "graft-being-failed", through: opts.operatorBeingId, of: { kind: "being", id: opts.operatorBeingId }, params: { graftedBeing: beingId, sourceReality: bundle.sourceReality || null, error: String(err?.message || err) }, actId: ctx.actId, branch }, ctx);
       });
     } catch (e) { log.warn("Graft", `failure-audit fact could not be stamped: ${e.message}`); }
     throw err;
@@ -1293,7 +1293,7 @@ export async function applyGraft(bundle, opts = {}) {
   // records the deed, it must NOT write the grafted being's reel). ──
   try {
     await withBeingAct(opts.operatorBeingId, "graft-being:completed", branch, async (ctx) => {
-      await emitFact({ verb: "do", action: "graft-being-completed", beingId: opts.operatorBeingId, target: { kind: "being", id: opts.operatorBeingId }, params: { graftedBeing: beingId, sourceReality: bundle.sourceReality || null, mode, counts, partial: bundle.meta?.partial || null }, actId: ctx.actId, branch }, ctx);
+      await emitFact({ verb: "do", act: "graft-being-completed", through: opts.operatorBeingId, of: { kind: "being", id: opts.operatorBeingId }, params: { graftedBeing: beingId, sourceReality: bundle.sourceReality || null, mode, counts, partial: bundle.meta?.partial || null }, actId: ctx.actId, branch }, ctx);
     });
   } catch (e) { log.warn("Graft", `completion-audit fact could not be stamped: ${e.message}`); }
 
@@ -1383,7 +1383,7 @@ async function applyStateSnapshot(bundle, opts = {}) {
   // ── 5. Success audit (operator's reel; single-writer). ──
   try {
     await withBeingAct(opts.operatorBeingId, "graft-being:snapshot", branch, async (ctx) => {
-      await emitFact({ verb: "do", action: "graft-being-completed", beingId: opts.operatorBeingId, target: { kind: "being", id: opts.operatorBeingId }, params: { graftedBeing: beingId, sourceReality: bundle.sourceReality || null, mode, counts: { facts: 0, acts: 0 }, partial }, actId: ctx.actId, branch }, ctx);
+      await emitFact({ verb: "do", act: "graft-being-completed", through: opts.operatorBeingId, of: { kind: "being", id: opts.operatorBeingId }, params: { graftedBeing: beingId, sourceReality: bundle.sourceReality || null, mode, counts: { facts: 0, acts: 0 }, partial }, actId: ctx.actId, branch }, ctx);
     });
   } catch (e) { log.warn("Graft", `snapshot completion-audit could not be stamped: ${e.message}`); }
 

@@ -219,7 +219,7 @@ async function replyAndRefresh(entry, content, { reality, refresh, btn }) {
     return;
   }
   try {
-    await flat.state.client.summon(target, {
+    await flat.state.client.call(target, {
       content,
       inReplyTo: entry.correlation,
     });

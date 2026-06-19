@@ -21,7 +21,7 @@ export const dancerTowardRole = Object.freeze({
 
   prompt: () => "",
 
-  async summon(message, ctx) {
+  async call(message, ctx) {
     const c = message?.content || {};
     const tick = c.tick;
     const gridSpaceId = c.gridSpaceId || c.spaceId || c.events?.[0]?.spaceId;
@@ -30,7 +30,7 @@ export const dancerTowardRole = Object.freeze({
       return {
         ok: false,
         shape: "internal",
-        reason: "summon missing gridSpaceId/spaceId in content",
+        reason: "call missing gridSpaceId/spaceId in content",
       };
     }
 
