@@ -1,12 +1,12 @@
 // Phase 2 demo: dry-run the cherub birth IR and print the facts it lays.
-// Run:  node story/seed/present/word/demo.js
+// Run:  node story/seed/present/word/examples/demo.js
 //
 // This proves the evaluator walks the IR and produces the fact sequence. The
 // Phase 2 gate is then to diff this sequence against the JS handler's deltaF for
 // the same input (the real beingId hashes and the inherited-role / global grants
 // that birthBeing lays internally fill in once form-being runs live).
 
-import { evaluate } from "./evaluator.js";
+import { evaluate } from "../evaluator.js";
 import { cherubBirth } from "./cherub-birth.ir.js";
 
 const ctx = {

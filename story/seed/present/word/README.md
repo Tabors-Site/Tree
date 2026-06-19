@@ -2,24 +2,29 @@
 
 The first real build of The Word: the **cherub birth flow**, hand-built as IR and run by an evaluator skeleton. Background: `reality/philosophy/word/` (1.md what it is, 2.md the plan, 5.md the IR schema, 3.md the tracker).
 
+> **`examples/` is teaching scaffolding slated for eventual deletion.** The demo runners, hand-built IR modules, and demo `.word` programs now live in `examples/`; they exist to illustrate and exercise the engine and will be removed once they have served their purpose. The engine files (`parser.js`, `evaluator.js`, `wordFold.js`, `roleWordRegistry.js`, `verbTense.js`, `wordStore.js`, `cond.js`) and the `verify-*.mjs` gates stay here.
+
 ## Files
 
-- `cherub-birth.ir.js` — the cherub birth flow, hand-built as Word IR (slice 1; no parser yet, Phase 3 adds that).
-- `harmony.ir.js` — harmony (drummer + dancer), the pulse (slice 2).
-- `sun.ir.js` — the sun, the coupled sun/moon wheel over state (slice 3).
 - `evaluator.js` — walks the IR and emits facts. It folds facts into `ctx.state`; registers flows as standing watches; `pump`s the choq on events (rules 6, 12); matches watches over state (`when: { state: {...} }`); and `drive`s a state wheel (the coupled clock). Two modes: `dryRun` (collects facts, no DB) and live (`emitFact` into the moment; `form-being` calls the real `birthBeing`).
-- `harmony.word` — harmony as real `.word` prose.
 - `parser.js` — a minimal template parser (prose -> IR); the larval form of the recursive-descent grammar (Phase 3).
-- `demo.js` / `harmony-demo.js` — dry-run the hand-built slices and print.
-- `word-demo.js` — the round-trip: parse `harmony.word` and run it (no hand-built IR).
 - `verify-word-cherub.mjs` — the **live gate**: boots a real reality (Mongo + genesis) and runs the evaluator's `form-being` against the real `birthBeing`, asserting a real being is born (5/5).
 - `roleWordRegistry.js` — the **bridge** (Phase 4, host): `(role, be-op) -> .word`, the dual registry preferring `.word`; `resolveRoleWord` returns the parsed IR or null (fall through to the JS handler), `runRoleWord` runs it live in the moment. Seeded with `cherub:birth -> cherub.word`. The only new host code; the rest of a conversion is deletion. See `bridge.md`.
 - `verify-bridge.mjs` — sanity check: the registry resolves `cherub:birth` to the 5-act `cherub.word` and falls through for everything else (5/5).
 
+### `examples/` (teaching scaffolding, slated for deletion)
+
+- `cherub-birth.ir.js` — the cherub birth flow, hand-built as Word IR (slice 1; no parser yet, Phase 3 adds that).
+- `harmony.ir.js` — harmony (drummer + dancer), the pulse (slice 2).
+- `sun.ir.js` — the sun, the coupled sun/moon wheel over state (slice 3).
+- `harmony.word` / `sun.word` / `genesis.word` / `give.word` / `being.word` / `matter.word` / `space.word` — demo `.word` prose.
+- `demo.js` / `harmony-demo.js` / `sun-demo.js` — dry-run the hand-built slices and print.
+- `word-demo.js` / `sun-word-demo.js` / `genesis-word-demo.js` / `cherub-word-demo.js` — the round-trip: parse a `.word` file and run it (no hand-built IR).
+
 ## Run
 
 ```
-node reality/seed/present/word/demo.js
+node reality/seed/present/word/examples/demo.js
 ```
 
 Lays five facts, the same five the JS handler lays:
@@ -35,7 +40,7 @@ do:set-being      by I_AM     -> being:<being>     (lineage)
 ## Slice 2: harmony (the pulse)
 
 ```
-node reality/seed/present/word/harmony-demo.js
+node reality/seed/present/word/examples/harmony-demo.js
 ```
 
 ```
@@ -52,7 +57,7 @@ This is the choq (rules 6, 8, 12) running with no clock: the drummer's role carr
 ## The sun: the coupled wheel (state + the driver)
 
 ```
-node reality/seed/present/word/sun-demo.js
+node reality/seed/present/word/examples/sun-demo.js
 ```
 
 ```
@@ -75,7 +80,7 @@ Coupling, not a clock: the sun setting writes `sky=night`, which the moon's watc
 ## Slice 3: real `.word` (the round-trip, Phase 3 begun)
 
 ```
-node reality/seed/present/word/word-demo.js
+node reality/seed/present/word/examples/word-demo.js
 ```
 
 Reads `harmony.word` (actual prose), parses it to the IR, and runs the pulse, no hand-built IR. `parser.js` is a minimal template-matcher over the sentence forms in use (`A X is a space.`, `A X is a role for a Y.`, `When a Z happens, the R verbs the O.`, and the derivation `When the R verbs the O, that is a Z.`). It is the larval grammar; grow it by adding templates, then replace with real recursive descent. This is the path off hand-built IR: write `.word`, run it.

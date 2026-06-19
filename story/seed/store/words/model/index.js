@@ -41,10 +41,16 @@
 // materials/ root beside moveOp.js / portalOp.js for the same reason.
 
 import { randomUUID as uuidv4 } from "node:crypto";
-import { registerOperation } from "../ibp/operations.js";
-import { IbpError, IBP_ERR } from "../ibp/protocol.js";
-import { detectTargetKind, targetIdOf } from "./_targetShape.js";
-import { I_AM } from "./being/seedBeings.js";
+import { registerOperation } from "../../../ibp/operations.js";
+import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
+import { detectTargetKind, targetIdOf } from "../../../materials/_targetShape.js";
+import { I_AM } from "../../../materials/being/seedBeings.js";
+import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
+
+// Register the dormant word INERT: it resolves but is not yet wired to a
+// bridge (its header names host fns that don't exist). The generic engine
+// stays factory; this only makes the .word discoverable for the follow-up.
+registerRoleWord("render", "set-model", new URL("./model.word", import.meta.url));
 
 const SKINS_SPACE_NAME = "skins";
 
@@ -56,11 +62,11 @@ const SKINS_SPACE_NAME = "skins";
  * idempotent by name-under-root.
  */
 export async function ensureSkinsSpace(branch = "0", moment = null) {
-  const { getSpaceRootId } = await import("../sprout.js");
+  const { getSpaceRootId } = await import("../../../sprout.js");
   const rootId = getSpaceRootId();
   if (!rootId) throw new IbpError(IBP_ERR.INTERNAL, "ensureSkinsSpace: story root not ready");
 
-  const { default: Projection } = await import("./history/projection.js");
+  const { default: Projection } = await import("../../../materials/history/projection.js");
   // Branch-local first, then main's inherited row (the lazy-fill
   // idiom): the catalog is minted on main and inherited by branches.
   for (const b of branch === "0" ? ["0"] : [branch, "0"]) {
@@ -74,7 +80,7 @@ export async function ensureSkinsSpace(branch = "0", moment = null) {
   }
 
   const id = uuidv4();
-  const { emitFact } = await import("../past/fact/facts.js");
+  const { emitFact } = await import("../../../past/fact/facts.js");
   await emitFact({
     verb:    "do",
     act:     "create-space",
@@ -95,7 +101,7 @@ export async function ensureSkinsSpace(branch = "0", moment = null) {
 
 /** Resolve + validate a model matter: exists, type model, live cas bytes. */
 async function resolveModelMatter(modelMatterId, branch) {
-  const { loadOrFold } = await import("./projections.js");
+  const { loadOrFold } = await import("../../../materials/projections.js");
   const slot = await loadOrFold("matter", String(modelMatterId), branch);
   if (!slot) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, `set-model: model matter "${modelMatterId}" not found`);
@@ -107,7 +113,7 @@ async function resolveModelMatter(modelMatterId, branch) {
       `set-model: matter "${modelMatterId}" is type "${matter.type || "generic"}", not "model"`,
     );
   }
-  const { isCasRef } = await import("./matter/contentStore.js");
+  const { isCasRef } = await import("../../../materials/matter/contentStore.js");
   if (!isCasRef(matter.content)) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "set-model: model matter carries no stored bytes");
   }
@@ -120,7 +126,7 @@ async function resolveModelMatter(modelMatterId, branch) {
 /** Self / author / owner gate per target kind. */
 async function assertMaySetModel(kind, targetId, identity, branch) {
   const actor = String(identity.beingId);
-  const { loadOrFold } = await import("./projections.js");
+  const { loadOrFold } = await import("../../../materials/projections.js");
 
   if (kind === "being") {
     if (String(targetId) === actor) return; // your body is yours
@@ -151,8 +157,8 @@ async function assertMaySetModel(kind, targetId, identity, branch) {
 
 async function isRootOwner(spaceId, actorId) {
   try {
-    const { resolveRootSpace } = await import("./space/spaces.js");
-    const { getSpaceOwner } = await import("./space/members.js");
+    const { resolveRootSpace } = await import("../../../materials/space/spaces.js");
+    const { getSpaceOwner } = await import("../../../materials/space/members.js");
     const root = await resolveRootSpace(String(spaceId));
     return String(getSpaceOwner(root) || "") === String(actorId);
   } catch {
@@ -183,7 +189,7 @@ async function setModelHandler({ target, params, identity, moment }) {
     if (kind !== "space") {
       throw new IbpError(IBP_ERR.INVALID_INPUT, "set-model: forMatterType applies to space targets only");
     }
-    const { getMatterType } = await import("./matter/types.js");
+    const { getMatterType } = await import("../../../materials/matter/types.js");
     if (!getMatterType(forMatterType)) {
       throw new IbpError(IBP_ERR.INVALID_INPUT, `set-model: unknown matter type "${forMatterType}"`);
     }

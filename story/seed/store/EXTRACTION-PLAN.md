@@ -13,7 +13,15 @@ the moved module imported at boot, and verify `registerOperation` + `registerRol
 (op in the Map AND `resolveRoleWord(role,op)` returns non-null). Op names + factAction strings stay
 byte-identical (the dispatch table, lineage fold, and portal UI all key on them).
 
-## Order (lowest-entanglement first) + progress
+## STATUS — ✅ ALL 8 EXTRACTED + BOOT-VERIFIED (2026-06-19)
+
+Fresh wipe + boot: all 12 ops register, 20 concepts declared onto the chain, genesis clean
+(`[Story] I am born.`), server up, zero errors. Items 1-8 below are all DONE and verified.
+Remaining: matter / acquisition / cherub / set-model stay co-located (flagged, see below);
+the present/word demo programs → `present/word/examples/` (Tabor's call); grant-role/index.js
+carries one harmless unused static `grantHostEnv` import to tidy.
+
+## Order (lowest-entanglement first) + progress  [all 8 done]
 
 - [ ] 1. **key-export** → `store/words/key/` (key.word, keyOps.js, keyHost.js). services.js:204 repoint. LOW.
 - [ ] 2. **set-render** → `store/words/set-render/` (set-render.word, setRender.js, setRenderHost.js). services.js:235. LOW.

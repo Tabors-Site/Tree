@@ -29,7 +29,6 @@ import { registerOperation } from "../../../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
 import { targetIdOf } from "../../../materials/_targetShape.js";
-import { grantHostEnv } from "./grantHost.js";
 
 async function grantRoleHandler({ target, params, identity, moment }) {
   // THE CONVERSION: grant-role's validation + record is grant-role.word (caller mode). The

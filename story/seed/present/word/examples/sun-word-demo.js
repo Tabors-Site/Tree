@@ -1,13 +1,13 @@
 // Phase 3: the sun from real `.word` (the round-trip). Parse sun.word -> drive.
-// Run:  node story/seed/present/word/sun-word-demo.js
+// Run:  node story/seed/present/word/examples/sun-word-demo.js
 //
 // Same wheel as sun-demo.js, but with NO hand-built IR: the program is the prose
 // in sun.word, parsed by the grown parser (start / wheel phase / rider forms).
 // Proves the parser reproduces the hand-built sun.ir and the engine runs it.
 
 import { readFileSync } from "node:fs";
-import { parse } from "./parser.js";
-import { register, drive } from "./evaluator.js";
+import { parse } from "../parser.js";
+import { register, drive } from "../evaluator.js";
 
 const source = readFileSync(new URL("./sun.word", import.meta.url), "utf8");
 const ir = parse(source);

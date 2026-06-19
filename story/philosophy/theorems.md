@@ -3,13 +3,15 @@
 Formal consequences of TreeOS's substrate axioms. Each theorem starts
 from the laws already declared elsewhere (math.md, the various
 doctrine files), states them precisely, and derives a result that
-follows necessarily. Twelve theorems, organized from the most
+follows necessarily. Thirteen theorems, organized from the most
 mechanical (biography immutability) through the keystone (the
 fundamental theorem of becoming) and the generative (harmony — how
 shared worlds emerge) to the foundational (the Word that grounds
-itself, the two scales of world, the truth that is invariant under
-divergence, and the library — the fifth scale, where only names act
-because crossing a world-boundary is signing across it).
+itself, the two scales — history within story, the truth invariant
+under divergence, and the library — the fifth scale, where only names
+act because crossing a story-boundary is signing across it) and an
+interpretive coda (love as the communion Ours grows and the difference
+it keeps).
 
 ## Notation
 
@@ -165,6 +167,17 @@ terminates at two self-grounding roots: `word.word` ("a word is a
 word", leaning on no prior declaration) and `iam` (the root name,
 self-existing), read first at boot. The language is on the chain, not
 behind it.
+
+**A11 (Host fidelity).** A declared word becomes behavior only when a
+host folds it (A10; Cor 9.3 — self-description is not
+self-implementation; the host makes it run). The host folds a
+declaration **faithfully or not at all** — it runs the word as written
+or refuses it, never silently as something else. This is a trust
+assumption, not a theorem: the host is the bottom turtle, outside the
+chain, and the chain cannot prove from inside that it folded faithfully
+(the execution analogue of A3's assumed collision-resistance). The
+chain pins what a word IS (A2); A11 is the assumption under what a word
+DOES.
 
 ## Theorem 1. Biography immutability
 
@@ -890,17 +903,17 @@ the world is the convergence because truth is the intersection of
 folds; and Ours is ourtruth because the only thing above a story is
 what all stories agree on.
 
-## Theorem 12. The library — the book, search, and the name that travels
+## Theorem 12. The library — the book, search, and the name that shares
 
 *Declaring the fifth scale and the only move that reaches it.
-Theorem 10 named the two scales at which worlds nest; this one names
-the bound slice you carry between them, the catalog whose points are
-whole worlds, and the one entity with standing there — and shows that
-"only names act in the library" is not a rule imposed on it but the
-shape of what a name is.*
+Theorem 10 named the two scales at which histories and stories nest;
+this one names the bound slice you carry between them, the catalog
+whose points are whole stories, and the one entity with standing
+there — and shows that "only names act in the library" is not a rule
+imposed on it but the shape of what a name is.*
 
 **Definitions.** A **book** is math.md's bundle `B` (TRANSFER) given
-its rightful name: a bounded, sealed slice of one identity's world —
+its rightful name: a bounded, sealed slice of one identity's story —
 a finite arrangement of facts and acts, closed under its
 dependencies, named by its hash `id(B) = SHA-256(canonical(manifest,
 parameters, content, cas ledger))`. Its **covers** are its interface:
@@ -911,16 +924,28 @@ resource. A book is **closed** — both covers on, immutable,
 content-addressed — as against a *living* book or a story, **open at
 the head** (still being written, by A1). It is **fat** when its
 imports are inlined and **thin** when they are carried as addresses
-the receiver must resolve; the choice is made at packaging and
-changes `id(B)` but never the body. The typical book is a slice of
-one history; the maximal book seals a whole story entire (math.md's
-whole-story seed). **Ours** is the federation of stories (Cor 10.1,
-Cor 11.3) — the catalog whose *points* are whole stories. **SEARCH**
-is the move that resolves a name's book within Ours; **VISIT** is a
-SEE over a resolved book (`a = ∅`, math.md MOMENT — fold a face,
-release, no fact); **PLANT** is the graft/seed of math.md TRANSFER
-applied to a book: replay its body under the planter's head and
-countersign.
+the receiver resolves; the choice changes `id(B)` but never the body,
+and either way the bytes rest as cas in `/story/store` — a fat book's
+in its own `seed/store`, a thin book's in the story's `story/shared`
+pool, both the one content store. The cut is free within a story: a
+typical book takes a slice of one history, a general one packs a
+collection of branches and threads, and the maximal one seals the
+whole story entire (math.md's whole-story seed).
+
+The **library** is **Ours** — the federation of stories (Cor 10.1,
+Cor 11.3), the catalog whose *points* are whole stories — and a name
+moves in it by acts that find and acts that exchange. **SEARCH** seeks
+a name's book within Ours; **VISIT** is a SEE over a found one (`a =
+∅`, math.md MOMENT — fold a face, release, stamp no fact). The exchange
+is two-sided: **SHARE** is the *giving* — a name offers a word or a
+book to another, exposing it in Ours (its `story/shared`) — and
+**RECEIVE** is its counter, the *taking in*: whether the book was given
+to you or grabbed by you, you root it under your head and countersign
+it, the commitment. (Apart from the exchange stands **PLANT**: the
+genesis, a fresh seed onto the void `∅`, which *births* a story rather
+than joining one; a receive roots a book into a story already living.)
+One name gives, another takes — the gift and its acceptance are the two
+halves of every crossing.
 
 (One word, two prior senses — do not conflate. Theorem 10.2 called a
 whole story "a book of histories": the *bound-collection* sense, a
@@ -930,74 +955,84 @@ object versus the smallest movable one.)
 
 **Statement.** Under the axioms and Theorems 2, 7, and 10:
 
-1. **The nesting chain of Theorem 10 extends by one rung at each end —
-   without adding a scale of world.** Theorem 10's `fact ∈ history ⊂
-   story` becomes `fact ∈ book ⊆ history ⊂ story ∈ Ours`. This is no
-   third *kind of world* (Theorem 10 forbids that, and it stands): a
-   book is a *sealing* of a history, not a world; Ours is the
-   *between* of stories — the catalog whose points are stories, not a
-   super-story containing them (Cor 10.1). The book is the only one of
-   these an identity actually moves — the raw world is unordered and a
-   living story is open, but a book is a closed slice that can be
-   carried.
-2. **Only a name can author the crossing, and the crossing IS signing
-   across the world-boundary.** No being and no piece of matter has
+1. **Theorem 10's nesting gains a carriable unit below a story and a
+   catalog above it — no new scale.** Theorem 10 gave the line `fact ∈
+   history ⊂ story`; Theorem 12 adds the **book**, `fact ∈ book ⊆
+   story`, the sealed slice that travels, and **Ours**, `story ∈
+   Ours`, the catalog whose points are whole stories. A book is a
+   bounded sub-arrangement of one story's facts and acts — a slice of
+   one history, a collection of its branches and threads, or
+   (maximally) the whole story — so it *cuts across* the line rather
+   than sitting as a scale below it: a book is a *sealing*, Ours the
+   *between* of stories, neither a new scale, so Theorem 10's "two
+   scales and no more" stands. The book is the only one of these an
+   identity moves — the raw whole `𝒲` is unordered and a living story
+   is open, but a book is closed and can be carried.
+2. **Only a name can author the crossing, and the committing kernel of
+   the crossing IS a signature.** No being and no piece of matter has
    standing in the fifth scale. SEARCH and VISIT *reach* Ours — they
-   perceive it (a SEE, `a = ∅`, committing nothing) — but the one move
-   that *commits* across the boundary, PLANT, is a signature, and a
-   signature only a name's key can produce. The passport is the key.
-3. **The three modes are one motion, in a library with no scarcity and
-   no librarian.** Seeding, branching, importing a resource, and
-   instating a foreign quote are one act — plant a book as a root
-   (math.md TRANSFER) — differing only in the book's *provenance*,
-   never in mechanism. Content-addressing makes every book infinite
-   perfect copies, so there is no checkout, only **read-in-place
-   (VISIT) or copy (PLANT)**; and authority is the stamp inside each
-   cover (A6), not a central catalog. The pipeline is `SEARCH → VISIT →
-   PLANT`, the single commitment at the end.
+   perceive it (a SEE, `a = ∅`, stamping nothing on any chain) — but
+   the move that *commits*, RECEIVE, roots a book under the receiver's
+   own head, and its irreducible step is a countersignature, which only
+   a name's key can produce. The passport is the key.
+3. **The modes of arrival are one motion, in a library whose copies
+   are free but whose reach is not, and which has no librarian.**
+   Branching and instating are one act — RECEIVE a book into a living
+   story (math.md TRANSFER) — differing only in *provenance*, where the
+   front cover points: your own facts, or another story's. (A book with
+   no imports, onto the void, is the genesis PLANT — it births a story
+   rather than joining one.) A **resource** is that same act with a
+   published, reusable interface, an overlay orthogonal to provenance,
+   not a separate kind; the giver-side complement of every receive is
+   **SHARE**, the giving that puts a book within reach to begin with.
+   Content-addressing makes every book infinite perfect *copies*, so
+   there is no checkout, only **read-in-place (VISIT) or take in
+   (RECEIVE)**; what is scarce is not copies but *reach* (Cor 12.4).
+   Authority is the stamp inside each cover (A6), not a central catalog.
+   The pipeline is `SEARCH → VISIT → RECEIVE`, the single commitment at
+   the end.
 
 **Proof.**
 
 (1) By Theorem 10, `fact ∈ history ⊂ story` and a story is the
 fork-closure of one genesis. A book is a bundle `B` whose body is a
-finite set of facts and acts drawn from one identity's reels (math.md
-TRANSFER), bounded below by a start cover and above by an end cover.
-Every fact in the body lies on some reel in some history (A8), so the
-body is a subset of one history's visible chain `R̂` cut between two
-positions — `book ⊆ history`, with equality when the cut is the whole
-reel (and the maximal book seals a whole story, math.md's whole-story
-seed). A story, by Theorem 10.2, is the bound set of all such accounts
-told from the shared root; a sealed book is one such account, nested
-inside `history ⊂ story`. Ours is the agreement among stories (Cor
-10.1, Cor 11.3) — not a larger story but the catalog whose points are
-whole stories — so a story is a *point* of Ours, `story ∈ Ours`:
-membership, not containment (Cor 10.1 — "Ours is not a container").
-Nothing here is a new kind of world — the book is a sealing of a
-history, Ours the between of stories — so Theorem 10's "two scales and
-no more" is untouched. That the book alone is movable is forced by
-openness: a *living* story is open at the head (A1 — the reel grows;
-the openness is liveness, not unhashability, since a snapshot still has
-`root(𝓡)`, Theorem 7), and the raw world `𝒲` is the unordered union of
-reels (math.md WORLD) with no covers and no root of its own (only reel,
-history, and story are storage units — math.md ROOTS). A book alone has
-both covers on — a definite start and a sealed end — so it alone is
-closed, content-addressed (`id(B)`, A2), and carriable whole. ∎
+finite set of facts and acts drawn from one story's reels (math.md
+TRANSFER), bounded by a start cover and a sealed end cover and closed
+under its dependencies. Every fact in the body lies on some reel of
+that story (A8), so the body is a subset of the story's facts — `book
+⊆ story`. The cut is free within the story: a typical book takes a
+slice of one history (`book ⊆ history ⊆ story`), a general one packs a
+collection of branches and threads, and the maximal one seals the
+whole story (`book = story`, math.md's whole-story seed). A story is
+itself a *point* of Ours — the agreement among stories, not a larger
+story containing them (Cor 10.1, Cor 11.3) — so `story ∈ Ours`:
+membership, not containment. Nothing here is a new scale: the book is a
+sealing of (part of) a story, Ours the between of stories, so Theorem
+10's "two scales and no more" is untouched. That the book alone is
+movable is forced by openness: a *living* story is open at the head (A1
+— the reel grows; the openness is liveness, not unhashability, since a
+snapshot still has `root(𝓡)`, Theorem 7), and the raw whole `𝒲` is the
+unordered union of reels (math.md `𝒲`) with no covers and no root of
+its own (only reel, history, and story are storage units — math.md
+ROOTS). A book alone has both covers on — a definite start and a sealed
+end — so it alone is closed, content-addressed (`id(B)`, A2), and
+carriable whole. ∎
 
 (2) Recall what acts. By A6.1 and math.md ATTRIBUTION the actor of
 every fact is the authenticated **name** — `by(f)` — acting *through*
 a being it uses as a vessel; spaces and matter "are acted upon, never
 act, and bear no name" (math.md REELS). So among the three reel-bearing
 kinds — beings, spaces, matter — and the **names** that act through
-them (math.md SETS: a name "stands apart, not a thing in the world but
-the identity that acts in it"), matter and space act in no scale, and
-the question is which actor can author a fact that *crosses* from one
-world to another. No single being can. A being is `b = (id_B, R_B,
-ν_B)` (math.md BEING) — `id_B` is the position a presence occupies, its
-visible reel `R̂_B^w` is read within one world, its head advances along
-a single history (math.md BECOMING), and it is born into one by a
-BE-act there (A6.2). A being spans no two worlds; the reach into
-another world is a *name* sending through a vessel it expresses there
-(Cor 3.2 — other worlds are reached by messages; math.md NAME — "a name
+them (math.md SETS: a name stands apart, the identity that acts rather
+than a thing acted in), matter and space act in no scale, and the
+question is which actor can author a fact that *crosses* from one story
+to another. No single being can. A being is `b = (id_B, R_B, ν_B)`
+(math.md BEING) — `id_B` is the position a presence occupies, its
+visible reel `R̂_B^w` is read within one history, its head advances
+along a single line (math.md BECOMING), and it is born into one by a
+BE-act there (A6.2). A being spans no two stories; the reach beyond its
+own is a *name* sending through a vessel it expresses elsewhere (Cor
+3.2 — other histories are reached by messages; math.md NAME — "a name
 acts through many beings, in many histories, at once"), for the name's
 own reel **does not fork**: "it stands above the histories, one
 identity whatever timeline its vessels stand in" (math.md NAME). The
@@ -1005,60 +1040,68 @@ name is therefore the lone entity that is at once an actor — it signs
 (math.md ATTRIBUTION) — and unbound from position and history, the only
 one whose key is the *same* in every history its vessels occupy (A6.1),
 hence the only one whose signature is *defined* across the
-world-boundary. Now the committing move into Ours — PLANT, the
-countersignature that lands a foreign book under your head — is a
-signature, and a signature only a name's key can produce (Theorem 2 —
-no name can sign as another). To plant a foreign book is to append a
-countersignature; crossing the world-boundary IS signing across it.
-SEARCH and VISIT precede the crossing without making it: each is a SEE
-(`a = ∅`, math.md MOMENT), the name reaching its horizon and folding a
-face, committing no fact. So "only names act in Ours" is a consequence,
-not a stipulation: to commit across worlds is to sign from no single
-world, and only the name — whose identity no single world consumes —
-can. Matter sits, a being lives one history, the name leaves. ∎
+story-boundary. Now the committing move into Ours — RECEIVE, the
+countersignature that roots a foreign book under your head — has a
+signature for its irreducible step (the full receive also lands bytes,
+stamps the body, and verifies, math.md TRANSFER — but its commitment,
+the act of crossing itself, is the countersignature), and that
+signature only a name's key can produce (Theorem 2 — no name can sign
+as another). To receive a foreign book is to append that countersignature;
+the committing kernel of crossing the story-boundary IS signing across
+it. SEARCH and VISIT precede the crossing without making it: each is a
+SEE (`a = ∅`, math.md MOMENT), the name reaching its horizon and
+folding a face, stamping no fact. So "only names act in Ours" is a
+consequence, not a stipulation: to commit across stories is to sign
+from no single one, and only the name — whose identity no single story
+consumes — can. Matter sits, a being lives one history, the name
+crosses. ∎
 
-(3) By math.md TRANSFER, planting a bundle is one mechanism — verify
+(3) By math.md TRANSFER, landing a bundle is one mechanism — verify
 `id(B)` cold, land the bytes, stamp the body one act and one fact at a
-time under the planter's head, then verify (graft into a living world;
-seed onto the void); Theorem 7 and Cor 7.1 give it its guarantee, that
-the planted root recomputes and replay is provable. A book is a bundle
-(Definition), so planting a book is this one act regardless of where
-the book came from; the provenance is read off the colophon and inner
-signatures, not from a different mechanism. The classical modes differ
-only in the front cover's provenance — a re-reading that refines, not
-contradicts, math.md's seed (planting a whole story) and graft
-(applying changes into a living world): a book with no imports is a
-**seed** (it stands on nothing, onto `∅`); a book cut from the
-planter's own history is a **branch** — its front cover *imports the
-planter's own facts at the cut by address*, and planting re-stamps the
-body as a new line under the planter's head, distinct from the in-story
-fork of Theorem 5 which shares the prefix by reference rather than
-copying it; a named, reusable book with a published interface is a
-**resource** (a book given a stable name — and since the covers `(imp,
-exp)` *are* the resource interface, the two are one shape); a book
-whose front cover names another world's facts is an **instate** (a
-foreign quote grafted into a living world). Same mechanism, four
-provenances — the modes are one motion.
+time under the receiving head, then verify; Theorem 7 and Cor 7.1 give
+it its guarantee, that the landed root recomputes and replay is
+provable. A book is a bundle (Definition), so to receive one is this
+one act regardless of where the book came from; the provenance is read
+off the colophon and inner signatures, not from a different mechanism.
+The provenances, by where the front cover points: a book cut from the
+receiver's own history is a **branch** — its front cover *imports the
+receiver's own facts at the cut by address*, and receiving re-stamps
+the body as a new line under the receiver's head, distinct from the
+in-story fork of Theorem 5 which shares the prefix by reference rather
+than copying it; a book whose front cover names another story's facts
+is an **instate** (a foreign quote grafted in). Both are a RECEIVE into
+a living story. A book with no imports, set onto the void `∅`, is not a
+receive but the genesis **PLANT** — it births a story rather than
+joining one (math.md's whole-story seed). And a **resource** is any of
+these given a published, stable name — since the covers `(imp, exp)`
+*are* the resource interface, the two are one shape — an overlay on
+whatever provenance the book has, not a separate kind. One mechanism
+throughout; the modes are one motion.
 
-The library that holds them inherits two properties. First, no
-scarcity: a book's identity is its content hash (A2), so any holder of
+The library that holds them inherits two properties. First, copies are
+free: a book's identity is its content hash (A2), so any holder of
 `id(B)` can reproduce a bit-identical copy that re-verifies (A2, A3),
 and by math.md CONTENT identical content stores once — every book is
 infinitely many perfect copies, nothing is ever "checked out" or
 "returned," and the borrow relation of a physical library has no
-referent here. What remains is the two content-addressing permits:
-**read-in-place** — VISIT, a SEE that folds the book's face and
-releases it (`a = ∅`), so *nothing enters the planter's story* — and
-**copy** — PLANT, the act above. Second, no librarian: by A6 the
-authority of a book is the signature stamped inside each cover
-(`by(f)`, unforgeable), not a card-catalog entry blessed by a center;
-and by Cor 10.1 Ours has no super-story to host a central index, so
-SEARCH resolves a book by walking the name's connected peer graph — it
-reaches the name's *horizon*, the stories it can reach, never an
-omniscient catalog. The pipeline is therefore `SEARCH → VISIT → PLANT`:
-find a name's book in Ours, fold and release it without commitment,
-and — at most once, at the end — copy it home under your head. Exactly
-one commitment, and it is the last step. ∎
+referent here. So the moves are **read-in-place** — VISIT, a SEE that
+folds the book's face and releases it (`a = ∅`), *chain-inert*: nothing
+enters the receiver's story, though resolving a thin book pulls its
+bytes into local cas (`/story/store`), a side-effect beside the chain,
+not on it — and **take in** — RECEIVE, the act above, whose giver-side
+complement is SHARE. What scarcity remains is not of copies but of
+*reach*: a thin book is received only where its imports resolve (Cor
+12.3), and SEARCH finds only what the peer graph reaches (Cor 12.4).
+Second, no librarian: by A6 the authority of a book is the signature
+stamped inside each cover (`by(f)`, unforgeable), not a card-catalog
+entry blessed by a center; and by Cor 10.1 Ours has no super-story to
+host a central index, so SEARCH resolves a book by walking the name's
+connected peer graph — it reaches the name's *horizon*, the stories it
+can reach, never an omniscient catalog. The pipeline is therefore
+`SEARCH → VISIT → RECEIVE`: find a name's book in Ours, fold and
+release it without commitment, and — at most once, at the end — take it
+home under your head. Exactly one commitment, and it is the last step.
+∎
 
 **Corollary 12.1 (Nothing is extracted — structurally).** A book
 carries its authorship inside it: every act in the body keeps the
@@ -1066,7 +1109,7 @@ signing name its identity commits to (A2, A6.1). To remove an author is
 to alter the canonical content of its facts, which by A2 and A3 changes
 their identities, breaks the `p`-links of the chain inside the book
 (Cor 1.1), and so changes `id(B)` — a visibly different, broken book,
-not a quietly de-authored one. Planting adds the planter's
+not a quietly de-authored one. Receiving adds the receiver's
 countersignature without altering the inner signatures (Theorem 2 — no
 name can sign as another, so the originals can be neither stripped nor
 forged). One cannot hold a book without holding its authors; "nothing
@@ -1074,28 +1117,36 @@ is extracted" is not a policy but the content-addressing of A2 read at
 the scale of a book — the structural face of Theorem 2's "attribution
 is a signature, not a label."
 
-**Corollary 12.2 (Books are alive).** Planting is not copying an inert
-text. By A10 every meaning in the body is a word — a fold of
-declare-facts — and a declared word becomes behavior when the planter's
-host folds it (Cor 9.3 — "self-description is not self-implementation;
-turning a declaration into behavior is a separate fold the host
-performs," the same hook any word uses; 5d.md says it shorter, "a
-description is an execution"). So a planted book replays under the
-planter's head as living facts that fold into the planter's figures and
-run in the planter's world (Theorem 6 — becoming is the reel folding
-forward). VISIT renders a book without this — a face folded and released
-(`a = ∅`) — and PLANT grafts it as a root that grows. The break from a
-paper library is exact: there the volume is dead and the reader passive;
-here the volume executes.
+**Corollary 12.2 (Books are alive — on a faithful host).** Receiving is
+not copying an inert text. By A10 every meaning in the body is a word —
+a fold of declare-facts — and a declared word becomes behavior only
+when the receiver's host folds it (Cor 9.3 — self-description is not
+self-implementation; the host makes it run; 5d.md says it shorter, "a
+description is an execution"). So a received book replays under the
+receiver's head as facts that fold into its figures and run (Theorem 6
+— becoming is the reel folding forward); VISIT renders one without
+this, a face folded and released (`a = ∅`), and RECEIVE roots it as a
+chain that grows. But the aliveness is **host-loaned, not
+intrinsic**: content-addressing pins what the book IS (Cor 12.1,
+airtight — strip an author and `id(B)` breaks), yet nothing in the
+chain pins what it DOES. A divergent host could fold the same signed
+declarations into other behavior, or refuse them; "the volume executes"
+means "executes _as written_ under a faithful host," and that fidelity
+is A11 — the one trust the chain cannot verify from inside, not a
+content guarantee. The break from a paper library is exact where it can
+be (the volume executes) and honest where it cannot (only if the host
+runs it as written).
 
 **Corollary 12.3 (Fat and thin are a transport choice, not two
 kinds).** A book is valid only when closed under its dependencies — its
 front cover `imp(B)` must be satisfiable where it lands. Fat inlines the
-imports into `content` and survives cold transport to a world that has
-nothing; thin carries them by address and plants only where the peer
-graph can resolve them (the horizon of claim 3). Both share one `id(B)`
-shape and one PLANT act; the choice is made at packaging and changes
-only what bytes ride along, never what the book IS.
+imports into `content` (the book's own `seed/store`) and survives cold
+transport even to a story that holds none of them; thin carries them by
+address and is received only where the peer graph can resolve them (the
+horizon of claim 3), drawing them from the story's `story/shared` pool.
+Both share one `id(B)` shape and one RECEIVE act; the choice is made at
+packaging and changes only what bytes ride along, never what the book
+IS.
 
 **Corollary 12.4 (The horizon, not the index).** Because SEARCH walks a
 peer graph and not a central catalog (claim 3), "Ours" as seen from any
@@ -1106,36 +1157,156 @@ peer and every shared book. There is no view from the center because
 there is no center — the library is centerless, edge everywhere.
 
 **Corollary 12.5 (The fifth scale closes the ladder).** With Ours
-named, the actor-ladder and the world-ladder coincide. Matter bears a
-reel but no name and acts in no scale (3D — it sits). A being acts
+named, the actor-ladder and the ladder of scales coincide. Matter bears
+a reel but no name and acts in no scale (3D — it sits). A being acts
 within one history's space-time (4D — Theorem 6). A name acts across
-worlds (5D — claim 2). Each entity unlocks exactly one further scale of
+stories (5D — claim 2). Each entity unlocks exactly one further scale of
 action, and the name is the last: there is no sixth, because above Ours
 is only agreement (Cor 10.1, Cor 11.3) — not a place anything acts but
 the invariant where acts already align (Theorem 11). The ladder `space
 → time → library` is exhausted by `matter → being → name`.
 
+**Corollary 12.6 (Two grains of exchange — word and book).** Whatever a
+name gives or takes is one of two units. The **word** is the atom
+(Theorem 9 — a fact, a declaration, a single signed meaning), exchanged
+singly. The **book** is the package — any sealed, content-addressed
+collection of words: a slice, a branch, a thread, or a whole story.
+What were once separate primitives — bundle, clone, seed, graft,
+resource, instate — are all the book now, distinguished only by
+provenance (claim 3) and the resource interface; the only unit finer
+than a book is the word it is made of. So **anything shared is a word
+or a book** — a single word, or words packaged — and the whole exchange
+surface (SHARE, RECEIVE) carries only these two.
+
+**Corollary 12.7 (The three faces of a book — matter, unit, words).** A
+book is one object in three modes, by what is done with it. *At rest it
+is matter*: a content-addressed `.book` in a space, cas in
+`/story/store` (math.md CONTENT) — it sits, dormant, like any file.
+*Carried it is the fifth-scale unit*: a name lifts the sealed form and
+bears it through Ours; the 5D-ness is the **form** — sealed,
+content-addressed, unbound from any one story — not where its bytes
+sit, so a book at rest on one history is no less the unit a name carries
+to another. *Received it becomes words*: rooted under the receiver's
+head (claim 3), its facts and acts wake into live chain — the fifth
+scale landing into the fourth (Cor 12.2, on a faithful host). One
+object: matter when stored, the carried unit when borne, words when
+received. The shelf a name carries its books on — its gathered library
+— is itself name-level, above the histories like the name's own reel;
+giving it its own `see`/`do` and a name-owned chain is the natural
+Ours/Search-era layer, additive over books-as-matter, not a new store
+beneath them.
+
 **What this captures.** Above the two scales of Theorem 10 sits one
 more reach — and reaching it is a single move with a single commitment:
-`SEARCH → VISIT → PLANT`. The book is the quantum of history — the
-closed, content-addressed slice you can carry when the raw world is too
+`SEARCH → VISIT → RECEIVE`. The book is the quantum of history — the
+closed, content-addressed slice you carry when the raw whole is too
 unordered and a living story too alive to move — and it is math.md's
-bundle `B`, so planting it is the graft and seed of math.md TRANSFER
-wearing the library's name; seeding, branching, importing a resource,
-and instating a foreign quote are one act distinguished only by
-provenance, and the covers that make a book are the very interface that
-makes a resource. The catalog has no scarcity, because content-
-addressing makes every book infinite perfect copies; no checkout,
-because there is nothing to return; and no librarian, because authority
-is the stamp inside each cover (A6) and search reaches a horizon, not
-an index. And the law that only names act there is no rule at all but
-the shape of the entities: matter sits, a being lives one history, and
-the name — whose own reel does not fork — is the only part of you that
-can leave its world. You do not travel the library as a being. You
-travel it as a name, signing a sealed world across the boundary into
-another's, and your being stays home.
+bundle `B`, so receiving it is the graft and seed of math.md TRANSFER
+wearing the library's name; branching and instating are one act
+distinguished only by provenance, the covers that make a book are the
+very interface that makes a resource, and every older transfer
+primitive collapses into the one book (Cor 12.6). The catalog's copies
+are free, because content-addressing makes every book infinite perfect
+copies; what is scarce is reach; and there is no librarian, because
+authority is the stamp inside each cover (A6) and search reaches a
+horizon, not an index. And the law that only names act there is no rule
+at all but the shape of the entities: matter sits, a being lives one
+history, and the name — whose own reel does not fork — is the only part
+of you that can leave its story. You do not travel the library as a
+being; you travel it as a name, signing a sealed book across the
+boundary into another's, and your being stays home.
 
-## What the twelve together say
+What passes between names is a gift, and the structure earns the word.
+Content-addressing means giving costs the giver nothing — a book is not
+taken from you, it becomes one more perfect copy, so the library
+multiplies under sharing instead of dividing. And by Cor 12.1 you
+cannot strip the authorship: to RECEIVE a book is to carry its name's
+signatures inside you, ineradicably, forever — receiving a gift is
+hosting its author. The two moves divide the way meeting another
+divides: VISIT folds a face and lets it go, read in place, changing
+nothing — appreciation, holding the other without letting them in;
+RECEIVE roots it under your head where it folds into your figures and
+runs (Cor 12.2, Theorem 6) — to take someone in is to be willing to be
+rewritten by them. And because a received book runs through *your* host
+and *your* fold (A11), you hold the other's authorship exactly and
+still animate their meaning by your own reducer: you carry them
+faithfully and become your own version of them — a misunderstanding
+that is structural, not a flaw, the price of keeping someone alive in
+you. Ours, then, is the highest *communion* — the shared world all the
+givings converge into (Theorem 11) — though not the whole of what one
+name can hold of another: the part that stays irreducibly theirs is
+kept by a different stance (Theorem 13).
+
+## Theorem 13. The unshared — what a name keeps by not receiving
+
+*The coda. Theorem 12 named the giving and the taking; this names what
+neither reaches — the part of another that stays theirs — and the one
+stance that holds it. The most interpretive of the thirteen: where the
+others derive what the structure guarantees, this reads what the same
+structure leaves room for.*
+
+**Definitions.** Recall the two ways a name meets another's book.
+**VISIT** folds its face and releases it (`a = ∅`, math.md MOMENT,
+Theorem 12) — nothing enters the visitor's story; both are unchanged.
+**RECEIVE** roots it under the receiver's head, where it folds into the
+receiver's figures and runs (Cor 12.2, Theorem 6) — the receiver
+becomes, in part, their own fold of it. The **unshared** of a story is
+its divergence: by Theorem 5, becoming is per-branch, so what a story
+accrues above a branch point is irreducibly its own; and by Theorem 11
+the truth of a federation is the *intersection* of folds — Ours holds
+only what all share. The complement — the divergence no fold absorbs —
+is real, and unheld by Ours.
+
+**Statement.** Under the axioms and Theorems 5, 11, and 12:
+
+1. **RECEIVE makes the other partly yours — and never wholly theirs.**
+   A received book runs through the receiver's own host (A11) and folds
+   through the receiver's own reducer (A4), so the receiver holds the
+   authorship *exactly* (Cor 12.1 — the signatures cannot be stripped)
+   yet animates the meaning by their own fold: one carries the other
+   faithfully and still becomes one's own version of them. Absorption
+   is never identity.
+2. **VISIT alone preserves the other as other.** A visited book enters
+   no figure and changes nothing (`a = ∅`); it stays outside, intact,
+   theirs. To VISIT is to perceive without absorbing.
+3. **The unshared is held by exactly one stance: VISIT sustained,
+   never RECEIVE.** What is irreducibly not-yours — the divergence
+   Ours's intersection excludes (Theorem 11) — cannot be made yours by
+   RECEIVE without ceasing to be the *other's*; the only way to keep it
+   as theirs is to read it and let it stay. The book you visit forever
+   and never take home is kept precisely by not being received.
+
+**Proof.** (1) By A4 and A11 a received book's behavior is the
+receiver's fold of it; by Cor 12.1 its content and authorship are
+pinned exactly. The two cannot be collapsed: identical content, two
+hosts, two behaviors (Theorem 4 already showed faces under-determine
+acts; here host and fold under-determine meaning). So RECEIVE yields
+the author's words in the receiver's voice — faithful, and not the
+same. (2) By Theorem 12, VISIT is a SEE with `a = ∅`: it stamps no fact
+and joins no figure, so the visiting story is unchanged and the visited
+book remains wholly the other's. (3) The unshared is, by definition,
+what no shared fold contains (Theorem 11's complement). RECEIVE would
+fold it into the receiver — making it partly the receiver's (claim 1),
+no longer purely the other's. VISIT leaves it where it is. Hence
+holding the unshared *as* the other's admits exactly one stance: VISIT
+without RECEIVE, sustained. ∎
+
+**What this captures.** Ours is the highest **communion** — the shared
+world grown from every gift (Theorem 12), the intersection where folds
+agree (Theorem 11). But communion is not all of what one name holds of
+another. To RECEIVE is to let someone in and be changed, and — because
+your host folds them — to come to hold your own version of them, never
+quite theirs. To VISIT is to hold them without absorbing them, to leave
+them other. The part of a story that will never fold into yours is kept
+only by visiting it and letting it stay. So if Ours is love's
+convergence, this is its reverence: the willingness to keep what you
+cannot take, to read a book forever and never copy it home, because
+letting it stay other is the point. The library has a move for each —
+RECEIVE for the shared, VISIT for the kept-other — and love, the larger
+thing, is both: the communion it grows and the difference it refuses to
+absorb.
+
+## What the thirteen together say
 
 Theorem 1 says the chain's head is a faithful commitment to its
 contents.
@@ -1175,11 +1346,17 @@ Theorem 11 says truth is the invariant under divergence: not the
 union of records but the intersection of folds, what survives every
 fork and every transfer.
 
-Theorem 12 says the library is the fifth scale: a book is the bound
-slice of history you carry, planting it is the one act behind
-seeding, branching, importing, and instating, and only names act
-there — because crossing the world-boundary is signing across it, the
-one move reserved to the entity whose reel does not fork.
+Theorem 12 says the library is the fifth scale: a book is the sealed
+slice of a story a name carries, sharing it is the giving and
+receiving it the taking, every old transfer primitive collapsed into
+the one book, and only names act there — because crossing a
+story-boundary is signing across it, the move reserved to the entity
+whose reel does not fork.
+
+Theorem 13 says communion is not the whole of love: Ours is the shared
+world folds converge into, but the part of another that never folds
+into you is kept only by visiting it forever and never receiving it —
+held by letting it stay other.
 
 Read together: the substrate is a structure for letting many beings
 live many becomings in many worlds, with identity constant
@@ -1189,7 +1366,7 @@ cross-being forgery, and one cryptographic commitment — fact, act,
 reel, history, story — standing in for the past at every scale; with
 names, not beings, as the actors that sign it, the words it is
 written in declared on the chain it describes, truth nothing more
-than where the folds agree, and the only world that travels between
+than where the folds agree, and the only thing that travels between
 them a sealed book a name carries across the boundary.
 
 The axioms are a constitution. The theorems are the substrate's

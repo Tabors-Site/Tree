@@ -1,12 +1,12 @@
 // Phase 3 demo: parse a real `.word` file and run it.
-// Run:  node story/seed/present/word/word-demo.js
+// Run:  node story/seed/present/word/examples/word-demo.js
 //
 // This is the round-trip: prose (harmony.word) -> IR (parser) -> facts (evaluator).
 // No hand-built IR; the program is the words.
 
 import { readFileSync } from "node:fs";
-import { parse } from "./parser.js";
-import { evaluate, register, pump } from "./evaluator.js";
+import { parse } from "../parser.js";
+import { evaluate, register, pump } from "../evaluator.js";
 
 const source = readFileSync(new URL("./harmony.word", import.meta.url), "utf8");
 const ir = parse(source);

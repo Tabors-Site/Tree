@@ -1,11 +1,11 @@
 // Phase 2 demo: the coupled sun/moon wheel turning with no clock.
-// Run:  node story/seed/present/word/sun-demo.js
+// Run:  node story/seed/present/word/examples/sun-demo.js
 //
 // Validates the three engine capabilities: state/fold, watches over state, and
 // the driver. The wheel turns because each phase writes the state the next phase
 // waits on (coupling), and the gardener rides the day-state, never a timer.
 
-import { register, drive } from "./evaluator.js";
+import { register, drive } from "../evaluator.js";
 import { sun, start } from "./sun.ir.js";
 
 const ctx = {

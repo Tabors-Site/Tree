@@ -184,8 +184,8 @@ import "./store/words/move/moveOp.js";
 // space / matter at a model matter (type "model", bytes in the
 // content store) by writing qualities.render.model. Upload is plain
 // create-matter into the /skins catalog; this op is the SET half.
-// See materials/modelOp.js.
-import "./materials/modelOp.js";
+// See store/words/model/index.js.
+import "./store/words/model/index.js";
 // Side-effect import. Registers `do form-portal` — creates a Matter
 // pointing at a foreign IBPA. The portal's experience (window /
 // portal / walk-through) is emergent per-viewer from foreign-side

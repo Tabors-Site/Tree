@@ -245,7 +245,7 @@ $$\mathrm{id}(B) = H(\mathrm{canon}(\,\text{manifest},\ \text{parameters},\ \tex
 
 Bytes travel beside it, each blob verified against its own address on arrival ($H(\text{bytes}) \stackrel{?}{=} \text{claimed}$). Any edit re-stamps the identity; an unstamped edit is visible to anyone holding the hash. What was offered is provably what was delivered.
 
-A bundle is a **book** — the quantum of history. A living story is open at its head; a book has **covers** (a definite start, a sealed end), so it is the closed, carriable slice — and its covers are its interface (imports before the start, exports at the end, the same signature as a resource). Seed, graft, branch, and instate are then one act — plant a book as a root — differing only in the book's _provenance_ (Theorem 12).
+A bundle is a **book** — the quantum of history. A living story is open at its head; a book has **covers** (a definite start, a sealed end), so it is the closed, carriable slice — and its covers are its interface (imports before the start, exports at the end, the same signature as a resource). Every old transfer primitive collapses into it: bundle, clone, seed, graft, resource, instate are all one **book**, distinguished only by _provenance_ — branch and instate **received** into a living story, a fresh seed **planted** onto the void as a genesis (Theorem 12).
 
 **Graft** (apply into a living world): verify $\mathrm{id}(B)$ _cold_ — refuse before anything stamps; land the bytes; stamp $\Delta\mathcal{F}$ one act, one fact at a time; then $\mathrm{verify}$ every reel the graft created. On any failure after stamping begins:
 
@@ -281,17 +281,17 @@ A **story** ($\mathcal{R}$) is every history told from one root — not a world 
 
 ### OURS — _the library_
 
-$$\text{book} \subseteq \text{history} \subset \text{story} \in \textbf{Ours}$$
+$$\text{book} \subseteq \text{story} \in \textbf{Ours}$$
 
-Above a single story is no larger story but **Ours** — the catalog whose _points_ are whole stories, joined only by messages and by the **books** that pass between them; no super-story contains them. It is the **library**: a fact reads as a passage, a book as a volume, a history as a shelf, a story as a collection, and Ours as the catalog itself. No center holds it — **search** reaches a name's _horizon_ (the stories its peers reach), and a book's authority is the signature inside its covers (ATTRIBUTION), never a central index. Content addressing makes every book infinitely many perfect copies, so there is no lending — only **visit** (a SEE over a book, $a=\varnothing$: read in place, nothing enters) and **plant** (copy it home, countersigned).
+Above a single story is no larger story but **Ours** — the catalog whose _points_ are whole stories, joined only by messages and by the **books** that pass between them; no super-story contains them. It is the **library**: a fact reads as a passage, a book as a volume, a history as a shelf, a story as a collection, and Ours as the catalog itself. No center holds it — **search** reaches a name's _horizon_ (the stories its peers reach), and a book's authority is the signature inside its covers (ATTRIBUTION), never a central index.
 
-The **book** is the unit that travels: a bundle $B$ (TRANSFER) with its covers on, a sealed slice of one history. To **share** a piece of your world is to plant a book under another head and countersign.
+A **book** is a bundle $B$ (TRANSFER) with its covers on: a sealed slice of one story — one history, a collection of its branches and threads, or the whole. At rest it is **matter**, cas in `/story/store`; carried, it is the unit a name bears through Ours; received into a story, its words wake to live again. Content addressing makes every book infinitely many perfect copies, so nothing is lent or returned: a name **shares** — gives a word or book, exposing it in `story/shared` — and another **receives**, taking it in, rooting it under its head and countersigning. **Visit** reads one in place (a SEE, $a=\varnothing$, nothing enters); **plant** is kept for the genesis alone, a seed onto the void.
 
-The move into Ours is the **name's** alone. The three kinds are three scales of action: **matter** sits in space; a **being** is matter living through time, a body advancing along one history; a **name** is the identity unbound from position and history (its reel does not fork), the only one that can leave its world.
+The move into Ours is the **name's** alone. The three kinds are three scales of action: **matter** sits in space; a **being** is matter living through time, a body advancing along one history; a **name** is the identity unbound from position and history (its reel does not fork), the only one that can leave its story.
 
 $$\text{3D space: }\textbf{matter} \quad\longrightarrow\quad \text{4D time: }\textbf{being} \quad\longrightarrow\quad \text{5D library: }\textbf{name}$$
 
-Each kind unlocks one further scale, and the name is the last: **5D motion is signing a sealed world across the world-boundary**, the act reserved to the one entity no single world consumes. You browse the library as a name; your being stays home (elaborated as Theorem 12).
+Each kind unlocks one further scale, and the name is the last: **5D motion is signing a sealed book across the story-boundary**, the act reserved to the one entity no single story consumes. You browse the library as a name; your being stays home (elaborated as Theorem 12, with the giving and the keeping as its coda, Theorem 13).
 
 ---
 

@@ -1,11 +1,11 @@
 // Phase 2 demo: run the harmony pulse for a bounded number of beats.
-// Run:  node story/seed/present/word/harmony-demo.js
+// Run:  node story/seed/present/word/examples/harmony-demo.js
 //
 // Shows rule 6 (flows fire on completion) and rule 12 (the choq: each beat begets
 // the next, the dancer coupled to the drummer) with no clock anywhere, only
 // completion advancing the reel, bounded by maxBeats so it terminates.
 
-import { evaluate, register, pump } from "./evaluator.js";
+import { evaluate, register, pump } from "../evaluator.js";
 import { harmony, firstStrike } from "./harmony.ir.js";
 
 const ctx = {

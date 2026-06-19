@@ -1,5 +1,5 @@
 // Phase 3: genesis from real `.word` — the creation narrative as a fact chain.
-// Run:  node story/seed/present/word/genesis-word-demo.js
+// Run:  node story/seed/present/word/examples/genesis-word-demo.js
 //
 // Parses genesis.word (I_AM's first acts) and runs the sequence. Rendered
 // forward from the root, the facts ARE the creation story (1.md). No hand-built
@@ -8,8 +8,8 @@
 // and lays the right acts in order.
 
 import { readFileSync } from "node:fs";
-import { parse } from "./parser.js";
-import { evaluate } from "./evaluator.js";
+import { parse } from "../parser.js";
+import { evaluate } from "../evaluator.js";
 
 const ir = parse(readFileSync(new URL("./genesis.word", import.meta.url), "utf8"));
 console.log(`\nparsed ${ir.length} acts from genesis.word (the creation narrative)\n`);

@@ -1,15 +1,15 @@
 // Phase 3: the cherub birth flow from real `.word` (the round-trip).
-// Run:  node story/seed/present/word/cherub-word-demo.js
+// Run:  node story/seed/present/word/examples/cherub-word-demo.js
 //
 // Proves the multi-effect flow body AND the implicit-actor rule: the five acts
 // are by I_AM, through Cherub (the mother); the being is the new Name's own; the
 // father is Arrival. No hand-built IR; the program is cherub.word.
 
 import { readFileSync } from "node:fs";
-import { parse } from "./parser.js";
-import { evaluate } from "./evaluator.js";
+import { parse } from "../parser.js";
+import { evaluate } from "../evaluator.js";
 
-const source = readFileSync(new URL("../roles/cherub/cherub.word", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../roles/cherub/cherub.word", import.meta.url), "utf8");
 const ir = parse(source);
 const flow = ir[0];
 

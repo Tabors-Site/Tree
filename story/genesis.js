@@ -742,6 +742,10 @@ export async function genesis(app, opts = {}) {
   const { registerRoleManagerOps } =
     await import("./seed/present/roles/role-manager/ops.js");
   registerRoleManagerOps();
+  // set-world-signal was carved out of role-manager/ops.js into its own
+  // store bundle (the word + its handler). The bundle registers its
+  // operation + word at module load, so a side-effect import fires it.
+  await import("./seed/store/words/set-world-signal/index.js");
 
   // set-being-roleflow . the typed write that puts a roleFlow on a
   // being's qualities. roleflow-composer (LLM helper) targets this op.
@@ -754,6 +758,10 @@ export async function genesis(app, opts = {}) {
   const { registerHistoryManagerOps } =
     await import("./seed/present/roles/branch-manager/ops.js");
   registerHistoryManagerOps();
+  // set-pointer + delete-pointer were carved out of branch-manager/ops.js
+  // into their own store bundle (the words + their shared host). The bundle
+  // registers at module load, so a side-effect import fires it.
+  await import("./seed/store/words/branch-pointers/index.js");
 
   // federation-manager ops: offer-template, offer-being, request-template,
   // accept-template, reject-template, fulfill-request, refuse-request. The
@@ -942,7 +950,7 @@ export async function genesis(app, opts = {}) {
   // can show the available bodies and beings pick by id. Idempotent;
   // branches inherit main's catalog.
   await withIAmAct("ensure skins catalog", async (ctx) => {
-    const { ensureSkinsSpace } = await import("./seed/materials/modelOp.js");
+    const { ensureSkinsSpace } = await import("./seed/store/words/model/index.js");
     await ensureSkinsSpace("0", ctx);
   }).catch((err) => {
     log.warn("Genesis", `skins catalog ensure failed: ${err.message}`);
