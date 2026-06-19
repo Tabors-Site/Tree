@@ -87,7 +87,7 @@ async function referencedByFacts() {
  * (policy "latest"), across ALL branches.
  */
 async function referencedByLatestProjections() {
-  const { default: Projection } = await import("../branch/projection.js");
+  const { default: Projection } = await import("../history/projection.js");
   const referenced = new Set();
   const cursor = Projection.find({
     type: "matter",

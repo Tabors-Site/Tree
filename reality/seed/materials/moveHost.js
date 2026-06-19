@@ -17,7 +17,7 @@ import Space from "./space/space.js";
 import { IbpError, IBP_ERR } from "../ibp/protocol.js";
 import { detectTargetKind, targetIdOf } from "./_targetShape.js";
 
-const branchOf = (ctx) => ctx?.moment?.actorAct?.branch || ctx?.branch || "0";
+const historyOf = (ctx) => ctx?.moment?.actorAct?.history || ctx?.branch || "0";
 
 // The subject kind from the same {kind,id} / string contract the handler uses.
 function subjectKind(subject) {
@@ -74,9 +74,9 @@ export function moveHostEnv() {
     // loadOrFold over the subject to capture fromSpaceId, and the coord bounds check
     // against the container's size. Reuses the SAME Space.exists / loadOrFold; lays NO
     // fact; throws the SAME IbpError on a missing dest / missing subject / out-of-bounds.
-    "resolve-source": async ({ args: [subject, coordArg, toArg, argBranch] }, ctx) => {
+    "resolve-source": async ({ args: [subject, coordArg, toArg, argHistory] }, ctx) => {
       const coord = absent(coordArg), to = absent(toArg);
-      const branch = absent(argBranch) || branchOf(ctx);
+      const branch = absent(argHistory) || historyOf(ctx);
       const kind = subjectKind(subject);
       const targetId = targetIdOf(subject);
       const { loadOrFold } = await import("./projections.js");

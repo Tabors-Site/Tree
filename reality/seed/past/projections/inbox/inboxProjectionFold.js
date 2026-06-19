@@ -33,7 +33,7 @@
 
 import InboxProjection, { priorityRankOf } from "./inboxProjection.js";
 import { registerCrossCuttingHandler } from "../../../present/stamper/2-fold/foldEngine.js";
-import { assertBranchOrThrow } from "../../../materials/projections.js";
+import { assertHistoryOrThrow } from "../../../materials/projections.js";
 
 async function handleCall(fact /*, type, id*/) {
   if (fact?.verb !== "call") return;
@@ -79,7 +79,7 @@ async function handleCall(fact /*, type, id*/) {
         // gate, so the row's branch IS the fact's branch. logFact
         // refuses any fact without branch; if this read returns
         // undefined the upstream invariant broke and we want it loud.
-        branch:          assertBranchOrThrow(fact.branch, "inboxProjectionFold(do:summon)"),
+        history:          assertHistoryOrThrow(fact.history, "inboxProjectionFold(do:summon)"),
       },
       $setOnInsert: { _id: params.correlation },
     },
@@ -97,7 +97,7 @@ async function handleBeSever(fact /*, type, id*/) {
   // across a fork is severed per branch, by a sever fact on each.
   await InboxProjection.deleteMany({
     rootCorrelation,
-    branch: assertBranchOrThrow(fact.branch, "inboxProjectionFold(be:sever)"),
+    history: assertHistoryOrThrow(fact.history, "inboxProjectionFold(be:sever)"),
   });
 }
 

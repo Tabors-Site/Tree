@@ -27,7 +27,7 @@ import log from "../../seedStory/log.js";
 // is a frozen doctrinal value.
 const I_AM = "i-am";
 
-function normBranch(b) {
+function normHistory(b) {
   return typeof b === "string" && b.length ? b : "0";
 }
 
@@ -50,7 +50,7 @@ export function buildActSigPayload(act, factIds) {
     through:  act.through,          // the being the name acted through
     to:       act.to ?? null,
     story:  act.story ?? null,
-    branch:   normBranch(act.branch),
+    history:   normHistory(act.history),
     p:        act.p ?? null,
     factIds:  Array.isArray(factIds) ? [...factIds].map(String).sort() : [],
     time:     timeISO(act),
@@ -72,7 +72,7 @@ export async function loadSigningKey(nameId, branch) {
     const { isKeyId } = await import("../../materials/name/keys.js");
     if (!isKeyId(nameId)) return null;             // not a key-bearing Name
     const { loadProjection } = await import("../../materials/projections.js");
-    const slot = await loadProjection("name", nameId, normBranch(branch));
+    const slot = await loadProjection("name", nameId, normHistory(branch));
     // The signing-session lock is NOT soul-type-gated — ALL Names are the
     // same (Tabor). It applies to PASSWORD-LOCKED Names, never by soul.
     const enc = slot?.state?.privateKeyEnc;
@@ -108,7 +108,7 @@ export async function loadSigningKey(nameId, branch) {
  * @param {string|null} pem     the signer's private key PEM (preloaded)
  */
 export async function signActDoc(actDoc, factIds, pem) {
-  if (pem === undefined) pem = await loadSigningKey(actDoc.by, actDoc.branch);
+  if (pem === undefined) pem = await loadSigningKey(actDoc.by, actDoc.history);
   if (!pem) return null;
   try {
     const { signAsName } = await import("../../materials/name/keys.js");
@@ -199,7 +199,7 @@ export function buildEnvelopeSigPayload({ verb, address, payload, nameId, actId,
     // against the name it controls. (Was beingId before the Name/Being split.)
     nameId:  nameId || null,
     actId:   actId || null,
-    branch:  normBranch(branch),
+    branch:  normHistory(branch),
     story: story || null,
     time:    time || null,
   };

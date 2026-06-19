@@ -65,7 +65,7 @@ export function renderTaskBar(container, { descriptor, discovery, session } = {}
   // narrowest, like a window menu bar.
   const tabs = [
     { id: "story", label: "Story", actions: storyActions(rootAddress) },
-    { id: "branch", label: "Branch", actions: branchActions(positionAddress) },
+    { id: "branch", label: "Branch", actions: historyActions(positionAddress) },
     { id: "place", label: "Place", actions: placeActions(positionAddress, desc) },
     { id: "federation", label: "Federation", actions: federationActions() },
   ];
@@ -254,7 +254,7 @@ function openAction(action, opByName) {
     return renderFederationPanel(body, action, opByName, { refreshView });
   }
   if (action.special === "branch-info") {
-    return renderBranchInfo(body);
+    return renderHistoryInfo(body);
   }
   if (action.special === "birth-self") {
     return renderBirthSelf(body, action);
@@ -430,13 +430,13 @@ function renderBirthSelf(body, action) {
 
 // who/when. Reads the synthetic `<story>/.branches/<path>` SEE
 // (readable by any logged-in being); no mutation.
-async function renderBranchInfo(body) {
+async function renderHistoryInfo(body) {
   const story = flat.state?.discovery?.story
     || flat.state?.descriptor?.address?.story
     || flat.state?.descriptor?.address?.place || "";
   const client = flat.state?.client;
   if (!client) { body.textContent = "portal not ready"; return; }
-  const currentBranch = flat.state?.descriptor?.address?.branch || "0";
+  const currentHistory = flat.state?.descriptor?.address?.branch || "0";
 
   const pickWrap = document.createElement("div");
   pickWrap.className = "op-field";
@@ -463,7 +463,7 @@ async function renderBranchInfo(body) {
       : `#${b.path}${b.label ? ` — ${b.label}` : ""}`;
     select.appendChild(o);
   }
-  select.value = branches.some((b) => b.path === currentBranch) ? currentBranch : (branches[0]?.path || "0");
+  select.value = branches.some((b) => b.path === currentHistory) ? currentHistory : (branches[0]?.path || "0");
 
   const renderFor = async (path) => {
     info.innerHTML = "";
@@ -704,15 +704,15 @@ function placeActions(address, desc) {
   ];
 }
 
-function branchActions(address) {
+function historyActions(address) {
   return [
     { label: "view branch info", special: "branch-info" },
     { label: "fork a branch", op: "create-branch", address },
-    { label: "merge branches", op: "merge-branches", address },
-    { label: "pause branch", op: "pause-branch", address },
-    { label: "unpause branch", op: "unpause-branch", address },
-    { label: "delete branch", op: "delete-branch", address, danger: true },
-    { label: "undelete branch", op: "undelete-branch", address },
+    { label: "merge branches", op: "merge-histories", address },
+    { label: "pause branch", op: "pause-history", address },
+    { label: "unpause branch", op: "unpause-history", address },
+    { label: "delete branch", op: "delete-history", address, danger: true },
+    { label: "undelete branch", op: "undelete-history", address },
     { label: "set pointer", op: "set-pointer", address },
     { label: "delete pointer", op: "delete-pointer", address },
     { label: "save clone (download)", op: "capture-template", special: "clone", address },

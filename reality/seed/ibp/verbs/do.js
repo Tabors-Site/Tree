@@ -33,7 +33,7 @@ import { emitFact } from "../../past/fact/facts.js";
 import { IbpError, IBP_ERR } from "../protocol.js";
 import { isSourceSpaceId } from "../../materials/space/source.js";
 import { authorize } from "../authorize.js";
-import { assertVerbCaller, refuseHistoricalWrite, resolveBranchForFact } from "./_shared.js";
+import { assertVerbCaller, refuseHistoricalWrite, resolveHistoryForFact } from "./_shared.js";
 import { stripForAudit } from "../../materials/redact.js";
 
 /**
@@ -69,11 +69,11 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     throw new Error(`Unknown DO operation: "${operation}". Use story.do.listOperations() to see available operations.`);
   }
 
-  // Resolve branch ONCE at the entry point. moment.actorAct?.branch wins when
-  // inside an existing moment (continuation); otherwise opts.currentBranch
-  // from the wire layer. resolveBranchForFact throws MISSING_BRANCH if
+  // Resolve branch ONCE at the entry point. moment.actorAct?.history wins when
+  // inside an existing moment (continuation); otherwise opts.currentHistory
+  // from the wire layer. resolveHistoryForFact throws MISSING_BRANCH if
   // both are absent — silent default to "0" hid threading bugs.
-  const branch = resolveBranchForFact(opts.moment, opts.currentBranch, "do");
+  const branch = resolveHistoryForFact(opts.moment, opts.currentHistory, "do");
 
   // Source matter joins the normal chain rule (philosophy/OS/MIRROR.md
   // step 2). Writes through the mirror mount land as sealed facts on
@@ -184,10 +184,10 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
           ? String(auditTarget.id)
           : null,
       moment: opts.moment,
-      // The caller's branch (session.currentBranch). Their grants
+      // The caller's branch (session.currentHistory). Their grants
       // live there; target may be on a different branch. See
-      // authorize.js "actorBranch vs targetBranch."
-      actorBranch: opts.currentBranch || null,
+      // authorize.js "actorHistory vs targetHistory."
+      actorHistory: opts.currentHistory || null,
     });
     if (!decision.ok) {
       throw new IbpError(
@@ -255,8 +255,8 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
       // Branch this fact lands on, pre-resolved at the entry. Inherited
       // from the moment's moment (set by assign from the intake
       // entry, which the wire layer fills from the parsed `#`
-      // qualifier) or attached as opts.currentBranch by the wire.
-      branch,
+      // qualifier) or attached as opts.currentHistory by the wire.
+      history: branch,
     }, opts.moment);
   }
 

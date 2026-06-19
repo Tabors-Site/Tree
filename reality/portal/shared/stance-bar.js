@@ -29,23 +29,23 @@
 // visible, never a surprise.
 
 let _bar = null; // { el, left, sep, right }
-let _cbs = { onNavigate: null, onSwitchBranch: null };
+let _cbs = { onNavigate: null, onSwitchHistory: null };
 let _ctx = {
   story: "",
   username: null,
   signedIn: false,
-  actorBranch: "0",
+  actorHistory: "0",
   // Where the being IS (its position path — follows every live
   // navigate's set-being:position). The left stance renders from
   // this, so left and right match unless the view diverges.
   actorPath: "/",
-  viewBranch: "0",
+  viewHistory: "0",
   path: "/",
   being: null,
   pointers: {},
 };
 
-function _branchAliases(path) {
+function _historyAliases(path) {
   const aliases = Object.keys(_ctx.pointers || {})
     .filter((n) => _ctx.pointers[n] === path)
     .sort();
@@ -58,13 +58,13 @@ function _actorValue() {
   // the presence your acts ride through.
   const name = _ctx.username || "arrival";
   const p = _ctx.actorPath || "/";
-  return `${_ctx.story || ""}#${_ctx.actorBranch}${p === "/" ? "/" : p}@${name}`;
+  return `${_ctx.story || ""}#${_ctx.actorHistory}${p === "/" ? "/" : p}@${name}`;
 }
 
 function _viewValue() {
   const p = _ctx.path || "/";
   const being = _ctx.being ? `@${_ctx.being}` : "";
-  return `${_ctx.story || ""}#${_ctx.viewBranch}${p === "/" ? "/" : p}${being}`;
+  return `${_ctx.story || ""}#${_ctx.viewHistory}${p === "/" ? "/" : p}${being}`;
 }
 
 function _paint() {
@@ -72,7 +72,7 @@ function _paint() {
   const { left, sep, right } = _bar;
   if (document.activeElement !== left) left.value = _actorValue();
   if (document.activeElement !== right) right.value = _viewValue();
-  const crossed = _ctx.actorBranch !== _ctx.viewBranch;
+  const crossed = _ctx.actorHistory !== _ctx.viewHistory;
   const accent = crossed ? "#8a6d2f" : "";
   const text = crossed ? "#e2c574" : "";
   left.style.borderColor = accent;
@@ -81,12 +81,12 @@ function _paint() {
   right.style.color = text;
   sep.style.color = crossed ? "#e2c574" : "";
   left.title =
-    `you are @${_ctx.username || "arrival"} — acts land on #${_ctx.actorBranch}${_branchAliases(_ctx.actorBranch)}\n` +
+    `you are @${_ctx.username || "arrival"} — acts land on #${_ctx.actorHistory}${_historyAliases(_ctx.actorHistory)}\n` +
     `edit @being to drive another being you own, and/or #branch to switch timeline, then Enter`;
   right.title = `the receiving stance — what you're looking at` +
-    `${_branchAliases(_ctx.viewBranch) ? `\nbranch${_branchAliases(_ctx.viewBranch)}` : ""}`;
+    `${_historyAliases(_ctx.viewHistory) ? `\nbranch${_historyAliases(_ctx.viewHistory)}` : ""}`;
   sep.title = crossed
-    ? `cross-branch: your being is seated on #${_ctx.actorBranch} while viewing #${_ctx.viewBranch} — acts from here land cross-branch`
+    ? `cross-branch: your being is seated on #${_ctx.actorHistory} while viewing #${_ctx.viewHistory} — acts from here land cross-branch`
     : "your being and the view are on the same branch";
 }
 
@@ -107,12 +107,12 @@ function _parseBeingEdit(raw) {
 /**
  * Create the bar once. Callbacks:
  *   onNavigate(raw)            — right-side Enter (a normal address)
- *   onSwitchBranch(path)       — left-side Enter, only the #branch changed
+ *   onSwitchHistory(path)       — left-side Enter, only the #branch changed
  *   onSwitchBeing(being, path) — left-side Enter, the @being changed (drive
  *                                another being your name owns, on `path`)
  */
-export function initStanceBar({ onNavigate, onSwitchBranch, onSwitchBeing } = {}) {
-  _cbs = { onNavigate, onSwitchBranch, onSwitchBeing };
+export function initStanceBar({ onNavigate, onSwitchHistory, onSwitchBeing } = {}) {
+  _cbs = { onNavigate, onSwitchHistory, onSwitchBeing };
   if (_bar) return _bar.el;
 
   const el = document.createElement("div");
@@ -147,7 +147,7 @@ export function initStanceBar({ onNavigate, onSwitchBranch, onSwitchBeing } = {}
     if (e.key === "Escape") { left.blur(); _paint(); return; }
     if (e.key !== "Enter") return;
     const raw = left.value.trim();
-    const targetBranch = _parseBranchEdit(raw) || _ctx.actorBranch;
+    const targetHistory = _parseBranchEdit(raw) || _ctx.actorHistory;
     const targetBeing = _parseBeingEdit(raw);
     const curBeing = _ctx.username || "arrival";
     left.blur();
@@ -155,9 +155,9 @@ export function initStanceBar({ onNavigate, onSwitchBranch, onSwitchBeing } = {}
     // changed #branch alone is a BE switch (keep the being). Else restore —
     // the left side names who you are, not a free-text field.
     if (targetBeing && targetBeing !== curBeing && _cbs.onSwitchBeing) {
-      _cbs.onSwitchBeing(targetBeing, targetBranch);
-    } else if (targetBranch !== _ctx.actorBranch && _cbs.onSwitchBranch) {
-      _cbs.onSwitchBranch(targetBranch);
+      _cbs.onSwitchBeing(targetBeing, targetHistory);
+    } else if (targetHistory !== _ctx.actorHistory && _cbs.onSwitchHistory) {
+      _cbs.onSwitchHistory(targetHistory);
     } else {
       _paint();
     }

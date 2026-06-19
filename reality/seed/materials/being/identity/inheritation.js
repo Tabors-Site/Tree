@@ -62,10 +62,10 @@ export async function livePointsAt(beingId, branch) {
   if (!beingId) return new Set();
   const position = String(beingId);
 
-  let branchClause = {};
+  let historyClause = {};
   if (branch) {
-    const { resolveBranchLineage } = await import("../../branch/branches.js");
-    branchClause = { branch: { $in: await resolveBranchLineage(String(branch)) } };
+    const { resolveHistoryLineage } = await import("../../history/histories.js");
+    historyClause = { history: { $in: await resolveHistoryLineage(String(branch)) } };
   }
 
   const [grants, revokes] = await Promise.all([
@@ -74,7 +74,7 @@ export async function livePointsAt(beingId, branch) {
       "of.id": position,
       verb: "do",
       act: "grant-inheritation",
-      ...branchClause,
+      ...historyClause,
     })
       .sort({ seq: 1, date: 1 })
       .select("params date")
@@ -84,7 +84,7 @@ export async function livePointsAt(beingId, branch) {
       "of.id": position,
       verb: "do",
       act: "revoke-inheritation",
-      ...branchClause,
+      ...historyClause,
     })
       .sort({ seq: 1, date: 1 })
       .select("params date")

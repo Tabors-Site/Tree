@@ -99,19 +99,19 @@ export async function handleCall(socket, env, ack) {
     // Cross-branch gate at the wire boundary. The caller's first-person
     // frame is the socket's tracked branch; the target stance's branch
     // is what the address carries. Mismatch is forbidden until
-    const callerBranch = socket.currentBranch || "0";
-    let _targetBranchResolved = null;
+    const callerHistory = socket.currentHistory || "0";
+    let _targetHistoryResolved = null;
     try {
-      const { parseFromSocket, expand, resolveBeingIds, resolveBranchPointers, getStoryDomain } =
+      const { parseFromSocket, expand, resolveBeingIds, resolveHistoryPointers, getStoryDomain } =
         await import("../../../seed/ibp/address.js");
       const parsed = parseFromSocket(socket, address);
       const expandCtx = {
         currentStory: getStoryDomain(),
         currentUser:    socket.name,
-        currentBranch:  callerBranch,
+        currentHistory:  callerHistory,
         currentPath:    socket.currentPath || null,
       };
-      const expandedWithPointers = await resolveBranchPointers(
+      const expandedWithPointers = await resolveHistoryPointers(
         expand(parsed, expandCtx), expandCtx);
       const expanded = await resolveBeingIds(expandedWithPointers, expandCtx);
 
@@ -121,43 +121,43 @@ export async function handleCall(socket, env, ack) {
       // Cross-branch dispatch: the summon record lands on the target
       // being's inbox-reel on the TARGET'S branch; crossOrigin marks
       // the caller's branch. emitFact attaches it. CROSS-WORLD.md.
-      _targetBranchResolved = expanded?.right?.branch || "0";
+      _targetHistoryResolved = expanded?.right?.branch || "0";
     } catch (err) {
       if (err && err.code === IBP_ERR.FORBIDDEN) throw err;
       // Parse failures fall through; callVerb owns address validation.
     }
-    const targetBranch = _targetBranchResolved || callerBranch;
+    const targetHistory = _targetHistoryResolved || callerHistory;
 
     // Pause / delete gate. SUMMON ALWAYS produces a summon Fact
     // (writes the recipient's inbox); paused or deleted branches
     // refuse so the frozen / hidden world accumulates no new work.
     {
-      const { isBranchPaused, isBranchDeleted } =
-        await import("../../../seed/materials/branch/branches.js");
-      if (await isBranchPaused(callerBranch)) {
+      const { isHistoryPaused, isHistoryDeleted } =
+        await import("../../../seed/materials/history/histories.js");
+      if (await isHistoryPaused(callerHistory)) {
         throw new IbpError(IBP_ERR.STORY_PAUSED,
-          `SUMMON refused: branch #${callerBranch} is paused.`,
-          { branch: callerBranch });
+          `SUMMON refused: branch #${callerHistory} is paused.`,
+          { branch: callerHistory });
       }
-      if (await isBranchDeleted(callerBranch)) {
+      if (await isHistoryDeleted(callerHistory)) {
         throw new IbpError(IBP_ERR.STORY_PAUSED,
-          `SUMMON refused: branch #${callerBranch} is deleted.`,
-          { branch: callerBranch, deleted: true });
+          `SUMMON refused: branch #${callerHistory} is deleted.`,
+          { branch: callerHistory, deleted: true });
       }
     }
 
     const result = await callVerb(address, message, {
       identity,
       currentUser:   socket.name,
-      // currentBranch is the FACT's branch (where the summon record
+      // currentHistory is the FACT's branch (where the summon record
       // lands on the recipient's inbox-reel) — that's the target's
-      // branch. actorBranch is the caller's session branch: the auth
+      // branch. actorHistory is the caller's session branch: the auth
       // side (their grants live there) and the crossOrigin block on
       // cross-branch summons both read it. A wire summon has no
       // moment, so without the explicit thread the actor's branch
       // never reached the seed at all.
-      currentBranch: targetBranch,
-      actorBranch:   callerBranch,
+      currentHistory: targetHistory,
+      actorHistory:   callerHistory,
       currentPath:   socket.currentPath || null,
       onResponse:    emitUpdateForSocket(socket),
     });

@@ -72,7 +72,7 @@ registerOperation("ask-role", {
     const viaWord = await _askRoleViaWord({ caller: identity.beingId, role: roleName, space: hostSpaceId, moment });
     if (viaWord) return viaWord;
 
-    const branch = moment?.actorAct?.branch || "0";
+    const branch = moment?.actorAct?.history || "0";
     const { spec, hostSpaceId: foundHost } = await getRoleSpecForGrant(
       { role: roleName, anchorSpaceId: hostSpaceId },
       branch,
@@ -218,10 +218,10 @@ async function _askRoleViaWord({ caller, role, space, moment }) {
   // fresh asker holds no role permitting summon — it would be correctly denied). The asker rides
   // in the inbox CONTENT, not the call's `from` stance.
   const { resolveRoleWord, runRoleWord } = await import("../word/roleWordRegistry.js");
-  const ir = resolveRoleWord("acquisition", "ask-role", moment?.actorAct?.branch);
+  const ir = resolveRoleWord("acquisition", "ask-role", moment?.actorAct?.history);
   if (!ir) return null;
   const { acquisitionHostEnv } = await import("./acquisitionHost.js");
-  const branch = moment?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.history || "0";
   try {
     const { result } = await runRoleWord(ir, {
       moment, branch, through: String(caller),
@@ -243,10 +243,10 @@ async function _takeRoleViaWord({ caller, role, space, moment }) {
   // reaches the owner FROM i-am; take-role has no summon, so nothing escapes to the host.
   if (!moment.identity?.beingId) moment.identity = { beingId: String(caller) };
   const { resolveRoleWord, runRoleWord } = await import("../word/roleWordRegistry.js");
-  const ir = resolveRoleWord("acquisition", "take-role", moment?.actorAct?.branch);
+  const ir = resolveRoleWord("acquisition", "take-role", moment?.actorAct?.history);
   if (!ir) return null;
   const { acquisitionHostEnv } = await import("./acquisitionHost.js");
-  const branch = moment?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.history || "0";
   try {
     const { result } = await runRoleWord(ir, {
       moment, branch,
@@ -287,7 +287,7 @@ registerOperation("take-role", {
     const viaWord = await _takeRoleViaWord({ caller: identity.beingId, role: roleName, space: hostSpaceId, moment });
     if (viaWord) return viaWord;
 
-    const branch = moment?.actorAct?.branch || "0";
+    const branch = moment?.actorAct?.history || "0";
     const { spec, hostSpaceId: foundHost } = await getRoleSpecForGrant(
       { role: roleName, anchorSpaceId: hostSpaceId },
       branch,
@@ -371,7 +371,7 @@ export async function emitInternalGrant({
     // auto-grant onto main — invisible on the branch where the
     // commons lives (the fork predates the grant), and a
     // foreign-world write onto main's reel.
-    branch: branch || moment?.actorAct?.branch || "0",
+    history: branch || moment?.actorAct?.history || "0",
     actId:  moment?.actId || null,
   }, moment);
 }

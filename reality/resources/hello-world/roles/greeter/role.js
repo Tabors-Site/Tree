@@ -26,7 +26,7 @@ export const greeterRole = Object.freeze({
     try {
       const myPlace = await ctx.read("space", myPosition);
       if (myPlace?.name) myPlaceName = myPlace.name;
-      const { default: Projection } = await import("../../../../seed/materials/branch/projection.js");
+      const { default: Projection } = await import("../../../../seed/materials/history/projection.js");
       const children = await Projection.find({
         branch: ctx.branch, type: "space",
         "state.parent": myPosition,

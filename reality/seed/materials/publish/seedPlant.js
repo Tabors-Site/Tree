@@ -24,7 +24,7 @@
 // History does not transfer — that's the seed-vs-graft distinction.
 // A planted subtree begins its life on the target's reels at the
 // moment of the plant; subsequent reads see fresh facts only. The
-// bundle's sourceStory / sourceBranch are recorded in the
+// bundle's sourceStory / sourceHistory are recorded in the
 // seed-planted meta-fact for audit, not replayed. For full-biography
 // transfer (acts preserved, identity continuation, the thing itself),
 // see graft.js — GRAFT-AND-SEED.md draws the line.
@@ -243,7 +243,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
   }
 
   const { loadProjection, loadOrFold } = await import("../projections.js");
-  const { default: Projection } = await import("../branch/projection.js");
+  const { default: Projection } = await import("../history/projection.js");
 
   // ── 1. Verify the target parent space exists. ──
   // loadOrFold: a target parent inherited from the parent branch
@@ -471,7 +471,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
         of:      { kind: "space", id: newId },
         params:  spec,
         actId:   ctx.actId,
-        branch,
+        history: branch,
       }, ctx);
     });
     committed.push({ kind: "space", id: newId });
@@ -522,7 +522,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
         of:      { kind: "being", id: newId },
         params:  spec,
         actId:   ctx.actId,
-        branch,
+        history: branch,
       }, ctx);
     });
     committed.push({ kind: "being", id: newId });
@@ -545,7 +545,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
         of:      { kind: "matter", id: newId },
         params:  spec,
         actId:   ctx.actId,
-        branch,
+        history: branch,
       }, ctx);
     });
     committed.push({ kind: "matter", id: newId });
@@ -578,7 +578,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
         of,
         params:  remapInBundleField(f.params || {}),
         actId:   ctx.actId,
-        branch,
+        history: branch,
       }, ctx);
     });
     counts.facts++;
@@ -617,7 +617,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
       of:      { kind: "space", id: rootSpaceId },
       params:  {
         sourceStory:      bundle.meta.sourceStory || null,
-        sourceBranch:       bundle.meta.sourceBranch || null,
+        sourceHistory:       bundle.meta.sourceHistory || null,
         sourceScopeSpaceId: bundle.meta.sourceScopeSpaceId || null,
         sourceScopeName:    bundle.meta.sourceScopeName || null,
         bundleCreatedAt:    bundle.meta.createdAt || null,
@@ -627,7 +627,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
         counts,
       },
       actId:  opts.moment.actId,
-      branch,
+      history: branch,
     }, opts.moment);
   } else {
     await withBeingAct(opts.operatorBeingId, "graft:completed", branch, async (ctx) => {
@@ -638,14 +638,14 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
         of:      { kind: "space", id: rootSpaceId },
         params:  {
           sourceStory:      bundle.meta.sourceStory || null,
-          sourceBranch:       bundle.meta.sourceBranch || null,
+          sourceHistory:       bundle.meta.sourceHistory || null,
           sourceScopeSpaceId: bundle.meta.sourceScopeSpaceId || null,
           sourceScopeName:    bundle.meta.sourceScopeName || null,
           bundleCreatedAt:    bundle.meta.createdAt || null,
           counts,
         },
         actId: ctx.actId,
-        branch,
+        history: branch,
       }, ctx);
     });
   }
@@ -676,7 +676,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
             of:      { kind, id },
             params:  { reason: "graft rollback" },
             actId:   ctx.actId,
-            branch,
+            history: branch,
           }, ctx);
         });
       } catch (rollbackErr) {
@@ -700,7 +700,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
             committedCount:  committed.length,
           },
           actId:  opts.moment.actId,
-          branch,
+          history: branch,
         }, opts.moment);
       } else {
         await withBeingAct(opts.operatorBeingId, "graft:failed", branch, async (ctx) => {
@@ -715,7 +715,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
               committedCount:  committed.length,
             },
             actId: ctx.actId,
-            branch,
+            history: branch,
           }, ctx);
         });
       }

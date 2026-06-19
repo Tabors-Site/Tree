@@ -119,7 +119,7 @@ export async function initHostRuntime() {
         host: redactMongoHost(process.env.MONGODB_URI || ""),
       },
       actId: ctx.actId,
-      branch: "0",
+      history: "0",
     }, ctx));
 
   const { bindHttpBeing } = await import("./requestLog.js");
@@ -138,7 +138,7 @@ export function redactMongoHost(uri) {
 }
 
 async function ensureRequestLogMatter() {
-  const { default: Projection } = await import("../branch/projection.js");
+  const { default: Projection } = await import("../history/projection.js");
   const existing = await Projection.findOne({
     branch: "0", type: "matter",
     "state.spaceId": ids.httpSpace,
@@ -171,7 +171,7 @@ async function ensureRequestLogMatter() {
 // socket is not in the live registry (at boot the registry is empty,
 // so ALL rows are stale).
 export async function reconcileStaleConnections() {
-  const { default: Projection } = await import("../branch/projection.js");
+  const { default: Projection } = await import("../history/projection.js");
   const { doVerb } = await import("../../ibp/verbs/do.js");
   const rows = await Projection.find({
     branch: "0", type: "matter",
@@ -236,7 +236,7 @@ export function noteSocketConnected({ socketId, beingId, name, branch } = {}) {
   }
 }
 
-export function noteSocketBranchRebound({ socketId, branch } = {}) {
+export function noteSocketHistoryRebound({ socketId, branch } = {}) {
   try {
     if (!ready || shuttingDown || !socketId) return;
     const matterId = socketMatter.get(socketId);
@@ -251,7 +251,7 @@ export function noteSocketBranchRebound({ socketId, branch } = {}) {
       );
     });
   } catch (err) {
-    log.warn("Host", `noteSocketBranchRebound: ${err.message}`);
+    log.warn("Host", `noteSocketHistoryRebound: ${err.message}`);
   }
 }
 
@@ -303,7 +303,7 @@ export function noteMongoReconnected() {
           gapMs: downAt ? (upAt - downAt) : null,
         },
         actId: ctx.actId,
-        branch: "0",
+        history: "0",
       }, ctx);
     });
   } catch (err) {

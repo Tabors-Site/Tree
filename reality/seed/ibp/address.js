@@ -29,8 +29,8 @@
 //   Stance     := Position "@" Being | Position | Being
 //   Position   := Place? Branch? Path?
 //   Place       := Domain (":" Port)?
-//   Branch     := "#" BranchPath          (omitted = "0" = main)
-//   BranchPath := number(letter+number)*  (e.g. "1", "1a", "1a1", "22zb")
+//   Branch     := "#" HistoryPath          (omitted = "0" = main)
+//   HistoryPath := number(letter+number)*  (e.g. "1", "1a", "1a1", "22zb")
 //   Path       := "/"                            (place space)
 //               | "/" Segment ("/" Segment)*     (space — full chain or leaf-only)
 //               | "/~" UserSlug ("/" Segment)*   (home zone)
@@ -130,7 +130,7 @@ export function parse(input, ctx = {}) {
   const right = parseStance(rightStr, ctx);
   const left = leftStr ? parseStance(leftStr, ctx, { isLeftSide: true }) : null;
 
-  // Cross-branch bridge gate, early half. Different branches are
+  // Cross-history bridge gate, early half. Different branches are
   // different worlds — their fact-chains never converge, so a bridge
   // across them has no shared fold to authorize against. At parse
   // time only TYPED canonical branches can be compared honestly: an
@@ -139,20 +139,20 @@ export function parse(input, ctx = {}) {
   // fallback compared an implicit side as literal main and refused
   // valid bridges from sessions seated off-main (implicit-left vs
   // explicit `#1`-right from a #1 session). Mixed/implicit/pointer
-  // shapes are checked by the full gate in resolveBranchPointers,
+  // shapes are checked by the full gate in resolveHistoryPointers,
   // after expansion and pointer resolution have filled real values.
-  if (left?.branch && right?.branch && left.branch !== right.branch) {
-    throw crossBranchBridgeError(input, left.branch, right.branch);
+  if (left?.history && right?.history && left.history !== right.history) {
+    throw crossHistoryBridgeError(input, left.history, right.history);
   }
 
   return { left, right };
 }
 
-function crossBranchBridgeError(input, lb, rb) {
+function crossHistoryBridgeError(input, lb, rb) {
   return paError(
-    "cross-branch-bridge",
+    "cross-history-bridge",
     input,
-    `Cross-branch bridge forbidden: left is on #${lb}, right is on #${rb}. ` +
+    `Cross-history bridge forbidden: left is on #${lb}, right is on #${rb}. ` +
       `Bridges must keep both stances on the same branch.`,
   );
 }
@@ -239,8 +239,8 @@ async function _resolveStanceBeingId(stance, ctx) {
     // No literal "0" fallback — resolve the operator's `#main` pointer
     // when the stance carries no explicit branch (the resolver should
     // have canonicalized this earlier, but defensive coverage here).
-    const { getDefaultBranch } = await import("../materials/branch/branchRegistry.js");
-    const branch = stance.branch || await getDefaultBranch();
+    const { getDefaultHistory } = await import("../materials/history/historyRegistry.js");
+    const branch = stance.history || await getDefaultHistory();
     const slot = await findByName("being", stance.being, branch);
     if (slot?.id) {
       return { ...stance, beingId: String(slot.id) };
@@ -258,11 +258,11 @@ async function _resolveStanceBeingId(stance, ctx) {
  * paths via the per-story @branch-registry being.
  *
  * Doctrine: the parser recognizes pointer references at structure
- * level (`#main`, `#prod`) and stashes them on `stance.branchPointer`,
- * leaving `stance.branch` null. This async step looks up each pointer
+ * level (`#main`, `#prod`) and stashes them on `stance.historyPointer`,
+ * leaving `stance.history` null. This async step looks up each pointer
  * in the registry (read from MAIN's projection) and fills
- * `stance.branch` with the canonical path it resolves to. After this
- * step, downstream code can read `stance.branch` and trust it's
+ * `stance.history` with the canonical path it resolves to. After this
+ * step, downstream code can read `stance.history` and trust it's
  * canonical regardless of whether the original address used a pointer
  * or a canonical path.
  *
@@ -271,7 +271,7 @@ async function _resolveStanceBeingId(stance, ctx) {
  * receiving side (see FEDERATION.md).
  *
  * Unresolved pointers (the name doesn't exist in the registry) leave
- * `stance.branch` null; the verb gate throws an appropriate error
+ * `stance.history` null; the verb gate throws an appropriate error
  * downstream with branch path context.
  *
  * Idempotent: re-running on an already-resolved stance is a no-op.
@@ -280,13 +280,13 @@ async function _resolveStanceBeingId(stance, ctx) {
  * @param {object} ctx
  * @returns {Promise<{ left?, right }>}
  */
-export async function resolveBranchPointers(pa, ctx = {}) {
+export async function resolveHistoryPointers(pa, ctx = {}) {
   if (!pa || typeof pa !== "object") return pa;
   const resolved = {
     left: pa.left ? await _resolveStancePointer(pa.left, ctx) : null,
     right: await _resolveStancePointer(pa.right, ctx),
   };
-  // Cross-branch bridge gate, full half (the parse-time half only
+  // Cross-history bridge gate, full half (the parse-time half only
   // compares typed canonical branches). By this point expansion has
   // filled implicit sides from the caller's ambient branch and the
   // pointer lookup above has canonicalized `#main`-style references,
@@ -295,26 +295,26 @@ export async function resolveBranchPointers(pa, ctx = {}) {
   // comparing them across realities is meaningless (the foreign
   // substrate gates its own side).
   if (
-    resolved.left?.branch &&
-    resolved.right?.branch &&
+    resolved.left?.history &&
+    resolved.right?.history &&
     (resolved.left.story || null) === (resolved.right.story || null) &&
-    resolved.left.branch !== resolved.right.branch
+    resolved.left.history !== resolved.right.history
   ) {
     let addr = null;
     try { addr = format(resolved); } catch { /* error context only */ }
-    throw crossBranchBridgeError(addr, resolved.left.branch, resolved.right.branch);
+    throw crossHistoryBridgeError(addr, resolved.left.history, resolved.right.history);
   }
   return resolved;
 }
 
 async function _resolveStancePointer(stance, ctx) {
-  if (!stance || !stance.branchPointer) return stance;
-  if (stance.branch) return stance;  // already canonical
+  if (!stance || !stance.historyPointer) return stance;
+  if (stance.history) return stance;  // already canonical
   const localStory = ctx.currentStory || getStoryDomain();
   if (stance.story && stance.story !== localStory) return stance;
   try {
-    const { resolvePointer } = await import("../materials/branch/branchRegistry.js");
-    const canonical = await resolvePointer(stance.branchPointer);
+    const { resolvePointer } = await import("../materials/history/historyRegistry.js");
+    const canonical = await resolvePointer(stance.historyPointer);
     if (canonical) {
       return { ...stance, branch: canonical };
     }
@@ -357,12 +357,12 @@ export function validate(pa) {
         reason: "invalid-path",
       });
     }
-    if (stance.branch != null && !isValidBranch(stance.branch)) {
+    if (stance.history != null && !isValidHistory(stance.history)) {
       errors.push({
         side: label,
-        field: "branch",
-        value: stance.branch,
-        reason: "invalid-branch",
+        field: "history",
+        value: stance.history,
+        reason: "invalid-history",
       });
     }
     if (stance.being != null && !isValidBeing(stance.being)) {
@@ -385,11 +385,11 @@ export function validate(pa) {
 
 function parseStance(input, ctx, opts = {}) {
   const { isLeftSide = false } = opts;
-  // branchPointer rides alongside `branch` throughout the function.
+  // historyPointer rides alongside `branch` throughout the function.
   // The parser sets one or the other (never both) when a `#` qualifier
-  // is present; both stay null when no `#` was typed. resolveBranchPointers
-  // (wire-layer) later fills `branch` from `branchPointer` if needed.
-  let branchPointer = null;
+  // is present; both stay null when no `#` was typed. resolveHistoryPointers
+  // (wire-layer) later fills `branch` from `historyPointer` if needed.
+  let historyPointer = null;
   const s = input.trim();
   if (!s) {
     throw paError("empty-stance", input, "Stance cannot be empty");
@@ -401,16 +401,16 @@ function parseStance(input, ctx, opts = {}) {
     if (isLeftSide) {
       return {
         story: ctx.currentStory || null,
-        branch: null,
-        branchPointer: null,
+        history: null,
+        historyPointer: null,
         path: "/",
         being: parseBeing(s),
       };
     }
     return {
       story: ctx.currentStory || null,
-      branch: null,
-      branchPointer: null,
+      history: null,
+      historyPointer: null,
       path: ctx.currentPath || null,
       being: parseBeing(s),
     };
@@ -431,16 +431,16 @@ function parseStance(input, ctx, opts = {}) {
       // implicit stance. If parse pre-fills story from ctx,
       // expandStance later treats it as typed-story and applies
       // the "no # means main" rule — silently overriding the
-      // socket's currentBranch on every relative DO.
+      // socket's currentHistory on every relative DO.
       story: null,
-      branch: null,
-      branchPointer: null,
+      history: null,
+      historyPointer: null,
       path: ctx.currentPath || null,
       being,
     };
   }
 
-  // Branch qualifier (`#<branchPath>`) sits between story and path.
+  // Branch qualifier (`#<historyPath>`) sits between story and path.
   // Pull it off `rest` first so story/path detection below stays
   // simple. The qualifier is optional; absence means "0" (main) after
   // expand. Allowed shapes: `treeos.ai#1a/path`, `#1a/path`, `#1a`,
@@ -450,7 +450,7 @@ function parseStance(input, ctx, opts = {}) {
   const hashIdx = rest.indexOf("#");
   if (hashIdx >= 0) {
     if (rest.indexOf("#", hashIdx + 1) >= 0) {
-      throw paError("multiple-branches", input,
+      throw paError("multiple-histories", input,
         `Only one "#" branch qualifier allowed per stance`);
     }
     const before = rest.slice(0, hashIdx);
@@ -464,18 +464,18 @@ function parseStance(input, ctx, opts = {}) {
     else if (ti >= 0) pathStart = ti;
     const branchStr = pathStart >= 0 ? after.slice(0, pathStart) : after;
     if (!branchStr) {
-      throw paError("empty-branch", input,
+      throw paError("empty-history", input,
         `Branch qualifier "#" cannot be empty`);
     }
-    const parsedBranch = parseBranchOrPointer(branchStr);
-    if (parsedBranch.kind === "canonical") {
-      branch = parsedBranch.value;
+    const parsedHistory = parseHistoryOrPointer(branchStr);
+    if (parsedHistory.kind === "canonical") {
+      branch = parsedHistory.value;
     } else {
       // Named pointer (`#main`, `#prod`, ...). Leave `branch` null
-      // and stash the name on `branchPointer`; the wire's
-      // resolveBranchPointers step fills in the canonical path
+      // and stash the name on `historyPointer`; the wire's
+      // resolveHistoryPointers step fills in the canonical path
       // before dispatch.
-      branchPointer = parsedBranch.value;
+      historyPointer = parsedHistory.value;
     }
     const pathPortion = pathStart >= 0 ? after.slice(pathStart) : "";
     rest = before + pathPortion;
@@ -493,8 +493,8 @@ function parseStance(input, ctx, opts = {}) {
     // story NULL (not ctx) so expand's storyWasTyped is honest.
     return {
       story: null,
-      branch,
-      branchPointer,
+      history: branch,
+      historyPointer,
       path: ctx.currentPath || null,
       being,
     };
@@ -504,8 +504,8 @@ function parseStance(input, ctx, opts = {}) {
     // not typed — the "typed story = main" rule does not apply.
     return {
       story: null,
-      branch,
-      branchPointer,
+      history: branch,
+      historyPointer,
       path: parsePath(rest, ctx),
       being,
     };
@@ -527,20 +527,20 @@ function parseStance(input, ctx, opts = {}) {
       // Human shorthand `tabor` on the left side — no story typed.
       return {
         story: null,
-        branch,
-        branchPointer,
+        history: branch,
+        historyPointer,
         path: "/",
         being: rest,
       };
     }
-    return { story: parseStory(rest), branch, branchPointer, path: null, being };
+    return { story: parseStory(rest), history: branch, historyPointer, path: null, being };
   }
   const storyPart = rest.slice(0, boundary);
   const pathPart = rest.slice(boundary);
   return {
     story: parseStory(storyPart),
-    branch,
-    branchPointer,
+    history: branch,
+    historyPointer,
     path: parsePath(pathPart, ctx),
     being,
   };
@@ -585,11 +585,11 @@ function parseBeing(s) {
   return id;
 }
 
-function parseBranch(s) {
+function parseHistory(s) {
   const trimmed = s.trim();
-  if (!isValidBranch(trimmed)) {
+  if (!isValidHistory(trimmed)) {
     throw paError(
-      "invalid-branch",
+      "invalid-history",
       trimmed,
       `Branch path "${trimmed}" must be "0" (main) or a number/letter chain ` +
         `(e.g. "1", "1a", "22zb"). Alternates number/letter; letters wrap a..z, ` +
@@ -607,21 +607,21 @@ function parseBranch(s) {
 // The disambiguation is purely structural: canonical paths start with
 // a digit (matching BRANCH_RE); pointers start with a lowercase letter
 // (matching POINTER_NAME_RE). A value that matches neither throws
-// "invalid-branch" with a hint about both shapes.
+// "invalid-history" with a hint about both shapes.
 //
-// The IBP wire layer's `resolveBranchPointers` step later resolves
+// The IBP wire layer's `resolveHistoryPointers` step later resolves
 // the pointer name to a canonical path via the @branch-registry being
 // before dispatch. Verbs read `expanded.<side>.branch` and trust it's
 // canonical because resolution either filled it in from a pointer or
 // the parser saw a canonical path to begin with.
-function parseBranchOrPointer(s) {
+function parseHistoryOrPointer(s) {
   const trimmed = s.trim();
-  if (isValidBranch(trimmed)) {
+  if (isValidHistory(trimmed)) {
     return { kind: "canonical", value: trimmed };
   }
   if (trimmed.length > POINTER_NAME_MAX_LENGTH) {
     throw paError(
-      "invalid-branch",
+      "invalid-history",
       trimmed.slice(0, 16) + "...",
       `Branch qualifier exceeds max pointer length (${POINTER_NAME_MAX_LENGTH} chars).`,
     );
@@ -630,7 +630,7 @@ function parseBranchOrPointer(s) {
     return { kind: "pointer", value: trimmed.toLowerCase() };
   }
   throw paError(
-    "invalid-branch",
+    "invalid-history",
     trimmed,
     `Branch qualifier "${trimmed}" is neither a canonical path ` +
       `("0", "1", "1a2", ...) nor a valid pointer name. ` +
@@ -702,9 +702,9 @@ function formatStance(stance, opts = {}) {
   // addresses omit `#0` the way URLs omit default ports — the address
   // bar should stay quiet for the common case. Empty-string branches
   // are treated as absent: never render `#` with nothing after it,
-  // because re-parsing that would throw "empty-branch".
-  if (typeof stance.branch === "string" && stance.branch && stance.branch !== "0") {
-    out += `#${stance.branch}`;
+  // because re-parsing that would throw "empty-history".
+  if (typeof stance.history === "string" && stance.history && stance.history !== "0") {
+    out += `#${stance.history}`;
   }
   if (stance.path) {
     // "/" at place root with a being renders as "/" + "@xxx".
@@ -745,43 +745,43 @@ function expandStance(stance, ctx) {
   // and every default address would be stuck at canonical `#0`.
   //
   // Named pointer note: when the parser saw `#main` (or any pointer),
-  // it set stance.branchPointer and left stance.branch null. We do
-  // NOT default-fill branch in that case . the resolveBranchPointers
+  // it set stance.historyPointer and left stance.history null. We do
+  // NOT default-fill branch in that case . the resolveHistoryPointers
   // step (called by the wire layer after expand) looks up the pointer
-  // in the .branches heaven space and fills stance.branch with the
+  // in the .branches heaven space and fills stance.history with the
   // canonical path. Until then, branch stays null as a marker.
   const storyWasTyped = !!stance.story;
   const story = stance.story || ctx.currentStory || null;
 
   let branch = null;
-  let branchPointer = stance.branchPointer || null;
-  if (stance.branch) {
+  let historyPointer = stance.historyPointer || null;
+  if (stance.history) {
     // Canonical was typed; use as-is.
-    branch = stance.branch;
-  } else if (branchPointer) {
-    // Pointer was typed; leave branch null for resolveBranchPointers.
+    branch = stance.history;
+  } else if (historyPointer) {
+    // Pointer was typed; leave branch null for resolveHistoryPointers.
     branch = null;
   } else if (storyWasTyped) {
     // Typed story, no `#` → default to the `#main` pointer. The
     // resolver fills branch from the registry; on a fresh story
     // main → "0" so behavior is identical at install.
-    branchPointer = "main";
-  } else if (ctx.currentBranch) {
+    historyPointer = "main";
+  } else if (ctx.currentHistory) {
     // Relative address with ambient branch context (the common case
-    // from a wire-layer call that has a tracked socket.currentBranch).
-    branch = ctx.currentBranch;
+    // from a wire-layer call that has a tracked socket.currentHistory).
+    branch = ctx.currentHistory;
   } else {
     // Relative address, no ambient context. Fall through to `#main`
     // pointer rather than the literal "0" so story-level mains
     // resolve correctly.
-    branchPointer = "main";
+    historyPointer = "main";
   }
 
   return {
     ...stance,
     story,
-    branch,
-    branchPointer,
+    history: branch,
+    historyPointer,
     path: stance.path || ctx.currentPath || null,
     being: stance.being || ctx.defaultBeing || null,
   };
@@ -851,11 +851,11 @@ export function isValidBeing(being) {
 // letter segment ("1a", "1b", ..., "1z", "1za", ...). Great-grandchildren
 // add another number, and so on. The grammar is intentionally minimal so
 // nesting depth reads off the path at a glance. See
-// seed/materials/branch/branchPath.js for the canonical parser used by
+// seed/materials/history/historyPath.js for the canonical parser used by
 // createBranch; this validator just enforces the wire-side shape.
 const BRANCH_RE = /^(?:0|\d+(?:[a-z]+\d+)*(?:[a-z]+)?)$/;
 
-export function isValidBranch(branch) {
+export function isValidHistory(branch) {
   return typeof branch === "string" && BRANCH_RE.test(branch);
 }
 
@@ -958,11 +958,11 @@ export function parseFromSocket(socket, input, extraCtx = {}) {
     // omitted fields from this ctx, so a client typing `/~` while on
     // `#1/some-place` correctly resolves to `treeos.ai#1/~`, not main.
     // When the socket has no tracked branch (initial connect, before
-    // any address has been resolved), leave currentBranch unset so
+    // any address has been resolved), leave currentHistory unset so
     // parseStance falls through to the `#main` pointer — which the
     // operator may have re-pointed away from canonical "0". Never
     // hardcode "0" here; the pointer registry is the source of truth.
-    currentBranch:  socket?.currentBranch || null,
+    currentHistory:  socket?.currentHistory || null,
     currentPath:    socket?.currentPath   || null,
     ...extraCtx,
   };
@@ -1041,7 +1041,7 @@ const STANCE_PAIR_SEPARATOR = " :: ";
 function stanceString(input) {
   if (input == null) return null;
   if (typeof input === "string") return input.length > 0 ? input : null;
-  const { place, branch, spaceId, name } = input;
+  const { place, history: branch, spaceId, name } = input;
   if (!spaceId || !name) return null;
   const storyPart = place || getStoryDomain();
   const branchPart = branch ? `#${branch}` : "";
@@ -1136,7 +1136,7 @@ async function composeStanceForBeing(
   if (!spaceId || !fields.name) return null;
   return {
     place: place || getStoryDomain(),
-    branch,
+    history: branch,
     spaceId: String(spaceId),
     name: fields.name,
   };

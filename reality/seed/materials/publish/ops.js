@@ -101,7 +101,7 @@ async function plantTemplateHandler({ target, params, identity, moment }) {
     );
   }
   const targetParentSpaceId = targetIdOf(target);
-  const branch = moment?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.history || "0";
 
   const { plantTemplate } = await import("./seedPlant.js");
   const result = await plantTemplate(bundle, targetParentSpaceId, {
@@ -248,7 +248,7 @@ async function plantTemplateByNameHandler({ target, params, identity, moment }) 
     );
   }
   const targetParentSpaceId = targetIdOf(target);
-  const branch = moment?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.history || "0";
   const { plantTemplate } = await import("./seedPlant.js");
   const result = await plantTemplate(entry.bundle, targetParentSpaceId, {
     branch,
@@ -361,7 +361,7 @@ async function graftBeingHandler({ params, identity, moment }) {
   if (!bundle) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "graft-being: params.bundle is required");
   }
-  const branch = moment?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.history || "0";
   const { applyGraft } = await import("./graft.js");
   const result = await applyGraft(bundle, { operatorBeingId: String(identity.beingId), branch });
   return { ...result, _skipAudit: true };

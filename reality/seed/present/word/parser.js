@@ -160,7 +160,7 @@ const EFFECT_RULES = [
   // `refuse with "…"` (no leading If) still matches here and inside parseInlineThen.
   [/^(?!If\b).*?\brefuses?\b.*?\bwith\s+"([^"]+)"(?:\s+as\s+([\w-]+))?\.?$/i,
     (m) => ({ kind: "refuse", message: m[1], ...(m[2] ? { code: m[2].toUpperCase().replace(/-/g, "_") } : {}) })],
-  // return (§7): success terminator. "Return the address, beingId, name, and seatBranch."
+  // return (§7): success terminator. "Return the address, beingId, name, and seatHistory."
   // An item "key: value" is an extra kv (literal or flag ref): "Return token, owned: true."
   [/^Return (.+)\.$/i, (m) => {
     const values = [], extra = {};
@@ -207,7 +207,7 @@ const EFFECT_RULES = [
 
   // ── WRITE: the substrate write verb (THE WALL's write side) → do:set-<kind>.
   // TARGETED write (a BOUND entity, not the flow's vessel) + a literal or $-ref field (for
-  // dynamic paths). "set the space branchesSpace's qualities.pointers to $next." /
+  // dynamic paths). "set the space historiesSpace's qualities.pointers to $next." /
   // "set the space root's $signalField to $value." The kind word picks set-being/space/matter.
   [/^set the (being|space|matter) ([\w-]+)'s (\$?[\w.]+) to (.+?)\.$/i,
     (m, c) => writeAct(c, m[1], m[3], m[4], undefined, m[2])],

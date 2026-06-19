@@ -24,11 +24,11 @@ import Fact from "../../../past/fact/fact.js";
 import * as reducers from "../../../materials/reducers.js";
 import { loadProjection, saveProjection, initProjection, tombstoneProjection } from "../../../materials/projections.js";
 import {
-  resolveBranchLineage,
+  resolveHistoryLineage,
   getBranchPoint,
   isMain,
   MAIN,
-} from "../../../materials/branch/branches.js";
+} from "../../../materials/history/histories.js";
 import log from "../../../seedStory/log.js";
 
 const REEL_TYPES = new Set(["being", "space", "matter", "name"]);
@@ -126,7 +126,7 @@ function assertType(type) {
  * filtered to main's own facts (pre-Pass-2 rows without a `branch`
  * field count as main).
  *
- * For non-main branches the body walks `resolveBranchLineage(branch)`
+ * For non-main branches the body walks `resolveHistoryLineage(branch)`
  * once, then runs a single OR-of-ranges query against the Fact
  * collection — each ancestor contributes the seqs it OWNS for this
  * reel (between its own branchPoint and the next branch up's
@@ -172,7 +172,7 @@ export async function readReelBetween(type, id, afterSeq, untilSeq, branch) {
       "of.kind": type,
       "of.id":   id,
       seq:           seqFilter,
-      $or: [{ branch: MAIN }, { branch: { $exists: false } }],
+      $or: [{ history: MAIN }, { history: { $exists: false } }],
     }).sort({ seq: 1 }).lean();
   }
 
@@ -181,7 +181,7 @@ export async function readReelBetween(type, id, afterSeq, untilSeq, branch) {
   // For each branch X in that list, X owns the seqs from its own
   // branchPoint (or 1 for main) up to (but not including) the NEXT
   // branch's branchPoint — OR up to untilSeq if X is the leaf.
-  const lineage = await resolveBranchLineage(branch);
+  const lineage = await resolveHistoryLineage(branch);
 
   // Compute each ancestor's owned [lo, hi] seq range for this reel.
   // The leaf inherits the global upper bound (untilSeq). Each non-leaf
@@ -203,7 +203,7 @@ export async function readReelBetween(type, id, afterSeq, untilSeq, branch) {
       ? (typeof untilSeq === "number" ? untilSeq : null)
       : await getBranchPoint(next, type, id);
     if (upper != null && upper <= lower) continue; // empty range; skip
-    ranges.push({ branch: here, lower, upper });
+    ranges.push({ history: here, lower, upper });
   }
   if (ranges.length === 0) return [];
 
@@ -211,17 +211,17 @@ export async function readReelBetween(type, id, afterSeq, untilSeq, branch) {
   // its seq range. For main rows that lack the `branch` field, match
   // via `$in: ["0", null, undefined]` ($exists:false) so pre-Pass-2
   // data participates in lineages that include main.
-  const orClauses = ranges.map(({ branch: b, lower, upper }) => {
+  const orClauses = ranges.map(({ history: b, lower, upper }) => {
     const seqFilter = { $type: "number", $gt: lower };
     if (upper != null) seqFilter.$lte = upper;
-    const branchClause = isMain(b)
-      ? { $or: [{ branch: MAIN }, { branch: { $exists: false } }] }
-      : { branch: b };
+    const historyClause = isMain(b)
+      ? { $or: [{ history: MAIN }, { history: { $exists: false } }] }
+      : { history: b };
     return {
       "of.kind": type,
       "of.id":   id,
       seq:           seqFilter,
-      ...branchClause,
+      ...historyClause,
     };
   });
 
@@ -262,7 +262,7 @@ export async function fold(type, id, opts = {}) {
     throw new Error(
       `fold: opts.branch is required (got ${JSON.stringify(opts.branch)}). ` +
       `Pass it from the fact's branch or the wire layer; in-moment callers ` +
-      `derive it from moment.actorAct.branch or the target's address.`,
+      `derive it from moment.actorAct.history or the target's address.`,
     );
   }
   const branch = opts.branch;
@@ -374,7 +374,7 @@ export async function rebuild(type, id, opts = {}) {
     throw new Error(
       `rebuild: opts.branch is required (got ${JSON.stringify(opts.branch)}). ` +
       `Pass it from the fact's branch or the wire layer; in-moment callers ` +
-      `derive it from moment.actorAct.branch or the target's address.`,
+      `derive it from moment.actorAct.history or the target's address.`,
     );
   }
   const branch = opts.branch;

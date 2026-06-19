@@ -49,7 +49,7 @@ export async function pullBackForeignPositions() {
   // current being state (per the projection-cache doctrine).
   // The legacy Being Mongoose collection isn't kept in sync with
   // qualities/position; projections is the truth.
-  const { default: Projection } = await import("../branch/projection.js");
+  const { default: Projection } = await import("../history/projection.js");
   const homeStory = getStoryDomain();
   const homeRealm   = { story: homeStory, branch: "0" };
 

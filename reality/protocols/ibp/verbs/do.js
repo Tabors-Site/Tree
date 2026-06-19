@@ -45,7 +45,7 @@
 // and ride the cherub-as-actor path in be.js.
 
 import log from "../../../seed/seedStory/log.js";
-import { parseFromSocket, expand, resolveBeingIds, resolveBranchPointers, getStoryDomain } from "../../../seed/ibp/address.js";
+import { parseFromSocket, expand, resolveBeingIds, resolveHistoryPointers, getStoryDomain } from "../../../seed/ibp/address.js";
 import { resolveStance } from "../../../seed/ibp/resolver.js";
 import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
 import { assertNoImpersonation } from "./_shared.js";
@@ -97,27 +97,27 @@ export async function handleDo(socket, env, ack) {
     const expandCtx = {
       currentStory: getStoryDomain(),
       currentUser:    socket.name,
-      currentBranch:  socket.currentBranch || "0",
+      currentHistory:  socket.currentHistory || "0",
       currentPath:    socket.currentPath   || null,
     };
     // Resolve named pointers (#main, #prod, ...) to canonical paths
     // before resolveBeingIds runs (findByName needs the canonical
     // branch for the lineage walk).
-    const expandedWithPointers = await resolveBranchPointers(
+    const expandedWithPointers = await resolveHistoryPointers(
       expand(parsed, expandCtx), expandCtx);
     const expanded = await resolveBeingIds(expandedWithPointers, expandCtx);
 
     // Impersonation refusal — see _shared.js for the doctrine.
     assertNoImpersonation(expanded, socket);
 
-    // Cross-branch dispatch. The caller is on socket.currentBranch
+    // Cross-branch dispatch. The caller is on socket.currentHistory
     // (their world); the target is on expanded.right.branch (the
     // target's world). When they differ, this is a cross-world call:
     // the Fact lands on the target's branch with a crossOrigin block
     // pointing at the caller's branch. emitFact's deriveCrossOrigin
     // attaches the provenance automatically. See CROSS-WORLD.md.
-    const callerBranch = socket.currentBranch || "0";
-    const targetBranch = expanded.right?.branch || "0";
+    const callerHistory = socket.currentHistory || "0";
+    const targetHistory = expanded.right?.branch || "0";
 
     // Pause / delete gate. While the target branch is paused or
     // deleted, DO refuses every op EXCEPT the branch-lifecycle ops
@@ -143,21 +143,21 @@ export async function handleDo(socket, env, ack) {
       "delete-branch", "undelete-branch",
     ]);
     if (!PAUSE_LIFECYCLE_OPS.has(action)) {
-      const { isBranchPaused } = await import("../../../seed/materials/branch/branches.js");
-      if (await isBranchPaused(targetBranch)) {
+      const { isHistoryPaused } = await import("../../../seed/materials/history/histories.js");
+      if (await isHistoryPaused(targetHistory)) {
         throw new IbpError(IBP_ERR.STORY_PAUSED,
-          `DO refused: branch #${targetBranch} is paused. ` +
+          `DO refused: branch #${targetHistory} is paused. ` +
           `Unpause via @branch-manager or fork a new branch off it.`,
-          { branch: targetBranch });
+          { branch: targetHistory });
       }
     }
     if (!DELETE_LIFECYCLE_OPS.has(action)) {
-      const { isBranchDeleted } = await import("../../../seed/materials/branch/branches.js");
-      if (await isBranchDeleted(targetBranch)) {
+      const { isHistoryDeleted } = await import("../../../seed/materials/history/histories.js");
+      if (await isHistoryDeleted(targetHistory)) {
         throw new IbpError(IBP_ERR.STORY_PAUSED,
-          `DO refused: branch #${targetBranch} is deleted. ` +
+          `DO refused: branch #${targetHistory} is deleted. ` +
           `Undelete via @branch-manager to restore writes.`,
-          { branch: targetBranch, deleted: true });
+          { branch: targetHistory, deleted: true });
       }
     }
 
@@ -184,7 +184,7 @@ export async function handleDo(socket, env, ack) {
     let target;
     if (beingTargetedOnly && qualifier) {
       const { findByName } = await import("../../../seed/materials/projections.js");
-      const beingSlot = await findByName("being", qualifier, callerBranch);
+      const beingSlot = await findByName("being", qualifier, callerHistory);
       if (!beingSlot) {
         throw new IbpError(
           IBP_ERR.BEING_NOT_FOUND,
@@ -247,11 +247,11 @@ export async function handleDo(socket, env, ack) {
       correlation,
       identity,
       // branch — actor's world; where the moment opens and the Act seals.
-      // targetBranch — target's world; where the Fact lands. Differs from
+      // targetHistory — target's world; where the Fact lands. Differs from
       // branch on cross-world calls; emitFact attaches crossOrigin
       // automatically. See seed/CROSS-WORLD.md.
-      branch: callerBranch,
-      targetBranch,
+      branch: callerHistory,
+      targetHistory,
     });
 
     // Fire-and-forget: when the moment seals, push the result to

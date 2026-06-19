@@ -42,12 +42,12 @@ export async function verifyReelFrom(
     throw new Error(`verifyReelFrom: targetKind must be being|space|matter (got "${targetKind}")`);
   }
   const id = String(targetId);
-  const { isMain, resolveBranchLineage, getBranchPoint } =
-    await import("../../materials/branch/branches.js");
+  const { isMain, resolveHistoryLineage, getBranchPoint } =
+    await import("../../materials/history/histories.js");
 
   // The branch's visible ranges, identical logic to verifyReel /
   // readReelBetween: lineage[i] owns (floor(lineage[i]), floor(lineage[i+1])].
-  const lineage = isMain(branch) ? ["0"] : await resolveBranchLineage(branch);
+  const lineage = isMain(branch) ? ["0"] : await resolveHistoryLineage(branch);
   const ranges = [];
   for (let i = 0; i < lineage.length; i++) {
     const here = lineage[i];
@@ -61,10 +61,10 @@ export async function verifyReelFrom(
   const orClauses = ranges.map(({ branch: b, lower, upper }) => {
     const seqFilter = { $type: "number", $gt: lower };
     if (upper != null) seqFilter.$lte = upper;
-    const branchClause = isMain(b)
-      ? { $or: [{ branch: "0" }, { branch: { $exists: false } }] }
-      : { branch: b };
-    return { "of.kind": targetKind, "of.id": id, seq: seqFilter, ...branchClause };
+    const historyClause = isMain(b)
+      ? { $or: [{ history: "0" }, { history: { $exists: false } }] }
+      : { history: b };
+    return { "of.kind": targetKind, "of.id": id, seq: seqFilter, ...historyClause };
   });
   if (orClauses.length === 0) return { ok: true, count: 0, headHash: null };
 

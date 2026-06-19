@@ -196,8 +196,8 @@ export function createPortalContext({ id = "main", persist = true, session = nul
         events.emit("call", entry);
       },
       onDescriptorEvent: (event) => ctx.navigation.handleDescriptorEvent(event),
-      onBranchChange: (branch) => {
-        state.set({ actorBranch: branch || "0" });
+      onHistoryChange: (branch) => {
+        state.set({ actorHistory: branch || "0" });
         events.emit("branch", branch);
       },
     }), ctx);

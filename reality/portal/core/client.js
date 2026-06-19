@@ -30,20 +30,20 @@
 import { io } from "socket.io-client";
 
 export class PortalClient {
-  constructor({ placeUrl, token, useProxy, onConnectionChange, onSummon, onDescriptorEvent, onBranchChange }) {
+  constructor({ placeUrl, token, useProxy, onConnectionChange, onSummon, onDescriptorEvent, onHistoryChange }) {
     this.placeUrl              = placeUrl;
     this.token                = token;
     this.useProxy             = !!useProxy;
     this.socket               = null;
     this.connected            = false;
     // The session's branch (left stance) — mirrors the server's
-    // socket.currentBranch via the "branch" push.
-    this.currentBranch         = null;
+    // socket.currentHistory via the "branch" push.
+    this.currentHistory         = null;
     this._reqCounter          = 0;
     this._onConnectionChange  = onConnectionChange  || (() => {});
     this._onSummon            = onSummon            || (() => {});
     this._onDescriptorEvent   = onDescriptorEvent   || (() => {});
-    this._onBranchChange      = onBranchChange      || (() => {});
+    this._onHistoryChange      = onHistoryChange      || (() => {});
     // correlation → { resolve, reject, timer } for awaiting moment pushes (DO/BE)
     this._pendingMoments      = new Map();
   }
@@ -112,14 +112,14 @@ export class PortalClient {
 
     // The server tells this session its BRANCH (the left stance's
     // branch — what every relative act lands on; mirrors the server's
-    // socket.currentBranch). Emitted at handshake and again after
+    // socket.currentHistory). Emitted at handshake and again after
     // every BE switch. The portal renders the full address from it:
     // @being#branch → story#view/path.
-    this.currentBranch = this.currentBranch || null;
+    this.currentHistory = this.currentHistory || null;
     this.socket.on("branch", (p) => {
       const branch = typeof p?.branch === "string" && p.branch.length ? p.branch : "0";
-      this.currentBranch = branch;
-      safeCall(this._onBranchChange, branch);
+      this.currentHistory = branch;
+      safeCall(this._onHistoryChange, branch);
     });
 
     // Single IBP wire event — one listener, route by envelope.verb.

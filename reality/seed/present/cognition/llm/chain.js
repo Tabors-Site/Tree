@@ -175,7 +175,7 @@ async function loadStoryRoot(branch) {
   // chain for the receiver/actor space ends at it, but for the
   // chain-walker convenience we load it directly so step 3 / 6 don't
   // depend on having walked space ancestors first.
-  const { default: Projection } = await import("../../../materials/branch/projection.js");
+  const { default: Projection } = await import("../../../materials/history/projection.js");
   const row = await Projection.findOne({
     branch, type: "space", "state.parent": null, tombstoned: { $ne: true },
   }).lean();

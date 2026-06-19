@@ -42,7 +42,7 @@ import { getInternalConfigValue } from "../../internalConfig.js";
 import { randomUUID as uuidv4 } from "node:crypto";
 import Matter from "./matter.js";
 import Space from "../space/space.js";
-import { loadProjection, loadOrFold, assertBranchOrThrow, listMatterNamesInFolder } from "../projections.js";
+import { loadProjection, loadOrFold, assertHistoryOrThrow, listMatterNamesInFolder } from "../projections.js";
 import { matterContentId } from "./matterId.js";
 import { emitFact, sealFacts } from "../../past/fact/facts.js";
 import { getStoryConfigValue } from "../../storyConfig.js";
@@ -205,10 +205,10 @@ async function createMatter({
       `Unknown matter type "${type}". Registered types: seed basics plus extension-registered "<ext>:<type>" names.`,
     );
   }
-  const branch = assertBranchOrThrow(moment?.actorAct?.branch, "matters(moment)");
+  const branch = assertHistoryOrThrow(moment?.actorAct?.history, "matters(moment)");
 
   const { loadOrFold } = await import("../projections.js");
-  const { default: Projection } = await import("../branch/projection.js");
+  const { default: Projection } = await import("../history/projection.js");
   const spaceIdBare = String(spaceId);
   const _spaceSlot = await loadOrFold("space", spaceIdBare, branch);
   const targetSpace = _spaceSlot ? {
@@ -351,7 +351,7 @@ async function createMatter({
     params:  matterParams,
     actId,
     sessionId,
-    branch,
+    history: branch,
   }]);
   const _newSlot = await loadProjection("matter", matterId, branch);
   if (!_newSlot) {
@@ -396,7 +396,7 @@ async function editMatter({
 }) {
   if (!matterId || !beingId) throw new Error("Missing required fields");
 
-  const branch = assertBranchOrThrow(moment?.actorAct?.branch, "matters(moment)");
+  const branch = assertHistoryOrThrow(moment?.actorAct?.history, "matters(moment)");
   const _matterSlot = await loadOrFold("matter", matterId, branch);
   if (!_matterSlot) throw new Error("Matter not found");
   const matter = { _id: _matterSlot.id, ...(_matterSlot.state || {}) };
@@ -486,7 +486,7 @@ async function editMatter({
     params:  { field: "content", value: newRef },
     actId,
     sessionId,
-    branch,
+    history: branch,
   }, moment);
   matter.content = newRef;
 
@@ -505,14 +505,14 @@ async function editMatter({
 }
 
 async function getMatters({ spaceId, limit, offset, startDate, endDate, branch }) {
-  assertBranchOrThrow(branch, "matters.getMatters(opts)");
+  assertHistoryOrThrow(branch, "matters.getMatters(opts)");
   if (!spaceId) throw new Error("Missing required parameter: spaceId");
 
   const dateRange = validateDateRange(startDate, endDate);
   const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), matterQueryLimit());
   const safeOffset = Math.max(0, Number(offset) || 0);
 
-  const { default: Projection } = await import("../branch/projection.js");
+  const { default: Projection } = await import("../history/projection.js");
   const spaceIdBare = String(spaceId);
   const where = {
     branch, type: "matter",
@@ -559,7 +559,7 @@ async function deleteMatterAndFile({
   actId = null, sessionId = null,
   moment = null,
 }) {
-  const branch = assertBranchOrThrow(moment?.actorAct?.branch, "matters(moment)");
+  const branch = assertHistoryOrThrow(moment?.actorAct?.history, "matters(moment)");
   const _mSlot = await loadOrFold("matter", matterId, branch);
   if (!_mSlot) throw new Error("Matter not found");
   const matter = { _id: _mSlot.id, ...(_mSlot.state || {}) };
@@ -603,7 +603,7 @@ async function deleteMatterAndFile({
       params:  { field, value },
       actId,
       sessionId,
-      branch,
+      history: branch,
     }, moment);
   await setMatterField("spaceId", DELETED);
   await setMatterField("beingId", DELETED);
@@ -634,7 +634,7 @@ async function transferMatter({
     throw new Error("Missing required fields: matterId, targetSpace, beingId");
   }
 
-  const branch = assertBranchOrThrow(moment?.actorAct?.branch, "matters(moment)");
+  const branch = assertHistoryOrThrow(moment?.actorAct?.history, "matters(moment)");
   const _mSlot2 = await loadOrFold("matter", matterId, branch);
   if (!_mSlot2) throw new Error("Matter not found");
   const matter = { _id: _mSlot2.id, ...(_mSlot2.state || {}) };
@@ -668,7 +668,7 @@ async function transferMatter({
     params:  { field: "spaceId", value: targetSpaceBare },
     actId,
     sessionId,
-    branch,
+    history: branch,
   }, moment);
   matter.spaceId = targetSpaceBare;
 
@@ -683,9 +683,9 @@ async function transferMatter({
  * specifically needs to avoid.
  */
 async function listMattersAt(spaceId, { limit = 50, branch } = {}) {
-  assertBranchOrThrow(branch, "matters.listMattersAt(opts)");
+  assertHistoryOrThrow(branch, "matters.listMattersAt(opts)");
   if (!spaceId) return [];
-  const { default: Projection } = await import("../branch/projection.js");
+  const { default: Projection } = await import("../history/projection.js");
   const toEntry = (s) => {
     const m = s.state || {};
     return {
@@ -715,12 +715,12 @@ async function listMattersAt(spaceId, { limit = 50, branch } = {}) {
   }
   // Non-main: union branch's own matters with main's matters that
   // existed at branch creation. Shadow + tombstone semantics.
-  const { getBranchPoint } = await import("../branch/branches.js");
-  const [branchRows, mainRows] = await Promise.all([
+  const { getBranchPoint } = await import("../history/histories.js");
+  const [historyRows, mainRows] = await Promise.all([
     Projection.find(baseQuery(branch)).lean(),
     Projection.find(baseQuery("0")).lean(),
   ]);
-  const shadowedIds = new Set(branchRows.map((s) => s.id));
+  const shadowedIds = new Set(historyRows.map((s) => s.id));
   const tombs = await Projection.find({
     branch, type: "matter", tombstoned: true,
   }).select("id").lean();
@@ -731,7 +731,7 @@ async function listMattersAt(spaceId, { limit = 50, branch } = {}) {
     const bp = await getBranchPoint(branch, "matter", cand.id);
     if (bp && bp > 0) mainVisible.push(cand);
   }
-  const all = [...branchRows, ...mainVisible];
+  const all = [...historyRows, ...mainVisible];
   all.sort((a, b) => {
     const at = a.state?.createdAt ? new Date(a.state.createdAt).getTime() : 0;
     const bt = b.state?.createdAt ? new Date(b.state.createdAt).getTime() : 0;
@@ -753,7 +753,7 @@ async function listMattersAt(spaceId, { limit = 50, branch } = {}) {
  */
 async function getMatter(matterId, opts = {}) {
   if (!matterId || typeof matterId !== "string") return null;
-  const branch = assertBranchOrThrow(opts?.branch, "matters.getMatter(opts)");
+  const branch = assertHistoryOrThrow(opts?.branch, "matters.getMatter(opts)");
   const slot = await loadOrFold("matter", matterId, branch);
   if (!slot) return null;
   return { _id: slot.id, ...(slot.state || {}) };

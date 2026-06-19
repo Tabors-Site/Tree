@@ -152,7 +152,7 @@ async function getLlmAssigner() {
 // marker so we never touch unrelated matter authored by the
 // llm-assigner. Returns the lean row, or null.
 async function findTutorialMatter(spaceId, llmAssignerId) {
-  const { default: Projection } = await import("../../../materials/branch/projection.js");
+  const { default: Projection } = await import("../../../materials/history/projection.js");
   // state.beingId / state.spaceId are bare ids in the matter projection.
   const row = await Projection.findOne({
     branch: "0", type: "matter",
@@ -617,7 +617,7 @@ export function registerLlmAssignerOps() {
         actorSpaceId = null,
         role = "main",
       } = args || {};
-      const effectiveBranch = args?.branch || branch || "0";
+      const effectiveHistory = args?.branch || branch || "0";
       // Default the actor to the SEE caller when not specified.
       if (!actorBeingId && !actorBeingName && identity?.beingId) {
         actorBeingId = String(identity.beingId);
@@ -633,7 +633,7 @@ export function registerLlmAssignerOps() {
       }
       if (actorBeingId && !actorSpaceId) {
         const { loadProjection: _lp } = await import("../../../materials/projections.js");
-        const actorSlot = await _lp("being", actorBeingId, effectiveBranch);
+        const actorSlot = await _lp("being", actorBeingId, effectiveHistory);
         actorSpaceId = actorSlot?.state?.position || actorSlot?.state?.homeSpace || null;
       }
       if (!receiverBeingId) {
@@ -644,7 +644,7 @@ export function registerLlmAssignerOps() {
         receiver: { beingId: receiverBeingId, spaceId: receiverSpaceId, storyDomain: null },
         actor: actorBeingId ? { beingId: actorBeingId, spaceId: actorSpaceId, storyDomain: null } : null,
         role,
-        branch: effectiveBranch,
+        branch: effectiveHistory,
       });
       const { loadProjection } = await import("../../../materials/projections.js");
       const beingsToLookup = new Map();

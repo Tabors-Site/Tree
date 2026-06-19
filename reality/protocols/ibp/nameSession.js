@@ -143,7 +143,7 @@ async function doDeclare(socket, msg, ack, id) {
   let nameId = null;
   let reveal = null;
   await withIAmAct("name:declare (pre-world)", async (ctx) => {
-    const r = await nameVerb("declare", payload, { moment: ctx, currentBranch: "0" });
+    const r = await nameVerb("declare", payload, { moment: ctx, currentHistory: "0" });
     nameId = r.nameId;
     reveal = r.reveal || null;
   });
@@ -167,7 +167,7 @@ async function stampNameSession(op, nameId) {
     await nameVerb(op, {}, {
       address:       `${nameId}@${storyDomain}`,
       moment:     ctx,
-      currentBranch: "0",
+      currentHistory: "0",
     });
   });
 }
@@ -296,7 +296,7 @@ async function doTree(socket, msg, ack, id) {
       "name tree requires a connected name (sign in first)");
   }
   const src = msg?.payload || msg || {};
-  const branch = src.branch || socket.currentBranch || null;
+  const branch = src.branch || socket.currentHistory || null;
   const { buildNameTree } = await import("../../seed/ibp/descriptor.js");
   const tree = await buildNameTree(nameId, branch);
   if (!tree) {

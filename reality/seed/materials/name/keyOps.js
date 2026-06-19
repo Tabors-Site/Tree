@@ -62,11 +62,11 @@ async function resolveTargetNameId(target, moment) {
 async function _keyExportViaWord({ target, caller, asker, moment }) {
   if (!moment) return null;
   const { resolveRoleWord, runRoleWord } = await import("../../present/word/roleWordRegistry.js");
-  const ir = resolveRoleWord("name", "key-export", moment?.actorAct?.branch);
+  const ir = resolveRoleWord("name", "key-export", moment?.actorAct?.history);
   if (!ir) return null;
   const { keyHostEnv } = await import("./keyHost.js");
   const { targetIdOf } = await import("../_targetShape.js");
-  const branch = moment?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.history || "0";
   try {
     const { result } = await runRoleWord(ir, {
       moment, branch,
@@ -97,7 +97,7 @@ registerOperation("key-export", {
     const viaWord = await _keyExportViaWord({ target, caller: identity?.nameId, asker: identity?.beingId, moment });
     if (viaWord) return viaWord;
 
-    const branch = moment?.actorAct?.branch;
+    const branch = moment?.actorAct?.history;
     const nameId = await resolveTargetNameId(target, moment);
 
     // NEVER export the story (I_AM) key. The I_AM "name" id is the literal
@@ -158,7 +158,7 @@ registerOperation("key-export", {
         of:      { kind: "being", id: askerBeingId },
         params:  { exportedNameId: nameId },
         actId:   moment?.actId || null,
-        branch,
+        history: branch,
       }, moment);
     }
 

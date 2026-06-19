@@ -38,7 +38,7 @@
 import { randomUUID } from "crypto";
 import InboxProjection from "../../past/projections/inbox/inboxProjection.js";
 import { emitFact } from "../../past/fact/facts.js";
-import { assertBranchOrThrow } from "../../materials/projections.js";
+import { assertHistoryOrThrow } from "../../materials/projections.js";
 import { stashSecrets, restoreSecrets } from "./secretStash.js";
 
 // Place-level cap on pending intake entries. Counts InboxProjection
@@ -145,7 +145,7 @@ export async function enqueueIntake(spaceId, beingId, entry) {
     // when upserting the projection row so the scheduler can pick
     // branch-scoped. Caller (transport-act dispatch) must attach
     // branch from the wire layer's parsed address; no silent fallback.
-    branch:  assertBranchOrThrow(entry.branch, "enqueueIntake(entry)"),
+    history:  assertHistoryOrThrow(entry.branch, "enqueueIntake(entry)"),
   });
 
   return { correlation, sentAt };
@@ -248,7 +248,7 @@ export async function pickNextIntake(spaceId, beingId, opts = {}) {
       // A row with null branch indicates a data integrity issue — the
       // fold should always have populated it from the originating
       // fact. assert so the corruption surfaces immediately.
-      branch:          assertBranchOrThrow(row.branch, "intake.pick(row)"),
+      history:          assertHistoryOrThrow(row.branch, "intake.pick(row)"),
     },
     index: row._id, // correlation as identifier
   };

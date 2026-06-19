@@ -18,12 +18,12 @@ import { emitFact } from "../past/fact/facts.js";
 import { IBPA_RE } from "./portalOp.js";
 import { matterContentId } from "./matter/matterId.js";
 
-const actBranchOf = (ctx) => ctx?.moment?.actorAct?.branch || ctx?.branch || "0";
+const actHistoryOf = (ctx) => ctx?.moment?.actorAct?.history || ctx?.branch || "0";
 // The fact-landing branch: same precedence the JS handler uses for the emit
-// (targetBranch before the actor's branch), so a cross-story inbound moment
+// (targetHistory before the actor's branch), so a cross-story inbound moment
 // lands the portal on the target's branch.
-const factBranchOf = (ctx) =>
-  ctx?.moment?.targetBranch || ctx?.moment?.actorAct?.branch || ctx?.branch || "0";
+const factHistoryOf = (ctx) =>
+  ctx?.moment?.targetHistory || ctx?.moment?.actorAct?.history || ctx?.branch || "0";
 
 export function portalHostEnv() {
   return {
@@ -51,7 +51,7 @@ export function portalHostEnv() {
       if (kind === "space") return id;
       if (kind === "matter") {
         const { loadOrFold } = await import("./projections.js");
-        const matterSlot = await loadOrFold("matter", id, actBranchOf(ctx));
+        const matterSlot = await loadOrFold("matter", id, actHistoryOf(ctx));
         return matterSlot?.state?.spaceId || null;
       }
       return null;
@@ -90,7 +90,7 @@ export function portalHostEnv() {
           of: { kind: "matter", id: matterId },
           params: createSpec,
           actId: sc?.actId || null,
-          branch: factBranchOf(ctx),
+          history: factHistoryOf(ctx),
         },
         sc,
       );

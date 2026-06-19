@@ -18,7 +18,7 @@
 // `getInboxSummary`) used by the descriptor and the UI.
 
 import InboxProjection from "../../past/projections/inbox/inboxProjection.js";
-import { assertBranchOrThrow } from "../../materials/projections.js";
+import { assertHistoryOrThrow } from "../../materials/projections.js";
 
 /**
  * Read a being's open inbox at this position. Returns the
@@ -38,7 +38,7 @@ export async function readInbox(spaceId, beingId, options = {}) {
   // Branch is required: an inbox query without it would scan every
   // branch's rows and return a cross-branch grab-bag. Caller must
   // attach branch from the moment's moment or the wire layer.
-  const branch = assertBranchOrThrow(options.branch, "readInbox(options)");
+  const branch = assertHistoryOrThrow(options.branch, "readInbox(options)");
   const q = { recipient: String(beingId), inboxSpaceId: String(spaceId), branch };
   if (options.since) q.sentAt = { $gte: new Date(options.since) };
   let cursor = InboxProjection.find(q).sort({ sentAt: 1 });
@@ -56,7 +56,7 @@ export async function getInboxSummary(spaceId, { branch } = {}) {
   if (!spaceId) return {};
   // See readInbox for the doctrine: branch required, no silent
   // cross-branch query.
-  const _branch = assertBranchOrThrow(branch, "getInboxSummary(opts)");
+  const _branch = assertHistoryOrThrow(branch, "getInboxSummary(opts)");
   const rows = await InboxProjection.aggregate([
     { $match: { inboxSpaceId: String(spaceId), branch: _branch } },
     { $sort: { sentAt: 1 } },

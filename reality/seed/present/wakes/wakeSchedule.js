@@ -30,7 +30,7 @@
 // same mechanism that inherits state. No special "clone schedules
 // at branch creation" step is needed.
 //
-// ── Branch axis ─────────────────────────────────────────────────
+// ── History axis ─────────────────────────────────────────────────
 //
 // Every schedule entry carries the branch it ticks in. A dancer in
 // main and the same dancer in #1 are two separate registry entries
@@ -68,9 +68,9 @@ import { getSpaceRootId } from "../../sprout.js";
 import { emitFact } from "../../past/fact/facts.js";
 import {
   MAIN,
-  resolveBranchLineage,
+  resolveHistoryLineage,
   getBranchPoint,
-} from "../../materials/branch/branches.js";
+} from "../../materials/history/histories.js";
 
 const MIN_INTERVAL_MS = 250;
 const DEFAULT_TICK_MS = 1000;
@@ -151,7 +151,7 @@ export async function schedule(beingId, opts = {}) {
 
   await emitFact({
     through: String(opts.actorBeingId || beingIdStr),
-    branch,
+    history: branch,
     verb:    "do",
     act:     "wake-scheduled",
     of:      { kind: "being", id: beingIdStr },
@@ -202,7 +202,7 @@ export async function unschedule(scheduleId, opts = {}) {
 
   await emitFact({
     through: String(opts.actorBeingId || entry.beingId),
-    branch,
+    history: branch,
     verb:    "do",
     act:     "wake-cancelled",
     of:      { kind: "being", id: entry.beingId },
@@ -295,7 +295,7 @@ export function resetEmitter() {
 /**
  * Rehydrate the in-memory registry from the fact chain.
  *
- * For every live branch (main + every non-deleted Branch row), walks
+ * For every live branch (main + every non-deleted History row), walks
  * the wake-scheduled / wake-cancelled facts inherited through the
  * branch's reel-lineage and materializes one runtime entry per live
  * (scheduleId, branch) pair.
@@ -306,24 +306,24 @@ export function resetEmitter() {
  * registry.
  */
 export async function rehydrateFromFacts() {
-  let Fact, Branch;
+  let Fact, History;
   try {
     Fact = (await import("../../past/fact/fact.js")).default;
-    Branch = (await import("../../materials/branch/branch.js")).default;
+    History = (await import("../../materials/history/history.js")).default;
   } catch (err) {
     log.warn("Schedule", `rehydrate skipped: model load failed (${err.message})`);
     return 0;
   }
 
-  // Enumerate live branches: main + every non-deleted Branch row.
+  // Enumerate live branches: main + every non-deleted History row.
   // Soft-deleted branches keep their facts in the chain but don't
   // tick. Undelete restores by rerunning rehydrate.
   const branches = [MAIN];
   try {
-    const branchRows = await Branch
+    const historyRows = await History
       .find({ deleted: { $ne: true } }, "_id")
       .lean();
-    for (const row of branchRows) {
+    for (const row of historyRows) {
       if (row._id !== MAIN) branches.push(row._id);
     }
   } catch (err) {
@@ -344,7 +344,7 @@ export async function rehydrateFromFacts() {
   for (const branch of branches) {
     const live = new Map();
     for (const fact of wakeFacts) {
-      const inLineage = await _isInBranchLineage(fact, branch);
+      const inLineage = await _isInHistoryLineage(fact, branch);
       if (!inLineage) continue;
       const scheduleId = fact.params?.scheduleId;
       if (!scheduleId) continue;
@@ -405,7 +405,7 @@ export function _inspectRegistry() {
     snapshot[key] = {
       id: entry.id,
       beingId: entry.beingId,
-      branch: entry.branch,
+      history: entry.branch,
       intervalMs: entry.intervalMs,
       priority: entry.priority,
       content: entry.content,
@@ -463,11 +463,11 @@ function _entryFromFact(fact, branch, nowMs) {
   };
 }
 
-// True when `fact` is inherited by `targetBranch`'s reel-lineage.
+// True when `fact` is inherited by `targetHistory`'s reel-lineage.
 //
 // Rules:
-//   . factBranch === targetBranch         . divergent path, always inherited
-//   . factBranch is an ancestor in lineage . inherited iff fact.seq is at or
+//   . factHistory === targetHistory         . divergent path, always inherited
+//   . factHistory is an ancestor in lineage . inherited iff fact.seq is at or
 //                                            below the branchPoint cutoff
 //                                            for the next-deeper child on
 //                                            this fact's reel.
@@ -475,23 +475,23 @@ function _entryFromFact(fact, branch, nowMs) {
 // Non-reel-bearing facts (no target.kind/id) inherit by ancestor
 // inclusion alone. Wake facts always carry target = { kind: "being",
 // id: <beingId> }, so the branchPoint check is the live path.
-async function _isInBranchLineage(fact, targetBranch) {
-  const factBranch = fact.branch || MAIN;
-  if (factBranch === targetBranch) return true;
+async function _isInHistoryLineage(fact, targetHistory) {
+  const factHistory = fact.history || MAIN;
+  if (factHistory === targetHistory) return true;
 
-  const lineage = await resolveBranchLineage(targetBranch);
-  const idx = lineage.indexOf(factBranch);
+  const lineage = await resolveHistoryLineage(targetHistory);
+  const idx = lineage.indexOf(factHistory);
   if (idx === -1) return false;
   if (idx === lineage.length - 1) return true;
 
-  const childBranch = lineage[idx + 1];
+  const childHistory = lineage[idx + 1];
   const kind = fact.target?.kind;
   const id   = fact.target?.id;
   if (!kind || !id) return true;
 
   let bp;
   try {
-    bp = await getBranchPoint(childBranch, kind, id);
+    bp = await getBranchPoint(childHistory, kind, id);
   } catch {
     return false;
   }
@@ -540,7 +540,7 @@ async function _defaultEmitter(entry, nowMs) {
   await callByResolved({
     toBeingId:    entry.beingId,
     inboxSpaceId: spaceId,
-    branch:       entry.branch,
+    history:       entry.branch,
     identity,
     message: {
       from:            sender,

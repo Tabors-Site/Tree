@@ -86,7 +86,7 @@ function getTTL() {
  * one lineage walk per ancestor the first time, then hit cache.
  *
  * Branch is REQUIRED . no default. A missing branch arg falls
- * through to assertBranch in loadOrFold which throws loud, so silent
+ * through to assertHistory in loadOrFold which throws loud, so silent
  * main-bias on a branched caller surfaces as a test failure or
  * runtime error rather than a quietly-wrong chain.
  *
@@ -450,8 +450,8 @@ export function invalidateSpace(spaceId, branch = null) {
   for (const key of keys) {
     // Key shape "branch:spaceId" . parse to compare.
     const sepIdx = key.indexOf(":");
-    const keyBranch = sepIdx >= 0 ? key.slice(0, sepIdx) : "0";
-    if (branch != null && keyBranch !== String(branch)) continue;
+    const keyHistory = sepIdx >= 0 ? key.slice(0, sepIdx) : "0";
+    if (branch != null && keyHistory !== String(branch)) continue;
     const keySpaceId = sepIdx >= 0 ? key.slice(sepIdx + 1) : key;
     // Direct hit on this space, or any cached chain that contains it.
     if (keySpaceId === id) {

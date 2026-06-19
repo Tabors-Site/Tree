@@ -79,8 +79,8 @@ export async function resolveStance(stance, opts = {}) {
   // set-pointer). Every return shape carries an explicit canonical
   // branch field; the verb layer reads this to thread into moment
   // + emitFact.
-  const { getDefaultBranch } = await import("../materials/branch/branchRegistry.js");
-  const branch = stance.branch || await getDefaultBranch();
+  const { getDefaultHistory } = await import("../materials/history/historyRegistry.js");
+  const branch = stance.history || await getDefaultHistory();
 
   // story root: path is "/". The story root IS a Space (the heavenSpace:
   // SPACE_ROOT row created by ensureSpaceRoot), so we surface its id as
@@ -358,7 +358,7 @@ async function walkSpacePath({
       }
     }
     const { default: Projection } =
-      await import("../materials/branch/projection.js");
+      await import("../materials/history/projection.js");
     async function _findIn(br) {
       if (UUID_RE.test(seg)) {
         const byId = await Projection.findOne({
@@ -388,7 +388,7 @@ async function walkSpacePath({
           .lean();
         if (!tomb) {
           const { getBranchPoint } =
-            await import("../materials/branch/branches.js");
+            await import("../materials/history/histories.js");
           const bp = await getBranchPoint(branch, "space", mainRow.id);
           if (bp && bp > 0) _spaceRow = mainRow;
         }

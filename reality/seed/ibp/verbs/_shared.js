@@ -18,7 +18,7 @@
 
 import log from "../../seedStory/log.js";
 import { IbpError, IBP_ERR } from "../protocol.js";
-import { resolveTargetBranch } from "../branchResolve.js";
+import { resolveTargetHistory } from "../branchResolve.js";
 
 /**
  * Normalize an identity input. Callers may pass a bare string (a
@@ -98,14 +98,14 @@ export function refuseHistoricalWrite(verb, target, opts) {
  *
  * Precedence — the moment is ground truth:
  *
- *   1. moment.targetBranch — the moment-wide target branch
- *      seated by assign.js from the inbox entry's targetBranch.
- *      For same-world moments this equals actorAct.branch.
- *   2. moment.actorAct.branch — the actor's branch. The
+ *   1. moment.targetHistory — the moment-wide target branch
+ *      seated by assign.js from the inbox entry's targetHistory.
+ *      For same-world moments this equals actorAct.history.
+ *   2. moment.actorAct.history — the actor's branch. The
  *      same-world fallback for in-moment continuations without an
  *      explicit target attachment (scaffolds, manifest sync, etc.,
  *      which operate on the actor's own world by construction).
- *   3. opts.currentBranch — explicit per-call attachment for
+ *   3. opts.currentHistory — explicit per-call attachment for
  *      PRE-MOMENT callers (the wire layer before a moment opens,
  *      schedulers, bootstraps). Inside a moment the seated branches
  *      above win; an opts side-channel must not re-point a moment
@@ -114,11 +114,11 @@ export function refuseHistoricalWrite(verb, target, opts) {
  * None present is a perimeter bug — throws so the missing-attachment
  * surfaces immediately at the offending call site. No silent "0".
  */
-export function resolveBranchForFact(moment, currentBranch, verb) {
+export function resolveHistoryForFact(moment, currentHistory, verb) {
   // Shared precedence (PORT-NOTES #10). Fact emission carries no parsed
-  // `target` here, so the chain reduces to moment.targetBranch →
-  // actorAct.branch → currentBranch — identical to before.
-  const resolved = resolveTargetBranch({ moment, currentBranch });
+  // `target` here, so the chain reduces to moment.targetHistory →
+  // actorAct.history → currentHistory — identical to before.
+  const resolved = resolveTargetHistory({ moment, currentHistory });
   if (resolved) return resolved;
   // Caller-specific null tail: a missing branch at the verb perimeter
   // is a threading bug — fail loud.
@@ -126,7 +126,7 @@ export function resolveBranchForFact(moment, currentBranch, verb) {
   throw new IbpError(
     IBP_ERR.MISSING_BRANCH || "MISSING_BRANCH",
     `place.${verb}: branch missing at the perimeter (none of ` +
-      `opts.currentBranch, moment.targetBranch, or moment.actorAct.branch ` +
+      `opts.currentHistory, moment.targetHistory, or moment.actorAct.history ` +
       `was attached). The wire layer must thread the target's branch into the ` +
       `verb opts. (caller: ${frame})`,
   );

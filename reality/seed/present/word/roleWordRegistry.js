@@ -39,18 +39,18 @@ const REGISTRY = new Map([
 // is per-BRANCH, folded from disable/enable facts (each laid on its own branch). This is what
 // lets an extension's words be ON in one branch and OFF in another of the SAME story.
 // V2 is per-EXACT-branch; lineage inheritance (a disable on an ancestor dimming descendants,
-// mirroring wakes' _isInBranchLineage) is the V2.1 refinement.
-const _branchDisabled = new Map();
-const _disabledOn = (key, branch) => !!_branchDisabled.get(String(branch))?.has(key);
+// mirroring wakes' _isInHistoryLineage) is the V2.1 refinement.
+const _historyDisabled = new Map();
+const _disabledOn = (key, branch) => !!_historyDisabled.get(String(branch))?.has(key);
 
 // The root story (heaven), where the base/seed vocabulary lives. It is the fallback for a
 // BRANCHLESS resolve — an existence query with no act context (a verifier, a global check).
 // This is NOT an act-default drifting to "0": a real act always threads its own branch.
 const ROOT = "0";
 // The resolved #main branch, cached at boot (declareWordsToChain / rehydrate resolve the
-// pointer via getDefaultBranch). resolveRoleWord is SYNC and can't await the pointer, so it
+// pointer via getDefaultHistory). resolveRoleWord is SYNC and can't await the pointer, so it
 // PREFERS the cached #main over the root when an act gave no branch.
-let _mainBranch = null;
+let _mainHistory = null;
 
 const irCache = new Map();
 function wordOf(file) {
@@ -84,7 +84,7 @@ export function resolveRoleWord(role, op, branch) {
   // an ACT passes its real branch; a branchless query falls back to the cached #main, then
   // to the root story (heaven) where the base vocabulary lives. The root fallback is NOT an
   // act defaulting to "0" — acts always thread their own branch.
-  const b = branch ?? _mainBranch ?? ROOT;
+  const b = branch ?? _mainHistory ?? ROOT;
   const key = k(role, op);
   const entry = REGISTRY.get(key);
   if (!entry || !entry.fileUrl || _disabledOn(key, b)) return null;
@@ -134,10 +134,10 @@ async function _assertMayChange(role, op, actor, br, verb) {
 
 // Resolve #main (the pointer), never the literal "0", and cache it for the sync
 // resolveRoleWord. Used wherever a branch isn't given.
-async function _ensureMainBranch() {
-  const { getDefaultBranch } = await import("../../materials/branch/branchRegistry.js");
-  _mainBranch = await getDefaultBranch();
-  return _mainBranch;
+async function _ensureMainHistory() {
+  const { getDefaultHistory } = await import("../../materials/history/historyRegistry.js");
+  _mainHistory = await getDefaultHistory();
+  return _mainHistory;
 }
 
 // Lay facts THROUGH a proper act — a Name making an act, opened by assign and sealed by the
@@ -156,7 +156,7 @@ export async function declareWordsToChain({ moment = null, branch = null, actorB
   const { default: Fact } = await import("../../past/fact/fact.js");
   const { emitFact } = await import("../../past/fact/facts.js");
   const actor = await _wordActor(actorBeingId);
-  await _ensureMainBranch(); // cache #main so the sync resolveRoleWord has a fallback
+  await _ensureMainHistory(); // cache #main so the sync resolveRoleWord has a fallback
   // The seed vocabulary is I_AM's, declared on HEAVEN / root ("0") — a DELIBERATE heaven pin
   // (I_AM's ops stay on heaven; the root vocabulary is inherited by EVERY branch). NOT #main,
   // which people can repoint. An explicit `branch` overrides (e.g. an extension on its branch).
@@ -170,7 +170,7 @@ export async function declareWordsToChain({ moment = null, branch = null, actorB
   await _inAct(moment, "I declare the words", async (ctx) => {
     for (const w of pending) {
       await emitFact({
-        through: actor, branch: br, verb: "do", act: WORD_DECLARE,
+        through: actor, history: br, verb: "do", act: WORD_DECLARE,
         of: { kind: "being", id: actor },
         params: { role: w.role, op: w.op, source: String(w.fileUrl) },
       }, ctx);
@@ -185,15 +185,15 @@ export async function declareWordsToChain({ moment = null, branch = null, actorB
 export async function disableWord(role, op, { moment = null, branch = null, actorBeingId = null } = {}) {
   const { emitFact } = await import("../../past/fact/facts.js");
   const actor = await _wordActor(actorBeingId);
-  const br = branch != null ? String(branch) : await _ensureMainBranch();
+  const br = branch != null ? String(branch) : await _ensureMainHistory();
   await _assertMayChange(role, op, actor, br, "disabled");
   await _inAct(moment, `I disable the word ${role}:${op}`, (ctx) => emitFact({
-    through: actor, branch: br, verb: "do", act: WORD_DISABLE,
+    through: actor, history: br, verb: "do", act: WORD_DISABLE,
     of: { kind: "being", id: actor },
     params: { role, op },
   }, ctx));
-  let s = _branchDisabled.get(br);
-  if (!s) { s = new Set(); _branchDisabled.set(br, s); }
+  let s = _historyDisabled.get(br);
+  if (!s) { s = new Set(); _historyDisabled.set(br, s); }
   s.add(k(role, op)); // disabled ON this branch only
 }
 
@@ -201,29 +201,29 @@ export async function disableWord(role, op, { moment = null, branch = null, acto
 export async function enableWord(role, op, { moment = null, branch = null, actorBeingId = null } = {}) {
   const { emitFact } = await import("../../past/fact/facts.js");
   const actor = await _wordActor(actorBeingId);
-  const br = branch != null ? String(branch) : await _ensureMainBranch();
+  const br = branch != null ? String(branch) : await _ensureMainHistory();
   await _assertMayChange(role, op, actor, br, "re-declared");
   const entry0 = REGISTRY.get(k(role, op));
   await _inAct(moment, `I enable the word ${role}:${op}`, (ctx) => emitFact({
-    through: actor, branch: br, verb: "do", act: WORD_DECLARE,
+    through: actor, history: br, verb: "do", act: WORD_DECLARE,
     of: { kind: "being", id: actor },
     params: { role, op, source: String(entry0?.fileUrl ?? "") },
   }, ctx));
-  _branchDisabled.get(br)?.delete(k(role, op)); // re-enabled ON this branch
+  _historyDisabled.get(br)?.delete(k(role, op)); // re-enabled ON this branch
 }
 
 // Rehydrate the projection from the chain (boot/recovery): replay declare-word / disable-word
 // facts in date/seq order (declare = enable + ensure present, disable = mark off; last action
 // wins), grouped by the fact's branch into the per-branch overlay. Mirrors wakes
 // rehydrateFromFacts. Per-EXACT-branch (V2); lineage inheritance (a disable on an ancestor
-// dimming descendants, mirroring wakes' _isInBranchLineage) is the V2.1 refinement. Also
+// dimming descendants, mirroring wakes' _isInHistoryLineage) is the V2.1 refinement. Also
 // caches #main so the sync resolveRoleWord can fall back to it (never the literal "0").
 export async function rehydrateWordsFromFacts() {
   const { default: Fact } = await import("../../past/fact/fact.js");
-  await _ensureMainBranch();
+  await _ensureMainHistory();
   const facts = await Fact.find({ verb: "do", act: { $in: [WORD_DECLARE, WORD_DISABLE] } })
     .sort({ date: 1, seq: 1 }).lean();
-  _branchDisabled.clear();
+  _historyDisabled.clear();
   _genesisWords.clear();
   const iAmId = await _iAm();
   for (const f of facts) {
@@ -231,7 +231,7 @@ export async function rehydrateWordsFromFacts() {
     if (!role || !op) continue;
     const key = k(role, op);
     // BEDROCK: a word I_AM declared on heaven ("0") is genesis — protected from non-I_AM override
-    if (f.act === WORD_DECLARE && String(f.through) === iAmId && String(f.branch) === "0") _genesisWords.add(key);
+    if (f.act === WORD_DECLARE && String(f.through) === iAmId && String(f.history) === "0") _genesisWords.add(key);
     // EXISTENCE (branch-independent): ensure a declared word is in REGISTRY. One declared on
     // the chain but absent from memory (extension/code not loaded) is recorded with its
     // source; resolve returns null for it (the .word file is absent — declared, unbacked).
@@ -240,9 +240,9 @@ export async function rehydrateWordsFromFacts() {
     }
     // ENABLED state (per EXACT branch): last action on the fact's branch wins (disable adds,
     // declare/enable removes). Facts always carry a branch; fall back to #main, never "0".
-    const br = String(f.branch ?? _mainBranch);
-    let s = _branchDisabled.get(br);
-    if (f.act === WORD_DISABLE) { if (!s) { s = new Set(); _branchDisabled.set(br, s); } s.add(key); }
+    const br = String(f.history ?? _mainHistory);
+    let s = _historyDisabled.get(br);
+    if (f.act === WORD_DISABLE) { if (!s) { s = new Set(); _historyDisabled.set(br, s); } s.add(key); }
     else if (s) s.delete(key);
   }
   return facts.length;

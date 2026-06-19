@@ -56,7 +56,7 @@
 import log from "../../seedStory/log.js";
 import { getInternalConfigValue } from "../../internalConfig.js";
 import Being from "../../materials/being/being.js";
-import { loadProjection, loadOrFold, assertBranchOrThrow } from "../../materials/projections.js";
+import { loadProjection, loadOrFold, assertHistoryOrThrow } from "../../materials/projections.js";
 import Act from "../../past/act/act.js";
 import { getStoryConfigValue } from "../../storyConfig.js";
 import { resolveActiveStack, computeAvailableRoles } from "../roles/roleFlow.js";
@@ -97,16 +97,16 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   // Branch-aware via the intake entry. The moment runs in the caller's
   // Two branches per the cross-world doctrine. `branch` is the
   // ACTOR's branch (where the moment runs and where the Act seals).
-  // `targetBranch` is where the Fact lands; for same-world calls it
+  // `targetHistory` is where the Fact lands; for same-world calls it
   // matches `branch`, for cross-world it differs. Both attach to
   // moment so verbs invoked inside the moment route correctly.
   // See seed/CROSS-WORLD.md.
-  const branch = assertBranchOrThrow(
-    entry?.branch || entry?.act?.branch,
+  const branch = assertHistoryOrThrow(
+    entry?.branch || entry?.act?.history,
     "assign(entry)",
   );
-  const targetBranch = (typeof entry?.targetBranch === "string" && entry.targetBranch.length > 0)
-    ? entry.targetBranch
+  const targetHistory = (typeof entry?.targetHistory === "string" && entry.targetHistory.length > 0)
+    ? entry.targetHistory
     : branch;
   // loadOrFold (not loadProjection): on a fresh branch, the receiving
   // being's slot hasn't been cold-folded into this branch's projection
@@ -294,11 +294,11 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   const orientation = validateOrientation(entry?.orientation, DEFAULT_ORIENTATION);
 
   // `branch` was extracted up top alongside the projection load; it
-  // becomes the actorAct.branch seated on moment, which every Fact
+  // becomes the actorAct.history seated on moment, which every Fact
   // this moment emits inherits as its actor-side branch. The cross-
-  // branch dispatch path routes targets via moment.targetBranch
-  // (set just below); same-world moments have actorAct.branch ===
-  // targetBranch.
+  // branch dispatch path routes targets via moment.targetHistory
+  // (set just below); same-world moments have actorAct.history ===
+  // targetHistory.
 
   // The actor's Act is the single carrier of the identity tuple
   // (story, branch, through, _id). moment.actorAct points to it;
@@ -306,10 +306,10 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   // verb handlers) reads identity from the Act, never from
   // independently-threaded fields.
   //
-  // targetBranch rides alongside as the Fact's destination branch.
-  // For same-world calls this equals actorAct.branch; for cross-world
-  // it differs. resolveBranchForFact consults it as the second
-  // precedence (after opts.currentBranch). See CROSS-WORLD.md.
+  // targetHistory rides alongside as the Fact's destination branch.
+  // For same-world calls this equals actorAct.history; for cross-world
+  // it differs. resolveHistoryForFact consults it as the second
+  // precedence (after opts.currentHistory). See CROSS-WORLD.md.
   // Asker's identity — exposed on the ctx so the receiver's role
   // handler can attribute the summoner without digging through
   // handoff plumbing. For cross-world summons via canopy,
@@ -331,7 +331,7 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     toBeing,
     actId,
     actorAct: plannedAct,
-    targetBranch,
+    targetHistory,
     askerBeingId,
     askerName,
     askerStory,
@@ -703,7 +703,7 @@ async function planActRow(opts = {}) {
     parentThread: resolvedParentThread,
     startMessage: { content: safeMessage, source },
     story: getStoryDomain(),
-    branch,
+    history: branch,
   };
   const p = await readActHead(branch, through);
   actId = computeActId(p, opening);
@@ -727,7 +727,7 @@ async function planActRow(opts = {}) {
     stampedAt: now,
     startMessage: { content: safeMessage, source },
     story: getStoryDomain(),
-    branch,
+    history: branch,
     // status is seated by the Stamper at insert time — openers
     // don't carry it. See sealAct in 4-stamped.js.
     ...(priority ? { priority } : {}),

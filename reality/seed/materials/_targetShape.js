@@ -125,16 +125,16 @@ export async function loadTargetRow(target, expectedKind, { moment = null } = {}
     throw new Error(`loadTargetRow: expectedKind must be space/being/matter; got "${expectedKind}"`);
   }
   // Branch the lookup happens on. The moment carries TWO branches: the
-  // actor's (moment.actorAct.branch — where their Act seals) and the
-  // target's (moment.targetBranch — where the row LIVES and the Fact
+  // actor's (moment.actorAct.history — where their Act seals) and the
+  // target's (moment.targetHistory — where the row LIVES and the Fact
   // lands). A LOCAL target row lives on the TARGET branch, so we prefer
   // it. For a same-world moment the two are equal (assign seats them
   // so), so this is a no-op there; for a cross-story INBOUND moment
-  // actorAct.branch is the FOREIGN home branch and the local target only
-  // resolves on moment.targetBranch. Same precedence (targetBranch
-  // before actorAct.branch) that resolveTargetBranch / resolveBranchForFact
+  // actorAct.history is the FOREIGN home branch and the local target only
+  // resolves on moment.targetHistory. Same precedence (targetHistory
+  // before actorAct.history) that resolveTargetHistory / resolveHistoryForFact
   // use for the fact-landing side.
-  const branch = moment?.targetBranch || moment?.actorAct?.branch || "0";
+  const branch = moment?.targetHistory || moment?.actorAct?.history || "0";
   // loadOrFold (not loadProjection): every DO/BE/SUMMON op flows through
   // loadTargetRow. On a fresh branch the target's slot hasn't been
   // cold-folded yet — bare loadProjection returns null, the handler

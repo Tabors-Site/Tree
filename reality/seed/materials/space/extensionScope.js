@@ -79,7 +79,7 @@ export async function loadConfinedExtensions() {
     if (!extSpace) return;
 
     // Query by parent. Direct projection query because we need state.qualities.
-    const { default: Projection } = await import("../branch/projection.js");
+    const { default: Projection } = await import("../history/projection.js");
     const children = (await Projection.find({
       branch: "0", type: "space",
       "state.parent": extSpace.id,

@@ -153,7 +153,7 @@ async function setOnBeingHandler({ target, params, moment }) {
     if (!value || typeof value !== "string") {
       throw new Error("set-being: `value` must be a string for field=name");
     }
-    const branch = moment?.actorAct?.branch || "0";
+    const branch = moment?.actorAct?.history || "0";
     const { findByName } = await import("../projections.js");
     const existing = await findByName("being", value, branch);
     if (existing && String(existing.id) !== String(target._id)) {
@@ -241,7 +241,7 @@ async function setOnBeingHandler({ target, params, moment }) {
     if (typeof value !== "object" || Array.isArray(value)) {
       throw new Error("set-being: `coord` value must be an object {x,y,z?} or null");
     }
-    const validated = await assertCoordInBounds(target, value, moment?.actorAct?.branch || "0");
+    const validated = await assertCoordInBounds(target, value, moment?.actorAct?.history || "0");
     return { beingId: String(target._id), coord: validated };
   }
 
@@ -526,10 +526,10 @@ registerRoleWord("being", "grant-role", new URL("./grant-role.word", import.meta
 async function _grantRoleViaWord({ caller, target, role, anchorSpaceId, anchorBeingId, moment }) {
   if (!moment) return null;
   const { resolveRoleWord, runRoleWord } = await import("../../present/word/roleWordRegistry.js");
-  const ir = resolveRoleWord("being", "grant-role", moment?.actorAct?.branch);
+  const ir = resolveRoleWord("being", "grant-role", moment?.actorAct?.history);
   if (!ir) return null;
   const { grantHostEnv } = await import("./grantHost.js");
-  const branch = moment?.actorAct?.branch;
+  const branch = moment?.actorAct?.history;
   try {
     const { result } = await runRoleWord(ir, {
       moment, branch,

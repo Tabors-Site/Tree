@@ -57,7 +57,7 @@ import { loadProjection } from "../materials/projections.js";
 import { redactSecrets } from "../materials/redact.js";
 import { BE_OPS } from "./beOps.js";
 import Act from "../past/act/act.js";
-import Projection from "../materials/branch/projection.js";
+import Projection from "../materials/history/projection.js";
 import { isNameBanished } from "../materials/name/closure.js";
 
 // Fold an aggregate before reading its qualities. Per FOLD.md: the
@@ -281,8 +281,8 @@ function truncate(s, n) {
 // endMessage as "what they last said" so the speech bubble can
 // persist between moments.
 async function callToActivity(summon, opts = {}) {
-  const { getDefaultBranch } = await import("../materials/branch/branchRegistry.js");
-  const branch = opts.branch || await getDefaultBranch();
+  const { getDefaultHistory } = await import("../materials/history/historyRegistry.js");
+  const branch = opts.branch || await getDefaultHistory();
   if (!summon) return null;
 
   if (opts.sealed) {
@@ -482,7 +482,7 @@ export async function buildNameDescriptor(nameId) {
   // Form read; main-scoped (names + their beings live on "0").
   const rows = await Projection
     .find({ branch: "0", type: "being", "state.trueName": String(nameId), tombstoned: { $ne: true } })
-    .select("id state.name state.defaultRole state.homeSpace state.homeBranch")
+    .select("id state.name state.defaultRole state.homeSpace state.homeHistory")
     .sort({ id: 1 })
     .limit(NAME_BEING_CAP)
     .lean();
@@ -491,7 +491,7 @@ export async function buildNameDescriptor(nameId) {
     name:        r.state?.name || null,
     defaultRole: r.state?.defaultRole || null,
     homeSpace:   r.state?.homeSpace ? String(r.state.homeSpace) : null,
-    homeBranch:  r.state?.homeBranch || null,
+    homeHistory:  r.state?.homeHistory || null,
   }));
   const beingCount = await Projection.countDocuments({
     branch: "0", type: "being", "state.trueName": String(nameId), tombstoned: { $ne: true },
@@ -548,19 +548,19 @@ export async function buildNameTree(nameId, branch) {
   // the operator default if none was threaded.
   let br = branch ? String(branch) : null;
   if (!br) {
-    const { getDefaultBranch } = await import("../materials/branch/branchRegistry.js");
-    br = await getDefaultBranch();
+    const { getDefaultHistory } = await import("../materials/history/historyRegistry.js");
+    br = await getDefaultHistory();
   }
-  const { resolveBranchLineage } = await import("../materials/branch/branches.js");
+  const { resolveHistoryLineage } = await import("../materials/history/histories.js");
   const { livePointsAt } = await import("../materials/being/identity/inheritation.js");
-  const lineage = await resolveBranchLineage(br);
+  const lineage = await resolveHistoryLineage(br);
   const rank = new Map(lineage.map((b, i) => [b, i]));
 
   // The Name's beings whose fold-cache row lives anywhere on this branch's
   // lineage. Bounded scan, capped — same shape as buildNameDescriptor.
   const rows = await Projection
     .find({ branch: { $in: lineage }, type: "being", "state.trueName": String(nameId), tombstoned: { $ne: true } })
-    .select("id branch state.name state.trueName state.parentBeingId state.homeBranch state.defaultRole")
+    .select("id branch state.name state.trueName state.parentBeingId state.homeHistory state.defaultRole")
     .limit(NAME_BEING_CAP)
     .lean();
 
@@ -583,7 +583,7 @@ export async function buildNameTree(nameId, branch) {
       name:          r.state?.name || null,
       trueName:      r.state?.trueName || null,
       parentBeingId: r.state?.parentBeingId ? String(r.state.parentBeingId) : null,
-      homeBranch:    r.state?.homeBranch || null,
+      homeHistory:    r.state?.homeHistory || null,
       defaultRole:   r.state?.defaultRole || null,
       points:        [...points],
       children:      [],
@@ -622,7 +622,7 @@ export async function buildNameTree(nameId, branch) {
  * being menu / arrival"). Reads the name's be:connect / be:release facts in
  * time order; a being whose LATEST be-action is "connect" is still open, and
  * the most-recently-connected such being wins. Returns { beingId, beingName,
- * homeBranch } or null.
+ * homeHistory } or null.
  */
 export async function lastOpenBeingForName(nameId, branch = "0") {
   if (!nameId || String(nameId) === "i-am") return null;
@@ -654,21 +654,21 @@ export async function lastOpenBeingForName(nameId, branch = "0") {
   return {
     beingId:    best.beingId,
     beingName:  slot.state.name || null,
-    homeBranch: slot.state.homeBranch || "0",
+    homeHistory: slot.state.homeHistory || "0",
   };
 }
 
 export async function buildPlaceDescriptor(resolved, opts = {}) {
   // Branch flows from the resolved stance (Pass 4 substrate). Threaded
   // through every descriptor helper alongside `until` so each fold lands
-  // on the right branch's projection slot. resolveBranchPointers
+  // on the right branch's projection slot. resolveHistoryPointers
   // upstream canonicalizes resolved.branch for both #explicit and
   // #main-implicit addresses. The defensive fallback resolves the
   // operator's `#main` pointer through the registry — never literal "0".
-  const { getDefaultBranch } = await import("../materials/branch/branchRegistry.js");
+  const { getDefaultHistory } = await import("../materials/history/historyRegistry.js");
   const branchedOpts = {
     ...opts,
-    branch: resolved.branch || opts.branch || await getDefaultBranch(),
+    branch: resolved.branch || opts.branch || await getDefaultHistory(),
   };
   if (resolved.isSpaceRoot) return placeAtSpaceRoot(resolved, branchedOpts);
   return placeAtSpace(resolved, branchedOpts);
@@ -776,7 +776,7 @@ async function placeAtSpaceRoot(resolved, { identity, until = null, branch } = {
       // chip reads this to decide whether to surface the `#<branch>`
       // qualifier in the address bar. `branch` was already resolved
       // upstream through the `#main` pointer registry; the fallback
-      // reads `resolved.branch` (post-resolveBranchPointers).
+      // reads `resolved.branch` (post-resolveHistoryPointers).
       branch: resolved.branch || branch,
     },
     isSpaceRoot: true,
@@ -933,7 +933,7 @@ async function placeAtSpace(resolved, { identity, payload, until = null, branch 
       pathByNames,
       // Branch this descriptor was folded for. `branch` was resolved
       // upstream through the `#main` pointer registry; resolved.branch
-      // is the post-canonicalization value from resolveBranchPointers.
+      // is the post-canonicalization value from resolveHistoryPointers.
       branch: resolved.branch || branch,
     },
     isSpaceRoot: false,
@@ -1386,8 +1386,8 @@ async function enrichBeings(spaceId, entries, opts = {}) {
   // Defensive fallback: callers from buildPlaceDescriptor pass
   // the resolved branch. When called directly without one, resolve
   // the operator's `#main` pointer rather than literal "0".
-  const { getDefaultBranch } = await import("../materials/branch/branchRegistry.js");
-  const branch = opts.branch || await getDefaultBranch();
+  const { getDefaultHistory } = await import("../materials/history/historyRegistry.js");
+  const branch = opts.branch || await getDefaultHistory();
   const identity = opts.identity || null;
   const until    = opts.until    || null;
   // The inbox + open/sealed-Act helpers are live-only projections

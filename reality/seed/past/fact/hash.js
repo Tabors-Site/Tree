@@ -19,16 +19,16 @@
 //   storage    — the content hash (what this exactly IS; dedup,
 //                transport, verification)
 // Content addressing operates on STORAGE UNITS: reel (root = head
-// fact's _id), branch, story — each with a primary root hash (see
-// chainRoots.js). A being's complete biography across branches and
+// fact's _id), history, story — each with a primary root hash (see
+// chainRoots.js). A being's complete biography across histories and
 // realities is a DERIVED VIEW composed from multiple reels —
 // hashable per query, never a primary identity.
 //
-// `branch` is part of the hashed content: a fact is an event IN A
-// WORLD, and sibling branches may lawfully hold the same (reel, seq)
-// with identical params — without the branch in the digest those
-// would collide into one row that only one branch's reads could see.
-// Cross-branch prefix sharing is already structural (branches don't
+// `history` is part of the hashed content: a fact is an event IN A
+// WORLD, and sibling histories may lawfully hold the same (reel, seq)
+// with identical params — without the history in the digest those
+// would collide into one row that only one history's reads could see.
+// Cross-history prefix sharing is already structural (histories don't
 // copy facts; lineage reads union them), so nothing real is lost.
 //
 // Canonical content includes every Fact field that defines the deed
@@ -61,7 +61,7 @@ export function computeHash(prev, content) {
  * in separately by computeHash), the identity itself (`_id` is the
  * digest's OUTPUT — including it would be circular), and mongoose
  * internals (`__v`). Includes every domain field so the digest
- * captures the whole deed, INCLUDING `branch` (the world the deed
+ * captures the whole deed, INCLUDING `history` (the world the deed
  * happened in; normalized so an absent field hashes like main).
  *
  * `foldSeq` (PARALLEL FACTS §1.3) is included WHEN PRESENT so the
@@ -82,7 +82,7 @@ export function contentOf(fact) {
     act:         fact.act,
     of:          fact.of,
     seq:         fact.seq,
-    branch:      typeof fact.branch === "string" && fact.branch.length ? fact.branch : "0",
+    history:      typeof fact.history === "string" && fact.history.length ? fact.history : "0",
     params:      fact.params,
     result:      fact.result,
     truncated:   fact.truncated,

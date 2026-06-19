@@ -29,7 +29,7 @@ registerSeeOperation("connections", {
           name: s.name || null,
           clientKind: s.clientKind || null,
           clientInstance: s.clientInstance || null,
-          branch: s.currentBranch || "0",
+          branch: s.currentHistory || "0",
           path: s.currentPath || "/",
         });
       }
@@ -38,7 +38,7 @@ registerSeeOperation("connections", {
     const wsSpace = getHostIds().wsSpace;
     let rows = [];
     if (wsSpace) {
-      const { default: Projection } = await import("../../../materials/branch/projection.js");
+      const { default: Projection } = await import("../../../materials/history/projection.js");
       rows = await Projection.find({
         branch: "0", type: "matter",
         "state.spaceId": wsSpace,

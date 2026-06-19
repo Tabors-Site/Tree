@@ -5,7 +5,7 @@
 // "Heaven never branches" (FACTORY.md). A space is in heaven if it
 // IS `.` (the HEAVEN heaven space) or its parent chain reaches `.`.
 // The Tier-3 heaven spaces (`.beings`, `.spaces`, `.matters`,
-// `.config`, `.branches`, `.roles`, `.tools`, `.operations`) sit
+// `.config`, `.histories`, `.roles`, `.tools`, `.operations`) sit
 // directly under `.`; their child spaces are heaven too because
 // their lineage walks through `.`.
 //

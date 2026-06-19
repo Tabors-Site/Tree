@@ -318,7 +318,7 @@ export function _resetAll() {
 /**
  * Rehydrate the in-memory registry from the fact chain.
  *
- * For every live branch (main + every non-deleted Branch row), walks
+ * For every live branch (main + every non-deleted History row), walks
  * the subscription-registered / subscription-cancelled facts inherited
  * through reel-lineage and materializes one runtime entry per live
  * (subscriptionId, branch) pair. Same shape as wakeSchedule's
@@ -332,21 +332,21 @@ export function _resetAll() {
  * @returns {Promise<number>} count of subscriptions restored across all branches
  */
 export async function rehydrateFromFacts() {
-  let Fact, Branch;
+  let Fact, History;
   try {
     Fact = (await import("../../past/fact/fact.js")).default;
-    Branch = (await import("../../materials/branch/branch.js")).default;
+    History = (await import("../../materials/history/history.js")).default;
   } catch (err) {
     log.warn("Subscriptions", `rehydrate skipped: model load failed (${err.message})`);
     return 0;
   }
 
-  // Enumerate live branches: main + every non-deleted Branch row.
+  // Enumerate live branches: main + every non-deleted History row.
   const MAIN = "0";
   const branches = [MAIN];
   try {
-    const branchRows = await Branch.find({ deleted: { $ne: true } }, "_id").lean();
-    for (const row of branchRows) {
+    const historyRows = await History.find({ deleted: { $ne: true } }, "_id").lean();
+    for (const row of historyRows) {
       if (row._id !== MAIN) branches.push(row._id);
     }
   } catch (err) {
@@ -364,7 +364,7 @@ export async function rehydrateFromFacts() {
   // Lazy-load lineage walker only when we actually have facts.
   let isInLineage = null;
   if (subFacts.length > 0) {
-    isInLineage = (await import("./wakeSchedule.js")).__isInBranchLineageForTests
+    isInLineage = (await import("./wakeSchedule.js")).__isInHistoryLineageForTests
       || null;
   }
 
@@ -375,7 +375,7 @@ export async function rehydrateFromFacts() {
       // Subscription facts target the being's own reel; we need the
       // branch-lineage filter same as wakes use. Inline-check via
       // Fact.branch matching the target branch or any ancestor.
-      if (!await _factInBranchLineage(fact, branch, Branch)) continue;
+      if (!await _factInHistoryLineage(fact, branch, History)) continue;
       const id = fact.params?.subscriptionId;
       if (!id) continue;
       if (fact.action === "subscription-registered") {
@@ -408,16 +408,16 @@ export async function rehydrateFromFacts() {
 // precision at boot — subscription liveness is event-driven, not
 // seq-replayed. Plain "stamped on this branch or one of its
 // ancestors" matches what `subscribe(branch: "1a")` callers expect.
-async function _factInBranchLineage(fact, viewerBranch, Branch) {
-  if (!fact.branch || fact.branch === viewerBranch) return true;
-  if (viewerBranch === "0") return fact.branch === "0";
-  // Walk viewerBranch's parent chain.
-  let cursor = viewerBranch;
+async function _factInHistoryLineage(fact, viewerHistory, History) {
+  if (!fact.history || fact.history === viewerHistory) return true;
+  if (viewerHistory === "0") return fact.history === "0";
+  // Walk viewerHistory's parent chain.
+  let cursor = viewerHistory;
   const visited = new Set();
   while (cursor && !visited.has(cursor)) {
     visited.add(cursor);
-    if (cursor === fact.branch) return true;
-    const row = await Branch.findById(cursor, "parent").lean();
+    if (cursor === fact.history) return true;
+    const row = await History.findById(cursor, "parent").lean();
     cursor = row?.parent || null;
   }
   return false;
@@ -566,7 +566,7 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
     return 0;
   }
   const rootCorrelation = payload?.rootCorrelation || payload?.actId || null;
-  // Branch rides on the triggering hook's payload (afterMatter,
+  // History rides on the triggering hook's payload (afterMatter,
   // afterQualityWrite, afterFieldWrite — all populate it from the
   // moment / fact that fired). The wake we emit lands on the SAME
   // branch as the trigger; cross-branch waking is forbidden by the
@@ -643,7 +643,7 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
 // universally) and dispatches through the standard inbox + role
 // path. There is no direct appendToInbox + wake bypass.
 //
-// Branch rides explicitly as args.branch (not via moment — this
+// History rides explicitly as args.branch (not via moment — this
 // path runs from a hook handler, outside any enclosing moment). The
 // triggering hook payload (afterMatter / afterQualityWrite / ...) put
 // the branch here; callByResolved threads it through to the fact.

@@ -136,7 +136,7 @@ registerOperation("offer-template", {
 
     // 1. Resolve subtreePath to a spaceId. Accepts both a raw uuid and
     // a slash-separated path.
-    const branch = ctx.moment?.actorAct?.branch || "0";
+    const branch = ctx.moment?.actorAct?.history || "0";
     const spaceId = await resolveSubtreeSpaceId(subtreePath, branch);
     if (!spaceId) {
       throw new IbpError(IBP_ERR.NOT_FOUND,
@@ -431,7 +431,7 @@ registerOperation("fulfill-request", {
     // offer-template code path so the receiver side runs the same
     // offer-template handling regardless of whether the push was operator
     // initiated or pull driven.
-    const branch = ctx.moment?.actorAct?.branch || "0";
+    const branch = ctx.moment?.actorAct?.history || "0";
     const spaceId = await resolveSubtreeSpaceId(request.subtreePath, branch);
     if (!spaceId) {
       throw new IbpError(IBP_ERR.NOT_FOUND,
@@ -526,7 +526,7 @@ registerOperation("refuse-request", {
 async function sendIntent(ctx, peerStory, message) {
   const { crossStoryDispatch } = await import("../../../ibp/crossWorld.js");
   const actorBeingId = ctx.moment?.actorAct?.through || ctx.identity?.beingId;
-  const actorBranch  = ctx.moment?.actorAct?.branch  || "0";
+  const actorHistory  = ctx.moment?.actorAct?.history  || "0";
   if (!actorBeingId) {
     throw new IbpError(IBP_ERR.INTERNAL, "sendIntent: no actor beingId in ctx");
   }
@@ -555,7 +555,7 @@ async function sendIntent(ctx, peerStory, message) {
   try {
     const result = await crossStoryDispatch({
       envelope,
-      actor:    { beingId: actorBeingId, branch: actorBranch },
+      actor:    { beingId: actorBeingId, branch: actorHistory },
       identity: { beingId: actorBeingId, name: ctx.identity?.name || null },
     });
     if (result?.peerAck?.status !== "ok") {
@@ -584,7 +584,7 @@ async function resolveSubtreeSpaceId(subtreePath, branch) {
     const localStory = _gRD();
     const parseCtx = {
       currentStory: localStory,
-      currentBranch:  branch,
+      currentHistory:  branch,
       currentUser:    null,
       currentPath:    null,
     };
@@ -614,7 +614,7 @@ async function readNegotiation(ctx, bucket, negotiationId) {
   // For an operator calling do:accept-template on @federation-manager,
   // the addressed being is the federation-manager (whose qualities
   // hold the negotiation state).
-  const branch = ctx.moment?.actorAct?.branch || "0";
+  const branch = ctx.moment?.actorAct?.history || "0";
   const { loadOrFold } = await import("../../../materials/projections.js");
   // Resolve the federation-manager being by name (not the caller's
   // beingId, which is the operator). The negotiation state lives on
@@ -651,7 +651,7 @@ async function setQualityField(ctx, subPath, value) {
   // Resolve the federation-manager being. The operator's op handler
   // ctx has the operator as actor; the negotiation state lives on the
   // federation-manager being, addressed by name.
-  const branch = ctx.moment?.actorAct?.branch || "0";
+  const branch = ctx.moment?.actorAct?.history || "0";
   const { findByName } = await import("../../../materials/projections.js");
   const slot = await findByName("being", "federation-manager", branch);
   if (!slot) {
@@ -670,7 +670,7 @@ async function setQualityField(ctx, subPath, value) {
     {
       identity:      ctx.identity || { beingId: myBeingId, name: "federation-manager" },
       moment:     ctx.moment,
-      currentBranch: branch,
+      currentHistory: branch,
     },
   );
 }

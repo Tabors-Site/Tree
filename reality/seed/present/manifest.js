@@ -20,7 +20,7 @@ import Space from "../materials/space/space.js";
 import log from "../seedStory/log.js";
 import { emitFact } from "../past/fact/facts.js";
 import { I_AM } from "../materials/being/seedBeings.js";
-import { assertBranchOrThrow } from "../materials/projections.js";
+import { assertHistoryOrThrow } from "../materials/projections.js";
 
 // Normalize a qualities container (Map or plain object) into a
 // recursively-key-sorted JSON string for stable equality comparison.
@@ -66,7 +66,7 @@ async function createChildByFact({ parentId, name, type, qualities }) {
         qualities: specQualities,
       },
       actId: ctx.actId,
-      branch: assertBranchOrThrow(ctx.actorAct?.branch, "manifest(createSpace)"),
+      history: assertHistoryOrThrow(ctx.actorAct?.history, "manifest(createSpace)"),
     }, ctx);
   });
   return id;
@@ -90,7 +90,7 @@ async function refreshQualitiesByFact(spaceId, qualities) {
   // matches the doctrine "each one is a DO, not a group of DOs."
   for (const [ns, value] of entries) {
     await withIAmAct(`manifest:refresh-${ns}`, async (ctx) => {
-      const refreshed = await loadOrFold("space", spaceId, ctx.actorAct.branch);
+      const refreshed = await loadOrFold("space", spaceId, ctx.actorAct.history);
       if (!refreshed) return;
       await doVerb(
         { kind: "space", id: String(refreshed.id) },
@@ -144,7 +144,7 @@ export async function manifestItems({
 
   // Children with parent === parentSlot.id and type matching itemType.
   // Direct projection query for the type+parent intersection.
-  const { default: Projection } = await import("../materials/branch/projection.js");
+  const { default: Projection } = await import("../materials/history/projection.js");
   const existingChildren = (await Projection.find({
     branch: "0", type: "space",
     "state.parent": parentSlot.id,
@@ -219,7 +219,7 @@ export async function addManifestChild({
   const parentSlot = await findByHeavenSpace(heavenSpace, "0");
   if (!parentSlot) return null;
   const parent = { _id: parentSlot.id };
-  const { default: Projection } = await import("../materials/branch/projection.js");
+  const { default: Projection } = await import("../materials/history/projection.js");
   const existing = await Projection.findOne({
     branch: "0", type: "space",
     "state.parent": parentSlot.id,
@@ -257,7 +257,7 @@ export async function removeManifestChild({
   const { findByHeavenSpace } = await import("../materials/projections.js");
   const parentSlot = await findByHeavenSpace(heavenSpace, "0");
   if (!parentSlot) return false;
-  const { default: Projection } = await import("../materials/branch/projection.js");
+  const { default: Projection } = await import("../materials/history/projection.js");
   const child = await Projection.findOne({
     branch: "0", type: "space",
     "state.parent": parentSlot.id,

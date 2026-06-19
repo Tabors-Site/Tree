@@ -31,7 +31,7 @@ export async function handleType(socket, env, ack) {
     // The Word's statements terminate with a period; the typist needn't type it.
     if (!/[.!?]$/.test(wordText)) wordText += ".";
 
-    const branch = socket.currentBranch || "0";
+    const branch = socket.currentHistory || "0";
     const identity = { beingId: socket.beingId, name: socket.name, nameId: socket.nameId || null };
 
     // Where the typist stands — "make here" parents a new space/matter to this position.

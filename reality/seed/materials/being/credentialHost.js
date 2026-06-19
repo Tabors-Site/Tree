@@ -16,7 +16,7 @@ import { mintCredentialSpec, decryptCredential } from "./identity/credentials.js
 import { hasCredentialAuthority, findBeingParent } from "./identity/lineage.js";
 import { loadTargetRow } from "../_targetShape.js";
 
-const branchOf = (ctx) => ctx?.moment?.actorAct?.branch || ctx?.branch || "0";
+const historyOf = (ctx) => ctx?.moment?.actorAct?.history || ctx?.branch || "0";
 
 export function credentialHostEnv() {
   return {
@@ -25,7 +25,7 @@ export function credentialHostEnv() {
     // owning the target or an ancestor / holding a covering point. One composite
     // predicate the JS handler calls as a unit.
     hasCredentialAuthority: async ({ args: [caller, target, branch] }, ctx) =>
-      hasCredentialAuthority(String(caller), String(target), branch || branchOf(ctx)),
+      hasCredentialAuthority(String(caller), String(target), branch || historyOf(ctx)),
 
     // see-op "mint-credential" -> the fresh credential spec the native writes + the
     // reveal-on-return read: the scrypt `hash`, the encrypted blob (`plain` ->

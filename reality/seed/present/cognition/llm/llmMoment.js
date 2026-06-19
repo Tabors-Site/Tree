@@ -176,9 +176,9 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
   // The branch this moment runs on. The wire layer attaches it to the
   // envelope from the parsed address; moment carries it forward
   // through every internal call. No default . if branch is missing,
-  // assertBranch in the projection layer will throw and the moment
+  // assertHistory in the projection layer will throw and the moment
   // fails loud rather than silently folding on main.
-  const branch = moment?.actorAct?.branch || envelope?.branch;
+  const branch = moment?.actorAct?.history || envelope?.branch;
 
   // The conversation lane. IBPA when both stances are resolvable; else
   // an ephemeral pipeline key. The reel fold reads this; the system
@@ -338,7 +338,7 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
   // inside the prompt-build phase BEFORE the summon dispatch — they
   // don't get a moment, only this promptCtx — so the reader has to
   // live here too.
-  const _summonBranch = moment?.actorAct?.branch || "0";
+  const _summonBranch = moment?.actorAct?.history || "0";
   const promptCtx = {
     name: username,
     beingId,

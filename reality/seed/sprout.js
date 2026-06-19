@@ -149,7 +149,7 @@ export async function withIAmAct(sourceLabel, fn) {
     parentThread:    null,
     startMessage: { content: sourceLabel || "I-Am acts.", source: "I-Am" },
     story: getStoryDomain(),
-    branch: "0",
+    history: "0",
   };
   const p = await readActHead("0", I_AM);
   const actId = computeActId(p, opening);
@@ -172,7 +172,7 @@ export async function withIAmAct(sourceLabel, fn) {
     startMessage: { content: sourceLabel || "I-Am acts.", source: "I-Am" },
     story: getStoryDomain(),
     // I-Am scaffold acts on main.
-    branch: "0",
+    history: "0",
   };
 
   // I-Am scaffold acts on main. Explicit "0" — the "no silent
@@ -253,7 +253,7 @@ export async function withBeingAct(beingId, sourceLabel, branch, fn) {
     parentThread:    null,
     startMessage:    { content: sourceLabel || "graft act", source: beingId },
     story: getStoryDomain(),
-    branch,
+    history: branch,
   };
   // The actor NAME — the being expresses a trueName (the name whose key
   // signs). No fallback: a being with no trueName cannot act.
@@ -285,7 +285,7 @@ export async function withBeingAct(beingId, sourceLabel, branch, fn) {
     stampedAt:       now,
     startMessage:    { content: sourceLabel || "graft act", source: beingId },
     story: getStoryDomain(),
-    branch,
+    history: branch,
   };
 
   const moment = { actId, deltaF: [], afterSeal: [], actorAct: plannedAct };
@@ -370,7 +370,7 @@ const STORY_HEAVEN_SPACES = [
   // divergent world by path. Pass 3 adds the create-branch op that
   // plants child rows here; Pass 2 ships the container space so the
   // SEE surface and child-discovery paths work the moment branches
-  // start landing. See seed/materials/branch/.
+  // start landing. See seed/materials/history/.
   { name: "branches", heavenSpace: HEAVEN_SPACE.BRANCHES },
   // host is the running machine, represented. Its children (below,
   // NOT in this list — the tier-3 repair loop would re-parent them
@@ -427,7 +427,7 @@ export async function ensureSpaceRoot() {
           qualities: {},
         },
         actId: ctx.actId,
-        branch: "0",
+        history: "0",
       }, ctx);
     });
     spaceRoot = { _id: rootId };
@@ -646,7 +646,7 @@ export async function ensureSpaceRoot() {
   if (!spaceRoot._pending) {
     // Count children of the space root in the projection collection.
     const { countByParent: _ } = await import("./materials/projections.js");
-    const { default: Projection } = await import("./materials/branch/projection.js");
+    const { default: Projection } = await import("./materials/history/projection.js");
     const childCount = await Projection.countDocuments({
       branch: "0", type: "space",
       "state.parent": spaceRoot._id,
@@ -721,7 +721,7 @@ export async function ensureIAm() {
         },
       },
       actId: ctx.actId,
-      branch: "0",
+      history: "0",
     }, ctx);
 
     await emitFact({
@@ -752,7 +752,7 @@ export async function ensureIAm() {
       },
       actId: ctx.actId,
       // Genesis is main-only — I_AM births before any branch exists.
-      branch: "0",
+      history: "0",
       // Op count: this be:birth is emitted directly (not through
       // beVerb), so it doesn't bump opCount. The moment seals with
       // opCount=0 — no warn, as intended (the act is one logical
@@ -864,7 +864,7 @@ export async function syncExtensionsToTree(manifests) {
   if (!extSpace) return;
 
   // Query by parent — children[] on the parent is retired.
-  const { default: Projection } = await import("./materials/branch/projection.js");
+  const { default: Projection } = await import("./materials/history/projection.js");
   const existingChildren = (await Projection.find({
     branch: "0", type: "space",
     "state.parent": extSpace._id,

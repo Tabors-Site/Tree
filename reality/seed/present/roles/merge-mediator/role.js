@@ -44,7 +44,7 @@ export const mergeMediatorRole = Object.freeze({
   // surface. Source branches surface via normal SEE on their position
   // addresses (the mediator's prompt instructs it to navigate per
   // conflict). The do entries are normal state-setting ops; the
-  // mediator includes `params._merge: { sourceBranch, conflictReel,
+  // mediator includes `params._merge: { sourceHistory, conflictReel,
   // strategy }` on each reconciliation call so the chain records the
   // merge provenance.
   can: [
@@ -124,7 +124,7 @@ For each conflict:
      merged branch. ALWAYS include the \`_merge\` metadata block:
 
         params._merge = {
-          sourceBranch:   "A" | "B" | "composed",
+          sourceHistory:   "A" | "B" | "composed",
           conflictReel:   "<reelKey>",
           strategy:       "<chosen-strategy>",
           note?:          "<freeform>",
@@ -132,7 +132,7 @@ For each conflict:
 
 For clean-A / clean-B reels (only one side touched), the operator
 can defer to your judgment by accepting suggestedStrategy. Stamp the
-appropriate fact with sourceBranch matching the side that had
+appropriate fact with sourceHistory matching the side that had
 changes. Or skip if the operator wants the ancestor's value
 (inherited by default; no fact needed).
 

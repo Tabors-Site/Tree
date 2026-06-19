@@ -14,7 +14,7 @@ import { registerOperation } from "../../ibp/operations.js";
 import Space from "./space.js";
 import {
   createSpace,
-  deleteSpaceBranch,
+  deleteSpaceHistory,
   assertValidSpaceName,
   assertValidSpaceType,
   assertValidSpaceSize,
@@ -90,7 +90,7 @@ async function setOnSpaceHandler({ target, params, identity, moment }) {
   // read happens between, the moment holds the act-chain lock).
   try {
     const { invalidateSpace } = await import("./ancestorCache.js");
-    invalidateSpace(String(targetIdOf(target) || ""), moment?.actorAct?.branch || null);
+    invalidateSpace(String(targetIdOf(target) || ""), moment?.actorAct?.history || null);
   } catch { /* cache module unavailable — nothing to invalidate */ }
 
   // ── qualities paths ────────────────────────────────────
@@ -175,7 +175,7 @@ async function setOnSpaceHandler({ target, params, identity, moment }) {
       // handler trusts that. The hasAccess gate via resolveSpaceAccess
       // retired with the contributor class (RolesAreAuth).
       const { loadOrFold } = await import("../projections.js");
-      const _slot1 = await loadOrFold("space", spaceId, moment?.actorAct?.branch || "0");
+      const _slot1 = await loadOrFold("space", spaceId, moment?.actorAct?.history || "0");
       const row = _slot1 ? { _id: _slot1.id, ...(_slot1.state || {}) } : null;
       if (!row) {
         throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Space not found");
@@ -215,7 +215,7 @@ async function setOnSpaceHandler({ target, params, identity, moment }) {
       // then returns the shape; doVerb auto-stamps do:set-space and
       // the space reducer's applySetField writes Space.type.
       const { loadOrFold } = await import("../projections.js");
-      const _slot2 = await loadOrFold("space", spaceId, moment?.actorAct?.branch || "0");
+      const _slot2 = await loadOrFold("space", spaceId, moment?.actorAct?.history || "0");
       const row = _slot2 ? { heavenSpace: _slot2.state?.heavenSpace } : null;
       if (!row) {
         throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Space not found");
@@ -288,10 +288,10 @@ async function setOnSpaceHandler({ target, params, identity, moment }) {
     // set-being:coord (assertCoordInBounds in being/ops.js): silent
     // clamping was a lie; throw and let cognition reface.
     const { loadOrFold } = await import("../projections.js");
-    const _selfSlot = await loadOrFold("space", spaceId, moment?.actorAct?.branch || "0");
+    const _selfSlot = await loadOrFold("space", spaceId, moment?.actorAct?.history || "0");
     const parentId = _selfSlot?.state?.parent;
     if (parentId) {
-      const _parentSlot = await loadOrFold("space", parentId, moment?.actorAct?.branch || "0");
+      const _parentSlot = await loadOrFold("space", parentId, moment?.actorAct?.history || "0");
       const parentRow = _parentSlot ? { size: _parentSlot.state?.size } : null;
       const parentSize = parentRow?.size || null;
       if (parentSize) {
@@ -341,9 +341,9 @@ async function endSpaceHandler({ target, identity, moment }) {
   // The actor is whoever called. I_AM-internal flows (registry mirror
   // sync at genesis + boot) pass `identity: I_AM`.
   const actorBeingId = identity?.beingId || null;
-  // Forward the open moment's actId so deleteSpaceBranch's internal
+  // Forward the open moment's actId so deleteSpaceHistory's internal
   // do.set-space writes ride the same Act.
-  const deleted = await deleteSpaceBranch(spaceId, actorBeingId, moment?.actId || null);
+  const deleted = await deleteSpaceHistory(spaceId, actorBeingId, moment?.actId || null);
   return { deathSpaceId: String(deleted?._id || spaceId) };
 }
 
@@ -465,7 +465,7 @@ registerOperation("set-owner", {
     const newOwnerId = String(params?.newOwnerId || "").trim();
     if (!newOwnerId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`newOwnerId` is required");
     try {
-      await setOwner(spaceId, newOwnerId, actor, moment?.actorAct?.branch || "0", moment);
+      await setOwner(spaceId, newOwnerId, actor, moment?.actorAct?.history || "0", moment);
     } catch (err) {
       throw mapPatternsToIbpError(err, PERMISSION_ERROR_PATTERNS);
     }
@@ -482,7 +482,7 @@ registerOperation("remove-owner", {
     const spaceId = spaceIdFromTarget(target);
     const actor = requireActor(identity);
     try {
-      await removeOwner(spaceId, actor, moment?.actorAct?.branch || "0");
+      await removeOwner(spaceId, actor, moment?.actorAct?.history || "0");
     } catch (err) {
       throw mapPatternsToIbpError(err, PERMISSION_ERROR_PATTERNS);
     }

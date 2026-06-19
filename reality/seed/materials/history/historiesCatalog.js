@@ -1,4 +1,4 @@
-// branchesCatalog.js — read-side helper that returns the branch graph
+// historiesCatalog.js — read-side helper that returns the branch graph
 // as a plain object. Powers the synthetic `<story>/.branches[/<path>]`
 // SEE catalog the portal uses to draw its chip row.
 //
@@ -10,23 +10,23 @@
 //   }
 //
 
-import Branch from "./branch.js";
+import History from "./history.js";
 import {
   MAIN,
-  loadBranch,
-  resolveBranchLineage,
+  loadHistory,
+  resolveHistoryLineage,
   commonAncestor,
   divergentFactsSince,
-} from "./branches.js";
-import { readPointers } from "./branchRegistry.js";
+} from "./histories.js";
+import { readPointers } from "./historyRegistry.js";
 
-export async function describeBranchesCatalog(branchPath = MAIN) {
+export async function describeHistoriesCatalog(historyPath = MAIN) {
   const path =
-    typeof branchPath === "string" && branchPath.length > 0 ? branchPath : MAIN;
+    typeof historyPath === "string" && historyPath.length > 0 ? historyPath : MAIN;
   const isMainPath = path === MAIN;
 
   // Lineage: just ["0"] for main; ["0", ..., path] for everything else.
-  const lineage = isMainPath ? [MAIN] : await resolveBranchLineage(path);
+  const lineage = isMainPath ? [MAIN] : await resolveHistoryLineage(path);
 
   // Current branch row. Main starts implicit (no document), but
   // pause-branch upserts a row when the operator first pauses main.
@@ -35,9 +35,9 @@ export async function describeBranchesCatalog(branchPath = MAIN) {
   // non-main with the same shape.
   let current;
   if (isMainPath) {
-    const mainRow = await loadBranch(MAIN).catch(() => null);
+    const mainRow = await loadHistory(MAIN).catch(() => null);
     if (mainRow) {
-      current = _serializeBranch(mainRow);
+      current = _serializeHistory(mainRow);
       // Even after a pause row exists, main's structural fields stay
       // implicit (parent=null, no anchor, the synthetic label).
       current.parent = null;
@@ -56,7 +56,7 @@ export async function describeBranchesCatalog(branchPath = MAIN) {
       };
     }
   } else {
-    const row = await loadBranch(path);
+    const row = await loadHistory(path);
     if (!row) {
       // Caller is asking about a branch that doesn't exist. Return a
       // not-found shape rather than throwing; SEE callers can render
@@ -68,7 +68,7 @@ export async function describeBranchesCatalog(branchPath = MAIN) {
         notFound: true,
       };
     }
-    current = _serializeBranch(row);
+    current = _serializeHistory(row);
   }
 
   // Direct children: rows whose parent is this path. Main's children
@@ -78,13 +78,13 @@ export async function describeBranchesCatalog(branchPath = MAIN) {
   // in the chain and SEE on a specific deleted path still resolves
   // (current slot above honors the direct lookup), but they don't
   // clutter the branch picker. Undelete brings them back.
-  const childRows = await Branch.find({
+  const childRows = await History.find({
     ...(isMainPath ? { parent: null } : { parent: path }),
     deleted: { $ne: true },
   })
     .sort({ path: 1 })
     .lean();
-  const children = childRows.map(_serializeBranch);
+  const children = childRows.map(_serializeHistory);
 
   // The named-pointer map ({ main: "0", prod: "7", ... }). One read; the
   // client filters names whose value === a branch path to show "pointers
@@ -98,8 +98,8 @@ export async function describeBranchesCatalog(branchPath = MAIN) {
   let rootHash = null;
   let chainStoryRoot = null;
   try {
-    const { branchRoot, storyRoot } = await import("../../past/fact/chainRoots.js");
-    rootHash = await branchRoot(isMainPath ? MAIN : path);
+    const { historyRoot, storyRoot } = await import("../../past/fact/chainRoots.js");
+    rootHash = await historyRoot(isMainPath ? MAIN : path);
     chainStoryRoot = await storyRoot();
   } catch { /* fingerprints are additive — never block the catalog */ }
 
@@ -113,7 +113,7 @@ export async function describeBranchesCatalog(branchPath = MAIN) {
   };
 }
 
-function _serializeBranch(row) {
+function _serializeHistory(row) {
   if (!row) return null;
   const bp =
     row.branchPoint instanceof Map
@@ -158,18 +158,18 @@ function _serializeBranch(row) {
  * state) get their own category in Phase 5; this returns "conflict"
  * for them today.
  *
- * @param {string} branchPath  the merged branch's path
+ * @param {string} historyPath  the merged branch's path
  * @returns {Promise<object>}
  */
-export async function describeMergeConflicts(branchPath) {
-  const row = await loadBranch(branchPath);
+export async function describeMergeConflicts(historyPath) {
+  const row = await loadHistory(historyPath);
   if (!row) {
-    return { branch: branchPath, notFound: true, conflicts: [] };
+    return { branch: historyPath, notFound: true, conflicts: [] };
   }
   const sources = Array.isArray(row.mergeSources) ? row.mergeSources : [];
   if (sources.length !== 2) {
     return {
-      branch: branchPath,
+      branch: historyPath,
       notAMerge: true,
       reason: "branch has no mergeSources (was not created by merge-branches)",
       conflicts: [],
@@ -195,7 +195,7 @@ export async function describeMergeConflicts(branchPath) {
   // This makes the catalog a live decision log: the UI re-renders
   // when a fact lands, and the next mediator call SEEs the current
   // state and picks up at the first open conflict.
-  const resolutions = await _readMergeResolutions(branchPath, allReels);
+  const resolutions = await _readMergeResolutions(historyPath, allReels);
   const conflicts = [];
   for (const reelKey of allReels) {
     const factsA = diffA.get(reelKey) || [];
@@ -251,7 +251,7 @@ export async function describeMergeConflicts(branchPath) {
   const openConflicts = conflicts.filter(c => c.side === "conflict" && c.status === "open").length;
   const resolvedConflicts = conflicts.filter(c => c.side === "conflict" && c.status === "resolved").length;
   return {
-    branch: branchPath,
+    branch: historyPath,
     sourceA,
     sourceB,
     ancestor,
@@ -272,7 +272,7 @@ function _summarizeFact(fact) {
     seq: fact.seq,
     verb: fact.verb,
     act: fact.act,
-    branch: fact.branch,
+    branch: fact.history,
     date: fact.date ? new Date(fact.date).toISOString() : null,
     through: fact.through || null,
     params: fact.params || null,
@@ -284,11 +284,11 @@ function _summarizeFact(fact) {
 // merged branch's storage for that reel carrying `params._merge`.
 // Returns a Map<reelKey, latest-resolution-fact>.
 //
-// Implementation: ONE query against Fact with branch=mergedBranch and
+// Implementation: ONE query against Fact with branch=mergedHistory and
 // params._merge exists, filtered to the conflict reel set. Cheaper than
 // per-reel queries; bounded by the number of reconciliation facts in
 // the merged branch (small even for large merges).
-async function _readMergeResolutions(mergedBranch, reelKeys) {
+async function _readMergeResolutions(mergedHistory, reelKeys) {
   if (!reelKeys || reelKeys.size === 0) return new Map();
   const { default: Fact } = await import("../../past/fact/fact.js");
   // Decompose reel keys ("kind:id") into target filters. Build a single
@@ -308,7 +308,7 @@ async function _readMergeResolutions(mergedBranch, reelKeys) {
     orClauses.push({ "of.kind": kind, "of.id": { $in: ids } });
   }
   const facts = await Fact.find({
-    branch: mergedBranch,
+    history: mergedHistory,
     "params._merge": { $exists: true },
     $or: orClauses,
   }).sort({ seq: 1, date: 1 }).lean();
@@ -326,11 +326,11 @@ function _summarizeResolution(fact) {
   return {
     seq: fact.seq,
     act: fact.act,
-    branch: fact.branch,
+    branch: fact.history,
     date: fact.date ? new Date(fact.date).toISOString() : null,
     through: fact.through || null,
     strategy: fact.params?._merge?.strategy || null,
-    sourceBranch: fact.params?._merge?.sourceBranch || null,
+    sourceHistory: fact.params?._merge?.sourceHistory || null,
     note: fact.params?._merge?.note || null,
     // Surface the actual values the resolution chose (params minus the
     // _merge metadata block) so the UI can render "Resolution: position

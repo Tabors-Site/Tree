@@ -67,18 +67,18 @@ export async function authorizeViaRoles(args) {
   if (typeof branch !== "string" || !branch.length) {
     throw new Error(
       "authorizeViaRoles requires `branch` as a non-empty string. " +
-      "Callers must pass moment.actorAct?.branch (or '0' for genesis / pre-summon paths) " +
+      "Callers must pass moment.actorAct?.history (or '0' for genesis / pre-summon paths) " +
       "explicitly; no silent default.",
     );
   }
-  // actorBranch = the actor's branch (their session.currentBranch
-  // or homeBranch). Where their grants actually live. branch (= target's
+  // actorHistory = the actor's branch (their session.currentHistory
+  // or homeHistory). Where their grants actually live. branch (= target's
   // branch) is used for role spec lookups and reach evaluation; actor's
-  // grants are loaded from actorBranch so a being seated on #0 can SEE
+  // grants are loaded from actorHistory so a being seated on #0 can SEE
   // onto branch #1 without needing to exist on #1 (the "look through
   // the portal" semantic). Defaults to branch when caller didn't
   // distinguish.
-  const actorBranch = args.actorBranch || branch;
+  const actorHistory = args.actorHistory || branch;
 
   // Bootstrap axiom.
   if (identity?.beingId === I_AM || identity?.name === I_AM) {
@@ -130,13 +130,13 @@ export async function authorizeViaRoles(args) {
   }
 
   // Load the caller's grants from their ACTOR branch (their home
-  // branch / session.currentBranch), NOT the target's branch. A being
+  // branch / session.currentHistory), NOT the target's branch. A being
   // seated on #0 looking onto branch #1 reads their own grants from
   // #0 (where they exist), then we evaluate reach against the target
   // on branch #1. This is the "stay yourself when navigating across
   // branches" semantic — your identity travels with you; only an
   // explicit be:switch changes the branch your session rides.
-  const slot = await loadOrFold("being", String(identity.beingId), actorBranch);
+  const slot = await loadOrFold("being", String(identity.beingId), actorHistory);
   const grants = readGrantsFromSlot(slot);
 
   const targetPath  = derivePath(target);

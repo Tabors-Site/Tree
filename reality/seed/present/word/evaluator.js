@@ -30,7 +30,7 @@ import { getPath } from "./cond.js";
 // Control-flow unwinds (8.md Engine answers, the CONTROL strand — none lay a fact):
 //   BREAK   — halts the nearest foreach (§3), caught by evalForeach.
 //   WordReturn — a SUCCESS terminator (§7): ends the flow with a `result` the host
-//     transport reads (tokens / seatBranch / reveal). Benign: evaluate() catches it.
+//     transport reads (tokens / seatHistory / reveal). Benign: evaluate() catches it.
 //   WordRefusal — a host HALT (§7): an IbpError-shaped abort that propagates OUT of
 //     evaluate() so the verb layer maps it to the ack error envelope and the moment
 //     rolls back. NO fact laid.
@@ -173,8 +173,8 @@ async function evalSee(node, ctx) {
     // falsy branch, but hasAuthorityOver hands branch straight to walkUp, so resolve here.
     let branch = node.branch ?? ctx.branch;
     if (!branch) {
-      const { getDefaultBranch } = await import("../../materials/branch/branchRegistry.js");
-      branch = await getDefaultBranch();
+      const { getDefaultHistory } = await import("../../materials/history/historyRegistry.js");
+      branch = await getDefaultHistory();
     }
     const objId = String(object?.beingId ?? object?._id ?? object);
     if (node.credential) {
@@ -193,20 +193,20 @@ async function evalSee(node, ctx) {
 }
 
 // query a kind's projection rows by a flat field predicate. being-by-name routes to the
-// canonical cross-branch sweep so the candidate shape (_id, homeBranch, ...state) matches
+// canonical cross-branch sweep so the candidate shape (_id, homeHistory, ...state) matches
 // what the flows read; other queries hit the read-model (the fold) directly.
 async function seeQuery(kind, where) {
   if (kind === "being" && where && where.name && Object.keys(where).length === 1) {
     const { findBeingCandidatesByName } = await import("../../materials/being/identity/lookups.js");
     return findBeingCandidatesByName(String(where.name));
   }
-  const { default: Projection } = await import("../../materials/branch/projection.js");
+  const { default: Projection } = await import("../../materials/history/projection.js");
   const q = { type: kind, tombstoned: { $ne: true } };
   for (const k of Object.keys(where || {})) q[`state.${k}`] = where[k];
   const rows = await Projection.find(q).lean();
   // tag each row with its `kind` so a later `see <row>'s <quality>` READ knows which
   // projection to re-read (space/matter, not just being).
-  return rows.map((r) => ({ _id: r.id, kind, homeBranch: r.state?.homeBranch, ...(r.state || {}) }));
+  return rows.map((r) => ({ _id: r.id, kind, homeHistory: r.state?.homeHistory, ...(r.state || {}) }));
 }
 
 // read a bound entity's dotted quality; `fresh` re-reads the projection (vs the bound
@@ -225,7 +225,7 @@ async function seeRead(subject, quality, fresh, branch) {
   const id = str ? subject : (subject?._id ?? subject?.id);
   if (fresh && id) {
     const { loadProjection } = await import("../../materials/projections.js");
-    const proj = await loadProjection(kind, String(id), (str ? null : subject?.homeBranch) || branch || "0");
+    const proj = await loadProjection(kind, String(id), (str ? null : subject?.homeHistory) || branch || "0");
     src = proj?.state ?? src;
   }
   return String(quality).split(".").reduce((o, k) => (o == null ? o : o[k]), src) ?? null;
@@ -402,7 +402,7 @@ async function evalRefuse(node, ctx) {
 // ── return (§7): a SUCCESS terminator, NO fact ─────────────────────────────────────
 // Resolves named values + literal/ref extras into a result object and unwinds the flow
 // (the __wordReturn signal evaluate() catches). The host transport reads ctx.result
-// (tokens, seatBranch, reveal, asFather) — the "rode the handler return, never the
+// (tokens, seatHistory, reveal, asFather) — the "rode the handler return, never the
 // fact" rule. World facts a flow lays came from §7 act/derive nodes that ran BEFORE it.
 async function evalReturn(node, ctx) {
   const { getPath } = await import("./cond.js");
@@ -619,7 +619,7 @@ async function evalClosure(node, ctx) {
 // (runRoleWord shares the array), also doing ctx.deltaF.push would DOUBLE-LIST the
 // fact. Live → emitFact owns the append; dry-run → ctx.deltaF.push (no live moment).
 async function emit(spec, ctx) {
-  const fact = { ...spec, actId: ctx.moment?.actId, branch: ctx.branch };
+  const fact = { ...spec, actId: ctx.moment?.actId, history: ctx.branch };
   if (spec._sets) Object.assign((ctx.state ??= {}), spec._sets); // the fold: a fact updates state
   if (ctx.dryRun) {
     ctx.deltaF.push(fact);
@@ -637,12 +637,12 @@ async function formBeing(spec, ctx) {
     const beingId = `<being:${spec.name}>`; // birthBeing computes a content hash; placeholder here
     ctx.deltaF.push({
       verb: "be", act: "birth", through: beingId, of: { kind: "being", id: beingId },
-      params: spec, actId: ctx.moment?.actId, branch: ctx.branch,
+      params: spec, actId: ctx.moment?.actId, history: ctx.branch,
     });
     return { beingId, name: spec.name };
   }
   const { birthBeing } = await import("../../materials/being/identity/birth.js");
-  return birthBeing({ spec, identity: ctx.identity, moment: ctx.moment, branch: ctx.branch });
+  return birthBeing({ spec, identity: ctx.identity, moment: ctx.moment, history: ctx.branch });
 }
 
 async function callHost(builtin, params, ctx) {

@@ -1,6 +1,6 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Branch. A divergent world that shares history with its parent up
+// History. A divergent world that shares history with its parent up
 // to a chosen branch point.
 //
 // Every branch traces back to main (#0). Branches form a tree:
@@ -16,17 +16,17 @@
 // at branchPoint[R] + 1, so seqs across the inherited-prefix +
 // divergent-tail combine into a single monotonic stream per reel.
 //
-// Branch metadata is doctrinally world data — when a branch is
+// History metadata is doctrinally world data — when a branch is
 // created, paused, or labeled, the change is a Fact on main's
-// `.branches` reel. The Branch Mongo doc here is the projection
+// `.histories` reel. The History Mongo doc here is the projection
 // of that fact stream, the same way Being / Space / Matter rows are
-// projections of their fact chains. See seed/materials/branch/
+// projections of their fact chains. See seed/materials/history/
 // branchReducer.js for the reducer (future pass; not in scope for
 // Pass 2 which only ships the schema + read-path awareness).
 
 import mongoose from "mongoose";
 
-const BranchSchema = new mongoose.Schema({
+const HistorySchema = new mongoose.Schema({
   // Path identifier. "0" for main; "1", "1a", "1a1", etc. for
   // descendants. Indexed unique. Pre-allocated by the create-branch
   // op based on the parent's existing children (next available
@@ -110,5 +110,5 @@ const BranchSchema = new mongoose.Schema({
   },
 });
 
-const Branch = mongoose.model("Branch", BranchSchema, "branches");
-export default Branch;
+const History = mongoose.model("History", HistorySchema, "histories");
+export default History;

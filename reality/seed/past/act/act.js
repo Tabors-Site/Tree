@@ -31,7 +31,7 @@
 //
 //   _id = SHA-256(p | canonical(opening))     (past/act/actHash.js)
 //
-// chained per (branch, being) — `p` is the being's previous sealed
+// chained per (history, being) — `p` is the being's previous sealed
 // act's identity (ActHead). The identity is minted at assign so the
 // moment's Facts can carry actId; the closure fields below (status,
 // endMessage, innerFace, answers) are bookkeeping OUTSIDE the
@@ -47,14 +47,14 @@ const ActSchema = new mongoose.Schema({
   _id: { type: String },
 
   // The act-chain link: the being's previous sealed act's identity
-  // on this branch (GENESIS_PREV for the first).
+  // on this history (GENESIS_PREV for the first).
   p: { type: String, default: null },
 
   // The ACTOR — the Name (identity) that authored this act and whose key
   // signs it. The acting being expresses this trueName; the name's key
   // (i-am → the story key, else the Name's privateKeyEnc) produces
-  // act.sig. The act-chain itself stays keyed per (branch, through): a
-  // name owns many beings' PARALLEL chains (name → branch → being → acts),
+  // act.sig. The act-chain itself stays keyed per (history, through): a
+  // name owns many beings' PARALLEL chains (name → history → being → acts),
   // so the name is the owner + signer, NOT the chain key. NOT part of
   // contentOfAct (the digest), so it never changes act._id. `through`
   // below is the being the name acted THROUGH. See materials/name/name.js.
@@ -153,7 +153,7 @@ const ActSchema = new mongoose.Schema({
   // Shape:
   //   { orientation, role, position, capabilities, blocks, weave, origin }
   //
-  // weave: [{reelKind, reelId, branch}] . the reels the fold actually
+  // weave: [{reelKind, reelId, history}] . the reels the fold actually
   // read (residue of canSee + foldPlace gating), captured at fold
   // build time and immutable at seal. Subscription dispatch, audit,
   // and replay all key off this same object. See
@@ -170,12 +170,12 @@ const ActSchema = new mongoose.Schema({
   // only story." See seed/CROSS-WORLD.md.
   story: { type: String, required: true, index: true },
 
-  // Branch the actor was acting from when this Act was stamped.
+  // History the actor was acting from when this Act was stamped.
   // Required — no schema default, no silent main-bias. Every Act
   // emitter (planActRow, withIAmAct, withBeingAct, test fixtures)
-  // must thread the branch explicitly. See seed/CROSS-WORLD.md for
+  // must thread the history explicitly. See seed/CROSS-WORLD.md for
   // why act-chain lineage matters.
-  branch: { type: String, required: true, index: true },
+  history: { type: String, required: true, index: true },
 
   // Cross-world act lifecycle status. Starts at "attempted" when the
   // Act seals locally on the actor's home reel; transitions exactly
@@ -183,7 +183,7 @@ const ActSchema = new mongoose.Schema({
   // world. Same-world acts (target.world === actor.world) transition
   // to "landed" inline at seal time since the foreign side IS the
   // local Stamper. Cross-world acts wait for the foreign Stamper
-  // (cross-branch: in-process; cross-story: over canopy) and
+  // (cross-history: in-process; cross-story: over canopy) and
   // update later.
   //
   // Terminal states:
@@ -224,12 +224,12 @@ const ActSchema = new mongoose.Schema({
 
 // All Acts under one chain (rootCorrelation walk).
 ActSchema.index({ rootCorrelation: 1, stampedAt: 1 }, { sparse: true });
-// Per-Being newest-first activity, scoped by branch.
-ActSchema.index({ through: 1, branch: 1, stampedAt: -1 });
-// Per-Name activity — the "name → branch → acts" folder view; a name's
+// Per-Being newest-first activity, scoped by history.
+ActSchema.index({ through: 1, history: 1, stampedAt: -1 });
+// Per-Name activity — the "name → history → acts" folder view; a name's
 // whole biography across every being it acts through.
-ActSchema.index({ by: 1, branch: 1, stampedAt: -1 }, { sparse: true });
-ActSchema.index({ to: 1, branch: 1, stampedAt: -1 });
+ActSchema.index({ by: 1, history: 1, stampedAt: -1 }, { sparse: true });
+ActSchema.index({ to: 1, history: 1, stampedAt: -1 });
 // Conversation between two Beings.
 ActSchema.index({ through: 1, to: 1, stampedAt: -1 }, { sparse: true });
 // "Every time to acted in activeRole" — audit query.

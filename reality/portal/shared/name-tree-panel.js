@@ -129,7 +129,7 @@ export async function showNameTree({ client, story = "", nameId, branch, canAct 
     const nm = el("span", "nt-name", `@${node.name || "(unnamed)"}`);
     main.appendChild(nm);
     if (node.parentName && depth === 0) main.appendChild(el("span", "nt-under", `under @${node.parentName}`));
-    if (node.homeBranch && node.homeBranch !== br) main.appendChild(el("span", "nt-tag", `#${node.homeBranch}`));
+    if (node.homeHistory && node.homeHistory !== br) main.appendChild(el("span", "nt-tag", `#${node.homeHistory}`));
     row.appendChild(main);
 
     // Points granted here (the Names with downward authority over this subtree).

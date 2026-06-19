@@ -13,7 +13,7 @@
 //      around them.
 //
 // Storage: a single `projections` collection
-// ([seed/materials/branch/projection.js](branch/projection.js)) holds
+// ([seed/materials/history/projection.js](branch/projection.js)) holds
 // every cache slot keyed `<branch>:<type>:<id>`. Main (branch="0") is
 // not special-cased — its slots live alongside every other branch's.
 //
@@ -23,7 +23,7 @@
 // fallbacks rot the architecture; loud breaks at the boundary are how
 // the sweep gets finished.
 
-import Projection, { projectionKey } from "./branch/projection.js";
+import Projection, { projectionKey } from "./history/projection.js";
 
 const MAIN = "0";
 const VALID_TYPES = new Set(["being", "space", "matter", "name"]);
@@ -43,15 +43,15 @@ function assertType(type) {
 // to "0" at expandStance); every other layer downstream of that
 // resolution holds the value it was handed.
 //
-// `assertBranch` is the canonical check. It throws on any value that
+// `assertHistory` is the canonical check. It throws on any value that
 // isn't a non-empty string, so a function called with `undefined`,
 // `null`, or `""` fails loudly at the boundary instead of silently
 // hitting main.
-function assertBranch(branch) {
+function assertHistory(branch) {
   if (typeof branch !== "string" || !branch.length) {
     throw new Error(
-      `projections: branch is required (got ${JSON.stringify(branch)}). ` +
-      `Internal callers must thread branch from the moment's moment or the wire layer.`,
+      `projections: history is required (got ${JSON.stringify(branch)}). ` +
+      `Internal callers must thread history from the moment's moment or the wire layer.`,
     );
   }
 }
@@ -61,14 +61,14 @@ function assertBranch(branch) {
 // projection-local check; callers use it at function entry so a missing
 // branch surfaces at THEIR site rather than masquerading as a projection
 // lookup error one stack frame deeper. The doctrinal commitment is that
-// every interior consumer trusts the perimeter has attached branch and
+// every interior consumer trusts the perimeter has attached history and
 // fails loud if not — no silent default to "0" / heaven.
-export function assertBranchOrThrow(branch, callerName) {
+export function assertHistoryOrThrow(branch, callerName) {
   if (typeof branch !== "string" || !branch.length) {
     throw new Error(
-      `${callerName || "substrate consumer"}: branch is required ` +
+      `${callerName || "substrate consumer"}: history is required ` +
       `(got ${JSON.stringify(branch)}). The wire layer / enclosing moment ` +
-      `must thread branch through; this consumer no longer silently defaults to heaven.`,
+      `must thread history through; this consumer no longer silently defaults to heaven.`,
     );
   }
   return branch;
@@ -113,19 +113,19 @@ export function assertBranchOrThrow(branch, callerName) {
 export async function loadProjection(type, id, branch) {
   if (!id) return null;
   assertType(type);
-  assertBranch(branch);
+  assertHistory(branch);
   // Heaven routing: spaces in heaven have one projection per story,
   // not per branch. If the caller passed a non-MAIN branch for a
   // heaven space, transparently rewrite to MAIN so the read returns
   // the single canonical row. The classifier is async (walks ancestor
   // cache), so guard on type=space to avoid cost on every being/matter
   // load.
-  let effectiveBranch = branch;
+  let effectiveHistory = branch;
   if (type === "space" && branch !== "0") {
     const { isHeavenSpace } = await import("./space/heavenLineage.js");
-    if (await isHeavenSpace(id)) effectiveBranch = "0";
+    if (await isHeavenSpace(id)) effectiveHistory = "0";
   }
-  const slot = await Projection.findById(projectionKey(effectiveBranch, type, id)).lean();
+  const slot = await Projection.findById(projectionKey(effectiveHistory, type, id)).lean();
   if (!slot) return null;
   return {
     state:      slot.state || {},
@@ -172,26 +172,26 @@ export async function loadProjection(type, id, branch) {
  * @param {string} [branch="0"]
  */
 export async function loadOrFold(type, id, branch) {
-  assertBranch(branch);
+  assertHistory(branch);
   // Heaven routing: spaces in heaven live only on MAIN. Rewrite to
   // MAIN before the cold-fold so the fold engine reads/writes the
   // canonical heaven slot.
-  let effectiveBranch = branch;
+  let effectiveHistory = branch;
   if (type === "space" && branch !== "0") {
     const { isHeavenSpace } = await import("./space/heavenLineage.js");
-    if (await isHeavenSpace(id)) effectiveBranch = "0";
+    if (await isHeavenSpace(id)) effectiveHistory = "0";
   }
-  const existing = await loadProjection(type, id, effectiveBranch);
+  const existing = await loadProjection(type, id, effectiveHistory);
   if (existing) return existing;
   // Cold-fold via the engine. fold writes to the branch slot via
   // initProjection on the way out; the next loadProjection hits cache.
   try {
     const { fold } = await import("../present/stamper/2-fold/foldEngine.js");
-    const { state, foldedSeq } = await fold(type, id, { branch: effectiveBranch });
+    const { state, foldedSeq } = await fold(type, id, { branch: effectiveHistory });
     if (!state || Object.keys(state).length === 0) return null;
     // Re-read the slot — fold's initProjection landed the canonical
     // shape (with `position` lifted to the slot level for indexing).
-    return await loadProjection(type, id, effectiveBranch);
+    return await loadProjection(type, id, effectiveHistory);
   } catch (err) {
     // Surface the failure. The empty catch that used to live here
     // hid every cold-fold issue (missing reel facts, branch lineage
@@ -202,7 +202,7 @@ export async function loadOrFold(type, id, branch) {
     const { default: log } = await import("../seedStory/log.js");
     log.warn(
       "Projections",
-      `loadOrFold(${type}, ${String(id).slice(0, 8)}, ${effectiveBranch}) ` +
+      `loadOrFold(${type}, ${String(id).slice(0, 8)}, ${effectiveHistory}) ` +
         `cold-fold failed: ${err.message}`,
     );
     return null;
@@ -225,7 +225,7 @@ export async function loadOrFold(type, id, branch) {
 export async function saveProjection(type, id, branch, next, expectedFoldedSeq) {
   if (!id) return false;
   assertType(type);
-  assertBranch(branch);
+  assertHistory(branch);
   const { state = {}, foldedSeq, position } = next;
   if (typeof foldedSeq !== "number") {
     throw new Error("saveProjection: next.foldedSeq must be a number");
@@ -255,7 +255,7 @@ export async function saveProjection(type, id, branch, next, expectedFoldedSeq) 
 export async function initProjection(type, id, branch, next) {
   if (!id) throw new Error("initProjection: id is required");
   assertType(type);
-  assertBranch(branch);
+  assertHistory(branch);
   if (!next || typeof next !== "object") {
     throw new Error("initProjection: next object is required");
   }
@@ -304,7 +304,7 @@ export async function initProjection(type, id, branch, next) {
 export async function tombstoneProjection(type, id, branch, atFoldedSeq, opts = {}) {
   if (!id) throw new Error("tombstoneProjection: id is required");
   assertType(type);
-  assertBranch(branch);
+  assertHistory(branch);
   if (typeof atFoldedSeq !== "number") {
     throw new Error("tombstoneProjection: atFoldedSeq must be a number");
   }
@@ -344,7 +344,7 @@ export async function tombstoneProjection(type, id, branch, atFoldedSeq, opts = 
  */
 export async function findByPosition(spaceId, branch) {
   if (!spaceId) return [];
-  assertBranch(branch);
+  assertHistory(branch);
   if (branch === MAIN) {
     const rows = await Projection.find({
       branch: MAIN, position: spaceId, tombstoned: { $ne: true },
@@ -356,8 +356,8 @@ export async function findByPosition(spaceId, branch) {
   // existed at branch creation (has a branchPoint entry for its reel).
   // Without this filter, aggregates created in main AFTER the branch
   // would leak into the branch's view of this space.
-  const { getBranchPoint } = await import("./branch/branches.js");
-  const [branchHere, mainOccupants, branchTouched] = await Promise.all([
+  const { getBranchPoint } = await import("./history/histories.js");
+  const [historyHere, mainOccupants, historyTouched] = await Promise.all([
     Projection.find({
       branch, position: spaceId, tombstoned: { $ne: true },
     }).select("type id foldedSeq position").lean(),
@@ -365,7 +365,7 @@ export async function findByPosition(spaceId, branch) {
     Projection.find({ branch }).select("type id").lean(),
   ]);
   const shadowedKey = (t, i) => `${t}:${i}`;
-  const shadowed = new Set(branchTouched.map((s) => shadowedKey(s.type, s.id)));
+  const shadowed = new Set(historyTouched.map((s) => shadowedKey(s.type, s.id)));
   // Filter main candidates: (1) not shadowed, (2) existed at branchPoint.
   const mainVisible = [];
   for (const o of mainOccupants) {
@@ -373,7 +373,7 @@ export async function findByPosition(spaceId, branch) {
     const bp = await getBranchPoint(branch, o.type, o.id);
     if (bp && bp > 0) mainVisible.push(o);
   }
-  return [...mainVisible, ...branchHere.map(toOccupant)];
+  return [...mainVisible, ...historyHere.map(toOccupant)];
 }
 
 /**
@@ -393,20 +393,20 @@ export async function findByPosition(spaceId, branch) {
  */
 export async function findByName(type, name, branch) {
   assertType(type);
-  assertBranch(branch);
+  assertHistory(branch);
   if (!name) return null;
   // Branch-local match first (works for main too — main IS just-another-branch).
-  const branchSlot = await Projection.findOne({
+  const historySlot = await Projection.findOne({
     branch, type, "state.name": name, tombstoned: { $ne: true },
   }).lean();
-  if (branchSlot) {
+  if (historySlot) {
     return {
-      state:     branchSlot.state || {},
-      foldedSeq: branchSlot.foldedSeq ?? null,
-      position:  branchSlot.position ?? null,
-      type:      branchSlot.type,
-      id:        branchSlot.id,
-      branch:    branchSlot.branch,
+      state:     historySlot.state || {},
+      foldedSeq: historySlot.foldedSeq ?? null,
+      position:  historySlot.position ?? null,
+      type:      historySlot.type,
+      id:        historySlot.id,
+      branch:    historySlot.branch,
     };
   }
   if (branch === MAIN) return null;
@@ -421,9 +421,9 @@ export async function findByName(type, name, branch) {
   //     (rename, tombstone, divergent fold) — and since the
   //     branch-local name query above didn't match it, the inherited
   //     name doesn't resolve here.
-  const { getBranchPoint, loadBranch } = await import("./branch/branches.js");
-  const branchRow = await loadBranch(branch);
-  const parentPath = branchRow?.parent || MAIN;
+  const { getBranchPoint, loadHistory } = await import("./history/histories.js");
+  const historyRow = await loadHistory(branch);
+  const parentPath = historyRow?.parent || MAIN;
   const inherited = await findByName(type, name, parentPath);
   if (!inherited) return null;
   const bp = await getBranchPoint(branch, type, inherited.id);
@@ -451,7 +451,7 @@ export async function findByName(type, name, branch) {
  */
 export async function findByParent(beingId, branch) {
   if (!beingId) return [];
-  assertBranch(branch);
+  assertHistory(branch);
   if (branch === MAIN) {
     const rows = await Projection.find({
       branch: MAIN, type: "being",
@@ -460,10 +460,10 @@ export async function findByParent(beingId, branch) {
     }).select("type id foldedSeq position").lean();
     return rows.map(toOccupant);
   }
-  const { getBranchPoint, loadBranch } = await import("./branch/branches.js");
-  const branchRow = await loadBranch(branch);
-  const parentPath = branchRow?.parent || MAIN;
-  const [branchChildren, inheritedChildren, branchTouched] = await Promise.all([
+  const { getBranchPoint, loadHistory } = await import("./history/histories.js");
+  const historyRow = await loadHistory(branch);
+  const parentPath = historyRow?.parent || MAIN;
+  const [branchChildren, inheritedChildren, historyTouched] = await Promise.all([
     Projection.find({
       branch, type: "being",
       "state.parentBeingId": beingId,
@@ -472,7 +472,7 @@ export async function findByParent(beingId, branch) {
     findByParent(beingId, parentPath),
     Projection.find({ branch, type: "being" }).select("id").lean(),
   ]);
-  const shadowed = new Set(branchTouched.map((s) => s.id));
+  const shadowed = new Set(historyTouched.map((s) => s.id));
   const inheritedVisible = [];
   for (const o of inheritedChildren) {
     if (shadowed.has(o.id)) continue;
@@ -495,24 +495,24 @@ export async function findByParent(beingId, branch) {
  */
 export async function listByType(type, branch) {
   assertType(type);
-  assertBranch(branch);
+  assertHistory(branch);
   if (branch === MAIN) {
     const rows = await Projection.find({
       branch: MAIN, type, tombstoned: { $ne: true },
     }).select("type id foldedSeq position").lean();
     return rows.map(toOccupant);
   }
-  const { getBranchPoint, loadBranch } = await import("./branch/branches.js");
-  const branchRow = await loadBranch(branch);
-  const parentPath = branchRow?.parent || MAIN;
-  const [branchSlots, inheritedAll, branchTouched] = await Promise.all([
+  const { getBranchPoint, loadHistory } = await import("./history/histories.js");
+  const historyRow = await loadHistory(branch);
+  const parentPath = historyRow?.parent || MAIN;
+  const [branchSlots, inheritedAll, historyTouched] = await Promise.all([
     Projection.find({
       branch, type, tombstoned: { $ne: true },
     }).select("type id foldedSeq position").lean(),
     listByType(type, parentPath),
     Projection.find({ branch, type }).select("id").lean(),
   ]);
-  const shadowed = new Set(branchTouched.map((s) => s.id));
+  const shadowed = new Set(historyTouched.map((s) => s.id));
   const inheritedVisible = [];
   for (const o of inheritedAll) {
     if (shadowed.has(o.id)) continue;
@@ -533,7 +533,7 @@ export async function listByType(type, branch) {
  */
 export async function findRoot(type, branch) {
   assertType(type);
-  assertBranch(branch);
+  assertHistory(branch);
   const parentField = type === "being" ? "state.parentBeingId" : "state.parent";
   const where = {
     branch, type,
@@ -558,7 +558,7 @@ export async function findRoot(type, branch) {
  */
 export async function findByNamePattern(type, pattern, branch) {
   assertType(type);
-  assertBranch(branch);
+  assertHistory(branch);
   if (!pattern) return [];
   const re = pattern instanceof RegExp ? pattern : new RegExp(pattern);
   const rows = await Projection.find({
@@ -592,7 +592,7 @@ export async function findByNamePattern(type, pattern, branch) {
  * @returns {Promise<string[]>}
  */
 export async function listMatterNamesInFolder(branch, spaceId, parentMatterId, pattern) {
-  assertBranch(branch);
+  assertHistory(branch);
   if (!spaceId) return [];
   const where = {
     branch, type: "matter",
@@ -616,7 +616,7 @@ export async function listMatterNamesInFolder(branch, spaceId, parentMatterId, p
  */
 export async function countByType(type, branch) {
   assertType(type);
-  assertBranch(branch);
+  assertHistory(branch);
   return await Projection.countDocuments({
     branch, type, tombstoned: { $ne: true },
   });
@@ -631,7 +631,7 @@ export async function countByType(type, branch) {
  */
 export async function countByParent(beingId, branch) {
   if (!beingId) return 0;
-  assertBranch(branch);
+  assertHistory(branch);
   return await Projection.countDocuments({
     branch, type: "being",
     "state.parentBeingId": beingId,
@@ -650,7 +650,7 @@ export async function countByParent(beingId, branch) {
  */
 export async function loadProjections(type, ids, branch) {
   assertType(type);
-  assertBranch(branch);
+  assertHistory(branch);
   if (!Array.isArray(ids) || ids.length === 0) return new Map();
   const keys = ids.map((id) => projectionKey(branch, type, id));
   const rows = await Projection.find({ _id: { $in: keys } }).lean();
@@ -680,7 +680,7 @@ export async function loadProjections(type, ids, branch) {
  */
 export async function findByHeavenSpace(heavenSpaceKind, branch) {
   if (!heavenSpaceKind) return null;
-  assertBranch(branch);
+  assertHistory(branch);
   const slot = await Projection.findOne({
     branch, type: "space",
     "state.heavenSpace": heavenSpaceKind,
@@ -749,7 +749,7 @@ export async function loadHeavenProjection(type, id) {
  * @returns {Promise<{id, name}|null>}
  */
 export async function findRootOperator(systemNames, branch) {
-  assertBranch(branch);
+  assertHistory(branch);
   // First find cherub's id (registered through findByName); main+branch.
   const cherubSlot = await findByName("being", "cherub", branch);
   const allowedParents = ["i-am"];

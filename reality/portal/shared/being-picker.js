@@ -120,11 +120,11 @@ export async function showBeingPicker({ client, storyDomain = "", nameId, onConn
     const row = el("div", "bp-row");
     const meta = el("div", "bp-meta");
     meta.appendChild(el("div", "bp-name", `@${b.name || "(unnamed)"}`));
-    meta.appendChild(el("div", "bp-branch", `#${b.homeBranch || "main"}`));
+    meta.appendChild(el("div", "bp-branch", `#${b.homeHistory || "main"}`));
     row.appendChild(meta);
 
     const branchInput = el("input", "bp-branch-input");
-    branchInput.value = b.homeBranch || "0";
+    branchInput.value = b.homeHistory || "0";
     branchInput.title = "branch to connect on";
     row.appendChild(branchInput);
 
@@ -134,7 +134,7 @@ export async function showBeingPicker({ client, storyDomain = "", nameId, onConn
       status.textContent = `Connecting to @${b.name}…`;
       status.className = "bp-status";
       try {
-        await onConnect(b.name, branchInput.value.trim() || b.homeBranch || "0");
+        await onConnect(b.name, branchInput.value.trim() || b.homeHistory || "0");
         hideBeingPicker();
       } catch (err) {
         status.textContent = `Connect failed: ${err?.message || err}`;

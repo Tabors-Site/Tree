@@ -487,10 +487,10 @@ export async function genesis(app, opts = {}) {
 
   // branch-manager: creates branches (divergent worlds) from past
   // points of existing branches. canDo:["create-branch"]. Substrate
-  // helpers in seed/materials/branch/ do the path arithmetic and
+  // helpers in seed/materials/history/ do the path arithmetic and
   // branchPoint snapshotting; the role just routes the op.
-  const { branchManagerRole } = await import("./seed/present/roles/branch-manager/role.js");
-  registerRole("branch-manager", branchManagerRole, "seed");
+  const { historyManagerRole } = await import("./seed/present/roles/branch-manager/role.js");
+  registerRole("branch-manager", historyManagerRole, "seed");
 
   // federation-manager: negotiates transfers (push / pull) with peer
   // realities. Operator triggers offer-template / offer-being (push) or
@@ -625,7 +625,7 @@ export async function genesis(app, opts = {}) {
       const { roleManagerRole } = await import("./seed/present/roles/role-manager/role.js");
       const { roleFinderRole } = await import("./seed/present/roles/role-finder/role.js");
       const { roleflowComposerRole } = await import("./seed/present/roles/roleflow-composer/role.js");
-      const { branchManagerRole } = await import("./seed/present/roles/branch-manager/role.js");
+      const { historyManagerRole } = await import("./seed/present/roles/branch-manager/role.js");
       const { mergeMediatorRole } = await import("./seed/present/roles/merge-mediator/role.js");
       const { llmAssignerRole } = await import("./seed/present/roles/llm-assigner/role.js");
       const { publicRole } = await import("./seed/present/roles/public/role.js");
@@ -640,7 +640,7 @@ export async function genesis(app, opts = {}) {
         ["role-manager", roleManagerRole],
         ["role-finder", roleFinderRole],
         ["roleflow-composer", roleflowComposerRole],
-        ["branch-manager", branchManagerRole],
+        ["branch-manager", historyManagerRole],
         ["merge-mediator", mergeMediatorRole],
         ["llm-assigner", llmAssignerRole],
         ["public", publicRole],
@@ -749,11 +749,11 @@ export async function genesis(app, opts = {}) {
   await import("./seed/present/roles/role-manager/roleFlowOp.js");
 
   // branch-manager's create-branch DO op. The substrate's branch
-  // helpers (seed/materials/branch/) own the heavy lifting; the op
+  // helpers (seed/materials/history/) own the heavy lifting; the op
   // is a thin handler routing through createBranch.
-  const { registerBranchManagerOps } =
+  const { registerHistoryManagerOps } =
     await import("./seed/present/roles/branch-manager/ops.js");
-  registerBranchManagerOps();
+  registerHistoryManagerOps();
 
   // federation-manager ops: offer-template, offer-being, request-template,
   // accept-template, reject-template, fulfill-request, refuse-request. The

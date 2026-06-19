@@ -41,7 +41,7 @@
 import mongoose from "mongoose";
 import { getInternalConfigValue } from "../../internalConfig.js";
 import Act from "../../past/act/act.js";
-import { assertBranchOrThrow } from "../../materials/projections.js";
+import { assertHistoryOrThrow } from "../../materials/projections.js";
 import { closeInboxOnAnswer } from "../../past/projections/inbox/inboxProjectionFold.js";
 import { noteActSealOnThread } from "../../past/projections/threads/threadsProjectionFold.js";
 import {
@@ -215,7 +215,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
   // transaction stays lean (the key never changes during the moment).
   // Null for a foreign cross-story actor or a missing key — the act
   // then seals unsigned. The key lives only here, never on the row.
-  const signingPem = await loadSigningKey(actDoc.by, actDoc.branch);
+  const signingPem = await loadSigningKey(actDoc.by, actDoc.history);
 
   let inserted = null;
   let sortedReels = [];
@@ -294,7 +294,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
             // chain. The moment fails loudly; its inbox row stays
             // open; the retry re-opens from the new head.
             const { advanceActHead } = await import("../../past/act/actHash.js");
-            await advanceActHead(actDoc.branch || "0", actDoc.through, actDoc._id, {
+            await advanceActHead(actDoc.history || "0", actDoc.through, actDoc._id, {
               session, expectPrev: actDoc.p,
             });
           });
@@ -325,7 +325,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
   if (!Array.isArray(deltaF) || deltaF.length === 0) {
     const { advanceActHead } = await import("../../past/act/actHash.js");
     try {
-      await advanceActHead(actDoc.branch || "0", actDoc.through, actDoc._id, {
+      await advanceActHead(actDoc.history || "0", actDoc.through, actDoc._id, {
         expectPrev: actDoc.p,
       });
     } catch (err) {
@@ -410,11 +410,11 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
       ) {
         const field = f.params.field;
         // Fact must carry branch (perimeter doctrine: every fact-emitter
-        // attaches it). assertBranchOrThrow surfaces a missing-branch
+        // attaches it). assertHistoryOrThrow surfaces a missing-branch
         // fact at the seal-time fan-out site rather than silently
         // invalidating subscribers on the wrong branch.
-        const factBranch = assertBranchOrThrow(f?.branch, "stamped(afterFieldWrite fan)");
-        const spaceId = await resolveSpaceForLiveSee(target, factBranch);
+        const factHistory = assertHistoryOrThrow(f?.history, "stamped(afterFieldWrite fan)");
+        const spaceId = await resolveSpaceForLiveSee(target, factHistory);
         // Position changes need BOTH the old and new rooms to invalidate
         // so the room the being LEFT also refreshes. set-being's handler
         // captures the prior position into params.fromPosition; the
@@ -437,7 +437,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
             // Branch this write happened on. Live-SEE subscribers filter
             // by branch on their end so a write on #1 doesn't invalidate
             // subscribers viewing main, and vice versa.
-            branch: factBranch,
+            branch: factHistory,
           };
           try {
             if (field.startsWith("qualities.")) {
@@ -511,7 +511,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
             beingId: baseBeing,
             // Branch the create happened on. Live-SEE filters by branch
             // so a #1 create doesn't invalidate main subscribers.
-            branch:  assertBranchOrThrow(f?.branch, "stamped(afterSpaceCreate)"),
+            history:  assertHistoryOrThrow(f?.history, "stamped(afterSpaceCreate)"),
           });
         } catch (err) {
           log.warn("Stamped", `afterSpaceCreate hook fan failed: ${err.message}`);
@@ -523,7 +523,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
           await hooks.run("afterSpaceDelete", {
             space: { _id: String(target.id) },
             beingId: baseBeing,
-            branch:  assertBranchOrThrow(f?.branch, "stamped(afterSpaceDelete)"),
+            history:  assertHistoryOrThrow(f?.history, "stamped(afterSpaceDelete)"),
           });
         } catch (err) {
           log.warn("Stamped", `afterSpaceDelete hook fan failed: ${err.message}`);

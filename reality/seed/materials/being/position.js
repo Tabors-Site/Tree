@@ -88,7 +88,7 @@ function persistBeingPosition(beingId, spaceId, moment = null) {
     of:      { kind: "being", id: String(beingId) },
     params:  { toPosition: spaceId || null },
     actId:   moment?.actId || null,
-    branch:  moment?.actorAct?.branch || "0",
+    history:  moment?.actorAct?.history || "0",
   };
   // Inside a moment: push synchronously to ctx.deltaF (rides the
   // existing Act). The push bypasses emitFact (whose async crossOrigin
@@ -163,9 +163,9 @@ async function deriveSpaceRootId(spaceId, branch) {
  */
 export async function setCurrentSpace(beingId, spaceId, moment) {
   if (!beingId) return;
-  const branch = moment?.actorAct?.branch;
+  const branch = moment?.actorAct?.history;
   if (typeof branch !== "string" || !branch) {
-    throw new Error("setCurrentSpace: moment.actorAct.branch is required; planting a being at a position needs the actor's branch to derive the right tree-root.");
+    throw new Error("setCurrentSpace: moment.actorAct.history is required; planting a being at a position needs the actor's branch to derive the right tree-root.");
   }
   const p = getBeingPositionRecord(beingId);
   p.position = spaceId || null;

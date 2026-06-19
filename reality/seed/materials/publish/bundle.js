@@ -10,7 +10,7 @@
 //     meta: {
 //       bundleVersion,        "1.0"
 //       sourceStory,        domain that produced it
-//       sourceBranch,         which branch the snapshot was taken from
+//       sourceHistory,         which branch the snapshot was taken from
 //       sourceScopeName,      human label for what was extracted
 //       sourceScopeSpaceId,   the root space's source-namespace id
 //       createdAt,            ISO string
@@ -149,12 +149,12 @@ export function assertValidBundle(bundle) {
  * Empty bundle scaffold. The replicator fills it in as it walks the
  * source subtree.
  */
-export function emptyBundle({ sourceStory, sourceBranch, sourceScopeName, sourceScopeSpaceId, operatorBeingId }) {
+export function emptyBundle({ sourceStory, sourceHistory, sourceScopeName, sourceScopeSpaceId, operatorBeingId }) {
   return {
     meta: {
       bundleVersion:     BUNDLE_VERSION,
       sourceStory:     sourceStory || null,
-      sourceBranch:      sourceBranch || "0",
+      sourceHistory:      sourceHistory || "0",
       sourceScopeName:   sourceScopeName || null,
       sourceScopeSpaceId: sourceScopeSpaceId || null,
       createdAt:         null,  // stamped by captureTemplate at completion

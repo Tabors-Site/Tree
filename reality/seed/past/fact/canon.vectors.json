@@ -189,7 +189,7 @@
   ],
   "facts": [
     {
-      "name": "minimal-branch-defaulted",
+      "name": "minimal-history-defaulted",
       "prev": "0000000000000000000000000000000000000000000000000000000000000000",
       "row": {
         "through": "be1",
@@ -220,7 +220,7 @@
           "id": "be1"
         },
         "seq": 1,
-        "branch": "0",
+        "history": "0",
         "params": {
           "field": "qualities.x",
           "value": 1
@@ -231,8 +231,8 @@
         "homeStory": null,
         "wasRemote": false
       },
-      "canonical": "{\"act\":\"set-being\",\"actId\":\"act-1\",\"branch\":\"0\",\"homeStory\":null,\"of\":{\"id\":\"be1\",\"kind\":\"being\"},\"params\":{\"field\":\"qualities.x\",\"value\":1},\"result\":null,\"seq\":1,\"sessionId\":null,\"through\":\"be1\",\"verb\":\"do\",\"wasRemote\":false}",
-      "id": "b61ab9f8468283f94a7fe70b387bedeb18bd83aa4a19695db872cec6756281eb"
+      "canonical": "{\"act\":\"set-being\",\"actId\":\"act-1\",\"history\":\"0\",\"homeStory\":null,\"of\":{\"id\":\"be1\",\"kind\":\"being\"},\"params\":{\"field\":\"qualities.x\",\"value\":1},\"result\":null,\"seq\":1,\"sessionId\":null,\"through\":\"be1\",\"verb\":\"do\",\"wasRemote\":false}",
+      "id": "57364bd757361dc1c52c805e368c9736d7d409efc93d26187248231966ef40a5"
     },
     {
       "name": "same-deed-different-date-same-id",
@@ -266,7 +266,7 @@
           "id": "be1"
         },
         "seq": 1,
-        "branch": "0",
+        "history": "0",
         "params": {
           "field": "qualities.x",
           "value": 1
@@ -277,12 +277,12 @@
         "homeStory": null,
         "wasRemote": false
       },
-      "canonical": "{\"act\":\"set-being\",\"actId\":\"act-1\",\"branch\":\"0\",\"homeStory\":null,\"of\":{\"id\":\"be1\",\"kind\":\"being\"},\"params\":{\"field\":\"qualities.x\",\"value\":1},\"result\":null,\"seq\":1,\"sessionId\":null,\"through\":\"be1\",\"verb\":\"do\",\"wasRemote\":false}",
-      "id": "b61ab9f8468283f94a7fe70b387bedeb18bd83aa4a19695db872cec6756281eb",
-      "expectSameIdAs": "minimal-branch-defaulted"
+      "canonical": "{\"act\":\"set-being\",\"actId\":\"act-1\",\"history\":\"0\",\"homeStory\":null,\"of\":{\"id\":\"be1\",\"kind\":\"being\"},\"params\":{\"field\":\"qualities.x\",\"value\":1},\"result\":null,\"seq\":1,\"sessionId\":null,\"through\":\"be1\",\"verb\":\"do\",\"wasRemote\":false}",
+      "id": "57364bd757361dc1c52c805e368c9736d7d409efc93d26187248231966ef40a5",
+      "expectSameIdAs": "minimal-history-defaulted"
     },
     {
-      "name": "explicit-deep-branch",
+      "name": "explicit-deep-history",
       "prev": "0000000000000000000000000000000000000000000000000000000000000000",
       "row": {
         "through": "be1",
@@ -293,7 +293,7 @@
           "id": "be1"
         },
         "seq": 1,
-        "branch": "1a1",
+        "history": "1a1",
         "params": {
           "field": "qualities.x",
           "value": 1
@@ -313,7 +313,7 @@
           "id": "be1"
         },
         "seq": 1,
-        "branch": "1a1",
+        "history": "1a1",
         "params": {
           "field": "qualities.x",
           "value": 1
@@ -324,8 +324,8 @@
         "homeStory": null,
         "wasRemote": false
       },
-      "canonical": "{\"act\":\"set-being\",\"actId\":\"act-1\",\"branch\":\"1a1\",\"homeStory\":null,\"of\":{\"id\":\"be1\",\"kind\":\"being\"},\"params\":{\"field\":\"qualities.x\",\"value\":1},\"result\":null,\"seq\":1,\"sessionId\":null,\"through\":\"be1\",\"verb\":\"do\",\"wasRemote\":false}",
-      "id": "2fed5964c73d33cecb57d46d2d328aed8e71fa122a2ae40a73b4c62e9659b58e"
+      "canonical": "{\"act\":\"set-being\",\"actId\":\"act-1\",\"history\":\"1a1\",\"homeStory\":null,\"of\":{\"id\":\"be1\",\"kind\":\"being\"},\"params\":{\"field\":\"qualities.x\",\"value\":1},\"result\":null,\"seq\":1,\"sessionId\":null,\"through\":\"be1\",\"verb\":\"do\",\"wasRemote\":false}",
+      "id": "53b386c6585b9d7d116bd8d533d9040771884482bc2bcab1eb8e93826d0174fa"
     },
     {
       "name": "foldseq-present",
@@ -339,7 +339,7 @@
           "id": "m1"
         },
         "seq": 9,
-        "branch": "0",
+        "history": "0",
         "params": {
           "name": "héllo 世界",
           "qualities": {
@@ -369,7 +369,7 @@
           "id": "m1"
         },
         "seq": 9,
-        "branch": "0",
+        "history": "0",
         "params": {
           "name": "héllo 世界",
           "qualities": {
@@ -390,8 +390,8 @@
         "wasRemote": true,
         "foldSeq": 7
       },
-      "canonical": "{\"act\":\"create-matter\",\"actId\":\"act-9\",\"branch\":\"0\",\"foldSeq\":7,\"homeStory\":\"tree.example\",\"of\":{\"id\":\"m1\",\"kind\":\"matter\"},\"params\":{\"name\":\"héllo 世界\",\"qualities\":{\"note\":null,\"tags\":[\"a\",\"b\"]}},\"result\":{\"ok\":true},\"seq\":9,\"sessionId\":\"sess-1\",\"through\":\"be2\",\"truncated\":false,\"verb\":\"do\",\"wasRemote\":true}",
-      "id": "ff347815bf77b53eec919eaf0cb32b99c3f202bc643e162398a9bd3ff0fd799e"
+      "canonical": "{\"act\":\"create-matter\",\"actId\":\"act-9\",\"foldSeq\":7,\"history\":\"0\",\"homeStory\":\"tree.example\",\"of\":{\"id\":\"m1\",\"kind\":\"matter\"},\"params\":{\"name\":\"héllo 世界\",\"qualities\":{\"note\":null,\"tags\":[\"a\",\"b\"]}},\"result\":{\"ok\":true},\"seq\":9,\"sessionId\":\"sess-1\",\"through\":\"be2\",\"truncated\":false,\"verb\":\"do\",\"wasRemote\":true}",
+      "id": "10853502159ad236612a14d393f71be89b2d7df59e30c1a0508dbf7de4a56a72"
     },
     {
       "name": "foldseq-absent-differs",
@@ -405,7 +405,7 @@
           "id": "m1"
         },
         "seq": 9,
-        "branch": "0",
+        "history": "0",
         "params": {
           "name": "héllo 世界",
           "qualities": {
@@ -434,7 +434,7 @@
           "id": "m1"
         },
         "seq": 9,
-        "branch": "0",
+        "history": "0",
         "params": {
           "name": "héllo 世界",
           "qualities": {
@@ -454,13 +454,13 @@
         "homeStory": "tree.example",
         "wasRemote": true
       },
-      "canonical": "{\"act\":\"create-matter\",\"actId\":\"act-9\",\"branch\":\"0\",\"homeStory\":\"tree.example\",\"of\":{\"id\":\"m1\",\"kind\":\"matter\"},\"params\":{\"name\":\"héllo 世界\",\"qualities\":{\"note\":null,\"tags\":[\"a\",\"b\"]}},\"result\":{\"ok\":true},\"seq\":9,\"sessionId\":\"sess-1\",\"through\":\"be2\",\"truncated\":false,\"verb\":\"do\",\"wasRemote\":true}",
-      "id": "6dc0a697b6ec190acda5f61ba9b3c6a423f8c0da68ac813c1668dac776a745cc",
+      "canonical": "{\"act\":\"create-matter\",\"actId\":\"act-9\",\"history\":\"0\",\"homeStory\":\"tree.example\",\"of\":{\"id\":\"m1\",\"kind\":\"matter\"},\"params\":{\"name\":\"héllo 世界\",\"qualities\":{\"note\":null,\"tags\":[\"a\",\"b\"]}},\"result\":{\"ok\":true},\"seq\":9,\"sessionId\":\"sess-1\",\"through\":\"be2\",\"truncated\":false,\"verb\":\"do\",\"wasRemote\":true}",
+      "id": "1303c967172e6a71a4bff4ef4927c88fb1e47f7792023d0394fc784a86a434a2",
       "expectDifferentIdFrom": "foldseq-present"
     },
     {
       "name": "chained-second-fact",
-      "prev": "b61ab9f8468283f94a7fe70b387bedeb18bd83aa4a19695db872cec6756281eb",
+      "prev": "57364bd757361dc1c52c805e368c9736d7d409efc93d26187248231966ef40a5",
       "row": {
         "through": "be1",
         "verb": "do",
@@ -470,7 +470,7 @@
           "id": "be1"
         },
         "seq": 2,
-        "branch": "0",
+        "history": "0",
         "params": {
           "field": "qualities.x",
           "value": 2
@@ -490,7 +490,7 @@
           "id": "be1"
         },
         "seq": 2,
-        "branch": "0",
+        "history": "0",
         "params": {
           "field": "qualities.x",
           "value": 2
@@ -501,9 +501,9 @@
         "homeStory": null,
         "wasRemote": false
       },
-      "canonical": "{\"act\":\"set-being\",\"actId\":\"act-2\",\"branch\":\"0\",\"homeStory\":null,\"of\":{\"id\":\"be1\",\"kind\":\"being\"},\"params\":{\"field\":\"qualities.x\",\"value\":2},\"result\":null,\"seq\":2,\"sessionId\":null,\"through\":\"be1\",\"verb\":\"do\",\"wasRemote\":false}",
-      "id": "67a6822932d57e45fb118940a90390095b2960c364b2d1181120be9f6cf00e6a",
-      "note": "prev = the id of minimal-branch-defaulted; identity commits to history"
+      "canonical": "{\"act\":\"set-being\",\"actId\":\"act-2\",\"history\":\"0\",\"homeStory\":null,\"of\":{\"id\":\"be1\",\"kind\":\"being\"},\"params\":{\"field\":\"qualities.x\",\"value\":2},\"result\":null,\"seq\":2,\"sessionId\":null,\"through\":\"be1\",\"verb\":\"do\",\"wasRemote\":false}",
+      "id": "e72bf134a6a60569edfd6d8900c69325e0e14ce666e032619b3a8bdfe819b57d",
+      "note": "prev = the id of minimal-history-defaulted; identity commits to history"
     }
   ],
   "acts": [
@@ -523,7 +523,7 @@
           "source": "be1"
         },
         "story": "tree.example",
-        "branch": "0"
+        "history": "0"
       },
       "content": {
         "through": "be1",
@@ -538,13 +538,13 @@
           "source": "be1"
         },
         "story": "tree.example",
-        "branch": "0"
+        "history": "0"
       },
-      "canonical": "{\"activeRole\":null,\"branch\":\"0\",\"ibpAddress\":null,\"inReplyTo\":null,\"inboxMessageId\":null,\"parentThread\":null,\"story\":\"tree.example\",\"startMessage\":{\"content\":\"first act\",\"source\":\"be1\"},\"through\":\"be1\",\"to\":\"be1\"}",
-      "id": "8806eb149bfc30ac22e21fe98fe33f2e2e9f045848f4f941b4f3ef34e3e9f883"
+      "canonical": "{\"activeRole\":null,\"history\":\"0\",\"ibpAddress\":null,\"inReplyTo\":null,\"inboxMessageId\":null,\"parentThread\":null,\"startMessage\":{\"content\":\"first act\",\"source\":\"be1\"},\"story\":\"tree.example\",\"through\":\"be1\",\"to\":\"be1\"}",
+      "id": "718d3167f29868bcd8734818f4c06cb3874d37eb8999fb8b670440847c7edabe"
     },
     {
-      "name": "act-branch-defaulted",
+      "name": "act-history-defaulted",
       "prev": "0000000000000000000000000000000000000000000000000000000000000000",
       "opening": {
         "through": "be1",
@@ -573,10 +573,10 @@
           "source": "be1"
         },
         "story": "tree.example",
-        "branch": "0"
+        "history": "0"
       },
-      "canonical": "{\"activeRole\":null,\"branch\":\"0\",\"ibpAddress\":null,\"inReplyTo\":null,\"inboxMessageId\":null,\"parentThread\":null,\"story\":\"tree.example\",\"startMessage\":{\"content\":\"first act\",\"source\":\"be1\"},\"through\":\"be1\",\"to\":\"be1\"}",
-      "id": "8806eb149bfc30ac22e21fe98fe33f2e2e9f045848f4f941b4f3ef34e3e9f883",
+      "canonical": "{\"activeRole\":null,\"history\":\"0\",\"ibpAddress\":null,\"inReplyTo\":null,\"inboxMessageId\":null,\"parentThread\":null,\"startMessage\":{\"content\":\"first act\",\"source\":\"be1\"},\"story\":\"tree.example\",\"through\":\"be1\",\"to\":\"be1\"}",
+      "id": "718d3167f29868bcd8734818f4c06cb3874d37eb8999fb8b670440847c7edabe",
       "expectSameIdAs": "act-minimal"
     },
     {
@@ -595,7 +595,7 @@
           "source": "be2"
         },
         "story": "tree.example",
-        "branch": "1a"
+        "history": "1a"
       },
       "content": {
         "through": "be2",
@@ -610,14 +610,14 @@
           "source": "be2"
         },
         "story": "tree.example",
-        "branch": "1a"
+        "history": "1a"
       },
-      "canonical": "{\"activeRole\":\"gärtner\",\"branch\":\"1a\",\"ibpAddress\":\"tree.example#1a/garden@be3\",\"inReplyTo\":\"corr-0\",\"inboxMessageId\":\"corr-1\",\"parentThread\":null,\"story\":\"tree.example\",\"startMessage\":{\"content\":\"héllo 世界 🌳\",\"source\":\"be2\"},\"through\":\"be2\",\"to\":\"be3\"}",
-      "id": "f0730b28e86dee4ffe72fedb981ff9f40019b4a81c2cf39af5b982607b386b3c"
+      "canonical": "{\"activeRole\":\"gärtner\",\"history\":\"1a\",\"ibpAddress\":\"tree.example#1a/garden@be3\",\"inReplyTo\":\"corr-0\",\"inboxMessageId\":\"corr-1\",\"parentThread\":null,\"startMessage\":{\"content\":\"héllo 世界 🌳\",\"source\":\"be2\"},\"story\":\"tree.example\",\"through\":\"be2\",\"to\":\"be3\"}",
+      "id": "8d075e80fbab068e5d0175a2e26ca698110e0fe82f70a747f43ee90b69ebb040"
     },
     {
       "name": "act-chained-second",
-      "prev": "8806eb149bfc30ac22e21fe98fe33f2e2e9f045848f4f941b4f3ef34e3e9f883",
+      "prev": "718d3167f29868bcd8734818f4c06cb3874d37eb8999fb8b670440847c7edabe",
       "opening": {
         "through": "be1",
         "to": "be1",
@@ -631,7 +631,7 @@
           "source": "be1"
         },
         "story": "tree.example",
-        "branch": "0"
+        "history": "0"
       },
       "content": {
         "through": "be1",
@@ -646,10 +646,10 @@
           "source": "be1"
         },
         "story": "tree.example",
-        "branch": "0"
+        "history": "0"
       },
-      "canonical": "{\"activeRole\":null,\"branch\":\"0\",\"ibpAddress\":null,\"inReplyTo\":null,\"inboxMessageId\":null,\"parentThread\":null,\"story\":\"tree.example\",\"startMessage\":{\"content\":\"second act\",\"source\":\"be1\"},\"through\":\"be1\",\"to\":\"be1\"}",
-      "id": "d6d721ce627d0f8b6035c32c61c41ea6f00192e4c6c571b84438a5c80356008e",
+      "canonical": "{\"activeRole\":null,\"history\":\"0\",\"ibpAddress\":null,\"inReplyTo\":null,\"inboxMessageId\":null,\"parentThread\":null,\"startMessage\":{\"content\":\"second act\",\"source\":\"be1\"},\"story\":\"tree.example\",\"through\":\"be1\",\"to\":\"be1\"}",
+      "id": "b029fbab95f48d2987eafd0de8a176b1a82e067ba4a926687a48acdcdb32f959",
       "note": "prev = the id of act-minimal"
     }
   ]

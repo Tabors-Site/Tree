@@ -81,7 +81,7 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   // produced incomplete bundles. The walker only sees what loadOrFold
   // surfaces.
   const { loadProjection, loadOrFold } = await import("../projections.js");
-  const { default: Projection } = await import("../branch/projection.js");
+  const { default: Projection } = await import("../history/projection.js");
 
   // Direct projection query for "children of space X in branch B".
   // (The generic findByParent helper is being-specific; spaces don't
@@ -101,7 +101,7 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
 
   const bundle = emptyBundle({
     sourceStory:      opts.sourceStory || null,
-    sourceBranch:       branch,
+    sourceHistory:       branch,
     sourceScopeName:    opts.scopeName || rootSlot.state?.name || null,
     sourceScopeSpaceId: scopeSpaceId,
     operatorBeingId:    opts.operatorBeingId || null,
@@ -489,7 +489,7 @@ export async function computeBundleHash(bundle) {
   const body = canonicalize({
     bundleVersion: bundle.meta?.bundleVersion ?? bundle.bundleVersion ?? null,
     sourceStory: bundle.meta?.sourceStory ?? null,
-    sourceBranch:  bundle.meta?.sourceBranch ?? null,
+    sourceHistory:  bundle.meta?.sourceHistory ?? null,
     sourceScopeSpaceId: bundle.meta?.sourceScopeSpaceId ?? null,
     sourceScopeName:    bundle.meta?.sourceScopeName ?? null,
     createdAt:     bundle.meta?.createdAt ?? null,

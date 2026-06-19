@@ -5,7 +5,7 @@
 # certifying (keys.js). The stamper signs the Name's acts with its held key (signingSession.js).
 # The chain does not fork, identity is above histories (closure.js, name.js). Descends from
 # word.word, iam.word, base.word, chain.word. Grounds `key` and `sign`, as base grounds `hash`.
-# A Name's beings, the vessels it acts through, are in being.word. The name verb is the Name's
+# A Name's beings, the ones it acts through, are in being.word. The name verb is the Name's
 # can, below. `connect` is shared with BE, the identity-layer of the one act, told apart by object.
 
 A Name is one who acts, a facet of the I_AM.
@@ -18,5 +18,5 @@ A Name has a parent, a Name before it, back to the I_AM.
 The I_AM is the first Name, the parent of all.
 A Name can be declared, with a key fresh or already its own.
 A Name can connect, and sign, and release.
-A Name can export, giving its key to the one who acts as it.
-A Name can banish, its chain sealed, to act no more.
+A Name can export, and gives its key to the one who acts as it.
+A Name can banish. Its chain seals.

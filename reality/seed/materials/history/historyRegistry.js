@@ -4,14 +4,14 @@
 // branch paths. The IBP address parser uses this to resolve labels
 // like `#main` to canonical paths like `#7`.
 //
-// Storage: heaven. Pointers live on the `.branches` heaven space's
-// `qualities.pointers` map. The `.branches` space is in heaven
+// Storage: heaven. Pointers live on the `.histories` heaven space's
+// `qualities.pointers` map. The `.histories` space is in heaven
 // ("heaven never branches" doctrine), so the storage has one
 // projection per story regardless of which branch is querying.
-// Pointer mutations land as set-space facts on the `.branches`
+// Pointer mutations land as set-space facts on the `.histories`
 // space's reel.
 //
-// Reads. Pointer resolution reads the `.branches` space's projection
+// Reads. Pointer resolution reads the `.histories` space's projection
 // on MAIN (the only branch heaven spaces live on). The substrate's
 // heaven routing also auto-rewrites any branched callers to MAIN,
 // but this module reads from MAIN explicitly to stay independent
@@ -24,7 +24,7 @@
 
 import { findHeavenSpace, loadHeavenProjection } from "../projections.js";
 import { HEAVEN_SPACE } from "../space/heavenSpaces.js";
-import { MAIN } from "./branches.js";
+import { MAIN } from "./histories.js";
 
 export const RESERVED_POINTERS = Object.freeze(["main"]);
 
@@ -92,7 +92,7 @@ export function assertPointerName(name, opName = "pointer") {
  * Resolve a pointer name to its canonical branch path. Returns the
  * canonical path or null when the pointer doesn't exist.
  *
- * Read-only; safe to call from the parser's resolveBranchPointers
+ * Read-only; safe to call from the parser's resolveHistoryPointers
  * step. Throws only on infrastructure failures (DB unreachable).
  */
 export async function resolvePointer(name) {
@@ -103,7 +103,7 @@ export async function resolvePointer(name) {
 }
 
 /**
- * Read the full pointer map from the `.branches` heaven space.
+ * Read the full pointer map from the `.histories` heaven space.
  * Returns `{ main: "0" }` when the space isn't planted yet.
  */
 export async function readPointers() {
@@ -118,7 +118,7 @@ export async function readPointers() {
  * (pre-bootstrap). Never hardcode "0" at call sites; route through
  * here so operator overrides take effect everywhere uniformly.
  */
-export async function getDefaultBranch() {
+export async function getDefaultHistory() {
   const target = await resolvePointer("main");
   return target || "0";
 }
@@ -138,7 +138,7 @@ export async function pointersFor(canonicalPath) {
 }
 
 /**
- * Return the `.branches` heaven space's id, or null if heaven isn't
+ * Return the `.histories` heaven space's id, or null if heaven isn't
  * planted yet. Used by the merge-branches op and the pointer DO ops
  * to address writes at the storage location.
  */

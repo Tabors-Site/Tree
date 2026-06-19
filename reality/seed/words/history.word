@@ -5,9 +5,9 @@
 # `name`/`being`/`space`/`matter` — "every chain" stands for all of them, and they lean on `history`
 # from above, not the other way.
 
-A history is where a chain splits.
-A history splits from a fact on the history before it, the fork.
+A history is where a chain branches.
+A history branches from a fact on the history before it, the fork.
 Up to the fork the facts are shared. After the fork the history has its own.
-At the fork, every chain splits at once, each at the head it had.
-Across a fork, the order is one and unbroken.
-The first history is the main. It splits from none.
+At the fork, every chain branches at once, each at the head it had.
+Across a fork, the order is one.
+The first history is the main. It branches from none.

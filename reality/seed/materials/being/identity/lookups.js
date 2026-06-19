@@ -158,7 +158,7 @@ export async function findRootOperator(branch = "0") {
  * for the real first human).
  */
 export async function isFirstBeing(branch = "0") {
-  const { default: Projection } = await import("../../branch/projection.js");
+  const { default: Projection } = await import("../../history/projection.js");
   const row = await Projection.findOne({
     branch, type: "being",
     "state.qualities.cognition.defaultKind": "human",
@@ -197,10 +197,10 @@ export async function findBeingByName(name, branch = "0") {
  * collection.
  *
  * Dedupes by being id. For each being, the returned doc is the HOME
- * slot view: the slot whose branch equals state.homeBranch (where the
+ * slot view: the slot whose branch equals state.homeHistory (where the
  * be:birth fact landed). Divergent copies of the same being on other
  * branches (lazy cold-folds, renames) don't get to redefine who the
- * being is for authentication. Beings predating homeBranch fall back
+ * being is for authentication. Beings predating homeHistory fall back
  * to whichever slot was found.
  *
  * Candidates are ordered default-branch-first so the common case (one
@@ -209,12 +209,12 @@ export async function findBeingByName(name, branch = "0") {
  * same-name beings born on different branches.
  *
  * @param {string} name
- * @returns {Promise<Array<{_id, homeBranch, position, ...state}>>}
+ * @returns {Promise<Array<{_id, homeHistory, position, ...state}>>}
  */
 export async function findBeingCandidatesByName(name) {
   if (!name || typeof name !== "string") return [];
   const escaped = name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const { default: Projection } = await import("../../branch/projection.js");
+  const { default: Projection } = await import("../../history/projection.js");
   const rows = await Projection.find({
     type: "being",
     "state.name": { $regex: `^${escaped}$`, $options: "i" },
@@ -222,8 +222,8 @@ export async function findBeingCandidatesByName(name) {
   }).lean();
   if (rows.length === 0) return [];
 
-  const { getDefaultBranch } = await import("../../branch/branchRegistry.js");
-  const defaultBranch = await getDefaultBranch();
+  const { getDefaultHistory } = await import("../../history/historyRegistry.js");
+  const defaultHistory = await getDefaultHistory();
 
   // Group slots per being id, then pick each being's home slot.
   const byId = new Map();
@@ -235,50 +235,50 @@ export async function findBeingCandidatesByName(name) {
   const candidates = [];
   for (const [id, slots] of byId) {
     const home =
-      slots.find((s) => s.state?.homeBranch && s.branch === s.state.homeBranch) ||
-      slots.find((s) => s.branch === defaultBranch) ||
+      slots.find((s) => s.state?.homeHistory && s.branch === s.state.homeHistory) ||
+      slots.find((s) => s.branch === defaultHistory) ||
       slots[0];
     candidates.push({
       _id:        id,
-      homeBranch: home.state?.homeBranch || defaultBranch,
+      homeHistory: home.state?.homeHistory || defaultHistory,
       position:   home.position ?? null,
       ...(home.state || {}),
     });
   }
   candidates.sort((a, b) => {
-    const aHome = a.homeBranch === defaultBranch ? 0 : 1;
-    const bHome = b.homeBranch === defaultBranch ? 0 : 1;
+    const aHome = a.homeHistory === defaultHistory ? 0 : 1;
+    const bHome = b.homeHistory === defaultHistory ? 0 : 1;
     return aHome - bHome;
   });
   return candidates;
 }
 
 /**
- * The branch a being owns as their present: state.homeBranch from
+ * The branch a being owns as their present: state.homeHistory from
  * their home slot (the slot on the branch they were birthed on).
  *
  * Cross-branch by necessity, same reasoning as
  * findBeingCandidatesByName: BE:connect / BE:release / the WS
- * handshake seat the session's currentBranch from this, and at those
+ * handshake seat the session's currentHistory from this, and at those
  * moments the session has no branch to scope the lookup by.
  *
  * Falls back to the default branch for legacy rows without
- * homeBranch and for unknown ids.
+ * homeHistory and for unknown ids.
  *
  * @param {string} beingId
  * @returns {Promise<string>}
  */
-export async function findHomeBranchOfBeing(beingId) {
-  const { getDefaultBranch } = await import("../../branch/branchRegistry.js");
-  const defaultBranch = await getDefaultBranch();
-  if (!beingId) return defaultBranch;
-  const { default: Projection } = await import("../../branch/projection.js");
+export async function findHomeHistoryOfBeing(beingId) {
+  const { getDefaultHistory } = await import("../../history/historyRegistry.js");
+  const defaultHistory = await getDefaultHistory();
+  if (!beingId) return defaultHistory;
+  const { default: Projection } = await import("../../history/projection.js");
   const slots = await Projection.find({
     type: "being", id: String(beingId), tombstoned: { $ne: true },
-  }).select("branch state.homeBranch").lean();
-  if (slots.length === 0) return defaultBranch;
+  }).select("branch state.homeHistory").lean();
+  if (slots.length === 0) return defaultHistory;
   const home =
-    slots.find((s) => s.state?.homeBranch && s.branch === s.state.homeBranch) ||
+    slots.find((s) => s.state?.homeHistory && s.branch === s.state.homeHistory) ||
     slots[0];
-  return home.state?.homeBranch || defaultBranch;
+  return home.state?.homeHistory || defaultHistory;
 }

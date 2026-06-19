@@ -164,11 +164,11 @@ function validatePassword(password) {
  *                                   semantics.
  * @param {string} [args.branch]     the branch this birth lands on, as
  *                                   resolved by the calling verb at its
- *                                   perimeter (resolveBranchForFact).
+ *                                   perimeter (resolveHistoryForFact).
  *                                   One law, one resolution: verbs
  *                                   resolve, primitives receive. When
  *                                   absent, falls back to the moment's
- *                                   actorAct.branch (in-moment
+ *                                   actorAct.history (in-moment
  *                                   primitive callers), then main
  *                                   (standalone scaffold callers).
  *
@@ -241,7 +241,7 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
   // another way here). actorAct covers in-moment primitive callers
   // (cherub's handlers, withIAmAct delegates); the main tail covers
   // standalone scaffold callers only.
-  branch = branch || moment?.actorAct?.branch || "0";
+  branch = branch || moment?.actorAct?.history || "0";
 
   // No inline authorize call. `birthBeing` is a substrate primitive
   // called from already-authorized contexts:
@@ -317,22 +317,22 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
     const underRoot   = String(parentBeingId) === String(I_AM);
     const underSelf   = minterBeingId && String(parentBeingId) === minterBeingId;
     if (!isIAmMinter && !underRoot && !underSelf && !parentPending) {
-      let gateBranch = branch;
-      if (!gateBranch) {
-        const { getDefaultBranch } = await import("../../branch/branchRegistry.js");
-        gateBranch = await getDefaultBranch();
+      let gateHistory = branch;
+      if (!gateHistory) {
+        const { getDefaultHistory } = await import("../../history/historyRegistry.js");
+        gateHistory = await getDefaultHistory();
       }
       // The minter's Name: its nameId if the act carried one, else the
       // minter being's trueName.
       let minterName = identity?.nameId ? String(identity.nameId) : null;
       if (!minterName && minterBeingId) {
         const { loadProjection } = await import("../../projections.js");
-        const minterSlot = await loadProjection("being", minterBeingId, gateBranch);
+        const minterSlot = await loadProjection("being", minterBeingId, gateHistory);
         minterName = minterSlot?.state?.trueName ? String(minterSlot.state.trueName) : null;
       }
       const { hasAuthorityOver } = await import("./inheritation.js");
       const covered = minterName
-        ? await hasAuthorityOver(minterName, String(parentBeingId), gateBranch)
+        ? await hasAuthorityOver(minterName, String(parentBeingId), gateHistory)
         : false;
       if (!covered) {
         throw new IbpError(
@@ -566,7 +566,7 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
     // pattern). Deriving from "a parent" introduces ambiguity that
     // doesn't exist when we read from the one source that's always
     // authoritative — the branch this fact is landing on.
-    homeBranch: branch,
+    homeHistory: branch,
     position,
     ...(resolvedCoord ? { coord: resolvedCoord } : {}),
     // Optional traits ride the fact only when SET. The reducer
@@ -602,7 +602,7 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
       of:      { kind: "being", id },
       params:  factSpec,
       actId:   moment?.actId || null,
-      branch,
+      history: branch,
     }, moment);
   } catch (err) {
     if (err.code === 11000) {
@@ -767,7 +767,7 @@ async function _inheritParentRoles({ childId, motherBeingId, fatherBeingId, mome
         inheritedFrom:  grantor,   // forensic marker — this came from parent inheritance
       },
       actId:   moment?.actId || null,
-      branch,
+      history: branch,
     }, moment);
   }
 }
@@ -813,7 +813,7 @@ async function _anointGlobal({ childId, branch, moment }) {
       grantedAt:     new Date().toISOString(),
     },
     actId:   moment?.actId || null,
-    branch,
+    history: branch,
   }, moment);
 }
 

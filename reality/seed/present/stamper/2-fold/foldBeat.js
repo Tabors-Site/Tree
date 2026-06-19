@@ -47,7 +47,7 @@ export async function runFoldBeat(setup = {}) {
     (moment.toBeing && String(moment.toBeing._id)) ||
     (moment.being && moment.being._id ? String(moment.being._id) : null);
   const orientation = moment.orientation || "forward";
-  const branch = moment.actorAct?.branch || moment.branch || null;
+  const branch = moment.actorAct?.history || moment.branch || null;
 
   // foldPlace runs the spatial weave. moment is threaded through so
   // foldPlace can stash foldedSeqs (PARALLEL FACTS §1.3) and read the

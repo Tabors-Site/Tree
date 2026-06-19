@@ -32,7 +32,7 @@ import ActHead from "../../past/act/actHead.js";
 import Fact from "../../past/fact/fact.js";
 import ReelHead from "../../past/reel/reelHead.js";
 import { attachActFacts } from "../../past/act/actChain.js";
-import { MAIN, isMain, loadBranch } from "../branch/branches.js";
+import { MAIN, isMain, loadHistory } from "../history/histories.js";
 
 const HEAVEN_SEGMENT = ".";
 const FACTORY_SEGMENT = "factory";
@@ -166,8 +166,8 @@ export async function listStamperChildren({ limit = 100 } = {}) {
 // main, mirroring readActChainLineage's compatibility handling.
 function branchClauseFor(branch) {
   return isMain(branch)
-    ? { $or: [{ branch: MAIN }, { branch: { $exists: false } }] }
-    : { branch };
+    ? { $or: [{ history: MAIN }, { history: { $exists: false } }] }
+    : { history: branch };
 }
 
 function shortLabel(act) {
@@ -203,21 +203,21 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
   // main; the rest order by branch creation time.
   const heads = await ActHead.find({ beingId, headHash: { $ne: null } })
     .select("branch headHash").lean();
-  const branchSet = new Set(heads.map((h) => h.branch || MAIN));
-  if (branchSet.size === 0) branchSet.add(MAIN);
-  const branchMeta = new Map(); // branch -> {createdAt: Date|null}
-  for (const b of branchSet) {
-    if (isMain(b)) { branchMeta.set(b, { createdAt: null }); continue; }
+  const historySet = new Set(heads.map((h) => h.branch || MAIN));
+  if (historySet.size === 0) historySet.add(MAIN);
+  const historyMeta = new Map(); // branch -> {createdAt: Date|null}
+  for (const b of historySet) {
+    if (isMain(b)) { historyMeta.set(b, { createdAt: null }); continue; }
     try {
-      const row = await loadBranch(b);
-      branchMeta.set(b, { createdAt: row?.createdAt ? new Date(row.createdAt) : null });
-    } catch { branchMeta.set(b, { createdAt: null }); }
+      const row = await loadHistory(b);
+      historyMeta.set(b, { createdAt: row?.createdAt ? new Date(row.createdAt) : null });
+    } catch { historyMeta.set(b, { createdAt: null }); }
   }
-  const branches = [...branchSet].sort((a, b) => {
+  const branches = [...historySet].sort((a, b) => {
     if (isMain(a)) return -1;
     if (isMain(b)) return 1;
-    const ta = branchMeta.get(a)?.createdAt?.getTime() || 0;
-    const tb = branchMeta.get(b)?.createdAt?.getTime() || 0;
+    const ta = historyMeta.get(a)?.createdAt?.getTime() || 0;
+    const tb = historyMeta.get(b)?.createdAt?.getTime() || 0;
     return ta - tb;
   });
 
@@ -227,10 +227,10 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
   // display. forkX(main) = 0.
   async function forkXFor(branch) {
     if (isMain(branch)) return 0;
-    const meta = branchMeta.get(branch);
+    const meta = historyMeta.get(branch);
     if (!meta?.createdAt) return 0;
     let parent = MAIN;
-    try { parent = (await loadBranch(branch))?.parent || MAIN; } catch { /* main */ }
+    try { parent = (await loadHistory(branch))?.parent || MAIN; } catch { /* main */ }
     const parentClause = branchClauseFor(parent);
     let x = 0;
     try {
@@ -305,7 +305,7 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
       qualities: {
         stamper: {
           actId: a._id,
-          branch: a.branch,
+          history: a.history,
           factCount: (a.facts || []).length,
           facts: (a.facts || []).slice(0, 8).map((f) => ({
             verb: f.verb, action: f.act, targetKind: f.of?.kind ?? null,

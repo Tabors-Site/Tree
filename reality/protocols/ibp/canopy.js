@@ -25,7 +25,7 @@
 // verb produces. The envelope adds two fields beyond the local IBP
 // shape:
 //
-//   actorBranch  — the actor's home branch (their world's branch path)
+//   actorHistory  — the actor's home branch (their world's branch path)
 //   actorActId   — the actor's local Act id (the home-side Stamp the
 //                  foreign side will reference in crossOrigin.actId)
 //
@@ -116,7 +116,7 @@ export function extractTargetStory(address) {
   // or `@`; anything starting with a local sigil is locally rooted.
   if (/^[@/~.#]/.test(rhs)) return null;
   // Place is everything up to the first slash or `@` (or the whole
-  // string), then strip any `#<branchPath>` qualifier. Branches are a
+  // string), then strip any `#<historyPath>` qualifier. Branches are a
   // property of the same story — without the strip, `localhost#1/`
   // would be misread as the foreign place `localhost#1` and federation
   // would PEER_NOT_FOUND it.
@@ -154,7 +154,7 @@ export function getForeignTargetDomain(address) {
  * the peer's ack payload.
  *
  * For cross-world calls, the caller passes the actor's identity tuple
- * (actorBranch + actorActId) so the peer can stamp crossOrigin on the
+ * (actorHistory + actorActId) so the peer can stamp crossOrigin on the
  * facts the verb produces. The actor's STORY is implicit (this
  * substrate's domain, sent as X-Canopy-Sender and authenticated by
  * signature) — not duplicated in the body.
@@ -166,7 +166,7 @@ export function getForeignTargetDomain(address) {
  * @param {object} envelope.payload       verb-specific payload (action,
  *                                        args, message, etc.)
  * @param {object} [envelope.identity]    { beingId, name } — the actor
- * @param {string} [envelope.actorBranch] the actor's home branch
+ * @param {string} [envelope.actorHistory] the actor's home branch
  *                                        (required for write verbs;
  *                                        optional for SEE)
  * @param {string} [envelope.actorActId]  the actor's home Act id (the
@@ -202,7 +202,7 @@ export async function forwardToPeer(envelope) {
     id:          envelope.id,
     payload:     envelope.payload,
     identity:    envelope.identity || null,
-    actorBranch: envelope.actorBranch || null,
+    actorHistory: envelope.actorHistory || null,
     actorActId:  envelope.actorActId  || null,
     // The actor's OWN signature over the deed (verb/address/payload tied
     // to the home act). Distinct from the story-level X-Canopy-Signature
@@ -399,7 +399,7 @@ export function actorTupleFromRequest(req) {
   // self-certifyingly against this nameId downstream), so a forged nameId can
   // never verify. story stays req.canopySender (ground truth) below.
   const nameId   = body?.identity?.nameId || null;
-  const branch   = body?.actorBranch || null;
+  const branch   = body?.actorHistory || null;
   const actId    = body?.actorActId  || null;
   const beingSig = body?.beingSig    || null;
 
@@ -417,7 +417,7 @@ export function actorTupleFromRequest(req) {
   if (!beingId || !branch || !actId) {
     throw new Error(
       "actorTupleFromRequest: cross-world envelope must carry identity.beingId, " +
-      "actorBranch, and actorActId. The receiving Stamper needs the full tuple " +
+      "actorHistory, and actorActId. The receiving Stamper needs the full tuple " +
       "to attach crossOrigin."
     );
   }

@@ -33,8 +33,8 @@ import { detectTargetKind, targetIdOf } from "../_targetShape.js";
 import { resolveMatterName } from "./matters.js";
 import { matterContentId } from "./matterId.js";
 
-const branchOf = (ctx) =>
-  ctx?.moment?.actorAct?.branch || ctx?.branch || "0";
+const historyOf = (ctx) =>
+  ctx?.moment?.actorAct?.history || ctx?.branch || "0";
 
 const COORD_AXES = ["x", "y", "z"];
 
@@ -75,7 +75,7 @@ export function matterHostEnv() {
     // addressed matterId from the target + params + caller. The exact body
     // createMatterHandler ran, calling the same imported primitives. NO fact.
     "resolve-birth-spec": async ({ args: [target, targetKind, params, caller] }, ctx) => {
-      const branch = branchOf(ctx);
+      const branch = historyOf(ctx);
       const spec = params || {};
       const kind = targetKind || detectTargetKind(target);
 
@@ -214,7 +214,7 @@ export function matterHostEnv() {
     // nameId rides moment.actorAct.by (the cut suppresses the i-am
     // override so this is the caller's name, matching the JS handler).
     emitBirth: async ({ args: [birth, caller] }, ctx) => {
-      const branch = branchOf(ctx);
+      const branch = historyOf(ctx);
       const moment = ctx?.moment || null;
       const enrichedSpec = birth?.enrichedSpec || {};
       const matterId = birth?.matterId;
@@ -233,7 +233,7 @@ export function matterHostEnv() {
           of: { kind: "matter", id: matterId },
           params: enrichedSpec,
           actId: moment?.actId || null,
-          branch,
+          history: branch,
         },
         moment,
       );

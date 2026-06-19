@@ -60,7 +60,7 @@ export async function ensureSkinsSpace(branch = "0", moment = null) {
   const rootId = getSpaceRootId();
   if (!rootId) throw new IbpError(IBP_ERR.INTERNAL, "ensureSkinsSpace: story root not ready");
 
-  const { default: Projection } = await import("./branch/projection.js");
+  const { default: Projection } = await import("./history/projection.js");
   // Branch-local first, then main's inherited row (the lazy-fill
   // idiom): the catalog is minted on main and inherited by branches.
   for (const b of branch === "0" ? ["0"] : [branch, "0"]) {
@@ -88,7 +88,7 @@ export async function ensureSkinsSpace(branch = "0", moment = null) {
       qualities: {},
     },
     actId:  moment?.actId || null,
-    branch,
+    history: branch,
   }, moment);
   return id;
 }
@@ -167,7 +167,7 @@ async function setModelHandler({ target, params, identity, moment }) {
   const kind = detectTargetKind(target);
   const targetId = targetIdOf(target);
   if (!targetId) throw new IbpError(IBP_ERR.INVALID_INPUT, "set-model: target required");
-  const branch = moment?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.history || "0";
 
   await assertMaySetModel(kind, targetId, identity, branch);
 

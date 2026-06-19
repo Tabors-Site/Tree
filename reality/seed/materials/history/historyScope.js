@@ -17,7 +17,7 @@
 // the scope check runs. Subtree branches can still author roles,
 // edit story config, etc. through normal heaven routing.
 
-import { loadBranch } from "./branches.js";
+import { loadHistory } from "./histories.js";
 import { getAncestorChain } from "../space/ancestorCache.js";
 import { getSpaceRoot } from "../../sprout.js";
 
@@ -59,22 +59,22 @@ export async function resolvePathToSpaceId(pathString, branch) {
 
   let cursorId = rootId;
   const { default: Projection } = await import("./projection.js");
-  const { isMain } = await import("./branches.js");
-  const { resolveBranchLineage } = await import("./branches.js");
+  const { isMain } = await import("./histories.js");
+  const { resolveHistoryLineage } = await import("./histories.js");
 
   // Build the branch's lineage chain (e.g. ["0"] for main, ["0", "1"]
   // for a child of main, etc.) so segment lookups walk inherited
   // content. A subtree branch may need to find a space planted on its
   // parent's reel; querying only the current branch's projection table
   // misses it.
-  const lineage = isMain(branch) ? ["0"] : await resolveBranchLineage(branch);
+  const lineage = isMain(branch) ? ["0"] : await resolveHistoryLineage(branch);
   // From leaf branch outward to root, so the most-divergent branch
   // wins on shadow.
-  const orderedBranches = [...lineage].reverse();
+  const orderedHistories = [...lineage].reverse();
 
   for (const segment of segments) {
     let resolvedChild = null;
-    for (const b of orderedBranches) {
+    for (const b of orderedHistories) {
       const child = await Projection.findOne({
         branch: b,
         type: "space",
@@ -90,7 +90,7 @@ export async function resolvePathToSpaceId(pathString, branch) {
   return cursorId;
 }
 
-// Cache of branchPath → scope.spaceId | null. Branch metadata is
+// Cache of historyPath → scope.spaceId | null. Branch metadata is
 // effectively append-only (the scope field is set at creation and
 // never modified); cache aggressively.
 const _scopeCache = new Map();
@@ -103,14 +103,14 @@ const _scopeCache = new Map();
  * that creates or mutates a branch's scope (currently only
  * create-branch, which sets it at creation).
  *
- * @param {string} branchPath
+ * @param {string} historyPath
  * @returns {Promise<string|null>}
  */
-export async function getBranchScopeSpaceId(branchPath) {
-  if (_scopeCache.has(branchPath)) return _scopeCache.get(branchPath);
-  const row = await loadBranch(branchPath);
+export async function getHistoryScopeSpaceId(historyPath) {
+  if (_scopeCache.has(historyPath)) return _scopeCache.get(historyPath);
+  const row = await loadHistory(historyPath);
   const spaceId = row?.scope?.spaceId ? String(row.scope.spaceId) : null;
-  _scopeCache.set(branchPath, spaceId);
+  _scopeCache.set(historyPath, spaceId);
   return spaceId;
 }
 
@@ -132,28 +132,28 @@ export async function getBranchScopeSpaceId(branchPath) {
  * trigger a projection load on miss, but the load is the same one
  * the fact write was about to do anyway.
  *
- * @param {string} branchPath
+ * @param {string} historyPath
  * @param {{kind: string, id: string}} target
  */
-export async function isTargetInBranchScope(branchPath, target) {
-  const scopeSpaceId = await getBranchScopeSpaceId(branchPath);
+export async function isTargetInHistoryScope(historyPath, target) {
+  const scopeSpaceId = await getHistoryScopeSpaceId(historyPath);
   if (!scopeSpaceId) return true;                  // unrestricted
   if (!target?.kind || !target?.id) return true;   // no target = no check
 
-  const homeSpaceId = await _resolveHomeSpace(target, branchPath);
+  const homeSpaceId = await _resolveHomeSpace(target, historyPath);
   if (!homeSpaceId) return true;                   // can't classify; allow
 
-  return await _isSpaceInScope(homeSpaceId, scopeSpaceId, branchPath);
+  return await _isSpaceInScope(homeSpaceId, scopeSpaceId, historyPath);
 }
 
 /**
  * True when `spaceId` is the scope root OR has the scope root in its
  * ancestor chain. Direct walks; cached.
  */
-async function _isSpaceInScope(spaceId, scopeSpaceId, branchPath) {
+async function _isSpaceInScope(spaceId, scopeSpaceId, historyPath) {
   if (String(spaceId) === scopeSpaceId) return true;
   try {
-    const chain = await getAncestorChain(String(spaceId), branchPath);
+    const chain = await getAncestorChain(String(spaceId), historyPath);
     if (!Array.isArray(chain)) return false;
     return chain.some(node => String(node._id || node.id) === scopeSpaceId);
   } catch {
@@ -172,11 +172,11 @@ async function _isSpaceInScope(spaceId, scopeSpaceId, branchPath) {
  * defensive "can't classify → allow" fallback would let out-of-scope
  * writes against inherited targets through silently.
  */
-async function _resolveHomeSpace(target, branchPath) {
+async function _resolveHomeSpace(target, historyPath) {
   if (target.kind === "space") return String(target.id);
 
   const { loadOrFold } = await import("../projections.js");
-  const slot = await loadOrFold(target.kind, String(target.id), branchPath);
+  const slot = await loadOrFold(target.kind, String(target.id), historyPath);
   if (!slot) return null;
   const state = slot.state || {};
 

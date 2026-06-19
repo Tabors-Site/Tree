@@ -17,7 +17,7 @@
 // only owns the counter; the lock lives with the append flow.
 
 import ReelHead from "./reelHead.js";
-import { getBranchPoint, isMain, MAIN } from "../../materials/branch/branches.js";
+import { getBranchPoint, isMain, MAIN } from "../../materials/history/histories.js";
 
 const VALID_TYPES = new Set(["being", "space", "matter", "name"]);
 

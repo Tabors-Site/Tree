@@ -6,7 +6,7 @@
 // One op for Pass 3: `create-branch`. Forks a new world from a past
 // point of an existing branch. The substrate's createBranch helper
 // does the heavy lifting (path arithmetic, branchPoint snapshot,
-// Branch row, child space).
+// History row, child space).
 //
 // Auth: any heaven authority (hasAccess on heaven) can mint a branch off any branch they can
 // SEE. Promotion to live / pause / delete (Pass 6.5 + 10) require
@@ -16,14 +16,14 @@
 
 import { registerOperation } from "../../../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
-import { createBranch } from "../../../materials/branch/branchCreation.js";
+import { createBranch } from "../../../materials/history/branchCreation.js";
 import {
   MAIN,
-  invalidateBranchCache,
+  invalidateHistoryCache,
   commonAncestor,
-} from "../../../materials/branch/branches.js";
-import Branch from "../../../materials/branch/branch.js";
-import { computeMergeResetFacts } from "../../../materials/branch/resetReels.js";
+} from "../../../materials/history/histories.js";
+import History from "../../../materials/history/history.js";
+import { computeMergeResetFacts } from "../../../materials/history/resetReels.js";
 import { emitFact } from "../../../past/fact/facts.js";
 import {
   readPointers,
@@ -33,7 +33,7 @@ import {
   findPointersSpaceId,
   pointersFor,
   isPointerName,
-} from "../../../materials/branch/branchRegistry.js";
+} from "../../../materials/history/historyRegistry.js";
 import { doVerb } from "../../../ibp/verbs/do.js";
 import { registerRoleWord } from "../../word/roleWordRegistry.js";
 import log from "../../../seedStory/log.js";
@@ -42,7 +42,7 @@ import log from "../../../seedStory/log.js";
 // ops.js (at seed boot, or in a DRY harness) registers it so resolveRoleWord(
 // "branch-manager", "set-pointer") finds it. The cut wires the bridge into the
 // set-pointer handler (run the .word's CONTROL strand through runRoleWord with
-// branchManagerHostEnv; JS handler stays as the clean-miss fallback).
+// historyManagerHostEnv; JS handler stays as the clean-miss fallback).
 registerRoleWord("branch-manager", "set-pointer", new URL("./branch-manager.word", import.meta.url));
 registerRoleWord("branch-manager", "delete-pointer", new URL("./delete-pointer.word", import.meta.url));
 
@@ -50,7 +50,7 @@ registerRoleWord("branch-manager", "delete-pointer", new URL("./delete-pointer.w
 // set-pointer to reject structurally-invalid `canonical` arguments.
 const CANONICAL_PATH_RE = /^(?:0|\d+(?:[a-z]+\d+)*(?:[a-z]+)?)$/;
 
-export function registerBranchManagerOps() {
+export function registerHistoryManagerOps() {
   // The actual registerOperation call lives at module load (side
   // effect); this empty function is the explicit entry point so
   // genesis.js can import + call it the same way it does for
@@ -70,12 +70,12 @@ registerOperation("create-branch", {
     },
     atSeq: {
       type:     "number",
-      label:    "Branch from this seq on the parent's reel (substrate-native; preferred when known)",
+      label:    "History from this seq on the parent's reel (substrate-native; preferred when known)",
       required: false,
     },
     atTimestamp: {
       type:     "text",
-      label:    "Branch from this ISO timestamp (human helper; resolved per-reel)",
+      label:    "History from this ISO timestamp (human helper; resolved per-reel)",
       required: false,
     },
     label: {
@@ -210,12 +210,12 @@ registerOperation("create-branch", {
       try {
         const current = await readPointers();
         const next = { ...current, [pointerName]: result.path };
-        const branchesSpaceId = await findPointersSpaceId();
-        if (!branchesSpaceId) {
+        const historiesSpaceId = await findPointersSpaceId();
+        if (!historiesSpaceId) {
           pointerWarning = ".branches heaven space not found; pointer attach skipped";
         } else {
           await doVerb(
-            { kind: "space", id: branchesSpaceId },
+            { kind: "space", id: historiesSpaceId },
             "set-space",
             { field: "qualities.pointers", value: next, merge: false },
             { identity, moment },
@@ -247,8 +247,8 @@ registerOperation("create-branch", {
         await doVerb(
           { kind: "space", id: String(rootSpace.id) },
           "form-portal",
-          { target: foreignAddress, name: `Branch #${result.path}` },
-          { identity, moment, currentBranch: "0" },
+          { target: foreignAddress, name: `History #${result.path}` },
+          { identity, moment, currentHistory: "0" },
         );
         portalSpawned = foreignAddress;
       }
@@ -276,27 +276,27 @@ registerOperation("create-branch", {
   },
 });
 
-// pause-branch / unpause-branch — toggle the Branch row's paused
+// pause-branch / unpause-branch — toggle the History row's paused
 // state. Paused branches refuse DO/BE/SUMMON at the wire-layer gate
 // (see protocols/ibp/verbs/* — they read isPaused and throw
 // STORY_PAUSED). SEEs still work so the user can rewind or inspect
 // frozen state.
 //
-// Pause metadata lives on the Branch row directly today; the doc's
+// Pause metadata lives on the History row directly today; the doc's
 // header notes the eventual fact-driven version. For now this is a
 // direct write — the substrate doctrine says branch metadata is
 // world data, but the reducer + reel haven't shipped yet (Pass 6.5).
 // Treat this as the stable public API regardless: callers see ops,
 // not collection mutations.
 
-registerOperation("pause-branch", {
+registerOperation("pause-history", {
   targets: ["being", "stance"],
   ownerExtension: "seed",
   skipAudit: false,
   args: {
     branch: {
       type:        "text",
-      label:       "Branch path to pause (\"0\" for main; \"1\", \"1a\", etc.)",
+      label:       "History path to pause (\"0\" for main; \"1\", \"1a\", etc.)",
       required:    true,
     },
     reason: {
@@ -306,8 +306,8 @@ registerOperation("pause-branch", {
     },
   },
   handler: async ({ params, identity, moment }) => {
-    const branchPath = String(params?.branch || "").trim();
-    if (!branchPath) {
+    const historyPath = String(params?.branch || "").trim();
+    if (!historyPath) {
       throw new IbpError(IBP_ERR.INVALID_INPUT, "pause-branch: branch is required");
     }
     // Main IS pauseable. Doctrine (Tabor 2026-06-04): every branch is
@@ -315,27 +315,27 @@ registerOperation("pause-branch", {
     // everything is paused?" recovery is solved by the gate exempting
     // unpause-branch and create-branch — those run on any branch
     // regardless of pause state. So a fully-frozen story can always
-    // be revived. If main doesn't yet have a Branch row, upsert one
+    // be revived. If main doesn't yet have a History row, upsert one
     // (rows are normally only created at branch creation; main is
     // implicit because its lineage walk starts from "0" without a
     // backing doc).
-    const isMainBranch = branchPath === MAIN;
-    if (!isMainBranch) {
-      const existing = await Branch.findOne({ path: branchPath }).lean();
+    const isMainHistory = historyPath === MAIN;
+    if (!isMainHistory) {
+      const existing = await History.findOne({ path: historyPath }).lean();
       if (!existing) {
-        throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, `pause-branch: no branch "${branchPath}"`);
+        throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, `pause-branch: no branch "${historyPath}"`);
       }
       if (existing.paused) {
-        return { paused: true, path: branchPath, alreadyPaused: true };
+        return { paused: true, path: historyPath, alreadyPaused: true };
       }
     } else {
-      const existing = await Branch.findOne({ path: MAIN }).lean();
+      const existing = await History.findOne({ path: MAIN }).lean();
       if (existing?.paused) {
         return { paused: true, path: MAIN, alreadyPaused: true };
       }
     }
-    await Branch.updateOne(
-      { path: branchPath },
+    await History.updateOne(
+      { path: historyPath },
       {
         $set: {
           paused:   true,
@@ -344,55 +344,55 @@ registerOperation("pause-branch", {
           ...(params?.reason ? { archivedBecause: String(params.reason) } : {}),
         },
         $setOnInsert: {
-          _id:    branchPath,
-          path:   branchPath,
-          parent: isMainBranch ? null : undefined,
+          _id:    historyPath,
+          path:   historyPath,
+          parent: isMainHistory ? null : undefined,
         },
       },
       { upsert: true },
     );
-    invalidateBranchCache(branchPath);
-    return { paused: true, path: branchPath };
+    invalidateHistoryCache(historyPath);
+    return { paused: true, path: historyPath };
   },
 });
 
-registerOperation("unpause-branch", {
+registerOperation("unpause-history", {
   targets: ["being", "stance"],
   ownerExtension: "seed",
   skipAudit: false,
   args: {
     branch: {
       type:        "text",
-      label:       "Branch path to unpause",
+      label:       "History path to unpause",
       required:    true,
     },
   },
   handler: async ({ params, identity }) => {
-    const branchPath = String(params?.branch || "").trim();
-    if (!branchPath) {
+    const historyPath = String(params?.branch || "").trim();
+    if (!historyPath) {
       throw new IbpError(IBP_ERR.INVALID_INPUT, "unpause-branch: branch is required");
     }
-    const row = await Branch.findOne({ path: branchPath }).lean();
+    const row = await History.findOne({ path: historyPath }).lean();
     if (!row) {
       // No row = not paused (main without a row is the implicit-live
       // default). Treat as alreadyLive idempotently.
-      return { paused: false, path: branchPath, alreadyLive: true };
+      return { paused: false, path: historyPath, alreadyLive: true };
     }
     if (!row.paused) {
-      return { paused: false, path: branchPath, alreadyLive: true };
+      return { paused: false, path: historyPath, alreadyLive: true };
     }
-    await Branch.updateOne(
-      { path: branchPath },
+    await History.updateOne(
+      { path: historyPath },
       {
         $set: { paused: false, pausedAt: null, pausedBy: null, archivedBecause: null },
       },
     );
-    invalidateBranchCache(branchPath);
-    return { paused: false, path: branchPath };
+    invalidateHistoryCache(historyPath);
+    return { paused: false, path: historyPath };
   },
 });
 
-// delete-branch / undelete-branch . mark-deleted toggle on the Branch
+// delete-branch / undelete-branch . mark-deleted toggle on the History
 // row. Mirrors pause/unpause structurally. Soft delete by doctrine:
 // every other lifecycle op in TreeOS is append-only (beings are
 // released not erased, spaces are archived not erased), so branches
@@ -401,7 +401,7 @@ registerOperation("unpause-branch", {
 //
 // Deleted branches refuse DO/BE/SUMMON at the wire-layer gate (see
 // protocols/ibp/verbs/*) and at the scheduler intake gate. SEE stays
-// open so historians can still walk the chain. Branch listings filter
+// open so historians can still walk the chain. History listings filter
 // out deleted by default; the catalog still surfaces a specific
 // deleted branch if its path is asked for directly.
 //
@@ -409,14 +409,14 @@ registerOperation("unpause-branch", {
 // gates exempt undelete-branch and delete-branch themselves so a
 // fully-deleted story can always be revived.
 
-registerOperation("delete-branch", {
+registerOperation("delete-history", {
   targets: ["being", "stance"],
   ownerExtension: "seed",
   skipAudit: false,
   args: {
     branch: {
       type:        "text",
-      label:       "Branch path to delete (\"0\" for main; \"1\", \"1a\", etc.)",
+      label:       "History path to delete (\"0\" for main; \"1\", \"1a\", etc.)",
       required:    true,
     },
     reason: {
@@ -426,27 +426,27 @@ registerOperation("delete-branch", {
     },
   },
   handler: async ({ params, identity }) => {
-    const branchPath = String(params?.branch || "").trim();
-    if (!branchPath) {
+    const historyPath = String(params?.branch || "").trim();
+    if (!historyPath) {
       throw new IbpError(IBP_ERR.INVALID_INPUT, "delete-branch: branch is required");
     }
-    const isMainBranch = branchPath === MAIN;
-    if (!isMainBranch) {
-      const existing = await Branch.findOne({ path: branchPath }).lean();
+    const isMainHistory = historyPath === MAIN;
+    if (!isMainHistory) {
+      const existing = await History.findOne({ path: historyPath }).lean();
       if (!existing) {
-        throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, `delete-branch: no branch "${branchPath}"`);
+        throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, `delete-branch: no branch "${historyPath}"`);
       }
       if (existing.deleted) {
-        return { deleted: true, path: branchPath, alreadyDeleted: true };
+        return { deleted: true, path: historyPath, alreadyDeleted: true };
       }
     } else {
-      const existing = await Branch.findOne({ path: MAIN }).lean();
+      const existing = await History.findOne({ path: MAIN }).lean();
       if (existing?.deleted) {
         return { deleted: true, path: MAIN, alreadyDeleted: true };
       }
     }
-    await Branch.updateOne(
-      { path: branchPath },
+    await History.updateOne(
+      { path: historyPath },
       {
         $set: {
           deleted:   true,
@@ -455,49 +455,49 @@ registerOperation("delete-branch", {
           ...(params?.reason ? { archivedBecause: String(params.reason) } : {}),
         },
         $setOnInsert: {
-          _id:    branchPath,
-          path:   branchPath,
-          parent: isMainBranch ? null : undefined,
+          _id:    historyPath,
+          path:   historyPath,
+          parent: isMainHistory ? null : undefined,
         },
       },
       { upsert: true },
     );
-    invalidateBranchCache(branchPath);
-    return { deleted: true, path: branchPath };
+    invalidateHistoryCache(historyPath);
+    return { deleted: true, path: historyPath };
   },
 });
 
-registerOperation("undelete-branch", {
+registerOperation("undelete-history", {
   targets: ["being", "stance"],
   ownerExtension: "seed",
   skipAudit: false,
   args: {
     branch: {
       type:        "text",
-      label:       "Branch path to undelete",
+      label:       "History path to undelete",
       required:    true,
     },
   },
   handler: async ({ params }) => {
-    const branchPath = String(params?.branch || "").trim();
-    if (!branchPath) {
+    const historyPath = String(params?.branch || "").trim();
+    if (!historyPath) {
       throw new IbpError(IBP_ERR.INVALID_INPUT, "undelete-branch: branch is required");
     }
-    const row = await Branch.findOne({ path: branchPath }).lean();
+    const row = await History.findOne({ path: historyPath }).lean();
     if (!row) {
-      return { deleted: false, path: branchPath, alreadyLive: true };
+      return { deleted: false, path: historyPath, alreadyLive: true };
     }
     if (!row.deleted) {
-      return { deleted: false, path: branchPath, alreadyLive: true };
+      return { deleted: false, path: historyPath, alreadyLive: true };
     }
-    await Branch.updateOne(
-      { path: branchPath },
+    await History.updateOne(
+      { path: historyPath },
       {
         $set: { deleted: false, deletedAt: null, deletedBy: null },
       },
     );
-    invalidateBranchCache(branchPath);
-    return { deleted: false, path: branchPath };
+    invalidateHistoryCache(historyPath);
+    return { deleted: false, path: historyPath };
   },
 });
 
@@ -524,7 +524,7 @@ registerOperation("undelete-branch", {
 // invalidating a chosen state on reel Y). Per-reel independent
 // conflicts only; the mediator + operator handle cascades by hand.
 
-registerOperation("merge-branches", {
+registerOperation("merge-histories", {
   targets: ["being", "stance"],
   ownerExtension: "seed",
   skipAudit: false,
@@ -626,13 +626,13 @@ registerOperation("merge-branches", {
       throw err;
     }
 
-    // Stamp the merge provenance onto the new Branch row. mergeSources
+    // Stamp the merge provenance onto the new History row. mergeSources
     // is forensic; the canonical `parent` stays the common ancestor.
-    await Branch.updateOne(
+    await History.updateOne(
       { path: result.path },
       { $set: { mergeSources: [sourceA, sourceB] } },
     );
-    invalidateBranchCache(result.path);
+    invalidateHistoryCache(result.path);
 
     // Reset reels: state that's branch-private by nature (today,
     // inhabit-state) is reset on the merged branch so divergent
@@ -644,7 +644,7 @@ registerOperation("merge-branches", {
       const actorBeingId = identity?.beingId;
       if (actorBeingId) {
         const resetFacts = await computeMergeResetFacts({
-          mergedBranch: result.path,
+          mergedHistory: result.path,
           ancestor,
           actorBeingId,
         });
@@ -669,10 +669,10 @@ registerOperation("merge-branches", {
     let afterWarning = null;
     if (afterAction !== "keep") {
       try {
-        for (const branchPath of [sourceA, sourceB]) {
+        for (const historyPath of [sourceA, sourceB]) {
           if (afterAction === "pause") {
-            await Branch.updateOne(
-              { path: branchPath },
+            await History.updateOne(
+              { path: historyPath },
               {
                 $set: {
                   paused:   true,
@@ -681,16 +681,16 @@ registerOperation("merge-branches", {
                   archivedBecause: `paused after merge into ${result.path}`,
                 },
                 $setOnInsert: {
-                  _id:    branchPath,
-                  path:   branchPath,
-                  parent: branchPath === MAIN ? null : undefined,
+                  _id:    historyPath,
+                  path:   historyPath,
+                  parent: historyPath === MAIN ? null : undefined,
                 },
               },
               { upsert: true },
             );
           } else if (afterAction === "delete") {
-            await Branch.updateOne(
-              { path: branchPath },
+            await History.updateOne(
+              { path: historyPath },
               {
                 $set: {
                   deleted:   true,
@@ -699,16 +699,16 @@ registerOperation("merge-branches", {
                   archivedBecause: `deleted after merge into ${result.path}`,
                 },
                 $setOnInsert: {
-                  _id:    branchPath,
-                  path:   branchPath,
-                  parent: branchPath === MAIN ? null : undefined,
+                  _id:    historyPath,
+                  path:   historyPath,
+                  parent: historyPath === MAIN ? null : undefined,
                 },
               },
               { upsert: true },
             );
           }
-          invalidateBranchCache(branchPath);
-          sourcesAffected.push(branchPath);
+          invalidateHistoryCache(historyPath);
+          sourcesAffected.push(historyPath);
         }
       } catch (err) {
         afterWarning = err.message;
@@ -742,12 +742,12 @@ registerOperation("merge-branches", {
         const current = await readPointers();
         const next = { ...current };
         for (const name of pointerNames) next[name] = result.path;
-        const branchesSpaceId = await findPointersSpaceId();
-        if (!branchesSpaceId) {
+        const historiesSpaceId = await findPointersSpaceId();
+        if (!historiesSpaceId) {
           repointWarning = ".branches heaven space not found; pointer updates skipped";
         } else {
           await doVerb(
-            { kind: "space", id: branchesSpaceId },
+            { kind: "space", id: historiesSpaceId },
             "set-space",
             { field: "qualities.pointers", value: next, merge: false },
             { identity, moment },
@@ -777,7 +777,7 @@ registerOperation("merge-branches", {
     let pauseResultWarning = null;
     if (pauseResult) {
       try {
-        await Branch.updateOne(
+        await History.updateOne(
           { path: result.path },
           {
             $set: {
@@ -788,7 +788,7 @@ registerOperation("merge-branches", {
             },
           },
         );
-        invalidateBranchCache(result.path);
+        invalidateHistoryCache(result.path);
         resultPaused = true;
       } catch (err) {
         pauseResultWarning = err.message;
@@ -824,14 +824,14 @@ registerOperation("merge-branches", {
 // (`<story>/.branches[/<path>]`), not a DO op. DOs open transport-act
 // moments that go through the scheduler and the orphan-act seal guard —
 // neither of which a read-only query should be paying for. The catalog
-// helper lives at seed/materials/branch/branchesCatalog.js and is
+// helper lives at seed/materials/history/historiesCatalog.js and is
 // wired into seed/ibp/verbs/see.js.
 
 // set-pointer / delete-pointer . named-pointer registry management.
 //
-// The pointer map lives on the `.branches` heaven space's
+// The pointer map lives on the `.histories` heaven space's
 // qualities.pointers. The IBP address parser resolves named pointers
-// (#main, #prod) through this map via resolveBranchPointers (the
+// (#main, #prod) through this map via resolveHistoryPointers (the
 // wire-layer async step). Canonical paths (#0, #1a2) bypass.
 //
 // These ops were briefly hosted on a dedicated @branch-registry
@@ -846,15 +846,15 @@ registerOperation("merge-branches", {
 async function _setPointerViaWord({ caller, name, canonical, moment }) {
   if (!moment) return null;
   const { resolveRoleWord, runRoleWord } = await import("../../word/roleWordRegistry.js");
-  const ir = resolveRoleWord("branch-manager", "set-pointer", moment?.actorAct?.branch);
+  const ir = resolveRoleWord("branch-manager", "set-pointer", moment?.actorAct?.history);
   if (!ir) return null;
-  const { branchManagerHostEnv } = await import("./branchManagerHost.js");
-  const branch = moment?.actorAct?.branch || "0";
+  const { historyManagerHostEnv } = await import("./branchManagerHost.js");
+  const branch = moment?.actorAct?.history || "0";
   try {
     const { result } = await runRoleWord(ir, {
       moment, branch,
       trigger: { caller: caller ? String(caller) : null, name, canonical, branch },
-      env: { host: branchManagerHostEnv() },
+      env: { host: historyManagerHostEnv() },
     });
     return result || null;
   } catch (e) {
@@ -905,13 +905,13 @@ registerOperation("set-pointer", {
     const current = await readPointers();
     const next = { ...current, [name]: canonical };
 
-    const branchesSpaceId = await findPointersSpaceId();
-    if (!branchesSpaceId) {
+    const historiesSpaceId = await findPointersSpaceId();
+    if (!historiesSpaceId) {
       throw new IbpError(IBP_ERR.INTERNAL,
         "set-pointer: .branches heaven space not found . story is not properly bootstrapped");
     }
     await doVerb(
-      { kind: "space", id: branchesSpaceId },
+      { kind: "space", id: historiesSpaceId },
       "set-space",
       { field: "qualities.pointers", value: next, merge: false },
       { identity, moment },
@@ -929,15 +929,15 @@ registerOperation("set-pointer", {
 async function _deletePointerViaWord({ caller, name, moment }) {
   if (!moment) return null;
   const { resolveRoleWord, runRoleWord } = await import("../../word/roleWordRegistry.js");
-  const ir = resolveRoleWord("branch-manager", "delete-pointer", moment?.actorAct?.branch);
+  const ir = resolveRoleWord("branch-manager", "delete-pointer", moment?.actorAct?.history);
   if (!ir) return null;
-  const { branchManagerHostEnv } = await import("./branchManagerHost.js");
-  const branch = moment?.actorAct?.branch;
+  const { historyManagerHostEnv } = await import("./branchManagerHost.js");
+  const branch = moment?.actorAct?.history;
   try {
     const { result } = await runRoleWord(ir, {
       moment, branch,
       trigger: { caller: caller ? String(caller) : null, name, branch },
-      env: { host: branchManagerHostEnv() },
+      env: { host: historyManagerHostEnv() },
     });
     return result || null;
   } catch (e) {
@@ -986,13 +986,13 @@ registerOperation("delete-pointer", {
     const next = { ...current };
     delete next[name];
 
-    const branchesSpaceId = await findPointersSpaceId();
-    if (!branchesSpaceId) {
+    const historiesSpaceId = await findPointersSpaceId();
+    if (!historiesSpaceId) {
       throw new IbpError(IBP_ERR.INTERNAL,
         "delete-pointer: .branches heaven space not found");
     }
     await doVerb(
-      { kind: "space", id: branchesSpaceId },
+      { kind: "space", id: historiesSpaceId },
       "set-space",
       { field: "qualities.pointers", value: next, merge: false },
       { identity, moment },

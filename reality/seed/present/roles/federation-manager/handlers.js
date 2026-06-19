@@ -131,7 +131,7 @@ async function handleAcceptTemplate(message, ctx) {
 // asker is the foreign federation-manager (ctx.actorAct.through);
 // the LOCAL receiver is `to`. State lives on the local being.
 async function readBucket(ctx, bucket, key) {
-  const branch    = ctx?.actorAct?.branch || "0";
+  const branch    = ctx?.actorAct?.history || "0";
   const myBeingId = ctx?.actorAct?.to || ctx?.actorAct?.through;
   if (!myBeingId) return null;
   const { loadOrFold } = await import("../../../materials/projections.js");
@@ -156,7 +156,7 @@ async function dispatchToPeer(ctx, peerStory, message) {
   // foreign asker (`through`). The cross story act we open is OUR
   // outbound dispatch.
   const myBeingId = ctx?.actorAct?.to || ctx?.actorAct?.through;
-  const branch    = ctx?.actorAct?.branch || "0";
+  const branch    = ctx?.actorAct?.history || "0";
   if (!myBeingId) {
     throw new Error("dispatchToPeer: no actorAct in ctx");
   }
@@ -419,7 +419,7 @@ async function setQualityField(ctx, subPath, value) {
     {
       identity:      { beingId: myBeingId, name: "federation-manager" },
       moment:     ctx,
-      currentBranch: ctx?.actorAct?.branch || null,
+      currentHistory: ctx?.actorAct?.history || null,
     },
   );
 }
@@ -428,7 +428,7 @@ async function setQualityField(ctx, subPath, value) {
 // future versions can route via the offer's manifest or an operator
 // policy (different incoming sources to different positions).
 async function resolveDefaultPlantParent(ctx) {
-  const branch = ctx?.actorAct?.branch || "0";
+  const branch = ctx?.actorAct?.history || "0";
   const { findRoot } = await import("../../../materials/projections.js");
   const roots = await findRoot("space", branch);
   return roots?.[0]?.id || null;

@@ -151,7 +151,7 @@ async function emitOwnerFact(spaceId, ownerId, actor, branch, moment) {
     target,
     "set-space",
     { field: "owner", value: ownerId },
-    { identity: { beingId: actor }, currentBranch: branch, moment },
+    { identity: { beingId: actor }, currentHistory: branch, moment },
   );
 }
 

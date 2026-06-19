@@ -167,7 +167,7 @@ export async function callWithFailover(callFn, primaryClient, beingId, rootId, o
   const branch = opts.branch;
   if (typeof branch !== "string" || !branch.length) {
     throw new Error(
-      "callWithFailover: opts.branch is required (the moment's actorAct.branch). " +
+      "callWithFailover: opts.branch is required (the moment's actorAct.history). " +
       "No main-bias default — failover reads must name their branch.",
     );
   }

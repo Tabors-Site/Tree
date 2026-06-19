@@ -38,7 +38,7 @@ export function mountIbpConsole({ root, client, getClient, getPlace }) {
     close:    panel.querySelector("[data-el=close]"),
   };
 
-  const history = [];
+  const callLog = [];
 
   function refreshPayloadShape() {
     const verb = els.verb.value;
@@ -76,7 +76,7 @@ export function mountIbpConsole({ root, client, getClient, getPlace }) {
       els.ack.textContent = JSON.stringify(ack, null, 2);
       els.ackStatus.textContent = `200 OK · ${ms}ms`;
       els.ackStatus.classList.add("ok");
-      pushHistory(history, els.history, { verb, address, ok: true, ms });
+      pushCallLog(callLog, els.callLog, { verb, address, ok: true, ms });
     } catch (err) {
       const ms = Math.round(performance.now() - t0);
       const ack = {
@@ -87,7 +87,7 @@ export function mountIbpConsole({ root, client, getClient, getPlace }) {
       els.ack.textContent = JSON.stringify(ack, null, 2);
       els.ackStatus.textContent = `${err.code || "ERROR"} · ${ms}ms`;
       els.ackStatus.classList.add("err");
-      pushHistory(history, els.history, { verb, address, ok: false, ms, code: err.code });
+      pushCallLog(callLog, els.callLog, { verb, address, ok: false, ms, code: err.code });
     } finally {
       els.send.disabled = false;
     }
@@ -176,9 +176,9 @@ function addressPlaceholderFor(verb, place) {
   }
 }
 
-function pushHistory(history, listEl, entry) {
-  history.unshift(entry);
-  if (history.length > 50) history.length = 50;
+function pushCallLog(callLog, listEl, entry) {
+  callLog.unshift(entry);
+  if (callLog.length > 50) callLog.length = 50;
   const li = document.createElement("li");
   li.className = `ibpc-history-item ${entry.ok ? "ok" : "err"}`;
   li.textContent = `${entry.ok ? "✓" : "✗"} ${entry.verb.padEnd(7)} ${entry.address} · ${entry.ms}ms${entry.code ? ` · ${entry.code}` : ""}`;

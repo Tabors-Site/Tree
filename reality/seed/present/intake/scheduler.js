@@ -332,29 +332,29 @@ async function runLoop(beingId) {
             // intake.pick now asserts row.branch; this fallback is dead.
             // Keep the bare read so a future intake refactor can't reintroduce
             // a silent default here.
-            const entryBranch = picked.entry.branch;
+            const entryHistory = picked.entry.branch;
             const innerAction = picked.entry?.act?.act || null;
             const isPauseLifecycleOp =
               picked.entry?.act?.verb === "do" &&
-              (innerAction === "pause-branch" ||
-               innerAction === "unpause-branch" ||
+              (innerAction === "pause-history" ||
+               innerAction === "unpause-history" ||
                innerAction === "create-branch" ||
-               innerAction === "delete-branch" ||
-               innerAction === "undelete-branch");
+               innerAction === "delete-history" ||
+               innerAction === "undelete-history");
             const isDeleteLifecycleOp =
               picked.entry?.act?.verb === "do" &&
-              (innerAction === "delete-branch" ||
-               innerAction === "undelete-branch");
+              (innerAction === "delete-history" ||
+               innerAction === "undelete-history");
             if (!isPauseLifecycleOp) {
-              const { isBranchPaused } = await import("../../materials/branch/branches.js");
-              if (await isBranchPaused(entryBranch)) {
+              const { isHistoryPaused } = await import("../../materials/history/histories.js");
+              if (await isHistoryPaused(entryHistory)) {
                 seenCorrelations.add(picked.entry.correlation);
                 continue;
               }
             }
             if (!isDeleteLifecycleOp) {
-              const { isBranchDeleted } = await import("../../materials/branch/branches.js");
-              if (await isBranchDeleted(entryBranch)) {
+              const { isHistoryDeleted } = await import("../../materials/history/histories.js");
+              if (await isHistoryDeleted(entryHistory)) {
                 seenCorrelations.add(picked.entry.correlation);
                 continue;
               }

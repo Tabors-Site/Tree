@@ -143,8 +143,8 @@ export async function hasCredentialAuthority(askerBeingId, targetBeingId, branch
   // Resolve a branch to read the tree on (never literal "0").
   let b = branch;
   if (!b) {
-    const { getDefaultBranch } = await import("../../branch/branchRegistry.js");
-    b = await getDefaultBranch();
+    const { getDefaultHistory } = await import("../../history/historyRegistry.js");
+    b = await getDefaultHistory();
   }
 
   // The asker's NAME (the being's trueName) is what actually holds

@@ -46,7 +46,7 @@ import { isExtensionBlockedAtSpace } from "../materials/space/extensionScope.js"
 import { authorizeViaRoles } from "./roleAuth.js";
 import { getSpaceRootId } from "../sprout.js";
 import { getStoryDomain } from "./address.js";
-import { resolveTargetBranch } from "./branchResolve.js";
+import { resolveTargetHistory } from "./branchResolve.js";
 
 /**
  * Authorize a verb request.
@@ -107,20 +107,20 @@ export async function authorize(args) {
   //
   // Two branches surface here:
   //
-  //   • targetBranch — where the target lives. Used to look up role
+  //   • targetHistory — where the target lives. Used to look up role
   //     specs on the target's qualities chain, and to evaluate reach
   //     (which space's projection should the reach pattern walk).
   //     Precedence: the parsed target's own branch is the most
   //     specific statement and wins; then the moment's seated
-  //     targetBranch (where this moment's facts land — auth must
+  //     targetHistory (where this moment's facts land — auth must
   //     evaluate the same world the stamp rides); then the actor's
   //     act branch (same-world acts); then the caller's session
   //     branch as the last resort (SEE ops and other targets that
   //     have no world of their own are evaluated from where the
   //     caller stands).
   //
-  //   • actorBranch — the actor's branch, where their grants live.
-  //     Caller passes args.actorBranch from socket.currentBranch
+  //   • actorHistory — the actor's branch, where their grants live.
+  //     Caller passes args.actorHistory from socket.currentHistory
   //     (seated by BE:birth/connect/release/switch). When a being is
   //     seated on #0 and SEEs onto branch #1, their grants are read
   //     from #0 (where they actually exist), not from #1 (where they
@@ -134,30 +134,30 @@ export async function authorize(args) {
   // can re-point main. Authenticated callers with no branch anywhere
   // are a perimeter threading bug: fail loud.
   // Shared precedence (PORT-NOTES #10): target.branch →
-  // moment.targetBranch → moment.actorAct.branch → the caller's
-  // seated branch (args.actorBranch here). Identical chain to the verb
-  // layer's resolveBranchForFact, so the branch that GATES an act and
+  // moment.targetHistory → moment.actorAct.history → the caller's
+  // seated branch (args.actorHistory here). Identical chain to the verb
+  // layer's resolveHistoryForFact, so the branch that GATES an act and
   // the branch a fact STAMPS on can never diverge.
-  let targetBranch = resolveTargetBranch({
+  let targetHistory = resolveTargetHistory({
     target,
     moment,
-    currentBranch: args.actorBranch,
+    currentHistory: args.actorHistory,
   });
-  if (!targetBranch) {
+  if (!targetHistory) {
     const isAnonymous = !identity?.beingId || identity?.name === "arrival";
     if (isAnonymous) {
-      const { getDefaultBranch } = await import("../materials/branch/branchRegistry.js");
-      targetBranch = await getDefaultBranch();
+      const { getDefaultHistory } = await import("../materials/history/historyRegistry.js");
+      targetHistory = await getDefaultHistory();
     } else {
       throw new Error(
         `authorize: branch could not be resolved for ${verb}:${args.action || args.seeOp || args.operation || args.intent || "?"} ` +
         `(identity=${identity?.name || identity?.beingId || "anonymous"}). ` +
-        `Pass moment, include branch on the parsed target, or thread actorBranch.`,
+        `Pass moment, include branch on the parsed target, or thread actorHistory.`,
       );
     }
   }
-  // actorBranch falls back to the moment's actor branch, then to
-  // targetBranch (genesis/scaffold paths where there's no separate
+  // actorHistory falls back to the moment's actor branch, then to
+  // targetHistory (genesis/scaffold paths where there's no separate
   // session branch). Same-branch acts collapse to one value naturally.
   //
   // Foreign-actor guard: an inbound cross-story actor's act carries
@@ -170,10 +170,10 @@ export async function authorize(args) {
   const actorActIsLocal =
     !moment?.actorAct?.story ||
     moment.actorAct.story === getStoryDomain();
-  const actorBranch =
-    args.actorBranch ||
-    (actorActIsLocal ? moment?.actorAct?.branch : null) ||
-    targetBranch;
+  const actorHistory =
+    args.actorHistory ||
+    (actorActIsLocal ? moment?.actorAct?.history : null) ||
+    targetHistory;
   const result = await authorizeViaRoles({
     identity,
     verb,
@@ -182,8 +182,8 @@ export async function authorize(args) {
     intent:      args.intent || null,
     operation:   args.operation || null,
     seeOp:       args.seeOp || null,
-    branch:      targetBranch,
-    actorBranch,
+    branch:      targetHistory,
+    actorHistory,
   });
 
   // Adapt to the verb-dispatch return shape. roleAuth returns
@@ -204,7 +204,7 @@ export async function authorize(args) {
     const { hasAuthorityOver } = await import(
       "../materials/being/identity/inheritation.js"
     );
-    if (await hasAuthorityOver(identity.nameId, String(args.auditBeingId), targetBranch)) {
+    if (await hasAuthorityOver(identity.nameId, String(args.auditBeingId), targetHistory)) {
       return { ok: true, actor: String(identity.nameId) };
     }
   }

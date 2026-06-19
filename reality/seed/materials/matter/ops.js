@@ -97,7 +97,7 @@ async function createMatterHandler(ctx) {
   let spaceId = targetKind === "space" ? targetIdOf(target) : (spec.spaceId || null);
   if (!spaceId && parentMatterId) {
     const { loadOrFold } = await import("../projections.js");
-    const parentSlot = await loadOrFold("matter", String(parentMatterId), moment?.actorAct?.branch || "0");
+    const parentSlot = await loadOrFold("matter", String(parentMatterId), moment?.actorAct?.history || "0");
     spaceId = parentSlot?.state?.spaceId || null;
   }
 
@@ -194,7 +194,7 @@ async function createMatterHandler(ctx) {
     name: spec.name,
     content,
     type: matterType,
-    branch: moment?.actorAct?.branch || "0",
+    history: moment?.actorAct?.history || "0",
     spaceId,
     parentMatterId,
   });
@@ -207,7 +207,7 @@ async function createMatterHandler(ctx) {
     coord = await assertMatterCoordInBounds(
       { spaceId },
       spec.coord,
-      moment?.actorAct?.branch || "0",
+      moment?.actorAct?.history || "0",
     );
   }
 
@@ -247,7 +247,7 @@ async function createMatterHandler(ctx) {
       actId: moment?.actId || null,
       // Branch this matter is created on — sourced from the moment ctx
       // so a plant under #1 lands matter on #1's reel, not main's.
-      branch: moment?.actorAct?.branch || "0",
+      history: moment?.actorAct?.history || "0",
     },
     moment,
   );
@@ -379,7 +379,7 @@ async function setOnMatterHandler({ target, params, moment }) {
     if (typeof value !== "object" || Array.isArray(value)) {
       throw new Error("set-matter: `coord` value must be an object {x,y,z?} or null");
     }
-    const clamped = await assertMatterCoordInBounds(target, value, moment?.actorAct?.branch || "0");
+    const clamped = await assertMatterCoordInBounds(target, value, moment?.actorAct?.history || "0");
     return { matterId: String(target._id), coord: clamped };
   }
 
@@ -417,7 +417,7 @@ async function renameMatterHandler({ target, params, moment }) {
   const allowReplace = params?.allowReplace === true;
   target = await loadTargetRow(target, "matter", { moment });
   const matterId = String(target._id);
-  const branch = moment?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.history || "0";
   const spaceId = target.spaceId ? String(target.spaceId) : null;
   const parentMatterId = target.parentMatterId ? String(target.parentMatterId) : null;
   if (!spaceId) {
@@ -453,7 +453,7 @@ async function renameMatterHandler({ target, params, moment }) {
 async function endMatterHandler({ target, identity, moment }) {
   const matterId = targetIdOf(target);
   if (!matterId) throw new Error("end-matter: matterId required");
-  const branch = moment?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.history || "0";
   const { deleteMatterAndFile } = await import("./matters.js");
   let beingId = identity?.beingId;
   if (!beingId) {
@@ -496,7 +496,7 @@ async function purgeContentHandler({ target, params, identity, moment }) {
   if (!identity?.beingId) {
     throw new IbpError(IBP_ERR.UNAUTHORIZED, "purge-content: identity required");
   }
-  const branch = moment?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.history || "0";
 
   const { loadOrFold } = await import("../projections.js");
   const slot = await loadOrFold("matter", String(matterId), branch);
@@ -532,7 +532,7 @@ async function purgeContentHandler({ target, params, identity, moment }) {
   // content is this hash. Purging would blind them — refuse without
   // force.
   const force = params?.force === true || params?.force === "true";
-  const { default: Projection } = await import("../branch/projection.js");
+  const { default: Projection } = await import("../history/projection.js");
   const others = await Projection.find({
     type: "matter",
     "state.content.hash": hash,
@@ -561,7 +561,7 @@ async function purgeContentHandler({ target, params, identity, moment }) {
     of:      { kind: "matter", id: String(matterId) },
     params:  { hash, force, referents: others.length },
     actId:   moment?.actId || null,
-    branch,
+    history: branch,
   }, moment);
 
   const doDelete = async () => {

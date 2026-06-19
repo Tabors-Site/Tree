@@ -216,7 +216,7 @@ registerSeeOperation("classify-matter", {
     mimeType: { type: "text", label: "Mime type (file inputs)", required: false },
     fileName: { type: "text", label: "File name (extension matters)", required: false },
     url:      { type: "text", label: "HTTP link (the WWW)", required: false },
-    ibpa:     { type: "text", label: "IBP address (another story/branch/position)", required: false },
+    ibpa:     { type: "text", label: "IBP address (another story/history/position)", required: false },
     text:     { type: "text", label: "Bare text", required: false },
   },
   handler: async ({ args }) => ({ candidates: classifyMatter(args || {}) }),

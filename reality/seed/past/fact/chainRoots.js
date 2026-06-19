@@ -14,7 +14,7 @@
 //             anchor in the parent; comparing roots parent-first
 //             compares whole worlds.
 //   story — sha256(canonical({ story, branches: sorted
-//             [path, branchRoot] })). One fingerprint for the whole
+//             [path, historyRoot] })). One fingerprint for the whole
 //             substrate's chain state. Two realities compare state
 //             in a single round-trip; on mismatch, walk down
 //             (branch roots → reel heads → facts) to the exact
@@ -78,7 +78,7 @@ export async function reelRoot(type, id, branch = "0") {
   if (!row) return GENESIS_PREV;
   if (row.headHash) return row.headHash;
   const headFact = await Fact.findOne(
-    { branch, "of.kind": type, "of.id": String(id), seq: row.head },
+    { history: branch, "of.kind": type, "of.id": String(id), seq: row.head },
     { _id: 1 },
   ).lean();
   return headFact?._id || GENESIS_PREV;
@@ -90,7 +90,7 @@ export async function reelRoot(type, id, branch = "0") {
 // families: the fact reels AND the act-chains (acts are content-
 // addressed too — Tabor 2026-06-11: "the story root would
 // literally cover everything").
-function branchRollup(path, meta, reelRows, actRows) {
+function historyRollup(path, meta, reelRows, actRows) {
   const reels = (reelRows || [])
     .map((r) => [String(r._id), r.headHash || `seq:${r.head}`])
     .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
@@ -103,7 +103,7 @@ function branchRollup(path, meta, reelRows, actRows) {
         : meta.branchPoint)
     : {};
   return rollup({
-    branch: path,
+    history: path,
     parent: meta?.parent ?? null,
     branchPoint,
     reels,
@@ -118,29 +118,29 @@ function branchRollup(path, meta, reelRows, actRows) {
  * plantGraft recomputes it over what landed. The live storyRoot()
  * below builds the same shapes from the DB.
  */
-export function storyRootFromParts({ story, branches = [], reelHeads = [], actHeads = [] }) {
+export function storyRootFromParts({ story, histories = [], reelHeads = [], actHeads = [] }) {
   const metaByPath = new Map(
-    branches.map((b) => [String(b._id ?? b.path), b]),
+    histories.map((b) => [String(b._id ?? b.path), b]),
   );
-  const rowsByBranch = new Map();
+  const rowsByHistory = new Map();
   for (const r of reelHeads) {
     const b = String(r.branch ?? "0");
-    if (!rowsByBranch.has(b)) rowsByBranch.set(b, []);
-    rowsByBranch.get(b).push(r);
+    if (!rowsByHistory.has(b)) rowsByHistory.set(b, []);
+    rowsByHistory.get(b).push(r);
   }
-  const actsByBranch = new Map();
+  const actsByHistory = new Map();
   for (const r of actHeads) {
     const b = String(r.branch ?? "0");
-    if (!actsByBranch.has(b)) actsByBranch.set(b, []);
-    actsByBranch.get(b).push(r);
+    if (!actsByHistory.has(b)) actsByHistory.set(b, []);
+    actsByHistory.get(b).push(r);
   }
-  const paths = new Set(["0", ...metaByPath.keys(), ...rowsByBranch.keys(), ...actsByBranch.keys()]);
+  const paths = new Set(["0", ...metaByPath.keys(), ...rowsByHistory.keys(), ...actsByHistory.keys()]);
   const out = [];
   for (const path of [...paths].sort()) {
     const meta = path === "0" ? null : metaByPath.get(path) || null;
-    out.push([path, branchRollup(path, meta, rowsByBranch.get(path) || [], actsByBranch.get(path) || [])]);
+    out.push([path, historyRollup(path, meta, rowsByHistory.get(path) || [], actsByHistory.get(path) || [])]);
   }
-  return rollup({ story: story ?? null, branches: out });
+  return rollup({ story: story ?? null, histories: out });
 }
 
 /**
@@ -171,16 +171,16 @@ export function graftRootFromParts({ beingId, reelHeads = [], actHeads = [] }) {
  * parent's root covers the shared facts; recursive comparison
  * parent-first compares full worlds without recounting the prefix).
  */
-export async function branchRoot(branchPath) {
-  return memoized(`branch:${branchPath}`, async () => {
-    const { loadBranch } = await import("../../materials/branch/branches.js");
+export async function historyRoot(historyPath) {
+  return memoized(`branch:${historyPath}`, async () => {
+    const { loadHistory } = await import("../../materials/history/histories.js");
     const { default: ActHead } = await import("../act/actHead.js");
-    const meta = branchPath === "0" ? null : await loadBranch(branchPath);
+    const meta = historyPath === "0" ? null : await loadHistory(historyPath);
     const [rows, actRows] = await Promise.all([
-      ReelHead.find({ branch: branchPath }).select("_id head headHash").lean(),
-      ActHead.find({ branch: branchPath }).select("_id headHash").lean(),
+      ReelHead.find({ branch: historyPath }).select("_id head headHash").lean(),
+      ActHead.find({ branch: historyPath }).select("_id headHash").lean(),
     ]);
-    return branchRollup(branchPath, meta, rows, actRows);
+    return historyRollup(historyPath, meta, rows, actRows);
   });
 }
 
@@ -190,17 +190,17 @@ export async function branchRoot(branchPath) {
  */
 export async function storyRoot() {
   return memoized("story", async () => {
-    const { default: Branch } = await import("../../materials/branch/branch.js");
+    const { default: History } = await import("../../materials/history/history.js");
     const { default: ActHead } = await import("../act/actHead.js");
     const { getStoryDomain } = await import("../../ibp/address.js");
-    const [branchRows, headRows, actHeadRows] = await Promise.all([
-      Branch.find({}).lean(),
+    const [historyRows, headRows, actHeadRows] = await Promise.all([
+      History.find({}).lean(),
       ReelHead.find({}).select("_id branch head headHash").lean(),
       ActHead.find({}).select("_id branch headHash").lean(),
     ]);
     return storyRootFromParts({
       story: getStoryDomain(),
-      branches: branchRows,
+      histories: historyRows,
       reelHeads: headRows,
       actHeads: actHeadRows,
     });
@@ -258,11 +258,11 @@ registerSeeOperation("verify-reel", {
   args: {
     type:   { type: "text", label: "Reel kind (being|space|matter)", required: true },
     id:     { type: "text", label: "Aggregate id", required: true },
-    branch: { type: "text", label: "Branch (default main)", required: false },
+    branch: { type: "text", label: "History (default main)", required: false },
   },
-  handler: async ({ args, branch: ctxBranch }) => {
+  handler: async ({ args, branch: ctxHistory }) => {
     const { verifyReel } = await import("./verifyReel.js");
-    return verifyReel(args.type, args.id, args.branch || ctxBranch || "0");
+    return verifyReel(args.type, args.id, args.branch || ctxHistory || "0");
   },
 });
 
@@ -296,17 +296,17 @@ registerSeeOperation("verify-act", {
 registerSeeOperation("chain-root", {
   description: "The chain's root hashes: the story root, or one branch's root.",
   args: {
-    branch: { type: "text", label: "Branch path (omit for the story root + all branches)", required: false },
+    branch: { type: "text", label: "History path (omit for the story root + all branches)", required: false },
   },
   handler: async ({ args }) => {
     if (typeof args?.branch === "string" && args.branch.length) {
-      return { branch: args.branch, rootHash: await branchRoot(args.branch) };
+      return { branch: args.branch, rootHash: await historyRoot(args.branch) };
     }
-    const { default: Branch } = await import("../../materials/branch/branch.js");
-    const rows = await Branch.find({}).select("_id").lean();
+    const { default: History } = await import("../../materials/history/history.js");
+    const rows = await History.find({}).select("_id").lean();
     const paths = [...new Set(["0", ...rows.map((b) => String(b._id))])].sort();
     const branches = {};
-    for (const p of paths) branches[p] = await branchRoot(p);
+    for (const p of paths) branches[p] = await historyRoot(p);
     return { storyRoot: await storyRoot(), branches };
   },
 });

@@ -276,10 +276,10 @@ registerOperation("delete-role", {
 async function _setWorldSignalViaWord({ namespace, key, value, moment }) {
   if (!moment) return null;
   const { resolveRoleWord, runRoleWord } = await import("../../word/roleWordRegistry.js");
-  const ir = resolveRoleWord("role-manager", "set-world-signal", moment?.actorAct?.branch);
+  const ir = resolveRoleWord("role-manager", "set-world-signal", moment?.actorAct?.history);
   if (!ir) return null;
   const { roleManagerHostEnv } = await import("./role-managerHost.js");
-  const branch = moment?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.history || "0";
   try {
     const { result } = await runRoleWord(ir, {
       moment, branch,

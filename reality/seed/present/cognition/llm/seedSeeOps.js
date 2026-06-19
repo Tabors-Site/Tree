@@ -172,7 +172,7 @@ registerSeeOperation("arrival-view", {
             being:      b.name,
             name:       b.name,
             beingId:    b.beingId,
-            homeBranch: b.homeBranch || null,
+            homeHistory: b.homeHistory || null,
             mine:       true,
             actions:    (BE_OPS.connect && b.name) ? [{
               verb:        "be",

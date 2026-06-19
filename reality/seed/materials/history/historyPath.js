@@ -44,7 +44,7 @@ const RE_LETTER = /^[a-z]+$/;
  * @param {string} path
  * @returns {string[]}
  */
-export function parseBranchPath(path) {
+export function parseHistoryPath(path) {
   if (path == null || path === "" || path === "0") return [];
   const out = [];
   let buf = "";
@@ -53,7 +53,7 @@ export function parseBranchPath(path) {
     const isDigit  = ch >= "0" && ch <= "9";
     const isLetter = ch >= "a" && ch <= "z";
     if (!isDigit && !isLetter) {
-      throw new Error(`parseBranchPath: invalid char "${ch}" in path "${path}"`);
+      throw new Error(`parseHistoryPath: invalid char "${ch}" in path "${path}"`);
     }
     const chMode = isDigit ? "number" : "letter";
     if (mode === null) mode = chMode;
@@ -74,7 +74,7 @@ export function parseBranchPath(path) {
     const seg = out[i];
     const got = RE_DIGIT.test(seg) ? "number" : RE_LETTER.test(seg) ? "letter" : "invalid";
     if (got !== expected) {
-      throw new Error(`parseBranchPath: segment[${i}] "${seg}" violates alternation in path "${path}"`);
+      throw new Error(`parseHistoryPath: segment[${i}] "${seg}" violates alternation in path "${path}"`);
     }
     expected = expected === "number" ? "letter" : "number";
   }
@@ -90,7 +90,7 @@ export function parseBranchPath(path) {
  * @returns {"number"|"letter"}
  */
 export function nextSegmentType(parentPath) {
-  const segs = parseBranchPath(parentPath);
+  const segs = parseHistoryPath(parentPath);
   // Level 0 (main, segs.length === 0) → next child is level 1 → number.
   // After that the parent's depth tells us what the NEXT level expects.
   // Parent's last segment is at depth = segs.length. Its children are
@@ -186,13 +186,13 @@ export function nextNumberSegment(existingNumberSegments) {
  * @returns {string} the new branch's path
  */
 export function nextChildPath(parentPath, existingChildren) {
-  const parentSegs = parseBranchPath(parentPath);
+  const parentSegs = parseHistoryPath(parentPath);
   const expected = nextSegmentType(parentPath);
   // Extract the last-segment of each existing child (the new segment
   // added at this child's level).
   const childSegs = [];
   for (const c of existingChildren) {
-    const segs = parseBranchPath(c);
+    const segs = parseHistoryPath(c);
     if (segs.length !== parentSegs.length + 1) continue; // not a direct child
     // Validate the prefix matches.
     let prefixOK = true;
@@ -211,12 +211,12 @@ export function nextChildPath(parentPath, existingChildren) {
 /**
  * Validate that a string is a syntactically well-formed branch path.
  * Returns true / false. For exception-based validation, call
- * parseBranchPath and catch.
+ * parseHistoryPath and catch.
  */
-export function isValidBranchPath(path) {
+export function isValidHistoryPath(path) {
   if (path === "0" || path === "") return true;
   try {
-    parseBranchPath(path);
+    parseHistoryPath(path);
     return true;
   } catch {
     return false;

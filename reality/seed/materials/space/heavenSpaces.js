@@ -141,7 +141,7 @@ export const HEAVEN_SPACE = Object.freeze({
   // (parent, branchPoint, label, paused state). SEE on
   // `<story>/./branches` returns the branch tree; the underlying
   // truth is the Branch Mongo collection (one row per non-main
-  // branch). See seed/materials/branch/branches.js for the read
+  // branch). See seed/materials/history/histories.js for the read
   // helpers and seed/timeline.md for the doctrine.
   BRANCHES: "branches",
   // The host tier: the running machine represented through the same

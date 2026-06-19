@@ -211,7 +211,7 @@ export async function tripTree(treeId, reason, opts = {}) {
       // haywire on branch #4 stays alive on main; operators see the
       // circuit on the branch they're inhabiting. Cross-branch
       // contamination would defeat the whole point of branching.
-      branch,
+      history: branch,
     }, ctx);
   });
   invalidateSpace(treeId, branch);
@@ -263,7 +263,7 @@ export async function reviveTree(treeId, beingId, branch) {
       through: String(beingId),
       of:      { kind: "space", id: String(treeId) },
       params:  { field: "qualities.circuit", value: { tripped: false }, merge: false },
-      branch,
+      history: branch,
     }, ctx);
   });
   invalidateSpace(treeId, branch);
@@ -285,7 +285,7 @@ export function startCircuitJob() {
 
   const timer = setInterval(async () => {
     try {
-      const { default: Projection } = await import("../branch/projection.js");
+      const { default: Projection } = await import("../history/projection.js");
       // Filter to non-system owners: owner set AND not the I_AM
       // sentinel string (system-owned spaces).
       const rows = await Projection.find({

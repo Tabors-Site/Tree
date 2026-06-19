@@ -55,7 +55,7 @@ export async function bindWord(name, descriptor = {}, { moment = null, branch = 
     }
   }
   await _inAct(moment, `I declare the word ${name}`, (ctx) => emitFact({
-    through: actor, branch: String(branch), verb: "do", act: DECLARE,
+    through: actor, history: String(branch), verb: "do", act: DECLARE,
     of: { kind: "being", id: actor },
     params: { word: name, ownerExtension, binding },
   }, ctx));
@@ -69,7 +69,7 @@ export async function disableWord(name, { moment = null, branch = "0", actorBein
   const { emitFact } = await import("../../past/fact/facts.js");
   const actor = await _actor(actorBeingId);
   await _inAct(moment, `I disable the word ${name}`, (ctx) => emitFact({
-    through: actor, branch: String(branch), verb: "do", act: DISABLE,
+    through: actor, history: String(branch), verb: "do", act: DISABLE,
     of: { kind: "being", id: actor },
     params: { word: name },
   }, ctx));
@@ -85,7 +85,7 @@ export async function getWord(name, branch = "0") {
   const branches = String(branch) === "0" ? ["0"] : ["0", String(branch)];
   const facts = await Fact.find({
     verb: "do", act: { $in: [DECLARE, DISABLE] }, "params.word": String(name),
-    branch: { $in: branches },
+    history: { $in: branches },
   }).sort({ date: 1, seq: 1 }).lean();
   let binding = null;
   for (const f of facts) {
@@ -106,7 +106,7 @@ const _projection = new Map(); // word name -> binding
 
 export async function rehydrateWordProjection(branch = "0") {
   const { default: Fact } = await import("../../past/fact/fact.js");
-  const facts = await Fact.find({ verb: "do", act: { $in: [DECLARE, DISABLE] }, branch: String(branch), "params.word": { $exists: true } })
+  const facts = await Fact.find({ verb: "do", act: { $in: [DECLARE, DISABLE] }, history: String(branch), "params.word": { $exists: true } })
     .sort({ date: 1, seq: 1 }).lean();
   _projection.clear();
   for (const f of facts) {

@@ -27,7 +27,7 @@
 // These helpers are the cross-STORY transport layer; cross-branch
 // within the same story runs entirely in-process through the normal
 // inbox / assign / sealAct flow (which already threads crossOrigin
-// correctly via moment.targetBranch).
+// correctly via moment.targetHistory).
 
 import Act from "../past/act/act.js";
 import { handleCrossWorldResponse } from "../past/act/crossWorldResponse.js";
@@ -66,8 +66,8 @@ function checkAndRecordForeignAct(story, actId) {
  *
  * The Fact lands on the TARGET's reel, on the TARGET's branch — and for
  * an inbound foreign actor the target lives on THIS substrate. Without
- * this, the synthetic moment's targetBranch stays null and
- * resolveBranchForFact falls through to moment.actorAct.branch — the
+ * this, the synthetic moment's targetHistory stays null and
+ * resolveHistoryForFact falls through to moment.actorAct.history — the
  * FOREIGN actor's branch — so the foreign-attributed fact would land on
  * a foreign-named branch reel instead of the local target's. See
  * CROSS-WORLD.md "The Fact lands on the target."
@@ -79,20 +79,20 @@ function checkAndRecordForeignAct(story, actId) {
  * story with the local default branch as the implicit context, so an
  * address with no explicit branch resolves to local main (never the
  * foreign actor's branch). No literal "0" — the #main pointer resolves
- * through getDefaultBranch.
+ * through getDefaultHistory.
  */
-async function resolveLocalTargetBranch(address) {
-  const { getDefaultBranch } = await import("../materials/branch/branchRegistry.js");
-  const localDefault = await getDefaultBranch();
+async function resolveLocalTargetHistory(address) {
+  const { getDefaultHistory } = await import("../materials/history/historyRegistry.js");
+  const localDefault = await getDefaultHistory();
   try {
-    const { parse, expand, resolveBranchPointers } = await import("./address.js");
+    const { parse, expand, resolveHistoryPointers } = await import("./address.js");
     const raw = String(address || "");
     const rhs = raw.includes("::") ? raw.split("::").pop().trim() : raw;
     if (!rhs) return localDefault;
-    const expandCtx = { currentStory: getStoryDomain(), currentBranch: localDefault };
+    const expandCtx = { currentStory: getStoryDomain(), currentHistory: localDefault };
     const parsed = parse(rhs);
-    const expanded = await resolveBranchPointers(expand(parsed, expandCtx), expandCtx);
-    return expanded?.right?.branch || localDefault;
+    const expanded = await resolveHistoryPointers(expand(parsed, expandCtx), expandCtx);
+    return expanded?.right?.history || localDefault;
   } catch {
     // Parse failure: fall back to local main. Worst case the verb path
     // re-parses and surfaces the real address error; we never let the
@@ -170,7 +170,7 @@ export async function crossStoryDispatch({ envelope, actor, identity } = {}) {
       source: actor.beingId,
     },
     story,
-    branch: actor.branch,
+    history: actor.branch,
   };
   // Open + advance under the act-chain lock (read-compute-write on
   // the head); the CAS'd advance is the cross-check.
@@ -183,7 +183,7 @@ export async function crossStoryDispatch({ envelope, actor, identity } = {}) {
     // true. ΔF is empty (the consequences land on the foreign chain), so
     // factIds = [].
     const sig = await signActDoc(
-      { _id: id, p, by: actorNameId, through: actor.beingId, to: actor.beingId, story, branch: actor.branch },
+      { _id: id, p, by: actorNameId, through: actor.beingId, to: actor.beingId, story, history: actor.branch },
       [],
       signingPem,
     );
@@ -206,7 +206,7 @@ export async function crossStoryDispatch({ envelope, actor, identity } = {}) {
         source: actor.beingId,
       },
       story,
-      branch: actor.branch,
+      history: actor.branch,
       status: "attempted",
       sig,
     });
@@ -245,7 +245,7 @@ export async function crossStoryDispatch({ envelope, actor, identity } = {}) {
       payload: envelope.payload,
       nameId: actorNameId,
       actId,
-      branch: actor.branch,
+      history: actor.branch,
       story,
     },
     signingPem,
@@ -253,7 +253,7 @@ export async function crossStoryDispatch({ envelope, actor, identity } = {}) {
   const peerAck = await forwardToPeer({
     ...envelope,
     identity: identity || { beingId: actor.beingId, name: null, nameId: actor.nameId || null },
-    actorBranch: actor.branch,
+    actorHistory: actor.branch,
     actorActId: actId,
     beingSig,
   });
@@ -343,7 +343,7 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
         payload,
         nameId: actorNameId,
         actId: actor.actId,
-        branch: actor.branch,
+        history: actor.branch,
         story: actor.story,
       },
       actor.beingSig,
@@ -393,23 +393,23 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
     by: actorNameId,
     through: actor.beingId,
     story: actor.story,
-    branch: actor.branch,
+    history: actor.branch,
   };
 
   // Synthetic moment. Carries actorAct + deltaF for emitFact to push
-  // onto. targetBranch is the LOCAL target's branch on THIS substrate,
+  // onto. targetHistory is the LOCAL target's branch on THIS substrate,
   // resolved from the inbound address: the Fact lands on the target's
-  // reel/branch, NOT the foreign actor's branch (actorAct.branch). The
-  // precedence in resolveBranchForFact puts targetBranch above
-  // actorAct.branch, so seating it here is what keeps a foreign-named
+  // reel/branch, NOT the foreign actor's branch (actorAct.history). The
+  // precedence in resolveHistoryForFact puts targetHistory above
+  // actorAct.history, so seating it here is what keeps a foreign-named
   // fact on the correct local reel.
-  const targetBranch = await resolveLocalTargetBranch(address);
+  const targetHistory = await resolveLocalTargetHistory(address);
   const moment = {
     actId: actor.actId,
     actorAct,
     deltaF: [],
     afterSeal: [],
-    targetBranch,
+    targetHistory,
   };
 
   const identity = {

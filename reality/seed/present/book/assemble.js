@@ -41,7 +41,7 @@ export async function assembleStory(
   } = {},
 ) {
   const { default: Fact } = await import("../../past/fact/fact.js");
-  const q = { branch: String(branch) };
+  const q = { history: String(branch) };
   if (since) q.date = { $gt: since instanceof Date ? since : new Date(since) };
 
   // The views are ONE coordinate system, not four parallels: WHO (being → lineage → world, the

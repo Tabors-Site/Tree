@@ -14,9 +14,9 @@
 //                   socket-side `.discovery` SEE (clones, timezone, ...)
 //   descriptor      the current Position Description (what every view renders)
 //   currentAddress  the address the descriptor answers
-//   actorBranch     the session's seated branch (server "branch" pushes)
+//   actorHistory     the session's seated branch (server "branch" pushes)
 //   selectedBeing   { beingId, name, lastSetAt } | null — cross-view focus
-//   history / historyIndex   portal-internal navigation history
+//   history / navIndex   portal-internal navigation history
 //   connection      "idle" | "connected" | "disconnected" | "error"
 //   activeView      registry name of the mounted view
 //   pendingSummons  Map(correlation -> being) — async summon bookkeeping
@@ -34,7 +34,7 @@ export function createPortalState(initial = {}) {
     discovery: null,
     descriptor: null,
     currentAddress: null,
-    actorBranch: "0",
+    actorHistory: "0",
     // The being's CURRENT POSITION path — where the per-navigate
     // set-being:position fact landed. The left stance renders from
     // this: it always follows where the being is, so left and right
@@ -46,8 +46,8 @@ export function createPortalState(initial = {}) {
     // render the fold at that moment until return-to-now clears it.
     historicalAnchor: null,
     selectedBeing: null,
-    history: [],
-    historyIndex: -1,
+    navStack: [],
+    navIndex: -1,
     connection: "idle",
     activeView: null,
     pendingSummons: new Map(),

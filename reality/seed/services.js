@@ -72,8 +72,8 @@ import { qualities } from "./materials/qualities.js";
 import { isBeingRoot, getSpaceRootId } from "./sprout.js";
 import {
   createSpace,
-  createSpaceBranch,
-  deleteSpaceBranch,
+  createSpaceHistory,
+  deleteSpaceHistory,
   updateParentRelationship,
   editSpaceName,
   editSpaceType,
@@ -433,8 +433,8 @@ export function buildStoryServices({
       reviveTree,
       isTreeAlive,
       createSpace,
-      createSpaceBranch,
-      deleteSpaceBranch,
+      createSpaceHistory,
+      deleteSpaceHistory,
       updateParentRelationship,
       editSpaceName,
       editSpaceType,

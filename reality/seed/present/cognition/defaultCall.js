@@ -188,7 +188,7 @@ async function maybeEmitReply({
       scopeNodeId,
       beingId,
       rootCorrelation,
-      { branch: ctx?.moment?.actorAct?.branch || "0" },
+      { branch: ctx?.moment?.actorAct?.history || "0" },
     );
     if (askerStance) {
       await emitReplyToStance({

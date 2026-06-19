@@ -29,7 +29,7 @@ import {
   assertVerbCaller,
   normalizeIdentity,
   refuseHistoricalWrite,
-  resolveBranchForFact,
+  resolveHistoryForFact,
 } from "./_shared.js";
 
 /**
@@ -62,7 +62,7 @@ function parseNameAddress(address) {
  *
  * @param {"declare"|"banish"} operation
  * @param {object} payload   op args (declare: { soulType? }; banish: {})
- * @param {object} opts      { address, identity, currentStory, currentBranch, moment }
+ * @param {object} opts      { address, identity, currentStory, currentHistory, moment }
  */
 export async function nameVerb(operation, payload = {}, opts = {}) {
   if (typeof operation !== "string" || !operation.length) {
@@ -73,11 +73,11 @@ export async function nameVerb(operation, payload = {}, opts = {}) {
   const {
     address        = null,
     currentStory = null,
-    currentBranch  = null,
+    currentHistory  = null,
     moment      = null,
   } = opts;
 
-  const branch = resolveBranchForFact(moment, currentBranch, "name");
+  const branch = resolveHistoryForFact(moment, currentHistory, "name");
   const storyDomain = currentStory || getStoryDomain();
 
   const { story, nameId: addressedToken } = parseNameAddress(address);
@@ -160,6 +160,6 @@ async function writeNameFact({ operation, identity, result, actId, moment, branc
     of:      { kind: "name", id: String(result.nameId) },
     params,
     actId,
-    branch,
+    history: branch,
   }, moment);
 }

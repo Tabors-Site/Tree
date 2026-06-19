@@ -153,7 +153,7 @@ async function drain() {
             through: httpBeingId,
             of: { kind: "matter", id: requestLogMatterId },
             params: { dropped, at: new Date().toISOString() },
-            actId: ctx.actId, branch: "0",
+            actId: ctx.actId, history: "0",
           }, ctx));
       }
       if (queue.length > SOFT_BATCH_THRESHOLD) {
@@ -166,7 +166,7 @@ async function drain() {
             through: httpBeingId,
             of: { kind: "matter", id: requestLogMatterId },
             params: { count: entries.length, entries },
-            actId: ctx.actId, branch: "0",
+            actId: ctx.actId, history: "0",
           }, ctx));
         totalStamped += entries.length;
       } else {
@@ -178,7 +178,7 @@ async function drain() {
             through: httpBeingId,
             of: { kind: "matter", id: requestLogMatterId },
             params,
-            actId: ctx.actId, branch: "0",
+            actId: ctx.actId, history: "0",
           }, ctx));
         totalStamped += 1;
       }
@@ -232,7 +232,7 @@ export function noteHttpListening({ port } = {}) {
         // The port IS the listener's identity. Route lists are
         // middleware furniture; the moment is the fact's own date.
         params: { port: port ?? null },
-        actId: ctx.actId, branch: "0",
+        actId: ctx.actId, history: "0",
       }, ctx);
     });
   } catch (err) {
@@ -254,7 +254,7 @@ export function noteHttpShutdown(signal) {
           uptimeSec: Math.round(process.uptime()),
           totals: { requests: counters.total, dropped: counters.dropped },
         },
-        actId: ctx.actId, branch: "0",
+        actId: ctx.actId, history: "0",
       }, ctx);
     });
   } catch (err) {

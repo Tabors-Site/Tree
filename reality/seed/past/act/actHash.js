@@ -48,7 +48,7 @@ export function contentOfAct(act) {
     parentThread:   act.parentThread ?? null,
     startMessage:   act.startMessage ?? null,
     story:        act.story ?? null,
-    branch:         typeof act.branch === "string" && act.branch.length ? act.branch : "0",
+    history:         typeof act.history === "string" && act.history.length ? act.history : "0",
   };
 }
 

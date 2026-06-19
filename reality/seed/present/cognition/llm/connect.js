@@ -66,7 +66,7 @@ import Space from "../../../materials/space/space.js";
 import { I_AM } from "../../../materials/being/seedBeings.js";
 import { getStoryConfigValue } from "../../../storyConfig.js";
 import { getAncestorChain } from "../../../materials/space/ancestorCache.js";
-import { actorBranchFrom } from "../../../past/act/crossOrigin.js";
+import { actorHistoryFrom } from "../../../past/act/crossOrigin.js";
 import {
   resolveAndValidateHost,
   hostInAllowedLlmDomains,
@@ -108,7 +108,7 @@ function _requireBranch(branch, hint) {
   if (typeof branch !== "string" || !branch.length) {
     throw new Error(
       `LLM connection read missing branch (${hint}). ` +
-      `Pass moment?.actorAct?.branch or actorBranchFrom(moment) — ` +
+      `Pass moment?.actorAct?.history or actorHistoryFrom(moment) — ` +
       `no main-bias default. Every read names its branch.`,
     );
   }
@@ -460,7 +460,7 @@ export async function addLlmConnection(
   // and threw "Being not found" for LLM-config writes against
   // inherited beings.
   const { loadOrFold } = await import("../../../materials/projections.js");
-  const slot = await loadOrFold("being", beingId, actorBranchFrom(moment));
+  const slot = await loadOrFold("being", beingId, actorHistoryFrom(moment));
   if (!slot) throw new Error("Being not found");
   const being = { _id: slot.id, ...slot.state };
 
@@ -527,7 +527,7 @@ export async function updateLlmConnection(
   // and threw "Being not found" for LLM-config writes against
   // inherited beings.
   const { loadOrFold } = await import("../../../materials/projections.js");
-  const slot = await loadOrFold("being", beingId, actorBranchFrom(moment));
+  const slot = await loadOrFold("being", beingId, actorHistoryFrom(moment));
   if (!slot) throw new Error("Being not found");
   const being = { _id: slot.id, ...slot.state };
 
@@ -606,7 +606,7 @@ export async function deleteLlmConnection(beingId, connectionId, { identity, mom
   // and threw "Being not found" for LLM-config writes against
   // inherited beings.
   const { loadOrFold } = await import("../../../materials/projections.js");
-  const slot = await loadOrFold("being", beingId, actorBranchFrom(moment));
+  const slot = await loadOrFold("being", beingId, actorHistoryFrom(moment));
   if (!slot) throw new Error("Being not found");
   const being = { _id: slot.id, ...slot.state };
 
@@ -667,7 +667,7 @@ export async function assignConnection(beingId, slot, connectionId, { identity, 
   }
 
   const safeConnId = validateConnectionId(connectionId);
-  const branch = actorBranchFrom(moment);
+  const branch = actorHistoryFrom(moment);
 
   if (safeConnId) {
     const conn = await readConnection(beingId, safeConnId, branch);
@@ -716,7 +716,7 @@ export async function assignSpaceConnection(
     throw new Error("Invalid assignment slot: " + slot);
   }
   const safeConnId = validateConnectionId(connectionId);
-  const branch = actorBranchFrom(moment, "assignSpaceConnection");
+  const branch = actorHistoryFrom(moment, "assignSpaceConnection");
 
   if (safeConnId) {
     // With qualities-based storage, connections are scoped to a being —
@@ -762,7 +762,7 @@ export async function assignSpaceConnection(
  * being. Returns the entry on success, null if the connection is
  * missing / invalid or its baseUrl fails the SSRF gate.
  *
- * Branch is REQUIRED — either via moment.actorAct.branch (the
+ * Branch is REQUIRED — either via moment.actorAct.history (the
  * normal moment path) or an explicit opts.branch (cache-warming
  * call sites). No silent main-bias.
  *
@@ -774,8 +774,8 @@ export async function assignSpaceConnection(
  * @param {string} [opts.branch]     explicit override for non-moment callers
  */
 export async function resolveConnection(beingId, connectionId, cacheKey, { moment, branch } = {}) {
-  const resolvedBranch = branch || actorBranchFrom(moment, "resolveConnection");
-  const conn = await readConnection(beingId, connectionId, resolvedBranch);
+  const resolvedHistory = branch || actorHistoryFrom(moment, "resolveConnection");
+  const conn = await readConnection(beingId, connectionId, resolvedHistory);
   // baseUrl is required; encryptedApiKey is optional (local LLMs like
   // Ollama / llama.cpp commonly need no auth).
   if (!conn || !conn.baseUrl) return null;
@@ -837,7 +837,7 @@ export async function resolveConnection(beingId, connectionId, cacheKey, { momen
     try {
       // loadOrFold: same inherited-being lineage-cold-fold rationale.
       const { loadOrFold } = await import("../../../materials/projections.js");
-      const slot = await loadOrFold("being", beingId, actorBranchFrom(moment));
+      const slot = await loadOrFold("being", beingId, actorHistoryFrom(moment));
       if (slot) {
         const { doVerb } = await import("../../../ibp/verbs/do.js");
         await doVerb(
@@ -885,7 +885,7 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId, bra
   }
   if (typeof branch !== "string" || !branch.length) {
     throw new Error(
-      "getClientForBeing: branch is required. Pass actorBranchFrom(moment) " +
+      "getClientForBeing: branch is required. Pass actorHistoryFrom(moment) " +
       "or the explicit branch the read is happening on — no main-bias default."
     );
   }

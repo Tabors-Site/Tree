@@ -2683,8 +2683,8 @@ export class Scene {
     // Ground plane — color modulated by branch id so different
     // branches read as visibly different worlds. Higher saturation
     // + lightness than before so the world isn't dim soup.
-    const branchHash = hashString(p.target);
-    const groundColor = new THREE.Color().setHSL((branchHash % 360) / 360, 0.45, 0.42);
+    const historyHash = hashString(p.target);
+    const groundColor = new THREE.Color().setHSL((historyHash % 360) / 360, 0.45, 0.42);
     const ground = new THREE.Mesh(
       new THREE.PlaneGeometry(sx, sz),
       new THREE.MeshStandardMaterial({ color: groundColor, roughness: 0.85 }),
@@ -2693,7 +2693,7 @@ export class Scene {
     p.miniWorld.add(ground);
     // Match the main scene's fog/sky color so the ground edge fades
     // into the sky rather than ending in a hard line.
-    p.miniScene.background = new THREE.Color().setHSL((branchHash % 360) / 360, 0.3, 0.18);
+    p.miniScene.background = new THREE.Color().setHSL((historyHash % 360) / 360, 0.3, 0.18);
     p.miniScene.fog.color = p.miniScene.background;
     p.cameraRadius = Math.max(sx, sz) * 0.7;
 

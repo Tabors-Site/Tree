@@ -47,7 +47,7 @@
 import Fact from "../../../past/fact/fact.js";
 import * as reducers from "../../../materials/reducers.js";
 import { readReelBetween } from "./foldEngine.js";
-import { assertBranchOrThrow } from "../../../materials/projections.js";
+import { assertHistoryOrThrow } from "../../../materials/projections.js";
 
 const REEL_TYPES = new Set(["being", "space", "matter", "name"]);
 
@@ -132,14 +132,14 @@ export async function resolveUntil(type, id, until, opts = {}) {
   // the entire scene empties out (the user's "grid spaces disappear in
   // past view on #1" symptom). Branch is required from the caller; the
   // historian path used to default to heaven silently.
-  const branch = assertBranchOrThrow(opts.branch || until.branch, "resolveUntil(opts)");
+  const branch = assertHistoryOrThrow(opts.branch || until.branch, "resolveUntil(opts)");
   if (branch === "0") {
     const row = await Fact.findOne({
       "of.kind": type,
       "of.id":   id,
       seq:           { $type: "number" },
       date:          { $lte: at },
-      $or:           [{ branch: "0" }, { branch: { $exists: false } }],
+      $or:           [{ history: "0" }, { history: { $exists: false } }],
     })
       .sort({ seq: -1 })
       .select("seq")
@@ -149,12 +149,12 @@ export async function resolveUntil(type, id, until, opts = {}) {
   // Non-main: walk the lineage and union per-ancestor branchMatch
   // clauses so a fact on the inherited prefix of main counts toward
   // the branch's view at past time.
-  const { resolveBranchLineage, isMain } = await import("../../../materials/branch/branches.js");
-  const lineage = await resolveBranchLineage(branch);
+  const { resolveHistoryLineage, isMain } = await import("../../../materials/history/histories.js");
+  const lineage = await resolveHistoryLineage(branch);
   const orClauses = lineage.map((b) =>
     isMain(b)
-      ? { $or: [{ branch: "0" }, { branch: { $exists: false } }] }
-      : { branch: b },
+      ? { $or: [{ history: "0" }, { history: { $exists: false } }] }
+      : { history: b },
   );
   const row = await Fact.findOne({
     "of.kind": type,
@@ -194,7 +194,7 @@ export async function foldAt(type, id, until, opts = {}) {
   // historical anchor). Prefer opts so the descriptor sweep doesn't
   // have to re-pack until objects. No silent default — caller must
   // attach branch via descriptor or until anchor.
-  const branch = assertBranchOrThrow(opts.branch || until?.branch, "foldAt(opts)");
+  const branch = assertHistoryOrThrow(opts.branch || until?.branch, "foldAt(opts)");
 
   const untilSeq = await resolveUntil(type, id, until, { branch });
   if (untilSeq == null) {

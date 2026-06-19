@@ -61,8 +61,8 @@ export function connectHostEnv() {
       return token;
     },
 
-    // (seatBranch + ownerTrueName COLLAPSED to `see` verbs in cherub-connect.word: the
-    // SEE verb reads homeBranch / trueName natively, no host escape — reads are verbs, 1.md.)
+    // (seatHistory + ownerTrueName COLLAPSED to `see` verbs in cherub-connect.word: the
+    // SEE verb reads homeHistory / trueName natively, no host escape — reads are verbs, 1.md.)
 
     // ── flow 3 (inherit-connect / father-admit, connectHandler Mode-3) ──────────────
 
@@ -126,7 +126,7 @@ export function connectHostEnv() {
           fatherBeingId: String(caller?.beingId),
           fatherStory: chosen.qualities?.father?.story || getStoryDomain(),
         },
-        actId: sc?.actId || null, branch: sc?.actorAct?.branch || "0",
+        actId: sc?.actId || null, history: sc?.actorAct?.history || "0",
       }, sc);
       return true;
     },
@@ -135,7 +135,7 @@ export function connectHostEnv() {
     // drives the vessel signing as HIMSELF (his local trueName, else his own id; never the
     // vessel's trueName, or a cross father would sign as the mother — connectHandler L587-594).
     driverTrueNameForFather: async ({ args: [chosen, caller] }) => {
-      const proj = await loadProjection("being", String(caller?.beingId), chosen?.homeBranch || "0");
+      const proj = await loadProjection("being", String(caller?.beingId), chosen?.homeHistory || "0");
       return proj?.state?.trueName || String(caller?.beingId);
     },
 

@@ -31,7 +31,7 @@ let _state = {
   // Branch the timeline strip is bound to (may differ from the user's
   // active address-branch — they could pull up main's timeline while
   // standing in #1).
-  timelineBranch: null,
+  timelineHistory: null,
   graph:         null,    // { current, lineage, children } for active branch
   graphAll:      null,    // full tree { byPath: Map, roots: [] }
   marks:         [],      // [{ ts, seq, label }] for active timeline
@@ -153,8 +153,8 @@ async function _maybeLoadOlderMarks(cursorMs) {
 
   _state.loadingMoreMarks = true;
   try {
-    const tlBranch = _state.timelineBranch || "0";
-    const bq = tlBranch === "0" ? "" : `#${tlBranch}`;
+    const tlHistory = _state.timelineHistory || "0";
+    const bq = tlHistory === "0" ? "" : `#${tlHistory}`;
     const actsDesc = await _state.client.see(
       `${_state.story}${bq}/.acts/${_state.timelineBeingId}`,
       { limit: NEXT_MARK_BATCH, before: earliest.ts },
@@ -218,18 +218,18 @@ function _speedLabel(tier) {
 // typing a different branch into the address yourself; then the
 // address line shows the split (@you#0 → story#2/...) so you always
 // know exactly what's being sent on both sides.
-export async function switchIntoBranch(branchPath) {
+export async function switchIntoHistory(historyPath) {
   const signedIn = !!_portalState()?.session?.token;
   if (signedIn) {
-    // BE switch at the gate: seats socket.currentBranch on the
+    // BE switch at the gate: seats socket.currentHistory on the
     // destination and stamps the be:switch fact on the destination
     // reel (your being's biography there records the arrival).
-    await _state.client.be("switch", `${_state.story}/@cherub`, { branch: branchPath });
+    await _state.client.be("switch", `${_state.story}/@cherub`, { branch: historyPath });
   }
   // Address follows the being — ALWAYS the explicit branch path. The
   // bare `#<story>/` form resolves through the #main POINTER, which
   // is reassignable and may not be "0"; explicit paths can't drift.
-  location.hash = `#${_state.story}#${branchPath}/`;
+  location.hash = `#${_state.story}#${historyPath}/`;
   _syncStanceBar();
 }
 
@@ -256,7 +256,7 @@ function _offerSwitchAfterBranch(path, note = "") {
     `Cancel — stay on ${hereLabel} (cross later via an ibpa portal, or click #${path} in the timeline)`,
   );
   if (yes) {
-    switchIntoBranch(path).catch((err) => {
+    switchIntoHistory(path).catch((err) => {
       _showBranchEvent(`switch failed: ${err?.message || err}`, { error: true });
     });
   } else {
@@ -274,7 +274,7 @@ function _offerSwitchAfterBranch(path, note = "") {
 // pointer-truthful tooltips).
 function _syncStanceBar() {
   updateStanceBar({
-    actorBranch: _state.client?.currentBranch || "0",
+    actorHistory: _state.client?.currentHistory || "0",
     pointers: _state.graph?.pointers || {},
   });
 }
@@ -289,7 +289,7 @@ function _portalState() {
     || {};
 }
 
-export function mountBranchBar({ client, story, buttonHost = null, getState = null }) {
+export function mountHistoryBar({ client, story, buttonHost = null, getState = null }) {
   _state.client = client;
   _state.story = story;
   _state.getState = typeof getState === "function" ? getState : null;
@@ -640,7 +640,7 @@ let _toggleInFlight = 0;
 function _isToggleInFlight() { return _toggleInFlight > 0; }
 
 async function _togglePauseBranch(branch) {
-  const op = branch.paused ? "unpause-branch" : "pause-branch";
+  const op = branch.paused ? "unpause-history" : "pause-history";
   // Optimistic local flip so the button changes the instant the user
   // clicks — no waiting for the DO + tree refetch round-trip. The
   // server-confirmed state replaces it on the subsequent refetch; if
@@ -655,15 +655,15 @@ async function _togglePauseBranch(branch) {
   // If the user just paused (or unpaused) the branch they themselves
   // are currently on, flip the grayscale chrome immediately so the
   // visual cue matches the new story without waiting for navigate.
-  const myBranch = _portalState()?.descriptor?.address?.branch || "0";
-  if (branch.path === myBranch) {
+  const myHistory = _portalState()?.descriptor?.address?.branch || "0";
+  if (branch.path === myHistory) {
     window.dispatchEvent(new CustomEvent("branchbar:paused-self", {
       detail: { paused: branch.paused },
     }));
   }
 
   // Use a RELATIVE address (`/@branch-manager`) so the wire inherits
-  // socket.currentBranch automatically — whichever branch the server
+  // socket.currentHistory automatically — whichever branch the server
   // actually thinks the user is on, the DO targets that same branch
   // and the cross-branch gate stays happy. The earlier approach of
   // reading window.__state.descriptor.address.branch raced the
@@ -697,7 +697,7 @@ async function _togglePauseBranch(branch) {
       const treeContainer = _state.panelEl.querySelector(".bp-tree");
       if (treeContainer) _renderTree(treeContainer, _state.graphAll);
     }
-    if (branch.path === myBranch) {
+    if (branch.path === myHistory) {
       window.dispatchEvent(new CustomEvent("branchbar:paused-self", {
         detail: { paused: prevPaused },
       }));
@@ -816,9 +816,9 @@ function _branchChip(branch) {
 // TIMELINE STRIP (bottom-pinned, branch-specific)
 // ─────────────────────────────────────────────────────────────────────
 
-async function _openTimeline(branchPath) {
+async function _openTimeline(historyPath) {
   _closeTimeline();
-  _state.timelineBranch = branchPath;
+  _state.timelineHistory = historyPath;
   const el = document.createElement("div");
   el.id = "branch-timeline";
   el.style.cssText = [
@@ -871,8 +871,8 @@ async function _openTimeline(branchPath) {
   `;
   document.body.appendChild(el);
   _state.timelineEl = el;
-  const branchLabel = branchPath === "0" ? "main" : `#${branchPath}`;
-  el.querySelector(".bt-label").textContent = `timeline · ${branchLabel}`;
+  const historyLabel = historyPath === "0" ? "main" : `#${historyPath}`;
+  el.querySelector(".bt-label").textContent = `timeline · ${historyLabel}`;
   el.querySelector(".bt-close").addEventListener("click", () => {
     _closeTimeline();
     _returnToNow();
@@ -939,9 +939,9 @@ async function _openTimeline(branchPath) {
   // without waiting for the navigate's after-call. Same-branch opens
   // need it (no navigate fires); different-branch opens benefit from it
   // (the marks fetch runs concurrent with navigate instead of after).
-  const currentBranch = _portalState()?.descriptor?.address?.branch || "0";
-  if (currentBranch !== branchPath) {
-    switchIntoBranch(branchPath).catch((err) => {
+  const currentHistory = _portalState()?.descriptor?.address?.branch || "0";
+  if (currentHistory !== historyPath) {
+    switchIntoHistory(historyPath).catch((err) => {
       _showBranchEvent(`switch failed: ${err?.message || err}`, { error: true });
     });
   }
@@ -960,7 +960,7 @@ function _closeTimeline() {
     _state.timelineEl.remove();
     _state.timelineEl = null;
   }
-  _state.timelineBranch = null;
+  _state.timelineHistory = null;
   _state.marks = [];
   _state.firstTs = null;
   _state.nowTs = null;
@@ -1040,15 +1040,15 @@ async function _update(desc) {
   // If an open timeline strip is bound to a different branch than the
   // address, re-bind it. Without this, the strip stays labelled
   // "main" while the IBP address shows #1.
-  if (_state.timelineEl && _state.timelineBranch !== branch) {
-    _state.timelineBranch = branch;
+  if (_state.timelineEl && _state.timelineHistory !== branch) {
+    _state.timelineHistory = branch;
     _state.marks = [];
     _state.firstTs = null;
     _state.nowTs = null;
     const labelEl = _state.timelineEl.querySelector(".bt-label");
     if (labelEl) {
-      const branchLabel = branch === "0" ? "main" : `#${branch}`;
-      labelEl.textContent = `timeline · ${branchLabel}`;
+      const historyLabel = branch === "0" ? "main" : `#${branch}`;
+      labelEl.textContent = `timeline · ${historyLabel}`;
     }
   }
 
@@ -1058,12 +1058,12 @@ async function _update(desc) {
   // Load marks for the timeline's bound branch. First batch only —
   // additional batches load progressively as the user rewinds toward
   // the earliest loaded mark (see _maybeLoadOlderMarks).
-  const tlBranch = _state.timelineBranch || branch;
+  const tlHistory = _state.timelineHistory || branch;
   const myBeingId = desc?.identity?.beingId || null;
   _state.timelineBeingId = myBeingId;
   if (myBeingId) {
     try {
-      const bq = tlBranch === "0" ? "" : `#${tlBranch}`;
+      const bq = tlHistory === "0" ? "" : `#${tlHistory}`;
       const actsDesc = await _state.client.see(
         `${_state.story}${bq}/.acts/${myBeingId}`,
         { limit: INITIAL_MARK_BATCH },
@@ -1231,9 +1231,9 @@ function _renderTimeline() {
     marksEl.appendChild(dot);
   }
 
-  const branchLabel = _state.timelineBranch === "0"
+  const historyLabel = _state.timelineHistory === "0"
     ? "main"
-    : `#${_state.timelineBranch}`;
+    : `#${_state.timelineHistory}`;
   if (_state.atTimestamp) {
     const t = new Date(_state.atTimestamp).getTime();
     let cursorFrac;
@@ -1260,9 +1260,9 @@ function _renderTimeline() {
       const seq = m?.seq ?? "?";
       const total = _state.marks.length;
       const idx = m ? _state.marks.findIndex((x) => x.ts === m.ts) + 1 : 0;
-      status.textContent = `seq ${seq} · act ${idx}/${total} on ${branchLabel}`;
+      status.textContent = `seq ${seq} · act ${idx}/${total} on ${historyLabel}`;
     } else {
-      status.textContent = `rewound to ${_humanStamp(_state.atTimestamp)} on ${branchLabel}`;
+      status.textContent = `rewound to ${_humanStamp(_state.atTimestamp)} on ${historyLabel}`;
     }
     status.style.color = "#e8b762";
     nowBtn.style.display = "inline-block";
@@ -1270,9 +1270,9 @@ function _renderTimeline() {
   } else {
     cursor.style.display = "none";
     if (_state.playbackMode === "story") {
-      status.textContent = `live · ${_state.marks.length} acts on ${branchLabel}`;
+      status.textContent = `live · ${_state.marks.length} acts on ${historyLabel}`;
     } else {
-      status.textContent = `live on ${branchLabel}`;
+      status.textContent = `live on ${historyLabel}`;
     }
     status.style.color = "#6b7d72";
     nowBtn.style.display = "none";
@@ -1616,9 +1616,9 @@ function _renderDetail(mark) {
 
 async function _branchHere() {
   if (!_state.atTimestamp) return;
-  const parent = _state.timelineBranch || "0";
+  const parent = _state.timelineHistory || "0";
   try {
-    // Relative `/@branch-manager` lets the wire inherit socket.currentBranch
+    // Relative `/@branch-manager` lets the wire inherit socket.currentHistory
     // automatically — no descriptor-state guessing, no race with
     // mid-flight branch switches. The cross-branch gate sees
     // caller=target by construction.
@@ -1654,12 +1654,12 @@ async function _branchHere() {
 
 let _branchInfoDialogEl = null;
 
-async function _openBranchInfoDialog(branchPath) {
+async function _openBranchInfoDialog(historyPath) {
   if (_branchInfoDialogEl) _closeBranchInfoDialog();
   let graph = null;
   let err = null;
   try {
-    const desc = await _state.client.see(`${_state.story}/.branches/${branchPath}`);
+    const desc = await _state.client.see(`${_state.story}/.branches/${historyPath}`);
     graph = desc?.branches || null;
   } catch (e) {
     err = e?.message || String(e);
@@ -1690,7 +1690,7 @@ async function _openBranchInfoDialog(branchPath) {
   const cur = graph?.current || null;
   const pointers = graph?.pointers || {};
   const aimedHere = Object.keys(pointers)
-    .filter((name) => pointers[name] === branchPath)
+    .filter((name) => pointers[name] === historyPath)
     .sort();
   const lineage = Array.isArray(graph?.lineage) ? graph.lineage : [];
   const children = Array.isArray(graph?.children) ? graph.children : [];
@@ -1704,7 +1704,7 @@ async function _openBranchInfoDialog(branchPath) {
   );
 
   if (err || !cur) {
-    rows.push(`<div style="color:#d97a7a;">${_escape(err || `branch "${branchPath}" not found`)}</div>`);
+    rows.push(`<div style="color:#d97a7a;">${_escape(err || `branch "${historyPath}" not found`)}</div>`);
   } else {
     kv("path", `#${_escape(cur.path)}`);
     if (cur.label) kv("label", _escape(cur.label));
@@ -1731,7 +1731,7 @@ async function _openBranchInfoDialog(branchPath) {
 
   el.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <span style="color:#8fbf9f;font-size:13px;">branch #${_escape(branchPath)} · info</span>
+      <span style="color:#8fbf9f;font-size:13px;">branch #${_escape(historyPath)} · info</span>
       <button type="button" class="bi-close" style="background:transparent;color:#6b7d72;border:none;font-size:18px;cursor:pointer;padding:0 4px;">×</button>
     </div>
     <div class="bi-body">${rows.join("")}</div>
@@ -1799,13 +1799,13 @@ function _openNewBranchDialog() {
     .filter((b) => !b.deleted)
     .sort((a, b) => a.path.localeCompare(b.path));
 
-  const curBranch = _portalState()?.descriptor?.address?.branch || "0";
+  const curHistory = _portalState()?.descriptor?.address?.branch || "0";
   const curPath = _portalState()?.descriptor?.address?.pathByNames || "/";
   const atRoot = curPath === "/" || curPath === "";
 
   const opt = (b) => {
     const label = b.path === "0" ? "main (#0)" : `#${b.path}${b.label ? ` — ${_escape(b.label)}` : ""}`;
-    const sel = b.path === curBranch ? " selected" : "";
+    const sel = b.path === curHistory ? " selected" : "";
     return `<option value="${b.path}"${sel}>${label}</option>`;
   };
 
@@ -2238,7 +2238,7 @@ function _openMergeDialog() {
 
       const result = await _state.client.do(
         "/@branch-manager",
-        "merge-branches",
+        "merge-histories",
         args,
       );
       const r = result?.result || result;
@@ -2257,7 +2257,7 @@ function _openMergeDialog() {
       // Switch INTO the merged branch (being + view together) so the
       // conflict catalog surfaces in the active view AND the relative
       // mediator summon below rides the merged branch's socket seat.
-      await switchIntoBranch(r.path);
+      await switchIntoHistory(r.path);
 
       if (summonMediator) {
         // Fire-and-forget. The mediator's first response arrives via
@@ -2506,7 +2506,7 @@ function _renderConflictRow(item, sourceA, sourceB, kind) {
     const r = document.createElement("div");
     r.style.cssText = "font-size:10px;color:#9ab2a3;";
     const strategy = res.strategy ? `strategy: ${res.strategy}` : "manual override";
-    const src = res.sourceBranch ? ` · from #${res.sourceBranch}` : "";
+    const src = res.sourceHistory ? ` · from #${res.sourceHistory}` : "";
     const when = res.date ? ` · ${_shortStamp(res.date)}` : "";
     r.textContent = `${strategy}${src}${when}`;
     row.appendChild(r);
@@ -2556,7 +2556,7 @@ function _actionButton(label, onclick) {
   return b;
 }
 
-async function _summonMediatorForBranch(branchPath) {
+async function _summonMediatorForBranch(historyPath) {
   try {
     _showBranchEvent("✨ summoning @merge-mediator…");
     await _state.client.call(
@@ -2564,8 +2564,8 @@ async function _summonMediatorForBranch(branchPath) {
       {
         from: "user",
         content:
-          `Walk me through the conflicts on #${branchPath}. ` +
-          `The catalog is at ${_state.story}/.branches/${branchPath}/conflicts. ` +
+          `Walk me through the conflicts on #${historyPath}. ` +
+          `The catalog is at ${_state.story}/.branches/${historyPath}/conflicts. ` +
           `Pick up at the first row marked status=open and propose a resolution.`,
       },
     );

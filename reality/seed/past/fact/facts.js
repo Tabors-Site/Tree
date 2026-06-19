@@ -132,14 +132,14 @@ export async function logFact(input, opts = {}) {
   // — not from the actor's branch. For same-world Facts the two
   // happen to match; for cross-world Facts they differ. See
   // CROSS-WORLD.md.
-  branch = input.branch;
+  branch = input.history;
 
   if (!through || !act) {
     throw new Error("logFact requires through and act");
   }
   if (typeof branch !== "string" || !branch.length) {
     throw new Error(
-      `logFact: branch is required (got ${JSON.stringify(branch)}). ` +
+      `logFact: history is required (got ${JSON.stringify(branch)}). ` +
       `Derive it from the target's address (the reel where this Fact lands), ` +
       `not from the actor's branch.`,
     );
@@ -228,21 +228,21 @@ export async function logFact(input, opts = {}) {
     // Load the scope module separately from running the check. A load
     // failure is a genuine pre-bootstrap signal (branch infra not yet
     // loaded) and is safe to swallow. But the check ITSELF must FAIL
-    // CLOSED: if getBranchScopeSpaceId / isTargetInBranchScope throws
+    // CLOSED: if getHistoryScopeSpaceId / isTargetInHistoryScope throws
     // (a resolver bug, a missing branch row), the write is REFUSED,
     // not silently allowed. A scope gate that fails open is no gate —
     // an out-of-scope write would slip through on any internal error.
     let scopeMod = null;
     try {
-      scopeMod = await import("../../materials/branch/branchScope.js");
+      scopeMod = await import("../../materials/history/historyScope.js");
     } catch {
       scopeMod = null; // pre-bootstrap: branch infra not loaded
     }
     if (scopeMod) {
-      const { isTargetInBranchScope, getBranchScopeSpaceId } = scopeMod;
+      const { isTargetInHistoryScope, getHistoryScopeSpaceId } = scopeMod;
       let scopeSpaceId;
       try {
-        scopeSpaceId = await getBranchScopeSpaceId(branch);
+        scopeSpaceId = await getHistoryScopeSpaceId(branch);
       } catch (err) {
         throw new IbpError(
           IBP_ERR.FORBIDDEN,
@@ -254,7 +254,7 @@ export async function logFact(input, opts = {}) {
       if (scopeSpaceId) {
         let allowed;
         try {
-          allowed = await isTargetInBranchScope(branch, normalizedTarget);
+          allowed = await isTargetInHistoryScope(branch, normalizedTarget);
         } catch (err) {
           throw new IbpError(
             IBP_ERR.FORBIDDEN,
@@ -393,7 +393,7 @@ export async function logFact(input, opts = {}) {
       // Branch-scoped: the delivery targets a specific world; a
       // sibling branch holding the same crossOrigin tuple is a
       // different reel and must not suppress this stamp.
-      branch,
+      history: branch,
       "of.kind": finalTarget.kind,
       "of.id":   finalTarget.id,
       "params.crossOrigin.actId":   incomingCrossOrigin.actId,
@@ -421,7 +421,7 @@ export async function logFact(input, opts = {}) {
     wasRemote: Boolean(hookData.wasRemote ?? wasRemote),
     foldSeq: typeof foldSeq === "number" ? foldSeq : null,
     date: new Date(),
-    branch,
+    history: branch,
   };
 
   // Reel-bearing path: allocate seq, chain the hash, insert — all
@@ -590,12 +590,12 @@ export async function logFact(input, opts = {}) {
 async function prevHashAt(kind, id, prevSeq, branch, session = null) {
   if (!(prevSeq > 0)) return GENESIS_PREV;
 
-  const { isMain, resolveBranchLineage, getBranchPoint } =
-    await import("../../materials/branch/branches.js");
+  const { isMain, resolveHistoryLineage, getBranchPoint } =
+    await import("../../materials/history/histories.js");
 
   let owner = branch;
   if (!isMain(branch)) {
-    const lineage = await resolveBranchLineage(branch); // main → leaf
+    const lineage = await resolveHistoryLineage(branch); // main → leaf
     owner = null;
     for (let i = lineage.length - 1; i >= 0; i--) {
       const here = lineage[i];
@@ -605,11 +605,11 @@ async function prevHashAt(kind, id, prevSeq, branch, session = null) {
     if (!owner) return GENESIS_PREV;
   }
 
-  const branchClause = isMain(owner)
-    ? { $or: [{ branch: "0" }, { branch: { $exists: false } }] }
-    : { branch: owner };
+  const historyClause = isMain(owner)
+    ? { $or: [{ history: "0" }, { history: { $exists: false } }] }
+    : { history: owner };
   let q = Fact.findOne(
-    { "of.kind": kind, "of.id": id, seq: prevSeq, ...branchClause },
+    { "of.kind": kind, "of.id": id, seq: prevSeq, ...historyClause },
     { _id: 1 },
   ).lean();
   if (session) q = q.session(session);
@@ -691,13 +691,13 @@ export function groupByReel(deltaF) {
       // branch=0 targeting the same being. logFact already required
       // branch upstream, so here we hold the caller to it — no silent
       // remap to main. If branch is absent we throw rather than guess.
-      if (typeof spec.branch !== "string" || !spec.branch.length) {
+      if (typeof spec.history !== "string" || !spec.history.length) {
         throw new Error(
-          `groupByReel: fact spec is missing branch (${spec.verb}:${spec.act} on ` +
+          `groupByReel: fact spec is missing history (${spec.verb}:${spec.act} on ` +
           `${of.kind}:${String(of.id).slice(0,8)}). Upstream caller must thread it.`,
         );
       }
-      const branch = spec.branch;
+      const branch = spec.history;
       const key = `${branch}:${of.kind}:${of.id}`;
       const entry = factsByReel.get(key)
         || { branch, kind: of.kind, id: String(of.id), facts: [] };
@@ -961,7 +961,7 @@ function inferTargetWorld(spec, moment, localStory) {
   if (spec?.of?.world?.story && spec?.of?.world?.branch) {
     return { world: spec.of.world };
   }
-  const branch = spec?.branch || moment?.actorAct?.branch || null;
+  const branch = spec?.history || moment?.actorAct?.history || null;
   if (!branch || !localStory) return null;
   return { world: { story: localStory, branch } };
 }
@@ -1105,7 +1105,7 @@ export async function getFacts({
   startDate,
   endDate,
   beingId,
-  branch,
+  history: branch,
 }) {
   if (!spaceId) throw new Error("Missing required parameter: spaceId");
 

@@ -10,7 +10,7 @@
 // available path under the chosen parent. The substrate handles the
 // rest — the new branch is queryable through SEE on
 // `<story>/./branches/<path>` and can accept its own facts via
-// moment.actorAct?.branch threading (Pass 4 wires that).
+// moment.actorAct?.history threading (Pass 4 wires that).
 //
 // Pause / unpause / promote-to-live ship in later passes (6.5 and
 // 10 respectively). The role advertises the can entry but the
@@ -19,7 +19,7 @@
 // I am scripted cognition. The portal renders my can entries as a form;
 // no LLM apparatus runs here.
 
-export const branchManagerRole = Object.freeze({
+export const historyManagerRole = Object.freeze({
   name: "branch-manager",
   description:
     "Creates and manages branches — divergent worlds forked from a past moment. Click @branch-manager at the story root to mint a new branch from a chosen parent + anchor.",

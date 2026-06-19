@@ -2245,7 +2245,7 @@ export async function runExtensionMigrations(moment) {
   // Find the .extensions place heaven space once, so per-extension queries are scoped correctly.
   const { HEAVEN_SPACE } = await import("../seed/materials/space/heavenSpaces.js");
   const { findByHeavenSpace } = await import("../seed/materials/projections.js");
-  const { default: Projection } = await import("../seed/materials/branch/projection.js");
+  const { default: Projection } = await import("../seed/materials/history/projection.js");
   const extensionsParent = await findByHeavenSpace(HEAVEN_SPACE.EXTENSIONS, "0");
 
   for (const [name, { manifest, instance }] of loaded) {

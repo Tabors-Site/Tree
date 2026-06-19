@@ -214,7 +214,7 @@ async function handleMateRequest(message, ctx, precomputedName = null) {
   if (!homeSpaceId) {
     try {
       const { findRoot } = await import("../../../materials/projections.js");
-      const branch = ctx?.actorAct?.branch || "0";
+      const branch = ctx?.actorAct?.history || "0";
       const roots = await findRoot("space", branch);
       homeSpaceId = roots?.[0]?.id || null;
     } catch {

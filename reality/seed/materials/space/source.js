@@ -47,7 +47,7 @@ import { matterContentId } from "../matter/matterId.js";
 import { HEAVEN_SPACE } from "./heavenSpaces.js";
 import { I_AM } from "../being/seedBeings.js";
 import { initProjection, tombstoneProjection } from "../projections.js";
-import ProjectionModel, { projectionKey } from "../branch/projection.js";
+import ProjectionModel, { projectionKey } from "../history/projection.js";
 import { anchorFile } from "../matter/anchor.js";
 
 // Lazy putContent; same boot-order rationale as the loader's lazy

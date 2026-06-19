@@ -20,7 +20,7 @@ import { seedFromPrivateKeyPem } from "./keys.js";
 import { entropyToMnemonic } from "./mnemonic.js";
 import { emitFact } from "../../past/fact/facts.js";
 
-const branchOf = (ctx) => ctx?.moment?.actorAct?.branch || ctx?.branch || "0";
+const historyOf = (ctx) => ctx?.moment?.actorAct?.history || ctx?.branch || "0";
 
 export function keyHostEnv() {
   return {
@@ -30,7 +30,7 @@ export function keyHostEnv() {
     // locked-and-not-connected or keyless. The branch is the moment's, never defaulted
     // for a real export (the "0" fallback only covers a standalone harness run).
     "load-key": async ({ args: [nameId] }, ctx) =>
-      loadSigningKey(String(nameId), branchOf(ctx)),
+      loadSigningKey(String(nameId), historyOf(ctx)),
 
     // paperForm(privateKeyPem) → the key's 32-byte seed as 24 BIP39 words (the SAME
     // entropyToMnemonic(seedFromPrivateKeyPem(pem)) the JS handler runs). Null when the
@@ -62,7 +62,7 @@ export function keyHostEnv() {
         of:      { kind: "being", id: asker },
         params:  { exportedNameId: String(exportedNameId) },
         actId:   sc?.actId || null,
-        branch:  branchOf(ctx),
+        history:  historyOf(ctx),
       }, sc);
       return true;
     },

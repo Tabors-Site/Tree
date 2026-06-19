@@ -47,7 +47,7 @@ export async function isBeingDead(beingId, branch) {
   if (typeof branch !== "string" || !branch.length) {
     throw new Error(
       "isBeingDead requires branch as a non-empty string. " +
-      "Pass moment?.actorAct?.branch or the explicit branch the " +
+      "Pass moment?.actorAct?.history or the explicit branch the " +
       "read is happening on — no main-bias default.",
     );
   }

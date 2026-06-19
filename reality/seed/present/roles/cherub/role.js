@@ -19,8 +19,8 @@
 //   connect  . bind an existing identity (credentials or token) to
 //              a session.
 //   release  . drop a session's binding. The result carries the
-//              being's homeBranch as seatBranch so the transport
-//              resets the session's currentBranch.
+//              being's homeHistory as seatHistory so the transport
+//              resets the session's currentHistory.
 //   switch   . change THIS session's branch on the same being.
 //              Per-session — does not touch other sockets of the
 //              same being. Stamps an audit fact on the new branch.
@@ -28,7 +28,7 @@
 //
 // Branch seating: handlers never touch the socket (the moment path
 // can't carry one — acts are records). Handlers that change which
-// branch the session rides return `seatBranch`; the WS transport,
+// branch the session rides return `seatHistory`; the WS transport,
 // the only layer that owns the socket, applies it after the moment
 // seals. Stamp-then-seat: a refused stamp leaves the session's
 // branch untouched.
@@ -49,7 +49,7 @@ import Being from "../../../materials/being/being.js";
 import {
   isFirstBeing,
   findBeingCandidatesByName,
-  findHomeBranchOfBeing,
+  findHomeHistoryOfBeing,
   verifyPassword,
   generateToken,
 } from "../../../materials/being/identity.js";
@@ -207,9 +207,9 @@ async function birthHandler({ payload, ctx }) {
       identityToken,
       beingAddress: `${getStoryDomain()}/@${being.name}`,
       // First-being birth: the transport seats the session's
-      // currentBranch to the new being's homeBranch (which the birth
+      // currentHistory to the new being's homeHistory (which the birth
       // fact set to this moment's branch).
-      seatBranch:   ctx?.moment?.actorAct?.branch || null,
+      seatHistory:   ctx?.moment?.actorAct?.history || null,
       // The new being is placed inside this home space (with a coord).
       // Surface it so the portal can land the camera at home directly,
       // without waiting for the post-seal projection fold to expose
@@ -232,7 +232,7 @@ async function birthHandler({ payload, ctx }) {
   }
 
   const { findByName } = await import("../../../materials/projections.js");
-  const branch = ctx?.moment?.actorAct?.branch || "0";
+  const branch = ctx?.moment?.actorAct?.history || "0";
   const cherubParent = await findByName("being", "cherub", branch);
   const parentBeingId = cherubParent ? String(cherubParent.id) : null;
   // The being belongs to the signed-in NAME (its trueName), not i-am.
@@ -270,9 +270,9 @@ async function birthHandler({ payload, ctx }) {
     identityToken,
     beingAddress: `${getStoryDomain()}/@${being.name}`,
     // Subsequent-user birth: the transport seats the session's
-    // currentBranch to the new being's homeBranch (the moment's
+    // currentHistory to the new being's homeHistory (the moment's
     // branch). Same shape as the first-user return above.
-    seatBranch:   ctx?.moment?.actorAct?.branch || null,
+    seatHistory:   ctx?.moment?.actorAct?.history || null,
     // See first-user branch above: lets the portal land at home directly
     // and dodge the post-seal projection-fold race.
     homeSpaceId:  being.homeSpace ? String(being.homeSpace) : null,
@@ -344,10 +344,10 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
       name:         being.name,
       // The branch this being owns as their present. The transport
       // (the only layer that holds the socket) seats
-      // socket.currentBranch from this after the moment seals. Same
+      // socket.currentHistory from this after the moment seals. Same
       // model for birth/connect/release/switch: BE results are the
-      // only writers of socket.currentBranch.
-      seatBranch:   being.homeBranch || null,
+      // only writers of socket.currentHistory.
+      seatHistory:   being.homeHistory || null,
     };
   }
 
@@ -378,7 +378,7 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
         .slice(0, 5);
       for (const candidate of candidates) {
         const fresh = await loadProjection(
-          "being", String(candidate._id), candidate.homeBranch || "0",
+          "being", String(candidate._id), candidate.homeHistory || "0",
         );
         const currentTrueName = fresh?.state?.trueName ?? null;
         if (currentTrueName && String(currentTrueName) === String(ownerNameId)) {
@@ -393,7 +393,7 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
             owned:        true,
             // Seat the session on the being's home branch, same as the
             // credential/inherit connects.
-            seatBranch:   candidate.homeBranch || null,
+            seatHistory:   candidate.homeHistory || null,
           };
         }
       }
@@ -570,7 +570,7 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
                 fatherStory: targetBeing.qualities.father?.story || getStoryDomain(),
               },
               actId:   moment?.actId || null,
-              branch:  moment?.actorAct?.branch || "0",
+              history:  moment?.actorAct?.history || "0",
             },
             moment,
           );
@@ -598,7 +598,7 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
     if (canInhabitAsFather) {
       const { loadProjection } = await import("../../../materials/projections.js");
       const fatherSlot = await loadProjection(
-        "being", String(identity.beingId), targetBeing.homeBranch || "0",
+        "being", String(identity.beingId), targetBeing.homeHistory || "0",
       );
       driverTrueName = fatherSlot?.state?.trueName || String(identity.beingId);
     }
@@ -613,9 +613,9 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
       // can render the connect lifecycle correctly (vessel-mode).
       asFather:     canInhabitAsFather,
       // Inherit-connect (or father-admit): the transport seats the
-      // session's currentBranch to the target being's homeBranch,
+      // session's currentHistory to the target being's homeHistory,
       // same model as credentials connect.
-      seatBranch:   targetBeing.homeBranch || null,
+      seatHistory:   targetBeing.homeHistory || null,
     };
   }
 
@@ -642,9 +642,9 @@ function extractTargetName(address) {
 
 async function releaseHandler({ identity }) {
   // Frame reset. The session unbinds the being; the transport seats
-  // the socket's currentBranch back to the being's homeBranch (the
+  // the socket's currentHistory back to the being's homeHistory (the
   // branch they were birthed on, what they own as their present).
-  // findHomeBranchOfBeing falls back to the default branch for
+  // findHomeHistoryOfBeing falls back to the default branch for
   // unknown ids and legacy rows.
   //
   // Sign-out closes the signing session: a released identity must not
@@ -662,8 +662,8 @@ async function releaseHandler({ identity }) {
     const { lockSigning } = await import("../../../materials/name/signingSession.js");
     lockSigning(String(identity.beingId));
   }
-  const seatBranch = await findHomeBranchOfBeing(identity?.beingId);
-  return { released: true, seatBranch };
+  const seatHistory = await findHomeHistoryOfBeing(identity?.beingId);
+  return { released: true, seatHistory };
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -672,7 +672,7 @@ async function releaseHandler({ identity }) {
 // reel my acts ride), so it lives in BE alongside connect/release/
 // birth/death.
 //
-// Per-session isolation: only THIS socket's currentBranch changes.
+// Per-session isolation: only THIS socket's currentHistory changes.
 // The same being can have N concurrent sockets, each with its own
 // branch; switching one doesn't touch the others. Identity is
 // invariant across branches; only the per-session "which branch am
@@ -682,33 +682,33 @@ async function releaseHandler({ identity }) {
 // Stamp-then-seat: beVerb stamps the be:switch audit fact on the
 // NEW branch (so that branch's view of this being's biography
 // records the switch-in event at T), and only after the moment
-// seals does the transport seat socket.currentBranch from
-// result.seatBranch. A refused stamp leaves the session's branch
+// seals does the transport seat socket.currentHistory from
+// result.seatHistory. A refused stamp leaves the session's branch
 // untouched. The old branch's reel naturally shows "no more acts
 // after T" without an explicit terminator.
 // ────────────────────────────────────────────────────────────────────
 
 async function switchHandler({ payload, identity, moment }) {
-  const targetBranch = String(payload?.branch || "").trim();
-  if (!targetBranch) {
+  const targetHistory = String(payload?.branch || "").trim();
+  if (!targetHistory) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "be:switch requires `branch`");
   }
 
-  const { isMain, loadBranch } = await import("../../../materials/branch/branches.js");
-  if (!isMain(targetBranch)) {
+  const { isMain, loadHistory } = await import("../../../materials/history/histories.js");
+  if (!isMain(targetHistory)) {
     // The destination must exist and be live. The wire's pause/delete
     // gate checks the moment's branch (which handleBe points at the
     // destination for switch); these checks are the seed-level
     // authority for callers that don't come through the wire.
-    const row = await loadBranch(targetBranch);
+    const row = await loadHistory(targetHistory);
     if (!row) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, `be:switch: branch "${targetBranch}" not found`);
+      throw new IbpError(IBP_ERR.INVALID_INPUT, `be:switch: branch "${targetHistory}" not found`);
     }
     if (row.deleted) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, `be:switch: branch "${targetBranch}" is deleted`);
+      throw new IbpError(IBP_ERR.INVALID_INPUT, `be:switch: branch "${targetHistory}" is deleted`);
     }
     if (row.paused) {
-      throw new IbpError(IBP_ERR.STORY_PAUSED, `be:switch: branch "${targetBranch}" is paused`);
+      throw new IbpError(IBP_ERR.STORY_PAUSED, `be:switch: branch "${targetHistory}" is paused`);
     }
   }
 
@@ -719,37 +719,37 @@ async function switchHandler({ payload, identity, moment }) {
   // orphan reel — a biography with no be:birth, folding to a nameless,
   // grantless state.
   const { loadOrFold } = await import("../../../materials/projections.js");
-  const destSlot = await loadOrFold("being", String(identity.beingId), targetBranch);
+  const destSlot = await loadOrFold("being", String(identity.beingId), targetHistory);
   if (!destSlot?.state?.name) {
     throw new IbpError(
       IBP_ERR.FORBIDDEN,
       `be:switch: @${identity?.name || identity?.beingId} does not exist on branch ` +
-        `"${targetBranch}" (born after the fork, or on a different lineage). ` +
+        `"${targetHistory}" (born after the fork, or on a different lineage). ` +
         `A session can only be seated on a branch where the being's reel folds to a birth.`,
     );
   }
   if (destSlot.state?.qualities?.death?.time) {
     throw new IbpError(
       IBP_ERR.FORBIDDEN,
-      `be:switch: @${identity?.name || identity?.beingId} is dead on branch "${targetBranch}"`,
+      `be:switch: @${identity?.name || identity?.beingId} is dead on branch "${targetHistory}"`,
     );
   }
 
   // The pre-switch branch. On the wire path handleBe threads it in
   // the payload (the moment itself rides the DESTINATION branch, so
-  // actorAct.branch is not the old branch there). In-moment
+  // actorAct.history is not the old branch there). In-moment
   // self-switches have no wire hint; the actor's act branch IS the
   // branch they were seated on.
-  const fromBranch =
-    (typeof payload?.fromBranch === "string" && payload.fromBranch) ||
-    moment?.actorAct?.branch ||
+  const fromHistory =
+    (typeof payload?.fromHistory === "string" && payload.fromHistory) ||
+    moment?.actorAct?.history ||
     null;
 
   return {
     switched:   true,
-    fromBranch,
-    toBranch:   targetBranch,
-    seatBranch: targetBranch,
+    fromHistory,
+    toHistory:   targetHistory,
+    seatHistory: targetHistory,
     beingId:    identity?.beingId || null,
   };
 }
@@ -908,7 +908,7 @@ async function _registerHumanWithFreshHome({
       qualities: {},
     },
     actId:  moment?.actId || null,
-    branch: moment?.actorAct?.branch || "0",
+    history: moment?.actorAct?.history || "0",
   }, moment);
 
   // ── 2. Birth the being into the new home ──
@@ -1033,7 +1033,7 @@ async function _birthViaWordOrJs({ name, password, importKey, parentBeingId, own
   if (importKey || !ownerNameId) return jsBirth();
 
   const { resolveRoleWord, runRoleWord, bornBeingFrom } = await import("../../word/roleWordRegistry.js");
-  const ir = resolveRoleWord("cherub", "birth", moment?.actorAct?.branch);
+  const ir = resolveRoleWord("cherub", "birth", moment?.actorAct?.history);
   if (!ir || !moment) return jsBirth(); // not converted, or no moment → JS
 
   const { findByName } = await import("../../../materials/projections.js");
@@ -1092,7 +1092,7 @@ async function _constantTimeReject(password) {
  */
 async function _connectViaWordOrJs({ name, password, moment }) {
   const { resolveRoleWord, runRoleWord } = await import("../../word/roleWordRegistry.js");
-  const ir = resolveRoleWord("cherub", "connect", moment?.actorAct?.branch);
+  const ir = resolveRoleWord("cherub", "connect", moment?.actorAct?.history);
   if (!ir) return null; // not converted → JS
   const { connectHostEnv, selectConnectFlow } = await import("./connectHost.js");
   // run ONLY the credential flow — the file also holds the owned/inherit flows, which
@@ -1100,7 +1100,7 @@ async function _connectViaWordOrJs({ name, password, moment }) {
   const flow = selectConnectFlow(ir, "credential");
   if (!flow) return null;
   const { randomUUID } = await import("node:crypto");
-  const branch = moment?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.history || "0";
   const sc = { actId: randomUUID(), actorAct: { branch }, identity: { beingId: "arrival", name: "arrival" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   try {
     const { result } = await runRoleWord([flow], { moment: sc, branch, trigger: { name, password }, env: { host: connectHostEnv() } });
@@ -1113,7 +1113,7 @@ async function _connectViaWordOrJs({ name, password, moment }) {
       beingAddress:  `${getStoryDomain()}/@${decoded.name}`,
       beingId:       String(decoded.beingId),
       name:          decoded.name,
-      seatBranch:    result.seat ?? null,
+      seatHistory:    result.seat ?? null,
     };
   } catch (e) {
     if (e && e.__wordRefusal) {
@@ -1133,7 +1133,7 @@ async function _connectViaWordOrJs({ name, password, moment }) {
  */
 async function _connectOwnedViaWord({ address, callerNameId, moment }) {
   const { resolveRoleWord, runRoleWord } = await import("../../word/roleWordRegistry.js");
-  const ir = resolveRoleWord("cherub", "connect", moment?.actorAct?.branch);
+  const ir = resolveRoleWord("cherub", "connect", moment?.actorAct?.history);
   if (!ir) return null;
   const targetName = extractTargetName(address);
   if (!targetName) return null;
@@ -1141,7 +1141,7 @@ async function _connectOwnedViaWord({ address, callerNameId, moment }) {
   const flow = selectConnectFlow(ir, "owned");
   if (!flow) return null;
   const { randomUUID } = await import("node:crypto");
-  const branch = moment?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.history || "0";
   const sc = { actId: randomUUID(), actorAct: { branch }, identity: { beingId: "name", name: "name" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   const { result } = await runRoleWord([flow], { moment: sc, branch, trigger: { name: targetName, caller: String(callerNameId) }, env: { host: connectHostEnv() } });
   if (!result?.token || result.owned !== true) return null; // not owned → fall through
@@ -1154,7 +1154,7 @@ async function _connectOwnedViaWord({ address, callerNameId, moment }) {
     beingId:       String(decoded.beingId),
     name:          decoded.name,
     owned:         true,
-    seatBranch:    result.seat ?? null,
+    seatHistory:    result.seat ?? null,
   };
 }
 
@@ -1168,13 +1168,13 @@ async function _connectOwnedViaWord({ address, callerNameId, moment }) {
  */
 async function _connectInheritViaWord({ address, identity, moment }) {
   const { resolveRoleWord, runRoleWord } = await import("../../word/roleWordRegistry.js");
-  const ir = resolveRoleWord("cherub", "connect", moment?.actorAct?.branch);
+  const ir = resolveRoleWord("cherub", "connect", moment?.actorAct?.history);
   if (!ir) return null;
   const { connectHostEnv, selectConnectFlow } = await import("./connectHost.js");
   const flow = selectConnectFlow(ir, "inherit");
   if (!flow) return null;
   const { randomUUID } = await import("node:crypto");
-  const branch = moment?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.history || "0";
   const sc = { actId: randomUUID(), actorAct: { branch }, identity: { beingId: identity?.beingId }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   let result;
   try {
@@ -1196,7 +1196,7 @@ async function _connectInheritViaWord({ address, identity, moment }) {
     name:          decoded.name,
     inherited:     true,
     asFather:      !!result.asFather,
-    seatBranch:    result.seatBranch ?? null,
+    seatHistory:    result.seatHistory ?? null,
   };
 }
 
@@ -1316,7 +1316,7 @@ async function handleCherubMate(message, ctx) {
   if (!homeSpaceId) {
     try {
       const { findRoot } = await import("../../../materials/projections.js");
-      const branch = ctx?.actorAct?.branch || "0";
+      const branch = ctx?.actorAct?.history || "0";
       const roots = await findRoot("space", branch);
       homeSpaceId = roots?.[0]?.id || null;
     } catch { homeSpaceId = null; }

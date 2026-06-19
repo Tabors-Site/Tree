@@ -80,12 +80,12 @@ export async function dispatchIbp(carrier, msg, ack) {
     const foreign = getForeignTargetDomain(env.address);
     if (foreign) {
       // Caller's home identity. beingId from the carrier; branch from
-      // the carrier's currentBranch (the actor's home world). Without
+      // the carrier's currentHistory (the actor's home world). Without
       // a beingId we can't open a local Act, so we fall back to a
       // bare forward (anonymous SEE etc.) which doesn't attach to any
       // Act on this side.
       const actorBeingId = carrier?.beingId || null;
-      const actorBranch = carrier?.currentBranch || "0";
+      const actorHistory = carrier?.currentHistory || "0";
       // The NAME the actor signs as (carrier-only, never client payload). It
       // is what a foreign story verifies the cross-world deed against.
       const actorNameId = carrier?.nameId || null;
@@ -96,7 +96,7 @@ export async function dispatchIbp(carrier, msg, ack) {
           );
           const { peerAck } = await crossStoryDispatch({
             envelope: env,
-            actor: { beingId: actorBeingId, branch: actorBranch, nameId: actorNameId },
+            actor: { beingId: actorBeingId, branch: actorHistory, nameId: actorNameId },
             identity: { beingId: actorBeingId, name: carrier?.name || null, nameId: actorNameId },
           });
           if (typeof ack === "function") ack(peerAck);

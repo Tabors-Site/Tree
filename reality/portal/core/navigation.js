@@ -33,9 +33,9 @@ export const STALE_SESSION_CODES = new Set([
 // the last NON-heaven address so the 3D view can restore on activate.
 export function isHeavenChildAddress(address) {
   if (typeof address !== "string" || address.length === 0) return false;
-  const noBranch = address.replace(/#[^/]+/, "");
-  const slash = noBranch.indexOf("/");
-  const path = slash >= 0 ? noBranch.slice(slash) : noBranch;
+  const noHistory = address.replace(/#[^/]+/, "");
+  const slash = noHistory.indexOf("/");
+  const path = slash >= 0 ? noHistory.slice(slash) : noHistory;
   return path.startsWith("/.");
 }
 
@@ -50,16 +50,16 @@ export function createNavigation(ctx) {
   // Branch stickiness. Doctrine (2026-06-04): the address bar IS the
   // source of truth — a FULL typed address without `#` means main.
   // Only relative shorthands ("/foo", "~") inherit the active branch.
-  function withActiveBranch(address) {
+  function withActiveHistory(address) {
     if (typeof address !== "string" || !address) return address;
     if (address.includes("#")) return address;
-    const activeBranch = state.get("descriptor")?.address?.branch || "0";
-    if (activeBranch === "0") return address;
+    const activeHistory = state.get("descriptor")?.address?.branch || "0";
+    if (activeHistory === "0") return address;
     const story = state.get("discovery")?.story;
     if (!story) return address;
     if (address.startsWith(story)) return address;
     if (address.startsWith("/") || address.startsWith("~")) {
-      return `${story}#${activeBranch}${address === "/" ? "/" : address}`;
+      return `${story}#${activeHistory}${address === "/" ? "/" : address}`;
     }
     return address;
   }
@@ -79,7 +79,7 @@ export function createNavigation(ctx) {
       const path = desc?.address?.pathByNames || "/";
       return `${story}${bq}${path}${trimmed}`.replace(/\/+@/, "/@");
     }
-    return withActiveBranch(trimmed);
+    return withActiveHistory(trimmed);
   }
 
   // The current position as a full dispatchable address, and the
@@ -159,11 +159,11 @@ export function createNavigation(ctx) {
 
   // ── navigate ────────────────────────────────────────────────────
 
-  async function navigate(address, { fromHistory = false } = {}) {
+  async function navigate(address, { fromNav = false } = {}) {
     const client = ctx.client;
     if (!client) return;
     try {
-      address = withActiveBranch(address);
+      address = withActiveHistory(address);
       // Ghost walk: while a rewind anchor is set, every navigate
       // carries the SAME `at:` qualifier — the user walks around in
       // the past, and all four views render the fold at that moment.
@@ -224,7 +224,7 @@ export function createNavigation(ctx) {
       // History push unless we're stepping through it. Store the FULL
       // IBP-form address (story + branch + path) so back/forward
       // restores the exact view even after branch hops.
-      if (!fromHistory) {
+      if (!fromNav) {
         const story = desc?.address?.place || state.get("discovery")?.story || "";
         const branch = desc?.address?.branch || "0";
         const path = desc?.address?.pathByNames || "/";
@@ -232,13 +232,13 @@ export function createNavigation(ctx) {
         const canonical = story
           ? `${story}${bq}${path === "/" ? "/" : path}`
           : (desc?.address?.pathByNames || address);
-        const history = state.get("history");
-        const historyIndex = state.get("historyIndex");
-        if (history[historyIndex] !== canonical) {
-          const trimmed = history.slice(0, historyIndex + 1);
+        const navStack = state.get("navStack");
+        const navIndex = state.get("navIndex");
+        if (navStack[navIndex] !== canonical) {
+          const trimmed = navStack.slice(0, navIndex + 1);
           trimmed.push(canonical);
-          partial.history = trimmed;
-          partial.historyIndex = trimmed.length - 1;
+          partial.navStack = trimmed;
+          partial.navIndex = trimmed.length - 1;
         }
       }
 
@@ -292,18 +292,18 @@ export function createNavigation(ctx) {
   // ── History ─────────────────────────────────────────────────────
 
   function back() {
-    const i = state.get("historyIndex");
+    const i = state.get("navIndex");
     if (i <= 0) return;
-    state.set({ historyIndex: i - 1 });
-    navigate(state.get("history")[i - 1], { fromHistory: true });
+    state.set({ navIndex: i - 1 });
+    navigate(state.get("navStack")[i - 1], { fromNav: true });
   }
 
   function forward() {
-    const i = state.get("historyIndex");
-    const history = state.get("history");
-    if (i >= history.length - 1) return;
-    state.set({ historyIndex: i + 1 });
-    navigate(history[i + 1], { fromHistory: true });
+    const i = state.get("navIndex");
+    const navStack = state.get("navStack");
+    if (i >= navStack.length - 1) return;
+    state.set({ navIndex: i + 1 });
+    navigate(navStack[i + 1], { fromNav: true });
   }
 
   // ── Rewind / return-to-now ─────────────────────────────────────
@@ -501,7 +501,7 @@ export function createNavigation(ctx) {
     forward,
     rewindTo,
     returnToNow,
-    withActiveBranch,
+    withActiveHistory,
     resolveAddressInput,
     currentPositionAddress,
     selfStance,

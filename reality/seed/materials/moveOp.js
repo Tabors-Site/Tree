@@ -111,7 +111,7 @@ async function moveHandler({ target, params, moment }) {
   // post-fold query.
   let fromSpaceId = null;
   const { loadOrFold } = await import("./projections.js");
-  const branch = moment?.actorAct?.branch || "0";
+  const branch = moment?.actorAct?.history || "0";
   if (kind === "space") {
     const slot = await loadOrFold("space", targetId, branch);
     if (!slot) {

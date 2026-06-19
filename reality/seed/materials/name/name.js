@@ -112,7 +112,7 @@ const NameSchema = new mongoose.Schema({
   // fact's own position on the reel (the fact-reel is the time).
   connected: { type: Boolean, default: false },
 
-  // No `homeBranch`, `isRemote`, or `homeStory`. A Name's identity is
+  // No `homeHistory`, `isRemote`, or `homeStory`. A Name's identity is
   // above the branch timeline (no branch seating) and its row only ever
   // exists on its home story (the story is implicit — a story's
   // data is that story's). A Name acting on a foreign story is

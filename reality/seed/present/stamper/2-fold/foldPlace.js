@@ -34,7 +34,7 @@
 // moment re-folds. The actor model holds.
 
 import { fold } from "./foldEngine.js";
-import { findByPosition, assertBranchOrThrow } from "../../../materials/projections.js";
+import { findByPosition, assertHistoryOrThrow } from "../../../materials/projections.js";
 import { ORIENTATION, validateOrientation } from "./orientation.js";
 import Act from "../../../past/act/act.js";
 import Fact from "../../../past/fact/fact.js";
@@ -97,8 +97,8 @@ export async function foldPlace(beingId, orientation = ORIENTATION.FORWARD, opts
   // place renders against one branch's facts. No silent default —
   // a missing branch here means a perimeter threading bug, surfaced
   // loud at the fold seam.
-  const branch = assertBranchOrThrow(
-    opts.moment?.actorAct?.branch || opts.branch,
+  const branch = assertHistoryOrThrow(
+    opts.moment?.actorAct?.history || opts.branch,
     "foldPlace(opts)",
   );
 

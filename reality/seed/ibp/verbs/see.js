@@ -41,7 +41,7 @@ import {
 import { describeReel } from "../../past/fact/facts.js";
 import { describeActChain } from "../../past/act/actChain.js";
 import { describeBeingsCatalog } from "../../materials/being/beingsCatalog.js";
-import { describeBranchesCatalog, describeMergeConflicts } from "../../materials/branch/branchesCatalog.js";
+import { describeHistoriesCatalog, describeMergeConflicts } from "../../materials/history/historiesCatalog.js";
 import {
   registerSeeOperation,
   unregisterSeeOperation,
@@ -99,25 +99,25 @@ function publicDirectoryTargetFromPath(path) {
   if (!m) return null;
   return { kind: m[1] === "beings" ? "being" : "space", id: decodeURIComponent(m[2]) };
 }
-// `.branches` / `.branches/<branchPath>` — branch tree catalog. Bare
+// `.histories` / `.branches/<historyPath>` — branch tree catalog. Bare
 // returns the root view (main + its children). With a path returns the
 // lineage for that branch + its direct children. Read-only synthetic
 // catalog; no Act/Fact, no scheduler involvement. Mirrors the
 // .beings / .acts pattern.
 //
-// `.branches/<branchPath>/conflicts` — merge conflict catalog. Only
-// meaningful when <branchPath> was created by merge-branches (has
+// `.branches/<historyPath>/conflicts` — merge conflict catalog. Only
+// meaningful when <historyPath> was created by merge-branches (has
 // mergeSources set). Returns the per-reel conflict descriptors the
 // merge-mediator role walks the operator through.
 function branchesTargetFromPath(path) {
   if (typeof path !== "string") return null;
   const mConflicts = path.match(/^\/?\.branches\/([^/]+)\/conflicts\/?$/);
   if (mConflicts) {
-    return { branchPath: decodeURIComponent(mConflicts[1]), kind: "conflicts" };
+    return { historyPath: decodeURIComponent(mConflicts[1]), kind: "conflicts" };
   }
   const m = path.match(/^\/?\.branches(?:\/([^/]+))?\/?$/);
   if (!m) return null;
-  return { branchPath: m[1] ? decodeURIComponent(m[1]) : "0", kind: "tree" };
+  return { historyPath: m[1] ? decodeURIComponent(m[1]) : "0", kind: "tree" };
 }
 
 /**
@@ -203,11 +203,11 @@ export async function seeVerb(target, opts = {}) {
         target: { kind: "see-op", value: addrString },
         seeOp: addrString,
         moment: opts.moment || null,
-        // actorBranch = the caller's branch (their session's
-        // currentBranch). Lets a being seated on #0 SEE op-dispatch
+        // actorHistory = the caller's branch (their session's
+        // currentHistory). Lets a being seated on #0 SEE op-dispatch
         // onto any branch without needing to exist there. See
-        // authorize.js "actorBranch vs targetBranch."
-        actorBranch: opts.currentBranch || null,
+        // authorize.js "actorHistory vs targetHistory."
+        actorHistory: opts.currentHistory || null,
       });
       if (!decision.ok) {
         throw new IbpError(
@@ -221,15 +221,15 @@ export async function seeVerb(target, opts = {}) {
         || opts.payload
         || {};
       // Op handlers receive the resolved branch: either the caller's
-      // currentBranch context, or the operator's `#main` pointer when
+      // currentHistory context, or the operator's `#main` pointer when
       // unset. Never literal "0" — the pointer is the source of truth.
-      const { getDefaultBranch } = await import("../../materials/branch/branchRegistry.js");
-      const handlerBranch = opts.currentBranch || await getDefaultBranch();
+      const { getDefaultHistory } = await import("../../materials/history/historyRegistry.js");
+      const handlerHistory = opts.currentHistory || await getDefaultHistory();
       return await op.handler({
         identity: opts.identity || null,
         args: dispatchArgs,
         ctx: opts.ctx || null,
-        branch: handlerBranch,
+        branch: handlerHistory,
       });
     }
   }
@@ -245,7 +245,7 @@ export async function seeVerb(target, opts = {}) {
     identity = null,
     currentUser = null,
     currentStory = null,
-    currentBranch = null,
+    currentHistory = null,
     payload = null,
     moment = null,
   } = opts;
@@ -274,7 +274,7 @@ export async function seeVerb(target, opts = {}) {
       identity,
       currentStory,
       currentUser,
-      currentBranch,
+      currentHistory,
       payload,
       moment,
       addressKind: opts.addressKind,
@@ -290,14 +290,14 @@ export async function seeVerb(target, opts = {}) {
     currentStory: currentStory || getStoryDomain(),
     currentUser: currentUser || identity?.name || null,
     // No "0" hardcode — leave null when the caller didn't pass one.
-    // parseStance falls through to branchPointer="main" which
-    // resolveBranchPointers canonicalizes via the operator-controlled
+    // parseStance falls through to historyPointer="main" which
+    // resolveHistoryPointers canonicalizes via the operator-controlled
     // registry (set-pointer can re-point main away from "0").
-    currentBranch: currentBranch || null,
+    currentHistory: currentHistory || null,
   };
   const parsed = parseWithContext(addrString, parseCtx);
-  const { resolveBranchPointers } = await import("../address.js");
-  const expanded = await resolveBranchPointers(expand(parsed, parseCtx), parseCtx);
+  const { resolveHistoryPointers } = await import("../address.js");
+  const expanded = await resolveHistoryPointers(expand(parsed, parseCtx), parseCtx);
 
   // Thread descriptor short-circuit. SEE on `<story>/./threads/<id>`
   // returns the synthetic projection from describeThread instead of
@@ -313,7 +313,7 @@ export async function seeVerb(target, opts = {}) {
       verb: "see",
       target: { kind: "position", spaceId: threadsSpaceId, isDiscovery: false },
       moment,
-      actorBranch: currentBranch || null,
+      actorHistory: currentHistory || null,
     });
     if (!decision.ok) {
       throw new IbpError(
@@ -364,7 +364,7 @@ export async function seeVerb(target, opts = {}) {
       verb: "see",
       target: { kind: "position", spaceId: factoryPresentId, isDiscovery: false },
       moment,
-      actorBranch: currentBranch || null,
+      actorHistory: currentHistory || null,
     });
     if (!decision.ok) {
       throw new IbpError(
@@ -453,8 +453,8 @@ export async function seeVerb(target, opts = {}) {
   if (publicTarget) {
     const { loadOrFold } = await import("../../materials/projections.js");
     const storyDomain = getStoryDomain();
-    const { getDefaultBranch: _gDB } = await import("../../materials/branch/branchRegistry.js");
-    const branch = expanded.right?.branch || parseCtx.currentBranch || await _gDB();
+    const { getDefaultHistory: _gDB } = await import("../../materials/history/historyRegistry.js");
+    const branch = expanded.right?.branch || parseCtx.currentHistory || await _gDB();
     const slot = await loadOrFold(publicTarget.kind, publicTarget.id, branch);
     const notFoundCode = publicTarget.kind === "being"
       ? IBP_ERR.BEING_NOT_FOUND
@@ -503,42 +503,42 @@ export async function seeVerb(target, opts = {}) {
   }
 
   // Branches catalog short-circuit. SEE on `<story>/.branches` (or
-  // `<story>/.branches/<branchPath>`) returns the branch tree as a
+  // `<story>/.branches/<historyPath>`) returns the branch tree as a
   // read-only graph. No Act, no Fact, no scheduler — same posture as
   // .beings / .acts. The portal calls this on every navigate to draw
   // the branch chips; routing it through SEE keeps the chips out of
   // the rate-limit budget on the caller's being.
-  const branchesTarget = branchesTargetFromPath(expanded.right?.path);
-  if (branchesTarget) {
+  const historiesTarget = branchesTargetFromPath(expanded.right?.path);
+  if (historiesTarget) {
     const storyDomain = getStoryDomain();
     // Resolve named pointers to canonical paths. A request for
     // `.branches/main` should walk main's current canonical lineage;
     // re-pointing main later changes what this catalog returns
     // without needing per-caller updates. Canonical paths (digit
     // start) pass through untouched.
-    let canonicalBranchPath = branchesTarget.branchPath;
-    if (/^[a-z]/.test(canonicalBranchPath)) {
+    let canonicalHistoryPath = historiesTarget.historyPath;
+    if (/^[a-z]/.test(canonicalHistoryPath)) {
       try {
-        const { resolvePointer, isPointerName } = await import("../../materials/branch/branchRegistry.js");
-        if (isPointerName(canonicalBranchPath)) {
-          const resolved = await resolvePointer(canonicalBranchPath);
-          if (resolved) canonicalBranchPath = resolved;
+        const { resolvePointer, isPointerName } = await import("../../materials/history/historyRegistry.js");
+        if (isPointerName(canonicalHistoryPath)) {
+          const resolved = await resolvePointer(canonicalHistoryPath);
+          if (resolved) canonicalHistoryPath = resolved;
         }
       } catch {
         // Pointer resolution unavailable (pre-bootstrap): fall through
-        // with the literal string. describeBranchesCatalog throws if
+        // with the literal string. describeHistoriesCatalog throws if
         // it can't find a Branch row, surfacing the bad input.
       }
     }
-    const isConflictsView = branchesTarget.kind === "conflicts";
+    const isConflictsView = historiesTarget.kind === "conflicts";
     const pathSuffix = isConflictsView
-      ? `/.branches/${branchesTarget.branchPath}/conflicts`
-      : `/.branches/${branchesTarget.branchPath}`;
+      ? `/.branches/${historiesTarget.historyPath}/conflicts`
+      : `/.branches/${historiesTarget.historyPath}`;
     const graph = isConflictsView
       ? null
-      : await describeBranchesCatalog(canonicalBranchPath);
+      : await describeHistoriesCatalog(canonicalHistoryPath);
     const conflicts = isConflictsView
-      ? await describeMergeConflicts(canonicalBranchPath)
+      ? await describeMergeConflicts(canonicalHistoryPath)
       : null;
     return {
       address: {
@@ -547,11 +547,11 @@ export async function seeVerb(target, opts = {}) {
         being: null,
         spaceId: null,
         pathByNames: pathSuffix,
-        branch: branchesTarget.branchPath,
+        branch: historiesTarget.historyPath,
       },
       isSpaceRoot: false,
       isHomeRoot: false,
-      isBranchesCatalog: !isConflictsView,
+      isHistoriesCatalog: !isConflictsView,
       isMergeConflictsCatalog: isConflictsView,
       branches: graph,
       conflicts,
@@ -579,10 +579,10 @@ export async function seeVerb(target, opts = {}) {
     const requestedBefore = typeof payload?.before === "string" && payload.before.length
       ? payload.before
       : undefined;
-    const { getDefaultBranch: _gDB } = await import("../../materials/branch/branchRegistry.js");
-    const chainBranch = expanded.right?.branch || parseCtx.currentBranch || await _gDB();
+    const { getDefaultHistory: _gDB } = await import("../../materials/history/historyRegistry.js");
+    const chainHistory = expanded.right?.branch || parseCtx.currentHistory || await _gDB();
     const chain = await describeActChain(actChainBeingId, {
-      branch: chainBranch,
+      branch: chainHistory,
       ...(requestedLimit ? { limit: requestedLimit } : {}),
       ...(requestedBefore ? { before: requestedBefore } : {}),
     });
@@ -609,16 +609,16 @@ export async function seeVerb(target, opts = {}) {
   // Stance auth. Branch threads via target.branch so authorize.js's
   // role-walk can fold the target's qualities at the right point. For
   // the wire-level SEE, branch comes from the parsed address or the
-  // socket's tracked currentBranch.
-  // resolveBranchPointers above canonicalizes expanded.right.branch
+  // socket's tracked currentHistory.
+  // resolveHistoryPointers above canonicalizes expanded.right.branch
   // for both explicit-#branch and implicit-#main addresses. The
   // fallback chain below covers legacy callers that bypass parse;
   // the final fallback resolves the operator's `#main` pointer
   // through the registry — never literal "0".
-  const { getDefaultBranch: _gDB } = await import("../../materials/branch/branchRegistry.js");
-  const seeBranch =
+  const { getDefaultHistory: _gDB } = await import("../../materials/history/historyRegistry.js");
+  const seeHistory =
     expanded.right?.branch ||
-    currentBranch ||
+    currentHistory ||
     await _gDB();
   const decision = await authorize({
     identity,
@@ -626,11 +626,11 @@ export async function seeVerb(target, opts = {}) {
     target: {
       kind: addressKind === "stance" ? "stance" : "position",
       spaceId: resolved.spaceId,
-      branch:  seeBranch,
+      branch:  seeHistory,
       isDiscovery: false,
     },
     moment,
-    actorBranch: currentBranch || null,
+    actorHistory: currentHistory || null,
   });
   if (!decision.ok) {
     // Anonymous redirect (seed/RolesAreAuth.md "canSee semantics").
@@ -651,19 +651,19 @@ export async function seeVerb(target, opts = {}) {
       const { getSeeOperation } = await import("../seeOps.js");
       const arrivalOp = getSeeOperation("arrival-view");
       if (arrivalOp) {
-        // Resolve branch: prefer the moment's actorAct.branch, then
-        // the wire-parsed currentBranch, then fall through to the
+        // Resolve branch: prefer the moment's actorAct.history, then
+        // the wire-parsed currentHistory, then fall through to the
         // operator's `#main` pointer (never literal "0").
-        const { getDefaultBranch } = await import("../../materials/branch/branchRegistry.js");
-        const arrivalBranch =
-          moment?.actorAct?.branch ||
-          currentBranch ||
-          await getDefaultBranch();
+        const { getDefaultHistory } = await import("../../materials/history/historyRegistry.js");
+        const arrivalHistory =
+          moment?.actorAct?.history ||
+          currentHistory ||
+          await getDefaultHistory();
         return await arrivalOp.handler({
           identity: identity || null,
           args: {},
           ctx: null,
-          branch: arrivalBranch,
+          branch: arrivalHistory,
         });
       }
     }
@@ -685,7 +685,7 @@ export async function seeVerb(target, opts = {}) {
     await maybeAutoGrantOnEntry({
       identity,
       spaceId: resolved.spaceId,
-      branch:  seeBranch,
+      branch:  seeHistory,
       moment,
     });
   }
@@ -813,7 +813,7 @@ async function seeAtTime({
   identity,
   currentStory,
   currentUser,
-  currentBranch,
+  currentHistory,
   payload,
   moment,
   addressKind: addressKindHint,
@@ -834,14 +834,14 @@ async function seeAtTime({
     currentStory: currentStory || getStoryDomain(),
     currentUser: currentUser || identity?.name || null,
     // No "0" hardcode — leave null when the caller didn't pass one.
-    // parseStance falls through to branchPointer="main" which
-    // resolveBranchPointers canonicalizes via the operator-controlled
+    // parseStance falls through to historyPointer="main" which
+    // resolveHistoryPointers canonicalizes via the operator-controlled
     // registry (set-pointer can re-point main away from "0").
-    currentBranch: currentBranch || null,
+    currentHistory: currentHistory || null,
   };
   const parsed = parseWithContext(addrString, parseCtx);
-  const { resolveBranchPointers } = await import("../address.js");
-  const expanded = await resolveBranchPointers(expand(parsed, parseCtx), parseCtx);
+  const { resolveHistoryPointers } = await import("../address.js");
+  const expanded = await resolveHistoryPointers(expand(parsed, parseCtx), parseCtx);
 
   if (threadIdFromPath(expanded.right?.path)) {
     throw new IbpError(
@@ -903,8 +903,8 @@ async function seeAtTime({
     try {
       // Historical fold runs on the same branch the live SEE resolved
       // to. resolved.branch is populated by expand() from the wire's
-      // currentBranch (seeVerb now threads it into parseCtx); foldAt's
-      // assertBranchOrThrow surfaces any threading regression here
+      // currentHistory (seeVerb now threads it into parseCtx); foldAt's
+      // assertHistoryOrThrow surfaces any threading regression here
       // loud rather than silently defaulting to heaven.
       const { state: beingState } = await foldAt(
         "being",
@@ -918,7 +918,7 @@ async function seeAtTime({
       if (histPosition && histPosition !== String(resolved.spaceId)) {
         const { loadProjection } =
           await import("../../materials/projections.js");
-        const { getDefaultBranch: _gDB } = await import("../../materials/branch/branchRegistry.js");
+        const { getDefaultHistory: _gDB } = await import("../../materials/history/historyRegistry.js");
         const _pSlot = await loadProjection(
           "space",
           histPosition,
@@ -958,11 +958,11 @@ async function seeAtTime({
       // (no moment) had no target branch and authorize failed loud
       // for every authenticated caller — the timeline strip's scrub
       // path.
-      branch: resolved.branch || currentBranch || null,
+      branch: resolved.branch || currentHistory || null,
       isDiscovery: false,
     },
     moment,
-    actorBranch: currentBranch || null,
+    actorHistory: currentHistory || null,
   });
   if (!decision.ok) {
     throw new IbpError(
@@ -1005,8 +1005,8 @@ async function _redirectResolvedToSpace(resolved, positionRow) {
   // Branch comes from the resolved stance — never a literal "0".
   // loadOrFold (not loadProjection) so a sub-branch whose ancestors
   // were planted on a parent branch still walks the lineage.
-  const { getDefaultBranch } = await import("../../materials/branch/branchRegistry.js");
-  const walkBranch = resolved.branch || await getDefaultBranch();
+  const { getDefaultHistory } = await import("../../materials/history/historyRegistry.js");
+  const walkHistory = resolved.branch || await getDefaultHistory();
   const chain = [];
   let cursor = positionRow;
   while (cursor) {
@@ -1014,7 +1014,7 @@ async function _redirectResolvedToSpace(resolved, positionRow) {
     if (!cursor.parent) break;
     const { loadOrFold: _lP } =
       await import("../../materials/projections.js");
-    const _cSlot = await _lP("space", cursor.parent, walkBranch);
+    const _cSlot = await _lP("space", cursor.parent, walkHistory);
     cursor = _cSlot
       ? {
           _id: _cSlot.id,

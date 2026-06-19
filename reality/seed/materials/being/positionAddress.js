@@ -85,7 +85,7 @@ export function isPositionCrossWorld(position, home) {
   if (!parts.story) return false;  // bare spaceId is always same-world
   if (!home?.story) return true;
   if (parts.story !== home.story) return true;
-  const positionBranch = parts.branch || "0";
-  const homeBranch     = home.branch  || "0";
-  return positionBranch !== homeBranch;
+  const positionHistory = parts.branch || "0";
+  const homeHistory     = home.branch  || "0";
+  return positionHistory !== homeHistory;
 }

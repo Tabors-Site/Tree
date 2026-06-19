@@ -31,7 +31,7 @@
 //
 // CONTENT-ADDRESSED. A fact's `_id` IS its hash:
 //
-//   _id = SHA-256(p | canonical(content incl branch))
+//   _id = SHA-256(p | canonical(content incl history))
 //
 // The same deed, in the same world, after the same history, IS the
 // same fact — identity is intrinsic, not assigned. No random ids;
@@ -108,13 +108,13 @@ const FactSchema = new mongoose.Schema({
   // INTEGRITY — per-reel hash chain.
   //
   //   p   — prev-hash: the previous fact's `_id` on the same reel
-  //         (lineage-aware on branches: the first divergent fact
+  //         (lineage-aware on histories: the first divergent fact
   //         chains to the parent's fact at the branchPoint;
   //         GENESIS_PREV at seq=1). Folds the entire history behind
   //         this fact into its identity.
   //   _id — the self-hash (see header). There is no separate `h`.
   //
-  // Per-reel, not global. Each (branch, of.kind, of.id) reel
+  // Per-reel, not global. Each (history, of.kind, of.id) reel
   // is its own chain. The chain DETECTS tampering — alter any past
   // fact and its recomputed identity changes, breaking the `p` link
   // of the next. The chain does not REPAIR. Repair is replication's
@@ -148,36 +148,36 @@ const FactSchema = new mongoose.Schema({
   // sealed. See past/fact/hash.js.
   foldSeq: { type: Number, default: null },
 
-  // BRANCH — which world this fact lives in. Default "0" = main.
-  // Branches are divergent worlds that share history with main up to
-  // their branch point; reads in a non-main branch walk the parent
-  // chain's facts up to each per-reel branchPoint, then the branch's
+  // HISTORY — which world this fact lives in. Default "0" = main.
+  // Histories are divergent worlds that share history with main up to
+  // their history point; reads in a non-main history walk the parent
+  // chain's facts up to each per-reel branchPoint, then the history's
   // own divergent facts. See seed/timeline.md for the full doctrine
-  // and seed/materials/branch/branch.js for the metadata schema.
+  // and seed/materials/history/history.js for the metadata schema.
   //
-  // Legacy rows from before this field landed have no `branch` value;
+  // Legacy rows from before this field landed have no `history` value;
   // the read path treats them as `"0"` via $or-with-$exists matching
   // so existing data participates in main reads without a migration.
-  branch: { type: String, default: "0", index: true },
+  history: { type: String, default: "0", index: true },
 });
 
 FactSchema.index({ through: 1, date: -1 });                                          // a being's reel
 FactSchema.index({ "of.kind": 1, "of.id": 1, date: -1 }, { sparse: true }); // a target's reel (date-ordered, legacy)
-FactSchema.index({ "of.kind": 1, "of.id": 1, seq: 1 }, {                     // a target's reel (seq-ordered, fold path; main / branch-implicit)
+FactSchema.index({ "of.kind": 1, "of.id": 1, seq: 1 }, {                     // a target's reel (seq-ordered, fold path; main / history-implicit)
   partialFilterExpression: { seq: { $type: "number" } },
 });
-// Per-reel uniqueness backstop — branch-aware. Reel identity is
-// (branch, of.kind, of.id); seq is per-reel. The old
-// branch-blind unique index collided whenever main and a branch
+// Per-reel uniqueness backstop — history-aware. Reel identity is
+// (history, of.kind, of.id); seq is per-reel. The old
+// history-blind unique index collided whenever main and a history
 // both held seq N on the same target, even though they're separate
-// reels. The unique constraint MUST include branch.
+// reels. The unique constraint MUST include history.
 //
-// Old index name `target_seq_unique` (without branch) is dropped at
+// Old index name `target_seq_unique` (without history) is dropped at
 // startup by the index-sync repair to release the collision.
-FactSchema.index({ branch: 1, "of.kind": 1, "of.id": 1, seq: 1 }, {
+FactSchema.index({ history: 1, "of.kind": 1, "of.id": 1, seq: 1 }, {
   unique: true,
   partialFilterExpression: { seq: { $type: "number" } },
-  name: "branch_target_seq_unique",
+  name: "history_target_seq_unique",
 });
 FactSchema.index({ actId: 1 }, { sparse: true });                                 // facts within a summon
 FactSchema.index({ verb: 1, act: 1, date: -1 });                                  // "every register, newest first"

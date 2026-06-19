@@ -28,11 +28,11 @@
  * is missing — no silent main-bias, no fallback. Use at every site
  * that needs the moment's branch.
  */
-export function actorBranchFrom(moment, hint) {
-  const branch = moment?.actorAct?.branch;
+export function actorHistoryFrom(moment, hint) {
+  const branch = moment?.actorAct?.history;
   if (typeof branch !== "string" || !branch.length) {
     throw new Error(
-      `actorBranchFrom: moment.actorAct.branch missing${hint ? ` (${hint})` : ""}. ` +
+      `actorHistoryFrom: moment.actorAct.history missing${hint ? ` (${hint})` : ""}. ` +
       `Every moment opener (planActRow, withIAmAct, withBeingAct) must seat the Act on the ctx.`
     );
   }
@@ -41,7 +41,7 @@ export function actorBranchFrom(moment, hint) {
 
 /**
  * Read the actor's story off a moment. Same contract as
- * actorBranchFrom.
+ * actorHistoryFrom.
  */
 export function actorStoryFrom(moment, hint) {
   const story = moment?.actorAct?.story;
@@ -68,13 +68,13 @@ export function actorStoryFrom(moment, hint) {
 export function deriveCrossOrigin(actorAct, target) {
   if (!actorAct || !target) return null;
   const actorStory = actorAct.story;
-  const actorBranch  = actorAct.branch;
+  const actorHistory  = actorAct.history;
   const targetStory = target?.world?.story;
-  const targetBranch  = target?.world?.branch;
-  if (!actorStory || !actorBranch || !targetStory || !targetBranch) {
+  const targetHistory  = target?.world?.branch;
+  if (!actorStory || !actorHistory || !targetStory || !targetHistory) {
     return null;
   }
-  if (actorStory === targetStory && actorBranch === targetBranch) {
+  if (actorStory === targetStory && actorHistory === targetHistory) {
     return null;  // same world; no foreign provenance
   }
   return {
@@ -82,7 +82,7 @@ export function deriveCrossOrigin(actorAct, target) {
     // domain when cross-story. Receiving substrate consumes both
     // shapes uniformly.
     story: actorStory === targetStory ? null : actorStory,
-    branch:  actorBranch,
+    branch:  actorHistory,
     // beingId = the POSITION the act came through (stays the dedupe key with
     // actId). nameId = the SIGNER-of-record (the foreign actor's name), so a
     // foreign father's facts attribute to HIS name, not the vessel's owner.

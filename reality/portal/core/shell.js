@@ -77,7 +77,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
   const viewHost = createViewHost(els.viewRoot);
   const tabs = [];               // [{ ctx, unsubs: [] }]
   let activeCtx = null;
-  let branchBar = null;
+  let historyBar = null;
   let branchBarRefreshTimer = null;
   let tabCounter = 0;
 
@@ -141,18 +141,18 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
       story:    m.discovery?.story || m.descriptor?.address?.place || "",
       username:   m.session?.username || null,
       signedIn:   !!m.session?.token,
-      viewBranch: m.descriptor?.address?.branch || "0",
+      viewHistory: m.descriptor?.address?.branch || "0",
       path:       m.descriptor?.address?.pathByNames || "/",
       // The right stance's @qualifier: an explicitly-navigated stance
       // address wins; otherwise the selected being (clicking a being
       // in ANY view refines the IBPA — the address is the truth every
       // dispatch reads).
       being:      m.descriptor?.address?.being || m.selectedBeing?.name || null,
-      actorBranch: m.actorBranch || "0",
+      actorHistory: m.actorHistory || "0",
       actorPath:   m.actorPosition || "/",
     });
-    els.back.disabled    = !(m.historyIndex > 0);
-    els.forward.disabled = !(m.historyIndex < m.history.length - 1);
+    els.back.disabled    = !(m.navIndex > 0);
+    els.forward.disabled = !(m.navIndex < m.navStack.length - 1);
     els.home.disabled    = !m.session?.token;
     // Socket health dot — reads the live connection state the context
     // already tracks.
@@ -246,7 +246,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
         const result = await ctx.client.be("connect", `${story}/@${beingName}`, {});
         await ctx.adoptSession(result, beingName);
         // Branch pick: if it differs from where connect seated us, switch.
-        if (branch && result?.seatBranch && branch !== String(result.seatBranch)) {
+        if (branch && result?.seatHistory && branch !== String(result.seatHistory)) {
           try { await ctx.client.be("switch", `${story}/@${beingName}`, { branch }); } catch { /* stay on home */ }
         }
         repaintChrome();
@@ -395,10 +395,10 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
 
   // ── Branch / timeline bar (chrome — applies to every view) ──────
 
-  async function ensureBranchBar() {
-    if (branchBar || !activeCtx?.client) return;
-    const { mountBranchBar } = await import("../3d/branch-bar.js");
-    branchBar = mountBranchBar({
+  async function ensureHistoryBar() {
+    if (historyBar || !activeCtx?.client) return;
+    const { mountHistoryBar } = await import("../3d/branch-bar.js");
+    historyBar = mountHistoryBar({
       client:  activeCtx.client,
       story: activeCtx.state.get("discovery")?.story || "treeos.ai",
       // Topbar-hosted: branches/timeline are chrome, present on all
@@ -409,15 +409,15 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
       getState: () => activeCtx?.state.raw,
     });
     const desc = activeCtx.state.get("descriptor");
-    if (desc) branchBar.update(desc);
+    if (desc) historyBar.update(desc);
   }
 
-  function scheduleBranchBarRefresh() {
+  function scheduleHistoryBarRefresh() {
     if (branchBarRefreshTimer) return;
     branchBarRefreshTimer = setTimeout(() => {
       branchBarRefreshTimer = null;
       const desc = activeCtx?.state.get("descriptor");
-      if (desc) branchBar?.update(desc);
+      if (desc) historyBar?.update(desc);
     }, 500);
   }
 
@@ -434,7 +434,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
       if ("session" in partial) repaintTabs();
       repaintChrome();
       if ("descriptor" in partial && partial.descriptor) {
-        branchBar?.update(partial.descriptor);
+        historyBar?.update(partial.descriptor);
         if (meta?.reason === "rewind") setPortalStatus("ghost view — return to now to act");
       }
     }));
@@ -443,16 +443,16 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     }));
     unsubs.push(ctx.events.on("client", (client) => {
       if (ctx === activeCtx) {
-        branchBar?.setClient(client, ctx.state.get("discovery")?.story);
+        historyBar?.setClient(client, ctx.state.get("discovery")?.story);
         window.__state = ctx.state.raw;
       }
     }));
     unsubs.push(ctx.events.on("branch", () => {
-      if (ctx === activeCtx) branchBar?.refreshAddress?.();
+      if (ctx === activeCtx) historyBar?.refreshAddress?.();
     }));
     for (const type of ["live-position", "live-fact", "live-while-historical"]) {
       unsubs.push(ctx.events.on(type, () => {
-        if (ctx === activeCtx) scheduleBranchBarRefresh();
+        if (ctx === activeCtx) scheduleHistoryBarRefresh();
       }));
     }
     return unsubs;
@@ -469,9 +469,9 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     if (ctx === activeCtx) return;
     activeCtx = ctx;
     window.__state = ctx.state.raw;          // legacy readers (branch-bar)
-    branchBar?.setClient(ctx.client, ctx.state.get("discovery")?.story);
+    historyBar?.setClient(ctx.client, ctx.state.get("discovery")?.story);
     const desc = ctx.state.get("descriptor");
-    if (desc) branchBar?.update(desc);
+    if (desc) historyBar?.update(desc);
     repaintTabs();
     repaintChrome();
     await viewHost.switchView(ctx.state.get("activeView") || defaultView, ctx);
@@ -593,9 +593,9 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
   initStanceBar({
     onNavigate: (raw) => activeCtx?.navigation.navigate(raw)
       .catch((err) => setPortalStatus(`see failed: ${err?.code || ""} ${err?.message || ""}`)),
-    onSwitchBranch: (branchPath) => {
+    onSwitchHistory: (historyPath) => {
       import("../3d/branch-bar.js")
-        .then((m) => m.switchIntoBranch(branchPath))
+        .then((m) => m.switchIntoHistory(historyPath))
         .catch((err) => console.warn("[shell] branch switch failed:", err?.message || err));
     },
     // Drive another being your name owns from the left stance. For EVERY BE op
@@ -641,7 +641,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
         }
         const result = await ctx.client.be("connect", `${story}/@${being}`, {});
         await ctx.adoptSession(result, being);
-        if (branch && result?.seatBranch && branch !== String(result.seatBranch)) {
+        if (branch && result?.seatHistory && branch !== String(result.seatHistory)) {
           try { await ctx.client.be("switch", `${story}/@${being}`, { branch }); } catch { /* stay on home */ }
         }
         repaintChrome();
@@ -756,12 +756,12 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
   return {
     ...shellApi,
     viewHost,
-    ensureBranchBar,
+    ensureHistoryBar,
     get activeCtx() { return activeCtx; },
     async startPrimary() {
       await primaryCtx.start();
       await maybeShowNameForm();
-      await ensureBranchBar();
+      await ensureHistoryBar();
       repaintChrome();
     },
     // Full shell teardown. The web page never calls this (the shell
@@ -772,8 +772,8 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
       for (const [target, type, fn] of windowListeners.splice(0)) {
         try { target.removeEventListener(type, fn); } catch {}
       }
-      try { branchBar?.destroy?.(); } catch {}
-      branchBar = null;
+      try { historyBar?.destroy?.(); } catch {}
+      historyBar = null;
       viewHost.destroy();
       for (const t of tabs.splice(0)) {
         for (const u of t.unsubs) { try { u(); } catch {} }

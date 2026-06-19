@@ -10,7 +10,7 @@ import { normalizeAcquisition, alreadyHoldsRole } from "./acquisition.js";
 import { loadOrFold } from "../../materials/projections.js";
 import { emitInternalGrant } from "./acquisitionOps.js";
 
-const branchOf = (ctx) => ctx?.moment?.actorAct?.branch || ctx?.branch || "0";
+const historyOf = (ctx) => ctx?.moment?.actorAct?.history || ctx?.branch || "0";
 
 export function acquisitionHostEnv() {
   return {
@@ -18,7 +18,7 @@ export function acquisitionHostEnv() {
     "role-spec-for-grant": async ({ args: [role, space] }, ctx) => {
       const { spec, hostSpaceId } = await getRoleSpecForGrant(
         { role: String(role || "").trim(), anchorSpaceId: String(space || "").trim() },
-        branchOf(ctx),
+        historyOf(ctx),
       );
       return spec ? { spec, anchor: hostSpaceId, role: String(role).trim() } : null;
     },
@@ -29,7 +29,7 @@ export function acquisitionHostEnv() {
     "asked-policy": ({ args: [found] }) => normalizeAcquisition(found?.spec).asked,
     // does the caller already hold this role at this anchor? (idempotency)
     "already-holds": async ({ args: [caller, role, found] }, ctx) => {
-      const slot = await loadOrFold("being", String(caller), branchOf(ctx));
+      const slot = await loadOrFold("being", String(caller), historyOf(ctx));
       const existing = slot?.state?.qualities?.rolesGranted || [];
       return alreadyHoldsRole(existing, String(role), found?.anchor);
     },
@@ -41,7 +41,7 @@ export function acquisitionHostEnv() {
         anchorSpaceId:  found?.anchor,
         grantedBy:      String(caller),
         moment:      ctx?.moment || null,
-        branch:         branchOf(ctx),
+        history:         historyOf(ctx),
       });
       return true;
     },
@@ -54,7 +54,7 @@ export function acquisitionHostEnv() {
     // owner-of(found) -> the OWNER BEING of the role's anchor space (a read; the queue
     // path reaches them). null when the anchor space has no owner.
     "owner-of": async ({ args: [found] }, ctx) => {
-      const branch = branchOf(ctx);
+      const branch = historyOf(ctx);
       const hostSlot = await loadOrFold("space", String(found?.anchor), branch);
       const ownerId = hostSlot?.state?.owner;
       if (!ownerId) return null;
@@ -64,7 +64,7 @@ export function acquisitionHostEnv() {
     // (a pure compute, no fact). Byte-identical to the prior content build, so the asker
     // stays identified in the content even when the call envelope's `from` is ctx.identity.
     "role-request": async ({ args: [role, found, caller] }, ctx) => {
-      const branch = branchOf(ctx);
+      const branch = historyOf(ctx);
       const askerSlot = await loadOrFold("being", String(caller), branch);
       return {
         role:          String(role),

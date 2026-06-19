@@ -441,7 +441,7 @@ export async function syncRolesToSubstrate() {
 export async function loadLiveRolesFromSubstrate() {
   const { HEAVEN_SPACE } = await import("../../materials/space/heavenSpaces.js");
   const { findByHeavenSpace } = await import("../../materials/projections.js");
-  const { default: Projection } = await import("../../materials/branch/projection.js");
+  const { default: Projection } = await import("../../materials/history/projection.js");
   const parent = await findByHeavenSpace(HEAVEN_SPACE.ROLES, "0");
   if (!parent) return { loaded: 0 };
   const rows = await Projection.find({

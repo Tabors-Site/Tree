@@ -7,6 +7,6 @@
 
 A story is all of its histories.
 Every fact is in it, on some chain, on some history.
-A story has a hash over its histories. The seal binds the whole, and no other story makes it.
-A story lasts. Its facts do not pass, and a history diverges within it, never beyond it.
-The main is the first history of a story. Every other history forks from one already in it.
+A story has a hash over its histories. The seal binds all of it, and no other story makes it.
+A story lasts. Its facts do not pass. A history branches within it, never beyond it.
+The main is the first history of a story. Every other history branches from one already in it.

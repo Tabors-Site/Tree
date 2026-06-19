@@ -57,10 +57,10 @@ registerRoleWord("credential", "credential-attach", new URL("./credential-attach
 async function _credentialGateViaWord(opName, { caller, target, moment }) {
   if (!moment) return null;
   const { resolveRoleWord, runRoleWord } = await import("../../present/word/roleWordRegistry.js");
-  const ir = resolveRoleWord("credential", opName, moment?.actorAct?.branch);
+  const ir = resolveRoleWord("credential", opName, moment?.actorAct?.history);
   if (!ir) return null;
   const { credentialHostEnv } = await import("./credentialHost.js");
-  const b = moment?.actorAct?.branch;
+  const b = moment?.actorAct?.history;
   try {
     const { result } = await runRoleWord(ir, {
       moment, branch: b,
@@ -80,10 +80,10 @@ async function _credentialGateViaWord(opName, { caller, target, moment }) {
 async function _credentialReadViaWord({ caller, target, branch, moment }) {
   if (!moment) return null;
   const { resolveRoleWord, runRoleWord } = await import("../../present/word/roleWordRegistry.js");
-  const ir = resolveRoleWord("credential", "credential-read", moment?.actorAct?.branch);
+  const ir = resolveRoleWord("credential", "credential-read", moment?.actorAct?.history);
   if (!ir) return null;
   const { credentialHostEnv } = await import("./credentialHost.js");
-  const b = branch || moment?.actorAct?.branch; // the moment's branch; never floor to "0"
+  const b = branch || moment?.actorAct?.history; // the moment's branch; never floor to "0"
   try {
     const { result } = await runRoleWord(ir, {
       moment, branch: b,
@@ -196,10 +196,10 @@ registerOperation("credential-read", {
 async function _credentialResetViaWord({ caller, target, branch, moment }) {
   if (!moment) return null;
   const { resolveRoleWord, runRoleWord } = await import("../../present/word/roleWordRegistry.js");
-  const ir = resolveRoleWord("credential", "credential-reset", moment?.actorAct?.branch);
+  const ir = resolveRoleWord("credential", "credential-reset", moment?.actorAct?.history);
   if (!ir) return null;
   const { credentialHostEnv } = await import("./credentialHost.js");
-  const b = branch || moment?.actorAct?.branch; // the moment's branch; never floor to "0"
+  const b = branch || moment?.actorAct?.history; // the moment's branch; never floor to "0"
   try {
     const { result } = await runRoleWord(ir, {
       moment, branch: b,

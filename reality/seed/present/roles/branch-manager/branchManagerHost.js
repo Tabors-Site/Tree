@@ -3,7 +3,7 @@
 // The CONTROL strand (the gate chain: identity present, name valid, canonical valid,
 // .branches space resolved) is the `.word`; the genuine computation + the heaven-routed
 // reads + the lone WORLD write STAY host. This is the thin adapter that wires the SAME
-// branchRegistry primitives the set-pointer JS handler imports into ctx.env.host, so the
+// historyRegistry primitives the set-pointer JS handler imports into ctx.env.host, so the
 // `.word` reaches the REAL logic with ZERO reimplementation — it calls the exact
 // isPointerName / readPointers / findPointersSpaceId / doVerb the JS handler calls.
 //
@@ -19,7 +19,7 @@
 // callHost invokes each builtin as `fn({ args: [...] }, ctx)`. NONE lay a fact now: the
 // validators + the map merge/prune are pure computes (see-ops), the pointer-map + .branches
 // id are heaven reads (see-ops), and the WRITE is the .word's targeted `set/replace the
-// space branchesSpace's qualities.pointers` (the one do:set-space).
+// space historiesSpace's qualities.pointers` (the one do:set-space).
 
 import {
   isPointerName,
@@ -27,19 +27,19 @@ import {
   RESERVED_POINTERS,
   readPointers,
   findPointersSpaceId,
-} from "../../../materials/branch/branchRegistry.js";
+} from "../../../materials/history/historyRegistry.js";
 
 // Mirrors CANONICAL_PATH_RE in ops.js (which mirrors BRANCH_RE in address.js). The
 // set-pointer handler rejects structurally-invalid `canonical` arguments with it.
 const CANONICAL_PATH_RE = /^(?:0|\d+(?:[a-z]+\d+)*(?:[a-z]+)?)$/;
 
 // branch the write rides: the moment's act branch, else the eval ctx branch, else main.
-const branchOf = (ctx) => ctx?.moment?.actorAct?.branch || ctx?.branch || "0";
+const historyOf = (ctx) => ctx?.moment?.actorAct?.history || ctx?.branch || "0";
 
-export function branchManagerHostEnv() {
+export function historyManagerHostEnv() {
   return {
     // ── genuine computation: the two validation regexes (host:, not see) ──────────────
-    // isPointerName(name) → the SAME branchRegistry grammar gate the JS handler calls.
+    // isPointerName(name) → the SAME historyRegistry grammar gate the JS handler calls.
     // Returns the normalized (lowercased + trimmed) name when valid, else null (the
     // `.word` reads `If no validName:` to refuse). Normalization rides here so the value
     // the .word writes is exactly what the JS handler wrote (`name.trim().toLowerCase()`).
@@ -55,17 +55,17 @@ export function branchManagerHostEnv() {
     },
 
     // ── heaven-routed reads the see-registry does not model yet (host:, see blockers) ──
-    // readPointers() → the full pointer map from the `.branches` heaven space's
+    // readPointers() → the full pointer map from the `.histories` heaven space's
     // qualities.pointers (MAIN-pinned heaven read). The JS handler calls this verbatim.
     "read-pointers": async () => readPointers(),
-    // findPointersSpaceId() → the `.branches` heaven space's id, or null when heaven
+    // findPointersSpaceId() → the `.histories` heaven space's id, or null when heaven
     // isn't planted (the `.word` refuses INTERNAL on absence, like the JS handler).
     "find-pointers-space-id": async () => findPointersSpaceId(),
 
     // ── the merge COMPUTE (a see-op; the WRITE is the .word's targeted set-space) ──────
     // set-pointer-map(current, name, canonical) → the next pointer map + the previous target
     // (current[name] || null). A pure perception of the updated map from inputs, NO fact;
-    // the `.word` then stamps it with `replace the space branchesSpace's qualities.pointers`.
+    // the `.word` then stamps it with `replace the space historiesSpace's qualities.pointers`.
     "set-pointer-map": ({ args: [current, name, canonical] }) => {
       const map = current && typeof current === "object" ? current : {};
       const previous = Object.prototype.hasOwnProperty.call(map, name) ? map[name] : null;

@@ -15,11 +15,11 @@ import Act from "./act.js";
 import Fact from "../fact/fact.js";
 import { redactSecrets } from "../../materials/redact.js";
 import {
-  resolveBranchLineage,
-  loadBranch,
+  resolveHistoryLineage,
+  loadHistory,
   MAIN,
   isMain,
-} from "../../materials/branch/branches.js";
+} from "../../materials/history/histories.js";
 
 // Cap is high so per-being scrubbable history reaches back to the
 // being's first act even after long sessions of fine-grained
@@ -189,7 +189,7 @@ async function readActChainLineage({ beingId, branch, limit, before }) {
   if (isMain(branch)) {
     const filter = {
       through: beingId,
-      $or: [{ branch: MAIN }, { branch: { $exists: false } }],
+      $or: [{ history: MAIN }, { history: { $exists: false } }],
     };
     if (beforeOK) filter.stampedAt = { $lt: beforeDate };
     return Act.find(filter)
@@ -198,23 +198,23 @@ async function readActChainLineage({ beingId, branch, limit, before }) {
       .lean();
   }
 
-  const lineage = await resolveBranchLineage(branch);
+  const lineage = await resolveHistoryLineage(branch);
   const ranges = [];
   for (let i = 0; i < lineage.length; i++) {
     const here = lineage[i];
     const next = lineage[i + 1] || null;
-    const hereDoc = isMain(here) ? null : await loadBranch(here);
+    const hereDoc = isMain(here) ? null : await loadHistory(here);
     const lower = hereDoc?.createdAt ?? null;
-    const upper = next ? (await loadBranch(next))?.createdAt ?? null : null;
+    const upper = next ? (await loadHistory(next))?.createdAt ?? null : null;
     if (upper && lower && upper <= lower) continue;
-    ranges.push({ branch: here, lower, upper });
+    ranges.push({ history: here, lower, upper });
   }
   if (ranges.length === 0) return [];
 
-  const orClauses = ranges.map(({ branch: b, lower, upper }) => {
-    const branchClause = isMain(b)
-      ? { $or: [{ branch: MAIN }, { branch: { $exists: false } }] }
-      : { branch: b };
+  const orClauses = ranges.map(({ history: b, lower, upper }) => {
+    const historyClause = isMain(b)
+      ? { $or: [{ history: MAIN }, { history: { $exists: false } }] }
+      : { history: b };
     const timeFilter = {};
     if (lower) timeFilter.$gte = lower;
     if (upper) timeFilter.$lt  = upper;
@@ -230,7 +230,7 @@ async function readActChainLineage({ beingId, branch, limit, before }) {
     }
     return {
       through: beingId,
-      ...branchClause,
+      ...historyClause,
       ...(Object.keys(timeFilter).length > 0 ? { stampedAt: timeFilter } : {}),
     };
   });
@@ -280,7 +280,7 @@ function serializeAct(a) {
     answers:         a.answers || null,
     // Branch this Act was stamped on. Null on legacy acts predating
     // the field; clients should treat that as main.
-    branch:          a.branch || null,
+    history:          a.history || null,
     // The canonical inner face this act ran under . orientation + role
     // + position + capabilities + role.canSee-resolved blocks, stamped
     // on every act regardless of the being's cognition. origin is

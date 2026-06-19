@@ -158,19 +158,19 @@ export async function handleBe(socket, env, ack) {
     // is what unauthenticated visitors expect. Cross-branch gate: if
     // the target address explicitly carries a different branch
     // qualifier, refuse before opening the moment.
-    const callerBranch = socket.currentBranch || "0";
-    let _targetBranchResolved = null;
+    const callerHistory = socket.currentHistory || "0";
+    let _targetHistoryResolved = null;
     try {
-      const { parseFromSocket, expand, resolveBeingIds, resolveBranchPointers, getStoryDomain } =
+      const { parseFromSocket, expand, resolveBeingIds, resolveHistoryPointers, getStoryDomain } =
         await import("../../../seed/ibp/address.js");
       const parsed = parseFromSocket(socket, address);
       const expandCtx = {
         currentStory: getStoryDomain(),
         currentUser:    socket.name,
-        currentBranch:  callerBranch,
+        currentHistory:  callerHistory,
         currentPath:    socket.currentPath || null,
       };
-      const expandedWithPointers = await resolveBranchPointers(
+      const expandedWithPointers = await resolveHistoryPointers(
         expand(parsed, expandCtx), expandCtx);
       const expanded = await resolveBeingIds(expandedWithPointers, expandCtx);
 
@@ -180,7 +180,7 @@ export async function handleBe(socket, env, ack) {
       // guard lets those pass through.
       assertNoImpersonation(expanded, socket);
 
-      _targetBranchResolved = expanded?.right?.branch || "0";
+      _targetHistoryResolved = expanded?.right?.branch || "0";
       // Cross-branch dispatch: the caller's BE acts on the target's
       // branch with a crossOrigin block pointing at the caller's
       // branch. emitFact attaches the provenance automatically. See
@@ -191,7 +191,7 @@ export async function handleBe(socket, env, ack) {
       if (err && err.code === IBP_ERR.FORBIDDEN) throw err;
     }
     // Fact lands on the target's branch (parsed from the address by
-    // beVerb); the actor's Act lives on callerBranch. Same-world calls
+    // beVerb); the actor's Act lives on callerHistory. Same-world calls
     // have caller==target and produce no crossOrigin.
     //
     // BE:switch rides the DESTINATION branch: its audit fact lands on
@@ -209,17 +209,17 @@ export async function handleBe(socket, env, ack) {
       opPayload.branch.trim()
         ? opPayload.branch.trim()
         : null;
-    if (switchDest) opPayload.fromBranch = callerBranch;
-    const branch = switchDest || callerBranch;
-    const targetBranch = switchDest || _targetBranchResolved || callerBranch;
+    if (switchDest) opPayload.fromHistory = callerHistory;
+    const branch = switchDest || callerHistory;
+    const targetHistory = switchDest || _targetHistoryResolved || callerHistory;
 
     // Pause / delete gate. BE is a write surface (birth/connect/
     // release); paused or deleted branches refuse every BE op so a
     // frozen or hidden world stays structurally that way. SEE remains
     // open at its own layer so historians can still walk the chain.
     {
-      const { isBranchPaused, isBranchDeleted, isMain, loadBranch } =
-        await import("../../../seed/materials/branch/branches.js");
+      const { isHistoryPaused, isHistoryDeleted, isMain, loadBranch } =
+        await import("../../../seed/materials/history/histories.js");
       // Switch destination must exist before the moment opens — the
       // moment itself rides the destination, so a bogus path would
       // otherwise surface as an internal intake error instead of a
@@ -233,12 +233,12 @@ export async function handleBe(socket, env, ack) {
           { branch: switchDest },
         );
       }
-      if (await isBranchPaused(branch)) {
+      if (await isHistoryPaused(branch)) {
         throw new IbpError(IBP_ERR.STORY_PAUSED,
           `BE refused: branch #${branch} is paused.`,
           { branch });
       }
-      if (await isBranchDeleted(branch)) {
+      if (await isHistoryDeleted(branch)) {
         throw new IbpError(IBP_ERR.STORY_PAUSED,
           `BE refused: branch #${branch} is deleted.`,
           { branch, deleted: true });
@@ -261,7 +261,7 @@ export async function handleBe(socket, env, ack) {
       },
       identity: callerIdentity || { beingId: cherubBeingId, name: "cherub" },
       branch,
-      targetBranch,
+      targetHistory,
     });
 
     // Push the result back. If the caller had an authed beingId we
@@ -279,24 +279,24 @@ export async function handleBe(socket, env, ack) {
     awaitResult
       .then(({ result, actId }) => {
         // Branch seating. BE results are the only writers of
-        // socket.currentBranch: a handler that changes which branch
-        // this session rides returns `seatBranch`, and the transport
+        // socket.currentHistory: a handler that changes which branch
+        // this session rides returns `seatHistory`, and the transport
         // — the only layer that owns the socket — applies it here,
         // after the moment sealed. Stamp-then-seat: a refused moment
         // rejects into the catch below and the session's branch stays
         // where it was. The moment path cannot carry the socket
         // itself (acts are records), which is why the handlers return
         // the branch instead of seating it.
-        if (typeof result?.seatBranch === "string" && result.seatBranch.length > 0) {
-          socket.currentBranch = result.seatBranch;
+        if (typeof result?.seatHistory === "string" && result.seatHistory.length > 0) {
+          socket.currentHistory = result.seatHistory;
           // Mirror the branch to the client so its address display
           // stays truthful (the handshake emitted the initial branch;
           // this keeps it current across switches).
-          try { socket.emit("branch", { branch: result.seatBranch }); } catch { /* fake sockets */ }
+          try { socket.emit("branch", { branch: result.seatHistory }); } catch { /* fake sockets */ }
           // Host observation: keep this connection's matter truthful
           // about which world the session rides.
           import("../../../seed/materials/host/host.js")
-            .then((m) => m.noteSocketBranchRebound({ socketId: socket.id, branch: result.seatBranch }))
+            .then((m) => m.noteSocketHistoryRebound({ socketId: socket.id, branch: result.seatHistory }))
             .catch(() => {});
         }
         pushReply(buildTransportActReply({

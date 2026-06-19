@@ -32,14 +32,14 @@ import mongoose from "mongoose";
  * creation fact.
  *
  * @param {object} args
- * @param {string} args.mergedBranch  the new branch's path
+ * @param {string} args.mergedHistory  the new branch's path
  * @param {string} args.ancestor      the common ancestor's path
  * @param {string} args.actorBeingId  who is performing the merge
  * @returns {Promise<Array<object>>}  fact specs (verb, action, target, ...)
  */
-export async function computeMergeResetFacts({ mergedBranch, ancestor, actorBeingId }) {
-  if (typeof mergedBranch !== "string" || !mergedBranch.length) {
-    throw new Error("computeMergeResetFacts: mergedBranch required");
+export async function computeMergeResetFacts({ mergedHistory, ancestor, actorBeingId }) {
+  if (typeof mergedHistory !== "string" || !mergedHistory.length) {
+    throw new Error("computeMergeResetFacts: mergedHistory required");
   }
   if (typeof ancestor !== "string" || !ancestor.length) {
     throw new Error("computeMergeResetFacts: ancestor required");
@@ -49,7 +49,7 @@ export async function computeMergeResetFacts({ mergedBranch, ancestor, actorBein
   }
 
   // V1: just the inhabit-state reset.
-  return await _inhabitResetFacts({ mergedBranch, ancestor, actorBeingId });
+  return await _inhabitResetFacts({ mergedHistory, ancestor, actorBeingId });
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -65,7 +65,7 @@ export async function computeMergeResetFacts({ mergedBranch, ancestor, actorBein
 // keyed by `${branch}:${type}:${id}`. We filter by branch=ancestor +
 // the inhabitedBy field path under state.qualities.
 // ─────────────────────────────────────────────────────────────────────
-async function _inhabitResetFacts({ mergedBranch, ancestor, actorBeingId }) {
+async function _inhabitResetFacts({ mergedHistory, ancestor, actorBeingId }) {
   const Projection = mongoose.connection.collection("projections");
   const rows = await Projection.find({
     type: "being",
@@ -80,14 +80,14 @@ async function _inhabitResetFacts({ mergedBranch, ancestor, actorBeingId }) {
       verb:    "be",
       act:     "release",
       through: String(actorBeingId),
-      branch:  mergedBranch,
+      history:  mergedHistory,
       of:      { kind: "being", id: beingId },
       params:  {
         inhabitedBy: null,
         _merge: {
           strategy:    "reset",
           rule:        "inhabit-state",
-          sourceBranch: ancestor,
+          sourceHistory: ancestor,
           note:        "branch-private reel reset on merge",
         },
       },

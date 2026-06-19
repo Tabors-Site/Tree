@@ -244,30 +244,30 @@ export function initWebSocketServer(httpServer, originPolicy) {
     // First-person stance tracking. The wire layer reads these to know
     // which branch + position the caller is in (the left side of every
     // IBP bridge). SEE handlers update currentPath after each
-    // successful live read; currentBranch is BE's alone — handlers
-    // return seatBranch and handleBe seats it after the moment seals
+    // successful live read; currentHistory is BE's alone — handlers
+    // return seatHistory and handleBe seats it after the moment seals
     // (birth/connect/release/switch). Token-bound reconnects seat the
-    // being's homeBranch right here, so a being born on #7a lands back
+    // being's homeHistory right here, so a being born on #7a lands back
     // on #7a without re-running BE:connect. Anonymous sockets ride the
     // operator's default branch (the pointer registry — never literal
     // "0"; set-pointer can re-point main).
     socket.currentPath = "/";
     try {
       if (socket.jwt && socket.beingId) {
-        const { findHomeBranchOfBeing } = await import(
+        const { findHomeHistoryOfBeing } = await import(
           "../../seed/materials/being/identity/lookups.js"
         );
-        socket.currentBranch = await findHomeBranchOfBeing(socket.beingId);
+        socket.currentHistory = await findHomeHistoryOfBeing(socket.beingId);
       } else {
-        const { getDefaultBranch } = await import(
-          "../../seed/materials/branch/branchRegistry.js"
+        const { getDefaultHistory } = await import(
+          "../../seed/materials/history/historyRegistry.js"
         );
-        socket.currentBranch = await getDefaultBranch();
+        socket.currentHistory = await getDefaultHistory();
       }
     } catch {
       // Registry not readable this early only on a half-bootstrapped
       // story; main is the honest floor there.
-      socket.currentBranch = "0";
+      socket.currentHistory = "0";
     }
 
     // Client identity tags. Names like `socket.client` / `socket.conn`
@@ -292,12 +292,12 @@ export function initWebSocketServer(httpServer, originPolicy) {
     const beingId = socket.beingId;
     log.debug("WS", `connected: ${socket.id} (being: ${beingId || "anon"})`);
 
-    // Tell the client its BRANCH. socket.currentBranch is the left
+    // Tell the client its BRANCH. socket.currentHistory is the left
     // stance's branch — the world every relative act lands on — and
     // the client must be able to display the full address truthfully
     // (@being#branch → story#view/path). Re-emitted by the BE wire
     // layer whenever a switch re-seats the socket.
-    socket.emit("branch", { branch: socket.currentBranch || "0" });
+    socket.emit("branch", { branch: socket.currentHistory || "0" });
 
     if (beingId) {
       addAuthSession(beingId, socket.id);
@@ -335,7 +335,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
       socketId: socket.id,
       beingId: socket.beingId || null,
       name: socket.name || null,
-      branch: socket.currentBranch || "0",
+      branch: socket.currentHistory || "0",
     });
 
     // Extension-registered socket handlers
@@ -364,7 +364,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
         // grace window (a reconnect cancels it). Only for an authenticated
         // being, never the anonymous @arrival floor.
         if (socket.jwt && socket.name !== "arrival" && getAuthSocketIds(beingId).length === 0) {
-          scheduleAutoRelease(beingId, { name: socket.name, branch: socket.currentBranch || "0" });
+          scheduleAutoRelease(beingId, { name: socket.name, branch: socket.currentHistory || "0" });
         }
       }
       if (
