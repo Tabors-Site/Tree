@@ -1,0 +1,36 @@
+# roleflow.word — what a roleflow IS (a role with an if; a word with a when).
+# The world strand of seed/present/roles/roleFlow.js; the host eval loop, the
+# ctx builder, and the registry lookups stay. It descends from word.word:
+# a role is a word, a when is a word, a roleflow is a word.
+
+A roleflow is a word.
+A roleflow is a being's quality, the program it picks its role by.
+
+A roleflow has clauses, an ordered list. The first passing clause that does not stack is the primary; every passing clause that stacks adds on top.
+
+A clause is a word.
+A clause has a role, the word the being speaks when the clause passes.
+A clause may have a when, the condition the clause passes by.
+A clause may have a stack, true when the clause adds to the role, not replaces it.
+A clause with no when always passes.
+
+A when is a word.
+A when reads the moment as it opens, the caller, the verb, the action, the operation, the intent, the space, the position, whether home, the time, the world, and the being itself.
+A when has operators, eq and ne and in and notIn and gt and gte and lt and lte and present.
+A when can compose, with and, with or, with not.
+
+A clause passes when its when passes, and the being can play the role, and the role's required cognition, if it declares one, is the being's.
+A being can play a role when it holds the role by grant and the role reaches this space, or when the role is a seed role the being's nature already carries.
+
+A roleflow resolves a stack.
+A stack has a primary, the first passing clause that does not stack.
+A stack has modifiers, every passing clause that stacks.
+A stack composes into one role, its capabilities the union, its permissions the union, its prompt the concatenation, the primary's name and cognition kept.
+
+A roleflow may be overruled. A caller may name the role on the entry; if the being can play it, it is the primary and the flow only adds modifiers.
+A roleflow has a floor. When neither a named role nor any clause yields a primary, the being's default role is the primary, if the being can play it.
+A roleflow that yields no primary at all gives no role, and the moment does not open.
+
+A roleflow gives the moment its active role, the primary's name, signed into the act.
+
+A roleflow is a pure word, the same moment folds the same role.

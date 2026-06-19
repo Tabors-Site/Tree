@@ -1,0 +1,24 @@
+# role.word — what a role IS. A theorem: it composes from words already grounded
+# (a being, the verbs, the words a being can speak), so it adds no kernel primitive.
+# Grounded in seed/present/roles/registry.js. Descends from word.word.
+
+A role is a word.
+A role is a composite word, made of the words a being may speak.
+
+A role has a name, a kebab-case handle.
+A role has a can, the set of words it grants.
+A role grants each word for a verb, the verb the word is spoken with.
+A role grants words to see, to do, to call, to be, and to recall.
+A role has a host, the space it is authored on.
+A role reaches its host and the host's descendants.
+A role may have a reach, a path filter that adjusts that coverage.
+A role wears a prompt, the voice it speaks the words in.
+
+A role can be granted to a being, anchored at a space or a being.
+A role is granted whole, by its name; it permits exactly the words it holds.
+A role can stack with a role, and grant the union of their words.
+A role can gate an act: it reaches the target, then it permits the word.
+
+A being wears a role.
+A being may wear a stack of roles.
+A being keeps its grants as it moves; a grant applies where its role reaches.
