@@ -15,10 +15,10 @@
 // (NOT I_AM-through-a-vessel, the cherub shape), so it reads the real moment here
 // rather than being a do-act the bridge would re-attribute. See the cut-spec note.
 
-import { loadSigningKey } from "../../past/act/actSig.js";
-import { seedFromPrivateKeyPem } from "./keys.js";
-import { entropyToMnemonic } from "./mnemonic.js";
-import { emitFact } from "../../past/fact/facts.js";
+import { loadSigningKey } from "../../../past/act/actSig.js";
+import { seedFromPrivateKeyPem } from "../../../materials/name/keys.js";
+import { entropyToMnemonic } from "../../../materials/name/mnemonic.js";
+import { emitFact } from "../../../past/fact/facts.js";
 
 const historyOf = (ctx) => ctx?.moment?.actorAct?.history || ctx?.history || "0";
 

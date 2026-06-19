@@ -26,11 +26,11 @@
 // set-being:coord (in-space) and set-being:position (cross-space).
 // `move` is what beings do TO things in their world.
 
-import Space from "./space/space.js";
-import { registerOperation } from "../ibp/operations.js";
-import { IbpError, IBP_ERR } from "../ibp/protocol.js";
-import { detectTargetKind, targetIdOf } from "./_targetShape.js";
-import { registerRoleWord } from "../present/word/roleWordRegistry.js";
+import Space from "../../../materials/space/space.js";
+import { registerOperation } from "../../../ibp/operations.js";
+import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
+import { detectTargetKind, targetIdOf } from "../../../materials/_targetShape.js";
+import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
 
 // Self-register this slice's co-located WORLD strand (CONVERTING.md): the bridge
 // resolves ("move", "move") to move.word, its host escapes wired by moveHost.js.
@@ -110,7 +110,7 @@ async function moveHandler({ target, params, moment }) {
   // params.fromSpaceId to fire the invalidate without an extra
   // post-fold query.
   let fromSpaceId = null;
-  const { loadOrFold } = await import("./projections.js");
+  const { loadOrFold } = await import("../../../materials/projections.js");
   const branch = moment?.actorAct?.history || "0";
   if (kind === "space") {
     const slot = await loadOrFold("space", targetId, branch);

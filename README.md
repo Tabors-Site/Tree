@@ -1,5 +1,7 @@
 # TreeOS Story
 
+![stamper](stamper.gif)
+
 Plant a seed on a host. It stores and grows a federated and cryptographically signed Story: histories of Named beings who act in space on matter.
 
 It also provides a "5th dimensional" Library that Names can act in to share books of histories, and Search all Stories they are peered with.

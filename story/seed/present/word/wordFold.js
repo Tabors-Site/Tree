@@ -18,12 +18,13 @@ import log from "../../seedStory/log.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SEED = path.resolve(__dirname, "../.."); // seed/
+const STORE = path.join(SEED, "store"); // seed/store — the words live here now
 
 // The foundation words, in descent order: the root first (grounds the structure), then the verb
 // instances. As more `.word`s gather into seed/words/, they join this list.
 const FOUNDATION_WORDS = [
-  path.join(SEED, "words", "word.word"),
-  path.join(SEED, "present", "word", "verbs.word"),
+  path.join(STORE, "words", "word.word"),
+  path.join(STORE, "words", "verbs.word"),
 ];
 
 // Parse "X is a verb." / "Its past is Y." pairs and declare each past. A verb's FIRST declared
@@ -75,7 +76,7 @@ const CONCEPT_WORDS = [
 
 // Split a .word into its declaration body (the `says`) and its # header (the axiom + host pointer).
 function readConceptWord(name) {
-  const text = fs.readFileSync(path.join(SEED, "words", `${name}.word`), "utf8");
+  const text = fs.readFileSync(path.join(STORE, "words", `${name}.word`), "utf8");
   const header = [], body = [];
   for (const line of text.split("\n")) {
     if (line.startsWith("#")) header.push(line.replace(/^#\s?/, ""));

@@ -28,17 +28,16 @@
 // at module load. `seed/services.js` imports this file for side
 // effects; the registry is populated before any caller dispatches.
 
-import { registerOperation } from "../../ibp/operations.js";
-import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
-import { I_AM } from "./seedBeings.js";
+import { registerOperation } from "../../../ibp/operations.js";
+import { IBP_ERR, IbpError } from "../../../ibp/protocol.js";
+import { I_AM } from "../../../materials/being/seedBeings.js";
 import {
   mintCredentialSpec,
   decryptCredential,
-} from "./identity/credentials.js";
-import { hasCredentialAuthority } from "./identity/lineage.js";
-import { doVerb } from "../../ibp/verbs/do.js";
-import { emitFact } from "../../past/fact/facts.js";
-import { registerRoleWord } from "../../present/word/roleWordRegistry.js";
+} from "../../../materials/being/identity/credentials.js";
+import { hasCredentialAuthority } from "../../../materials/being/identity/lineage.js";
+import { doVerb } from "../../../ibp/verbs/do.js";
+import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
 
 // Self-register this module's co-located `.word` slices (CONVERTING.md): importing
 // credentialOps.js (at seed boot, or in a DRY harness) registers them so
@@ -56,7 +55,7 @@ registerRoleWord("credential", "credential-attach", new URL("./credential-attach
 // detached|attached} or null on a clean miss. The cut re-adds _factTarget.
 async function _credentialGateViaWord(opName, { caller, target, moment }) {
   if (!moment) return null;
-  const { resolveRoleWord, runRoleWord } = await import("../../present/word/roleWordRegistry.js");
+  const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
   const ir = resolveRoleWord("credential", opName, moment?.actorAct?.history);
   if (!ir) return null;
   const { credentialHostEnv } = await import("./credentialHost.js");
@@ -79,7 +78,7 @@ async function _credentialGateViaWord(opName, { caller, target, moment }) {
 // re-adds _factTarget (the asker's reel) + coerces hasPlain to a strict boolean.
 async function _credentialReadViaWord({ caller, target, branch, moment }) {
   if (!moment) return null;
-  const { resolveRoleWord, runRoleWord } = await import("../../present/word/roleWordRegistry.js");
+  const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
   const ir = resolveRoleWord("credential", "credential-read", moment?.actorAct?.history);
   if (!ir) return null;
   const { credentialHostEnv } = await import("./credentialHost.js");
@@ -166,7 +165,7 @@ registerOperation("credential-read", {
         { askerBeingId, targetBeingId },
       );
     }
-    const { loadTargetRow } = await import("../_targetShape.js");
+    const { loadTargetRow } = await import("../../../materials/_targetShape.js");
     const beingRow = await loadTargetRow(target, "being", { moment });
     const blob = readCredentialPlainFromBeing(beingRow);
     const plaintext = blob ? decryptCredential(blob) : null;
@@ -195,7 +194,7 @@ registerOperation("credential-read", {
 // attribute to the asker. Returns {targetBeingId, plaintext}, or null on a clean miss.
 async function _credentialResetViaWord({ caller, target, branch, moment }) {
   if (!moment) return null;
-  const { resolveRoleWord, runRoleWord } = await import("../../present/word/roleWordRegistry.js");
+  const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
   const ir = resolveRoleWord("credential", "credential-reset", moment?.actorAct?.history);
   if (!ir) return null;
   const { credentialHostEnv } = await import("./credentialHost.js");
@@ -326,7 +325,7 @@ registerOperation("credential-attach", {
     // Being-parent-only EXCEPT I_AM (universal authority on its own
     // story).
     if (askerBeingId !== I_AM) {
-      const { findBeingParent } = await import("./identity/lineage.js");
+      const { findBeingParent } = await import("../../../materials/being/identity/lineage.js");
       const parentBeingId = await findBeingParent(targetBeingId);
       if (!parentBeingId || String(parentBeingId) !== askerBeingId) {
         throw new IbpError(

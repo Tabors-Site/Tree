@@ -14,9 +14,9 @@
 // moment, so it reads ctx.moment rather than being a plain do-act the bridge
 // would re-attribute to I_AM. See the cut-spec note.
 
-import { emitFact } from "../past/fact/facts.js";
+import { emitFact } from "../../../past/fact/facts.js";
 import { IBPA_RE } from "./portalOp.js";
-import { matterContentId } from "./matter/matterId.js";
+import { matterContentId } from "../../../materials/matter/matterId.js";
 
 const actHistoryOf = (ctx) => ctx?.moment?.actorAct?.history || ctx?.history || "0";
 // The fact-landing branch: same precedence the JS handler uses for the emit
@@ -50,7 +50,7 @@ export function portalHostEnv() {
       const id = t?.id != null ? String(t.id) : null;
       if (kind === "space") return id;
       if (kind === "matter") {
-        const { loadOrFold } = await import("./projections.js");
+        const { loadOrFold } = await import("../../../materials/projections.js");
         const matterSlot = await loadOrFold("matter", id, actHistoryOf(ctx));
         return matterSlot?.state?.spaceId || null;
       }

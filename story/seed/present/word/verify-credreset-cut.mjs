@@ -42,7 +42,7 @@ const { birthBeing } = await import(`${R}/seed/materials/being/identity/birth.js
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { doVerb } = await import(`${R}/seed/ibp/verbs/do.js`);
 const { resolveRoleWord, runRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
-const { credentialHostEnv } = await import(`${R}/seed/materials/being/credentialHost.js`);
+const { credentialHostEnv } = await import(`${R}/seed/store/words/credential/credentialHost.js`);
 const { comparePassword, decryptCredential } = await import(`${R}/seed/materials/being/identity/credentials.js`);
 
 let pass = 0, fail = 0;

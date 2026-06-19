@@ -902,7 +902,7 @@ shape of what a name is.*
 **Definitions.** A **book** is math.md's bundle `B` (TRANSFER) given
 its rightful name: a bounded, sealed slice of one identity's world —
 a finite arrangement of facts and acts, closed under its
-dependencies, named by its hash `id(B) = H(canon(manifest,
+dependencies, named by its hash `id(B) = SHA-256(canonical(manifest,
 parameters, content, cas ledger))`. Its **covers** are its interface:
 a *front cover* of imports (the content-addressed dependencies it
 stands on, present before its start) and a *back cover* of exports

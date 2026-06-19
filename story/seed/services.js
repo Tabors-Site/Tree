@@ -179,7 +179,7 @@ import "./past/fact/chainRoots.js";
 // a space or a matter into a new destination space). The cross-kind
 // shape doesn't belong in any single material's ops file; it lives
 // at materials/ root for that reason. See materials/moveOp.js.
-import "./materials/moveOp.js";
+import "./store/words/move/moveOp.js";
 // Side-effect import. Registers `do set-model` — points a being /
 // space / matter at a model matter (type "model", bytes in the
 // content store) by writing qualities.render.model. Upload is plain
@@ -190,9 +190,13 @@ import "./materials/modelOp.js";
 // pointing at a foreign IBPA. The portal's experience (window /
 // portal / walk-through) is emergent per-viewer from foreign-side
 // stance auth; see materials/portalOp.js + seed/CROSS-WORLD.md.
-import "./materials/portalOp.js";
+import "./store/words/portal/portalOp.js";
 import "./materials/being/ops.js";
-import "./materials/being/credentialOps.js";
+// Side-effect import. grant-role was carved out of being/ops.js into its
+// own store bundle (the word + its handler, portable). being/ops.js still
+// owns revoke-role / set-being / the LLM ops. See store/words/grant-role/.
+import "./store/words/grant-role/index.js";
+import "./store/words/credential/credentialOps.js";
 // Side-effect import. Registers `do grant-inheritation` / `do
 // revoke-inheritation` — authority over a being-tree subtree, handed
 // between Names (delegation) or held by ownership. The being-tree's
@@ -201,7 +205,7 @@ import "./materials/being/inheritationOps.js";
 // Side-effect import. Registers `do key-export` — the NAME's key custody
 // ("back up your key / your exit"). Lives in name/ because the key is a
 // Name concern post-split (a being holds no key). See materials/name/keyOps.js.
-import "./materials/name/keyOps.js";
+import "./store/words/key/keyOps.js";
 // Side-effect import. Registers the role-acquisition ops: ask-role
 // (host policy decides: auto, queue, or refuse) and take-role
 // (walk-in for grabbed:true roles). The acquisition module lives in
@@ -232,7 +236,7 @@ import "./materials/publish/ops.js";
 // write op against `qualities.render` (the seed-owned namespace any
 // matter/space/being can carry: model + animations + sounds + future
 // channels). Sugar over set-<kind>; see seed/ibp/setRender.js.
-import "./ibp/setRender.js";
+import "./store/words/set-render/setRender.js";
 // storyConfig.js self-registers the set-config / delete-config DO
 // ops alongside the setters they wrap. Importing for the side effect.
 import "./storyConfig.js";

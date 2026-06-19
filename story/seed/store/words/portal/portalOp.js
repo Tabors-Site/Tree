@@ -36,12 +36,12 @@
 // human time, which doesn't exist inside the story — a portal ends
 // by `end-matter`, or by a future story-time (moments) mechanism.
 
-import { registerOperation } from "../ibp/operations.js";
-import { IbpError, IBP_ERR } from "../ibp/protocol.js";
-import { emitFact } from "../past/fact/facts.js";
-import { detectTargetKind, targetIdOf } from "./_targetShape.js";
-import { matterContentId } from "./matter/matterId.js";
-import { registerRoleWord } from "../present/word/roleWordRegistry.js";
+import { registerOperation } from "../../../ibp/operations.js";
+import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
+import { emitFact } from "../../../past/fact/facts.js";
+import { detectTargetKind, targetIdOf } from "../../../materials/_targetShape.js";
+import { matterContentId } from "../../../materials/matter/matterId.js";
+import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
 
 // Self-register this module's co-located `.word` slice (CONVERTING.md): importing
 // portalOp.js (at seed boot, or in a DRY harness) registers it so
@@ -96,7 +96,7 @@ async function formPortalHandler({ target, params, moment, identity }) {
   if (kind === "space") {
     spaceId = String(targetIdOf(target));
   } else if (kind === "matter") {
-    const { loadOrFold } = await import("./projections.js");
+    const { loadOrFold } = await import("../../../materials/projections.js");
     const branch = moment?.actorAct?.history || "0";
     const matterSlot = await loadOrFold("matter", String(targetIdOf(target)), branch);
     spaceId = matterSlot?.state?.spaceId || null;

@@ -13,9 +13,9 @@
 // IbpError the JS handler throws (so the messages/codes are byte-identical and the
 // evaluator propagates it to the verb layer exactly as the JS throw would).
 
-import Space from "./space/space.js";
-import { IbpError, IBP_ERR } from "../ibp/protocol.js";
-import { detectTargetKind, targetIdOf } from "./_targetShape.js";
+import Space from "../../../materials/space/space.js";
+import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
+import { detectTargetKind, targetIdOf } from "../../../materials/_targetShape.js";
 
 const historyOf = (ctx) => ctx?.moment?.actorAct?.history || ctx?.history || "0";
 
@@ -79,7 +79,7 @@ export function moveHostEnv() {
       const branch = absent(argHistory) || historyOf(ctx);
       const kind = subjectKind(subject);
       const targetId = targetIdOf(subject);
-      const { loadOrFold } = await import("./projections.js");
+      const { loadOrFold } = await import("../../../materials/projections.js");
 
       // container-mode: the destination must exist (so the fact doesn't seal pointing
       // at nothing) — the SAME Space.exists the JS handler calls.

@@ -40,7 +40,7 @@ const { withIAmAct } = await import(`${R}/seed/sprout.js`);
 const { birthBeing } = await import(`${R}/seed/materials/being/identity/birth.js`);
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { resolveRoleWord, runRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
-const { credentialHostEnv } = await import(`${R}/seed/materials/being/credentialHost.js`);
+const { credentialHostEnv } = await import(`${R}/seed/store/words/credential/credentialHost.js`);
 
 let pass = 0, fail = 0;
 const ok = (l) => { pass++; console.log(`  ✓ ${l}`); };

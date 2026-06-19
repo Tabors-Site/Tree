@@ -38,10 +38,10 @@
 // existing applySetQualities reducer handles unchanged. ONE fact per
 // set-render, rides the calling moment's deltaF normally.
 
-import { registerOperation } from "./operations.js";
-import { IbpError, IBP_ERR } from "./protocol.js";
-import { detectTargetKind } from "../materials/_targetShape.js";
-import { registerRoleWord } from "../present/word/roleWordRegistry.js";
+import { registerOperation } from "../../../ibp/operations.js";
+import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
+import { detectTargetKind } from "../../../materials/_targetShape.js";
+import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
 
 // Self-register the co-located world strand so resolveRoleWord("render",
 // "set-render") finds it (CONVERTING.md step 3). The cut prefers the bridge and
@@ -183,7 +183,7 @@ async function setRenderHandler(ctx) {
   // inner fact joins the caller's moment's deltaF and rides the
   // same actId. set-render itself is skipAudit so we don't stamp two
   // facts for one logical write.
-  const { doVerb } = await import("./verbs/do.js");
+  const { doVerb } = await import("../../../ibp/verbs/do.js");
   const innerOp = `set-${kind}`;
   return doVerb(
     target,

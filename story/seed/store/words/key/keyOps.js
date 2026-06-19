@@ -29,10 +29,10 @@
 // inhabiting a mother's being) does NOT let you export the owner's key:
 // the gate compares the resolved Name, not the being you drive.
 
-import { registerOperation } from "../../ibp/operations.js";
-import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
-import { emitFact } from "../../past/fact/facts.js";
-import { registerRoleWord } from "../../present/word/roleWordRegistry.js";
+import { registerOperation } from "../../../ibp/operations.js";
+import { IBP_ERR, IbpError } from "../../../ibp/protocol.js";
+import { emitFact } from "../../../past/fact/facts.js";
+import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
 
 // Self-register this slice's co-located WORLD strand (CONVERTING.md): the bridge
 // resolves ("name", "key-export") to key.word, its host escapes wired by keyHost.js.
@@ -42,7 +42,7 @@ registerRoleWord("name", "key-export", new URL("./key.word", import.meta.url));
 
 // Resolve the NAME id this op acts on, from the being target's trueName.
 async function resolveTargetNameId(target, moment) {
-  const { loadTargetRow } = await import("../_targetShape.js");
+  const { loadTargetRow } = await import("../../../materials/_targetShape.js");
   const beingRow = await loadTargetRow(target, "being", { moment });
   const trueName = beingRow?.trueName || null;
   if (!trueName) {
@@ -61,11 +61,11 @@ async function resolveTargetNameId(target, moment) {
 // mark yields true|undefined), or null on a clean miss so the JS body runs.
 async function _keyExportViaWord({ target, caller, asker, moment }) {
   if (!moment) return null;
-  const { resolveRoleWord, runRoleWord } = await import("../../present/word/roleWordRegistry.js");
+  const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
   const ir = resolveRoleWord("name", "key-export", moment?.actorAct?.history);
   if (!ir) return null;
   const { keyHostEnv } = await import("./keyHost.js");
-  const { targetIdOf } = await import("../_targetShape.js");
+  const { targetIdOf } = await import("../../../materials/_targetShape.js");
   const branch = moment?.actorAct?.history || "0";
   try {
     const { result } = await runRoleWord(ir, {
@@ -132,7 +132,7 @@ registerOperation("key-export", {
     // Name -> the in-session PEM (null if not connected); system-encrypted
     // -> decrypt. Mirrors how the seal signs (actSig.loadSigningKey), so
     // export reflects exactly the key that signs.
-    const { loadSigningKey } = await import("../../past/act/actSig.js");
+    const { loadSigningKey } = await import("../../../past/act/actSig.js");
     const privateKeyPem = await loadSigningKey(nameId, branch);
 
     // Paper form: the key's 32-byte seed as 24 BIP39 words. Same key,
@@ -141,8 +141,8 @@ registerOperation("key-export", {
     let mnemonic = null;
     if (privateKeyPem) {
       try {
-        const { seedFromPrivateKeyPem } = await import("./keys.js");
-        const { entropyToMnemonic } = await import("./mnemonic.js");
+        const { seedFromPrivateKeyPem } = await import("../../../materials/name/keys.js");
+        const { entropyToMnemonic } = await import("../../../materials/name/mnemonic.js");
         mnemonic = entropyToMnemonic(seedFromPrivateKeyPem(privateKeyPem));
       } catch { /* PEM-only export (key not seed-derivable) */ }
     }

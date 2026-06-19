@@ -8,7 +8,7 @@
 //                      the timestamp is reached through this host fn, NEVER the evaluation
 //                      loop (the time-doctrine; same shape as credential-reset's resetAt).
 //                      The grant record carries it; expiry stays a moment concept (no clock).
-import { getRole } from "../../present/roles/registry.js";
+import { getRole } from "../../../present/roles/registry.js";
 
 export function grantHostEnv() {
   return {

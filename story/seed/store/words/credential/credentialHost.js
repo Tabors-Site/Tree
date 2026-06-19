@@ -12,9 +12,9 @@
 // NATIVE do:set-being acts, and the reveal rides the return — only the KDF and its
 // cutoff instant remain host (the one external-resource escape).
 
-import { mintCredentialSpec, decryptCredential } from "./identity/credentials.js";
-import { hasCredentialAuthority, findBeingParent } from "./identity/lineage.js";
-import { loadTargetRow } from "../_targetShape.js";
+import { mintCredentialSpec, decryptCredential } from "../../../materials/being/identity/credentials.js";
+import { hasCredentialAuthority, findBeingParent } from "../../../materials/being/identity/lineage.js";
+import { loadTargetRow } from "../../../materials/_targetShape.js";
 
 const historyOf = (ctx) => ctx?.moment?.actorAct?.history || ctx?.history || "0";
 
