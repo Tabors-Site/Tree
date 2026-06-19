@@ -9,7 +9,7 @@
 // `create-branch` action and I plant a new branch at the next
 // available path under the chosen parent. The substrate handles the
 // rest — the new branch is queryable through SEE on
-// `<reality>/./branches/<path>` and can accept its own facts via
+// `<story>/./branches/<path>` and can accept its own facts via
 // moment.actorAct?.branch threading (Pass 4 wires that).
 //
 // Pause / unpause / promote-to-live ship in later passes (6.5 and
@@ -22,7 +22,7 @@
 export const branchManagerRole = Object.freeze({
   name: "branch-manager",
   description:
-    "Creates and manages branches — divergent worlds forked from a past moment. Click @branch-manager at the reality root to mint a new branch from a chosen parent + anchor.",
+    "Creates and manages branches — divergent worlds forked from a past moment. Click @branch-manager at the story root to mint a new branch from a chosen parent + anchor.",
   requiredCognition: "scripted",
   permissions: ["do"],
   respondMode: "async",

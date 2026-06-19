@@ -42,7 +42,7 @@ export function clearDetail() {
 export function renderDescriptor(desc, { session, discovery }) {
   if (!desc) return;
   renderTopBar(desc, { session, discovery });
-  // The task menubar sits at the top of every view (Reality / Branch /
+  // The task menubar sits at the top of every view (Story / Branch /
   // Place) so its actions are always reachable, like a window menu bar.
   renderTaskBar(document.getElementById("task-menubar"), { descriptor: desc, session, discovery });
   // Explorer dispatch — .reel/<kind>/<id>, .acts/<beingId>, .beings,
@@ -117,7 +117,7 @@ function renderTopBar(desc, { session, discovery }) {
 function renderIdentityChip(session, discovery) {
   const idEl = document.getElementById("identity-chip");
   idEl.innerHTML = "";
-  const reality = discovery?.reality || "";
+  const story = discovery?.story || "";
   const username = session?.username || "arrival";
   const chip = document.createElement("button");
   chip.className = "chip" + (session?.token ? " chip-authed" : "");
@@ -213,17 +213,17 @@ function renderBeings(desc, { session, discovery }) {
     // Explorer links — beings get both a fact-reel and an act-chain.
     // The being's id (when present) drives the synthetic SEE paths.
     const beingId = b.beingId || null;
-    if (beingId && discovery?.reality) {
+    if (beingId && discovery?.story) {
       const factsA = document.createElement("a");
       factsA.className = "btn-sm btn-explore";
-      factsA.href = `#${discovery.reality}/.reel/being/${beingId}`;
+      factsA.href = `#${discovery.story}/.reel/being/${beingId}`;
       factsA.textContent = "facts";
       factsA.title = "this being's fact reel";
       actions.appendChild(factsA);
 
       const actsA = document.createElement("a");
       actsA.className = "btn-sm btn-explore";
-      actsA.href = `#${discovery.reality}/.acts/${beingId}`;
+      actsA.href = `#${discovery.story}/.acts/${beingId}`;
       actsA.textContent = "acts";
       actsA.title = "this being's act-chain";
       actions.appendChild(actsA);
@@ -350,7 +350,7 @@ function renderLineage(desc, { session, discovery }) {
     return;
   }
 
-  const reality = discovery?.reality || null;
+  const story = discovery?.story || null;
   const canInhabit = !!session?.token; // need an active session to inherit-connect
 
   for (const child of items) {
@@ -375,10 +375,10 @@ function renderLineage(desc, { session, discovery }) {
 
     // Inspect link → SEE the child's stance (so the user can drill in
     // and see ITS lineage too).
-    if (reality && child.name) {
+    if (story && child.name) {
       const a = document.createElement("a");
       a.className = "btn-sm btn-explore";
-      a.href = `#${reality}/@${child.name}`;
+      a.href = `#${story}/@${child.name}`;
       a.textContent = "open";
       a.title = "navigate to this being's stance";
       actions.appendChild(a);
@@ -391,7 +391,7 @@ function renderLineage(desc, { session, discovery }) {
     inhabitBtn.title = canInhabit
       ? "open a new tab driving this being"
       : "sign in first";
-    inhabitBtn.onclick = () => triggerInhabit(child, { reality });
+    inhabitBtn.onclick = () => triggerInhabit(child, { story });
     actions.appendChild(inhabitBtn);
 
     li.appendChild(actions);
@@ -405,12 +405,12 @@ function renderLineage(desc, { session, discovery }) {
 // tab with the inheriter token in the URL hash so the new tab can
 // boot its own independent session without clobbering this tab's
 // localStorage.
-async function triggerInhabit(child, { reality }) {
-  if (!reality || !child?.name) return;
+async function triggerInhabit(child, { story }) {
+  if (!story || !child?.name) return;
   setStatus(`inheriting @${child.name}...`);
   try {
     const { flat } = await import("./host.js");
-    const stance = `${reality}/@${child.name}`;
+    const stance = `${story}/@${child.name}`;
     const ack = await flat.beOp("connect", stance, {});
     if (!ack || ack.status === "error") {
       const msg = ack?.error?.message || "connect rejected";
@@ -481,10 +481,10 @@ function renderMatter(desc, { discovery } = {}) {
     actions.className = "row-actions";
 
     // Explorer link — open this matter's fact reel.
-    if (m.matterId && discovery?.reality) {
+    if (m.matterId && discovery?.story) {
       const factsA = document.createElement("a");
       factsA.className = "btn-sm btn-explore";
-      factsA.href = `#${discovery.reality}/.reel/matter/${m.matterId}`;
+      factsA.href = `#${discovery.story}/.reel/matter/${m.matterId}`;
       factsA.textContent = "facts";
       factsA.title = "this matter's fact reel";
       actions.appendChild(factsA);
@@ -598,26 +598,26 @@ function renderCatalogRow(kind, item, discovery) {
   const sub = document.createElement("div");
   sub.className = "catalog-sub";
 
-  if (kind === "threads" && item.thread?.id && discovery?.reality) {
+  if (kind === "threads" && item.thread?.id && discovery?.story) {
     // Threads: link straight into the thread descriptor.
     const open = document.createElement("a");
     open.className = "btn-explore";
-    open.href = `#${discovery.reality}/./threads/${item.thread.id}`;
+    open.href = `#${discovery.story}/./threads/${item.thread.id}`;
     open.textContent = "open thread";
     sub.appendChild(open);
-  } else if (item.path && discovery?.reality) {
+  } else if (item.path && discovery?.story) {
     // Others: link to the item's own space (where qualities live).
     const open = document.createElement("a");
     open.className = "btn-explore";
-    open.href = `#${discovery.reality}${item.path}`;
+    open.href = `#${discovery.story}${item.path}`;
     open.textContent = "open";
     sub.appendChild(open);
   }
 
-  if (item.spaceId && !String(item.spaceId).startsWith("thread:") && discovery?.reality) {
+  if (item.spaceId && !String(item.spaceId).startsWith("thread:") && discovery?.story) {
     const reel = document.createElement("a");
     reel.className = "btn-explore";
-    reel.href = `#${discovery.reality}/.reel/space/${item.spaceId}`;
+    reel.href = `#${discovery.story}/.reel/space/${item.spaceId}`;
     reel.textContent = "facts";
     sub.appendChild(reel);
   }
@@ -647,7 +647,7 @@ function renderCatalogItemDetail(desc, { kind, name }, { discovery }) {
   header.className = "explorer-header";
   const h = document.createElement("h2");
   h.className = "explorer-title";
-  h.innerHTML = `${meta.icon} <a class="dim" href="#${discovery.reality}/.${kind}">${meta.title}</a> <span class="dim">/</span> ${name}`;
+  h.innerHTML = `${meta.icon} <a class="dim" href="#${discovery.story}/.${kind}">${meta.title}</a> <span class="dim">/</span> ${name}`;
   header.appendChild(h);
 
   const sub = document.createElement("div");
@@ -656,10 +656,10 @@ function renderCatalogItemDetail(desc, { kind, name }, { discovery }) {
   sub.textContent = spaceId ? `space ${spaceId}` : "(no spaceId)";
   header.appendChild(sub);
 
-  if (spaceId && discovery?.reality) {
+  if (spaceId && discovery?.story) {
     const reel = document.createElement("a");
     reel.className = "explorer-jump";
-    reel.href = `#${discovery.reality}/.reel/space/${spaceId}`;
+    reel.href = `#${discovery.story}/.reel/space/${spaceId}`;
     reel.textContent = `⛓ reel for this row`;
     header.appendChild(reel);
   }
@@ -894,7 +894,7 @@ function renderThreadDetail(pane, thread, discovery) {
   header.className = "explorer-header";
   const h = document.createElement("h2");
   h.className = "explorer-title";
-  h.innerHTML = `⧖ <a class="dim" href="#${discovery.reality}/./threads">thread</a> <span class="dim">/</span> ${short(thread.id, 16)}`;
+  h.innerHTML = `⧖ <a class="dim" href="#${discovery.story}/./threads">thread</a> <span class="dim">/</span> ${short(thread.id, 16)}`;
   h.title = thread.id;
   header.appendChild(h);
 
@@ -917,10 +917,10 @@ function renderThreadDetail(pane, thread, discovery) {
   meta.appendChild(kvBlock("state", thread.state));
   if (thread.rootStartedAt) meta.appendChild(kvBlock("started at", String(thread.rootStartedAt)));
   if (thread.lastAct)       meta.appendChild(kvBlock("last act at", String(thread.lastAct)));
-  if (thread.parentThread && discovery?.reality) {
+  if (thread.parentThread && discovery?.story) {
     meta.appendChild(kvBlock("parent thread", thread.parentThread, {
       mono: true,
-      link: `#${discovery.reality}/./threads/${thread.parentThread}`,
+      link: `#${discovery.story}/./threads/${thread.parentThread}`,
     }));
   }
   if (Array.isArray(thread.participants) && thread.participants.length) {
@@ -935,7 +935,7 @@ function renderThreadDetail(pane, thread, discovery) {
     for (const p of thread.participants) {
       const a = document.createElement("a");
       a.className = "btn-explore";
-      a.href = `#${discovery.reality}/.acts/${p}`;
+      a.href = `#${discovery.story}/.acts/${p}`;
       a.textContent = short(p, 14);
       a.title = `view acts by ${p}`;
       chips.appendChild(a);
@@ -975,7 +975,7 @@ function renderThreadDetail(pane, thread, discovery) {
   pane.appendChild(list);
 }
 
-// Global beings catalog — every Being row across the reality. Different
+// Global beings catalog — every Being row across the story. Different
 // from the per-position beings list (which only shows beings homed at
 // the current space). Used to answer "what beings exist?" the way
 // .operations answers "what ops exist?".
@@ -987,7 +987,7 @@ function renderBeingsCatalog(pane, catalog, discovery) {
 
   const h = document.createElement("h2");
   h.className = "explorer-title";
-  h.innerHTML = `∴ <span class="dim">beings</span> <span class="dim">across</span> ${discovery?.reality || ""}`;
+  h.innerHTML = `∴ <span class="dim">beings</span> <span class="dim">across</span> ${discovery?.story || ""}`;
   header.appendChild(h);
 
   const sub = document.createElement("div");
@@ -999,7 +999,7 @@ function renderBeingsCatalog(pane, catalog, discovery) {
   if (!beings || beings.length === 0) {
     const empty = document.createElement("div");
     empty.className = "explorer-empty";
-    empty.textContent = "(no beings exist in this reality yet)";
+    empty.textContent = "(no beings exist in this story yet)";
     pane.appendChild(empty);
     return;
   }
@@ -1048,23 +1048,23 @@ function renderBeingCatalogRow(b, discovery) {
   idSpan.title = b.beingId;
   sub.appendChild(idSpan);
 
-  if (discovery?.reality) {
+  if (discovery?.story) {
     const facts = document.createElement("a");
     facts.className = "btn-explore";
-    facts.href = `#${discovery.reality}/.reel/being/${b.beingId}`;
+    facts.href = `#${discovery.story}/.reel/being/${b.beingId}`;
     facts.textContent = "facts";
     sub.appendChild(facts);
 
     const acts = document.createElement("a");
     acts.className = "btn-explore";
-    acts.href = `#${discovery.reality}/.acts/${b.beingId}`;
+    acts.href = `#${discovery.story}/.acts/${b.beingId}`;
     acts.textContent = "acts";
     sub.appendChild(acts);
 
     if (b.homeSpace) {
       const home = document.createElement("a");
       home.className = "btn-explore";
-      home.href = `#${discovery.reality}/.reel/space/${b.homeSpace}`;
+      home.href = `#${discovery.story}/.reel/space/${b.homeSpace}`;
       home.textContent = "home reel";
       home.title = `homed at space ${b.homeSpace}`;
       sub.appendChild(home);
@@ -1098,10 +1098,10 @@ function renderReelExplorer(pane, reel, discovery) {
   header.appendChild(sub);
 
   // Quick-nav: if the target is a being, offer a one-click jump to its acts.
-  if (target.kind === "being" && discovery?.reality) {
+  if (target.kind === "being" && discovery?.story) {
     const jump = document.createElement("a");
     jump.className = "explorer-jump";
-    jump.href = `#${discovery.reality}/.acts/${target.id}`;
+    jump.href = `#${discovery.story}/.acts/${target.id}`;
     jump.textContent = `→ acts by this being`;
     header.appendChild(jump);
   }
@@ -1248,22 +1248,22 @@ function renderFactBlock(f, discovery, chainStatus = "edge") {
 
   detail.appendChild(kvBlock("identity (hash)", f._id || "(none)", { mono: true }));
   detail.appendChild(kvBlock("p (prev)", f.p || "(genesis)", { mono: true }));
-  if (f.actId) detail.appendChild(kvBlock("act id", f.actId, { mono: true, link: discovery && f.through ? `#${discovery.reality}/.acts/${f.through}` : null }));
+  if (f.actId) detail.appendChild(kvBlock("act id", f.actId, { mono: true, link: discovery && f.through ? `#${discovery.story}/.acts/${f.through}` : null }));
   if (f.params != null) detail.appendChild(jsonKv("params", f.params));
   if (f.result != null) detail.appendChild(jsonKv("result", f.result));
   // Target link — clickable for navigation into the target's own reel.
-  if (discovery?.reality && f.of?.kind && f.of?.id) {
+  if (discovery?.story && f.of?.kind && f.of?.id) {
     const linkText = `${f.of.kind}/${f.of.id}`;
     detail.appendChild(kvBlock("target", linkText, {
       mono: true,
-      link: `#${discovery.reality}/.reel/${f.of.kind}/${f.of.id}`,
+      link: `#${discovery.story}/.reel/${f.of.kind}/${f.of.id}`,
     }));
   }
   // Doer link — to the doer's own facts.
-  if (discovery?.reality && f.through) {
+  if (discovery?.story && f.through) {
     detail.appendChild(kvBlock("doer", f.beingName || f.through, {
       mono: true,
-      link: `#${discovery.reality}/.reel/being/${f.through}`,
+      link: `#${discovery.story}/.reel/being/${f.through}`,
     }));
   }
 
@@ -1296,10 +1296,10 @@ function renderActChainExplorer(pane, chain, discovery) {
   sub.textContent = `${count} act${count === 1 ? "" : "s"} • newest first • each act = one moment this being authored`;
   header.appendChild(sub);
 
-  if (discovery?.reality) {
+  if (discovery?.story) {
     const jump = document.createElement("a");
     jump.className = "explorer-jump";
-    jump.href = `#${discovery.reality}/.reel/being/${being.id}`;
+    jump.href = `#${discovery.story}/.reel/being/${being.id}`;
     jump.textContent = `→ facts on this being's reel`;
     header.appendChild(jump);
   }
@@ -1439,10 +1439,10 @@ function renderActBlock(a, discovery) {
   if (a.ibpAddress) detail.appendChild(kvBlock("ibp address", a.ibpAddress, { mono: true }));
   if (a.activeRole) detail.appendChild(kvBlock("role", a.activeRole));
   if (a.priority) detail.appendChild(kvBlock("priority", a.priority));
-  if (a.to && discovery?.reality) {
+  if (a.to && discovery?.story) {
     detail.appendChild(kvBlock("being out", a.to, {
       mono: true,
-      link: `#${discovery.reality}/.reel/being/${a.to}`,
+      link: `#${discovery.story}/.reel/being/${a.to}`,
     }));
   }
   if (a.rootCorrelation) detail.appendChild(kvBlock("rootCorrelation", a.rootCorrelation, { mono: true }));
@@ -1687,8 +1687,8 @@ function renderFace(face, discovery) {
 
   if (face.position) {
     const positionName = face.position.name || face.position.id || "(position)";
-    const link = (face.position.id && discovery?.reality)
-      ? `#${discovery.reality}/.reel/space/${face.position.id}`
+    const link = (face.position.id && discovery?.story)
+      ? `#${discovery.story}/.reel/space/${face.position.id}`
       : null;
     body.appendChild(kvBlock("position", positionName, { link }));
   }
@@ -1761,7 +1761,7 @@ export function showInspector({ kind, entry }) {
     // and the panel is the whole point of the being's existence.
     if (entry?.being === "role-manager") {
       renderRoleManagerPanel(insp, entry, {
-        reality:    flat.state.discovery?.reality,
+        story:    flat.state.discovery?.story,
         username:   flat.state.session?.username || null,
         descriptor: flat.state.descriptor,
         see:        (addr) => flat.state.client.see(addr),
@@ -1779,9 +1779,9 @@ export function showInspector({ kind, entry }) {
 
 function renderBeingInspector(insp, b) {
   const fl       = flat.state;
-  const reality  = fl.discovery?.reality;
+  const story  = fl.discovery?.story;
   const path     = fl.descriptor?.address?.pathByNames || "/";
-  const stance   = `${reality}${path}@${b.being}`.replace(/\/+@/, "/@");
+  const stance   = `${story}${path}@${b.being}`.replace(/\/+@/, "/@");
   const isSelf   = fl.session?.username === b.being;
 
   // Header
@@ -1849,7 +1849,7 @@ function renderBeingInspector(insp, b) {
   const link = document.createElement("a");
   link.className = "nav-link";
   link.href = "#" + stance;
-  link.textContent = `→ see ${stance.replace(reality, "")}`;
+  link.textContent = `→ see ${stance.replace(story, "")}`;
   link.title = "navigate to this being's stance and re-SEE from there";
   nav.appendChild(link);
   insp.appendChild(nav);
@@ -1894,7 +1894,7 @@ function renderBeingInspector(insp, b) {
     flowSec.className = "panel-section";
     insp.appendChild(flowSec);
     renderBeingFlowPanel(flowSec, b, {
-      reality:    reality,
+      story:    story,
       username:   fl.session.username,
       descriptor: fl.descriptor,
       see:        (addr) => fl.client.see(addr),
@@ -1903,7 +1903,7 @@ function renderBeingInspector(insp, b) {
   }
 
   // ─── Timeline (recent acts on this being's reel; click to fold to past)
-  renderTimelineSection(insp, b, { reality });
+  renderTimelineSection(insp, b, { story });
 
   // ─── LLM at this space (7-step chain preview + per-being config)
   // Calls the llm-assigner:preview-llm-chain DO op to show which LLM
@@ -1912,7 +1912,7 @@ function renderBeingInspector(insp, b) {
   // receiver. Below the chain, the user's own qualities.llm config
   // surfaces (default list, slots per role, force flags) with
   // affordances to edit via the set-being-llm form.
-  renderLlmSection(insp, b, { reality, stance });
+  renderLlmSection(insp, b, { story, stance });
 
   // ─── DO actions (ops whose targets include being or stance)
   const ops = [
@@ -1933,9 +1933,9 @@ function renderBeingInspector(insp, b) {
 
 function renderMatterInspector(insp, m) {
   const fl      = flat.state;
-  const reality = fl.discovery?.reality;
+  const story = fl.discovery?.story;
   const path    = fl.descriptor?.address?.pathByNames || "/";
-  const matterAddress = `${reality}${path}`.replace(/\/+$/, "") || reality;
+  const matterAddress = `${story}${path}`.replace(/\/+$/, "") || story;
 
   const h = document.createElement("h3");
   h.className = "pane-title";
@@ -2087,7 +2087,7 @@ function doInlineForm(op, address, baseArgs = {}) {
 //      the 7-step ordered candidate list for (receiver=this being,
 //      actor=session user, role=main). Renders as a vertical flow:
 //        ✓ step 1  receiver-being:default  gpt-4o-mini  (CHOSEN)
-//          step 3  receiver-reality:slot   claude-3-5-sonnet
+//          step 3  receiver-story:slot   claude-3-5-sonnet
 //          ...
 //      and a `reason:` line at the bottom showing why the chain
 //      stopped (cap, no candidates, etc.).
@@ -2098,7 +2098,7 @@ function doInlineForm(op, address, baseArgs = {}) {
 //
 // Self-only edit: the form fields show for every viewer but
 // authorize() rejects the write unless the caller is the being.
-function renderLlmSection(insp, b, { reality, stance } = {}) {
+function renderLlmSection(insp, b, { story, stance } = {}) {
   const fl = flat.state;
   const sec = section("LLM at this space");
   insp.appendChild(sec);
@@ -2156,8 +2156,8 @@ function renderLlmSection(insp, b, { reality, stance } = {}) {
   }
 
   // SEE op call. The 7-step chain is a read-only perception — no Fact
-  // stamped. `reality.see("llm-chain", args)` dispatches through the
-  // unified SEE ops registry (parallel to reality.do).
+  // stamped. `story.see("llm-chain", args)` dispatches through the
+  // unified SEE ops registry (parallel to story.do).
   Promise.resolve(fl.client.see("llm-chain", {
     args: {
       receiverBeingId,

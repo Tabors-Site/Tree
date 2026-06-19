@@ -27,7 +27,7 @@
 import crypto from "crypto";
 import Being from "../being.js";
 import { loadProjection } from "../../projections.js";
-import { getRealityConfigValue } from "../../../realityConfig.js";
+import { getStoryConfigValue } from "../../../storyConfig.js";
 
 if (!process.env.JWT_SECRET)
   throw new Error(
@@ -59,8 +59,8 @@ const CREDENTIAL_KEY = Buffer.from(
 // caller. A symmetric HS256 token is just base64url(header).base64url(
 // payload).base64url(HMAC-SHA256), a few lines of node:crypto, so we
 // mint and verify them directly and carry no JWT dependency at all.
-// jose stays for the ASYMMETRIC reality-identity tokens
-// (realityIdentity.js), the case it is actually built for.
+// jose stays for the ASYMMETRIC story-identity tokens
+// (storyIdentity.js), the case it is actually built for.
 // ─────────────────────────────────────────────────────────────────────
 
 const UNIT_SECONDS = { s: 1, m: 60, h: 3600, d: 86400 };
@@ -266,8 +266,8 @@ export async function verifyPassword(being, password) {
  * is configurable via place config (default 30 days).
  */
 export function generateToken(being) {
-  const expiresIn = getRealityConfigValue("jwtExpiryDays")
-    ? `${Math.max(1, Math.min(Number(getRealityConfigValue("jwtExpiryDays")), 365))}d`
+  const expiresIn = getStoryConfigValue("jwtExpiryDays")
+    ? `${Math.max(1, Math.min(Number(getStoryConfigValue("jwtExpiryDays")), 365))}d`
     : "30d";
 
   return signJwtHS256(
@@ -295,8 +295,8 @@ export function generateToken(being) {
  * unlock); the token persists only the IDENTITY, not the ability to sign.
  */
 export function generateNameToken(nameId) {
-  const expiresIn = getRealityConfigValue("jwtExpiryDays")
-    ? `${Math.max(1, Math.min(Number(getRealityConfigValue("jwtExpiryDays")), 365))}d`
+  const expiresIn = getStoryConfigValue("jwtExpiryDays")
+    ? `${Math.max(1, Math.min(Number(getStoryConfigValue("jwtExpiryDays")), 365))}d`
     : "30d";
   return signJwtHS256(
     { beingId: null, name: null, nameId: String(nameId), jti: crypto.randomUUID() },

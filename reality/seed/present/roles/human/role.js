@@ -43,10 +43,10 @@ export const humanRole = Object.freeze({
   name: "human",
   description:
     "The receptive role every human being carries. Lets a human be SUMMONed; the SUMMON sits in their inbox as a notification until they respond from their own transport.",
-  // Hosted on the reality root — granted at registration by cherub.
-  // The "root founder" role: do-whatever-you-want in this reality
+  // Hosted on the story root — granted at registration by cherub.
+  // The "root founder" role: do-whatever-you-want in this story
   // because you registered here. Temporary by design — operators
-  // narrow it with custom roles as the reality matures. Only cherub
+  // narrow it with custom roles as the story matures. Only cherub
   // holds can:[{ verb:"do", word:"grant-role:human" }]; no other being hands it out.
   //
   // Broad can (seed/RolesAreAuth.md "human carries '*'"). Per the

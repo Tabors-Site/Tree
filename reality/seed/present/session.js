@@ -20,10 +20,10 @@
 // "a reach exists right now"; a presence is "this lane carries
 // the being's moments." Multiple sessions can sit in one presence.
 
-import log from "../seedReality/log.js";
+import log from "../seedStory/log.js";
 import { getInternalConfigValue } from "../internalConfig.js";
 import { hooks } from "../hooks.js";
-import { getRealityConfigValue } from "../realityConfig.js";
+import { getStoryConfigValue } from "../storyConfig.js";
 
 import { randomUUID as uuidv4 } from "node:crypto";
 
@@ -526,7 +526,7 @@ setInterval(
  *   2. `scope` + `purpose` — extension declares a named internal lane.
  *      Produces `pipeline:tree:${rootId}:${purpose}[:${extra}]`,
  *      `pipeline:home:${beingId}:${purpose}[:${extra}]`, or
- *      `pipeline:reality:${purpose}[:${extra}]`.
+ *      `pipeline:story:${purpose}[:${extra}]`.
  *   3. Neither — fresh `pipeline:ephemeral:${uuid}`. One-shot, no
  *      cross-call memory.
  *
@@ -575,10 +575,10 @@ export function resolvePipelineKey({
         persist: true,
       };
     }
-    if (scope === "reality") {
+    if (scope === "story") {
       if (!purpose)
-        throw new Error("resolvePipelineKey: scope='reality' requires purpose");
-      return { key: `pipeline:reality:${purpose}${suffix}`, persist: true };
+        throw new Error("resolvePipelineKey: scope='story' requires purpose");
+      return { key: `pipeline:story:${purpose}${suffix}`, persist: true };
     }
     throw new Error(`resolvePipelineKey: unknown scope "${scope}"`);
   }

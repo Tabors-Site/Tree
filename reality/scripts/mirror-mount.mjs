@@ -1,7 +1,7 @@
 // TreeOS . MIRROR.md step 2 prototype.
 //
 // FUSE mount that renders source matter as a real filesystem folder
-// rooted at the reality. Reads stream bytes from CAS by hash (step 1).
+// rooted at the story. Reads stream bytes from CAS by hash (step 1).
 // Writes enter the verb system through an IPC bridge to the parent
 // process (step 2): each FUSE write/truncate/create/unlink/rename/
 // mkdir is shipped to begin.js's mirrorProc message handler, which
@@ -9,8 +9,8 @@
 // replies with a status the child maps back to a posix errno. The
 // path is a live window onto the matter chain, not a copy of it.
 //
-// Usage: node reality/scripts/mirror-mount.mjs [mount-point]
-// Default mount: reality/mirror/
+// Usage: node story/scripts/mirror-mount.mjs [mount-point]
+// Default mount: story/mirror/
 
 import Fuse from "fuse-native";
 import fs from "fs";
@@ -28,7 +28,7 @@ const MOUNT = path.resolve(process.argv[2] || path.join(REPO_ROOT, "mirror"));
 // node is either a directory (carries a Set of child names) or a file
 // (carries a CAS hash + size + mimeType, plus the matterId so writes
 // can address it). The FUSE handlers do exact lookups against this
-// map. The root IS the source root; everything the reality holds bytes
+// map. The root IS the source root; everything the story holds bytes
 // for sits under it.
 
 const tree = new Map();
@@ -131,7 +131,7 @@ try {
     for (const row of rows) {
       const diskPath = row.state?.content?.path;
       if (!diskPath || typeof diskPath !== "string") continue;
-      // Only render paths under REPO_ROOT (the reality's checkout).
+      // Only render paths under REPO_ROOT (the story's checkout).
       const rel = path.relative(REPO_ROOT, diskPath);
       if (rel.startsWith("..")) continue;
       // The source-space root matter has rel === "" (diskPath ===
@@ -167,7 +167,7 @@ try {
     console.log(`Loaded ${sourceCount} files from matter projections.`);
     await mongoose.disconnect();
   } else {
-    console.error("No MONGODB_URI in env. Reality must be running for the mirror to read source matter.");
+    console.error("No MONGODB_URI in env. Story must be running for the mirror to read source matter.");
     process.exit(2);
   }
 } catch (err) {

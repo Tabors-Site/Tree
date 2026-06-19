@@ -17,7 +17,7 @@
 
 import { randomUUID as uuidv4 } from "node:crypto";
 import Space from "../materials/space/space.js";
-import log from "../seedReality/log.js";
+import log from "../seedStory/log.js";
 import { emitFact } from "../past/fact/facts.js";
 import { I_AM } from "../materials/being/seedBeings.js";
 import { assertBranchOrThrow } from "../materials/projections.js";

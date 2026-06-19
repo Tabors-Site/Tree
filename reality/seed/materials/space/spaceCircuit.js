@@ -28,22 +28,22 @@
 // being who can revive — the same being whose authority defines the
 // tree in the first place.
 //
-// Defaults to OFF (treeCircuitEnabled: false). A reality that never
+// Defaults to OFF (treeCircuitEnabled: false). A story that never
 // turns this on lives without it.
 
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 import { getInternalConfigValue } from "../../internalConfig.js";
 import Space from "./space.js";
 import Fact from "../../past/fact/fact.js";
 import { hooks } from "../../hooks.js";
-import { getRealityConfigValue } from "../../realityConfig.js";
+import { getStoryConfigValue } from "../../storyConfig.js";
 import { invalidateSpace } from "./ancestorCache.js";
 import { resolveSpaceAccess } from "./spaces.js";
 import { I_AM } from "../being/seedBeings.js";
 import { emitFact } from "../../past/fact/facts.js";
 
 /**
- * Is the tree-circuit feature enabled on this reality?
+ * Is the tree-circuit feature enabled on this story?
  */
 function isEnabled() {
   const val = getInternalConfigValue("treeCircuitEnabled");

@@ -29,7 +29,7 @@
 // philosophy behind why this reel is identity-load-bearing.
 
 import mongoose from "mongoose";
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 import { getInternalConfigValue } from "../../internalConfig.js";
 import Fact from "./fact.js";
 import { computeHash, contentOf, GENESIS_PREV } from "./hash.js";
@@ -37,7 +37,7 @@ import ReelHead from "../reel/reelHead.js";
 import { reelKey } from "../reel/reelHeads.js";
 import { hooks } from "../../hooks.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
-import { getRealityConfigValue } from "../../realityConfig.js";
+import { getStoryConfigValue } from "../../storyConfig.js";
 import { resolveSpaceAccess } from "../../materials/space/spaces.js";
 import { redactSecrets } from "../../materials/redact.js";
 import { allocSeq } from "../reel/reelHeads.js";
@@ -89,7 +89,7 @@ const BEING_ONLY_TARGET_VERBS = new Set(["be", "call"]);
  * @param {*} [params.result]       output payload (any JSON; clipped on cap)
  * @param {string|null} [params.actId]   correlation
  * @param {string|null} [params.sessionId]  correlation
- * @param {string|null} [params.homeReality]   federation provenance
+ * @param {string|null} [params.homeStory]   federation provenance
  * @param {boolean} [params.wasRemote=false] federation provenance
  * @param {object} [opts]                runtime options (NOT part of the fact)
  * @param {ClientSession} [opts.session] Mongo session for transactional
@@ -123,7 +123,7 @@ export async function logFact(input, opts = {}) {
     result = null,
     actId = null,
     sessionId = null,
-    homeReality = null,
+    homeStory = null,
     wasRemote = false,
     foldSeq = null,
   } = input;
@@ -182,7 +182,7 @@ export async function logFact(input, opts = {}) {
 
   // Heaven routing: facts targeting a heaven space always land on
   // branch="0". The doctrine is that heaven entries have one
-  // projection per reality regardless of caller's branch . the same
+  // projection per story regardless of caller's branch . the same
   // applies to their fact streams. Without this rewrite, a set-space
   // call from #1 against a heaven space would create a per-branch
   // reel, defeating the doctrine.
@@ -215,7 +215,7 @@ export async function logFact(input, opts = {}) {
   // single classifier hit + an ancestor walk on miss; cached.
   //
   // Doctrine: subtree branches let operators experiment on one feature
-  // without contaminating the rest of the reality. Outside the scope,
+  // without contaminating the rest of the story. Outside the scope,
   // the branch is transparent (reads inherit from parent); inside,
   // it diverges normally. Writes outside the scope are loud bugs
   // (you forgot to switch branches), not silent forwards.
@@ -332,7 +332,7 @@ export async function logFact(input, opts = {}) {
 
   // Banish gate — the Name layer's be:death. Refuse to stamp any fact whose
   // ACTOR name (by) is banished. The lone exception is the name:banish
-  // fact itself, so the tombstone can seal. A Name is reality-wide (its reel
+  // fact itself, so the tombstone can seal. A Name is story-wide (its reel
   // does not fork), so this reads on main regardless of the fact's branch;
   // isNameBanished short-circuits I_AM, so today's all-i-am traffic skips the
   // read. See materials/name/closure.js.
@@ -360,7 +360,7 @@ export async function logFact(input, opts = {}) {
     result,
     actId,
     sessionId,
-    homeReality,
+    homeStory,
     wasRemote,
   };
   const hookResult = await hooks.run("beforeFact", hookData);
@@ -383,7 +383,7 @@ export async function logFact(input, opts = {}) {
   // Network retries, double-canopy deliveries, and replays produce
   // the same Fact more than once with the same crossOrigin.actId; the
   // receiving Stamper must dedup so the foreign reel doesn't grow
-  // duplicates. The dedup key is {originReality, originBranch,
+  // duplicates. The dedup key is {originStory, originBranch,
   // originBeingId, originActId} (full provenance tuple); we check by
   // crossOrigin.actId first since actId is unique enough in practice,
   // and the broader tuple guards against pathological reuse.
@@ -417,7 +417,7 @@ export async function logFact(input, opts = {}) {
     truncated,
     actId,
     sessionId,
-    homeReality: hookData.homeReality ?? homeReality,
+    homeStory: hookData.homeStory ?? homeStory,
     wasRemote: Boolean(hookData.wasRemote ?? wasRemote),
     foldSeq: typeof foldSeq === "number" ? foldSeq : null,
     date: new Date(),
@@ -482,7 +482,7 @@ export async function logFact(input, opts = {}) {
 
       // The reel's ROOT HASH is its head fact's identity (every _id
       // commits to all priors). Denormalized onto the ReelHead in
-      // the same lock/session so branch/reality roll-ups are one
+      // the same lock/session so branch/story roll-ups are one
       // collection scan (chainRoots.js).
       const headUpdate = ReelHead.updateOne(
         { _id: reelKey(branch, finalTarget.kind, finalTarget.id) },
@@ -784,7 +784,7 @@ export async function foldAfterCommit(sortedReels) {
     // (a dance-floor plant births 5+ aggregates, so one disconnect
     // produces 5+ warnings on top of any per-tick noise). Skip the
     // batch and log once.
-    const { isDbHealthy } = await import("../../seedReality/dbConfig.js");
+    const { isDbHealthy } = await import("../../seedStory/dbConfig.js");
     if (!isDbHealthy()) {
       _noteFoldDeferredOnce(sortedReels.length);
       return;
@@ -922,8 +922,8 @@ export async function emitFact(spec, moment = null) {
   // at insert time. See seed/past/act/crossOrigin.js + CROSS-WORLD.md.
   if (moment?.actorAct && spec?.of) {
     const { deriveCrossOrigin } = await import("../act/crossOrigin.js");
-    const { getRealityDomain } = await import("../../ibp/address.js");
-    const target = inferTargetWorld(spec, moment, getRealityDomain());
+    const { getStoryDomain } = await import("../../ibp/address.js");
+    const target = inferTargetWorld(spec, moment, getStoryDomain());
     const crossOrigin = deriveCrossOrigin(moment.actorAct, target);
     if (crossOrigin) {
       spec.params = { ...(spec.params || {}), crossOrigin };
@@ -939,17 +939,17 @@ export async function emitFact(spec, moment = null) {
   await sealFacts([spec]);
 }
 
-// Resolve the target's world (reality + branch) from a fact spec.
-// The spec carries `branch` (where the fact lands); the reality is
+// Resolve the target's world (story + branch) from a fact spec.
+// The spec carries `branch` (where the fact lands); the story is
 // ALWAYS this substrate — the local stamper only ever writes local
-// reels (cross-reality writes travel over canopy and are stamped by
+// reels (cross-story writes travel over canopy and are stamped by
 // the receiving substrate). The explicit `of.world` override
 // remains for future forwarding shapes.
 //
-// The reality must NOT fall back to actorAct.reality: for an inbound
-// foreign actor the act's reality is the FOREIGN domain, and using it
+// The story must NOT fall back to actorAct.story: for an inbound
+// foreign actor the act's story is the FOREIGN domain, and using it
 // here made the target world look foreign too — deriveCrossOrigin
-// then compared foreign === foreign and dropped `reality` from the
+// then compared foreign === foreign and dropped `story` from the
 // crossOrigin block (or dropped the whole block when the foreign
 // branch string matched the local one, e.g. both "0"), losing
 // provenance AND the crossOrigin.actId retry-dedupe.
@@ -957,13 +957,13 @@ export async function emitFact(spec, moment = null) {
 // Always operates on ACTUAL branch paths, never pointers — pointer
 // resolution happens at the address-parsing perimeter before any
 // emit. See CROSS-WORLD.md "pointers vs actual branches."
-function inferTargetWorld(spec, moment, localReality) {
-  if (spec?.of?.world?.reality && spec?.of?.world?.branch) {
+function inferTargetWorld(spec, moment, localStory) {
+  if (spec?.of?.world?.story && spec?.of?.world?.branch) {
     return { world: spec.of.world };
   }
   const branch = spec?.branch || moment?.actorAct?.branch || null;
-  if (!branch || !localReality) return null;
-  return { world: { reality: localReality, branch } };
+  if (!branch || !localStory) return null;
+  return { world: { story: localStory, branch } };
 }
 
 export async function sealFacts(deltaF, opts = {}) {
@@ -1166,7 +1166,7 @@ export async function getReel({ targetKind, targetId, limit, offset, order = "de
 
 /**
  * Build the reel-explorer descriptor for a (targetKind, targetId).
- * Used by SEE on <reality>/.reel/<kind>/<id>. Includes the target's
+ * Used by SEE on <story>/.reel/<kind>/<id>. Includes the target's
  * display name (best-effort lookup) and a serialized fact list shaped
  * for the explorer view (full hash chain preserved).
  */

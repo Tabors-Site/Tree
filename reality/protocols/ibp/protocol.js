@@ -21,13 +21,13 @@
 // `ibp:update` event keyed by correlation id.
 //
 // Cross-domain calls flow through canopy: dispatchIbp detects a foreign
-// target place, signs the envelope with this reality's private key, and
+// target place, signs the envelope with this story's private key, and
 // POSTs to the peer's `/ibp/<verb>/<addr>` endpoint. The peer's
-// verifyIncoming middleware authenticates against the RealityPeer registry
+// verifyIncoming middleware authenticates against the StoryPeer registry
 // before re-entering dispatchIbp on the receiving side.
 //
 
-import log from "../../seed/seedReality/log.js";
+import log from "../../seed/seedStory/log.js";
 import { handleSee } from "./verbs/see.js";
 import { handleDo } from "./verbs/do.js";
 import { handleCall } from "./verbs/call.js";
@@ -70,9 +70,9 @@ export async function dispatchIbp(carrier, msg, ack) {
     return ackError(ack, id, IBP_ERR.INTERNAL, err.message || "Internal IBP error");
   }
 
-  // 2. Cross-reality OUTBOUND. If the target lives on another reality
+  // 2. Cross-story OUTBOUND. If the target lives on another story
   //    AND this call didn't already arrive verified from canopy, route
-  //    through crossRealityDispatch: opens a local Act for the actor's
+  //    through crossStoryDispatch: opens a local Act for the actor's
   //    attempt, forwards via canopy with the actor's identity tuple,
   //    applies the peer's response back to the Act (status transition +
   //    inner face attachment). See seed/CROSS-WORLD.md.
@@ -87,14 +87,14 @@ export async function dispatchIbp(carrier, msg, ack) {
       const actorBeingId = carrier?.beingId || null;
       const actorBranch = carrier?.currentBranch || "0";
       // The NAME the actor signs as (carrier-only, never client payload). It
-      // is what a foreign reality verifies the cross-world deed against.
+      // is what a foreign story verifies the cross-world deed against.
       const actorNameId = carrier?.nameId || null;
       if (actorBeingId) {
         try {
-          const { crossRealityDispatch } = await import(
+          const { crossStoryDispatch } = await import(
             "../../seed/ibp/crossWorld.js"
           );
-          const { peerAck } = await crossRealityDispatch({
+          const { peerAck } = await crossStoryDispatch({
             envelope: env,
             actor: { beingId: actorBeingId, branch: actorBranch, nameId: actorNameId },
             identity: { beingId: actorBeingId, name: carrier?.name || null, nameId: actorNameId },
@@ -102,9 +102,9 @@ export async function dispatchIbp(carrier, msg, ack) {
           if (typeof ack === "function") ack(peerAck);
           return;
         } catch (err) {
-          log.error("IBP", `crossRealityDispatch failed: ${err.message}`);
+          log.error("IBP", `crossStoryDispatch failed: ${err.message}`);
           return ackError(ack, id, IBP_ERR.INTERNAL,
-            `cross-reality dispatch failed: ${err.message}`);
+            `cross-story dispatch failed: ${err.message}`);
         }
       }
       // Anonymous / no-identity caller: forward without opening an Act.
@@ -114,7 +114,7 @@ export async function dispatchIbp(carrier, msg, ack) {
     }
   }
 
-  // 3. Cross-reality INBOUND. A verified canopy request carries the
+  // 3. Cross-story INBOUND. A verified canopy request carries the
   //    foreign actor's identity tuple on the carrier. Run the verb
   //    under a synthetic moment that represents the foreign actor;
   //    emitFact stamps any local facts with crossOrigin pointing back
@@ -139,7 +139,7 @@ export async function dispatchIbp(carrier, msg, ack) {
     } catch (err) {
       log.error("IBP", `runVerbAsForeignActor failed: ${err.message}`);
       return ackError(ack, id, IBP_ERR.INTERNAL,
-        `cross-reality inbound failed: ${err.message}`);
+        `cross-story inbound failed: ${err.message}`);
     }
   }
 

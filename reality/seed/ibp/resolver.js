@@ -18,7 +18,7 @@
 //   {
 //     isSpaceRoot, isHomeRoot — flags describing leaf semantics
 //     spaceId, rootId        — substrate handles (rootId = enclosing tree)
-//     chain                  — [{ name, id }] top-down (reality root → leaf)
+//     chain                  — [{ name, id }] top-down (story root → leaf)
 //     leafName, leafId       — convenience: last entry of chain
 //     beingId, name          — populated when the address names a being
 //                              (the @being qualifier or a "/~user" home)
@@ -32,7 +32,7 @@
 // flags; there is no longer a "zone" concept above the position.
 
 import { IbpError, IBP_ERR } from "../ibp/protocol.js";
-import { getRealityDomain } from "./address.js";
+import { getStoryDomain } from "./address.js";
 import Being from "../materials/being/being.js";
 import Space from "../materials/space/space.js";
 import { getSpaceRootId } from "../sprout.js";
@@ -44,11 +44,11 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * @param {{ reality: string|null, path: string|null, being: string|null }} stance
+ * @param {{ story: string|null, path: string|null, being: string|null }} stance
  * @param {object} [opts]
- * @param {boolean} [opts.requireRealityMatch=true]
- *   reject stances whose reality doesn't match this server (only false for
- *   cross-reality previews that intentionally inspect remote paths).
+ * @param {boolean} [opts.requireStoryMatch=true]
+ *   reject stances whose story doesn't match this server (only false for
+ *   cross-story previews that intentionally inspect remote paths).
  * @param {object|null} [opts.identity]
  *   the calling being's identity. Required when the path starts with "/~",
  *   because "~" means "the caller's homeSpace" — it's a self-relative
@@ -56,18 +56,18 @@ const UUID_RE =
  *   resolve.
  */
 export async function resolveStance(stance, opts = {}) {
-  const { requireRealityMatch = true, identity = null } = opts;
+  const { requireStoryMatch = true, identity = null } = opts;
   if (!stance) {
     throw new IbpError(IBP_ERR.ADDRESS_PARSE_ERROR, "Stance is required");
   }
 
-  const localReality = getRealityDomain();
-  const stanceReality = stance.reality || localReality;
-  if (requireRealityMatch && stanceReality !== localReality) {
+  const localStory = getStoryDomain();
+  const stanceStory = stance.story || localStory;
+  if (requireStoryMatch && stanceStory !== localStory) {
     throw new IbpError(
       IBP_ERR.SPACE_NOT_FOUND,
-      `Reality "${stanceReality}" is not served by this server`,
-      { stanceReality, serverReality: localReality },
+      `Story "${stanceStory}" is not served by this server`,
+      { stanceStory, serverStory: localStory },
     );
   }
 
@@ -82,11 +82,11 @@ export async function resolveStance(stance, opts = {}) {
   const { getDefaultBranch } = await import("../materials/branch/branchRegistry.js");
   const branch = stance.branch || await getDefaultBranch();
 
-  // reality root: path is "/". The reality root IS a Space (the heavenSpace:
+  // story root: path is "/". The story root IS a Space (the heavenSpace:
   // SPACE_ROOT row created by ensureSpaceRoot), so we surface its id as
-  // spaceId. That makes beings whose home is the reality root —
-  // reality-manager, llm-assigner, auth — summonable: the inbox sits on
-  // the reality-root space like any other position.
+  // spaceId. That makes beings whose home is the story root —
+  // story-manager, llm-assigner, auth — summonable: the inbox sits on
+  // the story-root space like any other position.
   if (path === "/") {
     const spaceRootId = getSpaceRootId();
     return base({
@@ -101,13 +101,13 @@ export async function resolveStance(stance, opts = {}) {
   // Home shorthand: path starts with "/~". "~" means "a being's
   // homeSpace" — which being is decided by the @qualifier:
   //
-  //   "<reality>/~@tabor"  — tabor's home (explicit being)
-  //   "<reality>/~"        — the caller's own home (implicit, default)
+  //   "<story>/~@tabor"  — tabor's home (explicit being)
+  //   "<story>/~"        — the caller's own home (implicit, default)
   //
   // Both forms collapse to a normal Space resolution. "~" is sugar; the
   // resolver swaps it for the actual Being.homeSpace row. Anything
   // after "/~/" walks into children of that home, e.g.
-  // "<reality>/~@tabor/projects" → tabor's home's "projects" child.
+  // "<story>/~@tabor/projects" → tabor's home's "projects" child.
   if (path.startsWith("/~")) {
     // Pick the target being. An explicit @qualifier wins; otherwise
     // default to the caller. Without either, "~" has nothing to
@@ -120,7 +120,7 @@ export async function resolveStance(stance, opts = {}) {
       if (!slot) {
         throw new IbpError(
           IBP_ERR.BEING_NOT_FOUND,
-          `No being named "${being}" on this reality`,
+          `No being named "${being}" on this story`,
           { being },
         );
       }
@@ -303,7 +303,7 @@ async function walkSpacePath({
   let leafSpace = startAt;
 
   // Track whether we're currently inside the heaven region. Heaven (".",
-  // HEAVEN_SPACE.HEAVEN) sits directly under the reality root and parents
+  // HEAVEN_SPACE.HEAVEN) sits directly under the story root and parents
   // every Tier-3 heaven space (identity, config, tools, roles,
   // operations, extensions, source, peers, threads). Descending into
   // heaven or one of its Tier-3 children requires letting the
@@ -317,7 +317,7 @@ async function walkSpacePath({
     // Heaven's name at depth 0. The bare "." is the door into the
     // I-Am's room; we let the heavenSpace filter off so the heaven row
     // (heavenSpace: "heaven") resolves. No other dot-prefixed segment
-    // lives directly under the reality root anymore . the legacy
+    // lives directly under the story root anymore . the legacy
     // ".config" / ".tools" etc shape retired 2026-06-01; all Tier-3
     // heaven spaces now live under heaven.
     const isHeavenDoor = isFirst && seg === ".";

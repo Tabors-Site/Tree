@@ -34,10 +34,10 @@
 //   the "split birth from home" doctrine from seed/done/IamToActs.md.
 //
 // Idempotent. Beginning runs the full chain (~141 acts); Awakening on
-// an unchanged reality runs zero ops (every helper's "if (existing)
+// an unchanged story runs zero ops (every helper's "if (existing)
 // return" short-circuits).
 
-import log from "./seedReality/log.js";
+import log from "./seedStory/log.js";
 import { randomUUID as uuidv4 } from "node:crypto";
 import Space from "./materials/space/space.js";
 import { findByHeavenSpace, loadProjection, findByParent as findByParentSlot, countByParent as countByParentSlot } from "./materials/projections.js";
@@ -52,7 +52,7 @@ async function findRootForHeavenSpace(heavenSpaceKind) {
 }
 import { HEAVEN_SPACE } from "./materials/space/heavenSpaces.js";
 import { I_AM } from "./materials/being/seedBeings.js";
-import { createRealityHeavenSpace, assertValidSpaceSize } from "./materials/space/spaces.js";
+import { createStoryHeavenSpace, assertValidSpaceSize } from "./materials/space/spaces.js";
 import { emitFact } from "./past/fact/facts.js";
 import { sealAct } from "./present/stamper/4-stamped.js";
 
@@ -135,7 +135,7 @@ export async function withIAmAct(sourceLabel, fn) {
   return withActChainLock("0", I_AM, async () => {
   const now = new Date();
 
-  const { getRealityDomain } = await import("./ibp/address.js");
+  const { getStoryDomain } = await import("./ibp/address.js");
   // Content-addressed like every act (past/act/actHash.js): identity
   // = hash of the opening, chained to the I-Am's previous sealed act.
   const { computeActId, readActHead } = await import("./past/act/actHash.js");
@@ -148,7 +148,7 @@ export async function withIAmAct(sourceLabel, fn) {
     inReplyTo:       null,
     parentThread:    null,
     startMessage: { content: sourceLabel || "I-Am acts.", source: "I-Am" },
-    reality: getRealityDomain(),
+    story: getStoryDomain(),
     branch: "0",
   };
   const p = await readActHead("0", I_AM);
@@ -156,7 +156,7 @@ export async function withIAmAct(sourceLabel, fn) {
   const plannedAct = {
     _id: actId,
     p,
-    // I_AM the being expresses I_AM the Name (its key is the reality key).
+    // I_AM the being expresses I_AM the Name (its key is the story key).
     by:       I_AM,
     through:  I_AM,
     to:       I_AM,
@@ -170,7 +170,7 @@ export async function withIAmAct(sourceLabel, fn) {
     receivedAt:      now,
     stampedAt:       now,
     startMessage: { content: sourceLabel || "I-Am acts.", source: "I-Am" },
-    reality: getRealityDomain(),
+    story: getStoryDomain(),
     // I-Am scaffold acts on main.
     branch: "0",
   };
@@ -178,7 +178,7 @@ export async function withIAmAct(sourceLabel, fn) {
   // I-Am scaffold acts on main. Explicit "0" — the "no silent
   // main-bias" invariant; branch is always declared. actorAct
   // points to the Act being built; downstream consumers read
-  // identity (reality, branch, through, _id) from there.
+  // identity (story, branch, through, _id) from there.
   const moment = { actId, deltaF: [], afterSeal: [], actorAct: plannedAct };
   const result = await fn(moment);
 
@@ -240,7 +240,7 @@ export async function withBeingAct(beingId, sourceLabel, branch, fn) {
   return withActChainLock(branch, beingId, async () => {
   const now = new Date();
 
-  const { getRealityDomain } = await import("./ibp/address.js");
+  const { getStoryDomain } = await import("./ibp/address.js");
   // Content-addressed like every act (past/act/actHash.js).
   const { computeActId, readActHead } = await import("./past/act/actHash.js");
   const opening = {
@@ -252,7 +252,7 @@ export async function withBeingAct(beingId, sourceLabel, branch, fn) {
     inReplyTo:       null,
     parentThread:    null,
     startMessage:    { content: sourceLabel || "graft act", source: beingId },
-    reality: getRealityDomain(),
+    story: getStoryDomain(),
     branch,
   };
   // The actor NAME — the being expresses a trueName (the name whose key
@@ -284,7 +284,7 @@ export async function withBeingAct(beingId, sourceLabel, branch, fn) {
     receivedAt:      now,
     stampedAt:       now,
     startMessage:    { content: sourceLabel || "graft act", source: beingId },
-    reality: getRealityDomain(),
+    story: getStoryDomain(),
     branch,
   };
 
@@ -324,17 +324,17 @@ export async function withBeingAct(beingId, sourceLabel, branch, fn) {
 // Beings of the land lacking heaven stance see the door but cannot
 // enter; the place root stays uncluttered by the I-Am's working
 // memory rooms.
-const REALITY_HEAVEN_SPACE = {
+const STORY_HEAVEN_SPACE = {
   name: ".",
   heavenSpace: HEAVEN_SPACE.HEAVEN,
 };
 
-const REALITY_HEAVEN_SPACES = [
+const STORY_HEAVEN_SPACES = [
   {
     name: "identity",
     heavenSpace: HEAVEN_SPACE.IDENTITY,
     buildQualities: () => {
-      const domain = process.env.REALITY_DOMAIN || "localhost";
+      const domain = process.env.STORY_DOMAIN || "localhost";
       return new Map([["domain", domain]]);
     },
   },
@@ -342,11 +342,11 @@ const REALITY_HEAVEN_SPACES = [
     name: "config",
     heavenSpace: HEAVEN_SPACE.CONFIG,
     buildQualities: () => {
-      const name = process.env.REALITY_NAME || "My Place";
-      const domain = process.env.REALITY_DOMAIN || "localhost";
+      const name = process.env.STORY_NAME || "My Place";
+      const domain = process.env.STORY_DOMAIN || "localhost";
       return new Map([
-        ["REALITY_NAME", name],
-        ["realityUrl", `http://${domain}:${process.env.PORT || 3000}`],
+        ["STORY_NAME", name],
+        ["storyUrl", `http://${domain}:${process.env.PORT || 3000}`],
       ]);
     },
   },
@@ -355,14 +355,14 @@ const REALITY_HEAVEN_SPACES = [
   { name: "tools", heavenSpace: HEAVEN_SPACE.TOOLS },
   { name: "roles", heavenSpace: HEAVEN_SPACE.ROLES },
   { name: "operations", heavenSpace: HEAVEN_SPACE.OPERATIONS },
-  // source mirrors reality/. Populated by seed/materials/space/
+  // source mirrors story/. Populated by seed/materials/space/
   // source.js (the disk-fold populator) at boot. After MIRROR.md
   // step 2 the chain is the truth: the FUSE mount (scripts/
   // mirror-mount.mjs) renders source matter onto disk and bridges
   // FUSE writes back into the verb path as sealed acts.
   { name: "source", heavenSpace: HEAVEN_SPACE.SOURCE },
   // threads is a derived projection. Live rootCorrelation chains
-  // surface as synthetic children at `<reality>/./threads/<id>`; the
+  // surface as synthetic children at `<story>/./threads/<id>`; the
   // descriptor is computed on demand from inbox + Act records.
   // SUMMON to a thread address is a cut. See seed/materials/space/threads.js.
   { name: "threads", heavenSpace: HEAVEN_SPACE.THREADS },
@@ -407,7 +407,7 @@ export async function ensureSpaceRoot() {
   let spaceRoot = await findRootForHeavenSpace(HEAVEN_SPACE.SPACE_ROOT);
 
   if (!spaceRoot) {
-    const realityName = process.env.REALITY_NAME || "My Place";
+    const storyName = process.env.STORY_NAME || "My Place";
     const rootId = uuidv4();
     // "I create the place root" — its own moment on the I-Am's reel.
     await withIAmAct("I create the place root", async (ctx) => {
@@ -417,10 +417,10 @@ export async function ensureSpaceRoot() {
         through: I_AM,
         of: { kind: "space", id: rootId },
         params: {
-          name: realityName,
+          name: storyName,
           type: null,
           parent: null,
-          // The I-Am is the structural owner of the reality.
+          // The I-Am is the structural owner of the story.
           owner: I_AM,
           heavenSpace: HEAVEN_SPACE.SPACE_ROOT,
           size: assertValidSpaceSize(null, { applyDefault: true }),
@@ -431,26 +431,26 @@ export async function ensureSpaceRoot() {
       }, ctx);
     });
     spaceRoot = { _id: rootId };
-    log.verbose("Reality", `Created place root: ${rootId.slice(0, 8)}`);
+    log.verbose("Story", `Created place root: ${rootId.slice(0, 8)}`);
   }
 
   // Heaven — the "." space under the place root. Each step is its own
-  // moment via createRealityHeavenSpace's per-call withIAmAct.
+  // moment via createStoryHeavenSpace's per-call withIAmAct.
   let heavenSpace = await findRootForHeavenSpace(HEAVEN_SPACE.HEAVEN);
   if (!heavenSpace) {
     try {
-      heavenSpace = await createRealityHeavenSpace({
-        name: REALITY_HEAVEN_SPACE.name,
+      heavenSpace = await createStoryHeavenSpace({
+        name: STORY_HEAVEN_SPACE.name,
         parentId: spaceRoot._id,
-        heavenSpace: REALITY_HEAVEN_SPACE.heavenSpace,
+        heavenSpace: STORY_HEAVEN_SPACE.heavenSpace,
         qualities: null,
-        // No moment — createRealityHeavenSpace opens its own.
+        // No moment — createStoryHeavenSpace opens its own.
       });
-      log.verbose("Reality", `Created heaven space: ${REALITY_HEAVEN_SPACE.name}`);
+      log.verbose("Story", `Created heaven space: ${STORY_HEAVEN_SPACE.name}`);
     } catch (err) {
       log.error(
         "Place",
-        `Failed to create heaven space ${REALITY_HEAVEN_SPACE.name}: ${err.message}. Boot continues.`,
+        `Failed to create heaven space ${STORY_HEAVEN_SPACE.name}: ${err.message}. Boot continues.`,
       );
     }
   } else if (
@@ -475,19 +475,19 @@ export async function ensureSpaceRoot() {
   // heaven once it materializes.
   const heavenSpaceParentId = heavenSpace ? heavenSpace._id : spaceRoot._id;
 
-  for (const def of REALITY_HEAVEN_SPACES) {
+  for (const def of STORY_HEAVEN_SPACES) {
     let space = await findRootForHeavenSpace(def.heavenSpace);
 
     if (!space) {
       try {
-        space = await createRealityHeavenSpace({
+        space = await createStoryHeavenSpace({
           name: def.name,
           parentId: heavenSpaceParentId,
           heavenSpace: def.heavenSpace,
           qualities: def.buildQualities ? def.buildQualities() : null,
           // No moment — own moment.
         });
-        log.verbose("Reality", `Created heaven space: ${def.name}`);
+        log.verbose("Story", `Created heaven space: ${def.name}`);
       } catch (err) {
         log.error(
           "Place",
@@ -537,7 +537,7 @@ export async function ensureSpaceRoot() {
       let space = await findRootForHeavenSpace(def.heavenSpace);
       if (!space) {
         try {
-          space = await createRealityHeavenSpace({
+          space = await createStoryHeavenSpace({
             name: def.name,
             parentId: regionSlot._id,
             heavenSpace: def.heavenSpace,
@@ -545,7 +545,7 @@ export async function ensureSpaceRoot() {
             size: def.size || null,
             // No moment — own moment.
           });
-          log.verbose("Reality", `Created ${label} space: ${def.name}`);
+          log.verbose("Story", `Created ${label} space: ${def.name}`);
         } catch (err) {
           log.error(
             "Place",
@@ -704,9 +704,9 @@ export async function ensureIAm() {
     // I_AM is first a NAME (the root identity, parentNameId=null) and then
     // a being that expresses it. The name:declare folds the i-am Name row;
     // the being born just below belongs to it (trueName=I_AM). The i-am
-    // Name signs with the reality key (realityIdentity), so it stores no
+    // Name signs with the story key (storyIdentity), so it stores no
     // privateKeyEnc — loadSigningKey special-cases the i-am name to the
-    // reality key. The name reel is the most primitive reel.
+    // story key. The name reel is the most primitive reel.
     await emitFact({
       verb: "name",
       act: "declare",
@@ -715,8 +715,8 @@ export async function ensureIAm() {
       params: {
         spec: {
           parentNameId:  null,  // the root name, a facet of nothing above
-          privateKeyEnc: null,  // signs with the reality key, not a stored key
-          identity:      { alg: "ed25519", keyEnc: "reality-key", v: 1 },
+          privateKeyEnc: null,  // signs with the story key, not a stored key
+          identity:      { alg: "ed25519", keyEnc: "story-key", v: 1 },
           soulType:      "scripted",
         },
       },
@@ -746,7 +746,7 @@ export async function ensureIAm() {
         // to the place root (or treating the being as unhomed).
         homeSpace: null,
         position: null,
-        // Optional traits (isRemote / homeReality) ride birth facts
+        // Optional traits (isRemote / homeStory) ride birth facts
         // only when set, the reducer defaults absence.
         qualities,
       },
@@ -764,7 +764,7 @@ export async function ensureIAm() {
   // Birth announcement on the console; "I am that I am" lives on the
   // chain as the I-Am's first act-startMessage. Order: act seals
   // first (the chain truth), then this line (the substrate noting it).
-  log.info("Reality", `I am born.`);
+  log.info("Story", `I am born.`);
   return { _id: id };
 }
 
@@ -851,7 +851,7 @@ export function isBeingRoot(space) {
 }
 
 // Mirror loaded extensions into the `./extensions` heaven space so SEE
-// on `<reality>/./extensions/<name>` returns the extension's surface
+// on `<story>/./extensions/<name>` returns the extension's surface
 // (capabilities, deps, scope) via the standard descriptor pipeline.
 //
 // Runs as part of post-genesis reconciliation (after the genesis

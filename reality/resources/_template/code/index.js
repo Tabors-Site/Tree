@@ -1,20 +1,20 @@
 // _template/code/index.js — the code piece's entry point.
 //
-// The loader calls init(reality) once at boot, after validating
-// manifest deps, building a scoped `reality` services bundle (per the
+// The loader calls init(story) once at boot, after validating
+// manifest deps, building a scoped `story` services bundle (per the
 // `needs`), and registering all the pack's role / seed / asset
 // pieces. So at the moment init() runs:
 //   - This pack's roles are already in the role registry.
 //   - This pack's seeds are already in the template registry.
-//   - reality.declare.registerRoleHandler(roleName, fn) can attach
+//   - story.declare.registerRoleHandler(roleName, fn) can attach
 //     code-cognition handlers to role pieces published as pure data.
 //
 // Logging via `log.info / verbose / debug / warn / error`. Never
 // console.log. The first arg is the namespace; use the pack's name.
 
-import log from "../../../seed/seedReality/log.js";
+import log from "../../../seed/seedStory/log.js";
 
-export async function init(reality) {
+export async function init(story) {
   // log.verbose("MyPack", "init starting");
 
   // ─────────────────────────────────────────────────────────────────
@@ -23,10 +23,10 @@ export async function init(reality) {
   // skipAudit:true.
   // ─────────────────────────────────────────────────────────────────
   //
-  // reality.do.registerOperation("example-op", {
+  // story.do.registerOperation("example-op", {
   //   targets: ["space"],
   //   handler: async ({ target, params, identity }) => {
-  //     await reality.qualities.space.mergeQuality(target._id, "my-pack", {
+  //     await story.qualities.space.mergeQuality(target._id, "my-pack", {
   //       lastValue: params.value,
   //     });
   //     return { stored: true };
@@ -39,7 +39,7 @@ export async function init(reality) {
   // receives. Auto-prefixed to <pack>:<name>.
   // ─────────────────────────────────────────────────────────────────
   //
-  // reality.declare.registerSeeOperation("example-see", {
+  // story.declare.registerSeeOperation("example-see", {
   //   description: "Returns the current state at the given position.",
   //   handler: ({ ctx, args }) => {
   //     return { position: ctx.spaceId, data: args };
@@ -50,26 +50,26 @@ export async function init(reality) {
   // Role handlers. Role PIECES (in ../roles/<name>/role.js) ship the
   // pure-data spec. If a role needs code cognition (scripted handler)
   // rather than default LLM cognition, register the handler here. The
-  // role name is the bare local name; scopedReality auto-prefixes it
+  // role name is the bare local name; scopedStory auto-prefixes it
   // to <pack>:<name> to match how the role-kind handler registered the
   // spec.
   // ─────────────────────────────────────────────────────────────────
   //
   // import { exampleRoleHandler } from "./handlers/example-role.js";
-  // reality.declare.registerRoleHandler("example-role", exampleRoleHandler);
+  // story.declare.registerRoleHandler("example-role", exampleRoleHandler);
 
   // ─────────────────────────────────────────────────────────────────
   // Hooks. React to substrate events. See seed/system/hooks.js for
   // the hook list + payload shapes.
   // ─────────────────────────────────────────────────────────────────
   //
-  // reality.hooks.register("enrichContext", async ({ context, space, meta }) => {
+  // story.hooks.register("enrichContext", async ({ context, space, meta }) => {
   //   const data = meta["my-pack"] || {};
   //   if (Object.keys(data).length === 0) return;
   //   context.myPack = data;
   // }, "my-pack");
   //
-  // reality.hooks.register("afterMatter", async ({ matter, spaceId, beingId, origin }) => {
+  // story.hooks.register("afterMatter", async ({ matter, spaceId, beingId, origin }) => {
   //   // react to any matter write at any position
   // }, "my-pack");
 
@@ -79,7 +79,7 @@ export async function init(reality) {
   // intent="do-trigger" SUMMONs to the subscriber's inbox.
   // ─────────────────────────────────────────────────────────────────
   //
-  // reality.declare.subscribe(beingId, {
+  // story.declare.subscribe(beingId, {
   //   event:    "afterMatter",
   //   scope:    { ancestor: someSpaceId },
   //   filter:   { origin: "web" },
@@ -91,7 +91,7 @@ export async function init(reality) {
   // Scheduled wakes. Fire a SUMMON on a being's inbox at a cadence.
   // ─────────────────────────────────────────────────────────────────
   //
-  // await reality.declare.schedule(beingId, {
+  // await story.declare.schedule(beingId, {
   //   intervalMs: 60_000 * 30,
   //   content:    { event: "tick" },
   //   priority:   4,
@@ -121,7 +121,7 @@ export async function init(reality) {
     // },
     //
     // exports: {                               // cross-pack API; other resources reach via
-    //   helperFn,                              //   reality.scope.getExtensionAtScope("my-pack", spaceId)
+    //   helperFn,                              //   story.scope.getExtensionAtScope("my-pack", spaceId)
     // },                                       //   then ext?.exports?.helperFn(...)
   };
 }

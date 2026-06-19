@@ -151,10 +151,10 @@ registerOperation("ask-role", {
     }
 
     const { callVerb } = await import("../../ibp/verbs/call.js");
-    const { getRealityDomain } = await import("../../ibp/address.js");
-    const reality = getRealityDomain();
-    const ownerStance = `${reality}/@${ownerName}`;
-    const askerStance = `${reality}/@${identity.name}`;
+    const { getStoryDomain } = await import("../../ibp/address.js");
+    const story = getStoryDomain();
+    const ownerStance = `${story}/@${ownerName}`;
+    const askerStance = `${story}/@${identity.name}`;
     try {
       await callVerb(
         ownerStance,

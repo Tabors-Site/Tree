@@ -2,7 +2,7 @@
 // key-export (key.word), LIVE through the bridge with ZERO stubs. The CONTROL strand
 // (resolve the Name via `see`, the double gate, the §7 return) is .word; the crypto key
 // reader + the BIP39 derive + the asker-attributed audit are host: escapes wired by
-// keyHost.js. Proves: the trueName resolution + the I_AM hard-refusal (the reality key is
+// keyHost.js. Proves: the trueName resolution + the I_AM hard-refusal (the story key is
 // never exportable), and RULE 7 — the audit fact carries only `exportedNameId`, never any
 // key bytes. The full authorized REVEAL (a connected non-I_AM Name with an unlocked key)
 // needs a human-registration fixture; the .word + keyHost reuse the SAME loadSigningKey /
@@ -17,12 +17,12 @@ import { randomUUID } from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const SCRATCH_DB = "mongodb://localhost:27017/reality_word_keyexport_cut";
+const SCRATCH_DB = "mongodb://localhost:27017/story_word_keyexport_cut";
 process.env.PORT = "3793";
 process.env.MONGODB_URI = SCRATCH_DB;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "keyexport-secret-0123456789";
-process.env.REALITY_KEY_DIR = path.join(os.tmpdir(), "keyexportcut-keys-" + process.pid);
-fs.rmSync(process.env.REALITY_KEY_DIR, { recursive: true, force: true });
+process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "keyexportcut-keys-" + process.pid);
+fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
 const SRC = path.join(os.tmpdir(), "keyexportcut-src");
 fs.rmSync(SRC, { recursive: true, force: true });
 fs.mkdirSync(SRC, { recursive: true });
@@ -67,7 +67,7 @@ try {
   ir ? ok(`key.word resolves through the bridge (self-registered)`) : bad(`resolves`, "null");
 
   // ── 1. I_AM hard-refusal: a being whose trueName resolves to i-am is NOT a door to
-  //       the reality key. The `see` reads the trueName; gate 1 refuses before anything. ──
+  //       the story key. The `see` reads the trueName; gate 1 refuses before anything. ──
   const being = await birth("keyholder");
   const trueName = (await loadOrFold("being", String(being), "0"))?.state?.trueName;
   console.log(`  @keyholder trueName = ${trueName}\n`);
@@ -76,8 +76,8 @@ try {
   try {
     await runRoleWord(ir, { moment: sc, branch: "0", trigger: { target: { kind: "being", id: String(being) }, caller: "i-am", asker: String(being), branch: "0" }, env: { host: keyHostEnv() } });
   } catch (e) { refused = e; }
-  refused && /reality \(I_AM\) key is never exportable/i.test(refused.message) && !(sc.deltaF || []).length
-    ? ok(`@keyholder (trueName→i-am) → refuse "the reality (I_AM) key is never exportable" [code ${refused.code}], NO fact`)
+  refused && /story \(I_AM\) key is never exportable/i.test(refused.message) && !(sc.deltaF || []).length
+    ? ok(`@keyholder (trueName→i-am) → refuse "the story (I_AM) key is never exportable" [code ${refused.code}], NO fact`)
     : bad(`i-am gate`, refused?.message || sc.deltaF?.map((f) => f.act));
   refused?.code === "FORBIDDEN" ? ok(`the I_AM refusal carries code FORBIDDEN (gate, fail-closed)`) : bad(`code`, refused?.code);
 

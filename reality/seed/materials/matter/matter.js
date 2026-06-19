@@ -4,7 +4,7 @@
 //
 // Space gives the world a where; matter gives it a what. I do not
 // split matter by what it carries — text, a file, an http link, a
-// doorway to another reality. One row, one schema, one set of
+// doorway to another story. One row, one schema, one set of
 // operations. The TYPE (types.js registry) says what the matter IS,
 // which decides its content shape, where bytes live, and which DO
 // ops apply:
@@ -15,14 +15,14 @@
 //   model   — a .glb body. Content is a CAS ref.
 //   http    — website content. Content is `{ url }` — the bytes live
 //             on the WWW.
-//   ibpa    — the inter-reality portal. Content is `{ target }` — an
+//   ibpa    — the inter-story portal. Content is `{ target }` — an
 //             IBP address into another world.
 //   source  — the seed's read-only disk mirror. Content is
 //             `{ path, ... }` — bytes live in the repo checkout.
 //
 // (There is no separate `origin` field — where content lives is
 // derivable from the type's reference shape, and a separate tag
-// drifted from reality the moment types landed.)
+// drifted from story the moment types landed.)
 //
 // Matter also forms a tree within its space (parentMatterId +
 // children[]). Folder-and-file structures, recursive emission

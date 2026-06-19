@@ -114,7 +114,7 @@ export class PortalClient {
     // branch — what every relative act lands on; mirrors the server's
     // socket.currentBranch). Emitted at handshake and again after
     // every BE switch. The portal renders the full address from it:
-    // @being#branch → reality#view/path.
+    // @being#branch → story#view/path.
     this.currentBranch = this.currentBranch || null;
     this.socket.on("branch", (p) => {
       const branch = typeof p?.branch === "string" && p.branch.length ? p.branch : "0";
@@ -267,7 +267,7 @@ export class PortalClient {
    * the parser/gate hint. The views repaint from the fact via their own subscriptions.
    *
    * @param {string} wordText  the Word line, e.g. "make a space named art"
-   * @param {string} address   where you stand (a position; a bare reality domain is fine)
+   * @param {string} address   where you stand (a position; a bare story domain is fine)
    * @returns {Promise<{ ok: boolean, laid?: any[], error?: string, where?: string }>}
    */
   async type(wordText, address) {
@@ -359,7 +359,7 @@ export class PortalClient {
     return this._callName("connect", { privateKey });
   }
   /** Release the name from the session (the name's be:release) — back to the
-   *  bare reality domain (the Name menu). */
+   *  bare story domain (the Name menu). */
   nameRelease() {
     return this._callName("release", {});
   }

@@ -13,8 +13,8 @@
 //     and form-being dispatches to the real birthBeing primitive.
 //
 // Faithful to the cherub birth flow mapped from the JS handlers:
-//   reality/seed/present/roles/cherub/role.js (_registerHumanWithFreshHome)
-//   reality/seed/materials/being/identity/birth.js (birthBeing)
+//   story/seed/present/roles/cherub/role.js (_registerHumanWithFreshHome)
+//   story/seed/materials/being/identity/birth.js (birthBeing)
 
 // Live-mode primitives (emitFact, birthBeing) are imported lazily inside the live
 // branches, so dry-run never loads the DB stack and can run standalone.
@@ -331,10 +331,10 @@ async function evalCall(node, ctx) {
     if (node.bind) ctx.bindings[node.bind] = r;
     return r;
   }
-  const { getRealityDomain } = await import("../../ibp/address.js");
+  const { getStoryDomain } = await import("../../ibp/address.js");
   const { loadOrFold } = await import("../../materials/projections.js");
-  const reality = getRealityDomain();
-  // the being to reach -> its stance (reality/@name). The being may arrive as a row
+  const story = getStoryDomain();
+  // the being to reach -> its stance (story/@name). The being may arrive as a row
   // (name at top), a projection slot (name under .state), or a bare id (loadOrFold it).
   const target = entity(node.of ?? node.being);
   let toName = target?.name ?? target?.state?.name;
@@ -353,9 +353,9 @@ async function evalCall(node, ctx) {
   // A call must address FROM a real stance — `@undefined` is NEVER acceptable. An actor with no
   // resolvable name is a HARD ERROR here, not a silent slide into anonymous downstream.
   if (!fromName) throw new WordRefusal("call: the caller has no resolvable name — cannot address from @undefined", "INVALID_INPUT");
-  const message = { from: `${reality}/@${fromName}`, content, ...(node.intent ? { intent: node.intent } : {}) };
+  const message = { from: `${story}/@${fromName}`, content, ...(node.intent ? { intent: node.intent } : {}) };
   const { callVerb } = await import("../../ibp/verbs/call.js");
-  const result = await callVerb(`${reality}/@${toName}`, message, { identity: ctx.identity, moment: ctx.moment });
+  const result = await callVerb(`${story}/@${toName}`, message, { identity: ctx.identity, moment: ctx.moment });
   if (node.bind) ctx.bindings[node.bind] = result;
   return result;
 }

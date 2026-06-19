@@ -1,5 +1,5 @@
 // Phase 2 demo: the coupled sun/moon wheel turning with no clock.
-// Run:  node reality/seed/present/word/sun-demo.js
+// Run:  node story/seed/present/word/sun-demo.js
 //
 // Validates the three engine capabilities: state/fold, watches over state, and
 // the driver. The wheel turns because each phase writes the state the next phase

@@ -10,7 +10,7 @@
 
 # ── The beginning: the root declares itself, then founds Ours ──
 I am that I am.                               # [HAVE] the genesis root
-I make Ours, a world.                         # [EASY] make a reality (today this mints a being)
+I make Ours, a world.                         # [EASY] make a story (today this mints a being)
 I make the commons, a space.                  # [HAVE] create-space
 I stand in the commons.                       # [HAVE] do:move
 
@@ -21,8 +21,8 @@ A being can serve only what it loves.         # [HAVE] capability (guarded readi
 No being can be forced to serve.              # [EASY] prohibition + passive
 
 # ── What Ours holds ──
-A Name has its own reality.                   # [HAVE] has
-A reality contains beings.                    # [HAVE] contains
+A Name has its own story.                   # [HAVE] has
+A story contains beings.                    # [HAVE] contains
 A being can declare its will.                 # [HAVE] capability
 A being acts for its Name.                    # [EASY] act with a beneficiary
 
@@ -35,7 +35,7 @@ History narrates itself.                      # [EASY] reflexive act
 
 # ── Help, without friction ──
 A being can help another being.               # [HAVE] capability (receiver is [EASY])
-A reality can federate with another reality.  # [HAVE] capability
+A story can federate with another story.  # [HAVE] capability
 A Name can propose a rule.                    # [HAVE] capability
 A Name can enact a rule.                      # [HAVE] capability
 Nothing is extracted.                         # [EASY] absence

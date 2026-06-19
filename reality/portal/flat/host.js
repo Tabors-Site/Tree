@@ -109,7 +109,7 @@ const FLAT_DOM = `
     <section id="detail-pane">
       <div id="empty-detail" class="empty">
         <div class="empty-title">pick an action</div>
-        <div class="empty-hint">the menu bar above is the work surface: <code>Reality</code> / <code>Branch</code> / <code>Place</code> menus act on where you are; select a being (here or in any view) and its <code>@being</code> menu appears. Forms open in this pane.</div>
+        <div class="empty-hint">the menu bar above is the work surface: <code>Story</code> / <code>Branch</code> / <code>Place</code> menus act on where you are; select a being (here or in any view) and its <code>@being</code> menu appears. Forms open in this pane.</div>
         <div class="empty-shortcuts">
           <kbd>/</kbd> focus address . <kbd>g h</kbd> home
         </div>
@@ -165,9 +165,9 @@ export function mountFlatView(rootContainer, ctx) {
   };
   flat.sendSummon = async (stance, content, opts = {}) => {
     if (!ctx.client) throw new Error("flat.sendSummon: no client");
-    const reality   = ctx.discovery?.reality;
+    const story   = ctx.discovery?.story;
     const username  = ctx.session?.username || "arrival";
-    const from      = `${reality}/@${username}`;
+    const from      = `${story}/@${username}`;
     const correlation = `c-${randomToken()}`;
     // Envelope intent rides at the top of the message per seed/SUMMON.md.
     // Callers that previously stuffed intent inside content should pass
@@ -186,10 +186,10 @@ export function mountFlatView(rootContainer, ctx) {
   };
   flat.cancelByRootCorrelation = async (rootCorrelation) => {
     if (!ctx.client || !rootCorrelation) return;
-    const reality  = ctx.discovery?.reality;
+    const story  = ctx.discovery?.story;
     const username = ctx.session?.username || "arrival";
-    const stance   = `${reality}/./threads/${rootCorrelation}`;
-    const from     = `${reality}/@${username}`;
+    const stance   = `${story}/./threads/${rootCorrelation}`;
+    const from     = `${story}/@${username}`;
     try {
       await ctx.client.call(
         stance,
@@ -355,18 +355,18 @@ function wireKeyboardShortcuts(ctx) {
     if (gFollow) {
       gFollow = false;
       if (gTimer) { clearTimeout(gTimer); gTimer = null; }
-      const reality = _state.discovery?.reality;
-      if (!reality) return;
+      const story = _state.discovery?.story;
+      if (!story) return;
       const branch = _state.descriptor?.address?.branch || "0";
       const bq = branch === "0" ? "" : `#${branch}`;
-      if      (ev.key === "h") { ev.preventDefault(); flat.navigate(`${reality}${bq}/`); }
-      else if (ev.key === "b") { ev.preventDefault(); flat.navigate(`${reality}${bq}/./beings`); }
-      else if (ev.key === "o") { ev.preventDefault(); flat.navigate(`${reality}${bq}/./operations`); }
-      else if (ev.key === "r") { ev.preventDefault(); flat.navigate(`${reality}${bq}/./roles`); }
-      else if (ev.key === "t") { ev.preventDefault(); flat.navigate(`${reality}${bq}/./threads`); }
+      if      (ev.key === "h") { ev.preventDefault(); flat.navigate(`${story}${bq}/`); }
+      else if (ev.key === "b") { ev.preventDefault(); flat.navigate(`${story}${bq}/./beings`); }
+      else if (ev.key === "o") { ev.preventDefault(); flat.navigate(`${story}${bq}/./operations`); }
+      else if (ev.key === "r") { ev.preventDefault(); flat.navigate(`${story}${bq}/./roles`); }
+      else if (ev.key === "t") { ev.preventDefault(); flat.navigate(`${story}${bq}/./threads`); }
       else if (ev.key === "i" && _state.session?.username) {
         ev.preventDefault();
-        flat.navigate(`${reality}${bq}/~`);
+        flat.navigate(`${story}${bq}/~`);
       }
     }
   };
@@ -378,9 +378,9 @@ function wireKeyboardShortcuts(ctx) {
 }
 
 async function refreshOperations(ctx) {
-  if (!ctx?.client || !_state.discovery?.reality) return;
+  if (!ctx?.client || !_state.discovery?.story) return;
   try {
-    const desc = await ctx.client.see(`${_state.discovery.reality}/./operations`);
+    const desc = await ctx.client.see(`${_state.discovery.story}/./operations`);
     const children = Array.isArray(desc.children) ? desc.children : [];
     _state.operations = children.map((s) => {
       const op = s.qualities?.operation || {};
@@ -402,11 +402,11 @@ async function refreshOperations(ctx) {
 }
 
 function buildAddressString(descriptor, discovery) {
-  const reality = discovery?.reality || descriptor?.address?.place || "";
+  const story = discovery?.story || descriptor?.address?.place || "";
   const branch  = descriptor?.address?.branch || "0";
   const path    = descriptor?.address?.pathByNames || "/";
   const bq      = branch === "0" ? "" : `#${branch}`;
-  return `${reality}${bq}${path}`;
+  return `${story}${bq}${path}`;
 }
 
 function randomToken() {

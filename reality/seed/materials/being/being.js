@@ -2,7 +2,7 @@
 //
 // Being. The shape I give identity.
 //
-// I am the first being on this reality — the row whose parentBeingId
+// I am the first being on this story — the row whose parentBeingId
 // is null. Every other being chains back to me through this same
 // schema. When a human registers, when an extension scaffolds an
 // LLM-driven being, when a code-cognition role like auth or
@@ -83,7 +83,7 @@ const BeingSchema = new mongoose.Schema({
 
   // The being's name. Drives the @qualifier in stance addresses
   // (treeos.ai/<path>@<name>). Federation crosses places using
-  // <name>@<realityDomain>. Unique on this reality.
+  // <name>@<storyDomain>. Unique on this story.
   name: { type: String, required: true, unique: true },
 
   // The trueName this being belongs to — the identity it EXPRESSES. A
@@ -131,7 +131,7 @@ const BeingSchema = new mongoose.Schema({
   // The being tree. Beings form a recursive lineage parallel to the
   // space tree. The place has exactly one root being — me — with
   // parentBeingId: null. Every other being chains back to me:
-  // cherub, llm-assigner, reality-manager, arrival are my children;
+  // cherub, llm-assigner, story-manager, arrival are my children;
   // the first human becomes the root operator under me; subsequent
   // humans register under the cherub; rulers parent under whoever
   // promoted them and spawn their own inner trio.
@@ -187,9 +187,9 @@ const BeingSchema = new mongoose.Schema({
   },
 
   // Federation. `isRemote: true` means this being is mirrored from
-  // another reality; `homeReality` carries the canonical reality's domain.
+  // another story; `homeStory` carries the canonical story's domain.
   isRemote: { type: Boolean, default: false },
-  homeReality: { type: String, default: null },
+  homeStory: { type: String, default: null },
 
   // What kind a being is. The open layer. Each extension writes to
   // its own quality namespace via qualities.being.setQuality from
@@ -205,7 +205,7 @@ const BeingSchema = new mongoose.Schema({
   // field shared with Space (= parent) and Matter (= spaceId);
   // findByPosition(spaceId) enumerates occupants across all three
   // kinds by querying this one field. Drives the asker stance for
-  // new summons: `<reality>/<position>@<name>`.
+  // new summons: `<story>/<position>@<name>`.
   foldedSeq: { type: Number, default: null },
   position:  { type: String, default: null },
 
@@ -224,7 +224,7 @@ const BeingSchema = new mongoose.Schema({
 // homeSpace index declared inline on the field above (index: true).
 BeingSchema.index({ parentBeingId: 1, _id: 1 });
 BeingSchema.index({ defaultRole: 1 });
-BeingSchema.index({ homeReality: 1, isRemote: 1 });
+BeingSchema.index({ homeStory: 1, isRemote: 1 });
 
 // Position index — what beings are at a given space. Used by foldPlace
 // to find a space's being-occupants.

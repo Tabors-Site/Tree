@@ -38,12 +38,12 @@
 
 import { escapeRegex } from "../../../utils.js";
 import { IBP_ERR, IbpError } from "../../../ibp/protocol.js";
-import log from "../../../seedReality/log.js";
+import log from "../../../seedStory/log.js";
 import { emitFact } from "../../../past/fact/facts.js";
 import { mintCredentialSpec } from "./credentials.js";
 import { beingContentId } from "../beingId.js";
 import { I_AM } from "../seedBeings.js";
-import { getRealityDomain } from "../../../ibp/address.js";
+import { getStoryDomain } from "../../../ibp/address.js";
 
 // ─────────────────────────────────────────────────────────────────────
 // VALIDATION
@@ -138,9 +138,9 @@ function validatePassword(password) {
  *   spec.qualities      Additional initial qualities. Deep-merged
  *                       with the auth + cognition + roleFlow seeds.
  *   spec.isRemote       For mirror-only beings (default false).
- *   spec.homeReality    URL of the reality where this being's
+ *   spec.homeStory    URL of the story where this being's
  *                       authoritative row lives (default null).
- *   spec.father         { reality, beingId } | null. Recorded on the
+ *   spec.father         { story, beingId } | null. Recorded on the
  *                       child as qualities.father. The verified
  *                       identity tuple of a being from another world
  *                       who commissioned this birth via summon:mate
@@ -361,7 +361,7 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
       throw new IbpError(
         IBP_ERR.INVALID_INPUT,
         `birthBeing("${name}"): explicit trueName "${String(spec.trueName).slice(0, 12)}…" ` +
-          `is not a declared Name on this reality.`,
+          `is not a declared Name on this story.`,
       );
     }
     const { isNameBanished } = await import("../../name/closure.js");
@@ -509,26 +509,26 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
   // Cross-world citizenship: father tuple. Only when present (mate-
   // accepted birth, recorded on the child's qualities for the
   // BE:connect father-admit check downstream). Shape:
-  // { reality: <foreign domain>, beingId: <foreign being id> }.
+  // { story: <foreign domain>, beingId: <foreign being id> }.
   // The mother (actor of be:birth) is the spec's parent; the father
   // (the summoner of summon:mate) is recorded here as a separate
   // tuple so it doesn't blur the identity chain. See FEDERATION.md.
   if (spec.father && typeof spec.father === "object") {
     if (
-      typeof spec.father.reality !== "string" ||
-      !spec.father.reality.length ||
+      typeof spec.father.story !== "string" ||
+      !spec.father.story.length ||
       typeof spec.father.beingId !== "string" ||
       !spec.father.beingId.length
     ) {
       throw new IbpError(
         IBP_ERR.INVALID_INPUT,
-        `birthBeing("${name}"): spec.father must be { reality: string, beingId: string }`,
+        `birthBeing("${name}"): spec.father must be { story: string, beingId: string }`,
       );
     }
     qualities.father = {
-      reality: spec.father.reality,
+      story: spec.father.story,
       beingId: spec.father.beingId,
-      // The father's NAME — what cherub's cross-reality father-admit matches
+      // The father's NAME — what cherub's cross-story father-admit matches
       // against (the cryptographically-proven id), NOT the beingId. Defaults
       // to the beingId for a pre-split father whose being id IS his pubkey.
       nameId:  spec.father.nameId || spec.father.beingId,
@@ -562,7 +562,7 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
     // parentBeingId. The mother (parentBeingId, the actor of birth) is
     // always on this branch — her moment IS this moment. But the
     // father (qualities.father, when set) may live on a different
-    // branch or a different reality entirely (cross-world mate-vessel
+    // branch or a different story entirely (cross-world mate-vessel
     // pattern). Deriving from "a parent" introduces ambiguity that
     // doesn't exist when we read from the one source that's always
     // authoritative — the branch this fact is landing on.
@@ -571,10 +571,10 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
     ...(resolvedCoord ? { coord: resolvedCoord } : {}),
     // Optional traits ride the fact only when SET. The reducer
     // (applyCreateBeing) defaults absent isRemote → false,
-    // homeReality → null, so omission folds identically and the
+    // homeStory → null, so omission folds identically and the
     // chain stops carrying false/null noise on every plain birth.
     ...(spec.isRemote ? { isRemote: true } : {}),
-    ...(spec.homeReality ? { homeReality: spec.homeReality } : {}),
+    ...(spec.homeStory ? { homeStory: spec.homeStory } : {}),
     qualities,
   };
 
@@ -614,16 +614,16 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
   // ── Inherit role grants from both parents (dual-parent doctrine) ──
   //
   // The child auto-inherits every grant on the mother (parentBeingId
-  // = the actor of be:birth) AND every grant on a same-reality father
-  // (spec.father.reality === local). Each inherited grant is a fresh
+  // = the actor of be:birth) AND every grant on a same-story father
+  // (spec.father.story === local). Each inherited grant is a fresh
   // grant fact on the child's reel, anchored at the same
   // anchorSpaceId / anchorBeingId as the parent's grant, with the
   // parent recorded as the grantor.
   //
-  // Cross-reality fathers do NOT contribute role inheritance — we
-  // can't read the foreign reality's projection synchronously. They
+  // Cross-story fathers do NOT contribute role inheritance — we
+  // can't read the foreign story's projection synchronously. They
   // still get the connect-eligibility marker via qualities.father
-  // (above). Same-reality fathers contribute roles AND get the marker.
+  // (above). Same-story fathers contribute roles AND get the marker.
   //
   // Self-birth (mother = self) and bootstrap births where the parent
   // has no grants yet are no-ops on this pass — no grants to inherit.
@@ -631,7 +631,7 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
   await _inheritParentRoles({
     childId: id,
     motherBeingId: parentBeingId,
-    fatherBeingId: spec.father?.reality === getRealityDomain() ? spec.father?.beingId : null,
+    fatherBeingId: spec.father?.story === getStoryDomain() ? spec.father?.beingId : null,
     moment,
     branch,
   });
@@ -642,8 +642,8 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
   // the only gate. For a being to do ANYTHING — including petition for
   // additional roles via ask-role / take-role — they must hold a role
   // that permits it. `global` is the universal baseline: every being
-  // born into this reality gets it at the reality root with default
-  // reach (host + descendants = reality-wide). Parent-inheritance above
+  // born into this story gets it at the story root with default
+  // reach (host + descendants = story-wide). Parent-inheritance above
   // already covers most paths; this stamps an UNCONDITIONAL global
   // grant so even bootstrap-case beings (parent = I-Am, no grants to
   // inherit) hold their petition surface.
@@ -698,9 +698,9 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
  * atomically — the child either exists with both their birth and
  * their inheritance or neither.
  *
- * Same-reality only. Cross-reality fathers contribute the connect-
+ * Same-story only. Cross-story fathers contribute the connect-
  * eligibility marker (qualities.father) but not role grants — the
- * foreign reality's projection isn't readable here.
+ * foreign story's projection isn't readable here.
  *
  * Dedup: when both parents have an identical grant
  * (same role + same anchor), only one grant fact is stamped.
@@ -713,7 +713,7 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
  * @param {object} args
  * @param {string} args.childId
  * @param {string} args.motherBeingId       parentBeingId on the spec
- * @param {string|null} args.fatherBeingId  local beingId of same-reality father, or null
+ * @param {string|null} args.fatherBeingId  local beingId of same-story father, or null
  * @param {object} args.moment           in-flight moment ctx (required)
  * @param {string} args.branch
  */
@@ -787,7 +787,7 @@ function _grantKey(grant) {
 
 /**
  * Anoint a freshly-birthed being with the `global` role anchored at
- * the reality root. Every being gets this so the petition surface
+ * the story root. Every being gets this so the petition surface
  * (ask-role + take-role + the rest of global.canDo) is reachable
  * without parent-inheritance dependencies.
  *

@@ -27,11 +27,11 @@
 // two concurrent moments on one being would race the head. Every act
 // attributed to a host being rides that being's single lane.
 
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 import { withBeingAct } from "../../sprout.js";
 import { HEAVEN_SPACE } from "../space/heavenSpaces.js";
-import { isDbHealthy } from "../../seedReality/dbConfig.js";
-import { getRealityConfigValue } from "../../realityConfig.js";
+import { isDbHealthy } from "../../seedStory/dbConfig.js";
+import { getStoryConfigValue } from "../../storyConfig.js";
 
 // ── module state ────────────────────────────────────────────────────
 let ready = false;
@@ -104,7 +104,7 @@ export async function initHostRuntime() {
 
   // The mongo boot fact: this process's connection, as the mongo
   // being's own act on its space's reel. Config only, no secrets.
-  const { default: mongoose } = await import("../../seedReality/dbConfig.js");
+  const { default: mongoose } = await import("../../seedStory/dbConfig.js");
   const { emitFact } = await import("../../past/fact/facts.js");
   await enqueueBeingAct(ids.mongoBeing, "mongo: connected", (ctx) =>
     emitFact({
@@ -203,7 +203,7 @@ export async function reconcileStaleConnections() {
 export function noteSocketConnected({ socketId, beingId, name, branch } = {}) {
   try {
     if (!ready || shuttingDown || !socketId) return;
-    if (getRealityConfigValue("hostConnectionFacts") === false) return;
+    if (getStoryConfigValue("hostConnectionFacts") === false) return;
     if (!isDbHealthy()) return;
     const qualities = {
       connection: {

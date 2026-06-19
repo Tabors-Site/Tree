@@ -6,13 +6,13 @@
 // (clone.js computeBundleHash): the CAS half. This adds the producer's
 // SIGNATURE over that hash, so a receiver proves WHO vouches for the
 // snapshot self-certifyingly — against the signer's pubkey id, with NO
-// callback to the source reality. Same self-certification the cross-
-// reality envelope-sig and the signed reality root already give, now
+// callback to the source story. Same self-certification the cross-
+// story envelope-sig and the signed story root already give, now
 // carried INSIDE the artifact rather than only on the transport.
 //
 // signerId is a pubkey id: the producer's NAME id (the Name's _id IS its
-// pubkey — a being never signs, the Name it expresses does), or realityId
-// when the reality (I_AM) vouches — the reality key's id, NOT the literal
+// pubkey — a being never signs, the Name it expresses does), or storyId
+// when the story (I_AM) vouches — the story key's id, NOT the literal
 // "i-am", so a foreign receiver decodes the key from the id alone. Absent
 // signature => advisory-accepted (pre-signature bundles + producers with
 // no local key); a PRESENT signature that fails verification is a hard
@@ -36,7 +36,7 @@ function sigPayload(bundleHash, signerId) {
  *
  * @param {object} bundle           a clone bundle WITH meta.bundleHash set
  * @param {string} producerBeingId  the vouching agent's BEING id (operator,
- *                                  or I_AM for a reality-vouched snapshot).
+ *                                  or I_AM for a story-vouched snapshot).
  *                                  Its NAME (trueName) is resolved and is
  *                                  what actually signs — a being never signs.
  * @param {string} [branch]
@@ -53,7 +53,7 @@ export async function signBundle(bundle, producerBeingId, branch = "0") {
 
   // The NAME is the signer. A being never signs — it expresses a trueName
   // whose key signs. I_AM's name id is the literal "i-am" (loadSigningKey
-  // maps it to the reality key). Any other producer is a BEING id (a content
+  // maps it to the story key). Any other producer is a BEING id (a content
   // hash, NOT a key after the split), so resolve its trueName; signing with
   // the bare beingId would silently produce an unsigned bundle (loadSigningKey
   // returns null for a non-key id).
@@ -71,12 +71,12 @@ export async function signBundle(bundle, producerBeingId, branch = "0") {
   const pem = await loadSigningKey(nameId, branch);
   if (!pem) { delete bundle.meta.signature; return bundle; }
   // signerId is the pubkey id the sig verifies against. For I_AM the
-  // signing key IS the reality key, whose id is realityId (a key id);
+  // signing key IS the story key, whose id is storyId (a key id);
   // any other Name's id already IS its pubkey.
   let signerId = nameId;
   if (nameId === I_AM) {
-    const { getRealityIdentity } = await import("../../realityIdentity.js");
-    signerId = getRealityIdentity().realityId;
+    const { getStoryIdentity } = await import("../../storyIdentity.js");
+    signerId = getStoryIdentity().storyId;
   }
   const { signAsName } = await import("../name/keys.js");
   bundle.meta.signature = {

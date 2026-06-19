@@ -13,7 +13,7 @@
 //
 // Same furniture class as ReelHead: a write-side pointer, not a
 // projection of the fold, and not part of any root hash today (the
-// reality root covers chain state; see PORT-NOTES #6 for extending
+// story root covers chain state; see PORT-NOTES #6 for extending
 // it over act chains now that they are verifiable).
 //
 // `_id` shape: `<branch>:<beingId>`.

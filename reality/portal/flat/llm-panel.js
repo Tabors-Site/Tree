@@ -1,29 +1,29 @@
 import "../styles/llm-panel.css";
 
-// llm-panel.js — the Place > LLM (and Reality > LLM) tab.
+// llm-panel.js — the Place > LLM (and Story > LLM) tab.
 //
 // Surfaces LLM connection management + the 7-step resolution chain
 // preview. Per the chain rebuild (philosophy/CROSS-WORLD/auth.jpg),
 // every being can configure their own LLM via the SEED-OWNED ops
 // (add-llm / delete-llm / assign-slot / set-being-llm), every space
 // owner can configure their space's defaults via set-space-llm, and
-// angels can configure the reality root via set-reality-llm. The
+// angels can configure the story root via set-story-llm. The
 // panel dispatches these bare op names directly — no @llm-assigner
 // routing.
 //
 // Two surfaces share this code:
 //
 //   "llm"          place tab — your settings + (when owner) this space's
-//   "llm-reality"  reality tab — the reality root's defaults (angels only)
+//   "llm-story"  story tab — the story root's defaults (angels only)
 //
 // The 7-step chain (seed/present/cognition/llm/chain.js):
 //   0  receiver being  · role-slot
 //   1  receiver being  · default
 //   2  receiver space  · role-slot (walks ancestors)
 //   3  receiver space  · default   (walks ancestors)
-//   4  receiver reality
+//   4  receiver story
 //   5  actor being     · role-slot + default
-//   6  actor space + actor reality
+//   6  actor space + actor story
 //
 // Forced flags shift the chain:
 //   forceReceiver=true on ANY container in [0..4] → caps at that container
@@ -36,27 +36,27 @@ export async function renderLlmPanel(body, action, opByName, { refreshView, mode
   body.innerHTML = "";
 
   const desc = action.values?.descriptor || flat.state?.descriptor || {};
-  const reality = flat.state?.discovery?.reality
-    || desc.address?.reality
+  const story = flat.state?.discovery?.story
+    || desc.address?.story
     || desc.address?.place
     || "";
   const path = desc.address?.pathByNames || "/";
-  const positionAddress = `${reality}${path === "/" ? "/" : path}`;
+  const positionAddress = `${story}${path === "/" ? "/" : path}`;
   const positionSpaceId = desc.address?.spaceId
     || desc.position?.spaceId
     || desc.space?._id
     || null;
-  const realityRootAddress = `${reality}/`;
+  const storyRootAddress = `${story}/`;
 
   const session = flat.state?.session || {};
   const viewerName = (session.username || session.name || "").trim();
   const viewerBeingId = session.beingId || null;
   const isAnonymous = !viewerName || viewerName === "arrival";
 
-  const isRealityMode = mode === "reality";
+  const isStoryMode = mode === "story";
 
   // ── 1. Effective chain (THE answer) ────────────────────────────────
-  await renderChainSection(body, { reality, viewerBeingId, viewerName, positionSpaceId, isAnonymous });
+  await renderChainSection(body, { story, viewerBeingId, viewerName, positionSpaceId, isAnonymous });
 
   if (isAnonymous) {
     body.appendChild(noteRow("Sign in to manage LLM connections."));
@@ -67,7 +67,7 @@ export async function renderLlmPanel(body, action, opByName, { refreshView, mode
   const connsBox = section(body, "Your connections");
   const connsBody = document.createElement("div");
   connsBox.appendChild(connsBody);
-  await renderConnections(connsBody, { refreshSelf: () => { connsBody.innerHTML = ""; renderConnections(connsBody, { refreshSelf: () => {}, refreshChain: () => refreshChainBlock(body, reality, viewerBeingId, positionSpaceId) }); } });
+  await renderConnections(connsBody, { refreshSelf: () => { connsBody.innerHTML = ""; renderConnections(connsBody, { refreshSelf: () => {}, refreshChain: () => refreshChainBlock(body, story, viewerBeingId, positionSpaceId) }); } });
 
   // ── 3. Add a connection ────────────────────────────────────────────
   const addBox = collapsibleSection(body, "Add a connection");
@@ -75,7 +75,7 @@ export async function renderLlmPanel(body, action, opByName, { refreshView, mode
     onResult: (err) => {
       if (!err) {
         connsBody.innerHTML = "";
-        renderConnections(connsBody, { refreshSelf: () => {}, refreshChain: () => refreshChainBlock(body, reality, viewerBeingId, positionSpaceId) });
+        renderConnections(connsBody, { refreshSelf: () => {}, refreshChain: () => refreshChainBlock(body, story, viewerBeingId, positionSpaceId) });
       }
     },
   });
@@ -87,31 +87,31 @@ export async function renderLlmPanel(body, action, opByName, { refreshView, mode
     onAssign: async ({ slot, connectionId }) => {
       await flat.doOp(positionAddress, "assign-slot", { slot, connectionId });
     },
-    afterChange: () => refreshChainBlock(body, reality, viewerBeingId, positionSpaceId),
+    afterChange: () => refreshChainBlock(body, story, viewerBeingId, positionSpaceId),
   });
 
   // ── 5. This space's defaults (owner-only — substrate gates) ────────
-  if (!isRealityMode) {
+  if (!isStoryMode) {
     const spaceBox = collapsibleSection(body, "This space's LLM defaults");
     spaceBox.body.appendChild(noteRow(
       "Owner-gated. Sets qualities.llm on this space — beings standing here pick this up via step 2/3 of the chain."
     ));
-    renderSpaceOrRealityForm(spaceBox.body, {
-      isReality: false,
+    renderSpaceOrStoryForm(spaceBox.body, {
+      isStory: false,
       address: positionAddress,
-      afterChange: () => refreshChainBlock(body, reality, viewerBeingId, positionSpaceId),
+      afterChange: () => refreshChainBlock(body, story, viewerBeingId, positionSpaceId),
     });
   }
 
-  // ── 6. Reality root's defaults (angel-only) ────────────────────────
-  const realityBox = collapsibleSection(body, isRealityMode ? "Reality LLM defaults" : "Reality LLM defaults (angel-only)");
-  realityBox.body.appendChild(noteRow(
-    "Angel-gated. Sets qualities.llm on the reality root — the floor everyone falls through to at step 4 of the chain."
+  // ── 6. Story root's defaults (angel-only) ────────────────────────
+  const storyBox = collapsibleSection(body, isStoryMode ? "Story LLM defaults" : "Story LLM defaults (angel-only)");
+  storyBox.body.appendChild(noteRow(
+    "Angel-gated. Sets qualities.llm on the story root — the floor everyone falls through to at step 4 of the chain."
   ));
-  renderSpaceOrRealityForm(realityBox.body, {
-    isReality: true,
-    address: realityRootAddress,
-    afterChange: () => refreshChainBlock(body, reality, viewerBeingId, positionSpaceId),
+  renderSpaceOrStoryForm(storyBox.body, {
+    isStory: true,
+    address: storyRootAddress,
+    afterChange: () => refreshChainBlock(body, story, viewerBeingId, positionSpaceId),
   });
 }
 
@@ -119,7 +119,7 @@ export async function renderLlmPanel(body, action, opByName, { refreshView, mode
 // Chain section — visualizes the 7 steps for "you summon a being here"
 // ──────────────────────────────────────────────────────────────────
 
-async function renderChainSection(parent, { reality, viewerBeingId, viewerName, positionSpaceId, isAnonymous }) {
+async function renderChainSection(parent, { story, viewerBeingId, viewerName, positionSpaceId, isAnonymous }) {
   const sec = section(parent, "What LLM will be used");
   sec.id = "llm-chain-section";
 
@@ -135,10 +135,10 @@ async function renderChainSection(parent, { reality, viewerBeingId, viewerName, 
   const receiverBeingId = viewerBeingId;
   const chainHolder = document.createElement("div");
   sec.appendChild(chainHolder);
-  await paintChain(chainHolder, { reality, receiverBeingId, actorBeingId: viewerBeingId, positionSpaceId });
+  await paintChain(chainHolder, { story, receiverBeingId, actorBeingId: viewerBeingId, positionSpaceId });
 }
 
-async function refreshChainBlock(panelBody, reality, viewerBeingId, positionSpaceId) {
+async function refreshChainBlock(panelBody, story, viewerBeingId, positionSpaceId) {
   const sec = panelBody.querySelector("#llm-chain-section");
   if (!sec) return;
   // Wipe everything except the title.
@@ -147,11 +147,11 @@ async function refreshChainBlock(panelBody, reality, viewerBeingId, positionSpac
   if (title) sec.appendChild(title);
   const holder = document.createElement("div");
   sec.appendChild(holder);
-  await paintChain(holder, { reality, receiverBeingId: viewerBeingId, actorBeingId: viewerBeingId, positionSpaceId });
+  await paintChain(holder, { story, receiverBeingId: viewerBeingId, actorBeingId: viewerBeingId, positionSpaceId });
 }
 
-async function paintChain(holder, { reality, receiverBeingId, actorBeingId, positionSpaceId }) {
-  void reality;
+async function paintChain(holder, { story, receiverBeingId, actorBeingId, positionSpaceId }) {
+  void story;
   holder.appendChild(noteRow("Loading chain…"));
   let result;
   try {
@@ -256,7 +256,7 @@ async function renderConnections(body, { refreshSelf, refreshChain } = {}) {
       if (!confirm(`Delete connection "${c.model || c.name}"?`)) return;
       del.disabled = true;
       try {
-        await flat.doOp(flat.state?.discovery?.reality + "/", "delete-llm", {
+        await flat.doOp(flat.state?.discovery?.story + "/", "delete-llm", {
           connectionId: c.connectionId,
         });
         refreshSelf?.();
@@ -302,7 +302,7 @@ function renderAddConnection(body, { onResult }) {
       return;
     }
     try {
-      await flat.doOp(flat.state?.discovery?.reality + "/", "add-llm", {
+      await flat.doOp(flat.state?.discovery?.story + "/", "add-llm", {
         name: nameF.input.value.trim() || null,
         baseUrl, model,
         apiKey: keyF.input.value || null,
@@ -400,10 +400,10 @@ async function renderSlotsAssigner(body, { onAssign, afterChange }) {
 }
 
 // ──────────────────────────────────────────────────────────────────
-// Space / reality LLM form (for owners + angels)
+// Space / story LLM form (for owners + angels)
 // ──────────────────────────────────────────────────────────────────
 
-function renderSpaceOrRealityForm(body, { isReality, address, afterChange }) {
+function renderSpaceOrStoryForm(body, { isStory, address, afterChange }) {
   const form = document.createElement("div");
   form.className = "compact-form";
 
@@ -423,7 +423,7 @@ function renderSpaceOrRealityForm(body, { isReality, address, afterChange }) {
   const submit = document.createElement("button");
   submit.type = "button";
   submit.className = "btn-primary";
-  submit.textContent = isReality ? "Save reality defaults" : "Save space defaults";
+  submit.textContent = isStory ? "Save story defaults" : "Save space defaults";
   submit.addEventListener("click", async () => {
     submit.disabled = true;
     result.textContent = "";
@@ -452,7 +452,7 @@ function renderSpaceOrRealityForm(body, { isReality, address, afterChange }) {
     if (forceActorF.input.checked) params.forceActor = true;
     if (forceReceiverF.input.checked) params.forceReceiver = true;
     try {
-      const op = isReality ? "set-reality-llm" : "set-space-llm";
+      const op = isStory ? "set-story-llm" : "set-space-llm";
       await flat.doOp(address, op, params);
       result.className = "action-result action-ok";
       result.textContent = "Saved.";

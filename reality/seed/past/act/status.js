@@ -26,7 +26,7 @@
 // Callers:
 //   - sealAct (4-stamped.js) moves attempted → landed inline for
 //     same-substrate moments where the Stamper IS the target.
-//   - The canopy response handler (when cross-reality lands) calls
+//   - The canopy response handler (when cross-story lands) calls
 //     this when a foreign substrate reports back.
 //   - The pull-back safety job (when implemented) calls this with
 //     timeout/unreachable for cross-world acts whose foreign side

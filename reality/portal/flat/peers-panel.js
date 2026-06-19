@@ -1,6 +1,6 @@
 // peers-panel.js . Federation > peers.
 //
-// The peer realities this reality knows (the ./peers registry), and the
+// The peer realities this story knows (the ./peers registry), and the
 // three outbound moves per peer:
 //   . graft a being      -> offer-being      (the entity itself, verbatim id + chain)
 //   . offer a template   -> offer-template   (a copy of a subtree's shape, fresh ids)
@@ -13,8 +13,8 @@ import { flat } from "./host.js";
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-function reality() { return (flat.state?.discovery?.reality || "").replace(/\/+$/, ""); }
-function fedAddress() { const r = reality(); return r ? `${r}/@federation-manager` : null; }
+function story() { return (flat.state?.discovery?.story || "").replace(/\/+$/, ""); }
+function fedAddress() { const r = story(); return r ? `${r}/@federation-manager` : null; }
 function shortTime(t) {
   if (!t) return "";
   const s = String(t);
@@ -36,7 +36,7 @@ function candidateBeings() {
 function normalizePeers(desc) {
   const raw = desc?.peers || desc?.children || desc?.peerList || desc?.list || [];
   return (Array.isArray(raw) ? raw : []).map((p) => ({
-    domain:     p.domain || p.name || p.reality || p.id || "(unknown)",
+    domain:     p.domain || p.name || p.story || p.id || "(unknown)",
     name:       p.name || p.qualities?.peer?.name || null,
     status:     p.status || p.qualities?.peer?.status || null,
     lastSeenAt: p.lastSeenAt || p.lastSeen || null,
@@ -44,9 +44,9 @@ function normalizePeers(desc) {
 }
 
 export async function renderPeersPanel(body, _action, _opByName, { refreshView } = {}) {
-  const r = reality();
+  const r = story();
   const addr = fedAddress();
-  if (!r || !addr) { body.textContent = "portal not ready (no reality)"; return; }
+  if (!r || !addr) { body.textContent = "portal not ready (no story)"; return; }
   body.innerHTML = "";
 
   const intro = document.createElement("div");

@@ -4,7 +4,7 @@
 // content shape — drop/pick a file, paste a URL, or type bare text
 // (a context chunk) — with a live preview of what matter TYPE the
 // input will become before anything is saved. Classification is
-// registry-driven: the reality's discovery payload carries the
+// registry-driven: the story's discovery payload carries the
 // matter-type catalog (each type's `claims` block), so extension
 // types participate the moment they register, no portal changes.
 //
@@ -54,8 +54,8 @@ function parseUrl(url) {
 // IBPA_RE in portalOp.js). url and ibpa are completely different
 // reference worlds with their own input fields: a url is an http
 // link into the WWW (web matter, embeds); an ibpa is an IBP address
-// into another reality / branch / position (type "ibpa" — the
-// inter-reality portal; four verbs go through it, never an iframe).
+// into another story / branch / position (type "ibpa" — the
+// inter-story portal; four verbs go through it, never an iframe).
 const IBPA_SHAPE_RE = /^(?:[a-zA-Z0-9.\-_]+(?:#[^/]+)?|#[^/]+)\/.*$/;
 
 function mimeMatches(pattern, mime) {
@@ -202,11 +202,11 @@ export function renderMatterComposer(body, action, { refreshView } = {}) {
   form.appendChild(urlField);
 
   // A COMPLETELY different reference world from url: an IBP address
-  // into another reality / branch / position. Becomes type "ibpa"
-  // (the inter-reality portal) via form-portal — verbs go through
+  // into another story / branch / position. Becomes type "ibpa"
+  // (the inter-story portal) via form-portal — verbs go through
   // it; it never opens an iframe.
   const ibpaField = el("div", "op-field");
-  ibpaField.appendChild(el("label", null, "ibpa (a doorway — another reality / branch)"));
+  ibpaField.appendChild(el("label", null, "ibpa (a doorway — another story / branch)"));
   const ibpaInput = document.createElement("input");
   ibpaInput.type = "text";
   ibpaInput.placeholder = "other.world#0/library  or  #1a/<spaceId>";
@@ -380,12 +380,12 @@ export function renderMatterComposer(body, action, { refreshView } = {}) {
       let args;
       if (pending.kind === "file") {
         const f = pending.file;
-        if (upload.enabled === false) throw new Error("uploads are disabled on this reality");
+        if (upload.enabled === false) throw new Error("uploads are disabled on this story");
         if (upload.maxUploadBytes && f.size > upload.maxUploadBytes) {
-          throw new Error(`file is ${fmtBytes(f.size)}; this reality caps uploads at ${fmtBytes(upload.maxUploadBytes)}`);
+          throw new Error(`file is ${fmtBytes(f.size)}; this story caps uploads at ${fmtBytes(upload.maxUploadBytes)}`);
         }
         if (!mimeAllowed(upload.allowedMimeTypes, f.type)) {
-          throw new Error(`mime "${f.type || "unknown"}" is not allowed on this reality`);
+          throw new Error(`mime "${f.type || "unknown"}" is not allowed on this story`);
         }
         // Byte plumbing: the content carrier stores the bytes, the DO
         // below is the act. (Kernel versions carry bytes natively.)

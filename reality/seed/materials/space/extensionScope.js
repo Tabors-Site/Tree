@@ -33,7 +33,7 @@
 // owned by blocked extensions) and is colocated here because it
 // shares no consumer outside scope resolution.
 
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 import { getInternalConfigValue } from "../../internalConfig.js";
 import Space from "./space.js";
 import { HEAVEN_SPACE } from "./heavenSpaces.js";
@@ -136,7 +136,7 @@ export async function isExtensionBlockedAtSpace(extName, spaceId) {
  *
  * This is the principled way for one extension to reach into another:
  *
- *   const cw = await reality.scope.getExtensionAtScope("code-workspace", spaceId);
+ *   const cw = await story.scope.getExtensionAtScope("code-workspace", spaceId);
  *   if (!cw?.exports?.someApi) return; // not active here
  *   await cw.exports.someApi(...);
  *
@@ -211,7 +211,7 @@ export function notifyScopeChange({
 // TOOL OWNERSHIP
 // ─────────────────────────────────────────────────────────────────────────
 
-import { getRealityConfigValue } from "../../realityConfig.js";
+import { getStoryConfigValue } from "../../storyConfig.js";
 
 const _toolOwnership = new Map(); // toolName -> { extName, verb }
 function maxToolOwners() {

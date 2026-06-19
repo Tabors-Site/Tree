@@ -4,7 +4,7 @@
 //
 // As of the bare-name refactor: the LLM-management ops (add-llm,
 // delete-llm, assign-slot, set-being-llm, set-space-llm,
-// set-reality-llm) are SEED-OWNED ops with bare names, NOT
+// set-story-llm) are SEED-OWNED ops with bare names, NOT
 // llm-assigner-prefixed. Any being with the appropriate canDo (or
 // owner-check on the target space) can call them directly. The
 // substrate doesn't route through @llm-assigner.
@@ -30,7 +30,7 @@ export const LLM_ASSIGNER_TUTORIAL_VIDEO_ID = "_cXGZXdiVgw";
 export const llmAssignerRole = Object.freeze({
   name: "llm-assigner",
   description:
-    "LLM-configuration delegate. The substrate ops (add-llm, delete-llm, assign-slot, set-being-llm, set-space-llm, set-reality-llm) are seed-owned and callable by any being with the right canDo; this delegate also hosts the tutorial flow (llm-assigner:start-tutorial / save-playback / complete-tutorial).",
+    "LLM-configuration delegate. The substrate ops (add-llm, delete-llm, assign-slot, set-being-llm, set-space-llm, set-story-llm) are seed-owned and callable by any being with the right canDo; this delegate also hosts the tutorial flow (llm-assigner:start-tutorial / save-playback / complete-tutorial).",
   requiredCognition: "scripted",
   permissions: ["be"],
   respondMode: "async",

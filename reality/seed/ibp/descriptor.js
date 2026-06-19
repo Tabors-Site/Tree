@@ -31,9 +31,9 @@
 // because both descriptor and discovery are wire payloads my SEE
 // verb returns, and they share types and version constants.
 
-import log from "../seedReality/log.js";
-import { getRealityDomain } from "./address.js";
-import { getRealityConfigValue, getRealityUrl } from "../realityConfig.js";
+import log from "../seedStory/log.js";
+import { getStoryDomain } from "./address.js";
+import { getStoryConfigValue, getStoryUrl } from "../storyConfig.js";
 import Being from "../materials/being/being.js";
 import Fact from "../past/fact/fact.js";
 import { getSpaceRootId } from "../sprout.js";
@@ -101,7 +101,7 @@ async function foldRead(type, id, until = null, branch) {
 export const DESCRIPTOR_VERSION   = "1.0";
 export const IBP_PROTOCOL_VERSION = "1.0";
 // ── Place discovery payload ──
-// Returned by `ibp:see <reality>/.discovery` once a socket is open. The
+// Returned by `ibp:see <story>/.discovery` once a socket is open. The
 // pre-identity surface every client reads to learn what I speak:
 // protocol version, descriptor versions supported, WS URL, role
 // names registered, verb set, graftable clones.
@@ -112,18 +112,18 @@ export const IBP_PROTOCOL_VERSION = "1.0";
 const SYSTEM_BE_BEINGS = ["cherub", "llm-assigner"];
 
 export async function buildDiscovery() {
-  const realityUrl = getRealityUrl();
-  const wsUrl = realityUrl.replace(/^http/, "ws");
+  const storyUrl = getStoryUrl();
+  const wsUrl = storyUrl.replace(/^http/, "ws");
 
   // The chain fingerprint: one hash summarizing the whole substrate's
   // chain state (TTL-memoized in chainRoots.js — discovery is fetched
   // on every portal connect). Two realities compare state in a single
   // round-trip; on mismatch, walk chain-root → reel heads → facts to
   // the exact divergence.
-  let chainBlock = { realityRoot: null, realityId: null, sig: null };
+  let chainBlock = { storyRoot: null, storyId: null, sig: null };
   try {
-    const { signedRealityRoot } = await import("../past/fact/chainRoots.js");
-    chainBlock = await signedRealityRoot();
+    const { signedStoryRoot } = await import("../past/fact/chainRoots.js");
+    chainBlock = await signedStoryRoot();
   } catch { /* additive — discovery never blocks on the fingerprint */ }
 
   // Merge two sources: the live role registry (SUMMON-honoring roles
@@ -134,8 +134,8 @@ export async function buildDiscovery() {
   ).sort();
 
   return {
-    name: getRealityConfigValue("REALITY_NAME") || "Unnamed Place",
-    reality: getRealityDomain(),
+    name: getStoryConfigValue("STORY_NAME") || "Unnamed Place",
+    story: getStoryDomain(),
     protocolVersion: IBP_PROTOCOL_VERSION,
     descriptorVersionSupported: [DESCRIPTOR_VERSION],
     ws: wsUrl,
@@ -154,12 +154,12 @@ export async function buildDiscovery() {
     // Upload policy caps so composers refuse oversized / disallowed
     // files before POSTing bytes. The HTTP carrier re-enforces.
     upload: {
-      enabled: getRealityConfigValue("uploadEnabled") !== false,
-      maxUploadBytes: Number(getRealityConfigValue("maxUploadBytes")) || 104857600,
-      allowedMimeTypes: getRealityConfigValue("allowedMimeTypes") || null,
+      enabled: getStoryConfigValue("uploadEnabled") !== false,
+      maxUploadBytes: Number(getStoryConfigValue("maxUploadBytes")) || 104857600,
+      allowedMimeTypes: getStoryConfigValue("allowedMimeTypes") || null,
     },
-    // The chain fingerprint, SIGNED by the reality (= I_AM) key. A peer
-    // given realityId (which IS the reality public key), realityRoot,
+    // The chain fingerprint, SIGNED by the story (= I_AM) key. A peer
+    // given storyId (which IS the story public key), storyRoot,
     // and sig verifies the whole chain's provenance self-certifyingly.
     chain: chainBlock,
     supportedVerbs: ["see", "do", "call", "be"],
@@ -461,7 +461,7 @@ const NAME_BEING_CAP = 200;
 export async function buildNameDescriptor(nameId) {
   if (!nameId) return null;
 
-  // Names live on main ("0") and never fork — the name reel is reality-wide,
+  // Names live on main ("0") and never fork — the name reel is story-wide,
   // above the branch timeline (materials/name/name.js, closure.js). Read the
   // name on "0" via loadProjection (the cached fold of the name reel), NOT
   // fold(): fold() returns a truthy empty {} for an id that has no facts, so a
@@ -675,7 +675,7 @@ export async function buildPlaceDescriptor(resolved, opts = {}) {
 }
 
 async function placeAtSpaceRoot(resolved, { identity, until = null, branch } = {}) {
-  const realityDomain = getRealityDomain();
+  const storyDomain = getStoryDomain();
   const spaceRootId = getSpaceRootId();
   const isRegistered = (beingName) => !!getRole(beingName);
 
@@ -736,7 +736,7 @@ async function placeAtSpaceRoot(resolved, { identity, until = null, branch } = {
   const { SEED_DELEGATES } = await import("../materials/being/seedDelegates.js");
   const { findByName } = await import("../materials/projections.js");
   // Delegates homed in their own heaven rooms (the host tier) do NOT
-  // surface at the reality root — their position is truthful and the
+  // surface at the story root — their position is truthful and the
   // occupants query finds them in their rooms. Only root-homed
   // delegates ride the hardcoded roster.
   const rootDelegates = SEED_DELEGATES.filter((d) => !d.homeHeavenSpace);
@@ -754,7 +754,7 @@ async function placeAtSpaceRoot(resolved, { identity, until = null, branch } = {
   }));
   // Merge in transient occupants . any being whose position points at
   // the space root and isn't already a seed delegate above. Mirrors
-  // the placeAtSpace path so the reality root surfaces humans /
+  // the placeAtSpace path so the story root surfaces humans /
   // scripted / LLM beings standing there, not just seed delegates.
   const transientRoot = spaceRootId
     ? await occupantsByPosition(spaceRootId, seedDelegateEntries, branch)
@@ -767,7 +767,7 @@ async function placeAtSpaceRoot(resolved, { identity, until = null, branch } = {
 
   return {
     address: {
-      place: realityDomain,
+      place: storyDomain,
       path: "/",
       being: resolved.being || null,
       spaceId: spaceRootId || null,
@@ -783,7 +783,7 @@ async function placeAtSpaceRoot(resolved, { identity, until = null, branch } = {
     isHomeRoot: false,
     // Surface the space root's `size` on the wire, same as placeAtSpace
     // does for non-root positions. Without this the 3D portal's sized-
-    // land render branch never fires at the reality root . it falls
+    // land render branch never fires at the story root . it falls
     // back to the infinite outdoor scene even though the root now
     // carries a default size at creation time.
     size: spaceRoot?.size || null,
@@ -792,7 +792,7 @@ async function placeAtSpaceRoot(resolved, { identity, until = null, branch } = {
     matters,
     qualities: serializeQualities(spaceRoot?.qualities),
     place: {
-      name: getRealityConfigValue("REALITY_NAME") || "Unnamed Place",
+      name: getStoryConfigValue("STORY_NAME") || "Unnamed Place",
     },
     identity: await identityBlock(identity, { until, branch }),
     ...(until ? { isHistorical: true, asOf: serializeAsOf(until) } : {}),
@@ -800,7 +800,7 @@ async function placeAtSpaceRoot(resolved, { identity, until = null, branch } = {
 }
 
 async function placeAtSpace(resolved, { identity, payload, until = null, branch } = {}) {
-  const realityDomain = getRealityDomain();
+  const storyDomain = getStoryDomain();
   if (!resolved.leafSpace) throw new Error("Resolved space missing leafSpace reference");
 
   // Fold the leaf before reading its qualities (Slice H seam).
@@ -916,7 +916,7 @@ async function placeAtSpace(resolved, { identity, payload, until = null, branch 
   const residents = await enrichBeings(space._id, residentsRaw,   { identity, until, branch });
 
   // Being-tree lineage. When the stance carries a beingId (a stance
-  // address like <reality>/<path>@<name>), surface the immediate
+  // address like <story>/<path>@<name>), surface the immediate
   // children of that being — beings whose parentBeingId points at it.
   // The portal renders this as the "lineage" panel: who did you
   // birth, who can you inhabit. One Mongo query, lean, capped.
@@ -926,7 +926,7 @@ async function placeAtSpace(resolved, { identity, payload, until = null, branch 
 
   return {
     address: {
-      place: realityDomain,
+      place: storyDomain,
       path: pathByNames,
       being: resolved.being || null,
       spaceId: space._id,
@@ -1183,7 +1183,7 @@ async function mattersAt(spaceId, { until = null, branch, spaceRender = null } =
         : (content && typeof content === "object" && typeof content.url === "string"
             ? content.url
             : null),
-      // External reference shapes (web / cross-reality) are small
+      // External reference shapes (web / cross-story) are small
       // structured pointers, not bytes — surface them whole so the
       // portal gets videoId / title / matterRef without a second
       // round-trip. CAS bytes never ride the descriptor.
@@ -1217,7 +1217,7 @@ async function mattersAt(spaceId, { until = null, branch, spaceRender = null } =
 }
 
 // Being-tree children of a being. Used by the descriptor's
-// `beingLineage` field on stance addresses (<reality>/<path>@<name>).
+// `beingLineage` field on stance addresses (<story>/<path>@<name>).
 // Each entry carries enough for the portal to render an "inhabit"
 // affordance: name, beingId, cognition, defaultRole. Cap at 200 to
 // stay bounded for prolific parents; deeper inspection happens via
@@ -1269,8 +1269,8 @@ async function listBeingChildren(parentBeingId, { until = null, branch } = {}) {
 // Top-down breadcrumb chain: place root + each named segment up to but
 // not including the leaf.
 function buildLineage(resolved) {
-  const realityDomain = getRealityDomain();
-  const lineage = [{ path: "/", name: realityDomain, spaceId: null }];
+  const storyDomain = getStoryDomain();
+  const lineage = [{ path: "/", name: storyDomain, spaceId: null }];
   let prefix = "";
   for (let i = 0; i < resolved.chain.length - 1; i++) {
     const seg = resolved.chain[i];
@@ -1631,7 +1631,7 @@ async function identityBlock(identity, { until = null, branch } = {}) {
         // doesn't exist until the lineage walk cold-folds it. Bare
         // loadProjection returns null in both cases . the portal then
         // sees identity.position = null, can't compute a landing
-        // address, and falls back to `<reality>/@<name>` which the
+        // address, and falls back to `<story>/@<name>` which the
         // resolver lands at the place root. The user's being IS at
         // their home with its bigger grid; the portal renders the
         // place root with its smaller grid; the being-mesh spawns
@@ -1702,8 +1702,8 @@ async function identityBlock(identity, { until = null, branch } = {}) {
     // homeSpace exposed so the portal can fall back to "/<homeSpace>"
     // when position is null (freshly-registered being whose slot
     // hasn't materialized yet, slow cold-fold, etc.). Without this
-    // the portal's only fallback was `<reality>/@<name>` which
-    // resolves to the reality root — and the being's home-grid coord
+    // the portal's only fallback was `<story>/@<name>` which
+    // resolves to the story root — and the being's home-grid coord
     // then renders far outside the much larger root grid.
     homeSpace,
     coord,

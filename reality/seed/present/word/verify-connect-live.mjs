@@ -14,12 +14,12 @@ import { randomUUID } from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const SCRATCH_DB = "mongodb://localhost:27017/reality_word_connect_live";
+const SCRATCH_DB = "mongodb://localhost:27017/story_word_connect_live";
 process.env.PORT = "3795";
 process.env.MONGODB_URI = SCRATCH_DB;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "connectlive-secret-0123456789";
-process.env.REALITY_KEY_DIR = path.join(os.tmpdir(), "connectlive-keys-" + process.pid);
-fs.rmSync(process.env.REALITY_KEY_DIR, { recursive: true, force: true });
+process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "connectlive-keys-" + process.pid);
+fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
 const SRC = path.join(os.tmpdir(), "connectlive-src");
 fs.rmSync(SRC, { recursive: true, force: true });
 fs.mkdirSync(SRC, { recursive: true });

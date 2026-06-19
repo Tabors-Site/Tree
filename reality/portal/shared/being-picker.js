@@ -29,13 +29,13 @@ export function hideBeingPicker() {
  *
  * @param {object}   opts
  * @param {object}   opts.client        the PortalClient (nameSee)
- * @param {string}   opts.realityDomain shown in the header
+ * @param {string}   opts.storyDomain shown in the header
  * @param {string}   opts.nameId        the signed-in name
  * @param {Function} opts.onConnect     (beingName, branch) => drive that being
  * @param {Function} opts.onBirthFirst  (beingName) => summon:mate @cherub
  * @param {Function} opts.onSignOut     () => release the name (Name menu)
  */
-export async function showBeingPicker({ client, realityDomain = "", nameId, onConnect = () => {}, onBirthFirst = () => {}, onSignOut = () => {} }) {
+export async function showBeingPicker({ client, storyDomain = "", nameId, onConnect = () => {}, onBirthFirst = () => {}, onSignOut = () => {} }) {
   hideBeingPicker();
   injectStyles();
 
@@ -45,7 +45,7 @@ export async function showBeingPicker({ client, realityDomain = "", nameId, onCo
 
   const head = el("div", "bp-head");
   const titles = el("div", "bp-titles");
-  titles.appendChild(el("div", "bp-ibpa", realityDomain || "this reality"));
+  titles.appendChild(el("div", "bp-ibpa", storyDomain || "this story"));
   titles.appendChild(el("h1", "bp-title", "Your beings"));
   head.appendChild(titles);
   const close = el("button", "bp-x", "×");

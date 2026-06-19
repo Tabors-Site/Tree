@@ -19,7 +19,7 @@
 // pipeline key. Ephemeral pipeline keys early-return [] (those lanes
 // are stateless by design).
 
-import log from "../../../seedReality/log.js";
+import log from "../../../seedStory/log.js";
 import { findByIbpAddress } from "./reelChains.js";
 
 // Compatibility stubs. The in-memory reel cache and its CARRY_MESSAGES

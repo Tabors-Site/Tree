@@ -1,8 +1,8 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
 // NAME — the fifth verb. The identity layer (outer worlds), not a world
-// stance: you address it reality-only (`<realityDomain>` — the reality's
-// I_AM, where a name is declared) or `<nameId>@<realityDomain>` (a specific
+// stance: you address it story-only (`<storyDomain>` — the story's
+// I_AM, where a name is declared) or `<nameId>@<storyDomain>` (a specific
 // name, to banish or see it). It rides the same IBPA but never resolves a
 // position; the portal gives it its own views (create a name, see a name's
 // data / all its acts).
@@ -20,7 +20,7 @@
 // is simpler — no per-being routing, no bootstrap modes, no stance.
 
 import { IbpError, IBP_ERR } from "../protocol.js";
-import { getRealityDomain } from "../address.js";
+import { getStoryDomain } from "../address.js";
 import { I_AM } from "../../materials/being/seedBeings.js";
 import { emitFact } from "../../past/fact/facts.js";
 import { getNameOp } from "../nameOps.js";
@@ -33,28 +33,28 @@ import {
 } from "./_shared.js";
 
 /**
- * Parse a NAME address into { reality, nameId }. Two shapes, the only two
+ * Parse a NAME address into { story, nameId }. Two shapes, the only two
  * NAME accepts:
- *   "<realityDomain>"            -> { reality, nameId: null }  (declare)
- *   "<nameId>@<realityDomain>"   -> { reality, nameId }        (banish / see)
+ *   "<storyDomain>"            -> { story, nameId: null }  (declare)
+ *   "<nameId>@<storyDomain>"   -> { story, nameId }        (banish / see)
  * No `::`, `/`, `#` — NAME is not a stance, so a positional address is
- * refused. Null/empty address means "this reality" (declare here).
+ * refused. Null/empty address means "this story" (declare here).
  */
 function parseNameAddress(address) {
-  if (address == null || address === "") return { reality: null, nameId: null };
+  if (address == null || address === "") return { story: null, nameId: null };
   if (typeof address !== "string") {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "name: address must be a string (<realityDomain> or <nameId>@<realityDomain>)");
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "name: address must be a string (<storyDomain> or <nameId>@<storyDomain>)");
   }
   if (/[:/#]/.test(address)) {
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
       `name: "${address}" is a positional address; NAME is the identity layer, address it ` +
-        `<realityDomain> or <nameId>@<realityDomain>`,
+        `<storyDomain> or <nameId>@<storyDomain>`,
     );
   }
   const at = address.indexOf("@");
-  if (at === -1) return { reality: address, nameId: null };
-  return { reality: address.slice(at + 1) || null, nameId: address.slice(0, at) || null };
+  if (at === -1) return { story: address, nameId: null };
+  return { story: address.slice(at + 1) || null, nameId: address.slice(0, at) || null };
 }
 
 /**
@@ -62,33 +62,33 @@ function parseNameAddress(address) {
  *
  * @param {"declare"|"banish"} operation
  * @param {object} payload   op args (declare: { soulType? }; banish: {})
- * @param {object} opts      { address, identity, currentReality, currentBranch, moment }
+ * @param {object} opts      { address, identity, currentStory, currentBranch, moment }
  */
 export async function nameVerb(operation, payload = {}, opts = {}) {
   if (typeof operation !== "string" || !operation.length) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "reality.name requires an operation");
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "story.name requires an operation");
   }
   refuseHistoricalWrite("name", payload, opts);
 
   const {
     address        = null,
-    currentReality = null,
+    currentStory = null,
     currentBranch  = null,
     moment      = null,
   } = opts;
 
   const branch = resolveBranchForFact(moment, currentBranch, "name");
-  const realityDomain = currentReality || getRealityDomain();
+  const storyDomain = currentStory || getStoryDomain();
 
-  const { reality, nameId: addressedToken } = parseNameAddress(address);
+  const { story, nameId: addressedToken } = parseNameAddress(address);
   // A name-address token can be a PUBKEY or a REAL-NAME; resolve it via the
   // registry to the nameId (the real-name -> pubkey auto-translation).
   const addressedNameId = addressedToken ? await resolveNameId(addressedToken) : null;
-  if (reality && reality !== realityDomain) {
+  if (story && story !== storyDomain) {
     throw new IbpError(
       IBP_ERR.SPACE_NOT_FOUND,
-      `Reality "${reality}" is not served by this server`,
-      { targetReality: reality, serverReality: realityDomain },
+      `Story "${story}" is not served by this server`,
+      { targetStory: story, serverStory: storyDomain },
     );
   }
 
@@ -114,7 +114,7 @@ export async function nameVerb(operation, payload = {}, opts = {}) {
     payload,
     identity,
     addressedNameId,
-    reality: realityDomain,
+    story: storyDomain,
     moment,
     branch,
   });

@@ -2,11 +2,11 @@
 //
 // My voice in the host realm.
 //
-// The reality's inner beings speak to each other through SUMMONs. I
-// speak to the operator outside the reality through this module. Three
+// The story's inner beings speak to each other through SUMMONs. I
+// speak to the operator outside the story through this module. Three
 // severity levels:
 //
-//   1 (info)    reality lifecycle: boot, connect, online, shutdown
+//   1 (info)    story lifecycle: boot, connect, online, shutdown
 //   2 (verbose) extension loading, sessions, jobs, mode switches
 //   3 (debug)   per-LLM-call, per-tool-call, per-hook noise
 //

@@ -23,7 +23,7 @@ import {
  * `ensureSpaceRoot()`; absent only on a pre-bootstrap place.
  *
  * Branch-aware: main-branch only by default; I_AM is a doctrinal
- * singleton at the reality root, not a per-branch concept.
+ * singleton at the story root, not a per-branch concept.
  */
 export async function findIAm() {
   const roots = await findRoot("being", "0");
@@ -34,7 +34,7 @@ export async function findIAm() {
 }
 
 // Cached I_AM identity object suitable for `opts.identity` on verb
-// calls. The I_AM has universal authority on its reality; seed-internal
+// calls. The I_AM has universal authority on its story; seed-internal
 // callers (DO-trigger fan-out, scheduled-wake tick, genesis
 // scaffolding) pass this identity so `authorize` shorts to allow.
 let _iAmIdentityCache = null;
@@ -60,7 +60,7 @@ const SEED_SYSTEM_BEING_NAMES = [
   "role-finder",
   "roleflow-composer",
   "llm-assigner",
-  "reality-manager",
+  "story-manager",
   "branch-manager",
   "federation-manager",
 ];
@@ -131,11 +131,11 @@ export function beingCognition(being) {
 }
 
 /**
- * Find the reality's root operator — the first being the cherub
+ * Find the story's root operator — the first being the cherub
  * admitted via register/claim. Doctrine encapsulated in the unified
  * findRootOperator helper.
  *
- * Returns null on a fresh reality before any being has registered.
+ * Returns null on a fresh story before any being has registered.
  *
  * @param {string} [branch="0"]
  */

@@ -13,4 +13,4 @@ A head is the last in an order.
 
 Content is a word's body.
 
-A hash is a seal over content. One content makes one hash, and no other content makes it.
+A hash is a seal over content and all before it. One content after one history makes one hash, and no other content or history makes it.

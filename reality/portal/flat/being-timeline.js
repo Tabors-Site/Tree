@@ -61,8 +61,8 @@ export async function renderTimelineSection(container, being, ctx) {
   // describeActChain returns { being:{id,name}, acts:[{...}], count } with
   // facts attached per act and the new `lastFactSeq` we added in the
   // substrate.
-  const reality = ctx.reality || flat.state.discovery?.reality;
-  const acts = await fetchActs(reality, being.beingId).catch((e) => {
+  const story = ctx.story || flat.state.discovery?.story;
+  const acts = await fetchActs(story, being.beingId).catch((e) => {
     status.textContent = `failed to load acts: ${e?.message || e}`;
     return null;
   });
@@ -74,19 +74,19 @@ export async function renderTimelineSection(container, being, ctx) {
   status.textContent = `${acts.length} act${acts.length === 1 ? "" : "s"} · newest first · click to view state at that point`;
 
   for (const act of acts) {
-    list.appendChild(renderActRow(act, being, past, reality));
+    list.appendChild(renderActRow(act, being, past, story));
   }
 }
 
-async function fetchActs(reality, beingId) {
-  if (!reality) return [];
+async function fetchActs(story, beingId) {
+  if (!story) return [];
   try {
     // Qualify the SEE with the active branch so the timeline reads the
-    // right reel. Without the qualifier, typed reality means main, and
+    // right reel. Without the qualifier, typed story means main, and
     // a #1 user's flat-app timeline silently displays main's acts.
     const branch = flat.state.descriptor?.address?.branch || "0";
     const bq = branch === "0" ? "" : `#${branch}`;
-    const desc = await flat.state.client.see(`${reality}${bq}/.acts/${beingId}`);
+    const desc = await flat.state.client.see(`${story}${bq}/.acts/${beingId}`);
     const chain = desc?.actChain;
     return Array.isArray(chain?.acts) ? chain.acts.slice(0, MAX_ACTS) : [];
   } catch {
@@ -96,7 +96,7 @@ async function fetchActs(reality, beingId) {
 
 // ─── Row ─────────────────────────────────────────────────────────
 
-function renderActRow(act, being, pastContainer, reality) {
+function renderActRow(act, being, pastContainer, story) {
   const li = document.createElement("li");
   li.className = "tl-row";
 
@@ -153,7 +153,7 @@ function renderActRow(act, being, pastContainer, reality) {
       [...li.parentElement.children].forEach((c) => c.classList.remove("tl-row-active"));
       li.classList.add("tl-row-active");
       await openHistoricalView({
-        reality,
+        story,
         being,
         whenISO: stampedAt,
         pastContainer,
@@ -166,7 +166,7 @@ function renderActRow(act, being, pastContainer, reality) {
 
 // ─── Historical view ─────────────────────────────────────────────
 
-async function openHistoricalView({ reality, being, whenISO, pastContainer }) {
+async function openHistoricalView({ story, being, whenISO, pastContainer }) {
   pastContainer.classList.remove("hidden");
   pastContainer.innerHTML = "";
 
@@ -190,7 +190,7 @@ async function openHistoricalView({ reality, being, whenISO, pastContainer }) {
   try {
     const branch = flat.state.descriptor?.address?.branch || "0";
     const bq = branch === "0" ? "" : `#${branch}`;
-    descriptor = await flat.state.client.see(`${reality}${bq}/@${being.being}`, {
+    descriptor = await flat.state.client.see(`${story}${bq}/@${being.being}`, {
       at: { atTimestamp: whenISO },
     });
   } catch (err) {

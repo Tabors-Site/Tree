@@ -22,7 +22,7 @@ When a being sets a branch pointer:
   see read-pointers() as current.
   see find-pointers-space-id() as branchesSpace.
   If no branchesSpace:
-    refuse with "the .branches heaven space was not found; reality is not properly bootstrapped" as internal.
+    refuse with "the .branches heaven space was not found; story is not properly bootstrapped" as internal.
   see set-pointer-map(current, validName, validPath) as updated.
   replace the space branchesSpace's qualities.pointers with updated's map.
   Return set: true, name: $validName, canonical: $validPath, previous: updated's previous.

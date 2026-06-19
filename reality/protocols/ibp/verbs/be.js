@@ -49,13 +49,13 @@
 // the new being's reel directly): the pre-being case has no reel
 // yet — there's no actor row, no inbox, no stamp surface. Cherub is
 // the seed-shipped handler that owns the identity-binding protocol;
-// every reality has exactly one. Subsequent BEs from authed sockets
+// every story has exactly one. Subsequent BEs from authed sockets
 // could in principle open on the authed being's own reel, but
 // routing them all through cherub keeps the identity-binding code
 // path uniform (one handler, one place to gate birth_enabled /
 // connect_enabled, one place to verify credentials).
 
-import log from "../../../seed/seedReality/log.js";
+import log from "../../../seed/seedStory/log.js";
 import Being from "../../../seed/materials/being/being.js";
 import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
 import { assertNoImpersonation } from "./_shared.js";
@@ -161,11 +161,11 @@ export async function handleBe(socket, env, ack) {
     const callerBranch = socket.currentBranch || "0";
     let _targetBranchResolved = null;
     try {
-      const { parseFromSocket, expand, resolveBeingIds, resolveBranchPointers, getRealityDomain } =
+      const { parseFromSocket, expand, resolveBeingIds, resolveBranchPointers, getStoryDomain } =
         await import("../../../seed/ibp/address.js");
       const parsed = parseFromSocket(socket, address);
       const expandCtx = {
-        currentReality: getRealityDomain(),
+        currentStory: getStoryDomain(),
         currentUser:    socket.name,
         currentBranch:  callerBranch,
         currentPath:    socket.currentPath || null,
@@ -234,12 +234,12 @@ export async function handleBe(socket, env, ack) {
         );
       }
       if (await isBranchPaused(branch)) {
-        throw new IbpError(IBP_ERR.REALITY_PAUSED,
+        throw new IbpError(IBP_ERR.STORY_PAUSED,
           `BE refused: branch #${branch} is paused.`,
           { branch });
       }
       if (await isBranchDeleted(branch)) {
-        throw new IbpError(IBP_ERR.REALITY_PAUSED,
+        throw new IbpError(IBP_ERR.STORY_PAUSED,
           `BE refused: branch #${branch} is deleted.`,
           { branch, deleted: true });
       }

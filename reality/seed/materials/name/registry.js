@@ -3,12 +3,12 @@
 // registry — resolve a name-address token to a nameId (pubkey).
 //
 // In the IBPA, a Name can be addressed either by its PUBKEY (the z-form id)
-// or by its REAL NAME (Name.name, the human handle): `<realName>@<reality>`
+// or by its REAL NAME (Name.name, the human handle): `<realName>@<story>`
 // auto-resolves to the pubkey behind the scenes on the server that holds
 // the registry. The "registry" is just the Name projections themselves —
 // findByName("name", realName, "0") looks a Name up by its `name` field
-// (reality-scoped; Names live on main). A token that is already a pubkey is
-// returned as-is; the literal "i-am" is the reality root.
+// (story-scoped; Names live on main). A token that is already a pubkey is
+// returned as-is; the literal "i-am" is the story root.
 
 import { isKeyId } from "./keys.js";
 
@@ -20,7 +20,7 @@ import { isKeyId } from "./keys.js";
  */
 export async function resolveNameId(token) {
   if (!token || typeof token !== "string") return null;
-  if (token === "i-am") return "i-am";   // the reality root's literal id
+  if (token === "i-am") return "i-am";   // the story root's literal id
   if (isKeyId(token)) return token;       // already a pubkey
   const { findByName } = await import("../projections.js");
   const slot = await findByName("name", token, "0");

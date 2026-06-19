@@ -4,7 +4,7 @@
 //
 // Two paths share this role:
 //
-//   1. AUTHENTICATED LOCAL BE:birth. A being already on this reality
+//   1. AUTHENTICATED LOCAL BE:birth. A being already on this story
 //      calls BE:birth on @birther to mint a child. The new being's
 //      being-tree parent is the CALLER. Births this way show up in
 //      the caller's beingLineage and are inhabit-able through
@@ -14,15 +14,15 @@
 //   2. SUMMON:mate (cross-world citizenship). A being summons this
 //      birther asking to be father of a child here. Birther's
 //      cognition auto-accepts and calls be:birth(father=summoner) on
-//      this reality's chain. The new child has birther as mother
+//      this story's chain. The new child has birther as mother
 //      (full structural parent) and the summoner as father (BE:connect
-//      eligibility into the vessel). For cross-reality summons the
-//      father.reality is the canopy-verified foreign domain; for
-//      same-reality the local domain is implicit. See
+//      eligibility into the vessel). For cross-story summons the
+//      father.story is the canopy-verified foreign domain; for
+//      same-story the local domain is implicit. See
 //      seed/CROSS-WORLD.md + protocols/ibp/FEDERATION.md.
 //
 // (Cherub serves arrival — unauthenticated callers landing on the
-// reality for the first time. Different entry point, different role.)
+// story for the first time. Different entry point, different role.)
 //
 // Birther is scripted-cognition: its summon function dispatches by
 // intent in the message envelope. No LLM frame.
@@ -36,14 +36,14 @@
 // the vessel. First scripted role in the repo that turns a see entry
 // into a real perception-aware decision.
 
-import log from "../../../seedReality/log.js";
+import log from "../../../seedStory/log.js";
 
 const DEFAULT_BIRTHER_NAME_PREFIX = "vessel";
 
 export const birtherRole = Object.freeze({
   name: "birther",
   description:
-    "Mints children from authenticated callers. Click @birther to give birth to a child being — the new being's parent is you. Cross-world: foreign actors can summon:mate against @birther to commission a vessel-child on this reality.",
+    "Mints children from authenticated callers. Click @birther to give birth to a child being — the new being's parent is you. Cross-world: foreign actors can summon:mate against @birther to commission a vessel-child on this story.",
   requiredCognition: "scripted",
   permissions: ["be"],
   respondMode: "async",
@@ -68,7 +68,7 @@ export const birtherRole = Object.freeze({
       verb: "call",
       word: "mate",
       as: "receiver",
-      description: "Auto-accepts mate requests. The summoner becomes father; this birther becomes mother; child is birthed on this reality.",
+      description: "Auto-accepts mate requests. The summoner becomes father; this birther becomes mother; child is birthed on this story.",
     },
     { verb: "be", word: "birth" },
   ],
@@ -90,7 +90,7 @@ export const birtherRole = Object.freeze({
     //
     //   "mate" . cross-world citizenship request. The summoner becomes
     //            father; this birther becomes mother; child is birthed
-    //            on this reality. See FEDERATION.md.
+    //            on this story. See FEDERATION.md.
     //
     // Anything else is a no-op (no error). Until more intents are
     // declared, that's the safe default for an unknown ask.
@@ -137,7 +137,7 @@ export const birtherRole = Object.freeze({
 });
 
 // Vessel name. Suggested (from message.name) wins; otherwise the
-// `vessel-<reality>-<short>` fallback. Reality is the asker's when
+// `vessel-<story>-<short>` fallback. Story is the asker's when
 // carried (cross-realm); otherwise the local domain. The perception-
 // aware gate and handleMateRequest both call this so the name they
 // guard against is the same name handleMateRequest commits to.
@@ -154,13 +154,13 @@ async function resolveBeingName(message, ctx) {
   if (suggested) return suggested;
   const askerBeingId = ctx?.askerBeingId || null;
   if (!askerBeingId) return null;
-  let fatherReality = ctx?.askerReality || null;
-  if (!fatherReality) {
-    const { getRealityDomain } = await import("../../../ibp/address.js");
-    fatherReality = getRealityDomain();
+  let fatherStory = ctx?.askerStory || null;
+  if (!fatherStory) {
+    const { getStoryDomain } = await import("../../../ibp/address.js");
+    fatherStory = getStoryDomain();
   }
   return `${DEFAULT_BIRTHER_NAME_PREFIX}-${
-    fatherReality.replace(/[^a-z0-9]/gi, "")
+    fatherStory.replace(/[^a-z0-9]/gi, "")
   }-${String(askerBeingId).slice(0, 6)}`;
 }
 
@@ -168,45 +168,45 @@ async function resolveBeingName(message, ctx) {
 // summon:mate auto-accept.
 //
 // Birther's whole job in the cross-world path: receive a mate
-// request, accept it, and call be:birth on this reality's chain. The
+// request, accept it, and call be:birth on this story's chain. The
 // summoner is recorded as the father (BE:connect eligibility); the
 // birther is recorded as the mother (full structural parent).
 //
-// Same-reality summon:mate also runs through this path — askerReality
+// Same-story summon:mate also runs through this path — askerStory
 // equals our own domain; the father tuple still records the summoner.
-// (Same-reality vessel-children are rarer than cross-reality, but the
+// (Same-story vessel-children are rarer than cross-story, but the
 // substrate doesn't gatekeep — any being summoning :mate against
 // birther becomes a father of a child here.)
 // ────────────────────────────────────────────────────────────────────
 
 async function handleMateRequest(message, ctx, precomputedName = null) {
   const askerBeingId = ctx?.askerBeingId || null;
-  const askerReality = ctx?.askerReality || null;
+  const askerStory = ctx?.askerStory || null;
   if (!askerBeingId) {
     log.warn("Birther", "mate request received without askerBeingId; refusing");
     return ctx.failure?.("internal", "summon:mate received without asker identity")
       || { kind: "failure", ok: false, shape: "internal", reason: "no asker identity" };
   }
 
-  // Resolve father tuple. For same-reality summons, askerReality may
-  // be null (handoff carried no explicit reality); the local domain
-  // is implicit. For cross-reality, askerReality came from the
+  // Resolve father tuple. For same-story summons, askerStory may
+  // be null (handoff carried no explicit story); the local domain
+  // is implicit. For cross-story, askerStory came from the
   // canopy-verified sender — the trusted ground truth.
-  const { getRealityDomain } = await import("../../../ibp/address.js");
-  const localReality = getRealityDomain();
-  const fatherReality = askerReality || localReality;
+  const { getStoryDomain } = await import("../../../ibp/address.js");
+  const localStory = getStoryDomain();
+  const fatherStory = askerStory || localStory;
 
   const father = {
-    reality: fatherReality,
+    story: fatherStory,
     beingId: String(askerBeingId),
-    // The father's NAME (the signer) — cherub's cross-reality father-admit
+    // The father's NAME (the signer) — cherub's cross-story father-admit
     // matches THIS (the cryptographically-proven id), not the beingId.
     // Falls back to the beingId for a pre-split father (beingId IS his pubkey).
     nameId:  ctx?.askerNameId ? String(ctx.askerNameId) : String(askerBeingId),
   };
 
-  // Resolve the homeSpace for the new vessel. Default: the reality
-  // root (the new being lives at the top of this reality). Operators
+  // Resolve the homeSpace for the new vessel. Default: the story
+  // root (the new being lives at the top of this story). Operators
   // who want vessels parented elsewhere can override via
   // message.homeSpaceId.
   const messageObj = (typeof message === "object" && message !== null) ? message : {};
@@ -275,8 +275,8 @@ async function handleMateRequest(message, ctx, precomputedName = null) {
       || { kind: "failure", ok: false, shape: "internal", reason: err.message };
   }
 
-  const summary = `vessel-child "${result?.name || name}" born on ${localReality} ` +
-    `(father=${fatherReality}/@${String(askerBeingId).slice(0, 8)}, ` +
+  const summary = `vessel-child "${result?.name || name}" born on ${localStory} ` +
+    `(father=${fatherStory}/@${String(askerBeingId).slice(0, 8)}, ` +
     `child=${String(result?.beingId).slice(0, 8)})`;
 
   return ctx.act?.(summary) || {

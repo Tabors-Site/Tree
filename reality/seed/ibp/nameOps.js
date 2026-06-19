@@ -4,15 +4,15 @@
 //
 // NAME is the fifth verb, and unlike the four world verbs it does not
 // operate as a stance: it is the IDENTITY layer (outer worlds). It rides
-// the same IBPA, but its address is reality-only (`<realityDomain>` — the
-// reality's I_AM, where a new name is declared) or `<nameId>@<realityDomain>`
+// the same IBPA, but its address is story-only (`<storyDomain>` — the
+// story's I_AM, where a new name is declared) or `<nameId>@<storyDomain>`
 // (a specific name, to see or banish it). The portal gives it its own views
 // (create a name, see a name's data / all its acts).
 //
 // A closed set, like BE: two ops, no extension adds a third.
 //
 //   declare — mint a new Name: a fresh ed25519 keypair whose public key is
-//             the Name's id, a facet of the reality's I_AM (parentNameId =
+//             the Name's id, a facet of the story's I_AM (parentNameId =
 //             I_AM, flat — never a Name hierarchy). The private key is held
 //             custodially (encrypted) on the Name row.
 //   banish  — the Name tombstones itself: no new fact can ever be signed by
@@ -50,24 +50,24 @@ function keypairFromImport(importKey) {
   );
 }
 
-// declare — mint a new Name as a facet of the reality's I_AM. Returns the
+// declare — mint a new Name as a facet of the story's I_AM. Returns the
 // new nameId + the spec the fact carries (applyMintName folds it). The
 // keypair is generated here — this is where key-minting LIVES now (it left
 // birth.js when a being stopped being its own identity).
 async function declareHandler({ payload }) {
-  // Real-name UNIQUE per reality: at most one Name per real-name, so the
+  // Real-name UNIQUE per story: at most one Name per real-name, so the
   // registry resolves a real-name to exactly one Name. Names live on main.
   if (payload?.name) {
     const { findByName } = await import("../materials/projections.js");
     if (await findByName("name", payload.name, "0")) {
       throw new IbpError(
         IBP_ERR.RESOURCE_CONFLICT,
-        `real-name "${payload.name}" is already taken on this reality`,
+        `real-name "${payload.name}" is already taken on this story`,
       );
     }
   }
   // Mint fresh, OR rebuild from an imported key (PEM / 24 words) — bringing
-  // a Name you already hold onto this reality. The imported key's pubkey IS
+  // a Name you already hold onto this story. The imported key's pubkey IS
   // the nameId, so a re-import of a Name that already exists here is a
   // conflict (you connect to it, you don't re-declare it).
   const keypair = payload?.importKey ? keypairFromImport(payload.importKey) : generateNameKeypair();
@@ -77,12 +77,12 @@ async function declareHandler({ payload }) {
     if (await loadProjection("name", nameId, "0")) {
       throw new IbpError(
         IBP_ERR.RESOURCE_CONFLICT,
-        `imported Name ${String(nameId).slice(0, 12)}… already exists on this reality; connect to it instead of re-declaring`,
+        `imported Name ${String(nameId).slice(0, 12)}… already exists on this story; connect to it instead of re-declaring`,
       );
     }
   }
   const spec = {
-    // Flat lineage: every declared Name is a facet of the reality's I_AM,
+    // Flat lineage: every declared Name is a facet of the story's I_AM,
     // one layer down — never a Name-of-a-Name hierarchy.
     parentNameId:  I_AM,
     // The key at rest. PASSWORD given -> encrypt with a KDF(password) so the
@@ -99,7 +99,7 @@ async function declareHandler({ payload }) {
     soulType:      payload?.soulType ?? null,
     // The real name (trueName.name) — OPTIONAL human handle. Easier server
     // access (sign in by real-name + password) but never required; you can
-    // always act with the private key. Reality-scoped. null when unspecified.
+    // always act with the private key. Story-scoped. null when unspecified.
     name:          payload?.name ?? null,
   };
   // The key REVEAL — returned ONCE on the direct response, NEVER in the fact
@@ -118,13 +118,13 @@ async function declareHandler({ payload }) {
 }
 
 // banish — the Name marks itself closed. The target Name is the one
-// addressed (`<nameId>@<realityDomain>`), threaded in as addressedNameId.
+// addressed (`<nameId>@<storyDomain>`), threaded in as addressedNameId.
 async function banishHandler({ addressedNameId, payload }) {
   const nameId = addressedNameId || payload?.nameId || null;
   if (!nameId) {
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
-      "name banish requires a target name (address it <nameId>@<realityDomain>)",
+      "name banish requires a target name (address it <nameId>@<storyDomain>)",
     );
   }
   return { nameId };
@@ -144,7 +144,7 @@ async function connectNameHandler({ addressedNameId, payload }) {
   const nameId = addressedNameId || payload?.nameId || null;
   if (!nameId) {
     throw new IbpError(IBP_ERR.INVALID_INPUT,
-      "name connect requires a target name (address it <nameId>@<realityDomain>)");
+      "name connect requires a target name (address it <nameId>@<storyDomain>)");
   }
   const { loadProjection } = await import("../materials/projections.js");
   const slot = await loadProjection("name", String(nameId), "0");
@@ -165,7 +165,7 @@ async function releaseNameHandler({ addressedNameId, payload }) {
   const nameId = addressedNameId || payload?.nameId || null;
   if (!nameId) {
     throw new IbpError(IBP_ERR.INVALID_INPUT,
-      "name release requires a target name (address it <nameId>@<realityDomain>)");
+      "name release requires a target name (address it <nameId>@<storyDomain>)");
   }
   const { loadProjection } = await import("../materials/projections.js");
   const slot = await loadProjection("name", String(nameId), "0");
@@ -178,7 +178,7 @@ async function releaseNameHandler({ addressedNameId, payload }) {
 
 export const NAME_OPS = Object.freeze({
   declare: {
-    description: "Mint a new name (a facet of the reality's I_AM) with its own keypair.",
+    description: "Mint a new name (a facet of the story's I_AM) with its own keypair.",
     label:       "Declare name",
     args:        { soulType: { type: "string", label: "Soul", required: false } },
     handler:     declareHandler,

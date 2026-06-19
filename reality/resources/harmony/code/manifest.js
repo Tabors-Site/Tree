@@ -2,7 +2,7 @@
 
 export default {
   kind:    "code",
-  // The code piece carries the pack's name so scopedReality's
+  // The code piece carries the pack's name so scopedStory's
   // auto-prefix rule writes "harmony:tick" / "harmony:neighbors" / etc.
   // The pack itself ALSO has name: "harmony" — different kinds,
   // distinct registries, no collision.

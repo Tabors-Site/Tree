@@ -13,12 +13,12 @@ import { randomUUID } from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const SCRATCH_DB = "mongodb://localhost:27017/reality_word_connect_cutmodes";
+const SCRATCH_DB = "mongodb://localhost:27017/story_word_connect_cutmodes";
 process.env.PORT = "3790";
 process.env.MONGODB_URI = SCRATCH_DB;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "cutmodes-secret-0123456789";
-process.env.REALITY_KEY_DIR = path.join(os.tmpdir(), "cutmodes-keys-" + process.pid);
-fs.rmSync(process.env.REALITY_KEY_DIR, { recursive: true, force: true });
+process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "cutmodes-keys-" + process.pid);
+fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
 const SRC = path.join(os.tmpdir(), "cutmodes-src");
 fs.rmSync(SRC, { recursive: true, force: true });
 fs.mkdirSync(SRC, { recursive: true });
@@ -41,8 +41,8 @@ const { birthBeing } = await import(`${R}/seed/materials/being/identity/birth.js
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { nameVerb } = await import(`${R}/seed/ibp/verbs/name.js`);
 const { cherubBeOps } = await import(`${R}/seed/present/roles/cherub/role.js`);
-const { getRealityDomain } = await import(`${R}/seed/ibp/address.js`);
-const D = getRealityDomain();
+const { getStoryDomain } = await import(`${R}/seed/ibp/address.js`);
+const D = getStoryDomain();
 
 let pass = 0, fail = 0;
 const ok = (l) => { pass++; console.log(`  ✓ ${l}`); };

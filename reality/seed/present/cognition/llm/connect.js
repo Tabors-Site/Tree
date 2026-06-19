@@ -60,11 +60,11 @@ import OpenAI from "openai";
 import { getInternalConfigValue } from "../../../internalConfig.js";
 import crypto from "crypto";
 import { randomUUID as uuidv4 } from "node:crypto";
-import log from "../../../seedReality/log.js";
+import log from "../../../seedStory/log.js";
 import Being from "../../../materials/being/being.js";
 import Space from "../../../materials/space/space.js";
 import { I_AM } from "../../../materials/being/seedBeings.js";
-import { getRealityConfigValue } from "../../../realityConfig.js";
+import { getStoryConfigValue } from "../../../storyConfig.js";
 import { getAncestorChain } from "../../../materials/space/ancestorCache.js";
 import { actorBranchFrom } from "../../../past/act/crossOrigin.js";
 import {
@@ -813,7 +813,7 @@ export async function resolveConnection(beingId, connectionId, cacheKey, { momen
       timeout: LLM_TIMEOUT_MS,
       defaultHeaders: {
         "HTTP-Referer":
-          getRealityConfigValue("realityUrl") ||
+          getStoryConfigValue("storyUrl") ||
           `http://localhost:${process.env.PORT || 3000}`,
         "X-OpenRouter-Title": "TreeOS",
         "X-OpenRouter-Categories": "personal-agent,general-chat",
@@ -864,7 +864,7 @@ export async function resolveConnection(beingId, connectionId, cacheKey, { momen
  *   2. being slot assignment (qualities.beingLlm.slots[slot])
  *   3. being main slot (qualities.beingLlm.slots.main), if slot
  *      wasn't already "main"
- *   4. place-level default (realityLlmConnection)
+ *   4. place-level default (storyLlmConnection)
  *   5. noLlm sentinel
  *
  * Branch is REQUIRED — every read walks the being's effective view
@@ -951,7 +951,7 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId, bra
     );
   }
 
-  // 4. Reality-level default. The `realityLlmConnection` config key
+  // 4. Story-level default. The `storyLlmConnection` config key
   // holds the connectionId; the connection record itself lives on
   // the root operator's qualities (that's where `add-llm` writes,
   // since the BE op runs as the caller). Earlier doctrine said the
@@ -960,27 +960,27 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId, bra
   // Resolving from the operator matches what the install side
   // actually does and avoids the silent-noLlm trap.
   try {
-    const realityLlmId = getRealityConfigValue("realityLlmConnection");
-    if (realityLlmId) {
+    const storyLlmId = getStoryConfigValue("storyLlmConnection");
+    if (storyLlmId) {
       const { findRootOperator } = await import("../../../materials/being/identity.js");
       const operator = await findRootOperator();
       if (operator?._id) {
-        const realityCacheKey = "place:" + slot + ":" + branch;
-        const realityCached = beingClientCache.get(realityCacheKey);
-        if (realityCached && Date.now() - realityCached.fetchedAt < CLIENT_CACHE_TTL) {
-          return realityCached;
+        const storyCacheKey = "place:" + slot + ":" + branch;
+        const storyCached = beingClientCache.get(storyCacheKey);
+        if (storyCached && Date.now() - storyCached.fetchedAt < CLIENT_CACHE_TTL) {
+          return storyCached;
         }
-        const realityEntry = await resolveConnection(
+        const storyEntry = await resolveConnection(
           String(operator._id),
-          realityLlmId,
-          realityCacheKey,
+          storyLlmId,
+          storyCacheKey,
           { branch },
         );
-        if (realityEntry) return realityEntry;
+        if (storyEntry) return storyEntry;
       }
     }
   } catch (err) {
-    log.error("LLM", `Failed to resolve reality default LLM: ${err.message}`);
+    log.error("LLM", `Failed to resolve story default LLM: ${err.message}`);
   }
 
   // 5. No LLM available. Cache the sentinel so we don't re-walk.
@@ -1020,5 +1020,5 @@ export async function beingHasLlm(beingId) {
   if (beingLlm.main) return true;
   const conns = readConnectionsFrom(state);
   if (Object.keys(conns).length > 0) return true;
-  return !!getRealityConfigValue("realityLlmConnection");
+  return !!getStoryConfigValue("storyLlmConnection");
 }

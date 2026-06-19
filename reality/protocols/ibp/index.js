@@ -14,7 +14,7 @@
 //
 // Both must be called for IBP to be fully alive on a Place.
 
-import log from "../../seed/seedReality/log.js";
+import log from "../../seed/seedStory/log.js";
 import { registerIbpBootstrap } from "./bootstrap-route.js";
 import { attachIbpHandlers } from "./protocol.js";
 import { attachNameSession } from "./nameSession.js";
@@ -258,7 +258,7 @@ export function initIBPWS(io) {
   registerFactPush();
   attachIbpHandlers(io);
   // Pre-world NAME channel: declare / login / logout / whoami for a
-  // connection with no being yet (the Name Form at the bare realityDomain).
+  // connection with no being yet (the Name Form at the bare storyDomain).
   attachNameSession(io);
   // Rehydrate runtime state. Both subscriptions and schedules now
   // fold from the fact chain. Each walker reads its action's facts
@@ -303,7 +303,7 @@ export function initIBPWS(io) {
 // Re-exports for convenience — anything that wants to USE the IBP
 // primitives (e.g. eventually emit ibp:event frames from within a Speak
 // handler) can import them through this module.
-export { parseFromSocket, parseWithContext, format, canonical, getRealityDomain } from "../../seed/ibp/address.js";
+export { parseFromSocket, parseWithContext, format, canonical, getStoryDomain } from "../../seed/ibp/address.js";
 export { resolveStance } from "../../seed/ibp/resolver.js";
 export { buildPlaceDescriptor, buildDiscovery, DESCRIPTOR_VERSION, IBP_PROTOCOL_VERSION } from "../../seed/ibp/descriptor.js";
 export { IbpError, IBP_ERR, isIbpError } from "../../seed/ibp/protocol.js";
@@ -311,7 +311,7 @@ export { IbpError, IBP_ERR, isIbpError } from "../../seed/ibp/protocol.js";
 // and the cancel sweeps are NOT re-exported: they let callers fabricate
 // or sever work without an envelope, breaking the audit chain. The
 // right way to wake a being is to SUMMON them; the right way to cut a
-// sub-tree is to SUMMON `<reality>/./threads/<id>` (priority HUMAN for
+// sub-tree is to SUMMON `<story>/./threads/<id>` (priority HUMAN for
 // out-of-band interrupt).
 export { getCurrentRootCorrelation, getStats as getSchedulerStats } from "../../seed/present/intake/scheduler.js";
 // Reply aggregation pattern for fanout (Foreman → Workers, etc.).

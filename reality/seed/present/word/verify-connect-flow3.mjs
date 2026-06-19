@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // cherub-connect.word FLOW 3 (inherit-connect / father-admit, connectHandler Mode-3),
 // LIVE through the bridge with ZERO stubs. Proves: ancestor inhabit, local father-admit,
-// LEGIT cross-reality father (proven name + verified sig), the SECURITY property (a cross
+// LEGIT cross-story father (proven name + verified sig), the SECURITY property (a cross
 // caller presenting the victim father's beingId but the WRONG name is REFUSED — the
 // vessel-takeover attack the JS guards, which the .word's old conds would have allowed),
 // and a non-relative refusal. Full begin.js boot. Scratch DB, wiped.
@@ -14,12 +14,12 @@ import { randomUUID } from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const SCRATCH_DB = "mongodb://localhost:27017/reality_word_connect_flow3";
+const SCRATCH_DB = "mongodb://localhost:27017/story_word_connect_flow3";
 process.env.PORT = "3792";
 process.env.MONGODB_URI = SCRATCH_DB;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "connectflow3-secret-0123456789";
-process.env.REALITY_KEY_DIR = path.join(os.tmpdir(), "connectflow3-keys-" + process.pid);
-fs.rmSync(process.env.REALITY_KEY_DIR, { recursive: true, force: true });
+process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "connectflow3-keys-" + process.pid);
+fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
 const SRC = path.join(os.tmpdir(), "connectflow3-src");
 fs.rmSync(SRC, { recursive: true, force: true });
 fs.mkdirSync(SRC, { recursive: true });
@@ -39,10 +39,10 @@ const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const { withIAmAct } = await import(`${R}/seed/sprout.js`);
 const { birthBeing } = await import(`${R}/seed/materials/being/identity/birth.js`);
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
-const { getRealityDomain } = await import(`${R}/seed/ibp/address.js`);
+const { getStoryDomain } = await import(`${R}/seed/ibp/address.js`);
 const { resolveRoleWord, runRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
 const { connectHostEnv, selectConnectFlow } = await import(`${R}/seed/present/roles/cherub/connectHost.js`);
-const localDomain = getRealityDomain();
+const localDomain = getStoryDomain();
 
 let pass = 0, fail = 0;
 const ok = (l) => { pass++; console.log(`  ✓ ${l}`); };
@@ -78,9 +78,9 @@ try {
 
   const daddy = await birth("daddy");
   const descendant = await birth("childbeing", { parentBeingId: daddy });
-  const localVessel = await birth("localvessel", { father: { reality: localDomain, beingId: daddy } });
+  const localVessel = await birth("localvessel", { father: { story: localDomain, beingId: daddy } });
   const FOREIGN = "did:web:foreign.example.com";
-  const crossVessel = await birth("crossvessel", { father: { reality: FOREIGN, beingId: "F-foreign-being", nameId: "z6MkVictimName" } });
+  const crossVessel = await birth("crossvessel", { father: { story: FOREIGN, beingId: "F-foreign-being", nameId: "z6MkVictimName" } });
   console.log(`  daddy=${String(daddy).slice(0,10)} descendant/localvessel/crossvessel born\n`);
 
   // ── 1. ANCESTOR path: daddy inhabits a being it birthed ──
@@ -89,24 +89,24 @@ try {
     ? ok(`ancestor: daddy inherits @childbeing → inherited:true, asFather:false, token`) : bad(`ancestor`, anc.refused?.message || anc.result);
 
   // ── 2. LOCAL FATHER: daddy is the local father of the vessel (beingId is the credential) ──
-  const lf = await inherit("localvessel", { beingId: daddy, reality: localDomain });
+  const lf = await inherit("localvessel", { beingId: daddy, story: localDomain });
   lf.result?.asFather === true && lf.result?.token
     ? ok(`local father: daddy admits @localvessel → asFather:true, token`) : bad(`local father`, lf.refused?.message || lf.result);
 
-  // ── 3. LEGIT CROSS-REALITY FATHER: proven NAME + verified sig ──
-  const xf = await inherit("crossvessel", { beingId: "F-foreign-being", reality: FOREIGN, nameId: "z6MkVictimName", beingSigVerified: true });
+  // ── 3. LEGIT CROSS-STORY FATHER: proven NAME + verified sig ──
+  const xf = await inherit("crossvessel", { beingId: "F-foreign-being", story: FOREIGN, nameId: "z6MkVictimName", beingSigVerified: true });
   xf.result?.asFather === true
     ? ok(`cross father (proven name + verified sig) → asFather:true`) : bad(`cross father legit`, xf.refused?.message || xf.result);
 
   // ── 4. THE SECURITY PROPERTY: a cross caller with the victim's beingId but the WRONG
   // name (and no matching sig) must be REFUSED. The OLD .word local cond would have let
   // this in on the beingId match; fatherMatch closes it (cross path needs nameId+sig). ──
-  const attack = await inherit("crossvessel", { beingId: "F-foreign-being", reality: FOREIGN, nameId: "z6MkAttackerName", beingSigVerified: true });
+  const attack = await inherit("crossvessel", { beingId: "F-foreign-being", story: FOREIGN, nameId: "z6MkAttackerName", beingSigVerified: true });
   attack.refused
     ? ok(`SECURITY: cross caller with victim's beingId but wrong name → REFUSED (no beingId-takeover)`) : bad(`SECURITY HOLE`, `attacker got in: ${JSON.stringify(attack.result)}`);
 
   // ── 5. NEGATIVE: a stranger (neither ancestor nor father) → refuse ──
-  const stranger = await inherit("localvessel", { beingId: "nobody-unrelated", reality: localDomain });
+  const stranger = await inherit("localvessel", { beingId: "nobody-unrelated", story: localDomain });
   stranger.refused
     ? ok(`stranger (not ancestor, not father) → refused`) : bad(`stranger refused`, stranger.result);
 

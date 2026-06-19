@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// I_AM GENESIS IMMUTABILITY (Tabor): the CORE REALITY genesis words are I_AM's bedrock — a
+// I_AM GENESIS IMMUTABILITY (Tabor): the CORE STORY genesis words are I_AM's bedrock — a
 // non-I_AM actor may NOT disable/re-declare one ON HEAVEN ("0"). But per-branch SHADOWING (the
 // V2 overlay, your own vocabulary) stays allowed, and I_AM may change its own. Proves the guard
 // protects the root without breaking V2. Full boot.
@@ -11,12 +11,12 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const SCRATCH_DB = "mongodb://localhost:27017/reality_genesis_immutable";
+const SCRATCH_DB = "mongodb://localhost:27017/story_genesis_immutable";
 process.env.PORT = "3808";
 process.env.MONGODB_URI = SCRATCH_DB;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "genimm-secret-0123456789";
-process.env.REALITY_KEY_DIR = path.join(os.tmpdir(), "genimm-keys-" + process.pid);
-fs.rmSync(process.env.REALITY_KEY_DIR, { recursive: true, force: true });
+process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "genimm-keys-" + process.pid);
+fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
 const SRC = path.join(os.tmpdir(), "genimm-src");
 fs.rmSync(SRC, { recursive: true, force: true });
 fs.mkdirSync(SRC, { recursive: true });

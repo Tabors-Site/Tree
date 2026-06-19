@@ -5,7 +5,7 @@
 // my-inbox SEE call.
 //
 // One renderer per well-known seed intent. Extensions can register
-// their own through `reality.registerInboxRenderer` exposed via the
+// their own through `story.registerInboxRenderer` exposed via the
 // services facade.
 
 import { registerInboxRenderer } from "../inboxRenderers.js";

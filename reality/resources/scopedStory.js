@@ -1,8 +1,8 @@
 // TreeOS Place . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// scopedReality.js — the per-extension permission boundary.
+// scopedStory.js — the per-extension permission boundary.
 //
-// Extensions don't get the full `reality` services bundle. They get a
+// Extensions don't get the full `story` services bundle. They get a
 // SCOPED view: only the services they declared in `manifest.needs` or
 // `manifest.optional`, plus a few seed-mandatory surfaces (hooks,
 // qualities, beingMetadata, matterMetadata).
@@ -10,11 +10,11 @@
 // The scoped bundle also auto-namespaces a handful of register-style
 // methods so extensions can't impersonate each other or the seed:
 //
-//   - `reality.do.registerOperation("name", spec)` → records
+//   - `story.do.registerOperation("name", spec)` → records
 //     "<ext>:name" with ownerExtension=<ext>.
-//   - `reality.websocket.emitToBeing(beingId, "evt", data)` → emits
+//   - `story.websocket.emitToBeing(beingId, "evt", data)` → emits
 //     "<ext>:evt".
-//   - `reality.auth.registerStrategy(name, handler)` → records the
+//   - `story.auth.registerStrategy(name, handler)` → records the
 //     strategy under the extension's name; only extensions that
 //     declared `provides.authStrategies` may register at all.
 //
@@ -24,22 +24,22 @@
 // Reserved event names ("ibp", "registered", "navigate") refuse.
 //
 // The whole scoped object is shallow-frozen so extensions can't
-// replace `reality.hooks` or `reality.llm`; they CAN add new top-level
-// properties (`reality.energy = {...}`), which is how an extension
+// replace `story.hooks` or `story.llm`; they CAN add new top-level
+// properties (`story.energy = {...}`), which is how an extension
 // publishes its own service surface for other extensions to declare.
 
 /**
- * Build the scoped reality bundle for one extension.
+ * Build the scoped story bundle for one extension.
  *
  * @param {object} manifest           the extension's manifest
- * @param {object} fullReality        the full reality services bundle
+ * @param {object} fullStory        the full story services bundle
  * @param {Set<string>} availableServices  seed-known service keys
- *   (computed once at boot from buildRealityServices output;
+ *   (computed once at boot from buildStoryServices output;
  *   used to distinguish seed-provided from extension-registered
  *   services in the scoping logic)
  * @returns {object}  the scoped, frozen bundle
  */
-export function buildScopedReality(manifest, fullReality, availableServices) {
+export function buildScopedStory(manifest, fullStory, availableServices) {
   const allowed = new Set();
 
   // Collect all declared services (required + optional)
@@ -55,46 +55,46 @@ export function buildScopedReality(manifest, fullReality, availableServices) {
 
   // Services: inject declared seed services
   for (const key of availableServices) {
-    if (allowed.has(key) && fullReality[key]) {
-      scoped[key] = fullReality[key];
+    if (allowed.has(key) && fullStory[key]) {
+      scoped[key] = fullStory[key];
     }
   }
 
   // Also inject declared services that were dynamically registered by other
-  // extensions (e.g. energy registers reality.energy during its init). The seed
+  // extensions (e.g. energy registers story.energy during its init). The seed
   // doesn't name these. Extensions discover them by declaration.
   for (const svc of allowed) {
-    if (!availableServices.has(svc) && fullReality[svc]) {
-      scoped[svc] = fullReality[svc];
+    if (!availableServices.has(svc) && fullStory[svc]) {
+      scoped[svc] = fullStory[svc];
     }
   }
 
   // Models: only inject declared ones (plus any registered by other extensions)
   scoped.models = {};
   for (const name of allowedModels) {
-    if (fullReality.models[name]) {
-      scoped.models[name] = fullReality.models[name];
+    if (fullStory.models[name]) {
+      scoped.models[name] = fullStory.models[name];
     }
   }
 
   // Hooks: always available (place infrastructure, not a declared service)
-  if (fullReality.hooks) {
-    scoped.hooks = fullReality.hooks;
+  if (fullStory.hooks) {
+    scoped.hooks = fullStory.hooks;
   }
 
   // Metadata: always available (every extension reads/writes metadata)
-  if (fullReality.qualities) {
-    scoped.qualities = fullReality.qualities;
+  if (fullStory.qualities) {
+    scoped.qualities = fullStory.qualities;
   }
 
   // Being metadata: always available (extensions store per-being state)
-  if (fullReality.beingMetadata) {
-    scoped.beingMetadata = fullReality.beingMetadata;
+  if (fullStory.beingMetadata) {
+    scoped.beingMetadata = fullStory.beingMetadata;
   }
 
   // Matter metadata: always available (extensions tag matter in their namespace)
-  if (fullReality.matterMetadata) {
-    scoped.matterMetadata = fullReality.matterMetadata;
+  if (fullStory.matterMetadata) {
+    scoped.matterMetadata = fullStory.matterMetadata;
   }
 
   // Auth strategy binding: wrap registerStrategy to auto-inject extension name.
@@ -115,7 +115,7 @@ export function buildScopedReality(manifest, fullReality, availableServices) {
   // write the local name; the registry records "<ext>:<name>" with
   // ownerExtension=<ext>. Fully-qualified names with a prefix that
   // doesn't match this extension throw to prevent impersonation. The
-  // verb function itself (`reality.do(...)`) is passed through; only the
+  // verb function itself (`story.do(...)`) is passed through; only the
   // registerOperation method gets scoped.
   if (
     typeof scoped.do === "function" &&
@@ -212,7 +212,7 @@ export function buildScopedReality(manifest, fullReality, availableServices) {
       registerRole: (name, def) => origDeclare.registerRole(prefixRoleName(name), rewriteRoleDef(def), extName),
       // SEE operations auto-namespace under the registering extension —
       // same shape as registerRole's wrap. An extension calling
-      //   reality.declare.registerSeeOperation("neighbors", {handler})
+      //   story.declare.registerSeeOperation("neighbors", {handler})
       // is rewritten to register under "<ext>:neighbors" with
       // ownerExtension set, so roles can refer to it as either
       // "<ext>:neighbors" or the bare suffix "neighbors".
@@ -226,7 +226,7 @@ export function buildScopedReality(manifest, fullReality, availableServices) {
       // for role resources by name. Same auto-namespace rule as
       // registerRole — bare role names pick up the extension prefix
       // so an extension calling
-      //   reality.declare.registerRoleHandler("registrar", handlerFn)
+      //   story.declare.registerRoleHandler("registrar", handlerFn)
       // registers the handler under "<ext>:registrar", matching where
       // the role's spec was registered. Cross-extension references
       // (already-prefixed names) pass through.
@@ -275,16 +275,16 @@ export function buildScopedReality(manifest, fullReality, availableServices) {
 
   // Qualities binding retired 2026-05-23 alongside the qualities.js
   // write API. The setQuality / mergeQuality / etc. methods on
-  // `reality.qualities.{being,space,matter}` are tombstones — they throw
+  // `story.qualities.{being,space,matter}` are tombstones — they throw
   // with a migration message pointing at
-  // `reality.do(target, "set-<kind>", { field: "qualities.<ns>" })`. Reads
+  // `story.do(target, "set-<kind>", { field: "qualities.<ns>" })`. Reads
   // (getQuality, readQualityNamespace) stay. Namespace ownership is
   // now enforced in the seed `do.set-<kind>` handler against the verb's
   // calling identity. No need to wrap here; scoped.qualities passes
   // through unchanged.
 
-  // Freeze existing seed services so extensions can't replace reality.hooks,
-  // reality.llm, etc. But allow adding new properties (reality.energy = {...})
+  // Freeze existing seed services so extensions can't replace story.hooks,
+  // story.llm, etc. But allow adding new properties (story.energy = {...})
   // which is the pattern for extension-provided services.
   for (const key of Object.keys(scoped)) {
     if (

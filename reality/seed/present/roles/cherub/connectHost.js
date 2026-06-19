@@ -15,7 +15,7 @@
 import { findBeingCandidatesByName } from "../../../materials/being/identity/lookups.js";
 import { verifyPassword, generateToken } from "../../../materials/being/identity/credentials.js";
 import { loadProjection } from "../../../materials/projections.js";
-import { getRealityDomain } from "../../../ibp/address.js";
+import { getStoryDomain } from "../../../ibp/address.js";
 
 // cherub-connect.word holds MULTIPLE flows (credential, owned, …); the bridge runs the
 // ONE that matches the connect mode. The credential flow declares a `password` bind; the
@@ -85,22 +85,22 @@ export function connectHostEnv() {
 
     // fatherMatch(candidate, caller) → THE father-admit decision, the EXACT JS local-vs-
     // cross logic (connectHandler L472-510). SECURITY-CRITICAL, kept HOST not .word: a
-    // LOCAL father (father.reality === this reality) is authed by beingId; a CROSS-reality
+    // LOCAL father (father.story === this story) is authed by beingId; a CROSS-story
     // father is authed ONLY by the proven NAME + a verified envelope signature, NEVER by
     // beingId (a beingId match for a cross father is the vessel-takeover attack the JS
-    // guards). `caller` is the identity object {beingId,nameId,reality,beingSigVerified}.
+    // guards). `caller` is the identity object {beingId,nameId,story,beingSigVerified}.
     fatherMatch: ({ args: [candidate, caller] }) => {
       const father = candidate?.qualities?.father || null;
-      if (!father?.reality) return false;
-      const localDomain = getRealityDomain();
-      const requesterReality = caller?.reality || localDomain;
-      const realityMatches = String(father.reality) === String(requesterReality);
-      const isCrossReality = String(father.reality) !== String(localDomain);
-      if (realityMatches && isCrossReality) {
+      if (!father?.story) return false;
+      const localDomain = getStoryDomain();
+      const requesterStory = caller?.story || localDomain;
+      const storyMatches = String(father.story) === String(requesterStory);
+      const isCrossStory = String(father.story) !== String(localDomain);
+      if (storyMatches && isCrossStory) {
         return !!(father.nameId && caller?.nameId &&
           String(father.nameId) === String(caller.nameId) && caller?.beingSigVerified === true);
       }
-      if (realityMatches) {
+      if (storyMatches) {
         return !!(father.beingId && String(father.beingId) === String(caller?.beingId));
       }
       return false;
@@ -124,7 +124,7 @@ export function connectHostEnv() {
         params: {
           releasedBy: "father-priority",
           fatherBeingId: String(caller?.beingId),
-          fatherReality: chosen.qualities?.father?.reality || getRealityDomain(),
+          fatherStory: chosen.qualities?.father?.story || getStoryDomain(),
         },
         actId: sc?.actId || null, branch: sc?.actorAct?.branch || "0",
       }, sc);

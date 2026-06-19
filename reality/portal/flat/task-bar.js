@@ -4,8 +4,8 @@
 // tab opens a dropdown; clicking an action mounts its form/panel in
 // the work area (the detail pane). Scope runs broadest → narrowest:
 //
-//   Reality  — what affects the whole reality / server (form seed,
-//              config, close reality).
+//   Story  — what affects the whole story / server (form seed,
+//              config, close story).
 //   Branch   — the branch lifecycle (fork, merge, pause, pointers)
 //              plus clone (download) and graft (paste-in).
 //   Place    — what acts on the space you're standing in (create
@@ -47,24 +47,24 @@ export function renderTaskBar(container, { descriptor, discovery, session } = {}
   if (!session?.username && !session?.beingId) return;
 
   const desc = descriptor || {};
-  const reality =
-    discovery?.reality || desc.address?.reality || desc.address?.place || "";
+  const story =
+    discovery?.story || desc.address?.story || desc.address?.place || "";
   const path = desc.address?.pathByNames || "/";
-  const positionAddress = `${reality}${path === "/" ? "/" : path}`;
-  const rootAddress = `${reality}/`;
+  const positionAddress = `${story}${path === "/" ? "/" : path}`;
+  const rootAddress = `${story}/`;
 
   const loadedOps = flat.state?.operations || [];
   const opByName = new Map(loadedOps.map((op) => [op.name, op]));
   // The .operations catalog loads async after mount. Until it arrives,
   // don't filter — show every action optimistically rather than collapsing
-  // each tab to its special-only entries. Once loaded, hide ops a reality
+  // each tab to its special-only entries. Once loaded, hide ops a story
   // genuinely doesn't register.
   const opsLoaded = loadedOps.length > 0;
 
-  // Order: Reality (far left), Branch, Place — broadest scope to
+  // Order: Story (far left), Branch, Place — broadest scope to
   // narrowest, like a window menu bar.
   const tabs = [
-    { id: "reality", label: "Reality", actions: realityActions(rootAddress) },
+    { id: "story", label: "Story", actions: storyActions(rootAddress) },
     { id: "branch", label: "Branch", actions: branchActions(positionAddress) },
     { id: "place", label: "Place", actions: placeActions(positionAddress, desc) },
     { id: "federation", label: "Federation", actions: federationActions() },
@@ -82,7 +82,7 @@ export function renderTaskBar(container, { descriptor, discovery, session } = {}
   if (beingEntry) {
     const branch = desc.address?.branch || "0";
     const bq = branch === "0" ? "" : `#${branch}`;
-    const stance = `${reality}${bq}${path}@${selName}`.replace(/\/+@/, "/@");
+    const stance = `${story}${bq}${path}@${selName}`.replace(/\/+@/, "/@");
     tabs.push({
       id: "being",
       label: `@${selName}`,
@@ -167,7 +167,7 @@ function renderDropdown(dropdown, tab, opByName, opsLoaded, closeDropdown) {
   dropdown.innerHTML = "";
   dropdown.classList.remove("hidden");
   for (const action of tab.actions) {
-    // Once the op catalog is loaded, skip actions whose op this reality
+    // Once the op catalog is loaded, skip actions whose op this story
     // doesn't register (unless it's a special, non-op action). Before the
     // catalog loads, show everything optimistically.
     if (opsLoaded && action.op && !action.special && !opByName.has(action.op)) continue;
@@ -203,13 +203,13 @@ function openAction(action, opByName) {
     return import("./renderer.js").then((m) => m.showInspector({ kind: "being", entry: action.being }));
   }
   if (action.special === "being-facts" || action.special === "being-acts") {
-    const reality = flat.state?.discovery?.reality || "";
+    const story = flat.state?.discovery?.story || "";
     const branch = flat.state?.descriptor?.address?.branch || "0";
     const bq = branch === "0" ? "" : `#${branch}`;
     const id = action.being?.beingId;
     if (!id) return;
     const path = action.special === "being-facts" ? `/.reel/being/${id}` : `/.acts/${id}`;
-    return flat.navigate(`${reality}${bq}${path}`);
+    return flat.navigate(`${story}${bq}${path}`);
   }
 
   const body = openInspectorPanel(action.label);
@@ -232,8 +232,8 @@ function openAction(action, opByName) {
   if (action.special === "clone") {
     return renderClone(body, action, opByName);
   }
-  if (action.special === "close-reality") {
-    return renderCloseReality(body, action, opByName);
+  if (action.special === "close-story") {
+    return renderCloseStory(body, action, opByName);
   }
   if (action.special === "roles") {
     return renderRolesPanel(body, action, opByName, { refreshView });
@@ -241,8 +241,8 @@ function openAction(action, opByName) {
   if (action.special === "llm") {
     return renderLlmPanel(body, action, opByName, { refreshView, mode: "place" });
   }
-  if (action.special === "llm-reality") {
-    return renderLlmPanel(body, action, opByName, { refreshView, mode: "reality" });
+  if (action.special === "llm-story") {
+    return renderLlmPanel(body, action, opByName, { refreshView, mode: "story" });
   }
   if (action.special === "inbox") {
     return renderInboxPanel(body, action, opByName, { refreshView });
@@ -284,7 +284,7 @@ export function openInboxAction() {
 
 // External opener for the identity panel. The identity chip in the
 // header mounts it directly: your name (the label), your key (the
-// permanent id), key export, password ops, reality provenance, and
+// permanent id), key export, password ops, story provenance, and
 // sign-out (which moved here off the chip).
 export function openIdentityAction() {
   const body = openInspectorPanel("your identity");
@@ -371,15 +371,15 @@ function renderClone(body, action, _opByName) {
   });
 }
 
-// close-reality stops the server. Confirm before firing.
-function renderCloseReality(body, action, opByName) {
-  const op = opByName.get("close-reality") || { name: "close-reality", args: {} };
+// close-story stops the server. Confirm before firing.
+function renderCloseStory(body, action, opByName) {
+  const op = opByName.get("close-story") || { name: "close-story", args: {} };
   renderOpForm(body, {
     op,
     address: action.address,
-    submitLabel: "⚠ close reality",
+    submitLabel: "⚠ close story",
     doOp: async (addr, name, payload) => {
-      if (!window.confirm("Close the reality? This stops the running server for everyone.")) {
+      if (!window.confirm("Close the story? This stops the running server for everyone.")) {
         throw new Error("cancelled");
       }
       return flat.doOp(addr, name, payload);
@@ -402,17 +402,17 @@ function renderBirthSelf(body, action) {
   const op = {
     name: "be:birth",
     args: {
-      name:     { type: "text", label: "Name (kebab-case, unique on this reality)", required: true },
+      name:     { type: "text", label: "Name (kebab-case, unique on this story)", required: true },
       password: { type: "text", label: "Password (placeholder; substitute future credential)", required: true },
     },
   };
-  const reality = (flat.state?.discovery?.reality || "").replace(/\/+$/, "");
+  const story = (flat.state?.discovery?.story || "").replace(/\/+$/, "");
   const myName = flat.state?.session?.username || null;
   if (!myName) {
     body.textContent = "sign in first to birth a being (your stance is the target — the caller becomes mother).";
     return;
   }
-  const selfStance = `${reality}/@${myName}`;
+  const selfStance = `${story}/@${myName}`;
   renderOpForm(body, {
     op,
     address:     selfStance,
@@ -428,11 +428,11 @@ function renderBirthSelf(body, action) {
   });
 }
 
-// who/when. Reads the synthetic `<reality>/.branches/<path>` SEE
+// who/when. Reads the synthetic `<story>/.branches/<path>` SEE
 // (readable by any logged-in being); no mutation.
 async function renderBranchInfo(body) {
-  const reality = flat.state?.discovery?.reality
-    || flat.state?.descriptor?.address?.reality
+  const story = flat.state?.discovery?.story
+    || flat.state?.descriptor?.address?.story
     || flat.state?.descriptor?.address?.place || "";
   const client = flat.state?.client;
   if (!client) { body.textContent = "portal not ready"; return; }
@@ -453,7 +453,7 @@ async function renderBranchInfo(body) {
   info.textContent = "loading…";
   body.appendChild(info);
 
-  const branches = await _loadAllBranches(client, reality);
+  const branches = await _loadAllBranches(client, story);
   select.innerHTML = "";
   for (const b of branches) {
     const o = document.createElement("option");
@@ -470,7 +470,7 @@ async function renderBranchInfo(body) {
     info.textContent = "loading…";
     let graph = null, err = null;
     try {
-      const desc = await client.see(`${reality}/.branches/${path}`);
+      const desc = await client.see(`${story}/.branches/${path}`);
       graph = desc?.branches || null;
     } catch (e) {
       err = e?.code ? `${e.code}: ${e.message || ""}` : (e?.message || String(e));
@@ -485,14 +485,14 @@ async function renderBranchInfo(body) {
 // Recursively walk `.branches/<path>` to collect every branch for the
 // picker. Depth-capped + seen-guarded like the 3D loader. Best-effort:
 // a failed sub-fetch just leaves that subtree out of the list.
-async function _loadAllBranches(client, reality) {
+async function _loadAllBranches(client, story) {
   const out = new Map();
   const seen = new Set();
   async function visit(path, depth) {
     if (depth > 6 || seen.has(path)) return;
     seen.add(path);
     try {
-      const desc = await client.see(`${reality}/.branches/${path}`);
+      const desc = await client.see(`${story}/.branches/${path}`);
       const g = desc?.branches;
       if (!g) return;
       if (g.current) out.set(g.current.path, g.current.label || null);
@@ -545,7 +545,7 @@ function _renderBranchInfoFields(container, path, graph, err) {
   const anchor = cur.anchor && typeof cur.anchor === "object" ? cur.anchor : {};
   const ak = Object.keys(anchor);
   _branchKv(container, "branch-point", ak.length ? ak.map((k) => `${k} @ seq ${anchor[k]}`).join(", ") : "(forked at genesis / no reels)");
-  _branchKv(container, "scope", cur.scope?.path ? `subtree ${cur.scope.path}` : "whole reality");
+  _branchKv(container, "scope", cur.scope?.path ? `subtree ${cur.scope.path}` : "whole story");
   _branchKv(container, "created", `${cur.createdAt || "?"}${cur.createdBy ? ` by ${String(cur.createdBy).slice(0, 8)}` : ""}`);
   if (cur.mergeSources?.length) _branchKv(container, "merged from", cur.mergeSources.map((s) => `#${s}`).join(" + "));
   if (cur.paused) _branchKv(container, "paused", `yes${cur.pausedAt ? ` (${cur.pausedAt})` : ""}`);
@@ -676,7 +676,7 @@ function placeActions(address, desc) {
     // exists for any op without a special).
     { label: "+ create matter", special: "create-matter", op: "create-matter", address },
     // be:birth on self. The actor becomes mother of a new child
-    // being on this reality. Solo birth — no father; child's identity
+    // being on this story. Solo birth — no father; child's identity
     // chain traces only through the actor. The current path routes
     // through @birther's BE:birth (existing mint flow; the new being's
     // tree parent is the caller). See FEDERATION.md "be:birth is the
@@ -693,7 +693,7 @@ function placeActions(address, desc) {
     { label: "roles", special: "roles", address, values: { descriptor: desc } },
     // LLM panel: the 7-step chain preview + connection management +
     // per-being / per-space slot assignments + force flags. Anyone can
-    // configure their own being; the space + reality writes are
+    // configure their own being; the space + story writes are
     // owner/angel-gated by the substrate. See llm-panel.js.
     { label: "llm", special: "llm", address, values: { descriptor: desc } },
     // (Inbox is per-being, not per-place — surfaced as a chip in the
@@ -720,26 +720,26 @@ function branchActions(address) {
   ];
 }
 
-function realityActions(address) {
+function storyActions(address) {
   return [
-    { label: "form seed of reality", op: "capture-graft", address },
+    { label: "form seed of story", op: "capture-graft", address },
     { label: "set config", op: "set-config", address },
     { label: "delete config", op: "delete-config", address },
-    // Reality-level roles. The reality root hosts the foundational
+    // Story-level roles. The story root hosts the foundational
     // roles (global, human, arrival, cherub, ...) in qualities.roles.
     // Same panel as the place-tab "roles" entry, just rooted at /.
-    // Owners of the reality root (the I-Am + anointed angels) get the
+    // Owners of the story root (the I-Am + anointed angels) get the
     // author-role form for system-wide roles.
-    { label: "roles (reality-wide)", special: "roles", address },
-    // Reality-level LLM. Angels can configure the floor every chain
-    // falls through to at step 4 (qualities.llm on the reality root):
+    { label: "roles (story-wide)", special: "roles", address },
+    // Story-level LLM. Angels can configure the floor every chain
+    // falls through to at step 4 (qualities.llm on the story root):
     // default fallback list, per-role slots, force flags.
-    { label: "llm (reality defaults)", special: "llm-reality", address },
-    { label: "⚠ close reality (exit server)", op: "close-reality", special: "close-reality", address, danger: true },
+    { label: "llm (story defaults)", special: "llm-story", address },
+    { label: "⚠ close story (exit server)", op: "close-story", special: "close-story", address, danger: true },
   ];
 }
 
-// Federation tab — reality-scoped peer transfers. Both panels act on the
+// Federation tab — story-scoped peer transfers. Both panels act on the
 // local @federation-manager: peers is the outbound surface (graft a being,
 // offer / request a template), activity is the incoming / in-flight queue.
 // No `op` field: these are special panels, always shown (not catalog-gated).

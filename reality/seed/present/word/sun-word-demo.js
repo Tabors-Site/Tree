@@ -1,5 +1,5 @@
 // Phase 3: the sun from real `.word` (the round-trip). Parse sun.word -> drive.
-// Run:  node reality/seed/present/word/sun-word-demo.js
+// Run:  node story/seed/present/word/sun-word-demo.js
 //
 // Same wheel as sun-demo.js, but with NO hand-built IR: the program is the prose
 // in sun.word, parsed by the grown parser (start / wheel phase / rider forms).

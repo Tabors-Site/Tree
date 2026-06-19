@@ -1,6 +1,6 @@
 // store/code — entry point for the store pack's code piece.
 //
-// Registers (auto-namespaced to store:<name> by scopedReality):
+// Registers (auto-namespaced to store:<name> by scopedStory):
 //   - store:delist   DO op (the operator's editorial lever; marks one
 //                     version delisted, never deletes)
 //
@@ -16,11 +16,11 @@
 // exists for them); browsing is plain SEE on the spaces and matter
 // the registrar keeps.
 
-import log from "../../../seed/seedReality/log.js";
+import log from "../../../seed/seedStory/log.js";
 import delistOp from "./ops/delist.js";
 
-export async function init(reality) {
-  reality.do.registerOperation("delist", delistOp);
+export async function init(story) {
+  story.do.registerOperation("delist", delistOp);
   log.verbose("Store", "registered: delist op");
   return {};
 }

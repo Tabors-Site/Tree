@@ -7,11 +7,11 @@ import path from "path";
 import crypto from "crypto";
 import express from "express";
 import { fileURLToPath, pathToFileURL } from "url";
-import { buildRealityServices } from "../seed/services.js";
+import { buildStoryServices } from "../seed/services.js";
 import { hooks } from "../seed/hooks.js";
 import { getToolOwner } from "../seed/materials/space/extensionScope.js";
-import log from "../seed/seedReality/log.js";
-import { buildScopedReality } from "./scopedReality.js";
+import log from "../seed/seedStory/log.js";
+import { buildScopedStory } from "./scopedStory.js";
 import {
   parseDepString,
   semverSatisfies,
@@ -92,10 +92,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DISABLED_FILE = path.join(__dirname, ".disabled");
 
 // CAS anchoring of resource bytes happens during the source walk
-// (seed/materials/space/source.js). source.js walks the whole reality
+// (seed/materials/space/source.js). source.js walks the whole story
 // once, putContent's every file into localStore, and stores the hash
 // on the matter row. The loader has no separate anchor pass; resources
-// are just paths inside the reality's source tree. To look up a
+// are just paths inside the story's source tree. To look up a
 // resource's bytes by hash, query source matter for the path
 // `resources/<name>/<rel>` and read `state.content.hash`.
 
@@ -156,7 +156,7 @@ export function syncDisabledFile(list) {
 // ---------------------------------------------------------------------------
 
 const loaded = new Map(); // name -> { manifest, instance }
-let realityServices = null; // the assembled reality bundle
+let storyServices = null; // the assembled story bundle
 const _bootSkipped = []; // [{ name, reason }] extensions that failed to load
 const registeredJobs = []; // [{ name, start, stop }] from extensions
 
@@ -193,17 +193,17 @@ function getDisabledExtensions(configFn) {
 // Validation
 // ---------------------------------------------------------------------------
 
-// Derived from buildRealityServices() at load time. Set by loadExtensions().
+// Derived from buildStoryServices() at load time. Set by loadExtensions().
 let AVAILABLE_SERVICES = new Set();
 
 const AVAILABLE_MODELS = new Set(["Being", "Space", "Fact", "Matter"]);
 
-function validateNeeds(manifest, reality) {
+function validateNeeds(manifest, story) {
   const missing = [];
 
   if (manifest.needs?.services) {
     for (const svc of manifest.needs.services) {
-      if (!AVAILABLE_SERVICES.has(svc) && !reality[svc]) {
+      if (!AVAILABLE_SERVICES.has(svc) && !story[svc]) {
         missing.push(`service:${svc}`);
       }
     }
@@ -211,7 +211,7 @@ function validateNeeds(manifest, reality) {
 
   if (manifest.needs?.models) {
     for (const model of manifest.needs.models) {
-      if (!AVAILABLE_MODELS.has(model) && !reality.models[model]) {
+      if (!AVAILABLE_MODELS.has(model) && !story.models[model]) {
         missing.push(`model:${model}`);
       }
     }
@@ -241,17 +241,17 @@ function validateNeeds(manifest, reality) {
 }
 
 /**
- * Inject no-op stubs for optional seed services the host reality doesn't have.
+ * Inject no-op stubs for optional seed services the host story doesn't have.
  * Only stubs seed-provided services (AVAILABLE_SERVICES). Extension-provided
  * services (like energy) are either present because that extension loaded first,
- * or absent. Extensions guard with if (reality.svc) for those.
+ * or absent. Extensions guard with if (story.svc) for those.
  */
-function applyOptionalStubs(manifest, reality) {
+function applyOptionalStubs(manifest, story) {
   if (!manifest.optional?.services) return;
 
   for (const svc of manifest.optional.services) {
-    if (AVAILABLE_SERVICES.has(svc) && !reality[svc]) {
-      reality[svc] = {};
+    if (AVAILABLE_SERVICES.has(svc) && !story[svc]) {
+      story[svc] = {};
     }
   }
 }
@@ -462,7 +462,7 @@ function enforceAssetBudget(manifest, dir) {
   return tally;
 }
 
-// buildScopedReality moved to scopedReality.js. Imported above.
+// buildScopedStory moved to scopedStory.js. Imported above.
 
 // ---------------------------------------------------------------------------
 // Dependency ordering (proper topological sort)
@@ -526,24 +526,24 @@ function topologicalSort(manifests) {
  * @param {object} app         - Express app
  * @param {object} mcpServer   - MCP server instance (optional)
  * @param {object} opts
- * @param {object} opts.overrides - service overrides for buildRealityServices
- * @param {Function} opts.getConfigValue - reality config reader (key => value)
+ * @param {object} opts.overrides - service overrides for buildStoryServices
+ * @param {Function} opts.getConfigValue - story config reader (key => value)
  * @returns {Map} loaded extensions
  */
 export async function loadExtensions(app, mcpServer, opts = {}) {
   // Track route ownership for collision detection
   const routeOwnership = new Map();
 
-  // Build reality services (initially with empty loadedExtensions)
-  realityServices = buildRealityServices({
+  // Build story services (initially with empty loadedExtensions)
+  storyServices = buildStoryServices({
     loadedExtensions: loaded,
     overrides: opts.overrides || {},
   });
 
-  // Derive available services from what buildRealityServices actually produced.
+  // Derive available services from what buildStoryServices actually produced.
   // No hardcoded list. If services.js adds a new service, it's automatically available.
   AVAILABLE_SERVICES = new Set(
-    Object.keys(realityServices).filter((k) => k !== "models"),
+    Object.keys(storyServices).filter((k) => k !== "models"),
   );
 
   // Discover manifests (now pack-aware per RESOURCES.md).
@@ -555,7 +555,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
   }
 
   // CAS anchoring happens in source.js during the source walk
-  // (it sees these files as part of the reality tree and putContent's
+  // (it sees these files as part of the story tree and putContent's
   // each one). The loader doesn't anchor; resources are paths in the
   // source tree like any other folder. See the header note + MIRROR.md.
 
@@ -590,7 +590,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
     );
   }
 
-  // Check disabled list (env var + reality config)
+  // Check disabled list (env var + story config)
   const disabled = getDisabledExtensions(opts.getConfigValue);
   const enabled = codeManifests.filter(({ manifest }) => {
     if (disabled.has(manifest.name)) {
@@ -615,7 +615,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
     const { manifest, dir, entryPath } = sorted[_si];
     try {
       // Validate required dependencies
-      const missing = validateNeeds(manifest, realityServices);
+      const missing = validateNeeds(manifest, storyServices);
       if (missing.length > 0) {
         log.debug(
           "Extensions",
@@ -666,7 +666,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       }
 
       // Apply no-op stubs for optional deps
-      applyOptionalStubs(manifest, realityServices);
+      applyOptionalStubs(manifest, storyServices);
 
       // Pre-init asset-budget gate. An extension that declares
       // provides.assets must fit the substrate-wide budget: per-file
@@ -699,15 +699,15 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
         continue;
       }
 
-      // Build scoped reality: only inject what the manifest declares
-      const scopedReality = buildScopedReality(manifest, realityServices, AVAILABLE_SERVICES);
+      // Build scoped story: only inject what the manifest declares
+      const scopedStory = buildScopedStory(manifest, storyServices, AVAILABLE_SERVICES);
 
       // Initialize (with timeout to prevent a single extension from blocking boot)
       const INIT_TIMEOUT_MS = 10000;
       let instance;
       try {
         instance = await Promise.race([
-          extModule.init(scopedReality),
+          extModule.init(scopedStory),
           new Promise((_, reject) =>
             setTimeout(
               () =>
@@ -731,7 +731,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
             ...(manifest.optional?.services || []),
           ]);
           const missing = [...AVAILABLE_SERVICES].filter(
-            (s) => !declared.has(s) && realityServices[s],
+            (s) => !declared.has(s) && storyServices[s],
           );
           if (missing.length > 0) {
             hint = ` Hint: add missing services to manifest needs/optional: ${missing.join(", ")}`;
@@ -852,16 +852,16 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // the entire LLM-facing surface; extensions add ops to the DO
       // operation registry instead. See seed/FACTORY.md.
 
-      // Register models from manifest (add to reality.models so other extensions can use them)
+      // Register models from manifest (add to story.models so other extensions can use them)
       if (manifest.provides?.models) {
         for (const [modelName, modelPath] of Object.entries(
           manifest.provides.models,
         )) {
-          if (!realityServices.models[modelName]) {
+          if (!storyServices.models[modelName]) {
             try {
               const resolved = path.resolve(dir, modelPath);
               const mod = await import(toImportURL(resolved));
-              realityServices.models[modelName] = mod.default || mod;
+              storyServices.models[modelName] = mod.default || mod;
               AVAILABLE_MODELS.add(modelName);
             } catch (err) {
               log.warn(
@@ -877,18 +877,18 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // Register energy actions from manifest
       if (
         manifest.provides?.energyActions &&
-        realityServices.energy?.registerAction
+        storyServices.energy?.registerAction
       ) {
         for (const [action, config] of Object.entries(
           manifest.provides.energyActions,
         )) {
           if (typeof config === "object" && config.costFn) {
-            realityServices.energy.registerAction(action, config.costFn);
+            storyServices.energy.registerAction(action, config.costFn);
           } else if (
             typeof config === "object" &&
             typeof config.cost === "number"
           ) {
-            realityServices.energy.registerAction(action, () => config.cost);
+            storyServices.energy.registerAction(action, () => config.cost);
           }
         }
       }
@@ -910,7 +910,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // The loader reads + validates each and registers it as
       // `<ext>:<localName>` so the portal's graft UI surfaces it
       // alongside other extensions' bundles. Operators graft via
-      // `reality.do(<position>, "plant-template", { bundle, params })`.
+      // `story.do(<position>, "plant-template", { bundle, params })`.
       // Replaces the retired seed-scaffold pattern. See
       // seed/done/Chain-Rebuild.md for the bundle format + parameter
       // substitution doctrine.
@@ -1013,12 +1013,12 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
     }
   }
 
-  // Register extension names provider so the reality's identity payload
+  // Register extension names provider so the story's identity payload
   // includes the installed extension list (used by `.well-known/treeos-portal`
-  // discovery + future cross-reality introspection).
+  // discovery + future cross-story introspection).
   try {
     const { setExtensionNamesProvider } =
-      await import("../seed/realityIdentity.js");
+      await import("../seed/storyIdentity.js");
     setExtensionNamesProvider(getLoadedExtensionNames);
   } catch {}
 
@@ -1031,10 +1031,10 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
   // Warn loudly at boot instead of letting the failure stay invisible.
   validateHookListens(loaded);
 
-  // All extensions loaded. Freeze the top-level reality object.
-  // Extension service registration (reality.energy = {...}) happened during init().
-  // No more property additions. reality.hooks = "garbage" now fails.
-  if (realityServices) Object.freeze(realityServices);
+  // All extensions loaded. Freeze the top-level story object.
+  // Extension service registration (story.energy = {...}) happened during init().
+  // No more property additions. story.hooks = "garbage" now fails.
+  if (storyServices) Object.freeze(storyServices);
 
   return loaded;
 }
@@ -1076,7 +1076,7 @@ const CORE_HOOKS_VALID = new Set([
 ]);
 
 function validateHookListens(loadedMap) {
-  // Build the set of all hook names that SOMETHING fires — reality + any
+  // Build the set of all hook names that SOMETHING fires — story + any
   // extension's declared customs.
   const firedByExt = new Map(); // hookName -> Set<extName>
   const knownValid = new Set(CORE_HOOKS_VALID);
@@ -1110,7 +1110,7 @@ function validateHookListens(loadedMap) {
         log.warn(
           "Extensions",
           `"${extName}" listens to "${h}" but nothing fires it. ` +
-            `Not a reality hook and no extension declares it in fires. ` +
+            `Not a story hook and no extension declares it in fires. ` +
             `No handler will run.`,
         );
       }
@@ -1289,7 +1289,7 @@ function validateManifest(manifest, dirName) {
 
 // Pack-aware discovery (RESOURCES.md).
 //
-// Each top-level folder under reality/resources/ is one resource. The
+// Each top-level folder under story/resources/ is one resource. The
 // manifest's `kind` field says what it is:
 //   - kind: "code"   → today's extension. Requires index.js. Goes
 //                      through the existing extension-load path.
@@ -1472,7 +1472,7 @@ async function discoverManifests() {
 // their own bare name (a future shape, no examples on disk today).
 // ---------------------------------------------------------------------------
 
-// Mirror of scopedReality.js's auto-prefix rule for role specs. A
+// Mirror of scopedStory.js's auto-prefix rule for role specs. A
 // pack-piece role spec writes bare action names (e.g. canDo: ["tick"]);
 // the pack's namespace gets prefixed at registration so it matches the
 // ops the pack's code piece registered.
@@ -1601,7 +1601,7 @@ export function getExtension(name) {
  * or when the lookup fails.
  *
  * This is the principled way for one extension to reach into another:
- *   const cw = await reality.scope.getExtensionAtScope("code-workspace", spaceId);
+ *   const cw = await story.scope.getExtensionAtScope("code-workspace", spaceId);
  *   if (!cw?.exports?.someApi) return; // not active here
  *   await cw.exports.someApi(...);
  *
@@ -1722,8 +1722,8 @@ export function getBootReport() {
  */
 export async function registerExtensionManagementOps() {
   const { registerOperation } = await import("../seed/ibp/operations.js");
-  const { getRealityConfigValue, setRealityConfigValue } =
-    await import("../seed/realityConfig.js");
+  const { getStoryConfigValue, setStoryConfigValue } =
+    await import("../seed/storyConfig.js");
 
   const EXT_NAME_RE = /^[a-z0-9-]+$/i;
 
@@ -1776,11 +1776,11 @@ export async function registerExtensionManagementOps() {
       if (!name || !EXT_NAME_RE.test(name)) {
         throw new Error("disable-extension: invalid extension name");
       }
-      const current = getRealityConfigValue("disabledExtensions") || [];
+      const current = getStoryConfigValue("disabledExtensions") || [];
       if (!current.includes(name)) {
         current.push(name);
         syncDisabledFile(current);
-        await setRealityConfigValue("disabledExtensions", current);
+        await setStoryConfigValue("disabledExtensions", current);
       }
       return { disabled: true, name, disabledExtensions: current };
     },
@@ -1794,9 +1794,9 @@ export async function registerExtensionManagementOps() {
       if (!name || !EXT_NAME_RE.test(name)) {
         throw new Error("enable-extension: invalid extension name");
       }
-      const current = getRealityConfigValue("disabledExtensions") || [];
+      const current = getStoryConfigValue("disabledExtensions") || [];
       const updated = current.filter((n) => n !== name);
-      await setRealityConfigValue("disabledExtensions", updated);
+      await setStoryConfigValue("disabledExtensions", updated);
       syncDisabledFile(updated);
       return { enabled: true, name, disabledExtensions: updated };
     },
@@ -1848,8 +1848,8 @@ export function hasExtension(name) {
 /**
  * Get the place services bundle (for late-binding or testing).
  */
-export function getRealityServices() {
-  return realityServices;
+export function getStoryServices() {
+  return storyServices;
 }
 
 /**
@@ -1857,8 +1857,8 @@ export function getRealityServices() {
  * and wants to replace the no-op stub with the real implementation).
  */
 export function setCoreService(serviceName, serviceImpl) {
-  if (realityServices) {
-    realityServices[serviceName] = serviceImpl;
+  if (storyServices) {
+    storyServices[serviceName] = serviceImpl;
   }
 }
 
@@ -2135,12 +2135,12 @@ export async function disableExtension(name) {
 
   // Also persist to DB config if available
   try {
-    const { getRealityConfigValue, setRealityConfigValue } =
-      await import("../seed/realityConfig.js");
-    const dbList = getRealityConfigValue("disabledExtensions") || [];
+    const { getStoryConfigValue, setStoryConfigValue } =
+      await import("../seed/storyConfig.js");
+    const dbList = getStoryConfigValue("disabledExtensions") || [];
     if (!dbList.includes(name)) {
       dbList.push(name);
-      await setRealityConfigValue("disabledExtensions", dbList);
+      await setStoryConfigValue("disabledExtensions", dbList);
     }
   } catch {
     // DB config not available (boot time), file sync is enough
@@ -2187,11 +2187,11 @@ export async function enableExtension(name) {
 
   // Also persist to DB config if available
   try {
-    const { getRealityConfigValue, setRealityConfigValue } =
-      await import("../seed/realityConfig.js");
-    const dbList = getRealityConfigValue("disabledExtensions") || [];
+    const { getStoryConfigValue, setStoryConfigValue } =
+      await import("../seed/storyConfig.js");
+    const dbList = getStoryConfigValue("disabledExtensions") || [];
     const dbUpdated = dbList.filter((n) => n !== name);
-    await setRealityConfigValue("disabledExtensions", dbUpdated);
+    await setStoryConfigValue("disabledExtensions", dbUpdated);
   } catch {
     // DB config not available, file sync is enough
   }
@@ -2203,7 +2203,7 @@ export async function enableExtension(name) {
  * Get the set of disabled extension names.
  * Merges env var, .disabled file, and DB config.
  *
- * @param {Function} [configFn] - optional config reader (getRealityConfigValue)
+ * @param {Function} [configFn] - optional config reader (getStoryConfigValue)
  * @returns {Set<string>}
  */
 export { getDisabledExtensions };
@@ -2303,7 +2303,7 @@ export async function runExtensionMigrations(moment) {
             `${name}: running migration v${migration.version}`,
           );
           try {
-            await migration.up(realityServices);
+            await migration.up(storyServices);
             ran++;
           } catch (err) {
             log.error(

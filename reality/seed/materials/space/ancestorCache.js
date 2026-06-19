@@ -31,7 +31,7 @@
 //   - TTL read once per operation for consistency.
 //   - Stats reset before counter overflow.
 
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 import { getInternalConfigValue } from "../../internalConfig.js";
 import { IBP_ERR } from "../../ibp/protocol.js";
 import { I_AM } from "../being/seedBeings.js";
@@ -368,7 +368,7 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
   for (const space of ancestors) {
     if (space.heavenSpace) {
       // SOURCE is a traversable system tree (live mirror of
-      // reality/extensions + reality/seed, see code-workspace/source.js).
+      // story/extensions + story/seed, see code-workspace/source.js).
       // Treat .source itself as the root of its subtree so everything
       // beneath it is navigable. Read-only by default.
       if (space.heavenSpace === "source") {
@@ -399,7 +399,7 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
     };
   }
 
-  // .source is a reality-wide system tree. Everyone on the reality
+  // .source is a story-wide system tree. Everyone on the story
   // can read it; writes are gated elsewhere.
   if (ownerNode.heavenSpace === "source") {
     return {

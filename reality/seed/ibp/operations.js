@@ -16,12 +16,12 @@
 //
 // The seed's own DO ops register at module load through each
 // material's ops file (materials/<kind>/ops.js, materials/seeds.js,
-// realityConfig.js — services.js imports them for side effects).
+// storyConfig.js — services.js imports them for side effects).
 // Extensions register theirs through the loader reading manifest
 // provides + init() return. Both go through registerOperation here;
 // there is no privileged seed path.
 
-import log from "../seedReality/log.js";
+import log from "../seedStory/log.js";
 
 const REGISTRY = new Map();
 
@@ -259,7 +259,7 @@ export function listOperations(filter = {}) {
 }
 
 /**
- * Sync the operation registry into `<reality>/./operations` as child Nodes.
+ * Sync the operation registry into `<story>/./operations` as child Nodes.
  * One child per registered DO operation; qualities mirrors the op's
  * declaration (targets, owner extension, factAction, skipAudit). Called
  * at boot end after extensions register; idempotent.

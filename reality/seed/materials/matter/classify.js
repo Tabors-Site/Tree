@@ -3,7 +3,7 @@
 // classify.js — "what matter type will this become?"
 //
 // The place flow takes anything (a file, a URL, bare text) and the
-// reality answers with a TYPE before anything is saved. Registry-
+// story answers with a TYPE before anything is saved. Registry-
 // driven: every type's `claims` block advertises what it claims
 // (mime patterns, file extensions, url patterns, schemes), so
 // extension types participate in classification the moment they
@@ -89,7 +89,7 @@ function mimeMatches(pattern, mime) {
  * `url` and `ibpa` are DIFFERENT reference worlds, not two spellings
  * of one field: a url is an HTTP link into the WWW (http matter —
  * website content, renders/embeds); an ibpa is an IBP address into
- * another reality / branch / position (ibpa matter — a doorway the
+ * another story / branch / position (ibpa matter — a doorway the
  * four verbs go through, never an iframe).
  *
  * @param {object} input
@@ -216,7 +216,7 @@ registerSeeOperation("classify-matter", {
     mimeType: { type: "text", label: "Mime type (file inputs)", required: false },
     fileName: { type: "text", label: "File name (extension matters)", required: false },
     url:      { type: "text", label: "HTTP link (the WWW)", required: false },
-    ibpa:     { type: "text", label: "IBP address (another reality/branch/position)", required: false },
+    ibpa:     { type: "text", label: "IBP address (another story/branch/position)", required: false },
     text:     { type: "text", label: "Bare text", required: false },
   },
   handler: async ({ args }) => ({ candidates: classifyMatter(args || {}) }),

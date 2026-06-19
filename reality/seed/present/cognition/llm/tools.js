@@ -25,10 +25,10 @@
 // X. Permissions belong to role identity, not envelopes. Callers
 // cannot cripple a role by stripping its capacities at call time.
 
-import log from "../../../seedReality/log.js";
+import log from "../../../seedStory/log.js";
 import { hooks } from "../../../hooks.js";
 import { getInternalConfigValue } from "../../../internalConfig.js";
-import { isDbHealthy } from "../../../seedReality/dbConfig.js";
+import { isDbHealthy } from "../../../seedStory/dbConfig.js";
 import {
   getCurrentSpace,
   getRootIdFor,
@@ -414,10 +414,10 @@ export async function auditToolDescriptions() {
   return { tools: SEED_VERB_TOOLS.length, missing };
 }
 
-// Sync the full tool registry into `<reality>/./tools` as child spaces.
+// Sync the full tool registry into `<story>/./tools` as child spaces.
 // One child per tool, name = tool name, qualities carries the
 // registered shape info. Called at the end of genesis (after
-// extensions have registered their tools) so SEE on `<reality>/./tools`
+// extensions have registered their tools) so SEE on `<story>/./tools`
 // reflects current state. Idempotent; subsequent calls reconcile
 // (add new tools, remove gone ones).
 export async function syncToolsToSubstrate() {
@@ -692,8 +692,8 @@ export async function executeTool(toolCall, session, ctx, presenceKey) {
   try {
     // Direct handler dispatch. Tools are verb-tagged and registered
     // with their handler via registerToolDef (above); the handler IS
-    // the verb call (it usually wraps reality.see / reality.do /
-    // reality.call / reality.be against a target). The verb dispatcher's
+    // the verb call (it usually wraps story.see / story.do /
+    // story.call / story.be against a target). The verb dispatcher's
     // authorize gate covers per-verb auth and the extension-scope
     // block — no protocol layer between the LLM voice and the handler.
     const handler = getToolHandler(resolvedToolName);

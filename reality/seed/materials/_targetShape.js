@@ -129,7 +129,7 @@ export async function loadTargetRow(target, expectedKind, { moment = null } = {}
   // target's (moment.targetBranch — where the row LIVES and the Fact
   // lands). A LOCAL target row lives on the TARGET branch, so we prefer
   // it. For a same-world moment the two are equal (assign seats them
-  // so), so this is a no-op there; for a cross-reality INBOUND moment
+  // so), so this is a no-op there; for a cross-story INBOUND moment
   // actorAct.branch is the FOREIGN home branch and the local target only
   // resolves on moment.targetBranch. Same precedence (targetBranch
   // before actorAct.branch) that resolveTargetBranch / resolveBranchForFact

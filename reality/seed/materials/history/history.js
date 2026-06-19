@@ -51,7 +51,7 @@ const BranchSchema = new mongoose.Schema({
   label:     { type: String, default: null },
 
   // Pause state. While paused, every IBP verb against this branch
-  // refuses with HISTORICAL_READ_ONLY's sibling code REALITY_PAUSED
+  // refuses with HISTORICAL_READ_ONLY's sibling code STORY_PAUSED
   // (Pass 6.5; substrate awareness lives on the doc, the gate ships
   // when the verbs learn to read it).
   paused:   { type: Boolean, default: false, index: true },
@@ -90,7 +90,7 @@ const BranchSchema = new mongoose.Schema({
   // the parent branch's projection unchanged.
   //
   // The doctrine: a subtree branch lets operators experiment on a
-  // single feature without contaminating the rest of the reality.
+  // single feature without contaminating the rest of the story.
   // Outside the scope, the branch is transparent . callers see the
   // parent's state. Inside the scope, the branch diverges normally.
   //
@@ -99,7 +99,7 @@ const BranchSchema = new mongoose.Schema({
   // _id, captured at branch creation time when the scope is locked
   // against the parent's view.
   //
-  // Whole-reality branches (the default) have `scope: null`. The
+  // Whole-story branches (the default) have `scope: null`. The
   // fast path in logFact short-circuits when scope is null.
   scope: {
     type: {

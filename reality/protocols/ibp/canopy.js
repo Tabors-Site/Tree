@@ -1,19 +1,19 @@
-// The canopy. This reality's portal to other realities.
+// The canopy. This story's portal to other realities.
 //
-// A portal is what speaks IBP to a reality. The being-portal is the
-// client a human or LLM uses to enter a reality (reality/portal/3d-app/
+// A portal is what speaks IBP to a story. The being-portal is the
+// client a human or LLM uses to enter a story (story/portal/3d-app/
 // is the bundled 3D one). The canopy is the same idea at the other scale:
-// it is the portal a REALITY uses to reach another reality. Same
+// it is the portal a STORY uses to reach another story. Same
 // protocol, different actor on the near side.
 //
 // Outbound. When an IBP envelope's target resolves to a foreign place,
 // the canopy signs the envelope and POSTs it to the peer's
 // /ibp/<verb>/<addr> endpoint. The peer verifies the signature against
-// our public key (which it has cached as a RealityPeer) and runs the
+// our public key (which it has cached as a StoryPeer) and runs the
 // verb locally.
 //
 // Inbound. `verifyIncoming` reads the X-Canopy-Sender and
-// X-Canopy-Signature headers, looks up the sender in RealityPeer, and
+// X-Canopy-Signature headers, looks up the sender in StoryPeer, and
 // verifies the signature over the raw body bytes. A verified request
 // has `req.canopySender = "<sender-domain>"` set; authorize.js uses
 // this to grant cross-place permissions.
@@ -29,25 +29,25 @@
 //   actorActId   — the actor's local Act id (the home-side Stamp the
 //                  foreign side will reference in crossOrigin.actId)
 //
-// The actor's home REALITY is NOT carried in the envelope. The
+// The actor's home STORY is NOT carried in the envelope. The
 // receiving side derives it from `req.canopySender`, which is the
 // cryptographically vouched authentication value — that's the
-// forgery-resistance point: another reality cannot claim to be us
-// because they can't sign our body bytes. So crossOrigin.reality
+// forgery-resistance point: another story cannot claim to be us
+// because they can't sign our body bytes. So crossOrigin.story
 // always comes from canopySender, never from a client-supplied
 // envelope field.
 //
-// The receiving substrate validates: any client-supplied `actorReality`
+// The receiving substrate validates: any client-supplied `actorStory`
 // in the envelope (if present, for forensics or debugging) must equal
 // `req.canopySender`. Mismatch is identity forgery — refuse hard.
 //
 // The address book the canopy consults lives next door at
 // [peers.js](peers.js). The signing keys it uses come from
-// [seed/realityIdentity.js](../../seed/realityIdentity.js).
+// [seed/storyIdentity.js](../../seed/storyIdentity.js).
 
-import log from "../../seed/seedReality/log.js";
-import { getRealityDomain } from "../../seed/ibp/address.js";
-import { signData, verifySignedData } from "../../seed/realityIdentity.js";
+import log from "../../seed/seedStory/log.js";
+import { getStoryDomain } from "../../seed/ibp/address.js";
+import { signData, verifySignedData } from "../../seed/storyIdentity.js";
 import { getPeerByDomain, getPeerBaseUrl } from "./peers.js";
 
 const FORWARD_TIMEOUT_MS = 30 * 1000;
@@ -98,43 +98,43 @@ function checkAndRecordCanopySig(signature) {
  * addresses (left :: right) target the right side. Returns the place
  * domain or null.
  */
-export function extractTargetReality(address) {
+export function extractTargetStory(address) {
   if (typeof address !== "string" || !address) return null;
   // Stance pair: take the right side (the callee).
   const rhs = address.includes("::") ? address.split("::").pop().trim() : address;
-  // Bare local stances have NO reality prefix:
+  // Bare local stances have NO story prefix:
   //   `@birther`            — local being summon
   //   `/path`               — local position
   //   `/path@being`         — local stance
   //   `~` / `~/inner`       — caller's home shorthand
   //   `.` / `./branches`    — heaven addresses
   //   `#1/path`             — branch-qualified local position
-  // Without this guard `extractTargetReality("@birther")` would return
+  // Without this guard `extractTargetStory("@birther")` would return
   // `"@birther"`, the dispatcher would compare it against the local
-  // domain (mismatch), and route the call through crossRealityDispatch.
-  // A reality domain in the address ALWAYS comes before the first `/`
+  // domain (mismatch), and route the call through crossStoryDispatch.
+  // A story domain in the address ALWAYS comes before the first `/`
   // or `@`; anything starting with a local sigil is locally rooted.
   if (/^[@/~.#]/.test(rhs)) return null;
   // Place is everything up to the first slash or `@` (or the whole
   // string), then strip any `#<branchPath>` qualifier. Branches are a
-  // property of the same reality — without the strip, `localhost#1/`
+  // property of the same story — without the strip, `localhost#1/`
   // would be misread as the foreign place `localhost#1` and federation
   // would PEER_NOT_FOUND it.
-  let realityDomain = rhs.split(/[/@]/)[0].trim();
-  const hashIdx = realityDomain.indexOf("#");
-  if (hashIdx >= 0) realityDomain = realityDomain.slice(0, hashIdx);
-  if (!realityDomain) return null;
+  let storyDomain = rhs.split(/[/@]/)[0].trim();
+  const hashIdx = storyDomain.indexOf("#");
+  if (hashIdx >= 0) storyDomain = storyDomain.slice(0, hashIdx);
+  if (!storyDomain) return null;
   // Bare relative paths (`lab/x`) put a plain segment where a domain
-  // would sit. A foreign reality is host-shaped — it carries a dot
+  // would sit. A foreign story is host-shaped — it carries a dot
   // (treeos.ai) or a port colon (localhost:3000) — or it IS the local
   // domain. A single undotted, unported segment that isn't the local
   // domain is a relative path root, not a peer. (Trade-off: a foreign
   // peer addressed as bare undotted `localhost` with no port won't
   // route — register peers with host:port or a real domain.)
-  if (realityDomain !== getRealityDomain() && !/[.:]/.test(realityDomain)) {
+  if (storyDomain !== getStoryDomain() && !/[.:]/.test(storyDomain)) {
     return null;
   }
-  return realityDomain;
+  return storyDomain;
 }
 
 /**
@@ -142,8 +142,8 @@ export function extractTargetReality(address) {
  * peer domain. Otherwise null.
  */
 export function getForeignTargetDomain(address) {
-  const local = getRealityDomain();
-  const target = extractTargetReality(address);
+  const local = getStoryDomain();
+  const target = extractTargetStory(address);
   if (!target || target === local) return null;
   return target;
 }
@@ -155,7 +155,7 @@ export function getForeignTargetDomain(address) {
  *
  * For cross-world calls, the caller passes the actor's identity tuple
  * (actorBranch + actorActId) so the peer can stamp crossOrigin on the
- * facts the verb produces. The actor's REALITY is implicit (this
+ * facts the verb produces. The actor's STORY is implicit (this
  * substrate's domain, sent as X-Canopy-Sender and authenticated by
  * signature) — not duplicated in the body.
  *
@@ -205,8 +205,8 @@ export async function forwardToPeer(envelope) {
     actorBranch: envelope.actorBranch || null,
     actorActId:  envelope.actorActId  || null,
     // The actor's OWN signature over the deed (verb/address/payload tied
-    // to the home act). Distinct from the reality-level X-Canopy-Signature
-    // below: that proves "this reality sent this body"; beingSig proves
+    // to the home act). Distinct from the story-level X-Canopy-Signature
+    // below: that proves "this story sent this body"; beingSig proves
     // "this being authored this request", verified self-certifyingly
     // against the actor's beingId. Null when the actor is keyless/anon.
     beingSig:    envelope.beingSig || null,
@@ -239,7 +239,7 @@ export async function forwardToPeer(envelope) {
     method: "POST",
     headers: {
       "Content-Type":       s ? SEALED_CONTENT_TYPE : "application/json",
-      "X-Canopy-Sender":    getRealityDomain(),
+      "X-Canopy-Sender":    getStoryDomain(),
       "X-Canopy-Signature": signature,
       ...(s ? { "X-Canopy-Session": s.sessionId } : {}),
     },
@@ -376,10 +376,10 @@ export async function verifyIncoming(req, res, next) {
  * Build the cross-world actor identity tuple from a verified canopy
  * request. Use AFTER verifyIncoming has set `req.canopySender`.
  *
- * The actor's reality is taken from canopySender (the cryptographically
+ * The actor's story is taken from canopySender (the cryptographically
  * vouched value), NOT from any client-supplied field in the body. This
  * is the identity-forgery defense: bing.com cannot claim that the
- * actor's reality is tabors.site because bing.com cannot sign for
+ * actor's story is tabors.site because bing.com cannot sign for
  * tabors.site.
  *
  * Returns null when the request is not a cross-world call (no
@@ -388,7 +388,7 @@ export async function verifyIncoming(req, res, next) {
  * Stamper to attach crossOrigin correctly.
  *
  * @param {object} req  Express request, post verifyIncoming
- * @returns {{ reality: string, branch: string, beingId: string, actId: string, beingSig: object|null }|null}
+ * @returns {{ story: string, branch: string, beingId: string, actId: string, beingSig: object|null }|null}
  */
 export function actorTupleFromRequest(req) {
   if (!req?.canopySender) return null;
@@ -397,19 +397,19 @@ export function actorTupleFromRequest(req) {
   // The NAME the actor signed as. Client-supplied like beingId, but its
   // integrity rests ENTIRELY on the envelope being-sig (verified
   // self-certifyingly against this nameId downstream), so a forged nameId can
-  // never verify. reality stays req.canopySender (ground truth) below.
+  // never verify. story stays req.canopySender (ground truth) below.
   const nameId   = body?.identity?.nameId || null;
   const branch   = body?.actorBranch || null;
   const actId    = body?.actorActId  || null;
   const beingSig = body?.beingSig    || null;
 
   // Identity-forgery defense: if the envelope claims an explicit
-  // actorReality (which we don't require — canopySender is the
+  // actorStory (which we don't require — canopySender is the
   // canonical source), it must match canopySender. Otherwise the
-  // sender is trying to impersonate a different reality.
-  if (body?.actorReality && body.actorReality !== req.canopySender) {
+  // sender is trying to impersonate a different story.
+  if (body?.actorStory && body.actorStory !== req.canopySender) {
     throw new Error(
-      `actorTupleFromRequest: envelope claims actorReality="${body.actorReality}" ` +
+      `actorTupleFromRequest: envelope claims actorStory="${body.actorStory}" ` +
       `but canopySender="${req.canopySender}". Identity forgery refused.`
     );
   }
@@ -423,7 +423,7 @@ export function actorTupleFromRequest(req) {
   }
 
   return {
-    reality: req.canopySender,
+    story: req.canopySender,
     branch,
     beingId,
     nameId,

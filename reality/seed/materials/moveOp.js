@@ -36,7 +36,7 @@ import { registerRoleWord } from "../present/word/roleWordRegistry.js";
 // resolves ("move", "move") to move.word, its host escapes wired by moveHost.js.
 // Registered at module load (operations.js imports this file at seed boot, and a
 // DRY harness importing moveOp.js triggers it too), so the `.word` is available
-// wherever a booted reality exists; the cut reads it via the bridge.
+// wherever a booted story exists; the cut reads it via the bridge.
 registerRoleWord("move", "move", new URL("./move.word", import.meta.url));
 
 async function moveHandler({ target, params, moment }) {

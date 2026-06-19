@@ -1,6 +1,6 @@
 // _template/code — the code piece manifest template.
 //
-// A code piece runs init(reality) at boot. The typical surface it
+// A code piece runs init(story) at boot. The typical surface it
 // registers is DO ops, SEE ops, hooks, and cognition handlers for
 // role pieces. Anything more substantial (mongoose models, express
 // routes, mcp tools, background jobs) is rare and lives behind
@@ -9,7 +9,7 @@
 
 export default {
   kind:    "code",
-  // The code piece carries the PACK's name so scopedReality's
+  // The code piece carries the PACK's name so scopedStory's
   // auto-prefix rule writes "my-pack:<thing>" when this code registers
   // ops/sees/etc. The pack ALSO has name: "my-pack" — different kinds,
   // distinct registries, no collision.
@@ -24,7 +24,7 @@ export default {
   // names EXTERNAL resources it draws from other packs.
   requires: [],
 
-  // Substrate services this code reaches for. The scoped reality only
+  // Substrate services this code reaches for. The scoped story only
   // exposes what's declared here; reaching for an undeclared service
   // returns undefined. Common services: see, do, summon, be, qualities,
   // declare, hooks, models.
@@ -45,7 +45,7 @@ export default {
   provides: {
     // DO operations this piece registers. Listed here for visibility;
     // the actual registration happens in init() via
-    // reality.do.registerOperation(name, op). The loader auto-namespaces
+    // story.do.registerOperation(name, op). The loader auto-namespaces
     // each name to <pack>:<name>.
     do: [
       // { name: "example-op", target: "space", description: "What it does." },
@@ -65,7 +65,7 @@ export default {
     // Hooks this code fires / listens to. The `fires` list lets other
     // resources discover hook names declaratively; `listens` documents
     // the contract (actual registration happens in init() via
-    // reality.hooks.register).
+    // story.hooks.register).
     hooks: {
       fires: [
         // { name: "my-pack:something", data: "{ field }", description: "What it means" },

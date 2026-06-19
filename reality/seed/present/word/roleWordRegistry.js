@@ -37,13 +37,13 @@ const REGISTRY = new Map([
 // The per-branch DISABLED overlay: branch -> Set<"role:op"> turned off ON that branch. A
 // word's EXISTENCE (declared + backed, in REGISTRY) is branch-INDEPENDENT; its ENABLED state
 // is per-BRANCH, folded from disable/enable facts (each laid on its own branch). This is what
-// lets an extension's words be ON in one branch and OFF in another of the SAME reality.
+// lets an extension's words be ON in one branch and OFF in another of the SAME story.
 // V2 is per-EXACT-branch; lineage inheritance (a disable on an ancestor dimming descendants,
 // mirroring wakes' _isInBranchLineage) is the V2.1 refinement.
 const _branchDisabled = new Map();
 const _disabledOn = (key, branch) => !!_branchDisabled.get(String(branch))?.has(key);
 
-// The root reality (heaven), where the base/seed vocabulary lives. It is the fallback for a
+// The root story (heaven), where the base/seed vocabulary lives. It is the fallback for a
 // BRANCHLESS resolve — an existence query with no act context (a verifier, a global check).
 // This is NOT an act-default drifting to "0": a real act always threads its own branch.
 const ROOT = "0";
@@ -82,7 +82,7 @@ export function registerRoleWord(role, op, fileUrl) {
 // Stays SYNCHRONOUS (never reads the chain).
 export function resolveRoleWord(role, op, branch) {
   // an ACT passes its real branch; a branchless query falls back to the cached #main, then
-  // to the root reality (heaven) where the base vocabulary lives. The root fallback is NOT an
+  // to the root story (heaven) where the base vocabulary lives. The root fallback is NOT an
   // act defaulting to "0" — acts always thread their own branch.
   const b = branch ?? _mainBranch ?? ROOT;
   const key = k(role, op);
@@ -113,7 +113,7 @@ async function _wordActor(actorBeingId) {
 
 // I_AM's genesis vocabulary is the BEDROCK — declared by I_AM on heaven ("0"). It can never be
 // disabled or re-declared ON HEAVEN by anyone but I_AM: the one exception to "words stack" (the
-// CORE REALITY terms are all I_AM's, immutable). A branch may still SHADOW a word locally (the
+// CORE STORY terms are all I_AM's, immutable). A branch may still SHADOW a word locally (the
 // per-branch overlay = your own vocabulary, V2), which is NOT a change to the root. _genesisWords
 // is folded from the chain at rehydrate (declare-word facts authored by I_AM on "0").
 const _genesisWords = new Set(); // k(role, op) of words I_AM declared on heaven
@@ -258,7 +258,7 @@ export async function rehydrateWordsFromFacts() {
 //   trigger    the summon payload the flow binds (e.g. { name, password })
 //   bindings   the rest of the flow's named context, NOT in the summon payload
 //              (cherub:birth's ownerName = the arriving Name, placeRoot = the
-//              reality root the home is made under). Merged over trigger.
+//              story root the home is made under). Merged over trigger.
 //   beings     proper-name -> being id (cherub:birth's { Cherub, Arrival }); the
 //              evaluator resolves a proper noun to its id through this (7.md bridge).
 //   through    the vessel being the acts run THROUGH (identity.beingId): cherub:birth

@@ -1,5 +1,5 @@
 // Phase 2 demo: run the harmony pulse for a bounded number of beats.
-// Run:  node reality/seed/present/word/harmony-demo.js
+// Run:  node story/seed/present/word/harmony-demo.js
 //
 // Shows rule 6 (flows fire on completion) and rule 12 (the choq: each beat begets
 // the next, the dancer coupled to the drummer) with no clock anywhere, only

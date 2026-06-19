@@ -5,11 +5,11 @@
 import fs from "fs"; import os from "os"; import path from "path"; import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const DB = "mongodb://localhost:27017/reality_wordstore";
+const DB = "mongodb://localhost:27017/story_wordstore";
 process.env.PORT = "3829"; process.env.MONGODB_URI = DB;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "wordstore-0123456789";
-process.env.REALITY_KEY_DIR = path.join(os.tmpdir(), "wordstore-keys-" + process.pid);
-fs.rmSync(process.env.REALITY_KEY_DIR, { recursive: true, force: true });
+process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "wordstore-keys-" + process.pid);
+fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
 const SRC = path.join(os.tmpdir(), "wordstore-src"); fs.rmSync(SRC, { recursive: true, force: true }); fs.mkdirSync(SRC, { recursive: true }); fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
 { const mongoose = (await import(`${R}/node_modules/mongoose/index.js`)).default; const conn = await mongoose.createConnection(DB).asPromise(); await conn.dropDatabase(); await conn.close(); }
@@ -52,6 +52,10 @@ try {
   const w5 = await pollFor(() => getWord("test-user"), (v) => v && v.can?.length === 2);
   (w5 && Array.isArray(w5.can) && w5.can.length === 2 && w5.can[0].word === "test-mail")
     ? ok(`composite word folds back as a stack of granted words (no handler)`) : bad(`composite`, w5);
+
+  // 6. idempotency: re-binding an unchanged word with skipIfUnchanged lays no redundant fact
+  const r6 = await bindWord("test-mail", { ownerExtension: "seed", do: { ref: "seed:test-mail" }, targets: ["being"] }, { skipIfUnchanged: true });
+  (r6 && r6.skipped === true) ? ok(`re-bind unchanged with skipIfUnchanged skips the declare (idempotent for the genesis fold)`) : bad(`dedup skip`, r6);
 
   console.log(`\n  ${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);

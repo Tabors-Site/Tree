@@ -8,7 +8,7 @@
 // (dedup), so the question is never "which file does this row own" —
 // it is "does anything still reference this hash."
 //
-// Two retention policies, reality-config `contentRetention`:
+// Two retention policies, story-config `contentRetention`:
 //
 //   "all"    (default) — a blob stays while ANY fact on ANY branch
 //            names its hash. Full history: historical folds and
@@ -40,8 +40,8 @@
 //   - Per-cycle cap so one run cannot block for minutes.
 
 import { getInternalConfigValue } from "../../internalConfig.js";
-import { getRealityConfigValue } from "../../realityConfig.js";
-import log from "../../seedReality/log.js";
+import { getStoryConfigValue } from "../../storyConfig.js";
+import log from "../../seedStory/log.js";
 import { listHashes, deleteContent, statContent } from "./contentStore.js";
 
 let sweepTimer = null;
@@ -53,7 +53,7 @@ function maxDeletionsPerCycle() {
 }
 
 function retentionPolicy() {
-  const v = getRealityConfigValue("contentRetention");
+  const v = getStoryConfigValue("contentRetention");
   return v === "latest" ? "latest" : "all";
 }
 

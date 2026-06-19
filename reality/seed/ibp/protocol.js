@@ -2,7 +2,7 @@
 //
 // Wire shape. The form every SEE, DO, SUMMON, and BE takes.
 //
-// IBP is my communication primitive. reality/ is what I AM; factory/
+// IBP is my communication primitive. story/ is what I AM; factory/
 // is how my LLM beings THINK; ibp/ is how any of it speaks to any
 // other. Without this folder a being could not SEE a position, DO
 // an action, SUMMON another being, or BE in any stance — every
@@ -42,7 +42,7 @@
 // Domain-specific enums (HEAVEN_SPACE, DELETED, I_AM)
 // live with their domain modules — not here.
 
-import log from "../seedReality/log.js";
+import log from "../seedStory/log.js";
 
 // ============================================================================
 // CODE ENUM
@@ -125,7 +125,7 @@ export const IBP_ERR = Object.freeze({
   // do.pause-branch on @branch-manager). Every write verb (DO / BE /
   // SUMMON) refuses with this code; SEE still works so the user can
   // inspect or rewind frozen state. unpause-branch lifts the gate.
-  REALITY_PAUSED: "REALITY_PAUSED",
+  STORY_PAUSED: "STORY_PAUSED",
 
   // Branch is required at the perimeter but the caller / wire layer
   // failed to thread it. The substrate used to silently default to
@@ -175,7 +175,7 @@ export function isIbpError(e) {
  * wire-shape errors instead of opaque internal messages.
  *
  *   throw mapPatternsToIbpError(err, [
- *     [/reality heaven spaces|reserved/i, IBP_ERR.FORBIDDEN],
+ *     [/story heaven spaces|reserved/i, IBP_ERR.FORBIDDEN],
  *     [/not found/i,                 IBP_ERR.SPACE_NOT_FOUND],
  *   ], IBP_ERR.INTERNAL);
  */
@@ -216,7 +216,7 @@ const STATUS_FOR_CODE = Object.freeze({
   SOURCE_READ_ONLY: 403,
   HISTORICAL_READ_ONLY: 403,
   CROSS_BRANCH_FORBIDDEN: 403,
-  REALITY_PAUSED: 403,
+  STORY_PAUSED: 403,
   NOT_A_BEING: 403,
   NOT_A_SEED: 403,
   // Branch missing at perimeter: 500 because it's an internal threading

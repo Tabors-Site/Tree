@@ -55,7 +55,7 @@ import {
 import { hooks } from "../../hooks.js";
 import { loadSigningKey, signActDoc } from "../../past/act/actSig.js";
 import Fact from "../../past/fact/fact.js";
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 
 function MAX_CHAT_CONTENT_BYTES() {
   return Math.max(
@@ -202,7 +202,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
   // transitions exactly once to a terminal state when the target's
   // world confirms. For same-world moments where the Stamper IS the
   // target, the post-commit transition happens inline below; for
-  // cross-reality moments awaiting a canopy round-trip, the Act stays
+  // cross-story moments awaiting a canopy round-trip, the Act stays
   // at "attempted" until the response arrives via updateActStatus.
   // See CROSS-WORLD.md "Act lifecycle and status."
   const actDoc = {
@@ -213,7 +213,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
 
   // Preload the actor NAME's signing key BEFORE the seal so the
   // transaction stays lean (the key never changes during the moment).
-  // Null for a foreign cross-reality actor or a missing key — the act
+  // Null for a foreign cross-story actor or a missing key — the act
   // then seals unsigned. The key lives only here, never on the row.
   const signingPem = await loadSigningKey(actDoc.by, actDoc.branch);
 
@@ -321,7 +321,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
   // ACT_CHAIN_MOVED propagates to the caller instead. Crashed moments
   // never reach this line, so the chain only ever points at acts
   // that exist. The head feeds the NEXT act's `p` (assign reads it)
-  // and the branch/reality roots (chainRoots).
+  // and the branch/story roots (chainRoots).
   if (!Array.isArray(deltaF) || deltaF.length === 0) {
     const { advanceActHead } = await import("../../past/act/actHash.js");
     try {
@@ -338,21 +338,21 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
   }
 
   // Status transition: attempted → landed. For same-world and
-  // same-reality cross-branch moments the local Stamper IS the
+  // same-story cross-branch moments the local Stamper IS the
   // target — by the time the transaction committed, the facts
   // landed and the Act can move to "landed" inline here. For
-  // cross-reality moments the Act is created directly by
-  // crossRealityDispatch (not sealAct) with no deltaF, and its
+  // cross-story moments the Act is created directly by
+  // crossStoryDispatch (not sealAct) with no deltaF, and its
   // status transitions when the canopy reply arrives via
   // handleCrossWorldResponse → updateActStatus. So the only path
-  // through here is same-reality; the foreign-reality check is a
+  // through here is same-story; the foreign-story check is a
   // belt-and-suspenders guard against a future caller routing a
-  // cross-reality moment through sealAct. See CROSS-WORLD.md +
+  // cross-story moment through sealAct. See CROSS-WORLD.md +
   // crossWorld.js.
-  const hasForeignRealityFact = Array.isArray(deltaF) && deltaF.some(
-    (f) => f?.params?.crossOrigin?.reality
+  const hasForeignStoryFact = Array.isArray(deltaF) && deltaF.some(
+    (f) => f?.params?.crossOrigin?.story
   );
-  if (!hasForeignRealityFact) {
+  if (!hasForeignStoryFact) {
     try {
       await Act.updateOne(
         { _id: inserted._id, status: "attempted" },

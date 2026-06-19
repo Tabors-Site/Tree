@@ -47,7 +47,7 @@ export function contentOfAct(act) {
     inReplyTo:      act.inReplyTo ?? null,
     parentThread:   act.parentThread ?? null,
     startMessage:   act.startMessage ?? null,
-    reality:        act.reality ?? null,
+    story:        act.story ?? null,
     branch:         typeof act.branch === "string" && act.branch.length ? act.branch : "0",
   };
 }

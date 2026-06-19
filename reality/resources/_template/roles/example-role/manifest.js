@@ -9,7 +9,7 @@
 //   - Default (no inline summon in role.js) → LLM cognition.
 //   - Inline `async call(message, ctx) { ... }` on the spec →
 //     scripted cognition. The substrate uses the inline function.
-//   - Pure-data role + code resource calls reality.declare.
+//   - Pure-data role + code resource calls story.declare.
 //     registerRoleHandler("<role>", handlerFn) → code cognition via
 //     the registered handler (cleanest for pieces that travel
 //     independently).

@@ -1,6 +1,6 @@
-import log from "./seedReality/log.js";
-import { getRealityConfigValue } from "./realityConfig.js";
-import { SEED_VERSION } from "./seedReality/version.js";
+import log from "./seedStory/log.js";
+import { getStoryConfigValue } from "./storyConfig.js";
+import { SEED_VERSION } from "./seedStory/version.js";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
@@ -10,7 +10,7 @@ import { keyIdFromPublicKeyPem } from "./materials/name/keys.js";
 const ALGORITHM = "Ed25519";
 const TOKEN_EXPIRY = "5m";
 
-let realityIdentity = null;
+let storyIdentity = null;
 
 /**
  * Strip protocol, port, and trailing slashes from a domain string.
@@ -22,25 +22,25 @@ function cleanDomain(raw) {
   return d;
 }
 
-// getRealityUrl moved to seed/realityConfig.js (it's a seed-level fact about
+// getStoryUrl moved to seed/storyConfig.js (it's a seed-level fact about
 // this place, not a canopy concern). Re-exported here so existing callers
 // continue to import it from this module.
-export { getRealityUrl } from "./realityConfig.js";
+export { getStoryUrl } from "./storyConfig.js";
 
 /**
  * Get or create the place identity (keypair + metadata).
  * On first boot, generates a new Ed25519 keypair and writes it to disk.
  * On subsequent boots, reads the existing keypair.
  */
-export function getRealityIdentity() {
-  if (realityIdentity) return realityIdentity;
+export function getStoryIdentity() {
+  if (storyIdentity) return storyIdentity;
 
-  const domain = cleanDomain(process.env.REALITY_DOMAIN || "localhost");
-  const name = process.env.REALITY_NAME || "My Place";
-  const keyDir = process.env.REALITY_KEY_DIR || path.join(process.cwd(), ".reality");
-  const privateKeyPath = path.join(keyDir, "reality.key");
-  const publicKeyPath = path.join(keyDir, "reality.key.pub");
-  const idPath = path.join(keyDir, "reality.id");
+  const domain = cleanDomain(process.env.STORY_DOMAIN || "localhost");
+  const name = process.env.STORY_NAME || "My Place";
+  const keyDir = process.env.STORY_KEY_DIR || path.join(process.cwd(), ".story");
+  const privateKeyPath = path.join(keyDir, "story.key");
+  const publicKeyPath = path.join(keyDir, "story.key.pub");
+  const idPath = path.join(keyDir, "story.id");
 
   if (!fs.existsSync(keyDir)) {
     fs.mkdirSync(keyDir, { recursive: true });
@@ -63,19 +63,19 @@ export function getRealityIdentity() {
     fs.writeFileSync(privateKeyPath, privateKey, { mode: 0o600 });
     fs.writeFileSync(publicKeyPath, publicKey, { mode: 0o644 });
 
-    log.verbose("Reality", "Generated new keypair for this reality");
+    log.verbose("Story", "Generated new keypair for this story");
   }
 
-  // The reality is a wallet: its id IS its public key, encoded the same
-  // z... way as a being id (this reality's I_AM shares this exact key,
-  // so realityId === I_AM's key id). Derived from the keypair, not a
-  // random uuid — the old reality.id token is retired. Written to disk
+  // The story is a wallet: its id IS its public key, encoded the same
+  // z... way as a being id (this story's I_AM shares this exact key,
+  // so storyId === I_AM's key id). Derived from the keypair, not a
+  // random uuid — the old story.id token is retired. Written to disk
   // for operator visibility only; the public key is the source of truth.
-  const realityId = keyIdFromPublicKeyPem(publicKey);
-  try { fs.writeFileSync(idPath, realityId, { mode: 0o644 }); } catch { /* visibility only */ }
+  const storyId = keyIdFromPublicKeyPem(publicKey);
+  try { fs.writeFileSync(idPath, storyId, { mode: 0o644 }); } catch { /* visibility only */ }
 
-  realityIdentity = {
-    realityId,
+  storyIdentity = {
+    storyId,
     domain,
     name,
     publicKey,
@@ -83,7 +83,7 @@ export function getRealityIdentity() {
     protocolVersion: 1,
   };
 
-  return realityIdentity;
+  return storyIdentity;
 }
 
 /**
@@ -101,20 +101,20 @@ export function setExtensionNamesProvider(fn) {
   _getExtNames = fn;
 }
 
-export function getRealityInfoPayload() {
-  const identity = getRealityIdentity();
-  const baseUrl = process.env.REALITY_BASE_URL || getRealityUrl();
-  const timezone = getRealityConfigValue("timezone") || Intl.DateTimeFormat().resolvedOptions().timeZone;
+export function getStoryInfoPayload() {
+  const identity = getStoryIdentity();
+  const baseUrl = process.env.STORY_BASE_URL || getStoryUrl();
+  const timezone = getStoryConfigValue("timezone") || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   return {
-    realityId: identity.realityId,
+    storyId: identity.storyId,
     domain: identity.domain,
     name: identity.name,
     publicKey: identity.publicKey,
     protocolVersion: identity.protocolVersion,
     seedVersion: SEED_VERSION,
     baseUrl,
-    siteUrl: process.env.REALITY_SITE_URL || null,
+    siteUrl: process.env.STORY_SITE_URL || null,
     timezone,
     capabilities: [
       ...(_getExtNames && _getExtNames().includes("team") ? ["invite"] : []),
@@ -129,14 +129,14 @@ export function getRealityInfoPayload() {
  * Used when proxying a local user's request to a remote place.
  */
 export async function signCanopyToken(beingId, targetDomain) {
-  const identity = getRealityIdentity();
+  const identity = getStoryIdentity();
   const privateKey = await importPKCS8(identity.privateKey, "EdDSA");
 
   const token = await new SignJWT({
     sub: beingId,
     iss: identity.domain,
     aud: targetDomain,
-    realityId: identity.realityId,
+    storyId: identity.storyId,
   })
     .setProtectedHeader({ alg: "EdDSA" })
     .setExpirationTime(TOKEN_EXPIRY)
@@ -148,11 +148,11 @@ export async function signCanopyToken(beingId, targetDomain) {
 
 /**
  * Verify a CanopyToken JWT from a remote place.
- * Requires the remote place's public key (from RealityPeer record).
+ * Requires the remote place's public key (from StoryPeer record).
  */
-export async function verifyCanopyToken(token, remoteRealityPublicKey) {
+export async function verifyCanopyToken(token, remoteStoryPublicKey) {
   try {
-    const publicKey = await importSPKI(remoteRealityPublicKey, "EdDSA");
+    const publicKey = await importSPKI(remoteStoryPublicKey, "EdDSA");
     const { payload } = await jwtVerify(token, publicKey, {
       algorithms: ["EdDSA"],
     });
@@ -163,7 +163,7 @@ export async function verifyCanopyToken(token, remoteRealityPublicKey) {
 }
 
 /**
- * Sign arbitrary data with this reality's private key.
+ * Sign arbitrary data with this story's private key.
  *
  * Ed25519 uses the one-shot crypto.sign() with algorithm=null, not
  * the streaming createSign API. Node 24+ throws "algorithm argument
@@ -173,7 +173,7 @@ export async function verifyCanopyToken(token, remoteRealityPublicKey) {
  * keys generated in this same file.
  */
 export function signData(data) {
-  const identity = getRealityIdentity();
+  const identity = getStoryIdentity();
   const buf = Buffer.from(typeof data === "string" ? data : JSON.stringify(data), "utf8");
   return crypto.sign(null, buf, identity.privateKey).toString("base64");
 }
@@ -182,11 +182,11 @@ export function signData(data) {
  * Verify signed data from a remote place. Same ed25519 one-shot path
  * as signData.
  */
-export function verifySignedData(data, signature, remoteRealityPublicKey) {
+export function verifySignedData(data, signature, remoteStoryPublicKey) {
   try {
     const buf = Buffer.from(typeof data === "string" ? data : JSON.stringify(data), "utf8");
     const sigBuf = Buffer.from(signature, "base64");
-    return crypto.verify(null, buf, remoteRealityPublicKey, sigBuf);
+    return crypto.verify(null, buf, remoteStoryPublicKey, sigBuf);
   } catch {
     return false;
   }

@@ -19,7 +19,7 @@
 // being-room).
 //
 
-import log from "../../../seed/seedReality/log.js";
+import log from "../../../seed/seedStory/log.js";
 import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
 import { assertNoImpersonation } from "./_shared.js";
 import { ackOk, ackError } from "../envelope.js";
@@ -102,11 +102,11 @@ export async function handleCall(socket, env, ack) {
     const callerBranch = socket.currentBranch || "0";
     let _targetBranchResolved = null;
     try {
-      const { parseFromSocket, expand, resolveBeingIds, resolveBranchPointers, getRealityDomain } =
+      const { parseFromSocket, expand, resolveBeingIds, resolveBranchPointers, getStoryDomain } =
         await import("../../../seed/ibp/address.js");
       const parsed = parseFromSocket(socket, address);
       const expandCtx = {
-        currentReality: getRealityDomain(),
+        currentStory: getStoryDomain(),
         currentUser:    socket.name,
         currentBranch:  callerBranch,
         currentPath:    socket.currentPath || null,
@@ -135,12 +135,12 @@ export async function handleCall(socket, env, ack) {
       const { isBranchPaused, isBranchDeleted } =
         await import("../../../seed/materials/branch/branches.js");
       if (await isBranchPaused(callerBranch)) {
-        throw new IbpError(IBP_ERR.REALITY_PAUSED,
+        throw new IbpError(IBP_ERR.STORY_PAUSED,
           `SUMMON refused: branch #${callerBranch} is paused.`,
           { branch: callerBranch });
       }
       if (await isBranchDeleted(callerBranch)) {
-        throw new IbpError(IBP_ERR.REALITY_PAUSED,
+        throw new IbpError(IBP_ERR.STORY_PAUSED,
           `SUMMON refused: branch #${callerBranch} is deleted.`,
           { branch: callerBranch, deleted: true });
       }

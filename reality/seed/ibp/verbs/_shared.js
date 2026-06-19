@@ -16,7 +16,7 @@
 //
 // Kept private to verbs/. External callers don't reach in here.
 
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 import { IbpError, IBP_ERR } from "../protocol.js";
 import { resolveTargetBranch } from "../branchResolve.js";
 

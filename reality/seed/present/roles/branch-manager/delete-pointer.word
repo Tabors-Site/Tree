@@ -16,7 +16,7 @@ When a being deletes a branch pointer:
     refuse with "that pointer is reserved and cannot be deleted; re-point it via set-pointer instead" as forbidden.
   see find-pointers-space-id() as branchesSpace.
   If no branchesSpace:
-    refuse with "the .branches heaven space was not found; reality is not properly bootstrapped" as internal.
+    refuse with "the .branches heaven space was not found; story is not properly bootstrapped" as internal.
   see read-pointers() as current.
   see delete-pointer-map(current, validName) as outcome.
   If no outcome:

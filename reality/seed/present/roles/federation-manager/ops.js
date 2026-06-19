@@ -35,18 +35,18 @@
 //                       template (reusing the rejection envelope).
 //
 // Auth: operator-only by default. canDo on the federation-manager role
-// licenses these ops, and the role is granted at the reality root to
+// licenses these ops, and the role is granted at the story root to
 // the @federation-manager being itself; the operator addresses
 // @federation-manager via SUMMON which dispatches the op. Custom
 // operator policy (auto-accept particular peers, throttle pulls, etc.)
 // lives in roleFlow on the @federation-manager being.
 
 import { randomUUID as uuidv4 } from "node:crypto";
-import log from "../../../seedReality/log.js";
+import log from "../../../seedStory/log.js";
 import { registerOperation } from "../../../ibp/operations.js";
 import { registerSeeOperation } from "../../../ibp/seeOps.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
-import { getRealityDomain } from "../../../ibp/address.js";
+import { getStoryDomain } from "../../../ibp/address.js";
 
 export function registerFederationManagerOps() {
   // registerOperation / registerSeeOperation calls below run at module
@@ -62,7 +62,7 @@ export function registerFederationManagerOps() {
 // qualities.federation buckets as flat lists (each entry carries its
 // negotiationId as `id`). READ-ONLY: folds the federation-manager being
 // and reads its qualities, emits no Fact. Operator-gated (heaven
-// authority), since the queues reveal who this reality is negotiating
+// authority), since the queues reveal who this story is negotiating
 // with. The DO ops below are how the operator acts on what this surfaces.
 registerSeeOperation("federation-status", {
   ownerExtension: "seed",
@@ -106,7 +106,7 @@ registerOperation("offer-template", {
   args: {
     peer: {
       type:        "text",
-      label:       "Peer reality domain (e.g. \"bing.com\")",
+      label:       "Peer story domain (e.g. \"bing.com\")",
       required:    true,
     },
     subtreePath: {
@@ -128,8 +128,8 @@ registerOperation("offer-template", {
     if (!subtreePath || typeof subtreePath !== "string") {
       throw new IbpError(IBP_ERR.INVALID_INPUT, "offer-template requires `subtreePath`");
     }
-    if (peer === getRealityDomain()) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "offer-template: cannot push to local reality");
+    if (peer === getStoryDomain()) {
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "offer-template: cannot push to local story");
     }
 
     const negotiationId = uuidv4();
@@ -202,12 +202,12 @@ registerOperation("offer-template", {
 });
 
 // ────────────────────────────────────────────────────────────────────
-// offer-being . Operator grafts a BEING to a peer reality.
+// offer-being . Operator grafts a BEING to a peer story.
 // ────────────────────────────────────────────────────────────────────
 //
 // The IDENTITY counterpart to offer-template (which pushes a CONTENT
 // template). Captures the being's identity-preserving graft bundle
-// (verbatim ids + chain, signed by this reality's key) and delivers it
+// (verbatim ids + chain, signed by this story's key) and delivers it
 // one-shot to the peer's federation-manager via deliver-being. No
 // offer/accept review: a being-graft is self-certifying (the receiver
 // verifies the signed graftRoot, no callback) and the peer auto-accepts
@@ -217,7 +217,7 @@ registerOperation("offer-being", {
   ownerExtension: "seed",
   skipAudit:      false,
   args: {
-    peer:    { type: "text", label: "Peer reality domain (e.g. \"beta.test\")", required: true },
+    peer:    { type: "text", label: "Peer story domain (e.g. \"beta.test\")", required: true },
     beingId: { type: "text", label: "Being id (pubkey) to graft to the peer", required: true },
   },
   handler: async (ctx) => {
@@ -228,11 +228,11 @@ registerOperation("offer-being", {
     if (!beingId || typeof beingId !== "string") {
       throw new IbpError(IBP_ERR.INVALID_INPUT, "offer-being requires `beingId`");
     }
-    if (peer === getRealityDomain()) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "offer-being: cannot graft to the local reality");
+    if (peer === getStoryDomain()) {
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "offer-being: cannot graft to the local story");
     }
 
-    // Capture the being's graft bundle (verbatim, signed by this reality).
+    // Capture the being's graft bundle (verbatim, signed by this story).
     const { captureGraft } = await import("../../../materials/publish/graft.js");
     let bundle;
     try {
@@ -270,7 +270,7 @@ registerOperation("request-template", {
   args: {
     peer: {
       type:        "text",
-      label:       "Peer reality domain to pull from",
+      label:       "Peer story domain to pull from",
       required:    true,
     },
     subtreePath: {
@@ -292,8 +292,8 @@ registerOperation("request-template", {
     if (!subtreePath || typeof subtreePath !== "string") {
       throw new IbpError(IBP_ERR.INVALID_INPUT, "request-template requires `subtreePath`");
     }
-    if (peer === getRealityDomain()) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "request-template: cannot pull from local reality");
+    if (peer === getStoryDomain()) {
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "request-template: cannot pull from local story");
     }
 
     const negotiationId = uuidv4();
@@ -343,12 +343,12 @@ registerOperation("accept-template", {
     if (!offer) {
       throw new IbpError(IBP_ERR.NOT_FOUND, `no pending offer "${negotiationId}"`);
     }
-    if (!offer.sender?.reality) {
+    if (!offer.sender?.story) {
       throw new IbpError(IBP_ERR.INVALID_INPUT,
-        `offer "${negotiationId}" has no sender reality recorded`);
+        `offer "${negotiationId}" has no sender story recorded`);
     }
 
-    await sendIntent(ctx, offer.sender.reality, {
+    await sendIntent(ctx, offer.sender.story, {
       intent:        "accept-template",
       negotiationId,
     });
@@ -383,7 +383,7 @@ registerOperation("reject-template", {
       throw new IbpError(IBP_ERR.NOT_FOUND, `no pending offer "${negotiationId}"`);
     }
 
-    await sendIntent(ctx, offer.sender.reality, {
+    await sendIntent(ctx, offer.sender.story, {
       intent:        "reject-template",
       negotiationId,
       reason:        ctx.params?.reason || null,
@@ -422,9 +422,9 @@ registerOperation("fulfill-request", {
     if (!request) {
       throw new IbpError(IBP_ERR.NOT_FOUND, `no pending request "${negotiationId}"`);
     }
-    if (!request.puller?.reality) {
+    if (!request.puller?.story) {
       throw new IbpError(IBP_ERR.INVALID_INPUT,
-        `request "${negotiationId}" has no puller reality recorded`);
+        `request "${negotiationId}" has no puller story recorded`);
     }
 
     // Push the requested subtree back at the puller. Reuses the
@@ -443,7 +443,7 @@ registerOperation("fulfill-request", {
     const pushNegotiationId = uuidv4();
     await cacheBundle(ctx, pushNegotiationId, bundle);
 
-    await sendIntent(ctx, request.puller.reality, {
+    await sendIntent(ctx, request.puller.story, {
       intent:             "offer-template",
       negotiationId:      pushNegotiationId,
       manifest:           bundle?.manifest || null,
@@ -454,7 +454,7 @@ registerOperation("fulfill-request", {
 
     await writeNegotiation(ctx, "pendingOutbound", pushNegotiationId, {
       direction:    "push",
-      peer:         request.puller.reality,
+      peer:         request.puller.story,
       subtreePath:  request.subtreePath,
       label:        request.label || null,
       manifest:     bundle?.manifest || null,
@@ -474,7 +474,7 @@ registerOperation("fulfill-request", {
       negotiationId,
       pushNegotiationId,
       status:                 "pushing",
-      peer:                   request.puller.reality,
+      peer:                   request.puller.story,
     };
   },
 });
@@ -501,7 +501,7 @@ registerOperation("refuse-request", {
       throw new IbpError(IBP_ERR.NOT_FOUND, `no pending request "${negotiationId}"`);
     }
 
-    await sendIntent(ctx, request.puller.reality, {
+    await sendIntent(ctx, request.puller.story, {
       intent:        "reject-template",
       negotiationId,
       reason:        ctx.params?.reason || null,
@@ -520,11 +520,11 @@ registerOperation("refuse-request", {
 });
 
 // ────────────────────────────────────────────────────────────────────
-// Helpers shared with handlers.js (state I/O + cross-reality dispatch).
+// Helpers shared with handlers.js (state I/O + cross-story dispatch).
 // ────────────────────────────────────────────────────────────────────
 
-async function sendIntent(ctx, peerReality, message) {
-  const { crossRealityDispatch } = await import("../../../ibp/crossWorld.js");
+async function sendIntent(ctx, peerStory, message) {
+  const { crossStoryDispatch } = await import("../../../ibp/crossWorld.js");
   const actorBeingId = ctx.moment?.actorAct?.through || ctx.identity?.beingId;
   const actorBranch  = ctx.moment?.actorAct?.branch  || "0";
   if (!actorBeingId) {
@@ -533,7 +533,7 @@ async function sendIntent(ctx, peerReality, message) {
 
   // Envelope intent is canonical (per seed/SUMMON.md): the auth gate
   // and the receiver's permitsReceiverSummon both read it from the
-  // envelope. crossRealityDispatch passes payload.message straight
+  // envelope. crossStoryDispatch passes payload.message straight
   // through to callVerb, so envelope.intent on the wire is the same
   // envelope.intent the local verb stamps onto the summon Fact. The
   // rest of the federation fields (negotiationId, manifest, bundle,
@@ -542,7 +542,7 @@ async function sendIntent(ctx, peerReality, message) {
   const envelope = {
     id:      uuidv4(),
     verb:    "call",
-    address: `${peerReality}/@federation-manager`,
+    address: `${peerStory}/@federation-manager`,
     payload: {
       message: {
         from:    "/@federation-manager",
@@ -553,23 +553,23 @@ async function sendIntent(ctx, peerReality, message) {
   };
 
   try {
-    const result = await crossRealityDispatch({
+    const result = await crossStoryDispatch({
       envelope,
       actor:    { beingId: actorBeingId, branch: actorBranch },
       identity: { beingId: actorBeingId, name: ctx.identity?.name || null },
     });
     if (result?.peerAck?.status !== "ok") {
       log.warn("FederationManager",
-        `cross-reality dispatch to ${peerReality} non-ok: ${JSON.stringify(result?.peerAck?.error || result?.peerAck).slice(0, 300)}`);
+        `cross-story dispatch to ${peerStory} non-ok: ${JSON.stringify(result?.peerAck?.error || result?.peerAck).slice(0, 300)}`);
     } else {
       log.info("FederationManager",
-        `cross-reality dispatch to ${peerReality} ok (intent=${envelope.payload.message.intent})`);
+        `cross-story dispatch to ${peerStory} ok (intent=${envelope.payload.message.intent})`);
     }
     return result;
   } catch (err) {
-    log.warn("FederationManager", `cross-reality dispatch to ${peerReality} failed: ${err.message}`);
+    log.warn("FederationManager", `cross-story dispatch to ${peerStory} failed: ${err.message}`);
     throw new IbpError(IBP_ERR.INTERNAL,
-      `cross-reality dispatch to "${peerReality}" failed: ${err.message}`);
+      `cross-story dispatch to "${peerStory}" failed: ${err.message}`);
   }
 }
 
@@ -577,13 +577,13 @@ async function resolveSubtreeSpaceId(subtreePath, branch) {
   // If already a uuid, return as-is.
   if (/^[0-9a-f-]{36}$/i.test(subtreePath)) return subtreePath;
   // Otherwise resolve through the address parser. Bare paths are
-  // interpreted relative to the local reality root.
+  // interpreted relative to the local story root.
   try {
-    const { parseWithContext, expand, getRealityDomain: _gRD } = await import("../../../ibp/address.js");
+    const { parseWithContext, expand, getStoryDomain: _gRD } = await import("../../../ibp/address.js");
     const { resolveStance } = await import("../../../ibp/resolver.js");
-    const localReality = _gRD();
+    const localStory = _gRD();
     const parseCtx = {
-      currentReality: localReality,
+      currentStory: localStory,
       currentBranch:  branch,
       currentUser:    null,
       currentPath:    null,

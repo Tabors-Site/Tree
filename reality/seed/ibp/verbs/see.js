@@ -3,14 +3,14 @@
 // see.js — the SEE verb. Read a position and return its descriptor.
 //
 // SEE is the only verb a caller without identity may invoke — the
-// `<reality>/.discovery` short-circuit returns the pre-identity surface
+// `<story>/.discovery` short-circuit returns the pre-identity surface
 // every client reads on socket open before the assertVerbCaller gate
 // fires. Every other path runs the gate.
 //
 // Two short-circuits before the normal descriptor flow:
 //
-//   1. `<reality>/.discovery` → buildDiscovery() (no auth, no parse).
-//   2. `<reality>/./threads/<id>` → describeThread(id). Threads have no
+//   1. `<story>/.discovery` → buildDiscovery() (no auth, no parse).
+//   2. `<story>/./threads/<id>` → describeThread(id). Threads have no
 //      persistent Space row, so the standard resolveStance walk would
 //      fail; this branch handles them. SEE on the bare `/./threads`
 //      folder still routes normally; placeAtSpace injects the
@@ -22,7 +22,7 @@
 // attaches the live channel itself.
 
 import { IbpError, IBP_ERR } from "../protocol.js";
-import { parseWithContext, expand, getRealityDomain } from "../address.js";
+import { parseWithContext, expand, getStoryDomain } from "../address.js";
 import { resolveStance } from "../resolver.js";
 import { buildPlaceDescriptor, buildDiscovery } from "../descriptor.js";
 import { authorize } from "../authorize.js";
@@ -62,8 +62,8 @@ import {
 // actually was at that point.
 
 // Path matchers for synthetic explorer addresses.
-//   `<reality>/.reel/<kind>/<id>` — facts targeting (kind, id).
-//   `<reality>/.acts/<beingId>`   — acts authored by being.
+//   `<story>/.reel/<kind>/<id>` — facts targeting (kind, id).
+//   `<story>/.acts/<beingId>`   — acts authored by being.
 // Both return non-stance descriptors (no persistent Space row); SEE
 // short-circuits before resolveStance.
 function reelTargetFromPath(path) {
@@ -86,8 +86,8 @@ function isBeingsCatalogPath(path) {
   // branches, which the cross-branch being catalog isn't supposed to.
   return /^\/?\.\/beings\/?$/.test(path);
 }
-// Public id-to-name directory. `<reality>/.beings/<id>` and
-// `<reality>/.spaces/<id>` return the named being or space without
+// Public id-to-name directory. `<story>/.beings/<id>` and
+// `<story>/.spaces/<id>` return the named being or space without
 // requiring auth — operator-controlled privacy filters (when added)
 // gate per-id. The point: foreign substrates seeing an id in a
 // cross-world descriptor can resolve the name without holding an
@@ -124,19 +124,19 @@ function branchesTargetFromPath(path) {
  * SEE. Read a position and return its descriptor.
  *
  * `target` is a stance / position / place string
- * ("<reality>/<path>@<being>", "<reality>/<path>", "<place>") or a
+ * ("<story>/<path>@<being>", "<story>/<path>", "<place>") or a
  * pre-parsed `{ kind, value }` envelope.
  *
  * opts:
  *   identity         { beingId, name } | null — for role-walk gating
  *   addressKind      explicit "stance" | "position" | "place" (else inferred)
  *   currentUser      name for pronoun resolution (default identity.name)
- *   currentReality   place domain for relative addresses (default ours)
+ *   currentStory   place domain for relative addresses (default ours)
  *   payload          opaque pass-through for descriptor derivers
  */
 export async function seeVerb(target, opts = {}) {
   if (target == null) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "reality.see requires a target");
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "story.see requires a target");
   }
 
   // Discovery short-circuit — pre-identity surface, runs before the
@@ -149,21 +149,21 @@ export async function seeVerb(target, opts = {}) {
     return buildDiscovery();
   }
 
-  // Name-address short-circuit. `<token>@<realityDomain>` (a name id or real
-  // name, then the SERVED reality) is the IDENTITY layer's read — "who is this
+  // Name-address short-circuit. `<token>@<storyDomain>` (a name id or real
+  // name, then the SERVED story) is the IDENTITY layer's read — "who is this
   // name" (biographic) — distinct from a position stance
-  // `<reality>/<path>@<being>` (geographic), which ALWAYS carries a "/". So an
-  // "@" with no "/" whose suffix is this reality is a name address: resolve the
+  // `<story>/<path>@<being>` (geographic), which ALWAYS carries a "/". So an
+  // "@" with no "/" whose suffix is this story is a name address: resolve the
   // token and return the Name descriptor (never the key — buildNameDescriptor
   // field-picks). A relative stance `path@being` (suffix is a being, not the
-  // reality) and a bare `@being` (empty token) fall through to the position
+  // story) and a bare `@being` (empty token) fall through to the position
   // parse below.
   if (typeof addrString === "string" && addrString.includes("@") && !/[/#]/.test(addrString)) {
     const at = addrString.indexOf("@");
     const token = addrString.slice(0, at);
-    const reality = addrString.slice(at + 1);
-    const { getRealityDomain } = await import("../address.js");
-    if (token && reality && reality === getRealityDomain()) {
+    const story = addrString.slice(at + 1);
+    const { getStoryDomain } = await import("../address.js");
+    if (token && story && story === getStoryDomain()) {
       const { resolveNameId } = await import("../../materials/name/registry.js");
       const { buildNameDescriptor } = await import("../descriptor.js");
       const nameId = await resolveNameId(token);
@@ -244,7 +244,7 @@ export async function seeVerb(target, opts = {}) {
   const {
     identity = null,
     currentUser = null,
-    currentReality = null,
+    currentStory = null,
     currentBranch = null,
     payload = null,
     moment = null,
@@ -272,7 +272,7 @@ export async function seeVerb(target, opts = {}) {
       addrString,
       at,
       identity,
-      currentReality,
+      currentStory,
       currentUser,
       currentBranch,
       payload,
@@ -287,7 +287,7 @@ export async function seeVerb(target, opts = {}) {
     inferAddressKind(addrString);
 
   const parseCtx = {
-    currentReality: currentReality || getRealityDomain(),
+    currentStory: currentStory || getStoryDomain(),
     currentUser: currentUser || identity?.name || null,
     // No "0" hardcode — leave null when the caller didn't pass one.
     // parseStance falls through to branchPointer="main" which
@@ -299,10 +299,10 @@ export async function seeVerb(target, opts = {}) {
   const { resolveBranchPointers } = await import("../address.js");
   const expanded = await resolveBranchPointers(expand(parsed, parseCtx), parseCtx);
 
-  // Thread descriptor short-circuit. SEE on `<reality>/./threads/<id>`
+  // Thread descriptor short-circuit. SEE on `<story>/./threads/<id>`
   // returns the synthetic projection from describeThread instead of
   // routing through resolveStance + placeAtSpace (the thread has no
-  // persistent space row). SEE on `<reality>/./threads` itself still
+  // persistent space row). SEE on `<story>/./threads` itself still
   // routes normally — placeAtSpace injects synthetic children for
   // that case. See materials/space/threads.js.
   const targetThreadId = threadIdFromPath(expanded.right?.path);
@@ -331,7 +331,7 @@ export async function seeVerb(target, opts = {}) {
     }
     return {
       address: {
-        reality: getRealityDomain(),
+        story: getStoryDomain(),
         path: `/./threads/${targetThreadId}`,
         being: null,
         spaceId: threadsSpaceId,
@@ -348,7 +348,7 @@ export async function seeVerb(target, opts = {}) {
   }
 
   // Stamper descriptor short-circuit. SEE on
-  // `<reality>/./factory/present/<being>` returns the synthetic
+  // `<story>/./factory/present/<being>` returns the synthetic
   // stamper space (the being's act-chain laid out spatially — one
   // lane per branch, papers at coords, the stamper figure at the
   // head) from describeStamperSpace. No persistent space row exists;
@@ -386,18 +386,18 @@ export async function seeVerb(target, opts = {}) {
     });
   }
 
-  // Reel-explorer short-circuit. SEE on `<reality>/.reel/<kind>/<id>`
+  // Reel-explorer short-circuit. SEE on `<story>/.reel/<kind>/<id>`
   // returns the fact-chain for that target. Used by client explorers
   // (flat-app) to surface the hash-chained history of a space, matter,
   // or being. Auth: any authenticated being can read any reel here —
-  // operators can tighten via stance-auth on the reality root later.
+  // operators can tighten via stance-auth on the story root later.
   const reelTarget = reelTargetFromPath(expanded.right?.path);
   if (reelTarget) {
-    const realityDomain = getRealityDomain();
+    const storyDomain = getStoryDomain();
     const reel = await describeReel(reelTarget.kind, reelTarget.id);
     return {
       address: {
-        reality: realityDomain,
+        story: storyDomain,
         path: `/.reel/${reelTarget.kind}/${reelTarget.id}`,
         being: null,
         spaceId: null,
@@ -413,19 +413,19 @@ export async function seeVerb(target, opts = {}) {
     };
   }
 
-  // Global being catalog short-circuit. SEE on `<reality>/./beings`
-  // returns every Being row across the reality, regardless of home.
+  // Global being catalog short-circuit. SEE on `<story>/./beings`
+  // returns every Being row across the story, regardless of home.
   // Mirrors `./operations` (catalog of registered DO ops). Per-position
   // beings still surface via normal SEE on a position; this is the
   // cross-position view for clients building global lists. Lives under
   // heaven so the catalog stays pinned to branch 0 like every other
-  // heaven space — the cross-reality being view doesn't fork.
+  // heaven space — the cross-story being view doesn't fork.
   if (isBeingsCatalogPath(expanded.right?.path)) {
-    const realityDomain = getRealityDomain();
+    const storyDomain = getStoryDomain();
     const catalog = await describeBeingsCatalog();
     return {
       address: {
-        reality: realityDomain,
+        story: storyDomain,
         path: `/./beings`,
         being: null,
         spaceId: null,
@@ -442,7 +442,7 @@ export async function seeVerb(target, opts = {}) {
   }
 
   // Public id-to-name directory short-circuit. SEE on
-  // `<reality>/.beings/<id>` or `<reality>/.spaces/<id>` returns the
+  // `<story>/.beings/<id>` or `<story>/.spaces/<id>` returns the
   // named entity's public-safe surface (id + name + a small set of
   // qualities operators choose to expose). Unauth — foreign substrates
   // can resolve display info for ids appearing in cross-world
@@ -452,7 +452,7 @@ export async function seeVerb(target, opts = {}) {
   const publicTarget = publicDirectoryTargetFromPath(expanded.right?.path);
   if (publicTarget) {
     const { loadOrFold } = await import("../../materials/projections.js");
-    const realityDomain = getRealityDomain();
+    const storyDomain = getStoryDomain();
     const { getDefaultBranch: _gDB } = await import("../../materials/branch/branchRegistry.js");
     const branch = expanded.right?.branch || parseCtx.currentBranch || await _gDB();
     const slot = await loadOrFold(publicTarget.kind, publicTarget.id, branch);
@@ -462,7 +462,7 @@ export async function seeVerb(target, opts = {}) {
     if (!slot) {
       throw new IbpError(
         notFoundCode,
-        `${publicTarget.kind} "${publicTarget.id}" not found on this reality`,
+        `${publicTarget.kind} "${publicTarget.id}" not found on this story`,
         { kind: publicTarget.kind, id: publicTarget.id },
       );
     }
@@ -479,7 +479,7 @@ export async function seeVerb(target, opts = {}) {
     }
     return {
       address: {
-        reality: realityDomain,
+        story: storyDomain,
         path: `/.${publicTarget.kind === "being" ? "beings" : "spaces"}/${publicTarget.id}`,
         being: null,
         spaceId: null,
@@ -502,15 +502,15 @@ export async function seeVerb(target, opts = {}) {
     };
   }
 
-  // Branches catalog short-circuit. SEE on `<reality>/.branches` (or
-  // `<reality>/.branches/<branchPath>`) returns the branch tree as a
+  // Branches catalog short-circuit. SEE on `<story>/.branches` (or
+  // `<story>/.branches/<branchPath>`) returns the branch tree as a
   // read-only graph. No Act, no Fact, no scheduler — same posture as
   // .beings / .acts. The portal calls this on every navigate to draw
   // the branch chips; routing it through SEE keeps the chips out of
   // the rate-limit budget on the caller's being.
   const branchesTarget = branchesTargetFromPath(expanded.right?.path);
   if (branchesTarget) {
-    const realityDomain = getRealityDomain();
+    const storyDomain = getStoryDomain();
     // Resolve named pointers to canonical paths. A request for
     // `.branches/main` should walk main's current canonical lineage;
     // re-pointing main later changes what this catalog returns
@@ -542,7 +542,7 @@ export async function seeVerb(target, opts = {}) {
       : null;
     return {
       address: {
-        reality: realityDomain,
+        story: storyDomain,
         path: pathSuffix,
         being: null,
         spaceId: null,
@@ -561,13 +561,13 @@ export async function seeVerb(target, opts = {}) {
     };
   }
 
-  // Act-chain explorer short-circuit. SEE on `<reality>/.acts/<beingId>`
+  // Act-chain explorer short-circuit. SEE on `<story>/.acts/<beingId>`
   // returns the being's chain of moments on the address's branch
   // (newest-first), with branch lineage so a fresh branch sees its
   // parent's acts up to fork point.
   const actChainBeingId = actChainTargetFromPath(expanded.right?.path);
   if (actChainBeingId) {
-    const realityDomain = getRealityDomain();
+    const storyDomain = getStoryDomain();
     // Allow callers (the 3D portal timeline) to bump the limit so a
     // long session of fine-grained acts doesn't truncate the visible
     // history window. describeActChain still caps at its MAX_LIMIT.
@@ -588,7 +588,7 @@ export async function seeVerb(target, opts = {}) {
     });
     return {
       address: {
-        reality: realityDomain,
+        story: storyDomain,
         path: `/.acts/${actChainBeingId}`,
         being: null,
         spaceId: null,
@@ -783,7 +783,7 @@ function normalizeAtQualifier(optsAt, target) {
 
 /**
  * Historical SEE. Resolves and authorizes like live SEE, then routes
- * through the standard `buildrealityDescriptor` with `until` threaded
+ * through the standard `buildstoryDescriptor` with `until` threaded
  * down into every internal fold call. Every reel that contributes to
  * the descriptor (the leaf space, neighboring beings, matters,
  * children, the asker's row) folds to its OWN per-reel seq derived
@@ -798,7 +798,7 @@ function normalizeAtQualifier(optsAt, target) {
  * disable action UIs; the shape is otherwise live-compatible so they
  * can reuse all existing render code.
  */
-// Attach the SEE op registry methods to seeVerb so `reality.see` is
+// Attach the SEE op registry methods to seeVerb so `story.see` is
 // both callable and carries the registry surface — mirrors the
 // pattern doVerb uses for DO ops (do.js:206-210).
 seeVerb.registerOperation = registerSeeOperation;
@@ -811,7 +811,7 @@ async function seeAtTime({
   addrString,
   at,
   identity,
-  currentReality,
+  currentStory,
   currentUser,
   currentBranch,
   payload,
@@ -821,7 +821,7 @@ async function seeAtTime({
   // Reject the short-circuit surfaces. Historical-at doesn't compose
   // with discovery (pre-identity), threads (synthetic-now projection),
   // .reel/.acts (fact-history surfaces — themselves the substrate's
-  // historical primitives), or .beings (reality-wide catalog). The
+  // historical primitives), or .beings (story-wide catalog). The
   // honest answer for any of these is "use the live form."
   if (typeof addrString === "string" && /\/\.discovery$/i.test(addrString)) {
     throw new IbpError(
@@ -831,7 +831,7 @@ async function seeAtTime({
   }
 
   const parseCtx = {
-    currentReality: currentReality || getRealityDomain(),
+    currentStory: currentStory || getStoryDomain(),
     currentUser: currentUser || identity?.name || null,
     // No "0" hardcode — leave null when the caller didn't pass one.
     // parseStance falls through to branchPointer="main" which
@@ -870,7 +870,7 @@ async function seeAtTime({
   if (/^\/?\.\/beings\/?$/.test(expanded.right?.path || "")) {
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
-      "SEE `at` is not supported on /./beings (reality-wide catalog; query per-being instead)",
+      "SEE `at` is not supported on /./beings (story-wide catalog; query per-being instead)",
     );
   }
 

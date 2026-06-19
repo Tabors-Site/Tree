@@ -5,7 +5,7 @@
 //
 // Operations live in the dispatcher (ibp/operations.js); seed-shipped
 // ones register at boot via the per-material ops files (each
-// materials/<kind>/ops.js + materials/seeds.js + realityConfig.js,
+// materials/<kind>/ops.js + materials/seeds.js + storyConfig.js,
 // imported for side effects by seed/services.js); extension ones
 // register from their init() function. The verb body does:
 //
@@ -20,7 +20,7 @@
 // the doVerb function itself, so callers reach both the verb and the
 // registry through the same export.
 
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 import {
   getOperation,
   registerOperation,
@@ -28,6 +28,7 @@ import {
   unregisterOperationsFromExtension,
   listOperations,
 } from "../operations.js";
+import { resolveDoOpFromFold } from "../../present/word/wordStore.js";
 import { emitFact } from "../../past/fact/facts.js";
 import { IbpError, IBP_ERR } from "../protocol.js";
 import { isSourceSpaceId } from "../../materials/space/source.js";
@@ -57,12 +58,15 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
   assertVerbCaller("do", opts);
   refuseHistoricalWrite("do", target, opts);
   if (typeof operation !== "string" || operation.length === 0) {
-    throw new Error("reality.do(target, operation, params): operation must be a non-empty string");
+    throw new Error("story.do(target, operation, params): operation must be a non-empty string");
   }
 
-  const op = getOperation(operation);
+  // Fold first: a word bound via bindWord resolves from the live projection (the fold of declare-word
+  // facts), the registry-free path (philosophy/word/10.md §2). The operations Map is the fallback for
+  // anything not yet folded (extension ops, until they fold at install).
+  let op = resolveDoOpFromFold(operation) || getOperation(operation);
   if (!op) {
-    throw new Error(`Unknown DO operation: "${operation}". Use reality.do.listOperations() to see available operations.`);
+    throw new Error(`Unknown DO operation: "${operation}". Use story.do.listOperations() to see available operations.`);
   }
 
   // Resolve branch ONCE at the entry point. moment.actorAct?.branch wins when
@@ -119,7 +123,7 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
   }
   // Stance auth runs for every call. authorize() short-circuits on
   // `identity?.name === I_AM` without a DB read, so seed-internal
-  // flows (I_AM acting on its own reality) pass through identically
+  // flows (I_AM acting on its own story) pass through identically
   // to how `scaffold: true` used to bypass — one path, one doctrine.
   {
     const identity = opts.identity;
@@ -259,7 +263,7 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
   return result;
 }
 
-// `reality.do` is callable AND carries the operation registry as
+// `story.do` is callable AND carries the operation registry as
 // methods, so callers reach both surfaces through the same export.
 doVerb.registerOperation = registerOperation;
 doVerb.unregisterOperation = unregisterOperation;
@@ -288,7 +292,7 @@ doVerb.listOperations = listOperations;
  *   String id     → look up — first Space, then Being, then Matter
  *
  * Returns null when nothing resolves (rare; the auth chain falls
- * through to the reality root via getSpaceRootId in the role-walk).
+ * through to the story root via getSpaceRootId in the role-walk).
  */
 async function resolveAuthSpaceId(target, auditTarget, branch) {
   // The audit target's kind tells us what to look up. When the

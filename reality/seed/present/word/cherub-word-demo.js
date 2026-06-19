@@ -1,5 +1,5 @@
 // Phase 3: the cherub birth flow from real `.word` (the round-trip).
-// Run:  node reality/seed/present/word/cherub-word-demo.js
+// Run:  node story/seed/present/word/cherub-word-demo.js
 //
 // Proves the multi-effect flow body AND the implicit-actor rule: the five acts
 // are by I_AM, through Cherub (the mother); the being is the new Name's own; the
@@ -13,7 +13,7 @@ const source = readFileSync(new URL("../roles/cherub/cherub.word", import.meta.u
 const ir = parse(source);
 const flow = ir[0];
 
-// cherub the being expresses I_AM (the reality root Name); the arriving Name is
+// cherub the being expresses I_AM (the story root Name); the arriving Name is
 // "tabor", making its first being "tabor-prime".
 const ctx = {
   dryRun: true, branch: "main", moment: { actId: "<actId>" },

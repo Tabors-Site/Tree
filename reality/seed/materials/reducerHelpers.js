@@ -487,7 +487,7 @@ export function applyCreateBeing(state, fact) {
     homeSpace:     spec.homeSpace ?? null,
     homeBranch:    spec.homeBranch ?? null,
     isRemote:      Boolean(spec.isRemote),
-    homeReality:   spec.homeReality ?? null,
+    homeStory:   spec.homeStory ?? null,
     // Cognition (closed-set: "llm" | "human" | "scripted") lives at
     // qualities.cognition.defaultKind. Effective cognition is computed
     // at read time by beingCognition() in identity/lookups.js, which

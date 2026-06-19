@@ -15,7 +15,7 @@
 // latch and stamps the be:release fact on its reel. There is no socket to push
 // the reply to (the tab is gone), so it is fire-and-forget.
 
-import log from "../../seed/seedReality/log.js";
+import log from "../../seed/seedStory/log.js";
 
 const DEFAULT_GRACE_MS = 20_000;
 const _pending = new Map(); // beingId -> timeoutId
@@ -61,12 +61,12 @@ async function dispatchRelease(beingId, name, branch) {
   }
   const { dispatchTransportAct } = await import("../../seed/present/intake/transportAct.js");
   const { findByName } = await import("../../seed/materials/projections.js");
-  const { getRealityDomain } = await import("../../seed/ibp/address.js");
+  const { getStoryDomain } = await import("../../seed/ibp/address.js");
 
   // cherub owns the BE moment, identical to the wire's handleBe.
   const cherubSlot = await findByName("being", "cherub", "0");
   if (!cherubSlot?.id) return;
-  const address = `${getRealityDomain()}/@${name}`;
+  const address = `${getStoryDomain()}/@${name}`;
   await dispatchTransportAct({
     beingId: String(cherubSlot.id),
     act: {

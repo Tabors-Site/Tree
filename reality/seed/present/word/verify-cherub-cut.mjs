@@ -5,7 +5,7 @@
 // born being is identical either way. Run on HEAD first (baseline, the JS path),
 // then after the cut (the .word path); both must be GREEN and IDENTICAL.
 //
-// Boots a FULL reality via begin.js (the e2e pattern) so cherub holds its grant-role
+// Boots a FULL story via begin.js (the e2e pattern) so cherub holds its grant-role
 // authority (the piecemeal ensureSeedDelegates boot doesn't anoint the seed roles).
 // Mirrors beVerb's moment setup (_inOp=true around the handler). Scratch DB, wiped.
 
@@ -16,13 +16,13 @@ import { fileURLToPath } from "url";
 import { randomUUID } from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const R = path.resolve(__dirname, "../../.."); // reality/
-const SCRATCH_DB = "mongodb://localhost:27017/reality_word_cherub_cut";
+const R = path.resolve(__dirname, "../../.."); // story/
+const SCRATCH_DB = "mongodb://localhost:27017/story_word_cherub_cut";
 process.env.PORT = "3796";
 process.env.MONGODB_URI = SCRATCH_DB;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "cherubcut-secret-0123456789";
-process.env.REALITY_KEY_DIR = path.join(os.tmpdir(), "cherubcut-keys-" + process.pid);
-fs.rmSync(process.env.REALITY_KEY_DIR, { recursive: true, force: true });
+process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "cherubcut-keys-" + process.pid);
+fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
 const SRC = path.join(os.tmpdir(), "cherubcut-src");
 fs.rmSync(SRC, { recursive: true, force: true });
 fs.mkdirSync(SRC, { recursive: true });

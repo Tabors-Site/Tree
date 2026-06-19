@@ -6,11 +6,11 @@
 // Seed and extension roles are declared in code and registered at
 // boot (genesis.js calls registerRole(name, def, "seed") or the
 // loader does the same for extensions). Operators reach those role
-// definitions through `<reality>/./roles/<name>` — read-only mirrors
+// definitions through `<story>/./roles/<name>` — read-only mirrors
 // of the in-memory registry, synced by syncRolesToSubstrate.
 //
 // role-manager opens a third path: live-authored roles. An operator
-// at the reality root clicks @role-manager, fills in a form (name,
+// at the story root clicks @role-manager, fills in a form (name,
 // cognition guard, can (verb+word capabilities), prompt), and the
 // resulting role-definition Fact lands at `./roles/<name>` tagged
 // `origin: "live"`. The set-role op also HOT-REGISTERS the role into
@@ -22,7 +22,7 @@
 // with seed/extension roles overwrite in-memory (live wins), the same
 // way the boot loader does on restart.
 //
-// World signals (set-world-signal) write to reality root's
+// World signals (set-world-signal) write to story root's
 // qualities.world.<ns>.<key>. Beings whose flows read
 // `world.<ns>.<key>` see the value at their next moment-open. The
 // authoring surface for environmental + coordination patterns
@@ -35,7 +35,7 @@
 export const roleManagerRole = Object.freeze({
   name: "role-manager",
   description:
-    "Authors and edits live-defined roles, publishes world signals. Click @role-manager at the reality root to open the panel.",
+    "Authors and edits live-defined roles, publishes world signals. Click @role-manager at the story root to open the panel.",
   requiredCognition: "scripted",
   permissions: ["do"],
   respondMode: "async",
@@ -55,7 +55,7 @@ export const roleManagerRole = Object.freeze({
     {
       verb:        "do",
       word:        "set-world-signal",
-      description: "publish a world signal at reality root. Flows that read world.<ns>.<key> see the new value at their next moment-open.",
+      description: "publish a world signal at story root. Flows that read world.<ns>.<key> see the new value at their next moment-open.",
     },
   ],
 

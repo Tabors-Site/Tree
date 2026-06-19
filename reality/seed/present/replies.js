@@ -41,11 +41,11 @@
 // last request.
 
 import { randomUUID } from "crypto";
-import log from "../seedReality/log.js";
+import log from "../seedStory/log.js";
 import Being from "../materials/being/being.js";
 import { readInbox } from "./intake/inbox.js";
 import { callByResolved } from "../ibp/verbs/call.js";
-import { getRealityDomain } from "../ibp/address.js";
+import { getStoryDomain } from "../ibp/address.js";
 
 // ─────────────────────────────────────────────────────────────────
 // Shared helpers
@@ -68,7 +68,7 @@ function priorityEnumFor(n) {
   return _PRIORITY_NUM_TO_ENUM[n] || "INTERACTIVE";
 }
 
-// Parse a stance string of the form `<reality>/<spaceId>@<qualifier>` into
+// Parse a stance string of the form `<story>/<spaceId>@<qualifier>` into
 // its parts. Replies build `from` fields in this shape; this is the
 // inverse. Returns null on mismatch — callers log and skip the reply.
 //
@@ -83,7 +83,7 @@ function parseAskerStance(stance) {
   if (typeof stance !== "string") return null;
   const m = STANCE_RE.exec(stance.trim());
   if (!m) return null;
-  return { reality: m[1], spaceId: m[2], qualifier: m[3] };
+  return { story: m[1], spaceId: m[2], qualifier: m[3] };
 }
 
 // ═════════════════════════════════════════════════════════════════
@@ -180,11 +180,11 @@ export async function emitReplyToAsker({
       return false;
     }
 
-    const realityDomain = getRealityDomain();
-    if (!realityDomain) {
+    const storyDomain = getStoryDomain();
+    if (!storyDomain) {
       log.debug(
         "Replies",
-        `skipping reply: reality domain not yet available`,
+        `skipping reply: story domain not yet available`,
       );
       return false;
     }
@@ -193,7 +193,7 @@ export async function emitReplyToAsker({
       fromBeing?.name ||
       fromBeing?.defaultRole ||
       "sub-being";
-    const fromStance = `${realityDomain}/${fromNodeId}@${fromQualifier}`;
+    const fromStance = `${storyDomain}/${fromNodeId}@${fromQualifier}`;
 
     const correlation = randomUUID();
     const rootCorrelation =
@@ -298,11 +298,11 @@ export async function emitReplyToStance({
       return false;
     }
 
-    const realityDomain = getRealityDomain();
-    if (!realityDomain) {
+    const storyDomain = getStoryDomain();
+    if (!storyDomain) {
       log.debug(
         "Replies",
-        `skipping reply: reality domain not yet available`,
+        `skipping reply: story domain not yet available`,
       );
       return false;
     }
@@ -311,7 +311,7 @@ export async function emitReplyToStance({
       fromBeing?.name ||
       fromBeing?.defaultRole ||
       "sub-being";
-    const fromStance = `${realityDomain}/${fromNodeId}@${fromQualifier}`;
+    const fromStance = `${storyDomain}/${fromNodeId}@${fromQualifier}`;
 
     const correlation = randomUUID();
     const rootC = rootCorrelation || correlation;

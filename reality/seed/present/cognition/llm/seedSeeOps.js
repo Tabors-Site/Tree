@@ -1,6 +1,6 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Foundational seed SEE ops. The named perceptions every reality
+// Foundational seed SEE ops. The named perceptions every story
 // ships so roles can declare canSee: ["place"], canSee: ["roles"],
 // etc. and get a focused view of the matter the heaven space already
 // curates.
@@ -22,8 +22,8 @@
 
 import { registerSeeOperation } from "../../../ibp/seeOps.js";
 import { seeVerb } from "../../../ibp/verbs/see.js";
-import { getRealityDomain } from "../../../ibp/address.js";
-import log from "../../../seedReality/log.js";
+import { getStoryDomain } from "../../../ibp/address.js";
+import log from "../../../seedStory/log.js";
 // Side-effect import: registers the my-inner-face SEE op (the live
 // canonical inner face for the caller's active stance). Roles can
 // declare `canSee: ["my-inner-face"]` to preload their own face; the
@@ -47,7 +47,7 @@ for (const name of HEAVEN_SEES) {
     ownerExtension: "seed",
     description: `Heaven catalog: ${name}`,
     handler: async ({ identity }) => {
-      const address = `${getRealityDomain()}/./${name}`;
+      const address = `${getStoryDomain()}/./${name}`;
       try {
         return await seeVerb(address, {
           identity: identity || null,
@@ -78,7 +78,7 @@ registerSeeOperation("place", {
       ctx?.rootId ||
       null;
     if (!spaceId) return null;
-    const address = `${getRealityDomain()}/${spaceId}`;
+    const address = `${getStoryDomain()}/${spaceId}`;
     try {
       return await seeVerb(address, {
         identity: identity || (ctx?.being?._id
@@ -93,7 +93,7 @@ registerSeeOperation("place", {
 });
 
 // "arrival-view" — the implicit floor for stateless visitors. Returns
-// a HAND-FILTERED descriptor of the reality root: physical layout
+// a HAND-FILTERED descriptor of the story root: physical layout
 // (name, size, coords) and the cherub being. Strips every other being
 // and all matter. The portal's landing page calls
 // `see("arrival-view")` to render the public face that lets a visitor
@@ -104,13 +104,13 @@ registerSeeOperation("place", {
 // This op is the one window an anonymous caller has into the world.
 registerSeeOperation("arrival-view", {
   ownerExtension: "seed",
-  description: "The public landing face: reality root layout + cherub only",
+  description: "The public landing face: story root layout + cherub only",
   handler: async ({ identity }) => {
-    // The reality root resolves from the bare `<reality>/` address.
-    // (An earlier shape was `<reality>/<rootId>` — that doesn't parse,
+    // The story root resolves from the bare `<story>/` address.
+    // (An earlier shape was `<story>/<rootId>` — that doesn't parse,
     // since path segments are space NAMES, not IDs, and the root's id
     // never appears as a named child of itself.)
-    const address = `${getRealityDomain()}/`;
+    const address = `${getStoryDomain()}/`;
     // The arrival-view op IS the seed's curated anonymous-safe surface.
     // We read the full place descriptor under I_AM identity (which has
     // universal SEE) and then filter to cherub-only. The wire-level
@@ -166,7 +166,7 @@ registerSeeOperation("arrival-view", {
       if (identity?.nameId) {
         try {
           const { buildNameDescriptor } = await import("../../../ibp/descriptor.js");
-          const reality = getRealityDomain();
+          const story = getStoryDomain();
           const nameDesc = await buildNameDescriptor(identity.nameId);
           myBeings = (nameDesc?.beings || []).map((b) => ({
             being:      b.name,
@@ -179,7 +179,7 @@ registerSeeOperation("arrival-view", {
               action:      "connect",
               label:       `Use ${b.name}`,
               description: "Drive a being you own (no password — your name is signed in)",
-              address:     `${reality}/@${b.name}`,
+              address:     `${story}/@${b.name}`,
             }] : [],
           }));
         } catch (err) {

@@ -19,7 +19,7 @@
 // that selects between roles. role-finder authors the ROLES themselves.
 // Together they cover the two halves of role-driven authoring.
 //
-// Reads: `<reality>/./roles` for the live registry, `<reality>/./tools`
+// Reads: `<story>/./roles` for the live registry, `<story>/./tools`
 // for the verb/DO tool surface (to know what canDo entries are
 // available to suggest).
 // Writes: `set-role` (creates / replaces a live role at ./roles).

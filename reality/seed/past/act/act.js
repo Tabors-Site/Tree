@@ -52,7 +52,7 @@ const ActSchema = new mongoose.Schema({
 
   // The ACTOR — the Name (identity) that authored this act and whose key
   // signs it. The acting being expresses this trueName; the name's key
-  // (i-am → the reality key, else the Name's privateKeyEnc) produces
+  // (i-am → the story key, else the Name's privateKeyEnc) produces
   // act.sig. The act-chain itself stays keyed per (branch, through): a
   // name owns many beings' PARALLEL chains (name → branch → being → acts),
   // so the name is the owner + signer, NOT the chain key. NOT part of
@@ -162,13 +162,13 @@ const ActSchema = new mongoose.Schema({
   // schema migration.
   innerFace: { type: mongoose.Schema.Types.Mixed, default: null },
 
-  // Reality the actor was acting from when this Act was stamped.
+  // Story the actor was acting from when this Act was stamped.
   // For local Acts on this substrate, this is the substrate's own
-  // domain (process.env.REALITY_DOMAIN). For cross-reality Acts, this
-  // is the foreign actor's home reality. Required — every Act knows
-  // its actor's home reality, no silent assumption that "this is the
-  // only reality." See seed/CROSS-WORLD.md.
-  reality: { type: String, required: true, index: true },
+  // domain (process.env.STORY_DOMAIN). For cross-story Acts, this
+  // is the foreign actor's home story. Required — every Act knows
+  // its actor's home story, no silent assumption that "this is the
+  // only story." See seed/CROSS-WORLD.md.
+  story: { type: String, required: true, index: true },
 
   // Branch the actor was acting from when this Act was stamped.
   // Required — no schema default, no silent main-bias. Every Act
@@ -183,7 +183,7 @@ const ActSchema = new mongoose.Schema({
   // world. Same-world acts (target.world === actor.world) transition
   // to "landed" inline at seal time since the foreign side IS the
   // local Stamper. Cross-world acts wait for the foreign Stamper
-  // (cross-branch: in-process; cross-reality: over canopy) and
+  // (cross-branch: in-process; cross-story: over canopy) and
   // update later.
   //
   // Terminal states:
@@ -210,9 +210,9 @@ const ActSchema = new mongoose.Schema({
   // buildActSigPayload: actId, opening fields, p, sorted factIds, time).
   // A CLOSURE field — NOT part of contentOfAct, so it does not change
   // act._id and replay/dedup is unaffected. Custodially produced at seal
-  // by the reality holding the being's key. `by` is the signer id (a
-  // being key id, or "i-am" for the reality key); null on the row when
-  // the actor has no local key (a foreign cross-reality actor). The
+  // by the story holding the being's key. `by` is the signer id (a
+  // being key id, or "i-am" for the story key); null on the row when
+  // the actor has no local key (a foreign cross-story actor). The
   // value is a public signature, safe on the chain.
   sig: {
     alg:   { type: String, default: null },   // "ed25519"

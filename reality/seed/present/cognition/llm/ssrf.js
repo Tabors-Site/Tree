@@ -8,14 +8,14 @@
 // admin panels, the place's own loopback). We block:
 //
 //   - localhost / 0.0.0.0 / ::1 by hostname
-//   - this reality's own URL (so an LLM connection can't ping our
+//   - this story's own URL (so an LLM connection can't ping our
 //     own admin surface)
 //   - cloud-provider metadata endpoints (169.254.169.254 et al.)
 //   - private IP ranges (RFC 1918, link-local, CGNAT, unique-local,
 //     IPv6 link-local, ULA)
 //   - URLs with embedded credentials, non-http(s) protocols
 //
-// Opt-in path: `allowedLlmDomains` in reality config. Hosts on that
+// Opt-in path: `allowedLlmDomains` in story config. Hosts on that
 // list bypass the SSRF gate — that's how an operator stands up
 // Ollama on the LAN or a self-hosted LLM gateway. Without that
 // opt-in, the gate stays closed.
@@ -29,7 +29,7 @@
 
 import dns from "dns/promises";
 import { getInternalConfigValue } from "../../../internalConfig.js";
-import { getRealityConfigValue } from "../../../realityConfig.js";
+import { getStoryConfigValue } from "../../../storyConfig.js";
 
 const BLOCKED_HOSTS = new Set([
   "localhost",
@@ -40,11 +40,11 @@ const BLOCKED_HOSTS = new Set([
   "metadata.internal",
 ]);
 
-// Add this reality's own hostname to the block list at module load
+// Add this story's own hostname to the block list at module load
 // so a misconfigured LLM connection can't ping our admin surface.
 try {
-  const realityUrl = getRealityConfigValue("realityUrl");
-  if (realityUrl) BLOCKED_HOSTS.add(new URL(realityUrl).hostname);
+  const storyUrl = getStoryConfigValue("storyUrl");
+  if (storyUrl) BLOCKED_HOSTS.add(new URL(storyUrl).hostname);
 } catch {}
 
 const BLOCKED_IP_PATTERNS = [
@@ -115,7 +115,7 @@ export async function resolveAndValidateHost(hostname) {
  * SSRF bypass.
  */
 export function hostInAllowedLlmDomains(hostname) {
-  const allowed = getRealityConfigValue("allowedLlmDomains");
+  const allowed = getStoryConfigValue("allowedLlmDomains");
   if (!Array.isArray(allowed) || allowed.length === 0) return false;
   return allowed.some((d) => {
     const low = d.toLowerCase();
@@ -165,10 +165,10 @@ export function validateBaseUrl(baseUrl) {
         "or a LAN-hosted LLM).",
     );
   }
-  const allowed = getRealityConfigValue("allowedLlmDomains");
+  const allowed = getStoryConfigValue("allowedLlmDomains");
   if (Array.isArray(allowed) && allowed.length > 0) {
     throw new Error(
-      `LLM domain "${hostname}" is not in this reality's allowed list.`,
+      `LLM domain "${hostname}" is not in this story's allowed list.`,
     );
   }
   return parsed.href.replace(/\/+$/, "");

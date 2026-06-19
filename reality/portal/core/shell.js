@@ -7,7 +7,7 @@
 //      is one PortalContext (its own client, session, state). Switch
 //      tabs and you switch beings; each tab remembers its own view.
 //   2. The IBPA stance bar — always visible, on every view — plus
-//      back/forward/reality/home/root and the four-view switcher.
+//      back/forward/story/home/root and the four-view switcher.
 //   3. The content region (#view-root) the active view draws into,
 //      and the cross-view chrome: branch/timeline bar, status toast,
 //      ghost/paused cues.
@@ -36,7 +36,7 @@ const SHELL_DOM = `
     <button class="nav-btn" id="nav-forward" title="Forward (N)" disabled>&rsaquo;</button>
     <div id="stance-slot" style="display:flex; flex:1; min-width:0;"></div>
     <button class="nav-btn" id="nav-send"  title="Go to the typed address (Enter)">&#10132;</button>
-    <button class="nav-btn" id="nav-place" title="Reality root">/</button>
+    <button class="nav-btn" id="nav-place" title="Story root">/</button>
     <button class="nav-btn" id="nav-home"  title="Your home" disabled>~</button>
     <span id="branch-button-slot" style="display:flex"></span>
     <nav id="view-switcher" title="views (Alt+1..5)"></nav>
@@ -106,7 +106,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     const text = els.statement.value.trim();
     if (!text) return;
     const m = activeCtx.state.get();
-    const address = m.discovery?.reality || m.descriptor?.address?.place;
+    const address = m.discovery?.story || m.descriptor?.address?.place;
     if (!address) { els.statementHint.textContent = "no place to stand yet"; return; }
     els.statementHint.textContent = "";
     try {
@@ -138,7 +138,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
         : "connect a Name to speak the Word…";
     }
     updateStanceBar({
-      reality:    m.discovery?.reality || m.descriptor?.address?.place || "",
+      story:    m.discovery?.story || m.descriptor?.address?.place || "",
       username:   m.session?.username || null,
       signedIn:   !!m.session?.token,
       viewBranch: m.descriptor?.address?.branch || "0",
@@ -191,7 +191,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
   }
 
   // The lock button is the NAME's own be:release. Clicking it signs OUT of the
-  // name (name:release) and drops back to the bare reality domain — the Name
+  // name (name:release) and drops back to the bare story domain — the Name
   // menu. This is distinct from releasing a BEING (a tab close), which keeps
   // the name; the lock is the full sign-out, "the name calling its own
   // release." (Was the old do:signing-lock latch, now moved to the name.)
@@ -203,21 +203,21 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
       console.warn("[portal:shell] name release:", err?.code || err?.message || err);
     }
     // Drop the stored name-session so a refresh doesn't re-seat the released
-    // name; back to the bare reality (the Name menu).
+    // name; back to the bare story (the Name menu).
     try { activeCtx.clearSession?.(); } catch { /* best-effort */ }
     hideNameTree();
     presentNameForm(activeCtx);
   }
 
-  // Show the Name Form over the bare reality. On connect it persists the
+  // Show the Name Form over the bare story. On connect it persists the
   // name-only token and re-runs the gate (which now lands at the Being Picker).
   function presentNameForm(ctx) {
     if (!ctx?.client) return;
     hideBeingPicker();
-    const reality = ctx.state.get("discovery")?.reality || "";
+    const story = ctx.state.get("discovery")?.story || "";
     showNameForm({
       client:        ctx.client,
-      realityDomain: reality,
+      storyDomain: story,
       onConnected:   async (result) => {
         try { ctx.adoptNameSession?.(result?.token, result?.nameId); } catch { /* best-effort */ }
         await presentNameGate(ctx);
@@ -232,10 +232,10 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
   function presentBeingPicker(ctx, nameId) {
     if (!ctx?.client) return;
     hideNameForm();
-    const reality = ctx.state.get("discovery")?.reality || "";
+    const story = ctx.state.get("discovery")?.story || "";
     showBeingPicker({
       client:        ctx.client,
-      realityDomain: reality,
+      storyDomain: story,
       nameId,
       onSignOut:     async () => {
         try { await ctx.client?.nameRelease(); } catch { /* best-effort */ }
@@ -243,11 +243,11 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
         presentNameForm(ctx);
       },
       onConnect:     async (beingName, branch) => {
-        const result = await ctx.client.be("connect", `${reality}/@${beingName}`, {});
+        const result = await ctx.client.be("connect", `${story}/@${beingName}`, {});
         await ctx.adoptSession(result, beingName);
         // Branch pick: if it differs from where connect seated us, switch.
         if (branch && result?.seatBranch && branch !== String(result.seatBranch)) {
-          try { await ctx.client.be("switch", `${reality}/@${beingName}`, { branch }); } catch { /* stay on home */ }
+          try { await ctx.client.be("switch", `${story}/@${beingName}`, { branch }); } catch { /* stay on home */ }
         }
         repaintChrome();
       },
@@ -264,16 +264,16 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
         // SEE resolves a being by that name, the birth would fail, so refuse now
         // with a clear message instead of a confusing 18s timeout.
         try {
-          const seen = await ctx.client.see(`${reality}/@${beingName}`);
+          const seen = await ctx.client.see(`${story}/@${beingName}`);
           if (seen?.identity?.beingId) {
-            throw new Error(`@${beingName} is already taken on this reality — pick another name`);
+            throw new Error(`@${beingName} is already taken on this story — pick another name`);
           }
         } catch (err) {
           if (/already taken/i.test(err?.message || "")) throw err;
           /* NAME/BEING_NOT_FOUND → the name is free; proceed */
         }
-        await ctx.client.call(`${reality}/@cherub`, {
-          from: `${reality}/@arrival`,
+        await ctx.client.call(`${story}/@cherub`, {
+          from: `${story}/@arrival`,
           content: { name: beingName },
           intent: "mate",
         });
@@ -287,7 +287,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
           } catch { /* keep polling */ }
         }
         if (!appeared) throw new Error("birth didn't land — the name may be taken, or cherub is busy. Try another name or reopen 'your beings'.");
-        const result = await ctx.client.be("connect", `${reality}/@${beingName}`, {});
+        const result = await ctx.client.be("connect", `${story}/@${beingName}`, {});
         await ctx.adoptSession(result, beingName);
         repaintChrome();
       },
@@ -305,12 +305,12 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     let nameId = null;
     try { nameId = (await ctx.client.nameWhoami())?.nameId || null; } catch { /* not signed in */ }
     if (!nameId) { presentNameForm(ctx); return; }
-    const reality = ctx.state.get("discovery")?.reality || "";
+    const story = ctx.state.get("discovery")?.story || "";
     const branch  = ctx.state.get("descriptor")?.address?.branch || "0";
     const canAct  = !!ctx.state.get("session")?.beingId;
     await showNameTree({
       client: ctx.client,
-      reality,
+      story,
       nameId,
       branch,
       canAct,
@@ -338,8 +338,8 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
       // stands at the arrival floor with the non-blocking being menu.
       if (who.lastBeing?.beingName) {
         try {
-          const reality = ctx.state.get("discovery")?.reality || "";
-          const result = await ctx.client.be("connect", `${reality}/@${who.lastBeing.beingName}`, {});
+          const story = ctx.state.get("discovery")?.story || "";
+          const result = await ctx.client.be("connect", `${story}/@${who.lastBeing.beingName}`, {});
           await ctx.adoptSession(result, who.lastBeing.beingName);
           hideBeingPicker();
           repaintChrome();
@@ -400,7 +400,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     const { mountBranchBar } = await import("../3d/branch-bar.js");
     branchBar = mountBranchBar({
       client:  activeCtx.client,
-      reality: activeCtx.state.get("discovery")?.reality || "treeos.ai",
+      story: activeCtx.state.get("discovery")?.story || "treeos.ai",
       // Topbar-hosted: branches/timeline are chrome, present on all
       // four views equally (rewind state rides the shared model).
       buttonHost: rootEl.querySelector("#branch-button-slot"),
@@ -443,7 +443,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     }));
     unsubs.push(ctx.events.on("client", (client) => {
       if (ctx === activeCtx) {
-        branchBar?.setClient(client, ctx.state.get("discovery")?.reality);
+        branchBar?.setClient(client, ctx.state.get("discovery")?.story);
         window.__state = ctx.state.raw;
       }
     }));
@@ -469,7 +469,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     if (ctx === activeCtx) return;
     activeCtx = ctx;
     window.__state = ctx.state.raw;          // legacy readers (branch-bar)
-    branchBar?.setClient(ctx.client, ctx.state.get("discovery")?.reality);
+    branchBar?.setClient(ctx.client, ctx.state.get("discovery")?.story);
     const desc = ctx.state.get("descriptor");
     if (desc) branchBar?.update(desc);
     repaintTabs();
@@ -488,10 +488,10 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     // won't bring it back — you closed it on purpose. Best-effort; the
     // disconnect auto-release safety net covers a hard close.
     try {
-      const reality   = ctx.state.get("discovery")?.reality;
+      const story   = ctx.state.get("discovery")?.story;
       const beingName = ctx.state.get("session")?.username;
-      if (reality && beingName && ctx.state.get("session")?.beingId) {
-        await ctx.client?.be("release", `${reality}/@${beingName}`, {});
+      if (story && beingName && ctx.state.get("session")?.beingId) {
+        await ctx.client?.be("release", `${story}/@${beingName}`, {});
       }
     } catch { /* best effort; the disconnect auto-release covers a hard close */ }
     ctx.destroy();
@@ -612,7 +612,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     onSwitchBeing: async (being, branch) => {
       const ctx = activeCtx;
       if (!ctx?.client) return;
-      const reality = ctx.state.get("discovery")?.reality || "";
+      const story = ctx.state.get("discovery")?.story || "";
       const hash = branch && branch !== "0" ? branch : "main";
       try {
         if (being === "arrival") {
@@ -622,7 +622,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
           // and only clear the being — bodiless, the name stands at the floor.
           const cur = ctx.state.get("session")?.username;
           if (!cur) return; // already bodiless
-          try { await ctx.client.be("release", `${reality}/@${cur}`, {}); } catch { /* best-effort */ }
+          try { await ctx.client.be("release", `${story}/@${cur}`, {}); } catch { /* best-effort */ }
           const s = ctx.state.get("session") || {};
           try { ctx.saveSession?.({ ...s, beingId: null, username: null, beingAddress: null }); } catch { /* best-effort */ }
           try { await ctx.navigation.landAnonymous(); } catch { /* best-effort */ }
@@ -639,10 +639,10 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
           setPortalStatus(`that name doesn't have @${being} on #${hash}`);
           return; // bar already restored on blur
         }
-        const result = await ctx.client.be("connect", `${reality}/@${being}`, {});
+        const result = await ctx.client.be("connect", `${story}/@${being}`, {});
         await ctx.adoptSession(result, being);
         if (branch && result?.seatBranch && branch !== String(result.seatBranch)) {
-          try { await ctx.client.be("switch", `${reality}/@${being}`, { branch }); } catch { /* stay on home */ }
+          try { await ctx.client.be("switch", `${story}/@${being}`, { branch }); } catch { /* stay on home */ }
         }
         repaintChrome();
       } catch (err) {
@@ -727,9 +727,9 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     for (const t of tabs.slice(1)) {
       const sess = t.ctx.state.get("session");
       if (!sess?.inherited) continue;
-      const reality = t.ctx.state.get("discovery")?.reality;
-      if (reality && sess.username) {
-        try { t.ctx.client?.be("release", `${reality}/@${sess.username}`, {}).catch(() => {}); } catch {}
+      const story = t.ctx.state.get("discovery")?.story;
+      if (story && sess.username) {
+        try { t.ctx.client?.be("release", `${story}/@${sess.username}`, {}).catch(() => {}); } catch {}
       }
     }
   });

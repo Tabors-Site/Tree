@@ -20,7 +20,7 @@ import { matterContentId } from "./matter/matterId.js";
 
 const actBranchOf = (ctx) => ctx?.moment?.actorAct?.branch || ctx?.branch || "0";
 // The fact-landing branch: same precedence the JS handler uses for the emit
-// (targetBranch before the actor's branch), so a cross-reality inbound moment
+// (targetBranch before the actor's branch), so a cross-story inbound moment
 // lands the portal on the target's branch.
 const factBranchOf = (ctx) =>
   ctx?.moment?.targetBranch || ctx?.moment?.actorAct?.branch || ctx?.branch || "0";

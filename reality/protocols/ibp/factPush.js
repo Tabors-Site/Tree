@@ -31,7 +31,7 @@
 // (the drum). Payload {n, at}. The `at:` timestamp is NOT consumed
 // in this cut . post-MVP polish.
 
-import log from "../../seed/seedReality/log.js";
+import log from "../../seed/seedStory/log.js";
 import Being from "../../seed/materials/being/being.js";
 import Matter from "../../seed/materials/matter/matter.js";
 import { registerCrossCuttingHandler } from "../../seed/present/stamper/2-fold/foldEngine.js";
@@ -195,7 +195,7 @@ async function _handleFact(fact, _type, _id) {
 /**
  * Install the fact-arrival cross-cutting handler. Call once at
  * boot, alongside the afterPositionUpdate hook registration in
- * reality/protocols/ibp/index.js.
+ * story/protocols/ibp/index.js.
  *
  * Idempotent only within a single process: each call appends a new
  * handler. Callers should invoke exactly once.

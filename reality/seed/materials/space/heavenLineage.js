@@ -9,7 +9,7 @@
 // directly under `.`; their child spaces are heaven too because
 // their lineage walks through `.`.
 //
-// Domain spaces under the reality root are NOT heaven. The
+// Domain spaces under the story root are NOT heaven. The
 // distinction is structural, not stored: no schema field needed.
 //
 // The substrate's projection layer consults this to route heaven
@@ -53,7 +53,7 @@ export async function findHeavenRootId() {
  *   . OR `.` appears in its ancestor chain on MAIN
  *
  * Walks the ancestor cache at MAIN. Branch-agnostic by design:
- * heaven membership is reality-level structure, not branched state.
+ * heaven membership is story-level structure, not branched state.
  *
  * Returns false for unknown spaces (defensive default).
  *
@@ -84,7 +84,7 @@ export function _resetHeavenCache() {
 }
 
 /**
- * True when `beingId` has reality-wide authority via heaven.
+ * True when `beingId` has story-wide authority via heaven.
  *
  * Heaven is the I-Am's room. Heaven authority is granted in two
  * shapes:
@@ -95,7 +95,7 @@ export function _resetHeavenCache() {
  *     on the being — the delegated authority under RolesAreAuth.
  *     Seed delegates and humans anointed by cherub.birth carry this.
  *
- * I_AM short-circuits true (universal authority on its own reality —
+ * I_AM short-circuits true (universal authority on its own story —
  * same doctrine as authorize.js's I_AM bypass).
  *
  * Returns true if EITHER check matches.

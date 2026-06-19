@@ -2,7 +2,7 @@
 // (the §0-§11 caps). Proves the parser emits IR the caps actually execute, mirroring
 // verify-flow.mjs but from prose instead of hand-built IR. Dry-run, no DB.
 //
-//   node reality/seed/present/word/verify-controlflow-parse.mjs
+//   node story/seed/present/word/verify-controlflow-parse.mjs
 
 import { parse } from "./parser.js";
 import { evaluate } from "./evaluator.js";

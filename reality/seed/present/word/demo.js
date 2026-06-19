@@ -1,5 +1,5 @@
 // Phase 2 demo: dry-run the cherub birth IR and print the facts it lays.
-// Run:  node reality/seed/present/word/demo.js
+// Run:  node story/seed/present/word/demo.js
 //
 // This proves the evaluator walks the IR and produces the fact sequence. The
 // Phase 2 gate is then to diff this sequence against the JS handler's deltaF for
@@ -16,7 +16,7 @@ const ctx = {
   identity: { beingId: "Cherub", name: "cherub", nameId: "Cherub" },
   trigger: { name: "tabor", password: "hunter2" }, // the birth summon payload
   env: { iam: "I_AM" },
-  bindings: { placeRoot: "<placeRoot>" }, // the reality's root space, ambient
+  bindings: { placeRoot: "<placeRoot>" }, // the story's root space, ambient
 };
 
 const facts = await evaluate(cherubBirth, ctx);

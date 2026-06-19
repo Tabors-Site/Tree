@@ -4,7 +4,7 @@
 //
 // A Name is the cryptographic identity that the substrate's signatures
 // bind to. It holds the keypair, signs every act, owns the act-chain,
-// and descends from the reality's I_AM through lineage. What used to be
+// and descends from the story's I_AM through lineage. What used to be
 // "the being's keypair / the being's chain" is the NAME's keypair and
 // the NAME's chain: the identity layer, lifted up off the Being.
 //
@@ -15,11 +15,11 @@
 // this row's `_id` (the ed25519 public key, did:key "z..." form).
 //
 // Names are flat facets of I_AM: every Name's `parentNameId` resolves
-// toward the reality's I_AM one layer down. There is no Name hierarchy
+// toward the story's I_AM one layer down. There is no Name hierarchy
 // (that hierarchy lives in the being tree, as containment, not as
 // sovereignty). I_AM is itself a Name, with `_id = "i-am"` and its key
-// the reality key (realityIdentity.js) — a Name whose biography is the
-// reality's own chain.
+// the story key (storyIdentity.js) — a Name whose biography is the
+// story's own chain.
 //
 // The name reel is the MOST PRIMITIVE reel: the identity layer beneath
 // space, matter, and being. A Name's reel carries only identity-layer
@@ -33,7 +33,7 @@
 // things must not be conflated:
 //   - The name REEL (this Name's identity facts: the NAME-verb acts
 //     declare / heir / federate / close) is OUTSIDE the world, so it does
-//     NOT fork. A Name is declared once, reality-wide; the reel lives on
+//     NOT fork. A Name is declared once, story-wide; the reel lives on
 //     the root timeline and every branch inherits it unchanged. There is
 //     nothing world-shaped on it to fork.
 //   - The Name's WORLD act-chain (the SEE/DO/SUMMON/BE moments it opens
@@ -66,13 +66,13 @@ const NameSchema = new mongoose.Schema({
   // insert must fail loudly rather than fabricate a non-pubkey identity
   // that can never sign or be self-certifyingly verified. The one
   // exception is the I_AM Name, whose id is the literal "i-am" and whose
-  // signing key is the reality key (special-cased in actSig.js).
+  // signing key is the story key (special-cased in actSig.js).
   _id: { type: String, required: true },
 
   // Lineage. The Name this Name descends from, recorded in the
   // name:declare fact. Flat: every Name is a facet of I_AM one layer
   // down, so parentNameId resolves toward I_AM. Null only for the I_AM
-  // Name itself (the root of the reality's identity layer).
+  // Name itself (the root of the story's identity layer).
   parentNameId: { type: String, ref: "Name", default: null },
 
   // The REAL NAME — the human-readable label for this Name (trueName.name),
@@ -80,16 +80,16 @@ const NameSchema = new mongoose.Schema({
   // `.priv` = `privateKeyEnc` (the private key), `.name` = this label. It is
   // the easier-server-access handle: people sign in with real-name + password
   // instead of handling the raw private key, but it is ALWAYS optional — you
-  // can act with the private key directly. Reality-scoped (resolved via
+  // can act with the private key directly. Story-scoped (resolved via
   // findByName("name", <realName>, "0")); distinct from being.name (a being's
   // world label). Folded from the name:declare spec.
   name: { type: String, default: null },
 
   // The encrypted private key (PKCS8 PEM, AES-256-GCM via
-  // credentials.encryptCredential). Custodial: the home reality holds
+  // credentials.encryptCredential). Custodial: the home story holds
   // it so the Name can sign while unlocked. Folded from the name:mint
   // fact's params. `select: false` so it never rides a default query.
-  // Null for the I_AM Name (its key is the reality key, on disk).
+  // Null for the I_AM Name (its key is the story key, on disk).
   privateKeyEnc: { type: String, select: false, default: null },
 
   // The key-scheme descriptor (alg/encoding/version), so a foreign
@@ -112,14 +112,14 @@ const NameSchema = new mongoose.Schema({
   // fact's own position on the reel (the fact-reel is the time).
   connected: { type: Boolean, default: false },
 
-  // No `homeBranch`, `isRemote`, or `homeReality`. A Name's identity is
+  // No `homeBranch`, `isRemote`, or `homeStory`. A Name's identity is
   // above the branch timeline (no branch seating) and its row only ever
-  // exists on its home reality (the reality is implicit — a reality's
-  // data is that reality's). A Name acting on a foreign reality is
+  // exists on its home story (the story is implicit — a story's
+  // data is that story's). A Name acting on a foreign story is
   // recorded there as the actor id on the FACTS it lays through a vessel,
   // with `crossOrigin` pointing home — never as a mirrored Name row.
 
-  // Open characterizing layer, reality-wide and LEAN. A Name is identity,
+  // Open characterizing layer, story-wide and LEAN. A Name is identity,
   // not presence: its keypair, lineage, and soul are fields above; the
   // rich stateful layer (position, matter, roles, the being's open
   // qualities) belongs to the BEING. This holds only name-level metadata

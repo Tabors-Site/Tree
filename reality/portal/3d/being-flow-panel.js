@@ -58,7 +58,7 @@ export function showBeingFlowPanel({ state, beingEntry, onClose }) {
   el.focus();
 
   renderBeingFlowPanel(body, beingEntry, {
-    reality:    state.discovery?.reality,
+    story:    state.discovery?.story,
     username:   state.session?.username || null,
     descriptor: state.descriptor,
     see:        (addr) => state.client.see(addr),

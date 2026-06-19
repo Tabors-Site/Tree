@@ -1,5 +1,5 @@
 // The world-strand gate for the cherub deletion (a fast, dry pre-check).
-// Run:  node reality/seed/present/word/verify-cherub-shape.mjs
+// Run:  node story/seed/present/word/verify-cherub-shape.mjs
 //
 // Asserts cherub.word reproduces the WORLD strand the deletion must preserve:
 // the five acts in order, the surfaced actor model (I_AM through Cherub), the

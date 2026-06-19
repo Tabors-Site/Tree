@@ -25,7 +25,7 @@
 // locks for seal-time conflicts (per the doctrine in innerFace.md).
 // This registry is purely the human portal's reactive channel.
 
-import log from "../../seed/seedReality/log.js";
+import log from "../../seed/seedStory/log.js";
 import { IBP_EVENT } from "./events.js";
 import { reelKey } from "../../seed/present/stamper/2-fold/weave.js";
 

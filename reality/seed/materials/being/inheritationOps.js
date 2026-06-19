@@ -54,7 +54,7 @@ function actingNameOf(identity) {
 }
 
 // The granted Name must be a declared, non-banished Name on this
-// reality. Mirrors birth.js's explicit-trueName validation so you can't
+// story. Mirrors birth.js's explicit-trueName validation so you can't
 // hand a point to a typo or a banished Name.
 async function assertGrantableName(grantedName, branch) {
   const { loadProjection } = await import("../projections.js");
@@ -62,7 +62,7 @@ async function assertGrantableName(grantedName, branch) {
   if (!nameSlot?.state) {
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
-      `grant-inheritation: "${grantedName.slice(0, 12)}…" is not a declared Name on this reality.`,
+      `grant-inheritation: "${grantedName.slice(0, 12)}…" is not a declared Name on this story.`,
     );
   }
   const { isNameBanished } = await import("../name/closure.js");

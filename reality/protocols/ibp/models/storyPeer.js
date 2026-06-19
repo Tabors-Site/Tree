@@ -18,11 +18,11 @@ const RateLimitsSchema = new mongoose.Schema(
   { _id: false }
 );
 
-const RealityPeerSchema = new mongoose.Schema({
+const StoryPeerSchema = new mongoose.Schema({
   _id: { type: String, required: true, default: uuidv4 },
   domain: { type: String, required: true, unique: true },
   baseUrl: { type: String, default: null }, // full URL with protocol, e.g. https://my-place.com or http://localhost:3001
-  realityId: { type: String, required: true },
+  storyId: { type: String, required: true },
   publicKey: { type: String, required: true },
   protocolVersion: { type: Number, default: 1 },
   seedVersion: { type: String, default: null },
@@ -33,9 +33,9 @@ const RealityPeerSchema = new mongoose.Schema({
     enum: ["active", "degraded", "unreachable", "dead", "blocked"],
     default: "active",
   },
-  // Strict envelope mode. When true, every cross-reality envelope from
+  // Strict envelope mode. When true, every cross-story envelope from
   // this peer must carry the acting being's own verified signature; the
-  // unsigned-advisory floor (peer-reality vouch alone) is refused. Turn
+  // unsigned-advisory floor (peer-story vouch alone) is refused. Turn
   // on for peers known to run a signing seed.
   requireSignedEnvelopes: { type: Boolean, default: false },
   consecutiveFailures: { type: Number, default: 0 },
@@ -56,8 +56,8 @@ const RealityPeerSchema = new mongoose.Schema({
   registeredAt: { type: Date, default: Date.now },
 });
 
-RealityPeerSchema.index({ status: 1 });
+StoryPeerSchema.index({ status: 1 });
 
-const RealityPeer = mongoose.model("RealityPeer", RealityPeerSchema);
+const StoryPeer = mongoose.model("StoryPeer", StoryPeerSchema);
 
-export default RealityPeer;
+export default StoryPeer;

@@ -14,7 +14,7 @@
 // DO, SUMMON, BE — forbidden at the verb dispatch layer; the verb
 // throws INVALID_INPUT (or future CROSS_BRANCH_FORBIDDEN). The
 // substrate treats cross-branch operations the way it treats
-// cross-reality calls: a federation territory that needs its own
+// cross-story calls: a federation territory that needs its own
 // protocol, deferred until use cases force it.
 //
 // One operation crosses branches structurally: `create-branch`, which
@@ -31,7 +31,7 @@
 //
 // Pass 3 adds: create-branch, pause/unpause facts + reducer. Pass 4
 // adds: IBP address parser + moment threading + the cross-branch
-// dispatch gate. Pass 6.5 adds: REALITY_PAUSED verb-gate using
+// dispatch gate. Pass 6.5 adds: STORY_PAUSED verb-gate using
 // isBranchPaused.
 //
 // Main ("0") has no row in the branches collection. It is the

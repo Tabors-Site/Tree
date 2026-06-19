@@ -25,7 +25,7 @@
 //
 // Everything here is a read. No facts, no acts, no rows.
 
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 import { HEAVEN_SPACE } from "./heavenSpaces.js";
 import Act from "../../past/act/act.js";
 import ActHead from "../../past/act/actHead.js";
@@ -328,11 +328,11 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
     qualities: {},
   }));
 
-  const { getRealityDomain } = await import("../../ibp/address.js");
+  const { getStoryDomain } = await import("../../ibp/address.js");
   const path = `/./factory/present/${encodeURIComponent(name)}`;
   return {
     address: {
-      place: getRealityDomain(),
+      place: getStoryDomain(),
       path,
       being: null,
       spaceId: `stamper:${beingId}`, // the live-subscription key

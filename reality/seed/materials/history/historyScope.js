@@ -8,14 +8,14 @@
 // transparently.
 //
 // The classification:
-//   - scope = null              → whole-reality branch (default; no check)
+//   - scope = null              → whole-story branch (default; no check)
 //   - scope.spaceId = "abc-123" → only writes whose target home space
 //                                 lineage walks through abc-123 are allowed
 //
 // Heaven writes bypass scope entirely: facts that route to heaven
 // (via heavenLineage's isHeavenSpace) get re-stamped on MAIN before
 // the scope check runs. Subtree branches can still author roles,
-// edit reality config, etc. through normal heaven routing.
+// edit story config, etc. through normal heaven routing.
 
 import { loadBranch } from "./branches.js";
 import { getAncestorChain } from "../space/ancestorCache.js";
@@ -26,7 +26,7 @@ import { getSpaceRoot } from "../../sprout.js";
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * Walk a slash-delimited path from the reality root and return the
+ * Walk a slash-delimited path from the story root and return the
  * resolved space's _id. Used by createBranch when an operator passes
  * a scope path like "/library" or "/library/reading-room" — the
  * branch's scope.spaceId is locked at creation time against the
@@ -35,7 +35,7 @@ import { getSpaceRoot } from "../../sprout.js";
  * Returns null when:
  *   - the path is empty or invalid
  *   - any segment doesn't resolve to a child space
- *   - the reality root isn't planted yet (pre-bootstrap)
+ *   - the story root isn't planted yet (pre-bootstrap)
  *
  * @param {string} pathString  e.g. "/library", "/library/reading-room"
  * @param {string} branch      branch path to resolve against (parent of the new branch)
@@ -96,7 +96,7 @@ export async function resolvePathToSpaceId(pathString, branch) {
 const _scopeCache = new Map();
 
 /**
- * Read the scope spaceId for a branch. Returns null for whole-reality
+ * Read the scope spaceId for a branch. Returns null for whole-story
  * branches (no scope) or when the branch row is missing.
  *
  * Cached per-process. Use `_invalidateScopeCache(path)` after any op
@@ -118,7 +118,7 @@ export async function getBranchScopeSpaceId(branchPath) {
  * True when the fact-target lives inside the branch's scope subtree.
  *
  * Decision matrix:
- *   - Whole-reality branch (scope = null)             → always true
+ *   - Whole-story branch (scope = null)             → always true
  *   - target.kind missing or id missing               → true (defensive)
  *   - target.kind === "space" with id === scopeId     → true (scope root)
  *   - target.kind === "space" with scopeId in lineage → true (descendant)

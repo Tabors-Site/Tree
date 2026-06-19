@@ -36,7 +36,7 @@
 // THE WIRE INTENTS my handler classifies (./handlers.js):
 //
 //   offer-template     sender -> peer
-//     "I have a template I would plant in your reality. Here is the
+//     "I have a template I would plant in your story. Here is the
 //      manifest. Will you accept?"
 //     payload: { negotiationId, manifest, label?, sourceSubtreePath? }
 //     response: pending-review, or auto-accept if policy admits.
@@ -84,7 +84,7 @@
 // names the matter id. (v1 inlines them for simplicity; matter-keyed
 // cache is a follow-up when bundles get large enough to matter.)
 
-import log from "../../../seedReality/log.js";
+import log from "../../../seedStory/log.js";
 
 export const federationManagerRole = Object.freeze({
   name: "federation-manager",
@@ -113,17 +113,17 @@ export const federationManagerRole = Object.freeze({
     {
       verb:        "do",
       word:        "offer-template",
-      description: "Offer a template (a subtree's shape, planted with fresh ids) to a peer reality. Args: { peer, subtreePath, label? }",
+      description: "Offer a template (a subtree's shape, planted with fresh ids) to a peer story. Args: { peer, subtreePath, label? }",
     },
     {
       verb:        "do",
       word:        "offer-being",
-      description: "Graft a being (identity + chain, verbatim) to a peer reality, one-shot. Args: { peer, beingId }",
+      description: "Graft a being (identity + chain, verbatim) to a peer story, one-shot. Args: { peer, beingId }",
     },
     {
       verb:        "do",
       word:        "request-template",
-      description: "Request a template (a subtree's shape) from a peer reality. Args: { peer, subtreePath, label? }",
+      description: "Request a template (a subtree's shape) from a peer story. Args: { peer, subtreePath, label? }",
     },
     {
       verb:        "do",
@@ -156,10 +156,10 @@ export const federationManagerRole = Object.freeze({
 
   // Incoming SUMMON dispatch. Classifies by intent and routes. Returns
   // the response payload that flows back to the caller (via the moment's
-  // descriptor inner face when cross-reality, via the local SUMMON
-  // return shape when same-reality).
+  // descriptor inner face when cross-story, via the local SUMMON
+  // return shape when same-story).
   async call(message, ctx) {
-    // Federation payload still rides inside content for cross-reality
+    // Federation payload still rides inside content for cross-story
     // SUMMONs (the canopy serializer hasn't been updated to carry
     // envelope intent yet — see TODO in dispatchToPeer in ./handlers.js
     // and ./ops.js). Pull the rest of the federation fields from
@@ -170,9 +170,9 @@ export const federationManagerRole = Object.freeze({
       : message;
 
     // Envelope intent first (per seed/SUMMON.md). Fall back to
-    // content.intent / content.kind for legacy cross-reality envelopes
-    // that haven't migrated yet. Same-reality callers should use the
-    // envelope; cross-reality callers will follow when canopy carries it.
+    // content.intent / content.kind for legacy cross-story envelopes
+    // that haven't migrated yet. Same-story callers should use the
+    // envelope; cross-story callers will follow when canopy carries it.
     const intent = message?.intent
       || ((typeof fedMessage === "object" && fedMessage !== null)
             ? (fedMessage.intent || fedMessage.kind || null)
@@ -185,7 +185,7 @@ export const federationManagerRole = Object.freeze({
     }
 
     log.info("FederationManager",
-      `routing intent="${intent}" askerReality=${ctx?.askerReality || "(local)"}`);
+      `routing intent="${intent}" askerStory=${ctx?.askerStory || "(local)"}`);
     try {
       const { handleIncomingIntent } = await import("./handlers.js");
       const result = await handleIncomingIntent(intent, fedMessage, ctx);

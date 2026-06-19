@@ -44,8 +44,8 @@
 // Pre-auth flows (birth / connect from arrival) are BE, not DO,
 // and ride the cherub-as-actor path in be.js.
 
-import log from "../../../seed/seedReality/log.js";
-import { parseFromSocket, expand, resolveBeingIds, resolveBranchPointers, getRealityDomain } from "../../../seed/ibp/address.js";
+import log from "../../../seed/seedStory/log.js";
+import { parseFromSocket, expand, resolveBeingIds, resolveBranchPointers, getStoryDomain } from "../../../seed/ibp/address.js";
 import { resolveStance } from "../../../seed/ibp/resolver.js";
 import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
 import { assertNoImpersonation } from "./_shared.js";
@@ -95,7 +95,7 @@ export async function handleDo(socket, env, ack) {
 
     const parsed = parseFromSocket(socket, positionString);
     const expandCtx = {
-      currentReality: getRealityDomain(),
+      currentStory: getStoryDomain(),
       currentUser:    socket.name,
       currentBranch:  socket.currentBranch || "0",
       currentPath:    socket.currentPath   || null,
@@ -145,7 +145,7 @@ export async function handleDo(socket, env, ack) {
     if (!PAUSE_LIFECYCLE_OPS.has(action)) {
       const { isBranchPaused } = await import("../../../seed/materials/branch/branches.js");
       if (await isBranchPaused(targetBranch)) {
-        throw new IbpError(IBP_ERR.REALITY_PAUSED,
+        throw new IbpError(IBP_ERR.STORY_PAUSED,
           `DO refused: branch #${targetBranch} is paused. ` +
           `Unpause via @branch-manager or fork a new branch off it.`,
           { branch: targetBranch });
@@ -154,7 +154,7 @@ export async function handleDo(socket, env, ack) {
     if (!DELETE_LIFECYCLE_OPS.has(action)) {
       const { isBranchDeleted } = await import("../../../seed/materials/branch/branches.js");
       if (await isBranchDeleted(targetBranch)) {
-        throw new IbpError(IBP_ERR.REALITY_PAUSED,
+        throw new IbpError(IBP_ERR.STORY_PAUSED,
           `DO refused: branch #${targetBranch} is deleted. ` +
           `Undelete via @branch-manager to restore writes.`,
           { branch: targetBranch, deleted: true });
@@ -188,7 +188,7 @@ export async function handleDo(socket, env, ack) {
       if (!beingSlot) {
         throw new IbpError(
           IBP_ERR.BEING_NOT_FOUND,
-          `No being named "${qualifier}" on this reality`,
+          `No being named "${qualifier}" on this story`,
           { qualifier },
         );
       }

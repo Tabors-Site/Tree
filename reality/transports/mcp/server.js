@@ -13,7 +13,7 @@
 // my universal grammar; every act inside me already speaks them.
 // The LLM voice's tool dispatch goes direct from getToolHandler to
 // the verb dispatcher — no protocol wrapper between the inference
-// loop and reality.do. Tools are verb-tagged at registration; the
+// loop and story.do. Tools are verb-tagged at registration; the
 // verb tells the dispatcher how to gate the call.
 //
 // MCP lives on as a future wrapper around the verbs, not a parallel
@@ -42,14 +42,14 @@
 //
 //   1. npm install @modelcontextprotocol/sdk
 //   2. Wire this transport into boot: import + start it from
-//      genesis.js (or behind a reality-config flag), passing the
+//      genesis.js (or behind a story-config flag), passing the
 //      express app + the authenticate seat for inbound calls.
 //   3. The per-tool JSON schema is now produced by zod 4's built-in
 //      z.toJSONSchema (the retired zod-to-json-schema package is gone),
 //      so confirm the enumeration in "Shape" step 2 still matches.
 //
 // Nothing imports this file at boot, so the missing dependency does
-// not affect the running reality; it only matters the day you turn
+// not affect the running story; it only matters the day you turn
 // MCP back on.
 //
 // ─────────────────────────────────────────────────────────────────
@@ -72,7 +72,7 @@
 //   external MCP client emits tool call
 //     → mcp transport unwraps name + args
 //     → handler = getToolHandler(name)
-//     → handler runs (typically wrapping reality.see/do/summon/be)
+//     → handler runs (typically wrapping story.see/do/summon/be)
 //     → verb dispatcher authorizes (stance auth + extension-scope gate)
 //     → operation handler runs, Fact is stamped
 //     → result wrapped into MCP's content shape, returned to client
@@ -87,7 +87,7 @@
 // (notifications/tools/list_changed) is a follow-up if hot reload
 // becomes a need.
 
-import log from "../../seed/seedReality/log.js";
+import log from "../../seed/seedStory/log.js";
 
 /**
  * Initialize the MCP server transport.

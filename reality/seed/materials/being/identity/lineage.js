@@ -40,7 +40,7 @@ import Fact from "../../../past/fact/fact.js";
  * Genesis-time seed delegates are birthed by the I-Am via the
  * scaffold path in seedDelegates.js; their `be:birth` Fact's
  * `params.parentBeingId` points at the I-Am, so arrival /
- * cherub / llm-assigner / reality-manager resolve to the I-Am here.
+ * cherub / llm-assigner / story-manager resolve to the I-Am here.
  */
 export async function findBeingParent(targetBeingId) {
   if (!targetBeingId) return null;
@@ -121,7 +121,7 @@ export async function isDetachedFromBeingParent(beingId) {
  * over the target's tree position:
  *
  *   self   → yes, always (a being may touch its own credential)
- *   I_AM   → yes, always (the reality is the source of all authority)
+ *   I_AM   → yes, always (the story is the source of all authority)
  *   else   → the asker's NAME (its trueName) has authority over the
  *            target — it owns the target or an ancestor, or holds an
  *            inheritation point covering it (hasAuthorityOver).

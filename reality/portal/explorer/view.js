@@ -119,10 +119,10 @@ export function createView() {
 
   function addressFor(path) {
     const m = ctx.state.get();
-    const reality = m.discovery?.reality || "";
+    const story = m.discovery?.story || "";
     const branch = m.descriptor?.address?.branch || "0";
     const bq = branch === "0" ? "" : `#${branch}`;
-    return `${reality}${bq}${path === "/" ? "/" : path}`;
+    return `${story}${bq}${path === "/" ? "/" : path}`;
   }
 
   function navigateTo(path) {
@@ -149,13 +149,13 @@ export function createView() {
   }
 
   function renderCrumbs(desc) {
-    const reality = ctx.state.get("discovery")?.reality || "reality";
+    const story = ctx.state.get("discovery")?.story || "story";
     const branch = desc?.address?.branch || "0";
     const path = desc?.address?.pathByNames || "/";
     els.up.disabled = path === "/";
 
     const crumbs = [];
-    crumbs.push(crumbButton(reality, "/"));
+    crumbs.push(crumbButton(story, "/"));
     if (branch !== "0") {
       const chip = document.createElement("span");
       chip.className = "ex-branch";
@@ -483,10 +483,10 @@ export function createView() {
 
   // Being tile / row menu.
   function buildBeingMenu(b) {
-    const reality = ctx.state.get("discovery")?.reality || "";
+    const story = ctx.state.get("discovery")?.story || "";
     const branch = ctx.state.get("descriptor")?.address?.branch || "0";
     const bq = branch === "0" ? "" : `#${branch}`;
-    const stance = `${reality}${bq}/@${beingName(b)}`;
+    const stance = `${story}${bq}/@${beingName(b)}`;
     return [
       { label: "Select",     onPick: () => pickBeing(b) },
       { label: "Open stance", onPick: () => ctx.navigation.navigate(stance).catch(() => {}) },

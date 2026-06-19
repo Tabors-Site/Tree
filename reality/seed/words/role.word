@@ -1,24 +1,14 @@
-# role.word — what a role IS. A theorem: it composes from words already grounded
-# (a being, the verbs, the words a being can speak), so it adds no kernel primitive.
-# Grounded in seed/present/roles/registry.js. Descends from word.word.
+# role.word — what a ROLE is, a composite word. Descends from word.word, can.word, being.word,
+# space.word, and the verbs. The host registry is seed/present/roles/registry.js. A role composes
+# from words already grounded, no new primitive. Its can is the granted words grouped by verb
+# (canSee, canDo collapse into the verbs). Its voice is the prompt, worn not granted. Its scope is
+# the space it is given on, and all under it. roleflow, when a being may play a role, comes next.
 
-A role is a word.
-A role is a composite word, made of the words a being may speak.
-
-A role has a name, a kebab-case handle.
-A role has a can, the set of words it grants.
-A role grants each word for a verb, the verb the word is spoken with.
-A role grants words to see, to do, to call, to be, and to recall.
-A role has a host, the space it is authored on.
-A role reaches its host and the host's descendants.
-A role may have a reach, a path filter that adjusts that coverage.
-A role wears a prompt, the voice it speaks the words in.
-
-A role can be granted to a being, anchored at a space or a being.
-A role is granted whole, by its name; it permits exactly the words it holds.
-A role can stack with a role, and grant the union of their words.
-A role can gate an act: it reaches the target, then it permits the word.
-
-A being wears a role.
-A being may wear a stack of roles.
-A being keeps its grants as it moves; a grant applies where its role reaches.
+A role is a composite word, a can of words.
+A role has a name, its handle.
+A role's can is words to see, do, call, be, and recall, each word for its verb.
+A role has a voice, the manner a being takes in it, no word it can.
+A role is given on a space, and its words can there and under it. Its reach may widen this to other paths or narrow it, by path.
+A role is granted to a being whole, by its name, at a space or a being.
+Roles stack. A being granted many has the words of all.
+A being granted a role acts by its words within the role's space, and has it as it moves.

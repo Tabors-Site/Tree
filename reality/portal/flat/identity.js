@@ -9,7 +9,7 @@ import { flat } from "./host.js";
 
 let _overlayMounted = false;
 
-export function showAuthOverlay(reality) {
+export function showAuthOverlay(story) {
   const root = document.getElementById("auth-overlay");
   if (!root) return;
   root.classList.remove("hidden");
@@ -24,7 +24,7 @@ export function showAuthOverlay(reality) {
 
   const sub = document.createElement("div");
   sub.className = "sub";
-  sub.textContent = `on ${reality}`;
+  sub.textContent = `on ${story}`;
   card.appendChild(sub);
 
   // Tabs.
@@ -44,7 +44,7 @@ export function showAuthOverlay(reality) {
 
   // Register-only: import an existing identity. The exported key (the
   // PEM, or the 24-word paper phrase) births the being WITH that
-  // identity — recovery, or moving yourself onto a reality you
+  // identity — recovery, or moving yourself onto a story you
   // control. Leave empty for a fresh keypair.
   const importWrap = document.createElement("div");
   importWrap.className = "field hidden";

@@ -6,7 +6,7 @@
 //                        a portable clone bundle (facts-only, no acts)
 //   plant-template        — DO op: apply a clone bundle into a target subtree
 //   plant-template-by-name — DO op: apply an extension-registered clone by name
-//   capture-graft       — DO op: capture the FULL reality (facts + acts +
+//   capture-graft       — DO op: capture the FULL story (facts + acts +
 //                        branches + reelHeads) as a portable seed
 //   clones             — SEE op: discovery of registered extension clones
 //
@@ -32,7 +32,7 @@ import { listTemplates, getTemplate } from "./templateRegistry.js";
 // ─────────────────────────────────────────────────────────────────────
 //
 // target: { kind: "space", id }  — the scope root to clone
-// params: { name?, sourceReality? }
+// params: { name?, sourceStory? }
 //
 // Returns: { bundle }  (the bundle is the substrate's wire payload)
 
@@ -46,7 +46,7 @@ registerSeeOperation("capture-template", {
   args: {
     spaceId:       { type: "text", label: "Scope root space id", required: true },
     name:          { type: "text", label: "Clone name (optional)", required: false },
-    sourceReality: { type: "text", label: "Source reality (optional)", required: false },
+    sourceStory: { type: "text", label: "Source story (optional)", required: false },
   },
   handler: async ({ identity, args, branch }) => {
     if (!identity?.beingId) {
@@ -63,7 +63,7 @@ registerSeeOperation("capture-template", {
     const bundle = await captureTemplate(scopeSpaceId, {
       branch: branch || "0",
       scopeName:       args?.name || null,
-      sourceReality:   args?.sourceReality || null,
+      sourceStory:   args?.sourceStory || null,
       operatorBeingId: String(identity.beingId),
     });
     return { bundle };
@@ -132,13 +132,13 @@ registerOperation("plant-template", {
 // ─────────────────────────────────────────────────────────────────────
 //
 // target: { kind: "space", id: <space root id> } OR a heaven space
-// params: { realityName? }
+// params: { storyName? }
 //
-// Captures the FULL reality (facts + acts + branches + reelHeads) as a
-// portable seed and saves it to reality/seeds/ on the server. Returns
+// Captures the FULL story (facts + acts + branches + reelHeads) as a
+// portable seed and saves it to story/seeds/ on the server. Returns
 // { savedTo, counts }. Authority-only — the caller must have heaven
 // authority (owner or angel role on heaven; gate-equivalent to "I am
-// authorized to represent this reality"). Clone, by contrast, can be
+// authorized to represent this story"). Clone, by contrast, can be
 // called by any authenticated being because it downloads bytes to
 // the client.
 
@@ -153,21 +153,21 @@ async function captureSeedHandler({ target, params, identity, moment }) {
   // Authority gate: caller must have heaven authority. Heaven is the
   // I-Am's room; beings with heaven authority are those the I-Am (or
   // an angel) has admitted via role grant or ownership transfer.
-  // Forming a seed bakes the full reality identity into a portable
+  // Forming a seed bakes the full story identity into a portable
   // artifact saved on the server's disk; only authorized beings
   // should be able to.
   const { hasHeavenAuthority } = await import("../space/heavenLineage.js");
   if (!(await hasHeavenAuthority(identity.beingId))) {
     throw new IbpError(
       IBP_ERR.FORBIDDEN,
-      "capture-graft: only beings with heaven authority (owner or angel role) may form a seed of the reality.",
+      "capture-graft: only beings with heaven authority (owner or angel role) may form a seed of the story.",
     );
   }
 
   const { captureGraft } = await import("./graft.js");
   const result = await captureGraft({
     capturedBy: String(identity.beingId),
-    realityName: (params || {}).realityName || null,
+    storyName: (params || {}).storyName || null,
   });
 
   return {
@@ -179,14 +179,14 @@ async function captureSeedHandler({ target, params, identity, moment }) {
 
 registerOperation("capture-graft", {
   // Accepts either the place root or a heaven space — both surfaces are
-  // "authority surfaces" for the reality. Target identity isn't load-
+  // "authority surfaces" for the story. Target identity isn't load-
   // bearing; the handler reads the place root regardless.
   targets: ["space"],
   ownerExtension: "seed",
   factAction: "capture-graft",
   skipAudit: true,
   args: {
-    realityName: { type: "text", label: "Reality name (optional)", required: false },
+    storyName: { type: "text", label: "Story name (optional)", required: false },
   },
   handler: captureSeedHandler,
 });
@@ -287,8 +287,8 @@ registerOperation("plant-template-by-name", {
 // privateKeyEnc. So the encrypted key is HASH-BOUND — the bundle MUST
 // carry it verbatim or verifyReel breaks on the receiver; it cannot be
 // redacted out (the template family can redact precisely because it
-// re-mints fresh keys). The encrypted key is reality-bound (AES-GCM via
-// HKDF-from-JWT_SECRET — undecryptable on any reality but the source, so
+// re-mints fresh keys). The encrypted key is story-bound (AES-GCM via
+// HKDF-from-JWT_SECRET — undecryptable on any story but the source, so
 // a graft to elsewhere can't use it; the owner re-imports their key
 // there). The gate keeps this otherwise-redacted blob from leaking to
 // unauthorized callers. SEE-op returns are NOT auto-redacted (only the
@@ -296,7 +296,7 @@ registerOperation("plant-template-by-name", {
 //
 // Gate breadth, stated plainly: hasHeavenAuthority is coarse by design —
 // the first human and their inheritors all carry it, so in a single-
-// operator reality this gate reads as "self, or the operator." That is
+// operator story this gate reads as "self, or the operator." That is
 // the intended breadth (the operator runs migration / backup / federation
 // for every being they host); it is NOT a fine-grained per-being grant.
 // A narrower "who may export THIS being" capability is a future refinement,
@@ -318,7 +318,7 @@ registerSeeOperation("capture-being", {
     }
     // Gate: the being itself (sovereign self-export) OR a heaven-authority
     // operator (migration / backup / federation). A being's graft bundle
-    // carries its verbatim be:birth fact (with the reality-bound encrypted
+    // carries its verbatim be:birth fact (with the story-bound encrypted
     // key), so it is not freely readable.
     const isSelf = String(identity.beingId) === String(beingId);
     if (!isSelf) {
@@ -335,7 +335,7 @@ registerSeeOperation("capture-being", {
 
 // ─────────────────────────────────────────────────────────────────────
 // graft-being  — DO op (actual mutation): apply a being-graft bundle
-//                into THIS (living) reality, identity preserved
+//                into THIS (living) story, identity preserved
 // ─────────────────────────────────────────────────────────────────────
 //
 // target: { kind: "space", id } — an authority surface (not load-bearing;
@@ -343,8 +343,8 @@ registerSeeOperation("capture-being", {
 //          as capture-graft.
 // params: { bundle }   Returns: { beingId, mode, counts, verified }
 //
-// HEAVEN-GATED on the target reality: admitting another being's full chain
-// into this reality is a reality-operator decision. applyGraft inserts the
+// HEAVEN-GATED on the target story: admitting another being's full chain
+// into this story is a story-operator decision. applyGraft inserts the
 // foreign chain VERBATIM (never emitFact — imported facts are foreign by
 // construction) and stamps its own graft-being-completed audit on the
 // operator's reel, so skipAudit.
@@ -355,7 +355,7 @@ async function graftBeingHandler({ params, identity, moment }) {
   }
   const { hasHeavenAuthority } = await import("../space/heavenLineage.js");
   if (!(await hasHeavenAuthority(identity.beingId))) {
-    throw new IbpError(IBP_ERR.FORBIDDEN, "graft-being: only beings with heaven authority may graft a being into this reality.");
+    throw new IbpError(IBP_ERR.FORBIDDEN, "graft-being: only beings with heaven authority may graft a being into this story.");
   }
   const { bundle } = params || {};
   if (!bundle) {

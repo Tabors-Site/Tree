@@ -6,7 +6,7 @@
 
 export default {
   kind:    "code",
-  // Pack name carries; scopedReality's auto-prefix writes store:delist
+  // Pack name carries; scopedStory's auto-prefix writes store:delist
   // for the DO op this piece registers.
   name:    "store",
   pack:    "store",

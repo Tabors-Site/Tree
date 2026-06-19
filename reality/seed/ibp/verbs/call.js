@@ -15,7 +15,7 @@
 //
 //   callVerb         — public, parses the stance, resolves the
 //                        being, dispatches. Threads-cut short-circuit:
-//                        `<reality>/./threads/<id>` routes to
+//                        `<story>/./threads/<id>` routes to
 //                        cutThread.
 //
 //   callByResolved   — for callers that already have the receiver
@@ -36,7 +36,7 @@
 // pathOfResolved.
 
 import { randomUUID } from "crypto";
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 import { emitFact } from "../../past/fact/facts.js";
 import {
   ORIENTATION,
@@ -44,7 +44,7 @@ import {
 } from "../../present/stamper/2-fold/orientation.js";
 import { IbpError, IBP_ERR } from "../protocol.js";
 import { I_AM } from "../../materials/being/seedBeings.js";
-import { parseWithContext, expand, resolveBranchPointers, getRealityDomain } from "../address.js";
+import { parseWithContext, expand, resolveBranchPointers, getStoryDomain } from "../address.js";
 import { resolveStance } from "../resolver.js";
 import { authorize } from "../authorize.js";
 import { permitsReceiverSummon } from "../roleAuth.js";
@@ -75,7 +75,7 @@ const _PRIORITY_NUM_TO_ENUM = {
  * scheduler so their role runs.
  *
  * `stance` is a stance string with @qualifier
- * ("<reality>/<path>@<being>"). `message` is
+ * ("<story>/<path>@<being>"). `message` is
  * { from, content, correlation?, inReplyTo?, attachments?,
  *   sentAt?, activeRole?, orientation? }.
  *
@@ -90,7 +90,7 @@ export async function callVerb(stance, message, opts = {}) {
   const validatedMessage = validateCallMessage(message);
 
   const {
-    identity = null, currentUser = null, currentReality = null,
+    identity = null, currentUser = null, currentStory = null,
     currentBranch = null, currentPath = null, actorBranch = null,
     onResponse = null, onError = null, moment = null,
   } = opts;
@@ -104,10 +104,10 @@ export async function callVerb(stance, message, opts = {}) {
   if (moment) {
     moment._opCount = (moment._opCount || 0) + 1;
   }
-  const realityDomain = currentReality || getRealityDomain();
+  const storyDomain = currentStory || getStoryDomain();
 
   const parseCtx = {
-    currentReality: realityDomain,
+    currentStory: storyDomain,
     currentUser: currentUser || identity?.name || null,
     // Ambient world for relative shapes (`~`, bare paths, implicit
     // branch): the moment's own branch when inside one, else the
@@ -131,7 +131,7 @@ export async function callVerb(stance, message, opts = {}) {
   const targetThreadId = threadIdFromPath(expanded.right?.path);
   if (targetThreadId) {
     // Stance auth: broad gate. Is the asker allowed to address
-    // `.threads` on this reality at all? The default rule
+    // `.threads` on this story at all? The default rule
     // `summon:.threads:*` matches against the place root and
     // requires non-arrival (an authenticated being). Per-position
     // overrides at `.threads` can tighten this.
@@ -491,7 +491,7 @@ async function _dispatchCall({
       ...(!moment?.actorAct && actorBranch && actorBranch !== branch
         ? {
             crossOrigin: {
-              reality: null,
+              story: null,
               branch:  actorBranch,
               beingId: summonerBeingId,
               actId:   null,
@@ -588,7 +588,7 @@ async function _dispatchCall({
  */
 function validateCallMessage(message) {
   if (!message || typeof message !== "object") {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "reality.call requires a `message` object");
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "story.call requires a `message` object");
   }
   if (typeof message.from !== "string" || !message.from.length) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "`message.from` is required");
@@ -666,6 +666,6 @@ async function runCalling(role, ctx) {
 }
 
 function pathOfResolved(resolved) {
-  if (resolved?.pathByNames) return `${getRealityDomain()}${resolved.pathByNames}`;
-  return `${getRealityDomain()}/`;
+  if (resolved?.pathByNames) return `${getStoryDomain()}${resolved.pathByNames}`;
+  return `${getStoryDomain()}/`;
 }

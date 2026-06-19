@@ -10,14 +10,14 @@
 // in the name refers to who carries it (everyone), not to the
 // scope mechanism.
 //
-// Customizable per reality. Operators edit this role's `can` entries
+// Customizable per story. Operators edit this role's `can` entries
 // as they decide what "everyone here can do." Default seed-shipped
 // `can` is conservative — move yourself, see your position, release.
 // Operators add things like "create-space" (so any being can stake
 // a new sub-place) or "create-matter" (so any being can place
 // matter in public spaces).
 //
-// The "public" surface of a reality is implicit: a space is "public"
+// The "public" surface of a story is implicit: a space is "public"
 // iff this role (or some other granted role) reaches it. There is
 // no public/private flag on Space — only the role's reach defines
 // what's accessible.
@@ -25,11 +25,11 @@
 export const globalRole = Object.freeze({
   name: "global",
   description:
-    "The baseline role every authenticated being carries in this reality. " +
+    "The baseline role every authenticated being carries in this story. " +
     "Granted by cherub at registration (and by parents to children they birth). " +
     "Customize the `can` entries to set the floor for what everyone can do here.",
-  // Hosted on the reality root (installed at genesis). Default reach
-  // is reality-wide since reality-root + descendants = the whole tree.
+  // Hosted on the story root (installed at genesis). Default reach
+  // is story-wide since story-root + descendants = the whole tree.
   // No `reach` field needed; the default covers everything.
   requiredCognition: null,
   respondMode: "async",
@@ -50,7 +50,7 @@ export const globalRole = Object.freeze({
   // gate (seed/RolesAreAuth.md): the substrate has no bypass
   // mechanism. Every being needs to be able to ask, so every being
   // must hold a role permitting ask. global is that role. Operators
-  // expand the rest for their reality.
+  // expand the rest for their story.
   can: [
     { verb: "see", word: "place" },
     { verb: "see", word: "classify-matter" },
@@ -61,7 +61,7 @@ export const globalRole = Object.freeze({
     { verb: "do", word: "set-being:position",  description: "walk to another space" },
     { verb: "do", word: "ask-role",            description: "request acquisition of a role from its host" },
     { verb: "do", word: "take-role",           description: "walk in and take a role with acquisition.grabbed=true" },
-    // The skins catalog (/skins at the reality root) is everyone's:
+    // The skins catalog (/skins at the story root) is everyone's:
     // upload a model there, wear any model from it. set-model's own
     // handler enforces self/author/owner per target, so the floor
     // grant is safe — you still can't set models on things that

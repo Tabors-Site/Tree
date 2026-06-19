@@ -34,10 +34,10 @@
 import express from "express";
 import multer from "multer";
 import { fileTypeFromBuffer } from "file-type";
-import log from "../../../seed/seedReality/log.js";
+import log from "../../../seed/seedStory/log.js";
 import authenticate from "../middleware/authenticate.js";
 import preUploadCheck from "../middleware/preUploadCheck.js";
-import { getRealityConfigValue } from "../../../seed/realityConfig.js";
+import { getStoryConfigValue } from "../../../seed/storyConfig.js";
 import { sendError, IBP_ERR } from "../../../seed/ibp/protocol.js";
 import {
   putContent,
@@ -49,11 +49,11 @@ import {
 const router = express.Router();
 
 function maxUploadBytes() {
-  return Number(getRealityConfigValue("maxUploadBytes")) || 104857600;
+  return Number(getStoryConfigValue("maxUploadBytes")) || 104857600;
 }
 
 function fileMimeAllowed(mimeType) {
-  const allowed = getRealityConfigValue("allowedMimeTypes");
+  const allowed = getStoryConfigValue("allowedMimeTypes");
   if (!Array.isArray(allowed) || allowed.length === 0) return true;
   const bare = String(mimeType || "").split(";")[0].trim().toLowerCase();
   return allowed.some((p) => {
@@ -106,7 +106,7 @@ router.post(
       const mimeType = sniffed?.mime || declared;
       if (!fileMimeAllowed(mimeType)) {
         return sendError(res, 415, IBP_ERR.UPLOAD_MIME_REJECTED,
-          `File type "${mimeType}" not allowed on this reality`);
+          `File type "${mimeType}" not allowed on this story`);
       }
       const isText = mimeType.startsWith("text/");
       const ref = await putContent(file.buffer, {

@@ -32,20 +32,20 @@
 //     for descriptor enrichment but they no longer gate authorize —
 //     granted roles do; the contributor class is fully retired)
 //   - registerDefaultPermissions extension contributions
-//   - REALITY_ROOT_DEFAULT_PERMISSIONS / HEAVEN_DEFAULT_PERMISSIONS seeding
+//   - STORY_ROOT_DEFAULT_PERMISSIONS / HEAVEN_DEFAULT_PERMISSIONS seeding
 //
 // Migration path for old surface: extensions author roles via
-// reality.declare.registerRole and grants are emitted at the relevant
+// story.declare.registerRole and grants are emitted at the relevant
 // boot/lifecycle moment. See seed/RolesAreAuth.md.
 
-import log from "../seedReality/log.js";
+import log from "../seedStory/log.js";
 import { IBP_ERR } from "./protocol.js";
 import { I_AM } from "../materials/being/seedBeings.js";
 import { getOperation } from "./operations.js";
 import { isExtensionBlockedAtSpace } from "../materials/space/extensionScope.js";
 import { authorizeViaRoles } from "./roleAuth.js";
 import { getSpaceRootId } from "../sprout.js";
-import { getRealityDomain } from "./address.js";
+import { getStoryDomain } from "./address.js";
 import { resolveTargetBranch } from "./branchResolve.js";
 
 /**
@@ -160,7 +160,7 @@ export async function authorize(args) {
   // targetBranch (genesis/scaffold paths where there's no separate
   // session branch). Same-branch acts collapse to one value naturally.
   //
-  // Foreign-actor guard: an inbound cross-reality actor's act carries
+  // Foreign-actor guard: an inbound cross-story actor's act carries
   // THEIR home branch — a path in another substrate's namespace.
   // Looking their grants up on that path locally is meaningless at
   // best (no such branch row → noisy cold-fold failure) and wrong at
@@ -168,8 +168,8 @@ export async function authorize(args) {
   // foreign actor holds HERE were granted here, on local branches, so
   // their grants read from the target's branch instead.
   const actorActIsLocal =
-    !moment?.actorAct?.reality ||
-    moment.actorAct.reality === getRealityDomain();
+    !moment?.actorAct?.story ||
+    moment.actorAct.story === getStoryDomain();
   const actorBranch =
     args.actorBranch ||
     (actorActIsLocal ? moment?.actorAct?.branch : null) ||
@@ -221,7 +221,7 @@ export async function authorize(args) {
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * Read reality-level BE config flags. Defaults to true/true. These
+ * Read story-level BE config flags. Defaults to true/true. These
  * flags are operator-controlled toggles for the registration flow;
  * they're NOT permission rules. Stored under place-root
  * `qualities.auth.{birth_enabled, connect_enabled}`.

@@ -8,7 +8,7 @@
 // logFact), beside the be:death gate, and keys on the fact's ACTOR
 // (fact.nameId): a banished Name cannot be the actor of any new fact.
 //
-// A Name is reality-wide — its reel does not fork (identity is above the
+// A Name is story-wide — its reel does not fork (identity is above the
 // branch timeline) — so its closed marker lives on main ("0") regardless of
 // which branch a fact is being stamped on. Hence isNameBanished takes no
 // branch, unlike isBeingDead.
@@ -23,7 +23,7 @@ import { I_AM } from "../being/seedBeings.js";
 /**
  * True if the Name is banished (name:banish stamped). Reads the Name
  * projection's `closedAt` on main. False for a missing Name (no row to
- * close) and for I_AM (never banished in practice — banishing the reality
+ * close) and for I_AM (never banished in practice — banishing the story
  * root would brick it).
  *
  * @param {string} nameId
@@ -31,7 +31,7 @@ import { I_AM } from "../being/seedBeings.js";
  */
 export async function isNameBanished(nameId) {
   if (!nameId) return false;
-  // I_AM is the reality root — never banished (it would brick the reality);
+  // I_AM is the story root — never banished (it would brick the story);
   // short-circuit so the stamper's per-fact gate skips a read on the common
   // case (today every actor is i-am).
   if (nameId === I_AM) return false;

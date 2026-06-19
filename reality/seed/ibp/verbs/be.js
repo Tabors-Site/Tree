@@ -25,12 +25,12 @@
 // address inside, so birther-as-target and arbitrary-being-as-target
 // reach the same code path.
 
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 import Being from "../../materials/being/being.js";
 import { emitFact } from "../../past/fact/facts.js";
 import { IbpError, IBP_ERR } from "../protocol.js";
 import { I_AM } from "../../materials/being/seedBeings.js";
-import { getRealityDomain } from "../address.js";
+import { getStoryDomain } from "../address.js";
 import { authorize, getAuthConfig } from "../authorize.js";
 import { BE_OPS, getBeOp } from "../beOps.js";
 import { assertVerbCaller, refuseHistoricalWrite, resolveBranchForFact } from "./_shared.js";
@@ -45,12 +45,12 @@ import { assertVerbCaller, refuseHistoricalWrite, resolveBranchForFact } from ".
  *   identity     authenticated identity (required for release)
  *   socket       optional WS socket passed through to auth hooks
  *   req          optional Express req for HTTP-arrival flows
- *   currentReality  defaults to the current reality domain (getRealityDomain)
+ *   currentStory  defaults to the current story domain (getStoryDomain)
  *   moment    moment context (so the audit Fact joins ctx.deltaF)
  */
 export async function beVerb(operation, payload = {}, opts = {}) {
   if (typeof operation !== "string" || !operation.length) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "reality.be requires an operation");
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "story.be requires an operation");
   }
   refuseHistoricalWrite("be", payload, opts);
 
@@ -64,7 +64,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     nameId      = null,
     socket      = null,
     req         = null,
-    currentReality = null,
+    currentStory = null,
     currentBranch  = null,
     moment   = null,
   } = opts;
@@ -79,15 +79,15 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   // than re-resolving from scope.
   const branch = resolveBranchForFact(moment, currentBranch, "be");
 
-  const realityDomain = currentReality || getRealityDomain();
+  const storyDomain = currentStory || getStoryDomain();
 
-  // Address must point at this reality.
-  const targetReality = extractRealityFromAddress(address, addressKind);
-  if (targetReality && targetReality !== realityDomain) {
+  // Address must point at this story.
+  const targetStory = extractStoryFromAddress(address, addressKind);
+  if (targetStory && targetStory !== storyDomain) {
     throw new IbpError(
       IBP_ERR.SPACE_NOT_FOUND,
-      `Reality "${targetReality}" is not served by this server`,
-      { targetReality, serverReality: realityDomain },
+      `Story "${targetStory}" is not served by this server`,
+      { targetStory, serverStory: storyDomain },
     );
   }
 
@@ -122,7 +122,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     assertVerbCaller("be", opts);
     const authConfig = await getAuthConfig();
     if (!authConfig.birth_enabled) {
-      throw new IbpError(IBP_ERR.FORBIDDEN, "Birth is disabled on this reality");
+      throw new IbpError(IBP_ERR.FORBIDDEN, "Birth is disabled on this story");
     }
     const decision = await authorize({
       identity,
@@ -182,7 +182,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     return {
       beingId:      result.beingId,
       name:         result.name,
-      beingAddress: `${getRealityDomain()}/@${result.name}`,
+      beingAddress: `${getStoryDomain()}/@${result.name}`,
       selfBirth:    true,
     };
   }
@@ -190,7 +190,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   // ── Birther path (BE:birth on @birther). ────────────────────────
   // Cherub serves unauthenticated arrival: someone with no identity
   // calls BE:birth on @cherub to register a fresh being on this
-  // reality (parent = cherub or I-Am for the first registrant).
+  // story (parent = cherub or I-Am for the first registrant).
   //
   // Birther serves authenticated callers: an existing being calls
   // BE:birth on @birther to mint a CHILD. The new being's being-tree
@@ -203,7 +203,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     }
     const authConfig = await getAuthConfig();
     if (!authConfig.birth_enabled) {
-      throw new IbpError(IBP_ERR.FORBIDDEN, "Birth is disabled on this reality");
+      throw new IbpError(IBP_ERR.FORBIDDEN, "Birth is disabled on this story");
     }
     // Auth gate (the standard rule is be:create-being via the place-
     // root default, which admits all authenticated callers; per-position
@@ -353,13 +353,13 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     return {
       beingId:      result.beingId,
       name:         result.name,
-      beingAddress: `${getRealityDomain()}/@${result.name}`,
+      beingAddress: `${getStoryDomain()}/@${result.name}`,
     };
   }
 
   // ── Release on a non-cherub being. ──────────────────────────────
   // The inheriter tab's pagehide fires BE:release on its own stance
-  // (e.g. `<reality>/@puppet`) to clear inhabitedBy. Cherub's release
+  // (e.g. `<story>/@puppet`) to clear inhabitedBy. Cherub's release
   // handler is a no-op (the token is a stateless JWT; the connection
   // reducer derives qualities.connection.inhabitedBy from the fact
   // stream). We route this through cherub's release handler so the
@@ -467,7 +467,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     if (!beingName) {
       throw new IbpError(
         IBP_ERR.INVALID_INPUT,
-        "be:death requires an explicit target being in the address (e.g. <reality>/@<being>)",
+        "be:death requires an explicit target being in the address (e.g. <story>/@<being>)",
       );
     }
     // Resolve beingName → beingId on the target's branch. The death
@@ -541,7 +541,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     if (!beingName) {
       throw new IbpError(
         IBP_ERR.INVALID_INPUT,
-        "be:truename requires an explicit target being in the address (e.g. <reality>/@<being>)",
+        "be:truename requires an explicit target being in the address (e.g. <story>/@<being>)",
       );
     }
     const trueNameToken = payload?.trueName;
@@ -617,7 +617,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     assertVerbCaller("be", opts);
     const authConfig = await getAuthConfig();
     if (!authConfig.connect_enabled) {
-      throw new IbpError(IBP_ERR.FORBIDDEN, "Connect is disabled on this reality");
+      throw new IbpError(IBP_ERR.FORBIDDEN, "Connect is disabled on this story");
     }
     const decision = await authorize({
       identity,
@@ -670,10 +670,10 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     if (operation === "birth" || operation === "connect") {
       const authConfig = await getAuthConfig();
       if (operation === "birth" && !authConfig.birth_enabled) {
-        throw new IbpError(IBP_ERR.FORBIDDEN, "Registration is disabled on this reality", { operation });
+        throw new IbpError(IBP_ERR.FORBIDDEN, "Registration is disabled on this story", { operation });
       }
       if (operation === "connect" && !authConfig.connect_enabled) {
-        throw new IbpError(IBP_ERR.FORBIDDEN, "Connect is disabled on this reality", { operation });
+        throw new IbpError(IBP_ERR.FORBIDDEN, "Connect is disabled on this story", { operation });
       }
     }
 
@@ -753,7 +753,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   }
   throw new IbpError(
     IBP_ERR.ROLE_UNAVAILABLE,
-    `No being @${beingName} handles BE ${operation} on this reality`,
+    `No being @${beingName} handles BE ${operation} on this story`,
     { beingName, operation },
   );
 }
@@ -899,21 +899,21 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
 // (runClaim retired . both modes (credentials, token re-claim) now
 //  live inside the `use` handler in cherub/role.js.)
 
-// Pull the reality prefix off an address, if any. Lets beVerb refuse
-// addresses pointing at a different reality before any auth runs.
+// Pull the story prefix off an address, if any. Lets beVerb refuse
+// addresses pointing at a different story before any auth runs.
 //
 // Strips the optional `#<branch>` qualifier and any `@<being>` so the
-// comparison against `getRealityDomain()` (just the DNS name) is
+// comparison against `getStoryDomain()` (just the DNS name) is
 // apples-to-apples. Without stripping `#`, addresses like
 // `treeos.ai#1/@cherub` would compare `"treeos.ai#1"` against
-// `"treeos.ai"` and falsely report a cross-reality call.
-function extractRealityFromAddress(address, addressKind) {
+// `"treeos.ai"` and falsely report a cross-story call.
+function extractStoryFromAddress(address, addressKind) {
   if (typeof address !== "string" || !address.length) return null;
   // Stance pair: the TARGET is the right side. Without this split a
   // bridge address (`left :: right`) would yield the LEFT stance's
-  // reality — the actor's, not the target's — and a cross-reality
+  // story — the actor's, not the target's — and a cross-story
   // right side could slip past the "is it served here" gate. Same
-  // right-side rule canopy's extractTargetReality applies.
+  // right-side rule canopy's extractTargetStory applies.
   let head = address.includes("::")
     ? address.split("::").pop().trim()
     : address;

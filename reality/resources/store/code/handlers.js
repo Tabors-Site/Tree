@@ -33,11 +33,11 @@
 // DIFFERENT manifest hash is refused; identical re-publish is idempotent.
 // The pointer is the only mutable thing, and it mutates by chaining.
 
-import log from "../../../seed/seedReality/log.js";
+import log from "../../../seed/seedStory/log.js";
 import { buildClaim, listingHashOf } from "./lib/claims.js";
 
 // Listing types ARE the resource kinds (RESOURCES.md). Six total:
-// code, role, roleflow, seed, asset, pack. A whole-reality publish is
+// code, role, roleflow, seed, asset, pack. A whole-story publish is
 // a "pack" listing whose tree happens to span the entire repo,  no
 // separate type; same primitive at a larger scope. The roleflow
 // listing path is soft-rejected below pending its design pass.
@@ -75,17 +75,17 @@ function frameOf(ctx) {
  * its key. Publishing requires an identified being holding the
  * store:publisher role (ROOTS.md). That being may be NATIVE (born
  * here, or grafted in) or FOREIGN (reaching across in its left stance
- * over cross-reality IBP); the key is the publisher either way, so names
- * scope to a key, never to an anonymous domain string. `homeReality`
+ * over cross-story IBP); the key is the publisher either way, so names
+ * scope to a key, never to an anonymous domain string. `homeStory`
  * rides along as a label when the publisher reaches across from a peer
- * (the cross-reality summon sets askerReality).
+ * (the cross-story summon sets askerStory).
  */
 function publisherOf(ctx) {
   const beingId = ctx?.askerBeingId
     || ctx?.actorAct?.beingIn
     || ctx?.toBeing?._id;
   if (!beingId) throw new Error("registrar: no publisher being on ctx (who is asking?)");
-  return { key: String(beingId), homeReality: ctx?.askerReality || null };
+  return { key: String(beingId), homeStory: ctx?.askerStory || null };
 }
 
 /** Load the registrar's folded qualities.store (prior moments only). */
@@ -158,7 +158,7 @@ export async function publishListing(fed, ctx) {
   }
 
   const frame = frameOf(ctx);
-  const { key: publisher, homeReality } = publisherOf(ctx);
+  const { key: publisher, homeStory } = publisherOf(ctx);
   const listingHash = listingHashOf(manifest);
 
   const store = await readStore(frame.meId, frame.branch);
@@ -195,7 +195,7 @@ export async function publishListing(fed, ctx) {
         listingHash,
         listingType,
         builtFor: typeof manifest.builtFor === "string" ? manifest.builtFor : null,
-        homeReality,
+        homeStory,
         status: "listed",
       },
     },

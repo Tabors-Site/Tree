@@ -19,7 +19,7 @@
 //   storage    — the content hash (what this exactly IS; dedup,
 //                transport, verification)
 // Content addressing operates on STORAGE UNITS: reel (root = head
-// fact's _id), branch, reality — each with a primary root hash (see
+// fact's _id), branch, story — each with a primary root hash (see
 // chainRoots.js). A being's complete biography across branches and
 // realities is a DERIVED VIEW composed from multiple reels —
 // hashable per query, never a primary identity.
@@ -88,7 +88,7 @@ export function contentOf(fact) {
     truncated:   fact.truncated,
     actId:       fact.actId,
     sessionId:   fact.sessionId,
-    homeReality: fact.homeReality,
+    homeStory: fact.homeStory,
     wasRemote:   fact.wasRemote,
   };
   if (typeof fact.foldSeq === "number") {

@@ -12,7 +12,7 @@
 // run() returns { cancelled: false } or { cancelled: true, reason }.
 // fire() is the same but swallows errors.
 
-import log from "./seedReality/log.js";
+import log from "./seedStory/log.js";
 import { getInternalConfigValue } from "./internalConfig.js";
 
 // Read at use time so config changes take effect without restart.
@@ -166,7 +166,7 @@ async function run(hookName, data) {
     // can saturate the terminal buffer faster than it flushes. Skip
     // resolution while disconnected; handlers run without the scope
     // filter, which is the same fallback as a thrown scope error.
-    const { isDbHealthy } = await import("./seedReality/dbConfig.js");
+    const { isDbHealthy } = await import("./seedStory/dbConfig.js");
     if (isDbHealthy()) {
       try {
         blockedExtensions = await _getScopeFn(String(spaceId), branch);

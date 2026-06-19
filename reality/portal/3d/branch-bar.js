@@ -23,7 +23,7 @@ import { updateStanceBar } from "../shared/stance-bar.js";
 
 let _state = {
   client:        null,
-  reality:       null,
+  story:       null,
   buttonEl:      null,
   panelEl:       null,
   timelineEl:    null,
@@ -57,12 +57,12 @@ let _state = {
   resumeSpeed: 0,
   // Playback mode: "human" advances cursorMs by wall-clock seconds *
   // speed factor (every gap between marks plays through in real time).
-  // "reality" steps mark-to-mark — the empty time between marks is
+  // "story" steps mark-to-mark — the empty time between marks is
   // collapsed, so each tick of speed advances one act on the reel.
   // Useful when the being acts sparsely and a +1x human playback would
   // be mostly waiting.
   playbackMode: "human",
-  // Accumulator for reality mode. Each tick adds factor * marksPerTick
+  // Accumulator for story mode. Each tick adds factor * marksPerTick
   // to the accumulator; when |accumulator| ≥ 1 the cursor steps that
   // many marks and the integer portion is subtracted out. Lets speeds
   // below 1 mark/tick advance smoothly (1x = 1 mark/sec at 250ms tick).
@@ -156,7 +156,7 @@ async function _maybeLoadOlderMarks(cursorMs) {
     const tlBranch = _state.timelineBranch || "0";
     const bq = tlBranch === "0" ? "" : `#${tlBranch}`;
     const actsDesc = await _state.client.see(
-      `${_state.reality}${bq}/.acts/${_state.timelineBeingId}`,
+      `${_state.story}${bq}/.acts/${_state.timelineBeingId}`,
       { limit: NEXT_MARK_BATCH, before: earliest.ts },
     );
     const acts = Array.isArray(actsDesc?.actChain?.acts)
@@ -216,7 +216,7 @@ function _speedLabel(tier) {
 // so who-you-are and where-you-look stay the same branch. The ONLY
 // ways to act cross-branch are walking through an ibpa portal or
 // typing a different branch into the address yourself; then the
-// address line shows the split (@you#0 → reality#2/...) so you always
+// address line shows the split (@you#0 → story#2/...) so you always
 // know exactly what's being sent on both sides.
 export async function switchIntoBranch(branchPath) {
   const signedIn = !!_portalState()?.session?.token;
@@ -224,12 +224,12 @@ export async function switchIntoBranch(branchPath) {
     // BE switch at the gate: seats socket.currentBranch on the
     // destination and stamps the be:switch fact on the destination
     // reel (your being's biography there records the arrival).
-    await _state.client.be("switch", `${_state.reality}/@cherub`, { branch: branchPath });
+    await _state.client.be("switch", `${_state.story}/@cherub`, { branch: branchPath });
   }
   // Address follows the being — ALWAYS the explicit branch path. The
-  // bare `#<reality>/` form resolves through the #main POINTER, which
+  // bare `#<story>/` form resolves through the #main POINTER, which
   // is reassignable and may not be "0"; explicit paths can't drift.
-  location.hash = `#${_state.reality}#${branchPath}/`;
+  location.hash = `#${_state.story}#${branchPath}/`;
   _syncStanceBar();
 }
 
@@ -289,9 +289,9 @@ function _portalState() {
     || {};
 }
 
-export function mountBranchBar({ client, reality, buttonHost = null, getState = null }) {
+export function mountBranchBar({ client, story, buttonHost = null, getState = null }) {
   _state.client = client;
-  _state.reality = reality;
+  _state.story = story;
   _state.getState = typeof getState === "function" ? getState : null;
   _state.buttonEl = _createBranchButton({ hosted: !!buttonHost });
   (buttonHost || document.body).appendChild(_state.buttonEl);
@@ -335,9 +335,9 @@ export function mountBranchBar({ client, reality, buttonHost = null, getState = 
     // keeps querying the dead pre-auth socket and the branch tree comes
     // back empty until a full page reload. Call this whenever the live
     // client changes so the bar's SEEs ride the current socket.
-    setClient: (client, reality) => {
+    setClient: (client, story) => {
       _state.client = client;
-      if (reality) _state.reality = reality;
+      if (story) _state.story = story;
       _syncStanceBar();
     },
   };
@@ -429,7 +429,7 @@ async function _openPanel() {
     </div>
     <div class="bp-tree" style="font-size:12px;line-height:1.7;"></div>
     <div class="bp-actions" style="margin-top:12px;padding-top:10px;border-top:1px solid #2c3a32;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-      <button type="button" class="bp-new" title="Create a new branch — fork a parent branch at a fact seq or a moment in time, scoped to the whole reality or just a subtree" style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
+      <button type="button" class="bp-new" title="Create a new branch — fork a parent branch at a fact seq or a moment in time, scoped to the whole story or just a subtree" style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
         ✚ New
       </button>
       <button type="button" class="bp-merge" title="Merge two branches" style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
@@ -503,7 +503,7 @@ async function _loadBranchTree() {
     seen.add(path);
     try {
       const catalog = await _state.client.see(
-        `${_state.reality}/.branches/${path}`,
+        `${_state.story}/.branches/${path}`,
       );
       const g = catalog?.branches;
       if (!g) return;
@@ -573,7 +573,7 @@ function _renderTree(container, tree) {
     row.appendChild(meta);
     // Pause/unpause control. Every branch including main is
     // pauseable — the wire-layer gate exempts unpause-branch and
-    // create-branch, so a fully-frozen reality can always be revived
+    // create-branch, so a fully-frozen story can always be revived
     // by clicking unpause here or by forking off a paused branch.
     {
       const action = document.createElement("button");
@@ -654,7 +654,7 @@ async function _togglePauseBranch(branch) {
   }
   // If the user just paused (or unpaused) the branch they themselves
   // are currently on, flip the grayscale chrome immediately so the
-  // visual cue matches the new reality without waiting for navigate.
+  // visual cue matches the new story without waiting for navigate.
   const myBranch = _portalState()?.descriptor?.address?.branch || "0";
   if (branch.path === myBranch) {
     window.dispatchEvent(new CustomEvent("branchbar:paused-self", {
@@ -669,7 +669,7 @@ async function _togglePauseBranch(branch) {
   // reading window.__state.descriptor.address.branch raced the
   // descriptor update: after creating a branch the socket flipped to
   // #1 but the local descriptor was still mid-refresh, so the DO went
-  // out with `localhost/@branch-manager` (typed-reality means main),
+  // out with `localhost/@branch-manager` (typed-story means main),
   // caller=#1 vs target=#0, CROSS_BRANCH_FORBIDDEN. Relative dodges
   // the whole question.
   try {
@@ -772,7 +772,7 @@ async function _decorateRowWithConflictCount(row, mergedPath) {
   }
   try {
     const catalog = await _state.client.see(
-      `${_state.reality}/.branches/${mergedPath}/conflicts`,
+      `${_state.story}/.branches/${mergedPath}/conflicts`,
     );
     const totals = catalog?.conflicts?.totals || {};
     const counts = {
@@ -860,7 +860,7 @@ async function _openTimeline(branchPath) {
         <button class="bt-playpause" type="button" title="play / pause" style="background:#131a17;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:3px 8px;font-family:inherit;font-size:12px;cursor:pointer;">▶</button>
         <button class="bt-ff" type="button" title="fast-forward (each click doubles forward speed)" style="background:#131a17;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:3px 8px;font-family:inherit;font-size:12px;cursor:pointer;">⏩</button>
         <span class="bt-speed" style="color:#8fbf9f;font-size:11px;min-width:48px;text-align:center;">paused</span>
-        <button class="bt-mode" type="button" title="time mode . 'human' = wall-clock seconds; 'reality' = mark-to-mark (each act counts as one step; gaps between acts collapse)" style="background:#131a17;color:#8fbf9f;border:1px solid #2c3a32;border-radius:3px;padding:3px 8px;font-family:inherit;font-size:11px;cursor:pointer;min-width:96px;">time: human</button>
+        <button class="bt-mode" type="button" title="time mode . 'human' = wall-clock seconds; 'story' = mark-to-mark (each act counts as one step; gaps between acts collapse)" style="background:#131a17;color:#8fbf9f;border:1px solid #2c3a32;border-radius:3px;padding:3px 8px;font-family:inherit;font-size:11px;cursor:pointer;min-width:96px;">time: human</button>
       </span>
       <span class="bt-buttons" style="display:flex;gap:6px;">
         <button class="bt-now" type="button" style="display:none;background:#131a17;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:3px 10px;font-family:inherit;font-size:11px;cursor:pointer;">return to now</button>
@@ -887,10 +887,10 @@ async function _openTimeline(branchPath) {
     // playback so the user's click position sticks until they press
     // play again.
     _stopPlayback();
-    // Mode-aware: in reality mode the strip is a discrete act-index
+    // Mode-aware: in story mode the strip is a discrete act-index
     // ruler — snap the click to the nearest act. In human mode it's
     // a continuous wall-clock ruler.
-    if (_state.playbackMode === "reality") {
+    if (_state.playbackMode === "story") {
       const total = _state.marks.length;
       if (total === 0) return;
       // frac near the right edge → return to live; else pick the
@@ -984,7 +984,7 @@ async function _update(desc) {
   _maybeSurfaceBranchSwitch(branch);
   _syncStanceBar();
   try {
-    const r = await _state.client.see(`${_state.reality}/.branches/${branch}`);
+    const r = await _state.client.see(`${_state.story}/.branches/${branch}`);
     _state.graph = r?.branches || null;
     // The pointer map just refreshed — repaint the bar tooltips.
     _syncStanceBar();
@@ -1065,7 +1065,7 @@ async function _update(desc) {
     try {
       const bq = tlBranch === "0" ? "" : `#${tlBranch}`;
       const actsDesc = await _state.client.see(
-        `${_state.reality}${bq}/.acts/${myBeingId}`,
+        `${_state.story}${bq}/.acts/${myBeingId}`,
         { limit: INITIAL_MARK_BATCH },
       );
       const acts = Array.isArray(actsDesc?.actChain?.acts)
@@ -1179,13 +1179,13 @@ function _renderTimeline() {
 
   // Two layout modes for the strip:
   //   - "human": dots positioned by wall-clock fraction in [firstTs, nowTs]
-  //   - "reality": dots positioned by act-index, evenly spaced. Each
+  //   - "story": dots positioned by act-index, evenly spaced. Each
   //     mark gets 1/N of the strip regardless of when it happened, so
-  //     a quiet hour reads the same as a busy second — "reality time"
+  //     a quiet hour reads the same as a busy second — "story time"
   //     is being-time, where each act is exactly one tick.
-  const realityMode = _state.playbackMode === "reality";
+  const storyMode = _state.playbackMode === "story";
   const total = _state.marks.length;
-  if (realityMode) {
+  if (storyMode) {
     labelL.textContent = total > 0 ? `act 1` : "no acts yet";
     labelR.textContent = total > 0 ? `act ${total}` : "";
   } else {
@@ -1197,9 +1197,9 @@ function _renderTimeline() {
   const end = new Date(_state.nowTs).getTime();
   const span = Math.max(1, end - start);
 
-  // Compute frac per mark — wall-clock for human, index for reality.
+  // Compute frac per mark — wall-clock for human, index for story.
   const fracOf = (m, i) => {
-    if (realityMode) {
+    if (storyMode) {
       return total === 1 ? 0.5 : i / (total - 1);
     }
     const t = new Date(m.ts).getTime();
@@ -1237,7 +1237,7 @@ function _renderTimeline() {
   if (_state.atTimestamp) {
     const t = new Date(_state.atTimestamp).getTime();
     let cursorFrac;
-    if (realityMode) {
+    if (storyMode) {
       // Position cursor at the mark we're "on" — i.e., the most-recent
       // mark at or before _state.atTimestamp. Uses the same act-index
       // spacing the dots use so the cursor lines up exactly.
@@ -1253,9 +1253,9 @@ function _renderTimeline() {
     cursor.style.left = `${(cursorFrac * 100).toFixed(2)}%`;
     cursor.style.right = "auto";
     // Status label is mode-aware: "human" shows the ISO wall-clock
-    // timestamp the rewind landed at; "reality" shows the seq of the
-    // act we're "on" so each step reads as 1 reality-tick.
-    if (_state.playbackMode === "reality") {
+    // timestamp the rewind landed at; "story" shows the seq of the
+    // act we're "on" so each step reads as 1 story-tick.
+    if (_state.playbackMode === "story") {
       const m = _findMarkAtCursor(t);
       const seq = m?.seq ?? "?";
       const total = _state.marks.length;
@@ -1269,7 +1269,7 @@ function _renderTimeline() {
     branchBtn.style.display = "inline-block";
   } else {
     cursor.style.display = "none";
-    if (_state.playbackMode === "reality") {
+    if (_state.playbackMode === "story") {
       status.textContent = `live · ${_state.marks.length} acts on ${branchLabel}`;
     } else {
       status.textContent = `live on ${branchLabel}`;
@@ -1456,8 +1456,8 @@ function _playbackTick() {
     _stopPlayback();
     return;
   }
-  if (_state.playbackMode === "reality") {
-    _playbackTickReality(factor);
+  if (_state.playbackMode === "story") {
+    _playbackTickStory(factor);
     return;
   }
   // Human-time mode: advance cursor in timeline-time by factor * tick.
@@ -1491,12 +1491,12 @@ function _playbackTick() {
   _rewindTo(new Date(nextMs).toISOString());
 }
 
-// Reality-time tick. Steps mark-to-mark — the empty wall-clock time
+// Story-time tick. Steps mark-to-mark — the empty wall-clock time
 // between acts collapses. Rate scales with the same speed tier: 1x =
 // 1 mark per second; 2x = 2 marks/sec; 8x = 8 marks/sec. Implemented
 // with an accumulator so fractional rates (1x with 250ms tick = 0.25
 // marks/tick) advance smoothly without stutter.
-function _playbackTickReality(factor) {
+function _playbackTickStory(factor) {
   const TICKS_PER_SEC = 1000 / PLAYBACK_TICK_MS;          // 4 at 250ms
   const MARKS_PER_TICK_AT_1X = 1 / TICKS_PER_SEC;          // 0.25
   _state.markAccumulator = (_state.markAccumulator || 0) + factor * MARKS_PER_TICK_AT_1X;
@@ -1559,13 +1559,13 @@ function _playbackTickReality(factor) {
 }
 
 function _toggleMode() {
-  _state.playbackMode = _state.playbackMode === "human" ? "reality" : "human";
+  _state.playbackMode = _state.playbackMode === "human" ? "story" : "human";
   // Reset the accumulator so a mode flip mid-playback doesn't carry
   // stale fractional progress across modes.
   _state.markAccumulator = 0;
   _renderModeDisplay();
   // Also repaint the strip so status text reflects the new mode
-  // (human shows ISO timestamp; reality shows seq + act count).
+  // (human shows ISO timestamp; story shows seq + act count).
   _renderTimeline();
 }
 
@@ -1646,7 +1646,7 @@ async function _branchHere() {
 // BRANCH INFO ("see branch")
 // ─────────────────────────────────────────────────────────────────────
 //
-// SEEs `<reality>/.branches/<path>` — the synthetic branch surface,
+// SEEs `<story>/.branches/<path>` — the synthetic branch surface,
 // readable by any logged-in being — and renders the organized JSON it
 // returns: branch-point seqs, pointers aimed here, scope, lineage,
 // children, paused/deleted detail, who/when. A "raw" toggle dumps the
@@ -1659,7 +1659,7 @@ async function _openBranchInfoDialog(branchPath) {
   let graph = null;
   let err = null;
   try {
-    const desc = await _state.client.see(`${_state.reality}/.branches/${branchPath}`);
+    const desc = await _state.client.see(`${_state.story}/.branches/${branchPath}`);
     graph = desc?.branches || null;
   } catch (e) {
     err = e?.message || String(e);
@@ -1721,7 +1721,7 @@ async function _openBranchInfoDialog(branchPath) {
         ? anchorKeys.map((k) => `${_escape(k)} @ seq ${anchor[k]}`).join("<br>")
         : "(forked at genesis / no reels)",
     );
-    kv("scope", cur.scope?.path ? `subtree ${_escape(cur.scope.path)}` : "whole reality");
+    kv("scope", cur.scope?.path ? `subtree ${_escape(cur.scope.path)}` : "whole story");
     kv("created", `${cur.createdAt ? _shortStamp(cur.createdAt) : "?"}${cur.createdBy ? ` by ${_escape(String(cur.createdBy).slice(0, 8))}` : ""}`);
     if (cur.mergeSources?.length) kv("merged from", cur.mergeSources.map((s) => `#${_escape(s)}`).join(" + "));
     if (cur.paused) kv("paused", `yes${cur.pausedAt ? ` (${_shortStamp(cur.pausedAt)})` : ""}`);
@@ -1782,9 +1782,9 @@ function _closeBranchInfoDialog() {
 //   parent  — which branch to fork (defaults to the one you're on)
 //   anchor  — a fact seq (substrate-native) OR a moment in time (human
 //             helper); exactly one is required
-//   scope   — omit for a whole-reality branch, or a subtree path for a
+//   scope   — omit for a whole-story branch, or a subtree path for a
 //             scoped branch (defaults to the position you're standing at;
-//             "/" collapses to whole-reality)
+//             "/" collapses to whole-story)
 // The branch-manager being carries the doctrine; this is a thin form.
 
 let _newBranchDialogEl = null;
@@ -1863,7 +1863,7 @@ function _openNewBranchDialog() {
       <fieldset style="border:1px solid #2c3a32;border-radius:4px;padding:8px 10px;display:grid;gap:8px;">
         <legend style="${labelCss}padding:0 4px;">scope</legend>
         <label style="display:flex;gap:6px;align-items:center;cursor:pointer;">
-          <input type="radio" name="scopeType" value="whole" ${atRoot ? "checked" : ""} /> the whole reality
+          <input type="radio" name="scopeType" value="whole" ${atRoot ? "checked" : ""} /> the whole story
         </label>
         <label style="display:flex;gap:6px;align-items:center;cursor:pointer;">
           <input type="radio" name="scopeType" value="subtree" ${atRoot ? "" : "checked"} /> just this subtree
@@ -1922,7 +1922,7 @@ function _openNewBranchDialog() {
         if (!p.startsWith("/")) p = "/" + p;
         args.scope = p;
       }
-      // empty or "/" → whole reality (omit scope)
+      // empty or "/" → whole story (omit scope)
     }
 
     const pointer = String(fd.get("pointer") || "").trim().toLowerCase();
@@ -2011,7 +2011,7 @@ function _closeNewBranchDialog() {
 // Copy (clone) + graft
 // ────────────────────────────────────────────────────────────────
 //
-// `Copy`: calls reality.see("capture-template", { args: { spaceId, name } })
+// `Copy`: calls story.see("capture-template", { args: { spaceId, name } })
 // — the chain rebuild is a pure read — and downloads the returned bundle
 // as a .seed.json file. The subtree is rooted at the user's current
 // position; the seed's captureTemplate primitive walks descendants + their
@@ -2308,7 +2308,7 @@ function _closeMergeDialog() {
 // ─────────────────────────────────────────────────────────────────────
 //
 // Opens via the "↶ N open" link on a merged-branch row in the tree.
-// SEEs `<reality>/.branches/<mergedPath>/conflicts` and renders the
+// SEEs `<story>/.branches/<mergedPath>/conflicts` and renders the
 // per-reel decision log. Every action on the panel either stamps a
 // reconciliation fact (via DO) or summons the mediator (via SUMMON);
 // both land in the same chain and the panel's re-render reflects
@@ -2405,7 +2405,7 @@ async function _refreshConflictPanel() {
   let catalog;
   try {
     catalog = await _state.client.see(
-      `${_state.reality}/.branches/${_conflictPanelBranch}/conflicts`,
+      `${_state.story}/.branches/${_conflictPanelBranch}/conflicts`,
     );
   } catch (err) {
     body.innerHTML = `<div style="color:#d97a7a;padding:16px;">failed to load catalog: ${_escape(err?.message || String(err))}</div>`;
@@ -2565,7 +2565,7 @@ async function _summonMediatorForBranch(branchPath) {
         from: "user",
         content:
           `Walk me through the conflicts on #${branchPath}. ` +
-          `The catalog is at ${_state.reality}/.branches/${branchPath}/conflicts. ` +
+          `The catalog is at ${_state.story}/.branches/${branchPath}/conflicts. ` +
           `Pick up at the first row marked status=open and propose a resolution.`,
       },
     );

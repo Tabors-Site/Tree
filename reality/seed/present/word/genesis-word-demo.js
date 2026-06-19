@@ -1,5 +1,5 @@
 // Phase 3: genesis from real `.word` — the creation narrative as a fact chain.
-// Run:  node reality/seed/present/word/genesis-word-demo.js
+// Run:  node story/seed/present/word/genesis-word-demo.js
 //
 // Parses genesis.word (I_AM's first acts) and runs the sequence. Rendered
 // forward from the root, the facts ARE the creation story (1.md). No hand-built

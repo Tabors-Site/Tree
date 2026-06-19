@@ -8,7 +8,7 @@
 // many bytes per message, how long a single tool call may take.
 // The ceiling exists because a turn that loops forever or floods
 // context isn't thinking, it's burning. Defaults live here; the
-// operator overrides through reality config; setInternalConfig at the
+// operator overrides through story config; setInternalConfig at the
 // bottom of this file routes each remembered key to the right
 // subsystem.
 //
@@ -16,7 +16,7 @@
 // path produces a working system even if a config value arrives
 // nonsense.
 
-import { getRealityConfigValue } from "../realityConfig.js";
+import { getStoryConfigValue } from "../storyConfig.js";
 import { getInternalConfigValue } from "../internalConfig.js";
 import { setLlmTimeout } from "./cognition/llm/connect.js";
 import { setFailoverTimeout } from "./cognition/llm/call.js";

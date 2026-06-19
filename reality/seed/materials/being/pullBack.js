@@ -7,17 +7,17 @@
 // Per CROSS-WORLD.md "Pull-back safety":
 //
 //   On home substrate startup, scan beings whose position names a
-//   foreign reality or branch. For each, check whether the foreign
+//   foreign story or branch. For each, check whether the foreign
 //   substrate has confirmed liveness within a configured window. If
 //   not (timeout / restart crossed the heartbeat threshold), stamp a
 //   `set-being:position` fact on the home reel that resets the
-//   being's position to their home space. If the foreign reality is
+//   being's position to their home space. If the foreign story is
 //   reachable, also stamp a corresponding departure fact on the
 //   foreign reel; best-effort. If unreachable, home unilaterally
 //   pulls back; the foreign reconciles at its next sync cycle.
 //
 //   The guarantee: a being's identity is never hostage to a foreign
-//   reality being available. Worst case they come back home; they
+//   story being available. Worst case they come back home; they
 //   don't get locked at foreign.
 //
 // What this file does today: provide the scan + pull primitive.
@@ -26,10 +26,10 @@
 // foreign substrates are stubbed pending the canopy gateway; until
 // then every cross-world position is considered "stale" on home
 // substrate restart and pulled back. The scan stays cheap because
-// cross-world positions are rare until cross-reality lands.
+// cross-world positions are rare until cross-story lands.
 
 import { parsePositionAddress, formatPositionAddress, isPositionCrossWorld } from "./positionAddress.js";
-import { getRealityDomain } from "../../ibp/address.js";
+import { getStoryDomain } from "../../ibp/address.js";
 import { withIAmAct } from "../../sprout.js";
 
 /**
@@ -40,7 +40,7 @@ import { withIAmAct } from "../../sprout.js";
  *
  * No-op when the substrate has no foreign-positioned beings (the
  * common case). Intended to run once at boot and as a periodic
- * health pass while cross-reality is in use.
+ * health pass while cross-story is in use.
  *
  * @returns {Promise<{ pulledBack: number, scanned: number }>}
  */
@@ -50,10 +50,10 @@ export async function pullBackForeignPositions() {
   // The legacy Being Mongoose collection isn't kept in sync with
   // qualities/position; projections is the truth.
   const { default: Projection } = await import("../branch/projection.js");
-  const homeReality = getRealityDomain();
-  const homeRealm   = { reality: homeReality, branch: "0" };
+  const homeStory = getStoryDomain();
+  const homeRealm   = { story: homeStory, branch: "0" };
 
-  // Cross-world positions encode reality + branch as a "/" segment;
+  // Cross-world positions encode story + branch as a "/" segment;
   // bare spaceIds never contain "#" or "/". Use a coarse regex
   // pre-filter then validate in JS to avoid scanning every being.
   const candidates = await Projection.find({

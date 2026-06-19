@@ -1,5 +1,5 @@
 // branchesCatalog.js — read-side helper that returns the branch graph
-// as a plain object. Powers the synthetic `<reality>/.branches[/<path>]`
+// as a plain object. Powers the synthetic `<story>/.branches[/<path>]`
 // SEE catalog the portal uses to draw its chip row.
 //
 // Returns:
@@ -92,15 +92,15 @@ export async function describeBranchesCatalog(branchPath = MAIN) {
   const pointers = await readPointers().catch(() => ({}));
 
   // Chain fingerprints (past/fact/chainRoots.js): this branch's root
-  // hash and the whole reality's root. Same root = same chain state;
+  // hash and the whole story's root. Same root = same chain state;
   // two substrates compare worlds in one number. TTL-memoized inside
   // chainRoots so this stays cheap on the hot SEE path.
   let rootHash = null;
-  let chainRealityRoot = null;
+  let chainStoryRoot = null;
   try {
-    const { branchRoot, realityRoot } = await import("../../past/fact/chainRoots.js");
+    const { branchRoot, storyRoot } = await import("../../past/fact/chainRoots.js");
     rootHash = await branchRoot(isMainPath ? MAIN : path);
-    chainRealityRoot = await realityRoot();
+    chainStoryRoot = await storyRoot();
   } catch { /* fingerprints are additive — never block the catalog */ }
 
   return {
@@ -109,7 +109,7 @@ export async function describeBranchesCatalog(branchPath = MAIN) {
     children,
     pointers,
     rootHash,
-    realityRoot: chainRealityRoot,
+    storyRoot: chainStoryRoot,
   };
 }
 

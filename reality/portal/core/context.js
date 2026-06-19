@@ -313,21 +313,21 @@ export function createPortalContext({ id = "main", persist = true, session = nul
 
   // ── Auth flows ──────────────────────────────────────────────────
 
-  // BE birth/connect against the reality root, then reconnect the
+  // BE birth/connect against the story root, then reconnect the
   // socket under the returned identity token.
   async function signIn(op, name, password, { importKey = null } = {}) {
     if (op !== "birth" && op !== "connect") {
       throw new Error(`signIn: unsupported op "${op}"`);
     }
     if (!ctx.client) throw new Error("signIn: no client");
-    const reality = state.get("discovery")?.reality;
-    if (!reality) throw new Error("signIn: no reality");
+    const story = state.get("discovery")?.story;
+    if (!story) throw new Error("signIn: no story");
     // importKey (birth only): an exported private-key PEM or its
     // 24-word paper form — the being is born WITH that identity.
     // The wire layer holds it out of the chain (secret stash).
     const payload = { name, password };
     if (op === "birth" && importKey) payload.importKey = importKey;
-    const result = await ctx.client.be(op, reality, payload);
+    const result = await ctx.client.be(op, story, payload);
     await adoptSession(result, name);
     // A birth minted a fresh keypair: show the permanent identity and
     // offer the key backup right away. Body-level overlay (lazy module)
@@ -379,7 +379,7 @@ export function createPortalContext({ id = "main", persist = true, session = nul
     const sess = state.get("session");
     if (!sess?.token) return;
     const stance = sess.beingAddress
-      || `${state.get("discovery")?.reality}/@${sess.username}`;
+      || `${state.get("discovery")?.story}/@${sess.username}`;
     try {
       await ctx.client.be("release", stance, {});
     } catch (err) {
@@ -400,7 +400,7 @@ export function createPortalContext({ id = "main", persist = true, session = nul
     const { useProxy } = resolvePlaceConfig({ placeUrl });
     const discovery = await PortalClient.bootstrap(placeUrl, { useProxy });
     state.set({ discovery });
-    events.emit("status", `connected to ${discovery.reality}`);
+    events.emit("status", `connected to ${discovery.story}`);
     // A being-session (token + beingId) lands at the being; a NAME-only session
     // (token, no being) re-seats the name and lands at the arrival/picker; no
     // token at all is a fresh anonymous arrival -> the Name Form.
@@ -412,10 +412,10 @@ export function createPortalContext({ id = "main", persist = true, session = nul
   // Pull the full socket-side `.discovery` (clones, timezone, the
   // whole capability surface) and merge over the HTTP bootstrap.
   async function refreshDiscovery() {
-    const reality = state.get("discovery")?.reality;
-    if (!ctx.client || !reality) return state.get("discovery");
+    const story = state.get("discovery")?.story;
+    if (!ctx.client || !story) return state.get("discovery");
     try {
-      const full = await ctx.client.see(`${reality}/.discovery`);
+      const full = await ctx.client.see(`${story}/.discovery`);
       const merged = { ...state.get("discovery"), ...full };
       state.set({ discovery: merged });
       return merged;
@@ -477,10 +477,10 @@ export function wirePresence(ctx) {
         const mySpawner = sessionStorage.getItem(SPAWNER_KEY);
         if (!mySpawner || msg.username !== mySpawner) return;
         try {
-          const reality = ctx.state.get("discovery")?.reality;
+          const story = ctx.state.get("discovery")?.story;
           const username = ctx.state.get("session")?.username;
-          if (ctx.client && reality && username) {
-            await ctx.client.be("release", `${reality}/@${username}`, {});
+          if (ctx.client && story && username) {
+            await ctx.client.be("release", `${story}/@${username}`, {});
           }
         } catch { /* best effort */ }
         ctx.clearSession();
@@ -491,10 +491,10 @@ export function wirePresence(ctx) {
     // Inheriter tabs release their connect when the tab closes.
     window.addEventListener("pagehide", () => {
       try {
-        const reality = ctx.state.get("discovery")?.reality;
+        const story = ctx.state.get("discovery")?.story;
         const username = ctx.state.get("session")?.username;
-        if (!ctx.client || !reality || !username) return;
-        ctx.client.be("release", `${reality}/@${username}`, {}).catch(() => {});
+        if (!ctx.client || !story || !username) return;
+        ctx.client.be("release", `${story}/@${username}`, {}).catch(() => {});
       } catch { /* defensive */ }
     });
     return;

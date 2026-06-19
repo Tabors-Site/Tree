@@ -10,11 +10,11 @@
 //   Step 0  receiver being   — role-slot list
 //   Step 1  receiver being   — default list
 //   Step 2  receiver space   — role-slot + default, walking ancestors
-//   Step 3  receiver reality — role-slot + default
+//   Step 3  receiver story — role-slot + default
 //   Step 3.5 cross-boundary  — opens only if forceActor fired upstream
 //   Step 4  actor being      — role-slot + default
 //   Step 5  actor space      — role-slot + default, walking ancestors
-//   Step 6  actor reality    — role-slot + default
+//   Step 6  actor story    — role-slot + default
 //
 // Each container exposes a unified `qualities.llm` shape:
 //
@@ -45,7 +45,7 @@
 // re-write via the new ops.
 
 import { getAncestorChain } from "../../../materials/space/ancestorCache.js";
-import { getRealityConfigValue } from "../../../realityConfig.js";
+import { getStoryConfigValue } from "../../../storyConfig.js";
 
 // ─────────────────────────────────────────────────────────────────────
 // CONTAINER NORMALIZER
@@ -170,8 +170,8 @@ async function loadSpaceAncestors(spaceId, branch) {
   }
 }
 
-async function loadRealityRoot(branch) {
-  // Reality root is the topmost space with parent=null. The ancestor
+async function loadStoryRoot(branch) {
+  // Story root is the topmost space with parent=null. The ancestor
   // chain for the receiver/actor space ends at it, but for the
   // chain-walker convenience we load it directly so step 3 / 6 don't
   // depend on having walked space ancestors first.
@@ -211,7 +211,7 @@ function appendContainerCandidates(chain, container, role, step, tried) {
   // preferOwn: jump this container's candidates to the front of the
   // chain WITHIN this step. Implementation: append in normal order;
   // the chain order already gives this container priority within the
-  // step (since space/reality walk happens later). preferOwn is only
+  // step (since space/story walk happens later). preferOwn is only
   // meaningful when this is a being-level container competing with
   // ancestors at a higher step — but the step structure already gives
   // step 0/1 priority over step 2+. So preferOwn is currently a
@@ -237,8 +237,8 @@ function appendContainerCandidates(chain, container, role, step, tried) {
  *     reason: string | null,                       // why the walk capped (force flag, no candidates)
  *   }
  *
- * `actor` / `receiver` are `{ beingId, spaceId, realityDomain }`. The
- * realityDomain field is currently informational — same-reality is the
+ * `actor` / `receiver` are `{ beingId, spaceId, storyDomain }`. The
+ * storyDomain field is currently informational — same-story is the
  * common case and the resolver walks LOCAL projections regardless.
  */
 export async function buildLlmChain({ actor, receiver, role, branch = "0" } = {}) {
@@ -342,36 +342,36 @@ export async function buildLlmChain({ actor, receiver, role, branch = "0" } = {}
     }
   }
 
-  // Step 3: receiver reality root.
+  // Step 3: receiver story root.
   if (boundary !== "force-actor") {
-    const realityRoot = await loadRealityRoot(branch);
-    if (realityRoot) {
-      const norm = readContainerLlm(realityRoot, role);
+    const storyRoot = await loadStoryRoot(branch);
+    if (storyRoot) {
+      const norm = readContainerLlm(storyRoot, role);
       for (const id of norm.slotList) {
         if (!tried.has(id)) {
-          chain.push({ step: "3", source: "receiver-reality:slot", connectionId: id });
+          chain.push({ step: "3", source: "receiver-story:slot", connectionId: id });
           tried.add(id);
         }
       }
       for (const id of norm.defaultList) {
         if (!tried.has(id)) {
-          chain.push({ step: "3", source: "receiver-reality:default", connectionId: id });
+          chain.push({ step: "3", source: "receiver-story:default", connectionId: id });
           tried.add(id);
         }
       }
-      // Reality-config back-compat: read realityLlmConnection if no
-      // qualities.llm.default exists at reality root.
+      // Story-config back-compat: read storyLlmConnection if no
+      // qualities.llm.default exists at story root.
       if (norm.defaultList.length === 0 && norm.slotList.length === 0) {
-        const configConn = getRealityConfigValue("realityLlmConnection");
+        const configConn = getStoryConfigValue("storyLlmConnection");
         if (configConn && !tried.has(configConn)) {
-          chain.push({ step: "3", source: "receiver-reality:config", connectionId: configConn });
+          chain.push({ step: "3", source: "receiver-story:config", connectionId: configConn });
           tried.add(configConn);
         }
       }
       if (norm.forceReceiver) {
         boundary = "force-receiver";
         capStep = "3";
-        return { chain, tried, reason: "forceReceiver on receiver reality (capped at step 3)" };
+        return { chain, tried, reason: "forceReceiver on receiver story (capped at step 3)" };
       }
       if (norm.forceActor) {
         boundary = "force-actor";
@@ -443,32 +443,32 @@ export async function buildLlmChain({ actor, receiver, role, branch = "0" } = {}
     }
   }
 
-  // Step 6: actor reality (currently same as receiver reality for
-  // same-reality calls; the chain de-duplicates via `tried`).
-  if (!actor?.realityDomain || actor.realityDomain === receiver?.realityDomain) {
-    // Same reality — the receiver reality root already contributed.
+  // Step 6: actor story (currently same as receiver story for
+  // same-story calls; the chain de-duplicates via `tried`).
+  if (!actor?.storyDomain || actor.storyDomain === receiver?.storyDomain) {
+    // Same story — the receiver story root already contributed.
     // Try the same root again under step 6 only if something new
     // appeared (rare, but covers operator edits between walks).
-    const realityRoot = await loadRealityRoot(branch);
-    if (realityRoot) {
-      const norm = readContainerLlm(realityRoot, role);
+    const storyRoot = await loadStoryRoot(branch);
+    if (storyRoot) {
+      const norm = readContainerLlm(storyRoot, role);
       for (const id of norm.slotList) {
         if (!tried.has(id)) {
-          chain.push({ step: "6", source: "actor-reality:slot", connectionId: id });
+          chain.push({ step: "6", source: "actor-story:slot", connectionId: id });
           tried.add(id);
         }
       }
       for (const id of norm.defaultList) {
         if (!tried.has(id)) {
-          chain.push({ step: "6", source: "actor-reality:default", connectionId: id });
+          chain.push({ step: "6", source: "actor-story:default", connectionId: id });
           tried.add(id);
         }
       }
     }
   } else {
-    // Cross-world: actor reality is foreign. The locally-cached
+    // Cross-world: actor story is foreign. The locally-cached
     // projection (if any) would live somewhere outside the standard
-    // reality root. For now we don't have foreign-reality projections
+    // story root. For now we don't have foreign-story projections
     // wired in; step 6 contributes nothing for cross-world actors.
     // This is documented in the plan as a follow-up.
   }

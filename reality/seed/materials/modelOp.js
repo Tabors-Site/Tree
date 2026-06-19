@@ -7,7 +7,7 @@
 //
 //   1. UPLOAD is create-matter: POST the bytes to /api/v1/content,
 //      then `do create-matter { type: "model", content: <ref> }`
-//      targeting the reality root's `skins` space — the catalog
+//      targeting the story root's `skins` space — the catalog
 //      space that holds every uploaded model so the 3D portal can
 //      display them all and beings can see which ids exist.
 //
@@ -30,7 +30,7 @@
 //   matter — the matter's author, or the root owner. Extension
 //            authors set DEFAULTS for all matter of their type via
 //            the type def's render.model; this op is the per-matter
-//            override beings write into the reality's history.
+//            override beings write into the story's history.
 //   space  — the space's owner, or the root owner. A space's model
 //            is its body in the PARENT's scene (the pyramid you
 //            click to enter); the child carries its own model and
@@ -49,7 +49,7 @@ import { I_AM } from "./being/seedBeings.js";
 const SKINS_SPACE_NAME = "skins";
 
 /**
- * Find (or mint) the reality root's `skins` space — the model
+ * Find (or mint) the story root's `skins` space — the model
  * catalog. A normal space, not heaven: it forks with branches like
  * everything else, so each branch shows its own models. Called at
  * boot (genesis background furniture) so uploads always have a home;
@@ -58,7 +58,7 @@ const SKINS_SPACE_NAME = "skins";
 export async function ensureSkinsSpace(branch = "0", moment = null) {
   const { getSpaceRootId } = await import("../sprout.js");
   const rootId = getSpaceRootId();
-  if (!rootId) throw new IbpError(IBP_ERR.INTERNAL, "ensureSkinsSpace: reality root not ready");
+  if (!rootId) throw new IbpError(IBP_ERR.INTERNAL, "ensureSkinsSpace: story root not ready");
 
   const { default: Projection } = await import("./branch/projection.js");
   // Branch-local first, then main's inherited row (the lazy-fill

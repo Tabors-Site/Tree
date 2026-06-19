@@ -2,12 +2,12 @@
 //
 // My public face.
 //
-// This file assembles the `reality` object I hand to every
-// extension's `init(reality)`. Whatever I expose here is the whole
+// This file assembles the `story` object I hand to every
+// extension's `init(story)`. Whatever I expose here is the whole
 // of me an extension can reach. Services not implemented on this
-// reality get no-op proxies so extension code stays safe to call.
+// story get no-op proxies so extension code stays safe to call.
 
-import log from "./seedReality/log.js";
+import log from "./seedStory/log.js";
 import { hooks as hooksModule } from "./hooks.js";
 import Being from "./materials/being/being.js";
 import Space from "./materials/space/space.js";
@@ -113,7 +113,7 @@ import {
   getLockStats as getSpaceLockStats,
 } from "./materials/space/spaceLocks.js";
 
-// The declarative primitives. Re-exposed through `reality.declare` so
+// The declarative primitives. Re-exposed through `story.declare` so
 // extensions register roles, subscribe to events, declare wake
 // cadences, and aggregate fan-out replies without importing my
 // internals.
@@ -164,7 +164,7 @@ import { beVerb }     from "./ibp/verbs/be.js";
 import { nameVerb }   from "./ibp/verbs/name.js";
 // Side-effect imports. Each material owns the ops that target it; the
 // modules self-register with the operation registry on load. Seeds and
-// reality-config ops live alongside their respective subjects.
+// story-config ops live alongside their respective subjects.
 import "./materials/space/ops.js";
 import "./materials/matter/ops.js";
 // Side-effect import. Registers the `classify-matter` SEE op — the
@@ -173,7 +173,7 @@ import "./materials/matter/ops.js";
 import "./materials/matter/classify.js";
 // Side-effect import. Registers the chain SEE ops — `verify-reel`
 // (walk a reel's hash chain, branch-aware) and `chain-root` (the
-// branch / reality root fingerprints). See past/fact/chainRoots.js.
+// branch / story root fingerprints). See past/fact/chainRoots.js.
 import "./past/fact/chainRoots.js";
 // Side-effect import. Registers the unified `do move` op (relocates
 // a space or a matter into a new destination space). The cross-kind
@@ -219,7 +219,7 @@ import "./present/intake/inboxOps.js";
 // (currently "role-request"). The my-inbox SEE op above looks up the
 // renderer keyed by envelope intent and attaches the render spec to
 // each entry — the panel is then a dumb renderer. Extensions can
-// register their own renderers via reality.registerInboxRenderer.
+// register their own renderers via story.registerInboxRenderer.
 // See seed/SUMMON.md "the receiving handler" + seed/present/intake/
 // inboxRenderers.js for the spec shape.
 import "./present/intake/renderers/index.js";
@@ -233,9 +233,9 @@ import "./materials/publish/ops.js";
 // matter/space/being can carry: model + animations + sounds + future
 // channels). Sugar over set-<kind>; see seed/ibp/setRender.js.
 import "./ibp/setRender.js";
-// realityConfig.js self-registers the set-config / delete-config DO
+// storyConfig.js self-registers the set-config / delete-config DO
 // ops alongside the setters they wrap. Importing for the side effect.
-import "./realityConfig.js";
+import "./storyConfig.js";
 // (reigning.js retired 2026-06-04 . heaven uses ownership + role
 // grants (per seed/RolesAreAuth.md). Promote a being into heaven by
 // granting them the `angel` role anchored at heaven:
@@ -269,30 +269,30 @@ const _allowedStrategyExtensions = new Set();
 // proxy functions without a separate fallback path.
 
 /**
- * Build the reality services bundle.
+ * Build the story services bundle.
  *
  * @param {object} opts
  * @param {Map}    opts.loadedExtensions  - already-loaded extensions (for availability checks)
  * @param {object} opts.overrides         - swap any service with a custom implementation
- * @returns {object} the reality services bundle
+ * @returns {object} the story services bundle
  */
 
 // I stash the last-built bundle so seed-internal callers don't have to
-// thread it through every signature. buildRealityServices runs once at
+// thread it through every signature. buildStoryServices runs once at
 // boot; the bundle stays stable for the process lifetime.
-let _lastBuiltReality = null;
-export function getRealityServices() {
-  return _lastBuiltReality;
+let _lastBuiltStory = null;
+export function getStoryServices() {
+  return _lastBuiltStory;
 }
 
-export function buildRealityServices({
+export function buildStoryServices({
   loadedExtensions = new Map(),
   overrides = {},
 } = {}) {
-  const reality = {
+  const story = {
     // The four verbs. The whole of my public surface for operations
     // on space, matter, and beings. Per-target helpers below
-    // (reality.space, reality.matters, reality.qualities, etc.) are syntactic
+    // (story.space, story.matters, story.qualities, etc.) are syntactic
     // surfaces over the same grammar; new code prefers the verbs.
     see: seeVerb,
     do: doVerb,
@@ -300,12 +300,12 @@ export function buildRealityServices({
     be: beVerb,
     name: nameVerb,
 
-    // Branch-cloning / reality-seeding portable artifacts.
+    // Branch-cloning / story-seeding portable artifacts.
     // - clone (clone.js + graft.js): the SETUP — current shape of a
     //   subtree, hollow face. Used via the wire DO ops `capture-template`
     //   and `plant-template` (legacy aliases `replicate-subtree` /
     //   `graft-replicate` also registered).
-    // - captureGraft: the WHOLE REALITY — full chains (facts + acts +
+    // - captureGraft: the WHOLE STORY — full chains (facts + acts +
     //   branches + reelHeads), original IDs preserved. Plant-only on
     //   the receive side (boot mode in genesis.js). See
     //   `seed/done/Chain-Rebuild.md` for the doctrine.
@@ -317,7 +317,7 @@ export function buildRealityServices({
     // public API. For now: use PLANT_FROM_GRAFT env var on boot.
     plant: () => {
       throw new Error(
-        "reality.plant: plant is currently boot-only. Wipe the DB, set " +
+        "story.plant: plant is currently boot-only. Wipe the DB, set " +
         "PLANT_FROM_GRAFT=/path/to/graft.json, and restart the substrate. " +
         "Runtime plant (live wipe-and-replay-in-place) is a future arc; " +
         "see seed/done/Chain-Rebuild.md for the doctrine.",
@@ -462,11 +462,11 @@ export function buildRealityServices({
     },
 
     // --- Qualities. Per-primitive extension-data Map.
-    //     reality.qualities.{being,space,matter}.{getQuality, setQuality,
+    //     story.qualities.{being,space,matter}.{getQuality, setQuality,
     //     mergeQuality, incQuality, pushQuality, addToQualitySet,
     //     batchSetQuality, unsetQuality, readQualityNamespace}.
     //     Namespace ownership is enforced on space and matter when the
-    //     scoped reality bundle passes opts.callerExtName.
+    //     scoped story bundle passes opts.callerExtName.
     qualities,
 
     // --- Extension scope (check blocked/allowed status at positions) ---
@@ -512,8 +512,8 @@ export function buildRealityServices({
       // being's cognition is scripted. Without a registered handler, a
       // scripted role falls through to whatever its inline `summon` is;
       // an LLM role with no handler runs default LLM cognition. The
-      // scoped reality auto-namespaces the role name to the registering
-      // extension (scopedReality.js).
+      // scoped story auto-namespaces the role name to the registering
+      // extension (scopedStory.js).
       registerRoleHandler:   ibpRegisterRoleHandler,
       unregisterRoleHandler: ibpUnregisterRoleHandler,
 
@@ -523,13 +523,13 @@ export function buildRealityServices({
       //   1. canSee on roles: `canSee: ["place", "<ext>:<name>"]`
       //      — the role frame preloads each name's result as a face
       //      block in the LLM prompt.
-      //   2. Direct call: `reality.see("<ext>:<name>", args)` —
+      //   2. Direct call: `story.see("<ext>:<name>", args)` —
       //      any caller (portal, DO handler, extension code) gets
       //      the structured return verbatim.
       // Bare names are reserved for the seed; extension names are
-      // auto-prefixed `<ext>:<name>`. The verb (reality.see) and the
-      // registry methods (reality.see.registerOperation, .list, etc.)
-      // are attached to the same callable — mirrors reality.do.
+      // auto-prefixed `<ext>:<name>`. The verb (story.see) and the
+      // registry methods (story.see.registerOperation, .list, etc.)
+      // are attached to the same callable — mirrors story.do.
       registerSeeOperation: ibpRegisterSeeOperation,
       unregisterSeeOperation: ibpUnregisterSeeOperation,
       unregisterSeesForExtension: ibpUnregisterSeesForExtension,
@@ -546,7 +546,7 @@ export function buildRealityServices({
 
       // Scheduled-wake registry. A being declares a wake cadence;
       // the tick loop emits a SUMMON on each interval. Default is
-      // an anonymous code emitter; a reality may swap in a real
+      // an anonymous code emitter; a story may swap in a real
       // scheduler-being via setScheduleEmitter so the wake is
       // attributable to a Being row.
       schedule: ibpSchedule,
@@ -565,7 +565,7 @@ export function buildRealityServices({
       // what a piece of matter IS (content kinds) and what may be
       // DONE with it (its DO ops, surfaced as the matter's actions
       // and gated by the role-walk). Extensions absorb external
-      // systems into the reality by registering types; the verbs
+      // systems into the story by registering types; the verbs
       // stay uniform. Seed ships only the basics (generic, file,
       // web, model). See materials/matter/types.js +
       // philosophy/OS/matter.md.
@@ -594,15 +594,15 @@ export function buildRealityServices({
 
   // Apply overrides (places can swap any service)
   for (const [key, value] of Object.entries(overrides)) {
-    if (reality[key] && typeof value === "object") {
-      reality[key] = { ...reality[key], ...value };
+    if (story[key] && typeof value === "object") {
+      story[key] = { ...story[key], ...value };
     } else {
-      reality[key] = value;
+      story[key] = value;
     }
   }
 
-  _lastBuiltReality = reality;
-  return reality;
+  _lastBuiltStory = story;
+  return story;
 }
 
 export { authStrategies };

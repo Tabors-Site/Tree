@@ -23,7 +23,7 @@
 //   "chain-initial"  on reply-wakes only, request the chain-opening
 //                    asker have the follow-up moment.
 
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 import { runLlmMoment } from "./llm/llmMoment.js";
 import { cognitionFailure } from "./cognitionResult.js";
 import {

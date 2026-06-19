@@ -13,14 +13,14 @@
 // is JSON-serializable; the panel renders it without knowing the intent
 // or having any intent-specific switches. Renderers are server-side and
 // keyed by envelope intent; seed ships one for "role-request", and
-// extensions add their own through reality.registerInboxRenderer.
+// extensions add their own through story.registerInboxRenderer.
 // Roles with no matching renderer get `render: null` and the panel
 // falls back to a generic free-text reply surface.
 
 import { registerSeeOperation } from "../../ibp/seeOps.js";
 import { loadOrFold } from "../../materials/projections.js";
 import { buildInboxRenderSpec } from "./inboxRenderers.js";
-import { getRealityDomain } from "../../ibp/address.js";
+import { getStoryDomain } from "../../ibp/address.js";
 
 registerSeeOperation("my-inbox", {
   ownerExtension: "seed",
@@ -36,7 +36,7 @@ registerSeeOperation("my-inbox", {
       .lean();
     // Enrich with summoner names so the panel can render @from
     // without a second round-trip per row.
-    const reality = getRealityDomain();
+    const story = getStoryDomain();
     const enriched = [];
     for (const r of rows) {
       let summonerName = null;
@@ -67,7 +67,7 @@ registerSeeOperation("my-inbox", {
       // renderer matches; the panel then uses its default free-text
       // surface. Renderer errors are logged and treated as null.
       entry.render = await buildInboxRenderSpec(entry, {
-        reality,
+        story,
         branch:   r.branch || branch || "0",
         identity,
       });

@@ -40,9 +40,9 @@ const VALID_VERBS = new Set(["see", "do", "call", "be", "type"]);
  * "position" / "stance" are the internal wire-side enum; in user-
  * facing copy these are usually described as:
  *
- *   "place"    — bare reality domain, no slash, no @being.
+ *   "place"    — bare story domain, no slash, no @being.
  *                Example: "treeos.ai". Accepted only by BE.
- *   "position" — reality domain + path, no @being.
+ *   "position" — story domain + path, no @being.
  *                Example: "treeos.ai/~tabor". Accepted by SEE, DO.
  *   "stance"   — position + @being qualifier.
  *                Example: "treeos.ai/~tabor@cherub". Accepted by
@@ -89,7 +89,7 @@ export function extractBeingQualifier(address) {
  *
  * Identity is NOT carried in the envelope. The address IS the actor:
  * left stance's resolved beingId names the caller, the authenticated
- * socket proves they're allowed to be that caller. Cross-reality
+ * socket proves they're allowed to be that caller. Cross-story
  * provenance arrives via a signed-envelope mechanism documented in
  * FEDERATION.md (Diff B); local calls authenticate purely through
  * the transport-attached auth (socket / req).
@@ -121,7 +121,7 @@ export async function parseUnifiedEnvelope(msg) {
   // mean "the place root" for verbs that need a position (SEE, DO).
   // Normalize once at the IBP layer so the seed never sees a bare-
   // place for position-targeted verbs — it always receives a position
-  // address (`<reality>/`) that resolves to the place root via the
+  // address (`<story>/`) that resolves to the place root via the
   // standard path-walk. The seed doesn't worry about the difference.
   //
   // BE is intentionally NOT normalized: it accepts bare-place
@@ -136,11 +136,11 @@ export async function parseUnifiedEnvelope(msg) {
   // walks them as positions (or worse, routes them as foreign
   // domains). Registry membership is the test; the domain guard
   // covers the pathological collision where an op shares the local
-  // reality's name.
+  // story's name.
   if (verb === "see" && addressKind === "place") {
     const { isSeeOpName } = await import("../../seed/ibp/seeOps.js");
-    const { getRealityDomain } = await import("../../seed/ibp/address.js");
-    if (isSeeOpName(address) && address !== getRealityDomain()) {
+    const { getStoryDomain } = await import("../../seed/ibp/address.js");
+    if (isSeeOpName(address) && address !== getStoryDomain()) {
       addressKind = "see-op";
     }
   }
@@ -166,8 +166,8 @@ export async function parseUnifiedEnvelope(msg) {
         throw new IbpError(
           IBP_ERR.INVALID_INPUT,
           `ibp SEE address must be a position or stance, e.g. "${address}/" ` +
-          `for the reality root or "${address}/<path>" for a specific space. ` +
-          `Got bare reality domain "${address}".`,
+          `for the story root or "${address}/<path>" for a specific space. ` +
+          `Got bare story domain "${address}".`,
         );
       }
       break;
@@ -176,10 +176,10 @@ export async function parseUnifiedEnvelope(msg) {
       if (addressKind !== "position" && addressKind !== "stance") {
         throw new IbpError(
           IBP_ERR.INVALID_INPUT,
-          `ibp DO address must be a position (reality domain + path). ` +
-          `Use "${address}/" to target the reality root (e.g. for set-config ` +
+          `ibp DO address must be a position (story domain + path). ` +
+          `Use "${address}/" to target the story root (e.g. for set-config ` +
           `/ install-extension), or "${address}/<path>" for a specific space ` +
-          `(e.g. "${address}/~tabor"). Got bare reality domain "${address}".`,
+          `(e.g. "${address}/~tabor"). Got bare story domain "${address}".`,
         );
       }
       break;
@@ -199,7 +199,7 @@ export async function parseUnifiedEnvelope(msg) {
         throw new IbpError(
           IBP_ERR.INVALID_INPUT,
           `ibp BE address must be a stance (e.g. "localhost/@cherub") or a bare ` +
-          `reality domain (e.g. "localhost", no slash). Got "${addressKind}" ` +
+          `story domain (e.g. "localhost", no slash). Got "${addressKind}" ` +
           `shape (address="${address}").`,
         );
       }

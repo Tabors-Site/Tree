@@ -22,7 +22,7 @@ export function idEquals(a, b) {
 
 // Walk a dotted accessor over the flow's readable state. The path's HEAD names a
 // binding (the §0 trigger binds, §6 binds, flow-local marks) or a state key or a
-// proper-name being; the tail descends plain object fields (qualities.father.reality).
+// proper-name being; the tail descends plain object fields (qualities.father.story).
 // Returns undefined for a missing head or a broken descent — never throws.
 export function getPath(path, ctx) {
   if (path == null) return undefined;

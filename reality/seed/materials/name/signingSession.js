@@ -10,7 +10,7 @@
 // the session is open, the stamper signs the Name's acts with the held
 // key; on logout (or TTL expiry) the key is wiped and the Name's acts
 // seal UNSIGNED until the next login. A Name whose key is NOT password-
-// locked (system-encrypted, or I_AM's reality key) never needs this —
+// locked (system-encrypted, or I_AM's story key) never needs this —
 // signing is automatic.
 //
 // All Names are the same here: the latch is NOT soul-type-gated. It is a

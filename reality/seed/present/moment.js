@@ -36,7 +36,7 @@
 // pending intake entry and is otherwise out of the moment's
 // business.
 
-import log from "../seedReality/log.js";
+import log from "../seedStory/log.js";
 import { assign }   from "./stamper/1-assign.js";
 import { momentum } from "./stamper/3-momentum.js";
 import { sealAct }  from "./stamper/4-stamped.js";

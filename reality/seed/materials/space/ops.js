@@ -20,7 +20,7 @@ import {
   assertValidSpaceSize,
   assertNameAvailableAt,
 } from "./spaces.js";
-import { getRealityDomain } from "../../ibp/address.js";
+import { getStoryDomain } from "../../ibp/address.js";
 import { IbpError, IBP_ERR, mapPatternsToIbpError } from "../../ibp/protocol.js";
 import { I_AM } from "../being/seedBeings.js";
 import { detectTargetKind, targetIdOf, loadTargetRow } from "../_targetShape.js";
@@ -450,7 +450,7 @@ const PERMISSION_ERROR_PATTERNS = [
 //                                            grantedBy: <originalGrantor> })
 //
 // Operators define their own contributor role via the role-manager UI
-// (set-role) with whatever canDo entries fit their reality.
+// (set-role) with whatever canDo entries fit their story.
 
 registerOperation("set-owner", {
   targets: ["space", "stance"],
@@ -574,7 +574,7 @@ function shapeNewSpace(newSpace) {
   return {
     spaceId,
     name: newSpace.name,
-    position: `${getRealityDomain()}/${spaceId}`,
+    position: `${getStoryDomain()}/${spaceId}`,
     _factTarget: { kind: "space", id: spaceId },
   };
 }

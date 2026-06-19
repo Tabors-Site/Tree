@@ -3,12 +3,12 @@
 // contentStore — the content-addressable store. Bytes live HERE;
 // the chain holds facts ABOUT bytes.
 //
-// Doctrinally this is the reality's **localStore**: the unconditional
-// CAS layer that every reality has, populated automatically by
+// Doctrinally this is the story's **localStore**: the unconditional
+// CAS layer that every story has, populated automatically by
 // putContent whenever owned bytes are created. Not all bytes here are
 // "installed" or "active" — they're just stored. The optional store
-// pack (reality/resources/store/) sits on top of this layer and lets a
-// reality choose which localStore items to expose as publishable
+// pack (story/resources/store/) sits on top of this layer and lets a
+// story choose which localStore items to expose as publishable
 // resources. See philosophy/OS/ROOTS.md for the four-layer model
 // (localStore, federation, peering, store).
 //
@@ -51,7 +51,7 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// localStore root: env override, else reality/localStore.
+// localStore root: env override, else story/localStore.
 const localStoreFolder = process.env.LOCALSTORE_DIR
   ? path.resolve(process.env.LOCALSTORE_DIR)
   : path.resolve(__dirname, "../../../localStore");

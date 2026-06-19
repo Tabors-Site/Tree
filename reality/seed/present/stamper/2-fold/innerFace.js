@@ -38,7 +38,7 @@
 //   face is stashed on moment for the seal. High enough that any
 //   honest face slips through unclamped; tight enough to prevent a
 //   runaway extension from writing a 50MB occupant list. The
-//   spaces / matter / beings of the reality are the truth; storage
+//   spaces / matter / beings of the story are the truth; storage
 //   is a bounded record of the face.
 //
 //   RENDER caps (LLM prompt budget). Applied by clampForRender when
@@ -258,11 +258,11 @@ export function clampForRender(face) {
 }
 
 /**
- * Normalize a foreign reality's descriptor into the canonical inner
+ * Normalize a foreign story's descriptor into the canonical inner
  * face shape so a cross-world override supersedes the local face
  * post-seal in the same shape readers already know.
  *
- * The foreign descriptor's shape varies per the receiving reality's
+ * The foreign descriptor's shape varies per the receiving story's
  * SEE pipeline. We map best-effort:
  *   . descriptor.space / .position / .address . position {id, name}
  *   . descriptor.orientation . orientation (default "forward")
@@ -323,7 +323,7 @@ export function normalizeForeignDescriptor(descriptor) {
       };
 
   const blocks = [];
-  // If the descriptor carries a blocks list already (foreign reality
+  // If the descriptor carries a blocks list already (foreign story
   // already speaks the canonical shape), pass them through. Otherwise
   // wrap the whole descriptor as one "place" block so the structured
   // view is still readable.
@@ -362,7 +362,7 @@ export function normalizeForeignDescriptor(descriptor) {
       STORAGE_LIST_MAX,
     ),
     // weave has no meaning for a foreign descriptor (we did not fold
-    // the foreign reality's reels). The foreign push channel, when it
+    // the foreign story's reels). The foreign push channel, when it
     // lands, is the channel of record for foreign updates.
     weave:        [],
     origin:       "foreign",

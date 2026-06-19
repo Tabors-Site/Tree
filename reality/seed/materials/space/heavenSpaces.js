@@ -77,7 +77,7 @@
 //
 // Kinds of Space the seed plants and owns. Two tiers.
 //
-// Tier 1 . the place root itself (SPACE_ROOT). The reality's outermost
+// Tier 1 . the place root itself (SPACE_ROOT). The story's outermost
 // space; the place every being and every tree hangs off.
 //
 // Tier 2 . the heaven space (HEAVEN), named ".", parented directly
@@ -93,7 +93,7 @@
 // tools, roles, operations, source, threads, branches, host). These
 // are I-Am's working memory, surfaced as spaces so SEE reads them
 // through the same protocol as everything else. They are children of
-// HEAVEN, addressable as `<reality>/./config`, `<reality>/./tools`,
+// HEAVEN, addressable as `<story>/./config`, `<story>/./tools`,
 // etc. The leading "./" is heaven's door; the inner names carry no
 // reserved sigil because heaven is the namespace. One tier-3 space
 // (host) carries its own children (http, websocket, mongo).
@@ -114,7 +114,7 @@ export const HEAVEN_SPACE = Object.freeze({
   EXTENSIONS: "extensions",
   // Registry-mirror place heaven spaces. Each runtime registry (tool defs,
   // role specs, DO operations) syncs its contents into a child Space
-  // here so SEE on `<reality>/./tools` (etc.) returns the current registry
+  // here so SEE on `<story>/./tools` (etc.) returns the current registry
   // through the standard descriptor pipeline.
   TOOLS: "tools",
   ROLES: "roles",
@@ -139,7 +139,7 @@ export const HEAVEN_SPACE = Object.freeze({
   // ("1", "1a", "1a1", ...); main itself is the implicit "0" and has
   // no child here. Children carry branch metadata in their qualities
   // (parent, branchPoint, label, paused state). SEE on
-  // `<reality>/./branches` returns the branch tree; the underlying
+  // `<story>/./branches` returns the branch tree; the underlying
   // truth is the Branch Mongo collection (one row per non-main
   // branch). See seed/materials/branch/branches.js for the read
   // helpers and seed/timeline.md for the doctrine.

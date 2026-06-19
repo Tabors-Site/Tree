@@ -42,7 +42,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 import { matterContentId } from "../matter/matterId.js";
 import { HEAVEN_SPACE } from "./heavenSpaces.js";
 import { I_AM } from "../being/seedBeings.js";
@@ -130,7 +130,7 @@ export async function ensureSourceTree(opts = {}) {
 
   // Branch is pinned to main ("0") throughout this file by design: the
   // ./source mirror is a heaven region, and heaven spaces live only on
-  // main (one canonical projection per reality, no per-branch fork).
+  // main (one canonical projection per story, no per-branch fork).
   const { findByHeavenSpace } = await import("../projections.js");
   const _sourceSlot = await findByHeavenSpace(HEAVEN_SPACE.SOURCE, "0");
   const sourceSpace = _sourceSlot ? { _id: _sourceSlot.id } : null;

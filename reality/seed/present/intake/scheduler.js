@@ -31,11 +31,11 @@
 // up. A boot-time recovery pass that scans inboxes for unstamped
 // requests and resumes them is on the roadmap.
 
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 import { getInternalConfigValue } from "../../internalConfig.js";
 import { pickNextIntake } from "./intake.js";
 import { runMoment } from "../moment.js";
-import { getRealityConfigValue } from "../../realityConfig.js";
+import { getStoryConfigValue } from "../../storyConfig.js";
 
 // Per-being scheduler state.
 //
@@ -258,7 +258,7 @@ async function runLoop(beingId) {
     // lane until restart. Live readyState read every pass (dbConfig's
     // isDbHealthy), never cached: the gate exists precisely for
     // mid-run outages, which a sticky cache can't see.
-    const { isDbHealthy } = await import("../../seedReality/dbConfig.js");
+    const { isDbHealthy } = await import("../../seedStory/dbConfig.js");
     if (!isDbHealthy()) {
       _noteDbDownOnce();
       return; // finally below clears running/controller, leaves wakeQueue
@@ -308,7 +308,7 @@ async function runLoop(beingId) {
           if (!picked) break;
           // Pause / delete gate. Entries land on the picked branch;
           // if that branch is paused or deleted, running the moment
-          // would just hit the wire-layer REALITY_PAUSED gate when
+          // would just hit the wire-layer STORY_PAUSED gate when
           // its downstream DOs fire, leaving the row open and
           // triggering a rate-limit storm. Mark the correlation seen
           // (the pick excludes it for the rest of this pass) and

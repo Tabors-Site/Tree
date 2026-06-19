@@ -65,7 +65,7 @@
 //                      custom summon (LLM path is the default)
 //   buildSystemPrompt - auto-assembled via seed/present/buildPrompt when not provided
 //
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 
 // The role registry. Seed-shipped roles (auth, llm-assigner,
 // place-manager) register through registerRole during genesis;
@@ -385,7 +385,7 @@ function makeLazyDefaultCall(role) {
 }
 
 /**
- * Sync the role registry into `<reality>/./roles` as child Spaces. One child
+ * Sync the role registry into `<story>/./roles` as child Spaces. One child
  * per role; qualities mirror the role's surface. Called at boot end
  * after extensions register; idempotent.
  */
@@ -427,7 +427,7 @@ export async function syncRolesToSubstrate() {
 
 /**
  * Boot-time loader for operator-authored live roles. Walks
- * `<reality>/./roles` for children whose qualities.role.origin === "live"
+ * `<story>/./roles` for children whose qualities.role.origin === "live"
  * and calls registerRole on each so they live in the in-memory map
  * alongside seed and extension roles. Runs AFTER extension loading
  * and BEFORE syncRolesToSubstrate so the round-trip preserves them.

@@ -2,7 +2,7 @@
 //
 // The request stream, stamped. nodeServerTest Phase 1, the deliberate
 // scale test: every HTTP request this process serves becomes a fact —
-// the OS will stamp at this cadence constantly, so the Node reality
+// the OS will stamp at this cadence constantly, so the Node story
 // proves the stamper holds up now.
 //
 // Shape:
@@ -23,16 +23,16 @@
 //     no-ops on these actions: the figure stays tiny, the facts are
 //     the record. Live numbers come from the in-memory counters via
 //     the `http-stats` SEE op, not from folds.
-//   - Off switch: realityConfig `hostRequestFacts` (false stops
+//   - Off switch: storyConfig `hostRequestFacts` (false stops
 //     stamping immediately; counters keep counting).
 //
 // Privacy: the query string is stripped (it can carry tokens), the
 // cookie token is decoded to a beingId at drain time and the token
 // string itself never enters a fact. No headers, no bodies.
 
-import log from "../../seedReality/log.js";
-import { isDbHealthy } from "../../seedReality/dbConfig.js";
-import { getRealityConfigValue } from "../../realityConfig.js";
+import log from "../../seedStory/log.js";
+import { isDbHealthy } from "../../seedStory/dbConfig.js";
+import { getStoryConfigValue } from "../../storyConfig.js";
 
 const SOFT_BATCH_THRESHOLD = 100;
 const BATCH_MAX = 50;
@@ -100,7 +100,7 @@ export function noteHttpRequest(entry) {
   try {
     bumpCounters(entry);
     if (!httpBeingId || !requestLogMatterId || !enqueue) return;
-    if (getRealityConfigValue("hostRequestFacts") === false) return;
+    if (getStoryConfigValue("hostRequestFacts") === false) return;
     if (queue.length >= HARD_CAP) {
       droppedSinceLastStamp++;
       counters.dropped++;

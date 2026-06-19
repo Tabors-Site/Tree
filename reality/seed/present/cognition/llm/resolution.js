@@ -17,14 +17,14 @@
 //   0  receiver being   role-slot list
 //   1  receiver being   default list
 //   2  receiver space   role-slot + default, walking ancestors
-//   3  receiver reality role-slot + default
+//   3  receiver story role-slot + default
 //   3.5 cross-boundary  opens only if forceActor fired upstream
 //   4  actor being      role-slot + default
 //   5  actor space      role-slot + default, walking ancestors
-//   6  actor reality    role-slot + default
+//   6  actor story    role-slot + default
 //
 // Each container's `qualities.llm` shape (unified across being, space,
-// reality):
+// story):
 //
 //   qualities.llm = {
 //     default:       string[],    // independent ordered list
@@ -49,8 +49,8 @@ import { buildLlmChain } from "./chain.js";
  * drains it.
  *
  * @param {object} opts
- * @param {object} opts.receiver  { beingId, spaceId, realityDomain }
- * @param {object} [opts.actor]   { beingId, spaceId, realityDomain }
+ * @param {object} opts.receiver  { beingId, spaceId, storyDomain }
+ * @param {object} [opts.actor]   { beingId, spaceId, storyDomain }
  *                                (null/missing — no actor side walked)
  * @param {string} [opts.role]    role name for per-role slot lookups
  * @param {string} [opts.branch]  branch id (default "0")

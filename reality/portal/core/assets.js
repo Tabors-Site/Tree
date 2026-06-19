@@ -1,7 +1,7 @@
 // TreeOS Portal . core/assets.js
 //
 // Asset resolution seam. Today every asset (extension models, sounds,
-// manifests, content-store bytes) is fetched from the reality's HTTP
+// manifests, content-store bytes) is fetched from the story's HTTP
 // origin by a root-relative path ("/assets/...", "/api/v1/content/...").
 // A future native shell (Tauri, Phase 3+) resolves the same references
 // from a local matter store instead — it injects a resolver here and

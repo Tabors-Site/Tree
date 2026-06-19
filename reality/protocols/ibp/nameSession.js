@@ -3,7 +3,7 @@
 // The Name layer is OUTSIDE the world and PRE all panels. You need a
 // name before you can do anything; minting the first name therefore
 // can't itself require one. So a fresh connection — no token, no being,
-// landed at the bare realityDomain — speaks THIS channel (socket event
+// landed at the bare storyDomain — speaks THIS channel (socket event
 // "name"), not the world-verb "ibp" channel and not cherub. (The four
 // world verbs ride "ibp" through the act pipeline; BE routes through
 // cherub. The Name layer answers to neither: it is the gate in front of
@@ -13,7 +13,7 @@
 // unbind the session, banish = its death). This channel carries the pre-world
 // surface — the Name Form's whole reach:
 //   declare  mint a name (the unauthed bootstrap; the fact's actor is
-//            I_AM, every name being a facet of the reality's I_AM). FACT.
+//            I_AM, every name being a facet of the story's I_AM). FACT.
 //   connect  real-name + password -> decrypt the key into the signing
 //            session + bind socket.nameId (the identity-layer be:connect).
 //            SESSION, not a fact. It is the portal's convenience for using a
@@ -28,7 +28,7 @@
 // because a pre-world connection has no being to route a transport-act
 // through. login/logout/whoami are pure session control on the socket.
 
-import log from "../../seed/seedReality/log.js";
+import log from "../../seed/seedStory/log.js";
 import { ackOk, ackError } from "./envelope.js";
 import { IBP_ERR } from "../../seed/ibp/protocol.js";
 
@@ -125,7 +125,7 @@ async function doWhoami(socket, ack, id) {
 }
 
 // declare — the pre-world bootstrap. Opens an I_AM moment (no being
-// needed) and mints the name as a facet of the reality's I_AM. Both
+// needed) and mints the name as a facet of the story's I_AM. Both
 // real-name and password are OPTIONAL.
 async function doDeclare(socket, msg, ack, id) {
   if (!checkNameRate("declare", socketIp(socket))) {
@@ -161,11 +161,11 @@ async function doDeclare(socket, msg, ack, id) {
 async function stampNameSession(op, nameId) {
   const { withIAmAct } = await import("../../seed/sprout.js");
   const { nameVerb } = await import("../../seed/ibp/verbs/name.js");
-  const { getRealityDomain } = await import("../../seed/ibp/address.js");
-  const realityDomain = getRealityDomain();
+  const { getStoryDomain } = await import("../../seed/ibp/address.js");
+  const storyDomain = getStoryDomain();
   await withIAmAct(`name:${op}`, async (ctx) => {
     await nameVerb(op, {}, {
-      address:       `${nameId}@${realityDomain}`,
+      address:       `${nameId}@${storyDomain}`,
       moment:     ctx,
       currentBranch: "0",
     });
@@ -239,7 +239,7 @@ async function doConnect(socket, msg, ack, id) {
 
 // release — stamp the name:release fact (folds connected:false), wipe the held
 // key, and unbind the connection (the name releasing itself; back to the bare
-// reality / the Name menu).
+// story / the Name menu).
 async function doRelease(socket, msg, ack, id) {
   const nameId = socket.nameId || null;
   if (nameId) {

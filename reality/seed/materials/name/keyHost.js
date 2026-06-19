@@ -25,7 +25,7 @@ const branchOf = (ctx) => ctx?.moment?.actorAct?.branch || ctx?.branch || "0";
 export function keyHostEnv() {
   return {
     // loadKey(nameId) → THE authoritative key reader, the SAME one the seal signs
-    // with (actSig.loadSigningKey): i-am → reality key; password-locked Name → the
+    // with (actSig.loadSigningKey): i-am → story key; password-locked Name → the
     // in-session PEM (null if not connected); system-encrypted → decrypt. Null when
     // locked-and-not-connected or keyless. The branch is the moment's, never defaulted
     // for a real export (the "0" fallback only covers a standalone harness run).

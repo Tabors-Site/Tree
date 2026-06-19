@@ -16,8 +16,8 @@
 //
 // Because the id IS the verification key, signatures are SELF
 // CERTIFYING: verifyNameSig decodes the key straight from the id, no
-// directory. Mirrors the ed25519 path the reality already uses in
-// seed/realityIdentity.js (Node native crypto, no new dependency).
+// directory. Mirrors the ed25519 path the story already uses in
+// seed/storyIdentity.js (Node native crypto, no new dependency).
 
 import crypto from "crypto";
 import { canonicalize } from "../../past/fact/hash.js";
@@ -71,7 +71,7 @@ function rawPubFromPem(publicKeyPem) {
   return Buffer.from(jwk.x, "base64url"); // raw 32-byte ed25519 public key
 }
 
-/** Encode a raw 32-byte ed25519 public key as a name/reality id. */
+/** Encode a raw 32-byte ed25519 public key as a name/story id. */
 export function encodeKeyId(rawPub) {
   return ID_PREFIX + b58encode(Buffer.concat([MULTICODEC_ED25519_PUB, rawPub]));
 }
@@ -148,7 +148,7 @@ export function verifyNameSig(nameId, payloadObj, sigB64) {
 /**
  * Verify a signature against a raw SPKI public-key PEM, not a key id.
  * Used where the signer's id is NOT its public key: I_AM, whose id is
- * the literal "i-am" and whose key is the reality key (realityIdentity).
+ * the literal "i-am" and whose key is the story key (storyIdentity).
  * Same canonicalizer as signAsName, so the two are symmetric.
  */
 export function verifyWithPublicKeyPem(publicKeyPem, payloadObj, sigB64) {
@@ -160,7 +160,7 @@ export function verifyWithPublicKeyPem(publicKeyPem, payloadObj, sigB64) {
   }
 }
 
-/** Encode a name/reality id from its SPKI public-key PEM. */
+/** Encode a name/story id from its SPKI public-key PEM. */
 export function keyIdFromPublicKeyPem(publicKeyPem) {
   return encodeKeyId(rawPubFromPem(publicKeyPem));
 }

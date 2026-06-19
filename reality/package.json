@@ -1,5 +1,5 @@
 {
-  "name": "treeos-reality",
+  "name": "treeos-story",
   "version": "1.0.0",
   "type": "module",
   "scripts": {
@@ -16,13 +16,13 @@
     "LLMs",
     "beings",
     "agents",
-    "reality",
+    "story",
     "federation",
     "metaverse"
   ],
   "author": "Tabor Holly",
   "license": "AGPL-3.0",
-  "description": "TreeOS Reality server. Plant the seed. Grow trees. Beings live here.",
+  "description": "TreeOS Story server. Plant the seed. Grow trees. Beings live here.",
   "homepage": "https://treeos.ai",
   "dependencies": {
     "cookie-parser": "^1.4.7",

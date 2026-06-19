@@ -23,7 +23,7 @@
 
 import log from "../log.js";
 import { SEED_VERSION } from "../version.js";
-import { getRealityConfigValue } from "../../realityConfig.js";
+import { getStoryConfigValue } from "../../storyConfig.js";
 import { I_AM } from "../../materials/being/seedBeings.js";
 import fs from "fs";
 import path from "path";
@@ -140,7 +140,7 @@ export async function runSeedMigrations(moment) {
       "runSeedMigrations requires moment. Wrap the call in withIAmAct(...) so migration writes ride one Act.",
     );
   }
-  const storedVersion = getRealityConfigValue("seedVersion") || "0.0.0";
+  const storedVersion = getStoryConfigValue("seedVersion") || "0.0.0";
   const currentVersion = SEED_VERSION;
 
   // Validate stored version looks like semver

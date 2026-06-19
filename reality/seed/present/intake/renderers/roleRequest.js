@@ -33,7 +33,7 @@ function escapeHtml(s) {
 
 /**
  * @param {object} entry  inbox entry (carries the envelope content)
- * @param {object} ctx    { reality, branch }
+ * @param {object} ctx    { story, branch }
  */
 export async function roleRequestRenderer(entry, ctx) {
   const c = entry.content || {};
@@ -41,7 +41,7 @@ export async function roleRequestRenderer(entry, ctx) {
   const anchorSpaceId = typeof c.anchorSpaceId === "string" ? c.anchorSpaceId : null;
   const askerBeingId  = typeof c.askerBeingId === "string" ? c.askerBeingId : null;
   const reason        = typeof c.reason === "string" ? c.reason : null;
-  const reality       = ctx?.reality || "";
+  const story       = ctx?.story || "";
   const branch        = ctx?.branch  || "0";
 
   // Resolve asker stance: prefer the askerName recorded in content;
@@ -50,12 +50,12 @@ export async function roleRequestRenderer(entry, ctx) {
   let askerStance = null;
   let askerName   = typeof c.askerName === "string" ? c.askerName : null;
   if (askerName) {
-    askerStance = `${reality}/@${askerName}`;
+    askerStance = `${story}/@${askerName}`;
   } else if (askerBeingId) {
     try {
       const slot = await loadOrFold("being", askerBeingId, branch);
       askerName = slot?.state?.name || null;
-      if (askerName) askerStance = `${reality}/@${askerName}`;
+      if (askerName) askerStance = `${story}/@${askerName}`;
     } catch {
       askerStance = null;
     }

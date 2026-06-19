@@ -6,7 +6,7 @@
 //
 // Space comes first. Without it nothing else has a where to be —
 // so the writes that shape the tree are the most consequential
-// substrate mutations on the reality. They run under tier-3 locks
+// substrate mutations on the story. They run under tier-3 locks
 // (spaceLocks.js) and they all flow through this file. Reads sit
 // alongside writes here, mirroring matter/matters.js — one ops
 // file per material.
@@ -21,7 +21,7 @@
 // addressable in a URL path without encoding — no slashes, no
 // spaces, no HTML, no @ / ~ / ? / # prefixes that the IBP address
 // grammar reserves for stance qualifiers. Place heaven spaces
-// (dot-prefixed) bypass the rule via `createRealityHeavenSpace` because
+// (dot-prefixed) bypass the rule via `createStoryHeavenSpace` because
 // I plant them at boot and the validator's job is to keep every
 // OTHER being out of the dot-namespace.
 
@@ -47,8 +47,8 @@ import {
 } from "./ancestorCache.js";
 import { hooks } from "../../hooks.js";
 import { getSpaceRootId } from "../../sprout.js";
-import { getRealityConfigValue, CONFIG_DEFAULTS } from "../../realityConfig.js";
-import log from "../../seedReality/log.js";
+import { getStoryConfigValue, CONFIG_DEFAULTS } from "../../storyConfig.js";
+import log from "../../seedStory/log.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
 import { DELETED, HEAVEN_SPACE } from "./heavenSpaces.js";
 import { I_AM } from "../being/seedBeings.js";
@@ -100,13 +100,13 @@ export function assertValidSpaceName(raw) {
  *   - empty after filtering: default-substitute when `applyDefault`,
  *     else INVALID_INPUT (existing set-space behavior).
  *
- * Reads config via getRealityConfigValue; falls back to CONFIG_DEFAULTS
+ * Reads config via getStoryConfigValue; falls back to CONFIG_DEFAULTS
  * so the helper works at boot (ensureSpaceRoot runs before
- * initRealityConfig) and after.
+ * initStoryConfig) and after.
  */
 export function assertValidSpaceSize(raw, { applyDefault = false } = {}) {
-  const defaultSize = getRealityConfigValue("defaultSpaceSize") || CONFIG_DEFAULTS.defaultSpaceSize;
-  const maxSize     = getRealityConfigValue("maxSpaceSize")     || CONFIG_DEFAULTS.maxSpaceSize;
+  const defaultSize = getStoryConfigValue("defaultSpaceSize") || CONFIG_DEFAULTS.defaultSpaceSize;
+  const maxSize     = getStoryConfigValue("maxSpaceSize")     || CONFIG_DEFAULTS.maxSpaceSize;
 
   if (raw === null || raw === undefined) {
     return applyDefault ? deepCopySize(defaultSize) : null;
@@ -298,9 +298,9 @@ export async function createSpace({
   }
 
   // A child of the space root is a tree root by definition: it carries
-  // an owner, lives at the reality's top level, and is reachable both
-  // as `<reality>/<name>` (from the place root walk) AND as
-  // `<reality>/~<owner-name>/<name>` (from the owner's home walk). The
+  // an owner, lives at the story's top level, and is reachable both
+  // as `<story>/<name>` (from the place root walk) AND as
+  // `<story>/~<owner-name>/<name>` (from the owner's home walk). The
   // home walk applies an owner filter (`rootOwner: <beingId>`), so if
   // a space sits at parent=spaceRoot WITHOUT rootOwner set, the home-
   // walk path can't find it and plant-after-create breaks even though
@@ -533,7 +533,7 @@ export async function createSpace({
  * its own precondition — point 9). Everything else is the same
  * write that `createSpace` performs.
  */
-export async function createRealityHeavenSpace({
+export async function createStoryHeavenSpace({
   name,
   parentId,
   heavenSpace,

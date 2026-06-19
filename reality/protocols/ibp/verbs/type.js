@@ -11,7 +11,7 @@
 // rejected. This is the human half of the scribe — the scribe drafts, you press; the bar IS you
 // pressing. The four views are renders of what lands here.
 
-import log from "../../../seed/seedReality/log.js";
+import log from "../../../seed/seedStory/log.js";
 import { IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
 import { ackOk, ackError } from "../envelope.js";
 

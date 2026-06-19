@@ -59,7 +59,7 @@
 //   portal can render either.
 //
 // Both sides of a bridge are stances. They use the SAME grammar. A
-// human user is represented as `<reality>/@<username>` — i.e. a being at
+// human user is represented as `<story>/@<username>` — i.e. a being at
 // the place root space. A bare identifier on the left side (e.g. `tabor`) is
 // the display shorthand for that. In future, the left side of a bridge
 // may carry a deeper path so the request reflects WHERE in the user's
@@ -67,7 +67,7 @@
 // requests).
 //
 // The parser accepts shorthands and expands them against an optional
-// context (currentReality / currentPath / currentUser / defaultBeing).
+// context (currentStory / currentPath / currentUser / defaultBeing).
 // The formatter round-trips: format(parse(s, ctx), ctx) yields the
 // canonical form.
 //
@@ -88,7 +88,7 @@
  *
  * @param {string} input
  * @param {object} [ctx]
- * @param {string} [ctx.currentReality]   — e.g. "treeos.ai"
+ * @param {string} [ctx.currentStory]   — e.g. "treeos.ai"
  * @param {string} [ctx.currentPath]   — e.g. "/~tabor/flappybird"
  * @param {string} [ctx.currentUser]   — e.g. "tabor"
  * @param {string} [ctx.defaultBeing]  — being to assume when omitted
@@ -199,13 +199,13 @@ export function expand(pa, ctx = {}) {
  * Resolve `@being` names to canonical beingIds on an expanded address.
  *
  * Doctrine: the address IS the identity. The left stance's `@being`
- * name plus the stance's (reality, branch) triple uniquely identifies
+ * name plus the stance's (story, branch) triple uniquely identifies
  * a being row via findByName. After this resolution, every local
  * stance with a `@being` qualifier also carries its `beingId`, and
  * the verb dispatcher reads the actor from the address directly . no
  * separate `identity` envelope field.
  *
- * Foreign-reality stances (reality !== ctx.currentReality) pass through
+ * Foreign-story stances (story !== ctx.currentStory) pass through
  * with no beingId resolution; the foreign substrate does its own
  * lookup when the envelope arrives there.
  *
@@ -216,7 +216,7 @@ export function expand(pa, ctx = {}) {
  *
  * @param {{ left?, right }} pa  expanded address (output of `expand`)
  * @param {object} ctx
- * @param {string} ctx.currentReality   this server's reality domain
+ * @param {string} ctx.currentStory   this server's story domain
  * @returns {Promise<{ left?, right }>}  same shape, with beingId on resolved stances
  */
 export async function resolveBeingIds(pa, ctx = {}) {
@@ -230,10 +230,10 @@ export async function resolveBeingIds(pa, ctx = {}) {
 async function _resolveStanceBeingId(stance, ctx) {
   if (!stance || !stance.being) return stance;
   if (stance.beingId) return stance;
-  const localReality = ctx.currentReality || getRealityDomain();
-  // Foreign reality: no local resolution. The receiving substrate
+  const localStory = ctx.currentStory || getStoryDomain();
+  // Foreign story: no local resolution. The receiving substrate
   // handles it. beingId stays unset on this side.
-  if (stance.reality && stance.reality !== localReality) return stance;
+  if (stance.story && stance.story !== localStory) return stance;
   try {
     const { findByName } = await import("../materials/projections.js");
     // No literal "0" fallback — resolve the operator's `#main` pointer
@@ -255,7 +255,7 @@ async function _resolveStanceBeingId(stance, ctx) {
 
 /**
  * Resolve named branch pointers on an expanded address to canonical
- * paths via the per-reality @branch-registry being.
+ * paths via the per-story @branch-registry being.
  *
  * Doctrine: the parser recognizes pointer references at structure
  * level (`#main`, `#prod`) and stashes them on `stance.branchPointer`,
@@ -266,8 +266,8 @@ async function _resolveStanceBeingId(stance, ctx) {
  * canonical regardless of whether the original address used a pointer
  * or a canonical path.
  *
- * Foreign-reality stances skip resolution: the pointer registry is
- * per-reality, and the foreign substrate does its own lookup on the
+ * Foreign-story stances skip resolution: the pointer registry is
+ * per-story, and the foreign substrate does its own lookup on the
  * receiving side (see FEDERATION.md).
  *
  * Unresolved pointers (the name doesn't exist in the registry) leave
@@ -291,13 +291,13 @@ export async function resolveBranchPointers(pa, ctx = {}) {
   // filled implicit sides from the caller's ambient branch and the
   // pointer lookup above has canonicalized `#main`-style references,
   // so the comparison is honest for every address shape. Only gate
-  // same-reality pairs: branch paths are per-reality namespaces, so
+  // same-story pairs: branch paths are per-story namespaces, so
   // comparing them across realities is meaningless (the foreign
   // substrate gates its own side).
   if (
     resolved.left?.branch &&
     resolved.right?.branch &&
-    (resolved.left.reality || null) === (resolved.right.reality || null) &&
+    (resolved.left.story || null) === (resolved.right.story || null) &&
     resolved.left.branch !== resolved.right.branch
   ) {
     let addr = null;
@@ -310,8 +310,8 @@ export async function resolveBranchPointers(pa, ctx = {}) {
 async function _resolveStancePointer(stance, ctx) {
   if (!stance || !stance.branchPointer) return stance;
   if (stance.branch) return stance;  // already canonical
-  const localReality = ctx.currentReality || getRealityDomain();
-  if (stance.reality && stance.reality !== localReality) return stance;
+  const localStory = ctx.currentStory || getStoryDomain();
+  if (stance.story && stance.story !== localStory) return stance;
   try {
     const { resolvePointer } = await import("../materials/branch/branchRegistry.js");
     const canonical = await resolvePointer(stance.branchPointer);
@@ -341,11 +341,11 @@ export function validate(pa) {
   const errors = [];
   const check = (stance, label) => {
     if (!stance) return;
-    if (stance.reality != null && !isValidReality(stance.reality)) {
+    if (stance.story != null && !isValidStory(stance.story)) {
       errors.push({
         side: label,
         field: "place",
-        value: stance.reality,
+        value: stance.story,
         reason: "invalid-place",
       });
     }
@@ -400,7 +400,7 @@ function parseStance(input, ctx, opts = {}) {
     // the human-user shorthand: it means the user `tabor` at the place root.
     if (isLeftSide) {
       return {
-        reality: ctx.currentReality || null,
+        story: ctx.currentStory || null,
         branch: null,
         branchPointer: null,
         path: "/",
@@ -408,7 +408,7 @@ function parseStance(input, ctx, opts = {}) {
       };
     }
     return {
-      reality: ctx.currentReality || null,
+      story: ctx.currentStory || null,
       branch: null,
       branchPointer: null,
       path: ctx.currentPath || null,
@@ -426,13 +426,13 @@ function parseStance(input, ctx, opts = {}) {
   // After stripping being, `rest` is a position (place+branch?+path).
   if (!rest) {
     return {
-      // Leave reality NULL so expand's realityWasTyped check stays
-      // honest: the user didn't type a reality, this was a fully
-      // implicit stance. If parse pre-fills reality from ctx,
-      // expandStance later treats it as typed-reality and applies
+      // Leave story NULL so expand's storyWasTyped check stays
+      // honest: the user didn't type a story, this was a fully
+      // implicit stance. If parse pre-fills story from ctx,
+      // expandStance later treats it as typed-story and applies
       // the "no # means main" rule — silently overriding the
       // socket's currentBranch on every relative DO.
-      reality: null,
+      story: null,
       branch: null,
       branchPointer: null,
       path: ctx.currentPath || null,
@@ -440,8 +440,8 @@ function parseStance(input, ctx, opts = {}) {
     };
   }
 
-  // Branch qualifier (`#<branchPath>`) sits between reality and path.
-  // Pull it off `rest` first so reality/path detection below stays
+  // Branch qualifier (`#<branchPath>`) sits between story and path.
+  // Pull it off `rest` first so story/path detection below stays
   // simple. The qualifier is optional; absence means "0" (main) after
   // expand. Allowed shapes: `treeos.ai#1a/path`, `#1a/path`, `#1a`,
   // `treeos.ai#1a`. Forbidden: more than one `#`, or `#` inside a path
@@ -489,10 +489,10 @@ function parseStance(input, ctx, opts = {}) {
   // A place identifier (e.g. "treeos.ai") never starts with "/" or "~", so a
   // leading slash or tilde means we're already inside the current place.
   if (!rest) {
-    // Pure-branch stance: `#1a` or `#1a@being` — no reality, no path.
-    // reality NULL (not ctx) so expand's realityWasTyped is honest.
+    // Pure-branch stance: `#1a` or `#1a@being` — no story, no path.
+    // story NULL (not ctx) so expand's storyWasTyped is honest.
     return {
-      reality: null,
+      story: null,
       branch,
       branchPointer,
       path: ctx.currentPath || null,
@@ -500,10 +500,10 @@ function parseStance(input, ctx, opts = {}) {
     };
   }
   if (rest.startsWith("/") || rest.startsWith("~")) {
-    // Relative path. reality NULL so expand treats it as inherited,
-    // not typed — the "typed reality = main" rule does not apply.
+    // Relative path. story NULL so expand treats it as inherited,
+    // not typed — the "typed story = main" rule does not apply.
     return {
-      reality: null,
+      story: null,
       branch,
       branchPointer,
       path: parsePath(rest, ctx),
@@ -524,21 +524,21 @@ function parseStance(input, ctx, opts = {}) {
     // `tabor`. On either side without a path, this can also be a
     // place-only reference (rare).
     if (isLeftSide && !being) {
-      // Human shorthand `tabor` on the left side — no reality typed.
+      // Human shorthand `tabor` on the left side — no story typed.
       return {
-        reality: null,
+        story: null,
         branch,
         branchPointer,
         path: "/",
         being: rest,
       };
     }
-    return { reality: parseReality(rest), branch, branchPointer, path: null, being };
+    return { story: parseStory(rest), branch, branchPointer, path: null, being };
   }
-  const realityPart = rest.slice(0, boundary);
+  const storyPart = rest.slice(0, boundary);
   const pathPart = rest.slice(boundary);
   return {
-    reality: parseReality(realityPart),
+    story: parseStory(storyPart),
     branch,
     branchPointer,
     path: parsePath(pathPart, ctx),
@@ -653,10 +653,10 @@ function parseBranchOrPointer(s) {
 const POINTER_NAME_RE = /^[a-z](?:[a-z0-9]|-[a-z0-9])*$/;
 const POINTER_NAME_MAX_LENGTH = 64;
 
-function parseReality(s) {
+function parseStory(s) {
   const trimmed = s.trim();
   if (!trimmed) return null;
-  if (!isValidReality(trimmed)) {
+  if (!isValidStory(trimmed)) {
     throw paError("invalid-place", trimmed, `Invalid place "${trimmed}"`);
   }
   return trimmed;
@@ -697,7 +697,7 @@ function parsePath(s, ctx) {
 function formatStance(stance, opts = {}) {
   if (!stance) return "";
   let out = "";
-  if (stance.reality) out += stance.reality;
+  if (stance.story) out += stance.story;
   // Branch qualifier renders only when explicitly non-main. Canonical
   // addresses omit `#0` the way URLs omit default ports — the address
   // bar should stay quiet for the common case. Empty-string branches
@@ -708,7 +708,7 @@ function formatStance(stance, opts = {}) {
   }
   if (stance.path) {
     // "/" at place root with a being renders as "/" + "@xxx".
-    // The grammar shows the canonical form as `<reality>/@<being>`,
+    // The grammar shows the canonical form as `<story>/@<being>`,
     // i.e. the slash separates place from path. "/" + "@tabor" already
     // does that.
     out += stance.path;
@@ -730,12 +730,12 @@ function formatStance(stance, opts = {}) {
 function expandStance(stance, ctx) {
   if (!stance) return stance;
   // Branch inheritance is keyed off whether the stance already named
-  // a reality before expand. The doctrine (locked 2026-06-04 with
-  // Tabor): when a typed address pins a reality, the user pinned the
+  // a story before expand. The doctrine (locked 2026-06-04 with
+  // Tabor): when a typed address pins a story, the user pinned the
   // whole address — absence of `#` MEANS the `#main` pointer (which
-  // every reality has, defaulting to canonical "0" but operators can
+  // every story has, defaulting to canonical "0" but operators can
   // re-point after a merge so the default address follows). Only
-  // shorthands that omit the reality (relative paths like `/foo`,
+  // shorthands that omit the story (relative paths like `/foo`,
   // `~`, `@bare`) fall through to the ambient branch the socket is
   // tracking.
   //
@@ -750,8 +750,8 @@ function expandStance(stance, ctx) {
   // step (called by the wire layer after expand) looks up the pointer
   // in the .branches heaven space and fills stance.branch with the
   // canonical path. Until then, branch stays null as a marker.
-  const realityWasTyped = !!stance.reality;
-  const reality = stance.reality || ctx.currentReality || null;
+  const storyWasTyped = !!stance.story;
+  const story = stance.story || ctx.currentStory || null;
 
   let branch = null;
   let branchPointer = stance.branchPointer || null;
@@ -761,9 +761,9 @@ function expandStance(stance, ctx) {
   } else if (branchPointer) {
     // Pointer was typed; leave branch null for resolveBranchPointers.
     branch = null;
-  } else if (realityWasTyped) {
-    // Typed reality, no `#` → default to the `#main` pointer. The
-    // resolver fills branch from the registry; on a fresh reality
+  } else if (storyWasTyped) {
+    // Typed story, no `#` → default to the `#main` pointer. The
+    // resolver fills branch from the registry; on a fresh story
     // main → "0" so behavior is identical at install.
     branchPointer = "main";
   } else if (ctx.currentBranch) {
@@ -772,14 +772,14 @@ function expandStance(stance, ctx) {
     branch = ctx.currentBranch;
   } else {
     // Relative address, no ambient context. Fall through to `#main`
-    // pointer rather than the literal "0" so reality-level mains
+    // pointer rather than the literal "0" so story-level mains
     // resolve correctly.
     branchPointer = "main";
   }
 
   return {
     ...stance,
-    reality,
+    story,
     branch,
     branchPointer,
     path: stance.path || ctx.currentPath || null,
@@ -793,11 +793,11 @@ function expandStance(stance, ctx) {
 
 // Lenient: DNS-like, also allows bare identifiers for local places
 // ("localhost", "tabor-laptop") and explicit port.
-const REALITY_RE =
+const STORY_RE =
   /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*(:\d{1,5})?$/i;
 
-export function isValidReality(place) {
-  return typeof place === "string" && REALITY_RE.test(place);
+export function isValidStory(place) {
+  return typeof place === "string" && STORY_RE.test(place);
 }
 
 // Optional leading "." for system-segments (`.threads`, `.reel`, `.acts`,
@@ -810,7 +810,7 @@ export function isValidReality(place) {
 // `<extension>:<action>` for registered ops (`harmony:place-being`),
 // `<extension>:<role>` for role templates (`harmony:dancer-llm`) — are
 // addressable through their sync'd seed-space children under
-// `<reality>/./operations/<op>` / `./roles/<role>` etc. Cannot lead a
+// `<story>/./operations/<op>` / `./roles/<role>` etc. Cannot lead a
 // segment (must start with alphanumeric/underscore/tilde, optionally
 // dot-prefixed for system segments).
 const SEGMENT_RE = /^\.?[a-z0-9_~][a-z0-9_.:-]*$/i;
@@ -917,12 +917,12 @@ export function toHttpRoute(stance) {
 // Server-side context helpers
 //
 // The pure parser above is environment-agnostic. The two helpers below
-// are server-only: they pull this reality's bare domain from process.env
-// and inject it as `currentReality`. Wire handlers use these so they don't
+// are server-only: they pull this story's bare domain from process.env
+// and inject it as `currentStory`. Wire handlers use these so they don't
 // have to assemble the parse context themselves.
 //
 // Browser-side consumers (Portal, 3D) import the parser directly via
-// `parse(input, ctx)` and supply their own `currentReality` from the
+// `parse(input, ctx)` and supply their own `currentStory` from the
 // client's address bar or socket bootstrap.
 // ─────────────────────────────────────────────────────────────────────
 
@@ -931,28 +931,28 @@ export function toHttpRoute(stance) {
 // the pure parser throws plain Error objects with .code + .paInput.
 import { IbpError, IBP_ERR } from "../ibp/protocol.js";
 
-// Cache the place's bare domain. Derived from process.env.REALITY_DOMAIN
+// Cache the place's bare domain. Derived from process.env.STORY_DOMAIN
 // with a localhost fallback. Stripped of protocol/port because an IBP
 // Address Place is just the domain.
-let cachedRealityDomain = null;
-export function getRealityDomain() {
-  if (cachedRealityDomain) return cachedRealityDomain;
-  const raw = process.env.REALITY_DOMAIN || "localhost";
-  cachedRealityDomain = raw
+let cachedStoryDomain = null;
+export function getStoryDomain() {
+  if (cachedStoryDomain) return cachedStoryDomain;
+  const raw = process.env.STORY_DOMAIN || "localhost";
+  cachedStoryDomain = raw
     .replace(/^https?:\/\//, "")
     .replace(/\/+$/, "")
     .replace(/:\d+$/, "");
-  return cachedRealityDomain;
+  return cachedStoryDomain;
 }
 
 // Parse an IBP Address string using a socket's identity context.
 // Throws IbpError on parse failure so wire handlers can ack-fail.
 //
 //   socket.name → currentUser (for ~ shorthand)
-//   getRealityDomain() → currentReality
+//   getStoryDomain() → currentStory
 export function parseFromSocket(socket, input, extraCtx = {}) {
   const ctx = {
-    currentReality: getRealityDomain(),
+    currentStory: getStoryDomain(),
     currentUser:    socket?.name || null,
     // The socket's first-person stance. The address parser fills
     // omitted fields from this ctx, so a client typing `/~` while on
@@ -980,7 +980,7 @@ export function parseFromSocket(socket, input, extraCtx = {}) {
 // Parse without a socket — HTTP bootstrap path, internal seed callers,
 // tests. Same shape; caller supplies any extra context.
 export function parseWithContext(input, ctx = {}) {
-  const fullCtx = { currentReality: getRealityDomain(), ...ctx };
+  const fullCtx = { currentStory: getStoryDomain(), ...ctx };
   try {
     return parse(input, fullCtx);
   } catch (e) {
@@ -994,12 +994,12 @@ export function parseWithContext(input, ctx = {}) {
 
 /**
  * @typedef {object} Stance
- * @property {string|null} reality — e.g. "treeos.ai" (or null when implicit)
+ * @property {string|null} story — e.g. "treeos.ai" (or null when implicit)
  * @property {string|null} branch — e.g. "1a" (or null pre-expand; "0" after expand for main)
  * @property {string|null} path    — e.g. "/~tabor/flappybird" (or null)
  * @property {string|null} being   — e.g. "ruler" (or null)
  *
- * A Stance carries both a Position (reality + branch + path) and a Being.
+ * A Stance carries both a Position (story + branch + path) and a Being.
  * When `being` is null, the Stance reduces to a bare Position. When
  * `branch` is null in a freshly-parsed stance, the caller has not asked
  * for a specific branch and expand() will fill in "0" (main).
@@ -1015,7 +1015,7 @@ export function parseWithContext(input, ctx = {}) {
 // Sorting makes A→B and B→A resolve to the same key — both directions
 // group into one lane on the reel.
 //
-// I store the spaceId-rooted form (`<reality>/<spaceId>@<name>`) so a
+// I store the spaceId-rooted form (`<story>/<spaceId>@<name>`) so a
 // saved lane name survives space renames. The address grammar's
 // display form (human-readable names) is a separate expression of the
 // same grammar — see parse / format above. Act records carry this
@@ -1032,7 +1032,7 @@ const STANCE_PAIR_SEPARATOR = " :: ";
  *   - string         — pass-through (assumed already formatted)
  *   - { place?, branch?, spaceId, name }
  *
- * Output: `<reality>#<branch>/<spaceId>@<name>` (spaceId-rooted path
+ * Output: `<story>#<branch>/<spaceId>@<name>` (spaceId-rooted path
  * form, full IBPA grammar). The branch qualifier is part of the lane
  * identity: the same two beings talking on #1 and on #0 are in
  * different worlds, so they are different lanes.
@@ -1043,9 +1043,9 @@ function stanceString(input) {
   if (typeof input === "string") return input.length > 0 ? input : null;
   const { place, branch, spaceId, name } = input;
   if (!spaceId || !name) return null;
-  const realityPart = place || getRealityDomain();
+  const storyPart = place || getStoryDomain();
   const branchPart = branch ? `#${branch}` : "";
-  return `${realityPart}${branchPart}/${spaceId}@${name}`;
+  return `${storyPart}${branchPart}/${spaceId}@${name}`;
 }
 
 /**
@@ -1135,7 +1135,7 @@ async function composeStanceForBeing(
   const spaceId = currentPosition || fields.homeSpace;
   if (!spaceId || !fields.name) return null;
   return {
-    place: place || getRealityDomain(),
+    place: place || getStoryDomain(),
     branch,
     spaceId: String(spaceId),
     name: fields.name,

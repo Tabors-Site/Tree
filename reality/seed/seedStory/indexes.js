@@ -19,7 +19,7 @@
 import log from "./log.js";
 import { getInternalConfigValue } from "../internalConfig.js";
 import mongoose from "mongoose";
-import { getRealityConfigValue } from "../realityConfig.js";
+import { getStoryConfigValue } from "../storyConfig.js";
 
 function MAX_EXTENSION_INDEXES() {
   return Math.max(5, Math.min(Number(getInternalConfigValue("maxExtensionIndexes")) || 20, 100));

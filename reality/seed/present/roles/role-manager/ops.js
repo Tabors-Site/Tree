@@ -6,7 +6,7 @@
 // Three ops:
 //
 //   set-role     — create or replace a live role at
-//                  `<reality>/./roles/<name>`. Hot-registers it into
+//                  `<story>/./roles/<name>`. Hot-registers it into
 //                  the in-memory registry so the next moment-assign
 //                  sees it without a restart. Origin tag: "live".
 //
@@ -16,7 +16,7 @@
 //                  surface this loudly at delete-time instead).
 //
 //   set-world-signal
-//                — write a world signal to reality root's qualities at
+//                — write a world signal to story root's qualities at
 //                  `qualities.world.<namespace>.<key>`. Beings whose
 //                  flows read `world.<namespace>.<key>` see the new
 //                  value at their next moment-open. The cleanest
@@ -259,15 +259,15 @@ registerOperation("delete-role", {
 // set-world-signal
 // ──────────────────────────────────────────────────────────────────
 //
-// World signals live in the reality root space's qualities under a
+// World signals live in the story root space's qualities under a
 // `world` top-level namespace, then by publisher namespace and key
 // path. Reading: `world.<namespace>.<key>` in a roleFlow `when`
-// resolves to `<reality-root>.qualities.world.<namespace>.<key>`.
+// resolves to `<story-root>.qualities.world.<namespace>.<key>`.
 //
 // Writing: this op is a thin wrapper around set-space that always
-// targets reality root and shapes the field path so authoring stays
+// targets story root and shapes the field path so authoring stays
 // uniform. Direct set-space writes still work for ops that already
-// know the reality-root id; this is the authoring convenience.
+// know the story-root id; this is the authoring convenience.
 
 // set-world-signal's world strand is role-manager.word, run through the bridge.
 // CALLER mode (no `through`): the signal-publish set-space attributes to the real
@@ -332,7 +332,7 @@ registerOperation("set-world-signal", {
 
     const rootId = getSpaceRootId();
     if (!rootId) {
-      throw new IbpError(IBP_ERR.INTERNAL, "set-world-signal: reality root not initialized");
+      throw new IbpError(IBP_ERR.INTERNAL, "set-world-signal: story root not initialized");
     }
 
     const field = `qualities.world.${namespace}.${keyParts.join(".")}`;

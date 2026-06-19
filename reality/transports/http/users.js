@@ -17,18 +17,18 @@
 // code via httpStatusFor() in seed/ibp/protocol.js — one canonical
 // mapping.
 
-import log from "../../seed/seedReality/log.js";
+import log from "../../seed/seedStory/log.js";
 import { sendOk, sendError, IBP_ERR, httpStatusFor } from "../../seed/ibp/protocol.js";
-import { getRealityConfigValue } from "../../seed/realityConfig.js";
-import { getRealityDomain } from "../../seed/ibp/address.js";
+import { getStoryConfigValue } from "../../seed/storyConfig.js";
+import { getStoryDomain } from "../../seed/ibp/address.js";
 import { makeHttpCarrier, dispatchAndWait, dispatchAndAwaitResult } from "./dispatch.js";
 
 function cookieDomain(req) {
   const host = (req.hostname || req.headers?.host || "").replace(/:\d+$/, "");
-  const realityDomain = process.env.REALITY_DOMAIN || "";
-  const configDomain = getRealityConfigValue("cookieDomain");
+  const storyDomain = process.env.STORY_DOMAIN || "";
+  const configDomain = getStoryConfigValue("cookieDomain");
   if (configDomain) return configDomain;
-  if (realityDomain && host.endsWith(realityDomain)) return "." + realityDomain;
+  if (storyDomain && host.endsWith(storyDomain)) return "." + storyDomain;
   return undefined;
 }
 
@@ -39,12 +39,12 @@ function isLocalRequest(req) {
 
 function setAuthCookie(res, req, token) {
   const isLocal = isLocalRequest(req);
-  const expiryDays = Math.max(1, Math.min(Number(getRealityConfigValue("jwtExpiryDays")) || 30, 365));
+  const expiryDays = Math.max(1, Math.min(Number(getStoryConfigValue("jwtExpiryDays")) || 30, 365));
   res.cookie("token", token, {
     httpOnly: true,
     secure:   !isLocal,
     // Lax everywhere. The portal is same-origin (served by this
-    // reality), so None bought nothing except sending the session
+    // story), so None bought nothing except sending the session
     // cookie on every cross-site request — the CSWSH ingredient.
     // Programmatic cross-origin clients authenticate with the
     // handshake/bearer token, never the cookie.
@@ -91,7 +91,7 @@ const register = async (req, res) => {
     // WS caller would receive. See dispatchAndAwaitResult.
     const ack = await dispatchAndAwaitResult(carrier, {
       verb:    "be",
-      address: getRealityDomain(),
+      address: getStoryDomain(),
       payload: { act: "birth", name, password },
     });
 
@@ -121,7 +121,7 @@ const login = async (req, res) => {
     const carrier = makeHttpCarrier(req, { _req: req });
     const ack = await dispatchAndAwaitResult(carrier, {
       verb:    "be",
-      address: getRealityDomain(),
+      address: getStoryDomain(),
       payload: { act: "connect", name, password },
     });
 
@@ -147,7 +147,7 @@ const logout = async (req, res) => {
     // signals "drop the token"; the server clears the cookie.
     const carrier = makeHttpCarrier(req, { _req: req });
     if (req.beingId && req.name) {
-      const heldStance = `${getRealityDomain()}/@${req.name}`;
+      const heldStance = `${getStoryDomain()}/@${req.name}`;
       await dispatchAndWait(carrier, {
         verb:    "be",
         address: heldStance,

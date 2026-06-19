@@ -114,7 +114,7 @@ export async function loadProjection(type, id, branch) {
   if (!id) return null;
   assertType(type);
   assertBranch(branch);
-  // Heaven routing: spaces in heaven have one projection per reality,
+  // Heaven routing: spaces in heaven have one projection per story,
   // not per branch. If the caller passed a non-MAIN branch for a
   // heaven space, transparently rewrite to MAIN so the read returns
   // the single canonical row. The classifier is async (walks ancestor
@@ -199,7 +199,7 @@ export async function loadOrFold(type, id, branch) {
     // signal to anyone investigating. callers that legitimately
     // expect null (a never-touched aggregate) still see null — the
     // log just makes the "fold threw" case visible.
-    const { default: log } = await import("../seedReality/log.js");
+    const { default: log } = await import("../seedStory/log.js");
     log.warn(
       "Projections",
       `loadOrFold(${type}, ${String(id).slice(0, 8)}, ${effectiveBranch}) ` +
@@ -699,7 +699,7 @@ export async function findByHeavenSpace(heavenSpaceKind, branch) {
 
 // ─────────────────────────────────────────────────────────────────────
 // Heaven-scoped wrappers . explicit-intent helpers for reads that
-// the caller KNOWS are reality-level (not branched). All forward to
+// the caller KNOWS are story-level (not branched). All forward to
 // the branch-required helpers with branch="0".
 //
 // The substrate's projection layer also auto-routes heaven targets
@@ -711,7 +711,7 @@ export async function findByHeavenSpace(heavenSpaceKind, branch) {
 
 /**
  * Read a heaven-scoped being or space by name. Same as findByName but
- * locked to MAIN. Used by callers that need a reality-level lookup
+ * locked to MAIN. Used by callers that need a story-level lookup
  * regardless of which branch they're acting on (e.g., the pointer
  * registry reader).
  *
@@ -739,7 +739,7 @@ export async function loadHeavenProjection(type, id) {
 }
 
 /**
- * Reality's root operator — the first non-system being admitted
+ * Story's root operator — the first non-system being admitted
  * through cherub. Encapsulates the doctrine (parent-must-be-I_AM-or-
  * cherub + name-not-in-system-set + earliest-by-createdAt) so callers
  * can't drift from it.

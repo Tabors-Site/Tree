@@ -1,8 +1,8 @@
 // The cherub birth flow, hand-built as Word IR (Phase 2 slice).
 //
 // Mirrors the real subsequent-user birth path: _registerHumanWithFreshHome in
-// reality/seed/present/roles/cherub/role.js (L856-987) and birthBeing in
-// reality/seed/materials/being/identity/birth.js (L177-686). It lays the same
+// story/seed/present/roles/cherub/role.js (L856-987) and birthBeing in
+// story/seed/materials/being/identity/birth.js (L177-686). It lays the same
 // five facts the JS handler does (the Phase 2 gate):
 //   1 do:create-space  (the home)
 //   2 be:birth         (via form-being -> birthBeing; +inherited-role +global grants)

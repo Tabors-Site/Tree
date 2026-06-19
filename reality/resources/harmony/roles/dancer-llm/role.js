@@ -12,7 +12,7 @@
 // structured world face. The seed enforces grid bounds via
 // Space.size at set-being:coord time.
 
-import log from "../../../../seed/seedReality/log.js";
+import log from "../../../../seed/seedStory/log.js";
 
 const DIRS = [
   { key: "N",  dx:  0, dy: -1 },
@@ -29,7 +29,7 @@ const DIRS = [
 // assemble.js stringifies it under [neighbors] in the system prompt.
 // Source of truth: the seed's PositionProjection (factory-owned).
 //
-// Registered from harmony/index.js via reality.declare.registerSeeOperation
+// Registered from harmony/index.js via story.declare.registerSeeOperation
 // (load-time registration goes through the declare namespace, never
 // through a seed-internal import).
 export const neighborsSeeResolver = async (ctx) => {

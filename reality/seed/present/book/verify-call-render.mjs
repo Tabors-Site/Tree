@@ -11,12 +11,12 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const DB = "mongodb://localhost:27017/reality_callrender";
+const DB = "mongodb://localhost:27017/story_callrender";
 process.env.PORT = "3814";
 process.env.MONGODB_URI = DB;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "callrender-0123456789";
-process.env.REALITY_KEY_DIR = path.join(os.tmpdir(), "callrender-keys-" + process.pid);
-fs.rmSync(process.env.REALITY_KEY_DIR, { recursive: true, force: true });
+process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "callrender-keys-" + process.pid);
+fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
 const SRC = path.join(os.tmpdir(), "callrender-src");
 fs.rmSync(SRC, { recursive: true, force: true });
 fs.mkdirSync(SRC, { recursive: true });

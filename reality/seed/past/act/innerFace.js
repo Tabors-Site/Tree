@@ -20,7 +20,7 @@
 //       hash,
 //     }
 //
-//   Hashable for tamper-detection: if the foreign reality later
+//   Hashable for tamper-detection: if the foreign story later
 //   returns a different descriptor for the same position at the same
 //   time, the hash proves the change.
 //

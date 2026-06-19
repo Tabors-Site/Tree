@@ -4,23 +4,23 @@
 // the factory runs internally — LLM call shape, session caches, scheduler
 // backpressure, hook timeouts, fold limits, cleanup intervals.
 //
-// Pair: realityConfig.js holds the reality's outward-
-// facing identity (REALITY_NAME, realityUrl, federation directory,
-// security domains). Reality config is about what the reality IS to
+// Pair: storyConfig.js holds the story's outward-
+// facing identity (STORY_NAME, storyUrl, federation directory,
+// security domains). Story config is about what the story IS to
 // the outside world; seed config is about how the apparatus runs
 // internally.
 //
 // Both write to the same underlying store — the `./config` Tier-3
 // heaven space's qualities Map — through the storage primitives
-// realityConfig owns. This file is a thin facade: its own defaults
+// storyConfig owns. This file is a thin facade: its own defaults
 // table, its own get/set names so callers reach the right surface at
 // import time.
 
 import {
-  setRealityConfigValue,
-  deleteRealityConfigValue,
-  getRealityConfigValue,
-} from "./realityConfig.js";
+  setStoryConfigValue,
+  deleteStoryConfigValue,
+  getStoryConfigValue,
+} from "./storyConfig.js";
 
 /**
  * Seed runtime defaults. Every knob the live machine reads. Each
@@ -140,7 +140,7 @@ export const INTERNAL_CONFIG_DEFAULTS = {
  * should compare against the defaults table directly.
  */
 export function getInternalConfigValue(key) {
-  const stored = getRealityConfigValue(key);
+  const stored = getStoryConfigValue(key);
   if (stored != null) return stored;
   // Defensive: during the top-of-module circular-import window
   // (ancestorCache.js scheduleCleanup → getTTL → here), the defaults
@@ -156,21 +156,21 @@ export function getInternalConfigValue(key) {
 
 /**
  * Write a seed runtime knob. Routes through the same underlying
- * `./config`-space writer realityConfig uses; both surfaces share the
+ * `./config`-space writer storyConfig uses; both surfaces share the
  * same store.
  */
-export const setInternalConfigValue    = setRealityConfigValue;
-export const deleteInternalConfigValue = deleteRealityConfigValue;
+export const setInternalConfigValue    = setStoryConfigValue;
+export const deleteInternalConfigValue = deleteStoryConfigValue;
 
 /**
  * Every seed runtime knob with effective value, default, and
- * whether overridden. Mirrors realityConfig.getConfigWithDefaults for
+ * whether overridden. Mirrors storyConfig.getConfigWithDefaults for
  * the seed side. Used by the dashboard surface to show full state.
  */
 export function getInternalConfigWithDefaults() {
   const result = {};
   for (const [key, defaultValue] of Object.entries(INTERNAL_CONFIG_DEFAULTS)) {
-    const override = getRealityConfigValue(key);
+    const override = getStoryConfigValue(key);
     const hasOverride = override != null;
     result[key] = {
       value: hasOverride ? override : defaultValue,

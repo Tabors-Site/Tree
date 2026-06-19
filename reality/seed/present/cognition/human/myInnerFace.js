@@ -23,7 +23,7 @@
 // the position is missing . return null. The portal renders "no live
 // face" rather than crashing.
 
-import log from "../../../seedReality/log.js";
+import log from "../../../seedStory/log.js";
 import { registerSeeOperation } from "../../../ibp/seeOps.js";
 import { buildInnerFace } from "../../stamper/2-fold/innerFace.js";
 import { foldPlace } from "../../stamper/2-fold/foldPlace.js";

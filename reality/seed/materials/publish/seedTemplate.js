@@ -2,7 +2,7 @@
 //
 // Seed (capture the template). Capture a subtree's STRUCTURE — beings,
 // roles, qualities, configurations, current shape — into a portable
-// artifact that another reality (or another part of this one) can plant.
+// artifact that another story (or another part of this one) can plant.
 //
 // **A seed is a shell by design.** It's structure-transfer: "here's the
 // SHAPE of my dance-floor / lab / blog — grow your own copy elsewhere."
@@ -45,7 +45,7 @@
 //     Identity-bearing beings can't graft as anonymous facts; a
 //     future "ghost being" mechanism might mint a placeholder identity
 //     on graft, but v1 stays conservative. (Seeds preserve identity
-//     correctly because plant runs in a fresh reality.)
+//     correctly because plant runs in a fresh story.)
 //   - Seed spaces (dot-namespace) are skipped — they're substrate
 //     furniture, not user content.
 //
@@ -64,7 +64,7 @@ import { emptyBundle } from "./bundle.js";
  * @param {object} opts
  * @param {string} [opts.branch]      branch to snapshot (default "0")
  * @param {string} [opts.scopeName]   human-friendly label for the bundle meta
- * @param {string} [opts.sourceReality] reality domain (for meta)
+ * @param {string} [opts.sourceStory] story domain (for meta)
  * @param {string} [opts.operatorBeingId] who initiated (for audit meta)
  * @returns {Promise<object>} the clone bundle
  */
@@ -100,7 +100,7 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   }
 
   const bundle = emptyBundle({
-    sourceReality:      opts.sourceReality || null,
+    sourceStory:      opts.sourceStory || null,
     sourceBranch:       branch,
     sourceScopeName:    opts.scopeName || rootSlot.state?.name || null,
     sourceScopeSpaceId: scopeSpaceId,
@@ -147,14 +147,14 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   // question. Two classes of being get filtered out:
   //
   //   - Human-cognition beings — replicating an operator's identity
-  //     onto another reality is a security smell. They stay home.
+  //     onto another story is a security smell. They stay home.
   //
   //   - Seed delegates — cherub, arrival, llm-assigner, branch-manager,
-  //     role-{manager,finder}, roleflow-composer, reality-manager,
-  //     birther. Every reality already plants these at boot
+  //     role-{manager,finder}, roleflow-composer, story-manager,
+  //     birther. Every story already plants these at boot
   //     (seed/materials/being/seedDelegates.js); replicating them
   //     would duplicate-mint the receiver's existing delegates.
-  //     Skipping them keeps each reality's substrate furniture local.
+  //     Skipping them keeps each story's substrate furniture local.
   //
   // Everything else — dancers, drummers, your own LLM/scripted beings
   // — travels. The earlier check gated on `state.password`, which is
@@ -381,7 +381,7 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
           bundle.casManifest.omitted.push({ hash, reason: err?.message || "read failed" });
         }
       }
-      const { default: log } = await import("../../seedReality/log.js");
+      const { default: log } = await import("../../seedStory/log.js");
       if (bundle.casManifest.omitted.length > 0) {
         log.warn(
           "Clone",
@@ -479,7 +479,7 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
  * Recompute a clone bundle's content hash. Pure — both sides of a
  * transfer call this: capture stamps it into meta, graft verifies
  * the received bundle reproduces it. Covers manifest + parameters +
- * content + casManifest + the identifying meta (source reality /
+ * content + casManifest + the identifying meta (source story /
  * branch / scope, createdAt). Excludes casBlobs bytes (each blob is
  * verified against its own hash at put time) and bundleHash itself.
  */
@@ -488,7 +488,7 @@ export async function computeBundleHash(bundle) {
   const { canonicalize } = await import("../../past/fact/hash.js");
   const body = canonicalize({
     bundleVersion: bundle.meta?.bundleVersion ?? bundle.bundleVersion ?? null,
-    sourceReality: bundle.meta?.sourceReality ?? null,
+    sourceStory: bundle.meta?.sourceStory ?? null,
     sourceBranch:  bundle.meta?.sourceBranch ?? null,
     sourceScopeSpaceId: bundle.meta?.sourceScopeSpaceId ?? null,
     sourceScopeName:    bundle.meta?.sourceScopeName ?? null,

@@ -2,7 +2,7 @@
 //
 // public/role.js — the "commons" delegate.
 //
-// Per seed/RolesAreAuth.md "Public being": every reality ships a
+// Per seed/RolesAreAuth.md "Public being": every story ships a
 // being called `public`. It's a seed delegate like cherub/birther/
 // arrival, but it exists ONLY as a recipient of ownership transfers.
 // You grant a space's `members.owner` slot to public, and from that

@@ -16,7 +16,7 @@ registerSeeOperation("mongo-stats", {
     "summary (collections, objects, sizes, indexes).",
   args: {},
   handler: async () => {
-    const { default: mongoose } = await import("../../../seedReality/dbConfig.js");
+    const { default: mongoose } = await import("../../../seedStory/dbConfig.js");
     const c = mongoose.connection;
     let dbStats = null;
     try {

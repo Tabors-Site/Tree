@@ -41,7 +41,7 @@
 // cognition cannot reach the seal because the seal's input type
 // cannot represent a failure.
 
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 import { normalizeCognitionResult, cognitionFailure } from "../cognition/cognitionResult.js";
 
 /**
@@ -183,8 +183,8 @@ async function runTransportAct(moment) {
   }
 
   // verb === "name" — the identity layer (declare / banish a name). `act`
-  // is the op name (declare | banish); the address is reality-only
-  // (<realityDomain>) or <nameId>@<realityDomain>.
+  // is the op name (declare | banish); the address is story-only
+  // (<storyDomain>) or <nameId>@<storyDomain>.
   const { nameVerb } = await import("../../ibp/verbs/name.js");
   const { opPayload = {}, address, callerIdentity = null } = args || {};
   return nameVerb(act, opPayload, {

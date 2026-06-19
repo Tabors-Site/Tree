@@ -16,7 +16,7 @@ import { IbpError, IBP_ERR } from "../../../seed/ibp/protocol.js";
  * resolved beingId must match the authenticated socket. No current
  * caller types left stances, so this gate is a no-op today . it's
  * the wire-side enforcement that becomes load-bearing when cross-
- * reality addressing lands (see FEDERATION.md, Diff B).
+ * story addressing lands (see FEDERATION.md, Diff B).
  *
  * BE arrival flows (birth / connect from no identity) legitimately
  * have socket.beingId === null. The check only fires when BOTH sides

@@ -5,11 +5,11 @@
 // key is PRESENT to the store is orthogonal to the role:
 //
 //   - NATIVE. The being lives here: born as a child (be its father), or
-//     grafted in from a peer reality (identity preserved). Now local.
+//     grafted in from a peer story (identity preserved). Now local.
 //   - FOREIGN. The being stays home and REACHES ACROSS in its left
-//     stance, acting on the store over cross-reality IBP with its full
+//     stance, acting on the store over cross-story IBP with its full
 //     identity. It never moves; its key is simply granted the role here.
-//     (The do:mate vessel-child is a further variant: a foreign reality
+//     (The do:mate vessel-child is a further variant: a foreign story
 //     fathers a vessel here and acts through it.)
 //
 // The role does not care which. Whoever holds it, identified by key, may

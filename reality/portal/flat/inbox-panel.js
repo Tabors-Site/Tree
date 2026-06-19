@@ -43,7 +43,7 @@ export async function renderInboxPanel(body, action, opByName, { refreshView } =
     return;
   }
 
-  const reality = flat.state?.discovery?.reality || "";
+  const story = flat.state?.discovery?.story || "";
 
   // After any response succeeds, refetch and repaint.
   const refresh = () => renderInboxPanel(body, action, opByName, { refreshView });
@@ -67,11 +67,11 @@ export async function renderInboxPanel(body, action, opByName, { refreshView } =
   header.appendChild(countRow);
 
   for (const entry of pending) {
-    renderEntry(header, entry, { reality, refresh });
+    renderEntry(header, entry, { story, refresh });
   }
 }
 
-function renderEntry(parent, entry, { reality, refresh }) {
+function renderEntry(parent, entry, { story, refresh }) {
   const card = document.createElement("div");
   card.className = "inbox-card";
 
@@ -92,7 +92,7 @@ function renderEntry(parent, entry, { reality, refresh }) {
   card.appendChild(meta);
 
   renderContentBody(card, entry);
-  renderResponseSurface(card, entry, { reality, refresh });
+  renderResponseSurface(card, entry, { story, refresh });
 
   parent.appendChild(card);
 }
@@ -126,7 +126,7 @@ function renderContentBody(card, entry) {
   card.appendChild(block);
 }
 
-function renderResponseSurface(card, entry, { reality, refresh }) {
+function renderResponseSurface(card, entry, { story, refresh }) {
   const row = document.createElement("div");
   row.className = "inbox-actions";
   const spec = entry.render;
@@ -136,7 +136,7 @@ function renderResponseSurface(card, entry, { reality, refresh }) {
       const btn = makeButtonFromSpec(btnSpec);
       if (!btnSpec.disabled) {
         btn.addEventListener("click", () =>
-          executeButton(entry, btnSpec, { reality, refresh, btn }));
+          executeButton(entry, btnSpec, { story, refresh, btn }));
       }
       row.appendChild(btn);
     }
@@ -160,14 +160,14 @@ function renderResponseSurface(card, entry, { reality, refresh }) {
   send.addEventListener("click", () => {
     const msg = input.value.trim();
     if (!msg) return;
-    replyAndRefresh(entry, { message: msg }, { reality, refresh, btn: send });
+    replyAndRefresh(entry, { message: msg }, { story, refresh, btn: send });
   });
   row.appendChild(send);
 
   if (allowDismiss) {
     const dismiss = makeButton("dismiss", "btn-warn");
     dismiss.addEventListener("click", () =>
-      replyAndRefresh(entry, { result: "dismissed" }, { reality, refresh, btn: dismiss }));
+      replyAndRefresh(entry, { result: "dismissed" }, { story, refresh, btn: dismiss }));
     row.appendChild(dismiss);
   }
   card.appendChild(row);
@@ -181,7 +181,7 @@ function renderResponseSurface(card, entry, { reality, refresh }) {
 //   1. for each entry in ops: flat.doOp(target, action, args)
 //   2. if reply: summon target=summoner with content + inReplyTo
 //   3. refresh inbox view
-async function executeButton(entry, btnSpec, { reality, refresh, btn }) {
+async function executeButton(entry, btnSpec, { story, refresh, btn }) {
   btn.disabled = true;
   const ops = Array.isArray(btnSpec.ops) ? btnSpec.ops : [];
   for (const op of ops) {
@@ -197,7 +197,7 @@ async function executeButton(entry, btnSpec, { reality, refresh, btn }) {
     }
   }
   if (btnSpec.reply) {
-    await replyAndRefresh(entry, btnSpec.reply.content || {}, { reality, refresh, btn });
+    await replyAndRefresh(entry, btnSpec.reply.content || {}, { story, refresh, btn });
     return;
   }
   // No reply specified — just refresh.
@@ -208,9 +208,9 @@ async function executeButton(entry, btnSpec, { reality, refresh, btn }) {
 // carries the response content + inReplyTo pointing at the inbox
 // row's correlation. The closeInboxOnAnswer hook closes the row when
 // the reply's Act seals.
-async function replyAndRefresh(entry, content, { reality, refresh, btn }) {
+async function replyAndRefresh(entry, content, { story, refresh, btn }) {
   if (btn) btn.disabled = true;
-  const target = await resolveSummonerStance(entry, reality);
+  const target = await resolveSummonerStance(entry, story);
   if (!target) {
     if (btn) {
       btn.textContent = "no addressable summoner";
@@ -234,22 +234,22 @@ async function replyAndRefresh(entry, content, { reality, refresh, btn }) {
 
 // Resolve a stance to address the summoner at, in priority order:
 //   1. summonerName from the inbox row (server-side resolution)
-//   2. public directory SEE on `<reality>/.beings/<id>` (no auth needed)
+//   2. public directory SEE on `<story>/.beings/<id>` (no auth needed)
 //   3. null (un-resolvable; caller surfaces a failure)
 //
 // The public directory path is the substrate's federation-foundation
 // id→name lookup; it works even when the local projection slot hasn't
 // folded yet (the bug pattern that motivated this fallback). See
 // seed/ibp/verbs/see.js#publicDirectoryTargetFromPath.
-async function resolveSummonerStance(entry, reality) {
+async function resolveSummonerStance(entry, story) {
   if (entry.summonerName) {
-    return `${reality}/@${entry.summonerName}`;
+    return `${story}/@${entry.summonerName}`;
   }
   if (!entry.summoner) return null;
   try {
-    const dir = await flat.state.client.see(`${reality}/.beings/${entry.summoner}`);
+    const dir = await flat.state.client.see(`${story}/.beings/${entry.summoner}`);
     const name = dir?.directoryEntry?.name || dir?.name || dir?.being?.name;
-    if (name) return `${reality}/@${name}`;
+    if (name) return `${story}/@${name}`;
   } catch (err) {
     console.warn("[inbox-panel] summoner directory SEE failed:", err?.message || err);
   }

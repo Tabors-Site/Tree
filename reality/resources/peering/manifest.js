@@ -1,6 +1,6 @@
 // peering pack (RESOURCES.md, ROOTS.md / PEERING.md).
 //
-// The discovery directory layer. A reality plants the peering pack to
+// The discovery directory layer. A story plants the peering pack to
 // become FINDABLE on the network and to find others through a peer
 // directory. Without peering, the substrate's wire still works — you
 // can be reached if someone has your address, you can SUMMON anyone
@@ -30,7 +30,7 @@ export default {
   name:    "peering",
   version: "0.1.0",
   description:
-    "The discovery directory layer for The Root System. Lets a reality be found on the network and find others through a peer registry. Independent of the store pack: a reality can peer without hosting a store, or host a store without peering.",
+    "The discovery directory layer for The Root System. Lets a story be found on the network and find others through a peer registry. Independent of the store pack: a story can peer without hosting a store, or host a store without peering.",
 
   // No pieces yet — this is the doctrine scaffold. When peer-record
   // machinery lands, this list grows to [code, peer-registrar role,

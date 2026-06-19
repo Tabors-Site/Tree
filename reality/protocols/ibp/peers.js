@@ -10,8 +10,8 @@
 // federation protocol. Liveness becomes a periodic `ibp:see <peer>/./identity`
 // when the wire-protocol federation slice places.
 
-import log from "../../seed/seedReality/log.js";
-import RealityPeer from "./models/realityPeer.js";
+import log from "../../seed/seedStory/log.js";
+import StoryPeer from "./models/storyPeer.js";
 
 /**
  * Reject private/internal addresses (SSRF defense).
@@ -21,24 +21,24 @@ function isPrivateHost(hostname) {
 }
 
 /**
- * Register a new peer place. Operator supplies the public key + realityId
+ * Register a new peer place. Operator supplies the public key + storyId
  * directly. Automated discovery (fetching the peer's `.well-known/treeos-portal`
  * or `ibp:see <peer>/./identity` and pulling the key) places with the
  * federation wire-protocol slice.
  *
  * @param {object} info
- * @param {string} info.domain      "realityB.com"
+ * @param {string} info.domain      "storyB.com"
  * @param {string} info.publicKey   PEM-encoded Ed25519 public key
- * @param {string} info.realityId      remote place's DID
+ * @param {string} info.storyId      remote place's DID
  * @param {string} [info.baseUrl]   defaults to "https://<domain>"
  * @param {string} [info.name]      friendly name
  * @param {boolean} [info.requireSignedEnvelopes]  strict mode: refuse
  *                                  envelopes from this peer that lack
  *                                  the acting being's own signature
  */
-export async function registerPeer({ domain, publicKey, realityId, baseUrl, name, requireSignedEnvelopes }) {
-  if (!domain || !publicKey || !realityId) {
-    throw new Error("registerPeer requires { domain, publicKey, realityId }");
+export async function registerPeer({ domain, publicKey, storyId, baseUrl, name, requireSignedEnvelopes }) {
+  if (!domain || !publicKey || !storyId) {
+    throw new Error("registerPeer requires { domain, publicKey, storyId }");
   }
 
   let parsed;
@@ -48,10 +48,10 @@ export async function registerPeer({ domain, publicKey, realityId, baseUrl, name
     throw new Error("Cannot register a peer with a private or internal address");
   }
 
-  const existing = await RealityPeer.findOne({ domain });
+  const existing = await StoryPeer.findOne({ domain });
   if (existing) {
     existing.publicKey = publicKey;
-    existing.realityId    = realityId;
+    existing.storyId    = storyId;
     existing.baseUrl   = url;
     existing.name      = name || existing.name;
     existing.status    = "active";
@@ -62,9 +62,9 @@ export async function registerPeer({ domain, publicKey, realityId, baseUrl, name
     return existing;
   }
 
-  return RealityPeer.create({
+  return StoryPeer.create({
     domain,
-    realityId,
+    storyId,
     publicKey,
     baseUrl: url,
     name: name || "",
@@ -74,23 +74,23 @@ export async function registerPeer({ domain, publicKey, realityId, baseUrl, name
 }
 
 export async function removePeer(domain) {
-  return RealityPeer.deleteOne({ domain });
+  return StoryPeer.deleteOne({ domain });
 }
 
 export async function blockPeer(domain) {
-  return RealityPeer.findOneAndUpdate({ domain }, { status: "blocked" }, { returnDocument: "after" });
+  return StoryPeer.findOneAndUpdate({ domain }, { status: "blocked" }, { returnDocument: "after" });
 }
 
 export async function unblockPeer(domain) {
-  return RealityPeer.findOneAndUpdate({ domain }, { status: "active" }, { returnDocument: "after" });
+  return StoryPeer.findOneAndUpdate({ domain }, { status: "active" }, { returnDocument: "after" });
 }
 
 export async function getPeerByDomain(domain) {
-  return RealityPeer.findOne({ domain });
+  return StoryPeer.findOne({ domain });
 }
 
 export async function getAllPeers() {
-  return RealityPeer.find({});
+  return StoryPeer.find({});
 }
 
 /**

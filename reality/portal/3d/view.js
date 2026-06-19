@@ -188,7 +188,7 @@ export function createView() {
     ibpConsole = mountIbpConsole({
       root: document.getElementById("overlays") || document.body,
       getClient: () => client(),
-      getPlace: () => state().discovery?.reality || "treeos.ai",
+      getPlace: () => state().discovery?.story || "treeos.ai",
     });
 
     hotbar = initHotbar(root.querySelector("#hud") || root, {
@@ -281,7 +281,7 @@ export function createView() {
   // ── Seed catalog → hotbar ───────────────────────────────────────
 
   async function refreshSeedCatalog() {
-    if (!client() || !state().discovery?.reality) return;
+    if (!client() || !state().discovery?.story) return;
     const full = await ctx.refreshDiscovery();
     if (!hotbar) return;
     const clones = Array.isArray(full?.clones) ? full.clones : [];
@@ -415,7 +415,7 @@ export function createView() {
   // ── Matter lifecycle callbacks ──────────────────────────────────
 
   async function onMatterEnded({ matterId }) {
-    if (!client() || !matterId || !state().discovery?.reality) return;
+    if (!client() || !matterId || !state().discovery?.story) return;
     try {
       await client().do("/", "llm-assigner:complete-tutorial", { matterId });
     } catch (err) {
@@ -424,7 +424,7 @@ export function createView() {
   }
 
   async function onMatterPlaybackTick({ matterId, currentTime }) {
-    if (!client()?.connected || !matterId || !state().discovery?.reality) return;
+    if (!client()?.connected || !matterId || !state().discovery?.story) return;
     try {
       await client().do("/", "llm-assigner:save-playback", { matterId, currentTime });
     } catch (err) {
@@ -435,7 +435,7 @@ export function createView() {
   async function spawnLlmAssignerTutorial() {
     if (!client()) throw new Error("Not connected");
     if (!isAuthed()) throw new Error("Not authenticated. Sign in via @cherub first.");
-    if (!state().discovery?.reality) throw new Error("Reality not yet discovered");
+    if (!state().discovery?.story) throw new Error("Story not yet discovered");
     if (!client().connected) {
       const deadline = Date.now() + 3000;
       while (!client().connected && Date.now() < deadline) {
@@ -488,17 +488,17 @@ export function createView() {
   // ── Being action menus ──────────────────────────────────────────
 
   function beingAddress(b, { rootDelegate = false } = {}) {
-    // Reality-root identity delegates address as `<reality>/@<name>`
+    // Story-root identity delegates address as `<story>/@<name>`
     // (bare-place stance); everyone else dispatches against the IBPA
     // stance — the same string the right side of the bar shows.
     if (!rootDelegate) return ctx.navigation.stanceFor(b.being);
-    const reality = state().discovery?.reality;
+    const story = state().discovery?.story;
     // Branch qualifier matters: acting on a being from a non-main
     // branch must carry `#<branch>` or the server's cross-branch gate
-    // refuses (expand() defaults a bare typed reality to #main).
+    // refuses (expand() defaults a bare typed story to #main).
     const branch = state().descriptor?.address?.branch || "0";
     const bq = branch === "0" ? "" : `#${branch}`;
-    return `${reality}${bq}/@${b.being}`;
+    return `${story}${bq}/@${b.being}`;
   }
 
   function openBeingActionMenu(b) {
@@ -581,7 +581,7 @@ export function createView() {
         placeIsProxied: ctx.config.useProxy,
         token:          ack.identityToken,
         username:       ack.name || b.being,
-        beingAddress:   ack.beingAddress || `${state().discovery.reality}/@${ack.name || b.being}`,
+        beingAddress:   ack.beingAddress || `${state().discovery.story}/@${ack.name || b.being}`,
         inherited:      true,
         spawnerName,
       }));
@@ -818,10 +818,10 @@ export function createView() {
             throw new Error(body?.error || `upload failed (${res.status})`);
           }
 
-          const reality = state().discovery.reality;
+          const story = state().discovery.story;
           const branch = state().descriptor?.address?.branch || "0";
           const bq = branch === "0" ? "" : `#${branch}`;
-          const made = await client().do(`${reality}${bq}/skins`, "create-matter", {
+          const made = await client().do(`${story}${bq}/skins`, "create-matter", {
             type:    "model",
             name:    file.name.replace(/\.(glb|gltf)$/i, ""),
             content: body.content,
@@ -921,7 +921,7 @@ export function createView() {
     if (!isAuthed()) { bounceToAuth(); return; }
     showLlmAssignerPanel({
       client:         client(),
-      place:          state().discovery.reality,
+      place:          state().discovery.story,
       currentSpaceId: state().descriptor?.address?.spaceId || null,
       onClose:        () => {},
       onSpawnTutorial: spawnLlmAssignerTutorial,
@@ -947,12 +947,12 @@ export function createView() {
     hideSummonPanel();
     currentSummonBeing = null;
     const stance = beingAddress(b);
-    const reality = state().discovery.reality;
+    const story = state().discovery.story;
     const branch = state().descriptor.address?.branch || "0";
     const bq = branch === "0" ? "" : `#${branch}`;
     const fromStance = state().session?.username
-      ? `${reality}${bq}/@${state().session.username}`
-      : `${reality}${bq}/@arrival`;
+      ? `${story}${bq}/@${state().session.username}`
+      : `${story}${bq}/@arrival`;
     const correlation = `c-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const reply = await client().call(stance, { from: fromStance, content: text, correlation });
     if (reply?.status === "accepted") {

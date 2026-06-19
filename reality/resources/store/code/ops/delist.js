@@ -15,7 +15,7 @@ export default {
   name: "delist", // becomes store:delist after loader namespacing
   targets: ["being"],
   args: {
-    publisher: { type: "text", label: "Publisher reality (the listing's owner)", required: true },
+    publisher: { type: "text", label: "Publisher story (the listing's owner)", required: true },
     name:      { type: "text", label: "Listing name", required: true },
     version:   { type: "text", label: "Version to delist", required: true },
     reason:    { type: "text", label: "Why this store declines to show it (optional)", required: false },

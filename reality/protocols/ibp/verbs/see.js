@@ -18,7 +18,7 @@
 // when `at` is set, so subscriptions to live updates are also skipped
 // on the historical path (a past state has no live patches to push).
 
-import log from "../../../seed/seedReality/log.js";
+import log from "../../../seed/seedStory/log.js";
 import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
 import { ackOk, ackError } from "../envelope.js";
 import { seeVerb } from "../../../seed/ibp/verbs/see.js";

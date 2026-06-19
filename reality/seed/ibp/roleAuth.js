@@ -19,7 +19,7 @@
 //
 // The walk:
 //   - I-Am bypass (bootstrap axiom; never walks the space chain).
-//   - Anonymous arrival floor (implicit arrival role on the reality
+//   - Anonymous arrival floor (implicit arrival role on the story
 //     root; canSee:* + canBe:["birth","connect","release"]).
 //   - For each grant in identity.rolesGranted: getRoleSpec → reach
 //     check → canX check → first match wins.
@@ -86,7 +86,7 @@ export async function authorizeViaRoles(args) {
   }
 
   // Anonymous arrival floor. Stateless callers run under the implicit
-  // arrival role (looked up at the reality root's qualities.roles or
+  // arrival role (looked up at the story root's qualities.roles or
   // — if not yet installed there — the in-memory REGISTRY).
   if (!identity?.beingId) {
     return await checkArrivalFloor({ verb, target, action, intent, operation, seeOp, branch });
@@ -172,17 +172,17 @@ export async function authorizeViaRoles(args) {
     };
   }
 
-  // Cross-reality fallback. A canopy-verified foreign actor has an
-  // identity (the verified beingId on their home reality) but no local
-  // grants here (their being row doesn't exist on this reality). Fall
+  // Cross-story fallback. A canopy-verified foreign actor has an
+  // identity (the verified beingId on their home story) but no local
+  // grants here (their being row doesn't exist on this story). Fall
   // through to the arrival floor so they can at least reach what every
   // anonymous visitor can . SUMMON @cherub:mate (cross-world
   // citizenship via vessel), SUMMON @federation-manager (initiate a
   // negotiation), arrival-view SEE. Without this fallthrough, any
-  // peer reality's outbound SUMMON to @federation-manager would deny
+  // peer story's outbound SUMMON to @federation-manager would deny
   // because the local grants table has no record of the remote
   // federation-manager being.
-  if (identity?.canopyVerifiedSender || identity?.reality) {
+  if (identity?.canopyVerifiedSender || identity?.story) {
     return await checkArrivalFloor({ verb, target, action, intent, operation, seeOp, branch });
   }
 
@@ -343,7 +343,7 @@ export function permitsReceiverSummon(role, intent) {
   if (receiverEntries.length === 0) {
     // No declared receiver entries → role accepts anything. Current
     // behavior for roles that haven't yet declared their accepted
-    // intents; preserves cross-reality summons and all legacy paths
+    // intents; preserves cross-story summons and all legacy paths
     // until each role authors its receiver list.
     return { ok: true };
   }
@@ -396,12 +396,12 @@ function matchBeingNamePattern(pattern, targetBeing) {
 // ────────────────────────────────────────────────────────────────────
 
 async function checkArrivalFloor({ verb, target, action, intent, operation, seeOp, branch }) {
-  // The arrival role's host IS the reality root. The shared lookup
-  // walks anchorSpaceId=realityRoot for qualities.roles.arrival; the
+  // The arrival role's host IS the story root. The shared lookup
+  // walks anchorSpaceId=storyRoot for qualities.roles.arrival; the
   // registry fallback covers boot-order edges before install.
-  const realityRootId = getSpaceRootId();
+  const storyRootId = getSpaceRootId();
   const { spec, hostSpaceId } = await getRoleSpecForGrant(
-    { role: ARRIVAL_ROLE, anchorSpaceId: realityRootId },
+    { role: ARRIVAL_ROLE, anchorSpaceId: storyRootId },
     branch,
   );
   if (!spec) {

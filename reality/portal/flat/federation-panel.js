@@ -10,13 +10,13 @@
 import { flat } from "./host.js";
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-function reality() { return (flat.state?.discovery?.reality || "").replace(/\/+$/, ""); }
-function fedAddress() { const r = reality(); return r ? `${r}/@federation-manager` : null; }
+function story() { return (flat.state?.discovery?.story || "").replace(/\/+$/, ""); }
+function fedAddress() { const r = story(); return r ? `${r}/@federation-manager` : null; }
 function short(s, n = 8) { return String(s == null ? "" : s).slice(0, n); }
 
 export async function renderFederationPanel(body, _action, _opByName, { refreshView } = {}) {
   const addr = fedAddress();
-  if (!addr) { body.textContent = "portal not ready (no reality)"; return; }
+  if (!addr) { body.textContent = "portal not ready (no story)"; return; }
   body.innerHTML = "";
 
   const intro = document.createElement("div");
@@ -104,7 +104,7 @@ export async function renderFederationPanel(body, _action, _opByName, { refreshV
     for (const o of offers) {
       const card = document.createElement("div"); card.className = "fed-card";
       kv(card, "negotiation", short(o.id));
-      kv(card, "from", o.sender?.reality || o.sender?.beingId || "(unknown)");
+      kv(card, "from", o.sender?.story || o.sender?.beingId || "(unknown)");
       if (o.label) kv(card, "label", o.label);
       if (o.sourceSubtreePath) kv(card, "subtree", o.sourceSubtreePath);
       const a = document.createElement("div"); a.className = "fed-card-actions";
@@ -121,7 +121,7 @@ export async function renderFederationPanel(body, _action, _opByName, { refreshV
     for (const q of reqs) {
       const card = document.createElement("div"); card.className = "fed-card";
       kv(card, "negotiation", short(q.id));
-      kv(card, "from", q.puller?.reality || q.puller?.beingId || "(unknown)");
+      kv(card, "from", q.puller?.story || q.puller?.beingId || "(unknown)");
       if (q.subtreePath) kv(card, "wants", q.subtreePath);
       const a = document.createElement("div"); a.className = "fed-card-actions";
       a.appendChild(actBtn("fulfill (send it)", false, () => decide("fulfill-request", q.id, `fulfilling ${short(q.id)}; pushing the template back.`)));

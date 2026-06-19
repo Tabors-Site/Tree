@@ -65,7 +65,7 @@ export function showRoleManagerPanel({ state, beingEntry, onClose }) {
   // Hand the body off to the shared renderer with a ctx adapter the
   // 3D portal's state already satisfies.
   renderRoleManagerPanel(body, beingEntry, {
-    reality:    state.discovery?.reality,
+    story:    state.discovery?.story,
     branch:     state.descriptor?.address?.branch || "0",
     username:   state.session?.username || null,
     descriptor: state.descriptor,

@@ -31,7 +31,7 @@ export default {
 
     // Defer the actual emit to the seed do.set-matter op (single
     // canonical write surface for matter qualities). The drummer role
-    // calls this op via reality.do(drumMatterId, "harmony:tick", ...);
+    // calls this op via story.do(drumMatterId, "harmony:tick", ...);
     // the wire shape stays uniform with other state changes by routing
     // through do.set-matter explicitly. The handler runs inside doVerb
     // already, so opts.moment is what threads the moment's actId

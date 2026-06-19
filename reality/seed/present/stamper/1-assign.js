@@ -53,12 +53,12 @@
 //   moment.js   the being acting
 //   stamped.js  press the closing face
 
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 import { getInternalConfigValue } from "../../internalConfig.js";
 import Being from "../../materials/being/being.js";
 import { loadProjection, loadOrFold, assertBranchOrThrow } from "../../materials/projections.js";
 import Act from "../../past/act/act.js";
-import { getRealityConfigValue } from "../../realityConfig.js";
+import { getStoryConfigValue } from "../../storyConfig.js";
 import { resolveActiveStack, computeAvailableRoles } from "../roles/roleFlow.js";
 import { composeStack } from "../roles/roleComposer.js";
 import Space from "../../materials/space/space.js";
@@ -166,7 +166,7 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     ? { activeRole: lastSealed.activeRole || null, stampedAt: lastSealed.stampedAt || null }
     : null;
 
-  // World signals lookup. Snapshots reality root's `qualities.world`
+  // World signals lookup. Snapshots story root's `qualities.world`
   // namespace so `world.<ns>.<key>` paths in the flow resolve to the
   // current published values. One findById per moment-open;
   // set-world-signal writes propagate at the next moment.
@@ -301,7 +301,7 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   // targetBranch.
 
   // The actor's Act is the single carrier of the identity tuple
-  // (reality, branch, through, _id). moment.actorAct points to it;
+  // (story, branch, through, _id). moment.actorAct points to it;
   // every downstream consumer (emitFact, foldEngine, the Stamper,
   // verb handlers) reads identity from the Act, never from
   // independently-threaded fields.
@@ -313,14 +313,14 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   // Asker's identity — exposed on the ctx so the receiver's role
   // handler can attribute the summoner without digging through
   // handoff plumbing. For cross-world summons via canopy,
-  // crossWorld.js's runVerbAsForeignActor stamps identity.reality
+  // crossWorld.js's runVerbAsForeignActor stamps identity.story
   // with the cryptographically vouched canopySender; that flows here.
-  // For same-reality summons, askerReality is null (the local
+  // For same-story summons, askerStory is null (the local
   // domain is implicit). See FEDERATION.md "mate + vessel".
-  const askerReality = handoff?.identity?.reality || null;
+  const askerStory = handoff?.identity?.story || null;
   // The asker's NAME (the signer), threaded from the verified identity. The
   // birther records it as the vessel's qualities.father.nameId so cherub's
-  // cross-reality father-admit matches the cryptographically-proven name.
+  // cross-story father-admit matches the cryptographically-proven name.
   const askerNameId = handoff?.identity?.nameId || null;
   const baseCtx = {
     kind,
@@ -334,7 +334,7 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     targetBranch,
     askerBeingId,
     askerName,
-    askerReality,
+    askerStory,
     askerNameId,
     // Branch-aware aggregate reader. Extensions and roles call
     // `await ctx.read("being"|"space"|"matter", id)` and get the
@@ -667,10 +667,10 @@ async function planActRow(opts = {}) {
   // only at seal so crashed moments never enter the chain). See
   // past/act/actHash.js for what the digest covers and excludes.
   //
-  // Identity tuple (reality, branch, through, _id) lives on this row.
+  // Identity tuple (story, branch, through, _id) lives on this row.
   // Everything downstream (Facts in deltaF, inner face attachment,
   // crossOrigin derivation) reads from here. See CROSS-WORLD.md.
-  const { getRealityDomain } = await import("../../ibp/address.js");
+  const { getStoryDomain } = await import("../../ibp/address.js");
   const { computeActId, readActHead } = await import("../../past/act/actHash.js");
 
   // The actor NAME — who SIGNS the act and whom every fact attributes.
@@ -702,7 +702,7 @@ async function planActRow(opts = {}) {
     inReplyTo,
     parentThread: resolvedParentThread,
     startMessage: { content: safeMessage, source },
-    reality: getRealityDomain(),
+    story: getStoryDomain(),
     branch,
   };
   const p = await readActHead(branch, through);
@@ -726,7 +726,7 @@ async function planActRow(opts = {}) {
     receivedAt: receivedAt || now,
     stampedAt: now,
     startMessage: { content: safeMessage, source },
-    reality: getRealityDomain(),
+    story: getStoryDomain(),
     branch,
     // status is seated by the Stamper at insert time — openers
     // don't carry it. See sealAct in 4-stamped.js.
@@ -776,9 +776,9 @@ async function enrichCallerForFlow({ toBeing, handoff, entry, branch = "0" }) {
   };
 }
 
-// Snapshot reality root's `qualities.world` namespace so the flow's
+// Snapshot story root's `qualities.world` namespace so the flow's
 // `world.<ns>.<key>` paths resolve at evaluation time. set-world-signal
-// writes to reality-root.qualities.world.<ns>.<key>; this read returns
+// writes to story-root.qualities.world.<ns>.<key>; this read returns
 // the whole world subtree once per moment-open so all flow clauses
 // share one consistent view.
 async function loadWorldSignals() {

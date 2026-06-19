@@ -23,9 +23,9 @@
 // stay unchanged.
 //
 // Reads:
-//   `<reality>#<merged>/.branches/<merged>/conflicts`  (conflict catalog)
-//   `<reality>#<sourceA>/`                              (source A's view)
-//   `<reality>#<sourceB>/`                              (source B's view)
+//   `<story>#<merged>/.branches/<merged>/conflicts`  (conflict catalog)
+//   `<story>#<sourceA>/`                              (source A's view)
+//   `<story>#<sourceB>/`                              (source B's view)
 //
 // Writes (with `_merge` metadata):
 //   set-being, set-matter, set-space  . state reconciliation
@@ -79,7 +79,7 @@ facts you stamp bring the merged branch's state to the operator-
 chosen combined state.
 
 The operator summoned you at the merged branch's address. Your first
-step is to SEE \`<reality>#<merged>/.branches/<merged>/conflicts\` to
+step is to SEE \`<story>#<merged>/.branches/<merged>/conflicts\` to
 get the conflict catalog. It returns:
 
   {
@@ -112,7 +112,7 @@ For each conflict:
   2. Read lastFactA and lastFactB to surface the most recent
      divergent value on each side.
   3. If you need fuller context, navigate to the source branches
-     (\`<reality>#<sourceA>/\` and \`<reality>#<sourceB>/\`) and SEE
+     (\`<story>#<sourceA>/\` and \`<story>#<sourceB>/\`) and SEE
      the relevant target.
   4. Present BOTH sides to the operator clearly: "In source A, X is
      Y. In source B, X is Z. Which would you like in the merged

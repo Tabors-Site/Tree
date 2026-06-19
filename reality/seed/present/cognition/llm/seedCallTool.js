@@ -25,7 +25,7 @@
 
 import { z } from "zod";
 import { callVerb } from "../../../ibp/verbs/call.js";
-import { getRealityDomain } from "../../../ibp/address.js";
+import { getStoryDomain } from "../../../ibp/address.js";
 
 export const seedCallTool = {
   name: "call",
@@ -55,7 +55,7 @@ export const seedCallTool = {
       .string()
       .optional()
       .describe(
-        "Stance address of the receiver, e.g. '<reality>/<spaceId>@<beingName>' " +
+        "Stance address of the receiver, e.g. '<story>/<spaceId>@<beingName>' " +
           "or '@beingName'. Defaults to whoever summoned this moment.",
       ),
     inReplyTo: z
@@ -198,13 +198,13 @@ export const seedCallTool = {
 };
 
 /**
- * Build the qualified stance for the actor: <reality>/<spaceId>@<name>.
+ * Build the qualified stance for the actor: <story>/<spaceId>@<name>.
  * Reads the wake's spaceId from callCtx.moment (filled by llmMoment).
- * Falls back to the reality root if no specific space is known.
+ * Falls back to the story root if no specific space is known.
  */
 function buildFromStance({ beingId, name, callCtx }) {
   if (!name) return null;
-  const domain = getRealityDomain();
+  const domain = getStoryDomain();
   if (!domain) return null;
   const spaceId = callCtx?.moment?.spaceId || null;
   if (!spaceId) return `${domain}@${name}`;

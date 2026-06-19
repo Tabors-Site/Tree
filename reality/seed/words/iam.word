@@ -3,8 +3,8 @@
 # A word must have one who acts it, so the I_AM is before any name, for the I_AM declares them
 # all. name.word, far above, says what the I_AM is the first of; it does not make the I_AM.
 # This is the one word spoken in the first person: the sayer naming itself, as the said names
-# itself. It uses only `word` and `act`, never `name`, which has not come yet and cannot.
-# Axiom: bottoms out in the host (the genesis being; the realityId is the I_AM's key).
+# itself. It uses `word`, `act`, and `name`: a name:declare fact folds the i-am Name row, then a be:birth fact births the being that expresses it (trueName=I_AM).
+# Axiom: bottoms out in the host (the genesis being; the storyId is the I_AM's key).
 
 I am that I am.
 A word must have one who acts it. I am that one.

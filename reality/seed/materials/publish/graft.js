@@ -2,18 +2,18 @@
 //
 // Graft — identity-preserving transport: bring the thing ITSELF, verbatim.
 //
-// A graft moves a being (or a branch, or the whole reality) WITH its
+// A graft moves a being (or a branch, or the whole story) WITH its
 // identity intact: same pubkey id, same act-chain, same fact hashes,
 // byte-for-byte as it was at home. No id remapping; an imported chain is
 // foreign by construction and lands by verbatim insert, never emitFact
 // (the digest binds branch + provenance, so re-homing is impossible).
 //
 // Scope ranges across one module:
-//   - captureGraft({beingId}) / applyGraft  — a BEING into a LIVING reality.
+//   - captureGraft({beingId}) / applyGraft  — a BEING into a LIVING story.
 //   - capturePartialGraft                    — a coherent SUBSET of a being.
-//   - captureGraft() / plantGraft            — the GENOME (whole reality at
-//     the root, boot-only into an empty DB; carries realityId so the result
-//     IS the same reality — a mirror/migration).
+//   - captureGraft() / plantGraft            — the GENOME (whole story at
+//     the root, boot-only into an empty DB; carries storyId so the result
+//     IS the same story — a mirror/migration).
 //
 // The SHELL counterpart (a structural template, fresh ids on planting) is
 // seedTemplate.js / seedPlant.js. See philosophy/OS/GRAFT-AND-SEED.md:
@@ -21,11 +21,11 @@
 //
 // Plant is the receive-side operation (boot-time only, lives in
 // `genesis.js`). The substrate refuses to expose runtime plant because
-// replacing a live reality is destructive and belongs to the deployer.
+// replacing a live story is destructive and belongs to the deployer.
 //
 // **Plant is continuation, not duplication.** A planted seed has the
 // source's original IDs. Two simultaneously-live substrates with the
-// same reality identity is undefined behavior; the deployer ensures
+// same story identity is undefined behavior; the deployer ensures
 // only one is canonical (migration / backup-restore / cold archive —
 // not duplication).
 //
@@ -39,17 +39,17 @@ import Fact from "../../past/fact/fact.js";
 import Act from "../../past/act/act.js";
 import Branch from "../branch/branch.js";
 import ReelHead from "../../past/reel/reelHead.js";
-import log from "../../seedReality/log.js";
-import { getRealityDomain } from "../../ibp/address.js";
+import log from "../../seedStory/log.js";
+import { getStoryDomain } from "../../ibp/address.js";
 import { writeFile, mkdir, readdir } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 
 // Collections the seed handles explicitly or that are pure caches
 // re-derived from the chain at plant time. Everything ELSE in the
-// database is "the rest of the reality's data" — extension-owned
+// database is "the rest of the story's data" — extension-owned
 // collections, the peer registry, whatever future modules store — and
-// the genome captures it verbatim (a seed is the WHOLE reality; an
+// the genome captures it verbatim (a seed is the WHOLE story; an
 // extension's collection is as much its body as its facts are).
 const SEED_CORE_COLLECTIONS = new Set(["facts", "acts", "branches", "reelHeads", "actHeads"]);
 const REGENERABLE_COLLECTIONS = new Set([
@@ -61,40 +61,40 @@ const REGENERABLE_COLLECTIONS = new Set([
 
 export const GRAFT_BUNDLE_VERSION = "1.0";
 
-// Canonical seeds folder: reality/seeds/, sibling of reality/extensions/.
+// Canonical seeds folder: story/seeds/, sibling of story/extensions/.
 // Operator artifacts (genome backups) live here, NOT inside the
 // sovereign seed/ substrate folder.
-// seed.js lives at reality/seed/materials/publish/graft.js
-// reality/seeds is three levels up.
+// seed.js lives at story/seed/materials/publish/graft.js
+// story/seeds is three levels up.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const GRAFTS_FOLDER = path.resolve(__dirname, "..", "..", "..", "grafts");
 
 /**
- * Capture the full reality as a portable seed bundle.
+ * Capture the full story as a portable seed bundle.
  *
  * The bundle preserves original IDs verbatim — a planted seed becomes
- * the same reality continuing on a new substrate. The substrate refuses
+ * the same story continuing on a new substrate. The substrate refuses
  * to expose a runtime plant; the receiving deployer plants at boot via
  * `genesis.js` mode.
  *
- * By default, writes the captured seed to `reality/seeds/<realityName>-<timestamp>.graft.json`.
+ * By default, writes the captured seed to `story/seeds/<storyName>-<timestamp>.graft.json`.
  * Pass `returnOnly: true` to skip the write and just return the bundle
  * (for callers who want to ship it over the wire or stash elsewhere).
  *
  * @param {object} opts
  * @param {string} [opts.capturedBy]  the operator beingId who initiated
  *                                    the capture (for audit meta)
- * @param {string} [opts.realityName] human label for the bundle meta + filename stem
+ * @param {string} [opts.storyName] human label for the bundle meta + filename stem
  * @param {boolean} [opts.returnOnly] if true, skip the disk write and just return the bundle
  * @returns {Promise<object>} { bundle, savedTo? } — bundle is the seed; savedTo is the disk path (when written)
  */
 export async function captureGraft(opts = {}) {
   // Scope dispatch: a beingId narrows the graft to one being (its reel,
-  // act-chain, lineage). No beingId = the whole reality (genome = graft at
+  // act-chain, lineage). No beingId = the whole story (genome = graft at
   // maximal scope). Same operation, same verbatim-identity discipline.
   if (opts.beingId) return captureBeingGraft(opts);
   const startedAt = Date.now();
-  log.info("Graft", "capturing reality genome...");
+  log.info("Graft", "capturing story genome...");
 
   // ── 1. Collect every Fact ──
   // The substantive change chain. Each fact has its hash chain (p/h)
@@ -107,7 +107,7 @@ export async function captureGraft(opts = {}) {
   // ── 2. Collect every Act ──
   // The experiential chain. Each act carries the cognition transcript
   // (startMessage, endMessage, innerFace) . the biography that
-  // makes the reality more than a state snapshot.
+  // makes the story more than a state snapshot.
   const acts = await Act.find({}).sort({ stampedAt: 1 }).lean();
   log.info("Graft", `captured ${acts.length} acts`);
 
@@ -126,14 +126,14 @@ export async function captureGraft(opts = {}) {
 
   // ── 4b. Collect every ActHead ──
   // Per-being per-branch act-chain tips. Acts are content-addressed
-  // chains; the reality root covers them, so the heads are core
+  // chains; the story root covers them, so the heads are core
   // genome, not extension luggage.
   const { default: ActHead } = await import("../../past/act/actHead.js");
   const actHeads = await ActHead.find({}).lean();
   log.info("Graft", `captured ${actHeads.length} act heads`);
 
   // ── 5. Collect everything else — extension collections et al ──
-  // The genome is the WHOLE reality. Extensions may keep their own
+  // The genome is the WHOLE story. Extensions may keep their own
   // Mongo collections (declared via their manifests); the peer
   // registry lives in its own collection; future modules will add
   // more. None of that is derivable from the chain, so the seed
@@ -162,7 +162,7 @@ export async function captureGraft(opts = {}) {
   // ── 5b. CAS blobs — the genome includes the BYTES ──
   // The chain holds facts ABOUT content; the bytes live in the
   // content store. A seed that travels to another machine must carry
-  // them or the planted reality's matter resolves to nothing. Every
+  // them or the planted story's matter resolves to nothing. Every
   // cas hash referenced by any fact travels (subject to caps, with
   // an honest omission ledger — no silent truncation). Plant puts
   // each blob and verifies its recomputed hash before the chain
@@ -202,10 +202,10 @@ export async function captureGraft(opts = {}) {
   }
 
   // ── 6. Record the loaded extensions ──
-  // The reality's behavior depends on which extensions are awake
+  // The story's behavior depends on which extensions are awake
   // (their roles, ops, schedules, collections). The receiving
-  // deployer needs the same set for the planted reality to BE the
-  // same reality; plant warns loudly about any that are missing.
+  // deployer needs the same set for the planted story to BE the
+  // same story; plant warns loudly about any that are missing.
   let extensions = [];
   try {
     const { getLoadedExtensionNames, getExtensionManifest } =
@@ -223,12 +223,12 @@ export async function captureGraft(opts = {}) {
   const bundle = {
     kind: "graft",
     bundleVersion: GRAFT_BUNDLE_VERSION,
-    sourceReality: getRealityDomain() || null,
+    sourceStory: getStoryDomain() || null,
     capturedAt: new Date().toISOString(),
     capturedBy: opts.capturedBy || null,
 
     meta: {
-      realityName: opts.realityName || null,
+      storyName: opts.storyName || null,
       extensions,
       counts: {
         facts:     facts.length,
@@ -238,18 +238,18 @@ export async function captureGraft(opts = {}) {
         actHeads:  actHeads.length,
         extensionCollections: Object.keys(extensionData).length,
       },
-      // The captured reality's chain fingerprint — computed PURELY
+      // The captured story's chain fingerprint — computed PURELY
       // over the captured arrays (not the live DB, which keeps
       // moving while capture runs). A seed's identity IS this root:
       // any substrate planting these parts must recompute the same
       // root, or determinism broke — plantGraft verifies and reports.
       // Reproducible realities by construction.
-      realityRoot: await (async () => {
+      storyRoot: await (async () => {
         try {
-          const { realityRootFromParts } =
+          const { storyRootFromParts } =
             await import("../../past/fact/chainRoots.js");
-          return realityRootFromParts({
-            reality: getRealityDomain() || null,
+          return storyRootFromParts({
+            story: getStoryDomain() || null,
             branches,
             reelHeads,
             actHeads,
@@ -268,29 +268,29 @@ export async function captureGraft(opts = {}) {
     casManifest,
   };
 
-  // Sign the genome's chain fingerprint (meta.realityRoot) with the
-  // reality key, so a planter proves the bundle is an AUTHENTIC genome of
-  // this reality self-certifyingly — the same signed-root provenance
-  // chainRoots.signedRealityRoot/verifyRealityRootSig give live, now
-  // carried in the artifact. signerId = realityId (the reality pubkey id).
-  if (bundle.meta?.realityRoot) {
+  // Sign the genome's chain fingerprint (meta.storyRoot) with the
+  // story key, so a planter proves the bundle is an AUTHENTIC genome of
+  // this story self-certifyingly — the same signed-root provenance
+  // chainRoots.signedStoryRoot/verifyStoryRootSig give live, now
+  // carried in the artifact. signerId = storyId (the story pubkey id).
+  if (bundle.meta?.storyRoot) {
     try {
-      const { getRealityIdentity, signData } = await import("../../realityIdentity.js");
-      const rid = getRealityIdentity();
-      bundle.meta.realitySig = { signerId: rid.realityId, value: signData(bundle.meta.realityRoot) };
+      const { getStoryIdentity, signData } = await import("../../storyIdentity.js");
+      const rid = getStoryIdentity();
+      bundle.meta.storySig = { signerId: rid.storyId, value: signData(bundle.meta.storyRoot) };
     } catch { /* unsigned genome (advisory); plant still recomputes + walks the chain */ }
   }
 
   const elapsedMs = Date.now() - startedAt;
   log.info("Graft", `genome captured in ${elapsedMs}ms`);
 
-  // Default behavior: write to reality/seeds/ so there's one canonical
+  // Default behavior: write to story/seeds/ so there's one canonical
   // place for genome artifacts. Callers wanting the raw bundle pass
   // returnOnly: true.
   if (opts.returnOnly) return { bundle };
 
   await mkdir(GRAFTS_FOLDER, { recursive: true });
-  const stem = (opts.realityName || bundle.sourceReality || "reality")
+  const stem = (opts.storyName || bundle.sourceStory || "story")
     .replace(/[^a-zA-Z0-9._-]/g, "-");
   const stamp = bundle.capturedAt.replace(/[:.]/g, "-").slice(0, 19);
   const savedTo = path.join(GRAFTS_FOLDER, `${stem}-${stamp}.graft.json`);
@@ -339,8 +339,8 @@ export function assertValidGraft(bundle) {
  *
  * Plant is continuation, not duplication. The bundle's original IDs
  * land verbatim on the new substrate. From this substrate's perspective,
- * this IS the reality with those IDs. Two simultaneously-live
- * substrates with the same reality identity is undefined behavior and
+ * this IS the story with those IDs. Two simultaneously-live
+ * substrates with the same story identity is undefined behavior and
  * is the deployer's responsibility to prevent (see done/Chain-Rebuild.md).
  *
  * Replaying steps:
@@ -358,20 +358,20 @@ export async function plantGraft(bundle) {
   assertValidGraft(bundle);
 
   // ── 0. PROVENANCE gate (before touching the substrate) ──
-  // If the genome carries a reality-root signature, verify it self-
-  // certifyingly over meta.realityRoot — "this genome was vouched for by
-  // the holder of realityId (the reality key)." The post-plant recompute
+  // If the genome carries a story-root signature, verify it self-
+  // certifyingly over meta.storyRoot — "this genome was vouched for by
+  // the holder of storyId (the story key)." The post-plant recompute
   // below then proves THIS substrate reproduces that same root. Together:
   // authentic genome AND provable replay. Absent signature is advisory
   // (older genomes). Verifiable without the DB, so it gates cold.
   {
-    const rsig = bundle.meta?.realitySig;
-    if (rsig?.value && bundle.meta?.realityRoot) {
-      const { verifyRealityRootSig } = await import("../../past/fact/chainRoots.js");
-      const ok = await verifyRealityRootSig(bundle.meta.realityRoot, rsig.signerId, rsig.value);
+    const rsig = bundle.meta?.storySig;
+    if (rsig?.value && bundle.meta?.storyRoot) {
+      const { verifyStoryRootSig } = await import("../../past/fact/chainRoots.js");
+      const ok = await verifyStoryRootSig(bundle.meta.storyRoot, rsig.signerId, rsig.value);
       if (!ok) {
         throw new Error(
-          `plantGraft: genome reality-root SIGNATURE invalid (signer ` +
+          `plantGraft: genome story-root SIGNATURE invalid (signer ` +
           `${String(rsig.signerId || "").slice(0, 14)}…) — refusing before planting.`,
         );
       }
@@ -380,11 +380,11 @@ export async function plantGraft(bundle) {
   }
 
   // ── 1. Refuse if DB isn't fresh ──
-  // Plant is destructive on a live reality. The substrate refuses to
+  // Plant is destructive on a live story. The substrate refuses to
   // expose runtime plant for exactly this reason. Boot mode in
   // `genesis.js` ensures it only runs against a fresh DB — but we
   // double-check here so a misconfigured boot can't silently corrupt
-  // an existing reality.
+  // an existing story.
   const checks = await Promise.all([
     Fact.countDocuments({}),
     Act.countDocuments({}),
@@ -401,7 +401,7 @@ export async function plantGraft(bundle) {
     );
   }
 
-  log.info("Graft", "planting reality genome...");
+  log.info("Graft", "planting story genome...");
   const startedAt = Date.now();
 
   // ── 1b. CAS blobs land FIRST ──
@@ -452,7 +452,7 @@ export async function plantGraft(bundle) {
   // ── 3b. ActHeads ──
   // Act-chain tips. Needed before any new moment seals so the next
   // act chains from the planted biography, and before verification
-  // (the reality root covers act chains).
+  // (the story root covers act chains).
   if (Array.isArray(bundle.actHeads) && bundle.actHeads.length > 0) {
     const { default: ActHead } = await import("../../past/act/actHead.js");
     await ActHead.insertMany(bundle.actHeads, { ordered: false });
@@ -495,8 +495,8 @@ export async function plantGraft(bundle) {
   }
 
   // ── 7. Extension presence check ──
-  // The bundle names the extensions the source reality ran with. The
-  // planted reality needs the same set to behave the same (roles, ops,
+  // The bundle names the extensions the source story ran with. The
+  // planted story needs the same set to behave the same (roles, ops,
   // schedules, collection consumers). Warn LOUDLY for any not present
   // on this substrate's disk — the operator fixes the extension folder
   // or the .treeos-profile before beings start acting.
@@ -514,7 +514,7 @@ export async function plantGraft(bundle) {
       if (!onDisk.has(name)) {
         log.warn(
           "Seed",
-          `planted reality expects extension "${name}"${ext?.version ? ` (v${ext.version})` : ""} ` +
+          `planted story expects extension "${name}"${ext?.version ? ` (v${ext.version})` : ""} ` +
           `but it is not present in extensions/. Its beings, roles, ops, and data ` +
           `will be inert until it's installed.`,
         );
@@ -523,33 +523,33 @@ export async function plantGraft(bundle) {
   }
 
   // ── 8. Provable replay ──
-  // Recompute the planted chain's reality root over what LANDED
+  // Recompute the planted chain's story root over what LANDED
   // (branch + reelHead rows read straight back from the DB) and
   // compare to the bundle's captured fingerprint. Match = this
-  // reality IS the captured reality, mathematically. Mismatch =
+  // story IS the captured story, mathematically. Mismatch =
   // determinism broke (or the bundle was altered) — warn loudly,
-  // never silently. Anchored to the bundle's sourceReality so the
+  // never silently. Anchored to the bundle's sourceStory so the
   // same chain verifies regardless of the host's own domain.
   let rootVerified = null;
-  const expectedRoot = bundle.meta?.realityRoot || null;
+  const expectedRoot = bundle.meta?.storyRoot || null;
   if (expectedRoot) {
     try {
-      const { realityRootFromParts } = await import("../../past/fact/chainRoots.js");
+      const { storyRootFromParts } = await import("../../past/fact/chainRoots.js");
       const { default: ActHead } = await import("../../past/act/actHead.js");
       const [dbBranches, dbHeads, dbActHeads] = await Promise.all([
         Branch.find({}).lean(),
         ReelHead.find({}).select("_id branch head headHash").lean(),
         ActHead.find({}).select("_id branch headHash").lean(),
       ]);
-      const actualRoot = realityRootFromParts({
-        reality: bundle.sourceReality || null,
+      const actualRoot = storyRootFromParts({
+        story: bundle.sourceStory || null,
         branches: dbBranches,
         reelHeads: dbHeads,
         actHeads: dbActHeads,
       });
       rootVerified = actualRoot === expectedRoot;
       if (rootVerified) {
-        log.info("Graft", `chain root VERIFIED: ${actualRoot.slice(0, 16)}… — this reality is the captured reality`);
+        log.info("Graft", `chain root VERIFIED: ${actualRoot.slice(0, 16)}… — this story is the captured story`);
         // ── The root proves the COMMITMENT STRUCTURE; now prove the
         // facts behind it. The planted head rows came verbatim from
         // the bundle — a bundle with tampered fact rows but original
@@ -647,7 +647,7 @@ export async function plantGraft(bundle) {
 
 // ─────────────────────────────────────────────────────────────────────
 // BEING GRAFT — identity-preserving transport of ONE being into a
-// LIVING reality. Scope below the genome: the being's own reel + its
+// LIVING story. Scope below the genome: the being's own reel + its
 // full act-chain + its lineage, carried VERBATIM (original pubkey id,
 // original fact/act hashes), deduped by pubkey on arrival. See
 // philosophy/OS/GRAFT-AND-SEED.md.
@@ -659,13 +659,13 @@ export async function plantGraft(bundle) {
  * full act-chain, the lineage Branch rows its facts span, the per-branch
  * reel/act heads, and the CAS blobs its facts reference — all VERBATIM
  * (original ids, original p/h hashes). meta.lineage carries parentBeingId
- * + homeReality (bare refs; the referenced beings need NOT be present on
+ * + homeStory (bare refs; the referenced beings need NOT be present on
  * the target). meta.graftRoot is the scoped fingerprint; meta.graftSig is
- * this reality vouching for the extract.
+ * this story vouching for the extract.
  */
 async function captureBeingGraft(opts) {
   const beingId = String(opts.beingId);
-  const reality = getRealityDomain() || null;
+  const story = getStoryDomain() || null;
   const { default: ActHead } = await import("../../past/act/actHead.js");
   const { actHeadKey } = await import("../../past/act/actHash.js");
   const { reelKey } = await import("../../past/reel/reelHeads.js");
@@ -708,7 +708,7 @@ async function captureBeingGraft(opts) {
   const slot = await loadOrFold("being", beingId, opts.branch || "0");
   const lineage = {
     parentBeingId: slot?.state?.parentBeingId ?? null,
-    homeReality: slot?.state?.homeReality ?? reality,
+    homeStory: slot?.state?.homeStory ?? story,
   };
 
   // CAS blobs referenced by the being's facts (rare on a being reel, but a
@@ -741,7 +741,7 @@ async function captureBeingGraft(opts) {
   const bundle = {
     kind: "graft",
     bundleVersion: GRAFT_BUNDLE_VERSION,
-    sourceReality: reality,
+    sourceStory: story,
     capturedAt: new Date().toISOString(),
     capturedBy: opts.capturedBy || null,
     meta: {
@@ -752,12 +752,12 @@ async function captureBeingGraft(opts) {
     },
     facts, acts, branches, reelHeads, actHeads, casBlobs, casManifest,
   };
-  // Provenance: this reality vouches the extract is authentic. signerId =
-  // realityId (a pubkey id a foreign receiver decodes from the id alone).
+  // Provenance: this story vouches the extract is authentic. signerId =
+  // storyId (a pubkey id a foreign receiver decodes from the id alone).
   try {
-    const { getRealityIdentity, signData } = await import("../../realityIdentity.js");
-    const rid = getRealityIdentity();
-    bundle.meta.graftSig = { signerId: rid.realityId, value: signData(graftRoot) };
+    const { getStoryIdentity, signData } = await import("../../storyIdentity.js");
+    const rid = getStoryIdentity();
+    bundle.meta.graftSig = { signerId: rid.storyId, value: signData(graftRoot) };
   } catch { /* unsigned extract (advisory) */ }
 
   log.info("Graft", `captured being ${beingId.slice(0, 12)}… — ${facts.length} fact(s), ${acts.length} act(s), ${branches.length} lineage branch(es)`);
@@ -816,7 +816,7 @@ export async function capturePartialGraft(opts = {}) {
     throw new Error(`capturePartialGraft: mechanism must be one of ${KNOWN.join(" / ")}`);
   }
   const branch = opts.branch || "0";
-  const reality = getRealityDomain() || null;
+  const story = getStoryDomain() || null;
   const { reelKey } = await import("../../past/reel/reelHeads.js");
   const { graftRootFromParts } = await import("../../past/fact/chainRoots.js");
   const { loadOrFold } = await import("../projections.js");
@@ -843,12 +843,12 @@ export async function capturePartialGraft(opts = {}) {
     const bundle = {
       kind: "graft",
       bundleVersion: GRAFT_BUNDLE_VERSION,
-      sourceReality: reality,
+      sourceStory: story,
       capturedAt: new Date().toISOString(),
       capturedBy: opts.capturedBy || null,
       meta: {
         beingId,
-        lineage: { parentBeingId: state.parentBeingId ?? null, homeReality: state.homeReality ?? reality },
+        lineage: { parentBeingId: state.parentBeingId ?? null, homeStory: state.homeStory ?? story },
         graftRoot: snapshotRoot,
         partial: { mechanism: "state-snapshot", branch, atHead, atSeq, stateHash, beyondExtract: opts.beyondExtract || "refuse" },
         counts: { facts: 0, acts: 0, branches: 0, reelHeads: 0, actHeads: 0 },
@@ -857,8 +857,8 @@ export async function capturePartialGraft(opts = {}) {
       facts: [], acts: [], branches: [], reelHeads: [], actHeads: [], casBlobs: {}, casManifest: { included: [], omitted: [] },
     };
     try {
-      const { getRealityIdentity, signData } = await import("../../realityIdentity.js");
-      bundle.meta.graftSig = { signerId: getRealityIdentity().realityId, value: signData(snapshotRoot) };
+      const { getStoryIdentity, signData } = await import("../../storyIdentity.js");
+      bundle.meta.graftSig = { signerId: getStoryIdentity().storyId, value: signData(snapshotRoot) };
     } catch { /* unsigned extract (advisory) */ }
     log.info("Graft", `captured state-snapshot of being ${beingId.slice(0, 12)}… — as-of seq ${atSeq} (head ${String(atHead).slice(0, 10)}…), no reel`);
     return { bundle };
@@ -954,13 +954,13 @@ export async function capturePartialGraft(opts = {}) {
   const reelHeads = [{ _id: reelKey(captureBranch, "being", beingId), type: "being", id: beingId, branch: captureBranch, head: head.seq, headHash: String(head._id) }];
 
   const slot = await loadOrFold("being", beingId, captureBranch);
-  const lineage = { parentBeingId: slot?.state?.parentBeingId ?? null, homeReality: slot?.state?.homeReality ?? reality };
+  const lineage = { parentBeingId: slot?.state?.parentBeingId ?? null, homeStory: slot?.state?.homeStory ?? story };
   const graftRoot = graftRootFromParts({ beingId, reelHeads, actHeads: [] });
 
   const bundle = {
     kind: "graft",
     bundleVersion: GRAFT_BUNDLE_VERSION,
-    sourceReality: reality,
+    sourceStory: story,
     capturedAt: new Date().toISOString(),
     capturedBy: opts.capturedBy || null,
     meta: {
@@ -973,8 +973,8 @@ export async function capturePartialGraft(opts = {}) {
     facts, acts: [], branches: branchesToCarry, reelHeads, actHeads: [], casBlobs: {}, casManifest: { included: [], omitted: [] },
   };
   try {
-    const { getRealityIdentity, signData } = await import("../../realityIdentity.js");
-    bundle.meta.graftSig = { signerId: getRealityIdentity().realityId, value: signData(graftRoot) };
+    const { getStoryIdentity, signData } = await import("../../storyIdentity.js");
+    bundle.meta.graftSig = { signerId: getStoryIdentity().storyId, value: signData(graftRoot) };
   } catch { /* unsigned extract (advisory) */ }
 
   const logLine = {
@@ -987,7 +987,7 @@ export async function capturePartialGraft(opts = {}) {
 }
 
 /**
- * Apply a being-graft bundle into THIS (living) reality, preserving the
+ * Apply a being-graft bundle into THIS (living) story, preserving the
  * being's identity verbatim. NO id remapping — the pubkey id and every
  * fact/act hash land byte-identical (the digest binds branch + provenance,
  * so re-homing is impossible; an imported chain is foreign by construction
@@ -1027,16 +1027,16 @@ export async function applyGraft(bundle, opts = {}) {
   const { emitFact } = await import("../../past/fact/facts.js");
 
   // ── 1. Provenance gate (cold, FAIL-CLOSED) ──
-  // A graft into a LIVING reality requires the source's signature over the
+  // A graft into a LIVING story requires the source's signature over the
   // extract, verified self-certifyingly against signerId (the source
-  // realityId) — no callback. opts.allowUnsigned is the explicit escape for
-  // a trusted local extract (e.g. a same-reality restore).
+  // storyId) — no callback. opts.allowUnsigned is the explicit escape for
+  // a trusted local extract (e.g. a same-story restore).
   if (bundle.meta?.graftSig?.value && bundle.meta?.graftRoot) {
     const { isKeyId } = await import("../name/keys.js");
-    const { verifyRealityRootSig } = await import("../../past/fact/chainRoots.js");
+    const { verifyStoryRootSig } = await import("../../past/fact/chainRoots.js");
     const sg = bundle.meta.graftSig;
     const ok = isKeyId(sg.signerId)
-      ? await verifyRealityRootSig(bundle.meta.graftRoot, sg.signerId, sg.value)
+      ? await verifyStoryRootSig(bundle.meta.graftRoot, sg.signerId, sg.value)
       : false;
     if (!ok) throw new Error(`applyGraft: graft SIGNATURE invalid (signer ${String(sg.signerId || "").slice(0, 14)}…). Refusing before any insert.`);
   } else if (!opts.allowUnsigned) {
@@ -1267,7 +1267,7 @@ export async function applyGraft(bundle, opts = {}) {
     // a swallowed audit is how the missing import hid.
     try {
       await withBeingAct(opts.operatorBeingId, "graft-being:failed", branch, async (ctx) => {
-        await emitFact({ verb: "do", act: "graft-being-failed", through: opts.operatorBeingId, of: { kind: "being", id: opts.operatorBeingId }, params: { graftedBeing: beingId, sourceReality: bundle.sourceReality || null, error: String(err?.message || err) }, actId: ctx.actId, branch }, ctx);
+        await emitFact({ verb: "do", act: "graft-being-failed", through: opts.operatorBeingId, of: { kind: "being", id: opts.operatorBeingId }, params: { graftedBeing: beingId, sourceStory: bundle.sourceStory || null, error: String(err?.message || err) }, actId: ctx.actId, branch }, ctx);
       });
     } catch (e) { log.warn("Graft", `failure-audit fact could not be stamped: ${e.message}`); }
     throw err;
@@ -1293,7 +1293,7 @@ export async function applyGraft(bundle, opts = {}) {
   // records the deed, it must NOT write the grafted being's reel). ──
   try {
     await withBeingAct(opts.operatorBeingId, "graft-being:completed", branch, async (ctx) => {
-      await emitFact({ verb: "do", act: "graft-being-completed", through: opts.operatorBeingId, of: { kind: "being", id: opts.operatorBeingId }, params: { graftedBeing: beingId, sourceReality: bundle.sourceReality || null, mode, counts, partial: bundle.meta?.partial || null }, actId: ctx.actId, branch }, ctx);
+      await emitFact({ verb: "do", act: "graft-being-completed", through: opts.operatorBeingId, of: { kind: "being", id: opts.operatorBeingId }, params: { graftedBeing: beingId, sourceStory: bundle.sourceStory || null, mode, counts, partial: bundle.meta?.partial || null }, actId: ctx.actId, branch }, ctx);
     });
   } catch (e) { log.warn("Graft", `completion-audit fact could not be stamped: ${e.message}`); }
 
@@ -1304,7 +1304,7 @@ export async function applyGraft(bundle, opts = {}) {
 /**
  * Apply a state-snapshot bundle: land an ATTESTED foreign state for a being
  * that has no reel here. No chain is replayed; the receiver trusts the source
- * reality's signed snapshot of the being's folded state, as-of a declared head.
+ * story's signed snapshot of the being's folded state, as-of a declared head.
  *
  * This is the one projection NOT folded from local facts: an attested foreign
  * state (marked `state.attested`), the state-level twin of "imported facts are
@@ -1331,9 +1331,9 @@ async function applyStateSnapshot(bundle, opts = {}) {
   // ── 1. Provenance gate (cold, fail-closed). ──
   if (bundle.meta?.graftSig?.value && bundle.meta?.graftRoot) {
     const { isKeyId } = await import("../name/keys.js");
-    const { verifyRealityRootSig } = await import("../../past/fact/chainRoots.js");
+    const { verifyStoryRootSig } = await import("../../past/fact/chainRoots.js");
     const sg = bundle.meta.graftSig;
-    const ok = isKeyId(sg.signerId) ? await verifyRealityRootSig(bundle.meta.graftRoot, sg.signerId, sg.value) : false;
+    const ok = isKeyId(sg.signerId) ? await verifyStoryRootSig(bundle.meta.graftRoot, sg.signerId, sg.value) : false;
     if (!ok) throw new Error(`applyStateSnapshot: snapshot SIGNATURE invalid (signer ${String(sg.signerId || "").slice(0, 14)}…). Refusing.`);
   } else if (!opts.allowUnsigned) {
     throw new Error("applyStateSnapshot: unsigned snapshot refused — a signed graftRoot (meta.graftSig) is required. Pass opts.allowUnsigned only for a trusted local extract.");
@@ -1367,7 +1367,7 @@ async function applyStateSnapshot(bundle, opts = {}) {
     ...state,
     attested: {
       stateSnapshot: true,
-      source: bundle.sourceReality || null,
+      source: bundle.sourceStory || null,
       atHead: partial.atHead || null,
       atSeq: partial.atSeq ?? null,
       stateHash,
@@ -1383,7 +1383,7 @@ async function applyStateSnapshot(bundle, opts = {}) {
   // ── 5. Success audit (operator's reel; single-writer). ──
   try {
     await withBeingAct(opts.operatorBeingId, "graft-being:snapshot", branch, async (ctx) => {
-      await emitFact({ verb: "do", act: "graft-being-completed", through: opts.operatorBeingId, of: { kind: "being", id: opts.operatorBeingId }, params: { graftedBeing: beingId, sourceReality: bundle.sourceReality || null, mode, counts: { facts: 0, acts: 0 }, partial }, actId: ctx.actId, branch }, ctx);
+      await emitFact({ verb: "do", act: "graft-being-completed", through: opts.operatorBeingId, of: { kind: "being", id: opts.operatorBeingId }, params: { graftedBeing: beingId, sourceStory: bundle.sourceStory || null, mode, counts: { facts: 0, acts: 0 }, partial }, actId: ctx.actId, branch }, ctx);
     });
   } catch (e) { log.warn("Graft", `snapshot completion-audit could not be stamped: ${e.message}`); }
 

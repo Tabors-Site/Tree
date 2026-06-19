@@ -33,7 +33,7 @@ export default {
 
   async handler({ target, params, identity, moment }) {
     // A dancer steps ITSELF. The acting being is the caller. The seed
-    // `do` tool defaults an unspecified target to the reality root, so
+    // `do` tool defaults an unspecified target to the story root, so
     // we must NOT read the being from `target` unless it explicitly
     // names a being. Resolve order: explicit being target, then the
     // caller's identity, then the seed-injected params.beingId. Reading

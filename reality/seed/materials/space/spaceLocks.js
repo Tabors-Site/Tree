@@ -29,9 +29,9 @@
 // check on next boot repairs any half-finished structural mutation
 // the lock-holder didn't get to clean up.
 
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 import { getInternalConfigValue } from "../../internalConfig.js";
-import { getRealityConfigValue } from "../../realityConfig.js";
+import { getStoryConfigValue } from "../../storyConfig.js";
 
 const locks = new Map(); // spaceId -> { sessionId, acquiredAt }
 

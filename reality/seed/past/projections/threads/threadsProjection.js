@@ -11,7 +11,7 @@
 // This collection is the cross-cutting projection over those
 // chains — the same kind as InboxProjection and the position
 // index. One row per live root, maintained by fold handlers on the
-// reality's per-being reels:
+// story's per-being reels:
 //
 //   `summon` fact (any reel) → upsert row keyed by
 //      params.rootCorrelation. Add summoner + recipient to
@@ -78,7 +78,7 @@ const ThreadsProjectionSchema = new mongoose.Schema({
   updatedAt: { type: Date, default: null },
 });
 
-// SEE on `<reality>/./threads` lists live threads sorted by recency.
+// SEE on `<story>/./threads` lists live threads sorted by recency.
 ThreadsProjectionSchema.index({ lastAct: -1 });
 // Per-participant query — "what threads is this being in?"
 ThreadsProjectionSchema.index({ participants: 1, lastAct: -1 });

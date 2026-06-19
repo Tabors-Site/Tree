@@ -36,7 +36,7 @@ import {
 } from "../../../materials/branch/branchRegistry.js";
 import { doVerb } from "../../../ibp/verbs/do.js";
 import { registerRoleWord } from "../../word/roleWordRegistry.js";
-import log from "../../../seedReality/log.js";
+import log from "../../../seedStory/log.js";
 
 // Self-register this module's co-located `.word` slice (CONVERTING.md): importing
 // ops.js (at seed boot, or in a DRY harness) registers it so resolveRoleWord(
@@ -96,7 +96,7 @@ registerOperation("create-branch", {
     },
     scope: {
       type:     "text",
-      label:    "Optional space path (e.g. \"/library\") to scope this branch to a subtree. Writes outside the subtree refuse with SCOPE_VIOLATION; reads outside inherit from parent. Use when experimenting on one feature without contaminating the rest of the reality.",
+      label:    "Optional space path (e.g. \"/library\") to scope this branch to a subtree. Writes outside the subtree refuse with SCOPE_VIOLATION; reads outside inherit from parent. Use when experimenting on one feature without contaminating the rest of the story.",
       required: false,
     },
   },
@@ -144,7 +144,7 @@ registerOperation("create-branch", {
     }
     // "~" is the caller's home — a self-relative alias. The scope
     // walker (resolvePathToSpaceId) resolves real space NAMES from the
-    // reality root and can't see aliases, and the scope locks at
+    // story root and can't see aliases, and the scope locks at
     // creation, so the stored path must be canonical. Swap the alias
     // for the home space's real path before resolution.
     if (scopePath && (scopePath === "/~" || scopePath.startsWith("/~/"))) {
@@ -154,7 +154,7 @@ registerOperation("create-branch", {
       }
       const { resolveStance } = await import("../../../ibp/resolver.js");
       const home = await resolveStance(
-        { reality: null, path: "/~", being: null, branch: parent },
+        { story: null, path: "/~", being: null, branch: parent },
         { identity },
       );
       const homeName = home?.leafSpace?.name;
@@ -227,11 +227,11 @@ registerOperation("create-branch", {
       }
     }
 
-    // Auto-spawn a portal Matter at the reality root on main pointing
+    // Auto-spawn a portal Matter at the story root on main pointing
     // at the new branch's root. Lets viewers on main peek into every
     // branch as a portal-window without manually issuing form-portal
     // for each one. Target uses the trailing-slash form
-    // `<reality>#<branch>/` meaning "the root of that world" — the
+    // `<story>#<branch>/` meaning "the root of that world" — the
     // resolver treats path segments as space NAMES, so passing a
     // UUID here would throw "Segment X not found." Best-effort;
     // branch creation succeeds even if the portal spawn fails. See
@@ -239,11 +239,11 @@ registerOperation("create-branch", {
     let portalSpawned = null;
     try {
       const { findRoot } = await import("../../../materials/projections.js");
-      const { getRealityDomain } = await import("../../../ibp/address.js");
+      const { getStoryDomain } = await import("../../../ibp/address.js");
       const rootSpaces = await findRoot("space", "0");
       const rootSpace = rootSpaces?.[0] || null;
       if (rootSpace) {
-        const foreignAddress = `${getRealityDomain()}#${result.path}/`;
+        const foreignAddress = `${getStoryDomain()}#${result.path}/`;
         await doVerb(
           { kind: "space", id: String(rootSpace.id) },
           "form-portal",
@@ -279,7 +279,7 @@ registerOperation("create-branch", {
 // pause-branch / unpause-branch — toggle the Branch row's paused
 // state. Paused branches refuse DO/BE/SUMMON at the wire-layer gate
 // (see protocols/ibp/verbs/* — they read isPaused and throw
-// REALITY_PAUSED). SEEs still work so the user can rewind or inspect
+// STORY_PAUSED). SEEs still work so the user can rewind or inspect
 // frozen state.
 //
 // Pause metadata lives on the Branch row directly today; the doc's
@@ -314,7 +314,7 @@ registerOperation("pause-branch", {
     // symmetric; main is not privileged. The "how do you unpause if
     // everything is paused?" recovery is solved by the gate exempting
     // unpause-branch and create-branch — those run on any branch
-    // regardless of pause state. So a fully-frozen reality can always
+    // regardless of pause state. So a fully-frozen story can always
     // be revived. If main doesn't yet have a Branch row, upsert one
     // (rows are normally only created at branch creation; main is
     // implicit because its lineage walk starts from "0" without a
@@ -407,7 +407,7 @@ registerOperation("unpause-branch", {
 //
 // Main IS deletable (symmetric-branch doctrine; same as pause). The
 // gates exempt undelete-branch and delete-branch themselves so a
-// fully-deleted reality can always be revived.
+// fully-deleted story can always be revived.
 
 registerOperation("delete-branch", {
   targets: ["being", "stance"],
@@ -821,7 +821,7 @@ registerOperation("merge-branches", {
 
 // list-branches lived here briefly as a DO op. Retired 2026-06-02: the
 // read-only graph belongs on a synthetic SEE catalog
-// (`<reality>/.branches[/<path>]`), not a DO op. DOs open transport-act
+// (`<story>/.branches[/<path>]`), not a DO op. DOs open transport-act
 // moments that go through the scheduler and the orphan-act seal guard —
 // neither of which a read-only query should be paying for. The catalog
 // helper lives at seed/materials/branch/branchesCatalog.js and is
@@ -908,7 +908,7 @@ registerOperation("set-pointer", {
     const branchesSpaceId = await findPointersSpaceId();
     if (!branchesSpaceId) {
       throw new IbpError(IBP_ERR.INTERNAL,
-        "set-pointer: .branches heaven space not found . reality is not properly bootstrapped");
+        "set-pointer: .branches heaven space not found . story is not properly bootstrapped");
     }
     await doVerb(
       { kind: "space", id: branchesSpaceId },

@@ -13,7 +13,7 @@
 // to the merged branch with the right metadata), they live here
 // alongside genesis-loaded role.
 
-import log from "../../../seedReality/log.js";
+import log from "../../../seedStory/log.js";
 
 export function registerMergeMediatorOps() {
   // No ops to register today. The entry-point shape exists so

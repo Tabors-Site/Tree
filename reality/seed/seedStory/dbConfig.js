@@ -4,7 +4,7 @@
 //
 // Every read and write in the world I form goes through Mongoose,
 // which goes through this connection. The connection's state is the
-// reality's lifeline; transitions are logged loudly so the operator
+// story's lifeline; transitions are logged loudly so the operator
 // sees exactly when the DB dropped and when it came back.
 // isDbHealthy() is the single source of truth for DB availability.
 
@@ -15,7 +15,7 @@ const mongooseUri = process.env.MONGODB_URI;
 
 if (!mongooseUri) {
   log.error("DB", "MONGODB_URI is not set in .env. Cannot start.");
-  log.error("DB", "Example: MONGODB_URI=mongodb://localhost:27017/reality");
+  log.error("DB", "Example: MONGODB_URI=mongodb://localhost:27017/story");
   process.exit(1);
 }
 

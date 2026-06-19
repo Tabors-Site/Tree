@@ -25,7 +25,7 @@
 // (so `0:being:xyz` for tabor on main, `1a:being:xyz` for tabor on
 // branch #1a). Pre-branch legacy rows used `<type>:<id>` without the
 // branch prefix; a one-shot boot migration rewrites them to the new
-// shape with `branch: "0"`. See seed/seedReality/migrations/.
+// shape with `branch: "0"`. See seed/seedStory/migrations/.
 
 import mongoose from "mongoose";
 
@@ -39,7 +39,7 @@ const ReelHeadSchema = new mongoose.Schema({
   // commits to every prior fact on the reel. Written by the stamper
   // in the same locked append as the fact insert. Null until the
   // first post-CAS fact lands (allocSeq never touches it). Branch /
-  // reality roots roll up from these — see past/fact/chainRoots.js.
+  // story roots roll up from these — see past/fact/chainRoots.js.
   headHash: { type: String, default: null },
 });
 

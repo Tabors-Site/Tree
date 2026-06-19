@@ -144,7 +144,7 @@
 // Coder the space is just where they stand. The space's name is what
 // the LLM needs to know its frame of reference for this turn.
 
-import log from "../../../seedReality/log.js";
+import log from "../../../seedStory/log.js";
 import { getToolDescription, resolveTools } from "./tools.js";
 import { resolveCanStar } from "../../roles/canStarResolver.js";
 import { formatInnerFaceBlocksForPrompt } from "./innerFaceFormat.js";

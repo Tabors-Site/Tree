@@ -70,8 +70,8 @@
 //   time.dayOfWeek       — moment-open weekday (0=Sun … 6=Sat)
 //   time.iso             — moment-open ISO timestamp
 //   time.sinceLastMoment — seconds since this being's previous sealed moment (null on first)
-//   world.<ns>.<key>     — read a world signal published on reality root
-//                          (set-world-signal writes to reality-root.qualities.world.<ns>.<key>;
+//   world.<ns>.<key>     — read a world signal published on story root
+//                          (set-world-signal writes to story-root.qualities.world.<ns>.<key>;
 //                          coordination + environmental patterns ride on this surface)
 //
 // Operators (object-form):
@@ -401,7 +401,7 @@ function buildCtx({
       quality:      serializeQualitiesShallow(toBeing.qualities),
     }),
     time: timeCtx,
-    // world.<namespace>.<key> reads from reality root's qualities.world
+    // world.<namespace>.<key> reads from story root's qualities.world
     // namespace, which set-world-signal writes to. Passed in by assign.js
     // (a single space-row lookup per moment-open).
     world: worldSignals && typeof worldSignals === "object"

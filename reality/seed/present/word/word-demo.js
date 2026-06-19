@@ -1,5 +1,5 @@
 // Phase 3 demo: parse a real `.word` file and run it.
-// Run:  node reality/seed/present/word/word-demo.js
+// Run:  node story/seed/present/word/word-demo.js
 //
 // This is the round-trip: prose (harmony.word) -> IR (parser) -> facts (evaluator).
 // No hand-built IR; the program is the words.

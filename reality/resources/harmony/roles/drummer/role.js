@@ -19,7 +19,7 @@
 // what they hear. Substrate-self-referential: the tick fact is
 // how the substrate tells itself to dance.
 
-import log from "../../../../seed/seedReality/log.js";
+import log from "../../../../seed/seedStory/log.js";
 
 export const drummerRole = Object.freeze({
   name: "drummer",

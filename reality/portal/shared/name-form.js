@@ -3,7 +3,7 @@
 // The PRE-WORLD pre-panel: what a connection sees BEFORE it has a name. The
 // Name layer sits in front of the world (you need a name to do anything), so
 // when the socket carries no nameId the portal shows this instead of landing
-// in a world. Its IBPA is just the bare reality domain (the "Name menu").
+// in a world. Its IBPA is just the bare story domain (the "Name menu").
 //
 // It speaks the client's `name` channel (nameDeclare / nameConnect / nameSee),
 // which rides the dedicated "name" socket event — NOT the world `ibp` verbs.
@@ -46,11 +46,11 @@ export function hideNameForm() {
  *
  * @param {object}   opts
  * @param {object}   opts.client       the PortalClient (name channel methods)
- * @param {string}   opts.realityDomain the bare reality (shown as the IBPA)
+ * @param {string}   opts.storyDomain the bare story (shown as the IBPA)
  * @param {Function} opts.onConnected   called with the bound nameId after a
  *                                      successful name:connect
  */
-export function showNameForm({ client, realityDomain = "", onConnected = () => {} }) {
+export function showNameForm({ client, storyDomain = "", onConnected = () => {} }) {
   hideNameForm();
   injectStyles();
 
@@ -58,8 +58,8 @@ export function showNameForm({ client, realityDomain = "", onConnected = () => {
   const card = el("div", "nf-card");
   overlay.appendChild(card);
 
-  // The IBPA: at the Name menu it is only the reality domain.
-  card.appendChild(el("div", "nf-ibpa", realityDomain || "this reality"));
+  // The IBPA: at the Name menu it is only the story domain.
+  card.appendChild(el("div", "nf-ibpa", storyDomain || "this story"));
   card.appendChild(el("h1", "nf-title", "Name"));
   card.appendChild(el("p", "nf-sub",
     "You need a name to enter. Connect to yours, create a new one, or look one up."));

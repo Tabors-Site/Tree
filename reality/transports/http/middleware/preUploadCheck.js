@@ -8,7 +8,7 @@
 //
 // Extensions add their own limits (tier gates, storage quotas)
 // through the matter hooks.
-import { getRealityConfigValue } from "../../../seed/realityConfig.js";
+import { getStoryConfigValue } from "../../../seed/storyConfig.js";
 import { sendError, IBP_ERR } from "../../../seed/ibp/protocol.js";
 
 export default function preUploadCheck(req, res, next) {
@@ -16,13 +16,13 @@ export default function preUploadCheck(req, res, next) {
   if (!contentType.includes("multipart/form-data")) return next();
 
   // Master switch
-  const enabled = getRealityConfigValue("uploadEnabled");
+  const enabled = getStoryConfigValue("uploadEnabled");
   if (enabled === false || enabled === "false") {
-    return sendError(res, 403, IBP_ERR.UPLOAD_DISABLED, "Uploads are disabled on this reality");
+    return sendError(res, 403, IBP_ERR.UPLOAD_DISABLED, "Uploads are disabled on this story");
   }
 
   // Size ceiling
-  const maxBytes = Number(getRealityConfigValue("maxUploadBytes")) || 104857600;
+  const maxBytes = Number(getStoryConfigValue("maxUploadBytes")) || 104857600;
   const contentLength = parseInt(req.headers["content-length"], 10);
   if (contentLength && contentLength > maxBytes) {
     return sendError(res, 413, IBP_ERR.UPLOAD_TOO_LARGE,
@@ -30,7 +30,7 @@ export default function preUploadCheck(req, res, next) {
   }
 
   // MIME filter
-  const allowed = getRealityConfigValue("allowedMimeTypes");
+  const allowed = getStoryConfigValue("allowedMimeTypes");
   if (Array.isArray(allowed) && allowed.length > 0) {
     const mime = contentType.split(";")[0].trim();
     const passes = allowed.some(prefix => mime.startsWith(prefix));

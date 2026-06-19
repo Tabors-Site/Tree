@@ -1,7 +1,7 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
 // SEE operations. The named perceptions a being can preload (via
-// canSee) or any caller can ask for (via reality.see(name, args)).
+// canSee) or any caller can ask for (via story.see(name, args)).
 //
 // SEE / DO are parallel registries. DO is "the words I know how to
 // act on"; SEE is "the named perceptions I know how to render." Both
@@ -17,8 +17,8 @@
 //      face block in the LLM prompt.
 //
 //   2. Direct call from anywhere
-//        const conns = await reality.see("llm-connections");
-//        const chain = await reality.see("llm-chain", { receiverBeingId, role });
+//        const conns = await story.see("llm-connections");
+//        const chain = await story.see("llm-chain", { receiverBeingId, role });
 //      Portal, DO handlers, extension code — all reach for named
 //      perceptions through the same surface.
 //
@@ -42,7 +42,7 @@
 // init() return. Both go through registerSeeOperation here; there is
 // no privileged seed path.
 
-import log from "../seedReality/log.js";
+import log from "../seedStory/log.js";
 
 const REGISTRY = new Map();
 

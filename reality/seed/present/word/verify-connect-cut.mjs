@@ -15,12 +15,12 @@ import { randomUUID } from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const SCRATCH_DB = "mongodb://localhost:27017/reality_word_connect_cut";
+const SCRATCH_DB = "mongodb://localhost:27017/story_word_connect_cut";
 process.env.PORT = "3794";
 process.env.MONGODB_URI = SCRATCH_DB;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "connectcut-secret-0123456789";
-process.env.REALITY_KEY_DIR = path.join(os.tmpdir(), "connectcut-keys-" + process.pid);
-fs.rmSync(process.env.REALITY_KEY_DIR, { recursive: true, force: true });
+process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "connectcut-keys-" + process.pid);
+fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
 const SRC = path.join(os.tmpdir(), "connectcut-src");
 fs.rmSync(SRC, { recursive: true, force: true });
 fs.mkdirSync(SRC, { recursive: true });
@@ -39,8 +39,8 @@ await import(`${R}/begin.js`);
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const { sealFacts } = await import(`${R}/seed/past/fact/facts.js`);
 const { cherubBeOps } = await import(`${R}/seed/present/roles/cherub/role.js`);
-const { getRealityDomain } = await import(`${R}/seed/ibp/address.js`);
-const realityDomain = getRealityDomain();
+const { getStoryDomain } = await import(`${R}/seed/ibp/address.js`);
+const storyDomain = getStoryDomain();
 
 let pass = 0, fail = 0;
 const ok = (l) => { pass++; console.log(`  ✓ ${l}`); };
@@ -62,7 +62,7 @@ async function connect(name, password) {
   const ctx = { moment: { actId: randomUUID(), actorAct: { branch }, identity: { beingId: "arrival", name: "arrival" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] }, nameId: null };
   const t0 = process.hrtime.bigint();
   try {
-    const res = await cherubBeOps.connect.handler({ address: `${realityDomain}/@cherub`, addressKind: "stance", payload: { name, password }, identity: null, ctx });
+    const res = await cherubBeOps.connect.handler({ address: `${storyDomain}/@cherub`, addressKind: "stance", payload: { name, password }, identity: null, ctx });
     return { res, refused: null, ms: Number(process.hrtime.bigint() - t0) / 1e6 };
   } catch (e) {
     if (e && (e.name === "IbpError" || e.code)) return { res: null, refused: e, ms: Number(process.hrtime.bigint() - t0) / 1e6 };
@@ -84,7 +84,7 @@ try {
   good.res?.identityToken ? ok(`correct password → identityToken`) : bad(`identityToken`, good.refused?.message || good.res);
   good.res?.name === "alice" ? ok(`response names @alice`) : bad(`name`, good.res?.name);
   String(good.res?.beingId) === String(alice.id) ? ok(`response beingId = @alice`) : bad(`beingId`, good.res?.beingId);
-  good.res?.beingAddress === `${realityDomain}/@alice` ? ok(`response beingAddress = ${realityDomain}/@alice`) : bad(`beingAddress`, good.res?.beingAddress);
+  good.res?.beingAddress === `${storyDomain}/@alice` ? ok(`response beingAddress = ${storyDomain}/@alice`) : bad(`beingAddress`, good.res?.beingAddress);
   ("seatBranch" in (good.res || {})) ? ok(`response carries seatBranch (${good.res.seatBranch})`) : bad(`seatBranch`, good.res);
 
   // ── wrong password → refuse ──

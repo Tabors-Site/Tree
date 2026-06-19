@@ -14,12 +14,12 @@ export async function renderRolesPanel(body, action, opByName, { refreshView } =
   body.innerHTML = "";
   const desc = action.values?.descriptor || flat.state?.descriptor || {};
 
-  const reality = flat.state?.discovery?.reality
-    || desc.address?.reality
+  const story = flat.state?.discovery?.story
+    || desc.address?.story
     || desc.address?.place
     || "";
   const path = desc.address?.pathByNames || "/";
-  const positionAddress = `${reality}${path === "/" ? "/" : path}`;
+  const positionAddress = `${story}${path === "/" ? "/" : path}`;
   const positionSpaceId = desc.address?.spaceId
     || desc.position?.spaceId
     || desc.space?._id
@@ -30,20 +30,20 @@ export async function renderRolesPanel(body, action, opByName, { refreshView } =
   const isAnonymous = !viewerName || viewerName === "arrival";
 
   // ── 1. Where you are + ownership ────────────────────────────────
-  await renderWhereYouAre(body, { desc, reality, positionSpaceId, path });
+  await renderWhereYouAre(body, { desc, story, positionSpaceId, path });
 
   // Collect data we'll need across sections.
   let hostedHere   = [];
   let claim        = null;
   let viewerData   = { grants: [], lineage: null };
-  try { hostedHere = await collectRolesInEffect(desc, reality); } catch { /* surface in section */ }
-  try { claim = await findNearestOwnedAncestor(desc, reality); } catch { /* */ }
+  try { hostedHere = await collectRolesInEffect(desc, story); } catch { /* surface in section */ }
+  try { claim = await findNearestOwnedAncestor(desc, story); } catch { /* */ }
   if (!isAnonymous) {
-    try { viewerData = await collectYourGrantsAndLineage(viewerName, reality, positionSpaceId); } catch { /* */ }
+    try { viewerData = await collectYourGrantsAndLineage(viewerName, story, positionSpaceId); } catch { /* */ }
   }
 
   // Annotate each grant with: spec, host, whether it reaches here.
-  const annotated = await annotateGrants(viewerData.grants, hostedHere, positionSpaceId, reality);
+  const annotated = await annotateGrants(viewerData.grants, hostedHere, positionSpaceId, story);
   const activeGrants = annotated.filter((g) => g.reachesHere);
 
   // Compute effective canX once — drives the "What you can do here"
@@ -54,7 +54,7 @@ export async function renderRolesPanel(body, action, opByName, { refreshView } =
   renderEffective(body, { effective, claim, viewerName, isAnonymous });
 
   // ── 3. Your grants ──────────────────────────────────────────────
-  renderYourGrants(body, { annotated, viewerName, isAnonymous, lineage: viewerData.lineage, reality });
+  renderYourGrants(body, { annotated, viewerName, isAnonymous, lineage: viewerData.lineage, story });
 
   // ── 4. Roles hosted here (collapsed) ────────────────────────────
   renderHostedHere(body, { hostedHere });
@@ -71,7 +71,7 @@ export async function renderRolesPanel(body, action, opByName, { refreshView } =
   if (activeGrants.length > 0) {
     renderGrantForm(body, {
       heldRoles: activeGrants,
-      reality,
+      story,
       onResult: (err) => { if (!err && typeof refreshView === "function") refreshView(); },
     });
   }
@@ -105,15 +105,15 @@ function computeEffective(activeGrants, claim, viewerName) {
 // Section 1 — Where you are
 // ──────────────────────────────────────────────────────────────────
 
-async function renderWhereYouAre(parent, { desc, reality, positionSpaceId, path }) {
+async function renderWhereYouAre(parent, { desc, story, positionSpaceId, path }) {
   const sec = section(parent, "Where you are");
   const hostName = desc.space?.name || desc.address?.spaceName
-                  || (path === "/" ? "reality root" : path);
-  sec.appendChild(kvRow("position", path === "/" ? "/ (reality root)" : path));
+                  || (path === "/" ? "story root" : path);
+  sec.appendChild(kvRow("position", path === "/" ? "/ (story root)" : path));
   sec.appendChild(kvRow("space", hostName));
   if (positionSpaceId) sec.appendChild(kvRow("spaceId", shortId(positionSpaceId)));
 
-  const claim = await findNearestOwnedAncestor(desc, reality);
+  const claim = await findNearestOwnedAncestor(desc, story);
   if (!claim) {
     sec.appendChild(kvRow("ownership", "(unclaimed)"));
   } else if (claim.publicCommons) {
@@ -208,7 +208,7 @@ function addCan(map, list, key, roleName) {
 // Section 3 — Your grants
 // ──────────────────────────────────────────────────────────────────
 
-function renderYourGrants(parent, { annotated, viewerName, isAnonymous, lineage, reality }) {
+function renderYourGrants(parent, { annotated, viewerName, isAnonymous, lineage, story }) {
   const sec = section(parent, isAnonymous ? "Your grants" : `Your grants (as @${viewerName})`);
   if (isAnonymous) {
     sec.appendChild(noteRow("Sign in to see your held roles."));
@@ -218,7 +218,7 @@ function renderYourGrants(parent, { annotated, viewerName, isAnonymous, lineage,
     sec.appendChild(noteRow("(you hold no granted roles)"));
   } else {
     for (const g of annotated) {
-      sec.appendChild(grantCard(g, viewerName, reality));
+      sec.appendChild(grantCard(g, viewerName, story));
     }
   }
   if (lineage && (lineage.mother || lineage.father)) {
@@ -228,7 +228,7 @@ function renderYourGrants(parent, { annotated, viewerName, isAnonymous, lineage,
   }
 }
 
-function grantCard(entry, viewerName, reality) {
+function grantCard(entry, viewerName, story) {
   const card = document.createElement("div");
   card.className = "grant-card";
 
@@ -263,7 +263,7 @@ function grantCard(entry, viewerName, reality) {
       btn.disabled = true;
       try {
         await flat.doOp(
-          `${reality}/@${viewerName}`,
+          `${story}/@${viewerName}`,
           "revoke-role",
           {
             role:          entry.grant.role,
@@ -542,7 +542,7 @@ function loadSpecIntoPickers(spec, pickers, reachField, descField) {
 // Section 6 — Grant a role to a being
 // ──────────────────────────────────────────────────────────────────
 
-function renderGrantForm(parent, { heldRoles, reality, onResult }) {
+function renderGrantForm(parent, { heldRoles, story, onResult }) {
   const sec = collapsibleSection(parent, "Grant a role to a being");
   sec.body.appendChild(noteRow(
     "The substrate admits if any of your held roles has canDo:[\"grant-role:<role>\"] (or grant-role:*) reaching the anchor."
@@ -599,7 +599,7 @@ function renderGrantForm(parent, { heldRoles, reality, onResult }) {
       submit.disabled = false;
       return;
     }
-    const target = resolveGranteeTarget(raw, reality);
+    const target = resolveGranteeTarget(raw, story);
     try {
       await flat.doOp(target, "grant-role", {
         role,
@@ -625,7 +625,7 @@ function renderGrantForm(parent, { heldRoles, reality, onResult }) {
 // Data collection
 // ──────────────────────────────────────────────────────────────────
 
-async function findNearestOwnedAncestor(desc, reality) {
+async function findNearestOwnedAncestor(desc, story) {
   const client = flat.state?.client;
   if (!client) return null;
   const path = desc.address?.pathByNames || "/";
@@ -634,12 +634,12 @@ async function findNearestOwnedAncestor(desc, reality) {
     const ancestorPath = "/" + segs.slice(0, i).join("/");
     let snap = null;
     try {
-      snap = await client.see(`${reality}${ancestorPath === "/" ? "/" : ancestorPath}`);
+      snap = await client.see(`${story}${ancestorPath === "/" ? "/" : ancestorPath}`);
     } catch { continue; }
     const owner = readOwner(snap);
     if (!owner) continue;
     const hostName = snap?.space?.name || snap?.address?.spaceName
-                    || (ancestorPath === "/" ? "reality root" : ancestorPath);
+                    || (ancestorPath === "/" ? "story root" : ancestorPath);
     const spaceId = snap?.space?._id || snap?.address?.spaceId || null;
     // Resolve owner name (public => commons indicator).
     const beingsList = Array.isArray(snap.beings) ? snap.beings : [];
@@ -656,32 +656,32 @@ function readOwner(snap) {
   return snap?.space?.owner || snap?.owner || null;
 }
 
-async function collectRolesInEffect(desc, reality) {
+async function collectRolesInEffect(desc, story) {
   const client = flat.state?.client;
   if (!client) return [];
 
   const seen = new Set();
   const out = [];
   const path = desc.address?.pathByNames || "/";
-  await harvestRolesAt(client, reality, path, seen, out, false);
+  await harvestRolesAt(client, story, path, seen, out, false);
 
   const segs = path.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
   for (let i = segs.length - 1; i >= 0; i--) {
     const ancestorPath = "/" + segs.slice(0, i).join("/");
-    await harvestRolesAt(client, reality, ancestorPath || "/", seen, out, true);
+    await harvestRolesAt(client, story, ancestorPath || "/", seen, out, true);
   }
   return out;
 }
 
-async function harvestRolesAt(client, reality, path, seen, out, viaInheritance) {
+async function harvestRolesAt(client, story, path, seen, out, viaInheritance) {
   let snap = null;
   try {
-    snap = await client.see(`${reality}${path === "/" ? "/" : path}`);
+    snap = await client.see(`${story}${path === "/" ? "/" : path}`);
   } catch { return; }
   const roles = snap?.space?.qualities?.roles || snap?.qualities?.roles || null;
   if (!roles || typeof roles !== "object") return;
   const hostSpaceName = snap?.space?.name || snap?.address?.spaceName
-                       || (path === "/" ? "reality root" : path);
+                       || (path === "/" ? "story root" : path);
   const hostSpaceId = snap?.space?._id || snap?.address?.spaceId || null;
   for (const [name, spec] of Object.entries(roles)) {
     if (seen.has(name)) continue;
@@ -690,7 +690,7 @@ async function harvestRolesAt(client, reality, path, seen, out, viaInheritance) 
   }
 }
 
-async function collectYourGrantsAndLineage(viewerName, reality, positionSpaceId) {
+async function collectYourGrantsAndLineage(viewerName, story, positionSpaceId) {
   const client = flat.state?.client;
   if (!client) return { grants: [], lineage: null };
   // The @stance SEE resolves to the position the being stands at; the
@@ -699,7 +699,7 @@ async function collectYourGrantsAndLineage(viewerName, reality, positionSpaceId)
   // qualities, so this is the correct path.
   let beingDesc = null;
   try {
-    beingDesc = await client.see(`${reality}/@${viewerName}`);
+    beingDesc = await client.see(`${story}/@${viewerName}`);
   } catch {
     return { grants: [], lineage: null };
   }
@@ -713,7 +713,7 @@ async function collectYourGrantsAndLineage(viewerName, reality, positionSpaceId)
   return { grants: granted, lineage };
 }
 
-async function annotateGrants(grants, hostedHere, positionSpaceId, reality) {
+async function annotateGrants(grants, hostedHere, positionSpaceId, story) {
   // hostedHere already collected from current → root. Use it to find specs
   // for grants whose anchor is somewhere on this chain. For grants
   // anchored elsewhere we fall back to a per-grant SEE walk.
@@ -730,17 +730,17 @@ async function annotateGrants(grants, hostedHere, positionSpaceId, reality) {
       spec = cached.spec;
       host = { spaceId: cached.hostSpaceId, name: cached.hostSpaceName };
     } else if (grant.anchorSpaceId) {
-      const walked = await walkForRoleSpec(grant.anchorSpaceId, grant.role, reality);
+      const walked = await walkForRoleSpec(grant.anchorSpaceId, grant.role, story);
       spec = walked.spec;
       host = walked.host;
     }
-    const reachesHere = !!(spec && host && (await spaceReachable(positionSpaceId, host.spaceId, spec, reality)));
+    const reachesHere = !!(spec && host && (await spaceReachable(positionSpaceId, host.spaceId, spec, story)));
     out.push({ grant, spec, host, reachesHere });
   }
   return out;
 }
 
-async function walkForRoleSpec(anchorSpaceId, roleName, reality) {
+async function walkForRoleSpec(anchorSpaceId, roleName, story) {
   const client = flat.state?.client;
   if (!client) return { spec: null, host: null };
   let cursor = anchorSpaceId;
@@ -748,7 +748,7 @@ async function walkForRoleSpec(anchorSpaceId, roleName, reality) {
   while (cursor && safety < 12) {
     safety++;
     let snap = null;
-    try { snap = await client.see(`${reality}/${cursor}`); } catch { return { spec: null, host: null }; }
+    try { snap = await client.see(`${story}/${cursor}`); } catch { return { spec: null, host: null }; }
     const roles = snap?.space?.qualities?.roles || snap?.qualities?.roles || {};
     const found = roles?.[roleName];
     if (found) {
@@ -765,7 +765,7 @@ async function walkForRoleSpec(anchorSpaceId, roleName, reality) {
   return { spec: null, host: null };
 }
 
-async function spaceReachable(targetSpaceId, hostSpaceId, _spec, reality) {
+async function spaceReachable(targetSpaceId, hostSpaceId, _spec, story) {
   // Best-effort: covered when target === host or target is in host's
   // descendant chain. Doesn't replicate the full `reach` path-grammar;
   // the substrate is the source of truth for real auth decisions.
@@ -779,7 +779,7 @@ async function spaceReachable(targetSpaceId, hostSpaceId, _spec, reality) {
     safety++;
     if (String(cursor) === String(hostSpaceId)) return true;
     let snap = null;
-    try { snap = await client.see(`${reality}/${cursor}`); } catch { return false; }
+    try { snap = await client.see(`${story}/${cursor}`); } catch { return false; }
     cursor = snap?.space?.parent || snap?.address?.parent || null;
   }
   return false;
@@ -861,19 +861,19 @@ function splitList(raw) {
 }
 
 // Resolve a grantee input into an IBP target address.
-//   "alice"                → "<reality>/@alice"           (local @-stance)
-//   "<uuid>"               → "<reality>/@<uuid>"          (id treated as name; resolver looks up by id too)
-//   "@alice"               → "<reality>/@alice"           (already prefixed)
+//   "alice"                → "<story>/@alice"           (local @-stance)
+//   "<uuid>"               → "<story>/@<uuid>"          (id treated as name; resolver looks up by id too)
+//   "@alice"               → "<story>/@alice"           (already prefixed)
 //   "bing.com/@tabor"      → "bing.com/@tabor"            (full IBPA, pass through)
 //   "bing.com#4/@tabor"    → "bing.com#4/@tabor"          (federation form, pass through)
-// Heuristic: if the string contains "/" or starts with the reality's
+// Heuristic: if the string contains "/" or starts with the story's
 // domain, treat it as a full address. Otherwise prefix with the local
-// reality's @-stance shape.
-function resolveGranteeTarget(raw, reality) {
+// story's @-stance shape.
+function resolveGranteeTarget(raw, story) {
   const s = raw.trim();
   if (s.includes("/")) return s;          // full address shape
   const cleaned = s.startsWith("@") ? s.slice(1) : s;
-  return `${reality}/@${cleaned}`;
+  return `${story}/@${cleaned}`;
 }
 
 function shortId(id) {

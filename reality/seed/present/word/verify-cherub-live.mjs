@@ -16,20 +16,20 @@ import { fileURLToPath } from "url";
 import { randomUUID } from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const realityRoot = path.resolve(__dirname, "../../..");
-for (const line of fs.readFileSync(path.resolve(realityRoot, ".env"), "utf8").split("\n")) {
+const storyRoot = path.resolve(__dirname, "../../..");
+for (const line of fs.readFileSync(path.resolve(storyRoot, ".env"), "utf8").split("\n")) {
   const t = line.trim(); if (!t || t.startsWith("#")) continue;
   const eq = t.indexOf("="); if (eq === -1) continue;
   const k = t.slice(0, eq).trim(), v = t.slice(eq + 1).trim();
   if (v && !process.env[k]) process.env[k] = v;
 }
-process.env.MONGODB_URI = "mongodb://localhost:27017/reality-word-cherub-live";
+process.env.MONGODB_URI = "mongodb://localhost:27017/story-word-cherub-live";
 
-const mongoose = (await import("../../seedReality/dbConfig.js")).default;
+const mongoose = (await import("../../seedStory/dbConfig.js")).default;
 if (mongoose.connection.readyState !== 1) {
   await new Promise((res, rej) => { mongoose.connection.once("connected", res); mongoose.connection.once("error", rej); });
 }
-if (mongoose.connection.name !== "reality-word-cherub-live") { console.log(`  REFUSING wrong DB ${mongoose.connection.name}`); process.exit(2); }
+if (mongoose.connection.name !== "story-word-cherub-live") { console.log(`  REFUSING wrong DB ${mongoose.connection.name}`); process.exit(2); }
 
 await import("../../materials/space/ops.js");
 await import("../../materials/matter/ops.js");
@@ -90,7 +90,7 @@ try {
   // run cherub.word's full flow LIVE through the bridge's resolved IR
   const ir = resolveRoleWord("cherub", "birth");
   const flow = ir[0];
-  // The actor is I_AM (the reality), acting THROUGH the Cherub vessel (bridge.md:
+  // The actor is I_AM (the story), acting THROUGH the Cherub vessel (bridge.md:
   // "by I_AM, through Cherub"). name = "i-am" short-circuits authorize (the
   // bootstrap axiom), beingId = cherub is the vessel. _inOp mirrors runRoleWord
   // (the whole flow is one op; do-acts dispatch as nested sub-ops).

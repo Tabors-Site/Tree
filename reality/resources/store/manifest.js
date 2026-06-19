@@ -1,6 +1,6 @@
 // store pack (RESOURCES.md).
 //
-// A reality grows store when it runs this pack. Roots are the nodes of
+// A story grows store when it runs this pack. Roots are the nodes of
 // The Root System, the underground network where realities find each
 // other and share resources (extensions, seeds, and the peer records
 // that point at them). Browsing is SEE, publishing is DO, every
@@ -25,7 +25,7 @@ export default {
   name:    "store",
   version: "0.1.0",
   description:
-    "The store pack: catalog of resources (extensions and seeds), published by peer realities, served and mirrored by any reality that runs it. A reality plants this pack to become a Roots node in The Root System.",
+    "The store pack: catalog of resources (extensions and seeds), published by peer realities, served and mirrored by any story that runs it. A story plants this pack to become a Roots node in The Root System.",
 
   requires: [
     { type: "code", ref: "store"             },

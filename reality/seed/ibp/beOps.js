@@ -23,7 +23,7 @@
 //
 // Cherub is currently the only being that handles BE. The five ops
 // are universal identity surface, not per-being behavior . if a
-// future reality wanted a different welcome-character, that being's
+// future story wanted a different welcome-character, that being's
 // role would still license
 // `canBe: ["birth", "connect", "release", "switch", "death"]`
 // and rely on the same static table.

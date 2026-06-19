@@ -2,9 +2,9 @@
 //
 // Cross-world dispatch helpers. Two halves of the receipt loop:
 //
-//   crossRealityDispatch  — outbound. Opens a local Act for the
+//   crossStoryDispatch  — outbound. Opens a local Act for the
 //                           actor's attempt, forwards the envelope to
-//                           the foreign reality via canopy, and
+//                           the foreign story via canopy, and
 //                           applies the peer's response back to the
 //                           Act (status transition + inner face).
 //
@@ -24,28 +24,28 @@
 //   attaches as the Act's inner face. Both updates land via the
 //   handleCrossWorldResponse composite path.
 //
-// These helpers are the cross-REALITY transport layer; cross-branch
-// within the same reality runs entirely in-process through the normal
+// These helpers are the cross-STORY transport layer; cross-branch
+// within the same story runs entirely in-process through the normal
 // inbox / assign / sealAct flow (which already threads crossOrigin
 // correctly via moment.targetBranch).
 
 import Act from "../past/act/act.js";
 import { handleCrossWorldResponse } from "../past/act/crossWorldResponse.js";
 import { sealFacts } from "../past/fact/facts.js";
-import { getRealityDomain } from "./address.js";
+import { getStoryDomain } from "./address.js";
 
-// Foreign act dedup. Every legitimate cross-reality call rides a FRESH
-// home-side attempt act (crossRealityDispatch opens one per dispatch),
-// so a repeated (reality, actId) pair is a replay, never a retry. The
+// Foreign act dedup. Every legitimate cross-story call rides a FRESH
+// home-side attempt act (crossStoryDispatch opens one per dispatch),
+// so a repeated (story, actId) pair is a replay, never a retry. The
 // canopy layer already refuses byte-identical replays; this catches the
 // stronger attacker, a compromised peer re-wrapping a captured deed in
 // fresh canopy bodies. In-memory: the envelope being-sig freshness
 // window bounds what a restart could let back in.
-const seenForeignActs = new Map(); // "reality|actId" -> expiresAt (ms)
+const seenForeignActs = new Map(); // "story|actId" -> expiresAt (ms)
 const SEEN_ACT_TTL_MS = Number(process.env.CROSS_SEEN_ACT_TTL_MS || 10 * 60_000);
 const SEEN_ACT_MAX = 50_000;
 
-function checkAndRecordForeignAct(reality, actId) {
+function checkAndRecordForeignAct(story, actId) {
   const now = Date.now();
   if (seenForeignActs.size > 1_000 || seenForeignActs.size >= SEEN_ACT_MAX) {
     for (const [k, exp] of seenForeignActs) {
@@ -55,14 +55,14 @@ function checkAndRecordForeignAct(reality, actId) {
   // Fail closed on a flooded cache: refusing fresh work is recoverable,
   // admitting replays is not.
   if (seenForeignActs.size >= SEEN_ACT_MAX) return false;
-  const key = `${reality}|${actId}`;
+  const key = `${story}|${actId}`;
   if (seenForeignActs.has(key)) return false;
   seenForeignActs.set(key, now + SEEN_ACT_TTL_MS);
   return true;
 }
 
 /**
- * Resolve the LOCAL target branch from an inbound cross-reality address.
+ * Resolve the LOCAL target branch from an inbound cross-story address.
  *
  * The Fact lands on the TARGET's reel, on the TARGET's branch — and for
  * an inbound foreign actor the target lives on THIS substrate. Without
@@ -75,8 +75,8 @@ function checkAndRecordForeignAct(reality, actId) {
  * The address may arrive as a full bridge (`home::local/space@being`);
  * we keep only the RIGHT (callee) stance so the cross-branch-bridge gate
  * (which compares left/right branches) can't refuse a legitimately
- * cross-reality address. The right stance is expanded against THIS
- * reality with the local default branch as the implicit context, so an
+ * cross-story address. The right stance is expanded against THIS
+ * story with the local default branch as the implicit context, so an
  * address with no explicit branch resolves to local main (never the
  * foreign actor's branch). No literal "0" — the #main pointer resolves
  * through getDefaultBranch.
@@ -89,7 +89,7 @@ async function resolveLocalTargetBranch(address) {
     const raw = String(address || "");
     const rhs = raw.includes("::") ? raw.split("::").pop().trim() : raw;
     if (!rhs) return localDefault;
-    const expandCtx = { currentReality: getRealityDomain(), currentBranch: localDefault };
+    const expandCtx = { currentStory: getStoryDomain(), currentBranch: localDefault };
     const parsed = parse(rhs);
     const expanded = await resolveBranchPointers(expand(parsed, expandCtx), expandCtx);
     return expanded?.right?.branch || localDefault;
@@ -102,7 +102,7 @@ async function resolveLocalTargetBranch(address) {
 }
 
 /**
- * Outbound cross-reality dispatch. Open a local Act, forward via
+ * Outbound cross-story dispatch. Open a local Act, forward via
  * canopy with the actor's identity tuple, apply the foreign response
  * back to the Act.
  *
@@ -115,28 +115,28 @@ async function resolveLocalTargetBranch(address) {
  * @returns {Promise<{ actId: string, peerAck: object, status: string,
  *                     innerFaceHash: string|null }>}
  */
-export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
+export async function crossStoryDispatch({ envelope, actor, identity } = {}) {
   if (!envelope?.verb || !envelope?.address) {
-    throw new Error("crossRealityDispatch: envelope.verb + address required");
+    throw new Error("crossStoryDispatch: envelope.verb + address required");
   }
   if (!actor?.beingId) {
-    throw new Error("crossRealityDispatch: actor.beingId required");
+    throw new Error("crossStoryDispatch: actor.beingId required");
   }
   if (!actor?.branch) {
-    throw new Error("crossRealityDispatch: actor.branch required");
+    throw new Error("crossStoryDispatch: actor.branch required");
   }
 
   const now = new Date();
-  const reality = getRealityDomain();
+  const story = getStoryDomain();
 
   // 1. Open the local Act at status="attempted". The actor's chain
-  // records "I attempted this cross-reality call." No facts attach
+  // records "I attempted this cross-story call." No facts attach
   // to it; deltaF stays empty because the consequences live on the
   // foreign substrate.
   //
   // SANCTIONED DOCTRINE EXCEPTION — assign.js is the one legitimate
   // Stamp opener (presentism invariant), and this Act.create is the
-  // documented second site: a cross-reality attempt has no inbox
+  // documented second site: a cross-story attempt has no inbox
   // entry and no scheduler pick to ride (the moment it frames runs
   // on the FOREIGN substrate), so the local audit Act is opened
   // directly. The OS port should either keep this exception explicit
@@ -151,7 +151,7 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
   const { loadSigningKey, signActDoc, signEnvelopeBeingSig } =
     await import("../past/act/actSig.js");
   // Load the actor's NAME key once (the name is the signer; the being is
-  // what it acts through). The home reality holds it custodially. Fall back to
+  // what it acts through). The home story holds it custodially. Fall back to
   // beingId only for the pre-split / i-am case where they coincide; an
   // ordinary post-split being whose id is a content hash only resolves a key
   // via its nameId.
@@ -166,10 +166,10 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
     inReplyTo: null,
     parentThread: null,
     startMessage: {
-      content: `cross-reality ${envelope.verb}`,
+      content: `cross-story ${envelope.verb}`,
       source: actor.beingId,
     },
-    reality,
+    story,
     branch: actor.branch,
   };
   // Open + advance under the act-chain lock (read-compute-write on
@@ -183,7 +183,7 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
     // true. ΔF is empty (the consequences land on the foreign chain), so
     // factIds = [].
     const sig = await signActDoc(
-      { _id: id, p, by: actorNameId, through: actor.beingId, to: actor.beingId, reality, branch: actor.branch },
+      { _id: id, p, by: actorNameId, through: actor.beingId, to: actor.beingId, story, branch: actor.branch },
       [],
       signingPem,
     );
@@ -202,10 +202,10 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
       receivedAt: now,
       stampedAt: now,
       startMessage: {
-        content: `cross-reality ${envelope.verb}`,
+        content: `cross-story ${envelope.verb}`,
         source: actor.beingId,
       },
-      reality,
+      story,
       branch: actor.branch,
       status: "attempted",
       sig,
@@ -214,7 +214,7 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
     return id;
   });
   // Stamper live loop parity: this direct open is the one seal path
-  // that bypasses sealAct, so fire afterAct here too (cross-reality
+  // that bypasses sealAct, so fire afterAct here too (cross-story
   // attempt acts push to stamper-space subscribers like any other).
   try {
     const { hooks } = await import("../hooks.js");
@@ -233,11 +233,11 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
   // protocols/ at module-load time.
   const { forwardToPeer } = await import("../../protocols/ibp/canopy.js");
   // Sign the deed with the actor's own NAME key: this verb, on this address,
-  // with this payload, tied to the home act just opened. The receiving reality
+  // with this payload, tied to the home act just opened. The receiving story
   // verifies it self-certifyingly against the NAME (actorNameId) — no callback
   // home. Null when the actor has no local name key (anonymous / keyless, or a
   // foreign name with no local custody); the call still forwards under the
-  // reality-level canopy sig (and a strict peer refuses the unsigned envelope).
+  // story-level canopy sig (and a strict peer refuses the unsigned envelope).
   const beingSig = await signEnvelopeBeingSig(
     {
       verb: envelope.verb,
@@ -246,7 +246,7 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
       nameId: actorNameId,
       actId,
       branch: actor.branch,
-      reality,
+      story,
     },
     signingPem,
   );
@@ -295,10 +295,10 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
 }
 
 /**
- * Inbound cross-reality dispatch. Run a substrate verb as the foreign
+ * Inbound cross-story dispatch. Run a substrate verb as the foreign
  * actor. The synthetic moment carries actorAct as a JS object —
  * NOT a Mongo row, since the actor's Act lives on their home
- * substrate. emitFact reads { reality, branch, through, _id } off this
+ * substrate. emitFact reads { story, branch, through, _id } off this
  * object to compute the crossOrigin block for any facts the verb
  * produces. After the verb returns, sealFacts commits the deltaF.
  *
@@ -309,7 +309,7 @@ export async function crossRealityDispatch({ envelope, actor, identity } = {}) {
  * @param {("see"|"do"|"summon"|"be")} opts.verb
  * @param {string} opts.address    IBP address string
  * @param {object} opts.payload    verb-specific payload
- * @param {object} opts.actor      { reality, branch, beingId, actId }
+ * @param {object} opts.actor      { story, branch, beingId, actId }
  *                                  the foreign actor's identity tuple
  * @param {object} [opts.carrier]  the original carrier (for identity
  *                                  + canopySender propagation)
@@ -319,18 +319,18 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
   if (!verb || !address) {
     throw new Error("runVerbAsForeignActor: verb + address required");
   }
-  if (!actor?.reality || !actor?.branch || !actor?.beingId || !actor?.actId) {
+  if (!actor?.story || !actor?.branch || !actor?.beingId || !actor?.actId) {
     throw new Error(
-      "runVerbAsForeignActor: actor must carry { reality, branch, beingId, actId }",
+      "runVerbAsForeignActor: actor must carry { story, branch, beingId, actId }",
     );
   }
 
-  // Cross-reality being-sig gate, BEFORE any verb work or seal. If the
+  // Cross-story being-sig gate, BEFORE any verb work or seal. If the
   // envelope carries the actor's own signature over { verb, address,
-  // payload, nameId, actId, branch, reality }, verify it against the actor's
+  // payload, nameId, actId, branch, story }, verify it against the actor's
   // NAME (which IS the pubkey) — self-certifying, no callback to the actor's
-  // home reality. A present-but-invalid sig is a hard refusal; an absent sig
-  // is accepted (the reality-level canopy sig that got us here already
+  // home story. A present-but-invalid sig is a hard refusal; an absent sig
+  // is accepted (the story-level canopy sig that got us here already
   // vouched, and peers may not sign yet).
   const actorNameId = actor.nameId || actor.beingId;
   let beingSigVerified = false;
@@ -344,13 +344,13 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
         nameId: actorNameId,
         actId: actor.actId,
         branch: actor.branch,
-        reality: actor.reality,
+        story: actor.story,
       },
       actor.beingSig,
     );
     if (!v.ok) {
       throw new Error(
-        `runVerbAsForeignActor: cross-reality being-sig verification failed (${v.reason})`,
+        `runVerbAsForeignActor: cross-story being-sig verification failed (${v.reason})`,
       );
     }
     // "being" = the actor's OWN signature verified against its key id.
@@ -367,11 +367,11 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
     // advisory behavior.
     if (!beingSigVerified) {
       const { getPeerByDomain } = await import("../../protocols/ibp/peers.js");
-      const peer = await getPeerByDomain(actor.reality).catch(() => null);
+      const peer = await getPeerByDomain(actor.story).catch(() => null);
       if (peer?.requireSignedEnvelopes) {
         throw new Error(
-          `runVerbAsForeignActor: cross-reality being-sig verification failed ` +
-          `(peer ${actor.reality} requires signed envelopes; got ${v.reason})`,
+          `runVerbAsForeignActor: cross-story being-sig verification failed ` +
+          `(peer ${actor.story} requires signed envelopes; got ${v.reason})`,
         );
       }
     }
@@ -379,10 +379,10 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
 
   // Foreign act replay gate. AFTER signature checks (a refused envelope
   // must not burn its actId), BEFORE any verb work or seal.
-  if (!checkAndRecordForeignAct(actor.reality, actor.actId)) {
+  if (!checkAndRecordForeignAct(actor.story, actor.actId)) {
     throw new Error(
       `runVerbAsForeignActor: foreign act ${String(actor.actId).slice(0, 16)}… ` +
-      `from ${actor.reality} was already dispatched (replay refused)`,
+      `from ${actor.story} was already dispatched (replay refused)`,
     );
   }
 
@@ -392,7 +392,7 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
     _id: actor.actId,
     by: actorNameId,
     through: actor.beingId,
-    reality: actor.reality,
+    story: actor.story,
     branch: actor.branch,
   };
 
@@ -421,16 +421,16 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
     nameId: actorNameId,
     // The verifyIncoming middleware will already have stamped
     // req.canopySender; authorize sees it via carrier.
-    canopyVerifiedSender: actor.reality,
-    // `reality` is the canopy-verified home reality of the foreign
+    canopyVerifiedSender: actor.story,
+    // `story` is the canopy-verified home story of the foreign
     // actor. Downstream gates (e.g. cherub's BE:connect father-admit
     // check) read this to match against the target vessel's
-    // qualities.father.reality. See FEDERATION.md "mate + vessel".
-    reality: actor.reality,
+    // qualities.father.story. See FEDERATION.md "mate + vessel".
+    story: actor.story,
     // True only when the actor's own envelope signature verified
     // against its key id (self-certifying). Father-admit requires it:
     // taking over a vessel needs the father's OWN key, not just the
-    // peer reality's vouch.
+    // peer story's vouch.
     beingSigVerified,
   };
 
@@ -476,14 +476,14 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
   // roles); without firing the callbacks, the receiver's runLoop never
   // starts and the inbox entry sits forever. Same shape stamped.js
   // uses to drain afterSeal at moment seal. This is the missing seam
-  // for cross-reality SUMMONs to actually deliver — the normal sealAct
+  // for cross-story SUMMONs to actually deliver — the normal sealAct
   // path wasn't entered (we have no local Act for the foreign actor),
   // so the seam has to live here.
   if (Array.isArray(moment.afterSeal) && moment.afterSeal.length > 0) {
     for (const cb of moment.afterSeal) {
       try { await cb(); }
       catch (err) {
-        const log = (await import("../seedReality/log.js")).default;
+        const log = (await import("../seedStory/log.js")).default;
         log.warn("CrossWorld", `afterSeal callback failed: ${err.message}`);
       }
     }

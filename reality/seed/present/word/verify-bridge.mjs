@@ -1,7 +1,7 @@
 // Sanity check for the bridge registry: it resolves the first converted slice
 // (cherub birth -> cherub.word, parsed) and falls through (null) for everything
 // else. No DB; just proves the lookup + parse work. Run:
-//   node reality/seed/present/word/verify-bridge.mjs
+//   node story/seed/present/word/verify-bridge.mjs
 
 import { resolveRoleWord } from "./roleWordRegistry.js";
 

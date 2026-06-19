@@ -8,7 +8,7 @@
 // seed (cognition: "llm" + an llm connection on the being); the
 // greeting logic stays the same.
 
-import log from "../../../../seed/seedReality/log.js";
+import log from "../../../../seed/seedStory/log.js";
 
 export const greeterRole = Object.freeze({
   permissions: ["see"],
@@ -38,7 +38,7 @@ export const greeterRole = Object.freeze({
     }
 
     // Parse the asker's name out of message.from (a stance string).
-    // Stance shape: "<reality>/<path>@<name>". Last @<name> is the asker.
+    // Stance shape: "<story>/<path>@<name>". Last @<name> is the asker.
     let askerName = "stranger";
     if (typeof message?.from === "string") {
       const m = message.from.match(/@([a-z][a-z0-9-]*)$/i);

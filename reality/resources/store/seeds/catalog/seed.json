@@ -1,7 +1,7 @@
 {
   "meta": {
     "bundleVersion": "1.0",
-    "sourceReality": "store",
+    "sourceStory": "store",
     "sourceBranch": "0",
     "sourceScopeName": "catalog",
     "sourceScopeSpaceId": "catalog-root",

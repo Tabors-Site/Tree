@@ -55,11 +55,11 @@ export function createNavigation(ctx) {
     if (address.includes("#")) return address;
     const activeBranch = state.get("descriptor")?.address?.branch || "0";
     if (activeBranch === "0") return address;
-    const reality = state.get("discovery")?.reality;
-    if (!reality) return address;
-    if (address.startsWith(reality)) return address;
+    const story = state.get("discovery")?.story;
+    if (!story) return address;
+    if (address.startsWith(story)) return address;
     if (address.startsWith("/") || address.startsWith("~")) {
-      return `${reality}#${activeBranch}${address === "/" ? "/" : address}`;
+      return `${story}#${activeBranch}${address === "/" ? "/" : address}`;
     }
     return address;
   }
@@ -73,11 +73,11 @@ export function createNavigation(ctx) {
     const trimmed = raw.trim();
     if (trimmed.startsWith("@")) {
       const desc = state.get("descriptor");
-      const reality = state.get("discovery")?.reality || desc?.address?.place || "";
+      const story = state.get("discovery")?.story || desc?.address?.place || "";
       const branch = desc?.address?.branch || "0";
       const bq = branch === "0" ? "" : `#${branch}`;
       const path = desc?.address?.pathByNames || "/";
-      return `${reality}${bq}${path}${trimmed}`.replace(/\/+@/, "/@");
+      return `${story}${bq}${path}${trimmed}`.replace(/\/+@/, "/@");
     }
     return withActiveBranch(trimmed);
   }
@@ -86,35 +86,35 @@ export function createNavigation(ctx) {
   // signed-in being's own stance. Shared by every view that emits.
   function currentPositionAddress() {
     const desc = state.get("descriptor");
-    const reality = state.get("discovery")?.reality || "";
+    const story = state.get("discovery")?.story || "";
     const path = desc?.address?.pathByNames || "/";
     const branch = desc?.address?.branch || "0";
     const bq = branch === "0" ? "" : `#${branch}`;
-    return `${reality}${bq}${path}`.replace(/\/+$/, "") || `${reality}${bq}`;
+    return `${story}${bq}${path}`.replace(/\/+$/, "") || `${story}${bq}`;
   }
 
   function selfStance() {
     const session = state.get("session");
     if (session?.beingAddress) return session.beingAddress;
-    const reality = state.get("discovery")?.reality || "";
+    const story = state.get("discovery")?.story || "";
     const branch = state.get("descriptor")?.address?.branch || "0";
     const bq = branch === "0" ? "" : `#${branch}`;
     const name = session?.username || "arrival";
-    return `${reality}${bq}/@${name}`;
+    return `${story}${bq}/@${name}`;
   }
 
   // THE target-stance builder: the current position with a being as
   // the @qualifier. This is what the IBPA's right side shows when a
   // being is selected, and what SUMMON/DO/BE dispatch against — the
   // IBPA is the source of truth, so views call this instead of
-  // hand-rolling `${reality}${path}@${being}` strings.
+  // hand-rolling `${story}${path}@${being}` strings.
   function stanceFor(beingName) {
     const desc = state.get("descriptor");
-    const reality = state.get("discovery")?.reality || desc?.address?.place || "";
+    const story = state.get("discovery")?.story || desc?.address?.place || "";
     const branch = desc?.address?.branch || "0";
     const bq = branch === "0" ? "" : `#${branch}`;
     const path = desc?.address?.pathByNames || "/";
-    return `${reality}${bq}${path}@${beingName}`.replace(/\/+@/, "/@");
+    return `${story}${bq}${path}@${beingName}`.replace(/\/+@/, "/@");
   }
 
   // Select a being as the interaction target. The selection IS an
@@ -142,12 +142,12 @@ export function createNavigation(ctx) {
     if (typeof location === "undefined") return;
     const existing = location.hash.replace(/^#/, "");
     if (existing.startsWith("inhabit=")) return;
-    const reality = desc?.address?.place || state.get("discovery")?.reality || "";
-    if (!reality) return;
+    const story = desc?.address?.place || state.get("discovery")?.story || "";
+    if (!story) return;
     const branch = desc?.address?.branch || "0";
     const path = desc?.address?.pathByNames || "/";
     const bq = branch === "0" ? "" : `#${branch}`;
-    const next = `${reality}${bq}${path === "/" ? "/" : path}`;
+    const next = `${story}${bq}${path === "/" ? "/" : path}`;
     if (existing !== next) {
       try { history.replaceState(null, "", `${location.pathname}#${next}`); } catch {}
     }
@@ -222,15 +222,15 @@ export function createNavigation(ctx) {
       }
 
       // History push unless we're stepping through it. Store the FULL
-      // IBP-form address (reality + branch + path) so back/forward
+      // IBP-form address (story + branch + path) so back/forward
       // restores the exact view even after branch hops.
       if (!fromHistory) {
-        const reality = desc?.address?.place || state.get("discovery")?.reality || "";
+        const story = desc?.address?.place || state.get("discovery")?.story || "";
         const branch = desc?.address?.branch || "0";
         const path = desc?.address?.pathByNames || "/";
         const bq = branch === "0" ? "" : `#${branch}`;
-        const canonical = reality
-          ? `${reality}${bq}${path === "/" ? "/" : path}`
+        const canonical = story
+          ? `${story}${bq}${path === "/" ? "/" : path}`
           : (desc?.address?.pathByNames || address);
         const history = state.get("history");
         const historyIndex = state.get("historyIndex");
@@ -277,7 +277,7 @@ export function createNavigation(ctx) {
         _recoveringBranch = true;
         clearLocationHash();
         try {
-          await navigate(`${state.get("discovery")?.reality || ""}/`);
+          await navigate(`${state.get("discovery")?.story || ""}/`);
           return;
         } catch (err2) {
           console.warn("[portal:nav] branch-gone recovery to main failed:", err2?.message || err2);
@@ -433,8 +433,8 @@ export function createNavigation(ctx) {
     const client = ctx.client;
     const discovery = state.get("discovery");
     const beingAddress = session.beingAddress
-      || (session.username && discovery?.reality
-        ? `${discovery.reality}/@${session.username}`
+      || (session.username && discovery?.story
+        ? `${discovery.story}/@${session.username}`
         : null);
 
     // Hash priority is for MID-SESSION RELOADS (restore the exact
@@ -461,8 +461,8 @@ export function createNavigation(ctx) {
           const pos = desc?.identity?.position || null;
           const home = desc?.identity?.homeSpace || null;
           const targetSpace = pos || home || session.homeSpaceId || null;
-          landingAddress = targetSpace && discovery?.reality
-            ? `${discovery.reality}/${targetSpace}`
+          landingAddress = targetSpace && discovery?.story
+            ? `${discovery.story}/${targetSpace}`
             : beingAddress;
         }
       } catch (err) {

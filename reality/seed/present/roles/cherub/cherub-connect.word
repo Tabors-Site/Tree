@@ -44,18 +44,18 @@ When a signed-in Name connects to a being it owns:
 # candidate search, the ancestor walk, the be:release displacement, token mint,
 # branch seat) stay `host:` escapes; the branching is .word and lays no fact (the
 # lone WORLD fact is the be:release the displacement host emits). The bridge binds
-# `caller` (the identity object: beingId/nameId/reality/beingSigVerified) + `address`.
+# `caller` (the identity object: beingId/nameId/story/beingSigVerified) + `address`.
 When an authenticated caller connects to inherit a descendant being:
   host: extractTargetName(address) as target.
   If no target:
     refuse with "connect target must name a being (@name in the address)".
   host: findBeingCandidatesByName(target) as candidates.
   If no candidates:
-    refuse with "No such being on this reality".
+    refuse with "No such being on this story".
   For each candidate in candidates in order:
     see whether the caller is an ancestor of the candidate as asAncestor.
     # father-admit is SECURITY-CRITICAL (a LOCAL father is authed by beingId; a CROSS-
-    # reality father ONLY by the proven NAME + a verified signature, NEVER beingId — a
+    # story father ONLY by the proven NAME + a verified signature, NEVER beingId — a
     # beingId match for a cross father is the vessel-takeover attack). The discrimination
     # stays host (fatherMatch, connectHandler L472-510 verbatim); the .word just marks.
     host: fatherMatch(candidate, caller) as fatherOk.

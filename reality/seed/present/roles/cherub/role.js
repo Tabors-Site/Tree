@@ -5,14 +5,14 @@
 // Genesis 3:24: God placed cherubim east of Eden to guard the way.
 // I play that role here. I am the only stance that accepts a request
 // from an unidentified arrival, and I stand at the threshold between
-// outside the reality (no identity, no being-in-this-reality yet) and
+// outside the story (no identity, no being-in-this-story yet) and
 // inside (bound to a being, addressable by stance). Without a cherub
 // at the gate there is no orderly passage. With one, the boundary
 // holds and the passage is witnessed.
 //
 // Five registered BE operations:
 //
-//   birth    . admit a new being into the reality. The arrival has no
+//   birth    . admit a new being into the story. The arrival has no
 //              identity yet; I mint their being-to-be via birthBeing
 //              internally and bind their session to it. The first ever
 //              caller becomes the first heaven authority.
@@ -43,7 +43,7 @@
 // `actions[]` surface exposes them to clients (the 3D portal renders
 // the schema as a form generically).
 
-import log from "../../../seedReality/log.js";
+import log from "../../../seedStory/log.js";
 import { hooks } from "../../../hooks.js";
 import Being from "../../../materials/being/being.js";
 import {
@@ -55,7 +55,7 @@ import {
 } from "../../../materials/being/identity.js";
 import { getSpaceRootId } from "../../../sprout.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
-import { getRealityDomain } from "../../../ibp/address.js";
+import { getStoryDomain } from "../../../ibp/address.js";
 import { birthBeing } from "../../../materials/being/identity/birth.js";
 import { hashPassword } from "../../../materials/being/identity/credentials.js";
 
@@ -80,7 +80,7 @@ export const cherubBeing = Object.freeze({
 });
 
 // ────────────────────────────────────────────────────────────────────
-// birth . A new being is born into the reality.
+// birth . A new being is born into the story.
 // ────────────────────────────────────────────────────────────────────
 
 async function birthHandler({ payload, ctx }) {
@@ -90,7 +90,7 @@ async function birthHandler({ payload, ctx }) {
   // the secret stash holds it OUT of the chain by that name (a generic
   // `key` would ride the transport-act fact raw). birthBeing turns it
   // back into the keypair so the being is born WITH that identity
-  // (recovery / moving your identity onto a reality you control).
+  // (recovery / moving your identity onto a story you control).
   const { password, importKey } = payload || {};
   if (!name || typeof name !== "string") {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "`name` is required");
@@ -112,7 +112,7 @@ async function birthHandler({ payload, ctx }) {
   // differ from the subsequent path: their being-tree parent is the
   // I_AM directly (so they become the first heaven authority), and
   // beforeRegister is bypassed because hook listeners are not yet
-  // loaded on a fresh reality. The cherub at the gate admits the
+  // loaded on a fresh story. The cherub at the gate admits the
   // first arrival the same way as every later one.
   const first = await isFirstBeing();
   if (first) {
@@ -184,7 +184,7 @@ async function birthHandler({ payload, ctx }) {
             });
           }
         } catch (err) {
-          const { default: log } = await import("../../../seedReality/log.js");
+          const { default: log } = await import("../../../seedStory/log.js");
           log.error(
             "Cherub",
             `failed to grant angel to @${beingName} at heaven: ${err.message}. ` +
@@ -205,7 +205,7 @@ async function birthHandler({ payload, ctx }) {
     }
     return {
       identityToken,
-      beingAddress: `${getRealityDomain()}/@${being.name}`,
+      beingAddress: `${getStoryDomain()}/@${being.name}`,
       // First-being birth: the transport seats the session's
       // currentBranch to the new being's homeBranch (which the birth
       // fact set to this moment's branch).
@@ -214,7 +214,7 @@ async function birthHandler({ payload, ctx }) {
       // Surface it so the portal can land the camera at home directly,
       // without waiting for the post-seal projection fold to expose
       // identity.position/homeSpace (that race is why a freshly-
-      // registered being used to spawn at the reality root).
+      // registered being used to spawn at the story root).
       homeSpaceId:  being.homeSpace ? String(being.homeSpace) : null,
       beingId:      String(being._id),
       name:         being.name,
@@ -268,7 +268,7 @@ async function birthHandler({ payload, ctx }) {
   }
   return {
     identityToken,
-    beingAddress: `${getRealityDomain()}/@${being.name}`,
+    beingAddress: `${getStoryDomain()}/@${being.name}`,
     // Subsequent-user birth: the transport seats the session's
     // currentBranch to the new being's homeBranch (the moment's
     // branch). Same shape as the first-user return above.
@@ -339,7 +339,7 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
     }
     return {
       identityToken,
-      beingAddress: `${getRealityDomain()}/@${being.name}`,
+      beingAddress: `${getStoryDomain()}/@${being.name}`,
       beingId:      String(being._id),
       name:         being.name,
       // The branch this being owns as their present. The transport
@@ -387,7 +387,7 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
           const identityToken = generateToken({ ...candidate, trueName: currentTrueName });
           return {
             identityToken,
-            beingAddress: `${getRealityDomain()}/@${candidate.name}`,
+            beingAddress: `${getStoryDomain()}/@${candidate.name}`,
             beingId:      String(candidate._id),
             name:         candidate.name,
             owned:        true,
@@ -404,7 +404,7 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
 
   // Mode 2: token re-claim against an already-held stance.
   if (identity) {
-    const expectedStance = `${getRealityDomain()}/@${identity.name}`;
+    const expectedStance = `${getStoryDomain()}/@${identity.name}`;
     if (address === expectedStance) {
       return {
         identityToken: null,
@@ -453,7 +453,7 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
       .filter((c) => !c.isRemote)
       .slice(0, 5);
     if (targetCandidates.length === 0) {
-      throw new IbpError(IBP_ERR.UNAUTHORIZED, "No such being on this reality");
+      throw new IbpError(IBP_ERR.UNAUTHORIZED, "No such being on this story");
     }
     const { isAncestorOf } = await import(
       "../../../materials/being/identity/lookups.js"
@@ -466,9 +466,9 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
     // the mate-vessel pattern. Father-admit fires when the requester
     // matches the stored father tuple.
     //
-    // Local-reality fathers: identity.reality (if set) or the local
-    // domain must match qualities.father.reality. Cross-reality
-    // fathers: identity.reality comes from req.canopySender via the
+    // Local-story fathers: identity.story (if set) or the local
+    // domain must match qualities.father.story. Cross-story
+    // fathers: identity.story comes from req.canopySender via the
     // wire layer's actorTupleFromRequest — same trusted ground truth
     // that lives in the wire-side carrier.crossWorldActor.
     let targetBeing = null;
@@ -481,12 +481,12 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
       );
       let asFather = false;
       const candidateFather = candidate.qualities?.father || null;
-      if (candidateFather?.reality) {
-        const requesterReality = identity?.reality || getRealityDomain();
-        const realityMatches = String(candidateFather.reality) === String(requesterReality);
-        const isCrossReality = String(candidateFather.reality) !== String(getRealityDomain());
-        if (realityMatches && isCrossReality) {
-          // CROSS-REALITY father: match on the NAME (the cryptographically
+      if (candidateFather?.story) {
+        const requesterStory = identity?.story || getStoryDomain();
+        const storyMatches = String(candidateFather.story) === String(requesterStory);
+        const isCrossStory = String(candidateFather.story) !== String(getStoryDomain());
+        if (storyMatches && isCrossStory) {
+          // CROSS-STORY father: match on the NAME (the cryptographically
           // PROVEN id — verifyEnvelopeBeingSig checked the father's own
           // envelope sig against this nameId, setting beingSigVerified), and
           // NEVER on the client-supplied beingId. Matching beingId would
@@ -505,12 +505,12 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
           } else {
             log.warn(
               "Cherub",
-              `father-admit refused for @${targetName}: cross-reality father must match the ` +
+              `father-admit refused for @${targetName}: cross-story father must match the ` +
               `stored father NAME and arrive with his own verified envelope signature ` +
               `(nameId match + beingSigVerified). Peer vouch / a beingId match is not enough.`,
             );
           }
-        } else if (realityMatches) {
+        } else if (storyMatches) {
           // LOCAL father: authenticated by the live session; the local
           // being-tree id is the credential (no foreign key to verify).
           if (candidateFather.beingId && String(candidateFather.beingId) === String(identity.beingId)) {
@@ -567,7 +567,7 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
               params:  {
                 releasedBy: "father-priority",
                 fatherBeingId: String(identity.beingId),
-                fatherReality: targetBeing.qualities.father?.reality || getRealityDomain(),
+                fatherStory: targetBeing.qualities.father?.story || getStoryDomain(),
               },
               actId:   moment?.actId || null,
               branch:  moment?.actorAct?.branch || "0",
@@ -589,10 +589,10 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
     // beingId/name stay the vessel's (he drives THROUGH it; the mother still
     // OWNS it and keeps the kill power). His name is: his LOCAL trueName if he
     // is a local being, else his own foreign id — which has NO local Name key,
-    // so his acts seal UNSIGNED here (his home reality signs + vouches them
+    // so his acts seal UNSIGNED here (his home story signs + vouches them
     // via federation later) rather than ever falling back to the mother.
     // CRITICAL: never default a foreign father to targetBeing.trueName, or a
-    // cross-reality father would sign as the mother. The ancestor/inherit
+    // cross-story father would sign as the mother. The ancestor/inherit
     // (non-father) connect keeps the vessel's own trueName.
     let driverTrueName = targetBeing.trueName;
     if (canInhabitAsFather) {
@@ -605,7 +605,7 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
     const identityToken = generateToken({ ...targetBeing, trueName: driverTrueName });
     return {
       identityToken,
-      beingAddress: `${getRealityDomain()}/@${targetBeing.name}`,
+      beingAddress: `${getStoryDomain()}/@${targetBeing.name}`,
       beingId:      String(targetBeing._id),
       name:         targetBeing.name,
       inherited:    true,
@@ -708,7 +708,7 @@ async function switchHandler({ payload, identity, moment }) {
       throw new IbpError(IBP_ERR.INVALID_INPUT, `be:switch: branch "${targetBranch}" is deleted`);
     }
     if (row.paused) {
-      throw new IbpError(IBP_ERR.REALITY_PAUSED, `be:switch: branch "${targetBranch}" is paused`);
+      throw new IbpError(IBP_ERR.STORY_PAUSED, `be:switch: branch "${targetBranch}" is paused`);
     }
   }
 
@@ -922,7 +922,7 @@ async function _registerHumanWithFreshHome({
       // is that NAME's own (sovereign trueName), NOT a child of i-am. Without
       // this, a name's being defaults to the mother's trueName (i-am) — the
       // funk where the being shows as I_AM and its key-export would surface the
-      // reality key. Null only for the anonymous/pre-name path (no connected
+      // story key. Null only for the anonymous/pre-name path (no connected
       // name), where the mother's default is correct.
       ...(ownerNameId ? { trueName: String(ownerNameId) } : {}),
       defaultRole:   "human",
@@ -951,10 +951,10 @@ async function _registerHumanWithFreshHome({
   // ── 4. Anoint the new human with the human role ──
   // Roles-Are-Auth bootstrap (seed/RolesAreAuth.md). The new being
   // already holds `global` via _anointGlobal in birth.js (every being
-  // gets global at the reality root, universal single-gate doctrine).
+  // gets global at the story root, universal single-gate doctrine).
   // Here cherub adds the registration-specific role:
   //   - human: the "root founder" canX (do whatever you want here)
-  // Anchored at the place root with reality-wide reach via descendants.
+  // Anchored at the place root with story-wide reach via descendants.
   // Cherub holds do:grant-role:human (declared in cherubRole.can)
   // so authorize permits this emit. grantedBy is cherub for forensics.
   await doVerb(
@@ -1043,7 +1043,7 @@ async function _birthViaWordOrJs({ name, password, importKey, parentBeingId, own
     await runRoleWord(ir, {
       moment, branch,
       trigger: { name, password },
-      // ownerName = the arriving Name (its own trueName); placeRoot = the reality
+      // ownerName = the arriving Name (its own trueName); placeRoot = the story
       // root the home space is made under (create-space's parent).
       bindings: { ownerName: ownerNameId, placeRoot: String(getSpaceRootId()) },
       // proper-name → being id: Cherub the mother/vessel, Arrival the father.
@@ -1110,7 +1110,7 @@ async function _connectViaWordOrJs({ name, password, moment }) {
     if (!decoded?.beingId) return null;
     return {
       identityToken: result.token,
-      beingAddress:  `${getRealityDomain()}/@${decoded.name}`,
+      beingAddress:  `${getStoryDomain()}/@${decoded.name}`,
       beingId:       String(decoded.beingId),
       name:          decoded.name,
       seatBranch:    result.seat ?? null,
@@ -1150,7 +1150,7 @@ async function _connectOwnedViaWord({ address, callerNameId, moment }) {
   if (!decoded?.beingId) return null;
   return {
     identityToken: result.token,
-    beingAddress:  `${getRealityDomain()}/@${decoded.name}`,
+    beingAddress:  `${getStoryDomain()}/@${decoded.name}`,
     beingId:       String(decoded.beingId),
     name:          decoded.name,
     owned:         true,
@@ -1160,7 +1160,7 @@ async function _connectOwnedViaWord({ address, callerNameId, moment }) {
 
 /**
  * cherub-connect.word FLOW 3 (inherit-connect / father-admit). Runs the inherit flow with
- * `caller` = the identity object {beingId,nameId,reality,beingSigVerified}. The .word is
+ * `caller` = the identity object {beingId,nameId,story,beingSigVerified}. The .word is
  * AUTHORITATIVE: it returns the connect response, or its WordRefusal becomes the same
  * IbpError the JS threw. Returns null only when NOT converted (resolveRoleWord null), so
  * the JS Mode-3 is the clean-miss fallback. The lone world fact (the be:release
@@ -1191,7 +1191,7 @@ async function _connectInheritViaWord({ address, identity, moment }) {
   if (!decoded?.beingId) return null;
   return {
     identityToken: result.token,
-    beingAddress:  `${getRealityDomain()}/@${decoded.name}`,
+    beingAddress:  `${getStoryDomain()}/@${decoded.name}`,
     beingId:       String(decoded.beingId),
     name:          decoded.name,
     inherited:     true,
@@ -1227,11 +1227,11 @@ export const cherubRole = Object.freeze({
   name: "cherub",
   description:
     "The gate, right below I_AM. Processes the three BE ops (birth/connect/release) AND summon:mate — a connected name births its first TOP-LEVEL being through cherub (owned by the name). Down the chain, names reuse summon:mate on @birther / be:birth on their own beings.",
-  // Seed delegate role — hosted on the reality root. The cherub being
+  // Seed delegate role — hosted on the story root. The cherub being
   // gets this role granted at boot by the I-Am. `can` includes
   // do:grant-role:human + do:grant-role:global so cherub can anoint new
   // humans on registration. Cherub is the only grantor of the human
-  // and global roles in a default reality.
+  // and global roles in a default story.
   requiredCognition: "scripted",
   respondMode: "async",
   triggerOn: [],
@@ -1311,7 +1311,7 @@ async function handleCherubMate(message, ctx) {
     return ctx.failure?.("internal", "cherub beingId unresolved in ctx")
       || { kind: "failure", ok: false, shape: "internal", reason: "no cherub id" };
   }
-  // Top-level: at the reality root, parented under cherub (right below I_AM).
+  // Top-level: at the story root, parented under cherub (right below I_AM).
   let homeSpaceId = messageObj.homeSpaceId || null;
   if (!homeSpaceId) {
     try {
@@ -1322,7 +1322,7 @@ async function handleCherubMate(message, ctx) {
     } catch { homeSpaceId = null; }
   }
   if (!homeSpaceId) {
-    return ctx.failure?.("internal", "cannot resolve the reality root for the new being")
+    return ctx.failure?.("internal", "cannot resolve the story root for the new being")
       || { kind: "failure", ok: false, shape: "internal", reason: "no home space" };
   }
 

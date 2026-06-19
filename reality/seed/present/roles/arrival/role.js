@@ -6,7 +6,7 @@
 // not yet authenticated. Multiple visitors use it concurrently —
 // SEE bypasses the scheduler (synchronous fold, no Act, no per-being
 // serial gate), so there is no contention. The being is one real
-// row at `<reality>/@arrival`; the address grammar resolves it like
+// row at `<story>/@arrival`; the address grammar resolves it like
 // any other delegate.
 //
 // What arrival CAN do: SEE on whatever's marked public at the place
@@ -28,8 +28,8 @@ export const arrivalRole = Object.freeze({
   name: "arrival",
   description:
     "The shared stance every unauthenticated visitor carries. SEE-only; one being row, many concurrent users.",
-  // The implicit floor for stateless callers. Hosted on the reality
-  // root; reach extended reality-wide so anonymous visitors can SEE
+  // The implicit floor for stateless callers. Hosted on the story
+  // root; reach extended story-wide so anonymous visitors can SEE
   // public spaces and BE birth/connect anywhere registration's
   // exposed.
   reach: ["/**"],
@@ -41,7 +41,7 @@ export const arrivalRole = Object.freeze({
   // then be.
   //
   // see: Anonymous visitors see ONLY the arrival-view SEE op — a
-  // filtered landing face that exposes the reality root's layout +
+  // filtered landing face that exposes the story root's layout +
   // cherub. Raw position SEE refuses (permitsSee requires "*" for bare
   // addresses, which only the human/angel roles carry).
   //

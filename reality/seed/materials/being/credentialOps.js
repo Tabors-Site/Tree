@@ -285,7 +285,7 @@ registerOperation("credential-detach", {
     const viaWord = await _credentialGateViaWord("credential-detach", { caller: askerBeingId, target: targetBeingId, moment });
     if (viaWord) return { _factTarget: { kind: "being", id: askerBeingId || targetBeingId }, ...viaWord };
     // Self-only EXCEPT I_AM which has universal authority on its own
-    // reality (parallels hasCredentialAuthority's I_AM short-circuit).
+    // story (parallels hasCredentialAuthority's I_AM short-circuit).
     if (askerBeingId !== targetBeingId && askerBeingId !== I_AM) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
@@ -324,7 +324,7 @@ registerOperation("credential-attach", {
     const viaWord = await _credentialGateViaWord("credential-attach", { caller: askerBeingId, target: targetBeingId, moment });
     if (viaWord) return { _factTarget: { kind: "being", id: askerBeingId || targetBeingId }, ...viaWord };
     // Being-parent-only EXCEPT I_AM (universal authority on its own
-    // reality).
+    // story).
     if (askerBeingId !== I_AM) {
       const { findBeingParent } = await import("./identity/lineage.js");
       const parentBeingId = await findBeingParent(targetBeingId);

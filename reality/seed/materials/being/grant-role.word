@@ -10,7 +10,7 @@
 #
 # THE WALL: the gates are CONTROL (.word). roleExists is a registry lookup (host) and
 # grantStamp is the grant's wall-clock instant — the one external-resource escape (the
-# reality has no clock of its own; the timestamp rides a host fn, never the eval loop, per
+# story has no clock of its own; the timestamp rides a host fn, never the eval loop, per
 # the time-doctrine — same shape as credential-reset's resetAt). The bridge binds `caller`
 # (the grantor beingId), `target` (the grantee beingId), `role`, `anchorSpaceId`,
 # `anchorBeingId`.

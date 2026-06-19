@@ -16,7 +16,7 @@ import { flat } from "./host.js";
 const state = {
   open:    false,
   being:   null,             // being NAME (e.g. "alice")
-  stance:  null,             // full stance address e.g. "<reality>/path@alice"
+  stance:  null,             // full stance address e.g. "<story>/path@alice"
   messages: [],              // [{ id, who, content, kind, parent?, rootCorrelation?, ts }]
   byCorr:   new Map(),       // correlation → message id (for matching pushes)
   byMessage: new Map(),      // server messageId → our message entry
@@ -28,8 +28,8 @@ export function getChatBeing() { return state.being; }
 export function openChatFor(beingEntry, { refresh = false } = {}) {
   if (!beingEntry) return;
   const fl = flat.state;
-  const reality = fl.discovery?.reality;
-  if (!reality) return;
+  const story = fl.discovery?.story;
+  if (!story) return;
 
   const path = fl.descriptor?.address?.pathByNames || "/";
   // Carry the active branch qualifier through; otherwise a chat opened
@@ -37,7 +37,7 @@ export function openChatFor(beingEntry, { refresh = false } = {}) {
   // gate rejects (or worse, hits a different being with the same name).
   const branch = fl.descriptor?.address?.branch || "0";
   const bq = branch === "0" ? "" : `#${branch}`;
-  const stance = `${reality}${bq}${path}@${beingEntry.being}`.replace(/\/+@/, "/@");
+  const stance = `${story}${bq}${path}@${beingEntry.being}`.replace(/\/+@/, "/@");
 
   // If we're already open on this being and just refreshing, only redraw
   // the inbox section (don't lose live messages).

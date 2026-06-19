@@ -1,13 +1,13 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Branch registry. Per-reality map of named pointers to canonical
+// Branch registry. Per-story map of named pointers to canonical
 // branch paths. The IBP address parser uses this to resolve labels
 // like `#main` to canonical paths like `#7`.
 //
 // Storage: heaven. Pointers live on the `.branches` heaven space's
 // `qualities.pointers` map. The `.branches` space is in heaven
 // ("heaven never branches" doctrine), so the storage has one
-// projection per reality regardless of which branch is querying.
+// projection per story regardless of which branch is querying.
 // Pointer mutations land as set-space facts on the `.branches`
 // space's reel.
 //

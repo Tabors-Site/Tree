@@ -10,7 +10,7 @@
 //                  carries. One Being row, many concurrent users
 //                  (SEE bypasses the scheduler; no contention).
 //                  SEE-only by default. Surfaces as
-//                  `<reality>/@arrival` on the network.
+//                  `<story>/@arrival` on the network.
 //   cherub         The gate. Stands at the threshold between outside
 //                  the place (no identity yet) and inside (bound to
 //                  a being). The only stance that accepts a request
@@ -19,13 +19,13 @@
 //   llm-assigner   Configures LLM connections (per-being and
 //                  per-tree slot assignments) + the first-time setup
 //                  tutorial. Scripted cognition.
-//   reality-manager  Conversational interface for place-level admin
+//   story-manager  Conversational interface for place-level admin
 //                  (extensions, config, peers). LLM cognition —
 //                  the only one of the three whose moments are
 //                  factory-assembled frames.
 //
 // They exist as real Being rows so the descriptor can surface them
-// and the address grammar resolves `<reality>/@cherub` (etc.) to them.
+// and the address grammar resolves `<story>/@cherub` (etc.) to them.
 //
 // These are beings I formed from myself, but they are no longer me.
 // They have their own identities, their own summon paths, their own
@@ -48,7 +48,7 @@
 // [identity.js](identity.js). This file owns the delegate roster
 // and the scaffold that ensures their rows exist.
 
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 import { birthBeing } from "./identity/birth.js";
 import { findIAm, iAmIdentity } from "./identity.js";
 import { I_AM } from "./seedBeings.js";
@@ -96,7 +96,7 @@ export const SEED_DELEGATES = [
     cognition: "scripted",
     invocableBy: "authenticated",
     description:
-      "Sibling delegate to cherub. Cherub serves unauthenticated arrival (mint a fresh identity on this reality). Birther serves authenticated callers (mint a child being whose parent is you).",
+      "Sibling delegate to cherub. Cherub serves unauthenticated arrival (mint a fresh identity on this story). Birther serves authenticated callers (mint a child being whose parent is you).",
   },
   {
     name: "role-manager",
@@ -104,7 +104,7 @@ export const SEED_DELEGATES = [
     cognition: "scripted",
     invocableBy: "authenticated",
     description:
-      "Authors and edits live-defined roles. Click @role-manager at the reality root to add or replace a role with origin:'live'. Restart picks up live changes; the in-memory registry rebuilds from ./roles on boot.",
+      "Authors and edits live-defined roles. Click @role-manager at the story root to add or replace a role with origin:'live'. Restart picks up live changes; the in-memory registry rebuilds from ./roles on boot.",
   },
   {
     name: "role-finder",
@@ -131,12 +131,12 @@ export const SEED_DELEGATES = [
       "Configures LLM connections — caller's being, owned nodes, or place default (root operator only for place scope).",
   },
   {
-    name: "reality-manager",
-    role: "reality-manager",
+    name: "story-manager",
+    role: "story-manager",
     cognition: "llm",
     invocableBy: "owner",
     description:
-      "Conversational interface for place-level administration (extensions, config, peers). Carries the reality-manager role with canDo for set-config, install-extension, etc. — granted at the reality root with reality-wide reach.",
+      "Conversational interface for place-level administration (extensions, config, peers). Carries the story-manager role with canDo for set-config, install-extension, etc. — granted at the story root with story-wide reach.",
   },
   {
     name: "branch-manager",
@@ -144,7 +144,7 @@ export const SEED_DELEGATES = [
     cognition: "scripted",
     invocableBy: "authenticated",
     description:
-      "Creates and manages branches — divergent worlds forked from a past moment of an existing branch. Click @branch-manager at the reality root to mint a new branch, merge branches, or manage the named-pointer registry (set-pointer, delete-pointer).",
+      "Creates and manages branches — divergent worlds forked from a past moment of an existing branch. Click @branch-manager at the story root to mint a new branch, merge branches, or manage the named-pointer registry (set-pointer, delete-pointer).",
   },
   {
     name: "federation-manager",
@@ -289,7 +289,7 @@ export async function ensureSeedDelegates(spaceRootId) {
       if (existingSlot) {
         // Idempotent drift correction: each drift-correction set-being
         // is its own withIAmAct moment per the one-DO-per-moment
-        // doctrine. On a clean reboot of an unchanged reality, the
+        // doctrine. On a clean reboot of an unchanged story, the
         // checks all match and no moments open — idempotent.
         const { doVerb } = await import("../../ibp/verbs/do.js");
         const beingTarget = { kind: "being", id: String(existingSlot.id) };
@@ -465,7 +465,7 @@ export async function grantAngelToSeedDelegates() {
   // delegate's grant there so the role-walk authorize finds the spec
   // by walking the grant's anchor up the qualities chain. Reach via
   // angel's qualities is the heaven subtree by default; the angel
-  // role's reach field can extend it reality-wide if seed needs it
+  // role's reach field can extend it story-wide if seed needs it
   // (default angel canX includes "*" so the gate passes once reach
   // is met).
   const heaven = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, "0");
@@ -515,13 +515,13 @@ export async function grantAngelToSeedDelegates() {
   }
 
   // Every seed delegate gets its OWN matching role granted at the
-  // reality root (in addition to angel @ heaven). This means:
+  // story root (in addition to angel @ heaven). This means:
   //   @cherub holds cherub role, @birther holds birther role,
   //   @role-manager holds role-manager role, etc.
   // The role-walk authorize finds each delegate's canX through their
   // OWN role's grant (instead of the registry-fallback hack in
-  // roleFlow.js). Reach is reality-wide via host + descendants from
-  // the reality root.
+  // roleFlow.js). Reach is story-wide via host + descendants from
+  // the story root.
   //
   // @public still gets no role grant (it never acts).
   // @arrival's match: arrival role granted at root (covers anon visitors).

@@ -63,8 +63,8 @@ export function normalizeAcquisition(spec) {
 // Time-bound grants: NOT a wall-clock concept. There is no expiry
 // field on grants. Beings have no clocks, calendars, or shared "now"
 // — wall-clock time is the human world's, and an `expiresAt` ISO
-// timestamp would smuggle it into the reality's auth core. When
-// time-bound grants land they will be REALITY-time: measured in the
+// timestamp would smuggle it into the story's auth core. When
+// time-bound grants land they will be STORY-time: measured in the
 // world's own units (a being's moments, reel seq, harmony beats),
 // enforced the same way everything else is — at the role-walk.
 // Until that unit exists, a grant lasts until revoked.

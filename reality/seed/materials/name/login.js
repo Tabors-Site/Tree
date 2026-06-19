@@ -29,7 +29,7 @@ import { mnemonicToEntropy } from "./mnemonic.js";
 export async function nameConnect(token, password) {
   const nameId = await resolveNameId(token);
   if (!nameId) return { ok: false, reason: "no-such-name" };
-  if (nameId === "i-am") return { ok: false, reason: "i-am-is-the-reality" };
+  if (nameId === "i-am") return { ok: false, reason: "i-am-is-the-story" };
 
   const { loadProjection } = await import("../projections.js");
   const slot = await loadProjection("name", nameId, "0");
@@ -72,9 +72,9 @@ export async function nameConnectWithKey(privateKeyInput) {
   } catch { return { ok: false, reason: "bad-key" }; }
 
   const nameId = kp.nameId;
-  if (nameId === "i-am") return { ok: false, reason: "i-am-is-the-reality" };
+  if (nameId === "i-am") return { ok: false, reason: "i-am-is-the-story" };
 
-  // The Name must have been declared on THIS reality (a key whose name was
+  // The Name must have been declared on THIS story (a key whose name was
   // never declared here is no name here — import it first).
   const { loadProjection } = await import("../projections.js");
   const slot = await loadProjection("name", nameId, "0");

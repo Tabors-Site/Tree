@@ -10,10 +10,10 @@
 // `{ target }` is an IBP address BETWEEN worlds (four verbs — never
 // an iframe):
 //
-//   content = { target: "<reality>#<branch>/<position>" }
+//   content = { target: "<story>#<branch>/<position>" }
 //
 // What each VIEWER experiences through the portal is emergent from
-// the foreign reality's stance auth for THEIR identity (per
+// the foreign story's stance auth for THEIR identity (per
 // CROSS-WORLD.md and the "portal == window == full" doctrine):
 //
 //   - foreign side grants SEE      → renders camera-through ("window")
@@ -28,13 +28,13 @@
 // the same matter the same way: read `external.target` off the
 // descriptor entry, then issue SEE/DO/SUMMON/BE at that address —
 // the normal canopy cross-world dispatch does the rest. The portal
-// matter is how beings move between realities, or act on one reality
+// matter is how beings move between realities, or act on one story
 // from inside another, regardless of renderer.
 //
 // `qualities.portal` carries provenance (createdBy) and mirrors the
 // target for renderer back-compat. No expiry: wall-clock TTLs are
-// human time, which doesn't exist inside the reality — a portal ends
-// by `end-matter`, or by a future reality-time (moments) mechanism.
+// human time, which doesn't exist inside the story — a portal ends
+// by `end-matter`, or by a future story-time (moments) mechanism.
 
 import { registerOperation } from "../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../ibp/protocol.js";
@@ -51,19 +51,19 @@ import { registerRoleWord } from "../present/word/roleWordRegistry.js";
 registerRoleWord("portal", "form-portal", new URL("./portal.word", import.meta.url));
 
 // Matches the IBPA shapes a portal can point at. A portal opens onto
-// a different WORLD (different reality OR different branch); same
-// reality+branch isn't a portal, it's just a reference. Accepted:
+// a different WORLD (different story OR different branch); same
+// story+branch isn't a portal, it's just a reference. Accepted:
 //
-//   <reality>#<branch>/<position>   foreign reality + foreign branch
-//   <reality>/<position>            foreign reality (implicit branch)
-//   #<branch>/<position>            same reality, foreign branch
+//   <story>#<branch>/<position>   foreign story + foreign branch
+//   <story>/<position>            foreign story (implicit branch)
+//   #<branch>/<position>            same story, foreign branch
 //
-// "Reality" can be either a TLD-style domain (bing.com, tabors.site)
+// "Story" can be either a TLD-style domain (bing.com, tabors.site)
 // or a single-word host (localhost, etc.) — both are legitimate
 // substrate identities. Branch path follows the alternating-segment
 // grammar (BRANCH_RE in address.js).
-// Accept the trailing-slash form `<reality>#<branch>/` as "the root
-// of that world" — same convention the resolver uses for bare-reality
+// Accept the trailing-slash form `<story>#<branch>/` as "the root
+// of that world" — same convention the resolver uses for bare-story
 // addresses. `.*` after the slash allows either a named path or an
 // empty path (root). classify.js floor-matches the same shape (kept
 // in sync) so pasting an IBPA into the place composer previews
@@ -84,7 +84,7 @@ async function formPortalHandler({ target, params, moment, identity }) {
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
       `form-portal: \`target\` doesn't look like a foreign IBPA: "${foreignAddress}". ` +
-        `Expected "<reality-domain>[#<branch>]/<position>".`,
+        `Expected "<story-domain>[#<branch>]/<position>".`,
     );
   }
 
@@ -128,7 +128,7 @@ async function formPortalHandler({ target, params, moment, identity }) {
   // ONE fact births the typed portal whole: type, the content
   // reference, and the qualities.portal provenance block all ride
   // the create-matter params (applyCreateMatter copies qualities).
-  // The content lives on the foreign reality — the {target} reference
+  // The content lives on the foreign story — the {target} reference
   // shape says so; no separate origin tag.
   //
   // Build the spec FIRST, then content-address the row id from it with

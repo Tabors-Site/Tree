@@ -5,7 +5,7 @@
 // the next Mongoose call. One in-memory readyState check; no async,
 // no DB query.
 
-import { isDbHealthy } from "../../../seed/seedReality/dbConfig.js";
+import { isDbHealthy } from "../../../seed/seedStory/dbConfig.js";
 import { sendError, IBP_ERR } from "../../../seed/ibp/protocol.js";
 
 export default function dbHealth(req, res, next) {

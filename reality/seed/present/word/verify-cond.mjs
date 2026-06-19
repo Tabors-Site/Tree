@@ -19,8 +19,8 @@ console.log(`\n  verify-cond (resolveCond / getPath, the §1 keystone)\n`);
 // ── a realistic flow ctx (the cherub-connect Mode-3 shape) ──
 const ctx = {
   bindings: {
-    candidate: { beingId: "b-cand", qualities: { father: { reality: "home.reality", nameId: "z6Name", beingId: "b-father" } } },
-    identity:  { beingId: "b-cand", nameId: "z6Name", reality: "home.reality" },
+    candidate: { beingId: "b-cand", qualities: { father: { story: "home.story", nameId: "z6Name", beingId: "b-father" } } },
+    identity:  { beingId: "b-cand", nameId: "z6Name", story: "home.story" },
     members:   ["a", "b", "c"],
     backers:   2,
     quorum:    2,
@@ -41,20 +41,20 @@ const ctx = {
 };
 
 // ── getPath: dotted reads over bindings / state / beings ──
-idEquals(getPath("candidate.qualities.father.reality", ctx), "home.reality")
-  ? ok("getPath walks candidate.qualities.father.reality") : bad("getPath nested");
+idEquals(getPath("candidate.qualities.father.story", ctx), "home.story")
+  ? ok("getPath walks candidate.qualities.father.story") : bad("getPath nested");
 getPath("state-missing.x", ctx) === undefined ? ok("getPath missing head → undefined (no throw)") : bad("getPath missing");
 getPath("phase", ctx) === undefined && getPath("candidate", ctx) ? ok("getPath head resolves from bindings") : ok("getPath head (state via path head)");
 
 // ── test:equals (the pervasive cherub-connect father/owner equality) ──
-await is("father.reality == identity.reality (local father)",
-  { test: { op: "equals", path: "candidate.qualities.father.reality", against: { ref: "identity.reality" } } }, ctx, true);
+await is("father.story == identity.story (local father)",
+  { test: { op: "equals", path: "candidate.qualities.father.story", against: { ref: "identity.story" } } }, ctx, true);
 await is("father.nameId == identity.nameId (owned by the name)",
   { test: { op: "equals", path: "candidate.qualities.father.nameId", against: { ref: "identity.nameId" } } }, ctx, true);
 await is("father.beingId == 'nope' (literal mismatch)",
   { test: { op: "equals", path: "candidate.qualities.father.beingId", value: "nope" } }, ctx, false);
-await is("NEGATED: father.reality != identity.reality",
-  { negated: true, test: { op: "equals", path: "candidate.qualities.father.reality", against: { ref: "identity.reality" } } }, ctx, false);
+await is("NEGATED: father.story != identity.story",
+  { negated: true, test: { op: "equals", path: "candidate.qualities.father.story", against: { ref: "identity.story" } } }, ctx, false);
 
 // ── test:reads / holds (existence of a read) ──
 await is("reads father.beingId (present)", { test: { op: "reads", path: "candidate.qualities.father.beingId" } }, ctx, true);
@@ -83,11 +83,11 @@ await is("flag canInhabit (false)", { flag: "canInhabit" }, ctx, false);
 
 // ── all / any (connectives) ──
 await is("ALL [local father AND owned-by-name]", { all: [
-  { test: { op: "equals", path: "candidate.qualities.father.reality", against: { ref: "identity.reality" } } },
+  { test: { op: "equals", path: "candidate.qualities.father.story", against: { ref: "identity.story" } } },
   { test: { op: "equals", path: "candidate.qualities.father.nameId", against: { ref: "identity.nameId" } } },
 ] }, ctx, true);
 await is("ALL fails if one fails", { all: [
-  { test: { op: "equals", path: "candidate.qualities.father.reality", against: { ref: "identity.reality" } } },
+  { test: { op: "equals", path: "candidate.qualities.father.story", against: { ref: "identity.story" } } },
   { test: { op: "equals", path: "candidate.qualities.father.beingId", value: "nope" } },
 ] }, ctx, false);
 await is("ANY [mismatch OR flag-set]", { any: [

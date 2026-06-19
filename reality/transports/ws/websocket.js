@@ -17,12 +17,12 @@
 // the wire through proxies that delegate here. Without that
 // registration the proxies no-op and a CLI-only run still boots.
 
-import log from "../../seed/seedReality/log.js";
+import log from "../../seed/seedStory/log.js";
 import { getInternalConfigValue } from "../../seed/internalConfig.js";
 import { Server } from "socket.io";
 import { verifyTokenStrict } from "../../seed/materials/being/identity.js";
-import { getRealityDomain } from "../../seed/ibp/address.js";
-import { getRealityConfigValue } from "../../seed/realityConfig.js";
+import { getStoryDomain } from "../../seed/ibp/address.js";
+import { getStoryConfigValue } from "../../seed/storyConfig.js";
 import { setPushChannel, IBP_EVENT } from "../../seed/ibp/pushChannel.js";
 import { noteSocketConnected, noteSocketDisconnected } from "../../seed/materials/host/host.js";
 import { scheduleAutoRelease, cancelAutoRelease } from "./autoRelease.js";
@@ -177,7 +177,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
     socket.beingId = null;
     // CSWSH gate: the browser auto-sends the session COOKIE on any
     // cross-site WebSocket handshake, so the cookie token is only
-    // honored when the handshake's Origin is this reality (hostname
+    // honored when the handshake's Origin is this story (hostname
     // match; no-Origin = non-browser client, no auto-cookie risk).
     // handshake.auth.token is always honored — a hostile page cannot
     // read or attach another site's token programmatically.
@@ -189,10 +189,10 @@ export function initWebSocketServer(httpServer, originPolicy) {
     if (cookieToken && origin) {
       try {
         const originHost = new URL(origin).hostname.toLowerCase();
-        const realityHost = getRealityDomain().toLowerCase();
+        const storyHost = getStoryDomain().toLowerCase();
         const isLocalOrigin =
           originHost === "localhost" || originHost === "127.0.0.1" || originHost === "0.0.0.0";
-        cookieOriginOk = originHost === realityHost || isLocalOrigin;
+        cookieOriginOk = originHost === storyHost || isLocalOrigin;
       } catch {
         cookieOriginOk = false;
       }
@@ -266,7 +266,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
       }
     } catch {
       // Registry not readable this early only on a half-bootstrapped
-      // reality; main is the honest floor there.
+      // story; main is the honest floor there.
       socket.currentBranch = "0";
     }
 
@@ -295,7 +295,7 @@ export function initWebSocketServer(httpServer, originPolicy) {
     // Tell the client its BRANCH. socket.currentBranch is the left
     // stance's branch — the world every relative act lands on — and
     // the client must be able to display the full address truthfully
-    // (@being#branch → reality#view/path). Re-emitted by the BE wire
+    // (@being#branch → story#view/path). Re-emitted by the BE wire
     // layer whenever a switch re-seats the socket.
     socket.emit("branch", { branch: socket.currentBranch || "0" });
 
@@ -399,7 +399,7 @@ export function emitNavigate({ beingId, url, replace = false }) {
 
 /**
  * Direct emit to every socket the being has connected. Extensions
- * reach this through the loader's scoped `reality.websocket.emitToBeing`
+ * reach this through the loader's scoped `story.websocket.emitToBeing`
  * (which auto-namespaces the event name to the extension's prefix).
  */
 export function emitToBeing(beingId, event, data) {

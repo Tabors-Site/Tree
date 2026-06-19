@@ -10,24 +10,24 @@ import { fileURLToPath } from "url";
 import { randomUUID } from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const realityRoot = path.resolve(__dirname, "../../.."); // .../reality
+const storyRoot = path.resolve(__dirname, "../../.."); // .../story
 
-for (const line of fs.readFileSync(path.resolve(realityRoot, ".env"), "utf8").split("\n")) {
+for (const line of fs.readFileSync(path.resolve(storyRoot, ".env"), "utf8").split("\n")) {
   const t = line.trim(); if (!t || t.startsWith("#")) continue;
   const eq = t.indexOf("="); if (eq === -1) continue;
   const k = t.slice(0, eq).trim(), v = t.slice(eq + 1).trim();
   if (v && !process.env[k]) process.env[k] = v;
 }
-process.env.MONGODB_URI = "mongodb://localhost:27017/reality-word-cherub-test";
+process.env.MONGODB_URI = "mongodb://localhost:27017/story-word-cherub-test";
 
-const mongoose = (await import("../../seedReality/dbConfig.js")).default;
+const mongoose = (await import("../../seedStory/dbConfig.js")).default;
 if (mongoose.connection.readyState !== 1) {
   await new Promise((res, rej) => {
     mongoose.connection.once("connected", res);
     mongoose.connection.once("error", rej);
   });
 }
-if (mongoose.connection.name !== "reality-word-cherub-test") {
+if (mongoose.connection.name !== "story-word-cherub-test") {
   console.log(`  REFUSING: wrong DB "${mongoose.connection.name}"`); process.exit(2);
 }
 

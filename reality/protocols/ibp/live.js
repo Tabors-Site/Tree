@@ -10,7 +10,7 @@
 // socket's subscription set on the socket itself and prune on the
 // `disconnect` event.
 
-import log from "../../seed/seedReality/log.js";
+import log from "../../seed/seedStory/log.js";
 import { IBP_EVENT, SEE_PUSH } from "./events.js";
 
 // spaceId -> Set<socket>

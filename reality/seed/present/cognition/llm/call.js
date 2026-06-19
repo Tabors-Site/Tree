@@ -40,7 +40,7 @@
 // registerFailoverResolver through runTurn's re-exports;
 // public surface is unchanged.
 
-import log from "../../../seedReality/log.js";
+import log from "../../../seedStory/log.js";
 import { resolveConnection } from "./connect.js";
 import { cognitionFailureError } from "../cognitionResult.js";
 

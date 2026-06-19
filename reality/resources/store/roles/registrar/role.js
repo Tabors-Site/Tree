@@ -12,7 +12,7 @@
 //     "List this. Here is the manifest."
 //     payload: { listingType: "code"|"role"|"roleflow"|"seed"|"asset"|"pack",
 //                manifest: { name, version, builtFor?, assets?, requires? } }
-//     A whole-reality publish is a "pack" listing whose tree spans
+//     A whole-story publish is a "pack" listing whose tree spans
 //     the entire repo. Same primitive, larger scope.
 //     response: { kind: "published", listingHash, claimHash, seq }
 //     Versions are immutable: same (name, version) with a different
@@ -29,7 +29,7 @@
 // store operator's editorial lever is the separate store:delist DO
 // op, not an intent: delisting is the operator's act, not the publisher's.
 
-import log from "../../../../seed/seedReality/log.js";
+import log from "../../../../seed/seedStory/log.js";
 
 export const registrarRole = Object.freeze({
   name: "store:registrar",
@@ -52,7 +52,7 @@ export const registrarRole = Object.freeze({
   label: "Store Registrar",
 
   async call(message, ctx) {
-    // Cross-reality SUMMONs still ride the payload inside content
+    // Cross-story SUMMONs still ride the payload inside content
     // (same canopy serializer gap the federation-manager documents).
     const fedMessage = (typeof message?.content === "object" && message.content !== null
                        && (message.content.kind === "store" || message.content.intent))
@@ -70,7 +70,7 @@ export const registrarRole = Object.freeze({
     }
 
     log.info("Store",
-      `registrar routing intent="${intent}" askerReality=${ctx?.askerReality || "(local)"}`);
+      `registrar routing intent="${intent}" askerStory=${ctx?.askerStory || "(local)"}`);
     try {
       const handlers = await import("../../code/handlers.js");
       if (intent === "publish-listing") return await handlers.publishListing(fedMessage, ctx);

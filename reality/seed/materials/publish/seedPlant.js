@@ -1,6 +1,6 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Seed plant. Apply a seed (template) bundle into this reality,
+// Seed plant. Apply a seed (template) bundle into this story,
 // producing fresh spaces / beings / matter with new local ids.
 //
 // Planting is structure-instantiation (the inverse of capturing a seed
@@ -24,7 +24,7 @@
 // History does not transfer — that's the seed-vs-graft distinction.
 // A planted subtree begins its life on the target's reels at the
 // moment of the plant; subsequent reads see fresh facts only. The
-// bundle's sourceReality / sourceBranch are recorded in the
+// bundle's sourceStory / sourceBranch are recorded in the
 // seed-planted meta-fact for audit, not replayed. For full-biography
 // transfer (acts preserved, identity continuation, the thing itself),
 // see graft.js — GRAFT-AND-SEED.md draws the line.
@@ -38,7 +38,7 @@ import { withBeingAct } from "../../sprout.js";
 import { generateNameKeypair } from "../name/keys.js";
 import { encryptCredential } from "../being/identity/credentials.js";
 import { matterContentId } from "../matter/matterId.js";
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 
 /**
  * Graft a clone bundle into the target.
@@ -90,7 +90,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
   // Content integrity (above) proves the BYTES are what bundleHash says;
   // this proves WHO vouched for them. If the bundle carries a producer
   // signature, verify it self-certifyingly against its signerId (a pubkey
-  // id) — no callback to the source reality. Present-but-invalid is a hard
+  // id) — no callback to the source story. Present-but-invalid is a hard
   // refusal; absent is advisory (pre-signature bundles / unsigned
   // producers). The verified signer rides into the template-planted fact.
   let bundleSigner = null;
@@ -616,7 +616,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
       through: opts.operatorBeingId,
       of:      { kind: "space", id: rootSpaceId },
       params:  {
-        sourceReality:      bundle.meta.sourceReality || null,
+        sourceStory:      bundle.meta.sourceStory || null,
         sourceBranch:       bundle.meta.sourceBranch || null,
         sourceScopeSpaceId: bundle.meta.sourceScopeSpaceId || null,
         sourceScopeName:    bundle.meta.sourceScopeName || null,
@@ -637,7 +637,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
         through: opts.operatorBeingId,
         of:      { kind: "space", id: rootSpaceId },
         params:  {
-          sourceReality:      bundle.meta.sourceReality || null,
+          sourceStory:      bundle.meta.sourceStory || null,
           sourceBranch:       bundle.meta.sourceBranch || null,
           sourceScopeSpaceId: bundle.meta.sourceScopeSpaceId || null,
           sourceScopeName:    bundle.meta.sourceScopeName || null,

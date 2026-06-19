@@ -25,8 +25,8 @@
 // that resolves correctly. Show it to the user. Iterate. Save via
 // set-being-roleflow.
 //
-// Reads: `<reality>/./roles` (which roles exist to reference),
-//        `<reality>/./tools` and `<reality>/./operations` (context
+// Reads: `<story>/./roles` (which roles exist to reference),
+//        `<story>/./tools` and `<story>/./operations` (context
 //        for what each role can do).
 // Writes: `set-being-roleflow` (the typed write for qualities.roleFlow
 //         on a target being).
@@ -103,7 +103,7 @@ The when condition vocabulary:
     space.id              the position space's id
     space.name            the position space's name
     space.quality.<ns>.<k> read a quality on the position space
-    world.<ns>.<k>        read a world signal at reality root
+    world.<ns>.<k>        read a world signal at story root
     time.hour             0..23 server local
     time.dayOfWeek        0=Sun .. 6=Sat
     time.iso              ISO timestamp

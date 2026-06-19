@@ -23,7 +23,7 @@
 
 import fs from "fs";
 import path from "path";
-import log from "../seed/seedReality/log.js";
+import log from "../seed/seedStory/log.js";
 
 // ─────────────────────────────────────────────────────────────────────
 // Semver matching (no external deps)
@@ -177,8 +177,8 @@ export async function runNpmInstall(extDir, npmDeps, extName, opts = {}) {
 
   let timeout = opts.timeout || 60000;
   try {
-    const { getRealityConfigValue } = await import("../seed/realityConfig.js");
-    const configured = getRealityConfigValue("npmInstallTimeout");
+    const { getStoryConfigValue } = await import("../seed/storyConfig.js");
+    const configured = getStoryConfigValue("npmInstallTimeout");
     if (configured) timeout = Number(configured);
   } catch {}
 

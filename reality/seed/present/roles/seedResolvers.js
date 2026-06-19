@@ -21,7 +21,7 @@
 // description}` entries. Consumers (the LLM frame builder, descriptor
 // actions) treat them as literals after expansion — no further walk.
 
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 import {
   registerRelResolver,
   registerPatternResolver,

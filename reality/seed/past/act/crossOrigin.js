@@ -4,16 +4,16 @@
 // the actor's identity tuple is read off a moment context.
 //
 // Terminology (see CROSS-WORLD.md):
-//   reality  — the substrate domain (e.g. tabors.site)
-//   world    — a reality + branch (e.g. tabors.site#0)
+//   story  — the substrate domain (e.g. tabors.site)
+//   world    — a story + branch (e.g. tabors.site#0)
 //   place    — a world + position (e.g. tabors.site#0/home)
 //
-// An Act records the actor's identity tuple { reality, branch,
+// An Act records the actor's identity tuple { story, branch,
 // through, _id }. moment.actorAct points to it. Every downstream
 // consumer reads identity through these helpers — no direct legacy
 // `moment.branch` reads (the retired path; throw hard).
 //
-// A Fact targets a reel that lives in some world (reality+branch).
+// A Fact targets a reel that lives in some world (story+branch).
 // The Fact carries a `crossOrigin` block in its params iff the
 // Fact's target world differs from the Act's actor world. The block
 // carries the Act's full identity tuple so the receiving substrate
@@ -40,17 +40,17 @@ export function actorBranchFrom(moment, hint) {
 }
 
 /**
- * Read the actor's reality off a moment. Same contract as
+ * Read the actor's story off a moment. Same contract as
  * actorBranchFrom.
  */
-export function actorRealityFrom(moment, hint) {
-  const reality = moment?.actorAct?.reality;
-  if (typeof reality !== "string" || !reality.length) {
+export function actorStoryFrom(moment, hint) {
+  const story = moment?.actorAct?.story;
+  if (typeof story !== "string" || !story.length) {
     throw new Error(
-      `actorRealityFrom: moment.actorAct.reality missing${hint ? ` (${hint})` : ""}.`
+      `actorStoryFrom: moment.actorAct.story missing${hint ? ` (${hint})` : ""}.`
     );
   }
-  return reality;
+  return story;
 }
 
 /**
@@ -58,30 +58,30 @@ export function actorRealityFrom(moment, hint) {
  * produced it and the target the Fact lands on. Returns null when the
  * Fact stays in the actor's home world (no provenance block needed).
  *
- * @param {object} actorAct  the Act row (must carry reality + branch
+ * @param {object} actorAct  the Act row (must carry story + branch
  *                           + through + _id).
- * @param {object} target    { world: { reality, branch } } the
+ * @param {object} target    { world: { story, branch } } the
  *                           resolved world of the Fact's target reel.
- * @returns {object|null}    { reality, branch, beingId, actId, ... }
+ * @returns {object|null}    { story, branch, beingId, actId, ... }
  *                           when cross-world; null otherwise.
  */
 export function deriveCrossOrigin(actorAct, target) {
   if (!actorAct || !target) return null;
-  const actorReality = actorAct.reality;
+  const actorStory = actorAct.story;
   const actorBranch  = actorAct.branch;
-  const targetReality = target?.world?.reality;
+  const targetStory = target?.world?.story;
   const targetBranch  = target?.world?.branch;
-  if (!actorReality || !actorBranch || !targetReality || !targetBranch) {
+  if (!actorStory || !actorBranch || !targetStory || !targetBranch) {
     return null;
   }
-  if (actorReality === targetReality && actorBranch === targetBranch) {
+  if (actorStory === targetStory && actorBranch === targetBranch) {
     return null;  // same world; no foreign provenance
   }
   return {
-    // null when cross-branch within the same reality; the foreign
-    // domain when cross-reality. Receiving substrate consumes both
+    // null when cross-branch within the same story; the foreign
+    // domain when cross-story. Receiving substrate consumes both
     // shapes uniformly.
-    reality: actorReality === targetReality ? null : actorReality,
+    story: actorStory === targetStory ? null : actorStory,
     branch:  actorBranch,
     // beingId = the POSITION the act came through (stays the dedupe key with
     // actId). nameId = the SIGNER-of-record (the foreign actor's name), so a

@@ -18,7 +18,7 @@
 // prefix, same shape extensions use. ownerExtension is set to the
 // role name so the registry tracks who shipped them.
 
-import log from "../../../seedReality/log.js";
+import log from "../../../seedStory/log.js";
 import Matter from "../../../materials/matter/matter.js";
 import Space from "../../../materials/space/space.js";
 import { registerOperation } from "../../../ibp/operations.js";
@@ -143,12 +143,12 @@ let _llmAssignerCache = null;
 async function getLlmAssigner() {
   if (_llmAssignerCache) return _llmAssignerCache;
   const row = await findBeingByName("llm-assigner");
-  if (!row) throw new Error("llm-assigner being not found on this reality");
+  if (!row) throw new Error("llm-assigner being not found on this story");
   _llmAssignerCache = row;
   return row;
 }
 
-// Locate this reality's tutorial matter at a space, scoped by the
+// Locate this story's tutorial matter at a space, scoped by the
 // marker so we never touch unrelated matter authored by the
 // llm-assigner. Returns the lean row, or null.
 async function findTutorialMatter(spaceId, llmAssignerId) {
@@ -448,7 +448,7 @@ export function registerLlmAssignerOps() {
     },
   });
 
-  // Set the reality-level LLM configuration on the place root's
+  // Set the story-level LLM configuration on the place root's
   // `qualities.llm`. Writes the 7-step chain fields (slot list, force
   // flags, preferOwn). Restricted to beings with heaven authority
   // (owner or angel role on heaven).
@@ -456,21 +456,21 @@ export function registerLlmAssignerOps() {
   // Back-compat: when `connectionId` (legacy scalar) is the only
   // payload field, it is converted to a single-element `connections`
   // list under `qualities.llm.default` (so existing UIs keep working).
-  registerOperation("set-reality-llm", {
+  registerOperation("set-story-llm", {
     targets: ["space"],
     ownerExtension: "seed",
     handler: async ({ params, identity, moment }) => {
       if (!identity?.beingId) {
         throw new IbpError(
           IBP_ERR.UNAUTHORIZED,
-          "set-reality-llm requires an authenticated being.",
+          "set-story-llm requires an authenticated being.",
         );
       }
       const { hasHeavenAuthority } = await import("../../../materials/space/heavenLineage.js");
       if (!(await hasHeavenAuthority(identity.beingId))) {
         throw new IbpError(
           IBP_ERR.FORBIDDEN,
-          "Only beings with heaven authority (owner or angel role) can change reality-level LLM configuration.",
+          "Only beings with heaven authority (owner or angel role) can change story-level LLM configuration.",
         );
       }
       assertFlagMutex(params || {});
@@ -478,7 +478,7 @@ export function registerLlmAssignerOps() {
       const roots = await findRoot("space", "0");
       const rootRow = roots && roots[0] ? roots[0] : null;
       if (!rootRow) {
-        throw new IbpError(IBP_ERR.INTERNAL, "Reality place root not found");
+        throw new IbpError(IBP_ERR.INTERNAL, "Story place root not found");
       }
       // Legacy scalar → list conversion. If the caller passed only
       // `connectionId` (the pre-rewire shape), map it onto `connections`
@@ -491,7 +491,7 @@ export function registerLlmAssignerOps() {
       }
       const written = await writeLlmFields("space", rootRow.id, normalized, identity, moment);
       log.verbose("llm-assigner",
-        `reality root LLM updated by ${identity.beingId}: ${Object.keys(written).join(", ") || "(no fields)"}`);
+        `story root LLM updated by ${identity.beingId}: ${Object.keys(written).join(", ") || "(no fields)"}`);
       return { spaceId: String(rootRow.id), written };
     },
   });
@@ -566,7 +566,7 @@ export function registerLlmAssignerOps() {
   //
   // Both are seed-owned (bare names, no prefix). Roles can declare
   // canSee: ["llm-connections"] to preload the connections list as a
-  // face block. Direct callers (the portal) invoke reality.see("llm-chain", {...}).
+  // face block. Direct callers (the portal) invoke story.see("llm-chain", {...}).
   registerSeeOperation("llm-connections", {
     ownerExtension: "seed",
     description: "The caller's LLM connections and slot assignments",
@@ -641,8 +641,8 @@ export function registerLlmAssignerOps() {
       }
       const { resolveLlmConnectionChain } = await import("../../cognition/llm/resolution.js");
       const { chain, reason } = await resolveLlmConnectionChain({
-        receiver: { beingId: receiverBeingId, spaceId: receiverSpaceId, realityDomain: null },
-        actor: actorBeingId ? { beingId: actorBeingId, spaceId: actorSpaceId, realityDomain: null } : null,
+        receiver: { beingId: receiverBeingId, spaceId: receiverSpaceId, storyDomain: null },
+        actor: actorBeingId ? { beingId: actorBeingId, spaceId: actorSpaceId, storyDomain: null } : null,
         role,
         branch: effectiveBranch,
       });
@@ -678,5 +678,5 @@ export function registerLlmAssignerOps() {
     },
   });
 
-  log.verbose("llm-assigner", "registered 9 DO ops + 2 SEE ops (3 llm-assigner:tutorial-* + 6 seed: add-llm/delete-llm/assign-slot/set-being-llm/set-space-llm/set-reality-llm + 2 SEE: llm-connections/llm-chain)");
+  log.verbose("llm-assigner", "registered 9 DO ops + 2 SEE ops (3 llm-assigner:tutorial-* + 6 seed: add-llm/delete-llm/assign-slot/set-being-llm/set-space-llm/set-story-llm + 2 SEE: llm-connections/llm-chain)");
 }

@@ -9,7 +9,7 @@
 // verbs.
 //
 // I do not split Matter's schema by what it carries. Text, a file,
-// an http link, an inter-reality doorway — one schema for all of
+// an http link, an inter-story doorway — one schema for all of
 // them. ONE field characterizes each piece:
 //
 //   type — what the matter IS (types.js): the registered matter
@@ -37,7 +37,7 @@
 // DELETED sentinel; the row stays for audit but no longer lives in
 // the world. Bytes stay in the content store under retention policy.
 
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 import { getInternalConfigValue } from "../../internalConfig.js";
 import { randomUUID as uuidv4 } from "node:crypto";
 import Matter from "./matter.js";
@@ -45,7 +45,7 @@ import Space from "../space/space.js";
 import { loadProjection, loadOrFold, assertBranchOrThrow, listMatterNamesInFolder } from "../projections.js";
 import { matterContentId } from "./matterId.js";
 import { emitFact, sealFacts } from "../../past/fact/facts.js";
-import { getRealityConfigValue } from "../../realityConfig.js";
+import { getStoryConfigValue } from "../../storyConfig.js";
 import { resolveRootSpace } from "../space/spaces.js";
 import { getSpaceOwner } from "../space/members.js";
 import { hooks } from "../../hooks.js";
@@ -71,16 +71,16 @@ function maxMatterPerSpace() { return Math.max(1,   Number(getInternalConfigValu
 function matterQueryLimit()  { return Math.max(1,   Math.min(Number(getInternalConfigValue("matterQueryLimit"))  || 5000, 50000)); }
 
 
-// Upload-policy knobs (reality config, same keys the upload route
+// Upload-policy knobs (story config, same keys the upload route
 // honors). Read at call time.
 function maxUploadBytes() {
-  return Math.max(1024, Number(getRealityConfigValue("maxUploadBytes")) || 100 * 1024 * 1024);
+  return Math.max(1024, Number(getStoryConfigValue("maxUploadBytes")) || 100 * 1024 * 1024);
 }
 function allowedMimeTypes() {
-  const v = getRealityConfigValue("allowedMimeTypes");
+  const v = getStoryConfigValue("allowedMimeTypes");
   return Array.isArray(v) && v.length > 0 ? v : null;
 }
-function mimeAllowedByReality(mimeType) {
+function mimeAllowedByStory(mimeType) {
   const allow = allowedMimeTypes();
   if (!allow) return true;
   const bare = String(mimeType || "").split(";")[0].trim().toLowerCase();
@@ -250,8 +250,8 @@ async function createMatter({
       throw new Error(`Content exceeds maxUploadBytes (${maxUploadBytes()} bytes)`);
     }
     const mt = mimeType || "application/octet-stream";
-    if (!mimeAllowedByReality(mt)) {
-      throw new Error(`MIME type "${mt}" is not allowed on this reality`);
+    if (!mimeAllowedByStory(mt)) {
+      throw new Error(`MIME type "${mt}" is not allowed on this story`);
     }
     if (!typeAllowsMime(typeDef, mt)) {
       throw new Error(`MIME type "${mt}" is not allowed for matter type "${type}"`);
@@ -770,7 +770,7 @@ async function getMatter(matterId, opts = {}) {
  *   { matter, ref, buffer }      ibp binary content
  *   { matter, ref, purged: true} bytes gone (purged / reclaimed)
  *   { matter, ref: null }        no owned bytes (null content, or a
- *                                web / cross-reality / filesystem
+ *                                web / cross-story / filesystem
  *                                reference shape — read matter.content
  *                                directly for those)
  *   null                         matter not found

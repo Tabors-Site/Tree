@@ -33,6 +33,6 @@ export const sun = [
   },
 ];
 
-export const start = { sky: "dawn" }; // the reality begins at dawn
+export const start = { sky: "dawn" }; // the story begins at dawn
 
 export default sun;

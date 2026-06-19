@@ -30,7 +30,7 @@ When a being forms a portal:
     refuse with "form-portal: target must be a foreign IBPA string (e.g. bing.com#0/library)".
   see valid-address(foreignAddress) as valid.
   If not valid:
-    refuse with "form-portal: target does not look like a foreign IBPA. Expected <reality-domain>[#<branch>]/<position>.".
+    refuse with "form-portal: target does not look like a foreign IBPA. Expected <story-domain>[#<branch>]/<position>.".
   see resolve-containing-space(target) as spaceId.
   If no spaceId:
     refuse with "form-portal: cannot determine containing space for the matter target".

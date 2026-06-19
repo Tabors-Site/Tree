@@ -1,11 +1,11 @@
 // TreeOS Canopy, the sealed channel.
 //
-// End-to-end encryption for reality-to-reality IBP, built from the keys
+// End-to-end encryption for story-to-story IBP, built from the keys
 // the realities already are. No certificate authority, no TLS dependence,
 // no new trust root: each side authenticates the handshake with its
-// reality ed25519 key (the same key canopy signatures use), and the
+// story ed25519 key (the same key canopy signatures use), and the
 // session keys are derived from EPHEMERAL X25519 keypairs so past
-// traffic stays sealed even if a reality key leaks later (forward
+// traffic stays sealed even if a story key leaks later (forward
 // secrecy). Compromise recovery is succession, as everywhere else.
 //
 // Handshake (one POST /ibp/handshake round trip):
@@ -15,7 +15,7 @@
 //           verifyIncoming gives authentication, freshness, and replay
 //           dedup for free.
 //   B → A   { sessionId, ephPub(B), challenge(B), expiresAt, sig }
-//           sig = reality-key signature over the transcript hash + the
+//           sig = story-key signature over the transcript hash + the
 //           sessionId. The transcript covers both domains, both
 //           ephemerals, and both challenges, so neither side's half can
 //           be swapped or replayed (A's challenge is inside what B
@@ -43,9 +43,9 @@
 // CANOPY_REQUIRE_SEALED=1 to refuse plaintext sending outright.
 
 import crypto from "node:crypto";
-import log from "../../seed/seedReality/log.js";
-import { getRealityDomain } from "../../seed/ibp/address.js";
-import { signData, verifySignedData } from "../../seed/realityIdentity.js";
+import log from "../../seed/seedStory/log.js";
+import { getStoryDomain } from "../../seed/ibp/address.js";
+import { signData, verifySignedData } from "../../seed/storyIdentity.js";
 
 export const SEALED_CONTENT_TYPE = "application/x-canopy-sealed";
 const HANDSHAKE_KIND = "canopy-handshake-v1";
@@ -98,7 +98,7 @@ function transcriptHash({ from, to, ephA, ephB, challengeA, challengeB }) {
 
 // Direction labels are handshake ROLES, not domains: the transcript hash
 // in the salt already binds both domains, and role labels keep the two
-// direction keys distinct even when a reality loops back to itself.
+// direction keys distinct even when a story loops back to itself.
 const DIR_INIT_TO_RESP = "init>resp";
 const DIR_RESP_TO_INIT = "resp>init";
 
@@ -174,7 +174,7 @@ export function invalidateOutboundSession(domain) {
 
 async function runHandshake(peer, fetchImpl) {
   const domain = peer.domain;
-  const from = getRealityDomain();
+  const from = getStoryDomain();
   try {
     const eph = crypto.generateKeyPairSync("x25519");
     const ephPub = eph.publicKey.export({ type: "spki", format: "pem" }).toString();
@@ -224,7 +224,7 @@ async function runHandshake(peer, fetchImpl) {
       challengeA: challenge,
       challengeB: theirChallenge,
     });
-    // The peer's reality key over transcript+sessionId proves the
+    // The peer's story key over transcript+sessionId proves the
     // responder holds the key we registered for it, and the transcript
     // contains OUR fresh challenge, so this response can't be a replay.
     if (!verifySignedData(`${tHash}|${sessionId}`, sig, peer.publicKey)) {
@@ -292,10 +292,10 @@ export function handshakeHandler(req, res) {
         error: { code: "UNAUTHORIZED", message: "handshake 'from' does not match the canopy sender" },
       });
     }
-    if (to !== getRealityDomain()) {
+    if (to !== getStoryDomain()) {
       return res.status(400).json({
         status: "error",
-        error: { code: "INVALID_INPUT", message: "handshake 'to' is not this reality" },
+        error: { code: "INVALID_INPUT", message: "handshake 'to' is not this story" },
       });
     }
     if (typeof ephPub !== "string" || typeof challenge !== "string" || !challenge.length) {

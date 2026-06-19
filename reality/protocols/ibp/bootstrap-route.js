@@ -4,11 +4,11 @@
 // its WebSocket connection before it has one. Everything else in IBP
 // travels over WebSocket.
 //
-// GET /.well-known/treeos-portal → { ws, protocolVersion, reality, timezone }
+// GET /.well-known/treeos-portal → { ws, protocolVersion, story, timezone }
 //
 // The response is intentionally minimal: just enough information for the
 // client to open a socket. Full capability discovery (zones, beings,
-// supported actions, version negotiation) moves to `see <reality>/.discovery`
+// supported actions, version negotiation) moves to `see <story>/.discovery`
 // once the socket is open.
 //
 // CORS: this endpoint is **structurally cross-origin**. Any Portal client
@@ -19,10 +19,10 @@
 // of DNS — a public lookup.
 
 import cors from "cors";
-import { getRealityDomain } from "../../seed/ibp/address.js";
+import { getStoryDomain } from "../../seed/ibp/address.js";
 import { IBP_PROTOCOL_VERSION } from "../../seed/ibp/descriptor.js";
-import { getRealityUrl } from "../../seed/realityIdentity.js";
-import { getRealityConfigValue } from "../../seed/realityConfig.js";
+import { getStoryUrl } from "../../seed/storyIdentity.js";
+import { getStoryConfigValue } from "../../seed/storyConfig.js";
 
 // Permissive route-level CORS just for the bootstrap. Wins over the
 // global cors() middleware on this specific route.
@@ -40,13 +40,13 @@ const bootstrapCors = cors({
 export function registerIbpBootstrap(app) {
   app.options("/.well-known/treeos-portal", bootstrapCors);
   app.get("/.well-known/treeos-portal", bootstrapCors, (_req, res) => {
-    const realityUrl = getRealityUrl();
-    const wsUrl = realityUrl.replace(/^http/, "ws");
+    const storyUrl = getStoryUrl();
+    const wsUrl = storyUrl.replace(/^http/, "ws");
     res.json({
       ws: wsUrl,
       protocolVersion: IBP_PROTOCOL_VERSION,
-      reality: getRealityDomain(),
-      timezone: getRealityConfigValue("timezone") || null,
+      story: getStoryDomain(),
+      timezone: getStoryConfigValue("timezone") || null,
     });
   });
 }

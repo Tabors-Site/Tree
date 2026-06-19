@@ -4,7 +4,7 @@
 // the flat (text) portal. One DOM node, re-parented between hosts,
 // so the two views can never disagree:
 //
-//   [ reality#aBranch/@being ] :: [ reality#vBranch/path@being ]
+//   [ story#aBranch/@being ] :: [ story#vBranch/path@being ]
 //        the actor stance          the receiving stance
 //
 // The LEFT stance ALWAYS shows the being you are using (the one your
@@ -31,7 +31,7 @@
 let _bar = null; // { el, left, sep, right }
 let _cbs = { onNavigate: null, onSwitchBranch: null };
 let _ctx = {
-  reality: "",
+  story: "",
   username: null,
   signedIn: false,
   actorBranch: "0",
@@ -58,13 +58,13 @@ function _actorValue() {
   // the presence your acts ride through.
   const name = _ctx.username || "arrival";
   const p = _ctx.actorPath || "/";
-  return `${_ctx.reality || ""}#${_ctx.actorBranch}${p === "/" ? "/" : p}@${name}`;
+  return `${_ctx.story || ""}#${_ctx.actorBranch}${p === "/" ? "/" : p}@${name}`;
 }
 
 function _viewValue() {
   const p = _ctx.path || "/";
   const being = _ctx.being ? `@${_ctx.being}` : "";
-  return `${_ctx.reality || ""}#${_ctx.viewBranch}${p === "/" ? "/" : p}${being}`;
+  return `${_ctx.story || ""}#${_ctx.viewBranch}${p === "/" ? "/" : p}${being}`;
 }
 
 function _paint() {
@@ -91,14 +91,14 @@ function _paint() {
 }
 
 // Pull the #branch segment out of an actor-stance string the user
-// edited: "reality#1a/@name" → "1a". Null when absent/garbled.
+// edited: "story#1a/@name" → "1a". Null when absent/garbled.
 function _parseBranchEdit(raw) {
   const m = String(raw).match(/#([0-9][0-9a-z]*)(?=\/|$)/i);
   return m ? m[1] : null;
 }
 
 // Pull the @being segment out of an actor-stance string: the trailing
-// "@<being>". Null when absent. "reality#1a/@coder" → "coder".
+// "@<being>". Null when absent. "story#1a/@coder" → "coder".
 function _parseBeingEdit(raw) {
   const m = String(raw).match(/@([^/@#\s]+)\s*$/);
   return m ? m[1] : null;
@@ -138,7 +138,7 @@ export function initStanceBar({ onNavigate, onSwitchBranch, onSwitchBeing } = {}
   const right = document.createElement("input");
   right.id = "address-input"; // historical id: styling + "/" focus key off it
   right.type = "text";
-  right.placeholder = "reality#branch/path@being";
+  right.placeholder = "story#branch/path@being";
   right.autocomplete = "off";
   right.spellcheck = false;
   right.style.cssText = "flex:1 1 auto; min-width:160px;";

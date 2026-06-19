@@ -1,7 +1,7 @@
 // _template — canonical pack template (RESOURCES.md).
 //
 // Copy this folder to start a new pack:
-//   cp -r reality/resources/_template reality/resources/<your-pack-name>
+//   cp -r story/resources/_template story/resources/<your-pack-name>
 //
 // Then rename the example pieces, fill in the manifests, and the
 // loader will discover everything at boot (the leading underscore on

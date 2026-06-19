@@ -55,15 +55,15 @@
 //   }
 //
 // Attention, not dispatch. Every scheduled wake is a SELF-WAKE
-// minted as the scheduled being itself. A reality that wants a
+// minted as the scheduled being itself. A story that wants a
 // different routing model installs an extension that calls
 // setEmitter to swap in its own dispatcher; the registry shape
 // doesn't change.
 
 import { randomUUID } from "crypto";
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 import { callByResolved } from "../../ibp/verbs/call.js";
-import { getRealityDomain } from "../../ibp/address.js";
+import { getStoryDomain } from "../../ibp/address.js";
 import { getSpaceRootId } from "../../sprout.js";
 import { emitFact } from "../../past/fact/facts.js";
 import {
@@ -517,12 +517,12 @@ async function _defaultEmitter(entry, nowMs) {
     );
     return;
   }
-  const realityDomain = getRealityDomain();
-  if (!realityDomain) {
+  const storyDomain = getStoryDomain();
+  if (!storyDomain) {
     log.debug(
       "Schedule",
       `skipping wake for being ${entry.beingId.slice(0, 8)} on #${entry.branch}: ` +
-      `reality domain not yet available`,
+      `story domain not yet available`,
     );
     return;
   }
@@ -536,7 +536,7 @@ async function _defaultEmitter(entry, nowMs) {
     return;
   }
   const correlation = randomUUID();
-  const sender = `${realityDomain}/${spaceId}@${identity.name}`;
+  const sender = `${storyDomain}/${spaceId}@${identity.name}`;
   await callByResolved({
     toBeingId:    entry.beingId,
     inboxSpaceId: spaceId,

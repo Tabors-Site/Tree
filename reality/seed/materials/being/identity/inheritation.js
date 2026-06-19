@@ -19,12 +19,12 @@
 //                        Name authority over part of its tree.
 //
 // Authority "covers" a being if an anchor for the asking Name sits at
-// the being OR at any ancestor on the walk up to the reality root.
+// the being OR at any ancestor on the walk up to the story root.
 // That is why "new beings inherit coverage automatically (nothing
 // stored)": a child born under a covered position is itself covered,
 // because the walk from the child passes through the anchor.
 //
-// I_AM is the source of all authority on its own reality and covers
+// I_AM is the source of all authority on its own story and covers
 // everything (parallel to authorize.js's I_AM short-circuit).
 //
 // Inheritation points are asymmetric grant/revoke pairs, read the same
@@ -128,7 +128,7 @@ function anchorsAtNode(beingRow, livePoints) {
 /**
  * Walk the being-tree UP from `beingId` (via the live parentBeingId on
  * each projection) yielding [node, livePointsAt(node)] for each node up
- * to the reality root. Bounded by MAX_TREE_DEPTH. Stops when a being
+ * to the story root. Bounded by MAX_TREE_DEPTH. Stops when a being
  * has no parent (the I-AM being / a root) or can't be loaded.
  */
 async function* walkUp(beingId, branch) {
@@ -149,7 +149,7 @@ async function* walkUp(beingId, branch) {
 /**
  * Does `nameId` have authority over `beingId`?
  *
- *   I_AM            → yes, always (universal authority on its reality)
+ *   I_AM            → yes, always (universal authority on its story)
  *   owns being or
  *   any ancestor    → yes (ownership anchors downward authority)
  *   holds a point at

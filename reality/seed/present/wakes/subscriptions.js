@@ -68,10 +68,10 @@
 // chain — not in a separate persistence layer.
 
 import { randomUUID } from "crypto";
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 import { getAncestorChain } from "../../materials/space/ancestorCache.js";
 import { callByResolved } from "../../ibp/verbs/call.js";
-import { getRealityDomain } from "../../ibp/address.js";
+import { getStoryDomain } from "../../ibp/address.js";
 import { getSpaceRootId } from "../../sprout.js";
 import { emitFact } from "../../past/fact/facts.js";
 
@@ -557,11 +557,11 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
   // subscriber's act-chain (beingIn = subscriber) reads cleanly as
   // "moments this being attended to." Position carries where the
   // triggering DO happened.
-  const realityDomain = getRealityDomain();
-  if (!realityDomain) {
+  const storyDomain = getStoryDomain();
+  if (!storyDomain) {
     log.debug(
       "Subscriptions",
-      `skipping ${eventName}: reality domain not yet available`,
+      `skipping ${eventName}: story domain not yet available`,
     );
     return 0;
   }
@@ -599,7 +599,7 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
         continue;
       }
       const subSpaceForStance = payload?.spaceId ? String(payload.spaceId) : targetSpace;
-      const senderStance = `${realityDomain}/${subSpaceForStance}@${subIdentity.name}`;
+      const senderStance = `${storyDomain}/${subSpaceForStance}@${subIdentity.name}`;
 
       const eventContent = _renderTriggerContent(eventName, payload);
       if (sub.coalesceMs > 0) {

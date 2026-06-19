@@ -1,19 +1,19 @@
-// TreeOS . Publish-reality helper.
+// TreeOS . Publish-story helper.
 //
-// Reads every file under the running reality's source-matter tree,
+// Reads every file under the running story's source-matter tree,
 // builds a tree blob in CAS that names them all by hash, and prints
 // the publish manifest you'd hand the registrar. The publish itself
 // is one summon away (`@store-registrar` with intent publish-listing,
 // passing this manifest + listingType: "pack").
 //
-// A reality publish IS a pack publish whose tree happens to span the
+// A story publish IS a pack publish whose tree happens to span the
 // entire repo. Same primitive, same listing type, larger scope. ONE
 // asset in the manifest, the tree hash. The tree blob lives in
 // localStore CAS like any other content; recipients pull by hash and
 // unpack.
 //
-// Usage: node reality/scripts/publish-reality.mjs [name] [version]
-//   defaults: name from .env's REALITY_NAME or "reality", version 1.0.0
+// Usage: node story/scripts/publish-story.mjs [name] [version]
+//   defaults: name from .env's STORY_NAME or "story", version 1.0.0
 //
 // Does NOT call the publish intent automatically; prints the manifest
 // + listingHash so you can summon the registrar by hand (or pipe it).
@@ -29,7 +29,7 @@ import { listingHashOf } from "../resources/store/code/lib/claims.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..");
 
-const NAME    = process.argv[2] || process.env.REALITY_NAME || "reality";
+const NAME    = process.argv[2] || process.env.STORY_NAME || "story";
 const VERSION = process.argv[3] || "1.0.0";
 
 // Load .env if env isn't set yet.
@@ -41,7 +41,7 @@ if (!process.env.MONGODB_URI) {
   } catch {}
 }
 if (!process.env.MONGODB_URI) {
-  console.error("MONGODB_URI not set. Reality must be running so source matter is queryable.");
+  console.error("MONGODB_URI not set. Story must be running so source matter is queryable.");
   process.exit(2);
 }
 
@@ -70,7 +70,7 @@ for (const row of rows) {
 }
 
 if (files.length === 0) {
-  console.error("No anchored source files found. Has the reality booted with source.js running?");
+  console.error("No anchored source files found. Has the story booted with source.js running?");
   await mongoose.disconnect();
   process.exit(2);
 }
@@ -82,11 +82,11 @@ const { treeHash, treeSize } = await buildTreeBlob(files, putContent, {
 });
 
 // Build the publish manifest. Same shape as a pack manifest: assets[]
-// carries content hashes. For a reality, exactly one asset — the tree.
+// carries content hashes. For a story, exactly one asset — the tree.
 const manifest = {
   name:        NAME,
   version:     VERSION,
-  description: `Reality ${NAME} as of ${treeHash.slice(0, 12)} (${files.length} files).`,
+  description: `Story ${NAME} as of ${treeHash.slice(0, 12)} (${files.length} files).`,
   assets: [
     { hash: treeHash, label: "tree", size: treeSize },
   ],
@@ -95,7 +95,7 @@ const manifest = {
 const listingHash = listingHashOf(manifest);
 
 console.log("");
-console.log("─── publish-reality ───");
+console.log("─── publish-story ───");
 console.log(`name:        ${NAME}`);
 console.log(`version:     ${VERSION}`);
 console.log(`files:       ${files.length}`);

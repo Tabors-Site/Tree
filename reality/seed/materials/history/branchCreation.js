@@ -7,7 +7,7 @@
 //   - Eager-snapshot per-reel branchPoint map by aggregating parent's
 //     lineage facts up to the anchor (atSeq or atTimestamp).
 //   - Write the Branch row.
-//   - Plant a child space at `<reality>/./branches/<path>` so SEE on
+//   - Plant a child space at `<story>/./branches/<path>` so SEE on
 //     the branches space lists the new branch with its qualities.
 //   - Stamp a `do:create-branch` audit fact on main's reel (where the
 //     branch metadata projection lives — main is the registry of all
@@ -65,7 +65,7 @@ export async function createBranch({ parent = MAIN, anchor, label = null, create
   //   - If `passed` is wider (resolves to an ancestor of parent.scope) OR
   //     disjoint (lives outside parent's subtree entirely) OR explicitly
   //     null/undefined on a scoped parent with the special `clearScope: true`
-  //     flag, the operation is widening. Widening requires reality-root
+  //     flag, the operation is widening. Widening requires story-root
   //     permission (heaven owner OR angel role); otherwise refused.
   //
   // The scope is locked at creation: re-pointing the path later doesn't
@@ -228,7 +228,7 @@ async function snapshotParentHeads({ parent, anchor }) {
  * doctrine documented above createBranch's `scope` block.
  *
  * Throws when the caller tries to widen or move to a disjoint scope
- * without reality-root permission.
+ * without story-root permission.
  */
 async function _resolveBranchScope({ passed, parentScope, parentBranchPath, createdBy }) {
   const noScopePassed = (passed === null || passed === undefined);
@@ -268,12 +268,12 @@ async function _resolveBranchScope({ passed, parentScope, parentBranchPath, crea
   );
   if (within) return resolvedPassed;
 
-  // Wider or disjoint — widening. Reality-root permission required.
-  const allowed = await _hasRealityRootPermission(createdBy);
+  // Wider or disjoint — widening. Story-root permission required.
+  const allowed = await _hasStoryRootPermission(createdBy);
   if (!allowed) {
     throw new Error(
       `createBranch: scope "${passed.path}" is not within parent branch's scope "${parentScope.path}". ` +
-      `Widening or moving to a disjoint scope requires reality-root permission ` +
+      `Widening or moving to a disjoint scope requires story-root permission ` +
       `(heaven owner or angel role). ` +
       `Sub-branches inherit parent's scope by default; declare a narrower scope to fork within.`,
     );
@@ -299,7 +299,7 @@ async function _isSpaceWithinScope(targetSpaceId, scopeSpaceId, branchPath) {
 }
 
 /**
- * Reality-root permission = heaven authority (owner of heaven OR
+ * Story-root permission = heaven authority (owner of heaven OR
  * angel role granted at heaven). I_AM owns heaven; other beings are
  * admitted via the angel role grant chain that traces back to I_AM
  * (per RolesAreAuth).
@@ -313,7 +313,7 @@ async function _isSpaceWithinScope(targetSpaceId, scopeSpaceId, branchPath) {
  * Returns false when beingId is null (createdBy not threaded) so
  * scope-widening from anonymous callers refuses by default.
  */
-async function _hasRealityRootPermission(beingId) {
+async function _hasStoryRootPermission(beingId) {
   if (!beingId) return false;
   try {
     const { findByHeavenSpace } = await import("../projections.js");

@@ -38,7 +38,7 @@
 // capture) imports from here. Previously lived in cognition/llm/
 // which was the wrong dependency direction.
 
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 
 // resolverKey -> async (entry, beingCtx) -> [resolvedEntry, ...]
 const relResolvers = new Map();

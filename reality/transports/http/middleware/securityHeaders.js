@@ -5,20 +5,20 @@
 // any operator-allowed frame domains), XSS protection, referrer policy,
 // strict transport security.
 
-import { getRealityConfigValue } from "../../../seed/realityConfig.js";
+import { getStoryConfigValue } from "../../../seed/storyConfig.js";
 
 export default function securityHeaders(req, res, next) {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
 
-  const realityUrl = getRealityConfigValue("realityUrl") || null;
-  const allowedFrameDomains = getRealityConfigValue("allowedFrameDomains") || [];
+  const storyUrl = getStoryConfigValue("storyUrl") || null;
+  const allowedFrameDomains = getStoryConfigValue("allowedFrameDomains") || [];
 
   const ancestors = ["'self'"];
   // CSP frame-ancestors expects origins (scheme + host + port), not full URLs with paths.
   // Pushing a full URL like "https://example.com/api/" is invalid and browsers may ignore it.
-  if (realityUrl) {
-    try { ancestors.push(new URL(realityUrl).origin); } catch {}
+  if (storyUrl) {
+    try { ancestors.push(new URL(storyUrl).origin); } catch {}
   }
   for (const domain of allowedFrameDomains) ancestors.push(domain);
 

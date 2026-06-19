@@ -2,16 +2,16 @@
 //
 // Place identity, remembered across reboots.
 //
-// What this reality IS to the outside world — its name, public URL,
+// What this story IS to the outside world — its name, public URL,
 // federation directory, accepted MIME types, boundary security
 // domains. Things the discovery payload surfaces, things a peer
-// reality sees when it reaches in.
+// story sees when it reaches in.
 //
 // At genesis I plant the `./config` heaven space and write the
 // boot-time settings into its qualities Map. Every later boot, I
-// read that Map back through `initRealityConfig()`.
-// `getRealityConfigValue(key)` and `setRealityConfigValue(key, value)`
-// are the only sanctioned paths in or out for reality-identity keys.
+// read that Map back through `initStoryConfig()`.
+// `getStoryConfigValue(key)` and `setStoryConfigValue(key, value)`
+// are the only sanctioned paths in or out for story-identity keys.
 //
 // Seed runtime knobs (LLM call shape, scheduler backpressure, hook
 // timeouts, cleanup intervals — the apparatus's internal tuning)
@@ -23,39 +23,39 @@
 // Module-state declarations FIRST (before imports that may chain
 // back into this module during their own top-level). `var` is used
 // deliberately: a circular import that lands a callback into
-// getRealityConfigValue mid-load would hit a TDZ ReferenceError on
+// getStoryConfigValue mid-load would hit a TDZ ReferenceError on
 // `let` here. var has no TDZ; same semantics, immune to that race.
 // The chain in question:
 //   ancestorCache.js (top-level scheduleCleanup) → getTTL →
-//   getInternalConfigValue → getRealityConfigValue → reads cache.
-// If realityConfig is mid-import when that fires, cache must be
+//   getInternalConfigValue → getStoryConfigValue → reads cache.
+// If storyConfig is mid-import when that fires, cache must be
 // readable as `undefined` (treated as null), not throw.
 var configCache = null;
 var initialized = false;
-var cachedRealityUrl = null;
+var cachedStoryUrl = null;
 
-import log from "./seedReality/log.js";
+import log from "./seedStory/log.js";
 import Space from "./materials/space/space.js";
 import { HEAVEN_SPACE } from "./materials/space/heavenSpaces.js";
 import { I_AM } from "./materials/being/seedBeings.js";
 import { registerOperation } from "./ibp/operations.js";
 // NOTE: protocol.js + identity.js are pulled in lazily inside the
-// close-reality handler (dynamic import), not at the top level — this
+// close-story handler (dynamic import), not at the top level — this
 // module loads very early (see the circular-import note above) and a
 // static import of the being/identity chain here risks a load-order TDZ.
 
-// The reality's public connection URL. Other realities, browsers, and the
+// The story's public connection URL. Other realities, browsers, and the
 // IBP discovery endpoint all reach me at this URL. Derived from
-// REALITY_DOMAIN + PORT; REALITY_PUBLIC_URL overrides the whole value for
+// STORY_DOMAIN + PORT; STORY_PUBLIC_URL overrides the whole value for
 // reverse-proxy deploys where the constructed URL would be wrong.
 // Port suffix only for local domains; public domains sit behind proxies.
-export function getRealityUrl() {
-  if (cachedRealityUrl) return cachedRealityUrl;
-  if (process.env.REALITY_PUBLIC_URL) {
-    cachedRealityUrl = process.env.REALITY_PUBLIC_URL.replace(/\/+$/, "");
-    return cachedRealityUrl;
+export function getStoryUrl() {
+  if (cachedStoryUrl) return cachedStoryUrl;
+  if (process.env.STORY_PUBLIC_URL) {
+    cachedStoryUrl = process.env.STORY_PUBLIC_URL.replace(/\/+$/, "");
+    return cachedStoryUrl;
   }
-  const raw = process.env.REALITY_DOMAIN || "localhost";
+  const raw = process.env.STORY_DOMAIN || "localhost";
   const domain = raw.replace(/^https?:\/\//, "").replace(/\/+$/, "").replace(/:\d+$/, "");
   const port = process.env.PORT || 80;
   const isLocal =
@@ -69,8 +69,8 @@ export function getRealityUrl() {
     !domain.includes(".");
   const protocol = isLocal ? "http" : "https";
   const portSuffix = isLocal && port != 80 && port != 443 ? `:${port}` : "";
-  cachedRealityUrl = `${protocol}://${domain}${portSuffix}`;
-  return cachedRealityUrl;
+  cachedStoryUrl = `${protocol}://${domain}${portSuffix}`;
+  return cachedStoryUrl;
 }
 
 const PROTECTED_KEYS = new Set([
@@ -101,15 +101,15 @@ function validateValue(value) {
   }
 }
 
-// Keys allowed to fall back to process.env before initRealityConfig() runs.
-// `var` (not `const`): getRealityConfigValue reads this set, and the
+// Keys allowed to fall back to process.env before initStoryConfig() runs.
+// `var` (not `const`): getStoryConfigValue reads this set, and the
 // circular-import callback (see top-of-file note) may fire it before
 // the const initializer runs. var hoists and accepts `undefined` on
 // early reads; the `BOOT_ENV_KEYS.has` call below short-circuits via
 // optional chaining for that case.
 var BOOT_ENV_KEYS = new Set([
   "socketMaxBufferSize", "socketPingTimeout", "socketPingInterval", "socketConnectTimeout",
-  "maxConnectionsPerIp", "REALITY_NAME", "realityUrl",
+  "maxConnectionsPerIp", "STORY_NAME", "storyUrl",
 ]);
 
 // Every returned value is a deep copy so callers can't pollute the cache.
@@ -127,7 +127,7 @@ async function loadConfigFromDb() {
     const { findByHeavenSpace } = await import("./materials/projections.js");
     const configSlot = await findByHeavenSpace(HEAVEN_SPACE.CONFIG, "0");
     if (!configSlot || !configSlot.state?.qualities) {
-      log.warn("Reality", "No config heaven space found or qualities is empty. Using empty config.");
+      log.warn("Story", "No config heaven space found or qualities is empty. Using empty config.");
       configCache = {};
       return;
     }
@@ -147,7 +147,7 @@ async function loadConfigFromDb() {
     const clean = {};
     for (const [k, v] of Object.entries(raw)) {
       if (DANGEROUS_KEYS.has(k)) {
-        log.warn("Reality", `Dangerous config key "${k}" found in DB. Skipped.`);
+        log.warn("Story", `Dangerous config key "${k}" found in DB. Skipped.`);
         continue;
       }
       if (k.startsWith("$") || k.startsWith("_")) continue;
@@ -155,12 +155,12 @@ async function loadConfigFromDb() {
     }
     configCache = clean;
   } catch (err) {
-    log.error("Reality", `Failed to load config from DB: ${err.message}. Using empty config.`);
+    log.error("Story", `Failed to load config from DB: ${err.message}. Using empty config.`);
     configCache = {};
   }
 }
 
-export function getRealityConfigValue(key) {
+export function getStoryConfigValue(key) {
   if (configCache && key in configCache && configCache[key] != null) {
     return deepCopy(configCache[key]);
   }
@@ -195,7 +195,7 @@ async function getConfigSpace() {
   return null;
 }
 
-export async function setRealityConfigValue(key, value, { internal, identity, moment } = {}) {
+export async function setStoryConfigValue(key, value, { internal, identity, moment } = {}) {
   validateKey(key);
   if (PROTECTED_KEYS.has(key) && !internal) {
     throw new Error(`Config key "${key}" is protected and cannot be modified manually`);
@@ -203,13 +203,13 @@ export async function setRealityConfigValue(key, value, { internal, identity, mo
   validateValue(value);
   if (!moment) {
     throw new Error(
-      `setRealityConfigValue(${key}) requires moment. Runtime callers thread the moment's ctx; seed-internal callers (e.g. migrations) wrap in withIAmAct(...).`,
+      `setStoryConfigValue(${key}) requires moment. Runtime callers thread the moment's ctx; seed-internal callers (e.g. migrations) wrap in withIAmAct(...).`,
     );
   }
 
   const configSpace = await getConfigSpace();
   if (!configSpace) {
-    throw new Error("Config write failed: config heaven space not found at <reality>/./config. Reality may need repair.");
+    throw new Error("Config write failed: config heaven space not found at <story>/./config. Story may need repair.");
   }
 
   // Route through do.set-space so the write IS a Fact on the `./config`
@@ -230,23 +230,23 @@ export async function setRealityConfigValue(key, value, { internal, identity, mo
   if (!configCache) configCache = {};
   configCache[key] = value;
 
-  log.verbose("Reality", `Config set: ${key}`);
+  log.verbose("Story", `Config set: ${key}`);
 }
 
-export async function deleteRealityConfigValue(key, { internal, identity, moment } = {}) {
+export async function deleteStoryConfigValue(key, { internal, identity, moment } = {}) {
   validateKey(key);
   if (PROTECTED_KEYS.has(key) && !internal) {
     throw new Error(`Config key "${key}" is protected and cannot be deleted manually`);
   }
   if (!moment) {
     throw new Error(
-      `deleteRealityConfigValue(${key}) requires moment. Runtime callers thread the moment's ctx; seed-internal callers wrap in withIAmAct(...).`,
+      `deleteStoryConfigValue(${key}) requires moment. Runtime callers thread the moment's ctx; seed-internal callers wrap in withIAmAct(...).`,
     );
   }
 
   const configSpace = await getConfigSpace();
   if (!configSpace) {
-    throw new Error("Config delete failed: config heaven space not found at <reality>/./config.");
+    throw new Error("Config delete failed: config heaven space not found at <story>/./config.");
   }
 
   const { doVerb } = await import("./ibp/verbs/do.js");
@@ -261,18 +261,18 @@ export async function deleteRealityConfigValue(key, { internal, identity, moment
   );
 
   if (configCache) delete configCache[key];
-  log.verbose("Reality", `Config deleted: ${key}`);
+  log.verbose("Story", `Config deleted: ${key}`);
 }
 
-// Place-identity defaults. What this reality IS to the outside
+// Place-identity defaults. What this story IS to the outside
 // world. Seed runtime knobs (LLM timeout, scheduler limits, hooks,
 // caches, etc.) live in [internalConfig.js](internalConfig.js).
 export const CONFIG_DEFAULTS = {
   // Identity + federation
-  REALITY_NAME: "My Place",
-  realityUrl: null,
+  STORY_NAME: "My Place",
+  storyUrl: null,
   timezone: null,
-  realityLlmConnection: null,
+  storyLlmConnection: null,
 
   // Host observation switches (seed/materials/host/). Facts stamped
   // by the http-server / websocket-pool beings; flipping one to false
@@ -280,7 +280,7 @@ export const CONFIG_DEFAULTS = {
   hostRequestFacts: true,
   hostConnectionFacts: true,
 
-  // Boundary security (what the reality accepts at its edge)
+  // Boundary security (what the story accepts at its edge)
   allowedLlmDomains: [],
   allowedFrameDomains: [],
   allowedMimeTypes: null,
@@ -298,7 +298,7 @@ export const CONFIG_DEFAULTS = {
 
   // Spatial defaults for spaces (Space.size shape: `{ x, y, z? }`).
   // `defaultSpaceSize` fills in when a space is created without a
-  // size in the spec . the reality root, being homes, and ad-hoc
+  // size in the spec . the story root, being homes, and ad-hoc
   // user-created spaces all land at this size unless the caller
   // overrides. Beings' coord writes are clamped against the space's
   // size (per being.coord), so a sized space lets the portal render
@@ -315,7 +315,7 @@ export const CONFIG_DEFAULTS = {
   disabledExtensions: [],
 };
 
-export function getAllRealityConfig() {
+export function getAllStoryConfig() {
   if (!configCache) return {};
   try {
     return JSON.parse(JSON.stringify(configCache));
@@ -325,9 +325,9 @@ export function getAllRealityConfig() {
 }
 
 // Every known key with its effective value, default, and whether it's
-// overridden in the DB. Used by reality-manager to show full state.
+// overridden in the DB. Used by story-manager to show full state.
 export function getConfigWithDefaults() {
-  const dbValues = getAllRealityConfig();
+  const dbValues = getAllStoryConfig();
   const result = {};
 
   for (const [key, defaultValue] of Object.entries(CONFIG_DEFAULTS)) {
@@ -349,25 +349,25 @@ export function getConfigWithDefaults() {
 }
 
 // Call once after ensureSpaceRoot(). After this runs, env fallback is disabled.
-export async function initRealityConfig() {
+export async function initStoryConfig() {
   await loadConfigFromDb();
   initialized = true;
-  log.verbose("Reality", `Config loaded from ./config space (${Object.keys(configCache).length} keys)`);
+  log.verbose("Story", `Config loaded from ./config space (${Object.keys(configCache).length} keys)`);
 }
 
 // For when another process modifies ./config directly (migration, manual repair).
-export async function reloadRealityConfig() {
+export async function reloadStoryConfig() {
   await loadConfigFromDb();
-  log.info("Reality", `Config reloaded from ./config space (${Object.keys(configCache).length} keys)`);
+  log.info("Story", `Config reloaded from ./config space (${Object.keys(configCache).length} keys)`);
 }
 
 // ─────────────────────────────────────────────────────────────────────
 // DO operations: set-config / delete-config
 // ─────────────────────────────────────────────────────────────────────
 //
-// Reads route through `ibp:see` on `<reality>/./config` (returns the
+// Reads route through `ibp:see` on `<story>/./config` (returns the
 // cached snapshot); writes route through the two ops below which wrap
-// setRealityConfigValue / deleteRealityConfigValue. The wrappers
+// setStoryConfigValue / deleteStoryConfigValue. The wrappers
 // handle cache invalidation, validation, and the PROTECTED_KEYS gate
 // (seedVersion and disabledExtensions can only be written from
 // scaffold flows).
@@ -378,7 +378,7 @@ export async function reloadRealityConfig() {
 // double-stamp.
 //
 // Self-register at module load — `seed/services.js` imports
-// realityConfig.js as a side effect so the registry is populated
+// storyConfig.js as a side effect so the registry is populated
 // before any caller dispatches.
 
 registerOperation("set-config", {
@@ -402,10 +402,10 @@ registerOperation("set-config", {
     // I_AM-internal flows (migrations, first-boot bootstrap, manifest
     // sync) may write PROTECTED_KEYS (seedVersion, disabledExtensions).
     // Other beings stay subject to the protected-key gate inside
-    // setRealityConfigValue. `internal` used to be derived from a
+    // setStoryConfigValue. `internal` used to be derived from a
     // `scaffold` ctx field; `identity.beingId === I_AM` is the same
     // signal post-retirement.
-    await setRealityConfigValue(key, value, {
+    await setStoryConfigValue(key, value, {
       internal: identity?.beingId === I_AM,
       identity,
       moment,
@@ -426,7 +426,7 @@ registerOperation("delete-config", {
     if (!key || typeof key !== "string") {
       throw new Error("delete-config: `key` is required");
     }
-    await deleteRealityConfigValue(key, {
+    await deleteStoryConfigValue(key, {
       internal: identity?.beingId === I_AM,
       identity,
       moment,
@@ -436,10 +436,10 @@ registerOperation("delete-config", {
 });
 
 // ─────────────────────────────────────────────────────────────────────
-// close-reality — exit the running server (graceful shutdown).
+// close-story — exit the running server (graceful shutdown).
 // ─────────────────────────────────────────────────────────────────────
 //
-// Reality-wide control: stops the Node process. Restricted to the root
+// Story-wide control: stops the Node process. Restricted to the root
 // operator (the first registered human). Rather than wiring a new
 // shutdown path, the handler re-raises SIGTERM to itself on a short
 // delay — long enough for the DO ack to flush over the wire before
@@ -447,7 +447,7 @@ registerOperation("delete-config", {
 // process.exit. skipAudit: there's nothing to fold once the world stops,
 // and the act-chain can't observe its own server's death.
 
-registerOperation("close-reality", {
+registerOperation("close-story", {
   targets: ["space"],
   ownerExtension: "seed",
   skipAudit: true,
@@ -456,15 +456,15 @@ registerOperation("close-reality", {
     const { IbpError, IBP_ERR } = await import("./ibp/protocol.js");
     const { hasHeavenAuthority } = await import("./materials/space/heavenLineage.js");
     if (!identity?.beingId) {
-      throw new IbpError(IBP_ERR.UNAUTHORIZED, "close-reality requires an authenticated being.");
+      throw new IbpError(IBP_ERR.UNAUTHORIZED, "close-story requires an authenticated being.");
     }
     if (!(await hasHeavenAuthority(identity.beingId))) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
-        "Only beings with heaven authority (owner or angel role) can close the reality.",
+        "Only beings with heaven authority (owner or angel role) can close the story.",
       );
     }
-    log.warn("Seed", `close-reality requested by ${identity.beingId} (heaven authority). Shutting down.`);
+    log.warn("Seed", `close-story requested by ${identity.beingId} (heaven authority). Shutting down.`);
     // Let the ack return first; then trigger the graceful shutdown wired
     // in begin.js (SIGTERM handler closes senses + process.exit).
     setTimeout(() => {

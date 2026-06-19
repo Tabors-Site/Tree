@@ -465,9 +465,9 @@ async function grantRoleHandler({ target, params, identity, moment }) {
   // Enrich params in-place so the auto-emitted Fact carries the full
   // grant record (grantedBy + grantedAt). The being reducer reads
   // these from fact.params and appends to qualities.rolesGranted.
-  // No expiry: wall-clock expiry is a human-time concept the reality
+  // No expiry: wall-clock expiry is a human-time concept the story
   // has no clock for; a grant lasts until revoked. Time-bound grants
-  // arrive with reality-time (moments), not ISO timestamps — see
+  // arrive with story-time (moments), not ISO timestamps — see
   // present/roles/acquisition.js.
   const grantedBy = String(identity.beingId);
   const grantedAt = new Date().toISOString();

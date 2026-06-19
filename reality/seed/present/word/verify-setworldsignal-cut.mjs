@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // set-world-signal (role-manager.word), LIVE through the bridge with ZERO stubs. The
 // CONTROL strand (the two kebab gates + the not-initialized guard) is .word; the
-// validators + the value coercion + the reality-root set-space emit are host: escapes
-// wired by role-managerHost.js. Proves: a signal publishes to the reality root
+// validators + the value coercion + the story-root set-space emit are host: escapes
+// wired by role-managerHost.js. Proves: a signal publishes to the story root
 // (qualities.world.<ns>.<key>, one do:set-space fact, value coerced) and the kebab
 // refusal. CALLER mode (no `through`) — the publish attributes to the actor. Full
 // begin.js boot. Scratch DB, wiped.
@@ -15,12 +15,12 @@ import { randomUUID } from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const SCRATCH_DB = "mongodb://localhost:27017/reality_word_worldsignal_cut";
+const SCRATCH_DB = "mongodb://localhost:27017/story_word_worldsignal_cut";
 process.env.PORT = "3790";
 process.env.MONGODB_URI = SCRATCH_DB;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "worldsignal-secret-0123456789";
-process.env.REALITY_KEY_DIR = path.join(os.tmpdir(), "worldsignalcut-keys-" + process.pid);
-fs.rmSync(process.env.REALITY_KEY_DIR, { recursive: true, force: true });
+process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "worldsignalcut-keys-" + process.pid);
+fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
 const SRC = path.join(os.tmpdir(), "worldsignalcut-src");
 fs.rmSync(SRC, { recursive: true, force: true });
 fs.mkdirSync(SRC, { recursive: true });
@@ -79,10 +79,10 @@ try {
     ? ok(`one do:set-space fact at qualities.world.harmony.tick.alive = true (the lone WORLD fact)`)
     : bad(`fact`, (p.deltaF || []).map((f) => `${f.act}:${f.params?.field}`));
 
-  // ── 3. the reality root folds the signal ──
+  // ── 3. the story root folds the signal ──
   const root = await loadOrFold("space", String(getSpaceRootId()), "0");
   getPath(root?.state, "qualities.world.harmony.tick.alive") === true
-    ? ok(`reality root folds qualities.world.harmony.tick.alive === true`)
+    ? ok(`story root folds qualities.world.harmony.tick.alive === true`)
     : bad(`fold`, getPath(root?.state, "qualities.world.harmony"));
 
   // ── 4. a non-kebab namespace → refuse, no fact ──

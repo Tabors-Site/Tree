@@ -20,7 +20,7 @@
 // Same inversion pattern as the schedule emitter (see
 // seed/present/wakes/wakeSchedule.js setScheduleEmitter).
 
-import log from "../seedReality/log.js";
+import log from "../seedStory/log.js";
 
 // The single wire event name for all IBP traffic in both directions
 //
@@ -45,7 +45,7 @@ const NOOP_CHANNEL = Object.freeze({
 });
 
 /**
- * Register the push channel for this reality. Called once per transport
+ * Register the push channel for this story. Called once per transport
  * at boot. Re-registration overwrites; a transport that hot-reloads
  * should clear via `resetPushChannel()` first.
  *

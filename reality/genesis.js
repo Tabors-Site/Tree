@@ -53,12 +53,12 @@
 //      (identity, config, peers, extensions, tools, roles, operations,
 //      source, threads). My own Being row places inside this step so
 //      every Fact from t=0 has an actor.
-//   3. initRealityConfig. I read my own remembered settings.
+//   3. initStoryConfig. I read my own remembered settings.
 //   4. ./source mirror, stance defaults, seed migrations. The place's
 //      reflexive surfaces: codebase as matter, permissions on space,
 //      schema forwards.
 //   5. ensureSeedDelegates. I summon auth, llm-assigner, and
-//      reality-manager forth, one SUMMON each. SUMMON is the verb of
+//      story-manager forth, one SUMMON each. SUMMON is the verb of
 //      one being calling another; calling a not-yet-being into
 //      being is the same act. From here on, Facts start attributing
 //      to these beings as their own acts run.
@@ -75,10 +75,10 @@
 // Every step is idempotent. Re-runs reconcile against what already
 // exists. Nothing is re-formed blindly.
 
-import mongoose from "./seed/seedReality/dbConfig.js";
-import { getRealityIdentity, getRealityUrl } from "./seed/realityIdentity.js";
+import mongoose from "./seed/seedStory/dbConfig.js";
+import { getStoryIdentity, getStoryUrl } from "./seed/storyIdentity.js";
 import { ensureSpaceRoot, withGenesisGuard, withIAmAct } from "./seed/sprout.js";
-import { initRealityConfig, getRealityConfigValue } from "./seed/realityConfig.js";
+import { initStoryConfig, getStoryConfigValue } from "./seed/storyConfig.js";
 import { getInternalConfigValue } from "./seed/internalConfig.js";
 import {
   startExtensionJobs,
@@ -91,7 +91,7 @@ import { startCasSweep } from "./seed/materials/matter/casSweep.js";
 import { getBlockedExtensionsAtSpace } from "./seed/materials/space/extensionScope.js";
 import { hooks } from "./seed/hooks.js";
 import { syncExtensionsToTree } from "./seed/sprout.js";
-import log from "./seed/seedReality/log.js";
+import log from "./seed/seedStory/log.js";
 
 /**
  * Register seed-shipped tool definitions through the same path
@@ -128,10 +128,10 @@ let bootMode = null;
  *   begin.js and threaded through.
  */
 export async function genesis(app, opts = {}) {
-  const reality = getRealityIdentity();
-  log.verbose("Reality", `Reality: ${reality.name} at ${reality.domain}`);
-  log.verbose("Reality", `Reality ID: ${reality.realityId}`);
-  log.verbose("Reality", `Protocol: v${reality.protocolVersion}`);
+  const story = getStoryIdentity();
+  log.verbose("Story", `Story: ${story.name} at ${story.domain}`);
+  log.verbose("Story", `Story ID: ${story.storyId}`);
+  log.verbose("Story", `Protocol: v${story.protocolVersion}`);
 
   // In the beginning was the word. Before genesis touches memory, the foundation words
   // (seed/words/word.word and the verb instances) fold into the runtime: pastOf and the tense
@@ -151,23 +151,23 @@ export async function genesis(app, opts = {}) {
   log.info("Genesis", "I open my memory.");
 
   // The physical floor every space, matter, being, and Fact sits on.
-  const { ensureIndexes } = await import("./seed/seedReality/indexes.js");
+  const { ensureIndexes } = await import("./seed/seedStory/indexes.js");
   await ensureIndexes();
 
   // ── PLANT MODE ──
   //
   // If PLANT_FROM_GRAFT env var points at a seed JSON file, boot by
   // replaying that seed's chains into the (assumed-empty) DB instead
-  // of running default genesis. The reality comes up with the seed's
+  // of running default genesis. The story comes up with the seed's
   // original IDs, original biography, original I-Am — a continuation
-  // of the source reality on this substrate.
+  // of the source story on this substrate.
   //
   // Plant is destructive (the existing DB must be empty). The deployer
   // is responsible for wiping first. plantGraft itself refuses to plant
   // into a non-empty DB as a guard against misconfigured boots.
   //
   // Plant is continuation, not duplication. Two simultaneously-live
-  // substrates with the same reality identity is undefined behavior;
+  // substrates with the same story identity is undefined behavior;
   // the deployer ensures only one is canonical (see done/Chain-Rebuild.md).
   let plantedFromSeed = false;
   if (process.env.PLANT_FROM_GRAFT) {
@@ -175,7 +175,7 @@ export async function genesis(app, opts = {}) {
     const { GRAFTS_FOLDER, plantGraft } = await import("./seed/materials/publish/graft.js");
     const raw = process.env.PLANT_FROM_GRAFT;
     // Filename-only (no separator, not absolute) → resolve against
-    // reality/seeds/. Anything with a separator or absolute → use
+    // story/seeds/. Anything with a separator or absolute → use
     // as-is. This lets operators say PLANT_FROM_GRAFT=alice.graft.json
     // and have it Just Work from the canonical folder.
     const seedPath = (raw.includes("/") || path.isAbsolute(raw))
@@ -305,6 +305,23 @@ export async function genesis(app, opts = {}) {
     await ensureSpaceRoot();
   }
 
+  // The seed declares itself onto the chain: the verb pasts, the concept .words, and the do-ops,
+  // all as I_AM declare-word facts in one moment (philosophy/word/10.md §2, GENESIS-FOLD.md). After
+  // this a boot reads the seed defining itself in the story. Idempotent: re-declares skip unchanged
+  // (the wordStore dedup). Guarded: a fold failure logs and degrades, it never crashes the boot.
+  try {
+    await withIAmAct("the words declare themselves", async (ctx) => {
+      const { seedFold } = await import("./seed/present/word/wordFold.js");
+      await seedFold({ moment: ctx });
+    });
+    // the seedFold act has sealed; rebuild the live word projection from the chain (covers reboot,
+    // where the declares dedup-skip and leave the in-memory projection unfilled).
+    const { rehydrateWordProjection } = await import("./seed/present/word/wordStore.js");
+    await rehydrateWordProjection("0");
+  } catch (err) {
+    log.warn("Genesis", `seedFold (the seed declaring itself) failed: ${err.message}`);
+  }
+
   // ── POST-GENESIS RECONCILIATIONS ──
   // The I-Am exists now. Each subsequent scaffold step is its own
   // moment of the I-Am — opens an Act, accumulates ΔF, seals. Zero
@@ -316,10 +333,10 @@ export async function genesis(app, opts = {}) {
 
   if (!plantedFromSeed) {
     // I read my own remembered settings out of ./config.
-    await initRealityConfig();
+    await initStoryConfig();
     log.info("Genesis", "I remember my settings.");
 
-    // I mirror the reality/ directory into space and matter under
+    // I mirror the story/ directory into space and matter under
     // `.source`. The source-space id cache primes for the read-only
     // DO gate, then the disk walk runs detached.
     const { ensureSourceTree } = await import("./seed/materials/space/source.js");
@@ -333,15 +350,15 @@ export async function genesis(app, opts = {}) {
     // are written; authorize.js no longer reads any such rows.
   } else {
     // Prime runtime caches that didn't get filled by the genesis
-    // sequence because we skipped it. initRealityConfig is still
+    // sequence because we skipped it. initStoryConfig is still
     // needed — reading config from .env / process.env shouldn't
     // change the planted state, just hydrate runtime cache.
-    await initRealityConfig();
+    await initStoryConfig();
     log.info("Genesis", "I remember my settings.");
   }
 
   // Beings with heaven authority. The seed delegates (cherub, birther, llm-
-  // assigner, reality-manager, arrival, etc.) need hasAccess on
+  // assigner, story-manager, arrival, etc.) need hasAccess on
   // heaven so they can act inside the Tier-3 heaven spaces (./roles,
   // ./operations, ./tools, ...). Mechanism: add them as contributors
   // on heaven. I_AM is heaven's rootOwner already; the new
@@ -368,7 +385,7 @@ export async function genesis(app, opts = {}) {
     // Seed migrations. Each migration's writes ride one I-Am act.
     await withIAmAct("seed migrations", async (ctx) => {
       const { runSeedMigrations } =
-        await import("./seed/seedReality/migrations/runner.js");
+        await import("./seed/seedStory/migrations/runner.js");
       const migrationsRan = await runSeedMigrations(ctx);
       if (migrationsRan) log.info("Genesis", "I update my form.");
     });
@@ -407,9 +424,9 @@ export async function genesis(app, opts = {}) {
   // handler functions and prompt closures since Mongo can't serialize
   // those.
   const { registerRole } = await import("./seed/present/roles/registry.js");
-  const { realityManagerRole } =
-    await import("./seed/present/roles/reality-manager/role.js");
-  registerRole("reality-manager", realityManagerRole, "seed");
+  const { storyManagerRole } =
+    await import("./seed/present/roles/story-manager/role.js");
+  registerRole("story-manager", storyManagerRole, "seed");
 
   // Seed-shipped verb tools. ONE generic tool per verb (see / do /
   // summon / be). Tool exposure is DERIVED at prompt-build time
@@ -455,7 +472,7 @@ export async function genesis(app, opts = {}) {
   registerRole("human", humanRole, "seed");
 
   // The "birther" role. Carried by the @birther seed delegate at the
-  // reality root. Authenticated callers click @birther to mint a child
+  // story root. Authenticated callers click @birther to mint a child
   // whose parent (being-tree) is the caller. Cherub is for arrival →
   // fresh identity; birther is for authenticated → child of self.
   // See seed/present/roles/birther/role.js for the doctrine.
@@ -552,13 +569,13 @@ export async function genesis(app, opts = {}) {
 
   // The foundational roles of the roles-are-auth doctrine
   // (seed/RolesAreAuth.md):
-  //   - angel: hosted at heaven, reach: ["/**"] (reality-wide). Carries
+  //   - angel: hosted at heaven, reach: ["/**"] (story-wide). Carries
   //     canDo: grant-role:* + revoke-role:* so angels can promote
   //     others recursively. Granted to every seed delegate at genesis
   //     and to the first human registrant. Also expresses IDENTITY:
   //     descendants of I-Am with heaven access.
-  //   - global: hosted at the reality root, default reach (host +
-  //     descendants = whole reality). The baseline every being holds —
+  //   - global: hosted at the story root, default reach (host +
+  //     descendants = whole story). The baseline every being holds —
   //     granted at birth via birth.js#_anointGlobal. canX defines what
   //     "every being can do here."
   const { angelRole } = await import("./seed/present/roles/angel/role.js");
@@ -570,7 +587,7 @@ export async function genesis(app, opts = {}) {
   // Final doctrine). Every role-in-effect lives on a space's
   // qualities.roles[<name>]:
   //   - angel  → heaven (the system root)
-  //   - everything else → the reality root
+  //   - everything else → the story root
   //
   // The REGISTRY above keeps the specs in code (with handlers) for
   // cognition-frame use; these hostRoleAt calls write the AUTH SPEC
@@ -583,28 +600,28 @@ export async function genesis(app, opts = {}) {
     const { HEAVEN_SPACE } = await import("./seed/materials/space/heavenSpaces.js");
     const { I_AM } = await import("./seed/materials/being/seedBeings.js");
     const heaven = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, "0");
-    const realityRootId = getSpaceRootId();
+    const storyRootId = getSpaceRootId();
 
     if (heaven) {
       await withIAmAct("I install angel on heaven", async (ctx) => {
         await hostRoleAt(String(heaven.id), "angel", angelRole, I_AM, ctx);
       });
     }
-    if (realityRootId) {
-      await withIAmAct("I install global on the reality root", async (ctx) => {
-        await hostRoleAt(String(realityRootId), "global", globalRole, I_AM, ctx);
+    if (storyRootId) {
+      await withIAmAct("I install global on the story root", async (ctx) => {
+        await hostRoleAt(String(storyRootId), "global", globalRole, I_AM, ctx);
       });
-      await withIAmAct("I install arrival on the reality root", async (ctx) => {
-        await hostRoleAt(String(realityRootId), "arrival", arrivalRole, I_AM, ctx);
+      await withIAmAct("I install arrival on the story root", async (ctx) => {
+        await hostRoleAt(String(storyRootId), "arrival", arrivalRole, I_AM, ctx);
       });
-      // Host every other seed delegate role on the reality root too.
+      // Host every other seed delegate role on the story root too.
       // Per the single-gate doctrine, the role-walk authorize finds each
       // delegate's canX through the qualities.roles host (not through a
       // registry-fallback hack). Each one-op-per-moment.
       const { humanRole } = await import("./seed/present/roles/human/role.js");
       const { cherubRole } = await import("./seed/present/roles/cherub/role.js");
       const { birtherRole } = await import("./seed/present/roles/birther/role.js");
-      const { realityManagerRole } = await import("./seed/present/roles/reality-manager/role.js");
+      const { storyManagerRole } = await import("./seed/present/roles/story-manager/role.js");
       const { roleManagerRole } = await import("./seed/present/roles/role-manager/role.js");
       const { roleFinderRole } = await import("./seed/present/roles/role-finder/role.js");
       const { roleflowComposerRole } = await import("./seed/present/roles/roleflow-composer/role.js");
@@ -619,7 +636,7 @@ export async function genesis(app, opts = {}) {
         ["human", humanRole],
         ["cherub", cherubRole],
         ["birther", birtherRole],
-        ["reality-manager", realityManagerRole],
+        ["story-manager", storyManagerRole],
         ["role-manager", roleManagerRole],
         ["role-finder", roleFinderRole],
         ["roleflow-composer", roleflowComposerRole],
@@ -632,8 +649,8 @@ export async function genesis(app, opts = {}) {
         ["mongo-connection", mongoRoleSpec],
       ];
       for (const [name, spec] of installs) {
-        await withIAmAct(`I install ${name} on the reality root`, async (ctx) => {
-          await hostRoleAt(String(realityRootId), name, spec, I_AM, ctx);
+        await withIAmAct(`I install ${name} on the story root`, async (ctx) => {
+          await hostRoleAt(String(storyRootId), name, spec, I_AM, ctx);
         });
       }
     }
@@ -646,7 +663,7 @@ export async function genesis(app, opts = {}) {
   // now hosted on its space, the I-Am grants each seed delegate:
   //   (a) the `angel` role anchored at heaven (identity + heaven
   //       access; seed/RolesAreAuth.md "Why angel for delegates")
-  //   (b) their matching role anchored at the reality root
+  //   (b) their matching role anchored at the story root
   //       (cherub→cherub, birther→birther, ...) — the day-to-day toolkit
   // @public and @arrival are special-cased inside the function:
   // @public gets no grants (never acts); @arrival gets arrival only
@@ -710,7 +727,7 @@ export async function genesis(app, opts = {}) {
   }
 
   // LLM-management ops. Six bare seed ops (add-llm / delete-llm /
-  // assign-slot / set-being-llm / set-space-llm / set-reality-llm)
+  // assign-slot / set-being-llm / set-space-llm / set-story-llm)
   // plus three llm-assigner-prefixed tutorial ops (start-tutorial /
   // save-playback / complete-tutorial) that drive the welcome flow.
   // The substrate ops are callable by any being with the appropriate
@@ -741,7 +758,7 @@ export async function genesis(app, opts = {}) {
   // federation-manager ops: offer-template, offer-being, request-template,
   // accept-template, reject-template, fulfill-request, refuse-request. The
   // capture/apply helpers (captureTemplate, plantTemplate, captureGraft,
-  // applyGraft, crossRealityDispatch) do the heavy lifting; the ops are thin
+  // applyGraft, crossStoryDispatch) do the heavy lifting; the ops are thin
   // handlers that thread negotiation state through the federation-manager
   // being's qualities.
   const { registerFederationManagerOps } =
@@ -833,7 +850,7 @@ export async function genesis(app, opts = {}) {
           fn(Number(val));
         }
       } catch (e) {
-        log.warn("Reality", `Config "${key}" failed: ${e.message}`);
+        log.warn("Story", `Config "${key}" failed: ${e.message}`);
       }
     }
   }
@@ -853,7 +870,7 @@ export async function genesis(app, opts = {}) {
   // in memory. (MCP retired 2026-05-22; tools dispatch direct from
   // the LLM voice via getToolHandler in cognition/llm/tools.js.)
   await loadExtensions(app, null, {
-    getConfigValue: getRealityConfigValue,
+    getConfigValue: getStoryConfigValue,
     registerRawWebhook: opts.registerRawWebhook,
   });
   {
@@ -888,7 +905,7 @@ export async function genesis(app, opts = {}) {
   await loadConfinedExtensions();
 
   // Register the loader's instance lookup with the seed so
-  // reality.scope.getExtensionAtScope can resolve names without the
+  // story.scope.getExtensionAtScope can resolve names without the
   // seed importing from extensions/loader.js (which would violate
   // the one-way layering rule). Looked up lazily so the loader
   // module is not pulled on places that skip it.
@@ -998,23 +1015,23 @@ export async function genesis(app, opts = {}) {
  * (listen) are open.
  */
 export function printReady() {
-  const apiUrl = getRealityUrl();
+  const apiUrl = getStoryUrl();
   const boot = getBootReport();
 
   console.log("");
   console.log("  ════════════════════════════════════════════════════════════");
-  log.info("Reality", bootMode === "Beginning" ? "I am born." : "I am awake.");
+  log.info("Story", bootMode === "Beginning" ? "I am born." : "I am awake.");
   console.log("  ════════════════════════════════════════════════════════════");
   console.log("");
 
   if (boot.skipped === 0) {
-    log.info("Reality", `Extensions: ${boot.loaded} loaded, all clear.`);
+    log.info("Story", `Extensions: ${boot.loaded} loaded, all clear.`);
   } else {
     log.info(
       "Place",
       `Extensions: ${boot.loaded} loaded, ${boot.skipped} skipped.`,
     );
-    log.warn("Reality", `Skipped: ${boot.skippedNames.join(", ")}`);
+    log.warn("Story", `Skipped: ${boot.skippedNames.join(", ")}`);
   }
 
   console.log("");

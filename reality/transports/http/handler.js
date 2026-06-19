@@ -25,8 +25,8 @@
 //      dispatcher the WebSocket layer uses; every seed and
 //      extension operation is automatically callable here.
 //
-// World-state never rides bare HTTP: the retired /api/v1/reality/root
-// shim (the last REST world read) folded into `ibp:see <reality>/`
+// World-state never rides bare HTTP: the retired /api/v1/story/root
+// shim (the last REST world read) folded into `ibp:see <story>/`
 // on 2026-06-11. HTTP serves bootstrap, bytes, auth, and the IBP
 // adapter — nothing descriptor-shaped outside IBP.
 //
@@ -39,10 +39,10 @@
 // initial discovery, clients read the rest of the protocol surface
 // via `ibp:see` on place heaven spaces:
 //
-//   GET /ibp/see/<reality>/./extensions   — extensions + capabilities
-//   GET /ibp/see/<reality>/./tools        — registered tools
-//   GET /ibp/see/<reality>/./roles        — registered roles
-//   GET /ibp/see/<reality>/./operations   — registered DO operations
+//   GET /ibp/see/<story>/./extensions   — extensions + capabilities
+//   GET /ibp/see/<story>/./tools        — registered tools
+//   GET /ibp/see/<story>/./roles        — registered roles
+//   GET /ibp/see/<story>/./operations   — registered DO operations
 
 import { authApiRouter, authPageRouter } from "./auth.js";
 import ibp from "./api/ibp.js";
@@ -56,7 +56,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import rateLimit from "express-rate-limit";
 import { sendError, IBP_ERR } from "../../seed/ibp/protocol.js";
-import log from "../../seed/seedReality/log.js";
+import log from "../../seed/seedStory/log.js";
 
 import { DELETED } from "../../seed/materials/space/heavenSpaces.js";
 

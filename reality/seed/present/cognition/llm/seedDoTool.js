@@ -23,20 +23,20 @@
 // LLM tool.
 //
 // Address shorthand. A leading "." names a heaven child
-// ('.config' → '<reality>/./config').
+// ('.config' → '<story>/./config').
 
 import { z } from "zod";
 import { doVerb } from "../../../ibp/verbs/do.js";
-import { getRealityDomain } from "../../../ibp/address.js";
+import { getStoryDomain } from "../../../ibp/address.js";
 import { getSpaceRootId } from "../../../sprout.js";
 
 export const seedDoTool = {
   name: "do",
   description:
     "Invoke a registered DO operation against a target. The action is the " +
-    "operation name as registered (use see on <reality>/./operations to " +
+    "operation name as registered (use see on <story>/./operations to " +
     "discover available actions and their expected args). Target defaults " +
-    "to the reality root when not specified; pass an explicit target for " +
+    "to the story root when not specified; pass an explicit target for " +
     "ops that act on a different position, being, or matter. Authorization " +
     "runs at the substrate layer; unlicensed actors refuse with FORBIDDEN.",
   verb: "do",
@@ -47,11 +47,11 @@ export const seedDoTool = {
     ),
     target: z.string().optional().describe(
       "Address of the position / being / matter the operation acts on. " +
-        "Leading '.' resolves against the reality root. Defaults to the " +
-        "reality root for ops that operate at the root.",
+        "Leading '.' resolves against the story root. Defaults to the " +
+        "story root for ops that operate at the root.",
     ),
     args: z.record(z.string(), z.any()).optional().describe(
-      "Operation-specific args. See <reality>/./operations for each op's expected shape.",
+      "Operation-specific args. See <story>/./operations for each op's expected shape.",
     ),
     beingId: z.string().describe("Injected by server. Ignore."),
     name: z.string().optional().describe("Injected by server. Ignore."),
@@ -68,7 +68,7 @@ export const seedDoTool = {
       return {
         content: [{
           type: "text",
-          text: "Error: could not resolve a target. Pass `target` explicitly or check that the reality root is initialized.",
+          text: "Error: could not resolve a target. Pass `target` explicitly or check that the story root is initialized.",
         }],
       };
     }
@@ -115,7 +115,7 @@ export const seedDoTool = {
  * Resolve the target arg into the typed target shape doVerb expects:
  *   - explicit string address (with '.' shorthand) -> pass through
  *   - explicit {kind, id} typed target -> pass through
- *   - missing -> default to the reality root as a space target
+ *   - missing -> default to the story root as a space target
  */
 async function resolveTarget(target, callCtx) {
   if (target && typeof target === "object" && target.kind && target.id) {
@@ -123,12 +123,12 @@ async function resolveTarget(target, callCtx) {
   }
   if (typeof target === "string" && target.length > 0) {
     // Leading "." shorthand routes through heaven. ".config" becomes
-    // "<reality>/./config"; "." alone is heaven itself.
+    // "<story>/./config"; "." alone is heaven itself.
     if (target === ".") {
-      return `${getRealityDomain()}/.`;
+      return `${getStoryDomain()}/.`;
     }
     if (target.startsWith(".") && !target.startsWith("./")) {
-      return `${getRealityDomain()}/./${target.slice(1)}`;
+      return `${getStoryDomain()}/./${target.slice(1)}`;
     }
     return target;
   }

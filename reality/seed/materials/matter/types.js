@@ -4,7 +4,7 @@
 //
 // Matter is the universal interface (philosophy/OS/matter.md): every
 // external system — file formats, web pages, APIs, chains, devices —
-// integrates into the reality as a TYPED piece of matter, and
+// integrates into the story as a TYPED piece of matter, and
 // extensions are how new types arrive. A type declares what the
 // matter IS (content kinds it may carry) and what may be DONE with it
 // (the DO ops that apply — the descriptor advertises them as the
@@ -14,7 +14,7 @@
 // `type` is orthogonal to `origin`:
 //   origin — where the bytes live / how they're bridged
 //            (ibp = the CAS owns them, filesystem = source mirror,
-//            web = a URL, cross-reality = another world's matter)
+//            web = a URL, cross-story = another world's matter)
 //   type   — what the matter IS and what can be done with it
 //            (generic note, file, web page, model, ext:invoice, ...)
 //
@@ -36,7 +36,7 @@
 //                        world (bare `create-matter` still matches —
 //                        same namespace semantics as grant-role:<role>).
 
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 
 const REGISTRY = new Map();
 
@@ -290,11 +290,11 @@ registerMatterType("source", {
 
 registerMatterType("ibpa", {
   description:
-    "An IBPA — the inter-reality portal. Content carries the target " +
-    "address (`{ target: \"<reality>#<branch>/<position>\" }`), the " +
+    "An IBPA — the inter-story portal. Content carries the target " +
+    "address (`{ target: \"<story>#<branch>/<position>\" }`), the " +
     "IBP sibling of web's `{ url }` — a COMPLETELY different " +
     "reference world: a url opens into the WWW over HTTP (render " +
-    "only, iframes); an IBPA opens into another reality over IBP " +
+    "only, iframes); an IBPA opens into another story over IBP " +
     "(four verbs, never an iframe). The same matter for every " +
     "viewer; what it IS for each (window / reach-through / " +
     "walk-through / black) is decided per-verb by the FOREIGN side's " +
@@ -302,7 +302,7 @@ registerMatterType("ibpa", {
     "3D-specific: a headless being reads `external.target` off the " +
     "descriptor entry and issues SEE/DO/SUMMON/BE at that address " +
     "through normal cross-world dispatch; that IS how beings move " +
-    "between realities or act on one reality from another. Formed " +
+    "between realities or act on one story from another. Formed " +
     "via `do form-portal`.",
   contentKinds: ["none"],
   ops: ["set-matter", "end-matter"],

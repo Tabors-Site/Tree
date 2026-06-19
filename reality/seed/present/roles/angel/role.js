@@ -27,13 +27,13 @@ export const angelRole = Object.freeze({
   description:
     "Super-sudo. Hosted on heaven (system-internal). The I-Am holds it " +
     "implicitly via code-level bypass; seed delegates get it granted at " +
-    "genesis. Reach is extended reality-wide so heaven-authority covers " +
-    "the whole reality. Use sparingly.",
+    "genesis. Reach is extended story-wide so heaven-authority covers " +
+    "the whole story. Use sparingly.",
   // Hosted on heaven — default reach is heaven + descendants. The
-  // `reach` field extends to the whole reality (any path under root)
+  // `reach` field extends to the whole story (any path under root)
   // so heaven-anchored grants of angel reach into the place root and
   // everything else outside heaven's subtree. This is the role
-  // expressing "heaven-class authority is reality-wide authority."
+  // expressing "heaven-class authority is story-wide authority."
   reach: ["/**"],
   requiredCognition: null,
   respondMode: "async",

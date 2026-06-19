@@ -1,6 +1,6 @@
 # be.word — the BE verb, a being's own lifecycle.
-# Descends from word.word, name.word, being.word, branch.word. BE is the closed five-op set
-# (seed/ibp/verbs/be.js): birth, connect, release, switch, death. `connect` is also a Name's
+# Descends from word.word, name.word, being.word, history.word. BE is the closed six-op set
+# (seed/ibp/verbs/be.js): birth, connect, release, switch, death, truename. `connect` is also a Name's
 # word, for a Name's session. Kept the same here, told apart by object — connect TO a being,
 # connect AS a Name. Worst case, if too close, the Name's word changes, not this one.
 
@@ -8,5 +8,6 @@ Be is the verb of a being's presence.
 A being is born of a mother, and at times a father.
 A being is connected to when a Name takes it up to act through it.
 A being is released when its Name acts through it no more.
-A being switches when it takes another branch as its present.
+A being switches its present history, the history its session acts on, moving only that frame, not the being, and making no history and copying no chain.
+A being takes a truename when a Name is handed to it, binding its identity.
 A being dies when its chain is sealed, and it acts no more.

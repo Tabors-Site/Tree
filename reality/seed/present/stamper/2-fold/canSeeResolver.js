@@ -21,10 +21,10 @@
 //
 // Address classification. Anything starting with ".", "/", or "<"
 // is an address; everything else is a see name. The leading "." is
-// heaven shorthand (`.config` becomes `<reality>/./config`); "./" is the
-// explicit child form (`./config` becomes `<reality>/./config`); "<" is
-// a fully-qualified address (`<reality>/...`); "/" is a tree path
-// from the reality root.
+// heaven shorthand (`.config` becomes `<story>/./config`); "./" is the
+// explicit child form (`./config` becomes `<story>/./config`); "<" is
+// a fully-qualified address (`<story>/...`); "/" is a tree path
+// from the story root.
 //
 // Failures are logged and dropped from the face. A missing see
 // resolver or a failing address fetch never blocks the moment . the
@@ -41,10 +41,10 @@
 // its reel reads; the foldPlace gate merges this with its own
 // occupant-fold weave via buildInnerFace.
 
-import log from "../../../seedReality/log.js";
+import log from "../../../seedStory/log.js";
 import { getSeeOperation } from "../../../ibp/seeOps.js";
 import { seeVerb } from "../../../ibp/verbs/see.js";
-import { getRealityDomain } from "../../../ibp/address.js";
+import { getStoryDomain } from "../../../ibp/address.js";
 import { emptyWeave, addReel } from "./weave.js";
 
 /**
@@ -156,10 +156,10 @@ function recordDescriptorReels(descriptor, branch, weave) {
 // heaven child X. "./X" . heaven child X. Other leading-"." shapes
 // pass through to seeVerb's address grammar.
 function expandAddress(entry) {
-  if (entry === ".") return `${getRealityDomain()}/.`;
-  if (entry.startsWith("./")) return `${getRealityDomain()}/${entry}`;
+  if (entry === ".") return `${getStoryDomain()}/.`;
+  if (entry.startsWith("./")) return `${getStoryDomain()}/${entry}`;
   if (entry.startsWith(".") && entry[1] !== ".") {
-    return `${getRealityDomain()}/./${entry.slice(1)}`;
+    return `${getStoryDomain()}/./${entry.slice(1)}`;
   }
   return entry;
 }
@@ -263,7 +263,7 @@ function labelForSeeName(name) {
  *
  * Permissive on uncertainty: when in doubt, ADMIT. The fold is the
  * source of truth; over-folding wastes work but never makes the face
- * lie. Under-folding (false-deny) would hide reality from a role that
+ * lie. Under-folding (false-deny) would hide story from a role that
  * declared it could see.
  *
  * @param {Array<string>} roleCanSee . role.canSee declaration

@@ -3,7 +3,7 @@
 
   "meta": {
     "bundleVersion":      "1.0",
-    "sourceReality":      "my-pack",
+    "sourceStory":      "my-pack",
     "sourceBranch":       "0",
     "sourceScopeName":    "example-seed",
     "sourceScopeSpaceId": "example-seed-root",

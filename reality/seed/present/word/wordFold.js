@@ -14,7 +14,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { declarePast } from "./verbTense.js";
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SEED = path.resolve(__dirname, "../.."); // seed/
@@ -60,4 +60,61 @@ export function foldWords() {
   }
   log.verbose("WordFold", `folded ${total} declared verb pasts from the foundation words`);
   return total;
+}
+
+// ── the concept fold: declare each concept .word as an I_AM declare-word fact ──
+//
+// The companion to foldVerbPasts. Where that folds verbs.word's PASTS into the tense lookup, this
+// folds the twenty concept .words onto the chain, one bindWord each, carrying {kind:"concept", says,
+// axiom}. Same path as the do-ops (wordStore.declareOpsToFold) and the verb pasts: no separate
+// truth-system. The descent order is declare-before-use, so the story reads the seed build on itself.
+const CONCEPT_WORDS = [
+  "word", "iam", "base", "chain", "history", "story", "fold", "weave",
+  "see", "do", "name", "being", "space", "matter", "be", "call", "can", "recall", "role", "roleflow",
+];
+
+// Split a .word into its declaration body (the `says`) and its # header (the axiom + host pointer).
+function readConceptWord(name) {
+  const text = fs.readFileSync(path.join(SEED, "words", `${name}.word`), "utf8");
+  const header = [], body = [];
+  for (const line of text.split("\n")) {
+    if (line.startsWith("#")) header.push(line.replace(/^#\s?/, ""));
+    else body.push(line);
+  }
+  return { says: body.join("\n").trim(), axiom: header.join("\n").trim() };
+}
+
+// Declare every concept word into the fold, in descent order, each through bindWord as an I_AM
+// declare-word fact carrying {kind:"concept", says, axiom}. Dedup by word is the wordStore guard.
+export async function declareConcepts({ moment = null, branch = "0" } = {}) {
+  const { bindWord } = await import("./wordStore.js");
+  let count = 0;
+  for (const name of CONCEPT_WORDS) {
+    try {
+      const { says, axiom } = readConceptWord(name);
+      await bindWord(name, { kind: "concept", says, axiom }, { moment, branch, skipIfUnchanged: true });
+      count++;
+    } catch (err) {
+      log.warn("WordFold", `could not declare concept word ${name}: ${err.message}`);
+    }
+  }
+  log.verbose("WordFold", `declared ${count} concept words into the fold`);
+  return count;
+}
+
+// ── the genesis fold: one boot step, three shapes, one fold ──
+//
+// (1) the verb pasts → declarePast (the runtime tense, sync); (2) the concept .words → bindWord
+// ({kind:"concept"}); (3) the do-ops → wordStore.declareOpsToFold ({kind:"op"}). All three land as
+// declare-word facts, folded together, read by kind. After this the story reads the seed in full:
+// the concepts as their bodies, the ops declared beside them. This is the shared seam, the one boot
+// call both halves meet at; wire it after the story is established, before the surface renders.
+export async function seedFold({ moment = null, branch = "0" } = {}) {
+  foldWords();                                 // verb pasts, sync, the tense lookup
+  await declareConcepts({ moment, branch });   // the concept descent, this half
+  const store = await import("./wordStore.js");
+  if (typeof store.declareOpsToFold === "function") {
+    await store.declareOpsToFold({ moment, branch }); // the do-ops, the wordStore half
+  }
+  return true;
 }

@@ -50,13 +50,13 @@
 // Registration:
 //   Seed registers via inboxRenderers/index.js, imported as a side
 //   effect from services.js. Extensions can register their own via
-//   reality.registerInboxRenderer (exposed in services).
+//   story.registerInboxRenderer (exposed in services).
 //
 // Failure: a renderer that throws is logged and treated as "no spec"
 // (panel falls back to free-text default). Renderers should be
 // defensive; the panel always has a usable fallback.
 
-import log from "../../seedReality/log.js";
+import log from "../../seedStory/log.js";
 
 const RENDERERS = new Map();
 
@@ -93,7 +93,7 @@ export function listInboxRenderers() {
  * renderer matches the entry's intent (panel falls back to free-text).
  *
  * @param {object} entry  the inbox entry (my-inbox shape)
- * @param {object} ctx    { reality, branch, identity, viewerBeingId, ... }
+ * @param {object} ctx    { story, branch, identity, viewerBeingId, ... }
  */
 export async function buildInboxRenderSpec(entry, ctx) {
   if (!entry || typeof entry !== "object") return null;

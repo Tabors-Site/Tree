@@ -8,12 +8,12 @@
 //
 //   - id display     the z... key as canonical identity, name as label
 //   - key export     DO key-export at the self stance; the one path a
-//                    private key ever leaves the reality (PEM download)
+//                    private key ever leaves the story (PEM download)
 //   - credentials    credential-read / credential-reset (password)
-//   - provenance     the discovery chain block { realityRoot,
-//                    realityId, sig }, verified LOCALLY via WebCrypto
+//   - provenance     the discovery chain block { storyRoot,
+//                    storyId, sig }, verified LOCALLY via WebCrypto
 //                    when the browser has Ed25519 (self-certifying:
-//                    the key decodes straight from the realityId)
+//                    the key decodes straight from the storyId)
 //
 // Deliberately NOT here (no backend yet, do not invent UI): key
 // import/recovery, BIP39 phrases, rotation, unlock sessions, per-act
@@ -55,15 +55,15 @@ export function isKeyId(id) {
 
 /**
  * Verify the discovery chain block locally. Self-certifying: the
- * public key decodes from realityId itself. Returns true/false, or
+ * public key decodes from storyId itself. Returns true/false, or
  * null when this browser's WebCrypto lacks Ed25519 (cannot judge).
  */
-export async function verifyRealityRootLocal(chain) {
-  if (!chain?.realityRoot || !chain?.realityId || !chain?.sig) return null;
+export async function verifyStoryRootLocal(chain) {
+  if (!chain?.storyRoot || !chain?.storyId || !chain?.sig) return null;
   if (!window.crypto?.subtle) return null;
   let key;
   try {
-    const decoded = b58decode(String(chain.realityId).slice(1));
+    const decoded = b58decode(String(chain.storyId).slice(1));
     if (decoded[0] !== 0xed || decoded[1] !== 0x01) return false;
     key = await crypto.subtle.importKey(
       "raw", decoded.slice(2), { name: "Ed25519" }, false, ["verify"]);
@@ -71,7 +71,7 @@ export async function verifyRealityRootLocal(chain) {
     return null; // no Ed25519 in this WebCrypto — display-only
   }
   try {
-    const msg = new TextEncoder().encode(String(chain.realityRoot));
+    const msg = new TextEncoder().encode(String(chain.storyRoot));
     const sig = Uint8Array.from(atob(chain.sig), (c) => c.charCodeAt(0));
     return await crypto.subtle.verify("Ed25519", key, sig, msg);
   } catch {
@@ -138,36 +138,36 @@ function noteLine(parent, text, cls = "idp-note") {
   parent.appendChild(el("div", cls, text));
 }
 
-// Render the reality-provenance block (shared by panel + overlay).
+// Render the story-provenance block (shared by panel + overlay).
 // The bootstrap discovery is slim; the chain block rides the full
 // socket-side `.discovery`, so fetch it through `see` when missing.
 async function provenanceSection(parent, discovery, see) {
-  const s = section(parent, "reality");
-  s.appendChild(el("div", "idp-label", discovery?.reality || "(unknown)"));
+  const s = section(parent, "story");
+  s.appendChild(el("div", "idp-label", discovery?.story || "(unknown)"));
   let chain = discovery?.chain;
-  if (!chain?.realityId && see && discovery?.reality) {
+  if (!chain?.storyId && see && discovery?.story) {
     try {
-      const full = await see(`${discovery.reality}/.discovery`);
+      const full = await see(`${discovery.story}/.discovery`);
       chain = full?.chain;
     } catch { /* provenance stays absent */ }
   }
-  if (!chain?.realityId) {
-    noteLine(s, "no signed chain root in discovery (older reality)");
+  if (!chain?.storyId) {
+    noteLine(s, "no signed chain root in discovery (older story)");
     return;
   }
-  noteLine(s, "reality key (the I-Am's, = realityId):", "idp-sub");
-  keyRow(s, String(chain.realityId));
-  if (chain.realityRoot) {
-    const r = el("div", "idp-root", `chain root ${String(chain.realityRoot).slice(0, 16)}…`);
-    r.title = chain.realityRoot;
+  noteLine(s, "story key (the I-Am's, = storyId):", "idp-sub");
+  keyRow(s, String(chain.storyId));
+  if (chain.storyRoot) {
+    const r = el("div", "idp-root", `chain root ${String(chain.storyRoot).slice(0, 16)}…`);
+    r.title = chain.storyRoot;
     s.appendChild(r);
   }
   const verdict = el("div", "idp-verify idp-verify-pending", "checking root signature…");
   s.appendChild(verdict);
-  verifyRealityRootLocal(chain).then((ok) => {
+  verifyStoryRootLocal(chain).then((ok) => {
     if (ok === true) {
       verdict.className = "idp-verify idp-verify-ok";
-      verdict.textContent = "✓ root signature verified locally against the reality key";
+      verdict.textContent = "✓ root signature verified locally against the story key";
     } else if (ok === false) {
       verdict.className = "idp-verify idp-verify-bad";
       verdict.textContent = "✗ root signature DID NOT verify";
@@ -183,7 +183,7 @@ async function provenanceSection(parent, discovery, see) {
 function exportSection(parent, { doOp, stance, name }) {
   const s = section(parent, "your key");
   noteLine(s,
-    "This reality holds your signing key in custody and signs your acts at the seal. " +
+    "This story holds your signing key in custody and signs your acts at the seal. " +
     "Export gives you the private key itself: your backup and your exit.");
   const btn = el("button", "idp-btn idp-primary", "export private key");
   const out = el("div", "idp-export-out");
@@ -219,8 +219,8 @@ function exportSection(parent, { doOp, stance, name }) {
         out.appendChild(row);
         noteLine(out,
           "Anyone holding the words or the key can sign as you. Keep them offline. " +
-          "The reality keeps its encrypted copy; this export is recorded on your chain (the key itself is not). " +
-          "Importing them on a reality you control births you there with this same identity.",
+          "The story keeps its encrypted copy; this export is recorded on your chain (the key itself is not). " +
+          "Importing them on a story you control births you there with this same identity.",
           "idp-warn");
       }
     } catch (err) {
@@ -291,7 +291,7 @@ function credentialSection(parent, { doOp, stance }) {
  * Render the identity panel.
  *
  * Self mode (no `being`): full panel — own id, key export, password,
- * reality provenance, sign out. Reads the live model via `state`.
+ * story provenance, sign out. Reads the live model via `state`.
  *
  * Being mode (`being` = a descriptor beings[] entry): read-only id
  * card for someone else; key ops are credential-authority-gated
@@ -312,7 +312,7 @@ export function renderIdentityPanel(body, { state, doOp, see, signOut, being = n
     if (being.beingId) {
       keyRow(s, String(being.beingId));
       if (String(being.beingId) === "i-am") {
-        noteLine(s, "the I-Am names itself \"i-am\" from inside; its key identity IS the reality key below");
+        noteLine(s, "the I-Am names itself \"i-am\" from inside; its key identity IS the story key below");
         provenanceSection(wrap, state?.discovery, see);
       }
     } else {
@@ -328,7 +328,7 @@ export function renderIdentityPanel(body, { state, doOp, see, signOut, being = n
   const nameId = session?.nameId || identity?.nameId || null;
 
   // THE NAME — your identity, the thing that SIGNS. The same name across every
-  // being you drive and every branch/reality; its public key is below. This is
+  // being you drive and every branch/story; its public key is below. This is
   // the permanent identity (the being below is just the presence it acts through).
   if (nameId) {
     const nm = section(wrap, "your name");
@@ -337,7 +337,7 @@ export function renderIdentityPanel(body, { state, doOp, see, signOut, being = n
   }
 
   // THE BEING — the presence you're driving. `@name` is a world label (it can
-  // differ per branch/reality); the id is a local presence handle (a content
+  // differ per branch/story); the id is a local presence handle (a content
   // hash of the birth), NOT the signing key — that's the Name above.
   const who = section(wrap, `@${name}`);
   noteLine(who, "the being you're driving — its name is a world label; the id below is a local presence handle", "idp-sub");
@@ -351,7 +351,7 @@ export function renderIdentityPanel(body, { state, doOp, see, signOut, being = n
 
   if (session?.token && doOp) {
     const stance = session.beingAddress
-      || `${state?.discovery?.reality || ""}/@${name}`;
+      || `${state?.discovery?.story || ""}/@${name}`;
     // No signing section here: signing is the NAME's, toggled by the ONE
     // top-right name lock (name:connect/release). The identity panel is about
     // the being you're driving — export (the Name's key) + the being password.
@@ -390,7 +390,7 @@ export function showBirthIdentityOverlay(ctx, result) {
 
   const doOp = (addr, op, args) => ctx.client.do(addr, op, args);
   const stance = result.beingAddress
-    || `${ctx.state.get("discovery")?.reality || ""}/@${result.name}`;
+    || `${ctx.state.get("discovery")?.story || ""}/@${result.name}`;
   exportSection(card, { doOp, stance, name: result.name });
 
   const cont = el("button", "btn", "continue");

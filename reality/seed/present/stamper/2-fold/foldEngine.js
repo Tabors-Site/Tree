@@ -29,7 +29,7 @@ import {
   isMain,
   MAIN,
 } from "../../../materials/branch/branches.js";
-import log from "../../../seedReality/log.js";
+import log from "../../../seedStory/log.js";
 
 const REEL_TYPES = new Set(["being", "space", "matter", "name"]);
 
@@ -146,9 +146,9 @@ export async function readReelBetween(type, id, afterSeq, untilSeq, branch) {
       `Pass the moment's branch explicitly; no silent default to main.`,
     );
   }
-  // Heaven routing: spaces in heaven have one reel per reality, no
+  // Heaven routing: spaces in heaven have one reel per story, no
   // lineage. A non-MAIN read against a heaven space rewrites to
-  // MAIN so the reel walk hits the canonical reality-level fact
+  // MAIN so the reel walk hits the canonical story-level fact
   // stream regardless of caller's branch.
   if (type === "space" && branch !== "0") {
     const { isHeavenSpace } = await import("../../../materials/space/heavenLineage.js");

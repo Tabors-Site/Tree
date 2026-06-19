@@ -1,7 +1,7 @@
-# role-manager.word — set-world-signal: publish a world signal to the reality root
+# role-manager.word — set-world-signal: publish a world signal to the story root
 # (role-manager/ops.js, the set-world-signal op).
 #
-# The WORLD strand is a SINGLE do:set-space on the reality root at the field path
+# The WORLD strand is a SINGLE do:set-space on the story root at the field path
 # `qualities.world.<namespace>.<key>` = value. The CONTROL strand (the two
 # kebab-case gates + the not-initialized guard) is `.word`. The genuine computes
 # stay `host:`:
@@ -21,8 +21,8 @@ When a being publishes a world signal:
   If not keyOk, refuse with "set-world-signal: key segments must be kebab-case" as invalid-input.
   see parse-signal-value(value) as value.
   see signal-field(namespace, key) as field.
-  see reality-root() as root.
+  see story-root() as root.
   If no root:
-    refuse with "set-world-signal: reality root not initialized" as internal.
+    refuse with "set-world-signal: story root not initialized" as internal.
   set the space root's $field to $value.
   Return published: true, namespace: $namespace, key: $key, value: $value.

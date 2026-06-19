@@ -1768,7 +1768,7 @@ export class Scene {
 
   // Wire the PortalClient into the scene for cross-world SEE calls.
   // Portal matters need to issue live SEE into their foreign target
-  // address; cross-reality routes through canopy automatically. Call
+  // address; cross-story routes through canopy automatically. Call
   // once after construction.
   setClient(client) {
     this._client = client || null;
@@ -2595,7 +2595,7 @@ export class Scene {
 
     this._activePortals.add(group);
     // Foreign SEE only when the cached descriptor is stale — a local
-    // re-render must not storm the foreign reality.
+    // re-render must not storm the foreign story.
     if (!rt.fetchedAt || (Date.now() - rt.fetchedAt) > PORTAL_CONFIG.DESCRIPTOR_TTL_MS) {
       this._fetchPortalDescriptor(target, group);
     }
@@ -2749,9 +2749,9 @@ export class Scene {
     }
 
     // Stream the real models in (async, budgeted). loadModel caches by
-    // URL globally and returns null on a miss — a cross-reality model
+    // URL globally and returns null on a miss — a cross-story model
     // whose bytes aren't reachable from this origin simply keeps its
-    // marker. Same-reality / cross-branch portals (the common case)
+    // marker. Same-story / cross-branch portals (the common case)
     // resolve from the shared content store and show the real world.
     for (const cand of modelCandidates.slice(0, PORTAL_CONFIG.MINI_MODEL_BUDGET)) {
       this._swapMiniModel(p, cand);
@@ -2914,7 +2914,7 @@ export class Scene {
   }
 
   // Async fetch of the foreign descriptor. Issues a live SEE through
-  // the standard client — canopy detects the foreign reality and
+  // the standard client — canopy detects the foreign story and
   // forwards automatically. On success, populates the mini-scene and
   // swaps the opening's material to the render target texture so the
   // live 3D view takes over. On refused/error, the opening stays on

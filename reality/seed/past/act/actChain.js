@@ -8,7 +8,7 @@
 // the Fact side (per-reel seq + hash linkage). Acts have no per-being
 // monotonic seq today; we order by stampedAt.
 //
-// Used by SEE on <reality>/.acts/<beingId> to power the act-chain
+// Used by SEE on <story>/.acts/<beingId> to power the act-chain
 // explorer in client surfaces (flat-app, future tooling).
 
 import Act from "./act.js";

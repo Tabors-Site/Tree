@@ -4,7 +4,7 @@
 //                      it's registered. A bounded compute, not a substrate read.
 //   grantStamp()     — the grant's wall-clock instant (the SAME new Date().toISOString()
 //                      the JS handler stamps into params.grantedAt). This is the ONE
-//                      external-resource escape: the reality has no clock of its own, so
+//                      external-resource escape: the story has no clock of its own, so
 //                      the timestamp is reached through this host fn, NEVER the evaluation
 //                      loop (the time-doctrine; same shape as credential-reset's resetAt).
 //                      The grant record carries it; expiry stays a moment concept (no clock).

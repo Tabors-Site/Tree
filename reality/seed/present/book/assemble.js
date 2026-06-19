@@ -208,10 +208,15 @@ function pastPhrase(f, names) {
       return `${pastOf("grant")}${target?.id ? ` ${displayName(target.id, names)}` : ""} the ${p.role || "?"} role`;
     case "revoke-role":
       return `${pastOf("take")} the ${p.role || "?"} role${target?.id ? ` from ${displayName(target.id, names)}` : ""}`;
-    case "declare-word":
-      return `${pastOf("speak")} the word ${p.role ? p.role + ":" : ""}${p.op || "?"}`;
+    case "declare-word": {
+      // wordStore shape (params.word + binding) or legacy roleWordRegistry (params.role/op). A
+      // concept word carries its declaration in binding.says; show it, so the story reads the seed.
+      const word = p.word || (p.role ? `${p.role}:${p.op || "?"}` : (p.op || "?"));
+      const says = p.binding && typeof p.binding.says === "string" ? p.binding.says.replace(/\s*\n\s*/g, " ").trim() : null;
+      return says ? `${pastOf("speak")} the word ${word}: ${says}` : `${pastOf("speak")} the word ${word}`;
+    }
     case "disable-word":
-      return `${pastOf("silence")} the word ${p.op || "?"}`;
+      return `${pastOf("silence")} the word ${p.word || p.op || "?"}`;
     case "set-space":
     case "set-being":
     case "set-matter": {

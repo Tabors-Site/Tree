@@ -101,8 +101,8 @@ const FactSchema = new mongoose.Schema({
   sessionId: { type: String, default: null, index: true },
 
   // Federation provenance. Set when the verb call arrived from
-  // another reality via canopy.
-  homeReality:  { type: String, default: null },
+  // another story via canopy.
+  homeStory:  { type: String, default: null },
   wasRemote: { type: Boolean, default: false },
 
   // INTEGRITY — per-reel hash chain.

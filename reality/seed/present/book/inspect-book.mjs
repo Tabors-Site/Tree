@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Inspect the BOOK of a branch — the story back to the very start (genesis → live edge).
-// The first step of book view: read the reality's history as the narration its facts tell.
+// The first step of book view: read the story's history as the narration its facts tell.
 // Usage (after a boot): node inspect-book.mjs [branch] [nameId]. Full begin.js boot, scratch DB.
 
 import fs from "fs";
@@ -10,12 +10,12 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const SCRATCH_DB = "mongodb://localhost:27017/reality_book_inspect";
+const SCRATCH_DB = "mongodb://localhost:27017/story_book_inspect";
 process.env.PORT = "3805";
 process.env.MONGODB_URI = SCRATCH_DB;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "book-secret-0123456789";
-process.env.REALITY_KEY_DIR = path.join(os.tmpdir(), "book-keys-" + process.pid);
-fs.rmSync(process.env.REALITY_KEY_DIR, { recursive: true, force: true });
+process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "book-keys-" + process.pid);
+fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
 const SRC = path.join(os.tmpdir(), "book-src");
 fs.rmSync(SRC, { recursive: true, force: true });
 fs.mkdirSync(SRC, { recursive: true });

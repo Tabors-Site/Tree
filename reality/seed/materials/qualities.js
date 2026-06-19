@@ -58,7 +58,7 @@
 //
 // Same nine methods on `qualities.space` and `qualities.matter`. The
 // space and matter variants enforce namespace ownership when the
-// scoped reality bundle passes opts.callerExtName (extensions can only
+// scoped story bundle passes opts.callerExtName (extensions can only
 // write to their own quality namespace).
 
 import Being from "../materials/being/being.js";
@@ -67,7 +67,7 @@ import Space from "../materials/space/space.js";
 import Matter from "../materials/matter/matter.js";
 import { hooks } from "../hooks.js";
 import { guardQualityWrite } from "./doCeiling.js";
-import { getRealityConfigValue } from "../realityConfig.js";
+import { getStoryConfigValue } from "../storyConfig.js";
 
 const MAX_KEY_LENGTH = 50;
 const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype"]);
@@ -172,8 +172,8 @@ function validateData(key, data) {
 // addToQualitySet / batchSetQuality / unsetQuality) retired 2026-05-23
 // (Slice 3). The fact-driven path is the only writer now:
 //
-//   await reality.do(target, "set-<kind>", { field: "qualities.<ns>", value }, opts)
-//   await reality.do(target, "set-<kind>", { field: "qualities.<ns>.<inner>", value }, opts)
+//   await story.do(target, "set-<kind>", { field: "qualities.<ns>", value }, opts)
+//   await story.do(target, "set-<kind>", { field: "qualities.<ns>.<inner>", value }, opts)
 //
 // where <kind> is space / being / matter — whichever the target is.
 //
@@ -191,7 +191,7 @@ function createQualityPrimitives({ Model, documentType }) {
   const tombstone = (methodName) => () => {
     throw new Error(
       `qualities.${documentType}.${methodName} retired 2026-05-23. ` +
-      `Use reality.do(target, "set-${documentType}", { field: "qualities.<ns>" or ` +
+      `Use story.do(target, "set-${documentType}", { field: "qualities.<ns>" or ` +
       `"qualities.<ns>.<innerKey>", value }) instead — every write is ` +
       `a Fact on the aggregate's reel now (see seed/STAMPER.md).`,
     );

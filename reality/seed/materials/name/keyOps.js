@@ -10,7 +10,7 @@
 //   key-export   return the Name's PRIVATE KEY (decrypted PEM) + its
 //                24-word paper form to whoever is acting AS that Name.
 //                The wallet "back up / exit" path. The key never leaves
-//                the reality except through this explicit, auth-gated,
+//                the story except through this explicit, auth-gated,
 //                owner-initiated op: it is redacted from every descriptor,
 //                fact, and bundle, and never the JWT. Returned only on the
 //                direct DO response channel.
@@ -37,7 +37,7 @@ import { registerRoleWord } from "../../present/word/roleWordRegistry.js";
 // Self-register this slice's co-located WORLD strand (CONVERTING.md): the bridge
 // resolves ("name", "key-export") to key.word, its host escapes wired by keyHost.js.
 // Registered at module load (services.js imports this file), so the `.word` is
-// available wherever a booted reality exists; the cut reads it via the bridge.
+// available wherever a booted story exists; the cut reads it via the bridge.
 registerRoleWord("name", "key-export", new URL("./key.word", import.meta.url));
 
 // Resolve the NAME id this op acts on, from the being target's trueName.
@@ -100,15 +100,15 @@ registerOperation("key-export", {
     const branch = moment?.actorAct?.branch;
     const nameId = await resolveTargetNameId(target, moment);
 
-    // NEVER export the reality (I_AM) key. The I_AM "name" id is the literal
-    // "i-am", and loadSigningKey maps it to the reality's private key. A being
+    // NEVER export the story (I_AM) key. The I_AM "name" id is the literal
+    // "i-am", and loadSigningKey maps it to the story's private key. A being
     // whose trueName resolved to i-am (e.g. a being born under i-am before it
-    // was handed a sovereign name) must NOT become a door to the reality key.
+    // was handed a sovereign name) must NOT become a door to the story key.
     // Hard refusal, before the ownership gate (which i-am===i-am would pass).
     if (nameId === "i-am" || nameId === "I_AM") {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
-        "key-export: the reality (I_AM) key is never exportable through a being.",
+        "key-export: the story (I_AM) key is never exportable through a being.",
         { nameId },
       );
     }
@@ -128,7 +128,7 @@ registerOperation("key-export", {
       );
     }
 
-    // The authoritative key reader: i-am -> reality key; password-locked
+    // The authoritative key reader: i-am -> story key; password-locked
     // Name -> the in-session PEM (null if not connected); system-encrypted
     // -> decrypt. Mirrors how the seal signs (actSig.loadSigningKey), so
     // export reflects exactly the key that signs.

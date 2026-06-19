@@ -1,7 +1,7 @@
 {
   "meta": {
     "bundleVersion": "1.0",
-    "sourceReality": "hello-world",
+    "sourceStory": "hello-world",
     "sourceBranch": "0",
     "sourceScopeName": "greeter",
     "sourceScopeSpaceId": "greeter-root",

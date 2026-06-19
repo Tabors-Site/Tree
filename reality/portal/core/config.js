@@ -1,6 +1,6 @@
 // TreeOS Portal . core/config.js
 //
-// "Where is the reality, and how do I reach it?" — one answer, read by
+// "Where is the story, and how do I reach it?" — one answer, read by
 // every other module. The web build of the portal infers this from
 // window.location; the dev build wires through Vite's proxy; a future
 // standalone shell (Tauri, Electron, native) will inject explicit
@@ -9,7 +9,7 @@
 //
 // Returned shape:
 //   {
-//     placeUrl:  string   absolute origin of the reality server
+//     placeUrl:  string   absolute origin of the story server
 //     useProxy:  boolean  true when the runtime should let the dev
 //                         proxy (vite) front the WS/HTTP target
 //                         instead of dialing it directly
@@ -21,7 +21,7 @@
 //   3. query string          ?place=<url>
 //   4. window.location       same-origin web bundle (default for the
 //                            production deploy where the portal is
-//                            served by the reality itself)
+//                            served by the story itself)
 //   5. fallback              http://localhost:3000  (dev safety net)
 //
 // useProxy defaults to true for any localhost / 127.0.0.1 URL because
@@ -110,7 +110,7 @@ export function shouldUseProxy(placeUrl) {
 
 /**
  * Persist a place URL across reloads in the same tab. Useful when a
- * user signs in to a non-default reality and we want the next reload
+ * user signs in to a non-default story and we want the next reload
  * to land them at the same server. Idempotent; tolerates absent
  * sessionStorage (file://, sandboxed contexts).
  */

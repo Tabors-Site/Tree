@@ -41,11 +41,11 @@ import { getSpaceRootId } from "../../sprout.js";
  * through to the registry, silently serving the template instead of
  * the space-installed override.
  *
- * Registry fallback host: the GRANT's anchor, not the reality root.
+ * Registry fallback host: the GRANT's anchor, not the story root.
  * The grant names where the role lives for this being; an uninstalled
  * role defaulting its host to the root silently widened every
- * anchored grant to reality-wide coverage. Seed roles that need
- * reality-wide reach declare it (`reach: ["/**"]` on angel/arrival)
+ * anchored grant to story-wide coverage. Seed roles that need
+ * story-wide reach declare it (`reach: ["/**"]` on angel/arrival)
  * or are anchored at the root (global). Being-anchored grants (no
  * anchorSpaceId) keep the root host: their coverage comes from the
  * spec's reach, with the root as the neutral base.
@@ -152,7 +152,7 @@ export async function roleReachesTarget(spec, hostSpaceId, target, branch) {
 /**
  * Path-by-names of a space, derived from the (cached, lineage-aware)
  * ancestor chain. Matches the resolver's display form: "/" + segment
- * names below the reality root, so "/garden/shed" — the same shape
+ * names below the story root, so "/garden/shed" — the same shape
  * role authors write reach patterns in. Null when any segment lacks
  * a name (the pattern then simply doesn't match; spaceId patterns
  * still can).
@@ -161,7 +161,7 @@ async function pathOfSpace(spaceId, branch) {
   try {
     const chain = await getAncestorChain(String(spaceId), branch);
     if (!Array.isArray(chain) || chain.length === 0) return null;
-    // chain is [self, ..., realityRoot]; drop the root, reverse to
+    // chain is [self, ..., storyRoot]; drop the root, reverse to
     // top-down, join names.
     const names = chain.slice(0, -1).map((n) => n?.name).reverse();
     if (names.some((n) => typeof n !== "string" || !n.length)) return null;

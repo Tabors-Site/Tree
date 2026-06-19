@@ -42,19 +42,19 @@ const short = (s) => (s ? String(s).slice(0, 10) + "…" : "?");
  *
  * @param {object}   opts
  * @param {object}   opts.client    PortalClient (nameTree / nameSee / do)
- * @param {string}   opts.reality   reality domain (for addresses + header)
+ * @param {string}   opts.story   story domain (for addresses + header)
  * @param {string}   opts.nameId    the signed-in name (its own tree)
  * @param {string}   opts.branch    the branch you stand on (left stance)
  * @param {boolean}  opts.canAct    are you driving a being? (grant/revoke need it)
  * @param {Function} [opts.reopen]  (branch) => re-show for the current branch (refresh)
  */
-export async function showNameTree({ client, reality = "", nameId, branch, canAct = false, reopen = null }) {
+export async function showNameTree({ client, story = "", nameId, branch, canAct = false, reopen = null }) {
   hideNameTree();
   injectStyles();
 
   const br = branch || "0";
   const bq = br && br !== "0" ? `#${br}` : "";
-  const addrOf = (beingName) => `${reality}${bq}/@${beingName}`;
+  const addrOf = (beingName) => `${story}${bq}/@${beingName}`;
 
   const panel = el("div", "nt-dock");
   const card = el("div", "nt-card");
@@ -62,7 +62,7 @@ export async function showNameTree({ client, reality = "", nameId, branch, canAc
 
   const head = el("div", "nt-head");
   const titles = el("div", "nt-titles");
-  titles.appendChild(el("div", "nt-ibpa", `${reality || "this reality"} · #${br === "0" ? "main" : br}`));
+  titles.appendChild(el("div", "nt-ibpa", `${story || "this story"} · #${br === "0" ? "main" : br}`));
   titles.appendChild(el("h1", "nt-title", "Your hierarchy"));
   head.appendChild(titles);
   const tools = el("div", "nt-tools");

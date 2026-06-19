@@ -8,7 +8,7 @@
 //
 // Seven intents (see role.js header for the wire shape and the
 // verb-object naming). Two cargoes: template (shape) and being (entity).
-//   offer-template     . peer offers a template to plant in this reality
+//   offer-template     . peer offers a template to plant in this story
 //   accept-template    . peer accepted our offer; we should deliver the bundle
 //   reject-template    . peer rejected our offer
 //   deliver-template   . peer delivers a previously-accepted template bundle
@@ -19,13 +19,13 @@
 //
 // State mutation uses doVerb on the federation-manager being itself
 // (nested under the outer moment, so it does not consume an extra
-// op slot). The template handlers do not initiate cross-reality dispatch;
+// op slot). The template handlers do not initiate cross-story dispatch;
 // the operator's accept-template / fulfill-request DO ops handle that. The
 // split keeps the handlers deterministic and the negotiation pause-able
 // at the operator's review step. deliver-being is the exception: it grafts
 // immediately, because a being-graft is self-certifying (no review needed).
 
-import log from "../../../seedReality/log.js";
+import log from "../../../seedStory/log.js";
 
 const QUALITIES_NAMESPACE = "qualities.federation";
 
@@ -60,7 +60,7 @@ export async function handleIncomingIntent(intent, message, ctx) {
 // Handlers.
 // ────────────────────────────────────────────────────────────────────
 
-// PEER -> US. A peer offers a template to plant in our reality. We
+// PEER -> US. A peer offers a template to plant in our story. We
 // record the offer (manifest + sender identity) and return a
 // "pending-review" response. The operator reviews via do:accept-template
 // or do:reject-template; nothing plants automatically in v1.
@@ -71,7 +71,7 @@ async function handleOfferTemplate(message, ctx) {
   const manifest = message?.manifest || null;
   const sender = {
     beingId: ctx?.askerBeingId || null,
-    reality: ctx?.askerReality || null,
+    story: ctx?.askerStory || null,
   };
 
   await writeNegotiation(ctx, "pendingIncomingOffers", negotiationId, {
@@ -100,7 +100,7 @@ async function handleOfferTemplate(message, ctx) {
 // runVerbAsForeignActor / protocol.js wrap acks). The peer's
 // handleDeliverTemplate plants AND fires a separate template-result SUMMON
 // back at us; handleTemplateResult seals the negotiation when that
-// arrives. Two cross reality steps, each a clean one-way.
+// arrives. Two cross story steps, each a clean one-way.
 async function handleAcceptTemplate(message, ctx) {
   const negotiationId = message?.negotiationId;
   if (!negotiationId) return failure("invalid", "accept-template missing negotiationId");
@@ -109,7 +109,7 @@ async function handleAcceptTemplate(message, ctx) {
   const bundle   = await readBucket(ctx, "bundleCache",     negotiationId);
   if (!outbound)        return failure("invalid", `no pendingOutbound[${negotiationId}]`);
   if (!bundle)          return failure("invalid", `no cached bundle for negotiation "${negotiationId}"`);
-  if (!outbound.peer)   return failure("invalid", `outbound record missing peer reality`);
+  if (!outbound.peer)   return failure("invalid", `outbound record missing peer story`);
 
   await dispatchToPeer(ctx, outbound.peer, {
     intent:        "deliver-template",
@@ -127,7 +127,7 @@ async function handleAcceptTemplate(message, ctx) {
 }
 
 // Read one entry from qualities.federation.<bucket>[id] on the LOCAL
-// federation-manager being. For cross reality incoming SUMMONs, the
+// federation-manager being. For cross story incoming SUMMONs, the
 // asker is the foreign federation-manager (ctx.actorAct.through);
 // the LOCAL receiver is `to`. State lives on the local being.
 async function readBucket(ctx, bucket, key) {
@@ -144,16 +144,16 @@ async function readBucket(ctx, bucket, key) {
   return bucketMap[key] || null;
 }
 
-// Outbound cross-reality SUMMON from inside a handler. Uses the
+// Outbound cross-story SUMMON from inside a handler. Uses the
 // federation-manager itself as the actor (the moment's `through`) so
 // the canopy round trip is signed federation-manager to federation-
 // manager. Fire and forget at this layer; the protocol's correlation
 // is the negotiationId, not the wire return.
-async function dispatchToPeer(ctx, peerReality, message) {
+async function dispatchToPeer(ctx, peerStory, message) {
   const { randomUUID: uuidv4 } = await import("node:crypto");
-  const { crossRealityDispatch } = await import("../../../ibp/crossWorld.js");
+  const { crossStoryDispatch } = await import("../../../ibp/crossWorld.js");
   // Use the local federation-manager (`to`) as actor — not the
-  // foreign asker (`through`). The cross reality act we open is OUR
+  // foreign asker (`through`). The cross story act we open is OUR
   // outbound dispatch.
   const myBeingId = ctx?.actorAct?.to || ctx?.actorAct?.through;
   const branch    = ctx?.actorAct?.branch || "0";
@@ -168,7 +168,7 @@ async function dispatchToPeer(ctx, peerReality, message) {
   const envelope = {
     id:      uuidv4(),
     verb:    "call",
-    address: `${peerReality}/@federation-manager`,
+    address: `${peerStory}/@federation-manager`,
     payload: {
       message: {
         from:    "/@federation-manager",
@@ -177,7 +177,7 @@ async function dispatchToPeer(ctx, peerReality, message) {
       },
     },
   };
-  return await crossRealityDispatch({
+  return await crossStoryDispatch({
     envelope,
     actor:    { beingId: myBeingId, branch },
     identity: { beingId: myBeingId, name: "federation-manager" },
@@ -201,7 +201,7 @@ async function handleRejectTemplate(message, ctx) {
 // chain, meant to continue here). Unlike deliver-template (a CONTENT template,
 // negotiated via offer/accept review), a being-graft is a ONE-SHOT delivery
 // auto-accepted by federation policy: the bundle is self-certifying
-// (applyGraft verifies the SOURCE reality's signed graftRoot with no
+// (applyGraft verifies the SOURCE story's signed graftRoot with no
 // callback), the canopy signature proves the sender, and the federation-
 // manager grafts on its own (reigning) authority. The being lands VERBATIM
 // (foreign by construction — imported facts keep foreign hashes). This is
@@ -232,7 +232,7 @@ async function handleDeliverBeing(message, ctx) {
       await loadOrFold("being", bundle.meta.beingId, "0");
     } catch { /* fold-on-read will catch up on the next SEE */ }
     log.info("FederationManager",
-      `grafted being ${String(bundle.meta.beingId).slice(0, 12)}… from ${ctx?.askerReality || "?"} ` +
+      `grafted being ${String(bundle.meta.beingId).slice(0, 12)}… from ${ctx?.askerStory || "?"} ` +
       `[${result.mode}] — ${result.counts.facts} fact(s) landed verbatim`);
     return { kind: "act", ok: true, content: `federation: grafted being ${String(bundle.meta.beingId).slice(0, 10)}… [${result.mode}]`, result };
   } catch (err) {
@@ -243,7 +243,7 @@ async function handleDeliverBeing(message, ctx) {
 
 // PEER -> US. A peer delivers a bundle for a negotiation we previously
 // accepted via accept-template. We graft, seal the incoming offer, and
-// fire template-result back at the sender as a separate cross reality
+// fire template-result back at the sender as a separate cross story
 // SUMMON so they can seal their outbound. plantTemplate's manifest gate
 // handles missing-extension refusals.
 async function handleDeliverTemplate(message, ctx) {
@@ -291,14 +291,14 @@ async function handleDeliverTemplate(message, ctx) {
 
   await completeIncomingOffer(ctx, negotiationId, { success, summary, error });
 
-  // Notify the sender so they can seal their outbound. askerReality is
-  // the canopy-verified home reality of whoever sent deliver-template to
+  // Notify the sender so they can seal their outbound. askerStory is
+  // the canopy-verified home story of whoever sent deliver-template to
   // us (the sender). One-way SUMMON; sender's handleTemplateResult does
   // the bookkeeping.
-  const senderReality = ctx?.askerReality || null;
-  if (senderReality) {
+  const senderStory = ctx?.askerStory || null;
+  if (senderStory) {
     try {
-      await dispatchToPeer(ctx, senderReality, {
+      await dispatchToPeer(ctx, senderStory, {
         intent:        "template-result",
         negotiationId,
         success,
@@ -307,7 +307,7 @@ async function handleDeliverTemplate(message, ctx) {
       });
     } catch (err) {
       log.warn("FederationManager",
-        `template-result notify failed for "${negotiationId}" to ${senderReality}: ${err.message}`);
+        `template-result notify failed for "${negotiationId}" to ${senderStory}: ${err.message}`);
     }
   }
 
@@ -331,7 +331,7 @@ async function handleRequestTemplate(message, ctx) {
 
   const puller = {
     beingId: ctx?.askerBeingId || null,
-    reality: ctx?.askerReality || null,
+    story: ctx?.askerStory || null,
   };
 
   await writeNegotiation(ctx, "pendingIncomingRequests", negotiationId, {
@@ -398,8 +398,8 @@ async function completeIncomingOffer(ctx, negotiationId, outcome) {
 async function setQualityField(ctx, subPath, value) {
   // The actor for the qualities write is the LOCAL federation-manager
   // (the moment's receiver = `to`), not the asker. For cross
-  // reality incoming SUMMONs the asker is the foreign federation
-  // manager, who has no grants on this reality and would deny the
+  // story incoming SUMMONs the asker is the foreign federation
+  // manager, who has no grants on this story and would deny the
   // doVerb authorize. The local federation-manager has angel granted
   // at boot via ensureSeedDelegates and is the natural authority over
   // its own qualities.

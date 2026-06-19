@@ -13,7 +13,7 @@
 //             rows })). Commits to the branch's divergence AND its
 //             anchor in the parent; comparing roots parent-first
 //             compares whole worlds.
-//   reality — sha256(canonical({ reality, branches: sorted
+//   story — sha256(canonical({ story, branches: sorted
 //             [path, branchRoot] })). One fingerprint for the whole
 //             substrate's chain state. Two realities compare state
 //             in a single round-trip; on mismatch, walk down
@@ -26,7 +26,7 @@
 // storage units.
 //
 // Computation is on demand with a short TTL memo (discovery fetches
-// the reality root on every portal connect; a few seconds of
+// the story root on every portal connect; a few seconds of
 // staleness is free, a reelHeads rescan per connect is not).
 // Incremental maintenance (roll up at stamp time) is the noted
 // follow-up when scale asks for it.
@@ -88,7 +88,7 @@ export async function reelRoot(type, id, branch = "0") {
 // through here, so a captured bundle and a live substrate with the
 // same chain produce byte-identical roots. Covers BOTH chain
 // families: the fact reels AND the act-chains (acts are content-
-// addressed too — Tabor 2026-06-11: "the reality root would
+// addressed too — Tabor 2026-06-11: "the story root would
 // literally cover everything").
 function branchRollup(path, meta, reelRows, actRows) {
   const reels = (reelRows || [])
@@ -112,13 +112,13 @@ function branchRollup(path, meta, reelRows, actRows) {
 }
 
 /**
- * PURE reality root over chain parts (branch rows + reelHead rows) —
+ * PURE story root over chain parts (branch rows + reelHead rows) —
  * no DB, no clock. This is the bundle fingerprint: captureGraft
  * computes it over the exact arrays it captured (race-free) and
- * plantGraft recomputes it over what landed. The live realityRoot()
+ * plantGraft recomputes it over what landed. The live storyRoot()
  * below builds the same shapes from the DB.
  */
-export function realityRootFromParts({ reality, branches = [], reelHeads = [], actHeads = [] }) {
+export function storyRootFromParts({ story, branches = [], reelHeads = [], actHeads = [] }) {
   const metaByPath = new Map(
     branches.map((b) => [String(b._id ?? b.path), b]),
   );
@@ -140,18 +140,18 @@ export function realityRootFromParts({ reality, branches = [], reelHeads = [], a
     const meta = path === "0" ? null : metaByPath.get(path) || null;
     out.push([path, branchRollup(path, meta, rowsByBranch.get(path) || [], actsByBranch.get(path) || [])]);
   }
-  return rollup({ reality: reality ?? null, branches: out });
+  return rollup({ story: story ?? null, branches: out });
 }
 
 /**
  * PURE scoped fingerprint for a GRAFT extract — a commitment to exactly
  * the reels and act-chains a being's graft carries, at the heads it
- * carries them, plus the being's id. Unlike realityRootFromParts (which
- * folds the whole-reality branch set AND the reality domain — wrong for a
+ * carries them, plus the being's id. Unlike storyRootFromParts (which
+ * folds the whole-story branch set AND the story domain — wrong for a
  * scoped extract that crosses host realities), this folds ONLY the
  * in-scope heads, so captureGraft and applyGraft recompute a byte-
  * identical fingerprint over the same extract with no dependence on the
- * host reality's other branches. The reelHead/actHead `_id` already
+ * host story's other branches. The reelHead/actHead `_id` already
  * encodes the branch, so a flat sorted list is branch-aware. Same rollup
  * discipline (one serializer) as every other root in this module.
  */
@@ -185,21 +185,21 @@ export async function branchRoot(branchPath) {
 }
 
 /**
- * The reality's root hash: one fingerprint of the entire chain
+ * The story's root hash: one fingerprint of the entire chain
  * state, all branches. Same root = bit-identical chain.
  */
-export async function realityRoot() {
-  return memoized("reality", async () => {
+export async function storyRoot() {
+  return memoized("story", async () => {
     const { default: Branch } = await import("../../materials/branch/branch.js");
     const { default: ActHead } = await import("../act/actHead.js");
-    const { getRealityDomain } = await import("../../ibp/address.js");
+    const { getStoryDomain } = await import("../../ibp/address.js");
     const [branchRows, headRows, actHeadRows] = await Promise.all([
       Branch.find({}).lean(),
       ReelHead.find({}).select("_id branch head headHash").lean(),
       ActHead.find({}).select("_id branch headHash").lean(),
     ]);
-    return realityRootFromParts({
-      reality: getRealityDomain(),
+    return storyRootFromParts({
+      story: getStoryDomain(),
       branches: branchRows,
       reelHeads: headRows,
       actHeads: actHeadRows,
@@ -208,40 +208,40 @@ export async function realityRoot() {
 }
 
 /**
- * The reality root, SIGNED by the reality (= I_AM) key. A peer given
- * only `realityId` (which IS the reality public key) plus `realityRoot`
+ * The story root, SIGNED by the story (= I_AM) key. A peer given
+ * only `storyId` (which IS the story public key) plus `storyRoot`
  * and `sig` can verify the root self-certifyingly, with no directory:
- * decode the key from realityId, check the signature over the root.
+ * decode the key from storyId, check the signature over the root.
  * This is the federation provenance — "this whole chain is what the
  * holder of this key is vouching for, signed since genesis."
  *
- * @returns {Promise<{realityRoot: string, realityId: string, sig: string|null}>}
+ * @returns {Promise<{storyRoot: string, storyId: string, sig: string|null}>}
  */
-export async function signedRealityRoot() {
-  // Memoized (same short TTL as realityRoot) so a hot SEE path does not
+export async function signedStoryRoot() {
+  // Memoized (same short TTL as storyRoot) so a hot SEE path does not
   // re-sign every call; ed25519 over the same root is deterministic.
-  return memoized("reality-signed", async () => {
-    const root = await realityRoot();
-    const { getRealityIdentity, signData } = await import("../../realityIdentity.js");
-    const id = getRealityIdentity();
+  return memoized("story-signed", async () => {
+    const root = await storyRoot();
+    const { getStoryIdentity, signData } = await import("../../storyIdentity.js");
+    const id = getStoryIdentity();
     return {
-      realityRoot: root,
-      realityId: id.realityId,
+      storyRoot: root,
+      storyId: id.storyId,
       sig: root ? signData(root) : null,
     };
   });
 }
 
 /**
- * Verify a signed reality root against the realityId (the public key).
+ * Verify a signed story root against the storyId (the public key).
  * Self-certifying: the verifier needs nothing but these three values.
  */
-export async function verifyRealityRootSig(realityRoot, realityId, sig) {
-  if (!realityRoot || !sig) return false;
+export async function verifyStoryRootSig(storyRoot, storyId, sig) {
+  if (!storyRoot || !sig) return false;
   try {
     const { keyIdToPublicKey } = await import("../../materials/name/keys.js");
-    const pub = keyIdToPublicKey(realityId);
-    return crypto.verify(null, Buffer.from(String(realityRoot), "utf8"), pub, Buffer.from(sig, "base64"));
+    const pub = keyIdToPublicKey(storyId);
+    return crypto.verify(null, Buffer.from(String(storyRoot), "utf8"), pub, Buffer.from(sig, "base64"));
   } catch {
     return false;
   }
@@ -267,7 +267,7 @@ registerSeeOperation("verify-reel", {
 });
 
 registerSeeOperation("verify-act", {
-  description: "Verify one act's seal signature self-certifyingly (the signer id IS the key; \"i-am\" verifies against the reality key). The wire form of the signed-act badge.",
+  description: "Verify one act's seal signature self-certifyingly (the signer id IS the key; \"i-am\" verifies against the story key). The wire form of the signed-act badge.",
   args: {
     actId: { type: "text", label: "Act id", required: true },
   },
@@ -279,8 +279,8 @@ registerSeeOperation("verify-act", {
     const act = await Act.findById(actId).lean();
     if (!act) return notFound;
     const { verifyActSig } = await import("../act/actSig.js");
-    const { getRealityDomain } = await import("../../ibp/address.js");
-    const v = await verifyActSig(act, { localReality: getRealityDomain() });
+    const { getStoryDomain } = await import("../../ibp/address.js");
+    const v = await verifyActSig(act, { localStory: getStoryDomain() });
     return {
       actId,
       found: true,
@@ -294,9 +294,9 @@ registerSeeOperation("verify-act", {
 });
 
 registerSeeOperation("chain-root", {
-  description: "The chain's root hashes: the reality root, or one branch's root.",
+  description: "The chain's root hashes: the story root, or one branch's root.",
   args: {
-    branch: { type: "text", label: "Branch path (omit for the reality root + all branches)", required: false },
+    branch: { type: "text", label: "Branch path (omit for the story root + all branches)", required: false },
   },
   handler: async ({ args }) => {
     if (typeof args?.branch === "string" && args.branch.length) {
@@ -307,6 +307,6 @@ registerSeeOperation("chain-root", {
     const paths = [...new Set(["0", ...rows.map((b) => String(b._id))])].sort();
     const branches = {};
     for (const p of paths) branches[p] = await branchRoot(p);
-    return { realityRoot: await realityRoot(), branches };
+    return { storyRoot: await storyRoot(), branches };
   },
 });

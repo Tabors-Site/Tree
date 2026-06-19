@@ -5,4 +5,4 @@
 
 A fold is a chain read into the present, its facts taken in order from first to head, each changing what is.
 A fold is the present of one chain.
-A fold is read, never kept. The facts are the truth, and the fold is only their reading.
+A fold is read into a cache, never the truth. The facts are the truth. The fold is only their reading, kept so the next read takes up where the last left off, not from the first.

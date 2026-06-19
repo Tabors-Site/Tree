@@ -28,10 +28,10 @@
 // to drift.
 //
 // Identity is optional. BE register / claim from an unauthenticated
-// arrival is intentionally supported — that's how a fresh reality's
+// arrival is intentionally supported — that's how a fresh story's
 // first human comes in.
 //
-// Every operation an extension registers via reality.do.registerOperation
+// Every operation an extension registers via story.do.registerOperation
 // is instantly callable here. No per-feature route files. The
 // protocol IS the API.
 
@@ -110,8 +110,8 @@ async function ibpHttpHandler(req, res) {
     req.nameId  = identity.nameId || null;
   }
   // Cross-world actor tuple. When the request arrived from a peer
-  // reality via canopy (req.canopySender is set), construct the
-  // actor's identity tuple — { reality, branch, beingId, actId } —
+  // story via canopy (req.canopySender is set), construct the
+  // actor's identity tuple — { story, branch, beingId, actId } —
   // from the trusted canopy sender + envelope fields. The receiving
   // verb handler uses this to seat moment.actorAct so emitFact
   // attaches crossOrigin correctly when stamping facts on local
@@ -119,7 +119,7 @@ async function ibpHttpHandler(req, res) {
   // path opens a local Act as normal.
   //
   // Throws on identity-forgery attempts (envelope claims a different
-  // actorReality than canopySender) or on incomplete tuples (cross-
+  // actorStory than canopySender) or on incomplete tuples (cross-
   // world envelopes must carry beingId + branch + actId). Both surface
   // as 401 UNAUTHORIZED.
   let crossWorldActor = null;
@@ -143,7 +143,7 @@ async function ibpHttpHandler(req, res) {
     // envelope back to its sender.
     canopyVerifiedSender: req.canopySender || null,
     // The foreign actor's identity tuple — populated only on cross-
-    // reality inbound. Receiving verb handlers consume this to build
+    // story inbound. Receiving verb handlers consume this to build
     // a synthetic moment.actorAct (the actor's local Act lives on
     // the SENDER's substrate, not here, so we don't open a local Act
     // row; we seat actorAct as a JS object representing the foreign

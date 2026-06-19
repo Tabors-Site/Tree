@@ -7,11 +7,11 @@ import "../styles/role-manager-panel.css";
 //
 // Three sections:
 //
-//   1. Existing roles — every registered role at this reality
+//   1. Existing roles — every registered role at this story
 //      (seed, extension, and operator-authored "live").
 //
 //   2. Create new role — calls DO set-role on @role-manager. The role
-//      lands at <reality>/./roles/<name> with origin: "live" and shows
+//      lands at <story>/./roles/<name> with origin: "live" and shows
 //      up after the next boot's live-role loader.
 //
 //   3. Author your roleFlow — mad-libs editor for your own being's
@@ -34,7 +34,7 @@ import "../styles/role-manager-panel.css";
 // the asker (the user) never needs reigning to author roles.
 //
 // ctx shape:
-//   reality       string                                 — discovery.reality
+//   story       string                                 — discovery.story
 //   username      string | null                          — caller's being name
 //   descriptor    object                                 — current SEE result (for fallback lookup)
 //   see(address)  async (address) => descriptor          — used by loadFlowForSelf
@@ -258,7 +258,7 @@ function renderCreateRoleSection(catalogs, ctx, onCreated) {
     status.textContent = "saving...";
     try {
       const bq = ctx.branch && ctx.branch !== "0" ? `#${ctx.branch}` : "";
-      const stance = `${ctx.reality}${bq}/@role-manager`;
+      const stance = `${ctx.story}${bq}/@role-manager`;
       // Combine the two canSummon pickers into one array with `as`
       // tags. Existing entries that come back stringified default
       // to as:"actor" semantics on the receiving side.
@@ -424,14 +424,14 @@ function chipPicker({ label, source, state }) {
 
 async function renderFlowEditorSection(allRoles, ctx) {
   // Self editor. Loads the caller's own flow and saves back to
-  // <reality>/@<self>. The reusable renderer below handles arbitrary
+  // <story>/@<self>. The reusable renderer below handles arbitrary
   // targets; this is the role-manager panel's "edit your own flow"
   // entry point.
   const flow = await loadFlowForSelf(ctx);
   return renderFlowEditor(allRoles, ctx, {
     headerLabel:    "your role flow",
     initialFlow:    flow,
-    targetStance:   `${ctx.reality}${ctx.branch && ctx.branch !== "0" ? `#${ctx.branch}` : ""}/@${ctx.username}`,
+    targetStance:   `${ctx.story}${ctx.branch && ctx.branch !== "0" ? `#${ctx.branch}` : ""}/@${ctx.username}`,
   });
 }
 
@@ -441,11 +441,11 @@ async function renderFlowEditorSection(allRoles, ctx) {
  * being-flow panel can mount the same UI against any being's stance.
  *
  * @param {Array} allRoles                 role-name list for clause role pickers
- * @param {object} ctx                     panel ctx (reality, username, doOp, …)
+ * @param {object} ctx                     panel ctx (story, username, doOp, …)
  * @param {object} target
  * @param {string} target.headerLabel      h4 label ("your role flow", "@food-coach's flow", …)
  * @param {Array}  target.initialFlow      current roleFlow on the target being (or empty)
- * @param {string} target.targetStance     where to save (`<reality>/@<name>`)
+ * @param {string} target.targetStance     where to save (`<story>/@<name>`)
  */
 export function renderFlowEditor(allRoles, ctx, { headerLabel, initialFlow, targetStance }) {
   const sec = document.createElement("section");
@@ -831,11 +831,11 @@ function renderDefaultRow(draft, allRoles, onChange) {
 // which lives on her being at her home space.
 
 async function loadFlowForSelf(ctx) {
-  const { reality, username, branch, see } = ctx || {};
-  if (!reality || !username || typeof see !== "function") return [];
+  const { story, username, branch, see } = ctx || {};
+  if (!story || !username || typeof see !== "function") return [];
   try {
     const bq = branch && branch !== "0" ? `#${branch}` : "";
-    const desc = await see(`${reality}${bq}/@${username}`);
+    const desc = await see(`${story}${bq}/@${username}`);
     const myId = desc.identity?.beingId || null;
     const pool = [].concat(desc.beings || [], desc.residents || []);
     const mine = (myId && pool.find((b) => String(b.beingId) === String(myId)))

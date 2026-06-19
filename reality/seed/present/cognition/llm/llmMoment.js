@@ -85,7 +85,7 @@
 //   . hooks (beforeLLMCall, afterLLMCall, enrichContext, beforeResponse)
 
 import crypto from "crypto";
-import log from "../../../seedReality/log.js";
+import log from "../../../seedStory/log.js";
 import { hooks } from "../../../hooks.js";
 import Space from "../../../materials/space/space.js";
 import {
@@ -242,9 +242,9 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
     envelope.askerSpaceId ||
     null;
   const chainResult = await resolveLlmConnectionChain({
-    receiver: { beingId, spaceId: currentSpace || rootId || null, realityDomain: null },
+    receiver: { beingId, spaceId: currentSpace || rootId || null, storyDomain: null },
     actor: askerBeingId
-      ? { beingId: askerBeingId, spaceId: askerSpaceId, realityDomain: null }
+      ? { beingId: askerBeingId, spaceId: askerSpaceId, storyDomain: null }
       : null,
     role: role?.llmSlot || role?.name || "main",
     branch,
@@ -423,7 +423,7 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
     // `forceToolCall: true` on their spec. The provider is told "call
     // a tool, no other option" and the model picks one immediately
     // instead of deliberating in prose. Conversational beings (cherub,
-    // reality-manager) keep the default `auto` so they can answer in
+    // story-manager) keep the default `auto` so they can answer in
     // text when that's the right response.
     reqParams.tool_choice = role?.forceToolCall ? "required" : "auto";
   }
