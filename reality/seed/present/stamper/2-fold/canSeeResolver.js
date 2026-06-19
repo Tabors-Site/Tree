@@ -71,6 +71,12 @@ async function resolveOne(entry, ctx, weave) {
   if (typeof entry !== "string" || entry.length === 0) {
     return null;
   }
+  // "*" is the see-all wildcard — a role's `{ verb: "see", word: "*" }` grant (angel, human). It is NOT a named see-op: foldPlace already gates occupant folds against
+  // role.canSee and shows the whole position for "*", so there is no separate block to resolve
+  // here. Recognize it so it does not fall through to resolveNamedSee and warn "unknown see *".
+  if (entry === "*") {
+    return null;
+  }
   if (isAddressShape(entry)) {
     return resolveAddress(entry, ctx, weave);
   }

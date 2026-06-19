@@ -17,18 +17,16 @@
 //
 // Modules load lazily: a text-first session never pays for Three.js.
 
+// The four views are RENDERS; the statement bar (shared, at the bottom) is what ACTS — any
+// Name with a being types the Word live in any view and the world changes under it. Retired
+// 2026-06-18: "console" (traditional-computing drift) and "history" (raw verb:op, superseded
+// by story). "text" renamed to "GUI".
 const REGISTRY = {
   "3d":       () => import("../3d/view.js"),
-  "text":     () => import("../flat/view.js"),
-  "console":  () => import("../console/view.js"),
+  "GUI":      () => import("../flat/view.js"),
   "explorer": () => import("../explorer/view.js"),
-  // The fifth surface (added 2026-06-12): the machine as its own
-  // biography. Chains the kernel already keeps, rendered as a feed;
-  // click a moment and every view folds to it.
-  "history":  () => import("../history/view.js"),
-  // The STORY view (2026-06-18): the same `assembleStory` fold the LLM's RECALL reads, painted —
-  // facts woven into past-tense Word, who × when × where. Supersedes "history" (which renders raw
-  // verb:op); kept alongside it until the swap is called.
+  // The STORY view: the same `assembleStory` fold the LLM's RECALL reads, painted — facts woven
+  // into past-tense Word, who × when × where. The machine as its own biography.
   "story":    () => import("../story/view.js"),
 };
 

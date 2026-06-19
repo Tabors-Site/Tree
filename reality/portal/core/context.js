@@ -128,6 +128,9 @@ function createEmitter() {
 const GHOST_ALLOWED_DO_ACTIONS = new Set(["create-branch"]);
 
 function ghostGuard(client, ctx) {
+  // NOTE: `type` is intentionally NOT ghost-guarded. A statement always resolves at the live
+  // edge (presentism — typeIntoBook never writes into the past), so typing while viewing the
+  // past is allowed: an approved statement lands NOW and the shell snaps the view forward to it.
   for (const verb of ["do", "call", "be"]) {
     const original = client[verb].bind(client);
     client[verb] = async (...args) => {

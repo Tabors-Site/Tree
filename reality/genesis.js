@@ -133,6 +133,13 @@ export async function genesis(app, opts = {}) {
   log.verbose("Reality", `Reality ID: ${reality.realityId}`);
   log.verbose("Reality", `Protocol: v${reality.protocolVersion}`);
 
+  // In the beginning was the word. Before genesis touches memory, the foundation words
+  // (seed/words/word.word and the verb instances) fold into the runtime: pastOf and the tense
+  // lookup descend from the Word, not a hardcoded map. The host reads the .words; the .words
+  // describe; nothing of the logic moves. (9.md Phase 2.)
+  const { foldWords } = await import("./seed/present/word/wordFold.js");
+  foldWords();
+
   // Mongo connection opens as a side effect of importing dbConfig.
   // Wait for it to land before any read or write fires.
   if (mongoose.connection.readyState !== 1) {

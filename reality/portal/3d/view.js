@@ -100,7 +100,7 @@ export function createView() {
   function bounceToAuth() {
     const cherub = (state().descriptor?.beings || []).find((bb) => bb.being === "cherub");
     if (cherub) { openActionMenu(cherub); return; }
-    ctx.shell?.switchView("text");
+    ctx.shell?.switchView("GUI");
   }
 
   // ── Mount ───────────────────────────────────────────────────────
@@ -157,7 +157,7 @@ export function createView() {
         return;
       }
       if (isGameplayInputBlocked()) return;
-      if (e.code === "KeyM") { e.preventDefault(); ctx.shell?.switchView("text"); return; }
+      if (e.code === "KeyM") { e.preventDefault(); ctx.shell?.switchView("GUI"); return; }
       if (e.code === "KeyB") { e.preventDefault(); ctx.navigation.back();    return; }
       if (e.code === "KeyN") { e.preventDefault(); ctx.navigation.forward(); return; }
       if (e.code === "KeyE") { e.preventDefault(); attemptPlant();           return; }

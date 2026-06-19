@@ -33,7 +33,7 @@ import { IbpError, IBP_ERR } from "../../seed/ibp/protocol.js";
 //      separate the extension namespace from the role name.
 // Both shapes participate in classifyAddress / stripBeingQualifier.
 const EMBODIMENT_SUFFIX = /@[a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)?$/i;
-const VALID_VERBS = new Set(["see", "do", "call", "be"]);
+const VALID_VERBS = new Set(["see", "do", "call", "be", "type"]);
 
 /**
  * Classify an address string into its kind. The kind names "place" /
@@ -145,12 +145,22 @@ export async function parseUnifiedEnvelope(msg) {
     }
   }
 
-  if ((verb === "see" || verb === "do") && addressKind === "place") {
+  if ((verb === "see" || verb === "do" || verb === "type") && addressKind === "place") {
     address     = `${address}/`;
     addressKind = "position";
   }
 
   switch (verb) {
+    case "type":
+      // The statement bar's address is where the typist stands (normalized from a bare place
+      // above). The Word itself rides payload.text; the position scopes "make here".
+      if (addressKind !== "position") {
+        throw new IbpError(
+          IBP_ERR.INVALID_INPUT,
+          `ibp TYPE address must be a position (where you stand), e.g. "${address}/".`,
+        );
+      }
+      break;
     case "see":
       if (addressKind !== "position" && addressKind !== "stance" && addressKind !== "see-op") {
         throw new IbpError(

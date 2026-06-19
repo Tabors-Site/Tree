@@ -63,11 +63,13 @@ function validateName(name) {
   return trimmed;
 }
 
-// Validates a caller-supplied plaintext password. Null/undefined is
-// permitted (the auto-generate path); only an actually-provided value
-// is range-checked.
+// Validates a caller-supplied plaintext password. The password is OPTIONAL:
+// null/undefined (the auto-generate path) AND "" (a form field left blank — the
+// portal sends the empty string, not null) both mean "no password". Only an
+// actually-provided, non-empty value is range-checked. Downstream already
+// normalizes `spec.password || null`, so blank lands on the keypair-only path.
 function validatePassword(password) {
-  if (password === null || password === undefined) return;
+  if (password === null || password === undefined || password === "") return;
   if (typeof password !== "string")
     throw new IbpError(IBP_ERR.INVALID_INPUT, "Password must be a string");
   if (password.length < MIN_PASSWORD)

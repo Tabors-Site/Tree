@@ -146,8 +146,8 @@ export function showNameForm({ client, realityDomain = "", onConnected = () => {
   // used to show at birth), THEN enter.
   function renderCreate() {
     const name = field(body, "Real name (your handle)");
-    const pw = field(body, "Password", "password");
-    const pw2 = field(body, "Confirm password", "password");
+    const pw = field(body, "Password (optional — recommended; or keep only your private key)", "password");
+    const pw2 = field(body, "Confirm password (if set)", "password");
     const go = el("button", "nf-btn nf-primary", "Create name");
     go.onclick = async () => {
       if (!name.value.trim()) { setStatus("A real name is required.", "err"); return; }

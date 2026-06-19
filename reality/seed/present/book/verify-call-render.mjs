@@ -58,12 +58,17 @@ try {
   // synthetic call/reply facts — assembleStory just READS them (no logFact, no call machinery)
   const now = Date.now();
   const C = String(cherub.id), S = String(sageId);
-  const mk = (i, by, through, to, extra) => ({ _id: `callrender-${i}`, branch: "0", actId: `act-cr-${i}`, by, through, to, verb: "call", act: "call", date: new Date(now + i * 1000), seq: 2000 + i, ...extra });
+  // Real call facts carry the recipient on `of` (the right stance), NOT `to`, and content can be
+  // a string (saying) OR an object (the `with` payload). Match that shape so the recipient
+  // resolution + content coercion are tested as they actually run.
+  const mk = (i, by, through, recipient, extra) => ({ _id: `callrender-${i}`, branch: "0", actId: `act-cr-${i}`, by, through, of: recipient ? { kind: "being", id: recipient } : null, verb: "call", act: "call", date: new Date(now + i * 1000), seq: 2000 + i, ...extra });
   await Fact.collection.insertMany([
     mk(1, C, C, S, { params: { content: "welcome to the garden" } }),                          // message → "said '…' to sage"
     mk(2, S, S, C, { inReplyTo: "callrender-1", params: { content: "thank you" } }),            // reply + message
     mk(3, C, C, S, { params: { intent: "stand-watch" } }),                                     // intent only → "called sage to stand watch"
     mk(4, C, C, S, { params: {} }),                                                            // bare reach → "called sage"
+    mk(5, C, C, S, { params: { content: { role: "warrior", anchorSpaceId: "x" } } }),          // OBJECT payload, no message field → call form, NEVER "[object Object]"
+    mk(6, C, C, S, { params: { content: { content: "hi there" } } }),                          // nested envelope object → extract the message
   ]);
 
   const world = await assembleStory("world", { branch: "0" });
@@ -72,6 +77,10 @@ try {
   has(lines, `replied to cherub, and said "thank you"`, "reply with a message");
   has(lines, `called sage to stand watch`, "intent-only reach");
   has(lines, `called sage.`, "bare reach");
+  has(lines, `said "hi there" to sage`, "nested envelope object → message extracted");
+  // the two bugs this fix closed (the portal story rendered `cherub said "[object Object]" to someone`):
+  lines.some((l) => l.includes("[object Object]")) ? (fail++, console.log(`  ✗ a line printed [object Object]`)) : (pass++, console.log(`  ✓ object payload rendered by form, never "[object Object]"`));
+  lines.some((l) => l.includes("to someone")) ? (fail++, console.log(`  ✗ a line fell back to "someone"`)) : (pass++, console.log(`  ✓ recipient on \`of\` resolved (no "someone")`));
 
   console.log(`\n  ${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);

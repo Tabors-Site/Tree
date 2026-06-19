@@ -149,7 +149,7 @@ async function drain() {
         droppedSinceLastStamp = 0;
         await enqueue(httpBeingId, "http: queue overflow", (ctx) =>
           emitFact({
-            verb: "do", act: "http-queue-overflow",
+            verb: "do", act: "drop",
             through: httpBeingId,
             of: { kind: "matter", id: requestLogMatterId },
             params: { dropped, at: new Date().toISOString() },
@@ -162,7 +162,7 @@ async function drain() {
         for (const e of batch) entries.push(await entryToFactParams(e));
         await enqueue(httpBeingId, `http: batch of ${entries.length}`, (ctx) =>
           emitFact({
-            verb: "do", act: "http-request-batch",
+            verb: "do", act: "serve",
             through: httpBeingId,
             of: { kind: "matter", id: requestLogMatterId },
             params: { count: entries.length, entries },
@@ -174,7 +174,7 @@ async function drain() {
         const params = await entryToFactParams(e);
         await enqueue(httpBeingId, `http: ${params.method} ${params.path}`, (ctx) =>
           emitFact({
-            verb: "do", act: "http-request",
+            verb: "do", act: "serve",
             through: httpBeingId,
             of: { kind: "matter", id: requestLogMatterId },
             params,
@@ -226,7 +226,7 @@ export function noteHttpListening({ port } = {}) {
     enqueue(httpBeingId, `http: listening on :${port}`, async (ctx) => {
       const { emitFact } = await import("../../past/fact/facts.js");
       await emitFact({
-        verb: "do", act: "http-listening",
+        verb: "do", act: "open",
         through: httpBeingId,
         of: { kind: "space", id: httpSpaceId },
         // The port IS the listener's identity. Route lists are
@@ -246,7 +246,7 @@ export function noteHttpShutdown(signal) {
     enqueue(httpBeingId, `http: shutdown (${signal || "?"})`, async (ctx) => {
       const { emitFact } = await import("../../past/fact/facts.js");
       await emitFact({
-        verb: "do", act: "http-shutdown",
+        verb: "do", act: "close",
         through: httpBeingId,
         of: { kind: "space", id: httpSpaceId },
         params: {

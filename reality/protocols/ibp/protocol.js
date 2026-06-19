@@ -32,6 +32,7 @@ import { handleSee } from "./verbs/see.js";
 import { handleDo } from "./verbs/do.js";
 import { handleCall } from "./verbs/call.js";
 import { handleBe } from "./verbs/be.js";
+import { handleType } from "./verbs/type.js";
 import { parseUnifiedEnvelope, ackError } from "./envelope.js";
 import { IBP_ERR, isIbpError } from "../../seed/ibp/protocol.js";
 import { getForeignTargetDomain, forwardToPeer } from "./canopy.js";
@@ -41,6 +42,7 @@ const VERB_HANDLERS = {
   do:     handleDo,
   call: handleCall,
   be:     handleBe,
+  type:   handleType,
 };
 
 /**

@@ -261,6 +261,22 @@ export class PortalClient {
   }
 
   /**
+   * TYPE: press a live Word statement — the statement bar. The subject is the caller's Name
+   * (first-person "I" assumed when omitted); the backend parses + evaluates it in a fresh moment
+   * under your being and lays the fact(s) at the live edge. Invalid Word lays NOTHING and returns
+   * the parser/gate hint. The views repaint from the fact via their own subscriptions.
+   *
+   * @param {string} wordText  the Word line, e.g. "make a space named art"
+   * @param {string} address   where you stand (a position; a bare reality domain is fine)
+   * @returns {Promise<{ ok: boolean, laid?: any[], error?: string, where?: string }>}
+   */
+  async type(wordText, address) {
+    const ack = await this._call("type", normalize(address), { text: String(wordText ?? "") });
+    if (ack?.status === "ok") return { ok: true, ...(ack.data || {}) };
+    return { ok: false, error: ack?.error?.message || "The press failed.", where: ack?.error?.detail?.where || null };
+  }
+
+  /**
    * SUMMON: deliver a message to a being's inbox and wake them.
    *
    * @param {string} stance   "<place>/<path>@<being>" — being qualifier mandatory

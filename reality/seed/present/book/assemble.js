@@ -58,8 +58,25 @@ export async function assembleStory(
     // WHEN: one moment's cross-section — the facts that act laid (its landings on every reel it touched)
     q.actId = String(moment);
   } else if ((scope === "place" || scope === "space") && space) {
-    // WHERE: a space's whole history — everything that ever happened to/in that location, across all time
-    q["of.id"] = String(space);
+    // WHERE: a space's whole story. Not just facts that acted ON the space (of.id === space),
+    // but the facts of everything LOCATED IN it — child spaces (Space.parent), matter present
+    // (Matter.spaceId), and beings present (Being.position) — each one's chain. So the place
+    // reads as the location's full history: the room and everything that lived in it.
+    const [{ default: Matter }, { default: Being }, { default: Space }] = await Promise.all([
+      import("../../materials/matter/matter.js"),
+      import("../../materials/being/being.js"),
+      import("../../materials/space/space.js"),
+    ]);
+    const S = String(space);
+    const [matterIn, beingsIn, childSpaces] = await Promise.all([
+      Matter.find({ spaceId: S }).select("_id").lean(),
+      Being.find({ position: S }).select("_id").lean(),
+      Space.find({ parent: S }).select("_id").lean(),
+    ]);
+    const beingIds = beingsIn.map((b) => String(b._id));
+    const ofIds = [S, ...childSpaces.map((s) => String(s._id)), ...matterIn.map((m) => String(m._id)), ...beingIds];
+    // facts ON any of those (the object side) OR acts BY a being present here (the through side)
+    q.$or = [{ "of.id": { $in: ofIds } }, { through: { $in: beingIds } }];
   }
   // scope "world" → WHO, all authors: the whole branch (no extra filter)
 
@@ -100,11 +117,22 @@ async function descendantsOf(beingId, depth, _branch) {
   return ids;
 }
 
+// A SELF-call is a being summoning ITSELF — the wake-call intake lays to kick off a moment
+// (intake.js: through === of.id). It's the moment's plumbing, not a deed, so the story skips it
+// (otherwise every move trails a phantom "I called <self>"). Real calls to OTHER beings stay.
+function isSelfCall(f) {
+  const op = opOf(f);
+  if (op !== "call" && op !== "summon") return false;
+  const o = objOf(f);
+  return !!(o && o.id != null && String(beingOf(f)) === String(o.id));
+}
+
 // ── weave: group facts into acts, render each as one past-tense Word sentence ─────────
 function weave(facts, focalBeing, names) {
   const acts = [];
   const byAct = new Map();
   for (const f of facts) {
+    if (isSelfCall(f)) continue;   // the wake-call kickoff — not a story event
     const key = f.actId ? `act:${f.actId}` : `solo:${f._id}`;
     let act = byAct.get(key);
     if (!act) {
@@ -186,8 +214,11 @@ function pastPhrase(f, names) {
       return `${pastOf("silence")} the word ${p.op || "?"}`;
     case "set-space":
     case "set-being":
-    case "set-matter":
-      return `${pastOf("set")} ${fieldGloss(p.field)}`;
+    case "set-matter": {
+      // show the VALUE, not just the field: "set the coord to (7, 2)", "set the owner to bob"
+      const val = glossSetValue(p.value, names);
+      return `${pastOf("set")} ${fieldGloss(p.field)}${val ? ` to ${val}` : ""}`;
+    }
     case "move":
       return `${pastOf("move")} to ${targetName(target, names) || "the space"}`;
     case "give":
@@ -203,9 +234,16 @@ function pastPhrase(f, names) {
       // only when it carries weight: a REPLY shows "replied to Y"; an intent-only reach shows
       // "called Y to <intent>". A plain message IMPLIES the call — just "said '…' to Y" (Tabor).
       // Any other deed in the same act (a birth, etc.) joins on via the weave's "and".
-      const who = displayName(recv(f), names) || targetName(target, names) || "someone";
-      const said = p.content ?? p.message ?? p.saying ?? p.said;
-      const hasSaid = said != null && said !== "";
+      // The receiver is the call's `to`, but a call carries the being on `of` (the right
+      // stance), so `to` is usually null — fall to of.id rather than displayName(null), which
+      // returns the truthy "someone" and would short-circuit the resolution.
+      const who = displayName(recv(f) ?? target?.id, names);
+      // Content may be a string (saying) OR an object payload (with). Only a STRING is "said";
+      // an object renders by intent, never as "[object Object]".
+      const raw = p.content ?? p.message ?? p.saying ?? p.said;
+      const fromObj = raw && typeof raw === "object" ? (raw.content ?? raw.message ?? raw.text ?? raw.saying) : null;
+      const said = typeof raw === "string" ? raw : typeof fromObj === "string" ? fromObj : null;
+      const hasSaid = typeof said === "string" && said !== "";
       const intent = p.intent && !["message", "talk", "say", "reply", "call", "summon"].includes(p.intent) ? String(p.intent).replace(/-/g, " ") : null; // an intent LABEL, not a deed — no past-tensing
       if (f.inReplyTo || p.inReplyTo)
         return hasSaid ? `${pastOf("reply")} to ${who}, and ${pastOf("say")} "${said}"` : `${pastOf("reply")} to ${who}`;
@@ -233,6 +271,22 @@ function fieldGloss(field) {
   if (f === "pointers") return "the pointers";
   if (f === "owner") return "the owner";
   return `the ${f.replace(/\./g, " ")}`;
+}
+
+// Render a set-value in the Word, secret-safe: a coord as "(x, y[, z])", an id as the name it
+// resolves to, a string/number plainly. Complex/unknown objects are skipped (return null) rather
+// than dumped — never leak a blob or a secret-bearing value into the story.
+function glossSetValue(value, names) {
+  if (value == null) return null;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === "string") return names.get(value) || `"${value}"`;
+  if (typeof value === "object") {
+    if (Number.isFinite(value.x) && Number.isFinite(value.y))
+      return `(${value.x}, ${value.y}${Number.isFinite(value.z) ? `, ${value.z}` : ""})`;
+    if (value.id) return displayName(value.id, names);     // an owner/position ref → the name
+    return null;                                            // a blob — don't dump it
+  }
+  return null;
 }
 
 function displayActor(a, names) {

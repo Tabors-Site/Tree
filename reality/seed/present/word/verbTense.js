@@ -12,6 +12,10 @@ const DECLARED_PAST = new Map([
   ["read", "read"], ["run", "ran"], ["send", "sent"], ["build", "built"], ["bring", "brought"],
   ["become", "became"], ["begin", "began"], ["hold", "held"], ["leave", "left"], ["let", "let"],
   ["say", "said"],  // call → "said '…'"; reply → replied and call → called fall out of the -ied/-ed rules
+  // NOTE: irregular pasts are migrating OUT of this hardcoded map and INTO the foundation words
+  // (seed/words/word.word + verbs.word), folded at boot by wordFold.js. `drop`→`dropped` lives in
+  // verbs.word now, not here: it is the proof that pastOf reads from the Word, not this map.
+  // The entries above remain as the bootstrap until the full migration (9.md Phase 3).
 ]);
 
 // the present → past of a verb: its declared past, or the -ed rule for regulars

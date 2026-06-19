@@ -27,8 +27,8 @@ export const mongoRole = Object.freeze({
   respondMode: "async",
   triggerOn: ["message"],
 
-  // Its facts are direct emits on its own moments (mongo-connected,
-  // mongo-reconnected are not DO ops); no operator-facing DO surface.
+  // Its facts are direct emits on its own moments (connect,
+  // reconnect are not DO ops); no operator-facing DO surface.
   can: [
     { verb: "see", word: "mongo-stats" },
     { verb: "see", word: "connections" },

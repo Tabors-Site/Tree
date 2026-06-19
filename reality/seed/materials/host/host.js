@@ -109,7 +109,7 @@ export async function initHostRuntime() {
   await enqueueBeingAct(ids.mongoBeing, "mongo: connected", (ctx) =>
     emitFact({
       verb: "do",
-      act: "mongo-connected",
+      act: "connect",
       through: ids.mongoBeing,
       of: { kind: "space", id: ids.mongoSpace },
       params: {
@@ -294,7 +294,7 @@ export function noteMongoReconnected() {
       const { emitFact } = await import("../../past/fact/facts.js");
       await emitFact({
         verb: "do",
-        act: "mongo-reconnected",
+        act: "reconnect",
         through: ids.mongoBeing,
         of: { kind: "space", id: ids.mongoSpace },
         params: {

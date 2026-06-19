@@ -48,6 +48,11 @@ const SHELL_DOM = `
   <main id="view-root">
     <div class="view-boot"><span class="vb-pulse"></span>finding your place…</div>
   </main>
+  <footer id="statement-bar">
+    <input id="statement-input" type="text" autocomplete="off" spellcheck="false"
+           placeholder="Say the Word — I make a space, I give tabor the role…" disabled />
+    <div id="statement-hint"></div>
+  </footer>
   <div id="overlays"></div>
 </div>
 `.trim();
@@ -65,6 +70,8 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     switcher: rootEl.querySelector("#view-switcher"),
     tree:     rootEl.querySelector("#nav-tree"),
     viewRoot: rootEl.querySelector("#view-root"),
+    statement:     rootEl.querySelector("#statement-input"),
+    statementHint: rootEl.querySelector("#statement-hint"),
   };
 
   const viewHost = createViewHost(els.viewRoot);
@@ -89,9 +96,47 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     switcherButtons.set(name, b);
   }
 
+  // ── The statement bar (chrome — shared by every view) ───────────
+  // Any Name with a being types the Word live, in any view; the backend presses it (typeIntoBook)
+  // and the views — which are renders of what it does — repaint from the fact it lays via their own
+  // subscriptions. Invalid Word shows the parser/gate hint and lays nothing.
+  els.statement.addEventListener("keydown", async (e) => {
+    if (e.key !== "Enter" || !activeCtx) return;
+    e.preventDefault();
+    const text = els.statement.value.trim();
+    if (!text) return;
+    const m = activeCtx.state.get();
+    const address = m.discovery?.reality || m.descriptor?.address?.place;
+    if (!address) { els.statementHint.textContent = "no place to stand yet"; return; }
+    els.statementHint.textContent = "";
+    try {
+      const res = await activeCtx.client.type(text, address);
+      if (res.ok) {
+        els.statement.value = "";                        // the views repaint from the new fact
+        // A statement always resolves at the live edge. If we were viewing the past, the fact
+        // landed NOW — snap forward to it (returnToNow clears the anchor + re-sees live).
+        if (m.descriptor?.isHistorical) activeCtx.navigation?.returnToNow?.();
+      } else {
+        els.statementHint.textContent = res.error || "that isn't valid Word";
+      }
+    } catch (err) {
+      els.statementHint.textContent = err?.message || "the press failed";
+    } finally {
+      els.statement.focus();
+    }
+  });
+
   function repaintChrome() {
     if (!activeCtx) return;
     const m = activeCtx.state.get();
+    // The statement bar is for a Name with a being — enabled once you hold one.
+    if (els.statement) {
+      const hasBeing = !!(m.session?.beingId || m.session?.token);
+      els.statement.disabled = !hasBeing;
+      els.statement.placeholder = hasBeing
+        ? "Say the Word — I make a space, I give tabor the role…"
+        : "connect a Name to speak the Word…";
+    }
     updateStanceBar({
       reality:    m.discovery?.reality || m.descriptor?.address?.place || "",
       username:   m.session?.username || null,
@@ -138,7 +183,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     // signed in (it's your Name's being-tree). Text view only — the 3d world
     // shows the tree spatially; this panel is the text surface.
     if (els.tree) {
-      els.tree.style.display = (m.session?.token && viewHost.activeName === "text") ? "" : "none";
+      els.tree.style.display = (m.session?.token && viewHost.activeName === "GUI") ? "" : "none";
     }
     // Ghost cue follows the active tab's descriptor.
     document.body.classList.toggle("ghost-view", !!m.descriptor?.isHistorical);
@@ -304,7 +349,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
       // The being menu ("Your beings") is the TEXT view's surface; in the 3D
       // world you stand at the arrival floor and reach cherub there directly.
       // So only pop the panel in text view; hide it in 3D.
-      if (viewHost.activeName === "text") presentBeingPicker(ctx, who.nameId);
+      if (viewHost.activeName === "GUI") presentBeingPicker(ctx, who.nameId);
       else hideBeingPicker();
       return;
     }
@@ -671,7 +716,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
       const inField = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
       if (inField) return;
       e.preventDefault();
-      switchView(viewHost.activeName === "text" ? "3d" : "text");
+      switchView(viewHost.activeName === "GUI" ? "3d" : "GUI");
     }
   };
   listen(window, "keydown", onKeydown);

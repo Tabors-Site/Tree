@@ -248,7 +248,11 @@ export function showActionForm(action, { onSubmit, onCancel, busy = false, error
         const n = Number(input.value);
         values[name] = Number.isFinite(n) ? n : undefined;
       } else {
-        values[name] = input.value;
+        const v = input.value;
+        // An OPTIONAL field left blank is OMITTED, not sent as "". The server reads
+        // absent as "no value" (an optional password → keypair-only); a literal ""
+        // trips length/required checks. Required fields always send their value.
+        values[name] = (!schema.required && v === "") ? undefined : v;
       }
     }
     onSubmit(values);
