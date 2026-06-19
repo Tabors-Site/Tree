@@ -2,7 +2,7 @@
 //
 // Consumes the unified envelope:
 //
-//   { id, verb: "summon", address (stance), payload: { message, ...threading } }
+//   { id, verb: "call", address (stance), payload: { message, ...threading } }
 //
 // Identity is NOT in the envelope. See do.js for the address-as-actor
 // doctrine.
@@ -13,7 +13,7 @@
 // The wire normalizes it onto message before delegating.
 //
 // Thin wire adapter: extracts envelope fields, composes the async-reply
-// broadcaster, delegates to `summonVerb` in seed/ibp/verbs/summon.js. The
+// broadcaster, delegates to `callVerb` in seed/ibp/verbs/call.js. The
 // scheduler invokes the broadcaster when async summoning completes;
 // the reply places on every socket the asker has connected (via the
 // being-room).
@@ -23,7 +23,7 @@ import log from "../../../seed/seedReality/log.js";
 import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
 import { assertNoImpersonation } from "./_shared.js";
 import { ackOk, ackError } from "../envelope.js";
-import { summonVerb } from "../../../seed/ibp/verbs/summon.js";
+import { callVerb } from "../../../seed/ibp/verbs/call.js";
 import { emitToBeingRoom } from "../../../seed/ibp/pushChannel.js";
 import { IBP_EVENT } from "../events.js";
 
@@ -34,7 +34,7 @@ import { IBP_EVENT } from "../events.js";
  *
  * The push rides the unified `ibp` event:
  *
- *   { verb: "summon", payload: <inbox entry> }
+ *   { verb: "call", payload: <inbox entry> }
  *
  * Direction (server → client) is implicit. The client routes by
  * envelope.verb and uses `payload.inReplyTo` / `payload.correlation`
@@ -42,7 +42,7 @@ import { IBP_EVENT } from "../events.js";
  */
 function emitUpdateForSocket(socket) {
   return (entry) => {
-    const envelope = { verb: "summon", payload: entry };
+    const envelope = { verb: "call", payload: entry };
     const beingId = socket?.beingId;
     if (beingId) {
       try {
@@ -56,7 +56,7 @@ function emitUpdateForSocket(socket) {
   };
 }
 
-export async function handleSummon(socket, env, ack) {
+export async function handleCall(socket, env, ack) {
   const id = env?.id || null;
   try {
     const { address, payload } = env;
@@ -65,7 +65,7 @@ export async function handleSummon(socket, env, ack) {
     }
 
     // Normalize threading: activeRole may live at payload.activeRole or
-    // inside message.activeRole. summonVerb reads from message.
+    // inside message.activeRole. callVerb reads from message.
     const message = {
       ...payload.message,
       activeRole: payload.message.activeRole || payload.activeRole || null,
@@ -124,7 +124,7 @@ export async function handleSummon(socket, env, ack) {
       _targetBranchResolved = expanded?.right?.branch || "0";
     } catch (err) {
       if (err && err.code === IBP_ERR.FORBIDDEN) throw err;
-      // Parse failures fall through; summonVerb owns address validation.
+      // Parse failures fall through; callVerb owns address validation.
     }
     const targetBranch = _targetBranchResolved || callerBranch;
 
@@ -146,7 +146,7 @@ export async function handleSummon(socket, env, ack) {
       }
     }
 
-    const result = await summonVerb(address, message, {
+    const result = await callVerb(address, message, {
       identity,
       currentUser:   socket.name,
       // currentBranch is the FACT's branch (where the summon record

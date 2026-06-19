@@ -31,7 +31,7 @@ import { resolveTargetBranch } from "../branchResolve.js";
  * Null / undefined / empty string returns null.
  *
  * Public so internal entry points beyond the four verbs
- * (summonByResolved, birthBeing, etc.) can call it too.
+ * (callByResolved, birthBeing, etc.) can call it too.
  */
 export function normalizeIdentity(identity) {
   if (typeof identity === "string") {

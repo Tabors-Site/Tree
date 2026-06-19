@@ -139,8 +139,8 @@ export async function dispatchTransportAct({
   if (!act || typeof act !== "object") {
     throw new Error("dispatchTransportAct requires act { verb, target, action, args }");
   }
-  if (act.verb !== "do" && act.verb !== "be" && act.verb !== "summon" && act.verb !== "name") {
-    throw new Error(`dispatchTransportAct: act.verb must be "do", "be", "summon", or "name" (got "${act.verb}")`);
+  if (act.verb !== "do" && act.verb !== "be" && act.verb !== "call" && act.verb !== "name") {
+    throw new Error(`dispatchTransportAct: act.verb must be "do", "be", "call", or "name" (got "${act.verb}")`);
   }
   // Branch is REQUIRED — no main-bias default. The wire layer parses
   // the address and attaches the branch to every transport-act; this

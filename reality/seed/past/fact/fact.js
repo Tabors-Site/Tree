@@ -66,7 +66,7 @@ const FactSchema = new mongoose.Schema({
   // / release — left stance, the actor itself), SUMMON for one
   // being calling another (right stance: the recipient). The three
   // stamping verbs are peers; SEE never appends a Fact.
-  verb:   { type: String, enum: ["do", "be", "summon", "name"], default: "do", index: true },
+  verb:   { type: String, enum: ["do", "be", "call", "name"], default: "do", index: true },
 
   // The operation or sub-event name. Operations register a
   // `factAction` (defaults to the operation name); helpers may write

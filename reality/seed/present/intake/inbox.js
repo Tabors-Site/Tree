@@ -3,12 +3,12 @@
 // Inbox — a thin reader over the InboxProjection. Per Bucket 3
 // Option D (2026-05-23) the inbox stopped being storage on
 // Space.qualities and became a fact-derived projection: every
-// SUMMON stamps a be:summon Fact on the summoner's reel, the
+// CALL stamps a call Fact on the summoner's reel, the
 // cross-cutting fold maintains `InboxProjection` rows keyed by
 // correlation, and this file just queries that collection.
 //
 // Writers are GONE — appendToInbox retired. The SUMMON verb stamps
-// the Fact directly (see seed/ibp/verbs/summon.js summonVerb). Closure is
+// the Fact directly (see seed/ibp/verbs/call.js callVerb). Closure is
 // also fact-driven: when the answering moment seals, its Act row
 // carries `answers: <correlation>` and the InboxProjection row
 // disappears. No durable `consumed` / `cancelled` state — the row

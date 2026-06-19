@@ -65,7 +65,7 @@ export const birtherRole = Object.freeze({
   can: [
     { verb: "see", word: "place" },
     {
-      verb: "summon",
+      verb: "call",
       word: "mate",
       as: "receiver",
       description: "Auto-accepts mate requests. The summoner becomes father; this birther becomes mother; child is birthed on this reality.",
@@ -73,7 +73,7 @@ export const birtherRole = Object.freeze({
     { verb: "be", word: "birth" },
   ],
 
-  async summon(message, ctx) {
+  async call(message, ctx) {
     // ctx.innerFace carries the canonical inner face the kernel built
     // for this moment (orientation + role + position + capabilities +
     // role.can see-entry-resolved blocks). Scripted roles read it as data:

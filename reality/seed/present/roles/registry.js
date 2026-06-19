@@ -61,7 +61,7 @@
 //   permissions      - union of verbs implied by canSee / canDo / canSummon / canBe
 //   respondMode      - "async" by default
 //   triggerOn        - ["message"] by default
-//   summon           - auto-wrapped with defaultSummon when role has no
+//   summon           - auto-wrapped with defaultCall when role has no
 //                      custom summon (LLM path is the default)
 //   buildSystemPrompt - auto-assembled via seed/present/buildPrompt when not provided
 //
@@ -89,7 +89,7 @@ const REGISTRY = new Map();
 // registers the handler at boot through this API.
 const HANDLERS = new Map();
 
-const VALID_PERMISSIONS = new Set(["see", "do", "summon", "be"]);
+const VALID_PERMISSIONS = new Set(["see", "do", "call", "be"]);
 const VALID_REPLY_MODES = new Set(["asker", "chain-initial"]);
 
 // Closed-set cognition vocabulary. Cognition lives on the being
@@ -278,14 +278,14 @@ export function registerRole(name, def, extName = "role-registry") {
   // Drop any legacy `scope` field — retired with the host-on-space model.
   delete spec.scope;
 
-  // Auto-wrap with defaultSummon when the role brings no custom summon.
-  // The custom summon is the SCRIPTED dispatch path; defaultSummon is
+  // Auto-wrap with defaultCall when the role brings no custom summon.
+  // The custom summon is the SCRIPTED dispatch path; defaultCall is
   // the LLM dispatch path. Momentum picks which to invoke at moment-
   // assign time based on the being's effective cognition (inhabit ?
   // "human" : qualities.cognition.defaultKind), regardless of which
   // path the role provides.
-  if (typeof spec.summon !== "function") {
-    spec.summon = makeLazyDefaultSummon(spec);
+  if (typeof spec.call !== "function") {
+    spec.call = makeLazyDefaultCall(spec);
   }
 
   REGISTRY.set(name, Object.freeze(spec));
@@ -332,8 +332,9 @@ export function canViews(can) {
   return {
     canSee:    byVerb("see").map((e) => e.word),
     canDo:     byVerb("do").map((e) => (e.description ? { action: e.word, description: e.description } : { action: e.word })),
-    canSummon: byVerb("summon").map((e) => { const { verb, ...rest } = e; return (Object.keys(rest).length === 1 && rest.word !== undefined) ? rest.word : rest; }),
+    canSummon: byVerb("call").map((e) => { const { verb, ...rest } = e; return (Object.keys(rest).length === 1 && rest.word !== undefined) ? rest.word : rest; }),
     canBe:     byVerb("be").map((e) => e.word),
+    canRecall: byVerb("recall").map((e) => e.word), // the granted recall-VIEWS — a being's consciousness-level (which folds it may pull)
   };
 }
 
@@ -369,15 +370,15 @@ function validatePermissions(name, list) {
   return [...seen];
 }
 
-// Lazy default-summon wiring. Avoids a circular import: defaultSummon
+// Lazy default-summon wiring. Avoids a circular import: defaultCall
 // imports runTurn, runTurn imports the registry. The closure resolves
-// defaultSummon on first invocation.
-function makeLazyDefaultSummon(role) {
+// defaultCall on first invocation.
+function makeLazyDefaultCall(role) {
   let cached = null;
   return async (message, ctx) => {
     if (!cached) {
-      const mod = await import("../cognition/defaultSummon.js");
-      cached = mod.defaultSummon;
+      const mod = await import("../cognition/defaultCall.js");
+      cached = mod.defaultCall;
     }
     return cached({ message, ctx, role });
   };
@@ -433,7 +434,7 @@ export async function syncRolesToSubstrate() {
  *
  * Live roles store their prompt as a string in qualities; we wrap that
  * string into a prompt function so the registry contract holds
- * (defaultSummon / buildPrompt call role.prompt()).
+ * (defaultCall / buildPrompt call role.prompt()).
  *
  * @returns {Promise<{ loaded: number }>}
  */
@@ -462,7 +463,7 @@ export async function loadLiveRolesFromSubstrate() {
         can:       Array.isArray(role.can) ? role.can : [],
         replyTo:   role.replyTo || null,
         // Wrap the stored string prompt as a prompt function so the
-        // role spec matches what defaultSummon / buildPrompt expect.
+        // role spec matches what defaultCall / buildPrompt expect.
         prompt:    () => promptStr,
       }, "live");
       loaded++;

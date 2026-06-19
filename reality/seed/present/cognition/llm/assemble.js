@@ -328,8 +328,8 @@ async function renderCapabilities(role, ctx) {
     dispatcher: "do",
     targetWord: "action",
   });
-  const summonBlock = renderCapabilityList(summonEntries, "summon", {
-    dispatcher: "summon",
+  const summonBlock = renderCapabilityList(summonEntries, "call", {
+    dispatcher: "call",
     targetWord: "stance",
   });
   const beBlock = renderCapabilityList(beEntries, "be", {
@@ -433,7 +433,7 @@ function assertAllToolsResolve(_role) {
   // the being does not pick from a menu and the verb is not exposed
   // as an action. To see more, move (DO), change role (BE /
   // roleFlow), or edit the role spec.
-  const SEED_VERB_TOOLS = ["do", "summon", "be"];
+  const SEED_VERB_TOOLS = ["do", "call", "be"];
   const missing = SEED_VERB_TOOLS.filter((name) => !getToolDescription(name));
   if (missing.length === 0) return;
   log.error(
@@ -443,7 +443,7 @@ function assertAllToolsResolve(_role) {
   );
   throw new Error(
     `Seed verb-tools missing from the registry: ${missing.join(", ")}. ` +
-      `genesis.js must register seedDoTool / seedSummonTool / seedBeTool ` +
+      `genesis.js must register seedDoTool / seedCallTool / seedBeTool ` +
       `before any LLM role can be summoned.`,
   );
 }
@@ -629,7 +629,7 @@ export function resolveToolsForRole(
   // field, two surfaces."
   if (Array.isArray(role.canSummon)
       && role.canSummon.some((e) => typeof e !== "object" || (e?.as ?? "actor") === "actor")) {
-    toolNames.push("summon");
+    toolNames.push("call");
   }
   if (Array.isArray(role.canBe) && role.canBe.length > 0) toolNames.push("be");
 

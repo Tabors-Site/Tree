@@ -18,7 +18,7 @@
 //   verb: "see"     → { kind: "patch"|"replace"|"invalidate",
 //                       spaceId, data }
 //
-//   verb: "summon"  → an inbox-shaped entry. Unsolicited SUMMONs
+//   verb: "call"  → an inbox-shaped entry. Unsolicited SUMMONs
 //                     and SUMMON-replies share this shape:
 //                       { from, content, correlation, inReplyTo?,
 //                         actId?, sentAt, ... }
@@ -81,7 +81,7 @@ export const SEE_PUSH = Object.freeze({
  */
 export function buildTransportActReply({ correlation, inReplyTo, actId = null, result, from = "system" }) {
   return {
-    verb: "summon",
+    verb: "call",
     payload: {
       from,
       correlation,

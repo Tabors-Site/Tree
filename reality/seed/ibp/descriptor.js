@@ -162,7 +162,7 @@ export async function buildDiscovery() {
     // given realityId (which IS the reality public key), realityRoot,
     // and sig verifies the whole chain's provenance self-certifyingly.
     chain: chainBlock,
-    supportedVerbs: ["see", "do", "summon", "be"],
+    supportedVerbs: ["see", "do", "call", "be"],
     capabilities: [],
   };
 }
@@ -280,7 +280,7 @@ function truncate(s, n) {
 // opts.sealed = true means the Act is closed and we surface its
 // endMessage as "what they last said" so the speech bubble can
 // persist between moments.
-async function summonToActivity(summon, opts = {}) {
+async function callToActivity(summon, opts = {}) {
   const { getDefaultBranch } = await import("../materials/branch/branchRegistry.js");
   const branch = opts.branch || await getDefaultBranch();
   if (!summon) return null;
@@ -318,7 +318,7 @@ async function summonToActivity(summon, opts = {}) {
     // `→@<recipient> <content>` above this being's avatar. Multiplayer-
     // visible: every viewer sees what this being said to whom because
     // the source is the substrate's fact, not a per-tab UI side-channel.
-    if (lastFact.act === "summon") {
+    if (lastFact.act === "call") {
       const recipientBeingId = lastFact.params?.recipient
         ? String(lastFact.params.recipient)
         : null;
@@ -364,7 +364,7 @@ async function summonToActivity(summon, opts = {}) {
   };
 }
 
-// Best-effort name lookup for a being id. Used by summonToActivity to
+// Best-effort name lookup for a being id. Used by callToActivity to
 // pre-resolve the recipient name so the portal can render `→@<name>`
 // without a second roundtrip. Returns null on miss (the portal falls
 // back to role / beingId prefix).
@@ -1444,12 +1444,12 @@ async function enrichBeings(spaceId, entries, opts = {}) {
     if (!e._beingId) return null;
     if (until) return null; // historical: see comment on inboxByBeing
     const open = await findOpenForBeing(e._beingId);
-    if (open) return summonToActivity(open, { branch });
+    if (open) return callToActivity(open, { branch });
     // No Act in flight. Fall back to what this being last SAID so
     // the speech bubble persists between moments. Without this the
     // bubble vanishes the instant a moment seals.
     const sealed = await findLastSealedForBeing(e._beingId);
-    return summonToActivity(sealed, { sealed: true, branch });
+    return callToActivity(sealed, { sealed: true, branch });
   }));
 
   return entries.map((entry, i) => {

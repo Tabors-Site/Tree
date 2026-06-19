@@ -3,7 +3,7 @@
 // seedDoTool.js . the DO verb exposed as an LLM tool.
 //
 // Run a registered operation against a target. Parallel structure to
-// seedSummonTool and seedBeTool: ONE generic do tool the seed ships;
+// seedCallTool and seedBeTool: ONE generic do tool the seed ships;
 // the role's `canDo` list declares which action names the role is
 // licensed to invoke and tool exposure is derived from canDo being
 // non-empty. Substrate role-walk at the verb gates whether the

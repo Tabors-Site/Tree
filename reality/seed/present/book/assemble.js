@@ -33,8 +33,9 @@ export async function assembleStory(
     branch = "0",
     being = null,
     moment = null,
+    space = null,
     depth = null,
-    nameId = null,
+    nameId = undefined,
     limit = 0,
     since = null,
   } = {},
@@ -43,26 +44,34 @@ export async function assembleStory(
   const q = { branch: String(branch) };
   if (since) q.date = { $gt: since instanceof Date ? since : new Date(since) };
 
+  // The views are ONE coordinate system, not four parallels: WHO (being → lineage → world, the
+  // same author-axis at three widths) × WHEN (a moment's cross-section) × WHERE (a space's whole
+  // history). Each is the same scoped fold — only the filter on which facts it reads changes.
   if (scope === "being" && being) {
-    // the being's own thread, from its start — the being it ran through, or a Name that is it
+    // WHO, one: the being's own thread from its start — the being it ran through, or a Name that is it
     q.$or = [{ through: String(being) }, { by: String(being) }];
-  } else if (scope === "place" && moment) {
-    // one moment's story — the facts that act laid (its landings on every reel it touched)
-    q.actId = String(moment);
   } else if (scope === "lineage" && being) {
-    // the being + its descendants (the birth tree), to an optional stopping depth
+    // WHO, widened along the birth tree: the being + its descendants, to an optional stopping depth
     const ids = await descendantsOf(String(being), depth, String(branch));
     q.through = { $in: ids };
+  } else if (scope === "moment" && moment) {
+    // WHEN: one moment's cross-section — the facts that act laid (its landings on every reel it touched)
+    q.actId = String(moment);
+  } else if ((scope === "place" || scope === "space") && space) {
+    // WHERE: a space's whole history — everything that ever happened to/in that location, across all time
+    q["of.id"] = String(space);
   }
-  // scope "world" → the whole branch (no extra filter)
+  // scope "world" → WHO, all authors: the whole branch (no extra filter)
 
   let cursor = Fact.find(q).sort({ date: 1, seq: 1 }).lean();
   if (limit) cursor = cursor.limit(limit);
   const facts = await cursor;
   const names = await resolveNames(facts, String(branch));
-  // first-person ("I …", recall) for the FOCAL being's own lines; third-person (saw) otherwise
+  // first-person ("I …") for the FOCAL being's own lines; third-person (saw) otherwise. An
+  // explicit nameId (INCLUDING null) overrides: recall passes its own being for a `recalled` view
+  // (first person) and null for a `saw` view (third person); the book defaults to the being it scopes.
   const focal =
-    nameId ?? (scope === "being" || scope === "lineage" ? being : null);
+    nameId !== undefined ? nameId : (scope === "being" || scope === "lineage" ? being : null);
   return weave(facts, focal, names);
 }
 
@@ -189,7 +198,20 @@ function pastPhrase(f, names) {
     case "declare":
       return `${pastOf("declare")} ${p.name || targetName(target, names) || displayName(beingOf(f), names)}`.trimEnd();
     case "summon":
-      return `${pastOf("call")} ${targetName(target, names) || displayName(recv(f), names) || "someone"}`;
+    case "call": {
+      // Rendered in the Word (book only — NOT a change to the call fact). The reach verb shows
+      // only when it carries weight: a REPLY shows "replied to Y"; an intent-only reach shows
+      // "called Y to <intent>". A plain message IMPLIES the call — just "said '…' to Y" (Tabor).
+      // Any other deed in the same act (a birth, etc.) joins on via the weave's "and".
+      const who = displayName(recv(f), names) || targetName(target, names) || "someone";
+      const said = p.content ?? p.message ?? p.saying ?? p.said;
+      const hasSaid = said != null && said !== "";
+      const intent = p.intent && !["message", "talk", "say", "reply", "call", "summon"].includes(p.intent) ? String(p.intent).replace(/-/g, " ") : null; // an intent LABEL, not a deed — no past-tensing
+      if (f.inReplyTo || p.inReplyTo)
+        return hasSaid ? `${pastOf("reply")} to ${who}, and ${pastOf("say")} "${said}"` : `${pastOf("reply")} to ${who}`;
+      if (hasSaid) return `${pastOf("say")} "${said}" to ${who}`;                 // message → the call is implied
+      return intent ? `${pastOf("call")} ${who} to ${intent}` : `${pastOf("call")} ${who}`; // intent-only → "called"
+    }
     case "verdict": {
       // the recorded memory of a recall — "saw the world that it was good (because …)". The
       // mode renders by chain (recalled=own, saw=world); the reason is the why, kept for next time.

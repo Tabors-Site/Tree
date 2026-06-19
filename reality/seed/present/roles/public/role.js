@@ -41,7 +41,7 @@ export const publicRole = Object.freeze({
    * No-op summon. Anything addressed to @public is silently dropped —
    * no Act, no Fact, no response. By design.
    */
-  async summon(_message, _ctx) {
+  async call(_message, _ctx) {
     return null;
   },
 });

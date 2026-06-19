@@ -45,7 +45,7 @@ import "../styles/role-manager-panel.css";
 // seed/present/roles/roleFlow.js for the matching set on the server.
 const FIELDS = [
   // Who
-  { path: "verb",                 label: "the verb",                  type: "select", options: ["do", "summon", "be"] },
+  { path: "verb",                 label: "the verb",                  type: "select", options: ["do", "call", "be"] },
   { path: "action",               label: "the DO action name",        type: "text"   },
   { path: "operation",            label: "the BE op name",            type: "text"   },
   { path: "intent",               label: "the intent",                type: "text"   },

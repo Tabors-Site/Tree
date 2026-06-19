@@ -150,7 +150,7 @@ DOCTRINE:
 - When unsure, ASK. The operator is the source of truth on intent.
 `,
 
-  async summon(_message, _ctx) {
+  async call(_message, _ctx) {
     // LLM-cognition role: the seed factory builds the moment, runTurn
     // executes the LLM step, tool calls land via canDo on the normal
     // DO path. No custom summon body needed; the moment-assigner reads

@@ -110,6 +110,6 @@ roleFlow theory unless the user asks . that's roleflow-composer's
 job.
 `.trim(),
 
-  // No custom summon . defaultSummon (the LLM dispatcher) handles
+  // No custom summon . defaultCall (the LLM dispatcher) handles
   // moments when this role is the active primary.
 });

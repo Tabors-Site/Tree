@@ -35,8 +35,8 @@ import InboxProjection, { priorityRankOf } from "./inboxProjection.js";
 import { registerCrossCuttingHandler } from "../../../present/stamper/2-fold/foldEngine.js";
 import { assertBranchOrThrow } from "../../../materials/projections.js";
 
-async function handleSummon(fact /*, type, id*/) {
-  if (fact?.verb !== "summon") return;
+async function handleCall(fact /*, type, id*/) {
+  if (fact?.verb !== "call") return;
   const params = fact.params || {};
   // Recipient is the fact's object (right stance); summoner is
   // through (the actor). Renamed from be:summon (which carried
@@ -105,7 +105,7 @@ async function handleBeSever(fact /*, type, id*/) {
 // handler is invoked directly from stamped.js (see closeInboxOnAnswer
 // below) because Act seals are not fact appends — Acts are their own
 // primitive.
-registerCrossCuttingHandler(handleSummon);
+registerCrossCuttingHandler(handleCall);
 registerCrossCuttingHandler(handleBeSever);
 
 /**

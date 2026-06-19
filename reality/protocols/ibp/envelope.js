@@ -33,7 +33,7 @@ import { IbpError, IBP_ERR } from "../../seed/ibp/protocol.js";
 //      separate the extension namespace from the role name.
 // Both shapes participate in classifyAddress / stripBeingQualifier.
 const EMBODIMENT_SUFFIX = /@[a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)?$/i;
-const VALID_VERBS = new Set(["see", "do", "summon", "be"]);
+const VALID_VERBS = new Set(["see", "do", "call", "be"]);
 
 /**
  * Classify an address string into its kind. The kind names "place" /
@@ -173,7 +173,7 @@ export async function parseUnifiedEnvelope(msg) {
         );
       }
       break;
-    case "summon":
+    case "call":
       if (addressKind !== "stance") {
         throw new IbpError(
           IBP_ERR.INVALID_INPUT,

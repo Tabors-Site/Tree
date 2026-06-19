@@ -2,7 +2,7 @@
 //
 // InboxProjection. The cross-cutting fold of open summons per being.
 //
-// A SUMMON is the summoner's act and deposits a `be:summon` fact on
+// A CALL is the summoner's act and deposits a `call` fact on
 // the summoner's reel, with `of = { kind: "being", id: recipient }`.
 // Single-writer holds — no one writes another being's reel — so the
 // summon-fact never lands on the recipient's reel.
@@ -13,7 +13,7 @@
 // materialization — a row per open summon, indexed by recipient.
 //
 // Lifecycle:
-//   `be:summon` fact appears on any reel → upsert row keyed by
+//   `call` fact appears on any reel → upsert row keyed by
 //      correlation, with recipient = of.id, plus the summon's
 //      params for the scheduler to read.
 //   `be:sever` fact appears on any reel → delete rows whose
@@ -27,7 +27,7 @@
 //
 // All three handlers live in the fold engine's cross-cutting dispatch
 // (see present/fold/foldEngine.js crossCuttingHandlers). The
-// projection is a cache: rebuildable by walking all be:summon facts
+// projection is a cache: rebuildable by walking all call facts
 // since genesis, applying the same three rules. Self-healing — a
 // missed fold means the next round catches up.
 //
@@ -42,7 +42,7 @@
 // inboxProjectionFold.js is the authority for what each row looks
 // like; the schema is Mongoose mechanics. Three-slot rule applies
 // in adapted form: Identity (`_id` = correlation), Figure (everything
-// the handler upserts from be:summon facts), Cache-control (no
+// the handler upserts from call facts), Cache-control (no
 // foldedSeq here — cross-cutting projections don't carry one). See
 // seed/materials/being/being.js header for the canonical projection
 // doctrine. Fields declared below collapse into `strict: false` when
@@ -58,7 +58,7 @@ const InboxProjectionSchema = new mongoose.Schema({
   recipient:       { type: String, ref: "Being", required: true, index: true },
   summoner:        { type: String, ref: "Being", default: null, index: true },
 
-  // Summon envelope captured from be:summon fact params. The
+  // Summon envelope captured from call fact params. The
   // scheduler reads these to decide pick order + build the moment.
   sender:          { type: String, default: null },
   content:         { type: mongoose.Schema.Types.Mixed, default: null },

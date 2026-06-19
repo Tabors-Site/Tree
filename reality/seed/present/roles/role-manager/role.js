@@ -59,7 +59,7 @@ export const roleManagerRole = Object.freeze({
     },
   ],
 
-  async summon(_message, _ctx) {
+  async call(_message, _ctx) {
     return null;
   },
 });

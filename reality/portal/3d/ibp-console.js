@@ -10,7 +10,7 @@ import "../styles/ibp-console.css";
 // socket. Useful during early-protocol development when ops are
 // registered faster than UI is built for them.
 
-const VERBS = ["see", "do", "summon", "be"];
+const VERBS = ["see", "do", "call", "be"];
 
 const BE_OPS = ["birth", "connect", "release"];
 
@@ -133,7 +133,7 @@ function runVerb(client, verb, address, payload) {
   switch (verb) {
     case "see":    return client.see(address, payload);
     case "do":     return client.do(address, payload.act, payload.args || {});
-    case "summon": {
+    case "call": {
       const { message, ...threading } = payload;
       return client.summon(address, message, threading);
     }
@@ -150,7 +150,7 @@ function defaultPayloadFor(verb) {
   switch (verb) {
     case "see":    return JSON.stringify({ live: false }, null, 2);
     case "do":     return JSON.stringify({ act: "", args: {} }, null, 2);
-    case "summon": return JSON.stringify({ message: { content: "" } }, null, 2);
+    case "call": return JSON.stringify({ message: { content: "" } }, null, 2);
     case "be":     return JSON.stringify({ act: "connect", name: "", password: "" }, null, 2);
     default:       return "{}";
   }
@@ -160,7 +160,7 @@ function payloadHintFor(verb) {
   switch (verb) {
     case "see":    return "options for SEE: { live }";
     case "do":     return "DO: { act: \"create-child\" | \"set-meta\" | …, args: { … } }";
-    case "summon": return "SUMMON: { message: { content, … }, from?, inReplyTo?, correlation? }";
+    case "call": return "SUMMON: { message: { content, … }, from?, inReplyTo?, correlation? }";
     case "be":     return `BE: { act: "${BE_OPS.join(" | ")}", name?, password?, … }`;
     default:       return "";
   }
@@ -170,7 +170,7 @@ function addressPlaceholderFor(verb, place) {
   switch (verb) {
     case "see":    return `${place}/.discovery`;
     case "do":     return `${place}/<spaceId>`;
-    case "summon": return `${place}/<spaceId>@<being>`;
+    case "call": return `${place}/<spaceId>@<being>`;
     case "be":     return `${place}/@cherub`;
     default:       return place;
   }

@@ -220,7 +220,7 @@ primitives:
 
 - **InboxProjection** ([past/projections/inbox/inboxProjection.js](past/projections/inbox/inboxProjection.js)),
   open summons addressed to each being. Built by cross-cutting fold
-  from `be:summon` and `be:sever` facts. The scheduler reads its pick
+  from `call` and `be:sever` facts. The scheduler reads its pick
   queue from this collection.
 - **ThreadsProjection** ([past/projections/threads/threadsProjection.js](past/projections/threads/threadsProjection.js)),
   live coordination chains keyed by `rootCorrelation`. Built the same
@@ -236,7 +236,7 @@ whole public surface.
 | ---------- | -------------------- | -------------------------------------------------------------------------------------------- |
 | **SEE**    | Space, Matter, Being | Resolve the stance, fold the leaf and occupants, return a place descriptor. Writes nothing.  |
 | **DO**     | Space, Matter        | Mutate at the target through a registered operation. Stamps a Fact on the target's reel.     |
-| **SUMMON** | Being                | Stamp a `be:summon` Fact on the summoner's reel; the cross-cutting fold maintains the inbox. |
+| **CALL**   | Being                | Stamp a `call` Fact on the summoner's reel; the cross-cutting fold maintains the inbox. |
 | **BE**     | Being (self)         | A being's lifecycle and session: birth, connect, release, switch, death. Stamps a Fact on the actor's own reel. |
 | **NAME**   | Name                 | Mint and close identities: `declare` (a new Name, a fresh keypair) and `banish`. Stamps on the Name's own reel, the most primitive reel, outside the world's branches. |
 
@@ -375,7 +375,7 @@ the Act whose moment deposited it.
 **InboxProjection** and **ThreadsProjection** are caches the
 cross-cutting fold maintains, open summons by recipient and live
 coordination chains by `rootCorrelation`. They duplicate fact data
-(an open summon also has a `be:summon` Fact on the summoner's reel)
+(an open summon also has a `call` Fact on the summoner's reel)
 but exist for indexability: the scheduler's pick query and the
 `./threads` SEE both need O(1) lookups the per-reel scan cannot give.
 They are rebuildable by replaying their fact history.
@@ -493,8 +493,8 @@ that span reels. Three uses today, one mechanism:
 | Projection            | Handler triggers                                                                 | Built in                                                                                               |
 | --------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | **Position index**    | Every reducer writes `state.position`; `findByPosition` queries the index.       | Implicit in projection field                                                                           |
-| **InboxProjection**   | `be:summon` upserts row; `be:sever` deletes by rootCorrelation; Act seal evicts. | [past/projections/inbox/inboxProjectionFold.js](past/projections/inbox/inboxProjectionFold.js)         |
-| **ThreadsProjection** | `be:summon` upserts row + adds participants; `be:sever` marks; Act seal bumps.   | [past/projections/threads/threadsProjectionFold.js](past/projections/threads/threadsProjectionFold.js) |
+| **InboxProjection**   | `call` upserts row; `be:sever` deletes by rootCorrelation; Act seal evicts. | [past/projections/inbox/inboxProjectionFold.js](past/projections/inbox/inboxProjectionFold.js)         |
+| **ThreadsProjection** | `call` upserts row + adds participants; `be:sever` marks; Act seal bumps.   | [past/projections/threads/threadsProjectionFold.js](past/projections/threads/threadsProjectionFold.js) |
 
 Future cross-reel projections add one registry line; the engine never
 changes. Per FOLD.md, the engine never grows; the materials catalog
@@ -814,7 +814,7 @@ values:
   facts came from are what surfaces.
 
 **The turn is an act.** A being shifts orientation by self-summoning
-with a new ω. One `be:summon` Fact lands on the being's own reel
+with a new ω. One `call` Fact lands on the being's own reel
 (target = self, params.recipient = self, params.orientation = ω′).
 Touches no other reel — the canonical inner act. The scheduler
 picks the InboxProjection row; assign reads orientation from the
@@ -829,7 +829,7 @@ forward — a being can turn itself; it cannot turn another being.
 **Inner vs outer acts.** A classifier in
 [orientation.js](present/stamper/2-fold/orientation.js) reads the ΔF and the doer:
 inner when every fact targets the doer's own reel AND no
-`be:summon` names another recipient; outer otherwise. This is
+`call` names another recipient; outer otherwise. This is
 single-writer read as a classifier — no new category, no new
 primitive. Self-summons (the canonical inner act) classify inner;
 DO/BE that touch any other reel classify outer.
@@ -971,7 +971,7 @@ projection row (outside genesis). The fact insert is the only
 synchronous commit; everything else is derived and self-healing on
 the next fold pass.
 
-**SUMMON respects single-writer.** A `be:summon` Fact lands on the
+**SUMMON respects single-writer.** A `call` Fact lands on the
 summoner's reel (the actor's), with the recipient in
 `params.recipient` (and the orientation, the rootCorrelation, the
 priority, the content). The recipient's reel is untouched. The
@@ -1134,7 +1134,7 @@ together — content addressed all the way down), `date`, `verb`
 (`"do"|"be"`), `action`, `beingId` (the actor), `target`
 (`{ kind, id }`, the reel this fact rides), `params`, `result`,
 `truncated` (size-cap flag), `actId` (the moment-frame; null for
-genesis scaffold and for the be:summon fact stamped OUTSIDE a moment
+genesis scaffold and for the call fact stamped OUTSIDE a moment
 by enqueueIntake), `sessionId`, `seq` (per-reel monotonic, allocated
 under the per-reel append lock), `branch`, `homeReality` +
 `wasRemote` (federation provenance), and the chain field:
@@ -1147,7 +1147,7 @@ Non-reel-bearing facts (target.kind ∈ {place, stance} or
 target-less) carry `p=null` and stay outside verification . they
 have no reel to chain against.
 
-Every DO and BE stamps one Fact; SUMMON stamps a `be:summon` Fact on
+Every DO and BE stamps one Fact; CALL stamps a `call` Fact on
 the summoner's reel (with `params.orientation` carrying the INNER-FOLD
 ω, defaulting to forward); sever stamps `be:sever` on the severer's
 reel. The append IS the commit.

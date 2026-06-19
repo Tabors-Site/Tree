@@ -159,7 +159,7 @@ import {
 // operations on space, matter, and beings.
 import { doVerb }     from "./ibp/verbs/do.js";
 import { seeVerb }    from "./ibp/verbs/see.js";
-import { summonVerb } from "./ibp/verbs/summon.js";
+import { callVerb } from "./ibp/verbs/call.js";
 import { beVerb }     from "./ibp/verbs/be.js";
 import { nameVerb }   from "./ibp/verbs/name.js";
 // Side-effect imports. Each material owns the ops that target it; the
@@ -296,7 +296,7 @@ export function buildRealityServices({
     // surfaces over the same grammar; new code prefers the verbs.
     see: seeVerb,
     do: doVerb,
-    summon: summonVerb,
+    summon: callVerb,
     be: beVerb,
     name: nameVerb,
 

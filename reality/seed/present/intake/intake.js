@@ -4,7 +4,7 @@
 //
 // Per Bucket 3 Option D (2026-05-23) the intake stopped being storage
 // on Space.qualities and became a query over the InboxProjection
-// projection (which is itself a fact-derived projection of be:summon
+// projection (which is itself a fact-derived projection of call
 // facts on summoners' reels). The scheduler picks rows out of that
 // collection; "currently running" is transient in-memory state in
 // scheduler.js (not durable). A moment seal commits the Act with
@@ -13,7 +13,7 @@
 //
 // Two kinds of intake remain operationally distinguishable:
 //
-//   "summon"        — created by the SUMMON verb stamping a be:summon
+//   "summon"        — created by the CALL verb stamping a call
 //                     Fact on the summoner's reel; the cross-cutting
 //                     fold creates the InboxProjection row. The
 //                     enqueueIntake here for kind="summon" is RETIRED
@@ -21,7 +21,7 @@
 //
 //   "transport-act" — the human acted from their own transport
 //                     (WS/HTTP/CLI). No SUMMON envelope; the human is
-//                     self-summoning, treated as a self-be:summon
+//                     self-summoning, treated as a self-call
 //                     where the summoner == the recipient. The
 //                     InboxProjection row appears the same way; the
 //                     scheduler treats them uniformly.
@@ -61,8 +61,8 @@ export async function getPendingIntakeCount() {
  * The cross-cutting fold materializes the InboxProjection row; the
  * scheduler picks it like any other entry.
  *
- * kind="summon" entries are no longer accepted here — the SUMMON
- * verb in seed/ibp/verbs/summon.js stamps the be:summon Fact directly.
+ * kind="summon" entries are no longer accepted here — the CALL
+ * verb in seed/ibp/verbs/call.js stamps the call Fact directly.
  *
  * @returns {Promise<{ correlation, sentAt, deduped?: boolean }>}
  */
@@ -117,8 +117,8 @@ export async function enqueueIntake(spaceId, beingId, entry) {
   // OUTSIDE a moment (it kicks one off), so emitFact's no-moment
   // path applies: immediate commit via sealFacts singleton.
   await emitFact({
-    verb:    "summon",
-    action:  "summon",
+    verb:    "call",
+    action:  "call",
     beingId: String(beingId),
     // The actor NAME. This self-summon is stamped OUTSIDE a moment (it
     // kicks one off), so emitFact's actorAct.by derivation can't
@@ -220,7 +220,7 @@ export async function pickNextIntake(spaceId, beingId, opts = {}) {
   const content = row.content ? restoreSecrets(row._id, row.content) : row.content;
   return {
     entry: {
-      kind:            content?.kind || (content?.transportAct ? "transport-act" : "summon"),
+      kind:            content?.kind || (content?.transportAct ? "transport-act" : "call"),
       correlation:     row._id,
       rootCorrelation: row.rootCorrelation,
       from:            row.sender,
@@ -243,7 +243,7 @@ export async function pickNextIntake(spaceId, beingId, opts = {}) {
       act:             content?.act || null,
       identity:        content?.identity || null,
       // Branch the moment will run in. Sourced from the inbox row's
-      // branch field (written by the fold from the be:summon fact's
+      // branch field (written by the fold from the call fact's
       // branch). assign.js reads entry.branch to seed moment.
       // A row with null branch indicates a data integrity issue — the
       // fold should always have populated it from the originating

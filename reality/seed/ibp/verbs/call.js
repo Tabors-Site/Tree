@@ -13,26 +13,26 @@
 //
 // Two entries:
 //
-//   summonVerb         — public, parses the stance, resolves the
+//   callVerb         — public, parses the stance, resolves the
 //                        being, dispatches. Threads-cut short-circuit:
 //                        `<reality>/./threads/<id>` routes to
 //                        cutThread.
 //
-//   summonByResolved   — for callers that already have the receiver
+//   callByResolved   — for callers that already have the receiver
 //                        and inbox space resolved (DO-trigger fan-out,
 //                        scheduled wakes). Skips parse + resolve; auth
 //                        still runs. The only sanctioned in-process
 //                        path for "internal" summons — anything
 //                        writing to a being's inbox comes through
-//                        here or through summonVerb.
+//                        here or through callVerb.
 //
 // Minting a new being is a BE op, not a SUMMON. The auth-running
 // public entry for that is `birthBeing` in
 // materials/being/identity/birth.js. Earlier this file hosted
 // `summonCreateBeing` for historical reasons; moved 2026-06-03.
 //
-// Private: _dispatchSummon (shared tail used by both summonVerb and
-// summonByResolved), validateSummonMessage, runSummoning,
+// Private: _dispatchCall (shared tail used by both callVerb and
+// callByResolved), validateCallMessage, runCalling,
 // pathOfResolved.
 
 import { randomUUID } from "crypto";
@@ -84,10 +84,10 @@ const _PRIORITY_NUM_TO_ENUM = {
  *   async  — { messageId, status: "accepted" }; reply later via onResponse
  *   none   — { messageId, status: "accepted" }
  */
-export async function summonVerb(stance, message, opts = {}) {
-  assertVerbCaller("summon", opts);
-  refuseHistoricalWrite("summon", stance, opts);
-  const validatedMessage = validateSummonMessage(message);
+export async function callVerb(stance, message, opts = {}) {
+  assertVerbCaller("call", opts);
+  refuseHistoricalWrite("call", stance, opts);
+  const validatedMessage = validateCallMessage(message);
 
   const {
     identity = null, currentUser = null, currentReality = null,
@@ -138,7 +138,7 @@ export async function summonVerb(stance, message, opts = {}) {
     const threadsSpaceId = await getThreadsSpaceId();
     const decision = await authorize({
       identity,
-      verb:   "summon",
+      verb:   "call",
       target: { kind: "thread", id: targetThreadId, spaceId: threadsSpaceId },
       moment,
       // The caller's session branch (their grants live there). The
@@ -195,7 +195,7 @@ export async function summonVerb(stance, message, opts = {}) {
   // ride moment.actorAct?.branch; wire-originated calls ride opts.currentBranch.
   // Throws MISSING_BRANCH if neither was attached (a threading bug at
   // the perimeter, surfaced loud per the branch-hardening doctrine).
-  const branch = resolveBranchForFact(moment, currentBranch, "summon");
+  const branch = resolveBranchForFact(moment, currentBranch, "call");
   let toBeingSlot = await findByName("being", qualifier, branch);
   let toBeing = toBeingSlot ? { _id: toBeingSlot.id, ...toBeingSlot.state } : null;
   if (!toBeing && resolved.spaceId) {
@@ -246,10 +246,10 @@ export async function summonVerb(stance, message, opts = {}) {
     );
   }
 
-  // branch was already resolved at the top of summonVerb (line ~172)
-  // for the findByName lookup; pass it through to _dispatchSummon so
+  // branch was already resolved at the top of callVerb (line ~172)
+  // for the findByName lookup; pass it through to _dispatchCall so
   // the fact emission uses the same value.
-  return _dispatchSummon({
+  return _dispatchCall({
     resolved, toBeing, activeRole, role, validatedMessage,
     identity, onResponse, onError, moment, branch,
     actorBranch,
@@ -270,7 +270,7 @@ export async function summonVerb(stance, message, opts = {}) {
  *
  * Only SUMMONs make SUMMONs. This is the single sanctioned entry for
  * those internal paths — anything that writes to a being's inbox
- * comes through here or through summonVerb. Direct appendToInbox +
+ * comes through here or through callVerb. Direct appendToInbox +
  * wake calls bypass the envelope contract and are forbidden.
  *
  * Branch precedence (no silent default to "0"):
@@ -289,7 +289,7 @@ export async function summonVerb(stance, message, opts = {}) {
  * @param {string} [args.branch]      explicit branch for non-moment callers
  * @param {object} [args.moment]   moment ctx for inside-moment callers
  */
-export async function summonByResolved(args) {
+export async function callByResolved(args) {
   const {
     toBeingId, inboxSpaceId, message, activeRole: roleOverride,
     identity: rawIdentity,
@@ -298,13 +298,13 @@ export async function summonByResolved(args) {
   // Accept bare-string identity shorthand (typically `I_AM` for seed-
   // internal summons) alongside the regular `{beingId, name}` shape.
   const identity = normalizeIdentity(rawIdentity);
-  if (!toBeingId)    throw new IbpError(IBP_ERR.INVALID_INPUT, "summonByResolved requires toBeingId");
-  if (!inboxSpaceId) throw new IbpError(IBP_ERR.INVALID_INPUT, "summonByResolved requires inboxSpaceId");
+  if (!toBeingId)    throw new IbpError(IBP_ERR.INVALID_INPUT, "callByResolved requires toBeingId");
+  if (!inboxSpaceId) throw new IbpError(IBP_ERR.INVALID_INPUT, "callByResolved requires inboxSpaceId");
 
-  const validatedMessage = validateSummonMessage(message);
+  const validatedMessage = validateCallMessage(message);
 
   const { loadOrFold } = await import("../../materials/projections.js");
-  const branch = resolveBranchForFact(moment, argsBranch, "summon");
+  const branch = resolveBranchForFact(moment, argsBranch, "call");
   const toSlot = await loadOrFold("being", toBeingId, branch);
   if (!toSlot) {
     throw new IbpError(IBP_ERR.BEING_NOT_FOUND, `No being with id ${toBeingId} on branch ${branch}`);
@@ -320,7 +320,7 @@ export async function summonByResolved(args) {
     );
   }
 
-  return _dispatchSummon({
+  return _dispatchCall({
     resolved: { spaceId: inboxSpaceId, leafId: inboxSpaceId, being: activeRole },
     toBeing, activeRole, role, validatedMessage,
     identity, onResponse, onError, moment, branch,
@@ -332,19 +332,19 @@ export async function summonByResolved(args) {
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * Shared dispatch tail used by summonVerb and summonByResolved.
- * Runs auth, emits the be:summon Fact (joins ctx.deltaF when in-
+ * Shared dispatch tail used by callVerb and callByResolved.
+ * Runs auth, emits the call Fact (joins ctx.deltaF when in-
  * moment), and either runs the role's summon handler synchronously
  * or registers a handoff and nudges the scheduler.
  */
-async function _dispatchSummon({
+async function _dispatchCall({
   resolved, toBeing, activeRole, role, validatedMessage,
   identity, onResponse, onError, moment = null, branch,
   actorBranch = null,
 }) {
   const decision = await authorize({
     identity,
-    verb:   "summon",
+    verb:   "call",
     // `being` is the TARGET BEING'S NAME — canSummon patterns
     // ("@cherub", "@food-*") match being names, and beings are
     // addressed individually even when several share a role. Passing
@@ -373,7 +373,7 @@ async function _dispatchSummon({
     // caller's session branch as actorBranch (the `branch` param is
     // the FACT's destination — the wrong side for grants). The final
     // fallback keeps seed-internal callers (scheduler wakes,
-    // summonByResolved) working: their actor is the substrate and
+    // callByResolved) working: their actor is the substrate and
     // the destination branch is their world.
     actorBranch: moment?.actorAct?.branch || actorBranch || branch || null,
   });
@@ -451,8 +451,8 @@ async function _dispatchSummon({
   // because the BE namespace is for self-acts (birth/connect/release);
   // summoning another being is not a self-act.
   await emitFact({
-    verb:    "summon",
-    act:     "summon",
+    verb:    "call",
+    act:     "call",
     through: summonerBeingId,
     // The actor NAME (the summoner's signing identity). In-moment summons
     // would have emitFact derive this from moment.actorAct.by; we
@@ -501,8 +501,8 @@ async function _dispatchSummon({
     },
     actId: moment?.actId || null,
     // Branch the summon fact lands on, pre-resolved at the entry point
-    // (summonVerb / summonByResolved both call resolveBranchForFact
-    // before dispatching here). _dispatchSummon trusts the value.
+    // (callVerb / callByResolved both call resolveBranchForFact
+    // before dispatching here). _dispatchCall trusts the value.
     branch,
   }, moment);
 
@@ -519,7 +519,7 @@ async function _dispatchSummon({
   if (role.respondMode === "sync") {
     let responseEntry = null;
     if (role.triggerOn.includes("message")) {
-      responseEntry = await runSummoning(role, innerCtx);
+      responseEntry = await runCalling(role, innerCtx);
     }
     if (!responseEntry) return { status: "accepted", messageId };
     return responseEntry;
@@ -549,7 +549,7 @@ async function _dispatchSummon({
     });
 
     // Phase 2: defer the scheduler-nudge until AFTER sealAct commits.
-    // The be:summon Fact above is in the caller's ΔF (when inside a
+    // The call Fact above is in the caller's ΔF (when inside a
     // moment); the InboxProjection row only materializes when sealAct
     // commits the ΔF + runs foldAfterCommit. Wake-before-fold would
     // nudge the scheduler at an empty projection. Outside a moment
@@ -586,9 +586,9 @@ async function _dispatchSummon({
  *   activeRole  OPTIONAL hint at which of the receiver's roles to wake
  *   attachments OPTIONAL caller-side metadata; opaque to seed
  */
-function validateSummonMessage(message) {
+function validateCallMessage(message) {
   if (!message || typeof message !== "object") {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "reality.summon requires a `message` object");
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "reality.call requires a `message` object");
   }
   if (typeof message.from !== "string" || !message.from.length) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "`message.from` is required");
@@ -629,7 +629,7 @@ function validateSummonMessage(message) {
   }
   // Orientation (INNER-FOLD spec). External summons must carry
   // forward — only self-summons may set half or inward, enforced
-  // in _dispatchSummon above. Default to forward when absent.
+  // in _dispatchCall above. Default to forward when absent.
   try {
     message.orientation = validateOrientation(message.orientation);
   } catch (err) {
@@ -644,10 +644,10 @@ function validateSummonMessage(message) {
  * is consulted for text/content; an empty return means "no reply"
  * (the role chose not to speak back).
  */
-async function runSummoning(role, ctx) {
+async function runCalling(role, ctx) {
   let result;
   try {
-    result = await role.summon(ctx.message, ctx);
+    result = await role.call(ctx.message, ctx);
   } catch (err) {
     log.error("Verbs", `being "${ctx.being}" summoning errored: ${err.message}`);
     throw new IbpError(IBP_ERR.LLM_FAILED, `Summoning failed: ${err.message}`);

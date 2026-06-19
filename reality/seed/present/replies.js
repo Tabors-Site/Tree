@@ -13,9 +13,9 @@
 //   EMISSION  (emitReplyToAsker, emitReplyToStance)
 //     A role's summon() has finished its moment and the role
 //     wants someone else to have the next moment. I build the
-//     reply envelope, hand it to summonByResolved, it lands in
+//     reply envelope, hand it to callByResolved, it lands in
 //     the asker's inbox. The asker's next moment will respond to
-//     it. defaultSummon is the canonical caller; every role that
+//     it. defaultCall is the canonical caller; every role that
 //     passes its act back up a chain ends here.
 //
 //   AGGREGATION  (aggregate)
@@ -27,7 +27,7 @@
 //     canonical user.
 //
 // Both halves share a discipline: neither touches the inbox
-// directly. Emission writes through the verb (summonByResolved);
+// directly. Emission writes through the verb (callByResolved);
 // aggregation never reads — replies are forwarded by the role's
 // summon() handler via notify(). Only SUMMONs make SUMMONs, and
 // replies are SUMMONs.
@@ -44,7 +44,7 @@ import { randomUUID } from "crypto";
 import log from "../seedReality/log.js";
 import Being from "../materials/being/being.js";
 import { readInbox } from "./intake/inbox.js";
-import { summonByResolved } from "../ibp/verbs/summon.js";
+import { callByResolved } from "../ibp/verbs/call.js";
 import { getRealityDomain } from "../ibp/address.js";
 
 // ─────────────────────────────────────────────────────────────────
@@ -119,7 +119,7 @@ export function buildResponseEntry({ result, handoff, originalEntry }) {
  * Emit a reply SUMMON to whoever originally addressed this being.
  *
  * Reads `originalMessage.from` (the asker's stance), resolves the
- * asker Being by name, and emits a SUMMON through summonByResolved
+ * asker Being by name, and emits a SUMMON through callByResolved
  * (which writes the inbox entry, wires the handoff, and wakes the
  * per-being scheduler — all atomically behind the envelope contract).
  *
@@ -203,7 +203,7 @@ export async function emitReplyToAsker({
 
     const content = payload ? { exit: exitText, ...payload } : exitText;
 
-    await summonByResolved({
+    await callByResolved({
       toBeingId:    String(askerBeing._id),
       inboxSpaceId: String(askerStance.spaceId),
       activeRole:   askerBeing.defaultRole || null,
@@ -244,7 +244,7 @@ export async function emitReplyToAsker({
  * rather than to the immediate sub-being sender.
  *
  * Parses the stance, resolves the asker Being by name, emits a SUMMON
- * through summonByResolved at that stance's position. Silent-best-
+ * through callByResolved at that stance's position. Silent-best-
  * effort on missing substrate.
  *
  * @param {object} opts
@@ -317,7 +317,7 @@ export async function emitReplyToStance({
     const rootC = rootCorrelation || correlation;
     const content = payload ? { exit: exitText, ...payload } : exitText;
 
-    await summonByResolved({
+    await callByResolved({
       toBeingId:    String(askerBeing._id),
       inboxSpaceId: String(parsed.spaceId),
       activeRole:   askerBeing.defaultRole || null,

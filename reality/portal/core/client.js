@@ -11,7 +11,7 @@
 //
 // Server pushes ride the SAME `ibp` event:
 //
-//   { verb: "summon", payload: <inbox entry> }
+//   { verb: "call", payload: <inbox entry> }
 //   { verb: "see",    payload: { kind: "patch"|"replace"|"invalidate",
 //                                spaceId, data } }
 //
@@ -124,11 +124,11 @@ export class PortalClient {
 
     // Single IBP wire event — one listener, route by envelope.verb.
     // Server-push envelopes:
-    //   { verb: "summon", payload: <inbox entry, optionally w/ result> }
+    //   { verb: "call", payload: <inbox entry, optionally w/ result> }
     //   { verb: "see",    payload: { kind, spaceId, data } }
     this.socket.on("ibp", (envelope) => {
       if (!envelope || typeof envelope !== "object") return;
-      if (envelope.verb === "summon") {
+      if (envelope.verb === "call") {
         const p = envelope.payload || {};
         // First: match against pending DO awaiters by correlation.
         // Transport-act results ride the SUMMON push shape — the
@@ -273,7 +273,7 @@ export class PortalClient {
     }
     const payload = { message, ...threading };
     // SUMMON can route through runTurn() (LLM round-trip); give it 90s.
-    return this._call("summon", normalize(stance), payload, { timeoutMs: 90000 });
+    return this._call("call", normalize(stance), payload, { timeoutMs: 90000 });
   }
 
   /**

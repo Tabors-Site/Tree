@@ -534,14 +534,14 @@ async function sendIntent(ctx, peerReality, message) {
   // Envelope intent is canonical (per seed/SUMMON.md): the auth gate
   // and the receiver's permitsReceiverSummon both read it from the
   // envelope. crossRealityDispatch passes payload.message straight
-  // through to summonVerb, so envelope.intent on the wire is the same
+  // through to callVerb, so envelope.intent on the wire is the same
   // envelope.intent the local verb stamps onto the summon Fact. The
   // rest of the federation fields (negotiationId, manifest, bundle,
   // etc.) ride inside content as before.
   const { intent: messageIntent, ...rest } = message || {};
   const envelope = {
     id:      uuidv4(),
-    verb:    "summon",
+    verb:    "call",
     address: `${peerReality}/@federation-manager`,
     payload: {
       message: {

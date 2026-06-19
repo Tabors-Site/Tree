@@ -1,6 +1,6 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// seedSummonTool.js . the SUMMON verb exposed as an LLM tool.
+// seedCallTool.js . the CALL verb exposed as an LLM tool.
 //
 // Speech to a being is SUMMON. There is no "respond" or "narrate"
 // verb in the model . a being that wants to speak to another being
@@ -24,11 +24,11 @@
 // `summon({content: "..."})` and the threading happens automatically.
 
 import { z } from "zod";
-import { summonVerb } from "../../../ibp/verbs/summon.js";
+import { callVerb } from "../../../ibp/verbs/call.js";
 import { getRealityDomain } from "../../../ibp/address.js";
 
-export const seedSummonTool = {
-  name: "summon",
+export const seedCallTool = {
+  name: "call",
   description:
     "Carry a message to a being's inbox so it wakes and processes it. Three " +
     "common shapes: " +
@@ -46,7 +46,7 @@ export const seedSummonTool = {
     "replied, call end-turn instead. " +
     "Authorization runs at the substrate layer; an unauthorized target " +
     "refuses with FORBIDDEN.",
-  verb: "summon",
+  verb: "call",
   schema: {
     content: z
       .string()
@@ -135,12 +135,12 @@ export const seedSummonTool = {
     const message = { from: fromStance, content };
     if (inReplyTo) message.inReplyTo = inReplyTo;
     // Stated purpose. Optional; when present rides the envelope (not
-    // content). summonVerb plumbs it to the auth gate and persists it
+    // content). callVerb plumbs it to the auth gate and persists it
     // on the summon Fact + InboxProjection row. See seed/SUMMON.md.
     if (typeof args?.intent === "string" && args.intent.length > 0) {
       message.intent = args.intent;
     }
-    // Orientation rides on the envelope. summonVerb validates that
+    // Orientation rides on the envelope. callVerb validates that
     // non-forward orientations are self-only (rejects half/inward on
     // cross-being summons). A being calling summon(target=self,
     // orientation="inward") wakes its next moment in pure reflection.
@@ -149,13 +149,13 @@ export const seedSummonTool = {
     }
 
     try {
-      const result = await summonVerb(
+      const result = await callVerb(
         targetStance,
         message,
         {
           identity: { beingId, name: name || null },
-          // Pass the FULL moment ctx, not a { actId } slice. summonVerb's
-          // emitFact reads ctx.deltaF to push the be:summon Fact onto the
+          // Pass the FULL moment ctx, not a { actId } slice. callVerb's
+          // emitFact reads ctx.deltaF to push the call Fact onto the
           // moment's ΔF; a truncated copy self-seals it outside the
           // moment and orphans the outer Act. callCtx.moment carries
           // deltaF.

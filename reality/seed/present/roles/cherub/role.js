@@ -1258,7 +1258,7 @@ export const cherubRole = Object.freeze({
     { verb: "do", word: "grant-role:human",  description: "anoint a new human at the place root" },
     { verb: "do", word: "grant-role:global", description: "give the baseline role to a new human" },
     {
-      verb: "summon",
+      verb: "call",
       word: "mate",
       as: "receiver",
       description: "Birth your first being through your name — a top-level being, owned by you (cherub is right below I_AM)",
@@ -1274,7 +1274,7 @@ export const cherubRole = Object.freeze({
   // not a vessel of cherub. Down the chain the name reuses summon:mate against
   // @birther / be:birth on its own beings. (A name CAN be given beings without
   // ever using cherub; this is just the typical first-being path on land.)
-  async summon(message, ctx) {
+  async call(message, ctx) {
     const intent = (typeof message === "object" && message !== null)
       ? (message.intent || message.kind || null)
       : null;

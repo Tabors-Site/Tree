@@ -423,12 +423,12 @@ export async function genesis(app, opts = {}) {
   // face by the assembler at moment-open (address entries via
   // seeVerb, named entries via the seeResolver registry). To see
   // more, the being moves (DO), changes role (BE / roleFlow), or
-  // the role spec is edited. The seed registers only do / summon /
+  // the role spec is edited. The seed registers only do / call /
   // be tools below; canSee covers perception.
   const { seedDoTool } =
     await import("./seed/present/cognition/llm/seedDoTool.js");
-  const { seedSummonTool } =
-    await import("./seed/present/cognition/llm/seedSummonTool.js");
+  const { seedCallTool } =
+    await import("./seed/present/cognition/llm/seedCallTool.js");
   const { seedBeTool } =
     await import("./seed/present/cognition/llm/seedBeTool.js");
   // end-turn is the explicit no-act call — the moment-level mirror
@@ -438,7 +438,7 @@ export async function genesis(app, opts = {}) {
   // instead of relying on the implicit no-tool-call → cognitionSee path.
   const { seedEndTurnTool } =
     await import("./seed/present/cognition/llm/seedEndTurnTool.js");
-  await registerSeedTools([seedDoTool, seedSummonTool, seedBeTool, seedEndTurnTool]);
+  await registerSeedTools([seedDoTool, seedCallTool, seedBeTool, seedEndTurnTool]);
 
   // The receptive role every human being carries. Without it, SUMMONs
   // to a human are rejected with ROLE_UNAVAILABLE. The role's summon

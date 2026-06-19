@@ -61,14 +61,14 @@ export const arrivalRole = Object.freeze({
   can: [
     { verb: "see", word: "arrival-view" },
     {
-      verb: "summon",
+      verb: "call",
       word: "@cherub",
       intent: "mate",
       as: "actor",
       description: "Request cherub to mint a new being and bind it to the session",
     },
     {
-      verb: "summon",
+      verb: "call",
       word: "@federation-manager",
       description: "Initiate or respond to a federation negotiation. Open to all callers, including canopy verified foreign federation managers from peer realities, so push and pull negotiations can start without prior grant. The federation manager's own handler decides what to do with the offer.",
     },
@@ -83,7 +83,7 @@ export const arrivalRole = Object.freeze({
    * SUMMON @arrival, the moment releases with no Act per the Round 5
    * seal-gate (no cognition → no act → no seal).
    */
-  async summon(_message, _ctx) {
+  async call(_message, _ctx) {
     return null;
   },
 });

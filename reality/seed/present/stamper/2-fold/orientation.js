@@ -20,7 +20,7 @@
 //             the forward face. Recall by causal adjacency.
 //
 // A being shifts orientation by SELF-SUMMONing with a new orientation.
-// The shift seals one fact (be:summon on the being's own reel) and
+// The shift seals one fact (call on the being's own reel) and
 // touches no other reel — an inner act. The next moment loads with
 // the new orientation carried on the summon's params.
 //
@@ -44,8 +44,8 @@ export const ORIENTATIONS = Object.freeze([
  * Validate an orientation string. Returns the normalized value, or
  * throws if the input is anything other than one of the three.
  *
- * Use this at every plumbing point — the SUMMON validator, the
- * be:summon Fact handler, the InboxProjection writer — so an
+ * Use this at every plumbing point — the CALL validator, the
+ * call Fact handler, the InboxProjection writer — so an
  * unknown value can never reach the fold.
  */
 export function validateOrientation(value, fallback = ORIENTATION.FORWARD) {

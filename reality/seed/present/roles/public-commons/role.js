@@ -43,7 +43,7 @@ export const publicCommonsRole = Object.freeze({
     { verb: "do", word: "set-being:position",  description: "walk to another space" },
     { verb: "do", word: "create-space",        description: "stake a new sub-space here" },
     { verb: "do", word: "create-matter",       description: "place matter here" },
-    { verb: "summon", word: "@cherub", description: "address the gate" },
+    { verb: "call", word: "@cherub", description: "address the gate" },
     { verb: "be", word: "release", description: "log out" },
   ],
 });

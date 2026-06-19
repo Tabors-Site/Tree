@@ -29,7 +29,7 @@
 // path that bypasses inbox entirely.
 //
 // No voice apparatus. Unlike the LLM role surface (which wires
-// through defaultSummon → runTurn) and unlike scripted roles (whose
+// through defaultCall → runTurn) and unlike scripted roles (whose
 // summon code IS their behavior), the human role's summon is an
 // explicit no-op for the SUMMON case. Their transport-acts dispatch
 // the wrapped verb at momentum directly. There is no voices/human/
@@ -56,7 +56,7 @@ export const humanRole = Object.freeze({
   can: [
     { verb: "see", word: "*" },
     { verb: "do", word: "*", description: "any action" },
-    { verb: "summon", word: "@*", description: "summon any being" },
+    { verb: "call", word: "@*", description: "summon any being" },
     { verb: "be", word: "*", description: "any BE operation, including birth (mint a child being)" },
   ],
   respondMode: "async",
@@ -68,8 +68,8 @@ export const humanRole = Object.freeze({
   triggerOn: [],
 
   // No-op summon: humans don't auto-dispatch. Present so any path that
-  // does role.summon(...) doesn't crash.
-  async summon(_message, _ctx) {
+  // does role.call(...) doesn't crash.
+  async call(_message, _ctx) {
     return null;
   },
 });

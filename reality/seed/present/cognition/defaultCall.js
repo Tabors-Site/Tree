@@ -1,6 +1,6 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// defaultSummon . the generic dispatch for an LLM moment.
+// defaultCall . the generic dispatch for an LLM moment.
 //
 // I prepare the moment, hand it to runLlmMoment (one stateless fold
 // in, one cognition result out), then route on the result's kind:
@@ -43,7 +43,7 @@ import {
  * @param {object} opts.role . the role spec
  * @returns {Promise<CognitionResult>}
  */
-export async function defaultSummon({ message, ctx, role }) {
+export async function defaultCall({ message, ctx, role }) {
   const startMs = Date.now();
   const scopeNodeId = ctx.spaceId || ctx.resolved?.spaceId;
   const roleName = role?.name || ctx.activeRole || "(unknown role)";

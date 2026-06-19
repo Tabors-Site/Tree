@@ -11,6 +11,7 @@ const DECLARED_PAST = new Map([
   ["set", "set"], ["be", "was"], ["speak", "spoke"], ["put", "put"], ["cut", "cut"],
   ["read", "read"], ["run", "ran"], ["send", "sent"], ["build", "built"], ["bring", "brought"],
   ["become", "became"], ["begin", "began"], ["hold", "held"], ["leave", "left"], ["let", "let"],
+  ["say", "said"],  // call → "said '…'"; reply → replied and call → called fall out of the -ied/-ed rules
 ]);
 
 // the present → past of a verb: its declared past, or the -ed rule for regulars
@@ -19,7 +20,7 @@ export function pastOf(verb) {
   if (DECLARED_PAST.has(v)) return DECLARED_PAST.get(v);   // the verb declared its own past
   if (/e$/.test(v)) return v + "d";                        // declare → declared, move → moved
   if (/[^aeiou]y$/.test(v)) return v.slice(0, -1) + "ied"; // deny → denied
-  return v + "ed";                                         // grant → granted, summon → summoned
+  return v + "ed";                                         // grant → granted, connect → connected
 }
 
 // fold a declared past in — when verbs.word lands on the chain, or an extension declares a verb

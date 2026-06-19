@@ -91,7 +91,7 @@ export const federationManagerRole = Object.freeze({
   description:
     "Negotiates subtree exchange with peer realities. Operator triggers offer-template or request-template DO ops; the role handles incoming offer-template / request-template / deliver-template SUMMONs from peer realities.",
   requiredCognition: "scripted",
-  permissions: ["see", "do", "summon"],
+  permissions: ["see", "do", "call"],
   respondMode: "async",
   triggerOn: ["message"],
 
@@ -146,7 +146,7 @@ export const federationManagerRole = Object.freeze({
       description: "Reject an incoming request-template. Args: { negotiationId, reason? }",
     },
     {
-      verb:        "summon",
+      verb:        "call",
       word:        "(asker)",
       description: "Reply to whoever woke this moment (default target / inReplyTo).",
     },
@@ -158,7 +158,7 @@ export const federationManagerRole = Object.freeze({
   // the response payload that flows back to the caller (via the moment's
   // descriptor inner face when cross-reality, via the local SUMMON
   // return shape when same-reality).
-  async summon(message, ctx) {
+  async call(message, ctx) {
     // Federation payload still rides inside content for cross-reality
     // SUMMONs (the canopy serializer hasn't been updated to carry
     // envelope intent yet — see TODO in dispatchToPeer in ./handlers.js

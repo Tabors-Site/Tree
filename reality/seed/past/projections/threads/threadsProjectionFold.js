@@ -7,7 +7,7 @@
 //
 // One handler per fact-action that affects thread state:
 //
-//   be:summon  → upsert row keyed by params.rootCorrelation. Add
+//   call       → upsert row keyed by params.rootCorrelation. Add
 //                summoner (fact.through) + recipient
 //                (params.recipient) to participants. Bump lastAct.
 //                If params.parentThread is set (the fact records
@@ -30,7 +30,7 @@ import ThreadsProjection from "./threadsProjection.js";
 import { registerCrossCuttingHandler } from "../../../present/stamper/2-fold/foldEngine.js";
 
 async function handleSummonForThreads(fact /*, type, id*/) {
-  if (fact?.verb !== "summon") return;
+  if (fact?.verb !== "call") return;
   const params = fact.params || {};
   const root = params.rootCorrelation || params.correlation;
   if (!root) return;

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // RECALL (the sixth verb) LIVE: reach back across TIME into a chain. Reading a thread lays NO
-// fact (own = recalled, world = saw; a foreign thread is gated). The VERDICT — `recall <X>
+// fact (own = recalled; the world + any other thread = saw, all public). The VERDICT — `recall <X>
 // that <Y> because <Z>` — is the only thing that writes: a do:verdict memory-fact carrying the
 // conclusion AND the declared why (the being's authored account of its reasoning, NOT the live
 // inference, which stays silent). The being's own chain is its memory. Proves read→reflect→
@@ -63,25 +63,38 @@ try {
   const ident = { beingId: String(sageId), nameId: String(sageId), name: sageName || "sage" };
   const reader = () => ({ dryRun: false, branch: "0", identity: ident, bindings: {}, deltaF: [], flows: [] });
 
-  // 1. recall your OWN thread → recalled; binds the thread; NO fact
+  // 1. recall your OWN thread → recalled; binds the WOVEN view (the story in the Word); NO fact
   const c1 = reader(); await evaluate({ kind: "recall", of: String(sageId), as: "mine" }, c1);
-  (Array.isArray(c1.bindings.mine) && c1.bindings.mine.length > 0 && c1.deltaF.length === 0)
-    ? ok(`recall my own thread → recalled (${c1.bindings.mine.length} facts bound), NO fact laid`)
-    : bad(`recall own`, { bound: Array.isArray(c1.bindings.mine), len: c1.bindings.mine?.length, laid: c1.deltaF.length });
+  (Array.isArray(c1.bindings.mine) && c1.bindings.mine.length > 0 && c1.bindings.mine[0]?.line && c1.deltaF.length === 0)
+    ? ok(`recall my own thread → recalled (${c1.bindings.mine.length} acts, woven in the Word), NO fact laid`)
+    : bad(`recall own`, { len: c1.bindings.mine?.length, line: c1.bindings.mine?.[0]?.line, laid: c1.deltaF.length });
 
-  // 2. recall the WORLD you stand in → saw; binds; NO fact
+  // 2. recall the WORLD → saw; the whole branch, woven; NO fact
   const c2 = reader(); await evaluate({ kind: "recall", of: "world", as: "w" }, c2);
   (Array.isArray(c2.bindings.w) && c2.bindings.w.length > 0 && c2.deltaF.length === 0)
-    ? ok(`recall the world → saw (${c2.bindings.w.length} facts bound), NO fact laid`)
+    ? ok(`recall the world → saw (${c2.bindings.w.length} acts), NO fact laid`)
     : bad(`recall world`, { len: c2.bindings.w?.length, laid: c2.deltaF.length });
 
-  // 3. recall a FOREIGN thread (I_AM's) → gated, refused
-  let refused = null;
-  try { await evaluate({ kind: "recall", of: String(I_AM) }, reader()); }
-  catch (e) { refused = e.__wordRefusal ? e.message : null; }
-  refused ? ok(`recall a foreign thread → refused ("${refused.slice(0, 40)}…")`) : bad(`foreign gate`, "expected a WordRefusal");
+  // 3. recall a FOREIGN thread (I_AM's) → saw (all public, no gate); NO fact
+  const c3 = reader(); await evaluate({ kind: "recall", of: String(I_AM), as: "f" }, c3);
+  (Array.isArray(c3.bindings.f) && c3.bindings.f.length > 0 && c3.deltaF.length === 0)
+    ? ok(`recall a foreign thread → saw (${c3.bindings.f.length} acts, all public), NO fact laid`)
+    : bad(`foreign saw`, { len: c3.bindings.f?.length, laid: c3.deltaF.length });
 
-  // 4. the VERDICT — recall + a published conclusion + the declared why → ONE do:verdict memory fact
+  // 4. recall my LINEAGE → recalled; the family story (sage + its descendants); NO fact
+  const c4 = reader(); await evaluate({ kind: "recall", of: { lineage: String(sageId) }, as: "fam" }, c4);
+  (Array.isArray(c4.bindings.fam) && c4.bindings.fam.length > 0 && c4.deltaF.length === 0)
+    ? ok(`recall my lineage → recalled (${c4.bindings.fam.length} acts, the family story), NO fact laid`)
+    : bad(`recall lineage`, { len: c4.bindings.fam?.length, laid: c4.deltaF.length });
+
+  // 5. recall a MOMENT → saw; one act's cross-section (a WHEN view); NO fact
+  const someAct = (c2.bindings.w || []).find((a) => a.actId)?.actId;
+  const c5 = reader(); await evaluate({ kind: "recall", of: { moment: someAct }, as: "mom" }, c5);
+  (Array.isArray(c5.bindings.mom) && c5.bindings.mom.length > 0 && c5.deltaF.length === 0)
+    ? ok(`recall a moment → saw (${c5.bindings.mom.length} act, the cross-section), NO fact laid`)
+    : bad(`recall moment`, { len: c5.bindings.mom?.length, act: someAct, laid: c5.deltaF.length });
+
+  // 6. the VERDICT — recall + a published conclusion + the declared why → ONE do:verdict memory fact
   let verdict = null;
   await withBeingAct(String(sageId), "verdict", "0", async (m) => {
     const cv = { dryRun: false, branch: "0", moment: m, identity: ident, bindings: {}, deltaF: m.deltaF, flows: [] };
@@ -93,7 +106,7 @@ try {
     ? ok(`the verdict wrote ONE memory fact (mode:saw, that + the declared why) — conclusion AND reason recorded`)
     : bad(`verdict`, verdict);
 
-  // 5. the book renders the verdict in the Word — "sage saw the world that it was good (because …)"
+  // 7. the book renders the verdict in the Word — "sage saw the world that it was good (because …)"
   await new Promise((r) => setTimeout(r, 500));
   const world = await assembleStory("world", { branch: "0" });
   const line = world.find((a) => /saw the world that it was good \(because it served its purpose\)/.test(a.line));

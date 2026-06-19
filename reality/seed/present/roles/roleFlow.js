@@ -20,7 +20,7 @@
 //
 //   roleFlow: [
 //     { when: { connectedFrom: "<parent.beingId>" }, role: "human" },
-//     { when: { and: [ { verb: "summon" },
+//     { when: { and: [ { verb: "call" },
 //                      { "caller.role": "human" } ] },
 //       role: "human-conversationalist" },
 //     { when: { and: [ { "space.name": "court" },
@@ -320,7 +320,7 @@ function buildCtx({
   // verb / action / operation hints — only present when the envelope
   // routes through DO or BE (transport-act). For SUMMON, verb="summon"
   // and the content is the message.
-  let verb = "summon";
+  let verb = "call";
   let action = null;
   let operation = null;
   if (isTransport) {

@@ -69,7 +69,7 @@ registerOperation("ask-role", {
 
     // THE CONVERSION: ask-role's world strand is ask-role.word, run through the bridge.
     // The JS below is the clean-miss fallback.
-    const viaWord = await _askRoleViaWord({ caller: identity.beingId, role: roleName, space: hostSpaceId, moment, identity });
+    const viaWord = await _askRoleViaWord({ caller: identity.beingId, role: roleName, space: hostSpaceId, moment });
     if (viaWord) return viaWord;
 
     const branch = moment?.actorAct?.branch || "0";
@@ -150,13 +150,13 @@ registerOperation("ask-role", {
       };
     }
 
-    const { summonVerb } = await import("../../ibp/verbs/summon.js");
+    const { callVerb } = await import("../../ibp/verbs/call.js");
     const { getRealityDomain } = await import("../../ibp/address.js");
     const reality = getRealityDomain();
     const ownerStance = `${reality}/@${ownerName}`;
     const askerStance = `${reality}/@${identity.name}`;
     try {
-      await summonVerb(
+      await callVerb(
         ownerStance,
         {
           from:    askerStance,
@@ -210,12 +210,13 @@ registerOperation("ask-role", {
 // The auto path's grant is I_AM-authority (like take-role); the queue path reaches the
 // owner with the CALL verb (see owner-of + see role-request build the payload, which keeps
 // the asker identified in the inbox content regardless of the call envelope's `from`).
-async function _askRoleViaWord({ caller, role, space, moment, identity }) {
+async function _askRoleViaWord({ caller, role, space, moment }) {
   if (!moment) return null;
-  // The .word runs AS the asker. runRoleWord reads the identity off the moment, but a kernel
-  // moment carries no `.identity` — thread the asker's FULL identity (name included), so
-  // evalCall's queue summon builds a real `from` stance and authorizes the asker, not anonymous.
-  if (!moment.identity?.beingId) moment.identity = identity || { beingId: String(caller) };
+  // HOST ESCAPE: ask-role is HOST-facilitated — the host (i-am) runs the .word THROUGH the asker's
+  // being (`through: caller` → runRoleWord's vessel identity, i-am). So the auto-grant carries
+  // I_AM authority and the queue summon reaches the owner FROM i-am (the host), not the asker (a
+  // fresh asker holds no role permitting summon — it would be correctly denied). The asker rides
+  // in the inbox CONTENT, not the call's `from` stance.
   const { resolveRoleWord, runRoleWord } = await import("../word/roleWordRegistry.js");
   const ir = resolveRoleWord("acquisition", "ask-role", moment?.actorAct?.branch);
   if (!ir) return null;
@@ -223,7 +224,7 @@ async function _askRoleViaWord({ caller, role, space, moment, identity }) {
   const branch = moment?.actorAct?.branch || "0";
   try {
     const { result } = await runRoleWord(ir, {
-      moment, branch,
+      moment, branch, through: String(caller),
       trigger: { caller: String(caller), role: String(role), space: String(space), branch },
       env: { host: acquisitionHostEnv() },
     });
@@ -236,8 +237,10 @@ async function _askRoleViaWord({ caller, role, space, moment, identity }) {
 
 async function _takeRoleViaWord({ caller, role, space, moment }) {
   if (!moment) return null;
-  // The .word runs AS the taker — thread the identity onto the moment (a kernel moment has none),
-  // so the .word's acts resolve to the caller, not anonymous.
+  // take-role is a SELF-act: the taker IS the actor, so the grant is attributed to the CALLER
+  // (authorized by the auto-policy). The .word runs AS the caller — thread the identity onto the
+  // moment (a kernel moment carries none). NOT a host escape like ask-role, whose queue summon
+  // reaches the owner FROM i-am; take-role has no summon, so nothing escapes to the host.
   if (!moment.identity?.beingId) moment.identity = { beingId: String(caller) };
   const { resolveRoleWord, runRoleWord } = await import("../word/roleWordRegistry.js");
   const ir = resolveRoleWord("acquisition", "take-role", moment?.actorAct?.branch);

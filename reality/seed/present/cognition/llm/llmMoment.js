@@ -580,7 +580,7 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
           // The live moment ctx, threaded UNMODIFIED. This is the
           // deltaF/foldedSeqs/afterSeal-bearing object the seal drains.
           // executeTool hands it to the tool handler as callCtx.moment
-          // so a tool that delegates to doVerb/summonVerb/beVerb pushes
+          // so a tool that delegates to doVerb/callVerb/beVerb pushes
           // its Fact onto THIS moment's ΔF and seals atomically with the
           // Act. Dropping it self-seals the Fact and orphans the Act.
           moment,

@@ -104,7 +104,7 @@ export function composeStack({ stack, toBeing }) {
   const permissions = unionStrings(resolved.map((r) => r.permissions));
 
   // Prompt composition. Each role's prompt may be a function (the
-  // canonical seed/extension shape — registry.js's makeLazyDefaultSummon
+  // canonical seed/extension shape — registry.js's makeLazyDefaultCall
   // wraps it) or a string (live roles authored via set-role). The
   // primary's body reads bare (it's the being's voice); each modifier
   // gets a named frame so the LLM treats it as layered context.
@@ -133,7 +133,7 @@ export function composeStack({ stack, toBeing }) {
     canSee, canDo, canSummon, canBe,
     permissions,
     prompt:            composedPrompt,
-    summon:            primary.summon,        // scripted dispatch, primary only
+    call:            primary.call,        // scripted dispatch, primary only
     requiredCognition: primary.requiredCognition || null,
     respondMode:       primary.respondMode || "async",
     triggerOn:         primary.triggerOn || ["message"],

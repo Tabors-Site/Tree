@@ -245,7 +245,7 @@ function readOwners(state) {
 function permits(spec, verb, { action, intent, operation, seeOp, targetBeing }) {
   if (verb === "see")    return permitsSee(spec, seeOp);
   if (verb === "do")     return permitsDo(spec, action);
-  if (verb === "summon") return permitsSummon(spec, targetBeing, intent);
+  if (verb === "call") return permitsSummon(spec, targetBeing, intent);
   if (verb === "be")     return permitsBe(spec, operation);
   return false;
 }

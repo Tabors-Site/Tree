@@ -62,7 +62,7 @@
 
 import { randomUUID } from "crypto";
 import log from "../../seedReality/log.js";
-import { summonByResolved } from "../../ibp/verbs/summon.js";
+import { callByResolved } from "../../ibp/verbs/call.js";
 import { getRealityDomain } from "../../ibp/address.js";
 import { getSpaceRootId } from "../../sprout.js";
 import { emitFact } from "../../past/fact/facts.js";
@@ -537,7 +537,7 @@ async function _defaultEmitter(entry, nowMs) {
   }
   const correlation = randomUUID();
   const sender = `${realityDomain}/${spaceId}@${identity.name}`;
-  await summonByResolved({
+  await callByResolved({
     toBeingId:    entry.beingId,
     inboxSpaceId: spaceId,
     branch:       entry.branch,

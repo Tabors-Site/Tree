@@ -17,7 +17,7 @@
 #     fact whole (type, content {target}, qualities.portal provenance). A rich
 #     create-spec emit the parser's set/merge/replace form cannot shape, AND a
 #     CALLER-attributed write (the portal is born BY the actor; qualities.portal
-#     .createdBy = the actor), so it reads the real summonCtx and emits under the
+#     .createdBy = the actor), so it reads the real moment and emits under the
 #     caller's identity rather than I_AM-through-a-vessel. See the cut-spec note.
 #
 # The bridge binds `caller` (the actor's beingId), `target` (the space-or-matter

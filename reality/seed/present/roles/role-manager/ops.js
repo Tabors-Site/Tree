@@ -135,7 +135,7 @@ registerOperation("set-role", {
     const can = [
       ...canSee.map((w) => ({ verb: "see", word: w })),
       ...canDo.map((w) => ({ verb: "do", word: w })),
-      ...canSummon.map((w) => (typeof w === "string" ? { verb: "summon", word: w } : { verb: "summon", ...w })),
+      ...canSummon.map((w) => (typeof w === "string" ? { verb: "call", word: w } : { verb: "call", ...w })),
       ...canBe.map((w) => ({ verb: "be", word: w })),
     ];
 

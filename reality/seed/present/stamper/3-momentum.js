@@ -12,7 +12,7 @@
 // the being's inbox; the scheduler picked it; assign opened the
 // moment). The difference is what the wake-call's payload means:
 //
-//   kind: "summon"  — DELIBERATION mode.
+//   kind: "call"  — DELIBERATION mode.
 //     The wake-call carries a message; the role's summon() handler
 //     reads it, thinks, decides what (if anything) to do. Most
 //     summons. Return value is normalized into CognitionResult:
@@ -60,7 +60,7 @@ import { normalizeCognitionResult, cognitionFailure } from "../cognition/cogniti
  */
 export async function momentum(setup = {}) {
   const { role, moment } = setup;
-  const kind = moment?.kind || "summon";
+  const kind = moment?.kind || "call";
 
   if (kind === "transport-act") {
     try {
@@ -100,14 +100,14 @@ export async function momentum(setup = {}) {
   // on the human portal only (see protocols/ibp/innerFaceLive).
   let raw;
   try {
-    raw = await role.summon(moment.message, moment);
+    raw = await role.call(moment.message, moment);
   } catch (err) {
     // Cognition threw. Per MODEL.md, this is a SEE — no act
     // produced. moment.js will not seal.
     if (moment?.signal?.aborted) {
       return cognitionFailure("aborted", err.message);
     }
-    log.warn("Momentum", `role.summon threw: ${err.message}`);
+    log.warn("Momentum", `role.call threw: ${err.message}`);
     return cognitionFailure("internal", err.message);
   }
 

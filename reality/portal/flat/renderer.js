@@ -1497,7 +1497,7 @@ function factSummaryLine(f) {
   if (!f) return null;
   const p = f.params;
   // summon — the message content is the headline.
-  if (f.verb === "summon") {
+  if (f.verb === "call") {
     const c = p?.content;
     if (typeof c === "string" && c) return `"${c}"`;
     if (c && typeof c === "object" && typeof c.content === "string" && c.content) {

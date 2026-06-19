@@ -18,7 +18,7 @@
 # THE CONTROL strand is .word: the actor gate (refuse when no identified actor)
 # and the return. The lone WORLD write is the content-addressed do:create-matter
 # birth-fact emit inside emitBirth, which reuses the SAME emitFact the JS handler
-# calls and lays it into the live moment via ctx.summonCtx — so the fact
+# calls and lays it into the live moment via ctx.moment — so the fact
 # attributes to the real caller, not to the i-am vessel override.
 #
 # The bridge binds `target`, `targetKind`, the create `params` (spec: name, type,

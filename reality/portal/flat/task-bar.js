@@ -640,7 +640,7 @@ function renderIntentSummon(body, action) {
 // flat.beOp; SUMMON falls back to chat.
 function renderBeingVerb(body, action, opByName) {
   const a = action.beingAction;
-  if (a.verb === "summon") {
+  if (a.verb === "call") {
     return openChatFor(action.being);
   }
   if (a.verb === "be") {

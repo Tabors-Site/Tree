@@ -446,9 +446,9 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
       payload?.args || {},
       { identity, moment },
     );
-  } else if (verb === "summon") {
-    const { summonVerb } = await import("./verbs/summon.js");
-    result = await summonVerb(
+  } else if (verb === "call") {
+    const { callVerb } = await import("./verbs/call.js");
+    result = await callVerb(
       address,
       payload?.message,
       { identity, moment },
@@ -471,7 +471,7 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
     await sealFacts(moment.deltaF);
   }
 
-  // Run afterSeal callbacks. summonByResolved queues `wake()` here when
+  // Run afterSeal callbacks. callByResolved queues `wake()` here when
   // it enqueues a SUMMON onto a receiver's inbox (triggerOn:["message"]
   // roles); without firing the callbacks, the receiver's runLoop never
   // starts and the inbox entry sits forever. Same shape stamped.js

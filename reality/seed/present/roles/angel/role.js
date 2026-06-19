@@ -43,7 +43,7 @@ export const angelRole = Object.freeze({
     { verb: "do", word: "*", description: "do anything" },
     { verb: "do", word: "grant-role:*", description: "grant any role to any being" },
     { verb: "do", word: "revoke-role:*", description: "revoke any grant" },
-    { verb: "summon", word: "@*", description: "summon any being" },
+    { verb: "call", word: "@*", description: "summon any being" },
     { verb: "be", word: "*", description: "any BE operation" },
   ],
 });

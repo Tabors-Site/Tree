@@ -68,7 +68,7 @@ export function reduce(state, fact) {
   // { time, byActor }. Idempotent (first death wins). Consumers test
   // `qualities.death?.time != null` for is-dead. Past acts + grants
   // remain valid; new acts targeting this being refuse upstream
-  // (beVerb + summonVerb gate on isDead).
+  // (beVerb + callVerb gate on isDead).
   next = applyDeath(next, fact);
 
   // be:truename — re-point this being at a declared Name (the trueName

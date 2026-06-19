@@ -515,12 +515,12 @@ export function createView() {
       __synthetic: "inhabit",
     };
     const summonAction = {
-      verb: "summon",
-      action: "summon",
+      verb: "call",
+      action: "call",
       label: "Summon",
       description: "Open a chat with this being.",
       args: {},
-      __synthetic: "summon",
+      __synthetic: "call",
     };
     const flowAction = {
       verb: "do",
@@ -536,7 +536,7 @@ export function createView() {
     showActionMenu({ ...fullBeing, actions: composed }, {
       onActionPicked: (action) => {
         if (action.__synthetic === "inhabit")   return doInhabit(b, address);
-        if (action.__synthetic === "summon")    { openSummonPanel(b); return; }
+        if (action.__synthetic === "call")    { openCallPanel(b); return; }
         if (action.__synthetic === "edit-flow") { openBeingFlowPanel(fullBeing); return; }
         openActionForm({ ...fullBeing, actions: composed }, action, address);
       },
@@ -895,7 +895,7 @@ export function createView() {
           } else if (action.verb === "do") {
             await client().do(address, action.action, values);
             hideActionPanel();
-          } else if (action.verb === "summon") {
+          } else if (action.verb === "call") {
             await client().summon(address, { content: values.content || "", from: address });
             hideActionPanel();
           } else {
@@ -930,7 +930,7 @@ export function createView() {
 
   // ── Summon ──────────────────────────────────────────────────────
 
-  function openSummonPanel(b) {
+  function openCallPanel(b) {
     currentSummonBeing = b.being;
     setSelectedBeing(b.beingId, b.being);
     showSummonPanel({

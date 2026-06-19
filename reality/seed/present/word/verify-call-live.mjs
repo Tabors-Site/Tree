@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // evalCall (the CALL verb) LIVE: a hand-built `call <being>` node reaches a real being
-// through TreeOS's summon machinery (summonVerb), laying the reach RECORD as a fact through
+// through TreeOS's summon machinery (callVerb), laying the reach RECORD as a fact through
 // moment (the stamper). Proves the engine half of the host:->call dissolution before the
 // parser's `call <being>, saying <intent>` surface lands. Full begin.js boot. Scratch DB.
 
@@ -69,9 +69,9 @@ try {
   let res = null, err = null;
   try { await evaluate(node, ctx); res = ctx.bindings.sent; if (sc.deltaF.length) await sealFacts(sc.deltaF); } catch (e) { err = e; }
 
-  !err ? ok(`call @owner dispatched through summonVerb (no throw) → reached`) : bad(`call dispatch`, err.message || err);
+  !err ? ok(`call @owner dispatched through callVerb (no throw) → reached`) : bad(`call dispatch`, err.message || err);
   // the reach is a RECORD: a fact landed (summon writes the reach through moment)
-  const summonFact = (sc.deltaF || []).find((f) => f.verb === "summon" || /summon|reach|inbox/i.test(String(f.act)));
+  const summonFact = (sc.deltaF || []).find((f) => f.verb === "call" || /summon|reach|inbox/i.test(String(f.act)));
   summonFact ? ok(`the reach laid a RECORD fact (verb:${summonFact.verb} action:${summonFact.act}) — through the stamper, not a bare emit`) : bad(`reach record`, (sc.deltaF || []).map((f) => `${f.verb}:${f.act}`));
   // attribution: the reach is the CALLER's act (i-am here)
   summonFact && String(summonFact.by || summonFact.through) ? ok(`reach attributed to the caller (a Name through a being)`) : bad(`attribution`, summonFact);

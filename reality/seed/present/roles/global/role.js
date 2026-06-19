@@ -69,7 +69,7 @@ export const globalRole = Object.freeze({
     { verb: "do", word: "create-matter:model", description: "upload a 3D model into the /skins catalog" },
     { verb: "do", word: "set-model",           description: "wear a model from /skins (or set one on things you own)" },
     // Anyone can address the gate.
-    { verb: "summon", word: "@cherub", description: "address the gate" },
+    { verb: "call", word: "@cherub", description: "address the gate" },
     // Anyone can release their own session.
     { verb: "be", word: "release", description: "log out / release identity" },
   ],

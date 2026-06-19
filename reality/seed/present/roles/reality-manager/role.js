@@ -2,8 +2,8 @@
 //
 // reality-manager . LLM-driven place manager.
 //
-// Pure role spec. The seed's role registry auto-wraps defaultSummon
-// for roles without a custom summon function; defaultSummon calls
+// Pure role spec. The seed's role registry auto-wraps defaultCall
+// for roles without a custom summon function; defaultCall calls
 // runLlmMoment with the right envelope and routes the discriminated
 // result. This file is data describing what the being IS.
 //
@@ -23,7 +23,7 @@ Each moment you may dispatch one act (do / summon / be) or end the turn (end-tur
 export const realityManagerRole = Object.freeze({
   name:        "reality-manager",
   description: "Inspects and mutates reality-level state on behalf of the operator.",
-  permissions: ["see", "do", "summon"],
+  permissions: ["see", "do", "call"],
   respondMode: "async",
   triggerOn:   ["message"],
 
@@ -48,8 +48,8 @@ export const realityManagerRole = Object.freeze({
     { verb: "do", word: "uninstall-extension", description: "remove an installed extension. args: { name }" },
     { verb: "do", word: "enable-extension",    description: "enable an installed extension. args: { name }" },
     { verb: "do", word: "disable-extension",   description: "disable an installed extension. args: { name }" },
-    { verb: "summon", word: "(asker)", description: "reply to whoever woke this moment . default target/inReplyTo" },
-    { verb: "summon", word: "(self)", description: "wake yourself for the next step (continue working). orientation:'inward' to reflect, 'forward' to keep acting." },
+    { verb: "call", word: "(asker)", description: "reply to whoever woke this moment . default target/inReplyTo" },
+    { verb: "call", word: "(self)", description: "wake yourself for the next step (continue working). orientation:'inward' to reflect, 'forward' to keep acting." },
   ],
 
   label: "Reality Manager",

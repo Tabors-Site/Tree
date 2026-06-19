@@ -128,7 +128,7 @@ function createEmitter() {
 const GHOST_ALLOWED_DO_ACTIONS = new Set(["create-branch"]);
 
 function ghostGuard(client, ctx) {
-  for (const verb of ["do", "summon", "be"]) {
+  for (const verb of ["do", "call", "be"]) {
     const original = client[verb].bind(client);
     client[verb] = async (...args) => {
       if (ctx.state.get("descriptor")?.isHistorical) {
@@ -190,7 +190,7 @@ export function createPortalContext({ id = "main", persist = true, session = nul
         // then hand the entry to whoever renders it.
         const correlation = entry?.inReplyTo;
         if (correlation) state.get("pendingSummons").delete(correlation);
-        events.emit("summon", entry);
+        events.emit("call", entry);
       },
       onDescriptorEvent: (event) => ctx.navigation.handleDescriptorEvent(event),
       onBranchChange: (branch) => {

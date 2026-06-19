@@ -46,7 +46,7 @@ export function acquisitionHostEnv() {
       return true;
     },
     // the queue path: summon the host's owner with intent "role-request" so they
-    // approve by hand. The SAME loadOrFold / summonVerb / getRealityDomain the JS
+    // approve by hand. The SAME loadOrFold / callVerb / getRealityDomain the JS
     // handler calls — no reimplementation. A SUMMON is a transport delivery, not a
     // substrate fact, so it stays a host: escape (like cherub-connect's session ops).
     // Returns { message } the .word's §7 return surfaces (the no-owner / send-failure /

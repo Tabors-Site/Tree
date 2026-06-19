@@ -9,20 +9,20 @@
 // `resolveTools`, so the being sees its options as part of being.
 //
 // Every tool has a shape. Each declares which of the four verbs it
-// fires (`see`, `do`, `summon`, `be`). Verb is REQUIRED at registration;
+// fires (`see`, `do`, `call`, `be`). Verb is REQUIRED at registration;
 // no permissive default; verbless tools are rejected. Internal tools
 // and the IBP protocol share one set of verbs, so the same address
 // grammar applies to either:
 //
 //   SEE    `<leftStance> :: <position-or-stance>`  read
 //   DO     `<leftStance> :: <position-or-stance>`  write
-//   SUMMON `<leftStance> :: <stance>`              target must be a being
+//   CALL   `<leftStance> :: <stance>`              target must be a being
 //   BE     `<leftStance>`                          identity ops on self
 //
-// Roles carry a `permissions: ("see"|"do"|"summon"|"be")[]` array.
+// Roles carry a `permissions: ("see"|"do"|"call"|"be")[]` array.
 // `resolveTools` filters the resolved set by verb against the role's
 // permissions so a role acting in capacity X only sees tools fitting
-// X. Permissions belong to role identity, not envelopes. Summoners
+// X. Permissions belong to role identity, not envelopes. Callers
 // cannot cripple a role by stripping its capacities at call time.
 
 import log from "../../../seedReality/log.js";
@@ -38,11 +38,11 @@ import { getToolCallTimeoutMs, getToolResultMaxBytes } from "../../knobs.js";
 import { resolveToolsForRole } from "./assemble.js";
 
 const toolDefs = {};
-const toolVerbs = {};    // name → "see" | "do" | "summon" | "be"
+const toolVerbs = {};    // name → "see" | "do" | "call" | "be"
 const toolHandlers = {}; // name → async (args) => result
 let MAX_TOOLS = 500;
 const TOOL_NAME_RE = /^[a-z][a-z0-9_-]{0,63}$/;
-const VALID_VERBS = new Set(["see", "do", "summon", "be"]);
+const VALID_VERBS = new Set(["see", "do", "call", "be"]);
 
 // Walk a JSON-Schema-shaped object and remove any
 // `additionalProperties: {}` keys (the empty-object sentinel zod
@@ -80,7 +80,7 @@ export function setMaxTools(n) {
  * @param {string} name
  * @param {object} schema - OpenAI function tool shape
  * @param {object} opts
- * @param {"see"|"do"|"summon"|"be"} opts.verb - REQUIRED. Which IBP verb
+ * @param {"see"|"do"|"call"|"be"} opts.verb - REQUIRED. Which IBP verb
  *   this tool fires. Internal tools and protocol verbs share one shape;
  *   tools without a verb are rejected.
  */
@@ -149,7 +149,7 @@ export function registerToolDef(name, schema, opts = {}) {
     log.error(
       "Tools",
       `Tool "${name}" rejected: missing or invalid verb (got ${JSON.stringify(verb)}). ` +
-        `Every tool must declare { verb: "see"|"do"|"summon"|"be" } at registration.`,
+        `Every tool must declare { verb: "see"|"do"|"call"|"be" } at registration.`,
     );
     return false;
   }
@@ -171,7 +171,7 @@ export function registerToolDef(name, schema, opts = {}) {
  *   - `schema` may be a raw shape (`{ key: z.string() }`) or a
  *     pre-built zod object. Translated to JSON schema for the
  *     LLM's function-calling format.
- *   - `verb` is REQUIRED ("see" | "do" | "summon" | "be").
+ *   - `verb` is REQUIRED ("see" | "do" | "call" | "be").
  *   - Tools without a `handler` are def-only (registered for
  *     `resolveTools` but not callable).
  *
@@ -308,7 +308,7 @@ const MAX_WARNED = 500;
  * the active role's declared capacities.
  *
  * @param {string[]} toolNames
- * @param {string[]} [permissions] - subset of ["see","do","summon"]
+ * @param {string[]} [permissions] - subset of ["see","do","call"]
  */
 export function resolveTools(toolNames, permissions = null) {
   const allowed = Array.isArray(permissions) ? new Set(permissions) : null;
@@ -374,7 +374,7 @@ export function listToolNames() {
  * Audit that the seed's verb-tools are registered. Four tools ship
  * from the seed:
  *
- *   do / summon / be   — the three act-capable verbs. Each is a
+ *   do / call / be     — the three act-capable verbs. Each is a
  *                        generic tool the LLM dispatches into the
  *                        role's licensed surface (canDo / canSummon
  *                        / canBe describe what the role may invoke).
@@ -399,7 +399,7 @@ export function listToolNames() {
  * they are perception, not dispatch.
  */
 export async function auditToolDescriptions() {
-  const SEED_VERB_TOOLS = ["do", "summon", "be", "end-turn"];
+  const SEED_VERB_TOOLS = ["do", "call", "be", "end-turn"];
   const missing = SEED_VERB_TOOLS.filter((name) => !toolDefs[name]);
   if (missing.length === 0) {
     log.verbose("Tools", `verb-tool audit: ${SEED_VERB_TOOLS.length} seed tool(s) registered`);
@@ -407,7 +407,7 @@ export async function auditToolDescriptions() {
     log.error(
       "Tools",
       `seed verb-tools missing from the registry: ${missing.join(", ")}. ` +
-        `Genesis did not register seedDoTool / seedSummonTool / seedBeTool ` +
+        `Genesis did not register seedDoTool / seedCallTool / seedBeTool ` +
         `before role auditing. No LLM role can run until this is fixed.`,
     );
   }
@@ -693,7 +693,7 @@ export async function executeTool(toolCall, session, ctx, presenceKey) {
     // Direct handler dispatch. Tools are verb-tagged and registered
     // with their handler via registerToolDef (above); the handler IS
     // the verb call (it usually wraps reality.see / reality.do /
-    // reality.summon / reality.be against a target). The verb dispatcher's
+    // reality.call / reality.be against a target). The verb dispatcher's
     // authorize gate covers per-verb auth and the extension-scope
     // block — no protocol layer between the LLM voice and the handler.
     const handler = getToolHandler(resolvedToolName);
@@ -706,11 +706,11 @@ export async function executeTool(toolCall, session, ctx, presenceKey) {
     // tool would have to repack ctx fields from args by hand and
     // forgetting throws "missing ambient actId" mid-stream.
     // Thread the live moment ctx so a tool that delegates to
-    // doVerb/summonVerb/beVerb pushes its Fact onto THIS moment's ΔF.
+    // doVerb/callVerb/beVerb pushes its Fact onto THIS moment's ΔF.
     // ctx.moment is the deltaF/foldedSeqs/afterSeal-bearing object
     // assign built and the seal drains; we spread it (preserving the
     // deltaF/afterSeal array references and the foldedSeqs Map) and add
-    // the wake/reply fields the seed summon tool reads. Rebuilding a
+    // the wake/reply fields the seed call tool reads. Rebuilding a
     // deltaF-less copy here was the bug: the handler's emitFact then
     // self-sealed its Fact outside the moment and the Act orphaned. The
     // minimal fallback covers standalone tool paths with no live moment.

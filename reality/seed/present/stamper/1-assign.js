@@ -25,9 +25,9 @@
 //
 // Two intake kinds reach assign:
 //
-//   kind: "summon"
+//   kind: "call"
 //     A SUMMON the being received. moment carries the message
-//     shape; moment.js calls role.summon(message, ctx).
+//     shape; moment.js calls role.call(message, ctx).
 //
 //   kind: "transport-act"
 //     The being acted from their own transport (portal/browser/CLI).
@@ -92,7 +92,7 @@ import { getSpaceRootId } from "../../sprout.js";
  *                ("being-not-found" | "role-not-carried" | "role-unavailable")
  */
 export async function assign({ beingId, spaceId, entry, handoff = null, signal = null } = {}) {
-  const kind = entry?.kind || "summon";
+  const kind = entry?.kind || "call";
   // ── assign: load the being ───────────────────────────────────────
   // Branch-aware via the intake entry. The moment runs in the caller's
   // Two branches per the cross-world doctrine. `branch` is the
@@ -288,7 +288,7 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   const actId = plannedAct?._id ? String(plannedAct._id) : null;
 
   // Orientation (INNER-FOLD §1). The fold parameter ω rides on the
-  // entry (which came from the be:summon Fact's params via the
+  // entry (which came from the call Fact's params via the
   // InboxProjection). External summons carry forward; self-summons
   // may carry half or inward. Default is forward.
   const orientation = validateOrientation(entry?.orientation, DEFAULT_ORIENTATION);
@@ -425,8 +425,8 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
       });
     },
     summon: async (address, message) => {
-      const { summonVerb } = await import("../../ibp/verbs/summon.js");
-      return summonVerb(address, message, {
+      const { callVerb } = await import("../../ibp/verbs/call.js");
+      return callVerb(address, message, {
         identity: handoff?.identity || entry?.identity || null,
         moment: baseCtx,
       });
@@ -746,7 +746,7 @@ async function planActRow(opts = {}) {
 // data — the flow then sees `caller.cognition: null`, `isAncestor:
 // false`, etc., which is the correct conservative default.
 async function enrichCallerForFlow({ toBeing, handoff, entry, branch = "0" }) {
-  const kind = entry?.kind || "summon";
+  const kind = entry?.kind || "call";
   if (kind === "transport-act") {
     return {
       cognition:    beingCognition(toBeing),

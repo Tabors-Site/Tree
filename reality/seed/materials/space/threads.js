@@ -190,7 +190,7 @@ export async function describeThread(rootCorrelation) {
     .lean();
   if (!summons.length) {
     // A thread can exist in the ThreadsProjection (the cross-cutting
-    // fold updated it from a be:summon Fact) before any moment has
+    // fold updated it from a call Fact) before any moment has
     // sealed an Act. listLiveThreads will surface it; the projection
     // is the source of truth for "open thread, no acts yet". Fall back
     // so the descriptor still resolves instead of 404-ing on a thread
@@ -316,7 +316,7 @@ export async function listLiveThreads({
 } = {}) {                 //   if filtering by role/stance/priority is needed.)
   // Route through the ThreadsProjection (Bucket 3 Option D, 2026-05-23).
   // The legacy per-SEE Act aggregation retired; the cross-cutting fold
-  // maintains this projection from be:summon Facts + Act seals.
+  // maintains this projection from call Facts + Act seals.
   const ThreadsProjection = (await import("../../past/projections/threads/threadsProjection.js")).default;
   const match = { severedAt: null };
   if (being) {
@@ -436,7 +436,7 @@ export async function cutThread({
   //    past/projections/inbox/inboxProjectionFold.js sweeps the InboxProjection
   //    rows whose rootCorrelation matches. Queued moments drop in
   //    one fold cycle; the legacy per-being intake sweep is gone.
-  //    Inbox audit (the be:summon Facts themselves) is untouched —
+  //    Inbox audit (the call Facts themselves) is untouched —
   //    facts are the permanent arrival record.
   let cancelled = 0;
   try {

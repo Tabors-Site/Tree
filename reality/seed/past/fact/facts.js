@@ -61,7 +61,7 @@ const MAX_ACTION_LENGTH = 100;
 //   - do: act on an object (right stance). of.kind ∈ {space, matter, being, place, stance}.
 //   - be: identity acting on self (left stance). of.kind === "being".
 //   - summon: one being calling another (right stance, the recipient). of.kind === "being".
-const VALID_VERBS = new Set(["do", "be", "summon", "name"]);
+const VALID_VERBS = new Set(["do", "be", "call", "name"]);
 const VALID_TARGET_KINDS = new Set([
   "space",
   "matter",
@@ -74,7 +74,7 @@ const VALID_TARGET_KINDS = new Set([
 // SUMMON always act on a being. Enforced in logFact below so a
 // caller can't slip a `verb:"be" of:{kind:"matter"}` past the
 // guard and confuse the fold or the inner/outer classifier.
-const BEING_ONLY_TARGET_VERBS = new Set(["be", "summon"]);
+const BEING_ONLY_TARGET_VERBS = new Set(["be", "call"]);
 
 /**
  * Act a Fact onto the reel.

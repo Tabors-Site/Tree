@@ -426,7 +426,7 @@ async function processEntry(beingId, spaceId, picked) {
 }
 
 // ────────────────────────────────────────────────────────────────
-// Handoff registration (called by verbs/summon.js for async sends)
+// Handoff registration (called by verbs/call.js for async sends)
 // ────────────────────────────────────────────────────────────────
 
 /**

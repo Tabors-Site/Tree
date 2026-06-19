@@ -57,20 +57,29 @@ try {
   const being = await assembleStory("being", { branch: "0", being: String(I_AM) });
   head("BEING (I_AM's own thread, first person)", being);
 
-  // PLACE — one moment's story (pick an act with an actId from the world story)
+  // MOMENT (WHEN) — one moment's cross-section (pick an act with an actId from the world story)
   const withAct = world.find((a) => a.actId);
   if (withAct) {
-    const place = await assembleStory("place", { branch: "0", moment: withAct.actId });
-    head(`PLACE (the moment ${String(withAct.actId).slice(0, 8)} — only its landings)`, place);
+    const moment = await assembleStory("moment", { branch: "0", moment: withAct.actId });
+    head(`MOMENT (the act ${String(withAct.actId).slice(0, 8)} — only its landings, the when)`, moment);
   } else {
-    console.log("\n  ── PLACE ── (no act carried an actId to scope a moment)");
+    console.log("\n  ── MOMENT ── (no act carried an actId to scope a moment)");
+  }
+
+  // PLACE (WHERE) — a space's whole history (pick a space that some fact targeted)
+  const withSpace = world.find((a) => a.of?.kind === "space" && a.of?.id);
+  if (withSpace) {
+    const place = await assembleStory("place", { branch: "0", space: withSpace.of.id });
+    head(`PLACE (the space ${String(withSpace.of.id).slice(0, 8)} — its whole history, the where)`, place);
+  } else {
+    console.log("\n  ── PLACE ── (no fact targeted a space to scope a where)");
   }
 
   // LINEAGE — I_AM and its children, one generation
   const lineage = await assembleStory("lineage", { branch: "0", being: String(I_AM), depth: 1 });
   head("LINEAGE (I_AM + its children, depth 1 — the family story)", lineage);
 
-  console.log(`\n  four views over one chain — read, watch, act.`);
+  console.log(`\n  five views, one coordinate system: who × when × where — read, watch, act.`);
   process.exit(0);
 } catch (err) {
   console.log(`\n  ! crashed: ${err.stack || err.message}`);

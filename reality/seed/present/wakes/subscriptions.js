@@ -70,7 +70,7 @@
 import { randomUUID } from "crypto";
 import log from "../../seedReality/log.js";
 import { getAncestorChain } from "../../materials/space/ancestorCache.js";
-import { summonByResolved } from "../../ibp/verbs/summon.js";
+import { callByResolved } from "../../ibp/verbs/call.js";
 import { getRealityDomain } from "../../ibp/address.js";
 import { getSpaceRootId } from "../../sprout.js";
 import { emitFact } from "../../past/fact/facts.js";
@@ -572,7 +572,7 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
   // branch as the trigger; cross-branch waking is forbidden by the
   // address bridge gate anyway. No fallback: if branch is missing
   // the hook payload was malformed at the perimeter and we surface
-  // it loud via summonByResolved's MISSING_BRANCH throw.
+  // it loud via callByResolved's MISSING_BRANCH throw.
   const branch = payload?.branch || null;
 
   let emitted = 0;
@@ -646,8 +646,8 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
 // Branch rides explicitly as args.branch (not via moment — this
 // path runs from a hook handler, outside any enclosing moment). The
 // triggering hook payload (afterMatter / afterQualityWrite / ...) put
-// the branch here; summonByResolved threads it through to the fact.
-// If branch is null, summonByResolved throws MISSING_BRANCH — that
+// the branch here; callByResolved threads it through to the fact.
+// If branch is null, callByResolved throws MISSING_BRANCH — that
 // surfaces a perimeter threading gap rather than silently waking on
 // main.
 async function _emitOne({
@@ -661,7 +661,7 @@ async function _emitOne({
   branch,
 }) {
   const correlation = randomUUID();
-  await summonByResolved({
+  await callByResolved({
     toBeingId,
     inboxSpaceId,
     identity,

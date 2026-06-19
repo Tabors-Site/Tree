@@ -246,22 +246,39 @@ async function evalRecall(node, ctx) {
   const ownBeing = ctx.identity?.beingId != null ? String(ctx.identity.beingId) : null;
   const ownName  = ctx.identity?.nameId  != null ? String(ctx.identity.nameId)  : (ctx.identity?.name != null ? String(ctx.identity.name) : null);
 
-  // which thread? → the rendering (saw/recalled) + the access gate
-  const isWorld = node.of === "world" || node.of?.ref === "world";
-  let query, mode, ofLabel;
-  if (isWorld) {
-    query = { branch }; mode = "saw"; ofLabel = "the world";            // the world-space you stand in
+  // resolve the recall TARGET to a STORY scope (who × when × where) — the SAME fold the book and
+  // the frontend story-views read. RECALL is the cognition changing views into the past/world:
+  //   world         → the whole branch                       (saw)
+  //   {lineage: B}   → B + its descendants, the family story  (own → recalled, else saw)
+  //   {moment: A}    → one act's cross-section                (saw)
+  //   {place: S}     → a space's whole history                (saw)
+  //   <being> / own  → a being's own thread                   (own → recalled, else saw)
+  // mode renders first-person ("I", your own thread) vs third-person ("saw", anything else).
+  const of = node.of;
+  const resolveRef = (v) => (v && typeof v === "object" && v.ref != null) ? getPath(v.ref, ctx) : resolveValue(v, ctx);
+  const idOf = (v) => { const r = resolveRef(v); return String(r?._id ?? r?.id ?? r ?? ""); };
+  let scope = "world", params = { branch }, mode = "saw", ofLabel = "the world";
+  if (of === "world" || of?.ref === "world") {
+    scope = "world"; mode = "saw"; ofLabel = "the world";
+  } else if (of && typeof of === "object" && of.lineage !== undefined) {
+    const b = idOf(of.lineage) || ownBeing; const own = b === ownBeing;
+    scope = "lineage"; params.being = b; if (of.depth != null) params.depth = of.depth;
+    mode = own ? "recalled" : "saw"; ofLabel = own ? "my lineage" : "their lineage";
+  } else if (of && typeof of === "object" && of.moment !== undefined) {
+    scope = "moment"; params.moment = idOf(of.moment); mode = "saw"; ofLabel = "that moment";
+  } else if (of && typeof of === "object" && (of.place !== undefined || of.space !== undefined)) {
+    scope = "place"; params.space = idOf(of.place ?? of.space); mode = "saw"; ofLabel = "that place";
   } else {
-    const ref = (node.of && typeof node.of === "object" && node.of.ref != null) ? getPath(node.of.ref, ctx) : resolveValue(node.of, ctx);
-    const id = String(ref?._id ?? ref?.id ?? ref ?? ownBeing);
-    if (id === ownBeing || id === ownName) {
-      query = { branch, $or: [{ through: ownBeing }, { by: ownName }] }; mode = "recalled"; ofLabel = "my own thread"; // your own thread, always yours
-    } else {
-      // your own thread is always yours; the world you can see; a foreign thread is private.
-      // (Per-space saw-access for a specific other space is the next refinement.)
-      throw new WordRefusal(`recall: that thread is not yours to recall`, "FORBIDDEN");
-    }
+    const id = idOf(of) || ownBeing; const own = id === ownBeing || id === ownName;
+    scope = "being"; params.being = own ? ownBeing : id;
+    mode = own ? "recalled" : "saw"; ofLabel = own ? "my own thread" : "their thread";
   }
+
+  // CONSCIOUSNESS-LEVEL (Tabor): which views a being may recall is granted via `can recall <view>`
+  // (canRecall), per being — the aperture is a granted word like everything else, NOT a permission
+  // over public data (it's the capability to compute the wider fold). Enforcement is PERMISSIVE for
+  // now ("allow all saw, show the full story"); when it arms, gate `scope` here against the role's
+  // canRecall: `mode === "recalled" || role.canRecall.includes(scope)`, refusing otherwise.
 
   if (ctx.dryRun) {
     if (node.as) ctx.bindings[node.as] = `<${mode}>`;
@@ -269,10 +286,13 @@ async function evalRecall(node, ctx) {
     return mode;
   }
 
-  // READ the chain back — the thread (NO fact: the inner fold the cognition reflects on)
-  const { default: Fact } = await import("../../past/fact/fact.js");
-  const thread = await Fact.find(query).sort({ date: 1, seq: 1 }).lean();
-  if (node.as) ctx.bindings[node.as] = thread;
+  // READ the view back — the WOVEN story (the same fold the book + frontend render), NO fact: the
+  // inner fold the cognition reflects on. recall lays nothing; only the verdict writes. The focal
+  // is your own being when recalled (first person), null when saw (third person).
+  const { assembleStory } = await import("../book/assemble.js");
+  const view = await assembleStory(scope, { ...params, nameId: mode === "recalled" ? (params.being || ownBeing) : null });
+  const thread = view;
+  if (node.as) ctx.bindings[node.as] = view;
 
   // the VERDICT — the conclusion AND the why, published as one memory-write. CRITICAL (Tabor):
   // the recorded `because` is the being's DECLARED ACCOUNT of its reasoning — an authored Word
@@ -295,7 +315,7 @@ async function evalRecall(node, ctx) {
 // talk. Lays the reach RECORD as a fact THROUGH moment, so it rides the moment + the
 // stamper (never a bare emit). `.word` surface: `call <being>, saying <content>` (talk) and
 // `call <being> to <intent>, with <content>` (summon-to-act) — the parser maps the surface
-// to { being, intent?, content }. The backing is TreeOS's summon machinery (summonVerb),
+// to { being, intent?, content }. The backing is TreeOS's summon machinery (callVerb),
 // named `call` at the surface now; the full rename comes later. (RECALL — reaching across
 // TIME into a chain — is the private twin; it lays no fact by itself.)
 async function evalCall(node, ctx) {
@@ -330,9 +350,12 @@ async function evalCall(node, ctx) {
   if (!fromName && ctx.identity?.beingId) {
     fromName = (await loadOrFold("being", String(ctx.identity.beingId), ctx.branch || "0"))?.state?.name;
   }
+  // A call must address FROM a real stance — `@undefined` is NEVER acceptable. An actor with no
+  // resolvable name is a HARD ERROR here, not a silent slide into anonymous downstream.
+  if (!fromName) throw new WordRefusal("call: the caller has no resolvable name — cannot address from @undefined", "INVALID_INPUT");
   const message = { from: `${reality}/@${fromName}`, content, ...(node.intent ? { intent: node.intent } : {}) };
-  const { summonVerb } = await import("../../ibp/verbs/summon.js");
-  const result = await summonVerb(`${reality}/@${toName}`, message, { identity: ctx.identity, moment: ctx.moment });
+  const { callVerb } = await import("../../ibp/verbs/call.js");
+  const result = await callVerb(`${reality}/@${toName}`, message, { identity: ctx.identity, moment: ctx.moment });
   if (node.bind) ctx.bindings[node.bind] = result;
   return result;
 }

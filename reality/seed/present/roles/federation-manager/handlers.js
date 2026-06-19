@@ -167,7 +167,7 @@ async function dispatchToPeer(ctx, peerReality, message) {
   const { intent: messageIntent, ...rest } = message || {};
   const envelope = {
     id:      uuidv4(),
-    verb:    "summon",
+    verb:    "call",
     address: `${peerReality}/@federation-manager`,
     payload: {
       message: {

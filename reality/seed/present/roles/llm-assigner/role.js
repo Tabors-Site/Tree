@@ -35,7 +35,7 @@ export const llmAssignerRole = Object.freeze({
   permissions: ["be"],
   respondMode: "async",
   triggerOn: [],
-  async summon(_message, _ctx) {
+  async call(_message, _ctx) {
     return null;
   },
 });

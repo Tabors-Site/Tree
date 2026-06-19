@@ -167,7 +167,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
   // even multiple writes to the same reel — but you don't pack
   // multiple unrelated ops into one moment.
   //
-  // How counting works: doVerb / beVerb / summonVerb at the entry
+  // How counting works: doVerb / beVerb / callVerb at the entry
   // layer bumps `moment._opCount` once per top-level call.
   // Recursive DO dispatches (set-render → set-being) are gated by
   // `moment._inOp` and don't re-count. At seal time, opCount > 1

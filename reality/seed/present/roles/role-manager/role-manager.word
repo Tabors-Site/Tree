@@ -10,7 +10,7 @@
 #   - publishSignal: the lone WORLD fact — a DYNAMIC dotted-field set-space the
 #     parser has no sentence form for yet, so it is reached as a `host:` escape
 #     that calls the SAME getSpaceRootId() + doVerb("set-space") the JS handler
-#     calls (no reimplementation). It reads ctx.summonCtx to lay its fact into the
+#     calls (no reimplementation). It reads ctx.moment to lay its fact into the
 #     live moment.
 # The bridge binds `namespace`, `key`, `value`, and the actor identity.
 
