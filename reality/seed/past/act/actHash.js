@@ -88,7 +88,7 @@ export async function advanceActHead(branch, beingId, actId, { session = null, e
     // Legacy unconditional advance (callers that own their serialization).
     const update = ActHead.updateOne(
       { _id },
-      { $set: { headHash: actId }, $setOnInsert: { branch, beingId: String(beingId) } },
+      { $set: { headHash: actId }, $setOnInsert: { history: branch, beingId: String(beingId) } },
       { upsert: true },
     );
     if (session) update.session(session);
@@ -102,7 +102,7 @@ export async function advanceActHead(branch, beingId, actId, { session = null, e
     : { _id, headHash: expectPrev };
   const q = ActHead.updateOne(
     filter,
-    { $set: { headHash: actId }, $setOnInsert: { branch, beingId: String(beingId) } },
+    { $set: { headHash: actId }, $setOnInsert: { history: branch, beingId: String(beingId) } },
     // Upsert only for the first act (no head row yet). A non-genesis
     // upsert would resurrect a filtered-out row and mask the fork.
     { upsert: isGenesis },

@@ -316,7 +316,7 @@ async function _resolveStancePointer(stance, ctx) {
     const { resolvePointer } = await import("../materials/history/historyRegistry.js");
     const canonical = await resolvePointer(stance.historyPointer);
     if (canonical) {
-      return { ...stance, branch: canonical };
+      return { ...stance, history: canonical };
     }
   } catch {
     // Registry not yet planted or DB unreachable. Leave branch null;

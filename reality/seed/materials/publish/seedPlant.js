@@ -273,7 +273,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
     throw new Error("plantTemplate: bundle.content.spaces is missing the scope root");
   }
   const targetSiblings = await Projection.find({
-    branch, type: "space",
+    history: branch, type: "space",
     "state.parent": targetParentSpaceId,
     "state.name": rootBundleSpace.name,
     tombstoned: { $ne: true },

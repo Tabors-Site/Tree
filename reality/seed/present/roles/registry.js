@@ -445,7 +445,7 @@ export async function loadLiveRolesFromSubstrate() {
   const parent = await findByHeavenSpace(HEAVEN_SPACE.ROLES, "0");
   if (!parent) return { loaded: 0 };
   const rows = await Projection.find({
-    branch: "0", type: "space",
+    history: "0", type: "space",
     "state.parent": parent.id,
     tombstoned: { $ne: true },
   }).lean();

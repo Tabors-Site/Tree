@@ -1,10 +1,8 @@
 # Licensing
 
 This licensing applies to **the seed** only: the code in
-[seed/](seed/), the apparatus that defines what TreeOS IS. Nothing
-else in this repository is governed by it. Extensions, roleFlows,
-clones/replicates (branches), portals (browsers), and work pulled or pushed through Roots
-are not covered here; they carry their own terms (or none).
+[seed/](seed/), the apparatus, words, and store that defines what Story IS. Nothing
+else in this repository is governed by it.
 
 The seed is dual licensed.
 

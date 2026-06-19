@@ -538,14 +538,14 @@ async function purgeContentHandler({ target, params, identity, moment }) {
     "state.content.hash": hash,
     tombstoned: { $ne: true },
     id: { $ne: String(matterId) },
-  }).select("id branch").lean();
+  }).select("id history").lean();
   if (others.length > 0 && !force) {
     throw new IbpError(
       IBP_ERR.RESOURCE_CONFLICT,
       `purge-content: ${others.length} other matter row(s) reference these same bytes ` +
       `(content is deduplicated by hash). Pass force=true to purge anyway — ` +
       `their content goes dark too.`,
-      { referents: others.map((o) => ({ matterId: o.id, branch: o.branch })) },
+      { referents: others.map((o) => ({ matterId: o.id, history: o.history })) },
     );
   }
 

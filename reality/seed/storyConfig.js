@@ -1,6 +1,6 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Place identity, remembered across reboots.
+// story identity, remembered across reboots.
 //
 // What this story IS to the outside world — its name, public URL,
 // federation directory, accepted MIME types, boundary security
@@ -56,16 +56,19 @@ export function getStoryUrl() {
     return cachedStoryUrl;
   }
   const raw = process.env.STORY_DOMAIN || "localhost";
-  const domain = raw.replace(/^https?:\/\//, "").replace(/\/+$/, "").replace(/:\d+$/, "");
+  const domain = raw
+    .replace(/^https?:\/\//, "")
+    .replace(/\/+$/, "")
+    .replace(/:\d+$/, "");
   const port = process.env.PORT || 80;
   const isLocal =
-    domain === "localhost"          ||
-    domain.startsWith("localhost")  ||
-    domain.startsWith("127.")       ||
-    domain.startsWith("192.168.")   ||
-    domain.startsWith("10.")        ||
-    domain.endsWith(".lan")         ||
-    domain.endsWith(".local")       ||
+    domain === "localhost" ||
+    domain.startsWith("localhost") ||
+    domain.startsWith("127.") ||
+    domain.startsWith("192.168.") ||
+    domain.startsWith("10.") ||
+    domain.endsWith(".lan") ||
+    domain.endsWith(".local") ||
     !domain.includes(".");
   const protocol = isLocal ? "http" : "https";
   const portSuffix = isLocal && port != 80 && port != 443 ? `:${port}` : "";
@@ -73,19 +76,27 @@ export function getStoryUrl() {
   return cachedStoryUrl;
 }
 
-const PROTECTED_KEYS = new Set([
-  "seedVersion",
-  "disabledExtensions",
-]);
+const PROTECTED_KEYS = new Set(["seedVersion", "disabledExtensions"]);
 
 const CONFIG_KEY_RE = /^[a-zA-Z][a-zA-Z0-9_]{0,63}$/;
-const DANGEROUS_KEYS = new Set(["__proto__", "constructor", "prototype", "toString", "valueOf", "hasOwnProperty"]);
+const DANGEROUS_KEYS = new Set([
+  "__proto__",
+  "constructor",
+  "prototype",
+  "toString",
+  "valueOf",
+  "hasOwnProperty",
+]);
 const MAX_VALUE_BYTES = 65536;
 
 function validateKey(key) {
   if (typeof key !== "string") throw new Error("Config key must be a string");
-  if (!CONFIG_KEY_RE.test(key)) throw new Error(`Invalid config key "${key}". Must be alphanumeric + underscores, start with letter, max 64 chars.`);
-  if (DANGEROUS_KEYS.has(key)) throw new Error(`Config key "${key}" is reserved`);
+  if (!CONFIG_KEY_RE.test(key))
+    throw new Error(
+      `Invalid config key "${key}". Must be alphanumeric + underscores, start with letter, max 64 chars.`,
+    );
+  if (DANGEROUS_KEYS.has(key))
+    throw new Error(`Config key "${key}" is reserved`);
 }
 
 function validateValue(value) {
@@ -93,7 +104,9 @@ function validateValue(value) {
   try {
     const size = JSON.stringify(value).length;
     if (size > MAX_VALUE_BYTES) {
-      throw new Error(`Config value exceeds ${MAX_VALUE_BYTES} byte limit (${size} bytes)`);
+      throw new Error(
+        `Config value exceeds ${MAX_VALUE_BYTES} byte limit (${size} bytes)`,
+      );
     }
   } catch (e) {
     if (e.message.includes("limit")) throw e;
@@ -108,8 +121,13 @@ function validateValue(value) {
 // early reads; the `BOOT_ENV_KEYS.has` call below short-circuits via
 // optional chaining for that case.
 var BOOT_ENV_KEYS = new Set([
-  "socketMaxBufferSize", "socketPingTimeout", "socketPingInterval", "socketConnectTimeout",
-  "maxConnectionsPerIp", "STORY_NAME", "storyUrl",
+  "socketMaxBufferSize",
+  "socketPingTimeout",
+  "socketPingInterval",
+  "socketConnectTimeout",
+  "maxConnectionsPerIp",
+  "STORY_NAME",
+  "storyUrl",
 ]);
 
 // Every returned value is a deep copy so callers can't pollute the cache.
@@ -127,7 +145,10 @@ async function loadConfigFromDb() {
     const { findByHeavenSpace } = await import("./materials/projections.js");
     const configSlot = await findByHeavenSpace(HEAVEN_SPACE.CONFIG, "0");
     if (!configSlot || !configSlot.state?.qualities) {
-      log.warn("Story", "No config heaven space found or qualities is empty. Using empty config.");
+      log.warn(
+        "Story",
+        "No config heaven space found or qualities is empty. Using empty config.",
+      );
       configCache = {};
       return;
     }
@@ -138,9 +159,8 @@ async function loadConfigFromDb() {
       configCache = {};
       return;
     }
-    const raw = configNs instanceof Map
-      ? Object.fromEntries(configNs)
-      : { ...configNs };
+    const raw =
+      configNs instanceof Map ? Object.fromEntries(configNs) : { ...configNs };
 
     // Strip keys that would fail validation (manual DB edits, proto
     // pollution injected directly into MongoDB, Mongoose lean() leaks).
@@ -155,7 +175,10 @@ async function loadConfigFromDb() {
     }
     configCache = clean;
   } catch (err) {
-    log.error("Story", `Failed to load config from DB: ${err.message}. Using empty config.`);
+    log.error(
+      "Story",
+      `Failed to load config from DB: ${err.message}. Using empty config.`,
+    );
     configCache = {};
   }
 }
@@ -181,7 +204,8 @@ export function getStoryConfigValue(key) {
 // config write during boot.
 let cachedConfigSpaceId = null;
 async function getConfigSpace() {
-  const { loadProjection, findByHeavenSpace } = await import("./materials/projections.js");
+  const { loadProjection, findByHeavenSpace } =
+    await import("./materials/projections.js");
   if (cachedConfigSpaceId) {
     const slot = await loadProjection("space", cachedConfigSpaceId, "0");
     if (slot) return { _id: slot.id, ...slot.state };
@@ -195,10 +219,16 @@ async function getConfigSpace() {
   return null;
 }
 
-export async function setStoryConfigValue(key, value, { internal, identity, moment } = {}) {
+export async function setStoryConfigValue(
+  key,
+  value,
+  { internal, identity, moment } = {},
+) {
   validateKey(key);
   if (PROTECTED_KEYS.has(key) && !internal) {
-    throw new Error(`Config key "${key}" is protected and cannot be modified manually`);
+    throw new Error(
+      `Config key "${key}" is protected and cannot be modified manually`,
+    );
   }
   validateValue(value);
   if (!moment) {
@@ -209,7 +239,9 @@ export async function setStoryConfigValue(key, value, { internal, identity, mome
 
   const configSpace = await getConfigSpace();
   if (!configSpace) {
-    throw new Error("Config write failed: config heaven space not found at <story>/./config. Story may need repair.");
+    throw new Error(
+      "Config write failed: config heaven space not found at <story>/./config. Story may need repair.",
+    );
   }
 
   // Route through do.set-space so the write IS a Fact on the `./config`
@@ -217,9 +249,7 @@ export async function setStoryConfigValue(key, value, { internal, identity, mome
   // scaffold path; user-driven writes thread caller identity. Either
   // way, the fact joins the wrapping moment's ΔF.
   const { doVerb } = await import("./ibp/verbs/do.js");
-  const opts = identity
-    ? { identity, moment }
-    : { identity: I_AM, moment };
+  const opts = identity ? { identity, moment } : { identity: I_AM, moment };
   await doVerb(
     { kind: "space", id: String(configSpace._id) },
     "set-space",
@@ -233,10 +263,15 @@ export async function setStoryConfigValue(key, value, { internal, identity, mome
   log.verbose("Story", `Config set: ${key}`);
 }
 
-export async function deleteStoryConfigValue(key, { internal, identity, moment } = {}) {
+export async function deleteStoryConfigValue(
+  key,
+  { internal, identity, moment } = {},
+) {
   validateKey(key);
   if (PROTECTED_KEYS.has(key) && !internal) {
-    throw new Error(`Config key "${key}" is protected and cannot be deleted manually`);
+    throw new Error(
+      `Config key "${key}" is protected and cannot be deleted manually`,
+    );
   }
   if (!moment) {
     throw new Error(
@@ -246,13 +281,13 @@ export async function deleteStoryConfigValue(key, { internal, identity, moment }
 
   const configSpace = await getConfigSpace();
   if (!configSpace) {
-    throw new Error("Config delete failed: config heaven space not found at <story>/./config.");
+    throw new Error(
+      "Config delete failed: config heaven space not found at <story>/./config.",
+    );
   }
 
   const { doVerb } = await import("./ibp/verbs/do.js");
-  const opts = identity
-    ? { identity, moment }
-    : { identity: I_AM, moment };
+  const opts = identity ? { identity, moment } : { identity: I_AM, moment };
   await doVerb(
     { kind: "space", id: String(configSpace._id) },
     "set-space",
@@ -308,7 +343,7 @@ export const CONFIG_DEFAULTS = {
   // A request to make a 10^9-cell space throws INVALID_INPUT. Keep
   // this generous . it's a sanity guard, not a budget.
   defaultSpaceSize: { x: 50, y: 50 },
-  maxSpaceSize:     { x: 1000, y: 1000, z: 1000 },
+  maxSpaceSize: { x: 1000, y: 1000, z: 1000 },
 
   // Protected (shown but not modifiable via public API)
   seedVersion: null,
@@ -352,13 +387,19 @@ export function getConfigWithDefaults() {
 export async function initStoryConfig() {
   await loadConfigFromDb();
   initialized = true;
-  log.verbose("Story", `Config loaded from ./config space (${Object.keys(configCache).length} keys)`);
+  log.verbose(
+    "Story",
+    `Config loaded from ./config space (${Object.keys(configCache).length} keys)`,
+  );
 }
 
 // For when another process modifies ./config directly (migration, manual repair).
 export async function reloadStoryConfig() {
   await loadConfigFromDb();
-  log.info("Story", `Config reloaded from ./config space (${Object.keys(configCache).length} keys)`);
+  log.info(
+    "Story",
+    `Config reloaded from ./config space (${Object.keys(configCache).length} keys)`,
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -454,9 +495,13 @@ registerOperation("close-story", {
   args: {},
   handler: async ({ identity }) => {
     const { IbpError, IBP_ERR } = await import("./ibp/protocol.js");
-    const { hasHeavenAuthority } = await import("./materials/space/heavenLineage.js");
+    const { hasHeavenAuthority } =
+      await import("./materials/space/heavenLineage.js");
     if (!identity?.beingId) {
-      throw new IbpError(IBP_ERR.UNAUTHORIZED, "close-story requires an authenticated being.");
+      throw new IbpError(
+        IBP_ERR.UNAUTHORIZED,
+        "close-story requires an authenticated being.",
+      );
     }
     if (!(await hasHeavenAuthority(identity.beingId))) {
       throw new IbpError(
@@ -464,7 +509,10 @@ registerOperation("close-story", {
         "Only beings with heaven authority (owner or angel role) can close the story.",
       );
     }
-    log.warn("Seed", `close-story requested by ${identity.beingId} (heaven authority). Shutting down.`);
+    log.warn(
+      "Seed",
+      `close-story requested by ${identity.beingId} (heaven authority). Shutting down.`,
+    );
     // Let the ack return first; then trigger the graceful shutdown wired
     // in begin.js (SIGTERM handler closes senses + process.exit).
     setTimeout(() => {

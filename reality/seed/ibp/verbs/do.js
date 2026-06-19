@@ -169,10 +169,10 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     const decision = await authorize({
       identity,
       verb:   "do",
-      // target.branch = the branch this DO's Fact lands on (resolved
+      // target.history = the branch this DO's Fact lands on (resolved
       // once at the verb entry). Auth evaluates the same world the
       // stamp rides.
-      target: { kind: "position", spaceId: spaceIdForAuth, branch },
+      target: { kind: "position", spaceId: spaceIdForAuth, history: branch },
       action: authAction,
       namespace,
       // The being this DO acts ON (when it's a being op). authorize uses

@@ -454,7 +454,7 @@ export async function seeVerb(target, opts = {}) {
     const { loadOrFold } = await import("../../materials/projections.js");
     const storyDomain = getStoryDomain();
     const { getDefaultHistory: _gDB } = await import("../../materials/history/historyRegistry.js");
-    const branch = expanded.right?.branch || parseCtx.currentHistory || await _gDB();
+    const branch = expanded.right?.history || parseCtx.currentHistory || await _gDB();
     const slot = await loadOrFold(publicTarget.kind, publicTarget.id, branch);
     const notFoundCode = publicTarget.kind === "being"
       ? IBP_ERR.BEING_NOT_FOUND
@@ -580,7 +580,7 @@ export async function seeVerb(target, opts = {}) {
       ? payload.before
       : undefined;
     const { getDefaultHistory: _gDB } = await import("../../materials/history/historyRegistry.js");
-    const chainHistory = expanded.right?.branch || parseCtx.currentHistory || await _gDB();
+    const chainHistory = expanded.right?.history || parseCtx.currentHistory || await _gDB();
     const chain = await describeActChain(actChainBeingId, {
       branch: chainHistory,
       ...(requestedLimit ? { limit: requestedLimit } : {}),
@@ -617,7 +617,7 @@ export async function seeVerb(target, opts = {}) {
   // through the registry — never literal "0".
   const { getDefaultHistory: _gDB } = await import("../../materials/history/historyRegistry.js");
   const seeHistory =
-    expanded.right?.branch ||
+    expanded.right?.history ||
     currentHistory ||
     await _gDB();
   const decision = await authorize({
@@ -626,7 +626,7 @@ export async function seeVerb(target, opts = {}) {
     target: {
       kind: addressKind === "stance" ? "stance" : "position",
       spaceId: resolved.spaceId,
-      branch:  seeHistory,
+      history: seeHistory,
       isDiscovery: false,
     },
     moment,
@@ -902,7 +902,7 @@ async function seeAtTime({
   if (followBeingId) {
     try {
       // Historical fold runs on the same branch the live SEE resolved
-      // to. resolved.branch is populated by expand() from the wire's
+      // to. resolved.history is populated by expand() from the wire's
       // currentHistory (seeVerb now threads it into parseCtx); foldAt's
       // assertHistoryOrThrow surfaces any threading regression here
       // loud rather than silently defaulting to heaven.
@@ -910,7 +910,7 @@ async function seeAtTime({
         "being",
         String(followBeingId),
         at,
-        { branch: resolved.branch },
+        { branch: resolved.history },
       );
       const histPosition = beingState?.position
         ? String(beingState.position)
@@ -922,7 +922,7 @@ async function seeAtTime({
         const _pSlot = await loadProjection(
           "space",
           histPosition,
-          resolved.branch || await _gDB(),
+          resolved.history || await _gDB(),
         );
         const positionRow = _pSlot
           ? {
@@ -958,7 +958,7 @@ async function seeAtTime({
       // (no moment) had no target branch and authorize failed loud
       // for every authenticated caller — the timeline strip's scrub
       // path.
-      branch: resolved.branch || currentHistory || null,
+      history: resolved.history || currentHistory || null,
       isDiscovery: false,
     },
     moment,
@@ -1006,7 +1006,7 @@ async function _redirectResolvedToSpace(resolved, positionRow) {
   // loadOrFold (not loadProjection) so a sub-branch whose ancestors
   // were planted on a parent branch still walks the lineage.
   const { getDefaultHistory } = await import("../../materials/history/historyRegistry.js");
-  const walkHistory = resolved.branch || await getDefaultHistory();
+  const walkHistory = resolved.history || await getDefaultHistory();
   const chain = [];
   let cursor = positionRow;
   while (cursor) {

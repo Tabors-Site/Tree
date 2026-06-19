@@ -134,7 +134,7 @@ export async function loadProjection(type, id, branch) {
     tombstoned: !!slot.tombstoned,
     type:       slot.type,
     id:         slot.id,
-    branch:     slot.branch,
+    history:    slot.history,
   };
 }
 
@@ -273,7 +273,7 @@ export async function initProjection(type, id, branch, next) {
         position:   position ?? null,
         tombstoned: false,
       },
-      $setOnInsert: { _id, branch, type, id },
+      $setOnInsert: { _id, history: branch, type, id },
     },
     { upsert: true },
   );
@@ -319,7 +319,7 @@ export async function tombstoneProjection(type, id, branch, atFoldedSeq, opts = 
     { _id },
     {
       $set: set,
-      $setOnInsert: { _id, branch, type, id, ...(opts.state ? {} : { state: {} }) },
+      $setOnInsert: { _id, history: branch, type, id, ...(opts.state ? {} : { state: {} }) },
     },
     { upsert: true },
   );
@@ -347,7 +347,7 @@ export async function findByPosition(spaceId, branch) {
   assertHistory(branch);
   if (branch === MAIN) {
     const rows = await Projection.find({
-      branch: MAIN, position: spaceId, tombstoned: { $ne: true },
+      history: MAIN, position: spaceId, tombstoned: { $ne: true },
     }).select("type id foldedSeq position").lean();
     return rows.map(toOccupant);
   }
@@ -359,10 +359,10 @@ export async function findByPosition(spaceId, branch) {
   const { getBranchPoint } = await import("./history/histories.js");
   const [historyHere, mainOccupants, historyTouched] = await Promise.all([
     Projection.find({
-      branch, position: spaceId, tombstoned: { $ne: true },
+      history: branch, position: spaceId, tombstoned: { $ne: true },
     }).select("type id foldedSeq position").lean(),
     findByPosition(spaceId, MAIN),
-    Projection.find({ branch }).select("type id").lean(),
+    Projection.find({ history: branch }).select("type id").lean(),
   ]);
   const shadowedKey = (t, i) => `${t}:${i}`;
   const shadowed = new Set(historyTouched.map((s) => shadowedKey(s.type, s.id)));
@@ -397,7 +397,7 @@ export async function findByName(type, name, branch) {
   if (!name) return null;
   // Branch-local match first (works for main too — main IS just-another-branch).
   const historySlot = await Projection.findOne({
-    branch, type, "state.name": name, tombstoned: { $ne: true },
+    history: branch, type, "state.name": name, tombstoned: { $ne: true },
   }).lean();
   if (historySlot) {
     return {
@@ -406,7 +406,7 @@ export async function findByName(type, name, branch) {
       position:  historySlot.position ?? null,
       type:      historySlot.type,
       id:        historySlot.id,
-      branch:    historySlot.branch,
+      history:   historySlot.history,
     };
   }
   if (branch === MAIN) return null;
@@ -429,7 +429,7 @@ export async function findByName(type, name, branch) {
   const bp = await getBranchPoint(branch, type, inherited.id);
   if (!bp || bp <= 0) return null;
   const touched = await Projection.findOne({
-    branch, type, id: inherited.id,
+    history: branch, type, id: inherited.id,
   }).select("_id").lean();
   if (touched) return null;
   return inherited;
@@ -454,7 +454,7 @@ export async function findByParent(beingId, branch) {
   assertHistory(branch);
   if (branch === MAIN) {
     const rows = await Projection.find({
-      branch: MAIN, type: "being",
+      history: MAIN, type: "being",
       "state.parentBeingId": beingId,
       tombstoned: { $ne: true },
     }).select("type id foldedSeq position").lean();
@@ -465,12 +465,12 @@ export async function findByParent(beingId, branch) {
   const parentPath = historyRow?.parent || MAIN;
   const [branchChildren, inheritedChildren, historyTouched] = await Promise.all([
     Projection.find({
-      branch, type: "being",
+      history: branch, type: "being",
       "state.parentBeingId": beingId,
       tombstoned: { $ne: true },
     }).select("type id foldedSeq position").lean(),
     findByParent(beingId, parentPath),
-    Projection.find({ branch, type: "being" }).select("id").lean(),
+    Projection.find({ history: branch, type: "being" }).select("id").lean(),
   ]);
   const shadowed = new Set(historyTouched.map((s) => s.id));
   const inheritedVisible = [];
@@ -498,7 +498,7 @@ export async function listByType(type, branch) {
   assertHistory(branch);
   if (branch === MAIN) {
     const rows = await Projection.find({
-      branch: MAIN, type, tombstoned: { $ne: true },
+      history: MAIN, type, tombstoned: { $ne: true },
     }).select("type id foldedSeq position").lean();
     return rows.map(toOccupant);
   }
@@ -507,10 +507,10 @@ export async function listByType(type, branch) {
   const parentPath = historyRow?.parent || MAIN;
   const [branchSlots, inheritedAll, historyTouched] = await Promise.all([
     Projection.find({
-      branch, type, tombstoned: { $ne: true },
+      history: branch, type, tombstoned: { $ne: true },
     }).select("type id foldedSeq position").lean(),
     listByType(type, parentPath),
-    Projection.find({ branch, type }).select("id").lean(),
+    Projection.find({ history: branch, type }).select("id").lean(),
   ]);
   const shadowed = new Set(historyTouched.map((s) => s.id));
   const inheritedVisible = [];
@@ -536,7 +536,7 @@ export async function findRoot(type, branch) {
   assertHistory(branch);
   const parentField = type === "being" ? "state.parentBeingId" : "state.parent";
   const where = {
-    branch, type,
+    history: branch, type,
     tombstoned: { $ne: true },
     $or: [
       { [parentField]: null },
@@ -562,7 +562,7 @@ export async function findByNamePattern(type, pattern, branch) {
   if (!pattern) return [];
   const re = pattern instanceof RegExp ? pattern : new RegExp(pattern);
   const rows = await Projection.find({
-    branch, type,
+    history: branch, type,
     "state.name": { $regex: re.source, $options: re.flags },
     tombstoned: { $ne: true },
   }).lean();
@@ -572,7 +572,7 @@ export async function findByNamePattern(type, pattern, branch) {
     position:  slot.position ?? null,
     type:      slot.type,
     id:        slot.id,
-    branch:    slot.branch,
+    history:   slot.history,
   }));
 }
 
@@ -595,7 +595,7 @@ export async function listMatterNamesInFolder(branch, spaceId, parentMatterId, p
   assertHistory(branch);
   if (!spaceId) return [];
   const where = {
-    branch, type: "matter",
+    history: branch, type: "matter",
     "state.spaceId": String(spaceId),
     "state.parentMatterId": parentMatterId ? String(parentMatterId) : null,
     tombstoned: { $ne: true },
@@ -618,7 +618,7 @@ export async function countByType(type, branch) {
   assertType(type);
   assertHistory(branch);
   return await Projection.countDocuments({
-    branch, type, tombstoned: { $ne: true },
+    history: branch, type, tombstoned: { $ne: true },
   });
 }
 
@@ -633,7 +633,7 @@ export async function countByParent(beingId, branch) {
   if (!beingId) return 0;
   assertHistory(branch);
   return await Projection.countDocuments({
-    branch, type: "being",
+    history: branch, type: "being",
     "state.parentBeingId": beingId,
     tombstoned: { $ne: true },
   });
@@ -663,7 +663,7 @@ export async function loadProjections(type, ids, branch) {
       tombstoned: !!slot.tombstoned,
       type:       slot.type,
       id:         slot.id,
-      branch:     slot.branch,
+      history:    slot.history,
     });
   }
   return out;
@@ -682,7 +682,7 @@ export async function findByHeavenSpace(heavenSpaceKind, branch) {
   if (!heavenSpaceKind) return null;
   assertHistory(branch);
   const slot = await Projection.findOne({
-    branch, type: "space",
+    history: branch, type: "space",
     "state.heavenSpace": heavenSpaceKind,
     tombstoned: { $ne: true },
   }).lean();
@@ -693,7 +693,7 @@ export async function findByHeavenSpace(heavenSpaceKind, branch) {
     position:  slot.position ?? null,
     type:      slot.type,
     id:        slot.id,
-    branch:    slot.branch,
+    history:   slot.history,
   };
 }
 
@@ -755,7 +755,7 @@ export async function findRootOperator(systemNames, branch) {
   const allowedParents = ["i-am"];
   if (cherubSlot) allowedParents.push(cherubSlot.id);
   const row = await Projection.findOne({
-    branch, type: "being",
+    history: branch, type: "being",
     "state.name": { $type: "string", $nin: systemNames },
     "state.parentBeingId": { $in: allowedParents },
     tombstoned: { $ne: true },

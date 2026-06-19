@@ -29,7 +29,7 @@ const ProjectionSchema = new mongoose.Schema({
   // convention so both branched caches share a mental model.
   _id:        { type: String },
 
-  branch:     { type: String, required: true, index: true },
+  history:    { type: String, required: true, index: true },
   type:       { type: String, required: true, enum: ["being", "space", "matter", "name"] },
   id:         { type: String, required: true },
 
@@ -56,7 +56,7 @@ const ProjectionSchema = new mongoose.Schema({
 // Primary lookup is via _id (composite key) — no extra index needed.
 // Branch + position serves findByPosition.
 ProjectionSchema.index(
-  { branch: 1, position: 1 },
+  { history: 1, position: 1 },
   { sparse: true },
 );
 
@@ -85,7 +85,7 @@ ProjectionSchema.index(
 // slot, tombstoneProjection flips it true (freeing the name), schema
 // defaults false.
 ProjectionSchema.index(
-  { branch: 1, type: 1, "state.name": 1 },
+  { history: 1, type: 1, "state.name": 1 },
   {
     unique: true,
     name: "name_unique_being",
@@ -97,7 +97,7 @@ ProjectionSchema.index(
   },
 );
 ProjectionSchema.index(
-  { branch: 1, type: 1, "state.parent": 1, "state.name": 1 },
+  { history: 1, type: 1, "state.parent": 1, "state.name": 1 },
   {
     unique: true,
     name: "name_unique_space",
@@ -109,7 +109,7 @@ ProjectionSchema.index(
   },
 );
 ProjectionSchema.index(
-  { branch: 1, type: 1, "state.spaceId": 1, "state.parentMatterId": 1, "state.name": 1 },
+  { history: 1, type: 1, "state.spaceId": 1, "state.parentMatterId": 1, "state.name": 1 },
   {
     unique: true,
     name: "name_unique_matter",
@@ -125,19 +125,19 @@ ProjectionSchema.index(
 // state.parentBeingId is a bare being-id; findByParent / countByParent
 // filter on it directly.
 ProjectionSchema.index(
-  { branch: 1, type: 1, "state.parentBeingId": 1 },
+  { history: 1, type: 1, "state.parentBeingId": 1 },
   { sparse: true },
 );
 
 // Lineage queries for spaces: "give me children of space X in branch B."
 ProjectionSchema.index(
-  { branch: 1, type: 1, "state.parent": 1 },
+  { history: 1, type: 1, "state.parent": 1 },
   { sparse: true },
 );
 
 // Lineage queries for matter: "give me children of matter X in branch B."
 ProjectionSchema.index(
-  { branch: 1, type: 1, "state.parentMatterId": 1 },
+  { history: 1, type: 1, "state.parentMatterId": 1 },
   { sparse: true },
 );
 
@@ -146,12 +146,12 @@ ProjectionSchema.index(
 // deleted matter; live-matter queries filter sentinels out via
 // tombstoned).
 ProjectionSchema.index(
-  { branch: 1, type: 1, "state.spaceId": 1 },
+  { history: 1, type: 1, "state.spaceId": 1 },
   { sparse: true },
 );
 
 // Catalog: "list every being / space / matter in branch B."
-ProjectionSchema.index({ branch: 1, type: 1 });
+ProjectionSchema.index({ history: 1, type: 1 });
 
 const Projection = mongoose.model(
   "Projection",

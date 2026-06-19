@@ -40,7 +40,7 @@ registerSeeOperation("connections", {
     if (wsSpace) {
       const { default: Projection } = await import("../../../materials/history/projection.js");
       rows = await Projection.find({
-        branch: "0", type: "matter",
+        history: "0", type: "matter",
         "state.spaceId": wsSpace,
         "state.type": "connection",
         tombstoned: { $ne: true },

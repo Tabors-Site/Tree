@@ -124,13 +124,13 @@ export function storyRootFromParts({ story, histories = [], reelHeads = [], actH
   );
   const rowsByHistory = new Map();
   for (const r of reelHeads) {
-    const b = String(r.branch ?? "0");
+    const b = String(r.history ?? "0");
     if (!rowsByHistory.has(b)) rowsByHistory.set(b, []);
     rowsByHistory.get(b).push(r);
   }
   const actsByHistory = new Map();
   for (const r of actHeads) {
-    const b = String(r.branch ?? "0");
+    const b = String(r.history ?? "0");
     if (!actsByHistory.has(b)) actsByHistory.set(b, []);
     actsByHistory.get(b).push(r);
   }
@@ -177,8 +177,8 @@ export async function historyRoot(historyPath) {
     const { default: ActHead } = await import("../act/actHead.js");
     const meta = historyPath === "0" ? null : await loadHistory(historyPath);
     const [rows, actRows] = await Promise.all([
-      ReelHead.find({ branch: historyPath }).select("_id head headHash").lean(),
-      ActHead.find({ branch: historyPath }).select("_id headHash").lean(),
+      ReelHead.find({ history: historyPath }).select("_id head headHash").lean(),
+      ActHead.find({ history: historyPath }).select("_id headHash").lean(),
     ]);
     return historyRollup(historyPath, meta, rows, actRows);
   });
@@ -195,8 +195,8 @@ export async function storyRoot() {
     const { getStoryDomain } = await import("../../ibp/address.js");
     const [historyRows, headRows, actHeadRows] = await Promise.all([
       History.find({}).lean(),
-      ReelHead.find({}).select("_id branch head headHash").lean(),
-      ActHead.find({}).select("_id branch headHash").lean(),
+      ReelHead.find({}).select("_id history head headHash").lean(),
+      ActHead.find({}).select("_id history headHash").lean(),
     ]);
     return storyRootFromParts({
       story: getStoryDomain(),

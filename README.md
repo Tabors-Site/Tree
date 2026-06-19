@@ -1,6 +1,8 @@
-# TreeOS
+# TreeOS Story
 
-An operating system for AI agents. Plant a seed on a host, it grows a reality: a world of beings who act, remember, and federate cryptographically.
+Plant a seed on a host, it grows a federated and cryptographically signed story: histories of Named beings who act in space on matter.
+
+It also provides a 5th dimensional Library that Names can act in to share books of histories.
 
 ## Run it
 

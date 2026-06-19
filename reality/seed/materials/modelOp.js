@@ -65,7 +65,7 @@ export async function ensureSkinsSpace(branch = "0", moment = null) {
   // idiom): the catalog is minted on main and inherited by branches.
   for (const b of branch === "0" ? ["0"] : [branch, "0"]) {
     const row = await Projection.findOne({
-      branch: b, type: "space",
+      history: b, type: "space",
       "state.parent": String(rootId),
       "state.name": SKINS_SPACE_NAME,
       tombstoned: { $ne: true },

@@ -221,7 +221,7 @@ async function createMatter({
 
   const max = maxMatterPerSpace();
   const count = await Projection.countDocuments({
-    branch, type: "matter",
+    history: branch, type: "matter",
     "state.spaceId": spaceIdBare,
     tombstoned: { $ne: true },
   });
@@ -701,7 +701,7 @@ async function listMattersAt(spaceId, { limit = 50, branch } = {}) {
   };
   const spaceIdBare = String(spaceId);
   const baseQuery = (b) => ({
-    branch: b, type: "matter",
+    history: b, type: "matter",
     "state.spaceId": spaceIdBare,
     tombstoned: { $ne: true },
   });
@@ -722,7 +722,7 @@ async function listMattersAt(spaceId, { limit = 50, branch } = {}) {
   ]);
   const shadowedIds = new Set(historyRows.map((s) => s.id));
   const tombs = await Projection.find({
-    branch, type: "matter", tombstoned: true,
+    history: branch, type: "matter", tombstoned: true,
   }).select("id").lean();
   for (const t of tombs) shadowedIds.add(t.id);
   const mainVisible = [];

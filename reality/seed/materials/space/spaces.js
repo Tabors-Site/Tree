@@ -928,7 +928,7 @@ export async function listSpaceChildren(parentId, { exclude = null, limit = 500,
   const { default: Projection } = await import("../history/projection.js");
   const buildQuery = (b) => {
     const q = {
-      branch: b, type: "space",
+      history: b, type: "space",
       "state.parent": parentId,
       tombstoned: { $ne: true },
     };
@@ -969,7 +969,7 @@ export async function listSpaceChildren(parentId, { exclude = null, limit = 500,
   // Also shadow tombstones on this branch — a space killed in branch
   // shouldn't reappear from main.
   const tombs = await Projection.find({
-    branch, type: "space", tombstoned: true,
+    history: branch, type: "space", tombstoned: true,
   }).select("id").lean();
   for (const t of tombs) shadowedIds.add(t.id);
   // Filter main candidates by branchPoint: only spaces that had any

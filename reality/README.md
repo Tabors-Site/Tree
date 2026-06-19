@@ -1,4 +1,4 @@
-# Reality
+# Story
 
 The world the seed makes. This directory IS the world's source, durable storage, and runtime.
 
@@ -24,15 +24,15 @@ treeos start
 
 ## The model
 
-A reality is one world cryptographically anchored to a single root being called I_AM. I_AM's keypair signs the genesis fact and every Merkle root from t=0 onward. Every other being is a wallet, named by its own public key. Every act produces facts; facts are content addressed and chained through prev-hashes. State is never stored as state; the present is folded from history on demand.
+A story is one world cryptographically anchored to a single root being called I_AM. I_AM's keypair signs the genesis fact and every Merkle root from t=0 onward. Every other being is a wallet, named by its own public key. Every act produces facts; facts are content addressed and chained through prev-hashes. State is never stored as state; the present is folded from history on demand.
 
-Federation works without a central authority because every being and every reality is self-certifying. Two realities verify each other by exchanging signed root hashes; the math runs locally.
+Federation works without a central authority because every being and every story is self-certifying. Two stories verify each other by exchanging signed root hashes; the math runs locally.
 
 Read [`philosophy/I_AM.md`](philosophy/I_AM.md) for the cryptographic root, [`philosophy/theorems.md`](philosophy/theorems.md) for the formal results, and [`philosophy/MOMENT.md`](philosophy/MOMENT.md) for the moment.
 
 ## The four verbs
 
-Every act inside the reality is one verb at one IBP address (`<reality>/<path>@<being>`).
+Every act inside the story is one verb at one IBP address (`<story>/<path>@<being>`).
 
 | Verb   | Acts on        | What it does                                                            |
 | ------ | -------------- | ----------------------------------------------------------------------- |
@@ -47,7 +47,7 @@ BE is the one verb where the actor IS the target. Its five ops are birth, connec
 
 | Primitive | What it is                                                                                                  |
 | --------- | ----------------------------------------------------------------------------------------------------------- |
-| Being     | An identity. A keypair, a wallet. Humans, LLM beings, scripted beings. The reality itself is a being: I_AM. |
+| Being     | An identity. A keypair, a wallet. Humans, LLM beings, scripted beings. The story itself is a being: I_AM. |
 | Space     | A position in the tree. Holds matter, hosts beings, owns quality namespaces.                                |
 | Matter    | Stuff inside a space. Types declare what it IS (file, model, http, ibpa, source, and extension types).      |
 | Fact      | One recorded change. Content addressed; chained through prev-hashes; signed at the seal step.               |
@@ -59,7 +59,7 @@ Seed schemas never change. Everything an extension defines lives in the `qualiti
 
 ```
 seed/                The kernel. Four folders: materials/, ibp/, present/, past/, plus a host floor.
-protocols/           IBP (the four verbs), canopy (cross-reality), mcp.
+protocols/           IBP (the four verbs), canopy (cross-story), mcp.
 transports/          HTTP, WebSocket, CLI: thin shims that translate into IBP.
 extensions/          Where you build. _template/ is the scaffold.
 portal/              The 3D portal client (active dev). Served at /. Three.js + Vite.
@@ -73,7 +73,7 @@ Dependency direction: `transports/` to `protocols/` to `seed/`. Extensions sit b
 
 ## MongoDB
 
-The reality needs MongoDB as a replica set (single-node is fine for dev). Without it, the substrate runs until the first multi-fact ΔF (a fact-set spanning more than one reel), at which point the all-or-nothing seal needs a transaction, and Mongo only supports transactions on a replica set.
+The story needs MongoDB as a replica set (single-node is fine for dev). Without it, the substrate runs until the first multi-fact ΔF (a fact-set spanning more than one reel), at which point the all-or-nothing seal needs a transaction, and Mongo only supports transactions on a replica set.
 
 Convert a local mongod once:
 

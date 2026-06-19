@@ -31,7 +31,7 @@ import mongoose from "mongoose";
 
 const ReelHeadSchema = new mongoose.Schema({
   _id:    { type: String },           // "<branch>:<type>:<id>"
-  branch: { type: String, required: true, default: "0", index: true },
+  history: { type: String, required: true, default: "0", index: true },
   type:   { type: String, required: true, enum: ["being", "space", "matter"] },
   id:     { type: String, required: true },
   head:   { type: Number, required: true, default: 0 },
@@ -47,7 +47,7 @@ const ReelHeadSchema = new mongoose.Schema({
 // shape already supports this query, but the explicit index makes
 // queries that filter by (branch, type, id) without _id (e.g.
 // migration scans) fast.
-ReelHeadSchema.index({ branch: 1, type: 1, id: 1 }, { unique: true });
+ReelHeadSchema.index({ history: 1, type: 1, id: 1 }, { unique: true });
 
 const ReelHead = mongoose.model("ReelHead", ReelHeadSchema, "reelHeads");
 export default ReelHead;

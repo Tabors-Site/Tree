@@ -9,7 +9,7 @@
 // call, so the two questions can never resolve to different worlds.
 //
 // The precedence, highest first:
-//   1. target.branch          — the parsed target already carries a world
+//   1. target.history         — the parsed target already carries a world
 //   2. moment.targetHistory  — the moment resolved the addressee's branch
 //   3. moment.actorAct.history — the acting moment's own world
 //   4. currentHistory           — the caller's seated branch (socket stance)
@@ -27,14 +27,14 @@ function nonEmpty(s) {
 
 /**
  * @param {object} args
- * @param {{branch?: string}|null} [args.target]   parsed target (may carry a branch)
+ * @param {{history?: string}|null} [args.target]   parsed target (may carry a branch)
  * @param {{targetHistory?: string, actorAct?: {branch?: string}}|null} [args.moment]
  * @param {string|null} [args.currentHistory]       caller's seated branch
  * @returns {string|null}  the resolved target branch, or null if none present
  */
 export function resolveTargetHistory({ target, moment, currentHistory } = {}) {
   return (
-    nonEmpty(target?.branch) ||
+    nonEmpty(target?.history) ||
     nonEmpty(moment?.targetHistory) ||
     nonEmpty(moment?.actorAct?.history) ||
     nonEmpty(currentHistory) ||

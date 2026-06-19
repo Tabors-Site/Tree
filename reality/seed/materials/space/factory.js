@@ -121,7 +121,7 @@ export async function resolveStamperBeing(ref) {
 export async function listStamperChildren({ limit = 100 } = {}) {
   const cap = Math.min(Math.max(1, Number(limit) || 100), 500);
   const heads = await ActHead.find({ headHash: { $ne: null } })
-    .select("branch beingId headHash").lean();
+    .select("history beingId headHash").lean();
   if (heads.length === 0) return [];
 
   const headActs = await Act.find({ _id: { $in: heads.map((h) => h.headHash) } })
@@ -131,7 +131,7 @@ export async function listStamperChildren({ limit = 100 } = {}) {
   const byBeing = new Map(); // beingId -> { branches, lastAct }
   for (const h of heads) {
     const cur = byBeing.get(h.beingId) || { branches: [], lastAct: null };
-    cur.branches.push(h.branch);
+    cur.branches.push(h.history);
     const t = lastByAct.get(String(h.headHash));
     if (t && (!cur.lastAct || t > cur.lastAct)) cur.lastAct = t;
     byBeing.set(h.beingId, cur);
@@ -202,8 +202,8 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
   // Lanes: every branch this being has sealed acts on. Lane 0 is
   // main; the rest order by branch creation time.
   const heads = await ActHead.find({ beingId, headHash: { $ne: null } })
-    .select("branch headHash").lean();
-  const historySet = new Set(heads.map((h) => h.branch || MAIN));
+    .select("history headHash").lean();
+  const historySet = new Set(heads.map((h) => h.history || MAIN));
   if (historySet.size === 0) historySet.add(MAIN);
   const historyMeta = new Map(); // branch -> {createdAt: Date|null}
   for (const b of historySet) {
@@ -275,7 +275,7 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
 
     const serialized = window.map((a) => ({
       _id: String(a._id),
-      branch, lane, forkX, countOlder,
+      history: branch, lane, forkX, countOlder,
       startMessage: a.startMessage || null,
       stampedAt: a.stampedAt || null,
     }));
@@ -283,7 +283,7 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
 
     const headX = forkX + total;
     if (headX > maxHeadX) maxHeadX = headX;
-    lanes.push({ branch, lane, forkX, headX, count: total, returned: window.length });
+    lanes.push({ history: branch, lane, forkX, headX, count: total, returned: window.length });
   }
 
   // ONE batched fact enrichment across every lane.
@@ -317,8 +317,8 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
   });
 
   const figures = lanes.map((l) => ({
-    being: `${name}#${l.branch}`,
-    name: `${name}#${l.branch}`,
+    being: `${name}#${l.history}`,
+    name: `${name}#${l.history}`,
     beingId: null,
     synthetic: true,
     role: "stamper",
@@ -339,7 +339,7 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
       pathByNames: path,
       // Heaven pin, not a default: factory spaces live in heaven,
       // which stays on branch 0 by doctrine.
-      branch: "0",
+      history: "0",
     },
     isSpaceRoot: false,
     isHomeRoot: false,
@@ -374,7 +374,7 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
  */
 export async function listReelChildren({ limit = 100 } = {}) {
   const cap = Math.min(Math.max(1, Number(limit) || 100), 500);
-  const heads = await ReelHead.find({ branch: "0" })
+  const heads = await ReelHead.find({ history: "0" })
     .select("type id head headHash").limit(2000).lean();
   if (heads.length === 0) return [];
 
@@ -388,7 +388,7 @@ export async function listReelChildren({ limit = 100 } = {}) {
     .map((h) => ({
       kind: h.type,
       id: String(h.id),
-      branch: "0",
+      history: "0",
       headSeq: h.head ?? 0,
       headHash8: h.headHash ? String(h.headHash).slice(0, 8) : null,
       lastFactAt: h.headHash ? (dateByHash.get(String(h.headHash)) || null) : null,

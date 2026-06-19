@@ -357,7 +357,7 @@ async function _dispatchCall({
       spaceId: resolved.spaceId,
       being: toBeing?.name || activeRole,
       activeRole,
-      branch,
+      history: branch,
     },
     // Envelope intent. Per seed/SUMMON.md, intent is the caller's
     // stated purpose AND an auth predicate: canSummon entries can

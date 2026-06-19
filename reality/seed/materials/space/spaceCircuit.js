@@ -289,7 +289,7 @@ export function startCircuitJob() {
       // Filter to non-system owners: owner set AND not the I_AM
       // sentinel string (system-owned spaces).
       const rows = await Projection.find({
-        branch: "0", type: "space",
+        history: "0", type: "space",
         "state.owner": { $exists: true, $ne: I_AM, $nin: [null] },
         tombstoned: { $ne: true },
       }).lean();

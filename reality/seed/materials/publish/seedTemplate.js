@@ -88,7 +88,7 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   // have a single substrate wrapper, so we query directly here.)
   const findSpaceChildren = async (parentId) => {
     return await Projection.find({
-      branch, type: "space",
+      history: branch, type: "space",
       "state.parent": parentId,
       tombstoned: { $ne: true },
     }).select("id").lean();
@@ -165,7 +165,7 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   const SEED_DELEGATE_NAMES = new Set(SEED_DELEGATES.map((d) => d.name));
   for (const spaceId of capturedSpaceIds) {
     const beingRows = await Projection.find({
-      branch, type: "being",
+      history: branch, type: "being",
       "state.homeSpace": spaceId,
       tombstoned: { $ne: true },
     }).lean();
@@ -180,7 +180,7 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   // ── 3. Walk matter whose spaceId is in the captured set ──
   for (const spaceId of capturedSpaceIds) {
     const matterRows = await Projection.find({
-      branch, type: "matter",
+      history: branch, type: "matter",
       "state.spaceId": spaceId,
       tombstoned: { $ne: true },
     }).lean();

@@ -140,7 +140,7 @@ export function redactMongoHost(uri) {
 async function ensureRequestLogMatter() {
   const { default: Projection } = await import("../history/projection.js");
   const existing = await Projection.findOne({
-    branch: "0", type: "matter",
+    history: "0", type: "matter",
     "state.spaceId": ids.httpSpace,
     "state.name": "request-log",
     tombstoned: { $ne: true },
@@ -174,7 +174,7 @@ export async function reconcileStaleConnections() {
   const { default: Projection } = await import("../history/projection.js");
   const { doVerb } = await import("../../ibp/verbs/do.js");
   const rows = await Projection.find({
-    branch: "0", type: "matter",
+    history: "0", type: "matter",
     "state.spaceId": ids.wsSpace,
     "state.type": "connection",
     tombstoned: { $ne: true },

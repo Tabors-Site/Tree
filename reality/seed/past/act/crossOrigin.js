@@ -60,7 +60,7 @@ export function actorStoryFrom(moment, hint) {
  *
  * @param {object} actorAct  the Act row (must carry story + branch
  *                           + through + _id).
- * @param {object} target    { world: { story, branch } } the
+ * @param {object} target    { world: { story, history } } the
  *                           resolved world of the Fact's target reel.
  * @returns {object|null}    { story, branch, beingId, actId, ... }
  *                           when cross-world; null otherwise.
@@ -70,7 +70,7 @@ export function deriveCrossOrigin(actorAct, target) {
   const actorStory = actorAct.story;
   const actorHistory  = actorAct.history;
   const targetStory = target?.world?.story;
-  const targetHistory  = target?.world?.branch;
+  const targetHistory  = target?.world?.history;
   if (!actorStory || !actorHistory || !targetStory || !targetHistory) {
     return null;
   }

@@ -177,7 +177,7 @@ async function loadStoryRoot(branch) {
   // depend on having walked space ancestors first.
   const { default: Projection } = await import("../../../materials/history/projection.js");
   const row = await Projection.findOne({
-    branch, type: "space", "state.parent": null, tombstoned: { $ne: true },
+    history: branch, type: "space", "state.parent": null, tombstoned: { $ne: true },
   }).lean();
   if (!row) return null;
   return { _id: row.id, ...row.state };

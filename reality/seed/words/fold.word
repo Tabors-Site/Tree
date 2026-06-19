@@ -3,6 +3,6 @@
 # place is folded from facts, never stored. Descends from word.word, base.word, chain.word;
 # every word grounded (fold, chain, fact, order, head). `present` is the floor (time).
 
-A fold is a chain read into the present, its facts taken in order from first to head, each changing what is.
+A fold is a chain made present, its facts in order from first to head, each makes what is.
 A fold is the present of one chain.
-A fold is read into a cache, never the truth. The facts are the truth. The fold is only their reading, kept so the next read takes up where the last left off, not from the first.
+A fold is a cache, never the truth. The facts are the truth. A fold is kept, so a being sees from the head, not the first.

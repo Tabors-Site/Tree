@@ -46,7 +46,7 @@ if (!process.env.MONGODB_URI) {
 }
 
 await mongoose.connect(process.env.MONGODB_URI);
-const { default: Projection } = await import("../seed/materials/branch/projection.js");
+const { default: Projection } = await import("../seed/materials/history/projection.js");
 
 // Walk source matter: every file under REPO_ROOT whose content has a hash.
 const rows = await Projection.find({

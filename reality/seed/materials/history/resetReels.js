@@ -69,7 +69,7 @@ async function _inhabitResetFacts({ mergedHistory, ancestor, actorBeingId }) {
   const Projection = mongoose.connection.collection("projections");
   const rows = await Projection.find({
     type: "being",
-    branch: ancestor,
+    history: ancestor,
     "state.qualities.connection.inhabitedBy": { $ne: null, $exists: true },
   }).project({ id: 1, "state.qualities.connection.inhabitedBy": 1 }).toArray();
 

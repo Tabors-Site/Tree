@@ -117,7 +117,7 @@ try {
   if (process.env.MONGODB_URI) {
     const { default: mongoose } = await import("mongoose");
     await mongoose.connect(process.env.MONGODB_URI);
-    const { default: Projection } = await import("../seed/materials/branch/projection.js");
+    const { default: Projection } = await import("../seed/materials/history/projection.js");
 
     // source matters: type=matter, state.content.kind in {"file","directory"},
     // state.content.path is the absolute disk path.

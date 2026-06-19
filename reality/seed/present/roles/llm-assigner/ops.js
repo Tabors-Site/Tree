@@ -155,7 +155,7 @@ async function findTutorialMatter(spaceId, llmAssignerId) {
   const { default: Projection } = await import("../../../materials/history/projection.js");
   // state.beingId / state.spaceId are bare ids in the matter projection.
   const row = await Projection.findOne({
-    branch: "0", type: "matter",
+    history: "0", type: "matter",
     "state.beingId": String(llmAssignerId),
     "state.spaceId": String(spaceId),
     "state.qualities.tutorial.purpose": LLM_ASSIGNER_TUTORIAL_MARK,

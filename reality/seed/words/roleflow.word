@@ -8,7 +8,7 @@ A roleflow is a being's quality, the conditional word that gives it its role.
 A roleflow has clauses, in order. A clause has a role, and may have a when.
 A when tests the moment, the caller, verb, act, space, time, and the being, by equals, in, more, less, or present, with and, or, not.
 A clause with no when always passes. A clause with one passes only when its when is true.
-When a clause passes, the clause gives its role only if the role asks no cognition, or the cognition it asks is the being's. Otherwise the clause is skipped and the flow goes on.
+When a clause passes, the clause gives its role only if the role asks no cognition, or the cognition it asks is the being's. Otherwise the clause drops, and the flow goes on.
 When a being is granted a role whose words can in this space, or the role is a seed its nature has: the being can play it.
 The first passing clause that does not stack is the primary. A clause that stacks gives its words on top of the primary, not in its place.
 A roleflow folds to one role, the primary's name and voice with the words of all that stack.

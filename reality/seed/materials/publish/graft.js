@@ -538,8 +538,8 @@ export async function plantGraft(bundle) {
       const { default: ActHead } = await import("../../past/act/actHead.js");
       const [dbHistories, dbHeads, dbActHeads] = await Promise.all([
         History.find({}).lean(),
-        ReelHead.find({}).select("_id branch head headHash").lean(),
-        ActHead.find({}).select("_id branch headHash").lean(),
+        ReelHead.find({}).select("_id history head headHash").lean(),
+        ActHead.find({}).select("_id history headHash").lean(),
       ]);
       const actualRoot = storyRootFromParts({
         story: bundle.sourceStory || null,
@@ -566,13 +566,13 @@ export async function plantGraft(bundle) {
           let reelsWalked = 0;
           let actsWalked = 0;
           for (const rh of dbHeads) {
-            const v = await verifyReel(rh.type ?? rh._id?.split(":")[1], rh.id ?? rh._id?.split(":")[2], rh.branch || "0");
+            const v = await verifyReel(rh.type ?? rh._id?.split(":")[1], rh.id ?? rh._id?.split(":")[2], rh.history || "0");
             reelsWalked++;
             if (!v.ok) broken.push({ kind: "reel", key: rh._id, reason: v.reason, at: v.brokenAt });
           }
           for (const ah of dbActHeads) {
             const beingId = ah.beingId ?? ah._id?.split(":")[1];
-            const v = await verifyActChain(ah.branch || "0", beingId);
+            const v = await verifyActChain(ah.history || "0", beingId);
             actsWalked++;
             if (!v.ok) broken.push({ kind: "act-chain", key: ah._id, reason: v.reason, at: v.brokenAt });
           }
@@ -951,7 +951,7 @@ export async function capturePartialGraft(opts = {}) {
   const head = facts[facts.length - 1];
   // A reelHead AT the captured tip (on the capture branch), so the landed
   // extract records its lawful tip and a later graft can advance from it.
-  const reelHeads = [{ _id: reelKey(captureHistory, "being", beingId), type: "being", id: beingId, branch: captureHistory, head: head.seq, headHash: String(head._id) }];
+  const reelHeads = [{ _id: reelKey(captureHistory, "being", beingId), type: "being", id: beingId, history: captureHistory, head: head.seq, headHash: String(head._id) }];
 
   const slot = await loadOrFold("being", beingId, captureHistory);
   const lineage = { parentBeingId: slot?.state?.parentBeingId ?? null, homeStory: slot?.state?.homeStory ?? story };

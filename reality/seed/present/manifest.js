@@ -146,7 +146,7 @@ export async function manifestItems({
   // Direct projection query for the type+parent intersection.
   const { default: Projection } = await import("../materials/history/projection.js");
   const existingChildren = (await Projection.find({
-    branch: "0", type: "space",
+    history: "0", type: "space",
     "state.parent": parentSlot.id,
     "state.type": itemType,
     tombstoned: { $ne: true },
@@ -221,7 +221,7 @@ export async function addManifestChild({
   const parent = { _id: parentSlot.id };
   const { default: Projection } = await import("../materials/history/projection.js");
   const existing = await Projection.findOne({
-    branch: "0", type: "space",
+    history: "0", type: "space",
     "state.parent": parentSlot.id,
     "state.name": name,
     "state.type": itemType,
@@ -259,7 +259,7 @@ export async function removeManifestChild({
   if (!parentSlot) return false;
   const { default: Projection } = await import("../materials/history/projection.js");
   const child = await Projection.findOne({
-    branch: "0", type: "space",
+    history: "0", type: "space",
     "state.parent": parentSlot.id,
     "state.name": name,
     "state.type": itemType,

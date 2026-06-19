@@ -648,7 +648,7 @@ export async function ensureSpaceRoot() {
     const { countByParent: _ } = await import("./materials/projections.js");
     const { default: Projection } = await import("./materials/history/projection.js");
     const childCount = await Projection.countDocuments({
-      branch: "0", type: "space",
+      history: "0", type: "space",
       "state.parent": spaceRoot._id,
       tombstoned: { $ne: true },
     });
@@ -866,7 +866,7 @@ export async function syncExtensionsToTree(manifests) {
   // Query by parent — children[] on the parent is retired.
   const { default: Projection } = await import("./materials/history/projection.js");
   const existingChildren = (await Projection.find({
-    branch: "0", type: "space",
+    history: "0", type: "space",
     "state.parent": extSpace._id,
     tombstoned: { $ne: true },
   }).lean()).map((s) => ({

@@ -481,7 +481,7 @@ export async function buildNameDescriptor(nameId) {
   // `state.trueName` filter is an unindexed scan, bounded + fine for a Name
   // Form read; main-scoped (names + their beings live on "0").
   const rows = await Projection
-    .find({ branch: "0", type: "being", "state.trueName": String(nameId), tombstoned: { $ne: true } })
+    .find({ history: "0", type: "being", "state.trueName": String(nameId), tombstoned: { $ne: true } })
     .select("id state.name state.defaultRole state.homeSpace state.homeHistory")
     .sort({ id: 1 })
     .limit(NAME_BEING_CAP)
@@ -494,7 +494,7 @@ export async function buildNameDescriptor(nameId) {
     homeHistory:  r.state?.homeHistory || null,
   }));
   const beingCount = await Projection.countDocuments({
-    branch: "0", type: "being", "state.trueName": String(nameId), tombstoned: { $ne: true },
+    history: "0", type: "being", "state.trueName": String(nameId), tombstoned: { $ne: true },
   });
   // The Name's whole biography of acts, across every being it acts through
   // (act.nameId is index-backed). factCount is deliberately omitted — Fact has
@@ -559,8 +559,8 @@ export async function buildNameTree(nameId, branch) {
   // The Name's beings whose fold-cache row lives anywhere on this branch's
   // lineage. Bounded scan, capped — same shape as buildNameDescriptor.
   const rows = await Projection
-    .find({ branch: { $in: lineage }, type: "being", "state.trueName": String(nameId), tombstoned: { $ne: true } })
-    .select("id branch state.name state.trueName state.parentBeingId state.homeHistory state.defaultRole")
+    .find({ history: { $in: lineage }, type: "being", "state.trueName": String(nameId), tombstoned: { $ne: true } })
+    .select("id history state.name state.trueName state.parentBeingId state.homeHistory state.defaultRole")
     .limit(NAME_BEING_CAP)
     .lean();
 
@@ -570,7 +570,7 @@ export async function buildNameTree(nameId, branch) {
   for (const r of rows) {
     const id = String(r.id);
     const prev = byId.get(id);
-    if (!prev || (rank.get(r.branch) ?? -1) > (rank.get(prev.branch) ?? -1)) byId.set(id, r);
+    if (!prev || (rank.get(r.history) ?? -1) > (rank.get(prev.history) ?? -1)) byId.set(id, r);
   }
 
   // Build a node per being, with its branch-scoped live inheritation points.
@@ -608,7 +608,7 @@ export async function buildNameTree(nameId, branch) {
     isNameTree:        true,
     nameId:            String(nameId),
     name:              nameSlot.state.name ?? null,
-    branch:            br,
+    history:           br,
     roots,
     beingCount:        nodes.size,
     descriptorVersion: DESCRIPTOR_VERSION,
@@ -662,13 +662,13 @@ export async function buildPlaceDescriptor(resolved, opts = {}) {
   // Branch flows from the resolved stance (Pass 4 substrate). Threaded
   // through every descriptor helper alongside `until` so each fold lands
   // on the right branch's projection slot. resolveHistoryPointers
-  // upstream canonicalizes resolved.branch for both #explicit and
+  // upstream canonicalizes resolved.history for both #explicit and
   // #main-implicit addresses. The defensive fallback resolves the
   // operator's `#main` pointer through the registry — never literal "0".
   const { getDefaultHistory } = await import("../materials/history/historyRegistry.js");
   const branchedOpts = {
     ...opts,
-    branch: resolved.branch || opts.branch || await getDefaultHistory(),
+    branch: resolved.history || opts.branch || await getDefaultHistory(),
   };
   if (resolved.isSpaceRoot) return placeAtSpaceRoot(resolved, branchedOpts);
   return placeAtSpace(resolved, branchedOpts);
@@ -776,8 +776,8 @@ async function placeAtSpaceRoot(resolved, { identity, until = null, branch } = {
       // chip reads this to decide whether to surface the `#<branch>`
       // qualifier in the address bar. `branch` was already resolved
       // upstream through the `#main` pointer registry; the fallback
-      // reads `resolved.branch` (post-resolveHistoryPointers).
-      branch: resolved.branch || branch,
+      // reads `resolved.history` (post-resolveHistoryPointers).
+      history: resolved.history || branch,
     },
     isSpaceRoot: true,
     isHomeRoot: false,
@@ -932,9 +932,9 @@ async function placeAtSpace(resolved, { identity, payload, until = null, branch 
       spaceId: space._id,
       pathByNames,
       // Branch this descriptor was folded for. `branch` was resolved
-      // upstream through the `#main` pointer registry; resolved.branch
+      // upstream through the `#main` pointer registry; resolved.history
       // is the post-canonicalization value from resolveHistoryPointers.
-      branch: resolved.branch || branch,
+      history: resolved.history || branch,
     },
     isSpaceRoot: false,
     isHomeRoot: false,
@@ -1087,12 +1087,12 @@ async function synthesizeReelChildren(payload) {
   const list = await listReelChildren({ limit });
   return list.map((r) => ({
     name:      `${r.kind}:${r.id.slice(0, 8)}`,
-    spaceId:   `reel:${r.branch}:${r.kind}:${r.id}`,
+    spaceId:   `reel:${r.history}:${r.kind}:${r.id}`,
     type:      "reel",
     synthetic: true,
     path:      `/.reel/${r.kind}/${r.id}`,
     reel: {
-      kind: r.kind, id: r.id, branch: r.branch,
+      kind: r.kind, id: r.id, history: r.history,
       headSeq: r.headSeq, headHash8: r.headHash8,
       lastFactAt: r.lastFactAt ? new Date(r.lastFactAt).toISOString() : null,
       ...(r.kind === "being" ? { actsPath: `/.acts/${r.id}` } : {}),

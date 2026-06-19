@@ -73,7 +73,7 @@ export async function allocSeq(type, id, opts = {}) {
       { _id: key },
       {
         $inc: { head: 1 },
-        $setOnInsert: { branch, type, id },
+        $setOnInsert: { history: branch, type, id },
       },
       { upsert: true, returnDocument: "after", lean: true, ...baseOpts },
     );
@@ -105,7 +105,7 @@ export async function allocSeq(type, id, opts = {}) {
   const seedHead = await getBranchPoint(branch, type, id) || 0;
   await ReelHead.findOneAndUpdate(
     { _id: key },
-    { $setOnInsert: { branch, type, id, head: seedHead } },
+    { $setOnInsert: { history: branch, type, id, head: seedHead } },
     { upsert: true, ...baseOpts },
   );
   // After $setOnInsert: head exists (either at seedHead, or already
@@ -167,7 +167,7 @@ export async function ensureHeadAtLeast(type, id, minHead, opts = {}) {
   const key = reelKey(branch, type, id);
   const doc = await ReelHead.findOneAndUpdate(
     { _id: key, head: { $lt: minHead } },
-    { $set: { head: minHead, branch, type, id } },
+    { $set: { head: minHead, history: branch, type, id } },
     { upsert: false, returnDocument: "after", lean: true },
   );
   if (doc) return doc.head;
@@ -175,7 +175,7 @@ export async function ensureHeadAtLeast(type, id, minHead, opts = {}) {
   if (existing) return existing.head;
   const created = await ReelHead.findOneAndUpdate(
     { _id: key },
-    { $setOnInsert: { branch, type, id, head: minHead } },
+    { $setOnInsert: { history: branch, type, id, head: minHead } },
     { upsert: true, returnDocument: "after", lean: true },
   );
   return created.head;

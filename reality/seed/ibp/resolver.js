@@ -94,7 +94,7 @@ export async function resolveStance(stance, opts = {}) {
       spaceId: spaceRootId,
       leafId: spaceRootId,
       being,
-      branch,
+      history: branch,
     });
   }
 
@@ -211,7 +211,7 @@ export async function resolveStance(stance, opts = {}) {
         leafId: homeSpace._id,
         being,
         leafSpace: homeSpace,
-        branch,
+        history: branch,
       });
     }
 
@@ -266,7 +266,7 @@ function base(over = {}) {
     // Branch the stance points at. Default "0" (main). The verb layer
     // reads this off the resolved stance to thread into moment and
     // emitFact so every fact lands on the right branch's reel.
-    branch: "0",
+    history: "0",
     ...over,
   };
 }
@@ -363,14 +363,14 @@ async function walkSpacePath({
       if (UUID_RE.test(seg)) {
         const byId = await Projection.findOne({
           ...baseQuery,
-          branch: br,
+          history: br,
           _id: `${br}:space:${seg}`,
         }).lean();
         if (byId) return byId;
       }
       return Projection.findOne({
         ...baseQuery,
-        branch: br,
+        history: br,
         "state.name": seg,
       }).lean();
     }
@@ -379,7 +379,7 @@ async function walkSpacePath({
       const mainRow = await _findIn("0");
       if (mainRow) {
         const tomb = await Projection.findOne({
-          branch,
+          history: branch,
           type: "space",
           id: mainRow.id,
           tombstoned: true,
@@ -431,6 +431,6 @@ async function walkSpacePath({
     leafId: leafSpace._id,
     being,
     leafSpace,
-    branch,
+    history: branch,
   });
 }

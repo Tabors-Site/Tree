@@ -160,7 +160,7 @@ export async function findRootOperator(branch = "0") {
 export async function isFirstBeing(branch = "0") {
   const { default: Projection } = await import("../../history/projection.js");
   const row = await Projection.findOne({
-    branch, type: "being",
+    history: branch, type: "being",
     "state.qualities.cognition.defaultKind": "human",
     tombstoned: { $ne: true },
   })
@@ -235,8 +235,8 @@ export async function findBeingCandidatesByName(name) {
   const candidates = [];
   for (const [id, slots] of byId) {
     const home =
-      slots.find((s) => s.state?.homeHistory && s.branch === s.state.homeHistory) ||
-      slots.find((s) => s.branch === defaultHistory) ||
+      slots.find((s) => s.state?.homeHistory && s.history === s.state.homeHistory) ||
+      slots.find((s) => s.history === defaultHistory) ||
       slots[0];
     candidates.push({
       _id:        id,
@@ -275,10 +275,10 @@ export async function findHomeHistoryOfBeing(beingId) {
   const { default: Projection } = await import("../../history/projection.js");
   const slots = await Projection.find({
     type: "being", id: String(beingId), tombstoned: { $ne: true },
-  }).select("branch state.homeHistory").lean();
+  }).select("history state.homeHistory").lean();
   if (slots.length === 0) return defaultHistory;
   const home =
-    slots.find((s) => s.state?.homeHistory && s.branch === s.state.homeHistory) ||
+    slots.find((s) => s.state?.homeHistory && s.history === s.state.homeHistory) ||
     slots[0];
   return home.state?.homeHistory || defaultHistory;
 }

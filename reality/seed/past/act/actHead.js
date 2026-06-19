@@ -22,12 +22,12 @@ import mongoose from "mongoose";
 
 const ActHeadSchema = new mongoose.Schema({
   _id:      { type: String },          // "<branch>:<beingId>"
-  branch:   { type: String, required: true, default: "0", index: true },
+  history:  { type: String, required: true, default: "0", index: true },
   beingId:  { type: String, required: true },
   headHash: { type: String, default: null },
 });
 
-ActHeadSchema.index({ branch: 1, beingId: 1 }, { unique: true });
+ActHeadSchema.index({ history: 1, beingId: 1 }, { unique: true });
 
 const ActHead = mongoose.model("ActHead", ActHeadSchema, "actHeads");
 export default ActHead;

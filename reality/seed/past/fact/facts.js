@@ -958,12 +958,12 @@ export async function emitFact(spec, moment = null) {
 // resolution happens at the address-parsing perimeter before any
 // emit. See CROSS-WORLD.md "pointers vs actual branches."
 function inferTargetWorld(spec, moment, localStory) {
-  if (spec?.of?.world?.story && spec?.of?.world?.branch) {
+  if (spec?.of?.world?.story && spec?.of?.world?.history) {
     return { world: spec.of.world };
   }
   const branch = spec?.history || moment?.actorAct?.history || null;
   if (!branch || !localStory) return null;
-  return { world: { story: localStory, branch } };
+  return { world: { story: localStory, history: branch } };
 }
 
 export async function sealFacts(deltaF, opts = {}) {

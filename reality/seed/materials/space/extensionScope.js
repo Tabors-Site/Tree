@@ -81,7 +81,7 @@ export async function loadConfinedExtensions() {
     // Query by parent. Direct projection query because we need state.qualities.
     const { default: Projection } = await import("../history/projection.js");
     const children = (await Projection.find({
-      branch: "0", type: "space",
+      history: "0", type: "space",
       "state.parent": extSpace.id,
       tombstoned: { $ne: true },
     }).select("state").lean()).map((s) => ({ name: s.state?.name, qualities: s.state?.qualities }));
