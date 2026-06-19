@@ -496,7 +496,7 @@ export function createView() {
     // Branch qualifier matters: acting on a being from a non-main
     // branch must carry `#<branch>` or the server's cross-branch gate
     // refuses (expand() defaults a bare typed story to #main).
-    const branch = state().descriptor?.address?.branch || "0";
+    const branch = state().descriptor?.address?.history || "0";
     const bq = branch === "0" ? "" : `#${branch}`;
     return `${story}${bq}/@${b.being}`;
   }
@@ -819,7 +819,7 @@ export function createView() {
           }
 
           const story = state().discovery.story;
-          const branch = state().descriptor?.address?.branch || "0";
+          const branch = state().descriptor?.address?.history || "0";
           const bq = branch === "0" ? "" : `#${branch}`;
           const made = await client().do(`${story}${bq}/skins`, "create-matter", {
             type:    "model",
@@ -948,7 +948,7 @@ export function createView() {
     currentSummonBeing = null;
     const stance = beingAddress(b);
     const story = state().discovery.story;
-    const branch = state().descriptor.address?.branch || "0";
+    const branch = state().descriptor.address?.history || "0";
     const bq = branch === "0" ? "" : `#${branch}`;
     const fromStance = state().session?.username
       ? `${story}${bq}/@${state().session.username}`

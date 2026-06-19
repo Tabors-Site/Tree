@@ -30,13 +30,13 @@ registerSeeOperation("story", {
     depth:  { type: "number", label: "Lineage depth (blank = all)" },
     limit:  { type: "number", label: "Max acts (0 = all)" },
   },
-  handler: async ({ identity, args, branch }) => {
+  handler: async ({ identity, args, history }) => {
     const a = args || {};
     const scope = a.scope || "world";
     // being/lineage default to the caller — "my story", "my family" with no id passed
     const being = a.being ?? ((scope === "being" || scope === "lineage") ? identity?.beingId : undefined);
     const acts = await assembleStory(scope, {
-      branch: branch || "0",
+      branch: history || "0",
       being:  being ? String(being) : null,
       moment: a.moment ? String(a.moment) : null,
       space:  a.space ? String(a.space) : null,

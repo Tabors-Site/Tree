@@ -33,11 +33,11 @@ import { getRole } from "../../roles/registry.js";
 registerSeeOperation("my-inner-face", {
   ownerExtension: "seed",
   description: "The canonical inner face for the caller's active stance . orientation + role + position + capabilities + canSee blocks.",
-  handler: async ({ identity, ctx, branch }) => {
+  handler: async ({ identity, ctx, history }) => {
     const beingId = identity?.beingId || ctx?.beingId || null;
     if (!beingId) return null;
 
-    const _branch = branch || ctx?.history || "0";
+    const _branch = history || ctx?.history || "0";
 
     let beingSlot = null;
     try {
@@ -80,7 +80,7 @@ registerSeeOperation("my-inner-face", {
         beingId:      String(beingId),
         role,
         orientation:  "forward",
-        branch:       _branch,
+        history:      _branch,
         currentSpace: positionId,
         rootId:       null,
         name:         being.name || null,

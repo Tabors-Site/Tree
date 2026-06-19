@@ -82,12 +82,12 @@ function _paint() {
   sep.style.color = crossed ? "#e2c574" : "";
   left.title =
     `you are @${_ctx.username || "arrival"} — acts land on #${_ctx.actorHistory}${_historyAliases(_ctx.actorHistory)}\n` +
-    `edit @being to drive another being you own, and/or #branch to switch timeline, then Enter`;
+    `edit @being to drive another being you own, and/or #history to switch timeline, then Enter`;
   right.title = `the receiving stance — what you're looking at` +
     `${_historyAliases(_ctx.viewHistory) ? `\nbranch${_historyAliases(_ctx.viewHistory)}` : ""}`;
   sep.title = crossed
-    ? `cross-branch: your being is seated on #${_ctx.actorHistory} while viewing #${_ctx.viewHistory} — acts from here land cross-branch`
-    : "your being and the view are on the same branch";
+    ? `cross-history: your being is seated on #${_ctx.actorHistory} while viewing #${_ctx.viewHistory} — acts from here land cross-history`
+    : "your being and the view are on the same history";
 }
 
 // Pull the #branch segment out of an actor-stance string the user
@@ -138,7 +138,7 @@ export function initStanceBar({ onNavigate, onSwitchHistory, onSwitchBeing } = {
   const right = document.createElement("input");
   right.id = "address-input"; // historical id: styling + "/" focus key off it
   right.type = "text";
-  right.placeholder = "story#branch/path@being";
+  right.placeholder = "story#history/path@being";
   right.autocomplete = "off";
   right.spellcheck = false;
   right.style.cssText = "flex:1 1 auto; min-width:160px;";

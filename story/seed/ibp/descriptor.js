@@ -527,7 +527,7 @@ export async function buildNameDescriptor(nameId) {
  * Branch-scoped on purpose: you stand on a branch (the IBPA left stance), and
  * this shows the beings your Name owns on THAT branch's timeline, nested by
  * parentBeingId, each tagged with the live inheritation points granted there.
- * Switch branch to see (and grant on) another timeline — a grant lands on the
+ * Switch history to see (and grant on) another timeline — a grant lands on the
  * branch you're standing on, so the tree you see is exactly the access you give.
  *
  * "Beings on this branch" = your beings whose fold lives anywhere on the

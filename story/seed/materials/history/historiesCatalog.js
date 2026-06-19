@@ -171,7 +171,7 @@ export async function describeMergeConflicts(historyPath) {
     return {
       branch: historyPath,
       notAMerge: true,
-      reason: "branch has no mergeSources (was not created by merge-branches)",
+      reason: "history has no mergeSources (was not created by merge-branches)",
       conflicts: [],
     };
   }

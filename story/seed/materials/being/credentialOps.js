@@ -148,17 +148,17 @@ registerOperation("credential-read", {
   targets: ["being"],
   ownerExtension: "seed",
   factAction: "credential-read",
-  handler: async ({ target, identity, moment, branch }) => {
+  handler: async ({ target, identity, moment, history }) => {
     const targetBeingId = targetBeingIdOf(target);
     const askerBeingId = askerBeingIdOf(identity);
 
     // THE CONVERSION: credential-read's world strand is credential-read.word (caller
     // mode). The dispatcher needs _factTarget (the asker's reel) for the audit fact,
     // which the .word omits — re-add it around the bridge result. JS = clean-miss fallback.
-    const viaWord = await _credentialReadViaWord({ caller: askerBeingId, target: targetBeingId, branch, moment });
+    const viaWord = await _credentialReadViaWord({ caller: askerBeingId, target: targetBeingId, branch: history, moment });
     if (viaWord) return { _factTarget: { kind: "being", id: askerBeingId || targetBeingId }, ...viaWord };
 
-    const ok = await hasCredentialAuthority(askerBeingId, targetBeingId, branch);
+    const ok = await hasCredentialAuthority(askerBeingId, targetBeingId, history);
     if (!ok) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
@@ -217,7 +217,7 @@ registerOperation("credential-reset", {
   targets: ["being"],
   ownerExtension: "seed",
   factAction: "credential-reset",
-  handler: async ({ target, identity, moment, branch }) => {
+  handler: async ({ target, identity, moment, history }) => {
     const targetBeingId = targetBeingIdOf(target);
     const askerBeingId = askerBeingIdOf(identity);
 
@@ -226,10 +226,10 @@ registerOperation("credential-reset", {
     // asker). The dispatcher needs _factTarget (the asker's reel) for its audit fact,
     // which the .word return omits — re-add it around the bridge result. JS body below
     // is the clean-miss fallback.
-    const viaWord = await _credentialResetViaWord({ caller: askerBeingId, target: targetBeingId, branch, moment });
+    const viaWord = await _credentialResetViaWord({ caller: askerBeingId, target: targetBeingId, branch: history, moment });
     if (viaWord) return { _factTarget: { kind: "being", id: askerBeingId || targetBeingId }, ...viaWord };
 
-    const ok = await hasCredentialAuthority(askerBeingId, targetBeingId, branch);
+    const ok = await hasCredentialAuthority(askerBeingId, targetBeingId, history);
     if (!ok) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,

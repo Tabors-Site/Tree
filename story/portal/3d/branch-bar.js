@@ -247,10 +247,10 @@ function _branchLabel(path) {
 // switch + go. No → stay put, with the two legitimate later routes
 // named (ibpa portal, timeline click).
 function _offerSwitchAfterBranch(path, note = "") {
-  const here = _portalState()?.descriptor?.address?.branch || "0";
+  const here = _portalState()?.descriptor?.address?.history || "0";
   const hereLabel = _branchLabel(here);
   const yes = window.confirm(
-    `Branch #${path} created${note}.\n\n` +
+    `History #${path} created${note}.\n\n` +
     `Switch into your being on #${path}?\n\n` +
     `OK — switch (you act on #${path}; your ${hereLabel} self stays where it is)\n` +
     `Cancel — stay on ${hereLabel} (cross later via an ibpa portal, or click #${path} in the timeline)`,
@@ -357,10 +357,10 @@ function _createBranchButton({ hosted = false } = {}) {
     // The panel + timeline it opens are fixed overlays, so the same
     // branch/rewind surface tracks every view equally.
     b.className = "nav-btn";
-    b.textContent = "branches";
+    b.textContent = "histories";
   } else {
     // Legacy floating placement (no shell handed us a host).
-    b.textContent = "Branches";
+    b.textContent = "Histories";
     b.style.cssText = [
       "position: fixed",
       "top: 80px",
@@ -424,7 +424,7 @@ async function _openPanel() {
   ].join(";");
   el.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-      <span style="color:#8fbf9f;">branch tree</span>
+      <span style="color:#8fbf9f;">history tree</span>
       <button type="button" class="bp-close" style="background:transparent;color:#6b7d72;border:none;font-size:18px;cursor:pointer;padding:0 4px;">×</button>
     </div>
     <div class="bp-tree" style="font-size:12px;line-height:1.7;"></div>
@@ -442,7 +442,7 @@ async function _openPanel() {
         ⬆ Graft
       </button>
       <input type="file" class="bp-graft-file" accept=".json,application/json" style="display:none;">
-      <span style="color:#6b7d72;font-size:10px;margin-left:auto;">click a branch to open its timeline · esc to close</span>
+      <span style="color:#6b7d72;font-size:10px;margin-left:auto;">click a history to open its timeline · esc to close</span>
     </div>
   `;
   document.body.appendChild(el);
@@ -528,7 +528,7 @@ async function _loadBranchTree() {
 function _renderTree(container, tree) {
   container.innerHTML = "";
   if (!tree || tree.byPath.size === 0) {
-    container.textContent = "no branches available";
+    container.textContent = "no histories available";
     return;
   }
   // Children map: parent path → child branches list.
@@ -655,7 +655,7 @@ async function _togglePauseBranch(branch) {
   // If the user just paused (or unpaused) the branch they themselves
   // are currently on, flip the grayscale chrome immediately so the
   // visual cue matches the new story without waiting for navigate.
-  const myHistory = _portalState()?.descriptor?.address?.branch || "0";
+  const myHistory = _portalState()?.descriptor?.address?.history || "0";
   if (branch.path === myHistory) {
     window.dispatchEvent(new CustomEvent("branchbar:paused-self", {
       detail: { paused: branch.paused },
@@ -666,7 +666,7 @@ async function _togglePauseBranch(branch) {
   // socket.currentHistory automatically — whichever branch the server
   // actually thinks the user is on, the DO targets that same branch
   // and the cross-branch gate stays happy. The earlier approach of
-  // reading window.__state.descriptor.address.branch raced the
+  // reading window.__state.descriptor.address.history raced the
   // descriptor update: after creating a branch the socket flipped to
   // #1 but the local descriptor was still mid-refresh, so the DO went
   // out with `localhost/@branch-manager` (typed-story means main),
@@ -939,7 +939,7 @@ async function _openTimeline(historyPath) {
   // without waiting for the navigate's after-call. Same-branch opens
   // need it (no navigate fires); different-branch opens benefit from it
   // (the marks fetch runs concurrent with navigate instead of after).
-  const currentHistory = _portalState()?.descriptor?.address?.branch || "0";
+  const currentHistory = _portalState()?.descriptor?.address?.history || "0";
   if (currentHistory !== historyPath) {
     switchIntoHistory(historyPath).catch((err) => {
       _showBranchEvent(`switch failed: ${err?.message || err}`, { error: true });
@@ -980,7 +980,7 @@ function _closeTimeline() {
 async function _update(desc) {
   // Always cache the latest graph for the active branch — even when the
   // panel/timeline isn't open, so opening either is instant.
-  const branch = desc?.address?.branch || "0";
+  const branch = desc?.address?.history || "0";
   _maybeSurfaceBranchSwitch(branch);
   _syncStanceBar();
   try {
@@ -1633,12 +1633,12 @@ async function _branchHere() {
       console.warn("[branch-bar] create-branch returned no path:", result);
       return;
     }
-    _showBranchEvent(`✨ branch #${r.path} created`, { sticky: 2500 });
+    _showBranchEvent(`✨ history #${r.path} created`, { sticky: 2500 });
     _closeTimeline();
     _offerSwitchAfterBranch(r.path);
   } catch (err) {
     console.warn("[branch-bar] create-branch failed:", err?.message);
-    _showBranchEvent(`branch failed: ${err?.message || err}`, { error: true });
+    _showBranchEvent(`history failed: ${err?.message || err}`, { error: true });
   }
 }
 
@@ -1799,7 +1799,7 @@ function _openNewBranchDialog() {
     .filter((b) => !b.deleted)
     .sort((a, b) => a.path.localeCompare(b.path));
 
-  const curHistory = _portalState()?.descriptor?.address?.branch || "0";
+  const curHistory = _portalState()?.descriptor?.address?.history || "0";
   const curPath = _portalState()?.descriptor?.address?.pathByNames || "/";
   const atRoot = curPath === "/" || curPath === "";
 
@@ -1964,7 +1964,7 @@ function _openNewBranchDialog() {
       _closePanel();
       const scopeNote = args.scope ? ` (subtree ${args.scope})` : "";
       const ptrNote = (r.pointerAttached || (pointer && !r.pointerWarning)) ? ` · pointer "${pointer}"` : "";
-      _showBranchEvent(`✨ branch #${r.path} created${scopeNote}${ptrNote}`, { sticky: 2500 });
+      _showBranchEvent(`✨ history #${r.path} created${scopeNote}${ptrNote}`, { sticky: 2500 });
       _offerSwitchAfterBranch(r.path, scopeNote);
     } catch (err) {
       console.warn("[branch-bar] create-branch failed:", err);
@@ -2131,7 +2131,7 @@ function _openMergeDialog() {
   ].join(";");
   el.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <span style="color:#8fbf9f;font-size:13px;">merge two branches</span>
+      <span style="color:#8fbf9f;font-size:13px;">merge two histories</span>
       <button type="button" class="md-close" style="background:transparent;color:#6b7d72;border:none;font-size:18px;cursor:pointer;padding:0 4px;">×</button>
     </div>
     <form class="md-form" style="display:grid;gap:12px;">
@@ -2148,13 +2148,13 @@ function _openMergeDialog() {
         </select>
       </label>
       <label style="display:grid;gap:4px;">
-        <span style="color:#9ab2a3;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">label for the merged branch (optional)</span>
+        <span style="color:#9ab2a3;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">label for the merged history (optional)</span>
         <input name="label" type="text" placeholder="e.g. release-candidate" style="background:#0a0d0c;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:5px 7px;font-family:inherit;font-size:12px;" />
       </label>
       <fieldset style="border:1px solid #2c3a32;border-radius:4px;padding:8px 10px;display:grid;gap:6px;">
         <legend style="color:#9ab2a3;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;padding:0 4px;">after the merge</legend>
         <label style="display:flex;gap:6px;align-items:center;cursor:pointer;">
-          <input type="radio" name="afterAction" value="keep" checked /> keep the source branches as they are
+          <input type="radio" name="afterAction" value="keep" checked /> keep the source histories as they are
         </label>
         <label style="display:flex;gap:6px;align-items:center;cursor:pointer;">
           <input type="radio" name="afterAction" value="pause" /> pause both sources (they stop ticking; can resume)
@@ -2164,7 +2164,7 @@ function _openMergeDialog() {
         </label>
       </fieldset>
       <fieldset style="border:1px solid #2c3a32;border-radius:4px;padding:8px 10px;display:grid;gap:6px;">
-        <legend style="color:#9ab2a3;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;padding:0 4px;">the merged branch</legend>
+        <legend style="color:#9ab2a3;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;padding:0 4px;">the merged history</legend>
         <label style="display:flex;gap:6px;align-items:center;cursor:pointer;">
           <input type="radio" name="pauseResult" value="false" checked /> keep it live (continue running while you resolve)
         </label>
@@ -2173,7 +2173,7 @@ function _openMergeDialog() {
         </label>
       </fieldset>
       <label style="display:grid;gap:4px;">
-        <span style="color:#9ab2a3;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">re-point named pointers at the merged branch</span>
+        <span style="color:#9ab2a3;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">re-point named pointers at the merged history</span>
         <input name="repointPointers" type="text" placeholder="e.g. main,prod (comma-separated; blank to skip)" style="background:#0a0d0c;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:5px 7px;font-family:inherit;font-size:12px;" />
         <span style="color:#6b7d72;font-size:10px;">canonical paths stay forever; pointers move so default addresses follow main wherever it goes</span>
       </label>
@@ -2653,7 +2653,7 @@ function _showBranchEvent(text, { sticky = 1500, error = false } = {}) {
 }
 
 // Branch-switch detection. main.js calls into update() on every
-// navigate; we compare desc.address.branch against the last seen one
+// navigate; we compare desc.address.history against the last seen one
 // and surface the change as an event chip. The user asked for "VERY
 // clear" — center-screen overlay does that.
 let _lastSeenBranch = null;

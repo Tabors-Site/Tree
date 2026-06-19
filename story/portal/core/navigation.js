@@ -53,7 +53,7 @@ export function createNavigation(ctx) {
   function withActiveHistory(address) {
     if (typeof address !== "string" || !address) return address;
     if (address.includes("#")) return address;
-    const activeHistory = state.get("descriptor")?.address?.branch || "0";
+    const activeHistory = state.get("descriptor")?.address?.history || "0";
     if (activeHistory === "0") return address;
     const story = state.get("discovery")?.story;
     if (!story) return address;
@@ -74,7 +74,7 @@ export function createNavigation(ctx) {
     if (trimmed.startsWith("@")) {
       const desc = state.get("descriptor");
       const story = state.get("discovery")?.story || desc?.address?.place || "";
-      const branch = desc?.address?.branch || "0";
+      const branch = desc?.address?.history || "0";
       const bq = branch === "0" ? "" : `#${branch}`;
       const path = desc?.address?.pathByNames || "/";
       return `${story}${bq}${path}${trimmed}`.replace(/\/+@/, "/@");
@@ -88,7 +88,7 @@ export function createNavigation(ctx) {
     const desc = state.get("descriptor");
     const story = state.get("discovery")?.story || "";
     const path = desc?.address?.pathByNames || "/";
-    const branch = desc?.address?.branch || "0";
+    const branch = desc?.address?.history || "0";
     const bq = branch === "0" ? "" : `#${branch}`;
     return `${story}${bq}${path}`.replace(/\/+$/, "") || `${story}${bq}`;
   }
@@ -97,7 +97,7 @@ export function createNavigation(ctx) {
     const session = state.get("session");
     if (session?.beingAddress) return session.beingAddress;
     const story = state.get("discovery")?.story || "";
-    const branch = state.get("descriptor")?.address?.branch || "0";
+    const branch = state.get("descriptor")?.address?.history || "0";
     const bq = branch === "0" ? "" : `#${branch}`;
     const name = session?.username || "arrival";
     return `${story}${bq}/@${name}`;
@@ -111,7 +111,7 @@ export function createNavigation(ctx) {
   function stanceFor(beingName) {
     const desc = state.get("descriptor");
     const story = state.get("discovery")?.story || desc?.address?.place || "";
-    const branch = desc?.address?.branch || "0";
+    const branch = desc?.address?.history || "0";
     const bq = branch === "0" ? "" : `#${branch}`;
     const path = desc?.address?.pathByNames || "/";
     return `${story}${bq}${path}@${beingName}`.replace(/\/+@/, "/@");
@@ -144,7 +144,7 @@ export function createNavigation(ctx) {
     if (existing.startsWith("inhabit=")) return;
     const story = desc?.address?.place || state.get("discovery")?.story || "";
     if (!story) return;
-    const branch = desc?.address?.branch || "0";
+    const branch = desc?.address?.history || "0";
     const path = desc?.address?.pathByNames || "/";
     const bq = branch === "0" ? "" : `#${branch}`;
     const next = `${story}${bq}${path === "/" ? "/" : path}`;
@@ -226,7 +226,7 @@ export function createNavigation(ctx) {
       // restores the exact view even after branch hops.
       if (!fromNav) {
         const story = desc?.address?.place || state.get("discovery")?.story || "";
-        const branch = desc?.address?.branch || "0";
+        const branch = desc?.address?.history || "0";
         const path = desc?.address?.pathByNames || "/";
         const bq = branch === "0" ? "" : `#${branch}`;
         const canonical = story

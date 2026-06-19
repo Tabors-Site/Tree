@@ -260,7 +260,7 @@ registerSeeOperation("verify-reel", {
     id:     { type: "text", label: "Aggregate id", required: true },
     branch: { type: "text", label: "History (default main)", required: false },
   },
-  handler: async ({ args, branch: ctxHistory }) => {
+  handler: async ({ args, history: ctxHistory }) => {
     const { verifyReel } = await import("./verifyReel.js");
     return verifyReel(args.type, args.id, args.branch || ctxHistory || "0");
   },

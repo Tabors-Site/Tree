@@ -48,7 +48,7 @@ registerSeeOperation("capture-template", {
     name:          { type: "text", label: "Clone name (optional)", required: false },
     sourceStory: { type: "text", label: "Source story (optional)", required: false },
   },
-  handler: async ({ identity, args, branch }) => {
+  handler: async ({ identity, args, history }) => {
     if (!identity?.beingId) {
       throw new IbpError(
         IBP_ERR.UNAUTHORIZED,
@@ -61,7 +61,7 @@ registerSeeOperation("capture-template", {
     }
     const { captureTemplate } = await import("./seedTemplate.js");
     const bundle = await captureTemplate(scopeSpaceId, {
-      branch: branch || "0",
+      branch: history || "0",
       scopeName:       args?.name || null,
       sourceStory:   args?.sourceStory || null,
       operatorBeingId: String(identity.beingId),

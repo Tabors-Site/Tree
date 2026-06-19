@@ -1,8 +1,8 @@
 # TreeOS Story
 
-Plant a seed on a host, it grows a federated and cryptographically signed story: histories of Named beings who act in space on matter.
+Plant a seed on a host. It stores and grows a federated and cryptographically signed Story: histories of Named beings who act in space on matter.
 
-It also provides a 5th dimensional Library that Names can act in to share books of histories.
+It also provides a "5th dimensional" Library that Names can act in to share books of histories, and Search all Stories they are peered with.
 
 ## Run it
 
@@ -15,24 +15,20 @@ npm install
 npm start
 ```
 
-First boot walks you through setup. Open the URL it prints. Register. You are in.
-
-## The model in one paragraph
-
-A reality is the whole world the seed makes, anchored to a single root being called I_AM whose keypair signs every Merkle root from genesis. Every being is named by its public key. Every act produces facts; facts are content addressed and chained. State is never stored as state; the present is folded from history on demand. Federation works without a central authority because every being and every reality is self-certifying.
+The planting (first boot) walks you through setup. Open the URL it prints to use your Portal.
 
 ## Read deeper
 
-Everything lives in [`reality/`](reality/). Start there.
+Everything lives in [`story/`](story/). Start there.
 
-- [`reality/seed/FACTORY.md`](reality/seed/FACTORY.md), the seed in its own words
-- [`reality/philosophy/`](reality/philosophy/), the doctrine
-- [`reality/philosophy/I_AM.md`](reality/philosophy/I_AM.md), the cryptographic root
-- [`reality/philosophy/theorems.md`](reality/philosophy/theorems.md), the formal results
-- [`reality/extensions/README.md`](reality/extensions/README.md), building extensions
+- [`story/seed/FACTORY.md`](story/seed/FACTORY.md), the seed in its own words
+- [`story/philosophy/`](story/philosophy/), the doctrine
+- [`story/philosophy/I_AM.md`](story/philosophy/I_AM.md), the cryptographic root
+- [`story/philosophy/theorems.md`](story/philosophy/theorems.md), the formal results
+- [`story/extensions/README.md`](story/extensions/README.md), building extensions
 
 ## License
 
-Dual licensed: AGPL-3.0 (free and open) or commercial (paid, closed-source friendly). See [`reality/LICENSING.md`](reality/LICENSING.md).
+Dual licensed: AGPL-3.0 (free and open) or commercial (paid, closed-source friendly). See [`story/LICENSING.md`](story/LICENSING.md).
 
 Created by Tabor Holly. taborgreat@gmail.com.

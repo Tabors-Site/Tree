@@ -88,7 +88,7 @@ async function _inhabitResetFacts({ mergedHistory, ancestor, actorBeingId }) {
           strategy:    "reset",
           rule:        "inhabit-state",
           sourceHistory: ancestor,
-          note:        "branch-private reel reset on merge",
+          note:        "history-private reel reset on merge",
         },
       },
     });

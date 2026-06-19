@@ -702,13 +702,13 @@ async function switchHandler({ payload, identity, moment }) {
     // authority for callers that don't come through the wire.
     const row = await loadHistory(targetHistory);
     if (!row) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, `be:switch: branch "${targetHistory}" not found`);
+      throw new IbpError(IBP_ERR.INVALID_INPUT, `be:switch: history "${targetHistory}" not found`);
     }
     if (row.deleted) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, `be:switch: branch "${targetHistory}" is deleted`);
+      throw new IbpError(IBP_ERR.INVALID_INPUT, `be:switch: history "${targetHistory}" is deleted`);
     }
     if (row.paused) {
-      throw new IbpError(IBP_ERR.STORY_PAUSED, `be:switch: branch "${targetHistory}" is paused`);
+      throw new IbpError(IBP_ERR.STORY_PAUSED, `be:switch: history "${targetHistory}" is paused`);
     }
   }
 
@@ -829,11 +829,11 @@ export const cherubBeOps = Object.freeze({
     handler: releaseHandler,
   },
   switch: {
-    description: "Change this session's branch on the same being. " +
-                 "Per-session — switching one socket's branch doesn't touch other sockets.",
-    label: "Switch branch",
+    description: "Change this session's history on the same being. " +
+                 "Per-session — switching one socket's history doesn't touch other sockets.",
+    label: "Switch history",
     args: {
-      branch: { type: "text", label: "Target branch path", required: true },
+      branch: { type: "text", label: "Target history path", required: true },
     },
     handler: switchHandler,
   },
@@ -1101,7 +1101,7 @@ async function _connectViaWordOrJs({ name, password, moment }) {
   if (!flow) return null;
   const { randomUUID } = await import("node:crypto");
   const branch = moment?.actorAct?.history || "0";
-  const sc = { actId: randomUUID(), actorAct: { branch }, identity: { beingId: "arrival", name: "arrival" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc = { actId: randomUUID(), actorAct: { history: branch }, identity: { beingId: "arrival", name: "arrival" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   try {
     const { result } = await runRoleWord([flow], { moment: sc, branch, trigger: { name, password }, env: { host: connectHostEnv() } });
     if (!result?.token) return null; // produced nothing usable → JS
@@ -1142,7 +1142,7 @@ async function _connectOwnedViaWord({ address, callerNameId, moment }) {
   if (!flow) return null;
   const { randomUUID } = await import("node:crypto");
   const branch = moment?.actorAct?.history || "0";
-  const sc = { actId: randomUUID(), actorAct: { branch }, identity: { beingId: "name", name: "name" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc = { actId: randomUUID(), actorAct: { history: branch }, identity: { beingId: "name", name: "name" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   const { result } = await runRoleWord([flow], { moment: sc, branch, trigger: { name: targetName, caller: String(callerNameId) }, env: { host: connectHostEnv() } });
   if (!result?.token || result.owned !== true) return null; // not owned → fall through
   const { decodeToken } = await import("../../../materials/being/identity/credentials.js");
@@ -1175,7 +1175,7 @@ async function _connectInheritViaWord({ address, identity, moment }) {
   if (!flow) return null;
   const { randomUUID } = await import("node:crypto");
   const branch = moment?.actorAct?.history || "0";
-  const sc = { actId: randomUUID(), actorAct: { branch }, identity: { beingId: identity?.beingId }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc = { actId: randomUUID(), actorAct: { history: branch }, identity: { beingId: identity?.beingId }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   let result;
   try {
     ({ result } = await runRoleWord([flow], { moment: sc, branch, trigger: { address, caller: identity }, env: { host: connectHostEnv() } }));

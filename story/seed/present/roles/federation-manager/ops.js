@@ -68,7 +68,7 @@ registerSeeOperation("federation-status", {
   ownerExtension: "seed",
   description: "Read the federation-manager's negotiation state: incoming offers/requests, outbound in-flight, completed. Operator-gated, read-only.",
   args: {},
-  handler: async ({ identity, branch }) => {
+  handler: async ({ identity, history }) => {
     if (!identity?.beingId) {
       throw new IbpError(IBP_ERR.UNAUTHORIZED, "federation-status: identity required");
     }
@@ -77,7 +77,7 @@ registerSeeOperation("federation-status", {
       throw new IbpError(IBP_ERR.FORBIDDEN, "federation-status: operator (heaven authority) only");
     }
     const { findByName } = await import("../../../materials/projections.js");
-    const slot = await findByName("being", "federation-manager", branch);
+    const slot = await findByName("being", "federation-manager", history);
     const q = slot?.state?.qualities;
     const qualities = q instanceof Map ? Object.fromEntries(q.entries()) : (q || {});
     const fed = qualities.federation || {};

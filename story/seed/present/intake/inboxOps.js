@@ -25,12 +25,12 @@ import { getStoryDomain } from "../../ibp/address.js";
 registerSeeOperation("my-inbox", {
   ownerExtension: "seed",
   description: "The caller's pending inbox — every open summon addressed to them. Returns {pending: [...]} sorted newest-first; each entry carries a `render` spec the panel uses verbatim.",
-  handler: async ({ identity, branch }) => {
+  handler: async ({ identity, history }) => {
     if (!identity?.beingId) return { pending: [], total: 0 };
     const InboxProjection = (await import("../../past/projections/inbox/inboxProjection.js")).default;
     const rows = await InboxProjection.find({
       recipient: String(identity.beingId),
-      ...(branch ? { branch } : {}),
+      ...(history ? { branch: history } : {}),
     })
       .sort({ sentAt: -1 })
       .lean();
@@ -42,7 +42,7 @@ registerSeeOperation("my-inbox", {
       let summonerName = null;
       if (r.summoner) {
         try {
-          const slot = await loadOrFold("being", String(r.summoner), branch || "0");
+          const slot = await loadOrFold("being", String(r.summoner), history || "0");
           summonerName = slot?.state?.name || null;
         } catch { /* best effort */ }
       }

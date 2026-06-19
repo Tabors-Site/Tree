@@ -93,7 +93,7 @@ registerOperation("grant-inheritation", {
   targets: ["being"],
   ownerExtension: "seed",
   factAction: "grant-inheritation",
-  handler: async ({ target, params, identity, branch }) => {
+  handler: async ({ target, params, identity, history }) => {
     const position = positionBeingIdOf(target);
     const actingName = actingNameOf(identity);
     if (!actingName) {
@@ -111,8 +111,8 @@ registerOperation("grant-inheritation", {
         "grant-inheritation requires params.name (the Name to grant authority to)",
       );
     }
-    await assertGrantableName(grantedName, branch);
-    await assertAuthorityOverPosition(actingName, position, branch, "grant-inheritation");
+    await assertGrantableName(grantedName, history);
+    await assertAuthorityOverPosition(actingName, position, history, "grant-inheritation");
     return {
       _factTarget: { kind: "being", id: position },
       name: grantedName,
@@ -131,7 +131,7 @@ registerOperation("revoke-inheritation", {
   targets: ["being"],
   ownerExtension: "seed",
   factAction: "revoke-inheritation",
-  handler: async ({ target, params, identity, branch }) => {
+  handler: async ({ target, params, identity, history }) => {
     const position = positionBeingIdOf(target);
     const actingName = actingNameOf(identity);
     if (!actingName) {
@@ -149,7 +149,7 @@ registerOperation("revoke-inheritation", {
         "revoke-inheritation requires params.name (the Name whose point to remove)",
       );
     }
-    await assertAuthorityOverPosition(actingName, position, branch, "revoke-inheritation");
+    await assertAuthorityOverPosition(actingName, position, history, "revoke-inheritation");
     return {
       _factTarget: { kind: "being", id: position },
       name: grantedName,

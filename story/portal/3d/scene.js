@@ -662,7 +662,7 @@ export class Scene {
     // cheap — the old full rebuild re-cloned every glTF per tick.
     const spaceKey = JSON.stringify([
       desc?.address?.spaceId || null,
-      desc?.address?.branch || null,
+      desc?.address?.history || null,
       !!isAuthenticated,
       desc?.identity?.beingId || null,
       isPlaceRoot,
@@ -2203,7 +2203,7 @@ export class Scene {
       // delta path; the camera is authoritative, no churn risk.
       hist: desc?.isHistorical ? (desc?.asOf?.atTimestamp || desc?.asOf?.atSeq || true) : false,
       selfCoord: coordKey(desc?.identity?.coord),
-      branch: desc?.address?.branch || "0",
+      branch: desc?.address?.history || "0",
       beings:   (desc.beings   || []).filter((e) => !isSelf(e)).map(sigBeing),
       matter:   (desc.matter   || []).map(sigPositional),
       children: (desc.children || []).map(sigPositional),

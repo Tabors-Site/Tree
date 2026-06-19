@@ -64,7 +64,7 @@ registerOperation("create-branch", {
   args: {
     parent: {
       type:        "text",
-      label:       "Parent branch path (e.g. \"0\" for main, \"1a\" for a nested branch)",
+      label:       "Parent history path (e.g. \"0\" for main, \"1a\" for a nested history)",
       required:    false,
       default:     MAIN,
     },
@@ -531,12 +531,12 @@ registerOperation("merge-histories", {
   args: {
     sourceA: {
       type:     "text",
-      label:    "First source branch path (e.g. \"1\", \"1a\")",
+      label:    "First source history path (e.g. \"1\", \"1a\")",
       required: true,
     },
     sourceB: {
       type:     "text",
-      label:    "Second source branch path",
+      label:    "Second source history path",
       required: true,
     },
     label: {
@@ -875,7 +875,7 @@ registerOperation("set-pointer", {
     },
     canonical: {
       type:     "text",
-      label:    "Canonical branch path the pointer should resolve to (e.g. \"0\", \"7\", \"1a2\")",
+      label:    "Canonical history path the pointer should resolve to (e.g. \"0\", \"7\", \"1a2\")",
       required: true,
     },
   },

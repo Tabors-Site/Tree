@@ -109,7 +109,7 @@ const FLAT_DOM = `
     <section id="detail-pane">
       <div id="empty-detail" class="empty">
         <div class="empty-title">pick an action</div>
-        <div class="empty-hint">the menu bar above is the work surface: <code>Story</code> / <code>Branch</code> / <code>Place</code> menus act on where you are; select a being (here or in any view) and its <code>@being</code> menu appears. Forms open in this pane.</div>
+        <div class="empty-hint">the menu bar above is the work surface: <code>Story</code> / <code>History</code> / <code>Place</code> menus act on where you are; select a being (here or in any view) and its <code>@being</code> menu appears. Forms open in this pane.</div>
         <div class="empty-shortcuts">
           <kbd>/</kbd> focus address . <kbd>g h</kbd> home
         </div>
@@ -357,7 +357,7 @@ function wireKeyboardShortcuts(ctx) {
       if (gTimer) { clearTimeout(gTimer); gTimer = null; }
       const story = _state.discovery?.story;
       if (!story) return;
-      const branch = _state.descriptor?.address?.branch || "0";
+      const branch = _state.descriptor?.address?.history || "0";
       const bq = branch === "0" ? "" : `#${branch}`;
       if      (ev.key === "h") { ev.preventDefault(); flat.navigate(`${story}${bq}/`); }
       else if (ev.key === "b") { ev.preventDefault(); flat.navigate(`${story}${bq}/./beings`); }
@@ -403,7 +403,7 @@ async function refreshOperations(ctx) {
 
 function buildAddressString(descriptor, discovery) {
   const story = discovery?.story || descriptor?.address?.place || "";
-  const branch  = descriptor?.address?.branch || "0";
+  const branch  = descriptor?.address?.history || "0";
   const path    = descriptor?.address?.pathByNames || "/";
   const bq      = branch === "0" ? "" : `#${branch}`;
   return `${story}${bq}${path}`;

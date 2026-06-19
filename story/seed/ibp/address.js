@@ -38,7 +38,7 @@
 //   Segment    := space-name | space-id (uuid)
 //   Being      := "@" Identifier
 //
-// Branch (`#<path>`) names which divergent world the stance is in. Main
+// History (`#<path>`) names which divergent world the stance is in. Main
 // is `"0"` and is implicit when omitted. Branches diverge from a parent
 // at a chosen past moment; the path alternates number/letter segments,
 // with letters rolling over `a..z, za..zz, zza..zzz` (so the 27th branch
@@ -153,7 +153,7 @@ function crossHistoryBridgeError(input, lb, rb) {
     "cross-history-bridge",
     input,
     `Cross-history bridge forbidden: left is on #${lb}, right is on #${rb}. ` +
-      `Bridges must keep both stances on the same branch.`,
+      `Bridges must keep both stances on the same history.`,
   );
 }
 
@@ -440,7 +440,7 @@ function parseStance(input, ctx, opts = {}) {
     };
   }
 
-  // Branch qualifier (`#<historyPath>`) sits between story and path.
+  // History qualifier (`#<historyPath>`) sits between story and path.
   // Pull it off `rest` first so story/path detection below stays
   // simple. The qualifier is optional; absence means "0" (main) after
   // expand. Allowed shapes: `treeos.ai#1a/path`, `#1a/path`, `#1a`,
@@ -451,7 +451,7 @@ function parseStance(input, ctx, opts = {}) {
   if (hashIdx >= 0) {
     if (rest.indexOf("#", hashIdx + 1) >= 0) {
       throw paError("multiple-histories", input,
-        `Only one "#" branch qualifier allowed per stance`);
+        `Only one "#" history qualifier allowed per stance`);
     }
     const before = rest.slice(0, hashIdx);
     const after = rest.slice(hashIdx + 1);
@@ -465,7 +465,7 @@ function parseStance(input, ctx, opts = {}) {
     const branchStr = pathStart >= 0 ? after.slice(0, pathStart) : after;
     if (!branchStr) {
       throw paError("empty-history", input,
-        `Branch qualifier "#" cannot be empty`);
+        `History qualifier "#" cannot be empty`);
     }
     const parsedHistory = parseHistoryOrPointer(branchStr);
     if (parsedHistory.kind === "canonical") {
@@ -591,7 +591,7 @@ function parseHistory(s) {
     throw paError(
       "invalid-history",
       trimmed,
-      `Branch path "${trimmed}" must be "0" (main) or a number/letter chain ` +
+      `History path "${trimmed}" must be "0" (main) or a number/letter chain ` +
         `(e.g. "1", "1a", "22zb"). Alternates number/letter; letters wrap a..z, ` +
         `za..zz, zza..zzz.`,
     );
@@ -623,7 +623,7 @@ function parseHistoryOrPointer(s) {
     throw paError(
       "invalid-history",
       trimmed.slice(0, 16) + "...",
-      `Branch qualifier exceeds max pointer length (${POINTER_NAME_MAX_LENGTH} chars).`,
+      `History qualifier exceeds max pointer length (${POINTER_NAME_MAX_LENGTH} chars).`,
     );
   }
   if (POINTER_NAME_RE.test(trimmed)) {
@@ -632,7 +632,7 @@ function parseHistoryOrPointer(s) {
   throw paError(
     "invalid-history",
     trimmed,
-    `Branch qualifier "${trimmed}" is neither a canonical path ` +
+    `History qualifier "${trimmed}" is neither a canonical path ` +
       `("0", "1", "1a2", ...) nor a valid pointer name. ` +
       `Pointer names must start with a lowercase letter, end with a letter or digit, ` +
       `and contain only lowercase letters, digits, and single hyphens ` +
@@ -698,7 +698,7 @@ function formatStance(stance, opts = {}) {
   if (!stance) return "";
   let out = "";
   if (stance.story) out += stance.story;
-  // Branch qualifier renders only when explicitly non-main. Canonical
+  // History qualifier renders only when explicitly non-main. Canonical
   // addresses omit `#0` the way URLs omit default ports — the address
   // bar should stay quiet for the common case. Empty-string branches
   // are treated as absent: never render `#` with nothing after it,
@@ -1033,7 +1033,7 @@ const STANCE_PAIR_SEPARATOR = " :: ";
  *   - { place?, branch?, spaceId, name }
  *
  * Output: `<story>#<branch>/<spaceId>@<name>` (spaceId-rooted path
- * form, full IBPA grammar). The branch qualifier is part of the lane
+ * form, full IBPA grammar). The history qualifier is part of the lane
  * identity: the same two beings talking on #1 and on #0 are in
  * different worlds, so they are different lanes.
  * Returns null when spaceId or name is missing.

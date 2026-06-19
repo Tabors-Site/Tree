@@ -120,7 +120,7 @@ export function createView() {
   function addressFor(path) {
     const m = ctx.state.get();
     const story = m.discovery?.story || "";
-    const branch = m.descriptor?.address?.branch || "0";
+    const branch = m.descriptor?.address?.history || "0";
     const bq = branch === "0" ? "" : `#${branch}`;
     return `${story}${bq}${path === "/" ? "/" : path}`;
   }
@@ -150,7 +150,7 @@ export function createView() {
 
   function renderCrumbs(desc) {
     const story = ctx.state.get("discovery")?.story || "story";
-    const branch = desc?.address?.branch || "0";
+    const branch = desc?.address?.history || "0";
     const path = desc?.address?.pathByNames || "/";
     els.up.disabled = path === "/";
 
@@ -484,7 +484,7 @@ export function createView() {
   // Being tile / row menu.
   function buildBeingMenu(b) {
     const story = ctx.state.get("discovery")?.story || "";
-    const branch = ctx.state.get("descriptor")?.address?.branch || "0";
+    const branch = ctx.state.get("descriptor")?.address?.history || "0";
     const bq = branch === "0" ? "" : `#${branch}`;
     const stance = `${story}${bq}/@${beingName(b)}`;
     return [
@@ -702,7 +702,7 @@ export function createView() {
       const sp = desc ? null : data;
       return desc ? [
         ["path",     desc.address?.pathByNames],
-        ["branch",   desc.address?.branch],
+        ["branch",   desc.address?.history],
         ["spaceId",  desc.spaceId],
         ["spaces",   (desc.children || []).length],
         ["beings",   (desc.beings || []).length],

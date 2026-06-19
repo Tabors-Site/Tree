@@ -607,7 +607,7 @@ export function registerLlmAssignerOps() {
       role:              { type: "text", label: "Role",                required: false },
       branch:            { type: "text", label: "Branch",              required: false },
     },
-    handler: async ({ identity, args, branch }) => {
+    handler: async ({ identity, args, history }) => {
       let {
         receiverBeingId = null,
         receiverBeingName = null,
@@ -617,7 +617,7 @@ export function registerLlmAssignerOps() {
         actorSpaceId = null,
         role = "main",
       } = args || {};
-      const effectiveHistory = args?.branch || branch || "0";
+      const effectiveHistory = args?.branch || history || "0";
       // Default the actor to the SEE caller when not specified.
       if (!actorBeingId && !actorBeingName && identity?.beingId) {
         actorBeingId = String(identity.beingId);

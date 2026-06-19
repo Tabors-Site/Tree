@@ -6,7 +6,7 @@
 //
 //   Story  — what affects the whole story / server (form seed,
 //              config, close story).
-//   Branch   — the branch lifecycle (fork, merge, pause, pointers)
+//   History  — the history lifecycle (fork, merge, pause, pointers)
 //              plus clone (download) and graft (paste-in).
 //   Place    — what acts on the space you're standing in (create
 //              space/matter, move, plant, roles, render, delete).
@@ -61,11 +61,11 @@ export function renderTaskBar(container, { descriptor, discovery, session } = {}
   // genuinely doesn't register.
   const opsLoaded = loadedOps.length > 0;
 
-  // Order: Story (far left), Branch, Place — broadest scope to
+  // Order: Story (far left), History, Place — broadest scope to
   // narrowest, like a window menu bar.
   const tabs = [
     { id: "story", label: "Story", actions: storyActions(rootAddress) },
-    { id: "branch", label: "Branch", actions: historyActions(positionAddress) },
+    { id: "branch", label: "History", actions: historyActions(positionAddress) },
     { id: "place", label: "Place", actions: placeActions(positionAddress, desc) },
     { id: "federation", label: "Federation", actions: federationActions() },
   ];
@@ -80,7 +80,7 @@ export function renderTaskBar(container, { descriptor, discovery, session } = {}
       || (desc.residents || []).find((b) => (b.being || b.name) === selName)
     : null;
   if (beingEntry) {
-    const branch = desc.address?.branch || "0";
+    const branch = desc.address?.history || "0";
     const bq = branch === "0" ? "" : `#${branch}`;
     const stance = `${story}${bq}${path}@${selName}`.replace(/\/+@/, "/@");
     tabs.push({
@@ -204,7 +204,7 @@ function openAction(action, opByName) {
   }
   if (action.special === "being-facts" || action.special === "being-acts") {
     const story = flat.state?.discovery?.story || "";
-    const branch = flat.state?.descriptor?.address?.branch || "0";
+    const branch = flat.state?.descriptor?.address?.history || "0";
     const bq = branch === "0" ? "" : `#${branch}`;
     const id = action.being?.beingId;
     if (!id) return;
@@ -436,12 +436,12 @@ async function renderHistoryInfo(body) {
     || flat.state?.descriptor?.address?.place || "";
   const client = flat.state?.client;
   if (!client) { body.textContent = "portal not ready"; return; }
-  const currentHistory = flat.state?.descriptor?.address?.branch || "0";
+  const currentHistory = flat.state?.descriptor?.address?.history || "0";
 
   const pickWrap = document.createElement("div");
   pickWrap.className = "op-field";
   const lbl = document.createElement("label");
-  lbl.textContent = "branch";
+  lbl.textContent = "history";
   const select = document.createElement("select");
   select.className = "op-input";
   pickWrap.appendChild(lbl);
@@ -706,13 +706,13 @@ function placeActions(address, desc) {
 
 function historyActions(address) {
   return [
-    { label: "view branch info", special: "branch-info" },
+    { label: "view history info", special: "branch-info" },
     { label: "fork a branch", op: "create-branch", address },
-    { label: "merge branches", op: "merge-histories", address },
-    { label: "pause branch", op: "pause-history", address },
-    { label: "unpause branch", op: "unpause-history", address },
-    { label: "delete branch", op: "delete-history", address, danger: true },
-    { label: "undelete branch", op: "undelete-history", address },
+    { label: "merge histories", op: "merge-histories", address },
+    { label: "pause history", op: "pause-history", address },
+    { label: "unpause history", op: "unpause-history", address },
+    { label: "delete history", op: "delete-history", address, danger: true },
+    { label: "undelete history", op: "undelete-history", address },
     { label: "set pointer", op: "set-pointer", address },
     { label: "delete pointer", op: "delete-pointer", address },
     { label: "save clone (download)", op: "capture-template", special: "clone", address },

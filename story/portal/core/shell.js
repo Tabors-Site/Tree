@@ -141,7 +141,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
       story:    m.discovery?.story || m.descriptor?.address?.place || "",
       username:   m.session?.username || null,
       signedIn:   !!m.session?.token,
-      viewHistory: m.descriptor?.address?.branch || "0",
+      viewHistory: m.descriptor?.address?.history || "0",
       path:       m.descriptor?.address?.pathByNames || "/",
       // The right stance's @qualifier: an explicitly-navigated stance
       // address wins; otherwise the selected being (clicking a being
@@ -306,7 +306,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     try { nameId = (await ctx.client.nameWhoami())?.nameId || null; } catch { /* not signed in */ }
     if (!nameId) { presentNameForm(ctx); return; }
     const story = ctx.state.get("discovery")?.story || "";
-    const branch  = ctx.state.get("descriptor")?.address?.branch || "0";
+    const branch  = ctx.state.get("descriptor")?.address?.history || "0";
     const canAct  = !!ctx.state.get("session")?.beingId;
     await showNameTree({
       client: ctx.client,

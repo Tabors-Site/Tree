@@ -79,7 +79,7 @@ export async function runFoldBeat(setup = {}) {
       beingId,
       role,
       orientation,
-      branch,
+      history: branch,
       currentSpace: moment.spaceId || null,
       rootId:       moment.rootId || null,
       name:         moment.toBeing?.name || null,
