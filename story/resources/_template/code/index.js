@@ -95,7 +95,7 @@ export async function init(story) {
   //   intervalMs: 60_000 * 30,
   //   content:    { event: "tick" },
   //   priority:   4,
-  //   branch:     moment.branch,
+  //   history:     moment.history,
   //   moment,
   // });
 

@@ -102,7 +102,7 @@ export const federationManagerRole = Object.freeze({
   // does NOT arrive through SEE . it is carried inside the peer's
   // SUMMON payload, which lands in my inbox automatically (substrate
   // intake, not a see word). The bundle bytes are message content,
-  // not a foreign-branch read. DO: operator-facing ops, each lives in
+  // not a foreign-history read. DO: operator-facing ops, each lives in
   // ops.js and registers via registerOperation at module load. SUMMON:
   // who I reply to. BE: peers can address me; I can be addressed by
   // anyone authenticated (operator policy decides what to do with the

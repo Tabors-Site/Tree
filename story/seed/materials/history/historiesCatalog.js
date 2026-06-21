@@ -1,4 +1,4 @@
-// historiesCatalog.js — read-side helper that returns the branch graph
+// historiesCatalog.js — read-side helper that returns the history graph
 // as a plain object. Powers the synthetic `<story>/.branches[/<path>]`
 // SEE catalog the portal uses to draw its chip row.
 //
@@ -28,7 +28,7 @@ export async function describeHistoriesCatalog(historyPath = MAIN) {
   // Lineage: just ["0"] for main; ["0", ..., path] for everything else.
   const lineage = isMainPath ? [MAIN] : await resolveHistoryLineage(path);
 
-  // Current branch row. Main starts implicit (no document), but
+  // Current history row. Main starts implicit (no document), but
   // pause-branch upserts a row when the operator first pauses main.
   // If a real row exists, surface it; otherwise synthesize the
   // implicit-live default. Either way the portal renders main and
@@ -58,9 +58,9 @@ export async function describeHistoriesCatalog(historyPath = MAIN) {
   } else {
     const row = await loadHistory(path);
     if (!row) {
-      // Caller is asking about a branch that doesn't exist. Return a
+      // Caller is asking about a history that doesn't exist. Return a
       // not-found shape rather than throwing; SEE callers can render
-      // "unknown branch" without an error envelope.
+      // "unknown history" without an error envelope.
       return {
         current: null,
         lineage: [MAIN],
@@ -74,10 +74,10 @@ export async function describeHistoriesCatalog(historyPath = MAIN) {
   // Direct children: rows whose parent is this path. Main's children
   // carry parent=null (main has no row).
   //
-  // Deleted branches drop from the default listing. They still exist
+  // Deleted histories drop from the default listing. They still exist
   // in the chain and SEE on a specific deleted path still resolves
   // (current slot above honors the direct lookup), but they don't
-  // clutter the branch picker. Undelete brings them back.
+  // clutter the history picker. Undelete brings them back.
   const childRows = await History.find({
     ...(isMainPath ? { parent: null } : { parent: path }),
     deleted: { $ne: true },
@@ -87,11 +87,11 @@ export async function describeHistoriesCatalog(historyPath = MAIN) {
   const children = childRows.map(_serializeHistory);
 
   // The named-pointer map ({ main: "0", prod: "7", ... }). One read; the
-  // client filters names whose value === a branch path to show "pointers
-  // aimed here." Surfaced for the full "see branch" info view.
+  // client filters names whose value === a history path to show "pointers
+  // aimed here." Surfaced for the full "see history" info view.
   const pointers = await readPointers().catch(() => ({}));
 
-  // Chain fingerprints (past/fact/chainRoots.js): this branch's root
+  // Chain fingerprints (past/fact/chainRoots.js): this history's root
   // hash and the whole story's root. Same root = same chain state;
   // two substrates compare worlds in one number. TTL-memoized inside
   // chainRoots so this stays cheap on the hot SEE path.
@@ -130,7 +130,7 @@ function _serializeHistory(row) {
     createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : null,
     createdBy: row.createdBy || null,
     mergeSources: Array.isArray(row.mergeSources) ? [...row.mergeSources] : [],
-    // Full-info fields for the "see branch" view. Cheap to surface (all
+    // Full-info fields for the "see history" view. Cheap to surface (all
     // on the row); a thin chip-row renderer just ignores them.
     scope: row.scope || null,
     pausedBy: row.pausedBy || null,
@@ -142,34 +142,34 @@ function _serializeHistory(row) {
 }
 
 /**
- * Return the conflict catalog for a merged branch. Reads the branch's
- * `mergeSources` to identify the two source branches, computes their
+ * Return the conflict catalog for a merged history. Reads the history's
+ * `mergeSources` to identify the two source histories, computes their
  * common ancestor, runs `divergentFactsSince` for both sides, and
  * groups by reel key into one of three categories:
  *
  *   - "clean-A": only source A touched this reel since the ancestor.
- *                The merged branch already inherits source A's state
+ *                The merged history already inherits source A's state
  *                through reel-lineage when the operator chooses to
  *                propagate it; suggestedStrategy is "take-A".
  *   - "clean-B": symmetric.
  *   - "conflict": both sources touched it. User must resolve.
  *
- * Reset reels (state that's branch-private by nature, like inhabit-
+ * Reset reels (state that's history-private by nature, like inhabit-
  * state) get their own category in Phase 5; this returns "conflict"
  * for them today.
  *
- * @param {string} historyPath  the merged branch's path
+ * @param {string} historyPath  the merged history's path
  * @returns {Promise<object>}
  */
 export async function describeMergeConflicts(historyPath) {
   const row = await loadHistory(historyPath);
   if (!row) {
-    return { branch: historyPath, notFound: true, conflicts: [] };
+    return { history: historyPath, notFound: true, conflicts: [] };
   }
   const sources = Array.isArray(row.mergeSources) ? row.mergeSources : [];
   if (sources.length !== 2) {
     return {
-      branch: historyPath,
+      history: historyPath,
       notAMerge: true,
       reason: "history has no mergeSources (was not created by merge-branches)",
       conflicts: [],
@@ -186,10 +186,10 @@ export async function describeMergeConflicts(historyPath) {
   // Union of reel keys touched on either side.
   const allReels = new Set([...diffA.keys(), ...diffB.keys()]);
 
-  // Walk reconciliation facts on the merged branch's reels so the
+  // Walk reconciliation facts on the merged history's reels so the
   // catalog reports which conflicts are RESOLVED vs still OPEN. A
   // reconciliation fact is any normal action fact stamped on the
-  // merged branch that carries `params._merge`. The mediator and
+  // merged history that carries `params._merge`. The mediator and
   // the user stamp these identically; the catalog doesn't care which.
   //
   // This makes the catalog a live decision log: the UI re-renders
@@ -251,7 +251,7 @@ export async function describeMergeConflicts(historyPath) {
   const openConflicts = conflicts.filter(c => c.side === "conflict" && c.status === "open").length;
   const resolvedConflicts = conflicts.filter(c => c.side === "conflict" && c.status === "resolved").length;
   return {
-    branch: historyPath,
+    history: historyPath,
     sourceA,
     sourceB,
     ancestor,
@@ -272,7 +272,7 @@ function _summarizeFact(fact) {
     seq: fact.seq,
     verb: fact.verb,
     act: fact.act,
-    branch: fact.history,
+    history: fact.history,
     date: fact.date ? new Date(fact.date).toISOString() : null,
     through: fact.through || null,
     params: fact.params || null,

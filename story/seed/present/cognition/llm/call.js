@@ -164,11 +164,11 @@ export function registerFailoverResolver(resolver) {
  * tracking when failover was used.
  */
 export async function callWithFailover(callFn, primaryClient, beingId, rootId, opts = {}) {
-  const branch = opts.branch;
-  if (typeof branch !== "string" || !branch.length) {
+  const history = opts.history;
+  if (typeof history !== "string" || !history.length) {
     throw new Error(
-      "callWithFailover: opts.branch is required (the moment's actorAct.history). " +
-      "No main-bias default — failover reads must name their branch.",
+      "callWithFailover: opts.history is required (the moment's actorAct.history). " +
+      "No main-bias default — failover reads must name their history.",
     );
   }
   try {
@@ -235,8 +235,8 @@ export async function callWithFailover(callFn, primaryClient, beingId, rootId, o
       const fallbackClient = await resolveConnection(
         beingId,
         connId,
-        "failover:" + connId + ":" + branch,
-        { branch },
+        "failover:" + connId + ":" + history,
+        { history },
       );
       if (!fallbackClient) continue;
       log.verbose(

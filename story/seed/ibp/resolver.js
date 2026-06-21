@@ -73,14 +73,14 @@ export async function resolveStance(stance, opts = {}) {
 
   const path = stance.path || "/";
   const being = stance.being || null;
-  // Branch flows from the parsed stance. Null in the address means
+  // History flows from the parsed stance. Null in the address means
   // "default to main" — resolve the operator's `#main` pointer through
   // the registry (which may have been re-pointed away from "0" via
   // set-pointer). Every return shape carries an explicit canonical
-  // branch field; the verb layer reads this to thread into moment
+  // history field; the verb layer reads this to thread into moment
   // + emitFact.
   const { getDefaultHistory } = await import("../materials/history/historyRegistry.js");
-  const branch = stance.history || await getDefaultHistory();
+  const history = stance.history || await getDefaultHistory();
 
   // story root: path is "/". The story root IS a Space (the heavenSpace:
   // SPACE_ROOT row created by ensureSpaceRoot), so we surface its id as
@@ -94,7 +94,7 @@ export async function resolveStance(stance, opts = {}) {
       spaceId: spaceRootId,
       leafId: spaceRootId,
       being,
-      history: branch,
+      history,
     });
   }
 
@@ -116,7 +116,7 @@ export async function resolveStance(stance, opts = {}) {
     const { findByName, loadOrFold } =
       await import("../materials/projections.js");
     if (being) {
-      const slot = await findByName("being", being, branch);
+      const slot = await findByName("being", being, history);
       if (!slot) {
         throw new IbpError(
           IBP_ERR.BEING_NOT_FOUND,
@@ -136,11 +136,11 @@ export async function resolveStance(stance, opts = {}) {
           `Cannot resolve "~" without an @qualifier and no caller identity`,
         );
       }
-      // loadOrFold (not loadProjection): on a branch, the caller's
+      // loadOrFold (not loadProjection): on a history, the caller's
       // being may have been created in main before the branch point,
-      // so the branch slot doesn't exist yet. loadOrFold walks the
+      // so the history slot doesn't exist yet. loadOrFold walks the
       // lineage and cold-folds from the appropriate reel.
-      const slot = await loadOrFold("being", identity.beingId, branch);
+      const slot = await loadOrFold("being", identity.beingId, history);
       if (!slot) {
         throw new IbpError(IBP_ERR.BEING_NOT_FOUND, `Caller being not found`, {
           beingId: String(identity.beingId),
@@ -166,10 +166,10 @@ export async function resolveStance(stance, opts = {}) {
     const subPath = path.slice(2).split("/").filter(Boolean);
 
     // loadOrFold (not loadProjection): user's home may have been
-    // created in main before the current branch. The lineage walk
-    // produces the correct slot for the branch.
+    // created in main before the current history. The lineage walk
+    // produces the correct slot for the history.
     const { loadOrFold: _lPhome } = await import("../materials/projections.js");
-    const _hSlot = await _lPhome("space", targetBeing.homeSpace, branch);
+    const _hSlot = await _lPhome("space", targetBeing.homeSpace, history);
     const homeSpace = _hSlot
       ? { _id: _hSlot.id, ...(_hSlot.state || {}) }
       : null;
@@ -211,7 +211,7 @@ export async function resolveStance(stance, opts = {}) {
         leafId: homeSpace._id,
         being,
         leafSpace: homeSpace,
-        history: branch,
+        history,
       });
     }
 
@@ -221,7 +221,7 @@ export async function resolveStance(stance, opts = {}) {
       ownerFilter: {},
       contextBeing: null,
       being,
-      branch,
+      history,
       startAt: { ...homeSpace, name: homeChainName },
     });
   }
@@ -237,7 +237,7 @@ export async function resolveStance(stance, opts = {}) {
     ownerFilter: {},
     contextBeing: null,
     being,
-    branch,
+    history,
   });
 }
 
@@ -263,9 +263,9 @@ function base(over = {}) {
     leafId: null,
     being: null,
     leafSpace: null,
-    // Branch the stance points at. Default "0" (main). The verb layer
+    // History the stance points at. Default "0" (main). The verb layer
     // reads this off the resolved stance to thread into moment and
-    // emitFact so every fact lands on the right branch's reel.
+    // emitFact so every fact lands on the right history's reel.
     history: "0",
     ...over,
   };
@@ -285,7 +285,7 @@ async function walkSpacePath({
   ownerFilter,
   contextBeing,
   being,
-  branch = "0",
+  history = "0",
   startAt = null,
 }) {
   const spaceRootId = getSpaceRootId();
@@ -333,11 +333,11 @@ async function walkSpacePath({
     // still match the unfiltered query, so relaxing is safe.
     const parentIsHeavenRegion = parentSeedSpace !== null;
     const allowSeedSpaceChildren = isHeavenDoor || parentIsHeavenRegion;
-    // Branch-aware segment lookup. The walker checks the current
-    // branch's slot first; on miss (and only on a non-main branch),
+    // History-aware segment lookup. The walker checks the current
+    // history's slot first; on miss (and only on a non-main history),
     // it falls through to main and validates the main slot existed
     // at branch creation via getBranchPoint (a tombstone in the
-    // branch defeats the fall-through). Same shadow+lineage pattern
+    // history defeats the fall-through). Same shadow+lineage pattern
     // as findByName/listSpaceChildren.
     const baseQuery = {
       type: "space",
@@ -374,12 +374,12 @@ async function walkSpacePath({
         "state.name": seg,
       }).lean();
     }
-    let _spaceRow = await _findIn(branch);
-    if (!_spaceRow && branch !== "0") {
+    let _spaceRow = await _findIn(history);
+    if (!_spaceRow && history !== "0") {
       const mainRow = await _findIn("0");
       if (mainRow) {
         const tomb = await Projection.findOne({
-          history: branch,
+          history,
           type: "space",
           id: mainRow.id,
           tombstoned: true,
@@ -389,7 +389,7 @@ async function walkSpacePath({
         if (!tomb) {
           const { getBranchPoint } =
             await import("../materials/history/histories.js");
-          const bp = await getBranchPoint(branch, "space", mainRow.id);
+          const bp = await getBranchPoint(history, "space", mainRow.id);
           if (bp && bp > 0) _spaceRow = mainRow;
         }
       }
@@ -431,6 +431,6 @@ async function walkSpacePath({
     leafId: leafSpace._id,
     being,
     leafSpace,
-    history: branch,
+    history,
   });
 }

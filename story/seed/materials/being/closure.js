@@ -18,8 +18,8 @@
 // → null). The dead being disappears from every SEE projection
 // without a per-call alive-filter. Identity-level state (name,
 // defaultRole, rolesGranted, homeSpace, parentBeingId) stays —
-// queryable as history. This module's `isBeingDead(beingId, branch)`
-// reads `qualities.death?.time` through `loadOrFold` so sub-branches
+// queryable as history. This module's `isBeingDead(beingId, history)`
+// reads `qualities.death?.time` through `loadOrFold` so sub-histories
 // that diverged see their effective view. The stamper (past/fact/facts.js emitFact) consults this
 // predicate before every emit; refusal surfaces as an IbpError so
 // upstream callers see a structured failure.
@@ -33,25 +33,25 @@ import { loadOrFold } from "../projections.js";
 
 /**
  * True if the being is closed (be:death stamped). Reads
- * `qualities.death?.time`. Branch-aware via loadOrFold.
+ * `qualities.death?.time`. History-aware via loadOrFold.
  *
  * Returns false for a missing being (no row to be closed) — callers
  * that need a being-existence check perform it separately.
  *
  * @param {string} beingId
- * @param {string} branch  REQUIRED — no main-bias default
+ * @param {string} history  REQUIRED — no main-bias default
  * @returns {Promise<boolean>}
  */
-export async function isBeingDead(beingId, branch) {
+export async function isBeingDead(beingId, history) {
   if (!beingId) return false;
-  if (typeof branch !== "string" || !branch.length) {
+  if (typeof history !== "string" || !history.length) {
     throw new Error(
-      "isBeingDead requires branch as a non-empty string. " +
-      "Pass moment?.actorAct?.history or the explicit branch the " +
+      "isBeingDead requires history as a non-empty string. " +
+      "Pass moment?.actorAct?.history or the explicit history the " +
       "read is happening on — no main-bias default.",
     );
   }
-  const slot = await loadOrFold("being", String(beingId), branch);
+  const slot = await loadOrFold("being", String(beingId), history);
   const time = slot?.state?.qualities?.death?.time;
   return !!time;
 }

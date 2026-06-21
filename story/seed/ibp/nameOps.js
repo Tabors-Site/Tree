@@ -176,6 +176,56 @@ async function releaseNameHandler({ addressedNameId, payload }) {
   return { nameId };
 }
 
+// set-password — add, change, or remove the Name's password AFTER declare. A
+// being password is optional because the Name owns the being; the password is
+// what encrypts the Name's private key at rest, so changing it means
+// re-encrypting the key — which requires HOLDING the key. Proof of holding it,
+// in order: pass it (importKey: a PEM or 24 BIP39 words), be unlocked (the
+// signing session holds the PEM from a prior sign-in/import), or — ONLY when the
+// Name has no password yet (system-encrypted) — the server key decrypts it. A
+// password-locked Name that is neither unlocked nor handed a key is refused.
+// A null/blank password REMOVES it (back to system-encrypted). The new
+// privateKeyEnc rides the fact as a SECRET_KEY (censored); the plaintext never does.
+async function setPasswordHandler({ addressedNameId, payload }) {
+  const nameId = addressedNameId || payload?.nameId || null;
+  if (!nameId) {
+    throw new IbpError(IBP_ERR.INVALID_INPUT,
+      "name set-password requires a target name (address it <nameId>@<storyDomain>)");
+  }
+  const { loadProjection } = await import("../materials/projections.js");
+  const slot = await loadProjection("name", String(nameId), "0");
+  if (!slot?.state) throw new IbpError(IBP_ERR.NAME_NOT_FOUND, `no such name: ${nameId}`);
+
+  // Resolve the private-key PEM — the proof of holding the key.
+  let pem = null;
+  if (payload?.importKey) {
+    pem = keypairFromImport(payload.importKey).privateKeyPem;
+  } else {
+    const { getSigningKey } = await import("../materials/name/signingSession.js");
+    pem = getSigningKey(String(nameId));
+    if (!pem) {
+      // No held key: this only works when the Name currently has NO password
+      // (its key is system-encrypted, so the server can decrypt it). A
+      // password-locked key needs an unlock or an importKey first.
+      const { decryptCredential } = await import("../materials/name/credentials.js");
+      pem = decryptCredential(slot.state.privateKeyEnc);
+    }
+  }
+  if (!pem || !/PRIVATE KEY/.test(String(pem))) {
+    throw new IbpError(IBP_ERR.FORBIDDEN,
+      "name set-password: hold the key to change its password — unlock the Name (sign in) or pass its private key (importKey).");
+  }
+  // The key MUST be this Name's key (its public key IS the nameId).
+  if (String(keypairFromPrivateKeyPem(String(pem)).nameId) !== String(nameId)) {
+    throw new IbpError(IBP_ERR.FORBIDDEN, "name set-password: that key is not this Name's key");
+  }
+
+  const privateKeyEnc = payload?.password
+    ? encryptWithPassword(String(pem), String(payload.password))
+    : encryptCredential(String(pem));
+  return { nameId, spec: { privateKeyEnc } };
+}
+
 export const NAME_OPS = Object.freeze({
   declare: {
     description: "Mint a new name (a facet of the story's I_AM) with its own keypair.",
@@ -194,6 +244,12 @@ export const NAME_OPS = Object.freeze({
     label:       "Release name",
     args:        {},
     handler:     releaseNameHandler,
+  },
+  "set-password": {
+    description: "Add, change, or remove the Name's password (re-encrypts its private key at rest); requires holding the key — unlock the Name or pass its key.",
+    label:       "Set name password",
+    args:        { password: { type: "string", label: "New password (blank to remove)", required: false } },
+    handler:     setPasswordHandler,
   },
   banish: {
     description: "The name tombstones itself; it can never sign a new fact again.",

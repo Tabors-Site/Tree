@@ -64,7 +64,7 @@
 //     remnants allow.
 //
 // In all three modes this file does the same thing. Open the
-// senses. Await genesis. The mode is not a branch in the code; it
+// senses. Await genesis. The mode is not a history in the code; it
 // is what spaces, matter, and beings genesis finds when it looks.
 //
 // One being, two natures.
@@ -128,7 +128,11 @@ import { getExtension } from "./resources/loader.js";
 import securityHeaders from "./transports/http/middleware/securityHeaders.js";
 import { genesis, printReady } from "./genesis.js";
 import { fork } from "child_process";
-import { noteHttpRequest, noteHttpListening, noteHttpShutdown } from "./seed/materials/host/requestLog.js";
+import {
+  noteHttpRequest,
+  noteHttpListening,
+  noteHttpShutdown,
+} from "./seed/materials/host/requestLog.js";
 import { getStoryUrl } from "./seed/storyIdentity.js";
 import log from "./seed/seedStory/log.js";
 
@@ -145,24 +149,31 @@ async function runFirstBootActions() {
   try {
     actions = JSON.parse(fs.readFileSync(actionsPath, "utf8"));
   } catch (err) {
-    log.warn("FirstBoot", `Could not parse .first-boot-actions.json: ${err.message}`);
+    log.warn(
+      "FirstBoot",
+      `Could not parse .first-boot-actions.json: ${err.message}`,
+    );
     return;
   }
   const { getSpaceRootId, getIAmBeingId } = await import("./seed/sprout.js");
-  const { getTemplate } = await import("./seed/materials/publish/templateRegistry.js");
-  const { plantTemplate } = await import("./seed/materials/publish/seedPlant.js");
+  const { getTemplate } =
+    await import("./seed/materials/publish/templateRegistry.js");
+  const { plantTemplate } =
+    await import("./seed/materials/publish/seedPlant.js");
   const rootSpaceId = getSpaceRootId();
   const iAm = getIAmBeingId();
   let plantedAny = false;
-  for (const action of (actions.plantTemplates || [])) {
+  for (const action of actions.plantTemplates || []) {
     const entry = getTemplate(action.name);
     if (!entry) {
-      log.warn("FirstBoot", `Template "${action.name}" not registered; skipping.`);
+      log.warn(
+        "FirstBoot",
+        `Template "${action.name}" not registered; skipping.`,
+      );
       continue;
     }
     try {
       await plantTemplate(entry.bundle, rootSpaceId, {
-        branch: "0",
         operatorBeingId: iAm,
         params: action.params || {},
       });
@@ -175,7 +186,11 @@ async function runFirstBootActions() {
   // Consume the marker only if everything planted (or nothing was asked).
   // Partial failure leaves the marker so the next boot retries.
   if ((actions.plantTemplates || []).length === 0 || plantedAny) {
-    try { fs.unlinkSync(actionsPath); } catch { /* best-effort */ }
+    try {
+      fs.unlinkSync(actionsPath);
+    } catch {
+      /* best-effort */
+    }
   }
 }
 
@@ -307,7 +322,9 @@ app.use((req, res, next) => {
         token: req.cookies?.token || null,
         at: Date.now(),
       });
-    } catch { /* observation must never break a response */ }
+    } catch {
+      /* observation must never break a response */
+    }
   });
   next();
 });
@@ -363,7 +380,7 @@ try {
   } else {
     mirrorProc = fork(scriptPath, [], {
       stdio: ["ignore", "pipe", "pipe", "ipc"],
-      env:   process.env,
+      env: process.env,
     });
     mirrorProc.stdout?.on("data", (b) => {
       const msg = String(b).trim();
@@ -400,12 +417,18 @@ async function handleMirrorWrite(msg) {
   if (!mirrorProc) return;
   const cid = msg.cid;
   const reply = (status, payload) => {
-    try { mirrorProc?.send({ type: "mount-reply", cid, status, ...payload }); }
-    catch { /* child gone */ }
+    try {
+      mirrorProc?.send({ type: "mount-reply", cid, status, ...payload });
+    } catch {
+      /* child gone */
+    }
   };
   const pushInvalidate = (payload) => {
-    try { mirrorProc?.send({ type: "mount-invalidate", ...payload }); }
-    catch { /* child gone */ }
+    try {
+      mirrorProc?.send({ type: "mount-invalidate", ...payload });
+    } catch {
+      /* child gone */
+    }
   };
   let result;
   try {
@@ -419,14 +442,23 @@ async function handleMirrorWrite(msg) {
 
 function mapMirrorError(err) {
   if (!err) return "EIO";
-  if (err.code === "EACCES" || err.code === "EEXIST" || err.code === "ENOENT"
-      || err.code === "ENOSPC" || err.code === "EXDEV" || err.code === "ENOTEMPTY"
-      || err.code === "EINVAL" || err.code === "EROFS" || err.code === "EIO") {
+  if (
+    err.code === "EACCES" ||
+    err.code === "EEXIST" ||
+    err.code === "ENOENT" ||
+    err.code === "ENOSPC" ||
+    err.code === "EXDEV" ||
+    err.code === "ENOTEMPTY" ||
+    err.code === "EINVAL" ||
+    err.code === "EROFS" ||
+    err.code === "EIO"
+  ) {
     return err.code;
   }
   // IbpError kinds: map to posix family.
   if (err.name === "IbpError") {
-    if (err.code === "FORBIDDEN" || err.code === "UNAUTHORIZED") return "EACCES";
+    if (err.code === "FORBIDDEN" || err.code === "UNAUTHORIZED")
+      return "EACCES";
     if (err.code === "SOURCE_READ_ONLY") return "EROFS";
     if (err.code === "RESOURCE_CONFLICT") return "EEXIST";
     if (err.code === "INVALID_INPUT") {
@@ -434,7 +466,8 @@ function mapMirrorError(err) {
       if (err.detail?.reason === "name-in-use") return "EEXIST";
       return "EINVAL";
     }
-    if (err.code === "MATTER_NOT_FOUND" || err.code === "SPACE_NOT_FOUND") return "ENOENT";
+    if (err.code === "MATTER_NOT_FOUND" || err.code === "SPACE_NOT_FOUND")
+      return "ENOENT";
   }
   return "EIO";
 }
@@ -457,7 +490,9 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
   async function readCurrentBytes(matterId) {
     const slot = await loadOrFold("matter", String(matterId), "0");
     if (!slot) {
-      throw Object.assign(new Error(`matter ${matterId} not found`), { code: "ENOENT" });
+      throw Object.assign(new Error(`matter ${matterId} not found`), {
+        code: "ENOENT",
+      });
     }
     const content = slot.state?.content;
     if (isCasRef(content) && content.hash) {
@@ -465,7 +500,11 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
       return buf || Buffer.alloc(0);
     }
     // Source-shaped ref: { path, kind, hash? }. Use hash when present.
-    if (content && typeof content === "object" && typeof content.hash === "string") {
+    if (
+      content &&
+      typeof content === "object" &&
+      typeof content.hash === "string"
+    ) {
       const buf = await getContent(content.hash);
       return buf || Buffer.alloc(0);
     }
@@ -490,7 +529,13 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
         { identity: I_AM, moment: ctx },
       );
     });
-    pushInvalidate({ path: msg.path, kind: "file", matterId, hash: ref.hash, size: ref.size });
+    pushInvalidate({
+      path: msg.path,
+      kind: "file",
+      matterId,
+      hash: ref.hash,
+      size: ref.size,
+    });
     return { hash: ref.hash, size: ref.size };
   }
 
@@ -517,19 +562,31 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
         { identity: I_AM, moment: ctx },
       );
     });
-    pushInvalidate({ path: msg.path, kind: "file", matterId, hash: ref.hash, size: ref.size });
+    pushInvalidate({
+      path: msg.path,
+      kind: "file",
+      matterId,
+      hash: ref.hash,
+      size: ref.size,
+    });
     return { hash: ref.hash, size: ref.size };
   }
 
   if (op === "create") {
-    const parentMatterId = msg.parentMatterId ? String(msg.parentMatterId) : null;
+    const parentMatterId = msg.parentMatterId
+      ? String(msg.parentMatterId)
+      : null;
     const name = String(msg.name || "");
     const sourceSpaceId = getSourceSpaceId();
     const target = parentMatterId
       ? { kind: "matter", id: parentMatterId }
-      : (sourceSpaceId ? { kind: "space", id: sourceSpaceId } : null);
+      : sourceSpaceId
+        ? { kind: "space", id: sourceSpaceId }
+        : null;
     if (!target) {
-      throw Object.assign(new Error("mirror: no parent target"), { code: "ENOENT" });
+      throw Object.assign(new Error("mirror: no parent target"), {
+        code: "ENOENT",
+      });
     }
     // Empty file at birth; vim et al. will subsequently write contents.
     // Encoding="utf8" treats the empty bytes as text so editors get the
@@ -545,7 +602,13 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
       );
       resultMatterId = r?.matterId || null;
     });
-    pushInvalidate({ path: msg.path, kind: "file", matterId: resultMatterId, hash: ref.hash, size: ref.size });
+    pushInvalidate({
+      path: msg.path,
+      kind: "file",
+      matterId: resultMatterId,
+      hash: ref.hash,
+      size: ref.size,
+    });
     return { matterId: resultMatterId, hash: ref.hash, size: ref.size };
   }
 
@@ -565,15 +628,14 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
 
   if (op === "rename") {
     const matterId = String(msg.matterId);
-    const replaceMatterId = msg.replace && msg.replaceMatterId
-      ? String(msg.replaceMatterId)
-      : null;
+    const replaceMatterId =
+      msg.replace && msg.replaceMatterId ? String(msg.replaceMatterId) : null;
     if (msg.sameParent) {
       // Atomic rename-replace: end the displaced row and rename the
       // source row in one moment so the destination path is never
       // empty between facts. The rename-matter handler skips its
       // per-folder uniqueness check when allowReplace is set; the
-      // caller (this branch) is responsible for ensuring the
+      // caller (this history) is responsible for ensuring the
       // colliding row is ended in the same withIAmAct, which is what
       // happens here.
       await withIAmAct(`mirror:rename`, async (ctx) => {
@@ -593,9 +655,18 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
         );
       });
       if (replaceMatterId) {
-        pushInvalidate({ path: msg.path, removed: true, matterId: replaceMatterId });
+        pushInvalidate({
+          path: msg.path,
+          removed: true,
+          matterId: replaceMatterId,
+        });
       }
-      pushInvalidate({ renamed: true, from: msg.from, path: msg.path, matterId });
+      pushInvalidate({
+        renamed: true,
+        from: msg.from,
+        path: msg.path,
+        matterId,
+      });
       return { renamed: true, replaced: !!replaceMatterId };
     }
     // Cross-parent rename: the simplest honest path (step 2) is a
@@ -605,13 +676,17 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
     // folders that are themselves matter rows).
     if (msg.newParentMatterId) {
       throw Object.assign(
-        new Error("mirror: cross-folder rename across matter folders is step 3"),
+        new Error(
+          "mirror: cross-folder rename across matter folders is step 3",
+        ),
         { code: "EXDEV" },
       );
     }
     const sourceSpaceId = getSourceSpaceId();
     if (!sourceSpaceId) {
-      throw Object.assign(new Error("mirror: no source space"), { code: "EIO" });
+      throw Object.assign(new Error("mirror: no source space"), {
+        code: "EIO",
+      });
     }
     await withIAmAct(`mirror:rename-move`, async (ctx) => {
       await doVerb(
@@ -636,14 +711,20 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
   }
 
   if (op === "mkdir") {
-    const parentMatterId = msg.parentMatterId ? String(msg.parentMatterId) : null;
+    const parentMatterId = msg.parentMatterId
+      ? String(msg.parentMatterId)
+      : null;
     const name = String(msg.name || "");
     const sourceSpaceId = getSourceSpaceId();
     const target = parentMatterId
       ? { kind: "matter", id: parentMatterId }
-      : (sourceSpaceId ? { kind: "space", id: sourceSpaceId } : null);
+      : sourceSpaceId
+        ? { kind: "space", id: sourceSpaceId }
+        : null;
     if (!target) {
-      throw Object.assign(new Error("mirror: no parent target"), { code: "ENOENT" });
+      throw Object.assign(new Error("mirror: no parent target"), {
+        code: "ENOENT",
+      });
     }
     let resultMatterId = null;
     await withIAmAct(`mirror:mkdir`, async (ctx) => {
@@ -659,7 +740,9 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
     return { matterId: resultMatterId };
   }
 
-  throw Object.assign(new Error(`mirror: unknown op "${op}"`), { code: "EINVAL" });
+  throw Object.assign(new Error(`mirror: unknown op "${op}"`), {
+    code: "EINVAL",
+  });
 }
 
 // Earth is whole. I mount the seed routers onto the app: rate limit,
@@ -695,7 +778,9 @@ const PORT = process.env.PORT || 80;
 server.listen(PORT, "0.0.0.0", () => {
   try {
     noteHttpListening({ port: Number(PORT) });
-  } catch { /* observation only */ }
+  } catch {
+    /* observation only */
+  }
   printReady();
 });
 
@@ -714,7 +799,9 @@ async function shutdown(signal) {
   // give the unmount a longer window than the read-only step 1
   // baseline (800ms → 3s) to drain.
   if (mirrorProc) {
-    try { mirrorProc.kill("SIGINT"); } catch {}
+    try {
+      mirrorProc.kill("SIGINT");
+    } catch {}
     await new Promise((r) => setTimeout(r, 3000));
   }
 

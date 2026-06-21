@@ -182,7 +182,7 @@ async function renameMatterHandler({ target, params, moment }) {
   const allowReplace = params?.allowReplace === true;
   target = await loadTargetRow(target, "matter", { moment });
   const matterId = String(target._id);
-  const branch = moment?.actorAct?.history || "0";
+  const history = moment?.actorAct?.history || "0";
   const spaceId = target.spaceId ? String(target.spaceId) : null;
   const parentMatterId = target.parentMatterId ? String(target.parentMatterId) : null;
   if (!spaceId) {
@@ -193,7 +193,7 @@ async function renameMatterHandler({ target, params, moment }) {
     // projection. A name collision throws INVALID_INPUT carrying a
     // tag the IPC bridge maps to EEXIST.
     const { listMatterNamesInFolder } = await import("../projections.js");
-    const existing = await listMatterNamesInFolder(branch, spaceId, parentMatterId);
+    const existing = await listMatterNamesInFolder(history, spaceId, parentMatterId);
     const taken = new Set(existing.map((n) => String(n).toLowerCase()));
     // Strip the current name from the taken set so renaming to the
     // same name is a no-op (not a collision).
@@ -218,12 +218,12 @@ async function renameMatterHandler({ target, params, moment }) {
 async function endMatterHandler({ target, identity, moment }) {
   const matterId = targetIdOf(target);
   if (!matterId) throw new Error("end-matter: matterId required");
-  const branch = moment?.actorAct?.history || "0";
+  const history = moment?.actorAct?.history || "0";
   const { deleteMatterAndFile } = await import("./matters.js");
   let beingId = identity?.beingId;
   if (!beingId) {
     const { loadOrFold } = await import("../projections.js");
-    const matterSlot = await loadOrFold("matter", matterId, branch);
+    const matterSlot = await loadOrFold("matter", matterId, history);
     beingId = matterSlot?.state?.beingId || null;
   }
   await deleteMatterAndFile({
@@ -261,10 +261,10 @@ async function purgeContentHandler({ target, params, identity, moment }) {
   if (!identity?.beingId) {
     throw new IbpError(IBP_ERR.UNAUTHORIZED, "purge-content: identity required");
   }
-  const branch = moment?.actorAct?.history || "0";
+  const history = moment?.actorAct?.history || "0";
 
   const { loadOrFold } = await import("../projections.js");
-  const slot = await loadOrFold("matter", String(matterId), branch);
+  const slot = await loadOrFold("matter", String(matterId), history);
   if (!slot) throw new IbpError(IBP_ERR.INVALID_INPUT, "purge-content: matter not found");
   const matter = { _id: slot.id, ...(slot.state || {}) };
 
@@ -293,7 +293,7 @@ async function purgeContentHandler({ target, params, identity, moment }) {
     );
   }
 
-  // Shared-fate refcount: other live matter (any branch) whose CURRENT
+  // Shared-fate refcount: other live matter (any history) whose CURRENT
   // content is this hash. Purging would blind them — refuse without
   // force.
   const force = params?.force === true || params?.force === "true";
@@ -326,7 +326,7 @@ async function purgeContentHandler({ target, params, identity, moment }) {
     of:      { kind: "matter", id: String(matterId) },
     params:  { hash, force, referents: others.length },
     actId:   moment?.actId || null,
-    history: branch,
+    history: history,
   }, moment);
 
   const doDelete = async () => {

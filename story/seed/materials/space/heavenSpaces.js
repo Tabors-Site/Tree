@@ -135,13 +135,13 @@ export const HEAVEN_SPACE = Object.freeze({
   // off it). SEE returns the live forest. See
   // seed/materials/space/threads.js.
   THREADS: "threads",
-  // The branches space. Each child names a divergent world by path
+  // The histories space. Each child names a divergent world by path
   // ("1", "1a", "1a1", ...); main itself is the implicit "0" and has
-  // no child here. Children carry branch metadata in their qualities
+  // no child here. Children carry history metadata in their qualities
   // (parent, branchPoint, label, paused state). SEE on
-  // `<story>/./branches` returns the branch tree; the underlying
-  // truth is the Branch Mongo collection (one row per non-main
-  // branch). See seed/materials/history/histories.js for the read
+  // `<story>/./branches` returns the history tree; the underlying
+  // truth is the History Mongo collection (one row per non-main
+  // history). See seed/materials/history/histories.js for the read
   // helpers and seed/timeline.md for the doctrine.
   BRANCHES: "branches",
   // The host tier: the running machine represented through the same
@@ -159,9 +159,9 @@ export const HEAVEN_SPACE = Object.freeze({
   // The factory tier: the stamping machinery, watched. `factory` is
   // tier-3 under heaven; its two children are read-side projections
   // over Act + Fact rows — nothing new is stored. `present` shows
-  // one stamper lane per (being, branch): the stamped papers laid
+  // one stamper lane per (being, history): the stamped papers laid
   // along the chain, the stamper figure at the head, forks splitting
-  // where branches were born. `past` lists the reels. For beings
+  // where histories were born. `past` lists the reels. For beings
   // examining how the machinery works (why a packet stuck at the
   // stamper, where a trail broke) — the host is the computer; the
   // factory is the mechanism. See seed/materials/space/factory.js.

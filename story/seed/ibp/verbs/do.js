@@ -76,11 +76,11 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     throw new Error(`Unknown DO operation: "${operation}". Use story.do.listOperations() to see available operations.`);
   }
 
-  // Resolve branch ONCE at the entry point. moment.actorAct?.history wins when
+  // Resolve history ONCE at the entry point. moment.actorAct?.history wins when
   // inside an existing moment (continuation); otherwise opts.currentHistory
   // from the wire layer. resolveHistoryForFact throws MISSING_BRANCH if
   // both are absent — silent default to "0" hid threading bugs.
-  const branch = resolveHistoryForFact(opts.moment, opts.currentHistory, "do");
+  const history = resolveHistoryForFact(opts.moment, opts.currentHistory, "do");
 
   // Source matter joins the normal chain rule (philosophy/OS/MIRROR.md
   // step 2). Writes through the mirror mount land as sealed facts on
@@ -103,7 +103,7 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     const { detectTargetKind, targetIdOf } = await import("../../materials/_targetShape.js");
     if (detectTargetKind(target) === "matter") {
       const { loadOrFold } = await import("../../materials/projections.js");
-      const slot = await loadOrFold("matter", String(targetIdOf(target)), branch);
+      const slot = await loadOrFold("matter", String(targetIdOf(target)), history);
       const matterType = slot?.state?.type || "generic";
       if (!op.matterTypes.includes(matterType)) {
         throw new IbpError(
@@ -142,7 +142,7 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     // lives at so the role-walk has a coherent path/spaceId to match
     // against role.reach + role host coverage.
     const auditTarget = resolveAuditTarget(target, null, op);
-    const spaceIdForAuth = await resolveAuthSpaceId(target, auditTarget, branch);
+    const spaceIdForAuth = await resolveAuthSpaceId(target, auditTarget, history);
     // Extract namespace for namespace-aware authorization. Three
     // forms handled: legacy set-qualities/clear-qualities (params.namespace),
     // and the material-scoped set-<kind> ops with
@@ -176,10 +176,10 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     const decision = await authorize({
       identity,
       verb:   "do",
-      // target.history = the branch this DO's Fact lands on (resolved
+      // target.history = the history this DO's Fact lands on (resolved
       // once at the verb entry). Auth evaluates the same world the
       // stamp rides.
-      target: { kind: "position", spaceId: spaceIdForAuth, history: branch },
+      target: { kind: "position", spaceId: spaceIdForAuth, history: history },
       action: authAction,
       namespace,
       // The being this DO acts ON (when it's a being op). authorize uses
@@ -191,8 +191,8 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
           ? String(auditTarget.id)
           : null,
       moment: opts.moment,
-      // The caller's branch (session.currentHistory). Their grants
-      // live there; target may be on a different branch. See
+      // The caller's history (session.currentHistory). Their grants
+      // live there; target may be on a different history. See
       // authorize.js "actorHistory vs targetHistory."
       actorHistory: opts.currentHistory || null,
     });
@@ -210,11 +210,11 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     params: params || {},
     identity: opts.identity,
     moment: opts.moment || null,
-    // The branch this DO's Fact lands on (resolved once at verb entry,
+    // The history this DO's Fact lands on (resolved once at verb entry,
     // same value authorize() gates against). Ops that resolve other
-    // material on this branch (e.g. inheritation name lookups) read it
+    // material on this history (e.g. inheritation name lookups) read it
     // here instead of re-deriving from moment.
-    history: branch,
+    history: history,
   };
 
   // Top-level operation count for the moment (one-moment-one-act
@@ -259,11 +259,11 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
       params:  ctx.params,
       result:  summarizeAuditResult(result),
       actId,
-      // Branch this fact lands on, pre-resolved at the entry. Inherited
+      // History this fact lands on, pre-resolved at the entry. Inherited
       // from the moment's moment (set by assign from the intake
       // entry, which the wire layer fills from the parsed `#`
       // qualifier) or attached as opts.currentHistory by the wire.
-      history: branch,
+      history: history,
     }, opts.moment);
   }
 
@@ -301,7 +301,7 @@ doVerb.listOperations = listOperations;
  * Returns null when nothing resolves (rare; the auth chain falls
  * through to the story root via getSpaceRootId in the role-walk).
  */
-async function resolveAuthSpaceId(target, auditTarget, branch) {
+async function resolveAuthSpaceId(target, auditTarget, history) {
   // The audit target's kind tells us what to look up. When the
   // op-handler already returned a kind (via result._factTarget or
   // schema-typed shapes), trust it.
@@ -310,39 +310,39 @@ async function resolveAuthSpaceId(target, auditTarget, branch) {
   if (!id) return null;
 
   if (kind === "space") return id;
-  // loadOrFold (not loadProjection): on a fresh branch the target's
+  // loadOrFold (not loadProjection): on a fresh history the target's
   // slot hasn't been cold-folded yet. resolveAuthSpaceId returning null
   // sends authorize() to "no space, no rule" which denies the write.
   // Walking the lineage gets the same answer the user gets on main
   // until they explicitly diverge.
   const { loadOrFold } = await import("../../materials/projections.js");
 
-  // Branch is required — strict-default doctrine. Authorize walks
-  // permissions on the branch the act is happening on; reading the
-  // wrong branch's slot returns the wrong position and the wrong
+  // History is required — strict-default doctrine. Authorize walks
+  // permissions on the history the act is happening on; reading the
+  // wrong history's slot returns the wrong position and the wrong
   // ancestor chain, which silently rejects writes that should pass.
-  if (typeof branch !== "string" || !branch.length) {
+  if (typeof history !== "string" || !history.length) {
     throw new Error(
-      `resolveAuthSpaceId: branch is required (got ${JSON.stringify(branch)})`,
+      `resolveAuthSpaceId: history is required (got ${JSON.stringify(history)})`,
     );
   }
 
   // For being/matter, look up the live slot's position / spaceId.
   if (kind === "being") {
-    const slot = await loadOrFold("being", id, branch);
+    const slot = await loadOrFold("being", id, history);
     return slot?.position || slot?.state?.homeSpace || null;
   }
   if (kind === "matter") {
-    const slot = await loadOrFold("matter", id, branch);
+    const slot = await loadOrFold("matter", id, history);
     return slot?.state?.spaceId ? String(slot.state.spaceId) : null;
   }
 
   // Kind unknown. Probe each type in order.
-  const spaceSlot = await loadOrFold("space", id, branch);
+  const spaceSlot = await loadOrFold("space", id, history);
   if (spaceSlot) return String(spaceSlot.id);
-  const beingSlot = await loadOrFold("being", id, branch);
+  const beingSlot = await loadOrFold("being", id, history);
   if (beingSlot) return beingSlot.position || beingSlot.state?.homeSpace || null;
-  const matterSlot = await loadOrFold("matter", id, branch);
+  const matterSlot = await loadOrFold("matter", id, history);
   if (matterSlot) {
     return matterSlot.state?.spaceId ? String(matterSlot.state.spaceId) : null;
   }
@@ -358,14 +358,14 @@ async function resolveAuthSpaceId(target, auditTarget, branch) {
  * sanctioned carve-out) should it want to consult it. Nothing in
  * the seed calls this anymore.
  */
-async function checkReadOnlySource(target, branch) {
+async function checkReadOnlySource(target, history) {
   if (!target || typeof target !== "object") return null;
 
   // Typed matter target: load the row and check its type.
   if (target.kind === "matter" && target.id != null) {
     try {
       const { loadOrFold } = await import("../../materials/projections.js");
-      const slot = await loadOrFold("matter", String(target.id), branch || "0");
+      const slot = await loadOrFold("matter", String(target.id), history || "0");
       if ((slot?.state?.type || "generic") === "source") {
         return "Cannot DO write on source matter: the seed's disk mirror is read-only";
       }

@@ -79,7 +79,7 @@ export async function dispatchIbp(carrier, msg, ack) {
   if (!carrier?.canopyVerifiedSender && env.addressKind !== "see-op") {
     const foreign = getForeignTargetDomain(env.address);
     if (foreign) {
-      // Caller's home identity. beingId from the carrier; branch from
+      // Caller's home identity. beingId from the carrier; history from
       // the carrier's currentHistory (the actor's home world). Without
       // a beingId we can't open a local Act, so we fall back to a
       // bare forward (anonymous SEE etc.) which doesn't attach to any
@@ -96,6 +96,9 @@ export async function dispatchIbp(carrier, msg, ack) {
           );
           const { peerAck } = await crossStoryDispatch({
             envelope: env,
+            // `branch` tuple key carries the actor's home HISTORY — kept
+            // as `branch` because seed/ibp/crossWorld.js reads actor.branch
+            // across the cross-world Act-chain (SEAM: rename in lockstep).
             actor: { beingId: actorBeingId, branch: actorHistory, nameId: actorNameId },
             identity: { beingId: actorBeingId, name: carrier?.name || null, nameId: actorNameId },
           });

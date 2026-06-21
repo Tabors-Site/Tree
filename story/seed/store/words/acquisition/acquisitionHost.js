@@ -41,7 +41,7 @@ export function acquisitionHostEnv() {
         anchorSpaceId:  found?.anchor,
         grantedBy:      String(caller),
         moment:      ctx?.moment || null,
-        branch:          historyOf(ctx),
+        history:          historyOf(ctx),
       });
       return true;
     },
@@ -54,18 +54,18 @@ export function acquisitionHostEnv() {
     // owner-of(found) -> the OWNER BEING of the role's anchor space (a read; the queue
     // path reaches them). null when the anchor space has no owner.
     "owner-of": async ({ args: [found] }, ctx) => {
-      const branch = historyOf(ctx);
-      const hostSlot = await loadOrFold("space", String(found?.anchor), branch);
+      const history = historyOf(ctx);
+      const hostSlot = await loadOrFold("space", String(found?.anchor), history);
       const ownerId = hostSlot?.state?.owner;
       if (!ownerId) return null;
-      return await loadOrFold("being", String(ownerId), branch);
+      return await loadOrFold("being", String(ownerId), history);
     },
     // role-request(role, found, caller) -> the request payload the owner's inbox receives
     // (a pure compute, no fact). Byte-identical to the prior content build, so the asker
     // stays identified in the content even when the call envelope's `from` is ctx.identity.
     "role-request": async ({ args: [role, found, caller] }, ctx) => {
-      const branch = historyOf(ctx);
-      const askerSlot = await loadOrFold("being", String(caller), branch);
+      const history = historyOf(ctx);
+      const askerSlot = await loadOrFold("being", String(caller), history);
       return {
         role:          String(role),
         anchorSpaceId: found?.anchor,

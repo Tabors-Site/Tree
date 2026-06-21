@@ -77,7 +77,11 @@
 
 import mongoose from "./seed/seedStory/dbConfig.js";
 import { getStoryIdentity, getStoryUrl } from "./seed/storyIdentity.js";
-import { ensureSpaceRoot, withGenesisGuard, withIAmAct } from "./seed/sprout.js";
+import {
+  ensureSpaceRoot,
+  withGenesisGuard,
+  withIAmAct,
+} from "./seed/sprout.js";
 import { initStoryConfig, getStoryConfigValue } from "./seed/storyConfig.js";
 import { getInternalConfigValue } from "./seed/internalConfig.js";
 import {
@@ -172,15 +176,17 @@ export async function genesis(app, opts = {}) {
   let plantedFromSeed = false;
   if (process.env.PLANT_FROM_GRAFT) {
     const path = await import("path");
-    const { GRAFTS_FOLDER, plantGraft } = await import("./seed/materials/publish/graft.js");
+    const { GRAFTS_FOLDER, plantGraft } =
+      await import("./seed/materials/publish/graft.js");
     const raw = process.env.PLANT_FROM_GRAFT;
     // Filename-only (no separator, not absolute) → resolve against
     // story/seeds/. Anything with a separator or absolute → use
     // as-is. This lets operators say PLANT_FROM_GRAFT=alice.graft.json
     // and have it Just Work from the canonical folder.
-    const seedPath = (raw.includes("/") || path.isAbsolute(raw))
-      ? raw
-      : path.join(GRAFTS_FOLDER, raw);
+    const seedPath =
+      raw.includes("/") || path.isAbsolute(raw)
+        ? raw
+        : path.join(GRAFTS_FOLDER, raw);
     log.info("Genesis", `Plant mode: replaying seed from ${seedPath}`);
     const { readFile } = await import("fs/promises");
     const seedJson = await readFile(seedPath, "utf8");
@@ -189,8 +195,8 @@ export async function genesis(app, opts = {}) {
     log.info(
       "Genesis",
       `Plant complete: ${result.counts.facts} facts, ${result.counts.acts} acts, ` +
-      `${result.counts.branches} branches, ${result.counts.reelHeads} reel heads. ` +
-      `Cold-folding to materialize projections...`,
+        `${result.counts.histories} histories, ${result.counts.reelHeads} reel heads. ` +
+        `Cold-folding to materialize projections...`,
     );
     // Materialize projections by walking every reelHead and folding.
     // The substrate's read paths use loadOrFold, but downstream
@@ -202,7 +208,9 @@ export async function genesis(app, opts = {}) {
     const { loadOrFold } = await import("./seed/materials/projections.js");
     const heads = await ReelHead.find({}).lean();
     for (const head of heads) {
-      try { await loadOrFold(head.type, head.id, head.branch); } catch {}
+      try {
+        await loadOrFold(head.type, head.id, head.history);
+      } catch {}
     }
     log.info("Genesis", `Cold-fold complete (${heads.length} aggregates).`);
     plantedFromSeed = true;
@@ -217,7 +225,9 @@ export async function genesis(app, opts = {}) {
   const existingRoot = await Space.findOne({ parent: null }).lean();
   bootMode = plantedFromSeed
     ? "Restored"
-    : existingRoot ? "Awakening" : "Beginning";
+    : existingRoot
+      ? "Awakening"
+      : "Beginning";
   // No pre-announcement here — the I-Am's first act ("I am that I am",
   // stamped inside ensureIAm) IS the birth statement, and it lives on
   // the chain rather than the console. ensureIAm logs the matching
@@ -245,8 +255,7 @@ export async function genesis(app, opts = {}) {
     await import("./seed/materials/being/seedDelegates.js");
   const { getSpaceRootId, getIAmBeingId, ensureIAm, setIAmHomeSpace } =
     await import("./seed/sprout.js");
-  const { findByHeavenSpace } =
-    await import("./seed/materials/projections.js");
+  const { findByHeavenSpace } = await import("./seed/materials/projections.js");
   const { HEAVEN_SPACE } =
     await import("./seed/materials/space/heavenSpaces.js");
 
@@ -271,10 +280,14 @@ export async function genesis(app, opts = {}) {
         const { seedFold } = await import("./seed/present/word/wordFold.js");
         await seedFold({ moment: ctx });
       });
-      const { rehydrateWordProjection } = await import("./seed/present/word/wordStore.js");
+      const { rehydrateWordProjection } =
+        await import("./seed/present/word/wordStore.js");
       await rehydrateWordProjection("0");
     } catch (err) {
-      log.warn("Genesis", `seedFold (the seed declaring itself) failed: ${err.message}`);
+      log.warn(
+        "Genesis",
+        `seedFold (the seed declaring itself) failed: ${err.message}`,
+      );
     }
   };
 
@@ -309,16 +322,24 @@ export async function genesis(app, opts = {}) {
       // Step 5: register the delegates on the place root's
       // qualities.beings. Its own moment.
       if (seedDelegateRoster && Object.keys(seedDelegateRoster).length > 0) {
-        await withIAmAct("I register my delegates on the place root", async (ctx) => {
-          const { doVerb } = await import("./seed/ibp/verbs/do.js");
-          const { I_AM } = await import("./seed/materials/being/seedBeings.js");
-          await doVerb(
-            { kind: "space", id: String(getSpaceRootId()) },
-            "set-space",
-            { field: "qualities.beings", value: seedDelegateRoster, merge: true },
-            { identity: I_AM, moment: ctx },
-          );
-        });
+        await withIAmAct(
+          "I register my delegates on the place root",
+          async (ctx) => {
+            const { doVerb } = await import("./seed/ibp/verbs/do.js");
+            const { I_AM } =
+              await import("./seed/materials/being/seedBeings.js");
+            await doVerb(
+              { kind: "space", id: String(getSpaceRootId()) },
+              "set-space",
+              {
+                field: "qualities.beings",
+                value: seedDelegateRoster,
+                merge: true,
+              },
+              { identity: I_AM, moment: ctx },
+            );
+          },
+        );
       }
     });
   } else {
@@ -326,14 +347,14 @@ export async function genesis(app, opts = {}) {
     // (place root id, I-Am being id). Call ensureSpaceRoot to walk
     // its detect-existing path — it finds the planted place root,
     // populates caches, and skips creation (no fact emitted, no
-    // moment opened on this branch).
+    // moment opened on this history).
     await ensureSpaceRoot();
     // The planted chain already carries the word-declarations; declare (dedup-skips) + rehydrate to
     // fill the live projection from the planted state, so the dispatch reads the fold.
     await declareTheWords();
   }
 
-  // (The seed declared itself BEFORE the reality — Step 1.5 above, and the planted else-branch — so
+  // (The seed declared itself BEFORE the reality — Step 1.5 above, and the planted else-history — so
   // every bootstrap do-op dispatched fold-only. Nothing left to declare here.)
 
   // ── POST-GENESIS RECONCILIATIONS ──
@@ -353,7 +374,8 @@ export async function genesis(app, opts = {}) {
     // I mirror the story/ directory into space and matter under
     // `.source`. The source-space id cache primes for the read-only
     // DO gate, then the disk walk runs detached.
-    const { ensureSourceTree } = await import("./seed/materials/space/source.js");
+    const { ensureSourceTree } =
+      await import("./seed/materials/space/source.js");
     await ensureSourceTree();
     log.info("Genesis", "I see my own body.");
 
@@ -424,10 +446,16 @@ export async function genesis(app, opts = {}) {
       await import("./seed/materials/being/pullBack.js");
     const result = await pullBackForeignPositions();
     if (result.pulledBack > 0) {
-      log.info("Genesis", `I called ${result.pulledBack} being(s) home from foreign worlds.`);
+      log.info(
+        "Genesis",
+        `I called ${result.pulledBack} being(s) home from foreign worlds.`,
+      );
     }
   } catch (err) {
-    log.warn("Genesis", `pull-back scan failed: ${err.message}. Foreign-positioned beings remain pending; their canopy round-trip will reconcile on first use.`);
+    log.warn(
+      "Genesis",
+      `pull-back scan failed: ${err.message}. Foreign-positioned beings remain pending; their canopy round-trip will reconcile on first use.`,
+    );
   }
 
   // Register seed-shipped role specs into the role registry. The
@@ -476,7 +504,12 @@ export async function genesis(app, opts = {}) {
   // instead of relying on the implicit no-tool-call → cognitionSee path.
   const { seedEndTurnTool } =
     await import("./seed/present/cognition/llm/seedEndTurnTool.js");
-  await registerSeedTools([seedDoTool, seedCallTool, seedBeTool, seedEndTurnTool]);
+  await registerSeedTools([
+    seedDoTool,
+    seedCallTool,
+    seedBeTool,
+    seedEndTurnTool,
+  ]);
 
   // The receptive role every human being carries. Without it, SUMMONs
   // to a human are rejected with ROLE_UNAVAILABLE. The role's summon
@@ -496,15 +529,17 @@ export async function genesis(app, opts = {}) {
   // role-manager: authors and edits live-defined roles. canDo:["set-role"].
   // After this registration, the live-role boot loader (later in genesis)
   // walks ./roles/* for origin:"live" entries and registers them too.
-  const { roleManagerRole } = await import("./seed/present/roles/role-manager/role.js");
+  const { roleManagerRole } =
+    await import("./seed/present/roles/role-manager/role.js");
   registerRole("role-manager", roleManagerRole, "seed");
 
-  // branch-manager: creates branches (divergent worlds) from past
-  // points of existing branches. canDo:["create-branch"]. Substrate
+  // history-manager: creates histories (divergent worlds) from past
+  // points of existing histories. canDo:["create-history"]. Substrate
   // helpers in seed/materials/history/ do the path arithmetic and
-  // branchPoint snapshotting; the role just routes the op.
-  const { historyManagerRole } = await import("./seed/present/roles/branch-manager/role.js");
-  registerRole("branch-manager", historyManagerRole, "seed");
+  // historyPoint snapshotting; the role just routes the op.
+  const { historyManagerRole } =
+    await import("./seed/present/roles/history-manager/role.js");
+  registerRole("history-manager", historyManagerRole, "seed");
 
   // federation-manager: negotiates transfers (push / pull) with peer
   // realities. Operator triggers offer-template / offer-being (push) or
@@ -513,15 +548,18 @@ export async function genesis(app, opts = {}) {
   // etc.) from peer federation-managers. Seed and graft are the data
   // primitives (template = shape, being = entity); this role is the social
   // protocol on top of them. See protocols/ibp/FEDERATION.md.
-  const { federationManagerRole } = await import("./seed/present/roles/federation-manager/role.js");
+  const { federationManagerRole } =
+    await import("./seed/present/roles/federation-manager/role.js");
   registerRole("federation-manager", federationManagerRole, "seed");
 
   // The host tier (nodeServerTest Phase 1): the HTTP listener, the
   // WebSocket pool, and the Mongo connection as beings. Scripted
   // cognition; their lifecycle code lives in seed/materials/host/.
-  const { httpServerRole } = await import("./seed/present/roles/http-server/role.js");
+  const { httpServerRole } =
+    await import("./seed/present/roles/http-server/role.js");
   registerRole("http-server", httpServerRole, "seed");
-  const { websocketPoolRole } = await import("./seed/present/roles/websocket-pool/role.js");
+  const { websocketPoolRole } =
+    await import("./seed/present/roles/websocket-pool/role.js");
   registerRole("websocket-pool", websocketPoolRole, "seed");
   const { mongoRole } = await import("./seed/present/roles/mongo/role.js");
   registerRole("mongo-connection", mongoRole, "seed");
@@ -529,27 +567,30 @@ export async function genesis(app, opts = {}) {
   // role-finder: LLM helper that authors live roles from English.
   // Summon @role-finder, describe what a being should be able to do,
   // it surfaces matches in ./roles or drafts a new role via set-role.
-  const { roleFinderRole } = await import("./seed/present/roles/role-finder/role.js");
+  const { roleFinderRole } =
+    await import("./seed/present/roles/role-finder/role.js");
   registerRole("role-finder", roleFinderRole, "seed");
 
   // roleflow-composer: LLM helper that authors a being's roleFlow
   // (the behavioral program that picks which role applies per moment).
   // Summon @roleflow-composer, describe a being's behavior, it
   // produces the structured roleFlow and writes via set-being-roleflow.
-  const { roleflowComposerRole } = await import("./seed/present/roles/roleflow-composer/role.js");
+  const { roleflowComposerRole } =
+    await import("./seed/present/roles/roleflow-composer/role.js");
   registerRole("roleflow-composer", roleflowComposerRole, "seed");
 
   // merge-mediator: LLM helper that walks the operator through
-  // resolving conflicts on a merged branch. Created by the
-  // merge-branches op; reconciliation facts stamp via normal state-
+  // resolving conflicts on a merged history. Created by the
+  // merge-histories op; reconciliation facts stamp via normal state-
   // setting ops with params._merge metadata.
-  const { mergeMediatorRole } = await import("./seed/present/roles/merge-mediator/role.js");
+  const { mergeMediatorRole } =
+    await import("./seed/present/roles/merge-mediator/role.js");
   registerRole("merge-mediator", mergeMediatorRole, "seed");
 
-  // (The @branch-registry delegate retired 2026-06-04 with the
-  // "heaven never branches" landing. Named pointers now live on the
-  // .branches heaven space's qualities; set-pointer / delete-pointer
-  // DO ops live alongside merge-branches on @branch-manager.)
+  // (The @history-registry delegate retired 2026-06-04 with the
+  // "heaven never histories" landing. Named pointers now live on the
+  // .histories heaven space's qualities; set-pointer / delete-pointer
+  // DO ops live alongside merge-histories on @history-manager.)
 
   // The shared stance every unauthenticated visitor carries. SEE
   // bypasses the scheduler so many concurrent visitors share one
@@ -571,7 +612,8 @@ export async function genesis(app, opts = {}) {
   // llm-assigner is registered before the host/grant loop); the
   // registry entries are stubs that surface canX for the role-walk.
   const { cherubRole } = await import("./seed/store/words/cherub/role.js");
-  const { llmAssignerRole } = await import("./seed/present/roles/llm-assigner/role.js");
+  const { llmAssignerRole } =
+    await import("./seed/present/roles/llm-assigner/role.js");
   registerRole("cherub", cherubRole, "seed");
   registerRole("llm-assigner", llmAssignerRole, "seed");
 
@@ -610,8 +652,10 @@ export async function genesis(app, opts = {}) {
   // grant.anchorSpaceId up the qualities ancestor chain.
   if (!plantedFromSeed) {
     const { hostRoleAt } = await import("./seed/present/roles/host.js");
-    const { findByHeavenSpace } = await import("./seed/materials/projections.js");
-    const { HEAVEN_SPACE } = await import("./seed/materials/space/heavenSpaces.js");
+    const { findByHeavenSpace } =
+      await import("./seed/materials/projections.js");
+    const { HEAVEN_SPACE } =
+      await import("./seed/materials/space/heavenSpaces.js");
     const { I_AM } = await import("./seed/materials/being/seedBeings.js");
     const heaven = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, "0");
     const storyRootId = getSpaceRootId();
@@ -626,7 +670,13 @@ export async function genesis(app, opts = {}) {
         await hostRoleAt(String(storyRootId), "global", globalRole, I_AM, ctx);
       });
       await withIAmAct("I install arrival on the story root", async (ctx) => {
-        await hostRoleAt(String(storyRootId), "arrival", arrivalRole, I_AM, ctx);
+        await hostRoleAt(
+          String(storyRootId),
+          "arrival",
+          arrivalRole,
+          I_AM,
+          ctx,
+        );
       });
       // Host every other seed delegate role on the story root too.
       // Per the single-gate doctrine, the role-walk authorize finds each
@@ -634,18 +684,30 @@ export async function genesis(app, opts = {}) {
       // registry-fallback hack). Each one-op-per-moment.
       const { humanRole } = await import("./seed/present/roles/human/role.js");
       const { cherubRole } = await import("./seed/store/words/cherub/role.js");
-      const { birtherRole } = await import("./seed/present/roles/birther/role.js");
-      const { storyManagerRole } = await import("./seed/present/roles/story-manager/role.js");
-      const { roleManagerRole } = await import("./seed/present/roles/role-manager/role.js");
-      const { roleFinderRole } = await import("./seed/present/roles/role-finder/role.js");
-      const { roleflowComposerRole } = await import("./seed/present/roles/roleflow-composer/role.js");
-      const { historyManagerRole } = await import("./seed/present/roles/branch-manager/role.js");
-      const { mergeMediatorRole } = await import("./seed/present/roles/merge-mediator/role.js");
-      const { llmAssignerRole } = await import("./seed/present/roles/llm-assigner/role.js");
-      const { publicRole } = await import("./seed/present/roles/public/role.js");
-      const { httpServerRole: httpServerRoleSpec } = await import("./seed/present/roles/http-server/role.js");
-      const { websocketPoolRole: websocketPoolRoleSpec } = await import("./seed/present/roles/websocket-pool/role.js");
-      const { mongoRole: mongoRoleSpec } = await import("./seed/present/roles/mongo/role.js");
+      const { birtherRole } =
+        await import("./seed/present/roles/birther/role.js");
+      const { storyManagerRole } =
+        await import("./seed/present/roles/story-manager/role.js");
+      const { roleManagerRole } =
+        await import("./seed/present/roles/role-manager/role.js");
+      const { roleFinderRole } =
+        await import("./seed/present/roles/role-finder/role.js");
+      const { roleflowComposerRole } =
+        await import("./seed/present/roles/roleflow-composer/role.js");
+      const { historyManagerRole } =
+        await import("./seed/present/roles/history-manager/role.js");
+      const { mergeMediatorRole } =
+        await import("./seed/present/roles/merge-mediator/role.js");
+      const { llmAssignerRole } =
+        await import("./seed/present/roles/llm-assigner/role.js");
+      const { publicRole } =
+        await import("./seed/present/roles/public/role.js");
+      const { httpServerRole: httpServerRoleSpec } =
+        await import("./seed/present/roles/http-server/role.js");
+      const { websocketPoolRole: websocketPoolRoleSpec } =
+        await import("./seed/present/roles/websocket-pool/role.js");
+      const { mongoRole: mongoRoleSpec } =
+        await import("./seed/present/roles/mongo/role.js");
       const installs = [
         ["human", humanRole],
         ["cherub", cherubRole],
@@ -654,7 +716,7 @@ export async function genesis(app, opts = {}) {
         ["role-manager", roleManagerRole],
         ["role-finder", roleFinderRole],
         ["roleflow-composer", roleflowComposerRole],
-        ["branch-manager", historyManagerRole],
+        ["history-manager", historyManagerRole],
         ["merge-mediator", mergeMediatorRole],
         ["llm-assigner", llmAssignerRole],
         ["public", publicRole],
@@ -709,7 +771,10 @@ export async function genesis(app, opts = {}) {
     const { initHostRuntime } = await import("./seed/materials/host/host.js");
     await initHostRuntime();
   } catch (err) {
-    log.warn("Genesis", `host runtime init failed: ${err.message}. Boot continues; host facts disabled.`);
+    log.warn(
+      "Genesis",
+      `host runtime init failed: ${err.message}. Boot continues; host facts disabled.`,
+    );
   }
 
   // LLM-management ops. Six bare seed ops (add-llm / delete-llm /
@@ -738,16 +803,16 @@ export async function genesis(app, opts = {}) {
   // Loaded by side effect; module-load calls registerOperation.
   await import("./seed/present/roles/role-manager/roleFlowOp.js");
 
-  // branch-manager's create-branch DO op. The substrate's branch
+  // history-manager's create-history DO op. The substrate's history
   // helpers (seed/materials/history/) own the heavy lifting; the op
-  // is a thin handler routing through createBranch.
+  // is a thin handler routing through createHistory.
   const { registerHistoryManagerOps } =
-    await import("./seed/present/roles/branch-manager/ops.js");
+    await import("./seed/present/roles/history-manager/ops.js");
   registerHistoryManagerOps();
-  // set-pointer + delete-pointer were carved out of branch-manager/ops.js
+  // set-pointer + delete-pointer were carved out of history-manager/ops.js
   // into their own store bundle (the words + their shared host). The bundle
   // registers at module load, so a side-effect import fires it.
-  await import("./seed/store/words/branch-pointers/index.js");
+  await import("./seed/store/words/history-pointers/index.js");
 
   // federation-manager ops: offer-template, offer-being, request-template,
   // accept-template, reject-template, fulfill-request, refuse-request. The
@@ -775,8 +840,7 @@ export async function genesis(app, opts = {}) {
   // modules that depend on them. Per-key failures are logged but
   // non-fatal. Sane defaults are baked in.
   {
-    const { setInternalConfig } =
-      await import("./seed/present/knobs.js");
+    const { setInternalConfig } = await import("./seed/present/knobs.js");
 
     const KERNEL_CONFIG = {
       llmTimeout: { setter: setInternalConfig },
@@ -813,9 +877,7 @@ export async function genesis(app, opts = {}) {
       },
       maxSessions: {
         load: () =>
-          import("./seed/present/session.js").then(
-            (m) => m.setMaxSessions,
-          ),
+          import("./seed/present/session.js").then((m) => m.setMaxSessions),
       },
       llmClientCacheTtl: {
         load: () =>
@@ -870,7 +932,10 @@ export async function genesis(app, opts = {}) {
   {
     const loadedCount = getLoadedExtensionNames().length;
     if (loadedCount > 0) {
-      log.info("Genesis", `I load my ${loadedCount} extension${loadedCount === 1 ? "" : "s"}.`);
+      log.info(
+        "Genesis",
+        `I load my ${loadedCount} extension${loadedCount === 1 ? "" : "s"}.`,
+      );
     }
   }
 
@@ -921,10 +986,10 @@ export async function genesis(app, opts = {}) {
 
   // Hooks only need the blocked set. Restricted extensions still
   // fire hooks, just with limited tools. The scope resolver receives
-  // the firing moment's branch from the hook caller; we thread it
-  // into the ancestor walk so per-branch scope rules apply.
-  hooks.setScopeResolver(async (spaceId, branch) => {
-    const { blocked } = await getBlockedExtensionsAtSpace(spaceId, branch);
+  // the firing moment's history from the hook caller; we thread it
+  // into the ancestor walk so per-history scope rules apply.
+  hooks.setScopeResolver(async (spaceId, history) => {
+    const { blocked } = await getBlockedExtensionsAtSpace(spaceId, history);
     return blocked;
   });
 
@@ -934,9 +999,10 @@ export async function genesis(app, opts = {}) {
   // The /skins model catalog — a normal root-child space every
   // uploaded model matter (type "model") lands in, so the 3D portal
   // can show the available bodies and beings pick by id. Idempotent;
-  // branches inherit main's catalog.
+  // histories inherit main's catalog.
   await withIAmAct("ensure skins catalog", async (ctx) => {
-    const { ensureSkinsSpace } = await import("./seed/store/words/model/index.js");
+    const { ensureSkinsSpace } =
+      await import("./seed/store/words/model/index.js");
     await ensureSkinsSpace("0", ctx);
   }).catch((err) => {
     log.warn("Genesis", `skins catalog ensure failed: ${err.message}`);
@@ -962,9 +1028,15 @@ export async function genesis(app, opts = {}) {
   // here, at boot-end, lets the dispatch resolve them from the fold, not the Map.
   // Idempotent (skipIfUnchanged): ops already folded at seedFold skip.
   try {
-    const { declareOpsToFold, declareTypesToFold, declareRoleWordsToFold, rehydrateWordProjection } =
-      await import("./seed/present/word/wordStore.js");
-    let folded = 0, typesFolded = 0, roleWordsFolded = 0;
+    const {
+      declareOpsToFold,
+      declareTypesToFold,
+      declareRoleWordsToFold,
+      rehydrateWordProjection,
+    } = await import("./seed/present/word/wordStore.js");
+    let folded = 0,
+      typesFolded = 0,
+      roleWordsFolded = 0;
     await withIAmAct("I declare the rest of my ops", async (ctx) => {
       folded = await declareOpsToFold({ moment: ctx });
     });
@@ -979,7 +1051,10 @@ export async function genesis(app, opts = {}) {
       roleWordsFolded = await declareRoleWordsToFold({ moment: ctx });
     });
     await rehydrateWordProjection("0");
-    log.verbose("Genesis", `boot-end fold: ${folded} op(s) + ${typesFolded} type(s) + ${roleWordsFolded} role-word(s) reconciled into the word-fold`);
+    log.verbose(
+      "Genesis",
+      `boot-end fold: ${folded} op(s) + ${typesFolded} type(s) + ${roleWordsFolded} role-word(s) reconciled into the word-fold`,
+    );
   } catch (err) {
     log.warn("Genesis", `boot-end op fold failed: ${err.message}`);
   }

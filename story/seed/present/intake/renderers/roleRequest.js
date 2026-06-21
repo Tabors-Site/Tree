@@ -33,7 +33,7 @@ function escapeHtml(s) {
 
 /**
  * @param {object} entry  inbox entry (carries the envelope content)
- * @param {object} ctx    { story, branch }
+ * @param {object} ctx    { story, history }
  */
 export async function roleRequestRenderer(entry, ctx) {
   const c = entry.content || {};
@@ -42,7 +42,7 @@ export async function roleRequestRenderer(entry, ctx) {
   const askerBeingId  = typeof c.askerBeingId === "string" ? c.askerBeingId : null;
   const reason        = typeof c.reason === "string" ? c.reason : null;
   const story       = ctx?.story || "";
-  const branch        = ctx?.history  || "0";
+  const history       = ctx?.history  || "0";
 
   // Resolve asker stance: prefer the askerName recorded in content;
   // fall back to a projection read by beingId so we can address the
@@ -53,7 +53,7 @@ export async function roleRequestRenderer(entry, ctx) {
     askerStance = `${story}/@${askerName}`;
   } else if (askerBeingId) {
     try {
-      const slot = await loadOrFold("being", askerBeingId, branch);
+      const slot = await loadOrFold("being", askerBeingId, history);
       askerName = slot?.state?.name || null;
       if (askerName) askerStance = `${story}/@${askerName}`;
     } catch {

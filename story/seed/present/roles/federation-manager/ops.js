@@ -136,18 +136,18 @@ registerOperation("offer-template", {
 
     // 1. Resolve subtreePath to a spaceId. Accepts both a raw uuid and
     // a slash-separated path.
-    const branch = ctx.moment?.actorAct?.history || "0";
-    const spaceId = await resolveSubtreeSpaceId(subtreePath, branch);
+    const history = ctx.moment?.actorAct?.history || "0";
+    const spaceId = await resolveSubtreeSpaceId(subtreePath, history);
     if (!spaceId) {
       throw new IbpError(IBP_ERR.NOT_FOUND,
-        `offer-template: subtree "${subtreePath}" not found on branch ${branch}`);
+        `offer-template: subtree "${subtreePath}" not found on history ${history}`);
     }
 
     // 2. Clone locally.
     const { captureTemplate } = await import("../../../materials/publish/seedTemplate.js");
     let bundle;
     try {
-      bundle = await captureTemplate(spaceId, { branch });
+      bundle = await captureTemplate(spaceId, { history });
     } catch (err) {
       throw new IbpError(IBP_ERR.INTERNAL, `captureTemplate failed: ${err.message}`);
     }
@@ -431,15 +431,15 @@ registerOperation("fulfill-request", {
     // offer-template code path so the receiver side runs the same
     // offer-template handling regardless of whether the push was operator
     // initiated or pull driven.
-    const branch = ctx.moment?.actorAct?.history || "0";
-    const spaceId = await resolveSubtreeSpaceId(request.subtreePath, branch);
+    const history = ctx.moment?.actorAct?.history || "0";
+    const spaceId = await resolveSubtreeSpaceId(request.subtreePath, history);
     if (!spaceId) {
       throw new IbpError(IBP_ERR.NOT_FOUND,
-        `fulfill-request: requested subtree "${request.subtreePath}" not found on branch ${branch}`);
+        `fulfill-request: requested subtree "${request.subtreePath}" not found on history ${history}`);
     }
 
     const { captureTemplate } = await import("../../../materials/publish/seedTemplate.js");
-    const bundle = await captureTemplate(spaceId, { branch });
+    const bundle = await captureTemplate(spaceId, { history });
     const pushNegotiationId = uuidv4();
     await cacheBundle(ctx, pushNegotiationId, bundle);
 
@@ -573,7 +573,7 @@ async function sendIntent(ctx, peerStory, message) {
   }
 }
 
-async function resolveSubtreeSpaceId(subtreePath, branch) {
+async function resolveSubtreeSpaceId(subtreePath, history) {
   // If already a uuid, return as-is.
   if (/^[0-9a-f-]{36}$/i.test(subtreePath)) return subtreePath;
   // Otherwise resolve through the address parser. Bare paths are
@@ -584,7 +584,7 @@ async function resolveSubtreeSpaceId(subtreePath, branch) {
     const localStory = _gRD();
     const parseCtx = {
       currentStory: localStory,
-      currentHistory:  branch,
+      currentHistory:  history,
       currentUser:    null,
       currentPath:    null,
     };
@@ -614,13 +614,13 @@ async function readNegotiation(ctx, bucket, negotiationId) {
   // For an operator calling do:accept-template on @federation-manager,
   // the addressed being is the federation-manager (whose qualities
   // hold the negotiation state).
-  const branch = ctx.moment?.actorAct?.history || "0";
+  const history = ctx.moment?.actorAct?.history || "0";
   const { loadOrFold } = await import("../../../materials/projections.js");
   // Resolve the federation-manager being by name (not the caller's
   // beingId, which is the operator). The negotiation state lives on
   // the federation-manager being.
   const { findByName } = await import("../../../materials/projections.js");
-  const slot = await findByName("being", "federation-manager", branch);
+  const slot = await findByName("being", "federation-manager", history);
   if (!slot) return null;
   const q = slot.state?.qualities;
   const qualities = q instanceof Map ? Object.fromEntries(q.entries()) : q;
@@ -651,9 +651,9 @@ async function setQualityField(ctx, subPath, value) {
   // Resolve the federation-manager being. The operator's op handler
   // ctx has the operator as actor; the negotiation state lives on the
   // federation-manager being, addressed by name.
-  const branch = ctx.moment?.actorAct?.history || "0";
+  const history = ctx.moment?.actorAct?.history || "0";
   const { findByName } = await import("../../../materials/projections.js");
-  const slot = await findByName("being", "federation-manager", branch);
+  const slot = await findByName("being", "federation-manager", history);
   if (!slot) {
     log.warn("FederationManager", "setQualityField: no federation-manager being found");
     return;
@@ -670,7 +670,7 @@ async function setQualityField(ctx, subPath, value) {
     {
       identity:      ctx.identity || { beingId: myBeingId, name: "federation-manager" },
       moment:     ctx.moment,
-      currentHistory: branch,
+      currentHistory: history,
     },
   );
 }

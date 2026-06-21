@@ -104,11 +104,11 @@ async function _grantRoleViaWord({ caller, target, role, anchorSpaceId, anchorBe
   const ir = resolveRoleWord("being", "grant-role", moment?.actorAct?.history);
   if (!ir) return null;
   const { grantHostEnv } = await import("./grantHost.js");
-  const branch = moment?.actorAct?.history;
+  const history = moment?.actorAct?.history;
   try {
     const { result } = await runRoleWord(ir, {
-      moment, branch,
-      trigger: { caller: caller ? String(caller) : null, target: target ? String(targetIdOf(target)) : null, role: role ?? null, anchorSpaceId: anchorSpaceId ?? null, anchorBeingId: anchorBeingId ?? null, branch },
+      moment, history,
+      trigger: { caller: caller ? String(caller) : null, target: target ? String(targetIdOf(target)) : null, role: role ?? null, anchorSpaceId: anchorSpaceId ?? null, anchorBeingId: anchorBeingId ?? null, branch: history },
       env: { host: grantHostEnv() },
     });
     return result || null;

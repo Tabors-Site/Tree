@@ -7,7 +7,7 @@
 //   plant-template        — DO op: apply a clone bundle into a target subtree
 //   plant-template-by-name — DO op: apply an extension-registered clone by name
 //   capture-graft       — DO op: capture the FULL story (facts + acts +
-//                        branches + reelHeads) as a portable seed
+//                        histories + reelHeads) as a portable seed
 //   clones             — SEE op: discovery of registered extension clones
 //
 // Graft ops run inside the wrapping moment and emit substrate facts
@@ -61,7 +61,7 @@ registerSeeOperation("capture-template", {
     }
     const { captureTemplate } = await import("./seedTemplate.js");
     const bundle = await captureTemplate(scopeSpaceId, {
-      branch: history || "0",
+      history: history || "0",
       scopeName:       args?.name || null,
       sourceStory:   args?.sourceStory || null,
       operatorBeingId: String(identity.beingId),
@@ -101,11 +101,11 @@ async function plantTemplateHandler({ target, params, identity, moment }) {
     );
   }
   const targetParentSpaceId = targetIdOf(target);
-  const branch = moment?.actorAct?.history || "0";
+  const history = moment?.actorAct?.history || "0";
 
   const { plantTemplate } = await import("./seedPlant.js");
   const result = await plantTemplate(bundle, targetParentSpaceId, {
-    branch,
+    history,
     operatorBeingId: String(identity.beingId),
     moment,
   });
@@ -134,7 +134,7 @@ registerOperation("plant-template", {
 // target: { kind: "space", id: <space root id> } OR a heaven space
 // params: { storyName? }
 //
-// Captures the FULL story (facts + acts + branches + reelHeads) as a
+// Captures the FULL story (facts + acts + histories + reelHeads) as a
 // portable seed and saves it to story/seeds/ on the server. Returns
 // { savedTo, counts }. Authority-only — the caller must have heaven
 // authority (owner or angel role on heaven; gate-equivalent to "I am
@@ -248,10 +248,10 @@ async function plantTemplateByNameHandler({ target, params, identity, moment }) 
     );
   }
   const targetParentSpaceId = targetIdOf(target);
-  const branch = moment?.actorAct?.history || "0";
+  const history = moment?.actorAct?.history || "0";
   const { plantTemplate } = await import("./seedPlant.js");
   const result = await plantTemplate(entry.bundle, targetParentSpaceId, {
-    branch,
+    history,
     operatorBeingId: String(identity.beingId),
     params: (params || {}).params || {},
     moment,
@@ -361,9 +361,9 @@ async function graftBeingHandler({ params, identity, moment }) {
   if (!bundle) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "graft-being: params.bundle is required");
   }
-  const branch = moment?.actorAct?.history || "0";
+  const history = moment?.actorAct?.history || "0";
   const { applyGraft } = await import("./graft.js");
-  const result = await applyGraft(bundle, { operatorBeingId: String(identity.beingId), branch });
+  const result = await applyGraft(bundle, { operatorBeingId: String(identity.beingId), history });
   return { ...result, _skipAudit: true };
 }
 

@@ -62,7 +62,7 @@ async function _credentialGateViaWord(opName, { caller, target, moment }) {
   const b = moment?.actorAct?.history;
   try {
     const { result } = await runRoleWord(ir, {
-      moment, branch: b,
+      moment, history: b,
       trigger: { caller: String(caller), target: String(target), branch: b },
       env: { host: credentialHostEnv() },
     });
@@ -76,16 +76,16 @@ async function _credentialGateViaWord(opName, { caller, target, moment }) {
 // credential-read's world strand is credential-read.word (the gate→read→reveal). CALLER
 // mode. Returns {targetBeingId, hasPlain, plaintext} or null on a clean miss. The cut
 // re-adds _factTarget (the asker's reel) + coerces hasPlain to a strict boolean.
-async function _credentialReadViaWord({ caller, target, branch, moment }) {
+async function _credentialReadViaWord({ caller, target, history, moment }) {
   if (!moment) return null;
   const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
   const ir = resolveRoleWord("credential", "credential-read", moment?.actorAct?.history);
   if (!ir) return null;
   const { credentialHostEnv } = await import("./credentialHost.js");
-  const b = branch || moment?.actorAct?.history; // the moment's branch; never floor to "0"
+  const b = history || moment?.actorAct?.history; // the moment's history; never floor to "0"
   try {
     const { result } = await runRoleWord(ir, {
-      moment, branch: b,
+      moment, history: b,
       trigger: { caller: String(caller), target: String(target), branch: b },
       env: { host: credentialHostEnv() },
     });
@@ -154,7 +154,7 @@ registerOperation("credential-read", {
     // THE CONVERSION: credential-read's world strand is credential-read.word (caller
     // mode). The dispatcher needs _factTarget (the asker's reel) for the audit fact,
     // which the .word omits — re-add it around the bridge result. JS = clean-miss fallback.
-    const viaWord = await _credentialReadViaWord({ caller: askerBeingId, target: targetBeingId, branch: history, moment });
+    const viaWord = await _credentialReadViaWord({ caller: askerBeingId, target: targetBeingId, history, moment });
     if (viaWord) return { _factTarget: { kind: "being", id: askerBeingId || targetBeingId }, ...viaWord };
 
     const ok = await hasCredentialAuthority(askerBeingId, targetBeingId, history);
@@ -192,16 +192,16 @@ registerOperation("credential-read", {
 // credential-reset's world strand is credential-reset.word (the authority gate, the
 // mint, the three credential writes, the reveal). CALLER mode (no `through`) — the writes
 // attribute to the asker. Returns {targetBeingId, plaintext}, or null on a clean miss.
-async function _credentialResetViaWord({ caller, target, branch, moment }) {
+async function _credentialResetViaWord({ caller, target, history, moment }) {
   if (!moment) return null;
   const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
   const ir = resolveRoleWord("credential", "credential-reset", moment?.actorAct?.history);
   if (!ir) return null;
   const { credentialHostEnv } = await import("./credentialHost.js");
-  const b = branch || moment?.actorAct?.history; // the moment's branch; never floor to "0"
+  const b = history || moment?.actorAct?.history; // the moment's history; never floor to "0"
   try {
     const { result } = await runRoleWord(ir, {
-      moment, branch: b,
+      moment, history: b,
       trigger: { caller: String(caller), target: String(target), branch: b },
       env: { host: credentialHostEnv() },
     });
@@ -225,7 +225,7 @@ registerOperation("credential-reset", {
     // asker). The dispatcher needs _factTarget (the asker's reel) for its audit fact,
     // which the .word return omits — re-add it around the bridge result. JS body below
     // is the clean-miss fallback.
-    const viaWord = await _credentialResetViaWord({ caller: askerBeingId, target: targetBeingId, branch: history, moment });
+    const viaWord = await _credentialResetViaWord({ caller: askerBeingId, target: targetBeingId, history, moment });
     if (viaWord) return { _factTarget: { kind: "being", id: askerBeingId || targetBeingId }, ...viaWord };
 
     const ok = await hasCredentialAuthority(askerBeingId, targetBeingId, history);

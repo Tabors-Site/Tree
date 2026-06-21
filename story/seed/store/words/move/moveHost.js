@@ -69,14 +69,14 @@ export function moveHostEnv() {
     // the plain `equals` would differ from the old String()-coercing host fn. Proven
     // equivalent over the reachable region; subjectKind/targetIdOf stay, resolveSource uses them.)
 
-    // resolveSource(subject, coord, to, branch) — the source-space READ (the world
+    // resolveSource(subject, coord, to, history) — the source-space READ (the world
     // strand's only substrate touch). Mirrors the JS handler's destExists check, the
     // loadOrFold over the subject to capture fromSpaceId, and the coord bounds check
     // against the container's size. Reuses the SAME Space.exists / loadOrFold; lays NO
     // fact; throws the SAME IbpError on a missing dest / missing subject / out-of-bounds.
     "resolve-source": async ({ args: [subject, coordArg, toArg, argHistory] }, ctx) => {
       const coord = absent(coordArg), to = absent(toArg);
-      const branch = absent(argHistory) || historyOf(ctx);
+      const history = absent(argHistory) || historyOf(ctx);
       const kind = subjectKind(subject);
       const targetId = targetIdOf(subject);
       const { loadOrFold } = await import("../../../materials/projections.js");
@@ -97,13 +97,13 @@ export function moveHostEnv() {
       // space for matter) so the live-SEE layer can invalidate both ends.
       let fromSpaceId = null;
       if (kind === "space") {
-        const slot = await loadOrFold("space", targetId, branch);
+        const slot = await loadOrFold("space", targetId, history);
         if (!slot) {
           throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, `move: space "${targetId}" not found`);
         }
         fromSpaceId = slot.state?.parent || null;
       } else {
-        const slot = await loadOrFold("matter", targetId, branch);
+        const slot = await loadOrFold("matter", targetId, history);
         if (!slot) {
           throw new IbpError(IBP_ERR.INVALID_INPUT, `move: matter "${targetId}" not found`);
         }
@@ -117,7 +117,7 @@ export function moveHostEnv() {
       // would lie — the reel would say "moved to (X,Y)" while the row stored a clamped
       // value). The SAME per-axis check against the container's size.
       if (coord && fromSpaceId) {
-        const containerSlot = await loadOrFold("space", fromSpaceId, branch);
+        const containerSlot = await loadOrFold("space", fromSpaceId, history);
         const size = containerSlot?.state?.size || null;
         if (size) {
           for (const axis of ["x", "y", "z"]) {

@@ -89,7 +89,7 @@ function mimeMatches(pattern, mime) {
  * `url` and `ibpa` are DIFFERENT reference worlds, not two spellings
  * of one field: a url is an HTTP link into the WWW (http matter —
  * website content, renders/embeds); an ibpa is an IBP address into
- * another story / branch / position (ibpa matter — a doorway the
+ * another story / history / position (ibpa matter — a doorway the
  * four verbs go through, never an iframe).
  *
  * @param {object} input

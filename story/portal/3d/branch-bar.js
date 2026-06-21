@@ -224,7 +224,7 @@ export async function switchIntoHistory(historyPath) {
     // BE switch at the gate: seats socket.currentHistory on the
     // destination and stamps the be:switch fact on the destination
     // reel (your being's biography there records the arrival).
-    await _state.client.be("switch", `${_state.story}/@cherub`, { branch: historyPath });
+    await _state.client.be("switch", `${_state.story}/@cherub`, { history: historyPath });
   }
   // Address follows the being — ALWAYS the explicit branch path. The
   // bare `#<story>/` form resolves through the #main POINTER, which
@@ -676,7 +676,7 @@ async function _togglePauseBranch(branch) {
     await _state.client.do(
       `/@branch-manager`,
       op,
-      { branch: branch.path },
+      { history: branch.path },
     );
     // Refetch the tree so the row's persisted state replaces our
     // optimistic flip (no-op when they match).

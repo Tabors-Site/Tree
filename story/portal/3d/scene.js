@@ -2203,7 +2203,7 @@ export class Scene {
       // delta path; the camera is authoritative, no churn risk.
       hist: desc?.isHistorical ? (desc?.asOf?.atTimestamp || desc?.asOf?.atSeq || true) : false,
       selfCoord: coordKey(desc?.identity?.coord),
-      branch: desc?.address?.history || "0",
+      history: desc?.address?.history || "0",
       beings:   (desc.beings   || []).filter((e) => !isSelf(e)).map(sigBeing),
       matter:   (desc.matter   || []).map(sigPositional),
       children: (desc.children || []).map(sigPositional),

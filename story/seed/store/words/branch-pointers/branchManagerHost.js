@@ -1,7 +1,7 @@
 // branchManagerHost.js — the host env for branch-manager.word's `host:` escapes (8.md §6/§7).
 //
 // The CONTROL strand (the gate chain: identity present, name valid, canonical valid,
-// .branches space resolved) is the `.word`; the genuine computation + the heaven-routed
+// .histories space resolved) is the `.word`; the genuine computation + the heaven-routed
 // reads + the lone WORLD write STAY host. This is the thin adapter that wires the SAME
 // historyRegistry primitives the set-pointer JS handler imports into ctx.env.host, so the
 // `.word` reaches the REAL logic with ZERO reimplementation — it calls the exact
@@ -10,14 +10,14 @@
 // Why these are host (the wall, 1.md): every space/being READ is a `see` and every WRITE
 // is a do/be verb — EXCEPT (a) genuine computation: the pointer-name + canonical-path
 // regex validation, the map merge; (b) reads the see-registry does not model yet: the
-// pointer map and the .branches heaven-space id are HEAVEN reads (MAIN-pinned, routed
+// pointer map and the .histories heaven-space id are HEAVEN reads (MAIN-pinned, routed
 // through loadHeavenProjection / findHeavenSpace by the BRANCHES enum), which no `see`
 // QUERY/READ form can shape today (see blockers); (c) the lone WORLD write, kept host
 // like take-role.word's grantInternal so it calls the SAME doVerb(set-space) the JS
 // handler calls, reading ctx.moment to lay its fact into the live moment.
 //
 // callHost invokes each builtin as `fn({ args: [...] }, ctx)`. NONE lay a fact now: the
-// validators + the map merge/prune are pure computes (see-ops), the pointer-map + .branches
+// validators + the map merge/prune are pure computes (see-ops), the pointer-map + .histories
 // id are heaven reads (see-ops), and the WRITE is the .word's targeted `set/replace the
 // space historiesSpace's qualities.pointers` (the one do:set-space).
 
@@ -33,7 +33,7 @@ import {
 // set-pointer handler rejects structurally-invalid `canonical` arguments with it.
 const CANONICAL_PATH_RE = /^(?:0|\d+(?:[a-z]+\d+)*(?:[a-z]+)?)$/;
 
-// branch the write rides: the moment's act branch, else the eval ctx branch, else main.
+// history the write rides: the moment's act history, else the eval ctx history, else main.
 const historyOf = (ctx) => ctx?.moment?.actorAct?.history || ctx?.history || "0";
 
 export function historyManagerHostEnv() {

@@ -255,23 +255,28 @@ export function resolveActiveStack({
  *
  * @param {object} toBeing                — the being whose moment is opening
  * @param {string} positionSpaceId         — toBeing.position
- * @param {string} branch                  — the branch ("0" for main)
+ * @param {string} history                 — the history ("0" for main)
  * @returns {Promise<Map<string, object>>}  role-name → spec
  */
-export async function computeAvailableRoles({ toBeing, positionSpaceId, branch }) {
+export async function computeAvailableRoles({ toBeing, positionSpaceId, history, branch }) {
   const out = new Map();
   if (!toBeing) return out;
-  if (typeof branch !== "string" || !branch.length) {
-    throw new Error("computeAvailableRoles requires `branch` (no silent default)");
+  // SEAM: the sole caller (present/stamper/1-assign.js, owned by another
+  // agent) still passes the history slot under the old `branch` key.
+  // Accept either until that side renames to `history`; the value is the
+  // history. Drop the `branch` alias once 1-assign passes `history`.
+  if (history == null) history = branch;
+  if (typeof history !== "string" || !history.length) {
+    throw new Error("computeAvailableRoles requires `history` (no silent default)");
   }
 
   const grants = readGrantsFromBeing(toBeing);
   if (grants.length === 0) return out;
 
   for (const grant of grants) {
-    const { spec, hostSpaceId } = await getRoleSpecForGrant(grant, branch);
+    const { spec, hostSpaceId } = await getRoleSpecForGrant(grant, history);
     if (!spec) continue;
-    if (!await reachCovers(spec, hostSpaceId, { spaceId: positionSpaceId }, branch)) continue;
+    if (!await reachCovers(spec, hostSpaceId, { spaceId: positionSpaceId }, history)) continue;
     if (!out.has(grant.role)) out.set(grant.role, spec);
   }
   return out;

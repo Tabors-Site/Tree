@@ -29,7 +29,7 @@ import log from "../../seed/seedStory/log.js";
 import { IBP_EVENT } from "./events.js";
 import { reelKey } from "../../seed/present/stamper/2-fold/weave.js";
 
-// subId -> { socket, beingId, branch, weave, faceSeq }
+// subId -> { socket, beingId, history, weave, faceSeq }
 const _subs = new Map();
 
 // reelKeyStr -> Set<subId>
@@ -52,15 +52,15 @@ function _mintSubId() {
  * rotates.
  *
  * @param {Socket} socket
- * @param {{ beingId: string, branch: string }} stance
+ * @param {{ beingId: string, history: string }} stance
  * @param {object} face . the canonical inner face shape with weave
  * @returns {string|null} subscription id, or null if inputs malformed
  */
-export function subscribeInnerFace(socket, { beingId, branch } = {}, face) {
-  if (!socket || !beingId || !branch) return null;
+export function subscribeInnerFace(socket, { beingId, history } = {}, face) {
+  if (!socket || !beingId || !history) return null;
   // Re-subscribe pattern: a stance may already have a sub on this
   // socket. Rotate its weave rather than mint a new id.
-  const existing = _findStanceSub(socket, beingId, branch);
+  const existing = _findStanceSub(socket, beingId, history);
   if (existing) {
     _rotateWeave(existing, face);
     return existing.subId;
@@ -70,7 +70,7 @@ export function subscribeInnerFace(socket, { beingId, branch } = {}, face) {
     subId,
     socket,
     beingId: String(beingId),
-    branch:  String(branch),
+    history: String(history),
     weave:   [],
     faceSeq: 0,
   };
@@ -133,7 +133,7 @@ export function getSubscribersForReel(key) {
 
 /**
  * Resolve a subId to its current subscription record. Used by the
- * refold dispatcher to read beingId / branch / socket without poking
+ * refold dispatcher to read beingId / history / socket without poking
  * at internal state.
  */
 export function getInnerFaceSub(subId) {
@@ -180,13 +180,13 @@ function _dropReelIndex(sub) {
   }
 }
 
-function _findStanceSub(socket, beingId, branch) {
+function _findStanceSub(socket, beingId, history) {
   const mine = _socketSubs.get(socket.id);
   if (!mine) return null;
   for (const subId of mine) {
     const sub = _subs.get(subId);
     if (!sub) continue;
-    if (sub.beingId === String(beingId) && sub.branch === String(branch)) {
+    if (sub.beingId === String(beingId) && sub.history === String(history)) {
       return sub;
     }
   }

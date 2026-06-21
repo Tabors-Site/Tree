@@ -29,14 +29,14 @@ const MAX_LIMIT = 10000;
 const MAX_FACT_PARAM_BYTES = 512;
 
 /**
- * Build the act-chain descriptor for one being on a given branch.
- * Newest-first. Walks branch lineage: a being's acts on branch #4
- * include the acts they stamped on every ancestor branch BEFORE the
+ * Build the act-chain descriptor for one being on a given history.
+ * Newest-first. Walks history lineage: a being's acts on history #4
+ * include the acts they stamped on every ancestor history BEFORE the
  * fork point, plus their own divergent acts on #4 afterward.
  *
  * @param {string} beingId
  * @param {object} [opts]
- * @param {string} [opts.branch="0"]  branch path to read on
+ * @param {string} [opts.history="0"]  history path to read on
  * @param {number} [opts.limit=100]
  * @param {string} [opts.before]      ISO timestamp — when set, only
  *                                    return acts strictly older than
@@ -49,8 +49,8 @@ const MAX_FACT_PARAM_BYTES = 512;
  */
 export async function describeActChain(beingId, opts = {}) {
   if (!beingId) throw new Error("describeActChain: beingId required");
-  const branch = typeof opts.branch === "string" && opts.branch.length
-    ? opts.branch
+  const history = typeof opts.history === "string" && opts.history.length
+    ? opts.history
     : MAIN;
   const limit = Math.min(Math.max(Number(opts.limit) || 100, 1), MAX_LIMIT);
   const before = typeof opts.before === "string" && opts.before.length
@@ -59,7 +59,7 @@ export async function describeActChain(beingId, opts = {}) {
 
   const acts = await readActChainLineage({
     beingId: String(beingId),
-    branch,
+    history,
     limit,
     before,
   });
@@ -67,7 +67,7 @@ export async function describeActChain(beingId, opts = {}) {
   let beingName = null;
   try {
     const { loadProjection } = await import("../../materials/projections.js");
-    const slot = await loadProjection("being", beingId, branch);
+    const slot = await loadProjection("being", beingId, history);
     beingName = slot?.state?.name || null;
   } catch { /* best-effort */ }
 
@@ -168,17 +168,17 @@ export async function attachActFacts(serializedActs, opts = {}) {
 }
 
 /**
- * Read a being's act-chain across a branch lineage. Mirrors the fact
- * reel's branch-lineage walk in foldEngine, but bounded by timestamp
+ * Read a being's act-chain across a history lineage. Mirrors the fact
+ * reel's history-lineage walk in foldEngine, but bounded by timestamp
  * (acts have no per-aggregate seq) — each ancestor owns acts stamped
- * before the next-down branch was created; the leaf owns everything
+ * before the next-down history was created; the leaf owns everything
  * after its own creation.
  *
- * Returns newest-first, capped at limit. Acts with no branch field
+ * Returns newest-first, capped at limit. Acts with no history field
  * (legacy, pre-Act-branching) are treated as main acts to stay
  * compatible with old data.
  */
-async function readActChainLineage({ beingId, branch, limit, before }) {
+async function readActChainLineage({ beingId, history, limit, before }) {
   // `before` (ISO string) → progressive-loading cursor. Returns only
   // acts strictly older than this timestamp. The timeline calls this
   // with the previous batch's earliest stamp to fetch the next page
@@ -186,7 +186,7 @@ async function readActChainLineage({ beingId, branch, limit, before }) {
   const beforeDate = before ? new Date(before) : null;
   const beforeOK = beforeDate && !Number.isNaN(beforeDate.getTime());
 
-  if (isMain(branch)) {
+  if (isMain(history)) {
     const filter = {
       through: beingId,
       $or: [{ history: MAIN }, { history: { $exists: false } }],
@@ -198,7 +198,7 @@ async function readActChainLineage({ beingId, branch, limit, before }) {
       .lean();
   }
 
-  const lineage = await resolveHistoryLineage(branch);
+  const lineage = await resolveHistoryLineage(history);
   const ranges = [];
   for (let i = 0; i < lineage.length; i++) {
     const here = lineage[i];
@@ -218,12 +218,12 @@ async function readActChainLineage({ beingId, branch, limit, before }) {
     const timeFilter = {};
     if (lower) timeFilter.$gte = lower;
     if (upper) timeFilter.$lt  = upper;
-    // Apply `before` cursor on top of any branch-range upper bound —
+    // Apply `before` cursor on top of any history-range upper bound —
     // shrink the window further so progressive-loading correctly
-    // honours both the branch lineage and the user's scroll cursor.
+    // honours both the history lineage and the user's scroll cursor.
     if (beforeOK) {
       if (timeFilter.$lt && timeFilter.$lt < beforeDate) {
-        // keep existing tighter upper (lineage already bounded by next-branch start)
+        // keep existing tighter upper (lineage already bounded by next-history start)
       } else {
         timeFilter.$lt = beforeDate;
       }
@@ -278,7 +278,7 @@ function serializeAct(a) {
     stampedAt:       a.stampedAt || null,
     severedAt:       a.severedAt || null,
     answers:         a.answers || null,
-    // Branch this Act was stamped on. Null on legacy acts predating
+    // History this Act was stamped on. Null on legacy acts predating
     // the field; clients should treat that as main.
     history:          a.history || null,
     // The canonical inner face this act ran under . orientation + role

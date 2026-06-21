@@ -7,7 +7,7 @@
 // Per CROSS-WORLD.md "Pull-back safety":
 //
 //   On home substrate startup, scan beings whose position names a
-//   foreign story or branch. For each, check whether the foreign
+//   foreign story or history. For each, check whether the foreign
 //   substrate has confirmed liveness within a configured window. If
 //   not (timeout / restart crossed the heartbeat threshold), stamp a
 //   `set-being:position` fact on the home reel that resets the
@@ -51,13 +51,13 @@ export async function pullBackForeignPositions() {
   // qualities/position; projections is the truth.
   const { default: Projection } = await import("../history/projection.js");
   const homeStory = getStoryDomain();
-  const homeRealm   = { story: homeStory, branch: "0" };
+  const homeRealm   = { story: homeStory, history: "0" };
 
-  // Cross-world positions encode story + branch as a "/" segment;
+  // Cross-world positions encode story + history as a "/" segment;
   // bare spaceIds never contain "#" or "/". Use a coarse regex
   // pre-filter then validate in JS to avoid scanning every being.
   const candidates = await Projection.find({
-    branch: "0",
+    history: "0",
     type: "being",
     "state.position": { $regex: /^[^#/]+#?[^/]*\// },
     tombstoned: { $ne: true },

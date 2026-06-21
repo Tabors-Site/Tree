@@ -62,7 +62,7 @@ const COORD_AXES = ["x", "y", "z"];
  * any coord passes. The check is "stay inside the declared box";
  * without a box there's nothing to enforce.
  */
-async function assertCoordInBounds(beingDoc, raw, branch = "0") {
+async function assertCoordInBounds(beingDoc, raw, history = "0") {
   const out = {};
   for (const a of COORD_AXES) {
     if (typeof raw[a] === "number" && Number.isFinite(raw[a])) {
@@ -75,7 +75,7 @@ async function assertCoordInBounds(beingDoc, raw, branch = "0") {
   const spaceId = beingDoc?.position || beingDoc?.homeSpace || null;
   if (!spaceId) return out;
   const { loadOrFold } = await import("../projections.js");
-  const _sSlot = await loadOrFold("space", spaceId, branch);
+  const _sSlot = await loadOrFold("space", spaceId, history);
   const space = _sSlot ? { size: _sSlot.state?.size } : null;
   const size = space?.size || null;
   if (!size) return out;
@@ -152,11 +152,11 @@ async function setOnBeingHandler({ target, params, moment }) {
     if (!value || typeof value !== "string") {
       throw new Error("set-being: `value` must be a string for field=name");
     }
-    const branch = moment?.actorAct?.history || "0";
+    const history = moment?.actorAct?.history || "0";
     const { findByName } = await import("../projections.js");
-    const existing = await findByName("being", value, branch);
+    const existing = await findByName("being", value, history);
     if (existing && String(existing.id) !== String(target._id)) {
-      throw new Error(`set-being: name "${value}" already taken on branch ${branch}`);
+      throw new Error(`set-being: name "${value}" already taken on history ${history}`);
     }
     return { beingId: String(target._id), name: value };
   }

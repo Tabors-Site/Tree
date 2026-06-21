@@ -24,8 +24,8 @@ export function credentialHostEnv() {
     // fold (lineage.js): self/I_AM short-circuit, else the asker's NAME (trueName)
     // owning the target or an ancestor / holding a covering point. One composite
     // predicate the JS handler calls as a unit.
-    hasCredentialAuthority: async ({ args: [caller, target, branch] }, ctx) =>
-      hasCredentialAuthority(String(caller), String(target), branch || historyOf(ctx)),
+    hasCredentialAuthority: async ({ args: [caller, target, history] }, ctx) =>
+      hasCredentialAuthority(String(caller), String(target), history || historyOf(ctx)),
 
     // see-op "mint-credential" -> the fresh credential spec the native writes + the
     // reveal-on-return read: the scrypt `hash`, the encrypted blob (`plain` ->

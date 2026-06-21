@@ -153,9 +153,9 @@ const BeingSchema = new mongoose.Schema({
   //
   homeSpace: { type: String, ref: "Space", default: null },
 
-  // The branch this being was birthed on — the branch it owns as
+  // The history this being was birthed on — the history it owns as
   // "its present." Stable across the being's lifetime; per-session
-  // branch-switches don't touch this. Used by BE:connect / BE:birth /
+  // history-switches don't touch this. Used by BE:connect / BE:birth /
   // BE:release to seat the session's currentHistory when no explicit
   // BE:switch overrides. Falls back to "0" (main) for legacy beings
   // birthed before this field was tracked.

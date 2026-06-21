@@ -35,11 +35,11 @@ import { assertHistoryOrThrow } from "../../materials/projections.js";
  */
 export async function readInbox(spaceId, beingId, options = {}) {
   if (!spaceId || !beingId) return [];
-  // Branch is required: an inbox query without it would scan every
-  // branch's rows and return a cross-branch grab-bag. Caller must
-  // attach branch from the moment's moment or the wire layer.
-  const branch = assertHistoryOrThrow(options.branch, "readInbox(options)");
-  const q = { recipient: String(beingId), inboxSpaceId: String(spaceId), branch };
+  // History is required: an inbox query without it would scan every
+  // history's rows and return a cross-history grab-bag. Caller must
+  // attach history from the moment's moment or the wire layer.
+  const history = assertHistoryOrThrow(options.history, "readInbox(options)");
+  const q = { recipient: String(beingId), inboxSpaceId: String(spaceId), history };
   if (options.since) q.sentAt = { $gte: new Date(options.since) };
   let cursor = InboxProjection.find(q).sort({ sentAt: 1 });
   if (typeof options.limit === "number") cursor = cursor.limit(options.limit);
@@ -52,13 +52,13 @@ export async function readInbox(spaceId, beingId, options = {}) {
  * for human-readable display. Aggregates over InboxProjection by
  * recipient with a per-recipient count and recent slice.
  */
-export async function getInboxSummary(spaceId, { branch } = {}) {
+export async function getInboxSummary(spaceId, { history } = {}) {
   if (!spaceId) return {};
-  // See readInbox for the doctrine: branch required, no silent
-  // cross-branch query.
-  const _branch = assertHistoryOrThrow(branch, "getInboxSummary(opts)");
+  // See readInbox for the doctrine: history required, no silent
+  // cross-history query.
+  const _history = assertHistoryOrThrow(history, "getInboxSummary(opts)");
   const rows = await InboxProjection.aggregate([
-    { $match: { inboxSpaceId: String(spaceId), branch: _branch } },
+    { $match: { inboxSpaceId: String(spaceId), history: _history } },
     { $sort: { sentAt: 1 } },
     {
       $group: {

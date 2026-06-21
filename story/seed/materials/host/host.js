@@ -200,7 +200,7 @@ export async function reconcileStaleConnections() {
 }
 
 // ── websocket notifiers ─────────────────────────────────────────────
-export function noteSocketConnected({ socketId, beingId, name, branch } = {}) {
+export function noteSocketConnected({ socketId, beingId, name, history } = {}) {
   try {
     if (!ready || shuttingDown || !socketId) return;
     if (getStoryConfigValue("hostConnectionFacts") === false) return;
@@ -214,7 +214,7 @@ export function noteSocketConnected({ socketId, beingId, name, branch } = {}) {
         socketId,
         beingId: beingId || null,
         name: name || null,
-        branch: branch || "0",
+        history: history || "0",
         connectedAt: new Date().toISOString(),
         // No token, no raw IP — connection rows are visible matter.
       },
@@ -224,7 +224,7 @@ export function noteSocketConnected({ socketId, beingId, name, branch } = {}) {
       const res = await doVerb(
         { kind: "space", id: ids.wsSpace },
         "create-matter",
-        // Full socketId: matter names are unique per kind per branch
+        // Full socketId: matter names are unique per kind per history
         // (the projections name index), and truncated ids collide.
         { name: `conn-${socketId}`, type: "connection", content: null, qualities },
         { identity: identityFor("ws"), moment: ctx },
@@ -236,17 +236,17 @@ export function noteSocketConnected({ socketId, beingId, name, branch } = {}) {
   }
 }
 
-export function noteSocketHistoryRebound({ socketId, branch } = {}) {
+export function noteSocketHistoryRebound({ socketId, history } = {}) {
   try {
     if (!ready || shuttingDown || !socketId) return;
     const matterId = socketMatter.get(socketId);
     if (!matterId || !isDbHealthy()) return;
-    enqueueBeingAct(ids.wsBeing, `ws rebind: ${socketId.slice(0, 8)} -> #${branch}`, async (ctx) => {
+    enqueueBeingAct(ids.wsBeing, `ws rebind: ${socketId.slice(0, 8)} -> #${history}`, async (ctx) => {
       const { doVerb } = await import("../../ibp/verbs/do.js");
       await doVerb(
         { kind: "matter", id: matterId },
         "set-matter",
-        { field: "qualities.connection.branch", value: branch },
+        { field: "qualities.connection.history", value: history },
         { identity: identityFor("ws"), moment: ctx },
       );
     });

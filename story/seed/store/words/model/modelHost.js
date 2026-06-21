@@ -29,9 +29,9 @@ import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { targetIdOf } from "../../../materials/_targetShape.js";
 
 /** Resolve + validate a model matter: exists, type model, live cas bytes. */
-export async function resolveModelMatter(modelMatterId, branch) {
+export async function resolveModelMatter(modelMatterId, history) {
   const { loadOrFold } = await import("../../../materials/projections.js");
-  const slot = await loadOrFold("matter", String(modelMatterId), branch);
+  const slot = await loadOrFold("matter", String(modelMatterId), history);
   if (!slot) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, `set-model: model matter "${modelMatterId}" not found`);
   }
@@ -53,20 +53,20 @@ export async function resolveModelMatter(modelMatterId, branch) {
 }
 
 /** Self / author / owner gate per target kind. */
-export async function assertMaySetModel(kind, targetId, identity, branch) {
+export async function assertMaySetModel(kind, targetId, identity, history) {
   const actor = String(identity.beingId);
   const { loadOrFold } = await import("../../../materials/projections.js");
 
   if (kind === "being") {
     if (String(targetId) === actor) return; // your body is yours
-    const slot = await loadOrFold("being", String(targetId), branch);
+    const slot = await loadOrFold("being", String(targetId), history);
     const homeSpace = slot?.state?.homeSpace || null;
     if (homeSpace && await isRootOwner(homeSpace, actor)) return;
     throw new IbpError(IBP_ERR.FORBIDDEN, "set-model: only the being itself (or the tree owner) sets a being's model");
   }
 
   if (kind === "matter") {
-    const slot = await loadOrFold("matter", String(targetId), branch);
+    const slot = await loadOrFold("matter", String(targetId), history);
     if (!slot) throw new IbpError(IBP_ERR.INVALID_INPUT, "set-model: target matter not found");
     if (String(slot.state?.beingId) === actor) return; // author
     if (slot.state?.spaceId && await isRootOwner(slot.state.spaceId, actor)) return;
@@ -74,7 +74,7 @@ export async function assertMaySetModel(kind, targetId, identity, branch) {
   }
 
   if (kind === "space") {
-    const slot = await loadOrFold("space", String(targetId), branch);
+    const slot = await loadOrFold("space", String(targetId), history);
     if (!slot) throw new IbpError(IBP_ERR.INVALID_INPUT, "set-model: target space not found");
     if (String(slot.state?.owner || "") === actor) return; // space owner
     if (await isRootOwner(String(targetId), actor)) return;
@@ -103,20 +103,20 @@ const historyOf = (ctx) =>
 // dispatcher's auto-fact reads). NO fact is laid here — enrichment, not emission.
 export function modelHostEnv(params) {
   return {
-    // The per-kind self/author/owner gate. Reads the moment's branch, calls the SAME
+    // The per-kind self/author/owner gate. Reads the moment's history, calls the SAME
     // assertMaySetModel the JS handler calls (throws IbpError on deny). Returns true on pass.
     "assert-may-set-model": async ({ args: [kind, target, caller] }, ctx) => {
       const targetId = targetIdOf(target);
-      const branch = historyOf(ctx);
-      await assertMaySetModel(kind, targetId, { beingId: caller }, branch);
+      const history = historyOf(ctx);
+      await assertMaySetModel(kind, targetId, { beingId: caller }, history);
       return true;
     },
 
     // Resolve the model matter + snapshot its body (matterId/hash/url/name) and carry the
     // optional scale/rotation through to write-model. Content-store work, lays NO fact.
     "resolve-model-block": async ({ args: [modelMatterId, scale, rotation] }, ctx) => {
-      const branch = historyOf(ctx);
-      const modelMatter = await resolveModelMatter(String(modelMatterId), branch);
+      const history = historyOf(ctx);
+      const modelMatter = await resolveModelMatter(String(modelMatterId), history);
       return {
         model: {
           matterId: String(modelMatter._id),

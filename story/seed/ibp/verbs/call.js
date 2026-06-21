@@ -110,17 +110,17 @@ export async function callVerb(stance, message, opts = {}) {
     currentStory: storyDomain,
     currentUser: currentUser || identity?.name || null,
     // Ambient world for relative shapes (`~`, bare paths, implicit
-    // branch): the moment's own branch when inside one, else the
+    // history): the moment's own history when inside one, else the
     // wire-threaded value. Without this the seed-side expand fell
     // through to the `#main` pointer for every relative summon and
-    // resolveStance walked the wrong branch for off-main callers.
+    // resolveStance walked the wrong history for off-main callers.
     currentHistory: moment?.actorAct?.history || currentHistory || null,
     currentPath:   currentPath || null,
   };
   const parsed = parseWithContext(stance, parseCtx);
   const expanded = await resolveHistoryPointers(expand(parsed, parseCtx), parseCtx);
 
-  // Thread-target branch. SUMMON whose right-side path names
+  // Thread-target history. SUMMON whose right-side path names
   // `.threads/<id>` is a cut, not a call. The thread is addressable
   // substrate but has no persistent space row — the resolver would
   // fail. Route to the seed cut handler before resolveStance runs.
@@ -141,9 +141,9 @@ export async function callVerb(stance, message, opts = {}) {
       verb:   "call",
       target: { kind: "thread", id: targetThreadId, spaceId: threadsSpaceId },
       moment,
-      // The caller's session branch (their grants live there). The
+      // The caller's session history (their grants live there). The
       // wire threads it separately from currentHistory, which carries
-      // the FACT's destination branch for this verb.
+      // the FACT's destination history for this verb.
       actorHistory: actorHistory || null,
     });
     if (!decision.ok) {
@@ -191,15 +191,15 @@ export async function callVerb(stance, message, opts = {}) {
   // When multiple beings share the role, the first hit wins; addressing
   // a specific instance uses its name.
   const { findByName, loadOrFold } = await import("../../materials/projections.js");
-  // Branch resolution at the perimeter: inside-moment continuations
+  // History resolution at the perimeter: inside-moment continuations
   // ride moment.actorAct?.history; wire-originated calls ride opts.currentHistory.
   // Throws MISSING_BRANCH if neither was attached (a threading bug at
-  // the perimeter, surfaced loud per the branch-hardening doctrine).
-  const branch = resolveHistoryForFact(moment, currentHistory, "call");
-  let toBeingSlot = await findByName("being", qualifier, branch);
+  // the perimeter, surfaced loud per the history-hardening doctrine).
+  const history = resolveHistoryForFact(moment, currentHistory, "call");
+  let toBeingSlot = await findByName("being", qualifier, history);
   let toBeing = toBeingSlot ? { _id: toBeingSlot.id, ...toBeingSlot.state } : null;
   if (!toBeing && resolved.spaceId) {
-    const spaceSlot = await loadOrFold("space", resolved.spaceId, branch);
+    const spaceSlot = await loadOrFold("space", resolved.spaceId, history);
     const beings = spaceSlot?.state?.qualities instanceof Map
       ? spaceSlot.state.qualities.get("beings")
       : spaceSlot?.state?.qualities?.beings;
@@ -212,7 +212,7 @@ export async function callVerb(stance, message, opts = {}) {
       homeBeingId = hit?.beingId || null;
     }
     if (homeBeingId) {
-      const slot = await loadOrFold("being", homeBeingId, branch);
+      const slot = await loadOrFold("being", homeBeingId, history);
       toBeing = slot ? { _id: slot.id, ...slot.state } : null;
     }
   }
@@ -246,12 +246,12 @@ export async function callVerb(stance, message, opts = {}) {
     );
   }
 
-  // branch was already resolved at the top of callVerb (line ~172)
+  // history was already resolved at the top of callVerb (line ~172)
   // for the findByName lookup; pass it through to _dispatchCall so
   // the fact emission uses the same value.
   return _dispatchCall({
     resolved, toBeing, activeRole, role, validatedMessage,
-    identity, onResponse, onError, moment, branch,
+    identity, onResponse, onError, moment, history,
     actorHistory,
   });
 }
@@ -273,9 +273,9 @@ export async function callVerb(stance, message, opts = {}) {
  * comes through here or through callVerb. Direct appendToInbox +
  * wake calls bypass the envelope contract and are forbidden.
  *
- * Branch precedence (no silent default to "0"):
- *   1. moment.actorAct.history — inside-moment caller; inherits the moment's branch
- *   2. args.branch — explicit attachment from callers without a moment
+ * History precedence (no silent default to "0"):
+ *   1. moment.actorAct.history — inside-moment caller; inherits the moment's history
+ *   2. args.history — explicit attachment from callers without a moment
  *      (subscriptions firing from a hook, scheduler boot paths, internal
  *      bootstraps). Required when moment is null.
  *   resolveHistoryForFact throws MISSING_BRANCH if neither is present.
@@ -286,14 +286,14 @@ export async function callVerb(stance, message, opts = {}) {
  * @param {object} args.message       SUMMON envelope
  * @param {string} [args.activeRole]  overrides toBeing.defaultRole
  * @param {object} args.identity      asker identity (typically I_AM)
- * @param {string} [args.branch]      explicit branch for non-moment callers
+ * @param {string} [args.history]      explicit history for non-moment callers
  * @param {object} [args.moment]   moment ctx for inside-moment callers
  */
 export async function callByResolved(args) {
   const {
     toBeingId, inboxSpaceId, message, activeRole: roleOverride,
     identity: rawIdentity,
-    onResponse, onError, moment = null, branch: argsHistory = null,
+    onResponse, onError, moment = null, history: argsHistory = null,
   } = args || {};
   // Accept bare-string identity shorthand (typically `I_AM` for seed-
   // internal summons) alongside the regular `{beingId, name}` shape.
@@ -304,10 +304,10 @@ export async function callByResolved(args) {
   const validatedMessage = validateCallMessage(message);
 
   const { loadOrFold } = await import("../../materials/projections.js");
-  const branch = resolveHistoryForFact(moment, argsHistory, "call");
-  const toSlot = await loadOrFold("being", toBeingId, branch);
+  const history = resolveHistoryForFact(moment, argsHistory, "call");
+  const toSlot = await loadOrFold("being", toBeingId, history);
   if (!toSlot) {
-    throw new IbpError(IBP_ERR.BEING_NOT_FOUND, `No being with id ${toBeingId} on branch ${branch}`);
+    throw new IbpError(IBP_ERR.BEING_NOT_FOUND, `No being with id ${toBeingId} on history ${history}`);
   }
   const toBeing = { _id: toSlot.id, position: toSlot.position, ...toSlot.state };
 
@@ -323,7 +323,7 @@ export async function callByResolved(args) {
   return _dispatchCall({
     resolved: { spaceId: inboxSpaceId, leafId: inboxSpaceId, being: activeRole },
     toBeing, activeRole, role, validatedMessage,
-    identity, onResponse, onError, moment, branch,
+    identity, onResponse, onError, moment, history,
   });
 }
 
@@ -339,7 +339,7 @@ export async function callByResolved(args) {
  */
 async function _dispatchCall({
   resolved, toBeing, activeRole, role, validatedMessage,
-  identity, onResponse, onError, moment = null, branch,
+  identity, onResponse, onError, moment = null, history,
   actorHistory = null,
 }) {
   const decision = await authorize({
@@ -357,7 +357,7 @@ async function _dispatchCall({
       spaceId: resolved.spaceId,
       being: toBeing?.name || activeRole,
       activeRole,
-      history: branch,
+      history,
     },
     // Envelope intent. Per seed/SUMMON.md, intent is the caller's
     // stated purpose AND an auth predicate: canSummon entries can
@@ -368,14 +368,14 @@ async function _dispatchCall({
     // were silent no-ops because the verb never plumbed it through.
     intent: validatedMessage.intent || null,
     moment,
-    // The actor's branch, where their grants live. In-moment summons
+    // The actor's history, where their grants live. In-moment summons
     // ride moment.actorAct.history; wire summons thread the
-    // caller's session branch as actorHistory (the `branch` param is
+    // caller's session history as actorHistory (the `history` param is
     // the FACT's destination — the wrong side for grants). The final
     // fallback keeps seed-internal callers (scheduler wakes,
     // callByResolved) working: their actor is the substrate and
-    // the destination branch is their world.
-    actorHistory: moment?.actorAct?.history || actorHistory || branch || null,
+    // the destination history is their world.
+    actorHistory: moment?.actorAct?.history || actorHistory || history || null,
   });
   if (!decision.ok) {
     throw new IbpError(
@@ -481,18 +481,18 @@ async function _dispatchCall({
       attachments:     validatedMessage.attachments,
       inboxSpaceId:    inboxNodeId,
       sentAt,
-      // Cross-branch provenance for MOMENT-LESS summons. In-moment
+      // Cross-history provenance for MOMENT-LESS summons. In-moment
       // summons get crossOrigin derived by emitFact from
       // moment.actorAct; a wire summon has no moment (the summon
       // becomes the RECIPIENT's moment), so when the caller's session
-      // branch differs from the fact's destination branch the block
+      // history differs from the fact's destination history the block
       // is attached here. actId is null — there is no home-side act
       // for a wire summon; the keystroke is not an act.
-      ...(!moment?.actorAct && actorHistory && actorHistory !== branch
+      ...(!moment?.actorAct && actorHistory && actorHistory !== history
         ? {
             crossOrigin: {
               story: null,
-              branch:  actorHistory,
+              history:  actorHistory,
               beingId: summonerBeingId,
               actId:   null,
             },
@@ -500,10 +500,10 @@ async function _dispatchCall({
         : {}),
     },
     actId: moment?.actId || null,
-    // Branch the summon fact lands on, pre-resolved at the entry point
+    // History the summon fact lands on, pre-resolved at the entry point
     // (callVerb / callByResolved both call resolveHistoryForFact
     // before dispatching here). _dispatchCall trusts the value.
-    history: branch,
+    history,
   }, moment);
 
   const innerCtx = {

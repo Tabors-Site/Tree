@@ -8,7 +8,7 @@
 // SHAPE of my dance-floor / lab / blog — grow your own copy elsewhere."
 // The receiver gets the structure plantable, not the history. No acts,
 // no biography, no original ids preserved: the planted seed sprouts fresh
-// facts on the receiver's branch under the planter's identity, with the
+// facts on the receiver's history under the planter's identity, with the
 // shape but no rings, no scars, no history of how it came to be — exactly
 // as intended.
 //
@@ -62,7 +62,7 @@ import { emptyBundle } from "./bundle.js";
  *
  * @param {string} scopeSpaceId       bare space-id of the subtree root
  * @param {object} opts
- * @param {string} [opts.branch]      branch to snapshot (default "0")
+ * @param {string} [opts.history]      history to snapshot (default "0")
  * @param {string} [opts.scopeName]   human-friendly label for the bundle meta
  * @param {string} [opts.sourceStory] story domain (for meta)
  * @param {string} [opts.operatorBeingId] who initiated (for audit meta)
@@ -72,10 +72,10 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   if (!scopeSpaceId || typeof scopeSpaceId !== "string") {
     throw new Error("captureTemplate: scopeSpaceId is required");
   }
-  const branch = opts.branch || "0";
+  const history = opts.history || "0";
   // loadOrFold throughout this file: clone walks aggregates on the
-  // source branch and captures their state for bundling. An aggregate
-  // inherited from main onto the source branch lives only on main's
+  // source history and captures their state for bundling. An aggregate
+  // inherited from main onto the source history lives only on main's
   // table until lineage cold-fold materializes it here; bare
   // loadProjection silently skipped (continue on !slot) those rows and
   // produced incomplete bundles. The walker only sees what loadOrFold
@@ -83,25 +83,25 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   const { loadProjection, loadOrFold } = await import("../projections.js");
   const { default: Projection } = await import("../history/projection.js");
 
-  // Direct projection query for "children of space X in branch B".
+  // Direct projection query for "children of space X in history B".
   // (The generic findByParent helper is being-specific; spaces don't
   // have a single substrate wrapper, so we query directly here.)
   const findSpaceChildren = async (parentId) => {
     return await Projection.find({
-      history: branch, type: "space",
+      history: history, type: "space",
       "state.parent": parentId,
       tombstoned: { $ne: true },
     }).select("id").lean();
   };
 
-  const rootSlot = await loadOrFold("space", scopeSpaceId, branch);
+  const rootSlot = await loadOrFold("space", scopeSpaceId, history);
   if (!rootSlot) {
-    throw new Error(`captureTemplate: space "${scopeSpaceId}" not found in branch "${branch}"`);
+    throw new Error(`captureTemplate: space "${scopeSpaceId}" not found in history "${history}"`);
   }
 
   const bundle = emptyBundle({
     sourceStory:      opts.sourceStory || null,
-    sourceHistory:       branch,
+    sourceHistory:       history,
     sourceScopeName:    opts.scopeName || rootSlot.state?.name || null,
     sourceScopeSpaceId: scopeSpaceId,
     operatorBeingId:    opts.operatorBeingId || null,
@@ -121,7 +121,7 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   while (spaceQueue.length > 0) {
     const { id, depth } = spaceQueue.shift();
     if (capturedSpaceIds.has(id)) continue;
-    const slot = await loadOrFold("space", id, branch);
+    const slot = await loadOrFold("space", id, history);
     if (!slot) continue;
     // Skip heaven spaces (dot-namespace) UNLESS this is the scope root
     // the operator explicitly chose. Two cases:
@@ -165,7 +165,7 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   const SEED_DELEGATE_NAMES = new Set(SEED_DELEGATES.map((d) => d.name));
   for (const spaceId of capturedSpaceIds) {
     const beingRows = await Projection.find({
-      history: branch, type: "being",
+      history: history, type: "being",
       "state.homeSpace": spaceId,
       tombstoned: { $ne: true },
     }).lean();
@@ -180,7 +180,7 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   // ── 3. Walk matter whose spaceId is in the captured set ──
   for (const spaceId of capturedSpaceIds) {
     const matterRows = await Projection.find({
-      history: branch, type: "matter",
+      history: history, type: "matter",
       "state.spaceId": spaceId,
       tombstoned: { $ne: true },
     }).lean();
@@ -276,7 +276,7 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   };
 
   for (const spaceId of orderedSpaceIds) {
-    const slot = await loadOrFold("space", spaceId, branch);
+    const slot = await loadOrFold("space", spaceId, history);
     if (!slot) continue;
     const state = slot.state || {};
     bundle.content.spaces.push({
@@ -301,7 +301,7 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
 
   // ── 6. Capture beings ──
   for (const beingId of capturedBeingIds) {
-    const slot = await loadOrFold("being", beingId, branch);
+    const slot = await loadOrFold("being", beingId, history);
     if (!slot) continue;
     const state = slot.state || {};
     bundle.content.beings.push({
@@ -321,7 +321,7 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   // ── 7. Capture matter ──
   let casRefCount = 0;
   for (const matterId of capturedMatterIds) {
-    const slot = await loadOrFold("matter", matterId, branch);
+    const slot = await loadOrFold("matter", matterId, history);
     if (!slot) continue;
     const state = slot.state || {};
     if (state.content?.kind === "cas") casRefCount++;
@@ -469,7 +469,7 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   // bundle still travels and is accepted under the transport sig.
   {
     const { signBundle } = await import("./bundleSig.js");
-    await signBundle(bundle, opts.operatorBeingId || null, opts.branch || "0");
+    await signBundle(bundle, opts.operatorBeingId || null, opts.history || "0");
   }
 
   return bundle;
@@ -480,7 +480,7 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
  * transfer call this: capture stamps it into meta, graft verifies
  * the received bundle reproduces it. Covers manifest + parameters +
  * content + casManifest + the identifying meta (source story /
- * branch / scope, createdAt). Excludes casBlobs bytes (each blob is
+ * history / scope, createdAt). Excludes casBlobs bytes (each blob is
  * verified against its own hash at put time) and bundleHash itself.
  */
 export async function computeBundleHash(bundle) {

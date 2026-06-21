@@ -59,12 +59,12 @@ const MAX_REGISTERED = 500;
  *   Bare for seed ("place"), "<ext>:<name>" for extensions.
  * @param {object} spec
  * @param {Function} spec.handler
- *   async ({ identity, args, ctx, branch }) => any
+ *   async ({ identity, args, ctx, history }) => any
  *   - identity: the caller's identity object (or null when anonymous)
  *   - args: validated against spec.args
  *   - ctx: when called from a cognition frame, the moment ctx
  *     (carries being, currentSpace, rootId); null otherwise
- *   - branch: the branch the SEE runs on
+ *   - history: the history the SEE runs on
  *   Return value can be any serializable shape. The cognition
  *   consumption path JSON-stringifies it under a [<label>] header;
  *   direct callers receive it verbatim.

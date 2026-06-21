@@ -247,7 +247,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
         await ctx.adoptSession(result, beingName);
         // Branch pick: if it differs from where connect seated us, switch.
         if (branch && result?.seatHistory && branch !== String(result.seatHistory)) {
-          try { await ctx.client.be("switch", `${story}/@${beingName}`, { branch }); } catch { /* stay on home */ }
+          try { await ctx.client.be("switch", `${story}/@${beingName}`, { history: branch }); } catch { /* stay on home */ }
         }
         repaintChrome();
       },
@@ -294,11 +294,11 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     });
   }
 
-  // The Name Hierarchy panel (text view). Your Name's being-tree on the branch
+  // The Name Hierarchy panel (text view). Your Name's being-tree on the history
   // you stand on (the IBPA left stance) + the grant surface. Reading the tree
   // is bodiless (the name channel); GRANTING/REVOKING are world acts, so canAct
   // reflects whether you're driving a being. reopen() re-reads the CURRENT
-  // branch each call, so the ⟳ refresh re-scopes after a branch switch, and a
+  // history each call, so the ⟳ refresh re-scopes after a history switch, and a
   // grant/revoke refreshes in place.
   async function presentNameHierarchy(ctx = activeCtx) {
     if (!ctx?.client) return;
@@ -306,13 +306,13 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     try { nameId = (await ctx.client.nameWhoami())?.nameId || null; } catch { /* not signed in */ }
     if (!nameId) { presentNameForm(ctx); return; }
     const story = ctx.state.get("discovery")?.story || "";
-    const branch  = ctx.state.get("descriptor")?.address?.history || "0";
+    const history  = ctx.state.get("descriptor")?.address?.history || "0";
     const canAct  = !!ctx.state.get("session")?.beingId;
     await showNameTree({
       client: ctx.client,
       story,
       nameId,
-      branch,
+      history,
       canAct,
       reopen: () => presentNameHierarchy(ctx),
     });
@@ -447,7 +447,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
         window.__state = ctx.state.raw;
       }
     }));
-    unsubs.push(ctx.events.on("branch", () => {
+    unsubs.push(ctx.events.on("history", () => {
       if (ctx === activeCtx) historyBar?.refreshAddress?.();
     }));
     for (const type of ["live-position", "live-fact", "live-while-historical"]) {
@@ -642,7 +642,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
         const result = await ctx.client.be("connect", `${story}/@${being}`, {});
         await ctx.adoptSession(result, being);
         if (branch && result?.seatHistory && branch !== String(result.seatHistory)) {
-          try { await ctx.client.be("switch", `${story}/@${being}`, { branch }); } catch { /* stay on home */ }
+          try { await ctx.client.be("switch", `${story}/@${being}`, { history: branch }); } catch { /* stay on home */ }
         }
         repaintChrome();
       } catch (err) {

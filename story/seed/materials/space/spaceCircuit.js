@@ -163,27 +163,27 @@ export async function checkTreeHealth(treeId) {
 }
 
 /**
- * Trip a tree's circuit breaker on a specific branch.
+ * Trip a tree's circuit breaker on a specific history.
  *
- * Each branch has its own circuit state — a tree that goes haywire
- * on a branch trips ONLY that branch's view, leaving other branches
- * untouched. Callers MUST pass the branch they're operating in;
+ * Each history has its own circuit state — a tree that goes haywire
+ * on a history trips ONLY that history's view, leaving other histories
+ * untouched. Callers MUST pass the history they're operating in;
  * there's no silent main-bias.
  *
  * @param {string} treeId
  * @param {string} reason
  * @param {object} [opts]
- * @param {string} opts.branch - branch the trip lands on (required)
+ * @param {string} opts.history - history the trip lands on (required)
  * @param {object} [opts.scores] - health scores at time of trip
  */
 export async function tripTree(treeId, reason, opts = {}) {
   if (!reason || typeof reason !== "string") reason = "Unknown";
   if (reason.length > 500) reason = reason.slice(0, 500);
 
-  const branch = opts.branch;
-  if (typeof branch !== "string" || !branch.length) {
+  const history = opts.history;
+  if (typeof history !== "string" || !history.length) {
     throw new Error(
-      "tripTree: opts.branch is required. Each branch tracks its own circuit; no silent main-bias.",
+      "tripTree: opts.history is required. Each history tracks its own circuit; no silent main-bias.",
     );
   }
   const scores = opts.scores || {};
@@ -200,25 +200,25 @@ export async function tripTree(treeId, reason, opts = {}) {
   // substrate-internal health-monitor writes. The I-Am is the
   // structural actor for background substrate housekeeping.
   const { withIAmAct } = await import("../../sprout.js");
-  await withIAmAct(`Circuit: trip tree ${String(treeId).slice(0, 8)} on #${branch}`, async (ctx) => {
+  await withIAmAct(`Circuit: trip tree ${String(treeId).slice(0, 8)} on #${history}`, async (ctx) => {
     await emitFact({
       verb:    "do",
       act:     "set-space",
       through: I_AM,
       of:      { kind: "space", id: String(treeId) },
       params:  { field: "qualities.circuit", value: circuit, merge: false },
-      // Each branch carries its own circuit state. A tree that goes
-      // haywire on branch #4 stays alive on main; operators see the
-      // circuit on the branch they're inhabiting. Cross-branch
+      // Each history carries its own circuit state. A tree that goes
+      // haywire on history #4 stays alive on main; operators see the
+      // circuit on the history they're inhabiting. Cross-history
       // contamination would defeat the whole point of branching.
-      history: branch,
+      history: history,
     }, ctx);
   });
-  invalidateSpace(treeId, branch);
+  invalidateSpace(treeId, history);
 
-  log.warn("Circuit", `Tree ${treeId} tripped on #${branch}: ${reason}`);
+  log.warn("Circuit", `Tree ${treeId} tripped on #${history}: ${reason}`);
 
-  hooks.run("onTreeTripped", { treeId, branch, reason, scores, timestamp: circuit.timestamp })
+  hooks.run("onTreeTripped", { treeId, history, reason, scores, timestamp: circuit.timestamp })
     .catch(err => log.debug("Circuit", `onTreeTripped hook error: ${err.message}`));
 }
 
@@ -228,12 +228,12 @@ export async function tripTree(treeId, reason, opts = {}) {
  * @param {string} treeId
  * @param {string} beingId - the caller (required for authorization)
  */
-export async function reviveTree(treeId, beingId, branch) {
+export async function reviveTree(treeId, beingId, history) {
   if (!treeId)  throw new Error("treeId is required");
   if (!beingId) throw new Error("beingId is required");
-  if (typeof branch !== "string" || !branch) throw new Error("reviveTree: branch is required");
+  if (typeof history !== "string" || !history) throw new Error("reviveTree: history is required");
 
-  const access = await resolveSpaceAccess(treeId, beingId, branch);
+  const access = await resolveSpaceAccess(treeId, beingId, history);
   if (!access.ok || !access.isOwner) {
     // Admin bypass retired 2026-05-18; role-walk gates
     // non-owner revival policies. For now: owner only.
@@ -251,24 +251,24 @@ export async function reviveTree(treeId, beingId, branch) {
   // Wrap the revive Fact in the operator's own moment via
   // withBeingAct so it rides their Act-chain. "Every fact comes from
   // an act" (MOMENT.md) — the operator's intentional revive is a
-  // moment in their biography. The revive lands on the SAME branch
+  // moment in their biography. The revive lands on the SAME history
   // the trip was on (the operator only sees the tripped state for
-  // the branch they're inhabiting); cross-branch revives would
-  // accidentally clear other branches' circuits.
+  // the history they're inhabiting); cross-history revives would
+  // accidentally clear other histories' circuits.
   const { withBeingAct } = await import("../../sprout.js");
-  await withBeingAct(String(beingId), `Circuit: revive tree ${String(treeId).slice(0, 8)} on #${branch}`, branch, async (ctx) => {
+  await withBeingAct(String(beingId), `Circuit: revive tree ${String(treeId).slice(0, 8)} on #${history}`, history, async (ctx) => {
     await emitFact({
       verb:    "do",
       act:     "set-space",
       through: String(beingId),
       of:      { kind: "space", id: String(treeId) },
       params:  { field: "qualities.circuit", value: { tripped: false }, merge: false },
-      history: branch,
+      history: history,
     }, ctx);
   });
-  invalidateSpace(treeId, branch);
+  invalidateSpace(treeId, history);
 
-  log.info("Circuit", `Tree ${treeId} revived by ${beingId} on #${branch}`);
+  log.info("Circuit", `Tree ${treeId} revived by ${beingId} on #${history}`);
 
   hooks.run("onTreeRevived", { treeId, timestamp: new Date().toISOString() })
     .catch(err => log.debug("Circuit", `onTreeRevived hook error: ${err.message}`));

@@ -18,7 +18,7 @@
 
 import log from "../../seedStory/log.js";
 import { IbpError, IBP_ERR } from "../protocol.js";
-import { resolveTargetHistory } from "../branchResolve.js";
+import { resolveTargetHistory } from "../historyResolve.js";
 
 /**
  * Normalize an identity input. Callers may pass a bare string (a
@@ -91,23 +91,23 @@ export function refuseHistoricalWrite(verb, target, opts) {
 }
 
 /**
- * Resolve which branch a write-verb's Fact lands on. The Fact lives
+ * Resolve which history a write-verb's Fact lands on. The Fact lives
  * at the TARGET's world; the actor's world is on moment.actorAct.
  * When they differ, the call is cross-world and emitFact attaches a
  * crossOrigin block automatically. See CROSS-WORLD.md.
  *
  * Precedence — the moment is ground truth:
  *
- *   1. moment.targetHistory — the moment-wide target branch
+ *   1. moment.targetHistory — the moment-wide target history
  *      seated by assign.js from the inbox entry's targetHistory.
  *      For same-world moments this equals actorAct.history.
- *   2. moment.actorAct.history — the actor's branch. The
+ *   2. moment.actorAct.history — the actor's history. The
  *      same-world fallback for in-moment continuations without an
  *      explicit target attachment (scaffolds, manifest sync, etc.,
  *      which operate on the actor's own world by construction).
  *   3. opts.currentHistory — explicit per-call attachment for
  *      PRE-MOMENT callers (the wire layer before a moment opens,
- *      schedulers, bootstraps). Inside a moment the seated branches
+ *      schedulers, bootstraps). Inside a moment the seated histories
  *      above win; an opts side-channel must not re-point a moment
  *      that was opened against a specific world.
  *
@@ -120,14 +120,14 @@ export function resolveHistoryForFact(moment, currentHistory, verb) {
   // actorAct.history → currentHistory — identical to before.
   const resolved = resolveTargetHistory({ moment, currentHistory });
   if (resolved) return resolved;
-  // Caller-specific null tail: a missing branch at the verb perimeter
+  // Caller-specific null tail: a missing history at the verb perimeter
   // is a threading bug — fail loud.
   const frame = captureCallerFrame();
   throw new IbpError(
     IBP_ERR.MISSING_BRANCH || "MISSING_BRANCH",
-    `place.${verb}: branch missing at the perimeter (none of ` +
+    `place.${verb}: history missing at the perimeter (none of ` +
       `opts.currentHistory, moment.targetHistory, or moment.actorAct.history ` +
-      `was attached). The wire layer must thread the target's branch into the ` +
+      `was attached). The wire layer must thread the target's history into the ` +
       `verb opts. (caller: ${frame})`,
   );
 }

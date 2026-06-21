@@ -141,11 +141,11 @@ export async function enqueueIntake(spaceId, beingId, entry) {
       sentAt,
       transportAct:    true,            // marker for the scheduler / moment
     },
-    // Branch threads off the entry; the inbox fold reads fact.branch
+    // History threads off the entry; the inbox fold reads fact.history
     // when upserting the projection row so the scheduler can pick
-    // branch-scoped. Caller (transport-act dispatch) must attach
-    // branch from the wire layer's parsed address; no silent fallback.
-    history:  assertHistoryOrThrow(entry.branch, "enqueueIntake(entry)"),
+    // history-scoped. Caller (transport-act dispatch) must attach
+    // history from the wire layer's parsed address; no silent fallback.
+    history:  assertHistoryOrThrow(entry.history, "enqueueIntake(entry)"),
   });
 
   return { correlation, sentAt };
@@ -242,13 +242,13 @@ export async function pickNextIntake(spaceId, beingId, opts = {}) {
       // them on moment without re-reading row.content.
       act:             content?.act || null,
       identity:        content?.identity || null,
-      // Branch the moment will run in. Sourced from the inbox row's
-      // branch field (written by the fold from the call fact's
-      // branch). assign.js reads entry.branch to seed moment.
-      // A row with null branch indicates a data integrity issue — the
+      // History the moment will run in. Sourced from the inbox row's
+      // history field (written by the fold from the call fact's
+      // history). assign.js reads entry.history to seed moment.
+      // A row with null history indicates a data integrity issue — the
       // fold should always have populated it from the originating
       // fact. assert so the corruption surfaces immediately.
-      history:          assertHistoryOrThrow(row.branch, "intake.pick(row)"),
+      history:          assertHistoryOrThrow(row.history, "intake.pick(row)"),
     },
     index: row._id, // correlation as identifier
   };

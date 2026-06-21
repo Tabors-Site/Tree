@@ -134,14 +134,14 @@ export async function isDetachedFromBeingParent(beingId) {
  * authority model now; `isDetachedFromBeingParent` remains for any
  * direct reader but is authority-inert here.
  */
-export async function hasCredentialAuthority(askerBeingId, targetBeingId, branch) {
+export async function hasCredentialAuthority(askerBeingId, targetBeingId, history) {
   if (!askerBeingId || !targetBeingId) return false;
   if (String(askerBeingId) === String(targetBeingId)) return true;
   const { I_AM } = await import("../seedBeings.js");
   if (String(askerBeingId) === String(I_AM)) return true;
 
-  // Resolve a branch to read the tree on (never literal "0").
-  let b = branch;
+  // Resolve a history to read the tree on (never literal "0").
+  let b = history;
   if (!b) {
     const { getDefaultHistory } = await import("../../history/historyRegistry.js");
     b = await getDefaultHistory();

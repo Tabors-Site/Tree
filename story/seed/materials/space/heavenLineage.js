@@ -13,7 +13,7 @@
 // distinction is structural, not stored: no schema field needed.
 //
 // The substrate's projection layer consults this to route heaven
-// reads / writes to branch="0" regardless of caller's branch.
+// reads / writes to history="0" regardless of caller's history.
 
 import { findByHeavenSpace } from "../projections.js";
 import { HEAVEN_SPACE } from "./heavenSpaces.js";
@@ -52,8 +52,8 @@ export async function findHeavenRootId() {
  *   . it IS `.` (the HEAVEN heaven space)
  *   . OR `.` appears in its ancestor chain on MAIN
  *
- * Walks the ancestor cache at MAIN. Branch-agnostic by design:
- * heaven membership is story-level structure, not branched state.
+ * Walks the ancestor cache at MAIN. History-agnostic by design:
+ * heaven membership is story-level structure, not per-history state.
  *
  * Returns false for unknown spaces (defensive default).
  *

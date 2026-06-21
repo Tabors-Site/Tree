@@ -124,29 +124,29 @@ export async function loadTargetRow(target, expectedKind, { moment = null } = {}
   if (!expectedKind || !KINDS.has(expectedKind)) {
     throw new Error(`loadTargetRow: expectedKind must be space/being/matter; got "${expectedKind}"`);
   }
-  // Branch the lookup happens on. The moment carries TWO branches: the
+  // History the lookup happens on. The moment carries TWO histories: the
   // actor's (moment.actorAct.history — where their Act seals) and the
   // target's (moment.targetHistory — where the row LIVES and the Fact
-  // lands). A LOCAL target row lives on the TARGET branch, so we prefer
+  // lands). A LOCAL target row lives on the TARGET history, so we prefer
   // it. For a same-world moment the two are equal (assign seats them
   // so), so this is a no-op there; for a cross-story INBOUND moment
-  // actorAct.history is the FOREIGN home branch and the local target only
+  // actorAct.history is the FOREIGN home history and the local target only
   // resolves on moment.targetHistory. Same precedence (targetHistory
   // before actorAct.history) that resolveTargetHistory / resolveHistoryForFact
   // use for the fact-landing side.
-  const branch = moment?.targetHistory || moment?.actorAct?.history || "0";
+  const history = moment?.targetHistory || moment?.actorAct?.history || "0";
   // loadOrFold (not loadProjection): every DO/BE/SUMMON op flows through
-  // loadTargetRow. On a fresh branch the target's slot hasn't been
+  // loadTargetRow. On a fresh history the target's slot hasn't been
   // cold-folded yet — bare loadProjection returns null, the handler
   // throws "target not found," and the user can't act on their OWN
   // being or anything else inherited from main. loadOrFold walks the
-  // lineage so branch-N targets resolve transparently from main.
+  // lineage so history-N targets resolve transparently from main.
   const { loadOrFold, findByName } = await import("./projections.js");
 
   // Stance-target shortcut for being-loading ops. The IBP resolver
   // hands the verb a stance object carrying `{ chain, spaceId, being }`;
   // ops that expect a Being row need the @qualifier resolved to a row
-  // before the handler runs. Branch-scoped: names are per-branch
+  // before the handler runs. History-scoped: names are per-history
   // identifiers.
   if (
     expectedKind === "being" &&
@@ -156,9 +156,9 @@ export async function loadTargetRow(target, expectedKind, { moment = null } = {}
     target.being.length > 0 &&
     !(target.kind && target.id != null)
   ) {
-    const slot = await findByName("being", target.being, branch);
+    const slot = await findByName("being", target.being, history);
     if (!slot) {
-      throw new Error(`loadTargetRow: no being found with name "${target.being}" on branch ${branch}`);
+      throw new Error(`loadTargetRow: no being found with name "${target.being}" on history ${history}`);
     }
     return { _id: slot.id, position: slot.position, ...(slot.state || {}) };
   }
@@ -181,7 +181,7 @@ export async function loadTargetRow(target, expectedKind, { moment = null } = {}
     );
   }
 
-  const slot = await loadOrFold(expectedKind, id, branch);
+  const slot = await loadOrFold(expectedKind, id, history);
   if (slot) return { _id: slot.id, position: slot.position, ...(slot.state || {}) };
 
   // Row absent — check the moment's deltaF for a pending create-<kind>

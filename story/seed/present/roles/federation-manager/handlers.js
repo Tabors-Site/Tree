@@ -131,11 +131,11 @@ async function handleAcceptTemplate(message, ctx) {
 // asker is the foreign federation-manager (ctx.actorAct.through);
 // the LOCAL receiver is `to`. State lives on the local being.
 async function readBucket(ctx, bucket, key) {
-  const branch    = ctx?.actorAct?.history || "0";
+  const history   = ctx?.actorAct?.history || "0";
   const myBeingId = ctx?.actorAct?.to || ctx?.actorAct?.through;
   if (!myBeingId) return null;
   const { loadOrFold } = await import("../../../materials/projections.js");
-  const slot = await loadOrFold("being", String(myBeingId), branch);
+  const slot = await loadOrFold("being", String(myBeingId), history);
   if (!slot) return null;
   const q = slot.state?.qualities;
   const qualities = q instanceof Map ? Object.fromEntries(q.entries()) : q;
@@ -156,7 +156,7 @@ async function dispatchToPeer(ctx, peerStory, message) {
   // foreign asker (`through`). The cross story act we open is OUR
   // outbound dispatch.
   const myBeingId = ctx?.actorAct?.to || ctx?.actorAct?.through;
-  const branch    = ctx?.actorAct?.history || "0";
+  const history   = ctx?.actorAct?.history || "0";
   if (!myBeingId) {
     throw new Error("dispatchToPeer: no actorAct in ctx");
   }
@@ -179,7 +179,7 @@ async function dispatchToPeer(ctx, peerStory, message) {
   };
   return await crossStoryDispatch({
     envelope,
-    actor:    { beingId: myBeingId, branch },
+    actor:    { beingId: myBeingId, branch: history },
     identity: { beingId: myBeingId, name: "federation-manager" },
   });
 }
@@ -428,9 +428,9 @@ async function setQualityField(ctx, subPath, value) {
 // future versions can route via the offer's manifest or an operator
 // policy (different incoming sources to different positions).
 async function resolveDefaultPlantParent(ctx) {
-  const branch = ctx?.actorAct?.history || "0";
+  const history = ctx?.actorAct?.history || "0";
   const { findRoot } = await import("../../../materials/projections.js");
-  const roots = await findRoot("space", branch);
+  const roots = await findRoot("space", history);
   return roots?.[0]?.id || null;
 }
 

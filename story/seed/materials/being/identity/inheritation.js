@@ -32,8 +32,8 @@
 // (by Fact.date at seal) for a given (position, granted Name) decides
 // the live state. Points are identity-level facts (who may act, not
 // what is where), so — like lineage.js's authority reads — the point
-// queries are branch-agnostic; only the tree WALK is branch-aware
-// (a being's parent/owner are read from its projection on `branch`).
+// queries are history-agnostic; only the tree WALK is history-aware
+// (a being's parent/owner are read from its projection on `history`).
 
 import Fact from "../../../past/fact/fact.js";
 import { loadProjection } from "../../projections.js";
@@ -47,25 +47,25 @@ const MAX_TREE_DEPTH = 256; // cycle/runaway guard for the upward walk.
  * latest revoke-inheritation naming it (latest-of-two-by-date, the
  * lineage.js attach/detach pattern).
  *
- * Branch-aware when `branch` is given: only points granted on `branch`'s
- * reel-lineage count (a sub-branch sees main's grants; main does not see
- * a sub-branch's). This is what lets the portal scope "who has access"
- * to the branch you're standing on. Omit `branch` for the branch-
+ * History-aware when `history` is given: only points granted on `history`'s
+ * reel-lineage count (a sub-history sees main's grants; main does not see
+ * a sub-history's). This is what lets the portal scope "who has access"
+ * to the history you're standing on. Omit `history` for the history-
  * agnostic union (any grant anywhere) — used where authority is read
- * without a branch in hand.
+ * without a history in hand.
  *
  * Both facts land on the POSITION being's reel (of.id = position),
  * attributed to the granting/revoking Name (the actor). The granted
  * Name rides in params.name.
  */
-export async function livePointsAt(beingId, branch) {
+export async function livePointsAt(beingId, history) {
   if (!beingId) return new Set();
   const position = String(beingId);
 
   let historyClause = {};
-  if (branch) {
+  if (history) {
     const { resolveHistoryLineage } = await import("../../history/histories.js");
-    historyClause = { history: { $in: await resolveHistoryLineage(String(branch)) } };
+    historyClause = { history: { $in: await resolveHistoryLineage(String(history)) } };
   }
 
   const [grants, revokes] = await Promise.all([
@@ -131,15 +131,15 @@ function anchorsAtNode(beingRow, livePoints) {
  * to the story root. Bounded by MAX_TREE_DEPTH. Stops when a being
  * has no parent (the I-AM being / a root) or can't be loaded.
  */
-async function* walkUp(beingId, branch) {
+async function* walkUp(beingId, history) {
   let id = beingId ? String(beingId) : null;
   const seen = new Set();
   for (let depth = 0; id && depth < MAX_TREE_DEPTH; depth++) {
     if (seen.has(id)) break; // defensive: a cycle in parentBeingId.
     seen.add(id);
-    const row = await loadProjection("being", id, branch);
+    const row = await loadProjection("being", id, history);
     if (!row?.state) break;
-    const points = await livePointsAt(id, branch);
+    const points = await livePointsAt(id, history);
     yield { id, row, points };
     const parent = row.state.parentBeingId;
     id = parent ? String(parent) : null;
@@ -159,14 +159,14 @@ async function* walkUp(beingId, branch) {
  * Short-circuits on the first covering anchor found on the walk up, so
  * it's cheaper than computing the full authoritiesOver set.
  */
-export async function hasAuthorityOver(nameId, beingId, branch) {
+export async function hasAuthorityOver(nameId, beingId, history) {
   if (!nameId || !beingId) return false;
   const name = String(nameId);
 
   const { I_AM } = await import("../seedBeings.js");
   if (name === String(I_AM) || name === "i-am" || name === "I_AM") return true;
 
-  for await (const { row, points } of walkUp(beingId, branch)) {
+  for await (const { row, points } of walkUp(beingId, history)) {
     if (anchorsAtNode(row, points).has(name)) return true;
   }
   return false;
@@ -178,12 +178,12 @@ export async function hasAuthorityOver(nameId, beingId, branch) {
  * point on the walk up. Use hasAuthorityOver when you only need a
  * yes/no for one Name (it short-circuits).
  */
-export async function authoritiesOver(beingId, branch) {
+export async function authoritiesOver(beingId, history) {
   const out = new Set();
   const { I_AM } = await import("../seedBeings.js");
   out.add(String(I_AM));
 
-  for await (const { row, points } of walkUp(beingId, branch)) {
+  for await (const { row, points } of walkUp(beingId, history)) {
     for (const a of anchorsAtNode(row, points)) out.add(a);
   }
   return out;

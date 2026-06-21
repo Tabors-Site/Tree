@@ -123,17 +123,19 @@ export async function resolveUntil(type, id, until, opts = {}) {
   if (Number.isNaN(at.getTime())) {
     throw new Error(`resolveUntil: invalid atTimestamp "${until.atTimestamp}"`);
   }
-  // Branch-aware AND lineage-aware: the latest fact at-or-before the
-  // timestamp anywhere in the branch's inherited reel. For heaven this
-  // is just heaven's facts; for a child branch this is heaven up to the
-  // branch point + the branch's own divergent facts. Without the lineage
+  // History-aware AND lineage-aware: the latest fact at-or-before the
+  // timestamp anywhere in the history's inherited reel. For heaven this
+  // is just heaven's facts; for a child history this is heaven up to the
+  // branch point + the history's own divergent facts. Without the lineage
   // walk, a past view on #1 where no divergent facts exist for the
   // target returns null → foldAt throws → descriptor drops the row, and
   // the entire scene empties out (the user's "grid spaces disappear in
-  // past view on #1" symptom). Branch is required from the caller; the
+  // past view on #1" symptom). History is required from the caller; the
   // historian path used to default to heaven silently.
-  const branch = assertHistoryOrThrow(opts.branch || until.branch, "resolveUntil(opts)");
-  if (branch === "0") {
+  // SEAM: opts key is still `branch` (foldEngine/descriptor convention);
+  // the value is the history slot.
+  const history = assertHistoryOrThrow(opts.branch || until.branch, "resolveUntil(opts)");
+  if (history === "0") {
     const row = await Fact.findOne({
       "of.kind": type,
       "of.id":   id,
@@ -148,9 +150,9 @@ export async function resolveUntil(type, id, until, opts = {}) {
   }
   // Non-main: walk the lineage and union per-ancestor branchMatch
   // clauses so a fact on the inherited prefix of main counts toward
-  // the branch's view at past time.
+  // the history's view at past time.
   const { resolveHistoryLineage, isMain } = await import("../../../materials/history/histories.js");
-  const lineage = await resolveHistoryLineage(branch);
+  const lineage = await resolveHistoryLineage(history);
   const orClauses = lineage.map((b) =>
     isMain(b)
       ? { $or: [{ history: "0" }, { history: { $exists: false } }] }
@@ -189,19 +191,20 @@ export async function foldAt(type, id, until, opts = {}) {
   assertType(type);
   if (!id) throw new Error("foldAt: id is required");
 
-  // Branch can come from opts.branch (the descriptor's threaded value)
-  // or from until.branch (legacy callers that packed it into the
-  // historical anchor). Prefer opts so the descriptor sweep doesn't
-  // have to re-pack until objects. No silent default — caller must
-  // attach branch via descriptor or until anchor.
-  const branch = assertHistoryOrThrow(opts.branch || until?.branch, "foldAt(opts)");
+  // History can come from opts.branch (the descriptor's threaded value;
+  // SEAM: opts key is still `branch` per the foldEngine/descriptor
+  // convention, value is the history slot) or from until.branch (legacy
+  // callers that packed it into the historical anchor). Prefer opts so
+  // the descriptor sweep doesn't have to re-pack until objects. No
+  // silent default — caller must attach history via descriptor or anchor.
+  const history = assertHistoryOrThrow(opts.branch || until?.branch, "foldAt(opts)");
 
-  const untilSeq = await resolveUntil(type, id, until, { branch });
+  const untilSeq = await resolveUntil(type, id, until, { branch: history });
   if (untilSeq == null) {
     throw new NoSuchHistoricalState(type, id, until);
   }
 
-  const facts = await readReelBetween(type, id, null, untilSeq, branch);
+  const facts = await readReelBetween(type, id, null, untilSeq, history);
 
   // No facts at or before this seq — the target hadn't been birthed
   // yet (or the reel was malformed). Distinguish from "fold returned

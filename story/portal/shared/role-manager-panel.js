@@ -257,7 +257,7 @@ function renderCreateRoleSection(catalogs, ctx, onCreated) {
     submit.disabled = true;
     status.textContent = "saving...";
     try {
-      const bq = ctx.branch && ctx.branch !== "0" ? `#${ctx.branch}` : "";
+      const bq = ctx.history && ctx.history !== "0" ? `#${ctx.history}` : "";
       const stance = `${ctx.story}${bq}/@role-manager`;
       // Combine the two canSummon pickers into one array with `as`
       // tags. Existing entries that come back stringified default
@@ -431,7 +431,7 @@ async function renderFlowEditorSection(allRoles, ctx) {
   return renderFlowEditor(allRoles, ctx, {
     headerLabel:    "your role flow",
     initialFlow:    flow,
-    targetStance:   `${ctx.story}${ctx.branch && ctx.branch !== "0" ? `#${ctx.branch}` : ""}/@${ctx.username}`,
+    targetStance:   `${ctx.story}${ctx.history && ctx.history !== "0" ? `#${ctx.history}` : ""}/@${ctx.username}`,
   });
 }
 
@@ -831,10 +831,10 @@ function renderDefaultRow(draft, allRoles, onChange) {
 // which lives on her being at her home space.
 
 async function loadFlowForSelf(ctx) {
-  const { story, username, branch, see } = ctx || {};
+  const { story, username, history, see } = ctx || {};
   if (!story || !username || typeof see !== "function") return [];
   try {
-    const bq = branch && branch !== "0" ? `#${branch}` : "";
+    const bq = history && history !== "0" ? `#${history}` : "";
     const desc = await see(`${story}${bq}/@${username}`);
     const myId = desc.identity?.beingId || null;
     const pool = [].concat(desc.beings || [], desc.residents || []);

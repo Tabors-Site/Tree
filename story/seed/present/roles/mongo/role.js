@@ -14,7 +14,7 @@
 // NOTE on the name: the role is "mongo-connection" while the BEING
 // is named "mongo". The roles mirror manifests every registered role
 // as a space named after it under ./roles, and matter/space names
-// are unique per kind per branch — a role named "mongo" would
+// are unique per kind per history — a role named "mongo" would
 // collide with the ./host/mongo space.
 export const mongoRole = Object.freeze({
   name: "mongo-connection",

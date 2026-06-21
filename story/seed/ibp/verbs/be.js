@@ -69,15 +69,15 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     moment   = null,
   } = opts;
 
-  // Resolve branch ONCE at the entry. Inside a moment the seated
-  // branches win (moment.targetHistory, then actorAct.history);
+  // Resolve history ONCE at the entry. Inside a moment the seated
+  // histories win (moment.targetHistory, then actorAct.history);
   // opts.currentHistory covers pre-moment callers only.
   // resolveHistoryForFact throws MISSING_BRANCH if all are absent —
   // surfaces a perimeter threading gap loud instead of silently
   // defaulting to heaven. All downstream sites (loadProjection
   // lookups, writeBeFact emissions, birthBeing) use this value rather
   // than re-resolving from scope.
-  const branch = resolveHistoryForFact(moment, currentHistory, "be");
+  const history = resolveHistoryForFact(moment, currentHistory, "be");
 
   const storyDomain = currentStory || getStoryDomain();
 
@@ -148,10 +148,10 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     const childRoleField = payload?.role || payload?.defaultRole || null;
     let childHomeId = payload?.homeId || payload?.homeSpace || null;
     if (!childHomeId) {
-      // Caller's own data reads from the caller's branch; see the
+      // Caller's own data reads from the caller's history; see the
       // birther path below for the doctrine.
       const { loadOrFold } = await import("../../materials/projections.js");
-      const callerHistory = moment?.actorAct?.history || branch;
+      const callerHistory = moment?.actorAct?.history || history;
       const callerSlot = await loadOrFold("being", identity.beingId, callerHistory);
       childHomeId = callerSlot?.state?.homeSpace || null;
     }
@@ -174,10 +174,10 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       spec: childSpec,
       identity,
       moment,
-      // The branch this verb resolved at the perimeter. One law: the
+      // The history this verb resolved at the perimeter. One law: the
       // verb resolves, the primitive receives. birthBeing must not
-      // re-derive the branch from scope.
-      branch,
+      // re-derive the history from scope.
+      history,
     });
     return {
       beingId:      result.beingId,
@@ -273,18 +273,18 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     let childHomeId = payload?.homeId || payload?.homeSpace || null;  // homeSpace accepted as legacy alias during caller migration
     const childHomeParent = payload?.homeParent || null;
     if (!childHomeId && !childHomeParent) {
-      // loadOrFold: a caller inherited from main onto a sub-branch
+      // loadOrFold: a caller inherited from main onto a sub-history
       // resolves their homeSpace via lineage cold-fold. loadProjection
       // here would return null and the inheritance-fallback would
       // silently fail, making BE:birth refuse on sub-branches whenever
       // the caller hasn't explicitly diverged.
       //
-      // The caller's OWN data reads from the caller's branch
-      // (actorAct.history), not the resolved target branch — a
-      // branch-qualified birth address says where the child lands,
+      // The caller's OWN data reads from the caller's history
+      // (actorAct.history), not the resolved target history — a
+      // history-qualified birth address says where the child lands,
       // not where the mother lives.
       const { loadOrFold } = await import("../../materials/projections.js");
-      const callerHistory = moment?.actorAct?.history || branch;
+      const callerHistory = moment?.actorAct?.history || history;
       const callerSlot = await loadOrFold("being", identity.beingId, callerHistory);
       childHomeId = callerSlot?.state?.homeSpace || null;
     }
@@ -319,9 +319,9 @@ export async function beVerb(operation, payload = {}, opts = {}) {
           qualities: {},
         },
         actId:  moment?.actId || null,
-        // The child's home space lands on the same branch as the
-        // child's be:birth — the branch this verb resolved.
-        history: branch,
+        // The child's home space lands on the same history as the
+        // child's be:birth — the history this verb resolved.
+        history,
       }, moment);
       childHomeId = newHomeId;
     }
@@ -342,8 +342,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       identity,
       moment,
       // Same law as the self-birth path: the verb resolves the
-      // branch once; the primitive receives it.
-      branch,
+      // history once; the primitive receives it.
+      history,
     });
     // ONE fact per birth. birthBeing already stamped `be:birth` on the
     // new being's reel with parentBeingId=<caller> in the spec. No
@@ -401,25 +401,25 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       beingName,
       actId: moment?.actId || null,
       moment,
-      branch,
+      history,
     });
     return result;
   }
 
   // ── Death path. ─────────────────────────────────────────────────
   // ── Switch path. ────────────────────────────────────────────────
-  // BE:switch is a per-session branch change on the caller's own
+  // BE:switch is a per-session history change on the caller's own
   // being. Self-targeted (the actor is the target). Authorize
-  // trivially — a being switching their own session's branch; no role
+  // trivially — a being switching their own session's history; no role
   // gate beyond assertVerbCaller. The handler validates the
-  // destination (branch exists, live, and the caller folds to a
+  // destination (history exists, live, and the caller folds to a
   // birthed state there) and returns the from/to summary; it never
   // touches the socket. writeBeFact stamps the be:switch audit fact
-  // on the actor's reel on the NEW branch (so the new branch's view
+  // on the actor's reel on the NEW history (so the new history's view
   // of this being's biography records the switch-in). Stamp-then-
   // seat: the transport seats socket.currentHistory from
   // result.seatHistory only after the moment seals, so a refused
-  // stamp leaves the session's branch untouched.
+  // stamp leaves the session's history untouched.
   if (operation === "switch") {
     assertVerbCaller("be", opts);
     if (!identity?.beingId) {
@@ -437,8 +437,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       ctx: { socket, address: { kind: addressKind, value: address }, identity, req, moment },
       moment,
     });
-    // Stamp the audit fact on the NEW branch (result.toHistory) — the
-    // post-switch branch's view of this being records the switch-in.
+    // Stamp the audit fact on the NEW history (result.toHistory) — the
+    // post-switch history's view of this being records the switch-in.
     await writeBeFact({
       operation,
       identity,
@@ -447,7 +447,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       beingName,
       actId: moment?.actId || null,
       moment,
-      branch: result.toHistory,
+      history: result.toHistory,
     });
     return result;
   }
@@ -470,16 +470,16 @@ export async function beVerb(operation, payload = {}, opts = {}) {
         "be:death requires an explicit target being in the address (e.g. <story>/@<being>)",
       );
     }
-    // Resolve beingName → beingId on the target's branch. The death
+    // Resolve beingName → beingId on the target's history. The death
     // fact lands on THAT being's reel; the resolution must come from
-    // the projection (the canonical source) on the operating branch.
+    // the projection (the canonical source) on the operating history.
     const { findByName } = await import("../../materials/projections.js");
-    const targetSlot = await findByName("being", beingName, branch);
+    const targetSlot = await findByName("being", beingName, history);
     if (!targetSlot) {
       throw new IbpError(
         IBP_ERR.BEING_NOT_FOUND,
-        `be:death target @${beingName} not found on branch #${branch}`,
-        { beingName, branch },
+        `be:death target @${beingName} not found on history #${history}`,
+        { beingName, history },
       );
     }
     const targetBeingId = String(targetSlot.id);
@@ -520,7 +520,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       beingName,
       actId: moment?.actId || null,
       moment,
-      branch,
+      history,
     });
     return { ...result, targetBeingId };
   }
@@ -558,17 +558,17 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       );
     }
     const { findByName, loadProjection } = await import("../../materials/projections.js");
-    const targetSlot = await findByName("being", beingName, branch);
+    const targetSlot = await findByName("being", beingName, history);
     if (!targetSlot) {
       throw new IbpError(
         IBP_ERR.BEING_NOT_FOUND,
-        `be:truename target @${beingName} not found on branch #${branch}`,
-        { beingName, branch },
+        `be:truename target @${beingName} not found on history #${history}`,
+        { beingName, history },
       );
     }
     const targetBeingId = String(targetSlot.id);
     // The target Name must exist and not be banished. Names live on main
-    // (identity is above the branch timeline); isNameBanished returns false
+    // (identity is above the history timeline); isNameBanished returns false
     // for a MISSING name too, so assert existence separately.
     const nameSlot = await loadProjection("name", String(newTrueName), "0");
     if (!nameSlot?.state) {
@@ -600,7 +600,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       beingName,
       actId: moment?.actId || null,
       moment,
-      branch,
+      history,
     });
     return { ...result, targetBeingId };
   }
@@ -654,7 +654,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       beingName,
       actId: moment?.actId || null,
       moment,
-      branch,
+      history,
     });
     return result;
   }
@@ -734,7 +734,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
         beingName,
         actId: moment?.actId || null,
         moment,
-        branch,
+        history,
       });
     }
     return result;
@@ -770,7 +770,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
  * before emitFact runs — an act without a frame doesn't get a Fact,
  * and a BE without a Fact didn't happen.
  */
-async function writeBeFact({ operation, identity, authResult, payload, beingName = "cherub", actId = null, moment = null, branch }) {
+async function writeBeFact({ operation, identity, authResult, payload, beingName = "cherub", actId = null, moment = null, history }) {
   if (!actId) {
     throw new IbpError(
       IBP_ERR.INTERNAL,
@@ -844,7 +844,7 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
     connectionParams = { byActor: String(actorBeingId) };
   } else if (operation === "truename") {
     // The being whose trueName changes was resolved in beVerb's truename
-    // branch and threaded via authResult.targetBeingId. The new Name id
+    // history and threaded via authResult.targetBeingId. The new Name id
     // rides params.trueName; the fact lands on that being's reel, and the
     // being reducer's applyTrueName folds it onto the row.
     const targetBeingId = authResult?.targetBeingId;
@@ -859,10 +859,10 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
     // — NOT the raw payload token, which may be a real-name.
     connectionParams = { trueName: String(authResult?.trueName) };
   } else if (operation === "switch") {
-    // Per-session branch change on the caller's own being. Target =
+    // Per-session history change on the caller's own being. Target =
     // the caller's being; params record from/to so the audit fact
-    // surfaces the transition. The fact lands on the NEW branch
-    // (beVerb passed result.toHistory as `branch`).
+    // surfaces the transition. The fact lands on the NEW history
+    // (beVerb passed result.toHistory as `history`).
     target = { kind: "being", id: String(actorBeingId) };
     connectionParams = {
       fromHistory: authResult?.fromHistory || null,
@@ -886,13 +886,13 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
     params:  mergedParams,
     result:  safeResult,
     actId,
-    // Branch the BE fact lands on, pre-resolved by beVerb at the
+    // History the BE fact lands on, pre-resolved by beVerb at the
     // entry point. writeBeFact trusts the value rather than
     // re-resolving from a scope that may not have currentHistory
     // (this function ran as nested-helper-with-implicit-closure
-    // before B perimeter hardening; missing-branch surfaced as a
+    // before B perimeter hardening; missing-history surfaced as a
     // ReferenceError only when an actual transport-act fired).
-    history: branch,
+    history,
   }, moment);
 }
 
@@ -918,7 +918,7 @@ function extractStoryFromAddress(address, addressKind) {
     ? address.split("::").pop().trim()
     : address;
   // For "place" addresses there's no path-separator slash, but the
-  // input may still carry a branch qualifier (e.g. "treeos.ai#1").
+  // input may still carry a history qualifier (e.g. "treeos.ai#1").
   // Fall through to the strip logic instead of returning whole.
   if (addressKind === "stance") {
     const slashIndex = head.indexOf("/");

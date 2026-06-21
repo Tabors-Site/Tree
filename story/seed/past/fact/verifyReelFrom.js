@@ -11,7 +11,7 @@
 // prev-mismatch), exactly as verifyReel would. Degenerate at
 // { fromSeq: 1, anchorPrev: GENESIS_PREV } this IS verifyReel.
 //
-// Same four break shapes, same branch-aware range logic, same byte-for-
+// Same four break shapes, same history-aware range logic, same byte-for-
 // byte recompute (computeHash(p, contentOf)). The only differences are
 // the seeded start and a `seq >= fromSeq` floor on the query. Kept a
 // separate function (not an opt on verifyReel) so every full-graft and
@@ -23,11 +23,11 @@ import { computeHash, contentOf, GENESIS_PREV } from "./hash.js";
 const REEL_KINDS = new Set(["being", "space", "matter"]);
 
 /**
- * Walk a reel's hash chain from a declared anchor, branch-aware.
+ * Walk a reel's hash chain from a declared anchor, history-aware.
  *
  * @param {"being"|"space"|"matter"} targetKind
  * @param {string} targetId
- * @param {string} [branch="0"]
+ * @param {string} [history="0"]
  * @param {object} [opts]
  * @param {number} [opts.fromSeq=1]               first seq present in the segment
  * @param {string} [opts.anchorPrev=GENESIS_PREV] identity of the fact BEFORE fromSeq
@@ -35,7 +35,7 @@ const REEL_KINDS = new Set(["being", "space", "matter"]);
  *   { ok:true, count, headHash } | { ok:false, count, brokenAt, reason, expected, actual }
  */
 export async function verifyReelFrom(
-  targetKind, targetId, branch = "0",
+  targetKind, targetId, history = "0",
   { fromSeq = 1, anchorPrev = GENESIS_PREV } = {},
 ) {
   if (!REEL_KINDS.has(targetKind)) {
@@ -45,9 +45,9 @@ export async function verifyReelFrom(
   const { isMain, resolveHistoryLineage, getBranchPoint } =
     await import("../../materials/history/histories.js");
 
-  // The branch's visible ranges, identical logic to verifyReel /
+  // The history's visible ranges, identical logic to verifyReel /
   // readReelBetween: lineage[i] owns (floor(lineage[i]), floor(lineage[i+1])].
-  const lineage = isMain(branch) ? ["0"] : await resolveHistoryLineage(branch);
+  const lineage = isMain(history) ? ["0"] : await resolveHistoryLineage(history);
   const ranges = [];
   for (let i = 0; i < lineage.length; i++) {
     const here = lineage[i];
@@ -55,10 +55,10 @@ export async function verifyReelFrom(
     const lower = isMain(here) ? 0 : (await getBranchPoint(here, targetKind, id)) || 0;
     const upper = next ? ((await getBranchPoint(next, targetKind, id)) || 0) : null;
     if (upper != null && upper <= lower) continue;
-    ranges.push({ branch: here, lower, upper });
+    ranges.push({ history: here, lower, upper });
   }
 
-  const orClauses = ranges.map(({ branch: b, lower, upper }) => {
+  const orClauses = ranges.map(({ history: b, lower, upper }) => {
     const seqFilter = { $type: "number", $gt: lower };
     if (upper != null) seqFilter.$lte = upper;
     const historyClause = isMain(b)

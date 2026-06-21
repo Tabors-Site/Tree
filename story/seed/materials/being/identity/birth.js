@@ -162,7 +162,7 @@ function validatePassword(password) {
  *                                   standalone tools (migrations) pass
  *                                   null and accept immediate-commit
  *                                   semantics.
- * @param {string} [args.branch]     the branch this birth lands on, as
+ * @param {string} [args.history]    the history this birth lands on, as
  *                                   resolved by the calling verb at its
  *                                   perimeter (resolveHistoryForFact).
  *                                   One law, one resolution: verbs
@@ -176,7 +176,7 @@ function validatePassword(password) {
  *   either the pending-view (in-moment) or the materialized row
  *   (standalone).
  */
-export async function birthBeing({ spec, identity, moment = null, branch = null }) {
+export async function birthBeing({ spec, identity, moment = null, history = null }) {
   if (!spec || typeof spec !== "object") {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "birthBeing requires spec object");
   }
@@ -234,14 +234,14 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
     );
   }
 
-  // Branch resolution. The calling verb resolves the branch once at
+  // History resolution. The calling verb resolves the history once at
   // its perimeter and passes it down; re-deriving here would be a
   // second resolution law that can disagree with the verb's (it did:
-  // a branch-qualified birth address resolved one way in beVerb and
+  // a history-qualified birth address resolved one way in beVerb and
   // another way here). actorAct covers in-moment primitive callers
   // (cherub's handlers, withIAmAct delegates); the main tail covers
   // standalone scaffold callers only.
-  branch = branch || moment?.actorAct?.history || "0";
+  history = history || moment?.actorAct?.history || "0";
 
   // No inline authorize call. `birthBeing` is a substrate primitive
   // called from already-authorized contexts:
@@ -260,11 +260,11 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
 
   // ── Parent exists (or is pending in this moment) ──
   // The being-tree's chain of causation needs every link to resolve.
-  // loadOrFold walks the parent's lineage so a branch-side birth finds
+  // loadOrFold walks the parent's lineage so a history-side birth finds
   // a parent who lives in main; the deltaF check covers atomic births
   // where the parent's be:birth is earlier in the same ΔF.
   const { loadOrFold, findByName, findByNamePattern } = await import("../../projections.js");
-  const parentSlot = await loadOrFold("being", parentBeingId, branch);
+  const parentSlot = await loadOrFold("being", parentBeingId, history);
   const parentPending = parentSlot ? null : moment?.deltaF?.find(
     (f) =>
       f?.verb === "be" &&
@@ -317,7 +317,7 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
     const underRoot   = String(parentBeingId) === String(I_AM);
     const underSelf   = minterBeingId && String(parentBeingId) === minterBeingId;
     if (!isIAmMinter && !underRoot && !underSelf && !parentPending) {
-      let gateHistory = branch;
+      let gateHistory = history;
       if (!gateHistory) {
         const { getDefaultHistory } = await import("../../history/historyRegistry.js");
         gateHistory = await getDefaultHistory();
@@ -377,7 +377,7 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
   // ── Home space exists (or is pending in this moment) ──
   // Same shape: an in-moment do:create-space for homeId is legitimate
   // because both facts commit in the same transaction.
-  const homeSlot = await loadOrFold("space", homeId, branch);
+  const homeSlot = await loadOrFold("space", homeId, history);
   let pendingHomeSize = null;
   if (!homeSlot) {
     const homePending = moment?.deltaF?.find(
@@ -398,24 +398,24 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
     pendingHomeSize = homePending?.params?.size ?? null;
   }
 
-  // ── Name uniqueness (branch-view aware) ──
+  // ── Name uniqueness (history-view aware) ──
   // Two checks. The pattern query catches case-variant collisions on
-  // the birth branch's own slots. findByName then catches inherited
-  // collisions: the branch's VIEW includes lineage aggregates whose
+  // the birth history's own slots. findByName then catches inherited
+  // collisions: the history's VIEW includes lineage aggregates whose
   // slots were never lazily folded here, and a name that resolves in
-  // the view is taken even though no branch-local slot carries it.
+  // the view is taken even though no history-local slot carries it.
   // (findByName is exact-case; an inherited case-variant can slip
   // through — acceptable until the name index is materialized
-  // per-branch.)
+  // per-history.)
   const existingByName = await findByNamePattern(
     "being",
     new RegExp(`^${escapeRegex(name)}$`, "i"),
-    branch,
+    history,
   );
   if (existingByName.length > 0) {
     throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Name already taken");
   }
-  const inheritedByName = await findByName("being", name, branch);
+  const inheritedByName = await findByName("being", name, history);
   if (inheritedByName) {
     throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Name already taken");
   }
@@ -451,7 +451,7 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
       if (positionId === homeId && pendingHomeSize) {
         size = pendingHomeSize;
       } else {
-        const posSlot = await loadOrFold("space", positionId, branch);
+        const posSlot = await loadOrFold("space", positionId, history);
         size = posSlot?.state?.size || null;
         if (!size) {
           const posPending = moment?.deltaF?.find(
@@ -553,20 +553,20 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
     trueName: effectiveTrueName,
     parentBeingId,
     homeSpace: homeId,
-    // The being's home branch = the stamper's branch (the branch THIS
+    // The being's home history = the stamper's history (the history THIS
     // be:birth fact is being stamped on). Everything is relative: a
     // being birthed on #7a owns #7a as their present; BE:connect/
     // release/birth all seat the session to this.
     //
-    // Read from the stamper's `branch` directly, NOT derived from
+    // Read from the stamper's `history` directly, NOT derived from
     // parentBeingId. The mother (parentBeingId, the actor of birth) is
-    // always on this branch — her moment IS this moment. But the
+    // always on this history — her moment IS this moment. But the
     // father (qualities.father, when set) may live on a different
-    // branch or a different story entirely (cross-world mate-vessel
+    // history or a different story entirely (cross-world mate-vessel
     // pattern). Deriving from "a parent" introduces ambiguity that
     // doesn't exist when we read from the one source that's always
-    // authoritative — the branch this fact is landing on.
-    homeHistory: branch,
+    // authoritative — the history this fact is landing on.
+    homeHistory: history,
     position,
     ...(resolvedCoord ? { coord: resolvedCoord } : {}),
     // Optional traits ride the fact only when SET. The reducer
@@ -580,7 +580,7 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
 
   // The being's id IS the content hash of its BIRTH EVENT — the one
   // immutable thing about a being (its live attributes all change). Who
-  // birthed it + its birth name + branch + the birth MOMENT (bornAt = this
+  // birthed it + its birth name + history + the birth MOMENT (bornAt = this
   // moment's act id, which makes each birth unique). Frozen here, carried
   // as of.id below; later set-being / be:rename rewrite the row, never
   // this id, so the reel stays intact. The shareable IDENTITY is the Name
@@ -602,7 +602,7 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
       of:      { kind: "being", id },
       params:  factSpec,
       actId:   moment?.actId || null,
-      history: branch,
+      history: history,
     }, moment);
   } catch (err) {
     if (err.code === 11000) {
@@ -633,7 +633,7 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
     motherBeingId: parentBeingId,
     fatherBeingId: spec.father?.story === getStoryDomain() ? spec.father?.beingId : null,
     moment,
-    branch,
+    history,
   });
 
   // ── Anoint with the global role ──
@@ -658,7 +658,7 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
   if (name !== "public") {
     await _anointGlobal({
       childId: id,
-      branch,
+      history,
       moment,
     });
   }
@@ -678,7 +678,7 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
   // back the materialized row so callers get the full shape including
   // any reducer-derived fields.
   const { loadProjection } = await import("../../projections.js");
-  const slot = await loadProjection("being", id, branch);
+  const slot = await loadProjection("being", id, history);
   return {
     status:  "created",
     beingId: id,
@@ -715,15 +715,15 @@ export async function birthBeing({ spec, identity, moment = null, branch = null 
  * @param {string} args.motherBeingId       parentBeingId on the spec
  * @param {string|null} args.fatherBeingId  local beingId of same-story father, or null
  * @param {object} args.moment           in-flight moment ctx (required)
- * @param {string} args.branch
+ * @param {string} args.history
  */
-async function _inheritParentRoles({ childId, motherBeingId, fatherBeingId, moment, branch }) {
-  // Read each parent's projection on the child's branch (loadOrFold
-  // walks lineage so a sub-branch sees its effective view).
+async function _inheritParentRoles({ childId, motherBeingId, fatherBeingId, moment, history }) {
+  // Read each parent's projection on the child's history (loadOrFold
+  // walks lineage so a sub-history sees its effective view).
   const { loadOrFold } = await import("../../projections.js");
   const reads = await Promise.all([
-    motherBeingId ? loadOrFold("being", String(motherBeingId), branch) : Promise.resolve(null),
-    fatherBeingId ? loadOrFold("being", String(fatherBeingId), branch) : Promise.resolve(null),
+    motherBeingId ? loadOrFold("being", String(motherBeingId), history) : Promise.resolve(null),
+    fatherBeingId ? loadOrFold("being", String(fatherBeingId), history) : Promise.resolve(null),
   ]);
   const motherSlot = reads[0];
   const fatherSlot = reads[1];
@@ -767,7 +767,7 @@ async function _inheritParentRoles({ childId, motherBeingId, fatherBeingId, mome
         inheritedFrom:  grantor,   // forensic marker — this came from parent inheritance
       },
       actId:   moment?.actId || null,
-      history: branch,
+      history: history,
     }, moment);
   }
 }
@@ -795,7 +795,7 @@ function _grantKey(grant) {
  * only gate, so universal capabilities MUST live on a role every
  * being holds.
  */
-async function _anointGlobal({ childId, branch, moment }) {
+async function _anointGlobal({ childId, history, moment }) {
   const { getSpaceRootId } = await import("../../../sprout.js");
   const { I_AM } = await import("../seedBeings.js");
   const rootId = getSpaceRootId();
@@ -813,7 +813,7 @@ async function _anointGlobal({ childId, branch, moment }) {
       grantedAt:     new Date().toISOString(),
     },
     actId:   moment?.actId || null,
-    history: branch,
+    history: history,
   }, moment);
 }
 
@@ -833,7 +833,7 @@ async function _anointGlobal({ childId, branch, moment }) {
  *
  * @param {string} role          base name (e.g. "dancer")
  * @param {object} [opts]
- * @param {string} [opts.branch] branch to check against (default "0")
+ * @param {string} [opts.history] history to check against (default "0")
  * @returns {Promise<string>}    e.g. "dancer3"
  */
 export async function generateUniqueName(role, opts = {}) {
@@ -844,11 +844,11 @@ export async function generateUniqueName(role, opts = {}) {
   if (!safeRole) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, `Role "${role}" produces no safe-name prefix`);
   }
-  const branch = opts.branch || "0";
+  const history = opts.history || "0";
   const { findByNamePattern } = await import("../../projections.js");
 
   const sameRolePrefix = new RegExp(`^${escapeRegex(safeRole)}[0-9]*$`, "i");
-  const existing = await findByNamePattern("being", sameRolePrefix, branch);
+  const existing = await findByNamePattern("being", sameRolePrefix, history);
   let n = existing.length;
   const MAX_RETRIES = 10000;
   for (let i = 0; i < MAX_RETRIES; i++) {
@@ -856,7 +856,7 @@ export async function generateUniqueName(role, opts = {}) {
     const collision = await findByNamePattern(
       "being",
       new RegExp(`^${escapeRegex(candidate)}$`, "i"),
-      branch,
+      history,
     );
     if (collision.length === 0) return candidate;
     n++;

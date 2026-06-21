@@ -177,14 +177,14 @@ export function assertValidSpaceType(raw) {
   return type;
 }
 
-async function getBeingOrThrow(beingId, branch = "0") {
+async function getBeingOrThrow(beingId, history = "0") {
   if (!beingId) throw new Error("beingId is required");
-  // loadOrFold so a being created in main is visible from any branch
+  // loadOrFold so a being created in main is visible from any history
   // before it's been touched there. Without this, the user's first
-  // create-space on a fresh branch throws "Being not found" because
-  // their being slot hasn't been cold-folded onto the branch yet.
+  // create-space on a fresh history throws "Being not found" because
+  // their being slot hasn't been cold-folded onto the history yet.
   const { loadOrFold } = await import("../projections.js");
-  const slot = await loadOrFold("being", beingId, branch);
+  const slot = await loadOrFold("being", beingId, history);
   if (!slot) throw new Error("Being not found");
   return { _id: slot.id, position: slot.position, ...slot.state };
 }
@@ -204,18 +204,18 @@ async function getBeingOrThrow(beingId, branch = "0") {
 export async function assertNameAvailableAt(
   parentId,
   name,
-  { excludeSpaceId = null, branch = "0" } = {},
+  { excludeSpaceId = null, history = "0" } = {},
 ) {
   if (!parentId) return;
-  // Per-branch sibling name uniqueness via direct projection query.
+  // Per-history sibling name uniqueness via direct projection query.
   const { default: Projection } = await import("../history/projection.js");
   const q = {
-    branch, type: "space",
+    history, type: "space",
     "state.parent": parentId,
     "state.name": name,
     tombstoned: { $ne: true },
   };
-  if (excludeSpaceId) q._id = { $ne: `${branch}:space:${excludeSpaceId}` };
+  if (excludeSpaceId) q._id = { $ne: `${history}:space:${excludeSpaceId}` };
   const conflict = await Projection.findOne(q).select("id").lean();
   if (conflict) {
     throw new IbpError(IBP_ERR.RESOURCE_CONFLICT,
@@ -269,10 +269,10 @@ export async function createSpace({
   if (!isRoot && !parentId)
     throw new Error("Non-root spaces require a parentId");
 
-  // Branch the create runs on. Threaded from the moment ctx so a
+  // History the create runs on. Threaded from the moment ctx so a
   // create under #1 reads parents from #1's lineage (with branchPoint
   // fall-through) and stamps its birth fact onto #1's reel.
-  const branch = moment?.actorAct?.history || "0";
+  const history = moment?.actorAct?.history || "0";
 
   // Assign a default coord inside the parent's size when the caller
   // didn't pass one. Without this every child space falls back to the
@@ -284,7 +284,7 @@ export async function createSpace({
     if (!isRoot && parentId) {
       try {
         const { loadOrFold: _lP } = await import("../projections.js");
-        const _pSlot = await _lP("space", parentId, branch);
+        const _pSlot = await _lP("space", parentId, history);
         const parentSize = _pSlot?.state?.size || null;
         if (parentSize && Number.isFinite(parentSize.x) && Number.isFinite(parentSize.y) &&
             parentSize.x > 0 && parentSize.y > 0) {
@@ -311,14 +311,14 @@ export async function createSpace({
     isRoot = true;
   }
 
-  const being = validatedBeing ?? (await getBeingOrThrow(beingId, branch));
+  const being = validatedBeing ?? (await getBeingOrThrow(beingId, history));
 
   // beforeSpaceCreate: extensions may modify or cancel. Pass parent
   // type so extensions can validate parent/child type compatibility.
   let parentType = null;
   if (parentId) {
     const { loadOrFold: _lP2 } = await import("../projections.js");
-    const _pDoc = await _lP2("space", parentId, branch);
+    const _pDoc = await _lP2("space", parentId, history);
     parentType = _pDoc?.state?.type || null;
   }
   const hookData = {
@@ -344,7 +344,7 @@ export async function createSpace({
   // Name must be unique among siblings at the target parent so
   // path-based fetching (`/foo/bar/baz`) resolves unambiguously.
   const siblingParentId = isRoot ? getSpaceRootId() : parentId;
-  await assertNameAvailableAt(siblingParentId, name, { branch });
+  await assertNameAvailableAt(siblingParentId, name, { history });
 
   // Fact-driven (Slice C, 2026-05-23). The new space's row is NOT
   // written directly. Instead the handler stamps a `do:birth` Fact on
@@ -378,7 +378,7 @@ export async function createSpace({
     if (isRoot) {
       if (resolvedParentId) {
         const childCount = await _Proj.countDocuments({
-          branch, type: "space",
+          history, type: "space",
           "state.parent": resolvedParentId,
           tombstoned: { $ne: true },
         });
@@ -390,7 +390,7 @@ export async function createSpace({
       }
     } else if (parentId) {
       const { loadOrFold: _lP3 } = await import("../projections.js");
-      const _pSlot3 = await _lP3("space", parentId, branch);
+      const _pSlot3 = await _lP3("space", parentId, history);
       const parentSpace = _pSlot3 ? { heavenSpace: _pSlot3.state?.heavenSpace } : null;
       // The parent may be pending earlier in this same moment's ΔF
       // (forward reference within one act) — accept either a
@@ -423,7 +423,7 @@ export async function createSpace({
         throw new Error("Cannot create spaces under heaven spaces");
       }
       const childCount = await _Proj.countDocuments({
-        branch, type: "space",
+        history, type: "space",
         "state.parent": parentId,
         tombstoned: { $ne: true },
       });
@@ -459,7 +459,7 @@ export async function createSpace({
       },
       actId: moment?.actId || actId,
       sessionId,
-      // Branch this space is created on — a plant under #1 must land
+      // History this space is created on — a plant under #1 must land
       // its child-space facts on #1's reel so reads on #1 see them.
       history: moment?.actorAct?.history || "0",
     }, moment);
@@ -890,7 +890,7 @@ export async function isDescendant(ancestorId, spaceId) {
  * `resolveSpaceAccessFromChain`. Callers that already have the chain
  * snapshotted should call the chain-form directly.
  */
-export async function resolveSpaceAccess(spaceId, beingId, branch) {
+export async function resolveSpaceAccess(spaceId, beingId, history) {
   if (!spaceId) {
     return {
       ok: false,
@@ -899,7 +899,7 @@ export async function resolveSpaceAccess(spaceId, beingId, branch) {
     };
   }
   const safeBeingId = beingId ? String(beingId) : null;
-  const ancestors = await getAncestorChain(String(spaceId), branch);
+  const ancestors = await getAncestorChain(String(spaceId), history);
   if (!ancestors) {
     return {
       ok: false,
@@ -915,15 +915,15 @@ export async function resolveSpaceAccess(spaceId, beingId, branch) {
  * place root yields user-created tree roots, not .config / .tools /
  * etc.). Returns at most `limit` rows, newest-creation first.
  */
-export async function listSpaceChildren(parentId, { exclude = null, limit = 500, branch = "0", includeHeavenChildren = false } = {}) {
+export async function listSpaceChildren(parentId, { exclude = null, limit = 500, history = "0", includeHeavenChildren = false } = {}) {
   if (!parentId) return [];
   // Heaven routing: children of a heaven parent are themselves
   // heaven; the parent-children query lives on MAIN regardless of
-  // caller's branch. Without this, a SEE from #1 on `.roles` would
+  // caller's history. Without this, a SEE from #1 on `.roles` would
   // find no children even though heaven roles live on MAIN.
-  if (branch !== "0") {
+  if (history !== "0") {
     const { isHeavenSpace } = await import("./heavenLineage.js");
-    if (await isHeavenSpace(parentId)) branch = "0";
+    if (await isHeavenSpace(parentId)) history = "0";
   }
   const { default: Projection } = await import("../history/projection.js");
   const buildQuery = (b) => {
@@ -947,7 +947,7 @@ export async function listSpaceChildren(parentId, { exclude = null, limit = 500,
   };
   const toRow = (s) => ({ _id: s.id, ...(s.state || {}) });
 
-  if (branch === "0") {
+  if (history === "0") {
     const rows = await Projection.find(buildQuery("0"))
       .sort({ "state.createdAt": 1 })
       .limit(limit)
@@ -955,21 +955,21 @@ export async function listSpaceChildren(parentId, { exclude = null, limit = 500,
     return rows.map(toRow);
   }
 
-  // Non-main: union the branch's own children with main's children
+  // Non-main: union the history's own children with main's children
   // that EXISTED at branch creation (branchPoint check). A child
   // created in main AFTER the branch was made must not leak through.
   const { getBranchPoint } = await import("../history/histories.js");
   const [historyRows, mainRows] = await Promise.all([
-    Projection.find(buildQuery(branch)).lean(),
+    Projection.find(buildQuery(history)).lean(),
     Projection.find(buildQuery("0")).lean(),
   ]);
-  // Branch slots: kept as-is (planted on this branch).
+  // History slots: kept as-is (planted on this history).
   const historyOut = historyRows.map(toRow);
   const shadowedIds = new Set(historyRows.map((s) => s.id));
-  // Also shadow tombstones on this branch — a space killed in branch
-  // shouldn't reappear from main.
+  // Also shadow tombstones on this history — a space killed in this
+  // history shouldn't reappear from main.
   const tombs = await Projection.find({
-    history: branch, type: "space", tombstoned: true,
+    history: history, type: "space", tombstoned: true,
   }).select("id").lean();
   for (const t of tombs) shadowedIds.add(t.id);
   // Filter main candidates by branchPoint: only spaces that had any
@@ -977,7 +977,7 @@ export async function listSpaceChildren(parentId, { exclude = null, limit = 500,
   const mainOut = [];
   for (const cand of mainRows) {
     if (shadowedIds.has(cand.id)) continue;
-    const bp = await getBranchPoint(branch, "space", cand.id);
+    const bp = await getBranchPoint(history, "space", cand.id);
     if (bp && bp > 0) mainOut.push(toRow(cand));
   }
   const all = [...mainOut, ...historyOut];

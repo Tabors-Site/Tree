@@ -1,7 +1,7 @@
 // TreeOS IBP wire helpers shared across DO / BE / SUMMON verb adapters.
 //
 // The wire adapters do parsing + perimeter gates (impersonation,
-// cross-branch) before forwarding to the seed-side dispatcher. Each
+// cross-history) before forwarding to the seed-side dispatcher. Each
 // gate had three identical copies in be.js / do.js / summon.js; that
 // fan-out is consolidated here. See `seed/ibp/authorize.js` for the
 // substrate-side gate; this file owns the pre-authorize wire checks.

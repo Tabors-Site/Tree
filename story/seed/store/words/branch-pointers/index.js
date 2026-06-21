@@ -49,11 +49,11 @@ async function _setPointerViaWord({ caller, name, canonical, moment }) {
   const ir = resolveRoleWord("branch-manager", "set-pointer", moment?.actorAct?.history);
   if (!ir) return null;
   const { historyManagerHostEnv } = await import("./branchManagerHost.js");
-  const branch = moment?.actorAct?.history || "0";
+  const history = moment?.actorAct?.history || "0";
   try {
     const { result } = await runRoleWord(ir, {
-      moment, branch,
-      trigger: { caller: caller ? String(caller) : null, name, canonical, branch },
+      moment, history,
+      trigger: { caller: caller ? String(caller) : null, name, canonical, history },
       env: { host: historyManagerHostEnv() },
     });
     return result || null;
@@ -108,7 +108,7 @@ registerOperation("set-pointer", {
     const historiesSpaceId = await findPointersSpaceId();
     if (!historiesSpaceId) {
       throw new IbpError(IBP_ERR.INTERNAL,
-        "set-pointer: .branches heaven space not found . story is not properly bootstrapped");
+        "set-pointer: .histories heaven space not found . story is not properly bootstrapped");
     }
     await doVerb(
       { kind: "space", id: historiesSpaceId },
@@ -132,11 +132,11 @@ async function _deletePointerViaWord({ caller, name, moment }) {
   const ir = resolveRoleWord("branch-manager", "delete-pointer", moment?.actorAct?.history);
   if (!ir) return null;
   const { historyManagerHostEnv } = await import("./branchManagerHost.js");
-  const branch = moment?.actorAct?.history;
+  const history = moment?.actorAct?.history;
   try {
     const { result } = await runRoleWord(ir, {
-      moment, branch,
-      trigger: { caller: caller ? String(caller) : null, name, branch },
+      moment, history,
+      trigger: { caller: caller ? String(caller) : null, name, history },
       env: { host: historyManagerHostEnv() },
     });
     return result || null;
@@ -189,7 +189,7 @@ registerOperation("delete-pointer", {
     const historiesSpaceId = await findPointersSpaceId();
     if (!historiesSpaceId) {
       throw new IbpError(IBP_ERR.INTERNAL,
-        "delete-pointer: .branches heaven space not found");
+        "delete-pointer: .histories heaven space not found");
     }
     await doVerb(
       { kind: "space", id: historiesSpaceId },

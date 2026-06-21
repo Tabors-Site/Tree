@@ -1,6 +1,6 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Branch path arithmetic — parsing and segment generation.
+// History path arithmetic — parsing and segment generation.
 //
 // Paths form a tree rooted at `"0"` (main). Each level alternates
 // between numeric and alphabetic segments:
@@ -25,7 +25,7 @@
 // Numbers grow by ordinary decimal counting: "1", "2", ..., "9",
 // "10", "11", ... — no special encoding needed.
 //
-// Branch numbering is STABLE: once #1 exists, the next branch off
+// History numbering is STABLE: once #1 exists, the next branch off
 // main is always #2 even if #1 is later deleted. The next-segment
 // computation picks "the highest existing segment + 1" rather than
 // "the count of existing siblings," so re-use is impossible.
@@ -34,7 +34,7 @@ const RE_DIGIT  = /^[0-9]+$/;
 const RE_LETTER = /^[a-z]+$/;
 
 /**
- * Parse a branch path into ordered segments.
+ * Parse a history path into ordered segments.
  *
  * "0" → []           (main has no segments)
  * "1" → ["1"]
@@ -183,7 +183,7 @@ export function nextNumberSegment(existingNumberSegments) {
  *
  * @param {string} parentPath          "0" for main, otherwise a valid path
  * @param {string[]} existingChildren  paths of existing direct children of parentPath
- * @returns {string} the new branch's path
+ * @returns {string} the new history's path
  */
 export function nextChildPath(parentPath, existingChildren) {
   const parentSegs = parseHistoryPath(parentPath);
@@ -209,7 +209,7 @@ export function nextChildPath(parentPath, existingChildren) {
 }
 
 /**
- * Validate that a string is a syntactically well-formed branch path.
+ * Validate that a string is a syntactically well-formed history path.
  * Returns true / false. For exception-based validation, call
  * parseHistoryPath and catch.
  */

@@ -9,7 +9,7 @@
 // Returns what was laid (the new beads) so the view can re-read just the tail (the live
 // update) rather than the whole book.
 
-export async function typeIntoBook(wordText, { moment, identity, branch = "0", position = null, bindings = {}, env = {} } = {}) {
+export async function typeIntoBook(wordText, { moment, identity, history = "0", position = null, bindings = {}, env = {} } = {}) {
   if (!moment || !Array.isArray(moment.deltaF)) {
     throw new Error("typeIntoBook: needs an OPEN act (moment with deltaF) — the press happens inside a moment");
   }
@@ -24,7 +24,7 @@ export async function typeIntoBook(wordText, { moment, identity, branch = "0", p
   }
 
   const ctx = {
-    dryRun: false, history: branch, moment, identity,
+    dryRun: false, history, moment, identity,
     position,                               // where the typist stands — "make here" parents to it
     env, bindings, deltaF: moment.deltaF, flows: [],
   };

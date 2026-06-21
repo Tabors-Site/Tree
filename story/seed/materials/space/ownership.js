@@ -25,8 +25,8 @@ import {
  * primitive's invariants (owner is a singleton; transfers replace
  * atomically).
  */
-export async function setOwner(spaceId, newOwnerId, beingId, branch, moment = null) {
-  return setSpaceOwner(spaceId, newOwnerId, beingId, branch, moment);
+export async function setOwner(spaceId, newOwnerId, beingId, history, moment = null) {
+  return setSpaceOwner(spaceId, newOwnerId, beingId, history, moment);
 }
 
 /**
@@ -34,7 +34,7 @@ export async function setOwner(spaceId, newOwnerId, beingId, branch, moment = nu
  * parent's owner authorizes; the walker inherits ownership from above
  * after the clear.
  */
-export async function removeOwner(spaceId, beingId, branch) {
-  return removeSpaceOwner(spaceId, beingId, branch, null);
+export async function removeOwner(spaceId, beingId, history) {
+  return removeSpaceOwner(spaceId, beingId, history, null);
 }
 

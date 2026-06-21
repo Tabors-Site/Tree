@@ -1,53 +1,44 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// credentials.js — password verification + JWT issuance/verification.
+// credentials.js — the auth/session layer: password verification + JWT
+// issuance/verification.
 //
-// Three concerns share this file because they share the JWT_SECRET
-// boot check:
+// The credential CRYPTO and minting (encrypt/decrypt, scrypt hashing, the
+// credential mint) moved UP to name/credentials.js — all minting is the
+// Name's, a being password is optional. This file is the cross-cutting
+// session layer: a Name auths THROUGH a Being, and the session token carries
+// both `beingId` and `nameId`. It imports the crypto from name/ and re-exports
+// it so existing importers of this path keep working unchanged.
 //
-//   PASSWORD  verifyPassword(being, candidate) → bcrypt compare with
-//             a 5-second timeout so an extreme cost factor can't
-//             stall the event loop indefinitely.
-//
-//   ISSUANCE  generateToken(being)         → session JWT shipped to
-//                                             clients (cookie/bearer)
-//             signInternalToken(args)      → short-lived server-to-
-//                                             server JWT (24h) used
-//                                             by the LLM runtime to
-//                                             call its own MCP layer
-//                                             under the originating
-//                                             being's identity
-//
-//   VERIFICATION  decodeToken(token)        → cheap parse, never
-//                                             throws, no DB read
-//                 verifyTokenStrict(token)  → decode + Being lookup +
-//                                             tokensInvalidBefore
-//                                             revocation check
+//   PASSWORD  verifyPassword(being, candidate) → scrypt compare with a
+//             5-second timeout so an extreme cost factor can't stall the loop.
+//   ISSUANCE  generateToken(being)      → session JWT shipped to clients
+//             generateNameToken(nameId) → name-only session token (no being)
+//             signInternalToken(args)   → short-lived server-to-server JWT
+//   VERIFICATION  decodeToken(token)       → cheap parse, never throws, no DB
+//                 verifyTokenStrict(token) → decode + lookup + revocation check
 
 import crypto from "crypto";
-import Being from "../being.js";
 import { loadProjection } from "../../projections.js";
 import { getStoryConfigValue } from "../../../storyConfig.js";
+import {
+  encryptCredential,
+  decryptCredential,
+  hashPassword,
+  comparePassword,
+  mintCredentialSpec,
+} from "../../name/credentials.js";
+
+// The credential crypto/minting now lives in name/credentials.js (all minting
+// is the Name's). Re-exported here so every existing importer of this file
+// keeps working; the session layer below (verifyPassword) uses comparePassword.
+export { encryptCredential, decryptCredential, hashPassword, comparePassword, mintCredentialSpec };
 
 if (!process.env.JWT_SECRET)
   throw new Error(
     "JWT_SECRET is required. Run the setup wizard or add it to .env",
   );
 const JWT_SECRET = process.env.JWT_SECRET;
-
-// AES key derived from JWT_SECRET via HKDF. The label binds the key to
-// the credential use case so a JWT signed with the same secret cannot
-// be mistaken for a credential blob and vice versa. hkdfSync returns
-// an ArrayBuffer; wrap it so cipher APIs accept it.
-const CREDENTIAL_KEY = Buffer.from(
-  crypto.hkdfSync(
-    "sha256",
-    Buffer.from(JWT_SECRET, "utf8"),
-    Buffer.alloc(0),
-    Buffer.from("treeos.credential.v1", "utf8"),
-    32,
-  ),
-);
 
 // ─────────────────────────────────────────────────────────────────────
 // HS256 JWT (sync, node:crypto HMAC)
@@ -59,8 +50,7 @@ const CREDENTIAL_KEY = Buffer.from(
 // caller. A symmetric HS256 token is just base64url(header).base64url(
 // payload).base64url(HMAC-SHA256), a few lines of node:crypto, so we
 // mint and verify them directly and carry no JWT dependency at all.
-// jose stays for the ASYMMETRIC story-identity tokens
-// (storyIdentity.js), the case it is actually built for.
+// jose stays for the ASYMMETRIC story-identity tokens (storyIdentity.js).
 // ─────────────────────────────────────────────────────────────────────
 
 const UNIT_SECONDS = { s: 1, m: 60, h: 3600, d: 86400 };
@@ -85,9 +75,8 @@ function signJwtHS256(payload, secret, { expiresIn } = {}) {
   return `${data}.${sig}`;
 }
 
-// Verifies signature + expiry, mirroring jsonwebtoken's jwt.verify
-// defaults. Throws on any failure (malformed, bad signature, expired);
-// decodeToken catches and returns null.
+// Verifies signature + expiry. Throws on any failure (malformed, bad
+// signature, expired); decodeToken catches and returns null.
 function verifyJwtHS256(token, secret) {
   const parts = String(token).split(".");
   if (parts.length !== 3) throw new Error("malformed token");
@@ -107,131 +96,13 @@ function verifyJwtHS256(token, secret) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// CREDENTIAL ENCRYPTION
-//
-// When a being's password is auto-generated (the being parent did not
-// pick one), we store the plaintext alongside the bcrypt hash so the
-// being and its being parent can retrieve it later. The plaintext is
-// encrypted at rest with a key derived from JWT_SECRET; a stolen DB
-// dump does not leak credentials.
-//
-// "Being parent" here means the being that performed the birth act
-// (the parentBeingId recorded inside the be:birth Fact's spec). It is
-// NOT the SUMMON sense (anyone calling anyone) and NOT the live
-// parentBeingId on the being row. See lineage.js findBeingParent.
-//
-// Wire format: base64( iv(12) || tag(16) || ciphertext ).
-// ─────────────────────────────────────────────────────────────────────
-
-export function encryptCredential(plaintext) {
-  if (typeof plaintext !== "string" || !plaintext)
-    throw new Error("encryptCredential: plaintext required");
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv("aes-256-gcm", CREDENTIAL_KEY, iv);
-  const ct = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return Buffer.concat([iv, tag, ct]).toString("base64");
-}
-
-export function decryptCredential(blob) {
-  if (typeof blob !== "string" || !blob) return null;
-  try {
-    const buf = Buffer.from(blob, "base64");
-    if (buf.length < 28) return null;
-    const iv  = buf.subarray(0, 12);
-    const tag = buf.subarray(12, 28);
-    const ct  = buf.subarray(28);
-    const dec = crypto.createDecipheriv("aes-256-gcm", CREDENTIAL_KEY, iv);
-    dec.setAuthTag(tag);
-    return Buffer.concat([dec.update(ct), dec.final()]).toString("utf8");
-  } catch {
-    return null;
-  }
-}
-
-// Mint a credential pair from an optional plaintext. When the caller
-// passes plaintext (a human typed it, a being parent chose it), the
-// plain stays null and only the bcrypt hash is stored. When the caller passes
-// null, we generate a 32-byte random plaintext, bcrypt it for the
-// password field, and encrypt the plaintext for retrievable storage in
-// qualities.auth.credentialPlain.
-//
-// Single source of truth for being credential birth. Used by createBeing
-// and by genesis (ensureIAm). Do NOT auto-generate plaintexts anywhere
-// else; route through here.
-
-// ─────────────────────────────────────────────────────────────────────
-// PASSWORD HASHING (scrypt, node:crypto)
-//
-// scrypt is a memory-hard KDF built into node, so we hash passwords
-// without the native (node-gyp) bcrypt dependency. Self-describing
-// storage format embeds the parameters so they can be tuned later
-// without breaking existing hashes:
-//
-//   scrypt$<N>$<r>$<p>$<saltBase64>$<keyBase64>
-//
-// N=16384 (2^14), r=8, p=1 is a standard interactive-login cost
-// (~60ms) and fits node's default 32MB scrypt memory budget.
-// ─────────────────────────────────────────────────────────────────────
-
-const SCRYPT_N = 16384;
-const SCRYPT_R = 8;
-const SCRYPT_P = 1;
-const SCRYPT_KEYLEN = 64;
-
-function scryptDerive(password, salt, keylen, { N, r, p }) {
-  return new Promise((resolve, reject) => {
-    crypto.scrypt(password, salt, keylen, { N, r, p }, (err, key) =>
-      err ? reject(err) : resolve(key),
-    );
-  });
-}
-
-export async function hashPassword(plaintext) {
-  const salt = crypto.randomBytes(16);
-  const key = await scryptDerive(plaintext, salt, SCRYPT_KEYLEN, {
-    N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P,
-  });
-  return `scrypt$${SCRYPT_N}$${SCRYPT_R}$${SCRYPT_P}$${salt.toString("base64")}$${key.toString("base64")}`;
-}
-
-// Re-derives with the stored parameters and timing-safe compares.
-// Returns false (never throws) for a missing or malformed hash.
-export async function comparePassword(plaintext, stored) {
-  if (typeof stored !== "string" || !stored.startsWith("scrypt$")) return false;
-  const parts = stored.split("$");
-  if (parts.length !== 6) return false;
-  const [, N, r, p, saltB64, keyB64] = parts;
-  const salt = Buffer.from(saltB64, "base64");
-  const expected = Buffer.from(keyB64, "base64");
-  const key = await scryptDerive(plaintext, salt, expected.length, {
-    N: Number(N), r: Number(r), p: Number(p),
-  });
-  return key.length === expected.length && crypto.timingSafeEqual(key, expected);
-}
-
-export async function mintCredentialSpec(plaintext) {
-  const autoGenerated = !plaintext;
-  const pt = autoGenerated
-    ? crypto.randomBytes(32).toString("hex")
-    : plaintext;
-  const hash = await hashPassword(pt);
-  return {
-    hash,
-    plain: autoGenerated ? encryptCredential(pt) : null,
-    autoGenerated,
-  };
-}
-
-// ─────────────────────────────────────────────────────────────────────
 // PASSWORD VERIFICATION
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * Verify a password against a being's stored scrypt hash.
- * scrypt is intentionally slow (memory-hard). The timeout prevents a
- * pathological stored cost factor from blocking the event loop for an
- * extended period.
+ * Verify a password against a being's stored scrypt hash. scrypt is
+ * intentionally slow (memory-hard); the timeout prevents a pathological
+ * stored cost factor from blocking the event loop.
  */
 const PASSWORD_VERIFY_TIMEOUT_MS = 5000;
 
@@ -259,11 +130,9 @@ export async function verifyPassword(being, password) {
 
 /**
  * Generate a session JWT for a being. Issued when the being claims an
- * identity (login / register / token re-claim); shipped to the client
- * as the session token (cookie or bearer header).
- *
- * Carries a unique `jti` so individual tokens can be revoked. Expiry
- * is configurable via place config (default 30 days).
+ * identity (login / register / token re-claim); shipped to the client as the
+ * session token. Carries a unique `jti` for revocation; expiry configurable
+ * via story config (default 30 days).
  */
 export function generateToken(being) {
   const expiresIn = getStoryConfigValue("jwtExpiryDays")
@@ -275,9 +144,7 @@ export function generateToken(being) {
       beingId: being._id,
       name: being.name,
       // The PORTAL identity: the Name this being expresses (its trueName).
-      // One name per portal, inherited by every tab on this token, so a
-      // reconnect re-seats socket.nameId without a name:login round-trip.
-      // null when the being has no trueName yet (no owned-name binding).
+      // null when the being has no trueName yet.
       nameId: being.trueName || null,
       jti: crypto.randomUUID(),
     },
@@ -288,11 +155,9 @@ export function generateToken(being) {
 
 /**
  * Mint a NAME-only session token — the "name, no being yet" state (a
- * name:connect with no being selected). Carries `nameId` and NO `beingId`, so
- * a reconnect re-seats socket.nameId (the portal lands at the Name's beings
- * picker) without forcing a re-entry of the password. The signing key is NOT
- * in this token (it lives in the in-memory signing session from the password
- * unlock); the token persists only the IDENTITY, not the ability to sign.
+ * name:connect with no being selected). Carries `nameId` and NO `beingId`.
+ * The signing key is NOT in the token (it lives in the in-memory signing
+ * session from the password unlock); the token persists only the IDENTITY.
  */
 export function generateNameToken(nameId) {
   const expiresIn = getStoryConfigValue("jwtExpiryDays")
@@ -306,22 +171,10 @@ export function generateNameToken(nameId) {
 }
 
 /**
- * Sign an internal server-to-server JWT. Used by the conversation
- * runtime to authorize tool calls against the local MCP server — the
- * token forwards the originating being's identity so the MCP layer
- * knows who the call is for.
- *
- * Distinct from `generateToken` (which issues session credentials to
- * clients): internal tokens are short-lived (24h default), have no
- * `jti`, and never leave the server. The MCP middleware
- * ([transports/http/middleware/authenticate.js]) decodes them with
- * `decodeToken` and reads beingId + name.
- *
- * @param {object} args
- * @param {string} args.beingId
- * @param {string} args.name
- * @param {string} [args.clientSessionId]  optional correlation tag
- * @param {string} [args.expiresIn]        default "24h"
+ * Sign an internal server-to-server JWT. Used by the conversation runtime to
+ * authorize tool calls against the local MCP server — forwards the originating
+ * being's identity. Short-lived (24h default), no `jti`, never leaves the
+ * server.
  */
 export function signInternalToken({
   beingId,
@@ -339,13 +192,9 @@ export function signInternalToken({
 }
 
 /**
- * Cheap JWT decode. Returns `{ beingId, name, iat, jti }` on success,
- * `null` for missing or invalid tokens. Never throws.
- *
- * Use this when you only need to extract identity from a token (WS
- * connect, IBP HTTP adapter, MCP middleware). It does NOT verify the
- * being still exists or check token revocation — those are concerns
- * of `verifyTokenStrict` and the HTTP auth pipeline.
+ * Cheap JWT decode. Returns `{ beingId, name, nameId, iat, jti }` on success,
+ * `null` for missing or invalid tokens. Never throws. Does NOT verify the
+ * being still exists or check revocation — those are verifyTokenStrict's job.
  */
 export function decodeToken(token) {
   if (typeof token !== "string" || !token) return null;
@@ -364,25 +213,20 @@ export function decodeToken(token) {
 }
 
 /**
- * Strict JWT verification. Decodes the token, looks up the Being to
- * confirm it still exists, and checks `qualities.auth.tokensInvalidBefore`
- * to reject tokens issued before the being's last revoke (e.g. after a
- * password change).
- *
- * Returns `{ beingId, name, jwt, being }` on success or `null` on any
- * failure (missing/invalid token, being deleted, token revoked). The
- * returned `being` is a lean Mongoose doc for callers that need it
- * (avoids a second lookup); pass `{ loadBeing: false }` to skip the
- * extra fetch (only the existence/revocation check still happens).
+ * Strict JWT verification. Decodes, confirms the Being (or the name-only
+ * Name) still exists, and checks `qualities.auth.tokensInvalidBefore` to
+ * reject tokens issued before the last revoke. Returns
+ * `{ beingId, name, nameId, jwt, being }` or `null` on any failure. Pass
+ * `{ loadBeing: false }` to skip the extra fetch.
  */
 export async function verifyTokenStrict(token, { loadBeing = true } = {}) {
   const decoded = decodeToken(token);
   if (!decoded) return null;
 
-  // NAME-only token (a name:connect session, no being yet). There is no being
-  // to look up; verify the Name still exists and isn't banished, then seat the
-  // session's nameId with NO being (the portal lands at the picker). Acts
-  // still need the signing session unlocked (the key isn't in the token).
+  // NAME-only token (a name:connect session, no being yet). Verify the Name
+  // still exists and isn't banished, then seat the session's nameId with NO
+  // being (the portal lands at the picker). Acts still need the signing
+  // session unlocked (the key isn't in the token).
   if (!decoded.beingId && decoded.nameId) {
     const nameSlot = await loadProjection("name", decoded.nameId, "0");
     if (!nameSlot?.state) return null;

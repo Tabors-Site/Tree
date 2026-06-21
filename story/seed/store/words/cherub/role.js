@@ -21,17 +21,17 @@
 //   release  . drop a session's binding. The result carries the
 //              being's homeHistory as seatHistory so the transport
 //              resets the session's currentHistory.
-//   switch   . change THIS session's branch on the same being.
+//   switch   . change THIS session's history on the same being.
 //              Per-session — does not touch other sockets of the
-//              same being. Stamps an audit fact on the new branch.
+//              same being. Stamps an audit fact on the new history.
 //   death    . close a being's lifecycle (I_AM-only today).
 //
-// Branch seating: handlers never touch the socket (the moment path
+// History seating: handlers never touch the socket (the moment path
 // can't carry one — acts are records). Handlers that change which
-// branch the session rides return `seatHistory`; the WS transport,
+// history the session rides return `seatHistory`; the WS transport,
 // the only layer that owns the socket, applies it after the moment
 // seals. Stamp-then-seat: a refused stamp leaves the session's
-// branch untouched.
+// history untouched.
 //
 // I am a scripted-cognition being. The factory does not assemble
 // a frame for me . I AM my code. When a BE arrives for me, the
@@ -217,7 +217,7 @@ async function birthHandler({ payload, ctx }) {
       beingAddress: `${getStoryDomain()}/@${being.name}`,
       // First-being birth: the transport seats the session's
       // currentHistory to the new being's homeHistory (which the birth
-      // fact set to this moment's branch).
+      // fact set to this moment's history).
       seatHistory:   ctx?.moment?.actorAct?.history || null,
       // The new being is placed inside this home space (with a coord).
       // Surface it so the portal can land the camera at home directly,
@@ -241,8 +241,8 @@ async function birthHandler({ payload, ctx }) {
   }
 
   const { findByName } = await import("../../../materials/projections.js");
-  const branch = ctx?.moment?.actorAct?.history || "0";
-  const cherubParent = await findByName("being", "cherub", branch);
+  const history = ctx?.moment?.actorAct?.history || "0";
+  const cherubParent = await findByName("being", "cherub", history);
   const parentBeingId = cherubParent ? String(cherubParent.id) : null;
   // The being belongs to the signed-in NAME (its trueName), not i-am.
   const ownerNameId = (ctx?.nameId && String(ctx.nameId) !== "i-am") ? String(ctx.nameId) : null;
@@ -254,7 +254,7 @@ async function birthHandler({ payload, ctx }) {
     // stays as the fallback (a clean miss only — see _birthViaWordOrJs); the
     // session strand below reads `being` either way, so the cut is a swap.
     being = await _birthViaWordOrJs({
-      name, password, importKey, parentBeingId, ownerNameId, branch,
+      name, password, importKey, parentBeingId, ownerNameId, history,
       moment: ctx?.moment || null,
     });
   } catch (err) {
@@ -280,7 +280,7 @@ async function birthHandler({ payload, ctx }) {
     beingAddress: `${getStoryDomain()}/@${being.name}`,
     // Subsequent-user birth: the transport seats the session's
     // currentHistory to the new being's homeHistory (the moment's
-    // branch). Same shape as the first-user return above.
+    // history). Same shape as the first-user return above.
     seatHistory:   ctx?.moment?.actorAct?.history || null,
     // See first-user branch above: lets the portal land at home directly
     // and dodge the post-seal projection-fold race.
@@ -321,10 +321,10 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
     const viaWord = await _connectViaWordOrJs({ name, password, moment: ctx?.moment });
     if (viaWord) return viaWord;
 
-    // Connect runs before the session has a branch seated, so the
-    // lookup is a cross-branch identity sweep: a being born on branch
-    // #7a must be findable from a fresh socket. Name uniqueness is per-branch, so
-    // the same name can be different beings on different branches; the
+    // Connect runs before the session has a history seated, so the
+    // lookup is a cross-history identity sweep: a being born on history
+    // #7a must be findable from a fresh socket. Name uniqueness is per-history, so
+    // the same name can be different beings on different histories; the
     // password disambiguates. Candidate count is capped to bound the
     // bcrypt cost per attempt.
     const candidates = (await findBeingCandidatesByName(name)).slice(0, 5);
@@ -351,7 +351,7 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
       beingAddress: `${getStoryDomain()}/@${being.name}`,
       beingId:      String(being._id),
       name:         being.name,
-      // The branch this being owns as their present. The transport
+      // The history this being owns as their present. The transport
       // (the only layer that holds the socket) seats
       // socket.currentHistory from this after the moment seals. Same
       // model for birth/connect/release/switch: BE results are the
@@ -400,7 +400,7 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
             beingId:      String(candidate._id),
             name:         candidate.name,
             owned:        true,
-            // Seat the session on the being's home branch, same as the
+            // Seat the session on the being's home history, same as the
             // credential/inherit connects.
             seatHistory:   candidate.homeHistory || null,
           };
@@ -452,8 +452,8 @@ async function connectHandler({ address, addressKind, payload, identity, ctx }) 
         { address },
       );
     }
-    // Cross-branch candidate sweep, same reasoning as Mode 1: the
-    // target being may be born on any branch, and per-branch name
+    // Cross-history candidate sweep, same reasoning as Mode 1: the
+    // target being may be born on any history, and per-history name
     // uniqueness means one name can be several beings. The lineage
     // (or father) relationship is the credential, so eligibility
     // picks the candidate: the first being of that name the caller
@@ -652,8 +652,8 @@ function extractTargetName(address) {
 async function releaseHandler({ identity }) {
   // Frame reset. The session unbinds the being; the transport seats
   // the socket's currentHistory back to the being's homeHistory (the
-  // branch they were birthed on, what they own as their present).
-  // findHomeHistoryOfBeing falls back to the default branch for
+  // history they were birthed on, what they own as their present).
+  // findHomeHistoryOfBeing falls back to the default history for
   // unknown ids and legacy rows.
   //
   // Sign-out closes the signing session: a released identity must not
@@ -676,37 +676,37 @@ async function releaseHandler({ identity }) {
 }
 
 // ────────────────────────────────────────────────────────────────────
-// switch . Change this session's branch on the same being.
-// The fifth BE op — branch-switch is identity-binding-state (which
+// switch . Change this session's history on the same being.
+// The fifth BE op — history-switch is identity-binding-state (which
 // reel my acts ride), so it lives in BE alongside connect/release/
 // birth/death.
 //
 // Per-session isolation: only THIS socket's currentHistory changes.
 // The same being can have N concurrent sockets, each with its own
-// branch; switching one doesn't touch the others. Identity is
-// invariant across branches; only the per-session "which branch am
+// history; switching one doesn't touch the others. Identity is
+// invariant across histories; only the per-session "which history am
 // I acting from" view differs.
 //
 // The handler validates and returns; it never touches the socket.
 // Stamp-then-seat: beVerb stamps the be:switch audit fact on the
-// NEW branch (so that branch's view of this being's biography
+// NEW history (so that history's view of this being's biography
 // records the switch-in event at T), and only after the moment
 // seals does the transport seat socket.currentHistory from
-// result.seatHistory. A refused stamp leaves the session's branch
-// untouched. The old branch's reel naturally shows "no more acts
+// result.seatHistory. A refused stamp leaves the session's history
+// untouched. The old history's reel naturally shows "no more acts
 // after T" without an explicit terminator.
 // ────────────────────────────────────────────────────────────────────
 
 async function switchHandler({ payload, identity, moment }) {
-  const targetHistory = String(payload?.branch || "").trim();
+  const targetHistory = String(payload?.history || "").trim();
   if (!targetHistory) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "be:switch requires `branch`");
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "be:switch requires `history`");
   }
 
   const { isMain, loadHistory } = await import("../../../materials/history/histories.js");
   if (!isMain(targetHistory)) {
     // The destination must exist and be live. The wire's pause/delete
-    // gate checks the moment's branch (which handleBe points at the
+    // gate checks the moment's history (which handleBe points at the
     // destination for switch); these checks are the seed-level
     // authority for callers that don't come through the wire.
     const row = await loadHistory(targetHistory);
@@ -722,8 +722,8 @@ async function switchHandler({ payload, identity, moment }) {
   }
 
   // The caller must exist on the destination: their reel must fold to
-  // a birthed state in that branch's lineage view. Without this gate
-  // a being born on #1 switching to a sibling (or to a branch forked
+  // a birthed state in that history's lineage view. Without this gate
+  // a being born on #1 switching to a sibling (or to a history forked
   // before their birth) would stamp be:switch as the first fact of an
   // orphan reel — a biography with no be:birth, folding to a nameless,
   // grantless state.
@@ -732,23 +732,23 @@ async function switchHandler({ payload, identity, moment }) {
   if (!destSlot?.state?.name) {
     throw new IbpError(
       IBP_ERR.FORBIDDEN,
-      `be:switch: @${identity?.name || identity?.beingId} does not exist on branch ` +
+      `be:switch: @${identity?.name || identity?.beingId} does not exist on history ` +
         `"${targetHistory}" (born after the fork, or on a different lineage). ` +
-        `A session can only be seated on a branch where the being's reel folds to a birth.`,
+        `A session can only be seated on a history where the being's reel folds to a birth.`,
     );
   }
   if (destSlot.state?.qualities?.death?.time) {
     throw new IbpError(
       IBP_ERR.FORBIDDEN,
-      `be:switch: @${identity?.name || identity?.beingId} is dead on branch "${targetHistory}"`,
+      `be:switch: @${identity?.name || identity?.beingId} is dead on history "${targetHistory}"`,
     );
   }
 
-  // The pre-switch branch. On the wire path handleBe threads it in
-  // the payload (the moment itself rides the DESTINATION branch, so
-  // actorAct.history is not the old branch there). In-moment
-  // self-switches have no wire hint; the actor's act branch IS the
-  // branch they were seated on.
+  // The pre-switch history. On the wire path handleBe threads it in
+  // the payload (the moment itself rides the DESTINATION history, so
+  // actorAct.history is not the old history there). In-moment
+  // self-switches have no wire hint; the actor's act history IS the
+  // history they were seated on.
   const fromHistory =
     (typeof payload?.fromHistory === "string" && payload.fromHistory) ||
     moment?.actorAct?.history ||
@@ -842,7 +842,7 @@ export const cherubBeOps = Object.freeze({
                  "Per-session — switching one socket's history doesn't touch other sockets.",
     label: "Switch history",
     args: {
-      branch: { type: "text", label: "Target history path", required: true },
+      history: { type: "text", label: "Target history path", required: true },
     },
     handler: switchHandler,
   },
@@ -1024,7 +1024,7 @@ async function _registerHumanWithFreshHome({
  * reads the returned being via `bornBeingFrom`, so the caller is unchanged either way.
  * See word/roleWordRegistry.js + word/bridge.md.
  */
-async function _birthViaWordOrJs({ name, password, importKey, parentBeingId, ownerNameId, branch, moment }) {
+async function _birthViaWordOrJs({ name, password, importKey, parentBeingId, ownerNameId, history, moment }) {
   const jsBirth = () => _registerHumanWithFreshHome({
     name, password, importKey, parentBeingId,
     cherubIdentity: { name: "cherub", beingId: parentBeingId },
@@ -1048,9 +1048,9 @@ async function _birthViaWordOrJs({ name, password, importKey, parentBeingId, own
   const { findByName } = await import("../../../materials/projections.js");
   const before = Array.isArray(moment.deltaF) ? moment.deltaF.length : 0;
   try {
-    const arrivalSlot = await findByName("being", "arrival", branch);
+    const arrivalSlot = await findByName("being", "arrival", history);
     await runRoleWord(ir, {
-      moment, branch,
+      moment, history,
       trigger: { name, password },
       // ownerName = the arriving Name (its own trueName); placeRoot = the story
       // root the home space is made under (create-space's parent).
@@ -1109,10 +1109,10 @@ async function _connectViaWordOrJs({ name, password, moment }) {
   const flow = selectConnectFlow(ir, "credential");
   if (!flow) return null;
   const { randomUUID } = await import("node:crypto");
-  const branch = moment?.actorAct?.history || "0";
-  const sc = { actId: randomUUID(), actorAct: { history: branch }, identity: { beingId: "arrival", name: "arrival" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const history = moment?.actorAct?.history || "0";
+  const sc = { actId: randomUUID(), actorAct: { history }, identity: { beingId: "arrival", name: "arrival" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   try {
-    const { result } = await runRoleWord([flow], { moment: sc, branch, trigger: { name, password }, env: { host: connectHostEnv() } });
+    const { result } = await runRoleWord([flow], { moment: sc, history, trigger: { name, password }, env: { host: connectHostEnv() } });
     if (!result?.token) return null; // produced nothing usable → JS
     const { decodeToken } = await import("../../../materials/being/identity/credentials.js");
     const decoded = decodeToken(result.token);
@@ -1150,9 +1150,9 @@ async function _connectOwnedViaWord({ address, callerNameId, moment }) {
   const flow = selectConnectFlow(ir, "owned");
   if (!flow) return null;
   const { randomUUID } = await import("node:crypto");
-  const branch = moment?.actorAct?.history || "0";
-  const sc = { actId: randomUUID(), actorAct: { history: branch }, identity: { beingId: "name", name: "name" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
-  const { result } = await runRoleWord([flow], { moment: sc, branch, trigger: { name: targetName, caller: String(callerNameId) }, env: { host: connectHostEnv() } });
+  const history = moment?.actorAct?.history || "0";
+  const sc = { actId: randomUUID(), actorAct: { history }, identity: { beingId: "name", name: "name" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const { result } = await runRoleWord([flow], { moment: sc, history, trigger: { name: targetName, caller: String(callerNameId) }, env: { host: connectHostEnv() } });
   if (!result?.token || result.owned !== true) return null; // not owned → fall through
   const { decodeToken } = await import("../../../materials/being/identity/credentials.js");
   const decoded = decodeToken(result.token);
@@ -1183,11 +1183,11 @@ async function _connectInheritViaWord({ address, identity, moment }) {
   const flow = selectConnectFlow(ir, "inherit");
   if (!flow) return null;
   const { randomUUID } = await import("node:crypto");
-  const branch = moment?.actorAct?.history || "0";
-  const sc = { actId: randomUUID(), actorAct: { history: branch }, identity: { beingId: identity?.beingId }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const history = moment?.actorAct?.history || "0";
+  const sc = { actId: randomUUID(), actorAct: { history }, identity: { beingId: identity?.beingId }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   let result;
   try {
-    ({ result } = await runRoleWord([flow], { moment: sc, branch, trigger: { address, caller: identity }, env: { host: connectHostEnv() } }));
+    ({ result } = await runRoleWord([flow], { moment: sc, history, trigger: { address, caller: identity }, env: { host: connectHostEnv() } }));
   } catch (e) {
     if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.FORBIDDEN, e.message); // the .word's refusal IS the answer
     throw e;
@@ -1325,8 +1325,8 @@ async function handleCherubMate(message, ctx) {
   if (!homeSpaceId) {
     try {
       const { findRoot } = await import("../../../materials/projections.js");
-      const branch = ctx?.actorAct?.history || "0";
-      const roots = await findRoot("space", branch);
+      const history = ctx?.actorAct?.history || "0";
+      const roots = await findRoot("space", history);
       homeSpaceId = roots?.[0]?.id || null;
     } catch { homeSpaceId = null; }
   }

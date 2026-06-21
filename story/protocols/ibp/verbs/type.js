@@ -31,20 +31,20 @@ export async function handleType(socket, env, ack) {
     // The Word's statements terminate with a period; the typist needn't type it.
     if (!/[.!?]$/.test(wordText)) wordText += ".";
 
-    const branch = socket.currentHistory || "0";
+    const history = socket.currentHistory || "0";
     const identity = { beingId: socket.beingId, name: socket.name, nameId: socket.nameId || null };
 
     // Where the typist stands — "make here" parents a new space/matter to this position.
     const { loadOrFold } = await import("../../../seed/materials/projections.js");
-    const slot = await loadOrFold("being", String(socket.beingId), branch);
+    const slot = await loadOrFold("being", String(socket.beingId), history);
     const position = slot?.state?.position || slot?.state?.homeSpace || null;
 
     const { withBeingAct } = await import("../../../seed/sprout.js");
     const { typeIntoBook } = await import("../../../seed/present/book/type.js");
 
     let result;
-    await withBeingAct(String(socket.beingId), `typed: ${wordText.slice(0, 60)}`, branch, async (moment) => {
-      result = await typeIntoBook(wordText, { moment, identity, branch, position });
+    await withBeingAct(String(socket.beingId), `typed: ${wordText.slice(0, 60)}`, history, async (moment) => {
+      result = await typeIntoBook(wordText, { moment, identity, history, position });
       // Reject invalid Word: drop the moment's deltaF so nothing lands (withBeingAct no-ops on 0 facts).
       if (!result.ok) moment.deltaF.length = 0;
     });

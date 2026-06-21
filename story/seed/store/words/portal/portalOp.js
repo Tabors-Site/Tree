@@ -97,8 +97,8 @@ async function formPortalHandler({ target, params, moment, identity }) {
     spaceId = String(targetIdOf(target));
   } else if (kind === "matter") {
     const { loadOrFold } = await import("../../../materials/projections.js");
-    const branch = moment?.actorAct?.history || "0";
-    const matterSlot = await loadOrFold("matter", String(targetIdOf(target)), branch);
+    const history = moment?.actorAct?.history || "0";
+    const matterSlot = await loadOrFold("matter", String(targetIdOf(target)), history);
     spaceId = matterSlot?.state?.spaceId || null;
     if (!spaceId) {
       throw new IbpError(
@@ -123,7 +123,7 @@ async function formPortalHandler({ target, params, moment, identity }) {
     );
   }
 
-  const branch = moment?.targetHistory || moment?.actorAct?.history || "0";
+  const history = moment?.targetHistory || moment?.actorAct?.history || "0";
 
   // ONE fact births the typed portal whole: type, the content
   // reference, and the qualities.portal provenance block all ride
@@ -162,7 +162,7 @@ async function formPortalHandler({ target, params, moment, identity }) {
       of: { kind: "matter", id: matterId },
       params: createSpec,
       actId: moment?.actId || null,
-      history: branch,
+      history,
     },
     moment,
   );

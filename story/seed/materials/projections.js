@@ -3,19 +3,19 @@
 // Projections — the cache the fold writes to and the engine reads from.
 //
 // Doctrine (locked with Tabor 2026-06-03):
-//   1. Main is just-another-branch with no parent. Branch is a
+//   1. Main is just-another-history with no parent. History is a
 //      first-class dimension of every projection lookup.
-//   2. Names are per-branch identifiers; identity is `_id`. IBP
-//      `#<branch>` disambiguates.
-//   3. Branches inherit parent state lazily. Modifications shadow main
-//      for in-branch queries.
-//   4. Reducers are branch-blind. The substrate handles branch routing
+//   2. Names are per-history identifiers; identity is `_id`. IBP
+//      `#<history>` disambiguates.
+//   3. Histories inherit parent state lazily. Modifications shadow main
+//      for in-history queries.
+//   4. Reducers are history-blind. The substrate handles history routing
 //      around them.
 //
 // Storage: a single `projections` collection
-// ([seed/materials/history/projection.js](branch/projection.js)) holds
-// every cache slot keyed `<branch>:<type>:<id>`. Main (branch="0") is
-// not special-cased — its slots live alongside every other branch's.
+// ([seed/materials/history/projection.js](history/projection.js)) holds
+// every cache slot keyed `<history>:<type>:<id>`. Main (history="0") is
+// not special-cased — its slots live alongside every other history's.
 //
 // No legacy compatibility paths. Callers that still read directly from
 // Being / Space / Matter rows for projection data are now broken until
@@ -34,12 +34,12 @@ function assertType(type) {
   }
 }
 
-// Doctrine (locked with Tabor 2026-06-04): branch is a required argument
+// Doctrine (locked with Tabor 2026-06-04): history is a required argument
 // on every projection API. Internal callers MUST thread it explicitly.
 // Silent defaults to main were the failure mode — a caller forgot to
-// pass branch, the lookup landed on the wrong slot, and the user saw a
+// pass history, the lookup landed on the wrong slot, and the user saw a
 // "ghost" state with no error. The IBP parser is the only layer
-// allowed to fill in absent branches (it resolves the wire-side default
+// allowed to fill in absent histories (it resolves the wire-side default
 // to "0" at expandStance); every other layer downstream of that
 // resolution holds the value it was handed.
 //
@@ -47,10 +47,10 @@ function assertType(type) {
 // isn't a non-empty string, so a function called with `undefined`,
 // `null`, or `""` fails loudly at the boundary instead of silently
 // hitting main.
-function assertHistory(branch) {
-  if (typeof branch !== "string" || !branch.length) {
+function assertHistory(history) {
+  if (typeof history !== "string" || !history.length) {
     throw new Error(
-      `projections: history is required (got ${JSON.stringify(branch)}). ` +
+      `projections: history is required (got ${JSON.stringify(history)}). ` +
       `Internal callers must thread history from the moment's moment or the wire layer.`,
     );
   }
@@ -59,19 +59,19 @@ function assertHistory(branch) {
 // Exported variant for use at substrate consumer boundaries (assign,
 // fold, stamped, intake, inbox, scheduler, matters). Same shape as the
 // projection-local check; callers use it at function entry so a missing
-// branch surfaces at THEIR site rather than masquerading as a projection
+// history surfaces at THEIR site rather than masquerading as a projection
 // lookup error one stack frame deeper. The doctrinal commitment is that
 // every interior consumer trusts the perimeter has attached history and
 // fails loud if not — no silent default to "0" / heaven.
-export function assertHistoryOrThrow(branch, callerName) {
-  if (typeof branch !== "string" || !branch.length) {
+export function assertHistoryOrThrow(history, callerName) {
+  if (typeof history !== "string" || !history.length) {
     throw new Error(
       `${callerName || "substrate consumer"}: history is required ` +
-      `(got ${JSON.stringify(branch)}). The wire layer / enclosing moment ` +
+      `(got ${JSON.stringify(history)}). The wire layer / enclosing moment ` +
       `must thread history through; this consumer no longer silently defaults to heaven.`,
     );
   }
-  return branch;
+  return history;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -79,27 +79,27 @@ export function assertHistoryOrThrow(branch, callerName) {
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * Read a projection slot in a branch. Returns null when the slot has
+ * Read a projection slot in a history. Returns null when the slot has
  * never been initialized (the aggregate has never been touched in this
- * branch's lineage), or a slot object — including tombstoned slots
+ * history's lineage), or a slot object — including tombstoned slots
  * (state-less, marker only). Callers handle tombstones explicitly.
  *
- * Lazy inheritance from parent branches is NOT done here. This function
+ * Lazy inheritance from parent histories is NOT done here. This function
  * is a single-slot read; the fold engine's cold-fold path walks the
  * lineage when the slot is missing, calls back through initProjection,
  * and subsequent reads land on the populated slot.
  *
- * DOCTRINE (read-back, branch-anchored, null = "write didn't land")
+ * DOCTRINE (read-back, history-anchored, null = "write didn't land")
  *
  * Use loadProjection when you JUST stamped a fact and you're confirming
  * the slot materialized. Null is a write-failure signal . the seal
- * didn't reach the slot. Branch-anchored: queries only the named
- * branch's slot table, no lineage walk. The two canonical uses:
+ * didn't reach the slot. History-anchored: queries only the named
+ * history's slot table, no lineage walk. The two canonical uses:
  *
  *   - Post-seal read-back ("I just stamped birth; is the row there?")
  *   - Doctrinal singletons hardcoded to main ("0") . I_AM, the
  *     `./config` cache, boot-time orphan-root walks. These rows live
- *     in main by construction; reading from a branch makes no sense.
+ *     in main by construction; reading from a history makes no sense.
  *
  * Behavioral reads ("does this being exist anywhere I should care
  * about?", "what is this space's size?") need loadOrFold instead .
@@ -107,21 +107,21 @@ export function assertHistoryOrThrow(branch, callerName) {
  *
  * @param {"being"|"space"|"matter"} type
  * @param {string} id
- * @param {string} [branch="0"]
- * @returns {Promise<{state, foldedSeq, position, tombstoned, type, id, branch}|null>}
+ * @param {string} [history="0"]
+ * @returns {Promise<{state, foldedSeq, position, tombstoned, type, id, history}|null>}
  */
-export async function loadProjection(type, id, branch) {
+export async function loadProjection(type, id, history) {
   if (!id) return null;
   assertType(type);
-  assertHistory(branch);
+  assertHistory(history);
   // Heaven routing: spaces in heaven have one projection per story,
-  // not per branch. If the caller passed a non-MAIN branch for a
+  // not per history. If the caller passed a non-MAIN history for a
   // heaven space, transparently rewrite to MAIN so the read returns
   // the single canonical row. The classifier is async (walks ancestor
   // cache), so guard on type=space to avoid cost on every being/matter
   // load.
-  let effectiveHistory = branch;
-  if (type === "space" && branch !== "0") {
+  let effectiveHistory = history;
+  if (type === "space" && history !== "0") {
     const { isHeavenSpace } = await import("./space/heavenLineage.js");
     if (await isHeavenSpace(id)) effectiveHistory = "0";
   }
@@ -139,27 +139,27 @@ export async function loadProjection(type, id, branch) {
 }
 
 /**
- * Lazy cold-fold load. When the branch has no slot for this aggregate,
- * triggers a fold() against the branch's lineage. fold() walks
- * `readReelBetween(type, id, null, null, branch)` — lineage-aware,
+ * Lazy cold-fold load. When the history has no slot for this aggregate,
+ * triggers a fold() against the history's lineage. fold() walks
+ * `readReelBetween(type, id, null, null, history)` — lineage-aware,
  * branch-point-respecting — and either populates the slot or returns
- * null (the aggregate truly doesn't exist in this branch, e.g. created
+ * null (the aggregate truly doesn't exist in this history, e.g. created
  * in main AFTER branch point).
  *
  * DOCTRINE (behavioral, lineage-aware, null = "truly absent")
  *
  * Use loadOrFold when the slot's value DRIVES a decision and the
- * caller would be wrong to silently treat a branch-cache miss as
+ * caller would be wrong to silently treat a history-cache miss as
  * absence. Inherited beings, inherited spaces, ancestor walks for
  * auth or scope, parent-existence checks before stamping a child .
- * all of these need to see the branch's effective view, which
+ * all of these need to see the history's effective view, which
  * includes everything in the lineage up to the branch point. Null
  * here means "the aggregate truly doesn't exist anywhere I can reach
- * from this branch."
+ * from this history."
  *
  * Cost: one Mongo lookup on cache hit (fast). On miss: one lineage
  * walk + reel replay + slot write (slow once, then cached forever).
- * Branches inherit parent state automatically through this path .
+ * Histories inherit parent state automatically through this path .
  * the first lookup pays the walk; every subsequent lookup is fast.
  *
  * RULE OF THUMB
@@ -169,24 +169,26 @@ export async function loadProjection(type, id, branch) {
  *
  * @param {"being"|"space"|"matter"} type
  * @param {string} id
- * @param {string} [branch="0"]
+ * @param {string} [history="0"]
  */
-export async function loadOrFold(type, id, branch) {
-  assertHistory(branch);
+export async function loadOrFold(type, id, history) {
+  assertHistory(history);
   // Heaven routing: spaces in heaven live only on MAIN. Rewrite to
   // MAIN before the cold-fold so the fold engine reads/writes the
   // canonical heaven slot.
-  let effectiveHistory = branch;
-  if (type === "space" && branch !== "0") {
+  let effectiveHistory = history;
+  if (type === "space" && history !== "0") {
     const { isHeavenSpace } = await import("./space/heavenLineage.js");
     if (await isHeavenSpace(id)) effectiveHistory = "0";
   }
   const existing = await loadProjection(type, id, effectiveHistory);
   if (existing) return existing;
-  // Cold-fold via the engine. fold writes to the branch slot via
+  // Cold-fold via the engine. fold writes to the history slot via
   // initProjection on the way out; the next loadProjection hits cache.
   try {
     const { fold } = await import("../present/stamper/2-fold/foldEngine.js");
+    // CROSS-DIR SEAM: foldEngine.fold still reads `opts.branch` (it lives
+    // outside materials/; its history→branch rename is a separate pass).
     const { state, foldedSeq } = await fold(type, id, { branch: effectiveHistory });
     if (!state || Object.keys(state).length === 0) return null;
     // Re-read the slot — fold's initProjection landed the canonical
@@ -194,7 +196,7 @@ export async function loadOrFold(type, id, branch) {
     return await loadProjection(type, id, effectiveHistory);
   } catch (err) {
     // Surface the failure. The empty catch that used to live here
-    // hid every cold-fold issue (missing reel facts, branch lineage
+    // hid every cold-fold issue (missing reel facts, history lineage
     // walk errors, reducer throws) as "slot returned null" with no
     // signal to anyone investigating. callers that legitimately
     // expect null (a never-touched aggregate) still see null — the
@@ -217,20 +219,20 @@ export async function loadOrFold(type, id, branch) {
  *
  * @param {"being"|"space"|"matter"} type
  * @param {string} id
- * @param {string} branch
+ * @param {string} history
  * @param {{state, foldedSeq, position}} next
  * @param {number|null} expectedFoldedSeq
  * @returns {Promise<boolean>}
  */
-export async function saveProjection(type, id, branch, next, expectedFoldedSeq) {
+export async function saveProjection(type, id, history, next, expectedFoldedSeq) {
   if (!id) return false;
   assertType(type);
-  assertHistory(branch);
+  assertHistory(history);
   const { state = {}, foldedSeq, position } = next;
   if (typeof foldedSeq !== "number") {
     throw new Error("saveProjection: next.foldedSeq must be a number");
   }
-  const _id = projectionKey(branch, type, id);
+  const _id = projectionKey(history, type, id);
   const guard = expectedFoldedSeq == null
     ? { $or: [{ foldedSeq: null }, { foldedSeq: { $exists: false } }] }
     : { foldedSeq: expectedFoldedSeq };
@@ -248,14 +250,14 @@ export async function saveProjection(type, id, branch, next, expectedFoldedSeq) 
  *
  * @param {"being"|"space"|"matter"} type
  * @param {string} id
- * @param {string} branch
+ * @param {string} history
  * @param {{state, foldedSeq, position}} next
  * @returns {Promise<void>}
  */
-export async function initProjection(type, id, branch, next) {
+export async function initProjection(type, id, history, next) {
   if (!id) throw new Error("initProjection: id is required");
   assertType(type);
-  assertHistory(branch);
+  assertHistory(history);
   if (!next || typeof next !== "object") {
     throw new Error("initProjection: next object is required");
   }
@@ -263,7 +265,7 @@ export async function initProjection(type, id, branch, next) {
   if (typeof foldedSeq !== "number") {
     throw new Error("initProjection: next.foldedSeq must be a number");
   }
-  const _id = projectionKey(branch, type, id);
+  const _id = projectionKey(history, type, id);
   await Projection.updateOne(
     { _id },
     {
@@ -273,25 +275,25 @@ export async function initProjection(type, id, branch, next) {
         position:   position ?? null,
         tombstoned: false,
       },
-      $setOnInsert: { _id, history: branch, type, id },
+      $setOnInsert: { _id, history, type, id },
     },
     { upsert: true },
   );
 }
 
 /**
- * Mark an aggregate as released-in-branch. Tombstoned slots are
+ * Mark an aggregate as released-in-history. Tombstoned slots are
  * filtered out of findByPosition / findByName / listByType / findByParent
  * but preserved by loadProjection so callers can render "gone here."
  *
- * Tombstones DO shadow parent-branch projections during query: a being
+ * Tombstones DO shadow parent-history projections during query: a being
  * tombstoned in #1 will not leak through from main when a #1 query
  * runs. Without the tombstone marker the lazy-inheritance rule would
  * resurrect it on every query.
  *
  * @param {"being"|"space"|"matter"} type
  * @param {string} id
- * @param {string} branch
+ * @param {string} history
  * @param {number} atFoldedSeq
  * @param {object} [opts]
  * @param {object} [opts.state]  the terminal fold state to record alongside
@@ -301,14 +303,14 @@ export async function initProjection(type, id, branch, next) {
  *        Omitted: state is left as-is (release/death paths that only flag).
  * @returns {Promise<void>}
  */
-export async function tombstoneProjection(type, id, branch, atFoldedSeq, opts = {}) {
+export async function tombstoneProjection(type, id, history, atFoldedSeq, opts = {}) {
   if (!id) throw new Error("tombstoneProjection: id is required");
   assertType(type);
-  assertHistory(branch);
+  assertHistory(history);
   if (typeof atFoldedSeq !== "number") {
     throw new Error("tombstoneProjection: atFoldedSeq must be a number");
   }
-  const _id = projectionKey(branch, type, id);
+  const _id = projectionKey(history, type, id);
   const set = {
     tombstoned: true,
     foldedSeq:  atFoldedSeq,
@@ -319,50 +321,50 @@ export async function tombstoneProjection(type, id, branch, atFoldedSeq, opts = 
     { _id },
     {
       $set: set,
-      $setOnInsert: { _id, history: branch, type, id, ...(opts.state ? {} : { state: {} }) },
+      $setOnInsert: { _id, history, type, id, ...(opts.state ? {} : { state: {} }) },
     },
     { upsert: true },
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Branch-aware queries with shadow + tombstone semantics.
+// History-aware queries with shadow + tombstone semantics.
 //
 // The pattern in every non-main query: union main's contributions
-// (filtered by ids the branch has TOUCHED — modified or tombstoned)
-// with the branch's own slots. This is how lazy inheritance manifests
-// at the query layer: untouched-in-branch aggregates show through from
-// main; touched-in-branch ones are shadowed by branch's slot.
+// (filtered by ids the history has TOUCHED — modified or tombstoned)
+// with the history's own slots. This is how lazy inheritance manifests
+// at the query layer: untouched-in-history aggregates show through from
+// main; touched-in-history ones are shadowed by history's slot.
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * Find aggregates positioned at a space in the given branch. Returns
+ * Find aggregates positioned at a space in the given history. Returns
  * [{ type, id, foldedSeq, position }].
  *
  * @param {string} spaceId
- * @param {string} [branch="0"]
+ * @param {string} [history="0"]
  */
-export async function findByPosition(spaceId, branch) {
+export async function findByPosition(spaceId, history) {
   if (!spaceId) return [];
-  assertHistory(branch);
-  if (branch === MAIN) {
+  assertHistory(history);
+  if (history === MAIN) {
     const rows = await Projection.find({
       history: MAIN, position: spaceId, tombstoned: { $ne: true },
     }).select("type id foldedSeq position").lean();
     return rows.map(toOccupant);
   }
   // Non-main: union with shadowing AND branchPoint filtering. A main
-  // aggregate at this position is only visible in `branch` if it
+  // aggregate at this position is only visible in `history` if it
   // existed at branch creation (has a branchPoint entry for its reel).
-  // Without this filter, aggregates created in main AFTER the branch
-  // would leak into the branch's view of this space.
+  // Without this filter, aggregates created in main AFTER the history
+  // would leak into the history's view of this space.
   const { getBranchPoint } = await import("./history/histories.js");
   const [historyHere, mainOccupants, historyTouched] = await Promise.all([
     Projection.find({
-      history: branch, position: spaceId, tombstoned: { $ne: true },
+      history, position: spaceId, tombstoned: { $ne: true },
     }).select("type id foldedSeq position").lean(),
     findByPosition(spaceId, MAIN),
-    Projection.find({ history: branch }).select("type id").lean(),
+    Projection.find({ history }).select("type id").lean(),
   ]);
   const shadowedKey = (t, i) => `${t}:${i}`;
   const shadowed = new Set(historyTouched.map((s) => shadowedKey(s.type, s.id)));
@@ -370,34 +372,34 @@ export async function findByPosition(spaceId, branch) {
   const mainVisible = [];
   for (const o of mainOccupants) {
     if (shadowed.has(shadowedKey(o.type, o.id))) continue;
-    const bp = await getBranchPoint(branch, o.type, o.id);
+    const bp = await getBranchPoint(history, o.type, o.id);
     if (bp && bp > 0) mainVisible.push(o);
   }
   return [...mainVisible, ...historyHere.map(toOccupant)];
 }
 
 /**
- * Find an aggregate by name in the given branch. Name uniqueness is
- * per-branch (unique partial index excludes tombstoned slots).
+ * Find an aggregate by name in the given history. Name uniqueness is
+ * per-history (unique partial index excludes tombstoned slots).
  *
- * Lazy inheritance: if no branch slot matches by name, walks the
- * parent chain (recursively, so nested branches see their full
+ * Lazy inheritance: if no history slot matches by name, walks the
+ * parent chain (recursively, so nested histories see their full
  * lineage). An inherited match is visible only when the aggregate
- * predates this branch's fork AND this branch has no divergent slot
+ * predates this history's fork AND this history has no divergent slot
  * for it (a rename or tombstone here shadows the inherited name).
  *
  * @param {"being"|"space"|"matter"} type
  * @param {string} name
- * @param {string} [branch="0"]
- * @returns {Promise<{state, foldedSeq, position, type, id, branch}|null>}
+ * @param {string} [history="0"]
+ * @returns {Promise<{state, foldedSeq, position, type, id, history}|null>}
  */
-export async function findByName(type, name, branch) {
+export async function findByName(type, name, history) {
   assertType(type);
-  assertHistory(branch);
+  assertHistory(history);
   if (!name) return null;
-  // Branch-local match first (works for main too — main IS just-another-branch).
+  // History-local match first (works for main too — main IS just-another-history).
   const historySlot = await Projection.findOne({
-    history: branch, type, "state.name": name, tombstoned: { $ne: true },
+    history, type, "state.name": name, tombstoned: { $ne: true },
   }).lean();
   if (historySlot) {
     return {
@@ -409,50 +411,50 @@ export async function findByName(type, name, branch) {
       history:   historySlot.history,
     };
   }
-  if (branch === MAIN) return null;
-  // Lazy fall-through to the PARENT branch, recursing to main —
-  // nested branches (#1a1) inherit names through their full lineage,
+  if (history === MAIN) return null;
+  // Lazy fall-through to the PARENT history, recursing to main —
+  // nested histories (#1a1) inherit names through their full lineage,
   // not by jumping straight to main. Each unwind step gates
   // visibility:
-  //   • branchPoint: the aggregate must have existed when THIS branch
+  //   • branchPoint: the aggregate must have existed when THIS history
   //     forked; named on the ancestor after the fork → invisible here.
-  //   • divergence shadow: ANY branch-local slot for that id means
-  //     this branch's own view of the aggregate is authoritative
+  //   • divergence shadow: ANY history-local slot for that id means
+  //     this history's own view of the aggregate is authoritative
   //     (rename, tombstone, divergent fold) — and since the
-  //     branch-local name query above didn't match it, the inherited
+  //     history-local name query above didn't match it, the inherited
   //     name doesn't resolve here.
   const { getBranchPoint, loadHistory } = await import("./history/histories.js");
-  const historyRow = await loadHistory(branch);
+  const historyRow = await loadHistory(history);
   const parentPath = historyRow?.parent || MAIN;
   const inherited = await findByName(type, name, parentPath);
   if (!inherited) return null;
-  const bp = await getBranchPoint(branch, type, inherited.id);
+  const bp = await getBranchPoint(history, type, inherited.id);
   if (!bp || bp <= 0) return null;
   const touched = await Projection.findOne({
-    history: branch, type, id: inherited.id,
+    history, type, id: inherited.id,
   }).select("_id").lean();
   if (touched) return null;
   return inherited;
 }
 
 /**
- * Find children of a being (by parentBeingId) in the given branch.
+ * Find children of a being (by parentBeingId) in the given history.
  * Used by being-lineage queries (descriptor's being-children).
  *
  * Lazy inheritance walks the parent chain recursively (same model as
- * findByName), so nested branches (#1a1) see their full lineage. At
+ * findByName), so nested histories (#1a1) see their full lineage. At
  * each level: an inherited child is visible only when it predates
- * this branch's fork (branchPoint gate) and this branch holds no
+ * this history's fork (branchPoint gate) and this history holds no
  * divergent slot for it (a local slot of any kind shadows the
- * inherited row — the branch's own view is authoritative).
+ * inherited row — the history's own view is authoritative).
  *
  * @param {string} beingId
- * @param {string} [branch="0"]
+ * @param {string} [history="0"]
  */
-export async function findByParent(beingId, branch) {
+export async function findByParent(beingId, history) {
   if (!beingId) return [];
-  assertHistory(branch);
-  if (branch === MAIN) {
+  assertHistory(history);
+  if (history === MAIN) {
     const rows = await Projection.find({
       history: MAIN, type: "being",
       "state.parentBeingId": beingId,
@@ -461,65 +463,65 @@ export async function findByParent(beingId, branch) {
     return rows.map(toOccupant);
   }
   const { getBranchPoint, loadHistory } = await import("./history/histories.js");
-  const historyRow = await loadHistory(branch);
+  const historyRow = await loadHistory(history);
   const parentPath = historyRow?.parent || MAIN;
-  const [branchChildren, inheritedChildren, historyTouched] = await Promise.all([
+  const [historyChildren, inheritedChildren, historyTouched] = await Promise.all([
     Projection.find({
-      history: branch, type: "being",
+      history, type: "being",
       "state.parentBeingId": beingId,
       tombstoned: { $ne: true },
     }).select("type id foldedSeq position").lean(),
     findByParent(beingId, parentPath),
-    Projection.find({ history: branch, type: "being" }).select("id").lean(),
+    Projection.find({ history, type: "being" }).select("id").lean(),
   ]);
   const shadowed = new Set(historyTouched.map((s) => s.id));
   const inheritedVisible = [];
   for (const o of inheritedChildren) {
     if (shadowed.has(o.id)) continue;
-    const bp = await getBranchPoint(branch, "being", o.id);
+    const bp = await getBranchPoint(history, "being", o.id);
     if (bp && bp > 0) inheritedVisible.push(o);
   }
-  return [...inheritedVisible, ...branchChildren.map(toOccupant)];
+  return [...inheritedVisible, ...historyChildren.map(toOccupant)];
 }
 
 /**
- * List every aggregate of a type in the given branch. Powers
+ * List every aggregate of a type in the given history. Powers
  * .beings / .spaces / .matters catalog SEEs.
  *
  * Lazy inheritance walks the parent chain recursively (same model as
- * findByName / findByParent), so nested branches see their full
+ * findByName / findByParent), so nested histories see their full
  * lineage with per-level branchPoint gating and divergence shadowing.
  *
  * @param {"being"|"space"|"matter"} type
- * @param {string} [branch="0"]
+ * @param {string} [history="0"]
  */
-export async function listByType(type, branch) {
+export async function listByType(type, history) {
   assertType(type);
-  assertHistory(branch);
-  if (branch === MAIN) {
+  assertHistory(history);
+  if (history === MAIN) {
     const rows = await Projection.find({
       history: MAIN, type, tombstoned: { $ne: true },
     }).select("type id foldedSeq position").lean();
     return rows.map(toOccupant);
   }
   const { getBranchPoint, loadHistory } = await import("./history/histories.js");
-  const historyRow = await loadHistory(branch);
+  const historyRow = await loadHistory(history);
   const parentPath = historyRow?.parent || MAIN;
-  const [branchSlots, inheritedAll, historyTouched] = await Promise.all([
+  const [historySlots, inheritedAll, historyTouched] = await Promise.all([
     Projection.find({
-      history: branch, type, tombstoned: { $ne: true },
+      history, type, tombstoned: { $ne: true },
     }).select("type id foldedSeq position").lean(),
     listByType(type, parentPath),
-    Projection.find({ history: branch, type }).select("id").lean(),
+    Projection.find({ history, type }).select("id").lean(),
   ]);
   const shadowed = new Set(historyTouched.map((s) => s.id));
   const inheritedVisible = [];
   for (const o of inheritedAll) {
     if (shadowed.has(o.id)) continue;
-    const bp = await getBranchPoint(branch, type, o.id);
+    const bp = await getBranchPoint(history, type, o.id);
     if (bp && bp > 0) inheritedVisible.push(o);
   }
-  return [...inheritedVisible, ...branchSlots.map(toOccupant)];
+  return [...inheritedVisible, ...historySlots.map(toOccupant)];
 }
 
 /**
@@ -528,15 +530,15 @@ export async function listByType(type, branch) {
  * a space, so this only meaningfully applies to beings + spaces.
  *
  * @param {"being"|"space"} type
- * @param {string} [branch="0"]
+ * @param {string} [history="0"]
  * @returns {Promise<Array<{type, id, foldedSeq, position}>>}
  */
-export async function findRoot(type, branch) {
+export async function findRoot(type, history) {
   assertType(type);
-  assertHistory(branch);
+  assertHistory(history);
   const parentField = type === "being" ? "state.parentBeingId" : "state.parent";
   const where = {
-    history: branch, type,
+    history, type,
     tombstoned: { $ne: true },
     $or: [
       { [parentField]: null },
@@ -553,16 +555,16 @@ export async function findRoot(type, branch) {
  *
  * @param {"being"|"space"|"matter"} type
  * @param {RegExp|string} pattern
- * @param {string} [branch="0"]
+ * @param {string} [history="0"]
  * @returns {Promise<Array<{state, foldedSeq, position, type, id}>>}
  */
-export async function findByNamePattern(type, pattern, branch) {
+export async function findByNamePattern(type, pattern, history) {
   assertType(type);
-  assertHistory(branch);
+  assertHistory(history);
   if (!pattern) return [];
   const re = pattern instanceof RegExp ? pattern : new RegExp(pattern);
   const rows = await Projection.find({
-    history: branch, type,
+    history, type,
     "state.name": { $regex: re.source, $options: re.flags },
     tombstoned: { $ne: true },
   }).lean();
@@ -580,22 +582,22 @@ export async function findByNamePattern(type, pattern, branch) {
  * List the names of matter in one FOLDER — the (space, parent-matter)
  * pair that scopes matter-name uniqueness. Optionally filtered to names
  * matching a regex (used by the generated-name floor to find the next
- * free `<type><n>`). Branch-local: matter uniqueness keys on branch, so
- * inherited matter in a parent branch never collides with a fresh slot
+ * free `<type><n>`). History-local: matter uniqueness keys on history, so
+ * inherited matter in a parent history never collides with a fresh slot
  * here. parentMatterId null means top-level matter directly under the
  * space.
  *
- * @param {string} branch
+ * @param {string} history
  * @param {string} spaceId
  * @param {string|null} parentMatterId
  * @param {RegExp} [pattern]
  * @returns {Promise<string[]>}
  */
-export async function listMatterNamesInFolder(branch, spaceId, parentMatterId, pattern) {
-  assertHistory(branch);
+export async function listMatterNamesInFolder(history, spaceId, parentMatterId, pattern) {
+  assertHistory(history);
   if (!spaceId) return [];
   const where = {
-    history: branch, type: "matter",
+    history, type: "matter",
     "state.spaceId": String(spaceId),
     "state.parentMatterId": parentMatterId ? String(parentMatterId) : null,
     tombstoned: { $ne: true },
@@ -608,17 +610,17 @@ export async function listMatterNamesInFolder(branch, spaceId, parentMatterId, p
 }
 
 /**
- * Count aggregates of a type in a branch.
+ * Count aggregates of a type in a history.
  *
  * @param {"being"|"space"|"matter"} type
- * @param {string} [branch="0"]
+ * @param {string} [history="0"]
  * @returns {Promise<number>}
  */
-export async function countByType(type, branch) {
+export async function countByType(type, history) {
   assertType(type);
-  assertHistory(branch);
+  assertHistory(history);
   return await Projection.countDocuments({
-    history: branch, type, tombstoned: { $ne: true },
+    history, type, tombstoned: { $ne: true },
   });
 }
 
@@ -626,14 +628,14 @@ export async function countByType(type, branch) {
  * Count beings whose parentBeingId matches the given being id.
  *
  * @param {string} beingId
- * @param {string} [branch="0"]
+ * @param {string} [history="0"]
  * @returns {Promise<number>}
  */
-export async function countByParent(beingId, branch) {
+export async function countByParent(beingId, history) {
   if (!beingId) return 0;
-  assertHistory(branch);
+  assertHistory(history);
   return await Projection.countDocuments({
-    history: branch, type: "being",
+    history, type: "being",
     "state.parentBeingId": beingId,
     tombstoned: { $ne: true },
   });
@@ -645,14 +647,14 @@ export async function countByParent(beingId, branch) {
  *
  * @param {"being"|"space"|"matter"} type
  * @param {Array<string>} ids
- * @param {string} [branch="0"]
- * @returns {Promise<Map<string, {state, foldedSeq, position, tombstoned, type, id, branch}>>}
+ * @param {string} [history="0"]
+ * @returns {Promise<Map<string, {state, foldedSeq, position, tombstoned, type, id, history}>>}
  */
-export async function loadProjections(type, ids, branch) {
+export async function loadProjections(type, ids, history) {
   assertType(type);
-  assertHistory(branch);
+  assertHistory(history);
   if (!Array.isArray(ids) || ids.length === 0) return new Map();
-  const keys = ids.map((id) => projectionKey(branch, type, id));
+  const keys = ids.map((id) => projectionKey(history, type, id));
   const rows = await Projection.find({ _id: { $in: keys } }).lean();
   const out = new Map();
   for (const slot of rows) {
@@ -672,17 +674,17 @@ export async function loadProjections(type, ids, branch) {
 /**
  * Find the space whose `heavenSpace` marker matches the given kind. Used
  * by the migrations runner and seed-space lookups (.config, .threads,
- * heaven, etc.). Seed-space markers are singletons within a branch.
+ * heaven, etc.). Seed-space markers are singletons within a history.
  *
  * @param {string} heavenSpaceKind  e.g. "config", "heaven", "threads"
- * @param {string} [branch="0"]
+ * @param {string} [history="0"]
  * @returns {Promise<{state, foldedSeq, position, type, id}|null>}
  */
-export async function findByHeavenSpace(heavenSpaceKind, branch) {
+export async function findByHeavenSpace(heavenSpaceKind, history) {
   if (!heavenSpaceKind) return null;
-  assertHistory(branch);
+  assertHistory(history);
   const slot = await Projection.findOne({
-    history: branch, type: "space",
+    history, type: "space",
     "state.heavenSpace": heavenSpaceKind,
     tombstoned: { $ne: true },
   }).lean();
@@ -699,12 +701,12 @@ export async function findByHeavenSpace(heavenSpaceKind, branch) {
 
 // ─────────────────────────────────────────────────────────────────────
 // Heaven-scoped wrappers . explicit-intent helpers for reads that
-// the caller KNOWS are story-level (not branched). All forward to
-// the branch-required helpers with branch="0".
+// the caller KNOWS are story-level (not per-history). All forward to
+// the history-required helpers with history="0".
 //
 // The substrate's projection layer also auto-routes heaven targets
-// to MAIN regardless of caller's branch (via isHeavenSpace), so
-// branched callers that incidentally touch a heaven space don't
+// to MAIN regardless of caller's history (via isHeavenSpace), so
+// per-history callers that incidentally touch a heaven space don't
 // have to know to use these wrappers. They exist for readability at
 // the call site when the intent is unambiguously heaven.
 // ─────────────────────────────────────────────────────────────────────
@@ -712,7 +714,7 @@ export async function findByHeavenSpace(heavenSpaceKind, branch) {
 /**
  * Read a heaven-scoped being or space by name. Same as findByName but
  * locked to MAIN. Used by callers that need a story-level lookup
- * regardless of which branch they're acting on (e.g., the pointer
+ * regardless of which history they're acting on (e.g., the pointer
  * registry reader).
  *
  * @param {"being"|"space"|"matter"} type
@@ -745,17 +747,17 @@ export async function loadHeavenProjection(type, id) {
  * can't drift from it.
  *
  * @param {Array<string>} systemNames  set of seed system being names
- * @param {string} [branch="0"]
+ * @param {string} [history="0"]
  * @returns {Promise<{id, name}|null>}
  */
-export async function findRootOperator(systemNames, branch) {
-  assertHistory(branch);
-  // First find cherub's id (registered through findByName); main+branch.
-  const cherubSlot = await findByName("being", "cherub", branch);
+export async function findRootOperator(systemNames, history) {
+  assertHistory(history);
+  // First find cherub's id (registered through findByName); main+history.
+  const cherubSlot = await findByName("being", "cherub", history);
   const allowedParents = ["i-am"];
   if (cherubSlot) allowedParents.push(cherubSlot.id);
   const row = await Projection.findOne({
-    history: branch, type: "being",
+    history, type: "being",
     "state.name": { $type: "string", $nin: systemNames },
     "state.parentBeingId": { $in: allowedParents },
     tombstoned: { $ne: true },

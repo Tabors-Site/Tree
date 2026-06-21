@@ -33,7 +33,7 @@ export function selectConnectFlow(ir, kind) {
 
 export function connectHostEnv() {
   return {
-    // searchByName(name) → the cross-branch candidate sweep, capped at 5 (the bcrypt
+    // searchByName(name) → the cross-history candidate sweep, capped at 5 (the bcrypt
     // cost bound, connectHandler L312). isRemote is already a boolean in the projection
     // (reducerHelpers.js), but normalize defensively so the `.word`'s `isRemote equals
     // false` matches a native being (the JS skipped on truthiness: `if (isRemote) continue`).

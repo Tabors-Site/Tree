@@ -44,7 +44,7 @@ export async function handleSee(socket, env, ack) {
       identity,
       addressKind,
       currentUser: socket.name || "arrival",
-      // First-person stance hint: the socket's tracked branch + path
+      // First-person stance hint: the socket's tracked history + path
       // are the implicit "where am I" context the parser fills
       // relative addresses against.
       currentHistory: socket.currentHistory || "0",
@@ -91,7 +91,7 @@ export async function handleSee(socket, env, ack) {
           socket,
           {
             beingId: socket.beingId,
-            branch:  socket.currentHistory || "0",
+            history: socket.currentHistory || "0",
           },
           descriptor,
         );
@@ -105,7 +105,7 @@ export async function handleSee(socket, env, ack) {
     // subsequent DO/SUMMON/BE calls inherit the caller's left-stance
     // path (e.g. `~` and relative addresses resolve correctly).
     // currentHistory is intentionally NOT updated here — the session's
-    // branch is the BE ops' concern (birth/connect/release/switch
+    // history is the BE ops' concern (birth/connect/release/switch
     // return seatHistory; handleBe seats it). The discipline is
     // structural: navigating a SEE does not switch the being's
     // act-reel; only an explicit be:switch does. See cherub's

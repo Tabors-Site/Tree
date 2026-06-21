@@ -40,7 +40,7 @@ class WordRefusal extends Error {
 }
 
 // Run a program (a node or an array of nodes) against a context, return ctx.deltaF.
-// ctx = { moment, identity, branch, trigger, env, bindings?, deltaF?, dryRun? }
+// ctx = { moment, identity, history, trigger, env, bindings?, deltaF?, dryRun? }
 // A §7 `return` sets ctx.result and unwinds here (benign); a §7 `refuse` propagates.
 export async function evaluate(program, ctx) {
   ctx.bindings ??= {};
@@ -169,23 +169,23 @@ async function evalSee(node, ctx) {
     // JS gates call, exactly as `descends from` resolves via isAncestorOf.
     const subject = entity(node.of), object = entity(node.hasAuthorityOver);
     // Resolve the #main pointer, never floor to literal "0": an authority WALK on the wrong
-    // tree is an auth bug (never-default-branch-zero). hasCredentialAuthority self-resolves a
-    // falsy branch, but hasAuthorityOver hands branch straight to walkUp, so resolve here.
-    let branch = node.branch ?? ctx.history;
-    if (!branch) {
+    // tree is an auth bug (never-default-history-zero). hasCredentialAuthority self-resolves a
+    // falsy history, but hasAuthorityOver hands history straight to walkUp, so resolve here.
+    let history = node.history ?? ctx.history;
+    if (!history) {
       const { getDefaultHistory } = await import("../../materials/history/historyRegistry.js");
-      branch = await getDefaultHistory();
+      history = await getDefaultHistory();
     }
     const objId = String(object?.beingId ?? object?._id ?? object);
     if (node.credential) {
       const { hasCredentialAuthority } = await import("../../materials/being/identity/lineage.js");
-      result = await hasCredentialAuthority(String(subject?.beingId ?? subject?._id ?? subject), objId, branch);
+      result = await hasCredentialAuthority(String(subject?.beingId ?? subject?._id ?? subject), objId, history);
     } else {
       const { hasAuthorityOver } = await import("../../materials/being/identity/inheritation.js");
-      result = await hasAuthorityOver(String(subject?.nameId ?? subject?.trueName ?? subject), objId, branch);
+      result = await hasAuthorityOver(String(subject?.nameId ?? subject?.trueName ?? subject), objId, history);
     }
   } else if (node.read != null) {
-    result = await seeRead(entity(node.of), node.read, node.fresh, node.branch ?? ctx.history);
+    result = await seeRead(entity(node.of), node.read, node.fresh, node.history ?? ctx.history);
   }
 
   if (node.bind) ctx.bindings[node.bind] = result;
@@ -193,7 +193,7 @@ async function evalSee(node, ctx) {
 }
 
 // query a kind's projection rows by a flat field predicate. being-by-name routes to the
-// canonical cross-branch sweep so the candidate shape (_id, homeHistory, ...state) matches
+// canonical cross-history sweep so the candidate shape (_id, homeHistory, ...state) matches
 // what the flows read; other queries hit the read-model (the fold) directly.
 async function seeQuery(kind, where) {
   if (kind === "being" && where && where.name && Object.keys(where).length === 1) {
@@ -214,7 +214,7 @@ async function seeQuery(kind, where) {
 // The kind comes from the entity (`subject.kind` — set by seeQuery, or by a {kind,id} bind
 // like move's `subject`), defaulting to "being" (back-compatible: connect's candidates
 // carry no kind and are beings). So space/matter slot reads are now `see` verbs too.
-async function seeRead(subject, quality, fresh, branch) {
+async function seeRead(subject, quality, fresh, history) {
   // A bare id STRING is an id (key-export's target arrives as a plain beingId, not a row;
   // cherub-connect's collapse only worked because its candidate was already a row). Treat
   // it as { id }, kind=being, so the fresh read can loadProjection it — without this guard
@@ -225,7 +225,7 @@ async function seeRead(subject, quality, fresh, branch) {
   const id = str ? subject : (subject?._id ?? subject?.id);
   if (fresh && id) {
     const { loadProjection } = await import("../../materials/projections.js");
-    const proj = await loadProjection(kind, String(id), (str ? null : subject?.homeHistory) || branch || "0");
+    const proj = await loadProjection(kind, String(id), (str ? null : subject?.homeHistory) || history || "0");
     src = proj?.state ?? src;
   }
   return String(quality).split(".").reduce((o, k) => (o == null ? o : o[k]), src) ?? null;
@@ -242,13 +242,13 @@ async function seeRead(subject, quality, fresh, branch) {
 // what concluded), the reflecting between stays silent. "saw … that it was good": the watching
 // is private, the JUDGMENT is the fact. IR: { kind:"recall", of:<ref|"world">, as?, that? }.
 async function evalRecall(node, ctx) {
-  const branch = ctx.history ?? "0";
+  const history = ctx.history ?? "0";
   const ownBeing = ctx.identity?.beingId != null ? String(ctx.identity.beingId) : null;
   const ownName  = ctx.identity?.nameId  != null ? String(ctx.identity.nameId)  : (ctx.identity?.name != null ? String(ctx.identity.name) : null);
 
   // resolve the recall TARGET to a STORY scope (who × when × where) — the SAME fold the book and
   // the frontend story-views read. RECALL is the cognition changing views into the past/world:
-  //   world         → the whole branch                       (saw)
+  //   world         → the whole history                      (saw)
   //   {lineage: B}   → B + its descendants, the family story  (own → recalled, else saw)
   //   {moment: A}    → one act's cross-section                (saw)
   //   {place: S}     → a space's whole history                (saw)
@@ -257,7 +257,7 @@ async function evalRecall(node, ctx) {
   const of = node.of;
   const resolveRef = (v) => (v && typeof v === "object" && v.ref != null) ? getPath(v.ref, ctx) : resolveValue(v, ctx);
   const idOf = (v) => { const r = resolveRef(v); return String(r?._id ?? r?.id ?? r ?? ""); };
-  let scope = "world", params = { branch }, mode = "saw", ofLabel = "the world";
+  let scope = "world", params = { history }, mode = "saw", ofLabel = "the world";
   if (of === "world" || of?.ref === "world") {
     scope = "world"; mode = "saw"; ofLabel = "the world";
   } else if (of && typeof of === "object" && of.lineage !== undefined) {

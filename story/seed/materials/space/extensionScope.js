@@ -173,10 +173,10 @@ export async function getExtensionAtScope(extName, spaceId) {
  * Get blocked and restricted extensions at a space position.
  * Confined extensions not found in allowed[] are added to the blocked set.
  */
-export async function getBlockedExtensionsAtSpace(spaceId, branch) {
+export async function getBlockedExtensionsAtSpace(spaceId, history) {
   if (!spaceId)
     return { blocked: new Set(), restricted: new Map(), allowed: new Set() };
-  const ancestors = await getAncestorChain(spaceId, branch);
+  const ancestors = await getAncestorChain(spaceId, history);
   if (!ancestors)
     return { blocked: new Set(), restricted: new Map(), allowed: new Set() };
   return resolveExtensionScopeFromChain(ancestors, _confinedExtensions);

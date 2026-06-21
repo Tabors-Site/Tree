@@ -39,9 +39,9 @@ function sigPayload(bundleHash, signerId) {
  *                                  or I_AM for a story-vouched snapshot).
  *                                  Its NAME (trueName) is resolved and is
  *                                  what actually signs — a being never signs.
- * @param {string} [branch]
+ * @param {string} [history]
  */
-export async function signBundle(bundle, producerBeingId, branch = "0") {
+export async function signBundle(bundle, producerBeingId, history = "0") {
   const bundleHash = bundle?.meta?.bundleHash;
   if (!bundleHash) throw new Error("signBundle: bundle.meta.bundleHash must be set first");
   // When we can't vouch (no producer, or no available key — e.g. a locked
@@ -62,13 +62,13 @@ export async function signBundle(bundle, producerBeingId, branch = "0") {
     nameId = I_AM;
   } else {
     const { loadOrFold } = await import("../../materials/projections.js");
-    const slot = await loadOrFold("being", String(producerBeingId), branch);
+    const slot = await loadOrFold("being", String(producerBeingId), history);
     nameId = slot?.state?.trueName || null;
   }
   if (!nameId) { delete bundle.meta.signature; return bundle; }
 
   const { loadSigningKey } = await import("../../past/act/actSig.js");
-  const pem = await loadSigningKey(nameId, branch);
+  const pem = await loadSigningKey(nameId, history);
   if (!pem) { delete bundle.meta.signature; return bundle; }
   // signerId is the pubkey id the sig verifies against. For I_AM the
   // signing key IS the story key, whose id is storyId (a key id);

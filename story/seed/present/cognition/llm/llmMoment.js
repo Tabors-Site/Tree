@@ -173,17 +173,19 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
   const beingId = String(being._id);
   const username = being.name || null;
 
-  // The branch this moment runs on. The wire layer attaches it to the
+  // The history this moment runs on. The wire layer attaches it to the
   // envelope from the parsed address; moment carries it forward
-  // through every internal call. No default . if branch is missing,
+  // through every internal call. No default . if history is missing,
   // assertHistory in the projection layer will throw and the moment
   // fails loud rather than silently folding on main.
-  const branch = moment?.actorAct?.history || envelope?.branch;
+  // (envelope.branch is the wire-contract key the protocols layer
+  // still attaches; the local is history.)
+  const history = moment?.actorAct?.history || envelope?.branch;
 
   // The conversation lane. IBPA when both stances are resolvable; else
   // an ephemeral pipeline key. The reel fold reads this; the system
-  // prompt's "presenceKey" lookup writes through it. Branch-scoped:
-  // the same pair on a different branch is a different lane.
+  // prompt's "presenceKey" lookup writes through it. History-scoped:
+  // the same pair on a different history is a different lane.
   const beingOut = envelope.beingOut || envelope.toBeingId || null;
   const isPresentist = role?.presentist === true;
   const _ibpAddress = (isPresentist || !beingOut)
@@ -192,7 +194,7 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
         askerBeingId: beingId,
         askerPosition: getCurrentSpace(beingId) || null,
         addresseeBeingId: beingOut,
-        ...(branch ? { branch } : {}),
+        ...(history ? { history } : {}),
       });
   const presenceKey = _ibpAddress
     || envelope.ibpAddress
@@ -210,7 +212,7 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
   // chain (scope, tools, LLM, config) reads from this memo.
   const snapshotNodeId = currentSpace || rootId || null;
   const ancestorSnapshot = snapshotNodeId
-    ? await snapshotAncestors(snapshotNodeId, branch)
+    ? await snapshotAncestors(snapshotNodeId, history)
     : [];
 
   // Tree circuit breaker. If the owning root is tripped, return a
@@ -247,12 +249,12 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
       ? { beingId: askerBeingId, spaceId: askerSpaceId, storyDomain: null }
       : null,
     role: role?.llmSlot || role?.name || "main",
-    branch,
+    history,
   });
   const roleConnectionId = chainResult.chain.length > 0
     ? chainResult.chain[0].connectionId
     : null;
-  const clientEntry = await getClientForBeing(beingId, null, roleConnectionId, branch);
+  const clientEntry = await getClientForBeing(beingId, null, roleConnectionId, history);
   if (clientEntry.noLlm) {
     return cognitionSuccess(
       "No LLM connection configured. Set one up at /setup to use AI features.",
@@ -332,13 +334,13 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
   // Capabilities. The pastFaceBlock rides through into buildPrompt's
   // assembly; suppressCanSee tells the assembler to skip the role's
   // preloaded canSee blocks on inward (world drops out).
-  // Branch-aware aggregate reader for see-resolvers and prompt builders.
+  // History-aware aggregate reader for see-resolvers and prompt builders.
   // Same shape as ctx.read on moment (see 1-assign.js baseCtx): hides
-  // loadOrFold + branch threading behind one call. SEE-resolvers run
+  // loadOrFold + history threading behind one call. SEE-resolvers run
   // inside the prompt-build phase BEFORE the summon dispatch — they
   // don't get a moment, only this promptCtx — so the reader has to
   // live here too.
-  const _summonBranch = moment?.actorAct?.history || "0";
+  const _summonHistory = moment?.actorAct?.history || "0";
   const promptCtx = {
     name: username,
     beingId,
@@ -354,11 +356,11 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
     // section of the prompt; no per-soul rebuild.
     innerFace: moment?.innerFace || null,
     suppressCanSee: orientation === "inward",
-    branch: _summonBranch,
+    history: _summonHistory,
     read: async (kind, id) => {
       if (!id) return null;
       const { loadOrFold } = await import("../../../materials/projections.js");
-      const slot = await loadOrFold(kind, String(id), _summonBranch);
+      const slot = await loadOrFold(kind, String(id), _summonHistory);
       if (!slot) return null;
       return { _id: slot.id, position: slot.position, ...(slot.state || {}) };
     },
@@ -406,7 +408,7 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
     sessionFacade,
     beingId,
     Array.isArray(role.permissions) ? role.permissions : null,
-    branch,
+    history,
   );
   if (envelope.readOnly) {
     tools = tools.filter((t) => {
@@ -472,9 +474,9 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
       // Pass the 7-step chain so failover walks our resolver's
       // candidates (with force flags + per-role slots already
       // applied) instead of falling back to the legacy resolver.
-      // Branch threads through so failover reads see the moment's
+      // History threads through so failover reads see the moment's
       // effective view (sub-branch deletions, etc.).
-      { chain: chainResult.chain, branch },
+      { chain: chainResult.chain, history },
     );
     let winner;
     try {

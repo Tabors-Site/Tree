@@ -3,7 +3,7 @@
 // Cross-world response handler. The actor's Act seals locally at
 // status="attempted" when the cross-world call dispatches. When the
 // foreign substrate replies — via canopy for cross-story, or
-// directly for same-story cross-branch (which has no async wait
+// directly for same-story cross-history (which has no async wait
 // today) — this function transitions the Act's status and attaches
 // the foreign descriptor as inner face.
 //

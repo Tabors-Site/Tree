@@ -60,20 +60,20 @@ const SKINS_SPACE_NAME = "skins";
 
 /**
  * Find (or mint) the story root's `skins` space — the model
- * catalog. A normal space, not heaven: it forks with branches like
- * everything else, so each branch shows its own models. Called at
+ * catalog. A normal space, not heaven: it forks with histories like
+ * everything else, so each history shows its own models. Called at
  * boot (genesis background furniture) so uploads always have a home;
  * idempotent by name-under-root.
  */
-export async function ensureSkinsSpace(branch = "0", moment = null) {
+export async function ensureSkinsSpace(history = "0", moment = null) {
   const { getSpaceRootId } = await import("../../../sprout.js");
   const rootId = getSpaceRootId();
   if (!rootId) throw new IbpError(IBP_ERR.INTERNAL, "ensureSkinsSpace: story root not ready");
 
   const { default: Projection } = await import("../../../materials/history/projection.js");
-  // Branch-local first, then main's inherited row (the lazy-fill
-  // idiom): the catalog is minted on main and inherited by branches.
-  for (const b of branch === "0" ? ["0"] : [branch, "0"]) {
+  // History-local first, then main's inherited row (the lazy-fill
+  // idiom): the catalog is minted on main and inherited by histories.
+  for (const b of history === "0" ? ["0"] : [history, "0"]) {
     const row = await Projection.findOne({
       history: b, type: "space",
       "state.parent": String(rootId),
@@ -98,7 +98,7 @@ export async function ensureSkinsSpace(branch = "0", moment = null) {
       qualities: {},
     },
     actId:  moment?.actId || null,
-    history: branch,
+    history,
   }, moment);
   return id;
 }
@@ -113,10 +113,10 @@ async function _setModelViaWord({ target, params, caller, moment }) {
   const ir = resolveRoleWord("render", "set-model", moment?.actorAct?.history);
   if (!ir) return null;
   const { modelHostEnv } = await import("./modelHost.js");
-  const branch = moment?.actorAct?.history;
+  const history = moment?.actorAct?.history;
   try {
     const { result } = await runRoleWord(ir, {
-      moment, branch,
+      moment, history,
       trigger: {
         target,
         kind: detectTargetKind(target),
@@ -126,7 +126,7 @@ async function _setModelViaWord({ target, params, caller, moment }) {
         rotation: params?.rotation ?? null,
         clear: params?.clear ?? false,
         forMatterType: params?.forMatterType ?? null,
-        branch,
+        branch: history,
       },
       // The host env CLOSES OVER the op's params so write-model/clear-model enrich it in
       // place (the same object the dispatcher's auto-fact reads). NO emit, NO skipAudit.
@@ -152,9 +152,9 @@ async function setModelHandler({ target, params, identity, moment }) {
   const kind = detectTargetKind(target);
   const targetId = targetIdOf(target);
   if (!targetId) throw new IbpError(IBP_ERR.INVALID_INPUT, "set-model: target required");
-  const branch = moment?.actorAct?.history || "0";
+  const history = moment?.actorAct?.history || "0";
 
-  await assertMaySetModel(kind, targetId, identity, branch);
+  await assertMaySetModel(kind, targetId, identity, history);
 
   // forMatterType: a SPACE-level default for every matter of one type
   // sitting in that space ("all notes here look like this"). Lives at
@@ -200,7 +200,7 @@ async function setModelHandler({ target, params, identity, moment }) {
       "set-model: `modelMatterId` required (upload first via create-matter type=model, or pass clear=true)",
     );
   }
-  const modelMatter = await resolveModelMatter(String(params.modelMatterId), branch);
+  const modelMatter = await resolveModelMatter(String(params.modelMatterId), history);
   const model = {
     matterId: String(modelMatter._id),
     hash:     modelMatter.content.hash,

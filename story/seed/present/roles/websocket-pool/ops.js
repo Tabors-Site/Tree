@@ -29,7 +29,7 @@ registerSeeOperation("connections", {
           name: s.name || null,
           clientKind: s.clientKind || null,
           clientInstance: s.clientInstance || null,
-          branch: s.currentHistory || "0",
+          history: s.currentHistory || "0",
           path: s.currentPath || "/",
         });
       }

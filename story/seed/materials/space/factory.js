@@ -10,10 +10,10 @@
 // made of). Two children:
 //
 //   ./factory/present — the stampers. One synthetic child per being
-//     with sealed acts; inside, one lane per (being, branch): the
+//     with sealed acts; inside, one lane per (being, history): the
 //     stamped papers laid along the chain at {x: index, y: lane*2},
 //     the stamper figure standing at the head, a fork starting a new
-//     lane where the branch was born. The stamper steps one forward
+//     lane where the history was born. The stamper steps one forward
 //     after each act comes through — literally, x = chain position.
 //
 //   ./factory/past — the reels. A thin recent-first listing whose
@@ -115,7 +115,7 @@ export async function resolveStamperBeing(ref) {
 
 /**
  * One entry per being with sealed acts, recent actors first. Cheap:
- * ActHead is one small row per (being, branch); the head act lookup
+ * ActHead is one small row per (being, history); the head act lookup
  * is an indexed _id batch; actCount runs only for the returned page.
  */
 export async function listStamperChildren({ limit = 100 } = {}) {
@@ -162,12 +162,12 @@ export async function listStamperChildren({ limit = 100 } = {}) {
 
 // ── the stamper space ───────────────────────────────────────────────
 
-// Acts with no branch field (legacy, pre-Act-branching) count as
+// Acts with no history field (legacy, pre-Act-branching) count as
 // main, mirroring readActChainLineage's compatibility handling.
-function branchClauseFor(branch) {
-  return isMain(branch)
+function historyClauseFor(history) {
+  return isMain(history)
     ? { $or: [{ history: MAIN }, { history: { $exists: false } }] }
-    : { history: branch };
+    : { history: history };
 }
 
 function shortLabel(act) {
@@ -185,7 +185,7 @@ function previewOf(act) {
 
 /**
  * The stamper space: a space-shaped descriptor both portals render
- * with no special view code. One lane per (being, branch); papers at
+ * with no special view code. One lane per (being, history); papers at
  * {x: forkX + countOlder + i, y: lane*2}; the stamper figure at the
  * head. Windowed (limit/before) so heavy stampers (the http-server's
  * request stream) stay cheap; countOlder keeps x stable while paging.
@@ -199,13 +199,13 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
   const cap = Math.min(Math.max(1, Number(limit) || 100), 500);
   const beforeDate = before ? new Date(before) : null;
 
-  // Lanes: every branch this being has sealed acts on. Lane 0 is
-  // main; the rest order by branch creation time.
+  // Lanes: every history this being has sealed acts on. Lane 0 is
+  // main; the rest order by history creation time.
   const heads = await ActHead.find({ beingId, headHash: { $ne: null } })
     .select("history headHash").lean();
   const historySet = new Set(heads.map((h) => h.history || MAIN));
   if (historySet.size === 0) historySet.add(MAIN);
-  const historyMeta = new Map(); // branch -> {createdAt: Date|null}
+  const historyMeta = new Map(); // history -> {createdAt: Date|null}
   for (const b of historySet) {
     if (isMain(b)) { historyMeta.set(b, { createdAt: null }); continue; }
     try {
@@ -213,7 +213,7 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
       historyMeta.set(b, { createdAt: row?.createdAt ? new Date(row.createdAt) : null });
     } catch { historyMeta.set(b, { createdAt: null }); }
   }
-  const branches = [...historySet].sort((a, b) => {
+  const histories = [...historySet].sort((a, b) => {
     if (isMain(a)) return -1;
     if (isMain(b)) return 1;
     const ta = historyMeta.get(a)?.createdAt?.getTime() || 0;
@@ -221,17 +221,17 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
     return ta - tb;
   });
 
-  // Fork anchor: where along the PARENT lane this branch was born.
+  // Fork anchor: where along the PARENT lane this history was born.
   // Wall-clock anchor (acts have no seq; stampedAt is a display
   // helper, never truth) — honest for a view whose whole job is
   // display. forkX(main) = 0.
-  async function forkXFor(branch) {
-    if (isMain(branch)) return 0;
-    const meta = historyMeta.get(branch);
+  async function forkXFor(history) {
+    if (isMain(history)) return 0;
+    const meta = historyMeta.get(history);
     if (!meta?.createdAt) return 0;
     let parent = MAIN;
-    try { parent = (await loadHistory(branch))?.parent || MAIN; } catch { /* main */ }
-    const parentClause = branchClauseFor(parent);
+    try { parent = (await loadHistory(history))?.parent || MAIN; } catch { /* main */ }
+    const parentClause = historyClauseFor(parent);
     let x = 0;
     try {
       x = await Act.countDocuments({
@@ -239,7 +239,7 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
         stampedAt: { $lte: meta.createdAt },
       });
     } catch { x = 0; }
-    // Recurse one level when the parent is itself a branch so deep
+    // Recurse one level when the parent is itself a history so deep
     // forks anchor against the whole ancestry.
     if (!isMain(parent)) x += await forkXFor(parent);
     return x;
@@ -249,10 +249,10 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
   const allSerialized = [];
   let maxHeadX = 0;
 
-  for (let lane = 0; lane < branches.length; lane++) {
-    const branch = branches[lane];
-    const clause = branchClauseFor(branch);
-    const forkX = await forkXFor(branch);
+  for (let lane = 0; lane < histories.length; lane++) {
+    const history = histories[lane];
+    const clause = historyClauseFor(history);
+    const forkX = await forkXFor(history);
 
     let total = 0;
     try { total = await Act.countDocuments({ through: beingId, ...clause }); } catch { /* 0 */ }
@@ -275,7 +275,7 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
 
     const serialized = window.map((a) => ({
       _id: String(a._id),
-      history: branch, lane, forkX, countOlder,
+      history: history, lane, forkX, countOlder,
       startMessage: a.startMessage || null,
       stampedAt: a.stampedAt || null,
     }));
@@ -283,7 +283,7 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
 
     const headX = forkX + total;
     if (headX > maxHeadX) maxHeadX = headX;
-    lanes.push({ history: branch, lane, forkX, headX, count: total, returned: window.length });
+    lanes.push({ history: history, lane, forkX, headX, count: total, returned: window.length });
   }
 
   // ONE batched fact enrichment across every lane.
@@ -338,7 +338,7 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
       spaceId: `stamper:${beingId}`, // the live-subscription key
       pathByNames: path,
       // Heaven pin, not a default: factory spaces live in heaven,
-      // which stays on branch 0 by doctrine.
+      // which stays on history 0 by doctrine.
       history: "0",
     },
     isSpaceRoot: false,

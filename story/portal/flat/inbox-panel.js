@@ -88,7 +88,7 @@ function renderEntry(parent, entry, { story, refresh }) {
   const meta = document.createElement("div");
   meta.className = "inbox-meta dim";
   const when = entry.sentAt ? new Date(entry.sentAt).toLocaleString() : "(no date)";
-  meta.textContent = `${when} · priority: ${entry.priority || "?"} · branch: ${entry.branch || "?"}`;
+  meta.textContent = `${when} · priority: ${entry.priority || "?"} · history: ${entry.history || "?"}`;
   card.appendChild(meta);
 
   renderContentBody(card, entry);

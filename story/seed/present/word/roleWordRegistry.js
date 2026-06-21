@@ -33,23 +33,23 @@ const k = (role, op) => `${role}:${op}`;
 // field would be a redundant copy of that truth, and a redundant copy drifts.)
 const REGISTRY = new Map();
 
-// The per-branch DISABLED overlay: branch -> Set<"role:op"> turned off ON that branch. A
-// word's EXISTENCE (declared + backed, in REGISTRY) is branch-INDEPENDENT; its ENABLED state
-// is per-BRANCH, folded from disable/enable facts (each laid on its own branch). This is what
-// lets an extension's words be ON in one branch and OFF in another of the SAME story.
-// V2 is per-EXACT-branch; lineage inheritance (a disable on an ancestor dimming descendants,
+// The per-history DISABLED overlay: history -> Set<"role:op"> turned off ON that history. A
+// word's EXISTENCE (declared + backed, in REGISTRY) is history-INDEPENDENT; its ENABLED state
+// is per-HISTORY, folded from disable/enable facts (each laid on its own history). This is what
+// lets an extension's words be ON in one history and OFF in another of the SAME story.
+// V2 is per-EXACT-history; lineage inheritance (a disable on an ancestor dimming descendants,
 // mirroring wakes' _isInHistoryLineage) is the V2.1 refinement.
 const _historyDisabled = new Map();
-const _disabledOn = (key, branch) =>
-  !!_historyDisabled.get(String(branch))?.has(key);
+const _disabledOn = (key, history) =>
+  !!_historyDisabled.get(String(history))?.has(key);
 
 // The root story (heaven), where the base/seed vocabulary lives. It is the fallback for a
-// BRANCHLESS resolve — an existence query with no act context (a verifier, a global check).
-// This is NOT an act-default drifting to "0": a real act always threads its own branch.
+// HISTORYLESS resolve — an existence query with no act context (a verifier, a global check).
+// This is NOT an act-default drifting to "0": a real act always threads its own history.
 const ROOT = "0";
-// The resolved #main branch, cached at boot (declareRoleWordsToFold / rehydrate resolve the
+// The resolved #main history, cached at boot (declareRoleWordsToFold / rehydrate resolve the
 // pointer via getDefaultHistory). resolveRoleWord is SYNC and can't await the pointer, so it
-// PREFERS the cached #main over the root when an act gave no branch.
+// PREFERS the cached #main over the root when an act gave no history.
 let _mainHistory = null;
 
 const irCache = new Map();
@@ -85,26 +85,26 @@ export function listRegistered() {
   return [...REGISTRY.values()];
 }
 
-// Resolve a role's op to its `.word` IR for a BRANCH, or null to fall through to the JS
+// Resolve a role's op to its `.word` IR for a HISTORY, or null to fall through to the JS
 // handler. Resolves iff DECLARED + BACKED (existence — the `.word` file present; a gone
-// extension leaves the declaration but no code) AND NOT disabled ON this branch (the
-// per-branch overlay). A missing branch falls back to #main (the cached default pointer),
-// NEVER the literal "0" — resolve the pointer, don't assume the id (never-default-branch-zero).
+// extension leaves the declaration but no code) AND NOT disabled ON this history (the
+// per-history overlay). A missing history falls back to #main (the cached default pointer),
+// NEVER the literal "0" — resolve the pointer, don't assume the id (never-default-history-zero).
 // Stays SYNCHRONOUS (never reads the chain).
-export function resolveRoleWord(role, op, branch) {
-  // PHASE 2 cutover: the runtime read is the UNIFIED wordStore fold + the per-branch overlay, via
+export function resolveRoleWord(role, op, history) {
+  // PHASE 2 cutover: the runtime read is the UNIFIED wordStore fold + the per-history overlay, via
   // resolveRoleWordViaFold. The REGISTRY Map is now ONLY the pre-genesis registration buffer
   // (declareRoleWordsToFold flushes it into the fold); resolveRoleWord no longer reads it. Parity
   // proven by verify-rolewordfold (phase 1) before this cutover. Stays SYNCHRONOUS.
-  return resolveRoleWordViaFold(role, op, branch);
+  return resolveRoleWordViaFold(role, op, history);
 }
 
 // ROLES-UNIFICATION phase-1 parity path: resolve a role-word's IR by reading the UNIFIED wordStore
-// fold (existence + source, sync) + the per-branch overlay (enabled). verify-rolewordfold compares
+// fold (existence + source, sync) + the per-history overlay (enabled). verify-rolewordfold compares
 // this to resolveRoleWord (the REGISTRY path) to prove the read cutover is a no-op before REGISTRY is
 // deleted in phase 2. Same SYNC contract as resolveRoleWord (the overlay is an in-memory index).
-export function resolveRoleWordViaFold(role, op, branch) {
-  const b = branch ?? _mainHistory ?? ROOT;
+export function resolveRoleWordViaFold(role, op, history) {
+  const b = history ?? _mainHistory ?? ROOT;
   if (_disabledOn(k(role, op), b)) return null;
   const source = resolveRoleWordSource(role, op); // sync read of the unified fold
   if (!source) return null;
@@ -133,7 +133,7 @@ const WORD_RETIRE = "retire";
 // roleword — not just role-words. roleWordRegistry no longer carries its own bedrock set or guard.
 
 // Resolve #main (the pointer), never the literal "0", and cache it for the sync
-// resolveRoleWord. Used wherever a branch isn't given.
+// resolveRoleWord. Used wherever a history isn't given.
 async function _ensureMainHistory() {
   const { getDefaultHistory } =
     await import("../../materials/history/historyRegistry.js");
@@ -151,13 +151,13 @@ async function _ensureMainHistory() {
 export async function disableWord(
   role,
   op,
-  { moment = null, branch = null, actorBeingId = null } = {},
+  { moment = null, history = null, actorBeingId = null } = {},
 ) {
   const { disableWord: disableWordInFold } = await import("./wordStore.js");
-  const br = branch != null ? String(branch) : await _ensureMainHistory();
+  const br = history != null ? String(history) : await _ensureMainHistory();
   await disableWordInFold(`${role}:${op}`, {
     moment,
-    branch: br,
+    history: br,
     actorBeingId,
   }); // the unified fold (bedrock-guarded there)
   let s = _historyDisabled.get(br);
@@ -165,17 +165,17 @@ export async function disableWord(
     s = new Set();
     _historyDisabled.set(br, s);
   }
-  s.add(k(role, op)); // disabled ON this branch only (the sync overlay)
+  s.add(k(role, op)); // disabled ON this history only (the sync overlay)
 }
 
 // Re-enable a disabled word: a fresh `do:coin` fact (the fold's last action wins).
 export async function enableWord(
   role,
   op,
-  { moment = null, branch = null, actorBeingId = null } = {},
+  { moment = null, history = null, actorBeingId = null } = {},
 ) {
   const { bindWord } = await import("./wordStore.js");
-  const br = branch != null ? String(branch) : await _ensureMainHistory();
+  const br = history != null ? String(history) : await _ensureMainHistory();
   const entry0 = REGISTRY.get(k(role, op)); // the registration buffer holds the IR source
   await bindWord(
     `${role}:${op}`,
@@ -185,15 +185,15 @@ export async function enableWord(
       op,
       source: String(entry0?.fileUrl ?? ""),
     },
-    { moment, branch: br, actorBeingId },
+    { moment, history: br, actorBeingId },
   ); // a fresh coin re-enables (bedrock-guarded in wordStore)
-  _historyDisabled.get(br)?.delete(k(role, op)); // re-enabled ON this branch (the sync overlay)
+  _historyDisabled.get(br)?.delete(k(role, op)); // re-enabled ON this history (the sync overlay)
 }
 
 // Rehydrate the projection from the chain (boot/recovery): replay coin / retire
 // facts in date/seq order (declare = enable + ensure present, disable = mark off; last action
-// wins), grouped by the fact's branch into the per-branch overlay. Mirrors wakes
-// rehydrateFromFacts. Per-EXACT-branch (V2); lineage inheritance (a disable on an ancestor
+// wins), grouped by the fact's history into the per-history overlay. Mirrors wakes
+// rehydrateFromFacts. Per-EXACT-history (V2); lineage inheritance (a disable on an ancestor
 // dimming descendants, mirroring wakes' _isInHistoryLineage) is the V2.1 refinement. Also
 // caches #main so the sync resolveRoleWord can fall back to it (never the literal "0").
 export async function rehydrateWordsFromFacts() {
@@ -201,7 +201,7 @@ export async function rehydrateWordsFromFacts() {
   await _ensureMainHistory();
   // The role-words now live in the UNIFIED wordStore fold: a coin fact carries
   // params.word ("role:op") + params.binding.kind === "roleword"; a retire carries params.word.
-  // Rebuild the per-branch disabled overlay + the I_AM bedrock set from them. resolveRoleWord reads
+  // Rebuild the per-history disabled overlay + the I_AM bedrock set from them. resolveRoleWord reads
   // the fold for EXISTENCE, so REGISTRY is no longer populated here (it is the pre-genesis buffer).
   const facts = await Fact.find({
     verb: "do",
@@ -216,9 +216,9 @@ export async function rehydrateWordsFromFacts() {
     if (!word) continue;
     if (f.act === WORD_COIN && f.params?.binding?.kind === "roleword")
       rolewordKeys.add(word);
-    if (!rolewordKeys.has(word)) continue; // only role-words feed the per-branch overlay
-    // ENABLED state (per EXACT branch): last action on the fact's branch wins (disable adds,
-    // declare/enable removes). Facts always carry a branch; fall back to #main, never "0".
+    if (!rolewordKeys.has(word)) continue; // only role-words feed the per-history overlay
+    // ENABLED state (per EXACT history): last action on the fact's history wins (disable adds,
+    // declare/enable removes). Facts always carry a history; fall back to #main, never "0".
     const br = String(f.history ?? _mainHistory);
     let s = _historyDisabled.get(br);
     if (f.act === WORD_RETIRE) {
@@ -267,7 +267,7 @@ export async function runRoleWord(
   ir,
   {
     moment,
-    branch,
+    history,
     trigger = {},
     bindings = {},
     beings = {},
@@ -292,7 +292,7 @@ export async function runRoleWord(
     dryRun: false,
     moment: wordCtx,
     identity,
-    history: branch,
+    history,
     // default id-minter for `bind` sites (the home space): create-space honors the
     // target id, so a minted uuid becomes the home's id and later acts reference it.
     // A caller can override via env.mintId.

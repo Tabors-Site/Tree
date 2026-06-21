@@ -6,7 +6,7 @@
 // multibase multicodec form `z<base58btc(0xed01 || rawpub)>` (the
 // did:key value for ed25519, renderable as `did:key:z...` for external
 // display). Colon-free on purpose: ids flow through projection keys
-// (`<branch>:<type>:<id>`), reel keys, and act-head keys, all
+// (`<history>:<type>:<id>`), reel keys, and act-head keys, all
 // colon-delimited, so a `did:tree:` prefix with colons would corrupt
 // key parsing. The `z` is multibase base58btc; the `0xed01` is the
 // multicodec varint for ed25519-pub, so the id is self-describing and

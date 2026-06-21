@@ -1,32 +1,32 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Projection. The unified per-branch projection cache.
+// Projection. The unified per-history projection cache.
 //
 // Doctrine (locked with Tabor 2026-06-03):
-//   1. Main is just-another-branch with no parent. Branch is a
+//   1. Main is just-another-history with no parent. History is a
 //      first-class dimension of every projection lookup.
-//   2. Names are per-branch identifiers; identity is `_id`. IBP
-//      `#<branch>` disambiguates.
-//   3. Branches inherit parent state lazily. Modifications shadow main
-//      for in-branch queries.
-//   4. Reducers are branch-blind. The substrate handles branch routing
+//   2. Names are per-history identifiers; identity is `_id`. IBP
+//      `#<history>` disambiguates.
+//   3. Histories inherit parent state lazily. Modifications shadow main
+//      for in-history queries.
+//   4. Reducers are history-blind. The substrate handles history routing
 //      around them.
 //
 // During Phase 2/3 of the projection unification this collection holds
 // only NON-MAIN projections; main's slots continue to live on the
 // Being/Space/Matter rows. The unified API in seed/materials/projections.js
-// hides which storage backs which branch from callers.
+// hides which storage backs which history from callers.
 //
 // In Phase 4 the storage migration backfills every existing Being /
-// Space / Matter row into this collection with branch="0" and the API's
+// Space / Matter row into this collection with history="0" and the API's
 // main path swings over. After that, every projection regardless of
-// branch lives here.
+// history lives here.
 
 import mongoose from "mongoose";
 
 const ProjectionSchema = new mongoose.Schema({
-  // Composite key. `<branch>:<type>:<id>` mirrors the ReelHead key
-  // convention so both branched caches share a mental model.
+  // Composite key. `<history>:<type>:<id>` mirrors the ReelHead key
+  // convention so both per-history caches share a mental model.
   _id:        { type: String },
 
   history:    { type: String, required: true, index: true },
@@ -37,7 +37,7 @@ const ProjectionSchema = new mongoose.Schema({
   // here — same shape they write today on Being/Space/Matter rows.
   state:      { type: mongoose.Schema.Types.Mixed, default: {} },
 
-  // Highest fact-seq this branch has folded for this reel. Read by the
+  // Highest fact-seq this history has folded for this reel. Read by the
   // fold engine to decide whether the cache is fresh and to bound the
   // tail-read on hot fold.
   foldedSeq:  { type: Number, default: null },
@@ -45,16 +45,16 @@ const ProjectionSchema = new mongoose.Schema({
   // Reducer-derived position. Sparse-indexed below for findByPosition.
   position:   { type: String, default: null },
 
-  // Released-in-branch marker. Distinct from "row doesn't exist" — a
-  // tombstone says "this aggregate WAS visible in this branch but was
+  // Released-in-history marker. Distinct from "row doesn't exist" — a
+  // tombstone says "this aggregate WAS visible in this history but was
   // explicitly released here." findByPosition and findByName filter
   // these out; loadProjection returns them so callers can render
-  // "gone-in-this-branch" cleanly.
+  // "gone-in-this-history" cleanly.
   tombstoned: { type: Boolean, default: false },
 });
 
 // Primary lookup is via _id (composite key) — no extra index needed.
-// Branch + position serves findByPosition.
+// History + position serves findByPosition.
 ProjectionSchema.index(
   { history: 1, position: 1 },
   { sparse: true },
@@ -64,8 +64,8 @@ ProjectionSchema.index(
 // Three type-scoped unique indexes, one doctrine: a name is unique over
 // exactly the set it must disambiguate among.
 //
-//   • BEING — the one global handle. A being name IS a branch-wide
-//     address (`@dancer3`), unique across the whole branch.
+//   • BEING — the one global handle. A being name IS a history-wide
+//     address (`@dancer3`), unique across the whole history.
 //   • SPACE — a folder among its siblings. Unique per PARENT, so the
 //     same name lives in different scopes (`/home/love/love` is legal);
 //     you address a space by its full path, which the resolver walks
@@ -77,7 +77,7 @@ ProjectionSchema.index(
 //
 // Each index is partial on its own `type` (equality is legal in a
 // partial filter) so the three never overlap. Tombstoned slots are
-// excluded so a name frees up when its slot is released in the branch.
+// excluded so a name frees up when its slot is released in the history.
 // The tombstone exclusion is EQUALITY on false, not `$ne: true` — Mongo
 // partial indexes don't support $not/$ne and the index silently never
 // builds with that spec. Equality is safe because every write path sets
@@ -121,7 +121,7 @@ ProjectionSchema.index(
   },
 );
 
-// Lineage queries: "give me children of being X in branch B."
+// Lineage queries: "give me children of being X in history B."
 // state.parentBeingId is a bare being-id; findByParent / countByParent
 // filter on it directly.
 ProjectionSchema.index(
@@ -129,19 +129,19 @@ ProjectionSchema.index(
   { sparse: true },
 );
 
-// Lineage queries for spaces: "give me children of space X in branch B."
+// Lineage queries for spaces: "give me children of space X in history B."
 ProjectionSchema.index(
   { history: 1, type: 1, "state.parent": 1 },
   { sparse: true },
 );
 
-// Lineage queries for matter: "give me children of matter X in branch B."
+// Lineage queries for matter: "give me children of matter X in history B."
 ProjectionSchema.index(
   { history: 1, type: 1, "state.parentMatterId": 1 },
   { sparse: true },
 );
 
-// Matter-in-space queries: "give me matters at space X in branch B."
+// Matter-in-space queries: "give me matters at space X in history B."
 // state.spaceId is a bare space-id (or the DELETED sentinel for soft-
 // deleted matter; live-matter queries filter sentinels out via
 // tombstoned).
@@ -150,7 +150,7 @@ ProjectionSchema.index(
   { sparse: true },
 );
 
-// Catalog: "list every being / space / matter in branch B."
+// Catalog: "list every being / space / matter in history B."
 ProjectionSchema.index({ history: 1, type: 1 });
 
 const Projection = mongoose.model(
@@ -161,8 +161,8 @@ const Projection = mongoose.model(
 
 export default Projection;
 
-// Composite key helper. Mirrors reelKey(branch, type, id) from
+// Composite key helper. Mirrors reelKey(history, type, id) from
 // seed/past/reel/reelHeads.js so both caches use the same convention.
-export function projectionKey(branch, type, id) {
-  return `${branch}:${type}:${id}`;
+export function projectionKey(history, type, id) {
+  return `${history}:${type}:${id}`;
 }

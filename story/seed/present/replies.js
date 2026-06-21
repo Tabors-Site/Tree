@@ -372,11 +372,12 @@ export async function findChainInitialCaller(
   scopeNodeId,
   beingId,
   rootCorrelation,
-  { branch = "0" } = {},
+  { history = "0" } = {},
 ) {
   if (!scopeNodeId || !beingId || !rootCorrelation) return null;
   try {
-    const entries = await readInbox(scopeNodeId, beingId, { branch });
+    // readInbox (intake/) consumes the `history` option key.
+    const entries = await readInbox(scopeNodeId, beingId, { history });
     if (!Array.isArray(entries) || entries.length === 0) return null;
     for (const entry of entries) {
       if (entry?.rootCorrelation === rootCorrelation && !entry.inReplyTo) {

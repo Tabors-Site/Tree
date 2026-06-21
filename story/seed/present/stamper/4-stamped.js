@@ -434,9 +434,12 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
             beingId: baseBeing,
             actId: baseActId,
             spaceId: sid,
-            // Branch this write happened on. Live-SEE subscribers filter
-            // by branch on their end so a write on #1 doesn't invalidate
+            // History this write happened on. Live-SEE subscribers filter
+            // by history on their end so a write on #1 doesn't invalidate
             // subscribers viewing main, and vice versa.
+            // SEAM: the afterFieldWrite/afterQualityWrite hook payload key
+            // is still `branch` (protocols/ibp/index.js destructures
+            // `branch`); the value is the history slot.
             branch: factHistory,
           };
           try {
@@ -571,27 +574,27 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
 // Resolve the descriptor-space affected by a quality write. Used to
 // route live-SEE invalidations on afterQualityWrite. Returns null when
 // the affected space can't be determined (live-SEE then no-ops).
-async function resolveSpaceForLiveSee(target, branch = "0") {
+async function resolveSpaceForLiveSee(target, history = "0") {
   if (!target || !target.id) return null;
   if (target.kind === "space") return String(target.id);
-  // loadOrFold (not loadProjection): on a sub-branch with an inherited
+  // loadOrFold (not loadProjection): on a sub-history with an inherited
   // being/matter, the slot only materializes via lineage cold-fold.
   // Bare loadProjection returns null, this function returns null, the
   // live-SEE invalidation no-ops, and portals subscribed to the
   // descriptor never get the "world changed" event. That's why beings
-  // appeared frozen in the 3D/flat portals on non-main branches even
+  // appeared frozen in the 3D/flat portals on non-main histories even
   // though facts were landing correctly.
   if (target.kind === "being") {
     try {
       const { loadOrFold } = await import("../../materials/projections.js");
-      const slot = await loadOrFold("being", target.id, branch);
+      const slot = await loadOrFold("being", target.id, history);
       return slot?.position ? String(slot.position) : null;
     } catch { return null; }
   }
   if (target.kind === "matter") {
     try {
       const { loadOrFold } = await import("../../materials/projections.js");
-      const slot = await loadOrFold("matter", target.id, branch);
+      const slot = await loadOrFold("matter", target.id, history);
       return slot?.state?.spaceId ? String(slot.state.spaceId) : null;
     } catch { return null; }
   }

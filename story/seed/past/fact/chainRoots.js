@@ -8,19 +8,19 @@
 //   reel    — the head fact's identity. Every fact's _id commits to
 //             all priors via p, so the head IS the rolling root.
 //             Denormalized as ReelHead.headHash by the stamper.
-//   branch  — sha256(canonical({ branch, parent, branchPoint,
-//             reels: sorted [reelKey, headHash] of the branch's OWN
-//             rows })). Commits to the branch's divergence AND its
+//   history — sha256(canonical({ history, parent, branchPoint,
+//             reels: sorted [reelKey, headHash] of the history's OWN
+//             rows })). Commits to the history's divergence AND its
 //             anchor in the parent; comparing roots parent-first
 //             compares whole worlds.
-//   story — sha256(canonical({ story, branches: sorted
+//   story — sha256(canonical({ story, histories: sorted
 //             [path, historyRoot] })). One fingerprint for the whole
 //             substrate's chain state. Two realities compare state
 //             in a single round-trip; on mismatch, walk down
-//             (branch roots → reel heads → facts) to the exact
+//             (history roots → reel heads → facts) to the exact
 //             divergence. Git's trick, applied to worlds.
 //
-// A being's complete biography across branches/realities is a
+// A being's complete biography across histories/realities is a
 // DERIVED VIEW composed from multiple reels — hashable per query,
 // never a primary identity. The primary identities are these
 // storage units.
@@ -71,20 +71,20 @@ export function invalidateChainRootCache() {
  * verifyReel's returned headHash is the walked truth when exactness
  * matters; sealFacts appends update headHash inside the transaction.
  */
-export async function reelRoot(type, id, branch = "0") {
+export async function reelRoot(type, id, history = "0") {
   const { reelKey } = await import("../reel/reelHeads.js");
-  const row = await ReelHead.findById(reelKey(branch, type, id))
+  const row = await ReelHead.findById(reelKey(history, type, id))
     .select("head headHash").lean();
   if (!row) return GENESIS_PREV;
   if (row.headHash) return row.headHash;
   const headFact = await Fact.findOne(
-    { history: branch, "of.kind": type, "of.id": String(id), seq: row.head },
+    { history, "of.kind": type, "of.id": String(id), seq: row.head },
     { _id: 1 },
   ).lean();
   return headFact?._id || GENESIS_PREV;
 }
 
-// The ONE branch roll-up shape — DB reads and bundle parts both flow
+// The ONE history roll-up shape — DB reads and bundle parts both flow
 // through here, so a captured bundle and a live substrate with the
 // same chain produce byte-identical roots. Covers BOTH chain
 // families: the fact reels AND the act-chains (acts are content-
@@ -112,7 +112,7 @@ function historyRollup(path, meta, reelRows, actRows) {
 }
 
 /**
- * PURE story root over chain parts (branch rows + reelHead rows) —
+ * PURE story root over chain parts (history rows + reelHead rows) —
  * no DB, no clock. This is the bundle fingerprint: captureGraft
  * computes it over the exact arrays it captured (race-free) and
  * plantGraft recomputes it over what landed. The live storyRoot()
@@ -147,12 +147,12 @@ export function storyRootFromParts({ story, histories = [], reelHeads = [], actH
  * PURE scoped fingerprint for a GRAFT extract — a commitment to exactly
  * the reels and act-chains a being's graft carries, at the heads it
  * carries them, plus the being's id. Unlike storyRootFromParts (which
- * folds the whole-story branch set AND the story domain — wrong for a
+ * folds the whole-story history set AND the story domain — wrong for a
  * scoped extract that crosses host realities), this folds ONLY the
  * in-scope heads, so captureGraft and applyGraft recompute a byte-
  * identical fingerprint over the same extract with no dependence on the
- * host story's other branches. The reelHead/actHead `_id` already
- * encodes the branch, so a flat sorted list is branch-aware. Same rollup
+ * host story's other histories. The reelHead/actHead `_id` already
+ * encodes the history, so a flat sorted list is history-aware. Same rollup
  * discipline (one serializer) as every other root in this module.
  */
 export function graftRootFromParts({ beingId, reelHeads = [], actHeads = [] }) {
@@ -166,13 +166,13 @@ export function graftRootFromParts({ beingId, reelHeads = [], actHeads = [] }) {
 }
 
 /**
- * A branch's root hash over its OWN divergence + its anchor.
+ * A history's root hash over its OWN divergence + its anchor.
  * Inherited prefix is committed via parent + branchPoint (the
  * parent's root covers the shared facts; recursive comparison
  * parent-first compares full worlds without recounting the prefix).
  */
 export async function historyRoot(historyPath) {
-  return memoized(`branch:${historyPath}`, async () => {
+  return memoized(`history:${historyPath}`, async () => {
     const { loadHistory } = await import("../../materials/history/histories.js");
     const { default: ActHead } = await import("../act/actHead.js");
     const meta = historyPath === "0" ? null : await loadHistory(historyPath);
@@ -186,7 +186,7 @@ export async function historyRoot(historyPath) {
 
 /**
  * The story's root hash: one fingerprint of the entire chain
- * state, all branches. Same root = bit-identical chain.
+ * state, all histories. Same root = bit-identical chain.
  */
 export async function storyRoot() {
   return memoized("story", async () => {
@@ -254,15 +254,15 @@ export async function verifyStoryRootSig(storyRoot, storyId, sig) {
 import { registerSeeOperation } from "../../ibp/seeOps.js";
 
 registerSeeOperation("verify-reel", {
-  description: "Walk a reel's hash chain (branch-aware) and report intact/broken with the exact break position.",
+  description: "Walk a reel's hash chain (history-aware) and report intact/broken with the exact break position.",
   args: {
-    type:   { type: "text", label: "Reel kind (being|space|matter)", required: true },
-    id:     { type: "text", label: "Aggregate id", required: true },
-    branch: { type: "text", label: "History (default main)", required: false },
+    type:    { type: "text", label: "Reel kind (being|space|matter)", required: true },
+    id:      { type: "text", label: "Aggregate id", required: true },
+    history: { type: "text", label: "History (default main)", required: false },
   },
   handler: async ({ args, history: ctxHistory }) => {
     const { verifyReel } = await import("./verifyReel.js");
-    return verifyReel(args.type, args.id, args.branch || ctxHistory || "0");
+    return verifyReel(args.type, args.id, args.history || ctxHistory || "0");
   },
 });
 
@@ -294,19 +294,19 @@ registerSeeOperation("verify-act", {
 });
 
 registerSeeOperation("chain-root", {
-  description: "The chain's root hashes: the story root, or one branch's root.",
+  description: "The chain's root hashes: the story root, or one history's root.",
   args: {
-    branch: { type: "text", label: "History path (omit for the story root + all branches)", required: false },
+    history: { type: "text", label: "History path (omit for the story root + all histories)", required: false },
   },
   handler: async ({ args }) => {
-    if (typeof args?.branch === "string" && args.branch.length) {
-      return { branch: args.branch, rootHash: await historyRoot(args.branch) };
+    if (typeof args?.history === "string" && args.history.length) {
+      return { history: args.history, rootHash: await historyRoot(args.history) };
     }
     const { default: History } = await import("../../materials/history/history.js");
     const rows = await History.find({}).select("_id").lean();
     const paths = [...new Set(["0", ...rows.map((b) => String(b._id))])].sort();
-    const branches = {};
-    for (const p of paths) branches[p] = await historyRoot(p);
-    return { storyRoot: await storyRoot(), branches };
+    const histories = {};
+    for (const p of paths) histories[p] = await historyRoot(p);
+    return { storyRoot: await storyRoot(), histories };
   },
 });

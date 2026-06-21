@@ -94,30 +94,30 @@ import { getSpaceRootId } from "../../sprout.js";
 export async function assign({ beingId, spaceId, entry, handoff = null, signal = null } = {}) {
   const kind = entry?.kind || "call";
   // ── assign: load the being ───────────────────────────────────────
-  // Branch-aware via the intake entry. The moment runs in the caller's
-  // Two branches per the cross-world doctrine. `branch` is the
-  // ACTOR's branch (where the moment runs and where the Act seals).
+  // History-aware via the intake entry. The moment runs in the caller's
+  // Two histories per the cross-world doctrine. `history` is the
+  // ACTOR's history (where the moment runs and where the Act seals).
   // `targetHistory` is where the Fact lands; for same-world calls it
-  // matches `branch`, for cross-world it differs. Both attach to
+  // matches `history`, for cross-world it differs. Both attach to
   // moment so verbs invoked inside the moment route correctly.
   // See seed/CROSS-WORLD.md.
-  const branch = assertHistoryOrThrow(
-    entry?.branch || entry?.act?.history,
+  const history = assertHistoryOrThrow(
+    entry?.history || entry?.act?.history,
     "assign(entry)",
   );
   const targetHistory = (typeof entry?.targetHistory === "string" && entry.targetHistory.length > 0)
     ? entry.targetHistory
-    : branch;
-  // loadOrFold (not loadProjection): on a fresh branch, the receiving
-  // being's slot hasn't been cold-folded into this branch's projection
+    : history;
+  // loadOrFold (not loadProjection): on a fresh history, the receiving
+  // being's slot hasn't been cold-folded into this history's projection
   // table yet. Bare loadProjection returns null, assign returns
   // skipped:"being-not-found", and the moment closes silently without
   // calling handoff.onError or onResponse — the wire's awaitResult
   // times out at 60s. loadOrFold walks lineage so an inherited being
   // resolves on first access without manual rebuild.
-  const slot = await loadOrFold("being", beingId, branch);
+  const slot = await loadOrFold("being", beingId, history);
   if (!slot) {
-    log.warn("Assign", `being ${String(beingId).slice(0, 8)} not found on branch ${branch}`);
+    log.warn("Assign", `being ${String(beingId).slice(0, 8)} not found on history ${history}`);
     return { skipped: "being-not-found" };
   }
   // Flatten the slot into a row-shaped object so the downstream code
@@ -145,10 +145,10 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   let spaceRow = null;
   if (spaceId) {
     // loadOrFold: same lineage-cold-fold rationale as the being load
-    // above. A position space inherited from the parent branch needs
+    // above. A position space inherited from the parent history needs
     // its slot materialized so resolveActiveStack reads the right
     // qualities (per-stance permissions, descriptor derivers, etc.).
-    const _sSlot = await loadOrFold("space", spaceId, branch);
+    const _sSlot = await loadOrFold("space", spaceId, history);
     spaceRow = _sSlot ? { _id: _sSlot.id, ...(_sSlot.state || {}) } : null;
   }
 
@@ -156,7 +156,7 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   // The flow's `caller.cognition / isAncestor / isDescendant` paths
   // need data that lives one DB hop away. We do those lookups here
   // (assign is async; the evaluator stays pure) and pass the result in.
-  const callerEnrichment = await enrichCallerForFlow({ toBeing, handoff, entry, branch });
+  const callerEnrichment = await enrichCallerForFlow({ toBeing, handoff, entry, history });
 
   // Previous moment lookup for `me.previousRole` and
   // `time.sinceLastMoment`. Best-effort; a being with no prior moment
@@ -179,7 +179,9 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   const availableRoles = await computeAvailableRoles({
     toBeing,
     positionSpaceId: toBeing?.position || null,
-    branch: branch || "0",
+    // SEAM: computeAvailableRoles (present/roles/) still destructures
+    // `branch`; the value is the history slot.
+    branch: history || "0",
   });
 
   const stack = resolveActiveStack({
@@ -274,9 +276,9 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     rootCorrelation:   entry.rootCorrelation || entry.correlation || null,
     receivedAt:        entry.sentAt || null,
     priority:          entry.priority || null,
-    // Branch this moment runs on; stamped onto the Act so the act-chain
-    // respects lineage on cross-branch reads (mirrors the Fact schema).
-    branch,
+    // History this moment runs on; stamped onto the Act so the act-chain
+    // respects lineage on cross-history reads (mirrors the Fact schema).
+    history,
     // Bucket 3 Option D: this moment answers the InboxProjection
     // row keyed by entry.correlation; stamped.js fires
     // closeInboxOnAnswer when the Act row materializes on seal.
@@ -293,20 +295,20 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   // may carry half or inward. Default is forward.
   const orientation = validateOrientation(entry?.orientation, DEFAULT_ORIENTATION);
 
-  // `branch` was extracted up top alongside the projection load; it
+  // `history` was extracted up top alongside the projection load; it
   // becomes the actorAct.history seated on moment, which every Fact
-  // this moment emits inherits as its actor-side branch. The cross-
-  // branch dispatch path routes targets via moment.targetHistory
+  // this moment emits inherits as its actor-side history. The cross-
+  // history dispatch path routes targets via moment.targetHistory
   // (set just below); same-world moments have actorAct.history ===
   // targetHistory.
 
   // The actor's Act is the single carrier of the identity tuple
-  // (story, branch, through, _id). moment.actorAct points to it;
+  // (story, history, through, _id). moment.actorAct points to it;
   // every downstream consumer (emitFact, foldEngine, the Stamper,
   // verb handlers) reads identity from the Act, never from
   // independently-threaded fields.
   //
-  // targetHistory rides alongside as the Fact's destination branch.
+  // targetHistory rides alongside as the Fact's destination history.
   // For same-world calls this equals actorAct.history; for cross-world
   // it differs. resolveHistoryForFact consults it as the second
   // precedence (after opts.currentHistory). See CROSS-WORLD.md.
@@ -336,11 +338,11 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     askerName,
     askerStory,
     askerNameId,
-    // Branch-aware aggregate reader. Extensions and roles call
+    // History-aware aggregate reader. Extensions and roles call
     // `await ctx.read("being"|"space"|"matter", id)` and get the
     // row-shaped object back (or null). Internally walks lineage via
-    // loadOrFold using this moment's branch — extension authors don't
-    // need to know about branch threading, lineage cold-folds, or the
+    // loadOrFold using this moment's history — extension authors don't
+    // need to know about history threading, lineage cold-folds, or the
     // loadOrFold/loadProjection distinction. Return shape matches
     // `ctx.toBeing` (id baked in as `_id`, state fields flattened).
     read: async (kind, id) => {
@@ -356,7 +358,7 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
         return readPositionsInSpace(String(id));
       }
       const { loadOrFold } = await import("../../materials/projections.js");
-      const slot = await loadOrFold(kind, String(id), branch);
+      const slot = await loadOrFold(kind, String(id), history);
       if (!slot) return null;
       return { _id: slot.id, position: slot.position, ...(slot.state || {}) };
     },
@@ -587,14 +589,14 @@ async function planActRow(opts = {}) {
     rootCorrelation = null,
     receivedAt = null,
     priority = null,
-    branch,
+    history,
     // Bucket 3 Option D: the correlation of the InboxProjection row
     // this moment is consuming. Stored on the Act as `answers`; on
     // seal, the cross-cutting fold evicts the matching row.
     answers = null,
   } = opts;
-  if (typeof branch !== "string" || !branch.length) {
-    throw new Error("planActRow: branch is required (no silent main-bias)");
+  if (typeof history !== "string" || !history.length) {
+    throw new Error("planActRow: history is required (no silent main-bias)");
   }
 
   if (!through) {
@@ -649,9 +651,11 @@ async function planActRow(opts = {}) {
     askerPosition,
     addresseeBeingId: to,
     addresseePosition,
-    // The moment's branch: scopes the being lookups (branch-born
+    // The moment's history: scopes the being lookups (history-born
     // beings compose) and renders into the lane identity.
-    branch,
+    // SEAM: computeIbpStampAddress (ibp/address.js) still destructures
+    // `branch`; the value is the history slot.
+    branch: history,
   });
 
   const now = new Date();
@@ -667,7 +671,7 @@ async function planActRow(opts = {}) {
   // only at seal so crashed moments never enter the chain). See
   // past/act/actHash.js for what the digest covers and excludes.
   //
-  // Identity tuple (story, branch, through, _id) lives on this row.
+  // Identity tuple (story, history, through, _id) lives on this row.
   // Everything downstream (Facts in deltaF, inner face attachment,
   // crossOrigin derivation) reads from here. See CROSS-WORLD.md.
   const { getStoryDomain } = await import("../../ibp/address.js");
@@ -683,7 +687,7 @@ async function planActRow(opts = {}) {
   // hijacks it. No fallback to nothing: a being with no signer cannot act.
   const { loadOrFold } = await import("../../materials/projections.js");
   const { isKeyId } = await import("../../materials/name/keys.js");
-  const actorSlot = await loadOrFold("being", through, branch);
+  const actorSlot = await loadOrFold("being", through, history);
   const ownTrueName = actorSlot?.state?.trueName || null;
   const by = (inhabitorNameId && isKeyId(inhabitorNameId)) ? inhabitorNameId : ownTrueName;
   if (!by) {
@@ -703,9 +707,9 @@ async function planActRow(opts = {}) {
     parentThread: resolvedParentThread,
     startMessage: { content: safeMessage, source },
     story: getStoryDomain(),
-    history: branch,
+    history,
   };
-  const p = await readActHead(branch, through);
+  const p = await readActHead(history, through);
   actId = computeActId(p, opening);
   // A summon with no parent IS its own root.
   if (!resolvedRoot) resolvedRoot = actId;
@@ -727,7 +731,7 @@ async function planActRow(opts = {}) {
     stampedAt: now,
     startMessage: { content: safeMessage, source },
     story: getStoryDomain(),
-    history: branch,
+    history,
     // status is seated by the Stamper at insert time — openers
     // don't carry it. See sealAct in 4-stamped.js.
     ...(priority ? { priority } : {}),
@@ -745,7 +749,7 @@ async function planActRow(opts = {}) {
 // scheduled wakes that didn't thread an identity) also returns null
 // data — the flow then sees `caller.cognition: null`, `isAncestor:
 // false`, etc., which is the correct conservative default.
-async function enrichCallerForFlow({ toBeing, handoff, entry, branch = "0" }) {
+async function enrichCallerForFlow({ toBeing, handoff, entry, history = "0" }) {
   const kind = entry?.kind || "call";
   if (kind === "transport-act") {
     return {
@@ -760,13 +764,13 @@ async function enrichCallerForFlow({ toBeing, handoff, entry, branch = "0" }) {
   }
   const [callerSlot, callerIsAncestor, meIsAncestorOfCaller] = await Promise.all([
     // loadOrFold: the caller might be a being inherited from main on a
-    // sub-branch. Bare loadProjection would return null, callerRow
+    // sub-history. Bare loadProjection would return null, callerRow
     // stays null, the enriched-caller fields drop out of role
     // evaluation — a non-obvious behavioral change on non-main
-    // branches.
-    loadOrFold("being", callerBeingId, branch),
-    isAncestorOf(callerBeingId, String(toBeing._id), branch),
-    isAncestorOf(String(toBeing._id), callerBeingId, branch),
+    // histories.
+    loadOrFold("being", callerBeingId, history),
+    isAncestorOf(callerBeingId, String(toBeing._id), history),
+    isAncestorOf(String(toBeing._id), callerBeingId, history),
   ]);
   const callerRow = callerSlot ? { _id: callerSlot.id, ...callerSlot.state } : null;
   return {

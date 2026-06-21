@@ -4,15 +4,15 @@
 //
 // Replaces the old uploads orphan sweeper (uploadCleanup.js, retired
 // with the multer-name upload system). Content blobs are addressed by
-// hash and possibly shared by many matter rows across many branches
+// hash and possibly shared by many matter rows across many histories
 // (dedup), so the question is never "which file does this row own" —
 // it is "does anything still reference this hash."
 //
 // Two retention policies, story-config `contentRetention`:
 //
-//   "all"    (default) — a blob stays while ANY fact on ANY branch
+//   "all"    (default) — a blob stays while ANY fact on ANY history
 //            names its hash. Full history: historical folds and
-//            branch rewinds can resolve every version's bytes.
+//            history rewinds can resolve every version's bytes.
 //            Identical bytes still store once (the hash dedups), so
 //            "keep all" costs one blob per DISTINCT version, not per
 //            edit. The only blobs removed are ones no fact ever
@@ -20,7 +20,7 @@
 //            plus anything the purge-content op already deleted.
 //
 //   "latest" — a blob stays only while some LIVE projection (any
-//            branch, non-tombstoned) carries its hash as the CURRENT
+//            history, non-tombstoned) carries its hash as the CURRENT
 //            content. Old versions' bytes reclaim on the next sweep
 //            (their facts remain — the chain still proves the hash,
 //            size, and type; only the bytes are gone, and reads
@@ -84,7 +84,7 @@ async function referencedByFacts() {
 
 /**
  * Collect every hash some live projection's CURRENT content carries
- * (policy "latest"), across ALL branches.
+ * (policy "latest"), across ALL histories.
  */
 async function referencedByLatestProjections() {
   const { default: Projection } = await import("../history/projection.js");

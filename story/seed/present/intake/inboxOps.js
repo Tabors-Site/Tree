@@ -30,7 +30,7 @@ registerSeeOperation("my-inbox", {
     const InboxProjection = (await import("../../past/projections/inbox/inboxProjection.js")).default;
     const rows = await InboxProjection.find({
       recipient: String(identity.beingId),
-      ...(history ? { branch: history } : {}),
+      ...(history ? { history } : {}),
     })
       .sort({ sentAt: -1 })
       .lean();
@@ -54,7 +54,7 @@ registerSeeOperation("my-inbox", {
         content:      r.content,
         priority:     r.priority,
         sentAt:       r.sentAt,
-        branch:       r.branch,
+        history:      r.history,
         inboxSpaceId: r.inboxSpaceId,
         // Envelope intent (canonical, per seed/SUMMON.md). The fallback
         // to content.intent is a one-release transition for callers that
@@ -68,7 +68,7 @@ registerSeeOperation("my-inbox", {
       // surface. Renderer errors are logged and treated as null.
       entry.render = await buildInboxRenderSpec(entry, {
         story,
-        branch:   r.branch || branch || "0",
+        history:  r.history || history || "0",
         identity,
       });
       enriched.push(entry);

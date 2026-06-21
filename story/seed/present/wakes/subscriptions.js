@@ -61,8 +61,8 @@
 // Boot rehydrate folds the chain to rebuild the registry.
 //
 // Same doctrine as wakes-as-facts (wakeSchedule.js): per-being liveness
-// rides on the being's own reel, not on a side-table. Branches inherit
-// subscription state through reel-lineage automatically (a #1 branch
+// rides on the being's own reel, not on a side-table. Histories inherit
+// subscription state through reel-lineage automatically (a #1 history
 // sees parent's subscriptions until a cancel-on-#1 lands). Clones can
 // capture per-being subscriptions because they live on the being's
 // chain — not in a separate persistence layer.
@@ -106,7 +106,7 @@ const _pendingCoalesce = new Map();
  * Register a subscription. Validates input, updates the in-memory
  * registry synchronously (so dispatch sees it on the next event), and
  * stamps a `subscription-registered` fact on the subscriber's reel
- * (the durable, branch-aware record).
+ * (the durable, history-aware record).
  *
  * The fact emit is awaited so callers inside a moment ride the same
  * ΔF and seal atomically with the surrounding act. Callers outside a
@@ -115,7 +115,7 @@ const _pendingCoalesce = new Map();
  * @param {string} beingId
  * @param {object} sub   shape per file header (event/scope/filter/priority/coalesceMs/id)
  * @param {object} opts
- * @param {string} opts.branch         REQUIRED. Which branch this subscription lives on.
+ * @param {string} opts.history        REQUIRED. Which history this subscription lives on.
  *                                     No silent default; pass "0" explicitly from
  *                                     genesis / seed-plant paths.
  * @param {object} [opts.moment]    in-flight act ctx; fact rides this ΔF
@@ -140,9 +140,9 @@ export async function subscribe(beingId, sub, opts = {}) {
       "subscription.scope must specify everywhere|spaceId|ancestor",
     );
   }
-  if (typeof opts.branch !== "string" || !opts.branch.length) {
+  if (typeof opts.history !== "string" || !opts.history.length) {
     throw new Error(
-      `subscribe requires opts.branch (got ${JSON.stringify(opts.branch)}). ` +
+      `subscribe requires opts.history (got ${JSON.stringify(opts.history)}). ` +
       `No silent default to main — pass "0" explicitly for genesis / seed paths.`,
     );
   }
@@ -172,7 +172,7 @@ export async function subscribe(beingId, sub, opts = {}) {
   // concurrent unsubscribe of the same id.
   await emitFact({
     through: String(opts.actorBeingId || beingIdStr),
-    branch:  opts.branch,
+    history: opts.history,
     verb:    "do",
     act:     "subscription-registered",
     of:      { kind: "being", id: beingIdStr },
@@ -191,36 +191,36 @@ export async function subscribe(beingId, sub, opts = {}) {
   log.verbose(
     "Subscriptions",
     `subscribed ${entry.event} for being ${entry.beingId.slice(0, 8)} ` +
-      `on #${opts.branch} (scope=${_scopeLabel(entry.scope)}, id=${id.slice(0, 8)})`,
+      `on #${opts.history} (scope=${_scopeLabel(entry.scope)}, id=${id.slice(0, 8)})`,
   );
   return id;
 }
 
 /**
- * Cancel a subscription on a branch. Stamps a `subscription-cancelled`
+ * Cancel a subscription on a history. Stamps a `subscription-cancelled`
  * fact on the subscriber's reel and drops the runtime entry.
- * Cancellations are per-branch by design: cancelling on main does not
+ * Cancellations are per-history by design: cancelling on main does not
  * stop the inherited entry on #1, and cancelling on #1 does not stop
  * main. Returns true when something was removed from the runtime
  * registry (false if no live entry by that id).
  *
  * @param {string} subscriptionId
  * @param {object} opts
- * @param {string} opts.branch         REQUIRED
+ * @param {string} opts.history        REQUIRED
  * @param {object} [opts.moment]    in-flight act ctx
  * @param {string} [opts.actorBeingId] defaults to the subscription's being
  * @returns {Promise<boolean>}
  */
 export async function unsubscribe(subscriptionId, opts = {}) {
-  if (typeof opts.branch !== "string" || !opts.branch.length) {
-    throw new Error("unsubscribe requires opts.branch");
+  if (typeof opts.history !== "string" || !opts.history.length) {
+    throw new Error("unsubscribe requires opts.history");
   }
   const entry = _index.get(subscriptionId);
   if (!entry) return false;
 
   await emitFact({
     through: String(opts.actorBeingId || entry.beingId),
-    branch:  opts.branch,
+    history: opts.history,
     verb:    "do",
     act:     "subscription-cancelled",
     of:      { kind: "being", id: entry.beingId },
@@ -318,10 +318,10 @@ export function _resetAll() {
 /**
  * Rehydrate the in-memory registry from the fact chain.
  *
- * For every live branch (main + every non-deleted History row), walks
+ * For every live history (main + every non-deleted History row), walks
  * the subscription-registered / subscription-cancelled facts inherited
  * through reel-lineage and materializes one runtime entry per live
- * (subscriptionId, branch) pair. Same shape as wakeSchedule's
+ * (subscriptionId, history) pair. Same shape as wakeSchedule's
  * rehydrateFromFacts.
  *
  * The chain is the truth. This function is its projector for the
@@ -329,7 +329,7 @@ export function _resetAll() {
  * prove fold-from-genesis recovers attention identically to the live
  * registry.
  *
- * @returns {Promise<number>} count of subscriptions restored across all branches
+ * @returns {Promise<number>} count of subscriptions restored across all histories
  */
 export async function rehydrateFromFacts() {
   let Fact, History;
@@ -341,20 +341,20 @@ export async function rehydrateFromFacts() {
     return 0;
   }
 
-  // Enumerate live branches: main + every non-deleted History row.
+  // Enumerate live histories: main + every non-deleted History row.
   const MAIN = "0";
-  const branches = [MAIN];
+  const histories = [MAIN];
   try {
     const historyRows = await History.find({ deleted: { $ne: true } }, "_id").lean();
     for (const row of historyRows) {
-      if (row._id !== MAIN) branches.push(row._id);
+      if (row._id !== MAIN) histories.push(row._id);
     }
   } catch (err) {
-    log.warn("Subscriptions", `rehydrate branch enumeration failed: ${err.message}`);
+    log.warn("Subscriptions", `rehydrate history enumeration failed: ${err.message}`);
   }
 
-  // One query pulls every subscription fact across every branch.
-  // Sorted by (date, seq) so cancellations within a branch's lineage
+  // One query pulls every subscription fact across every history.
+  // Sorted by (date, seq) so cancellations within a history's lineage
   // take effect after the matching registration.
   const subFacts = await Fact.find({
     verb: "do",
@@ -369,13 +369,13 @@ export async function rehydrateFromFacts() {
   }
 
   let restored = 0;
-  for (const branch of branches) {
+  for (const history of histories) {
     const live = new Map();
     for (const fact of subFacts) {
       // Subscription facts target the being's own reel; we need the
-      // branch-lineage filter same as wakes use. Inline-check via
-      // Fact.branch matching the target branch or any ancestor.
-      if (!await _factInHistoryLineage(fact, branch, History)) continue;
+      // history-lineage filter same as wakes use. Inline-check via
+      // Fact.history matching the target history or any ancestor.
+      if (!await _factInHistoryLineage(fact, history, History)) continue;
       const id = fact.params?.subscriptionId;
       if (!id) continue;
       if (fact.action === "subscription-registered") {
@@ -395,19 +395,19 @@ export async function rehydrateFromFacts() {
   if (restored > 0) {
     log.info(
       "Subscriptions",
-      `rehydrated ${restored} subscription(s) from fact chain across ${branches.length} branch(es)`,
+      `rehydrated ${restored} subscription(s) from fact chain across ${histories.length} history(ies)`,
     );
   }
   return restored;
 }
 
-// Lightweight per-branch lineage check. A fact lives in branch B's
+// Lightweight per-history lineage check. A fact lives in history B's
 // view if it was stamped on B itself or on any ancestor up to genesis.
 // Wakes use a more careful seq-aware walk that respects per-reel
 // branchPoints; for subscriptions we don't need that level of
 // precision at boot — subscription liveness is event-driven, not
-// seq-replayed. Plain "stamped on this branch or one of its
-// ancestors" matches what `subscribe(branch: "1a")` callers expect.
+// seq-replayed. Plain "stamped on this history or one of its
+// ancestors" matches what `subscribe(history: "1a")` callers expect.
 async function _factInHistoryLineage(fact, viewerHistory, History) {
   if (!fact.history || fact.history === viewerHistory) return true;
   if (viewerHistory === "0") return fact.history === "0";
@@ -464,9 +464,10 @@ export async function getMatchingSubscribers(eventName, payload) {
 
   const spaceId = payload?.spaceId ? String(payload.spaceId) : null;
   // Subscriptions fan out from a fact that was just emitted on a
-  // specific branch; the chain walk has to read that branch's view.
-  // Caller threads payload.branch from the emitting moment.
-  const branch = payload?.branch;
+  // specific history; the chain walk has to read that history's view.
+  // Caller threads payload.history (the afterX hook payload key, still
+  // `branch` at the producer perimeter — see seam) from the emitting moment.
+  const history = payload?.history ?? payload?.branch;
 
   // Pre-compute the ancestor chain for the payload's space once per
   // call; reuse it across every ancestor-scoped subscription this
@@ -481,7 +482,7 @@ export async function getMatchingSubscribers(eventName, payload) {
       return ancestorChainIds;
     }
     try {
-      const chain = await getAncestorChain(spaceId, branch);
+      const chain = await getAncestorChain(spaceId, history);
       ancestorChainIds = new Set(
         (Array.isArray(chain) ? chain : [])
           .map((n) => String(n?._id))
@@ -569,11 +570,12 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
   // History rides on the triggering hook's payload (afterMatter,
   // afterQualityWrite, afterFieldWrite — all populate it from the
   // moment / fact that fired). The wake we emit lands on the SAME
-  // branch as the trigger; cross-branch waking is forbidden by the
-  // address bridge gate anyway. No fallback: if branch is missing
+  // history as the trigger; cross-history waking is forbidden by the
+  // address bridge gate anyway. No fallback: if history is missing
   // the hook payload was malformed at the perimeter and we surface
-  // it loud via callByResolved's MISSING_BRANCH throw.
-  const branch = payload?.branch || null;
+  // it loud via callByResolved's MISSING_BRANCH throw. (The hook
+  // payload key is still `branch` at the producer perimeter — seam.)
+  const history = payload?.history ?? payload?.branch ?? null;
 
   let emitted = 0;
   for (const sub of matches) {
@@ -613,7 +615,7 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
           targetSpace,
           rootCorrelation,
           identity: subIdentity,
-          branch,
+          history,
         });
         emitted++;
       } else {
@@ -625,7 +627,7 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
           content: eventContent,
           rootCorrelation,
           identity: subIdentity,
-          branch,
+          history,
         });
         emitted++;
       }
@@ -643,11 +645,11 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
 // universally) and dispatches through the standard inbox + role
 // path. There is no direct appendToInbox + wake bypass.
 //
-// History rides explicitly as args.branch (not via moment — this
+// History rides explicitly as args.history (not via moment — this
 // path runs from a hook handler, outside any enclosing moment). The
 // triggering hook payload (afterMatter / afterQualityWrite / ...) put
-// the branch here; callByResolved threads it through to the fact.
-// If branch is null, callByResolved throws MISSING_BRANCH — that
+// the history here; callByResolved threads it through to the fact.
+// If history is null, callByResolved throws MISSING_BRANCH — that
 // surfaces a perimeter threading gap rather than silently waking on
 // main.
 async function _emitOne({
@@ -658,14 +660,14 @@ async function _emitOne({
   content,
   rootCorrelation,
   identity,
-  branch,
+  history,
 }) {
   const correlation = randomUUID();
   await callByResolved({
     toBeingId,
     inboxSpaceId,
     identity,
-    branch,
+    history,
     message: {
       from: senderStance,
       content,
@@ -694,7 +696,7 @@ function _enqueueCoalesce(sub, ctx) {
     rootCorrelation: ctx.rootCorrelation,
     eventName: ctx.eventName,
     identity: ctx.identity || null,
-    branch: ctx.history || null,
+    history: ctx.history || null,
     timer: null,
   };
   pending.timer = setTimeout(() => {
@@ -742,7 +744,7 @@ async function _flushCoalesce(sub) {
       content,
       rootCorrelation: pending.rootCorrelation,
       identity,
-      branch: pending.branch,
+      history: pending.history,
     });
   } catch (err) {
     log.warn(

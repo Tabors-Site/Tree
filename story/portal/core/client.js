@@ -36,8 +36,8 @@ export class PortalClient {
     this.useProxy             = !!useProxy;
     this.socket               = null;
     this.connected            = false;
-    // The session's branch (left stance) — mirrors the server's
-    // socket.currentHistory via the "branch" push.
+    // The session's history (left stance) — mirrors the server's
+    // socket.currentHistory via the "history" push.
     this.currentHistory         = null;
     this._reqCounter          = 0;
     this._onConnectionChange  = onConnectionChange  || (() => {});
@@ -110,16 +110,16 @@ export class PortalClient {
     this.socket.on("disconnect",    (reason) => { this.connected = false; this._onConnectionChange("disconnected", reason); });
     this.socket.on("connect_error", (err)    => { this.connected = false; this._onConnectionChange("error", err?.message); });
 
-    // The server tells this session its BRANCH (the left stance's
-    // branch — what every relative act lands on; mirrors the server's
+    // The server tells this session its HISTORY (the left stance's
+    // history — what every relative act lands on; mirrors the server's
     // socket.currentHistory). Emitted at handshake and again after
     // every BE switch. The portal renders the full address from it:
-    // @being#branch → story#view/path.
+    // @being#history → story#view/path.
     this.currentHistory = this.currentHistory || null;
-    this.socket.on("branch", (p) => {
-      const branch = typeof p?.branch === "string" && p.branch.length ? p.branch : "0";
-      this.currentHistory = branch;
-      safeCall(this._onHistoryChange, branch);
+    this.socket.on("history", (p) => {
+      const history = typeof p?.history === "string" && p.history.length ? p.history : "0";
+      this.currentHistory = history;
+      safeCall(this._onHistoryChange, history);
     });
 
     // Single IBP wire event — one listener, route by envelope.verb.
@@ -372,12 +372,16 @@ export class PortalClient {
     return this._callName("see", { token });
   }
   /**
-   * YOUR being-tree on one branch (the hierarchy view + grant surface).
-   * Branch-scoped: pass the branch you stand on; the tree + its inheritation
+   * YOUR being-tree on one history (the hierarchy view + grant surface).
+   * History-scoped: pass the history you stand on; the tree + its inheritation
    * points reflect that timeline. Requires a connected name.
+   *
+   * NOTE: the `branch` payload key is the name-event wire contract the server's
+   * doTree (protocols/ibp/nameSession.js) reads as `src.branch` — SEAM kept
+   * deliberately, do not rename without the server side.
    */
-  nameTree(branch) {
-    return this._callName("tree", { branch: branch || null });
+  nameTree(history) {
+    return this._callName("tree", { branch: history || null });
   }
 
   // ────────────────────────────────────────────────────────────────

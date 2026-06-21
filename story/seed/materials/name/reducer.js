@@ -66,6 +66,18 @@ function applyNameSession(state, fact) {
   return state;
 }
 
+// name:set-password — re-key the private key under a new password (or back to
+// the system key when the password is removed). Folds ONLY the new
+// privateKeyEnc; the identity (the pubkey _id) never changes, just the at-rest
+// encryption. The plaintext key never rides the fact — only the new encrypted
+// blob, which is a SECRET_KEY (censored on serialize-out, redact.js).
+function applySetPassword(state, fact) {
+  if (fact?.verb !== "name" || fact.act !== "set-password") return state;
+  const spec = fact?.params?.spec;
+  if (!spec || spec.privateKeyEnc == null) return state;
+  return { ...state, privateKeyEnc: spec.privateKeyEnc };
+}
+
 /**
  * Apply one fact to the Name state.
  *
@@ -84,6 +96,9 @@ export function reduce(state, fact) {
 
   // name:connect / name:release — the session lifecycle on the reel.
   next = applyNameSession(next, fact);
+
+  // name:set-password — re-key the private key under a new (or removed) password.
+  next = applySetPassword(next, fact);
 
   // do:set on this Name — scalar fields + qualities paths (e.g. a soul
   // transition writing qualities.soul, or auth carve-outs). Reuses the

@@ -106,14 +106,14 @@ const InboxProjectionSchema = new mongoose.Schema({
 
   sentAt: { type: Date, required: true },
 
-  // Branch this summon belongs to. Summons can never cross branches
-  // (the IBP parse-time bridge gate rejects mixed-branch addresses),
-  // so every row is single-branch. The pick reads across branches
-  // (each picked row runs its moment ON its own branch; paused or
-  // deleted branches are skipped per pass via the pick's exclusion
-  // set) — branch scoping matters on the WRITE side: the sever sweep
-  // deletes only rows on the sever-fact's branch.
-  branch:          { type: String, default: "0", index: true },
+  // History this summon belongs to. Summons can never cross histories
+  // (the IBP parse-time bridge gate rejects mixed-history addresses),
+  // so every row is single-history. The pick reads across histories
+  // (each picked row runs its moment ON its own history; paused or
+  // deleted histories are skipped per pass via the pick's exclusion
+  // set) — history scoping matters on the WRITE side: the sever sweep
+  // deletes only rows on the sever-fact's history.
+  history:          { type: String, default: "0", index: true },
 });
 
 // The scheduler's pick query — per recipient + inbox space, by

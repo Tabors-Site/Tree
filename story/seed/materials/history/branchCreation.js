@@ -136,7 +136,7 @@ export async function createBranch({ parent = MAIN, anchor, label = null, create
  *
  * Lineage walk: for each ancestor (main → parent), include facts
  * within its OWNED seq range. For most branches this is just main
- * (parent === "0"), and we filter by branch=MAIN (or absent — legacy
+ * (parent === "0"), and we filter by history=MAIN (or absent — legacy
  * rows) plus the anchor's seq/date filter.
  *
  * For deeper lineages this aggregates across multiple branches; the
@@ -155,8 +155,8 @@ async function snapshotParentHeads({ parent, anchor }) {
     const here = lineage[i];
     const isLeaf = i === lineage.length - 1;
     const branchMatch = isMain(here)
-      ? { $or: [{ branch: MAIN }, { branch: { $exists: false } }] }
-      : { branch: here };
+      ? { $or: [{ history: MAIN }, { history: { $exists: false } }] }
+      : { history: here };
 
     // Seq filter for this branch's contribution.
     const seqFilter = { $type: "number" };

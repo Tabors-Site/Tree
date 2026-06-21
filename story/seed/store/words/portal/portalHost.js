@@ -19,9 +19,9 @@ import { IBPA_RE } from "./portalOp.js";
 import { matterContentId } from "../../../materials/matter/matterId.js";
 
 const actHistoryOf = (ctx) => ctx?.moment?.actorAct?.history || ctx?.history || "0";
-// The fact-landing branch: same precedence the JS handler uses for the emit
-// (targetHistory before the actor's branch), so a cross-story inbound moment
-// lands the portal on the target's branch.
+// The fact-landing history: same precedence the JS handler uses for the emit
+// (targetHistory before the actor's history), so a cross-story inbound moment
+// lands the portal on the target's history.
 const factHistoryOf = (ctx) =>
   ctx?.moment?.targetHistory || ctx?.moment?.actorAct?.history || ctx?.history || "0";
 
@@ -63,7 +63,7 @@ export function portalHostEnv() {
     // content-addresses the row id from it with the SAME matterContentId, and lays
     // the SAME do:create-matter fact via the SAME emitFact. Attributes to the
     // CALLER (through = the actor), reads the real moment for actId + the
-    // fact-landing branch. Returns { matterId } the .word's §7 return surfaces.
+    // fact-landing history. Returns { matterId } the .word's §7 return surfaces.
     createPortalMatter: async ({ args: [caller, spaceId, foreignAddress, name] }, ctx) => {
       const sc = ctx?.moment || null;
       const actorBeingId = String(caller);

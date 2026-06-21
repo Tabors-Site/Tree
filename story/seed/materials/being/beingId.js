@@ -28,7 +28,7 @@ import { canonicalize } from "../../past/fact/hash.js";
  * parentBeingId / cognition / coord / …; be:rename rewrites trueName). So
  * the identity is NOT the current attributes; it is the IMMUTABLE BIRTH
  * EVENT: who birthed it (parentBeingId), what it was named at birth
- * (name), on which branch (homeHistory), and in which moment (bornAt = the
+ * (name), on which history (homeHistory), and in which moment (bornAt = the
  * be:birth act's id). Frozen at birth like a matter's id and a fact's
  * hash — later mutations rewrite the ROW, never recompute this id, so a
  * rename / move / re-cognition / be:rename keeps the being's reel intact.

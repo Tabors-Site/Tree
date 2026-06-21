@@ -43,7 +43,7 @@ export function matterHostEnv() {
     // addressed matterId from the target + params + caller. The exact body
     // createMatterHandler ran, calling the same imported primitives. NO fact.
     "resolve-birth-spec": async ({ args: [target, targetKind, params, caller] }, ctx) => {
-      const branch = historyOf(ctx);
+      const history = historyOf(ctx);
       const spec = params || {};
       const kind = targetKind || detectTargetKind(target);
 
@@ -57,7 +57,7 @@ export function matterHostEnv() {
       let spaceId = kind === "space" ? targetIdOf(target) : (spec.spaceId || null);
       if (!spaceId && parentMatterId) {
         const { loadOrFold } = await import("../../../materials/projections.js");
-        const parentSlot = await loadOrFold("matter", String(parentMatterId), branch);
+        const parentSlot = await loadOrFold("matter", String(parentMatterId), history);
         spaceId = parentSlot?.state?.spaceId || null;
       }
 
@@ -143,7 +143,7 @@ export function matterHostEnv() {
         name: spec.name,
         content,
         type: matterType,
-        branch,
+        history,
         spaceId,
         parentMatterId,
       });
@@ -152,7 +152,7 @@ export function matterHostEnv() {
       // never silently clamp).
       let coord = null;
       if (spec.coord && typeof spec.coord === "object" && !Array.isArray(spec.coord)) {
-        coord = await assertMatterCoordInBounds({ spaceId }, spec.coord, branch);
+        coord = await assertMatterCoordInBounds({ spaceId }, spec.coord, history);
       }
 
       const enrichedSpec = {
@@ -182,7 +182,7 @@ export function matterHostEnv() {
     // nameId rides moment.actorAct.by (the cut suppresses the i-am
     // override so this is the caller's name, matching the JS handler).
     emitBirth: async ({ args: [birth, caller] }, ctx) => {
-      const branch = historyOf(ctx);
+      const history = historyOf(ctx);
       const moment = ctx?.moment || null;
       const enrichedSpec = birth?.enrichedSpec || {};
       const matterId = birth?.matterId;
@@ -201,7 +201,7 @@ export function matterHostEnv() {
           of: { kind: "matter", id: matterId },
           params: enrichedSpec,
           actId: moment?.actId || null,
-          history: branch,
+          history,
         },
         moment,
       );

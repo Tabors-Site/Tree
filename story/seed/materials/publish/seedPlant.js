@@ -47,7 +47,7 @@ import log from "../../seedStory/log.js";
  * @param {string} targetParentSpaceId where to insert (the new subtree's parent)
  * @param {object} opts
  * @param {string} opts.operatorBeingId  who is grafting (must be authenticated; used for GRAFT_INITIATOR + audit)
- * @param {string} [opts.branch]       target branch (default "0")
+ * @param {string} [opts.history]      target history (default: the #main pointer, resolved)
  * @param {object} [opts.params]       parameter values for the bundle's declared parameter holes ($paramName references in field values)
  * @param {object} [opts.moment]    if invoked inside an existing moment; otherwise the eager-fold singleton path is used
  * @returns {Promise<{ rootSpaceId, counts, remapTable }>}
@@ -60,7 +60,10 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
   if (!opts.operatorBeingId || typeof opts.operatorBeingId !== "string") {
     throw new Error("plantTemplate: opts.operatorBeingId is required (identifies the grafter for GRAFT_INITIATOR + audit)");
   }
-  const branch = opts.branch || "0";
+  // PLANT always lands on #main (the default-history pointer), never the literal "0" — #main is
+  // re-pointable, so resolve it. An explicit opts.history overrides (e.g. an extension on its history).
+  const { getDefaultHistory } = await import("../history/historyRegistry.js");
+  const history = opts.history ?? await getDefaultHistory();
 
   // ── Bundle integrity gate (BEFORE anything stamps) ──
   // A captured bundle carries its own identity: meta.bundleHash, the
@@ -246,12 +249,12 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
   const { default: Projection } = await import("../history/projection.js");
 
   // ── 1. Verify the target parent space exists. ──
-  // loadOrFold: a target parent inherited from the parent branch
+  // loadOrFold: a target parent inherited from the parent history
   // resolves via lineage cold-fold. Bare loadProjection threw
-  // "target parent space not found" when grafting onto a sub-branch.
-  const targetParentSlot = await loadOrFold("space", targetParentSpaceId, branch);
+  // "target parent space not found" when grafting onto a sub-history.
+  const targetParentSlot = await loadOrFold("space", targetParentSpaceId, history);
   if (!targetParentSlot) {
-    throw new Error(`plantTemplate: target parent space "${targetParentSpaceId}" not found in branch "${branch}"`);
+    throw new Error(`plantTemplate: target parent space "${targetParentSpaceId}" not found in history "${history}"`);
   }
   // Heaven space refuse — but allow the place root ("space-root").
   // Tier-3 heaven spaces (identity, config, tools, etc.) are substrate
@@ -273,7 +276,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
     throw new Error("plantTemplate: bundle.content.spaces is missing the scope root");
   }
   const targetSiblings = await Projection.find({
-    history: branch, type: "space",
+    history: history, type: "space",
     "state.parent": targetParentSpaceId,
     "state.name": rootBundleSpace.name,
     tombstoned: { $ne: true },
@@ -463,7 +466,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
     // a single ΔF triggers nonlinear fold/append-lock back-pressure
     // (40 qualities writes inside one moment serialize on the same
     // per-reel lock and choke); per-fact small acts fold independently.
-    await withBeingAct(opts.operatorBeingId, `graft:create-space ${s.name}`, branch, async (ctx) => {
+    await withBeingAct(opts.operatorBeingId, `graft:create-space ${s.name}`, history, async (ctx) => {
       await emitFact({
         verb:    "do",
         act:     "create-space",
@@ -471,7 +474,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
         of:      { kind: "space", id: newId },
         params:  spec,
         actId:   ctx.actId,
-        history: branch,
+        history: history,
       }, ctx);
     });
     committed.push({ kind: "space", id: newId });
@@ -514,7 +517,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
     // So the operator (the grafter, the one birthing it here) signs the
     // act that covers the birth; the being's own self-signed acts begin
     // when it first acts. Same one-fact-per-act discipline.
-    await withBeingAct(opts.operatorBeingId, `graft:birth ${spec.name}`, branch, async (ctx) => {
+    await withBeingAct(opts.operatorBeingId, `graft:birth ${spec.name}`, history, async (ctx) => {
       await emitFact({
         verb:    "be",
         act:     "birth",
@@ -522,7 +525,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
         of:      { kind: "being", id: newId },
         params:  spec,
         actId:   ctx.actId,
-        history: branch,
+        history: history,
       }, ctx);
     });
     committed.push({ kind: "being", id: newId });
@@ -537,7 +540,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
   for (const m of orderedMatter) {
     const newId = remapTable.get(m.sourceId);
     const spec = matterSpecs.get(m.sourceId);
-    await withBeingAct(opts.operatorBeingId, `graft:create-matter ${spec.name}`, branch, async (ctx) => {
+    await withBeingAct(opts.operatorBeingId, `graft:create-matter ${spec.name}`, history, async (ctx) => {
       await emitFact({
         verb:    "do",
         act:     "create-matter",
@@ -545,7 +548,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
         of:      { kind: "matter", id: newId },
         params:  spec,
         actId:   ctx.actId,
-        history: branch,
+        history: history,
       }, ctx);
     });
     committed.push({ kind: "matter", id: newId });
@@ -570,7 +573,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
     const actorBeingId = f.through
       ? remapInBundleField(f.through)
       : opts.operatorBeingId;
-    await withBeingAct(actorBeingId, `graft:${f.act}`, branch, async (ctx) => {
+    await withBeingAct(actorBeingId, `graft:${f.act}`, history, async (ctx) => {
       await emitFact({
         verb:    f.verb,
         act:     f.act,
@@ -578,7 +581,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
         of,
         params:  remapInBundleField(f.params || {}),
         actId:   ctx.actId,
-        history: branch,
+        history: history,
       }, ctx);
     });
     counts.facts++;
@@ -594,7 +597,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
   {
     const { verifyReel } = await import("../../past/fact/verifyReel.js");
     for (const { kind, id } of committed) {
-      const v = await verifyReel(kind, id, branch);
+      const v = await verifyReel(kind, id, history);
       if (!v.ok) {
         throw new Error(
           `plantTemplate: POST-GRAFT CHAIN VERIFICATION FAILED on ${kind}:${id.slice(0, 8)} ` +
@@ -627,10 +630,10 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
         counts,
       },
       actId:  opts.moment.actId,
-      history: branch,
+      history: history,
     }, opts.moment);
   } else {
-    await withBeingAct(opts.operatorBeingId, "graft:completed", branch, async (ctx) => {
+    await withBeingAct(opts.operatorBeingId, "graft:completed", history, async (ctx) => {
       await emitFact({
         verb:    "do",
         act:     "template-planted",
@@ -645,7 +648,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
           counts,
         },
         actId: ctx.actId,
-        history: branch,
+        history: history,
       }, ctx);
     });
   }
@@ -668,7 +671,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
     for (let i = committed.length - 1; i >= 0; i--) {
       const { kind, id } = committed[i];
       try {
-        await withBeingAct(opts.operatorBeingId, `graft:rollback ${endAction[kind]}`, branch, async (ctx) => {
+        await withBeingAct(opts.operatorBeingId, `graft:rollback ${endAction[kind]}`, history, async (ctx) => {
           await emitFact({
             verb:    "do",
             act:     endAction[kind],
@@ -676,7 +679,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
             of:      { kind, id },
             params:  { reason: "graft rollback" },
             actId:   ctx.actId,
-            history: branch,
+            history: history,
           }, ctx);
         });
       } catch (rollbackErr) {
@@ -700,10 +703,10 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
             committedCount:  committed.length,
           },
           actId:  opts.moment.actId,
-          history: branch,
+          history: history,
         }, opts.moment);
       } else {
-        await withBeingAct(opts.operatorBeingId, "graft:failed", branch, async (ctx) => {
+        await withBeingAct(opts.operatorBeingId, "graft:failed", history, async (ctx) => {
           await emitFact({
             verb:    "do",
             act:     "graft-failed",
@@ -715,7 +718,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
               committedCount:  committed.length,
             },
             actId: ctx.actId,
-            history: branch,
+            history: history,
           }, ctx);
         });
       }

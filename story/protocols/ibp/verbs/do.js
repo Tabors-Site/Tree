@@ -102,7 +102,7 @@ export async function handleDo(socket, env, ack) {
     };
     // Resolve named pointers (#main, #prod, ...) to canonical paths
     // before resolveBeingIds runs (findByName needs the canonical
-    // branch for the lineage walk).
+    // history for the lineage walk).
     const expandedWithPointers = await resolveHistoryPointers(
       expand(parsed, expandCtx), expandCtx);
     const expanded = await resolveBeingIds(expandedWithPointers, expandCtx);
@@ -110,31 +110,31 @@ export async function handleDo(socket, env, ack) {
     // Impersonation refusal — see _shared.js for the doctrine.
     assertNoImpersonation(expanded, socket);
 
-    // Cross-branch dispatch. The caller is on socket.currentHistory
-    // (their world); the target is on expanded.right.branch (the
+    // Cross-history dispatch. The caller is on socket.currentHistory
+    // (their world); the target is on expanded.right.history (the
     // target's world). When they differ, this is a cross-world call:
-    // the Fact lands on the target's branch with a crossOrigin block
-    // pointing at the caller's branch. emitFact's deriveCrossOrigin
+    // the Fact lands on the target's history with a crossOrigin block
+    // pointing at the caller's history. emitFact's deriveCrossOrigin
     // attaches the provenance automatically. See CROSS-WORLD.md.
     const callerHistory = socket.currentHistory || "0";
-    const targetHistory = expanded.right?.branch || "0";
+    const targetHistory = expanded.right?.history || "0";
 
-    // Pause / delete gate. While the target branch is paused or
+    // Pause / delete gate. While the target history is paused or
     // deleted, DO refuses every op EXCEPT the branch-lifecycle ops
     // (so the operator can revive a paused world, undelete a deleted
     // one, toggle from a stale UI without bouncing, or fork off a
-    // paused branch). SEE stays open regardless so the user can still
+    // paused history). SEE stays open regardless so the user can still
     // rewind or inspect the frozen state.
     //
     // Lifecycle ops are included as their own targets (e.g. delete on
-    // an already-deleted branch is idempotent) because the client UI
+    // an already-deleted history is idempotent) because the client UI
     // is often a few ticks stale and bouncing the call would leave
     // the operator wondering why their toggle silently failed.
     //
     // delete-branch gates differ slightly from pause-branch: deletion
-    // is a stronger statement ("this branch is hidden"), so we don't
+    // is a stronger statement ("this history is hidden"), so we don't
     // exempt create-branch off a deleted target. To fork off a
-    // deleted branch, undelete it first.
+    // deleted history, undelete it first.
     const PAUSE_LIFECYCLE_OPS = new Set([
       "unpause-branch", "pause-branch", "create-branch",
       "delete-branch", "undelete-branch",
@@ -146,18 +146,18 @@ export async function handleDo(socket, env, ack) {
       const { isHistoryPaused } = await import("../../../seed/materials/history/histories.js");
       if (await isHistoryPaused(targetHistory)) {
         throw new IbpError(IBP_ERR.STORY_PAUSED,
-          `DO refused: branch #${targetHistory} is paused. ` +
+          `DO refused: history #${targetHistory} is paused. ` +
           `Unpause via @branch-manager or fork a new branch off it.`,
-          { branch: targetHistory });
+          { history: targetHistory });
       }
     }
     if (!DELETE_LIFECYCLE_OPS.has(action)) {
       const { isHistoryDeleted } = await import("../../../seed/materials/history/histories.js");
       if (await isHistoryDeleted(targetHistory)) {
         throw new IbpError(IBP_ERR.STORY_PAUSED,
-          `DO refused: branch #${targetHistory} is deleted. ` +
+          `DO refused: history #${targetHistory} is deleted. ` +
           `Undelete via @branch-manager to restore writes.`,
-          { branch: targetHistory, deleted: true });
+          { history: targetHistory, deleted: true });
       }
     }
 
@@ -246,11 +246,11 @@ export async function handleDo(socket, env, ack) {
       },
       correlation,
       identity,
-      // branch — actor's world; where the moment opens and the Act seals.
+      // history — actor's world; where the moment opens and the Act seals.
       // targetHistory — target's world; where the Fact lands. Differs from
-      // branch on cross-world calls; emitFact attaches crossOrigin
+      // history on cross-world calls; emitFact attaches crossOrigin
       // automatically. See seed/CROSS-WORLD.md.
-      branch: callerHistory,
+      history: callerHistory,
       targetHistory,
     });
 

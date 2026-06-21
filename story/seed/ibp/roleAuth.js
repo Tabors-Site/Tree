@@ -59,26 +59,26 @@ const ARRIVAL_ROLE = "arrival";
  * @param {string} [args.intent]        SUMMON intent
  * @param {string} [args.operation]     BE operation
  * @param {string} [args.seeOp]         SEE op name (when target is a SEE op call)
- * @param {string} [args.branch]        branch (defaults to "0")
+ * @param {string} [args.history]       history (defaults to "0")
  * @returns {Promise<{ok: boolean, role?: string, anchor?: string, reason?: string}>}
  */
 export async function authorizeViaRoles(args) {
-  const { identity, verb, target, action, intent, operation, seeOp, branch } = args || {};
-  if (typeof branch !== "string" || !branch.length) {
+  const { identity, verb, target, action, intent, operation, seeOp, history } = args || {};
+  if (typeof history !== "string" || !history.length) {
     throw new Error(
-      "authorizeViaRoles requires `branch` as a non-empty string. " +
+      "authorizeViaRoles requires `history` as a non-empty string. " +
       "Callers must pass moment.actorAct?.history (or '0' for genesis / pre-summon paths) " +
       "explicitly; no silent default.",
     );
   }
-  // actorHistory = the actor's branch (their session.currentHistory
-  // or homeHistory). Where their grants actually live. branch (= target's
-  // branch) is used for role spec lookups and reach evaluation; actor's
+  // actorHistory = the actor's history (their session.currentHistory
+  // or homeHistory). Where their grants actually live. history (= target's
+  // history) is used for role spec lookups and reach evaluation; actor's
   // grants are loaded from actorHistory so a being seated on #0 can SEE
-  // onto branch #1 without needing to exist on #1 (the "look through
-  // the portal" semantic). Defaults to branch when caller didn't
+  // onto history #1 without needing to exist on #1 (the "look through
+  // the portal" semantic). Defaults to history when caller didn't
   // distinguish.
-  const actorHistory = args.actorHistory || branch;
+  const actorHistory = args.actorHistory || history;
 
   // Bootstrap axiom.
   if (identity?.beingId === I_AM || identity?.name === I_AM) {
@@ -89,7 +89,7 @@ export async function authorizeViaRoles(args) {
   // arrival role (looked up at the story root's qualities.roles or
   // — if not yet installed there — the in-memory REGISTRY).
   if (!identity?.beingId) {
-    return await checkArrivalFloor({ verb, target, action, intent, operation, seeOp, branch });
+    return await checkArrivalFloor({ verb, target, action, intent, operation, seeOp, history });
   }
 
   // Ownership step (seed/RolesAreAuth.md "Nearest claim wins").
@@ -119,7 +119,7 @@ export async function authorizeViaRoles(args) {
   // up uniformly. No "public-commons" branch lives in this file.
   const targetSpaceForOwner = deriveSpaceId(target);
   if (targetSpaceForOwner) {
-    const claim = await findNearestOwnedAncestor(String(targetSpaceForOwner), branch);
+    const claim = await findNearestOwnedAncestor(String(targetSpaceForOwner), history);
     if (claim) {
       const actorIdStr = String(identity.beingId);
       if (claim.ownerIds.some((id) => String(id) === actorIdStr)) {
@@ -129,13 +129,13 @@ export async function authorizeViaRoles(args) {
     }
   }
 
-  // Load the caller's grants from their ACTOR branch (their home
-  // branch / session.currentHistory), NOT the target's branch. A being
-  // seated on #0 looking onto branch #1 reads their own grants from
+  // Load the caller's grants from their ACTOR history (their home
+  // history / session.currentHistory), NOT the target's history. A being
+  // seated on #0 looking onto history #1 reads their own grants from
   // #0 (where they exist), then we evaluate reach against the target
-  // on branch #1. This is the "stay yourself when navigating across
+  // on history #1. This is the "stay yourself when navigating across
   // branches" semantic — your identity travels with you; only an
-  // explicit be:switch changes the branch your session rides.
+  // explicit be:switch changes the history your session rides.
   const slot = await loadOrFold("being", String(identity.beingId), actorHistory);
   const grants = readGrantsFromSlot(slot);
 
@@ -154,10 +154,10 @@ export async function authorizeViaRoles(args) {
   }
 
   for (const grant of grants) {
-    const { spec, hostSpaceId } = await getRoleSpecForGrant(grant, branch);
+    const { spec, hostSpaceId } = await getRoleSpecForGrant(grant, history);
     if (!spec) continue;
 
-    if (!await reachCovers(spec, hostSpaceId, { spaceId: targetSpace, path: targetPath }, branch)) {
+    if (!await reachCovers(spec, hostSpaceId, { spaceId: targetSpace, path: targetPath }, history)) {
       continue;
     }
 
@@ -183,7 +183,7 @@ export async function authorizeViaRoles(args) {
   // because the local grants table has no record of the remote
   // federation-manager being.
   if (identity?.canopyVerifiedSender || identity?.story) {
-    return await checkArrivalFloor({ verb, target, action, intent, operation, seeOp, branch });
+    return await checkArrivalFloor({ verb, target, action, intent, operation, seeOp, history });
   }
 
   return {
@@ -210,21 +210,21 @@ export async function authorizeViaRoles(args) {
  * inheritance would leak through into every private sub-space.
  * See seed/RolesAreAuth.md "@public being".
  */
-async function findNearestOwnedAncestor(targetSpaceId, branch) {
-  // Self space first. loadOrFold inherits from main for branches
-  // that haven't diverged this space — otherwise a branch read would
+async function findNearestOwnedAncestor(targetSpaceId, history) {
+  // Self space first. loadOrFold inherits from main for histories
+  // that haven't diverged this space — otherwise a history read would
   // miss the owner that was set on main.
-  const self = await loadOrFold("space", targetSpaceId, branch);
+  const self = await loadOrFold("space", targetSpaceId, history);
   const selfOwners = readOwners(self?.state);
   if (selfOwners.length > 0) {
     return { spaceId: String(targetSpaceId), ownerIds: selfOwners };
   }
 
   let chain = null;
-  try { chain = await getAncestorChain(targetSpaceId, branch); } catch { chain = null; }
+  try { chain = await getAncestorChain(targetSpaceId, history); } catch { chain = null; }
   if (!Array.isArray(chain)) return null;
   for (const node of chain) {
-    const slot = await loadOrFold("space", String(node._id), branch);
+    const slot = await loadOrFold("space", String(node._id), history);
     const owners = readOwners(slot?.state);
     if (owners.length > 0) {
       return { spaceId: String(node._id), ownerIds: owners };
@@ -395,14 +395,14 @@ function matchBeingNamePattern(pattern, targetBeing) {
 // Anonymous arrival floor
 // ────────────────────────────────────────────────────────────────────
 
-async function checkArrivalFloor({ verb, target, action, intent, operation, seeOp, branch }) {
+async function checkArrivalFloor({ verb, target, action, intent, operation, seeOp, history }) {
   // The arrival role's host IS the story root. The shared lookup
   // walks anchorSpaceId=storyRoot for qualities.roles.arrival; the
   // registry fallback covers boot-order edges before install.
   const storyRootId = getSpaceRootId();
   const { spec, hostSpaceId } = await getRoleSpecForGrant(
     { role: ARRIVAL_ROLE, anchorSpaceId: storyRootId },
-    branch,
+    history,
   );
   if (!spec) {
     return { ok: false, reason: "no arrival role registered; anonymous callers have no floor." };
@@ -412,7 +412,7 @@ async function checkArrivalFloor({ verb, target, action, intent, operation, seeO
   const targetSpace = deriveSpaceId(target);
   const targetBeing = deriveBeingName(target);
 
-  if (!await reachCovers(spec, hostSpaceId, { spaceId: targetSpace, path: targetPath }, branch)) {
+  if (!await reachCovers(spec, hostSpaceId, { spaceId: targetSpace, path: targetPath }, history)) {
     return { ok: false, reason: "arrival floor does not reach this position." };
   }
   if (permits(spec, verb, { action, intent, operation, seeOp, targetBeing })) {

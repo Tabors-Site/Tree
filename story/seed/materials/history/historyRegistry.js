@@ -1,19 +1,19 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Branch registry. Per-story map of named pointers to canonical
-// branch paths. The IBP address parser uses this to resolve labels
+// History registry. Per-story map of named pointers to canonical
+// history paths. The IBP address parser uses this to resolve labels
 // like `#main` to canonical paths like `#7`.
 //
 // Storage: heaven. Pointers live on the `.histories` heaven space's
 // `qualities.pointers` map. The `.histories` space is in heaven
 // ("heaven never branches" doctrine), so the storage has one
-// projection per story regardless of which branch is querying.
+// projection per story regardless of which history is querying.
 // Pointer mutations land as set-space facts on the `.histories`
 // space's reel.
 //
 // Reads. Pointer resolution reads the `.histories` space's projection
-// on MAIN (the only branch heaven spaces live on). The substrate's
-// heaven routing also auto-rewrites any branched callers to MAIN,
+// on MAIN (the only history heaven spaces live on). The substrate's
+// heaven routing also auto-rewrites any per-history callers to MAIN,
 // but this module reads from MAIN explicitly to stay independent
 // of the routing layer.
 //
@@ -89,7 +89,7 @@ export function assertPointerName(name, opName = "pointer") {
 }
 
 /**
- * Resolve a pointer name to its canonical branch path. Returns the
+ * Resolve a pointer name to its canonical history path. Returns the
  * canonical path or null when the pointer doesn't exist.
  *
  * Read-only; safe to call from the parser's resolveHistoryPointers
@@ -111,7 +111,7 @@ export async function readPointers() {
 }
 
 /**
- * The default branch for wire calls that omit a `#branch` segment.
+ * The default history for wire calls that omit a `#history` segment.
  * Resolves the `#main` pointer through the registry — operators may
  * have re-pointed `main` away from canonical "0" via set-pointer.
  * Falls back to "0" only when the pointer registry is uninitialized
@@ -124,9 +124,9 @@ export async function getDefaultHistory() {
 }
 
 /**
- * Reverse lookup: given a canonical branch path, return every pointer
+ * Reverse lookup: given a canonical history path, return every pointer
  * name currently resolving to it. Used by the merge dialog to surface
- * "this source branch had #feature-x attached . want to keep it?"
+ * "this source history had #feature-x attached . want to keep it?"
  *
  * @param {string} canonicalPath
  * @returns {Promise<string[]>}

@@ -128,17 +128,17 @@ const _SKIP_ACTIONS = new Set([
  * . target.kind="matter" . Matter.spaceId
  * Returns null when the target cannot be located (deleted, malformed).
  */
-async function _resolveSpaceId(targetKind, targetId, branch = "0") {
+async function _resolveSpaceId(targetKind, targetId, history = "0") {
   if (!targetKind || !targetId) return null;
   try {
     const { loadProjection } = await import("../../seed/materials/projections.js");
     if (targetKind === "being") {
-      const slot = await loadProjection("being", targetId, branch);
+      const slot = await loadProjection("being", targetId, history);
       if (!slot) return null;
       return slot.position || slot.state?.homeSpace || null;
     }
     if (targetKind === "matter") {
-      const slot = await loadProjection("matter", targetId, branch);
+      const slot = await loadProjection("matter", targetId, history);
       if (!slot) return null;
       return slot.state?.spaceId || null;
     }
@@ -174,7 +174,7 @@ async function _handleFact(fact, _type, _id) {
   // currentTime later without re-shipping server code.
   const at = (fact?.params && typeof fact.params.at === "string") ? fact.params.at : null;
 
-  const spaceId = await _resolveSpaceId(targetKind, targetId, fact?.branch || "0");
+  const spaceId = await _resolveSpaceId(targetKind, targetId, fact?.history || "0");
   if (!spaceId) return;
 
   const emit = await _loadEmitter();

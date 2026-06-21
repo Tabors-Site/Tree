@@ -64,7 +64,7 @@ export function renderBeingFlowPanel(container, beingEntry, ctx) {
     : [];
 
   // ── Editor ─────────────────────────────────────────────────
-  const bq = ctx.branch && ctx.branch !== "0" ? `#${ctx.branch}` : "";
+  const bq = ctx.history && ctx.history !== "0" ? `#${ctx.history}` : "";
   const targetStance = `${ctx.story}${bq}/@${beingEntry.being}`;
   container.appendChild(renderFlowEditor(allRoles, ctx, {
     headerLabel:  `clauses (${initialFlow.length})`,

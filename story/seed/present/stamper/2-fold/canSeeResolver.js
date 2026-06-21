@@ -52,7 +52,7 @@ import { emptyWeave, addReel } from "./weave.js";
  * the resolver touched.
  *
  * @param {Array<string>} entries . role.canSee values
- * @param {object} ctx             . moment ctx (carries being, position, branch, ...)
+ * @param {object} ctx             . moment ctx (carries being, position, history, ...)
  * @returns {Promise<{ blocks: Array<{key:string, source:string, label:string, payload:any}>, weave: Array }>}
  */
 export async function resolveCanSee(entries, ctx) {
@@ -89,7 +89,7 @@ function isAddressShape(s) {
 
 async function resolveAddress(entry, ctx, weave) {
   const beingId = ctx?.being?._id ? String(ctx.being._id) : null;
-  const branch = typeof ctx?.history === "string" && ctx.history.length ? ctx.history : "0";
+  const history = typeof ctx?.history === "string" && ctx.history.length ? ctx.history : "0";
   const address = expandAddress(entry);
   try {
     const descriptor = await seeVerb(address, {
@@ -103,7 +103,7 @@ async function resolveAddress(entry, ctx, weave) {
     // qualifier being; both are reads the fold made on the caller's
     // behalf and must be in the weave so a fact on either reel
     // wakes a subscriber.
-    recordDescriptorReels(descriptor, branch, weave);
+    recordDescriptorReels(descriptor, history, weave);
     const label = labelForAddress(entry);
     return {
       key:     entry,
@@ -127,27 +127,27 @@ async function resolveAddress(entry, ctx, weave) {
 // descriptor surfaced). Each is a reel a fact could land on that
 // would change what this block shows. Best-effort: a malformed
 // descriptor just drops out.
-function recordDescriptorReels(descriptor, branch, weave) {
+function recordDescriptorReels(descriptor, history, weave) {
   if (!descriptor || typeof descriptor !== "object") return;
   const addr = descriptor.address;
   if (addr && typeof addr === "object") {
     if (addr.spaceId) {
-      addReel(weave, { reelKind: "space", reelId: String(addr.spaceId), branch });
+      addReel(weave, { reelKind: "space", reelId: String(addr.spaceId), history });
     }
     if (addr.being && typeof addr.being === "object" && addr.being.id) {
-      addReel(weave, { reelKind: "being", reelId: String(addr.being.id), branch });
+      addReel(weave, { reelKind: "being", reelId: String(addr.being.id), history });
     }
   }
   if (Array.isArray(descriptor.beings)) {
     for (const b of descriptor.beings) {
       const id = b?.beingId || b?._id || b?.id;
-      if (id) addReel(weave, { reelKind: "being", reelId: String(id), branch });
+      if (id) addReel(weave, { reelKind: "being", reelId: String(id), history });
     }
   }
   if (Array.isArray(descriptor.matters)) {
     for (const m of descriptor.matters) {
       const id = m?.matterId || m?._id || m?.id;
-      if (id) addReel(weave, { reelKind: "matter", reelId: String(id), branch });
+      if (id) addReel(weave, { reelKind: "matter", reelId: String(id), history });
     }
   }
 }
@@ -179,11 +179,11 @@ async function resolveNamedSee(name, ctx, weave) {
   }
   try {
     const beingId = ctx?.being?._id ? String(ctx.being._id) : null;
-    const branch = typeof ctx?.history === "string" && ctx.history.length ? ctx.history : "0";
+    const history = typeof ctx?.history === "string" && ctx.history.length ? ctx.history : "0";
     const identity = beingId
       ? { beingId, name: ctx?.being?.name || null }
       : null;
-    const out = await op.handler({ identity, args: {}, ctx, history: branch });
+    const out = await op.handler({ identity, args: {}, ctx, history });
     if (out == null) return null;
     // Handlers may return either bare payload OR a structured
     // `{ payload, reels }` envelope. The envelope lets see-op authors
@@ -205,7 +205,7 @@ async function resolveNamedSee(name, ctx, weave) {
         addReel(weave, {
           reelKind: reel.reelKind || reel.kind,
           reelId:   reel.reelId   || reel.id,
-          branch:   typeof reel.branch === "string" && reel.branch.length ? reel.branch : branch,
+          history:  typeof reel.history === "string" && reel.history.length ? reel.history : history,
         });
       }
     }
@@ -214,7 +214,7 @@ async function resolveNamedSee(name, ctx, weave) {
     // `arrival-view`, and any other named-see op that returns a
     // position descriptor.
     if (payload && typeof payload === "object" && (payload.address || Array.isArray(payload.beings) || Array.isArray(payload.matters))) {
-      recordDescriptorReels(payload, branch, weave);
+      recordDescriptorReels(payload, history, weave);
     }
     if (payload == null) return null;
     if (typeof payload === "string") {
@@ -251,7 +251,7 @@ function labelForSeeName(name) {
  * going to drop). The predicate matches the same shape the resolver
  * matches:
  *
- *   . address entries admit a reel when its (kind, id, branch) matches
+ *   . address entries admit a reel when its (kind, id, history) matches
  *     the address's resolved spaceId / being qualifier.
  *   . named-see entries admit reels declared by the op's handler at
  *     resolution time; pre-fold we cannot resolve names cheaply, so a

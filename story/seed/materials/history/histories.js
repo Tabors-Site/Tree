@@ -2,39 +2,39 @@
 //
 // History helpers — the read-side surface around the History
 // collection. Every place in the substrate that needs to know about
-// branches goes through these helpers, NOT through History.findById
+// histories goes through these helpers, NOT through History.findById
 // directly, so the in-memory ancestry cache stays warm and the
-// branch-aware read paths stay consistent.
+// history-aware read paths stay consistent.
 //
-// ── Cross-branch constraint (doctrine) ────────────────────────────
+// ── Cross-history constraint (doctrine) ────────────────────────────
 //
-// Branches are isolated worlds. A left-stance being and a right-
+// Histories are isolated worlds. A left-stance being and a right-
 // stance target can only communicate when they share the same
-// branch (the `#` qualifier in an IBP address). Cross-branch SEE,
+// history (the `#` qualifier in an IBP address). Cross-history SEE,
 // DO, SUMMON, BE — forbidden at the verb dispatch layer; the verb
 // throws INVALID_INPUT (or future CROSS_BRANCH_FORBIDDEN). The
-// substrate treats cross-branch operations the way it treats
+// substrate treats cross-history operations the way it treats
 // cross-story calls: a federation territory that needs its own
 // protocol, deferred until use cases force it.
 //
-// One operation crosses branches structurally: `create-branch`, which
-// is itself a CREATE, not a CROSS-OP. The new branch starts from a
-// past point of an existing one; from that moment forward the two
-// branches diverge. See Pass 3 (create-branch op).
+// One operation crosses histories structurally: `create-branch`, which
+// is itself a CREATE, not a CROSS-OP. The new history starts from a
+// past point of an existing one (it branches off it); from that moment
+// forward the two histories diverge. See Pass 3 (create-branch op).
 //
 // Pass 2 ships:
 //   resolveHistoryLineage(path)   — main → leaf ordered ancestry
-//   getBranchPoint(branch, reel) — per-reel branchPoint seq for the
+//   getBranchPoint(history, reel) — per-reel branchPoint seq for the
 //                                   range walk in readReelBetween
 //   isMain(path)                 — small predicate for hot-path gating
 //   isHistoryPaused(path)         — read the pause projection
 //
 // Pass 3 adds: create-branch, pause/unpause facts + reducer. Pass 4
-// adds: IBP address parser + moment threading + the cross-branch
+// adds: IBP address parser + moment threading + the cross-history
 // dispatch gate. Pass 6.5 adds: STORY_PAUSED verb-gate using
 // isHistoryPaused.
 //
-// Main ("0") has no row in the branches collection. It is the
+// Main ("0") has no row in the histories collection. It is the
 // implicit root; helpers short-circuit when asked about it. Saves a
 // DB lookup on the hot path.
 
@@ -56,7 +56,7 @@ export function isMain(path) {
 //
 // History metadata is append-only after creation (only the paused /
 // archived flags toggle; the parent / branchPoint never change). The
-// ancestry of a given branch is therefore stable for the process
+// ancestry of a given history is therefore stable for the process
 // lifetime once we've seen it. Cache aggressively.
 //
 // Eviction: an explicit `invalidateHistoryCache(path)` is exposed so
@@ -91,14 +91,14 @@ export async function loadHistory(path) {
 }
 
 /**
- * Resolve a branch path to its ordered ancestry, main first, leaf
+ * Resolve a history path to its ordered ancestry, main first, leaf
  * last. For main returns `["0"]`. For #1a1 returns `["0", "1", "1a", "1a1"]`.
  *
  * Walks the parent chain via the History collection. Cached.
  *
- * Throws when the path doesn't resolve (a branch row is missing
+ * Throws when the path doesn't resolve (a history row is missing
  * partway up the chain) — that's a corrupted lineage and reading the
- * reel would silently swap facts from the wrong branch's storage.
+ * reel would silently swap facts from the wrong history's storage.
  *
  * @param {string} path
  * @returns {Promise<string[]>}
@@ -119,13 +119,13 @@ export async function resolveHistoryLineage(path) {
     const row = await loadHistory(cursor);
     if (!row) {
       // Coded so the wire classifies it as 404 and clients (the portal)
-      // can fall back to main / clear a stale branch hash, rather than
+      // can fall back to main / clear a stale history hash, rather than
       // letting a plain Error surface as INTERNAL — which left a client
-      // pinned to a gone branch storming retries.
+      // pinned to a gone history storming retries.
       throw new IbpError(
         IBP_ERR.BRANCH_NOT_FOUND,
-        `branch "${cursor}" not found (resolving path="${path}")`,
-        { branch: cursor, path },
+        `history "${cursor}" not found (resolving path="${path}")`,
+        { history: cursor, path },
       );
     }
     chain.unshift(cursor);
@@ -137,25 +137,25 @@ export async function resolveHistoryLineage(path) {
 }
 
 /**
- * Read the per-reel branchPoint for a branch + reel. Returns null
+ * Read the per-reel branchPoint for a history + reel. Returns null
  * for main (main has no branchPoint — its reel starts at seq 1).
- * Returns 0 for branches whose branchPoint map has no entry for this
+ * Returns 0 for histories whose branchPoint map has no entry for this
  * reel — that's "the reel had no facts at branch time," so the
- * branch's own seqs start at 1.
+ * history's own seqs start at 1.
  *
- * @param {string} branch
+ * @param {string} history
  * @param {"being"|"space"|"matter"} type
  * @param {string} id
  * @returns {Promise<number|null>}
  */
-export async function getBranchPoint(branch, type, id) {
-  if (isMain(branch)) return null;
-  const row = await loadHistory(branch);
+export async function getBranchPoint(history, type, id) {
+  if (isMain(history)) return null;
+  const row = await loadHistory(history);
   if (!row) {
     throw new IbpError(
       IBP_ERR.BRANCH_NOT_FOUND,
-      `branch "${branch}" not found`,
-      { branch },
+      `history "${history}" not found`,
+      { history },
     );
   }
   const key = `${type}:${id}`;
@@ -167,8 +167,8 @@ export async function getBranchPoint(branch, type, id) {
 }
 
 /**
- * Cheap pause check. ALL branches including main are pauseable
- * (Tabor doctrine 2026-06-04: every branch is symmetric). A main row
+ * Cheap pause check. ALL histories including main are pauseable
+ * (Tabor doctrine 2026-06-04: every history is symmetric). A main row
  * is only created lazily when the operator first pauses main; before
  * that no row exists and the default is "not paused" (live).
  *
@@ -182,10 +182,10 @@ export async function isHistoryPaused(path) {
 }
 
 /**
- * Cheap delete check. Mirrors isHistoryPaused. Soft delete: the branch
+ * Cheap delete check. Mirrors isHistoryPaused. Soft delete: the history
  * still exists in the chain, its facts are still readable via SEE,
  * but new writes (DO/BE/SUMMON) refuse and the scheduler skips it.
- * Main is deletable (same symmetric-branch doctrine as pause).
+ * Main is deletable (same symmetric-history doctrine as pause).
  *
  * Reads via loadHistory (cached). The delete-branch / undelete-branch
  * ops invalidate the cache after writes.
@@ -196,7 +196,7 @@ export async function isHistoryDeleted(path) {
 }
 
 /**
- * Find the most recent shared ancestor of two branches. Walks both
+ * Find the most recent shared ancestor of two histories. Walks both
  * lineages (main → leaf) and returns the deepest path present in
  * both. Always exists because main is in every lineage.
  *
@@ -206,7 +206,7 @@ export async function isHistoryDeleted(path) {
  *   commonAncestor("1a", "1b")   → "1"  (both forked from 1)
  *   commonAncestor("1a1", "1a2") → "1a"
  *
- * The merged branch produced by merge-branches uses this path as its
+ * The merged history produced by merge-branches uses this path as its
  * parent and snapshots branchPoint from there.
  */
 export async function commonAncestor(pathA, pathB) {
@@ -230,36 +230,36 @@ export async function commonAncestor(pathA, pathB) {
 }
 
 /**
- * Return every fact on `branch`'s reel-lineage that is NOT also on
+ * Return every fact on `history`'s reel-lineage that is NOT also on
  * `ancestor`'s reel-lineage. Grouped by reel key (`<kind>:<id>`).
  *
- * "Divergent" means: facts on the BRANCHES between `ancestor` and
- * `branch` (exclusive of ancestor; inclusive of branch). Each of
- * those branches stored its own writes with `branch=<that branch>`;
- * the query is `branch: { $in: [divergent-branches] }`.
+ * "Divergent" means: facts on the HISTORIES between `ancestor` and
+ * `history` (exclusive of ancestor; inclusive of history). Each of
+ * those histories stored its own writes with `history=<that history>`;
+ * the query is `history: { $in: [divergent-histories] }`.
  *
  * Used by the merge pipeline:
  *   diff for side A = divergentFactsSince(sourceA, commonAncestor)
  *   diff for side B = divergentFactsSince(sourceB, commonAncestor)
  *   conflicts = reels touched in BOTH diffs
  *
- * Returns an empty Map when `branch === ancestor` or when the
+ * Returns an empty Map when `history === ancestor` or when the
  * divergent set has no fact-emitting reels.
  *
- * @param {string} branch
+ * @param {string} history
  * @param {string} ancestor
  * @returns {Promise<Map<string, Array<object>>>}
  */
-export async function divergentFactsSince(branch, ancestor) {
-  if (typeof branch !== "string" || !branch.length) {
-    throw new Error("divergentFactsSince: branch required");
+export async function divergentFactsSince(history, ancestor) {
+  if (typeof history !== "string" || !history.length) {
+    throw new Error("divergentFactsSince: history required");
   }
   if (typeof ancestor !== "string" || !ancestor.length) {
     throw new Error("divergentFactsSince: ancestor required");
   }
-  if (branch === ancestor) return new Map();
+  if (history === ancestor) return new Map();
 
-  const historyLineage = await resolveHistoryLineage(branch);
+  const historyLineage = await resolveHistoryLineage(history);
   const ancestorLineage = await resolveHistoryLineage(ancestor);
   const ancestorSet = new Set(ancestorLineage);
   const divergentHistories = historyLineage.filter(b => !ancestorSet.has(b));

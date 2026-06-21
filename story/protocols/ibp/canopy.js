@@ -25,7 +25,7 @@
 // verb produces. The envelope adds two fields beyond the local IBP
 // shape:
 //
-//   actorHistory  — the actor's home branch (their world's branch path)
+//   actorHistory  — the actor's home history (their world's history path)
 //   actorActId   — the actor's local Act id (the home-side Stamp the
 //                  foreign side will reference in crossOrigin.actId)
 //
@@ -108,7 +108,7 @@ export function extractTargetStory(address) {
   //   `/path@being`         — local stance
   //   `~` / `~/inner`       — caller's home shorthand
   //   `.` / `./branches`    — heaven addresses
-  //   `#1/path`             — branch-qualified local position
+  //   `#1/path`             — history-qualified local position
   // Without this guard `extractTargetStory("@birther")` would return
   // `"@birther"`, the dispatcher would compare it against the local
   // domain (mismatch), and route the call through crossStoryDispatch.
@@ -116,7 +116,7 @@ export function extractTargetStory(address) {
   // or `@`; anything starting with a local sigil is locally rooted.
   if (/^[@/~.#]/.test(rhs)) return null;
   // Place is everything up to the first slash or `@` (or the whole
-  // string), then strip any `#<historyPath>` qualifier. Branches are a
+  // string), then strip any `#<historyPath>` qualifier. Histories are a
   // property of the same story — without the strip, `localhost#1/`
   // would be misread as the foreign place `localhost#1` and federation
   // would PEER_NOT_FOUND it.
@@ -166,7 +166,7 @@ export function getForeignTargetDomain(address) {
  * @param {object} envelope.payload       verb-specific payload (action,
  *                                        args, message, etc.)
  * @param {object} [envelope.identity]    { beingId, name } — the actor
- * @param {string} [envelope.actorHistory] the actor's home branch
+ * @param {string} [envelope.actorHistory] the actor's home history
  *                                        (required for write verbs;
  *                                        optional for SEE)
  * @param {string} [envelope.actorActId]  the actor's home Act id (the
@@ -384,8 +384,13 @@ export async function verifyIncoming(req, res, next) {
  *
  * Returns null when the request is not a cross-world call (no
  * canopySender). Throws when the request IS cross-world but missing
- * the actor's branch + actId — those are required for the receiving
+ * the actor's history + actId — those are required for the receiving
  * Stamper to attach crossOrigin correctly.
+ *
+ * The tuple's `branch` key carries the actor's home HISTORY value. The
+ * key name stays `branch` because the seed federation layer
+ * (seed/ibp/crossWorld.js) reads `actor.branch` across the cross-world
+ * Act-chain — a SEAM to rename in lockstep with this tuple later.
  *
  * @param {object} req  Express request, post verifyIncoming
  * @returns {{ story: string, branch: string, beingId: string, actId: string, beingSig: object|null }|null}

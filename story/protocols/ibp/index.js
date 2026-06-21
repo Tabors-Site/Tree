@@ -217,7 +217,7 @@ export function wireLiveHooks() {
           identity: { beingId: sub.beingId, name: null },
           args:     {},
           ctx:      null,
-          branch:   sub.branch,
+          history:  sub.history,
         });
         if (!face) continue;
         applyRefold(subId, face);
@@ -263,8 +263,8 @@ export function initIBPWS(io) {
   // Rehydrate runtime state. Both subscriptions and schedules now
   // fold from the fact chain. Each walker reads its action's facts
   // (subscription-registered/cancelled, wake-scheduled/cancelled)
-  // across every live branch, threads them through reel-lineage,
-  // and materializes one runtime entry per (id, branch) pair.
+  // across every live history, threads them through reel-lineage,
+  // and materializes one runtime entry per (id, history) pair.
   // Without this, every server restart wipes every being's standing
   // attention and cadence — extensions planted before the restart
   // silently stop responding.
@@ -282,7 +282,7 @@ export function initIBPWS(io) {
       await Promise.all([rehydrateSubs(), rehydrateSchedules()]);
       // The role-words are declared into the unified wordStore fold at genesis
       // (declareRoleWordsToFold, in seedFold + the boot-end pass). Here, after genesis, REHYDRATE
-      // rebuilds the per-branch disabled overlay + the I_AM bedrock set from those fold facts, so a
+      // rebuilds the per-history disabled overlay + the I_AM bedrock set from those fold facts, so a
       // restart re-applies any disables. resolveRoleWord reads the fold for existence; the chain is
       // the durable truth.
       const { rehydrateWordsFromFacts } =

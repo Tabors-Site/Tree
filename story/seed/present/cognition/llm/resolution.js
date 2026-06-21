@@ -53,15 +53,15 @@ import { buildLlmChain } from "./chain.js";
  * @param {object} [opts.actor]   { beingId, spaceId, storyDomain }
  *                                (null/missing — no actor side walked)
  * @param {string} [opts.role]    role name for per-role slot lookups
- * @param {string} [opts.branch]  branch id (default "0")
+ * @param {string} [opts.history]  history id (default "0")
  * @returns {Promise<{ chain, tried, reason }>}
  */
 export async function resolveLlmConnectionChain({
   actor = null,
   receiver = null,
   role = null,
-  branch = "0",
+  history = "0",
 } = {}) {
-  return buildLlmChain({ actor, receiver, role, branch });
+  return buildLlmChain({ actor, receiver, role, history });
 }
 

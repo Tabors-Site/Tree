@@ -295,7 +295,7 @@ registerMatterType("source", {
 registerMatterType("ibpa", {
   description:
     "An IBPA — the inter-story portal. Content carries the target " +
-    "address (`{ target: \"<story>#<branch>/<position>\" }`), the " +
+    "address (`{ target: \"<story>#<history>/<position>\" }`), the " +
     "IBP sibling of web's `{ url }` — a COMPLETELY different " +
     "reference world: a url opens into the WWW over HTTP (render " +
     "only, iframes); an IBPA opens into another story over IBP " +
@@ -317,10 +317,10 @@ registerMatterType("connection", {
   description:
     "A live WebSocket connection. One row per socket in " +
     "./host/websocket; the websocket-pool being creates it on " +
-    "connect, updates qualities.connection.branch on a branch " +
+    "connect, updates qualities.connection.history on a history " +
     "reseat, and ends it on disconnect. qualities.connection " +
     "carries the socket identity (socketId, beingId, name, " +
-    "branch, connectedAt). The pool's " +
+    "history, connectedAt). The pool's " +
     "act-chain is the connection log; the row is the live state.",
   contentKinds: ["none"],
   ops: ["set-matter", "end-matter"],

@@ -95,11 +95,11 @@ async function _setWorldSignalViaWord({ namespace, key, value, moment }) {
   if (!moment) return null;
   const ir = resolveRoleWord("role-manager", "set-world-signal", moment?.actorAct?.history);
   if (!ir) return null;
-  const branch = moment?.actorAct?.history || "0";
+  const history = moment?.actorAct?.history || "0";
   try {
     const { result } = await runRoleWord(ir, {
-      moment, branch,
-      trigger: { namespace, key, value, branch },
+      moment, history,
+      trigger: { namespace, key, value, branch: history },
       env: { host: roleManagerHostEnv() },
     });
     return result || null;

@@ -38,12 +38,12 @@ import { I_AM } from "../being/seedBeings.js";
 
 // ── Cache storage ──
 
-// Cache key is `${branch}:${spaceId}` so each branch holds its own
-// view of every chain. Branches that haven't reparented anything still
+// Cache key is `${history}:${spaceId}` so each history holds its own
+// view of every chain. Histories that haven't reparented anything still
 // pay one lineage walk to populate the first time, then hit cache.
-const _cache = new Map(); // "branch:spaceId" -> { ancestors: [...], cachedAt: number }
-function _cacheKey(branch, spaceId) {
-  return `${String(branch || "0")}:${String(spaceId)}`;
+const _cache = new Map(); // "history:spaceId" -> { ancestors: [...], cachedAt: number }
+function _cacheKey(history, spaceId) {
+  return `${String(history || "0")}:${String(spaceId)}`;
 }
 function MAX_ENTRIES() {
   return Number(getInternalConfigValue("ancestorCacheMaxEntries")) || 50000;
@@ -72,33 +72,33 @@ function getTTL() {
 // ── Core functions ──
 
 /**
- * Get the ancestor chain from a space to root, on a given branch.
+ * Get the ancestor chain from a space to root, on a given history.
  * Returns cached chain if fresh, otherwise walks from DB and caches.
  *
  * Each ancestor is a lean object with: _id, qualities, parent,
  * heavenSpace, owner. The array is ordered from the space itself to
  * root (or the last non-place heaven space).
  *
- * Branch-aware: each branch holds its own cached view of every chain.
- * The walk uses `loadOrFold` so branches that haven't reparented an
- * ancestor inherit main's value transparently; branches that HAVE
- * reparented see their divergent parent. Reads on a fresh branch pay
+ * History-aware: each history holds its own cached view of every chain.
+ * The walk uses `loadOrFold` so histories that haven't reparented an
+ * ancestor inherit main's value transparently; histories that HAVE
+ * reparented see their divergent parent. Reads on a fresh history pay
  * one lineage walk per ancestor the first time, then hit cache.
  *
- * Branch is REQUIRED . no default. A missing branch arg falls
+ * History is REQUIRED . no default. A missing history arg falls
  * through to assertHistory in loadOrFold which throws loud, so silent
- * main-bias on a branched caller surfaces as a test failure or
+ * main-bias on a non-main-history caller surfaces as a test failure or
  * runtime error rather than a quietly-wrong chain.
  *
  * @param {string} spaceId
- * @param {string} branch
- * @returns {Promise<Array<object>|null>} null if the starting space doesn't exist on this branch
+ * @param {string} history
+ * @returns {Promise<Array<object>|null>} null if the starting space doesn't exist on this history
  */
-export async function getAncestorChain(spaceId, branch) {
+export async function getAncestorChain(spaceId, history) {
   if (!spaceId) return null;
   const id = String(spaceId);
   const ttl = getTTL();
-  const key = _cacheKey(branch, id);
+  const key = _cacheKey(history, id);
 
   // Check cache
   const cached = _cache.get(key);
@@ -109,18 +109,18 @@ export async function getAncestorChain(spaceId, branch) {
 
   // Cache miss. Walk from DB.
   _misses++;
-  const ancestors = await walkFromDb(id, ttl, branch);
+  const ancestors = await walkFromDb(id, ttl, history);
   if (!ancestors) return null;
 
   // Cache the result (with eviction if at capacity)
   cacheEntry(key, ancestors);
 
-  // Also cache sub-paths for shared ancestors on this branch.
+  // Also cache sub-paths for shared ancestors on this history.
   // If the chain is [C, B, A, root], also cache B -> [B, A, root] and A -> [A, root].
   // Cap sub-path caching to avoid flooding from deep chains.
   const maxSubPaths = Math.min(ancestors.length - 1, 10);
   for (let i = 1; i <= maxSubPaths; i++) {
-    const subKey = _cacheKey(branch, ancestors[i]._id);
+    const subKey = _cacheKey(history, ancestors[i]._id);
     if (!_cache.has(subKey)) {
       cacheEntry(subKey, ancestors.slice(i));
     }
@@ -131,7 +131,7 @@ export async function getAncestorChain(spaceId, branch) {
 
 /**
  * Cache an entry with LRU eviction on overflow.
- * key is the full `branch:spaceId` cache key.
+ * key is the full `history:spaceId` cache key.
  */
 function cacheEntry(key, ancestors) {
   // Evict oldest entries if at capacity
@@ -145,10 +145,10 @@ function cacheEntry(key, ancestors) {
 }
 
 /**
- * Walk the parent chain from the database on the given branch.
+ * Walk the parent chain from the database on the given history.
  * Returns null if the starting space doesn't exist.
  */
-async function walkFromDb(spaceId, ttl, branch) {
+async function walkFromDb(spaceId, ttl, history) {
   const ancestors = [];
   let cursor = spaceId;
   const visited = new Set();
@@ -163,11 +163,11 @@ async function walkFromDb(spaceId, ttl, branch) {
       break;
     }
 
-    // Check if this ancestor is already cached on THIS branch (shared
-    // path optimization). Each branch's cache entry is keyed
-    // separately so divergent reparents on one branch don't bleed
+    // Check if this ancestor is already cached on THIS history (shared
+    // path optimization). Each history's cache entry is keyed
+    // separately so divergent reparents on one history don't bleed
     // into another's cached chain.
-    const subKey = _cacheKey(branch, cursor);
+    const subKey = _cacheKey(history, cursor);
     const cachedAncestor = _cache.get(subKey);
     if (cachedAncestor && Date.now() - cachedAncestor.cachedAt < ttl) {
       // Validate the cached tail before splicing
@@ -184,15 +184,15 @@ async function walkFromDb(spaceId, ttl, branch) {
       _cache.delete(subKey);
     }
 
-    // loadOrFold (not loadProjection): on a branch where this
+    // loadOrFold (not loadProjection): on a history where this
     // ancestor hasn't been touched, the slot is inherited from main
-    // (or the nearest parent branch with a divergent fact). Bare
+    // (or the nearest parent history with a divergent fact). Bare
     // loadProjection would return null for any inherited ancestor
-    // and the walk would stop at the deepest branch-divergent space,
+    // and the walk would stop at the deepest history-divergent space,
     // returning a truncated chain. loadOrFold walks the lineage so
-    // the branch sees its full effective ancestry.
+    // the history sees its full effective ancestry.
     const { loadOrFold } = await import("../projections.js");
-    const _slot = await loadOrFold("space", cursor, branch);
+    const _slot = await loadOrFold("space", cursor, history);
     const n = _slot ? {
       _id: _slot.id,
       name: _slot.state?.name,
@@ -245,14 +245,14 @@ async function walkFromDb(spaceId, ttl, branch) {
  * Returns a deep copy. All resolution chains for one message read
  * from this snapshot. The live cache can change underneath.
  *
- * Branch is REQUIRED . see getAncestorChain.
+ * History is REQUIRED . see getAncestorChain.
  *
  * @param {string} spaceId
- * @param {string} branch
+ * @param {string} history
  * @returns {Promise<Array<object>|null>}
  */
-export async function snapshotAncestors(spaceId, branch) {
-  const chain = await getAncestorChain(spaceId, branch);
+export async function snapshotAncestors(spaceId, history) {
+  const chain = await getAncestorChain(spaceId, history);
   if (!chain) return null;
   // Deep copy: qualities objects are plain (not Maps), so JSON roundtrip works.
   // Lean documents from Mongoose are pure JSON-safe objects.
@@ -433,25 +433,25 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
  * as an ancestor. Snapshots keys before deletion to avoid
  * iterate-and-delete.
  *
- * Branch defaults to null = invalidate the space across ALL branches.
- * Pass an explicit branch to scope eviction to one branch's view (used
- * by branch-scoped writes that only affect their own divergent chain).
+ * History defaults to null = invalidate the space across ALL histories.
+ * Pass an explicit history to scope eviction to one history's view (used
+ * by history-scoped writes that only affect their own divergent chain).
  * For most writes (set-space on main, or any tree-shape change on a
- * specific branch), the safe default is "evict everywhere" . the cost
+ * specific history), the safe default is "evict everywhere" . the cost
  * is one rebuild on next read, and the alternative is stale entries
- * across branches that share the un-rewritten ancestor.
+ * across histories that share the un-rewritten ancestor.
  */
-export function invalidateSpace(spaceId, branch = null) {
+export function invalidateSpace(spaceId, history = null) {
   const id = String(spaceId);
   _invalidations++;
 
   // Snapshot keys then check each. Safe against concurrent modification.
   const keys = [..._cache.keys()];
   for (const key of keys) {
-    // Key shape "branch:spaceId" . parse to compare.
+    // Key shape "history:spaceId" . parse to compare.
     const sepIdx = key.indexOf(":");
     const keyHistory = sepIdx >= 0 ? key.slice(0, sepIdx) : "0";
-    if (branch != null && keyHistory !== String(branch)) continue;
+    if (history != null && keyHistory !== String(history)) continue;
     const keySpaceId = sepIdx >= 0 ? key.slice(sepIdx + 1) : key;
     // Direct hit on this space, or any cached chain that contains it.
     if (keySpaceId === id) {

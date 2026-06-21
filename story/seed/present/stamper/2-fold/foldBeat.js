@@ -40,24 +40,26 @@ export async function runFoldBeat(setup = {}) {
   const { role, moment } = setup;
   if (!moment) return { foldedFace: null, innerFace: null };
 
-  // Inputs the fold needs: who is acting, where, on what branch, at
+  // Inputs the fold needs: who is acting, where, on what history, at
   // what orientation. assign seated these on moment; we read them
   // through.
   const beingId =
     (moment.toBeing && String(moment.toBeing._id)) ||
     (moment.being && moment.being._id ? String(moment.being._id) : null);
   const orientation = moment.orientation || "forward";
-  const branch = moment.actorAct?.history || moment.history || null;
+  const history = moment.actorAct?.history || moment.history || null;
 
   // foldPlace runs the spatial weave. moment is threaded through so
   // foldPlace can stash foldedSeqs (PARALLEL FACTS §1.3) and read the
-  // moment's branch from moment.actorAct. Role rides through so
+  // moment's history from moment.actorAct. Role rides through so
   // occupant folds are gated pre-fold by role.canSee . the dep set
   // then matches what we actually read.
   let foldedFace = null;
-  if (beingId && branch) {
+  if (beingId && history) {
     try {
-      foldedFace = await foldPlace(beingId, orientation, { moment, branch, role });
+      // SEAM: foldPlace opts key stays `branch` (shared with non-moment
+      // callers like myInnerFace.js); the value is the history slot.
+      foldedFace = await foldPlace(beingId, orientation, { moment, branch: history, role });
     } catch {
       foldedFace = null;
     }
@@ -79,7 +81,7 @@ export async function runFoldBeat(setup = {}) {
       beingId,
       role,
       orientation,
-      history: branch,
+      history,
       currentSpace: moment.spaceId || null,
       rootId:       moment.rootId || null,
       name:         moment.toBeing?.name || null,

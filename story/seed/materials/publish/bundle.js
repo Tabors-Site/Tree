@@ -10,7 +10,7 @@
 //     meta: {
 //       bundleVersion,        "1.0"
 //       sourceStory,        domain that produced it
-//       sourceHistory,         which branch the snapshot was taken from
+//       sourceHistory,         which history the snapshot was taken from
 //       sourceScopeName,      human label for what was extracted
 //       sourceScopeSpaceId,   the root space's source-namespace id
 //       createdAt,            ISO string

@@ -46,7 +46,7 @@ import { isExtensionBlockedAtSpace } from "../materials/space/extensionScope.js"
 import { authorizeViaRoles } from "./roleAuth.js";
 import { getSpaceRootId } from "../sprout.js";
 import { getStoryDomain } from "./address.js";
-import { resolveTargetHistory } from "./branchResolve.js";
+import { resolveTargetHistory } from "./historyResolve.js";
 
 /**
  * Authorize a verb request.
@@ -105,39 +105,39 @@ export async function authorize(args) {
   // 4. The role-walk. Anonymous callers → implicit arrival floor.
   // Authenticated callers → walk qualities.rolesGranted.
   //
-  // Two branches surface here:
+  // Two histories surface here:
   //
   //   • targetHistory — where the target lives. Used to look up role
   //     specs on the target's qualities chain, and to evaluate reach
   //     (which space's projection should the reach pattern walk).
-  //     Precedence: the parsed target's own branch is the most
+  //     Precedence: the parsed target's own history is the most
   //     specific statement and wins; then the moment's seated
   //     targetHistory (where this moment's facts land — auth must
   //     evaluate the same world the stamp rides); then the actor's
-  //     act branch (same-world acts); then the caller's session
-  //     branch as the last resort (SEE ops and other targets that
+  //     act history (same-world acts); then the caller's session
+  //     history as the last resort (SEE ops and other targets that
   //     have no world of their own are evaluated from where the
   //     caller stands).
   //
-  //   • actorHistory — the actor's branch, where their grants live.
+  //   • actorHistory — the actor's history, where their grants live.
   //     Caller passes args.actorHistory from socket.currentHistory
   //     (seated by BE:birth/connect/release/switch). When a being is
-  //     seated on #0 and SEEs onto branch #1, their grants are read
+  //     seated on #0 and SEEs onto history #1, their grants are read
   //     from #0 (where they actually exist), not from #1 (where they
   //     may not exist if their reel was created post-fork). This is
   //     the "look through the portal" semantic — you remain yourself
   //     when navigating across branches.
   //
   // Anonymous callers (no being bound, or the arrival floor's
-  // identity) with no branch anywhere fall to the operator's default
-  // branch via the pointer registry — never literal "0"; set-pointer
-  // can re-point main. Authenticated callers with no branch anywhere
+  // identity) with no history anywhere fall to the operator's default
+  // history via the pointer registry — never literal "0"; set-pointer
+  // can re-point main. Authenticated callers with no history anywhere
   // are a perimeter threading bug: fail loud.
-  // Shared precedence (PORT-NOTES #10): target.branch →
+  // Shared precedence (PORT-NOTES #10): target.history →
   // moment.targetHistory → moment.actorAct.history → the caller's
-  // seated branch (args.actorHistory here). Identical chain to the verb
-  // layer's resolveHistoryForFact, so the branch that GATES an act and
-  // the branch a fact STAMPS on can never diverge.
+  // seated history (args.actorHistory here). Identical chain to the verb
+  // layer's resolveHistoryForFact, so the history that GATES an act and
+  // the history a fact STAMPS on can never diverge.
   let targetHistory = resolveTargetHistory({
     target,
     moment,
@@ -150,23 +150,23 @@ export async function authorize(args) {
       targetHistory = await getDefaultHistory();
     } else {
       throw new Error(
-        `authorize: branch could not be resolved for ${verb}:${args.action || args.seeOp || args.operation || args.intent || "?"} ` +
+        `authorize: history could not be resolved for ${verb}:${args.action || args.seeOp || args.operation || args.intent || "?"} ` +
         `(identity=${identity?.name || identity?.beingId || "anonymous"}). ` +
-        `Pass moment, include branch on the parsed target, or thread actorHistory.`,
+        `Pass moment, include history on the parsed target, or thread actorHistory.`,
       );
     }
   }
-  // actorHistory falls back to the moment's actor branch, then to
+  // actorHistory falls back to the moment's actor history, then to
   // targetHistory (genesis/scaffold paths where there's no separate
-  // session branch). Same-branch acts collapse to one value naturally.
+  // session history). Same-history acts collapse to one value naturally.
   //
   // Foreign-actor guard: an inbound cross-story actor's act carries
-  // THEIR home branch — a path in another substrate's namespace.
+  // THEIR home history — a path in another substrate's namespace.
   // Looking their grants up on that path locally is meaningless at
-  // best (no such branch row → noisy cold-fold failure) and wrong at
-  // worst (a coincidentally same-named local branch). Any roles a
-  // foreign actor holds HERE were granted here, on local branches, so
-  // their grants read from the target's branch instead.
+  // best (no such history row → noisy cold-fold failure) and wrong at
+  // worst (a coincidentally same-named local history). Any roles a
+  // foreign actor holds HERE were granted here, on local histories, so
+  // their grants read from the target's history instead.
   const actorActIsLocal =
     !moment?.actorAct?.story ||
     moment.actorAct.story === getStoryDomain();
@@ -182,7 +182,7 @@ export async function authorize(args) {
     intent:      args.intent || null,
     operation:   args.operation || null,
     seeOp:       args.seeOp || null,
-    branch:      targetHistory,
+    history:     targetHistory,
     actorHistory,
   });
 

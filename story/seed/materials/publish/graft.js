@@ -2,11 +2,11 @@
 //
 // Graft — identity-preserving transport: bring the thing ITSELF, verbatim.
 //
-// A graft moves a being (or a branch, or the whole story) WITH its
+// A graft moves a being (or a history, or the whole story) WITH its
 // identity intact: same pubkey id, same act-chain, same fact hashes,
 // byte-for-byte as it was at home. No id remapping; an imported chain is
 // foreign by construction and lands by verbatim insert, never emitFact
-// (the digest binds branch + provenance, so re-homing is impossible).
+// (the digest binds history + provenance, so re-homing is impossible).
 //
 // Scope ranges across one module:
 //   - captureGraft({beingId}) / applyGraft  — a BEING into a LIVING story.
@@ -51,7 +51,7 @@ import { fileURLToPath } from "url";
 // collections, the peer registry, whatever future modules store — and
 // the genome captures it verbatim (a seed is the WHOLE story; an
 // extension's collection is as much its body as its facts are).
-const SEED_CORE_COLLECTIONS = new Set(["facts", "acts", "branches", "reelHeads", "actHeads"]);
+const SEED_CORE_COLLECTIONS = new Set(["facts", "acts", "histories", "reelHeads", "actHeads"]);
 const REGENERABLE_COLLECTIONS = new Set([
   // fold caches — plant cold-folds these back from the chain
   "projections", "inbox_projection", "threads_projection", "position_projection",
@@ -115,17 +115,17 @@ export async function captureGraft(opts = {}) {
   // History registry: paths, branchPoints (per-reel snapshots of parent
   // heads at create-branch time), scopes, lifecycle flags.
   const branches = await History.find({}).lean();
-  log.info("Graft", `captured ${branches.length} branches`);
+  log.info("Graft", `captured ${branches.length} histories`);
 
   // ── 4. Collect every ReelHead ──
-  // Per-reel-per-branch seq counters. Without these the receiving
+  // Per-reel-per-history seq counters. Without these the receiving
   // substrate would allocate seq 1 for every reel on a fresh boot,
   // breaking the hash chain continuity from the seed's facts.
   const reelHeads = await ReelHead.find({}).lean();
   log.info("Graft", `captured ${reelHeads.length} reel heads`);
 
   // ── 4b. Collect every ActHead ──
-  // Per-being per-branch act-chain tips. Acts are content-addressed
+  // Per-being per-history act-chain tips. Acts are content-addressed
   // chains; the story root covers them, so the heads are core
   // genome, not extension luggage.
   const { default: ActHead } = await import("../../past/act/actHead.js");
@@ -250,7 +250,7 @@ export async function captureGraft(opts = {}) {
             await import("../../past/fact/chainRoots.js");
           return storyRootFromParts({
             story: getStoryDomain() || null,
-            branches,
+            histories: branches,
             reelHeads,
             actHeads,
           });
@@ -346,7 +346,7 @@ export function assertValidGraft(bundle) {
  * Replaying steps:
  *   1. Validate bundle shape
  *   2. Refuse if any target collection is non-empty (DB must be fresh)
- *   3. Bulk-insert branches, reelHeads, facts, acts (original IDs)
+ *   3. Bulk-insert histories, reelHeads, facts, acts (original IDs)
  *   4. Caller (genesis.js boot mode) runs cold-fold over every
  *      aggregate to materialize projections — the chain IS truth, so
  *      projections are caches; replaying the chain re-derives them.
@@ -391,11 +391,11 @@ export async function plantGraft(bundle) {
     History.countDocuments({}),
     ReelHead.countDocuments({}),
   ]);
-  const [factCount, actCount, branchCount, reelCount] = checks;
-  if (factCount > 0 || actCount > 0 || branchCount > 0 || reelCount > 0) {
+  const [factCount, actCount, historyCount, reelCount] = checks;
+  if (factCount > 0 || actCount > 0 || historyCount > 0 || reelCount > 0) {
     throw new Error(
       `plantGraft: refusing to plant into a non-empty DB. Found ` +
-      `facts=${factCount}, acts=${actCount}, branches=${branchCount}, ` +
+      `facts=${factCount}, acts=${actCount}, histories=${historyCount}, ` +
       `reelHeads=${reelCount}. Wipe the DB before planting (the deployer's ` +
       `responsibility — plant is destructive by design).`,
     );
@@ -432,13 +432,13 @@ export async function plantGraft(bundle) {
       `their refs plant but the bytes are not here.`);
   }
 
-  // ── 2. Branches first ──
+  // ── 2. Histories first ──
   // Plant order matters for foreign-key-like references inside the
-  // substrate's read paths. Branches are referenced by facts.branch
-  // and reelHeads.branch; insert them first.
+  // substrate's read paths. Histories are referenced by facts.history
+  // and reelHeads.history; insert them first.
   if (bundle.branches.length > 0) {
     await History.insertMany(bundle.branches, { ordered: false });
-    log.info("Graft", `planted ${bundle.branches.length} branches`);
+    log.info("Graft", `planted ${bundle.branches.length} histories`);
   }
 
   // ── 3. ReelHeads ──
@@ -460,7 +460,7 @@ export async function plantGraft(bundle) {
   }
 
   // ── 4. Facts ──
-  // The substantive chain. Original _id, seq, branch, p/h hashes
+  // The substantive chain. Original _id, seq, history, p/h hashes
   // preserved. The fold engine derives projections from these.
   if (bundle.facts.length > 0) {
     await Fact.insertMany(bundle.facts, { ordered: false });
@@ -524,7 +524,7 @@ export async function plantGraft(bundle) {
 
   // ── 8. Provable replay ──
   // Recompute the planted chain's story root over what LANDED
-  // (branch + reelHead rows read straight back from the DB) and
+  // (history + reelHead rows read straight back from the DB) and
   // compare to the bundle's captured fingerprint. Match = this
   // story IS the captured story, mathematically. Mismatch =
   // determinism broke (or the bundle was altered) — warn loudly,
@@ -543,7 +543,7 @@ export async function plantGraft(bundle) {
       ]);
       const actualRoot = storyRootFromParts({
         story: bundle.sourceStory || null,
-        branches: dbHistories,
+        histories: dbHistories,
         reelHeads: dbHeads,
         actHeads: dbActHeads,
       });
@@ -554,7 +554,7 @@ export async function plantGraft(bundle) {
         // facts behind it. The planted head rows came verbatim from
         // the bundle — a bundle with tampered fact rows but original
         // heads would pass the root match alone. Walk every reel
-        // (hash chain end to end, branch-aware) and every act-chain
+        // (hash chain end to end, history-aware) and every act-chain
         // back to genesis. Broken anywhere → unplant, same as a root
         // mismatch. Skippable for very large genomes via
         // opts-on-bundle escape; ON by default because "provable
@@ -603,7 +603,7 @@ export async function plantGraft(bundle) {
         log.warn("Graft", `${why} — UNPLANTING`);
         try {
           const db = mongoose.connection.db;
-          const toClear = ["facts", "acts", "branches", "reelHeads", "actHeads"];
+          const toClear = ["facts", "acts", "histories", "reelHeads", "actHeads"];
           for (const name of Object.keys(bundle.extensionData || {})) {
             if (!name.startsWith("system.")) toClear.push(name);
           }
@@ -656,7 +656,7 @@ export async function plantGraft(bundle) {
 /**
  * Capture ONE being as an identity-preserving graft bundle. The being's
  * own reel (be:birth + its be-acts + do:set-being + its summons), its
- * full act-chain, the lineage History rows its facts span, the per-branch
+ * full act-chain, the lineage History rows its facts span, the per-history
  * reel/act heads, and the CAS blobs its facts reference — all VERBATIM
  * (original ids, original p/h hashes). meta.lineage carries parentBeingId
  * + homeStory (bare refs; the referenced beings need NOT be present on
@@ -678,7 +678,7 @@ async function captureBeingGraft(opts) {
   const facts = await Fact.find({ "of.kind": "being", "of.id": beingId }).sort({ seq: 1 }).lean();
   const acts = await Act.find({ through: beingId }).sort({ stampedAt: 1 }).lean();
 
-  // Lineage branches: every distinct non-main branch the being touched,
+  // Lineage histories: every distinct non-main history the being touched,
   // plus its ancestor chain, so resolveHistoryLineage resolves on the
   // target. Main ("0") is implicit (no History row).
   const historySet = new Set();
@@ -697,7 +697,7 @@ async function captureBeingGraft(opts) {
   }
   const branches = [...historyById.values()];
 
-  // Per-branch heads (the being's reel + act-chain tips). Include main.
+  // Per-history heads (the being's reel + act-chain tips). Include main.
   const allHistories = [...new Set([...historySet, "0", ...historyById.keys()])];
   const reelKeys = allHistories.map((br) => reelKey(br, "being", beingId));
   const actKeys = allHistories.map((br) => actHeadKey(br, beingId));
@@ -705,7 +705,7 @@ async function captureBeingGraft(opts) {
   const actHeads = await ActHead.find({ _id: { $in: actKeys } }).lean();
 
   // Lineage refs from the being's current projection.
-  const slot = await loadOrFold("being", beingId, opts.branch || "0");
+  const slot = await loadOrFold("being", beingId, opts.history || "0");
   const lineage = {
     parentBeingId: slot?.state?.parentBeingId ?? null,
     homeStory: slot?.state?.homeStory ?? story,
@@ -760,7 +760,7 @@ async function captureBeingGraft(opts) {
     bundle.meta.graftSig = { signerId: rid.storyId, value: signData(graftRoot) };
   } catch { /* unsigned extract (advisory) */ }
 
-  log.info("Graft", `captured being ${beingId.slice(0, 12)}… — ${facts.length} fact(s), ${acts.length} act(s), ${branches.length} lineage branch(es)`);
+  log.info("Graft", `captured being ${beingId.slice(0, 12)}… — ${facts.length} fact(s), ${acts.length} act(s), ${branches.length} lineage history(ies)`);
   return { bundle };
 }
 
@@ -777,16 +777,16 @@ async function captureBeingGraft(opts) {
  *     GENESIS, so it carries the being's birth and verifies/folds with the
  *     stock verifyReel (no anchor). A later full/longer graft MERGES the tail.
  *
- *   "checkpoint-segment" — a contiguous SUFFIX [fromSeq..toSeq] on one branch,
+ *   "checkpoint-segment" — a contiguous SUFFIX [fromSeq..toSeq] on one history,
  *     anchored at the head hash of the fact immediately before fromSeq (carried
  *     as a signed checkpoint, NOT the fact itself). Verifies with the Phase-2
  *     verifyReelFrom seeded at that anchor. "Bring my recent history, provably
  *     mine, without my whole life" — a verifiable reference import.
  *
  *   "single-branch"      — every fact of the being that LIVES on one fork
- *     (branch === opts.branch, a non-main path), anchored at the FORK-POINT
+ *     (history === opts.history, a non-main path), anchored at the FORK-POINT
  *     head on the parent. The fork's lineage History rows ride along so the
- *     receiver resolves the branch and verifyReelFrom checks only the fork's
+ *     receiver resolves the history and verifyReelFrom checks only the fork's
  *     slice. "Bring one project's worth of my activity." Same anchored verify
  *     as checkpoint-segment, with a branchPoint anchor + carried lineage.
  *
@@ -802,9 +802,9 @@ async function captureBeingGraft(opts) {
  * meta.partial declares the shape so the receiver knows what is missing and how
  * to answer history queries beyond the extract.
  *
- * @param {object} opts { beingId, mechanism?, cutoffSeq, fromSeq?, toSeq?, branch?, beyondExtract?, capturedBy? }
+ * @param {object} opts { beingId, mechanism?, cutoffSeq, fromSeq?, toSeq?, history?, beyondExtract?, capturedBy? }
  *   genesis-prefix needs cutoffSeq; checkpoint-segment needs fromSeq (>=2);
- *   single-branch needs branch (a non-main fork); state-snapshot needs neither.
+ *   single-branch needs history (a non-main fork); state-snapshot needs neither.
  * @returns {Promise<{ bundle }>}
  */
 export async function capturePartialGraft(opts = {}) {
@@ -815,7 +815,7 @@ export async function capturePartialGraft(opts = {}) {
   if (!KNOWN.includes(mechanism)) {
     throw new Error(`capturePartialGraft: mechanism must be one of ${KNOWN.join(" / ")}`);
   }
-  const branch = opts.branch || "0";
+  const history = opts.history || "0";
   const story = getStoryDomain() || null;
   const { reelKey } = await import("../../past/reel/reelHeads.js");
   const { graftRootFromParts } = await import("../../past/fact/chainRoots.js");
@@ -829,17 +829,17 @@ export async function capturePartialGraft(opts = {}) {
   // (a `snapshot` block, empty reel/act collections), so it returns early. ──
   if (mechanism === "state-snapshot") {
     const { computeHash, GENESIS_PREV } = await import("../../past/fact/hash.js");
-    const snap = await loadOrFold("being", beingId, branch);
+    const snap = await loadOrFold("being", beingId, history);
     if (!snap || !snap.state || Object.keys(snap.state).length === 0) {
-      throw new Error(`capturePartialGraft: being ${beingId.slice(0, 10)}… does not fold on branch ${branch} (nothing to snapshot)`);
+      throw new Error(`capturePartialGraft: being ${beingId.slice(0, 10)}… does not fold on history ${history} (nothing to snapshot)`);
     }
-    const reelHeadRow = await ReelHead.findById(reelKey(branch, "being", beingId)).lean();
+    const reelHeadRow = await ReelHead.findById(reelKey(history, "being", beingId)).lean();
     const atHead = reelHeadRow?.headHash || GENESIS_PREV;
     const atSeq = reelHeadRow?.head ?? null;
     const state = snap.state;
     // Hash the state, then bind it, the head, and the being into one signed root.
     const stateHash = computeHash(GENESIS_PREV, state);
-    const snapshotRoot = computeHash(GENESIS_PREV, { kind: "state-snapshot", beingId, branch, atHead, atSeq, stateHash });
+    const snapshotRoot = computeHash(GENESIS_PREV, { kind: "state-snapshot", beingId, history, atHead, atSeq, stateHash });
     const bundle = {
       kind: "graft",
       bundleVersion: GRAFT_BUNDLE_VERSION,
@@ -850,10 +850,10 @@ export async function capturePartialGraft(opts = {}) {
         beingId,
         lineage: { parentBeingId: state.parentBeingId ?? null, homeStory: state.homeStory ?? story },
         graftRoot: snapshotRoot,
-        partial: { mechanism: "state-snapshot", branch, atHead, atSeq, stateHash, beyondExtract: opts.beyondExtract || "refuse" },
+        partial: { mechanism: "state-snapshot", history, atHead, atSeq, stateHash, beyondExtract: opts.beyondExtract || "refuse" },
         counts: { facts: 0, acts: 0, branches: 0, reelHeads: 0, actHeads: 0 },
       },
-      snapshot: { state, branch, atHead, atSeq },
+      snapshot: { state, history, atHead, atSeq },
       facts: [], acts: [], branches: [], reelHeads: [], actHeads: [], casBlobs: {}, casManifest: { included: [], omitted: [] },
     };
     try {
@@ -867,23 +867,23 @@ export async function capturePartialGraft(opts = {}) {
   // ── reel-based mechanisms (genesis-prefix / checkpoint-segment / single-
   // branch): capture the chosen range of the being's reel + the partial
   // descriptor declaring its shape, plus (single-branch) the fork's lineage
-  // History rows so the receiver can resolve and verify the branch. ──
+  // History rows so the receiver can resolve and verify the history. ──
   let facts, partialMeta;
-  let captureHistory = branch;
+  let captureHistory = history;
   let historiesToCarry = [];
   if (mechanism === "genesis-prefix") {
     const cutoffSeq = Number(opts.cutoffSeq);
     if (!(Number.isInteger(cutoffSeq) && cutoffSeq > 0)) {
       throw new Error("capturePartialGraft: cutoffSeq must be a positive integer");
     }
-    // The being's reel on `branch`, seq 1..cutoff — a genesis-rooted prefix.
-    facts = await Fact.find({ "of.kind": "being", "of.id": beingId, history: branch, seq: { $lte: cutoffSeq } }).sort({ seq: 1 }).lean();
+    // The being's reel on `history`, seq 1..cutoff — a genesis-rooted prefix.
+    facts = await Fact.find({ "of.kind": "being", "of.id": beingId, history: history, seq: { $lte: cutoffSeq } }).sort({ seq: 1 }).lean();
     if (facts.length === 0) {
-      throw new Error(`capturePartialGraft: no facts on being ${beingId.slice(0, 10)}… reel (branch ${branch}) at or before seq ${cutoffSeq}`);
+      throw new Error(`capturePartialGraft: no facts on being ${beingId.slice(0, 10)}… reel (history ${history}) at or before seq ${cutoffSeq}`);
     }
-    partialMeta = { mechanism: "genesis-prefix", branch, cutoffSeq: facts[facts.length - 1].seq, beyondExtract: opts.beyondExtract || "refuse" };
+    partialMeta = { mechanism: "genesis-prefix", history, cutoffSeq: facts[facts.length - 1].seq, beyondExtract: opts.beyondExtract || "refuse" };
   } else if (mechanism === "checkpoint-segment") {
-    // A contiguous SUFFIX [fromSeq..toSeq?] on `branch`. fromSeq must be >= 2
+    // A contiguous SUFFIX [fromSeq..toSeq?] on `history`. fromSeq must be >= 2
     // (fromSeq 1 IS a genesis-prefix). The anchor is the prev-hash the first
     // segment fact already chains to — carried as the checkpoint; the fact
     // before fromSeq is NOT included.
@@ -893,38 +893,38 @@ export async function capturePartialGraft(opts = {}) {
     }
     const seqFilter = { $gte: fromSeq };
     if (opts.toSeq != null) seqFilter.$lte = Number(opts.toSeq);
-    facts = await Fact.find({ "of.kind": "being", "of.id": beingId, history: branch, seq: seqFilter }).sort({ seq: 1 }).lean();
+    facts = await Fact.find({ "of.kind": "being", "of.id": beingId, history: history, seq: seqFilter }).sort({ seq: 1 }).lean();
     if (facts.length === 0) {
-      throw new Error(`capturePartialGraft: no facts on being ${beingId.slice(0, 10)}… reel (branch ${branch}) at seq ${fromSeq}..`);
+      throw new Error(`capturePartialGraft: no facts on being ${beingId.slice(0, 10)}… reel (history ${history}) at seq ${fromSeq}..`);
     }
     if (facts[0].seq !== fromSeq) {
       throw new Error(`capturePartialGraft: reel has no fact at seq ${fromSeq} (a checkpoint-segment must be contiguous from fromSeq)`);
     }
     const anchorPrev = String(facts[0].p);
     partialMeta = {
-      mechanism: "checkpoint-segment", branch, fromSeq, cutoffSeq: facts[facts.length - 1].seq,
+      mechanism: "checkpoint-segment", history, fromSeq, cutoffSeq: facts[facts.length - 1].seq,
       // The signed checkpoint: "at seq fromSeq-1 this reel's head was anchorPrev."
       // The receiver seeds verifyReelFrom here; the value is committed
       // transitively by the segment chain, so graftSig already vouches it.
-      checkpoint: { branch, seq: fromSeq - 1, headHash: anchorPrev },
+      checkpoint: { history, seq: fromSeq - 1, headHash: anchorPrev },
       beyondExtract: opts.beyondExtract || "refuse",
     };
   } else {
-    // single-branch: every fact of the being that LIVES on a fork (branch ===
+    // single-branch: every fact of the being that LIVES on a fork (history ===
     // targetHistory), the divergent slice after the fork point. The inherited
     // parent prefix is shared history the being already holds on the parent
     // line and is NOT brought. Anchored at the fork-point head (the prev-hash
     // the fork's first fact chains to). The fork's lineage History rows ride
     // along so the receiver can resolveHistoryLineage + verifyReelFrom on it.
     const { isMain, loadHistory } = await import("../history/histories.js");
-    const targetHistory = opts.branch;
+    const targetHistory = opts.history;
     if (!targetHistory || isMain(targetHistory)) {
-      throw new Error("capturePartialGraft: single-branch requires a non-main branch (main is the trunk — use genesis-prefix or checkpoint-segment there)");
+      throw new Error("capturePartialGraft: single-branch requires a non-main history (main is the trunk — use genesis-prefix or checkpoint-segment there)");
     }
     captureHistory = targetHistory;
     facts = await Fact.find({ "of.kind": "being", "of.id": beingId, history: targetHistory }).sort({ seq: 1 }).lean();
     if (facts.length === 0) {
-      throw new Error(`capturePartialGraft: being ${beingId.slice(0, 10)}… has no facts on branch ${targetHistory}`);
+      throw new Error(`capturePartialGraft: being ${beingId.slice(0, 10)}… has no facts on history ${targetHistory}`);
     }
     const anchorPrev = String(facts[0].p);
     const fromSeq = facts[0].seq;
@@ -940,16 +940,16 @@ export async function capturePartialGraft(opts = {}) {
     }
     const parentHistory = historiesToCarry[0]?.parent != null ? String(historiesToCarry[0].parent) : "0";
     partialMeta = {
-      mechanism: "single-branch", branch: targetHistory, fromSeq, cutoffSeq: facts[facts.length - 1].seq,
+      mechanism: "single-branch", history: targetHistory, fromSeq, cutoffSeq: facts[facts.length - 1].seq,
       // The fork-point anchor: at the parent's head where this branch split, the
       // reel head was anchorPrev (the fork's first fact chains to it).
-      checkpoint: { branch: parentHistory, seq: fromSeq - 1, headHash: anchorPrev },
+      checkpoint: { history: parentHistory, seq: fromSeq - 1, headHash: anchorPrev },
       beyondExtract: opts.beyondExtract || "refuse",
     };
   }
 
   const head = facts[facts.length - 1];
-  // A reelHead AT the captured tip (on the capture branch), so the landed
+  // A reelHead AT the captured tip (on the capture history), so the landed
   // extract records its lawful tip and a later graft can advance from it.
   const reelHeads = [{ _id: reelKey(captureHistory, "being", beingId), type: "being", id: beingId, history: captureHistory, head: head.seq, headHash: String(head._id) }];
 
@@ -980,7 +980,7 @@ export async function capturePartialGraft(opts = {}) {
   const logLine = {
     "genesis-prefix":     `captured genesis-prefix of being ${beingId.slice(0, 12)}… — seq 1..${head.seq} (${facts.length} fact(s))`,
     "checkpoint-segment": `captured checkpoint-segment of being ${beingId.slice(0, 12)}… — seq ${partialMeta.fromSeq}..${head.seq} anchored at ${String(facts[0].p).slice(0, 10)}… (${facts.length} fact(s))`,
-    "single-branch":      `captured single-branch of being ${beingId.slice(0, 12)}… — branch ${captureHistory} seq ${partialMeta.fromSeq}..${head.seq}, ${historiesToCarry.length} lineage branch(es) (${facts.length} fact(s))`,
+    "single-branch":      `captured single-branch of being ${beingId.slice(0, 12)}… — history ${captureHistory} seq ${partialMeta.fromSeq}..${head.seq}, ${historiesToCarry.length} lineage history(ies) (${facts.length} fact(s))`,
   }[mechanism];
   log.info("Graft", logLine);
   return { bundle };
@@ -989,7 +989,7 @@ export async function capturePartialGraft(opts = {}) {
 /**
  * Apply a being-graft bundle into THIS (living) story, preserving the
  * being's identity verbatim. NO id remapping — the pubkey id and every
- * fact/act hash land byte-identical (the digest binds branch + provenance,
+ * fact/act hash land byte-identical (the digest binds history + provenance,
  * so re-homing is impossible; an imported chain is foreign by construction
  * and goes in by verbatim insert, never emitFact).
  *
@@ -1002,7 +1002,7 @@ export async function capturePartialGraft(opts = {}) {
  * @param {object} bundle              a being-graft bundle (meta.beingId set)
  * @param {object} opts
  * @param {string} opts.operatorBeingId who is grafting (for the audit fact)
- * @param {string} [opts.branch="0"]    the branch the audit fact rides
+ * @param {string} [opts.history="0"]    the history the audit fact rides
  * @returns {Promise<{ beingId, mode, counts, verified }>}
  */
 export async function applyGraft(bundle, opts = {}) {
@@ -1019,7 +1019,7 @@ export async function applyGraft(bundle, opts = {}) {
   if (bundle.meta?.partial?.mechanism === "state-snapshot") {
     return await applyStateSnapshot(bundle, opts);
   }
-  const branch = opts.branch || "0";
+  const history = opts.history || "0";
   const { computeHash, contentOf, GENESIS_PREV } = await import("../../past/fact/hash.js");
   const { computeActId, contentOfAct } = await import("../../past/act/actHash.js");
   const { default: ActHead } = await import("../../past/act/actHead.js");
@@ -1115,8 +1115,8 @@ export async function applyGraft(bundle, opts = {}) {
   const mode = haveFacts.size === 0 ? "create" : (newFacts.length === 0 ? "idempotent" : "merge");
 
   // ── 6. Reel-divergence gate (cold) ──
-  // A (branch, seq) on the being's reel that the target already holds with
-  // DIFFERENT content (different _id) is a FORK. The unique (branch, target,
+  // A (history, seq) on the being's reel that the target already holds with
+  // DIFFERENT content (different _id) is a FORK. The unique (history, target,
   // seq) index would throw mid-insert; catch it cold and refuse — a graft
   // preserves the reel verbatim, it never forks it.
   if (newFacts.length > 0) {
@@ -1127,7 +1127,7 @@ export async function applyGraft(bundle, opts = {}) {
     for (const e of clash) {
       const want = wantBySeq.get(`${String(e.history ?? "0")}:${e.seq}`);
       if (want && want !== String(e._id)) {
-        throw new Error(`applyGraft: REEL DIVERGENCE — target already holds (branch ${e.history ?? "0"}, seq ${e.seq}) with different content. Refusing (a graft preserves the reel verbatim).`);
+        throw new Error(`applyGraft: REEL DIVERGENCE — target already holds (history ${e.history ?? "0"}, seq ${e.seq}) with different content. Refusing (a graft preserves the reel verbatim).`);
       }
     }
   }
@@ -1205,22 +1205,22 @@ export async function applyGraft(bundle, opts = {}) {
     }
 
     // ── 10. Verify the landed chain (verbatim heads must reproduce). Verify
-    // every branch that received a fact/act, not just the ones with a
-    // captured head row (a fact on a head-less branch must verify too). ──
+    // every history that received a fact/act, not just the ones with a
+    // captured head row (a fact on a head-less history must verify too). ──
     const { verifyActChain } = await import("../../past/act/actHash.js");
     const partial = bundle.meta?.partial;
     if (partial?.mechanism === "checkpoint-segment" || partial?.mechanism === "single-branch") {
       // A non-genesis-rooted segment, anchored at a signed checkpoint hash:
-      //   checkpoint-segment — anchor is an earlier head on the SAME branch.
+      //   checkpoint-segment — anchor is an earlier head on the SAME history.
       //   single-branch      — anchor is the fork-point head on the PARENT.
       // Both verify with the Phase-2 verifyReelFrom seeded at that anchor (the
-      // branch's lineage History rows landed in step 7, so the range resolves).
+      // history's lineage History rows landed in step 7, so the range resolves).
       // The anchor is committed transitively by the segment chain → graftRoot →
       // graftSig (verified cold in step 1), so a tampered anchor cannot survive.
       // Genesis-rooted verifyReel would (correctly) seq-gap here.
       const { verifyReelFrom } = await import("../../past/fact/verifyReelFrom.js");
       const cp = partial.checkpoint || {};
-      const segHistory = partial.branch || branch;
+      const segHistory = partial.history || history;
       const v = await verifyReelFrom("being", beingId, segHistory, { fromSeq: partial.fromSeq, anchorPrev: String(cp.headHash || GENESIS_PREV) });
       if (!v.ok) throw new Error(`applyGraft: POST-GRAFT segment verification FAILED on being:${beingId.slice(0, 8)}@${segHistory} (${v.reason} at ${v.brokenAt}); anchor ${String(cp.headHash || "").slice(0, 10)}….`);
     } else {
@@ -1266,8 +1266,8 @@ export async function applyGraft(bundle, opts = {}) {
     // Failure audit (operator's reel, single-writer). Logged, never silent —
     // a swallowed audit is how the missing import hid.
     try {
-      await withBeingAct(opts.operatorBeingId, "graft-being:failed", branch, async (ctx) => {
-        await emitFact({ verb: "do", act: "graft-being-failed", through: opts.operatorBeingId, of: { kind: "being", id: opts.operatorBeingId }, params: { graftedBeing: beingId, sourceStory: bundle.sourceStory || null, error: String(err?.message || err) }, actId: ctx.actId, branch }, ctx);
+      await withBeingAct(opts.operatorBeingId, "graft-being:failed", history, async (ctx) => {
+        await emitFact({ verb: "do", act: "graft-being-failed", through: opts.operatorBeingId, of: { kind: "being", id: opts.operatorBeingId }, params: { graftedBeing: beingId, sourceStory: bundle.sourceStory || null, error: String(err?.message || err) }, actId: ctx.actId, history }, ctx);
       });
     } catch (e) { log.warn("Graft", `failure-audit fact could not be stamped: ${e.message}`); }
     throw err;
@@ -1292,8 +1292,8 @@ export async function applyGraft(bundle, opts = {}) {
   // ── 11. Success audit (operator's reel; single-writer — the grafter
   // records the deed, it must NOT write the grafted being's reel). ──
   try {
-    await withBeingAct(opts.operatorBeingId, "graft-being:completed", branch, async (ctx) => {
-      await emitFact({ verb: "do", act: "graft-being-completed", through: opts.operatorBeingId, of: { kind: "being", id: opts.operatorBeingId }, params: { graftedBeing: beingId, sourceStory: bundle.sourceStory || null, mode, counts, partial: bundle.meta?.partial || null }, actId: ctx.actId, branch }, ctx);
+    await withBeingAct(opts.operatorBeingId, "graft-being:completed", history, async (ctx) => {
+      await emitFact({ verb: "do", act: "graft-being-completed", through: opts.operatorBeingId, of: { kind: "being", id: opts.operatorBeingId }, params: { graftedBeing: beingId, sourceStory: bundle.sourceStory || null, mode, counts, partial: bundle.meta?.partial || null }, actId: ctx.actId, history }, ctx);
     });
   } catch (e) { log.warn("Graft", `completion-audit fact could not be stamped: ${e.message}`); }
 
@@ -1323,7 +1323,7 @@ async function applyStateSnapshot(bundle, opts = {}) {
   if (!opts.operatorBeingId) throw new Error("applyStateSnapshot: opts.operatorBeingId is required (the grafter, for the audit fact)");
   const partial = bundle.meta?.partial || {};
   const snap = bundle.snapshot || {};
-  const branch = partial.branch || snap.branch || "0";
+  const history = partial.history || snap.history || "0";
   const { computeHash, GENESIS_PREV } = await import("../../past/fact/hash.js");
   const { withBeingAct } = await import("../../sprout.js");
   const { emitFact } = await import("../../past/fact/facts.js");
@@ -1347,7 +1347,7 @@ async function applyStateSnapshot(bundle, opts = {}) {
   if (stateHash !== partial.stateHash) {
     throw new Error(`applyStateSnapshot: STATE HASH MISMATCH — state hashes ${stateHash.slice(0, 12)}… but the attestation says ${String(partial.stateHash).slice(0, 12)}…. Refusing.`);
   }
-  const reproduced = computeHash(GENESIS_PREV, { kind: "state-snapshot", beingId, branch, atHead: partial.atHead, atSeq: partial.atSeq, stateHash });
+  const reproduced = computeHash(GENESIS_PREV, { kind: "state-snapshot", beingId, history, atHead: partial.atHead, atSeq: partial.atSeq, stateHash });
   if (reproduced !== bundle.meta.graftRoot) {
     throw new Error(`applyStateSnapshot: SNAPSHOT ROOT MISMATCH — parts reproduce ${reproduced.slice(0, 12)}… but the signed root is ${String(bundle.meta.graftRoot).slice(0, 12)}…. Refusing.`);
   }
@@ -1361,7 +1361,7 @@ async function applyStateSnapshot(bundle, opts = {}) {
   // ── 4. Land the attested projection, marked so reads know it is a snapshot
   // (no history) and a later real graft can recognize and supersede it. ──
   const { initProjection, loadProjection } = await import("../projections.js");
-  const existing = await loadProjection("being", beingId, branch);
+  const existing = await loadProjection("being", beingId, history);
   const mode = existing ? "refresh" : "create";
   const attestedState = {
     ...state,
@@ -1374,7 +1374,7 @@ async function applyStateSnapshot(bundle, opts = {}) {
       signer: bundle.meta?.graftSig?.signerId || null,
     },
   };
-  await initProjection("being", beingId, branch, {
+  await initProjection("being", beingId, history, {
     state: attestedState,
     foldedSeq: typeof partial.atSeq === "number" ? partial.atSeq : 0,
     position: state.position ?? null,
@@ -1382,8 +1382,8 @@ async function applyStateSnapshot(bundle, opts = {}) {
 
   // ── 5. Success audit (operator's reel; single-writer). ──
   try {
-    await withBeingAct(opts.operatorBeingId, "graft-being:snapshot", branch, async (ctx) => {
-      await emitFact({ verb: "do", act: "graft-being-completed", through: opts.operatorBeingId, of: { kind: "being", id: opts.operatorBeingId }, params: { graftedBeing: beingId, sourceStory: bundle.sourceStory || null, mode, counts: { facts: 0, acts: 0 }, partial }, actId: ctx.actId, branch }, ctx);
+    await withBeingAct(opts.operatorBeingId, "graft-being:snapshot", history, async (ctx) => {
+      await emitFact({ verb: "do", act: "graft-being-completed", through: opts.operatorBeingId, of: { kind: "being", id: opts.operatorBeingId }, params: { graftedBeing: beingId, sourceStory: bundle.sourceStory || null, mode, counts: { facts: 0, acts: 0 }, partial }, actId: ctx.actId, history }, ctx);
     });
   } catch (e) { log.warn("Graft", `snapshot completion-audit could not be stamped: ${e.message}`); }
 

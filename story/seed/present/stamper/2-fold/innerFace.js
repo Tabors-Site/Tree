@@ -142,7 +142,7 @@ function clampBlock(block, fieldMax) {
  *
  * Inputs:
  *   role . the active role spec
- *   ctx  . { being, beingId, currentSpace, rootId, name, branch,
+ *   ctx  . { being, beingId, currentSpace, rootId, name, history,
  *           orientation, foldedFace } . the moment ctx; foldedFace is
  *           the result of foldPlace at this orientation
  */
@@ -188,9 +188,9 @@ export async function buildInnerFace(role, ctx = {}) {
   // manifest as facts on the being's reel (via qualities.roleFlow);
   // the self entry already covers the role-flip wakeup. If the role
   // primitive ever becomes reel-backed, append it here.
-  const branch = typeof ctx?.history === "string" && ctx.history.length ? ctx.history : "0";
+  const history = typeof ctx?.history === "string" && ctx.history.length ? ctx.history : "0";
   if (weave.length === 0 && ctx?.beingId) {
-    addReel(weave, { reelKind: "being", reelId: String(ctx.beingId), branch });
+    addReel(weave, { reelKind: "being", reelId: String(ctx.beingId), history });
   }
 
   return {

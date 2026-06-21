@@ -306,13 +306,13 @@ async function runLoop(beingId) {
             excludeCorrelations: seenCorrelations,
           });
           if (!picked) break;
-          // Pause / delete gate. Entries land on the picked branch;
-          // if that branch is paused or deleted, running the moment
+          // Pause / delete gate. Entries land on the picked history;
+          // if that history is paused or deleted, running the moment
           // would just hit the wire-layer STORY_PAUSED gate when
           // its downstream DOs fire, leaving the row open and
           // triggering a rate-limit storm. Mark the correlation seen
           // (the pick excludes it for the rest of this pass) and
-          // CONTINUE — rows on other branches behind it stay
+          // CONTINUE — rows on other histories behind it stay
           // drainable. The next pass retries once unpause/undelete
           // lands.
           //
@@ -329,10 +329,10 @@ async function runLoop(beingId) {
           // forking off a paused branch is allowed but forking off a
           // deleted one is not — undelete first if you want that.
           {
-            // intake.pick now asserts row.branch; this fallback is dead.
+            // intake.pick now asserts row.history; this fallback is dead.
             // Keep the bare read so a future intake refactor can't reintroduce
             // a silent default here.
-            const entryHistory = picked.entry.branch;
+            const entryHistory = picked.entry.history;
             const innerAction = picked.entry?.act?.act || null;
             const isPauseLifecycleOp =
               picked.entry?.act?.verb === "do" &&

@@ -51,12 +51,12 @@ async function handleSetBeingCoord(fact /*, type, id*/) {
 
   // Resolve which space this coord belongs in. The fact carries the
   // being's reel only; the being's current `position` names the
-  // space the coord is within. Branch-aware: a fact on #1 lives in
-  // #1's projection slot. logFact refuses any fact without branch;
-  // a missing branch here is upstream-broken and we want it loud.
+  // space the coord is within. History-aware: a fact on #1 lives in
+  // #1's projection slot. logFact refuses any fact without history;
+  // a missing history here is upstream-broken and we want it loud.
   const { loadOrFold, assertHistoryOrThrow } = await import("../../../materials/projections.js");
-  const branch = assertHistoryOrThrow(fact.history, "positionProjectionFold(set-coord)");
-  const slot = await loadOrFold("being", beingId, branch);
+  const history = assertHistoryOrThrow(fact.history, "positionProjectionFold(set-coord)");
+  const slot = await loadOrFold("being", beingId, history);
   const spaceId = slot?.position ? String(slot.position) : null;
   if (!spaceId) return;
 

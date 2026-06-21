@@ -21,7 +21,7 @@ export const COORD_AXES = ["x", "y", "z"];
  * IbpError(INVALID_INPUT) on an out-of-bounds axis — the fact never
  * seals.
  */
-export async function assertMatterCoordInBounds(matterDoc, raw, branch = "0") {
+export async function assertMatterCoordInBounds(matterDoc, raw, history = "0") {
   const out = {};
   for (const a of COORD_AXES) {
     if (typeof raw[a] === "number" && Number.isFinite(raw[a])) {
@@ -32,7 +32,7 @@ export async function assertMatterCoordInBounds(matterDoc, raw, branch = "0") {
   const spaceId = matterDoc?.spaceId || null;
   if (!spaceId || spaceId === "deleted") return out;
   const { loadOrFold } = await import("../projections.js");
-  const spaceSlot = await loadOrFold("space", spaceId, branch);
+  const spaceSlot = await loadOrFold("space", spaceId, history);
   const size = spaceSlot?.state?.size || null;
   if (!size) return out;
   for (const a of COORD_AXES) {

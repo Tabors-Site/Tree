@@ -15,7 +15,7 @@
 // Shape (one entry).
 //   { reelKind: "being" | "space" | "matter",
 //     reelId:   string,
-//     branch:   string }
+//     history:  string }
 //
 // Roles are not reel-backed today (the role registry is an in-memory
 // Map populated by registerRole, not a fact-chain). Role flips
@@ -38,11 +38,11 @@
 //   Within each contributor entries are appended in encounter order;
 //   mergeWeaves preserves the union without resorting.
 //
-// Branch is included on every entry because the same (kind, id) can
-// live on multiple branches and a fact lands on exactly one.
+// History is included on every entry because the same (kind, id) can
+// live on multiple histories and a fact lands on exactly one.
 //
 // Canonical key.
-//   reelKey({ reelKind, reelId, branch }) = `${branch}|${reelKind}|${reelId}`
+//   reelKey({ reelKind, reelId, history }) = `${history}|${reelKind}|${reelId}`
 //
 // Entries are deduplicated by reelKey on insert. Encoded for wire as
 // the same JSON array; no canonicalization beyond stable ordering.
@@ -68,10 +68,10 @@ export function emptyWeave() {
  */
 export function reelKey(entry) {
   if (!entry || typeof entry !== "object") return "";
-  const branch   = typeof entry.branch   === "string" ? entry.branch   : "";
+  const history  = typeof entry.history  === "string" ? entry.history  : "";
   const reelKind = typeof entry.reelKind === "string" ? entry.reelKind : "";
   const reelId   = entry.reelId != null ? String(entry.reelId) : "";
-  return `${branch}|${reelKind}|${reelId}`;
+  return `${history}|${reelKind}|${reelId}`;
 }
 
 /**
@@ -83,9 +83,9 @@ function normalizeEntry(entry) {
   if (!entry || typeof entry !== "object") return null;
   const reelKind = typeof entry.reelKind === "string" ? entry.reelKind : null;
   const reelId   = entry.reelId != null ? String(entry.reelId) : null;
-  const branch   = typeof entry.branch === "string" ? entry.branch : null;
-  if (!reelKind || !reelId || !branch) return null;
-  return { reelKind, reelId, branch };
+  const history  = typeof entry.history === "string" ? entry.history : null;
+  if (!reelKind || !reelId || !history) return null;
+  return { reelKind, reelId, history };
 }
 
 /**

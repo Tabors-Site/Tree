@@ -33,8 +33,8 @@ import log from "../../../seedStory/log.js";
 
 const REEL_TYPES = new Set(["being", "space", "matter", "name"]);
 
-// Name-collision self-heal. The per-branch unique index on
-// (branch, type, state.name) is a backstop on a CACHE — when two live
+// Name-collision self-heal. The per-history unique index on
+// (history, type, state.name) is a backstop on a CACHE — when two live
 // reels of one type collide on name (the pre-stamp check is per-op,
 // no cross-reel lock), the facts have already committed and the chain
 // is the truth. Refusing to materialize the second slot would poison
@@ -117,54 +117,54 @@ function assertType(type) {
  *     the world as of seq N" semantic: a target seq is the last
  *     fact I want applied, not the first I want excluded.
  *
- * ── Branch semantics ─────────────────────────────────────────────
+ * ── History semantics ────────────────────────────────────────────
  *
- * Reading a reel in branch B is "main's facts up to main's branchPoint
+ * Reading a reel in history B is "main's facts up to main's branchPoint
  * for this reel, plus #X's facts up to #X's branchPoint for this reel
  * (for every X in lineage main→B), plus B's own divergent facts." For
- * branch "0" (main) the body short-circuits to a single-branch query
- * filtered to main's own facts (pre-Pass-2 rows without a `branch`
+ * history "0" (main) the body short-circuits to a single-history query
+ * filtered to main's own facts (pre-Pass-2 rows without a `history`
  * field count as main).
  *
- * For non-main branches the body walks `resolveHistoryLineage(branch)`
+ * For non-main histories the body walks `resolveHistoryLineage(history)`
  * once, then runs a single OR-of-ranges query against the Fact
  * collection — each ancestor contributes the seqs it OWNS for this
- * reel (between its own branchPoint and the next branch up's
+ * reel (between its own branchPoint and the next history up's
  * branchPoint, or untilSeq for the leaf).
  *
  * @param {string} type
  * @param {string} id
  * @param {number|null} afterSeq         EXCLUSIVE lower bound; null = from beginning
  * @param {number|null} untilSeq         INCLUSIVE upper bound; null = to the end
- * @param {string}      [branch="0"]     branch identifier (default "0" = main)
+ * @param {string}      [history="0"]    history identifier (default "0" = main)
  * @returns {Promise<Array<object>>}
  */
-export async function readReelBetween(type, id, afterSeq, untilSeq, branch) {
-  if (typeof branch !== "string" || !branch.length) {
+export async function readReelBetween(type, id, afterSeq, untilSeq, history) {
+  if (typeof history !== "string" || !history.length) {
     throw new Error(
-      `readReelBetween: branch is required (got ${JSON.stringify(branch)}). ` +
-      `Pass the moment's branch explicitly; no silent default to main.`,
+      `readReelBetween: history is required (got ${JSON.stringify(history)}). ` +
+      `Pass the moment's history explicitly; no silent default to main.`,
     );
   }
   // Heaven routing: spaces in heaven have one reel per story, no
   // lineage. A non-MAIN read against a heaven space rewrites to
   // MAIN so the reel walk hits the canonical story-level fact
-  // stream regardless of caller's branch.
-  if (type === "space" && branch !== "0") {
+  // stream regardless of caller's history.
+  if (type === "space" && history !== "0") {
     const { isHeavenSpace } = await import("../../../materials/space/heavenLineage.js");
-    if (await isHeavenSpace(id)) branch = "0";
+    if (await isHeavenSpace(id)) history = "0";
   }
-  // Main short-circuit: one branch, no lineage walk. The branch
-  // filter is REQUIRED here — branches share the seq number space
+  // Main short-circuit: one history, no lineage walk. The history
+  // filter is REQUIRED here — histories share the seq number space
   // (each seeded from its parent's branchPoint), so without it a
-  // main read swallows other branches' facts: main's state folds in
-  // foreign-branch events and main's foldedSeq jumps to the global
+  // main read swallows other histories' facts: main's state folds in
+  // foreign-history events and main's foldedSeq jumps to the global
   // max, leaving main's OWN later facts below the marker and
   // invisible to every subsequent fold (acts on main silently stop
-  // materializing). Legacy pre-Pass-2 rows that lack the `branch`
+  // materializing). Legacy pre-Pass-2 rows that lack the `history`
   // field participate via $exists:false — the same clause the
   // lineage path below uses for its main segment.
-  if (isMain(branch)) {
+  if (isMain(history)) {
     const seqFilter = { $type: "number" };
     if (typeof afterSeq === "number") seqFilter.$gt  = afterSeq;
     if (typeof untilSeq === "number") seqFilter.$lte = untilSeq;
@@ -178,10 +178,10 @@ export async function readReelBetween(type, id, afterSeq, untilSeq, branch) {
 
   // Non-main: walk the lineage and build a per-ancestor range query.
   // The lineage is ordered main → leaf (e.g. ["0", "1", "1a", "1a1"]).
-  // For each branch X in that list, X owns the seqs from its own
+  // For each history X in that list, X owns the seqs from its own
   // branchPoint (or 1 for main) up to (but not including) the NEXT
-  // branch's branchPoint — OR up to untilSeq if X is the leaf.
-  const lineage = await resolveHistoryLineage(branch);
+  // history's branchPoint — OR up to untilSeq if X is the leaf.
+  const lineage = await resolveHistoryLineage(history);
 
   // Compute each ancestor's owned [lo, hi] seq range for this reel.
   // The leaf inherits the global upper bound (untilSeq). Each non-leaf
@@ -207,8 +207,8 @@ export async function readReelBetween(type, id, afterSeq, untilSeq, branch) {
   }
   if (ranges.length === 0) return [];
 
-  // Build the OR-of-ranges query. Each clause filters by branch and
-  // its seq range. For main rows that lack the `branch` field, match
+  // Build the OR-of-ranges query. Each clause filters by history and
+  // its seq range. For main rows that lack the `history` field, match
   // via `$in: ["0", null, undefined]` ($exists:false) so pre-Pass-2
   // data participates in lineages that include main.
   const orClauses = ranges.map(({ history: b, lower, upper }) => {
@@ -258,31 +258,34 @@ export async function fold(type, id, opts = {}) {
   assertType(type);
   if (!id) throw new Error("fold: id is required");
   const skipCrossCutting = opts.skipCrossCutting === true;
+  // SEAM: opts key stays `branch` (the foldEngine/descriptor convention;
+  // facts.js + projections.js callers pass `branch`); the value is the
+  // history slot.
   if (typeof opts.branch !== "string" || !opts.branch.length) {
     throw new Error(
       `fold: opts.branch is required (got ${JSON.stringify(opts.branch)}). ` +
-      `Pass it from the fact's branch or the wire layer; in-moment callers ` +
+      `Pass it from the fact's history or the wire layer; in-moment callers ` +
       `derive it from moment.actorAct.history or the target's address.`,
     );
   }
-  const branch = opts.branch;
+  const history = opts.branch;
 
-  const slot = await loadProjection(type, id, branch);
+  const slot = await loadProjection(type, id, history);
   if (!slot) {
-    // No slot in this branch yet. Cold-fold via lineage-aware
+    // No slot in this history yet. Cold-fold via lineage-aware
     // readReelBetween (Pass 2 substrate) and land via initProjection.
     // rebuild defaults cross-cutting OFF: this walk is a replay of
     // committed history into a fresh cache slot, not fact arrival.
     return await rebuild(type, id, opts);
   }
   if (slot.tombstoned) {
-    // Released in this branch. No further folding; the aggregate is
+    // Released in this history. No further folding; the aggregate is
     // gone here. Return the marker state so callers can render
-    // "gone-in-this-branch" cleanly.
+    // "gone-in-this-history" cleanly.
     return { state: slot.state, foldedSeq: slot.foldedSeq ?? 0, tombstoned: true };
   }
 
-  const tail = await readReelBetween(type, id, slot.foldedSeq, null, branch);
+  const tail = await readReelBetween(type, id, slot.foldedSeq, null, history);
   if (tail.length === 0) {
     // Hot path: nothing new since last fold. Cache read, no write.
     return { state: slot.state, foldedSeq: slot.foldedSeq ?? 0 };
@@ -296,9 +299,9 @@ export async function fold(type, id, opts = {}) {
   }
   const newFoldedSeq = tail[tail.length - 1].seq;
 
-  // Gone-in-this-branch (reducer-owned predicate, e.g. ended matter's
+  // Gone-in-this-history (reducer-owned predicate, e.g. ended matter's
   // spaceId=DELETED sentinel). Tombstone instead of saving: the slot
-  // leaves the per-branch unique name index (freeing the name for
+  // leaves the per-history unique name index (freeing the name for
   // re-creation) and findByName/listByType stop returning it. The
   // reel keeps the full history; only the cache slot is closed.
   if (typeof reducer.isGone === "function" && reducer.isGone(state)) {
@@ -306,17 +309,17 @@ export async function fold(type, id, opts = {}) {
     // (e.g. ended matter's spaceId=DELETED) is the chain's truth, and
     // consumers reading the slot should see it. The tombstone frees
     // the name index and drops the slot from findByName/listByType.
-    await tombstoneProjection(type, id, branch, newFoldedSeq, { state });
+    await tombstoneProjection(type, id, history, newFoldedSeq, { state });
     return { state, foldedSeq: newFoldedSeq, tombstoned: true };
   }
 
   const position = state.position !== undefined ? state.position : undefined;
 
   // CAS: only advance if no one beat us. On failure, the next fold
-  // catches up. Per-branch slot — main and #1 don't contend.
+  // catches up. Per-history slot — main and #1 don't contend.
   try {
     await saveProjection(
-      type, id, branch,
+      type, id, history,
       { state, foldedSeq: newFoldedSeq, position },
       slot.foldedSeq,
     );
@@ -325,11 +328,11 @@ export async function fold(type, id, opts = {}) {
     state = deconflictName(state, id);
     log.warn(
       "Fold",
-      `name collision folding ${type} ${String(id).slice(0, 8)} on #${branch}; ` +
+      `name collision folding ${type} ${String(id).slice(0, 8)} on #${history}; ` +
       `materialized as "${state.name}" (see state.nameConflict)`,
     );
     await saveProjection(
-      type, id, branch,
+      type, id, history,
       { state, foldedSeq: newFoldedSeq, position },
       slot.foldedSeq,
     );
@@ -370,23 +373,25 @@ export async function rebuild(type, id, opts = {}) {
   assertType(type);
   if (!id) throw new Error("rebuild: id is required");
   const skipCrossCutting = opts.skipCrossCutting !== false;
+  // SEAM: opts key stays `branch` (foldEngine/descriptor convention); value
+  // is the history slot.
   if (typeof opts.branch !== "string" || !opts.branch.length) {
     throw new Error(
       `rebuild: opts.branch is required (got ${JSON.stringify(opts.branch)}). ` +
-      `Pass it from the fact's branch or the wire layer; in-moment callers ` +
+      `Pass it from the fact's history or the wire layer; in-moment callers ` +
       `derive it from moment.actorAct.history or the target's address.`,
     );
   }
-  const branch = opts.branch;
+  const history = opts.branch;
 
   const reducer = reducers.get(type);
-  // Pass 2 substrate: readReelBetween with a branch returns the
+  // Pass 2 substrate: readReelBetween with a history returns the
   // lineage-aware fact chain (main's facts up to branchPoint plus
-  // this branch's divergent facts, in seq order). For main, returns
-  // every fact on the reel. For a deeper branch, walks the parent
+  // this history's divergent facts, in seq order). For main, returns
+  // every fact on the reel. For a deeper history, walks the parent
   // chain. The reducer doesn't see the lineage; it just sees the
   // ordered facts.
-  const facts = await readReelBetween(type, id, null, null, branch);
+  const facts = await readReelBetween(type, id, null, null, history);
   let state = reducer.initial();
   for (const f of facts) {
     state = reducer.reduce(state, f);
@@ -407,34 +412,34 @@ export async function rebuild(type, id, opts = {}) {
     return { state, foldedSeq: lastSeq };
   }
 
-  // Gone-in-this-branch — same predicate as the hot fold path. A cold
+  // Gone-in-this-history — same predicate as the hot fold path. A cold
   // rebuild of a lineage ending in the gone state must land a
   // TOMBSTONED slot, not a live one: initProjection of an ended
   // matter's name would re-occupy the unique name index and E11000
   // any same-named successor.
   if (typeof reducer.isGone === "function" && reducer.isGone(state)) {
-    await tombstoneProjection(type, id, branch, lastSeq, { state });
+    await tombstoneProjection(type, id, history, lastSeq, { state });
     return { state, foldedSeq: lastSeq, tombstoned: true };
   }
 
   const position = state.position !== undefined ? state.position : undefined;
   try {
-    await initProjection(type, id, branch, { state, foldedSeq: lastSeq, position });
+    await initProjection(type, id, history, { state, foldedSeq: lastSeq, position });
   } catch (err) {
     if (isDupKeyError(err) && !isNameDupError(err)) {
       // _id upsert race: another fold built this slot concurrently.
       // Retry as-is — the slot exists now, the update matches it.
-      await initProjection(type, id, branch, { state, foldedSeq: lastSeq, position });
+      await initProjection(type, id, history, { state, foldedSeq: lastSeq, position });
       return { state, foldedSeq: lastSeq };
     }
     if (!isNameDupError(err)) throw err;
     state = deconflictName(state, id);
     log.warn(
       "Fold",
-      `name collision rebuilding ${type} ${String(id).slice(0, 8)} on #${branch}; ` +
+      `name collision rebuilding ${type} ${String(id).slice(0, 8)} on #${history}; ` +
       `materialized as "${state.name}" (see state.nameConflict)`,
     );
-    await initProjection(type, id, branch, { state, foldedSeq: lastSeq, position });
+    await initProjection(type, id, history, { state, foldedSeq: lastSeq, position });
   }
 
   return { state, foldedSeq: lastSeq };

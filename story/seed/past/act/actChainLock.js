@@ -1,13 +1,13 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Per-(branch, being) act-chain lock. IN-PROCESS ONLY — the same
+// Per-(history, being) act-chain lock. IN-PROCESS ONLY — the same
 // scope warning as past/reel/appendLock.js applies verbatim.
 //
 // An act's identity chains off the head (`p` = ActHead.headHash at
 // open; the next head = the sealed act's _id). Anything that opens
 // and seals acts therefore runs a read-compute-write on the chain:
 //   readActHead → computeActId → ... → sealAct(advance)
-// Two concurrent openers on the same (branch, being) both read the
+// Two concurrent openers on the same (history, being) both read the
 // same head, both compute children of the same `p`, and the second
 // seal silently FORKS the chain (last-writer-wins head).
 //
@@ -40,24 +40,24 @@ import { AsyncLocalStorage } from "async_hooks";
 const _tails = new Map(); // chainKey -> Promise (tail of the chain)
 const _held = new AsyncLocalStorage(); // Set<chainKey> held by this async context
 
-function chainKey(branch, beingId) {
-  return `${branch}:${beingId}`;
+function chainKey(history, beingId) {
+  return `${history}:${beingId}`;
 }
 
 /**
- * Run `fn` while holding the act-chain lock for (branch, beingId).
+ * Run `fn` while holding the act-chain lock for (history, beingId).
  * Callers serialize per chain; different beings — and the same being
- * on different branches (per-branch presents) — run in parallel.
+ * on different histories (per-history presents) — run in parallel.
  * Reentrant within one async context (see header).
  *
  * @template T
- * @param {string} branch
+ * @param {string} history
  * @param {string} beingId
  * @param {() => Promise<T>} fn
  * @returns {Promise<T>}
  */
-export async function withActChainLock(branch, beingId, fn) {
-  const key = chainKey(branch, String(beingId));
+export async function withActChainLock(history, beingId, fn) {
+  const key = chainKey(history, String(beingId));
   const held = _held.getStore();
   if (held?.has(key)) return fn(); // reentrant: already ours
 

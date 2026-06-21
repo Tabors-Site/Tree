@@ -63,7 +63,7 @@ export function buildActSigPayload(act, factIds) {
  * local key (foreign cross-story, missing/corrupt blob) — the seal
  * then proceeds unsigned. Never throws.
  */
-export async function loadSigningKey(nameId, branch) {
+export async function loadSigningKey(nameId, history) {
   try {
     if (nameId === I_AM) {
       const { getStoryIdentity } = await import("../../storyIdentity.js");
@@ -72,7 +72,7 @@ export async function loadSigningKey(nameId, branch) {
     const { isKeyId } = await import("../../materials/name/keys.js");
     if (!isKeyId(nameId)) return null;             // not a key-bearing Name
     const { loadProjection } = await import("../../materials/projections.js");
-    const slot = await loadProjection("name", nameId, normHistory(branch));
+    const slot = await loadProjection("name", nameId, normHistory(history));
     // The signing-session lock is NOT soul-type-gated — ALL Names are the
     // same (Tabor). It applies to PASSWORD-LOCKED Names, never by soul.
     const enc = slot?.state?.privateKeyEnc;
@@ -188,7 +188,7 @@ export async function verifyActSig(act, { localStory = null } = {}) {
  * (the peer story signs that); this proves the DEED is fresh (the
  * being signs this).
  */
-export function buildEnvelopeSigPayload({ verb, address, payload, nameId, actId, branch, story, time }) {
+export function buildEnvelopeSigPayload({ verb, address, payload, nameId, actId, history, story, time }) {
   return {
     kind:    "cross-story-envelope",
     verb:    verb || null,
@@ -199,7 +199,7 @@ export function buildEnvelopeSigPayload({ verb, address, payload, nameId, actId,
     // against the name it controls. (Was beingId before the Name/Being split.)
     nameId:  nameId || null,
     actId:   actId || null,
-    branch:  normHistory(branch),
+    history: normHistory(history),
     story: story || null,
     time:    time || null,
   };
@@ -221,11 +221,11 @@ function envelopeSigWindowMs() {
  * actor — the call still forwards, accepted under the story-level canopy
  * sig). Never throws: an unsignable cross-call must not be blocked.
  *
- * @param {object} env  { verb, address, payload, beingId, actId, branch, story }
+ * @param {object} env  { verb, address, payload, beingId, actId, history, story }
  * @param {string|null} pem  the actor's private key PEM (preloaded)
  */
 export async function signEnvelopeBeingSig(env, pem) {
-  if (pem === undefined) pem = await loadSigningKey(env.nameId, env.branch);
+  if (pem === undefined) pem = await loadSigningKey(env.nameId, env.history);
   if (!pem) return null;
   try {
     const { signAsName } = await import("../../materials/name/keys.js");

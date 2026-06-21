@@ -152,32 +152,32 @@ export function readContainerLlm(container, role) {
 // LOAD HELPERS
 // ─────────────────────────────────────────────────────────────────────
 
-async function loadBeing(beingId, branch) {
+async function loadBeing(beingId, history) {
   if (!beingId) return null;
   const { loadOrFold } = await import("../../../materials/projections.js");
-  const slot = await loadOrFold("being", beingId, branch).catch(() => null);
+  const slot = await loadOrFold("being", beingId, history).catch(() => null);
   return slot ? { _id: slot.id, ...slot.state } : null;
 }
 
-async function loadSpaceAncestors(spaceId, branch) {
+async function loadSpaceAncestors(spaceId, history) {
   if (!spaceId) return [];
   try {
-    return await getAncestorChain(spaceId, branch);
+    return await getAncestorChain(spaceId, history);
   } catch {
     const { loadOrFold } = await import("../../../materials/projections.js");
-    const slot = await loadOrFold("space", spaceId, branch).catch(() => null);
+    const slot = await loadOrFold("space", spaceId, history).catch(() => null);
     return slot ? [{ _id: slot.id, ...slot.state }] : [];
   }
 }
 
-async function loadStoryRoot(branch) {
+async function loadStoryRoot(history) {
   // Story root is the topmost space with parent=null. The ancestor
   // chain for the receiver/actor space ends at it, but for the
   // chain-walker convenience we load it directly so step 3 / 6 don't
   // depend on having walked space ancestors first.
   const { default: Projection } = await import("../../../materials/history/projection.js");
   const row = await Projection.findOne({
-    history: branch, type: "space", "state.parent": null, tombstoned: { $ne: true },
+    history: history, type: "space", "state.parent": null, tombstoned: { $ne: true },
   }).lean();
   if (!row) return null;
   return { _id: row.id, ...row.state };
@@ -241,7 +241,7 @@ function appendContainerCandidates(chain, container, role, step, tried) {
  * storyDomain field is currently informational — same-story is the
  * common case and the resolver walks LOCAL projections regardless.
  */
-export async function buildLlmChain({ actor, receiver, role, branch = "0" } = {}) {
+export async function buildLlmChain({ actor, receiver, role, history = "0" } = {}) {
   const chain = [];
   const tried = new Set();
   let reason = null;
@@ -280,7 +280,7 @@ export async function buildLlmChain({ actor, receiver, role, branch = "0" } = {}
 
   // ── RECEIVER SIDE ──
 
-  const receiverBeing = await loadBeing(receiver?.beingId, branch);
+  const receiverBeing = await loadBeing(receiver?.beingId, history);
 
   // Step 0/1: receiver being (slot list, then default list, in one
   // container-read — the step number on each entry preserves the
@@ -314,7 +314,7 @@ export async function buildLlmChain({ actor, receiver, role, branch = "0" } = {}
 
   // Step 2: receiver space ancestors (only if not jumping to actor).
   if (boundary !== "force-actor" && receiver?.spaceId) {
-    const ancestors = await loadSpaceAncestors(receiver.spaceId, branch);
+    const ancestors = await loadSpaceAncestors(receiver.spaceId, history);
     for (const space of ancestors) {
       const norm = readContainerLlm(space, role);
       for (const id of norm.slotList) {
@@ -344,7 +344,7 @@ export async function buildLlmChain({ actor, receiver, role, branch = "0" } = {}
 
   // Step 3: receiver story root.
   if (boundary !== "force-actor") {
-    const storyRoot = await loadStoryRoot(branch);
+    const storyRoot = await loadStoryRoot(history);
     if (storyRoot) {
       const norm = readContainerLlm(storyRoot, role);
       for (const id of norm.slotList) {
@@ -398,7 +398,7 @@ export async function buildLlmChain({ actor, receiver, role, branch = "0" } = {}
   }
 
   // Step 4: actor being.
-  const actorBeing = await loadBeing(actor?.beingId, branch);
+  const actorBeing = await loadBeing(actor?.beingId, history);
   if (actorBeing) {
     const norm = readContainerLlm(actorBeing, role);
     for (const id of norm.slotList) {
@@ -421,7 +421,7 @@ export async function buildLlmChain({ actor, receiver, role, branch = "0" } = {}
 
   // Step 5: actor space ancestors.
   if (actor?.spaceId) {
-    const ancestors = await loadSpaceAncestors(actor.spaceId, branch);
+    const ancestors = await loadSpaceAncestors(actor.spaceId, history);
     for (const space of ancestors) {
       const norm = readContainerLlm(space, role);
       for (const id of norm.slotList) {
@@ -449,7 +449,7 @@ export async function buildLlmChain({ actor, receiver, role, branch = "0" } = {}
     // Same story — the receiver story root already contributed.
     // Try the same root again under step 6 only if something new
     // appeared (rare, but covers operator edits between walks).
-    const storyRoot = await loadStoryRoot(branch);
+    const storyRoot = await loadStoryRoot(history);
     if (storyRoot) {
       const norm = readContainerLlm(storyRoot, role);
       for (const id of norm.slotList) {

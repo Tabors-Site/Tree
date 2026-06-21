@@ -66,13 +66,13 @@ async function _keyExportViaWord({ target, caller, asker, moment }) {
   if (!ir) return null;
   const { keyHostEnv } = await import("./keyHost.js");
   const { targetIdOf } = await import("../../../materials/_targetShape.js");
-  const branch = moment?.actorAct?.history || "0";
+  const history = moment?.actorAct?.history || "0";
   try {
     const { result } = await runRoleWord(ir, {
-      moment, branch,
+      moment, history,
       // `target` is bound as an entity object (kind + id) so the .word's `see the
       // target's trueName` can loadProjection — seeRead needs ._id/.id, not a bare string.
-      trigger: { target: { kind: "being", id: String(targetIdOf(target)) }, caller: caller ? String(caller) : null, asker: asker ? String(asker) : null, branch },
+      trigger: { target: { kind: "being", id: String(targetIdOf(target)) }, caller: caller ? String(caller) : null, asker: asker ? String(asker) : null, branch: history },
       env: { host: keyHostEnv() },
     });
     if (!result) return null;
@@ -97,7 +97,7 @@ registerOperation("key-export", {
     const viaWord = await _keyExportViaWord({ target, caller: identity?.nameId, asker: identity?.beingId, moment });
     if (viaWord) return viaWord;
 
-    const branch = moment?.actorAct?.history;
+    const history = moment?.actorAct?.history;
     const nameId = await resolveTargetNameId(target, moment);
 
     // NEVER export the story (I_AM) key. The I_AM "name" id is the literal
@@ -133,7 +133,7 @@ registerOperation("key-export", {
     // -> decrypt. Mirrors how the seal signs (actSig.loadSigningKey), so
     // export reflects exactly the key that signs.
     const { loadSigningKey } = await import("../../../past/act/actSig.js");
-    const privateKeyPem = await loadSigningKey(nameId, branch);
+    const privateKeyPem = await loadSigningKey(nameId, history);
 
     // Paper form: the key's 32-byte seed as 24 BIP39 words. Same key,
     // writable by hand; the keypair rebuilds from either skin. Null when
@@ -148,7 +148,7 @@ registerOperation("key-export", {
     }
 
     // Audit fact on the asker's reel: who exported which Name's key. The
-    // key is never in it. Branch threaded from the moment, never defaulted.
+    // key is never in it. History threaded from the moment, never defaulted.
     const askerBeingId = identity?.beingId ? String(identity.beingId) : null;
     if (askerBeingId) {
       await emitFact({
@@ -158,7 +158,7 @@ registerOperation("key-export", {
         of:      { kind: "being", id: askerBeingId },
         params:  { exportedNameId: nameId },
         actId:   moment?.actId || null,
-        history: branch,
+        history,
       }, moment);
     }
 

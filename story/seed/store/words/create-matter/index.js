@@ -47,16 +47,16 @@ async function _createMatterViaWord({ target, params, caller, moment }) {
   const ir = resolveRoleWord("matter", "create-matter", moment?.actorAct?.history);
   if (!ir) return null;
   const { matterHostEnv } = await import("./matterHost.js");
-  const branch = moment?.actorAct?.history;
+  const history = moment?.actorAct?.history;
   try {
     const { result } = await runRoleWord(ir, {
-      moment, branch,
+      moment, history,
       trigger: {
         target,
         targetKind: detectTargetKind(target),
         params: params || {},
         caller: caller ? String(caller) : null,
-        branch,
+        branch: history,
       },
       env: { host: matterHostEnv() },
     });
@@ -185,7 +185,7 @@ async function createMatterHandler(ctx) {
     name: spec.name,
     content,
     type: matterType,
-    branch: moment?.actorAct?.history || "0",
+    history: moment?.actorAct?.history || "0",
     spaceId,
     parentMatterId,
   });

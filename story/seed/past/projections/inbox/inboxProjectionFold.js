@@ -75,9 +75,9 @@ async function handleCall(fact /*, type, id*/) {
         inReplyTo:       params.inReplyTo || null,
         inboxSpaceId:    params.inboxSpaceId || null,
         sentAt:          params.sentAt ? new Date(params.sentAt) : (fact.date || new Date()),
-        // Branch the summon was stamped on. Single-branch by parse-time
-        // gate, so the row's branch IS the fact's branch. logFact
-        // refuses any fact without branch; if this read returns
+        // History the summon was stamped on. Single-history by parse-time
+        // gate, so the row's history IS the fact's history. logFact
+        // refuses any fact without history; if this read returns
         // undefined the upstream invariant broke and we want it loud.
         history:          assertHistoryOrThrow(fact.history, "inboxProjectionFold(do:summon)"),
       },
@@ -91,10 +91,10 @@ async function handleBeSever(fact /*, type, id*/) {
   if (fact?.verb !== "be" || fact?.act !== "sever") return;
   const rootCorrelation = fact.params?.rootCorrelation;
   if (!rootCorrelation) return;
-  // Scoped to the sever-fact's branch: severing a thread on one
-  // branch must not evict a sibling branch's open rows (INTAKE.md's
-  // "per branch isolation — never crosses"). A thread inherited
-  // across a fork is severed per branch, by a sever fact on each.
+  // Scoped to the sever-fact's history: severing a thread on one
+  // history must not evict a sibling history's open rows (INTAKE.md's
+  // "per history isolation — never crosses"). A thread inherited
+  // across a fork is severed per history, by a sever fact on each.
   await InboxProjection.deleteMany({
     rootCorrelation,
     history: assertHistoryOrThrow(fact.history, "inboxProjectionFold(be:sever)"),

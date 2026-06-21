@@ -1,20 +1,20 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Subtree-branch scope helpers.
+// Subtree-history scope helpers.
 //
-// A branch can declare a scope . a specific space subtree the branch
+// A history can declare a scope . a specific space subtree the history
 // is allowed to write to. Writes outside scope refuse at the fact-
 // emission boundary; reads outside scope inherit from the parent
 // transparently.
 //
 // The classification:
-//   - scope = null              → whole-story branch (default; no check)
+//   - scope = null              → whole-story history (default; no check)
 //   - scope.spaceId = "abc-123" → only writes whose target home space
 //                                 lineage walks through abc-123 are allowed
 //
 // Heaven writes bypass scope entirely: facts that route to heaven
 // (via heavenLineage's isHeavenSpace) get re-stamped on MAIN before
-// the scope check runs. Subtree branches can still author roles,
+// the scope check runs. Subtree histories can still author roles,
 // edit story config, etc. through normal heaven routing.
 
 import { loadHistory } from "./histories.js";
@@ -29,8 +29,8 @@ import { getSpaceRoot } from "../../sprout.js";
  * Walk a slash-delimited path from the story root and return the
  * resolved space's _id. Used by createBranch when an operator passes
  * a scope path like "/library" or "/library/reading-room" — the
- * branch's scope.spaceId is locked at creation time against the
- * parent branch's view.
+ * history's scope.spaceId is locked at creation time against the
+ * parent history's view.
  *
  * Returns null when:
  *   - the path is empty or invalid
@@ -38,10 +38,10 @@ import { getSpaceRoot } from "../../sprout.js";
  *   - the story root isn't planted yet (pre-bootstrap)
  *
  * @param {string} pathString  e.g. "/library", "/library/reading-room"
- * @param {string} branch      branch path to resolve against (parent of the new branch)
+ * @param {string} history     history path to resolve against (parent of the new branch)
  * @returns {Promise<string|null>}
  */
-export async function resolvePathToSpaceId(pathString, branch) {
+export async function resolvePathToSpaceId(pathString, history) {
   if (typeof pathString !== "string" || !pathString.length) return null;
   const trimmed = pathString.trim();
   if (!trimmed.startsWith("/")) return null;
@@ -62,13 +62,13 @@ export async function resolvePathToSpaceId(pathString, branch) {
   const { isMain } = await import("./histories.js");
   const { resolveHistoryLineage } = await import("./histories.js");
 
-  // Build the branch's lineage chain (e.g. ["0"] for main, ["0", "1"]
+  // Build the history's lineage chain (e.g. ["0"] for main, ["0", "1"]
   // for a child of main, etc.) so segment lookups walk inherited
-  // content. A subtree branch may need to find a space planted on its
-  // parent's reel; querying only the current branch's projection table
+  // content. A subtree history may need to find a space planted on its
+  // parent's reel; querying only the current history's projection table
   // misses it.
-  const lineage = isMain(branch) ? ["0"] : await resolveHistoryLineage(branch);
-  // From leaf branch outward to root, so the most-divergent branch
+  const lineage = isMain(history) ? ["0"] : await resolveHistoryLineage(history);
+  // From leaf history outward to root, so the most-divergent history
   // wins on shadow.
   const orderedHistories = [...lineage].reverse();
 
@@ -76,7 +76,7 @@ export async function resolvePathToSpaceId(pathString, branch) {
     let resolvedChild = null;
     for (const b of orderedHistories) {
       const child = await Projection.findOne({
-        branch: b,
+        history: b,
         type: "space",
         "state.parent": cursorId,
         "state.name": segment,
@@ -90,17 +90,17 @@ export async function resolvePathToSpaceId(pathString, branch) {
   return cursorId;
 }
 
-// Cache of historyPath → scope.spaceId | null. Branch metadata is
+// Cache of historyPath → scope.spaceId | null. History metadata is
 // effectively append-only (the scope field is set at creation and
 // never modified); cache aggressively.
 const _scopeCache = new Map();
 
 /**
- * Read the scope spaceId for a branch. Returns null for whole-story
- * branches (no scope) or when the branch row is missing.
+ * Read the scope spaceId for a history. Returns null for whole-story
+ * histories (no scope) or when the history row is missing.
  *
  * Cached per-process. Use `_invalidateScopeCache(path)` after any op
- * that creates or mutates a branch's scope (currently only
+ * that creates or mutates a history's scope (currently only
  * create-branch, which sets it at creation).
  *
  * @param {string} historyPath
@@ -115,10 +115,10 @@ export async function getHistoryScopeSpaceId(historyPath) {
 }
 
 /**
- * True when the fact-target lives inside the branch's scope subtree.
+ * True when the fact-target lives inside the history's scope subtree.
  *
  * Decision matrix:
- *   - Whole-story branch (scope = null)             → always true
+ *   - Whole-story history (scope = null)            → always true
  *   - target.kind missing or id missing               → true (defensive)
  *   - target.kind === "space" with id === scopeId     → true (scope root)
  *   - target.kind === "space" with scopeId in lineage → true (descendant)
@@ -166,7 +166,7 @@ async function _isSpaceInScope(spaceId, scopeSpaceId, historyPath) {
  * id (for matter). Returns null when classification is impossible.
  *
  * Lineage-aware via loadOrFold: a being inherited from the parent
- * branch (no divergent slot on this branch yet) still resolves to its
+ * history (no divergent slot on this history yet) still resolves to its
  * homeSpace via cold-fold over the inherited reel. Bare loadProjection
  * here would return null for inherited aggregates and the gate's
  * defensive "can't classify → allow" fallback would let out-of-scope
@@ -186,7 +186,7 @@ async function _resolveHomeSpace(target, historyPath) {
 }
 
 /**
- * Invalidate the scope cache for one branch (or all branches when
+ * Invalidate the scope cache for one history (or all histories when
  * called with no args). Called from create-branch and from branch-
  * delete machinery if the scope field is ever made mutable.
  */

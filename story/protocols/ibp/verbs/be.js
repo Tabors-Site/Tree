@@ -153,10 +153,10 @@ export async function handleBe(socket, env, ack) {
     // payload + the address-bearing ctx; we pack everything into
     // the act's args so runTransportAct can hand them back to
     // beVerb identically.
-    // Branch the moment runs in = the socket's first-person branch.
+    // History the moment runs in = the socket's first-person history.
     // BE on an arrival socket (no prior SEE) defaults to main, which
-    // is what unauthenticated visitors expect. Cross-branch gate: if
-    // the target address explicitly carries a different branch
+    // is what unauthenticated visitors expect. Cross-history gate: if
+    // the target address explicitly carries a different history
     // qualifier, refuse before opening the moment.
     const callerHistory = socket.currentHistory || "0";
     let _targetHistoryResolved = null;
@@ -180,29 +180,31 @@ export async function handleBe(socket, env, ack) {
       // guard lets those pass through.
       assertNoImpersonation(expanded, socket);
 
-      _targetHistoryResolved = expanded?.right?.branch || "0";
-      // Cross-branch dispatch: the caller's BE acts on the target's
-      // branch with a crossOrigin block pointing at the caller's
-      // branch. emitFact attaches the provenance automatically. See
+      _targetHistoryResolved = expanded?.right?.history || "0";
+      // Cross-history dispatch: the caller's BE acts on the target's
+      // history with a crossOrigin block pointing at the caller's
+      // history. emitFact attaches the provenance automatically. See
       // CROSS-WORLD.md.
     } catch (err) {
       // Re-throw structured IBP errors; swallow parse failures so the
       // downstream beVerb owns address validation.
       if (err && err.code === IBP_ERR.FORBIDDEN) throw err;
     }
-    // Fact lands on the target's branch (parsed from the address by
+    // Fact lands on the target's history (parsed from the address by
     // beVerb); the actor's Act lives on callerHistory. Same-world calls
     // have caller==target and produce no crossOrigin.
     //
-    // BE:switch rides the DESTINATION branch: its audit fact lands on
-    // the new branch (the switch-in is part of that branch's
+    // BE:switch rides the DESTINATION history: its audit fact lands on
+    // the new history (the switch-in is part of that history's
     // biography), so the moment opens there too. That points the
     // pause/delete gate below at the destination — switching INTO a
     // frozen world refuses, switching AWAY from one never writes to
-    // it (a session seated on a paused branch stays escapable). The
-    // pre-switch branch rides the payload for the audit fact, because
-    // inside the moment actorAct.branch is the destination, not the
-    // old branch.
+    // it (a session seated on a paused history stays escapable). The
+    // pre-switch history rides the payload for the audit fact, because
+    // inside the moment actorAct.history is the destination, not the
+    // old history.
+    // (opPayload.branch is the wire-contract destination key — the act
+    // of branching-to; switchDest names the destination history value.)
     const switchDest =
       operation === "switch" &&
       typeof opPayload?.branch === "string" &&
@@ -210,38 +212,38 @@ export async function handleBe(socket, env, ack) {
         ? opPayload.branch.trim()
         : null;
     if (switchDest) opPayload.fromHistory = callerHistory;
-    const branch = switchDest || callerHistory;
+    const history = switchDest || callerHistory;
     const targetHistory = switchDest || _targetHistoryResolved || callerHistory;
 
     // Pause / delete gate. BE is a write surface (birth/connect/
-    // release); paused or deleted branches refuse every BE op so a
+    // release); paused or deleted histories refuse every BE op so a
     // frozen or hidden world stays structurally that way. SEE remains
     // open at its own layer so historians can still walk the chain.
     {
-      const { isHistoryPaused, isHistoryDeleted, isMain, loadBranch } =
+      const { isHistoryPaused, isHistoryDeleted, isMain, loadHistory } =
         await import("../../../seed/materials/history/histories.js");
       // Switch destination must exist before the moment opens — the
       // moment itself rides the destination, so a bogus path would
       // otherwise surface as an internal intake error instead of a
       // clean refusal. (Deleted/paused destinations fall through to
       // the shared gate below, which now checks the destination
-      // because `branch` IS the destination for switch.)
-      if (switchDest && !isMain(switchDest) && !(await loadBranch(switchDest))) {
+      // because `history` IS the destination for switch.)
+      if (switchDest && !isMain(switchDest) && !(await loadHistory(switchDest))) {
         throw new IbpError(
           IBP_ERR.INVALID_INPUT,
-          `be:switch: branch "${switchDest}" not found`,
-          { branch: switchDest },
+          `be:switch: history "${switchDest}" not found`,
+          { history: switchDest },
         );
       }
-      if (await isHistoryPaused(branch)) {
+      if (await isHistoryPaused(history)) {
         throw new IbpError(IBP_ERR.STORY_PAUSED,
-          `BE refused: branch #${branch} is paused.`,
-          { branch });
+          `BE refused: history #${history} is paused.`,
+          { history });
       }
-      if (await isHistoryDeleted(branch)) {
+      if (await isHistoryDeleted(history)) {
         throw new IbpError(IBP_ERR.STORY_PAUSED,
-          `BE refused: branch #${branch} is deleted.`,
-          { branch, deleted: true });
+          `BE refused: history #${history} is deleted.`,
+          { history, deleted: true });
       }
     }
 
@@ -260,7 +262,7 @@ export async function handleBe(socket, env, ack) {
         },
       },
       identity: callerIdentity || { beingId: cherubBeingId, name: "cherub" },
-      branch,
+      history,
       targetHistory,
     });
 
@@ -278,25 +280,27 @@ export async function handleBe(socket, env, ack) {
 
     awaitResult
       .then(({ result, actId }) => {
-        // Branch seating. BE results are the only writers of
-        // socket.currentHistory: a handler that changes which branch
+        // History seating. BE results are the only writers of
+        // socket.currentHistory: a handler that changes which history
         // this session rides returns `seatHistory`, and the transport
         // — the only layer that owns the socket — applies it here,
         // after the moment sealed. Stamp-then-seat: a refused moment
-        // rejects into the catch below and the session's branch stays
+        // rejects into the catch below and the session's history stays
         // where it was. The moment path cannot carry the socket
         // itself (acts are records), which is why the handlers return
-        // the branch instead of seating it.
+        // the history instead of seating it.
         if (typeof result?.seatHistory === "string" && result.seatHistory.length > 0) {
           socket.currentHistory = result.seatHistory;
-          // Mirror the branch to the client so its address display
-          // stays truthful (the handshake emitted the initial branch;
+          // Mirror the history to the client so its address display
+          // stays truthful (the handshake emitted the initial history;
           // this keeps it current across switches).
-          try { socket.emit("branch", { branch: result.seatHistory }); } catch { /* fake sockets */ }
+          // SEAM: portal/core/client.js must listen on "history" with
+          // payload { history } to match this emit (was "branch").
+          try { socket.emit("history", { history: result.seatHistory }); } catch { /* fake sockets */ }
           // Host observation: keep this connection's matter truthful
           // about which world the session rides.
           import("../../../seed/materials/host/host.js")
-            .then((m) => m.noteSocketHistoryRebound({ socketId: socket.id, branch: result.seatHistory }))
+            .then((m) => m.noteSocketHistoryRebound({ socketId: socket.id, history: result.seatHistory }))
             .catch(() => {});
         }
         pushReply(buildTransportActReply({

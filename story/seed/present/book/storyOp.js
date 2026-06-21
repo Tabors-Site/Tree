@@ -5,7 +5,7 @@
 // story panel are ONE fold, different consumers — one reads the woven Word, one paints it.
 //
 // The coordinate system is who × when × where:
-//   world          → the whole branch, all activity        (the WORLD's story)
+//   world          → the whole history, all activity        (the WORLD's story)
 //   {scope:being}   → a being's own thread from its start    (the BEING's story)
 //   {scope:lineage} → a being + its descendants, depth N     (the FAMILY's story)
 //   {scope:moment}  → one act's cross-section                (a WHEN view)
@@ -36,7 +36,7 @@ registerSeeOperation("story", {
     // being/lineage default to the caller — "my story", "my family" with no id passed
     const being = a.being ?? ((scope === "being" || scope === "lineage") ? identity?.beingId : undefined);
     const acts = await assembleStory(scope, {
-      branch: history || "0",
+      history: history || "0",
       being:  being ? String(being) : null,
       moment: a.moment ? String(a.moment) : null,
       space:  a.space ? String(a.space) : null,

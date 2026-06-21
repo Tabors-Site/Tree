@@ -20,7 +20,7 @@ export async function emitInternalGrant({
   anchorSpaceId,
   grantedBy,
   moment,
-  branch = null,
+  history = null,
 }) {
   const { emitFact } = await import("../../past/fact/facts.js");
   await emitFact({
@@ -36,13 +36,13 @@ export async function emitInternalGrant({
       grantedAt:     new Date().toISOString(),
     },
     // The world this acquisition happened in. Callers pass it
-    // explicitly (the op's moment branch, the SEE's branch for
+    // explicitly (the op's moment history, the SEE's history for
     // auto-on-entry). The actorAct fallback covers in-moment ops; SEE
-    // has no moment, and its old fallback stamped every branch-side
-    // auto-grant onto main — invisible on the branch where the
+    // has no moment, and its old fallback stamped every history-side
+    // auto-grant onto main — invisible on the history where the
     // commons lives (the fork predates the grant), and a
     // foreign-world write onto main's reel.
-    history: branch || moment?.actorAct?.history || "0",
+    history: history || moment?.actorAct?.history || "0",
     actId:  moment?.actId || null,
   }, moment);
 }

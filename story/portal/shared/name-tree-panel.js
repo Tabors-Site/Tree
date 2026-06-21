@@ -44,15 +44,15 @@ const short = (s) => (s ? String(s).slice(0, 10) + "…" : "?");
  * @param {object}   opts.client    PortalClient (nameTree / nameSee / do)
  * @param {string}   opts.story   story domain (for addresses + header)
  * @param {string}   opts.nameId    the signed-in name (its own tree)
- * @param {string}   opts.branch    the branch you stand on (left stance)
+ * @param {string}   opts.history   the history you stand on (left stance)
  * @param {boolean}  opts.canAct    are you driving a being? (grant/revoke need it)
- * @param {Function} [opts.reopen]  (branch) => re-show for the current branch (refresh)
+ * @param {Function} [opts.reopen]  (history) => re-show for the current history (refresh)
  */
-export async function showNameTree({ client, story = "", nameId, branch, canAct = false, reopen = null }) {
+export async function showNameTree({ client, story = "", nameId, history, canAct = false, reopen = null }) {
   hideNameTree();
   injectStyles();
 
-  const br = branch || "0";
+  const br = history || "0";
   const bq = br && br !== "0" ? `#${br}` : "";
   const addrOf = (beingName) => `${story}${bq}/@${beingName}`;
 

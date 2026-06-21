@@ -8,10 +8,10 @@
 // does the heavy lifting (path arithmetic, branchPoint snapshot,
 // History row, child space).
 //
-// Auth: any heaven authority (hasAccess on heaven) can mint a branch off any branch they can
+// Auth: any heaven authority (hasAccess on heaven) can mint a history off any history they can
 // SEE. Promotion to live / pause / delete (Pass 6.5 + 10) require
-// tighter permissions; for branch creation, the principle is "anyone
-// who can read can fork" — branches are isolated worlds, the parent
+// tighter permissions; for history creation, the principle is "anyone
+// who can read can fork" — histories are isolated worlds, the parent
 // is unaffected.
 
 import { registerOperation } from "../../../ibp/operations.js";
@@ -48,84 +48,106 @@ registerOperation("create-branch", {
   skipAudit: false,
   args: {
     parent: {
-      type:        "text",
-      label:       "Parent history path (e.g. \"0\" for main, \"1a\" for a nested history)",
-      required:    false,
-      default:     MAIN,
+      type: "text",
+      label:
+        'Parent history path (e.g. "0" for main, "1a" for a nested history)',
+      required: false,
+      default: MAIN,
     },
     atSeq: {
-      type:     "number",
-      label:    "History from this seq on the parent's reel (substrate-native; preferred when known)",
+      type: "number",
+      label:
+        "History from this seq on the parent's reel (substrate-native; preferred when known)",
       required: false,
     },
     atTimestamp: {
-      type:     "text",
-      label:    "History from this ISO timestamp (human helper; resolved per-reel)",
+      type: "text",
+      label:
+        "History from this ISO timestamp (human helper; resolved per-reel)",
       required: false,
     },
     label: {
-      type:     "text",
-      label:    "Label (optional human-readable name)",
+      type: "text",
+      label: "Label (optional human-readable name)",
       required: false,
     },
     pointer: {
-      type:     "text",
-      label:    "Optional named pointer to attach to the new branch in the same call (e.g. \"feature-x\"). Equivalent to following create-branch with set-pointer.",
+      type: "text",
+      label:
+        'Optional named pointer to attach to the new branch in the same call (e.g. "feature-x"). Equivalent to following create-branch with set-pointer.',
       required: false,
     },
     reassignPointer: {
-      type:     "bool",
-      label:    "If the pointer is already taken, move it to the new branch (the old branch keeps its canonical path but loses the pointer). Without this, a taken pointer is refused.",
+      type: "bool",
+      label:
+        "If the pointer is already taken, move it to the new branch (the old branch keeps its canonical path but loses the pointer). Without this, a taken pointer is refused.",
       required: false,
-      default:  false,
+      default: false,
     },
     scope: {
-      type:     "text",
-      label:    "Optional space path (e.g. \"/library\") to scope this branch to a subtree. Writes outside the subtree refuse with SCOPE_VIOLATION; reads outside inherit from parent. Use when experimenting on one feature without contaminating the rest of the story.",
+      type: "text",
+      label:
+        'Optional space path (e.g. "/library") to scope this branch to a subtree. Writes outside the subtree refuse with SCOPE_VIOLATION; reads outside inherit from parent. Use when experimenting on one feature without contaminating the rest of the story.',
       required: false,
     },
   },
   handler: async ({ params, identity, moment }) => {
-    const parent  = String(params?.parent || MAIN).trim() || MAIN;
-    const label   = params?.label ? String(params.label).trim() : null;
+    const parent = String(params?.parent || MAIN).trim() || MAIN;
+    const label = params?.label ? String(params.label).trim() : null;
     const pointerName = params?.pointer
       ? String(params.pointer).trim().toLowerCase()
       : null;
     if (pointerName && !isPointerName(pointerName)) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT,
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
         `create-branch: pointer "${pointerName}" is invalid. ` +
-        `Must start with a lowercase letter, end with a letter or digit, ` +
-        `and contain only lowercase letters, digits, and single hyphens. ` +
-        `Max ${POINTER_NAME_MAX_LENGTH} chars.`);
+          `Must start with a lowercase letter, end with a letter or digit, ` +
+          `and contain only lowercase letters, digits, and single hyphens. ` +
+          `Max ${POINTER_NAME_MAX_LENGTH} chars.`,
+      );
     }
-    const anchor  = {};
+    const anchor = {};
     if (typeof params?.atSeq === "number") {
       anchor.atSeq = params.atSeq;
-    } else if (typeof params?.atSeq === "string" && params.atSeq.trim().length > 0) {
+    } else if (
+      typeof params?.atSeq === "string" &&
+      params.atSeq.trim().length > 0
+    ) {
       const n = Number(params.atSeq);
       if (!Number.isInteger(n) || n < 0) {
-        throw new IbpError(IBP_ERR.INVALID_INPUT,
-          `create-branch: atSeq must be a non-negative integer; got "${params.atSeq}"`);
+        throw new IbpError(
+          IBP_ERR.INVALID_INPUT,
+          `create-branch: atSeq must be a non-negative integer; got "${params.atSeq}"`,
+        );
       }
       anchor.atSeq = n;
     }
-    if (typeof params?.atTimestamp === "string" && params.atTimestamp.trim().length > 0) {
+    if (
+      typeof params?.atTimestamp === "string" &&
+      params.atTimestamp.trim().length > 0
+    ) {
       const d = new Date(params.atTimestamp);
       if (Number.isNaN(d.getTime())) {
-        throw new IbpError(IBP_ERR.INVALID_INPUT,
-          `create-branch: invalid atTimestamp "${params.atTimestamp}"`);
+        throw new IbpError(
+          IBP_ERR.INVALID_INPUT,
+          `create-branch: invalid atTimestamp "${params.atTimestamp}"`,
+        );
       }
       anchor.atTimestamp = d.toISOString();
     }
     if (anchor.atSeq == null && anchor.atTimestamp == null) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT,
-        "create-branch: provide atSeq or atTimestamp to anchor the branch point");
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "create-branch: provide atSeq or atTimestamp to anchor the branch point",
+      );
     }
 
     let scopePath = params?.scope ? String(params.scope).trim() : null;
     if (scopePath && !scopePath.startsWith("/")) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT,
-        `create-branch: scope must be a path starting with "/" (e.g. "/library"); got "${scopePath}"`);
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        `create-branch: scope must be a path starting with "/" (e.g. "/library"); got "${scopePath}"`,
+      );
     }
     // "~" is the caller's home — a self-relative alias. The scope
     // walker (resolvePathToSpaceId) resolves real space NAMES from the
@@ -134,18 +156,22 @@ registerOperation("create-branch", {
     // for the home space's real path before resolution.
     if (scopePath && (scopePath === "/~" || scopePath.startsWith("/~/"))) {
       if (!identity?.beingId) {
-        throw new IbpError(IBP_ERR.UNAUTHORIZED,
-          `create-branch: scope "~" is self-relative and needs a caller identity to resolve a home`);
+        throw new IbpError(
+          IBP_ERR.UNAUTHORIZED,
+          `create-branch: scope "~" is self-relative and needs a caller identity to resolve a home`,
+        );
       }
       const { resolveStance } = await import("../../../ibp/resolver.js");
       const home = await resolveStance(
-        { story: null, path: "/~", being: null, branch: parent },
+        { story: null, path: "/~", being: null, history: parent },
         { identity },
       );
       const homeName = home?.leafSpace?.name;
       if (!homeName) {
-        throw new IbpError(IBP_ERR.SPACE_NOT_FOUND,
-          `create-branch: could not resolve "~" to your home space`);
+        throw new IbpError(
+          IBP_ERR.SPACE_NOT_FOUND,
+          `create-branch: could not resolve "~" to your home space`,
+        );
       }
       scopePath = `/${homeName}${scopePath.slice(2)}`;
     }
@@ -162,7 +188,7 @@ registerOperation("create-branch", {
         throw new IbpError(
           IBP_ERR.RESOURCE_CONFLICT,
           `Pointer "${pointerName}" is already on branch #${heldBy}. ` +
-          `Pass reassignPointer:true to move it to the new branch.`,
+            `Pass reassignPointer:true to move it to the new branch.`,
           { pointer: pointerName, heldBy, reassignable: true },
         );
       }
@@ -181,7 +207,10 @@ registerOperation("create-branch", {
       // Path / lineage / arg errors surface as INVALID_INPUT; anything
       // else bubbles as INTERNAL.
       if (/invalid|required|not found/i.test(err.message)) {
-        throw new IbpError(IBP_ERR.INVALID_INPUT, `create-branch: ${err.message}`);
+        throw new IbpError(
+          IBP_ERR.INVALID_INPUT,
+          `create-branch: ${err.message}`,
+        );
       }
       throw err;
     }
@@ -197,7 +226,8 @@ registerOperation("create-branch", {
         const next = { ...current, [pointerName]: result.path };
         const historiesSpaceId = await findPointersSpaceId();
         if (!historiesSpaceId) {
-          pointerWarning = ".branches heaven space not found; pointer attach skipped";
+          pointerWarning =
+            ".branches heaven space not found; pointer attach skipped";
         } else {
           await doVerb(
             { kind: "space", id: historiesSpaceId },
@@ -242,16 +272,18 @@ registerOperation("create-branch", {
       // warning on the response so the caller can re-run form-portal
       // manually if they care.
       // eslint-disable-next-line no-console
-      console.warn(`branch-manager: auto-portal for #${result.path} failed: ${err.message}`);
+      console.warn(
+        `branch-manager: auto-portal for #${result.path} failed: ${err.message}`,
+      );
     }
 
     const response = {
-      created:     true,
-      path:        result.path,
-      parent:      result.parent,
-      anchor:      result.anchor,
+      created: true,
+      path: result.path,
+      parent: result.parent,
+      anchor: result.anchor,
       branchPoint: result.branchPoint,
-      createdAt:   result.createdAt,
+      createdAt: result.createdAt,
     };
     if (pointerAttached) response.pointerAttached = pointerAttached;
     if (pointerWarning) response.pointerWarning = pointerWarning;
@@ -279,21 +311,24 @@ registerOperation("pause-history", {
   ownerExtension: "seed",
   skipAudit: false,
   args: {
-    branch: {
-      type:        "text",
-      label:       "History path to pause (\"0\" for main; \"1\", \"1a\", etc.)",
-      required:    true,
+    history: {
+      type: "text",
+      label: 'History path to pause ("0" for main; "1", "1a", etc.)',
+      required: true,
     },
     reason: {
-      type:     "text",
-      label:    "Optional reason recorded with the pause",
+      type: "text",
+      label: "Optional reason recorded with the pause",
       required: false,
     },
   },
   handler: async ({ params, identity, moment }) => {
-    const historyPath = String(params?.branch || "").trim();
+    const historyPath = String(params?.history || "").trim();
     if (!historyPath) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "pause-branch: branch is required");
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "pause-history: history is required",
+      );
     }
     // Main IS pauseable. Doctrine (Tabor 2026-06-04): every branch is
     // symmetric; main is not privileged. The "how do you unpause if
@@ -308,7 +343,10 @@ registerOperation("pause-history", {
     if (!isMainHistory) {
       const existing = await History.findOne({ path: historyPath }).lean();
       if (!existing) {
-        throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, `pause-branch: no branch "${historyPath}"`);
+        throw new IbpError(
+          IBP_ERR.SPACE_NOT_FOUND,
+          `pause-history: no history "${historyPath}"`,
+        );
       }
       if (existing.paused) {
         return { paused: true, path: historyPath, alreadyPaused: true };
@@ -323,14 +361,14 @@ registerOperation("pause-history", {
       { path: historyPath },
       {
         $set: {
-          paused:   true,
+          paused: true,
           pausedBy: identity?.beingId || null,
           pausedAt: new Date(),
           ...(params?.reason ? { archivedBecause: String(params.reason) } : {}),
         },
         $setOnInsert: {
-          _id:    historyPath,
-          path:   historyPath,
+          _id: historyPath,
+          path: historyPath,
           parent: isMainHistory ? null : undefined,
         },
       },
@@ -346,16 +384,19 @@ registerOperation("unpause-history", {
   ownerExtension: "seed",
   skipAudit: false,
   args: {
-    branch: {
-      type:        "text",
-      label:       "History path to unpause",
-      required:    true,
+    history: {
+      type: "text",
+      label: "History path to unpause",
+      required: true,
     },
   },
   handler: async ({ params, identity }) => {
-    const historyPath = String(params?.branch || "").trim();
+    const historyPath = String(params?.history || "").trim();
     if (!historyPath) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "unpause-branch: branch is required");
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "unpause-history: history is required",
+      );
     }
     const row = await History.findOne({ path: historyPath }).lean();
     if (!row) {
@@ -369,7 +410,12 @@ registerOperation("unpause-history", {
     await History.updateOne(
       { path: historyPath },
       {
-        $set: { paused: false, pausedAt: null, pausedBy: null, archivedBecause: null },
+        $set: {
+          paused: false,
+          pausedAt: null,
+          pausedBy: null,
+          archivedBecause: null,
+        },
       },
     );
     invalidateHistoryCache(historyPath);
@@ -399,27 +445,33 @@ registerOperation("delete-history", {
   ownerExtension: "seed",
   skipAudit: false,
   args: {
-    branch: {
-      type:        "text",
-      label:       "History path to delete (\"0\" for main; \"1\", \"1a\", etc.)",
-      required:    true,
+    history: {
+      type: "text",
+      label: 'History path to delete ("0" for main; "1", "1a", etc.)',
+      required: true,
     },
     reason: {
-      type:     "text",
-      label:    "Optional reason recorded with the deletion",
+      type: "text",
+      label: "Optional reason recorded with the deletion",
       required: false,
     },
   },
   handler: async ({ params, identity }) => {
-    const historyPath = String(params?.branch || "").trim();
+    const historyPath = String(params?.history || "").trim();
     if (!historyPath) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "delete-branch: branch is required");
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "delete-history: history is required",
+      );
     }
     const isMainHistory = historyPath === MAIN;
     if (!isMainHistory) {
       const existing = await History.findOne({ path: historyPath }).lean();
       if (!existing) {
-        throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, `delete-branch: no branch "${historyPath}"`);
+        throw new IbpError(
+          IBP_ERR.SPACE_NOT_FOUND,
+          `delete-history: no history "${historyPath}"`,
+        );
       }
       if (existing.deleted) {
         return { deleted: true, path: historyPath, alreadyDeleted: true };
@@ -434,14 +486,14 @@ registerOperation("delete-history", {
       { path: historyPath },
       {
         $set: {
-          deleted:   true,
+          deleted: true,
           deletedBy: identity?.beingId || null,
           deletedAt: new Date(),
           ...(params?.reason ? { archivedBecause: String(params.reason) } : {}),
         },
         $setOnInsert: {
-          _id:    historyPath,
-          path:   historyPath,
+          _id: historyPath,
+          path: historyPath,
           parent: isMainHistory ? null : undefined,
         },
       },
@@ -457,16 +509,19 @@ registerOperation("undelete-history", {
   ownerExtension: "seed",
   skipAudit: false,
   args: {
-    branch: {
-      type:        "text",
-      label:       "History path to undelete",
-      required:    true,
+    history: {
+      type: "text",
+      label: "History path to undelete",
+      required: true,
     },
   },
   handler: async ({ params }) => {
-    const historyPath = String(params?.branch || "").trim();
+    const historyPath = String(params?.history || "").trim();
     if (!historyPath) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "undelete-branch: branch is required");
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "undelete-history: history is required",
+      );
     }
     const row = await History.findOne({ path: historyPath }).lean();
     if (!row) {
@@ -515,47 +570,54 @@ registerOperation("merge-histories", {
   skipAudit: false,
   args: {
     sourceA: {
-      type:     "text",
-      label:    "First source history path (e.g. \"1\", \"1a\")",
+      type: "text",
+      label: 'First source history path (e.g. "1", "1a")',
       required: true,
     },
     sourceB: {
-      type:     "text",
-      label:    "Second source history path",
+      type: "text",
+      label: "Second source history path",
       required: true,
     },
     label: {
-      type:     "text",
-      label:    "Label for the merged branch (optional human-readable name)",
+      type: "text",
+      label: "Label for the merged branch (optional human-readable name)",
       required: false,
     },
     afterAction: {
-      type:     "text",
-      label:    "What to do with sourceA and sourceB after merge: \"keep\" (default), \"pause\", or \"delete\". Pause stops them from ticking but keeps them readable; delete marks them deleted (still soft, still in the chain).",
+      type: "text",
+      label:
+        'What to do with sourceA and sourceB after merge: "keep" (default), "pause", or "delete". Pause stops them from ticking but keeps them readable; delete marks them deleted (still soft, still in the chain).',
       required: false,
-      default:  "keep",
+      default: "keep",
     },
     repointPointers: {
-      type:     "text",
-      label:    "Comma-separated list of named pointers (e.g. \"main,prod\") to re-point at the merged branch in one call. Each name must match the pointer grammar (lowercase letter start). Updates land via the .branches heaven space's qualities.pointers.",
+      type: "text",
+      label:
+        'Comma-separated list of named pointers (e.g. "main,prod") to re-point at the merged branch in one call. Each name must match the pointer grammar (lowercase letter start). Updates land via the .branches heaven space\'s qualities.pointers.',
       required: false,
     },
     pauseResult: {
-      type:     "text",
-      label:    "Pause the merged branch immediately after creation (\"true\" or \"false\", default \"false\"). Useful when conflicts need resolution before the branch should be live. Operators unpause via pause-branch op when ready.",
+      type: "text",
+      label:
+        'Pause the merged branch immediately after creation ("true" or "false", default "false"). Useful when conflicts need resolution before the branch should be live. Operators unpause via pause-branch op when ready.',
       required: false,
-      default:  "false",
+      default: "false",
     },
   },
   handler: async ({ params, identity, moment }) => {
     const sourceA = String(params?.sourceA || "").trim();
     const sourceB = String(params?.sourceB || "").trim();
-    const label   = params?.label ? String(params.label).trim() : null;
-    const afterAction = String(params?.afterAction || "keep").trim().toLowerCase();
+    const label = params?.label ? String(params.label).trim() : null;
+    const afterAction = String(params?.afterAction || "keep")
+      .trim()
+      .toLowerCase();
     const VALID_AFTER = new Set(["keep", "pause", "delete"]);
     if (!VALID_AFTER.has(afterAction)) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT,
-        `merge-branches: afterAction must be one of: ${[...VALID_AFTER].join(", ")}; got "${afterAction}"`);
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        `merge-histories: afterAction must be one of: ${[...VALID_AFTER].join(", ")}; got "${afterAction}"`,
+      );
     }
     const pauseResult = (() => {
       const raw = params?.pauseResult;
@@ -563,11 +625,21 @@ registerOperation("merge-histories", {
       if (typeof raw === "string") return raw.trim().toLowerCase() === "true";
       return false;
     })();
-    if (!sourceA) throw new IbpError(IBP_ERR.INVALID_INPUT, "merge-branches: sourceA is required");
-    if (!sourceB) throw new IbpError(IBP_ERR.INVALID_INPUT, "merge-branches: sourceB is required");
+    if (!sourceA)
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "merge-histories: sourceA is required",
+      );
+    if (!sourceB)
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "merge-histories: sourceB is required",
+      );
     if (sourceA === sourceB) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT,
-        "merge-branches: sourceA and sourceB must differ");
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "merge-histories: sourceA and sourceB must differ",
+      );
     }
 
     // Find the common ancestor. Walks both lineages; throws if either
@@ -576,8 +648,10 @@ registerOperation("merge-histories", {
     try {
       ancestor = await commonAncestor(sourceA, sourceB);
     } catch (err) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT,
-        `merge-branches: ${err.message}`);
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        `merge-histories: ${err.message}`,
+      );
     }
 
     // Refuse degenerate merges where one source is the ancestor of
@@ -585,9 +659,11 @@ registerOperation("merge-histories", {
     // copy of the deeper source; no merge work to do. Operators who
     // want that effect should just navigate to the deeper source.
     if (ancestor === sourceA || ancestor === sourceB) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT,
-        `merge-branches: "${ancestor}" is an ancestor of the other source. ` +
-        `Nothing to merge.`);
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        `merge-histories: "${ancestor}" is an ancestor of the other source. ` +
+          `Nothing to merge.`,
+      );
     }
 
     // Snapshot the ancestor's current heads. Each reel's branchPoint
@@ -599,14 +675,17 @@ registerOperation("merge-histories", {
     let result;
     try {
       result = await createBranch({
-        parent:    ancestor,
-        anchor:    { atSeq: Number.MAX_SAFE_INTEGER },
+        parent: ancestor,
+        anchor: { atSeq: Number.MAX_SAFE_INTEGER },
         label,
         createdBy: identity?.beingId || null,
       });
     } catch (err) {
       if (/invalid|required|not found/i.test(err.message)) {
-        throw new IbpError(IBP_ERR.INVALID_INPUT, `merge-branches: ${err.message}`);
+        throw new IbpError(
+          IBP_ERR.INVALID_INPUT,
+          `merge-histories: ${err.message}`,
+        );
       }
       throw err;
     }
@@ -660,14 +739,14 @@ registerOperation("merge-histories", {
               { path: historyPath },
               {
                 $set: {
-                  paused:   true,
+                  paused: true,
                   pausedBy: identity?.beingId || null,
                   pausedAt: new Date(),
                   archivedBecause: `paused after merge into ${result.path}`,
                 },
                 $setOnInsert: {
-                  _id:    historyPath,
-                  path:   historyPath,
+                  _id: historyPath,
+                  path: historyPath,
                   parent: historyPath === MAIN ? null : undefined,
                 },
               },
@@ -678,14 +757,14 @@ registerOperation("merge-histories", {
               { path: historyPath },
               {
                 $set: {
-                  deleted:   true,
+                  deleted: true,
                   deletedBy: identity?.beingId || null,
                   deletedAt: new Date(),
                   archivedBecause: `deleted after merge into ${result.path}`,
                 },
                 $setOnInsert: {
-                  _id:    historyPath,
-                  path:   historyPath,
+                  _id: historyPath,
+                  path: historyPath,
                   parent: historyPath === MAIN ? null : undefined,
                 },
               },
@@ -709,18 +788,25 @@ registerOperation("merge-histories", {
     const repointArg = params?.repointPointers;
     let pointerNames = [];
     if (Array.isArray(repointArg)) {
-      pointerNames = repointArg.map(s => String(s).trim().toLowerCase()).filter(Boolean);
+      pointerNames = repointArg
+        .map((s) => String(s).trim().toLowerCase())
+        .filter(Boolean);
     } else if (typeof repointArg === "string" && repointArg.trim().length > 0) {
-      pointerNames = repointArg.split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+      pointerNames = repointArg
+        .split(",")
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean);
     }
     if (pointerNames.length > 0) {
       for (const name of pointerNames) {
         if (!isPointerName(name)) {
-          throw new IbpError(IBP_ERR.INVALID_INPUT,
-            `merge-branches: repointPointers entry "${name}" is invalid. ` +
-            `Pointer names must start with a lowercase letter, end with a letter or digit, ` +
-            `contain only lowercase letters, digits, and single hyphens, ` +
-            `and be at most ${POINTER_NAME_MAX_LENGTH} chars.`);
+          throw new IbpError(
+            IBP_ERR.INVALID_INPUT,
+            `merge-histories: repointPointers entry "${name}" is invalid. ` +
+              `Pointer names must start with a lowercase letter, end with a letter or digit, ` +
+              `contain only lowercase letters, digits, and single hyphens, ` +
+              `and be at most ${POINTER_NAME_MAX_LENGTH} chars.`,
+          );
         }
       }
       try {
@@ -729,7 +815,8 @@ registerOperation("merge-histories", {
         for (const name of pointerNames) next[name] = result.path;
         const historiesSpaceId = await findPointersSpaceId();
         if (!historiesSpaceId) {
-          repointWarning = ".branches heaven space not found; pointer updates skipped";
+          repointWarning =
+            ".branches heaven space not found; pointer updates skipped";
         } else {
           await doVerb(
             { kind: "space", id: historiesSpaceId },
@@ -766,7 +853,7 @@ registerOperation("merge-histories", {
           { path: result.path },
           {
             $set: {
-              paused:   true,
+              paused: true,
               pausedBy: identity?.beingId || null,
               pausedAt: new Date(),
               archivedBecause: `paused for conflict resolution after merge of #${sourceA} + #${sourceB}`,
@@ -781,13 +868,13 @@ registerOperation("merge-histories", {
     }
 
     const response = {
-      merged:       true,
-      path:         result.path,
-      parent:       result.parent,
+      merged: true,
+      path: result.path,
+      parent: result.parent,
       ancestor,
       mergeSources: [sourceA, sourceB],
-      branchPoint:  result.branchPoint,
-      createdAt:    result.createdAt,
+      branchPoint: result.branchPoint,
+      createdAt: result.createdAt,
       resetCount,
       afterAction,
       sourcesAffected,

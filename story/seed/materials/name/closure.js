@@ -9,9 +9,9 @@
 // (fact.nameId): a banished Name cannot be the actor of any new fact.
 //
 // A Name is story-wide — its reel does not fork (identity is above the
-// branch timeline) — so its closed marker lives on main ("0") regardless of
-// which branch a fact is being stamped on. Hence isNameBanished takes no
-// branch, unlike isBeingDead.
+// history timeline) — so its closed marker lives on main ("0") regardless of
+// which history a fact is being stamped on. Hence isNameBanished takes no
+// history, unlike isBeingDead.
 //
 // The ONE exception: the name:banish fact itself is allowed through (mirror
 // closure.js's be:death carve-out), so the tombstone can seal. The Name

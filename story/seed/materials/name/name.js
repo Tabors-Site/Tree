@@ -27,22 +27,22 @@
 // world is folded from facts that a Name signed. Nothing is more
 // foundational than the thread of who acted.
 //
-// IDENTITY IS ABOVE THE BRANCH TIMELINE. A key is the same key on every
-// branch. Branching forks the WORLD (the timeline of world facts); an
-// identity is not a world-event, so a Name is NOT branch-seated. Two
+// IDENTITY IS ABOVE THE HISTORY TIMELINE. A key is the same key on every
+// history. Branching forks the WORLD (the timeline of world facts); an
+// identity is not a world-event, so a Name is NOT history-seated. Two
 // things must not be conflated:
 //   - The name REEL (this Name's identity facts: the NAME-verb acts
 //     declare / heir / federate / close) is OUTSIDE the world, so it does
 //     NOT fork. A Name is declared once, story-wide; the reel lives on
-//     the root timeline and every branch inherits it unchanged. There is
+//     the root timeline and every history inherits it unchanged. There is
 //     nothing world-shaped on it to fork.
 //   - The Name's WORLD act-chain (the SEE/DO/SUMMON/BE moments it opens
-//     acting THROUGH beings) DOES fork per branch — it lands on whatever
-//     branch's world it acted in, keyed <branch>:<nameId>. The BEINGS it
+//     acting THROUGH beings) DOES fork per history — it lands on whatever
+//     history's world it acted in, keyed <history>:<nameId>. The BEINGS it
 //     acts through fork too.
 // Identity above (no fork); world activity and presence below, in the
-// branches. So this row carries no branch-seating field and no rich
-// per-branch state — those are the Being's.
+// histories. So this row carries no history-seating field and no rich
+// per-history state — those are the Being's.
 //
 // THREE SLOTS, no fourth (same doctrine as Being).
 //   1. IDENTITY — `_id`. The ed25519 public key. Minted once at
@@ -113,7 +113,7 @@ const NameSchema = new mongoose.Schema({
   connected: { type: Boolean, default: false },
 
   // No `homeHistory`, `isRemote`, or `homeStory`. A Name's identity is
-  // above the branch timeline (no branch seating) and its row only ever
+  // above the history timeline (no history seating) and its row only ever
   // exists on its home story (the story is implicit — a story's
   // data is that story's). A Name acting on a foreign story is
   // recorded there as the actor id on the FACTS it lays through a vessel,

@@ -24,12 +24,12 @@ const _pending = new Map(); // beingId -> timeoutId
  * Schedule a be:release for `beingId` after the grace window, unless a
  * reconnect cancels it first. Idempotent: re-scheduling collapses to one timer.
  */
-export function scheduleAutoRelease(beingId, { name = null, branch = "0", graceMs = DEFAULT_GRACE_MS } = {}) {
+export function scheduleAutoRelease(beingId, { name = null, history = "0", graceMs = DEFAULT_GRACE_MS } = {}) {
   if (!beingId) return;
   cancelAutoRelease(beingId);
   const timer = setTimeout(() => {
     _pending.delete(String(beingId));
-    dispatchRelease(beingId, name, branch).catch((err) =>
+    dispatchRelease(beingId, name, history).catch((err) =>
       log.warn("WS", `auto-release dispatch for ${String(beingId).slice(0, 12)} failed: ${err.message}`));
   }, graceMs);
   // Don't let a pending release hold the event loop open at shutdown.
@@ -52,7 +52,7 @@ export function hasPendingAutoRelease(beingId) {
   return _pending.has(String(beingId));
 }
 
-async function dispatchRelease(beingId, name, branch) {
+async function dispatchRelease(beingId, name, history) {
   if (!name) {
     // Without the being's name we can't form its stance address; skip rather
     // than guess (a named being is the normal authenticated case).
@@ -80,7 +80,7 @@ async function dispatchRelease(beingId, name, branch) {
       },
     },
     identity: { beingId: String(beingId), name },
-    branch:   branch || "0",
+    history:  history || "0",
   });
   log.debug("WS", `auto-released @${name} after its last tab closed`);
 }

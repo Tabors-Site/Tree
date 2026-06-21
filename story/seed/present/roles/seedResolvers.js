@@ -125,7 +125,7 @@ async function loadBeingById(beingId) {
 async function listMatchingBeingNames(matcher) {
   try {
     // Query projections directly: every being projection has _id
-    // shaped `<branch>:being:<id>` with state.name. Project name only
+    // shaped `<history>:being:<id>` with state.name. Project name only
     // to keep the result lean.
     const mongoose = (await import("mongoose")).default;
     const Projection = mongoose.connection.collection("projections");

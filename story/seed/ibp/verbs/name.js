@@ -16,7 +16,7 @@
 // on the NEW name's reel — making it. "declare is open, banish is self-only,
 // and a real authorize()" come later.
 //
-// Mirrors ibp/verbs/be.js (same _shared gates, same branch resolution); it
+// Mirrors ibp/verbs/be.js (same _shared gates, same history resolution); it
 // is simpler — no per-being routing, no bootstrap modes, no stance.
 
 import { IbpError, IBP_ERR } from "../protocol.js";
@@ -77,7 +77,7 @@ export async function nameVerb(operation, payload = {}, opts = {}) {
     moment      = null,
   } = opts;
 
-  const branch = resolveHistoryForFact(moment, currentHistory, "name");
+  const history = resolveHistoryForFact(moment, currentHistory, "name");
   const storyDomain = currentStory || getStoryDomain();
 
   const { story, nameId: addressedToken } = parseNameAddress(address);
@@ -116,7 +116,7 @@ export async function nameVerb(operation, payload = {}, opts = {}) {
     addressedNameId,
     story: storyDomain,
     moment,
-    branch,
+    history,
   });
 
   await writeNameFact({
@@ -125,7 +125,7 @@ export async function nameVerb(operation, payload = {}, opts = {}) {
     result,
     actId: moment?.actId || null,
     moment,
-    branch,
+    history,
   });
 
   // `reveal` (declare only) carries the freshly minted key ONCE for backup —
@@ -140,7 +140,7 @@ export async function nameVerb(operation, payload = {}, opts = {}) {
  * The ACTOR (fact.nameId) is filled by emitFact from the moment's act —
  * I_AM today. Mirrors writeBeFact.
  */
-async function writeNameFact({ operation, identity, result, actId, moment, branch }) {
+async function writeNameFact({ operation, identity, result, actId, moment, history }) {
   if (!actId) {
     throw new IbpError(
       IBP_ERR.INTERNAL,
@@ -160,6 +160,6 @@ async function writeNameFact({ operation, identity, result, actId, moment, branc
     of:      { kind: "name", id: String(result.nameId) },
     params,
     actId,
-    history: branch,
+    history,
   }, moment);
 }

@@ -74,10 +74,10 @@ registerOperation("ask-role", {
     const viaWord = await _askRoleViaWord({ caller: identity.beingId, role: roleName, space: hostSpaceId, moment });
     if (viaWord) return viaWord;
 
-    const branch = moment?.actorAct?.history || "0";
+    const history = moment?.actorAct?.history || "0";
     const { spec, hostSpaceId: foundHost } = await getRoleSpecForGrant(
       { role: roleName, anchorSpaceId: hostSpaceId },
-      branch,
+      history,
     );
     if (!spec) {
       throw new IbpError(
@@ -96,8 +96,8 @@ registerOperation("ask-role", {
 
     // Idempotent: skip if the caller already holds the role at this
     // host. loadOrFold: the caller's grants may live on an inherited
-    // (not yet folded) slot on this branch.
-    const callerSlot = await loadOrFold("being", String(identity.beingId), branch);
+    // (not yet folded) slot on this history.
+    const callerSlot = await loadOrFold("being", String(identity.beingId), history);
     const existing   = callerSlot?.state?.qualities?.rolesGranted || [];
     if (alreadyHoldsRole(existing, roleName, foundHost)) {
       return {
@@ -114,7 +114,7 @@ registerOperation("ask-role", {
         anchorSpaceId:  foundHost,
         grantedBy:      String(identity.beingId), // self-grant via the role's auto policy
         moment,
-        branch,
+        history,
       });
       return {
         granted: true,
@@ -129,7 +129,7 @@ registerOperation("ask-role", {
     // approves/denies via the portal's inbox panel. Approve →
     // owner emits grant-role for the asker. Deny → reply summon with
     // {result:"denied"} clears the inbox row, no grant emitted.
-    const hostSlot = await loadOrFold("space", foundHost, branch);
+    const hostSlot = await loadOrFold("space", foundHost, history);
     const ownerId = hostSlot?.state?.owner;
     if (!ownerId) {
       return {
@@ -140,7 +140,7 @@ registerOperation("ask-role", {
         message: `Role "${roleName}" needs manual approval but the host space has no owner to ask.`,
       };
     }
-    const ownerSlot = await loadOrFold("being", String(ownerId), branch);
+    const ownerSlot = await loadOrFold("being", String(ownerId), history);
     const ownerName = ownerSlot?.state?.name;
     if (!ownerName) {
       return {
@@ -223,11 +223,11 @@ async function _askRoleViaWord({ caller, role, space, moment }) {
   const ir = resolveRoleWord("acquisition", "ask-role", moment?.actorAct?.history);
   if (!ir) return null;
   const { acquisitionHostEnv } = await import("./acquisitionHost.js");
-  const branch = moment?.actorAct?.history || "0";
+  const history = moment?.actorAct?.history || "0";
   try {
     const { result } = await runRoleWord(ir, {
-      moment, branch, through: String(caller),
-      trigger: { caller: String(caller), role: String(role), space: String(space), branch },
+      moment, history, through: String(caller),
+      trigger: { caller: String(caller), role: String(role), space: String(space), branch: history },
       env: { host: acquisitionHostEnv() },
     });
     return result || null;
@@ -248,11 +248,11 @@ async function _takeRoleViaWord({ caller, role, space, moment }) {
   const ir = resolveRoleWord("acquisition", "take-role", moment?.actorAct?.history);
   if (!ir) return null;
   const { acquisitionHostEnv } = await import("./acquisitionHost.js");
-  const branch = moment?.actorAct?.history || "0";
+  const history = moment?.actorAct?.history || "0";
   try {
     const { result } = await runRoleWord(ir, {
-      moment, branch,
-      trigger: { caller: String(caller), role: String(role), space: String(space), branch },
+      moment, history,
+      trigger: { caller: String(caller), role: String(role), space: String(space), branch: history },
       env: { host: acquisitionHostEnv() },
     });
     return result || null;
@@ -289,10 +289,10 @@ registerOperation("take-role", {
     const viaWord = await _takeRoleViaWord({ caller: identity.beingId, role: roleName, space: hostSpaceId, moment });
     if (viaWord) return viaWord;
 
-    const branch = moment?.actorAct?.history || "0";
+    const history = moment?.actorAct?.history || "0";
     const { spec, hostSpaceId: foundHost } = await getRoleSpecForGrant(
       { role: roleName, anchorSpaceId: hostSpaceId },
-      branch,
+      history,
     );
     if (!spec) {
       throw new IbpError(
@@ -309,7 +309,7 @@ registerOperation("take-role", {
       );
     }
 
-    const callerSlot = await loadOrFold("being", String(identity.beingId), branch);
+    const callerSlot = await loadOrFold("being", String(identity.beingId), history);
     const existing   = callerSlot?.state?.qualities?.rolesGranted || [];
     if (alreadyHoldsRole(existing, roleName, foundHost)) {
       return {
@@ -325,7 +325,7 @@ registerOperation("take-role", {
       anchorSpaceId:  foundHost,
       grantedBy:      String(identity.beingId),
       moment,
-      branch,
+      history,
     });
     return {
       granted: true,

@@ -4,31 +4,31 @@
 // String in `Being.position`. The string carries either:
 //
 //   bare spaceId            same-world position (this story,
-//                           current branch of access)
-//   "<story>#<branch>/<spaceId>"
+//                           current history of access)
+//   "<story>#<history>/<spaceId>"
 //                           cross-world position (foreign story
-//                           and/or foreign branch)
+//                           and/or foreign history)
 //
 // Per CROSS-WORLD.md "The position quality":
 //
-//   For a being at home, <story> is the home domain and <branch>
-//   is the active branch. For a foreign-position being, both can
+//   For a being at home, <story> is the home domain and <history>
+//   is the active history. For a foreign-position being, both can
 //   differ. The substrate uses the position to determine where verbs
 //   default to: SEE / DO / SUMMON / BE against the being's stance
-//   routes to whatever story+branch their position currently names.
+//   routes to whatever story+history their position currently names.
 //
-// Always operates on ACTUAL branch paths, never pointers — pointer
+// Always operates on ACTUAL history paths, never pointers — pointer
 // resolution happens at the address-parsing perimeter before any
-// position write. See CROSS-WORLD.md "Pointers vs actual branches."
+// position write. See CROSS-WORLD.md "Pointers vs actual histories."
 
-// Capture order: story (required when cross-world), branch
+// Capture order: story (required when cross-world), history
 // (optional within story), spaceId (required).
 //
 // Examples:
 //   "abc-123"                       → same-world: { spaceId: "abc-123" }
-//   "tabors.site#0/abc-123"         → cross-world: { story, branch, spaceId }
-//   "tabors.site#4a/abc-123"        → cross-world: { story, branch, spaceId }
-//   "tabors.site/abc-123"           → cross-world story only: { story, branch: "0", spaceId }
+//   "tabors.site#0/abc-123"         → cross-world: { story, history, spaceId }
+//   "tabors.site#4a/abc-123"        → cross-world: { story, history, spaceId }
+//   "tabors.site/abc-123"           → cross-world story only: { story, history: "0", spaceId }
 const CROSS_WORLD_RE = /^([^#/]+)(?:#([^/]+))?\/(.+)$/;
 
 /**
@@ -37,7 +37,7 @@ const CROSS_WORLD_RE = /^([^#/]+)(?:#([^/]+))?\/(.+)$/;
  * shape returns the full triple.
  *
  * @param {string|null|undefined} position
- * @returns {{ story?: string, branch?: string, spaceId: string }|null}
+ * @returns {{ story?: string, history?: string, spaceId: string }|null}
  */
 export function parsePositionAddress(position) {
   if (typeof position !== "string" || !position.length) return null;
@@ -45,28 +45,28 @@ export function parsePositionAddress(position) {
   if (m) {
     return {
       story: m[1],
-      branch:  m[2] || "0",
+      history:  m[2] || "0",
       spaceId: m[3],
     };
   }
-  // Bare spaceId — same-world. No story / branch prefix.
+  // Bare spaceId — same-world. No story / history prefix.
   return { spaceId: position };
 }
 
 /**
  * Format a position triple into the canonical string. Same-world
- * positions (story / branch absent) format as bare spaceId.
- * Cross-world positions format as "<story>#<branch>/<spaceId>".
+ * positions (story / history absent) format as bare spaceId.
+ * Cross-world positions format as "<story>#<history>/<spaceId>".
  *
- * @param {{ story?: string, branch?: string, spaceId: string }} parts
+ * @param {{ story?: string, history?: string, spaceId: string }} parts
  * @returns {string}
  */
-export function formatPositionAddress({ story, branch, spaceId } = {}) {
+export function formatPositionAddress({ story, history, spaceId } = {}) {
   if (typeof spaceId !== "string" || !spaceId.length) {
     throw new Error("formatPositionAddress: spaceId is required");
   }
   if (!story) return spaceId;
-  const b = branch || "0";
+  const b = history || "0";
   return `${story}#${b}/${spaceId}`;
 }
 
@@ -76,7 +76,7 @@ export function formatPositionAddress({ story, branch, spaceId } = {}) {
  * route cross-world or operate locally.
  *
  * @param {string} position
- * @param {{ story: string, branch?: string }} home
+ * @param {{ story: string, history?: string }} home
  * @returns {boolean}
  */
 export function isPositionCrossWorld(position, home) {
@@ -85,7 +85,7 @@ export function isPositionCrossWorld(position, home) {
   if (!parts.story) return false;  // bare spaceId is always same-world
   if (!home?.story) return true;
   if (parts.story !== home.story) return true;
-  const positionHistory = parts.branch || "0";
-  const homeHistory     = home.branch  || "0";
+  const positionHistory = parts.history || "0";
+  const homeHistory     = home.history  || "0";
   return positionHistory !== homeHistory;
 }

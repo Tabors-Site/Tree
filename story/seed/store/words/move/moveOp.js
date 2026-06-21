@@ -111,15 +111,15 @@ async function moveHandler({ target, params, moment }) {
   // post-fold query.
   let fromSpaceId = null;
   const { loadOrFold } = await import("../../../materials/projections.js");
-  const branch = moment?.actorAct?.history || "0";
+  const history = moment?.actorAct?.history || "0";
   if (kind === "space") {
-    const slot = await loadOrFold("space", targetId, branch);
+    const slot = await loadOrFold("space", targetId, history);
     if (!slot) {
       throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, `move: space "${targetId}" not found`);
     }
     fromSpaceId = slot.state?.parent || null;
   } else {
-    const slot = await loadOrFold("matter", targetId, branch);
+    const slot = await loadOrFold("matter", targetId, history);
     if (!slot) {
       throw new IbpError(IBP_ERR.INVALID_INPUT, `move: matter "${targetId}" not found`);
     }
@@ -141,7 +141,7 @@ async function moveHandler({ target, params, moment }) {
   if (coord) {
     const containerId = fromSpaceId;
     if (containerId) {
-      const containerSlot = await loadOrFold("space", containerId, branch);
+      const containerSlot = await loadOrFold("space", containerId, history);
       const size = containerSlot?.state?.size || null;
       if (size) {
         for (const axis of ["x", "y", "z"]) {

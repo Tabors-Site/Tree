@@ -27,7 +27,7 @@ export function keyHostEnv() {
     // loadKey(nameId) → THE authoritative key reader, the SAME one the seal signs
     // with (actSig.loadSigningKey): i-am → story key; password-locked Name → the
     // in-session PEM (null if not connected); system-encrypted → decrypt. Null when
-    // locked-and-not-connected or keyless. The branch is the moment's, never defaulted
+    // locked-and-not-connected or keyless. The history is the moment's, never defaulted
     // for a real export (the "0" fallback only covers a standalone harness run).
     "load-key": async ({ args: [nameId] }, ctx) =>
       loadSigningKey(String(nameId), historyOf(ctx)),

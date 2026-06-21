@@ -605,7 +605,7 @@ export function registerLlmAssignerOps() {
       actorBeingName:    { type: "text", label: "Actor being name",    required: false },
       actorSpaceId:      { type: "text", label: "Actor space id",      required: false },
       role:              { type: "text", label: "Role",                required: false },
-      branch:            { type: "text", label: "Branch",              required: false },
+      history:           { type: "text", label: "History",             required: false },
     },
     handler: async ({ identity, args, history }) => {
       let {
@@ -617,7 +617,7 @@ export function registerLlmAssignerOps() {
         actorSpaceId = null,
         role = "main",
       } = args || {};
-      const effectiveHistory = args?.branch || history || "0";
+      const effectiveHistory = args?.history || history || "0";
       // Default the actor to the SEE caller when not specified.
       if (!actorBeingId && !actorBeingName && identity?.beingId) {
         actorBeingId = String(identity.beingId);
@@ -644,7 +644,7 @@ export function registerLlmAssignerOps() {
         receiver: { beingId: receiverBeingId, spaceId: receiverSpaceId, storyDomain: null },
         actor: actorBeingId ? { beingId: actorBeingId, spaceId: actorSpaceId, storyDomain: null } : null,
         role,
-        branch: effectiveHistory,
+        history: effectiveHistory,
       });
       const { loadProjection } = await import("../../../materials/projections.js");
       const beingsToLookup = new Map();

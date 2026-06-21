@@ -4,7 +4,7 @@
 //
 // Every "find a being" / "is this the I-Am" / "who's the operator"
 // answer comes through here. No state changes, no Fact stamps, no
-// auth side-effects — just lean reads against the per-branch
+// auth side-effects — just lean reads against the per-history
 // projections collection via the unified API.
 
 import {
@@ -22,8 +22,8 @@ import {
  * being on the place chains back to it. Created during
  * `ensureSpaceRoot()`; absent only on a pre-bootstrap place.
  *
- * Branch-aware: main-branch only by default; I_AM is a doctrinal
- * singleton at the story root, not a per-branch concept.
+ * History-aware: main-history only by default; I_AM is a doctrinal
+ * singleton at the story root, not a per-history concept.
  */
 export async function findIAm() {
   const roots = await findRoot("being", "0");
@@ -76,10 +76,10 @@ const SEED_SYSTEM_BEING_NAMES = [
  *
  * @param {string} ancestorBeingId    the prospective ancestor
  * @param {string} descendantBeingId  the being to check
- * @param {string} [branch="0"]
+ * @param {string} [history="0"]
  * @returns {Promise<boolean>}
  */
-export async function isAncestorOf(ancestorBeingId, descendantBeingId, branch = "0") {
+export async function isAncestorOf(ancestorBeingId, descendantBeingId, history = "0") {
   if (!ancestorBeingId || !descendantBeingId) return false;
   const ancestor = String(ancestorBeingId);
   let cursor = String(descendantBeingId);
@@ -91,11 +91,11 @@ export async function isAncestorOf(ancestorBeingId, descendantBeingId, branch = 
     visited.add(cursor);
     hops++;
     // loadOrFold: behavioral read . the parent being may live in the
-    // branch's main lineage with no divergent slot yet. loadProjection
+    // history's main lineage with no divergent slot yet. loadProjection
     // would short-circuit to false on inherited beings; loadOrFold
     // walks the lineage and cold-folds from the inherited reel.
     const { loadOrFold } = await import("../../projections.js");
-    const slot = await loadOrFold("being", cursor, branch);
+    const slot = await loadOrFold("being", cursor, history);
     if (!slot) return false;
     const parent = slot.state?.parentBeingId || null;
     if (!parent) return false;
@@ -137,10 +137,10 @@ export function beingCognition(being) {
  *
  * Returns null on a fresh story before any being has registered.
  *
- * @param {string} [branch="0"]
+ * @param {string} [history="0"]
  */
-export async function findRootOperator(branch = "0") {
-  return await findRootOperatorImpl(SEED_SYSTEM_BEING_NAMES, branch);
+export async function findRootOperator(history = "0") {
+  return await findRootOperatorImpl(SEED_SYSTEM_BEING_NAMES, history);
 }
 
 /**
@@ -157,10 +157,10 @@ export async function findRootOperator(branch = "0") {
  * be misclassified as the operator and the bootstrap branch to skip
  * for the real first human).
  */
-export async function isFirstBeing(branch = "0") {
+export async function isFirstBeing(history = "0") {
   const { default: Projection } = await import("../../history/projection.js");
   const row = await Projection.findOne({
-    history: branch, type: "being",
+    history: history, type: "being",
     "state.qualities.cognition.defaultKind": "human",
     tombstoned: { $ne: true },
   })
@@ -170,43 +170,43 @@ export async function isFirstBeing(branch = "0") {
 }
 
 /**
- * Find a being by name (case-insensitive). Branch-scoped: same name in
- * different branches resolves to different beings.
+ * Find a being by name (case-insensitive). History-scoped: same name in
+ * different histories resolves to different beings.
  *
  * Returns a doc-shaped object with `_id` + flattened state fields so
  * auth callers (which read `being.password`, `being.qualities.auth`,
  * etc.) keep working without refactoring.
  */
-export async function findBeingByName(name, branch = "0") {
+export async function findBeingByName(name, history = "0") {
   if (!name || typeof name !== "string") return null;
   const escaped = name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const matches = await findByNamePattern("being", new RegExp(`^${escaped}$`, "i"), branch);
+  const matches = await findByNamePattern("being", new RegExp(`^${escaped}$`, "i"), history);
   if (matches.length === 0) return null;
   const slot = matches[0];
   return { _id: slot.id, position: slot.position, ...slot.state };
 }
 
 /**
- * Find every being that answers to `name`, across ALL branches.
+ * Find every being that answers to `name`, across ALL histories.
  *
  * The identity surface (BE:connect) runs before a session has a
- * branch seated, so a being born on branch #7a must be findable from
- * a fresh socket sitting on the default branch. Lineage walks don't cover this (a
- * sibling or child branch is not in the default branch's lineage), so
- * this is a deliberate cross-branch sweep of the projections
+ * history seated, so a being born on history #7a must be findable from
+ * a fresh socket sitting on the default history. Lineage walks don't cover this (a
+ * sibling or child history is not in the default history's lineage), so
+ * this is a deliberate cross-history sweep of the projections
  * collection.
  *
  * Dedupes by being id. For each being, the returned doc is the HOME
- * slot view: the slot whose branch equals state.homeHistory (where the
+ * slot view: the slot whose history equals state.homeHistory (where the
  * be:birth fact landed). Divergent copies of the same being on other
- * branches (lazy cold-folds, renames) don't get to redefine who the
+ * histories (lazy cold-folds, renames) don't get to redefine who the
  * being is for authentication. Beings predating homeHistory fall back
  * to whichever slot was found.
  *
- * Candidates are ordered default-branch-first so the common case (one
+ * Candidates are ordered default-history-first so the common case (one
  * being, born on main) costs one comparison. Callers that authenticate
  * should verify credentials per candidate; the password disambiguates
- * same-name beings born on different branches.
+ * same-name beings born on different histories.
  *
  * @param {string} name
  * @returns {Promise<Array<{_id, homeHistory, position, ...state}>>}
@@ -254,15 +254,15 @@ export async function findBeingCandidatesByName(name) {
 }
 
 /**
- * The branch a being owns as their present: state.homeHistory from
- * their home slot (the slot on the branch they were birthed on).
+ * The history a being owns as their present: state.homeHistory from
+ * their home slot (the slot on the history they were birthed on).
  *
- * Cross-branch by necessity, same reasoning as
+ * Cross-history by necessity, same reasoning as
  * findBeingCandidatesByName: BE:connect / BE:release / the WS
  * handshake seat the session's currentHistory from this, and at those
- * moments the session has no branch to scope the lookup by.
+ * moments the session has no history to scope the lookup by.
  *
- * Falls back to the default branch for legacy rows without
+ * Falls back to the default history for legacy rows without
  * homeHistory and for unknown ids.
  *
  * @param {string} beingId

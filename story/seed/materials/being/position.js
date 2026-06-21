@@ -114,7 +114,7 @@ function persistBeingPosition(beingId, spaceId, moment = null) {
       await withBeingAct(
         String(beingId),
         `Position: persist @${String(beingId).slice(0, 8)}`,
-        spec.branch,
+        spec.history,
         async (ctx) => {
           // Re-stamp with the being's act context (spec.nameId stays
           // unset so emitFact resolves it from ctx.actorAct.by).
@@ -139,9 +139,9 @@ function persistBeingPosition(beingId, spaceId, moment = null) {
  * stops at a system boundary), the topmost non-system entry of the
  * chain is treated as the space-root.
  */
-async function deriveSpaceRootId(spaceId, branch) {
+async function deriveSpaceRootId(spaceId, history) {
   if (!spaceId) return null;
-  const chain = await getAncestorChain(String(spaceId), branch);
+  const chain = await getAncestorChain(String(spaceId), history);
   if (!chain || chain.length === 0) return null;
   const spaceRootId = getSpaceRootId();
   if (spaceRootId) {
@@ -163,13 +163,13 @@ async function deriveSpaceRootId(spaceId, branch) {
  */
 export async function setCurrentSpace(beingId, spaceId, moment) {
   if (!beingId) return;
-  const branch = moment?.actorAct?.history;
-  if (typeof branch !== "string" || !branch) {
-    throw new Error("setCurrentSpace: moment.actorAct.history is required; planting a being at a position needs the actor's branch to derive the right tree-root.");
+  const history = moment?.actorAct?.history;
+  if (typeof history !== "string" || !history) {
+    throw new Error("setCurrentSpace: moment.actorAct.history is required; planting a being at a position needs the actor's history to derive the right tree-root.");
   }
   const p = getBeingPositionRecord(beingId);
   p.position = spaceId || null;
-  p.rootId = await deriveSpaceRootId(spaceId, branch);
+  p.rootId = await deriveSpaceRootId(spaceId, history);
   persistBeingPosition(beingId, spaceId, moment);
 }
 

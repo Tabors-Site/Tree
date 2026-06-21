@@ -31,7 +31,7 @@ async function _iAm() {
 }
 
 // BEDROCK (project_iam_genesis_immutable): is `name`'s current heaven ("0") declaration I_AM's? Then
-// it is genesis bedrock — immutable on "0" by anyone but I_AM (per-branch shadowing is still allowed).
+// it is genesis bedrock — immutable on "0" by anyone but I_AM (per-history shadowing is still allowed).
 // Covers EVERY word kind (op/type/reducer/concept/roleword), since all are I_AM's words on "0". Reads
 // the latest "0" coin fact's author. Only consulted on a non-I_AM write to "0" (rare).
 async function _isIAmBedrock(name) {
@@ -52,8 +52,8 @@ async function _inAct(moment, label, fn) {
 // Bind a word to its host: lay a coin fact carrying the binding descriptor. The descriptor
 // is SERIALIZABLE -- handlers are refs to code matter, not inline functions, because a fact is data.
 // Re-binding lays a fresh coin fact; the fold's last declaration wins (the words-stack rule).
-// Returns { word, branch }.
-export async function bindWord(name, descriptor = {}, { moment = null, branch = "0", actorBeingId = null, skipIfUnchanged = false } = {}) {
+// Returns { word, history }.
+export async function bindWord(name, descriptor = {}, { moment = null, history = "0", actorBeingId = null, skipIfUnchanged = false } = {}) {
   if (!name || typeof name !== "string") throw new Error("bindWord: a non-empty word name is required");
   const { emitFact } = await import("../../past/fact/facts.js");
   const actor = await _actor(actorBeingId);
@@ -65,56 +65,56 @@ export async function bindWord(name, descriptor = {}, { moment = null, branch = 
   // skip the redundant coin fact, so a reboot does not grow the chain by a declare per boot.
   // Safe by construction: a content difference always differs as JSON, so this never skips a real change.
   if (skipIfUnchanged) {
-    const current = await getWord(name, branch);
+    const current = await getWord(name, history);
     if (current) {
       // getWord now surfaces ownerExtension (the provenance) alongside the binding; strip it
       // for the binding compare and check it separately, else the dedup never matches and a
       // reboot re-declares every op (chain growth).
       const { word: _w, ownerExtension: curOwner, ...curBinding } = current;
-      if (JSON.stringify(curBinding) === JSON.stringify(binding) && curOwner === ownerExtension) return { word: name, branch: String(branch), skipped: true };
+      if (JSON.stringify(curBinding) === JSON.stringify(binding) && curOwner === ownerExtension) return { word: name, history: String(history), skipped: true };
     }
   }
   // BEDROCK guard — AFTER the dedup, so I_AM's idempotent genesis re-declares skip above and only a
   // real override by ANOTHER reaches here. A non-I_AM cannot re-declare an I_AM "0" word on "0".
-  if (String(branch) === "0" && String(actor) !== (await _iAm()) && await _isIAmBedrock(name)) {
-    throw new Error(`the I_AM genesis word "${name}" is bedrock on heaven and cannot be re-declared by another — only I_AM may, or shadow it on your own branch`);
+  if (String(history) === "0" && String(actor) !== (await _iAm()) && await _isIAmBedrock(name)) {
+    throw new Error(`the I_AM genesis word "${name}" is bedrock on heaven and cannot be re-declared by another — only I_AM may, or shadow it on your own history`);
   }
   await _inAct(moment, `I coin the word ${name}`, (ctx) => emitFact({
-    through: actor, history: String(branch), verb: "do", act: COIN,
+    through: actor, history: String(history), verb: "do", act: COIN,
     of: { kind: "being", id: actor },
     params: { word: name, ownerExtension, binding },
   }, ctx));
-  if (String(branch) === "0") _projection.set(name, { ...binding, ownerExtension }); // live projection: binding + provenance
-  return { word: name, branch: String(branch) };
+  if (String(history) === "0") _projection.set(name, { ...binding, ownerExtension }); // live projection: binding + provenance
+  return { word: name, history: String(history) };
 }
 
 // Disable a word: lay a retire fact. The declaration stays on the chain forever; this is
 // the "new word that says it can't be used". A later re-bind (a fresh declare) re-enables it.
-export async function disableWord(name, { moment = null, branch = "0", actorBeingId = null } = {}) {
+export async function disableWord(name, { moment = null, history = "0", actorBeingId = null } = {}) {
   const { emitFact } = await import("../../past/fact/facts.js");
   const actor = await _actor(actorBeingId);
-  // BEDROCK: same guard as bindWord — a non-I_AM cannot disable an I_AM "0" word (shadow on a branch).
-  if (String(branch) === "0" && String(actor) !== (await _iAm()) && await _isIAmBedrock(name)) {
-    throw new Error(`the I_AM genesis word "${name}" is bedrock on heaven and cannot be disabled by another — only I_AM may, or shadow it on your own branch`);
+  // BEDROCK: same guard as bindWord — a non-I_AM cannot disable an I_AM "0" word (shadow on a history).
+  if (String(history) === "0" && String(actor) !== (await _iAm()) && await _isIAmBedrock(name)) {
+    throw new Error(`the I_AM genesis word "${name}" is bedrock on heaven and cannot be disabled by another — only I_AM may, or shadow it on your own history`);
   }
   await _inAct(moment, `I retire the word ${name}`, (ctx) => emitFact({
-    through: actor, history: String(branch), verb: "do", act: RETIRE,
+    through: actor, history: String(history), verb: "do", act: RETIRE,
     of: { kind: "being", id: actor },
     params: { word: name },
   }, ctx));
-  if (String(branch) === "0") _projection.delete(String(name));
+  if (String(history) === "0") _projection.delete(String(name));
 }
 
 // Ask for a word: fold its coin / retire facts into the current descriptor. Heaven
-// ("0", the seed vocabulary) is inherited by every branch; a branch's own facts layer on top, in
+// ("0", the seed vocabulary) is inherited by every history; a history's own facts layer on top, in
 // date/seq order, last action wins. A word whose last action is a disable folds to null (it is not
 // deleted, it is off). This is the read path the verb dispatch will use instead of a registry get.
-export async function getWord(name, branch = "0") {
+export async function getWord(name, history = "0") {
   const { default: Fact } = await import("../../past/fact/fact.js");
-  const branches = String(branch) === "0" ? ["0"] : ["0", String(branch)];
+  const histories = String(history) === "0" ? ["0"] : ["0", String(history)];
   const facts = await Fact.find({
     verb: "do", act: { $in: [COIN, RETIRE] }, "params.word": String(name),
-    history: { $in: branches },
+    history: { $in: histories },
   }).sort({ date: 1, seq: 1 }).lean();
   let binding = null, owner = null;
   for (const f of facts) {
@@ -128,14 +128,14 @@ export async function getWord(name, branch = "0") {
 //
 // getWord reads the chain per call (correct, slow). The verb dispatch needs a SYNC, fast read of the
 // current vocabulary, so _projection holds the fold of coin / retire facts on heaven
-// "0" (the story vocabulary, inherited by every branch), kept current as bindWord lays facts and
+// "0" (the story vocabulary, inherited by every history), kept current as bindWord lays facts and
 // rebuilt from the chain at boot by rehydrateWordProjection. A cache of the fold, not a registry:
 // the facts are the truth, this is their reading (the wakes / Being-row pattern).
 const _projection = new Map(); // word name -> binding
 
-export async function rehydrateWordProjection(branch = "0") {
+export async function rehydrateWordProjection(history = "0") {
   const { default: Fact } = await import("../../past/fact/fact.js");
-  const facts = await Fact.find({ verb: "do", act: { $in: [COIN, RETIRE] }, history: String(branch), "params.word": { $exists: true } })
+  const facts = await Fact.find({ verb: "do", act: { $in: [COIN, RETIRE] }, history: String(history), "params.word": { $exists: true } })
     .sort({ date: 1, seq: 1 }).lean();
   _projection.clear();
   for (const f of facts) {
@@ -204,7 +204,7 @@ export function resolveDoOpFromFold(name) {
 // well as the Map, until the Map is retired. NOTE: authAction is a function (not serializable), so an
 // op that refines its auth key keeps that refinement on the Map path until the host-ref form lands.
 // Returns the count declared. filter: { target } or { ownerExtension } (see operations.listOperations).
-export async function declareOpsToFold({ moment = null, branch = "0", filter = {} } = {}) {
+export async function declareOpsToFold({ moment = null, history = "0", filter = {} } = {}) {
   const { listOperations, getOperation } = await import("../../ibp/operations.js");
   const names = listOperations(filter).map((o) => o.name);
   let n = 0;
@@ -228,7 +228,7 @@ export async function declareOpsToFold({ moment = null, branch = "0", filter = {
       // not the Map (10.md step 6). Serializable, so a fact holds it.
       args: op.args ? JSON.parse(JSON.stringify(op.args)) : undefined,
       useNamespaceKey: op.useNamespaceKey ? true : undefined,
-    }, { moment, branch, skipIfUnchanged: true });
+    }, { moment, history, skipIfUnchanged: true });
     n++;
   }
   return n;
@@ -252,7 +252,7 @@ export function listFoldedOps() {
 // resolves a type from the fold (resolveTypeFromFold) as well as the Map, until the Map retires.
 // (Like the do-ops, the types Map stays as the bootstrap buffer: seed types register at module load,
 // before seedFold can declare them, and getMatterType is read during the bootstrap that builds them.)
-export async function declareTypesToFold({ moment = null, branch = "0" } = {}) {
+export async function declareTypesToFold({ moment = null, history = "0" } = {}) {
   const { listMatterTypes } = await import("../../materials/matter/types.js");
   let n = 0;
   for (const t of listMatterTypes()) {
@@ -265,7 +265,7 @@ export async function declareTypesToFold({ moment = null, branch = "0" } = {}) {
       ops: Array.isArray(t.ops) ? [...t.ops] : [],
       render: t.render && typeof t.render === "object" ? { ...t.render } : null,
       claims: t.claims && typeof t.claims === "object" ? JSON.parse(JSON.stringify(t.claims)) : null,
-    }, { moment, branch, skipIfUnchanged: true });
+    }, { moment, history, skipIfUnchanged: true });
     n++;
   }
   return n;
@@ -304,13 +304,13 @@ export function listFoldedTypes() {
 // The parsed IR stays HOST (roleWordRegistry's irCache); the fold carries only role:op -> source, the
 // same shape as an op's do.ref. declareRoleWordsToFold mirrors declareOpsToFold (reads the registered
 // role-words); resolveRoleWordSource is the sync source-read roleWordRegistry's resolveRoleWord uses.
-export async function declareRoleWordsToFold({ moment = null, branch = "0" } = {}) {
+export async function declareRoleWordsToFold({ moment = null, history = "0" } = {}) {
   const { listRegistered } = await import("./roleWordRegistry.js");
   let n = 0;
   for (const w of listRegistered()) {
     await bindWord(`${w.role}:${w.op}`, {
       kind: "roleword", role: w.role, op: w.op, source: String(w.fileUrl),
-    }, { moment, branch, skipIfUnchanged: true });
+    }, { moment, history, skipIfUnchanged: true });
     n++;
   }
   return n;
@@ -333,7 +333,7 @@ export function resolveRoleWordSource(role, op) {
 // static registry as the bootstrap / non-boot backstop. Named "<kind>-reducer" so it never collides
 // with the concept word of the same kind (10.md's "reducer is a field on the kind word" is the
 // eventual unification; a distinct word keeps this isolated from declareConcepts for now).
-export async function declareReducersToFold({ moment = null, branch = "0" } = {}) {
+export async function declareReducersToFold({ moment = null, history = "0" } = {}) {
   const reducers = await import("../../materials/reducers.js");
   let n = 0;
   for (const kind of reducers.types()) {
@@ -350,7 +350,7 @@ export async function declareReducersToFold({ moment = null, branch = "0" } = {}
       registerHostHandler(`reducer:${kind}:isGone`, r.isGone);
       binding.isGone = { ref: `reducer:${kind}:isGone` };
     }
-    await bindWord(`${kind}-reducer`, binding, { moment, branch, skipIfUnchanged: true });
+    await bindWord(`${kind}-reducer`, binding, { moment, history, skipIfUnchanged: true });
     n++;
   }
   return n;

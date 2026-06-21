@@ -1,7 +1,7 @@
 // The BOOK / STORY — facts woven into the story they tell, genesis → the live edge.
 //
 // FOUR STORY VIEWS (Tabor) — one panel you could live in (read, watch, act):
-//   world    — the whole branch and all its activity. The WORLD's story.
+//   world    — the whole history and all its activity. The WORLD's story.
 //   place    — only the parts of the fold that made one moment. The MOMENT's story.
 //   being    — every act/fact from a being's start, its own thread. The BEING's story.
 //   lineage  — a being and all its children (choose a stopping point). The FAMILY's story.
@@ -30,7 +30,7 @@ const recv      = (f) => f.to ?? null;      // the receiver (rule 17)
 export async function assembleStory(
   scope = "world",
   {
-    branch = "0",
+    history = "0",
     being = null,
     moment = null,
     space = null,
@@ -41,7 +41,7 @@ export async function assembleStory(
   } = {},
 ) {
   const { default: Fact } = await import("../../past/fact/fact.js");
-  const q = { history: String(branch) };
+  const q = { history: String(history) };
   if (since) q.date = { $gt: since instanceof Date ? since : new Date(since) };
 
   // The views are ONE coordinate system, not four parallels: WHO (being → lineage → world, the
@@ -52,7 +52,7 @@ export async function assembleStory(
     q.$or = [{ through: String(being) }, { by: String(being) }];
   } else if (scope === "lineage" && being) {
     // WHO, widened along the birth tree: the being + its descendants, to an optional stopping depth
-    const ids = await descendantsOf(String(being), depth, String(branch));
+    const ids = await descendantsOf(String(being), depth, String(history));
     q.through = { $in: ids };
   } else if (scope === "moment" && moment) {
     // WHEN: one moment's cross-section — the facts that act laid (its landings on every reel it touched)
@@ -78,12 +78,12 @@ export async function assembleStory(
     // facts ON any of those (the object side) OR acts BY a being present here (the through side)
     q.$or = [{ "of.id": { $in: ofIds } }, { through: { $in: beingIds } }];
   }
-  // scope "world" → WHO, all authors: the whole branch (no extra filter)
+  // scope "world" → WHO, all authors: the whole history (no extra filter)
 
   let cursor = Fact.find(q).sort({ date: 1, seq: 1 }).lean();
   if (limit) cursor = cursor.limit(limit);
   const facts = await cursor;
-  const names = await resolveNames(facts, String(branch));
+  const names = await resolveNames(facts, String(history));
   // first-person ("I …") for the FOCAL being's own lines; third-person (saw) otherwise. An
   // explicit nameId (INCLUDING null) overrides: recall passes its own being for a `recalled` view
   // (first person) and null for a `saw` view (third person); the book defaults to the being it scopes.
@@ -93,12 +93,12 @@ export async function assembleStory(
 }
 
 // the world story is the default book; keep the name the read/write halves already call
-export async function assembleBook(branch = "0", opts = {}) {
-  return assembleStory("world", { branch, ...opts });
+export async function assembleBook(history = "0", opts = {}) {
+  return assembleStory("world", { history, ...opts });
 }
 
 // walk the birth tree from a being down to its descendants, bounded by `depth` (null = all)
-async function descendantsOf(beingId, depth, _branch) {
+async function descendantsOf(beingId, depth, _history) {
   const { default: Being } = await import("../../materials/being/being.js");
   const ids = [String(beingId)];
   let frontier = [String(beingId)];
@@ -170,7 +170,7 @@ function weave(facts, focalBeing, names) {
 }
 
 // ── id → proper name, resolved once per story from the reel slots ────────────────────
-async function resolveNames(facts, branch) {
+async function resolveNames(facts, history) {
   const { loadOrFold } = await import("../../materials/projections.js");
   const want = new Map();
   for (const f of facts) {
@@ -185,7 +185,7 @@ async function resolveNames(facts, branch) {
   const names = new Map([["i-am", "I_AM"]]);
   for (const [id, kind] of want) {
     try {
-      const slot = await loadOrFold(kind, id, branch);
+      const slot = await loadOrFold(kind, id, history);
       if (slot?.state?.name) names.set(id, slot.state.name);
     } catch {
       /* unresolved ids fall back to the short form */

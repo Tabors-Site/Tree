@@ -131,7 +131,7 @@ export async function dispatchTransportAct({
   spaceId,
   identity = null,
   priority,
-  branch,
+  history,
   targetHistory = null,
   timeoutMs = DEFAULT_TIMEOUT_MS,
 } = {}) {
@@ -142,23 +142,23 @@ export async function dispatchTransportAct({
   if (act.verb !== "do" && act.verb !== "be" && act.verb !== "call" && act.verb !== "name") {
     throw new Error(`dispatchTransportAct: act.verb must be "do", "be", "call", or "name" (got "${act.verb}")`);
   }
-  // Branch is REQUIRED — no main-bias default. The wire layer parses
-  // the address and attaches the branch to every transport-act; this
+  // History is REQUIRED — no main-bias default. The wire layer parses
+  // the address and attaches the history to every transport-act; this
   // throw catches a caller that forgot to thread it.
-  if (typeof branch !== "string" || branch.length === 0) {
+  if (typeof history !== "string" || history.length === 0) {
     throw new Error(
-      `dispatchTransportAct: branch is required (got ${JSON.stringify(branch)}). ` +
-      `Thread the wire-parsed branch through; no main-bias default.`,
+      `dispatchTransportAct: history is required (got ${JSON.stringify(history)}). ` +
+      `Thread the wire-parsed history through; no main-bias default.`,
     );
   }
-  // targetHistory defaults to branch when not specified — same-world
-  // call. When set explicitly different from branch, this is a
-  // cross-world dispatch: the moment opens on the actor's branch but
-  // the Fact lands on the target's branch with crossOrigin marking
+  // targetHistory defaults to history when not specified — same-world
+  // call. When set explicitly different from history, this is a
+  // cross-world dispatch: the moment opens on the actor's history but
+  // the Fact lands on the target's history with crossOrigin marking
   // the actor's. See CROSS-WORLD.md.
   const resolvedTargetHistory = (typeof targetHistory === "string" && targetHistory.length > 0)
     ? targetHistory
-    : branch;
+    : history;
 
   const finalCorrelation = correlation || randomUUID();
 
@@ -166,14 +166,14 @@ export async function dispatchTransportAct({
   // fix is being-keyed intake storage so this lookup goes away.
   let resolvedSpace = spaceId;
   if (!resolvedSpace) {
-    // Branch-aware: the moment runs in the caller's branch; the
-    // intake-storing space comes from the being's state in that branch.
+    // History-aware: the moment runs in the caller's history; the
+    // intake-storing space comes from the being's state in that history.
     // loadOrFold triggers a lineage-cold-fold on miss so a being that
-    // existed pre-branch shows up in the branch's view on first access
+    // existed pre-fork shows up in the history's view on first access
     // without a manual rebuild. Returns null if the being didn't exist
-    // at this branch's branchPoint (legitimate "not here").
+    // at this history's branchPoint (legitimate "not here").
     const { loadOrFold } = await import("../../materials/projections.js");
-    const slot = await loadOrFold("being", beingId, branch);
+    const slot = await loadOrFold("being", beingId, history);
     resolvedSpace = slot?.state?.homeSpace || null;
   }
   if (!resolvedSpace) {
@@ -189,15 +189,15 @@ export async function dispatchTransportAct({
     act,
     identity,
     priority,
-    // Two branches carried per the cross-world doctrine:
-    //   branch       — the ACTOR's branch; where the moment runs and
+    // Two histories carried per the cross-world doctrine:
+    //   history      — the ACTOR's history; where the moment runs and
     //                  where the Act seals. assign.js reads this when
     //                  shaping moment and seating the actorAct.
-    //   targetHistory — where the Fact lands (the TARGET'S branch).
-    //                  Defaults to branch (same-world). When different,
+    //   targetHistory — where the Fact lands (the TARGET'S history).
+    //                  Defaults to history (same-world). When different,
     //                  emitFact's deriveCrossOrigin attaches a
     //                  provenance block automatically.
-    branch,
+    history,
     targetHistory: resolvedTargetHistory,
   });
 

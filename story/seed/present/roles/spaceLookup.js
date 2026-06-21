@@ -33,10 +33,10 @@ import { getSpaceRootId } from "../../sprout.js";
  * (code-cognition roles not yet installed; boot-order edge).
  *
  * The walk reads off the ancestor chain's own nodes: getAncestorChain
- * is loadOrFold-backed (lineage-aware, branch-keyed) and each node
+ * is loadOrFold-backed (lineage-aware, history-keyed) and each node
  * already carries normalized qualities, so the chain IS the read.
  * The per-node loadProjection this used to do was both redundant and
- * branch-blind — on a branch where a host space hadn't been lazily
+ * history-blind — on a history where a host space hadn't been lazily
  * folded yet, the installed role was invisible and the lookup fell
  * through to the registry, silently serving the template instead of
  * the space-installed override.
@@ -51,12 +51,12 @@ import { getSpaceRootId } from "../../sprout.js";
  * spec's reach, with the root as the neutral base.
  *
  * @param {object} grant   { role, anchorSpaceId, anchorBeingId?, ... }
- * @param {string} branch  required
+ * @param {string} history  required
  * @returns {Promise<{spec: object|null, hostSpaceId: string|null}>}
  */
-export async function getRoleSpecForGrant(grant, branch) {
-  if (typeof branch !== "string" || !branch.length) {
-    throw new Error("getRoleSpecForGrant requires `branch` (no silent default)");
+export async function getRoleSpecForGrant(grant, history) {
+  if (typeof history !== "string" || !history.length) {
+    throw new Error("getRoleSpecForGrant requires `history` (no silent default)");
   }
   const name = grant?.role;
   if (!name) return { spec: null, hostSpaceId: null };
@@ -64,7 +64,7 @@ export async function getRoleSpecForGrant(grant, branch) {
   const anchor = grant?.anchorSpaceId;
   if (anchor) {
     let chain = null;
-    try { chain = await getAncestorChain(String(anchor), branch); } catch { chain = null; }
+    try { chain = await getAncestorChain(String(anchor), history); } catch { chain = null; }
     if (Array.isArray(chain)) {
       // chain[0] is the anchor itself; the walk covers self + ancestors.
       for (const node of chain) {
@@ -108,19 +108,19 @@ export async function getRoleSpecForGrant(grant, branch) {
  * @param {object}  spec        — the role spec
  * @param {string}  hostSpaceId — where the spec is hosted
  * @param {object}  target      — { spaceId?, path? } describing the target
- * @param {string}  branch      — required
+ * @param {string}  history      — required
  * @returns {Promise<boolean>}  — true iff the spec reaches the target
  */
-export async function roleReachesTarget(spec, hostSpaceId, target, branch) {
-  if (typeof branch !== "string" || !branch.length) {
-    throw new Error("roleReachesTarget requires `branch` (no silent default)");
+export async function roleReachesTarget(spec, hostSpaceId, target, history) {
+  if (typeof history !== "string" || !history.length) {
+    throw new Error("roleReachesTarget requires `history` (no silent default)");
   }
   const { spaceId: targetSpace = null, path: targetPath = null } = target || {};
 
   // Default base — target at or below host.
   let covered = false;
   if (hostSpaceId && targetSpace) {
-    covered = await spaceIsAtOrBelow(targetSpace, hostSpaceId, branch);
+    covered = await spaceIsAtOrBelow(targetSpace, hostSpaceId, history);
   }
 
   const reach = Array.isArray(spec?.reach) ? spec.reach : null;
@@ -135,7 +135,7 @@ export async function roleReachesTarget(spec, hostSpaceId, target, branch) {
   // for DO — base coverage stood and the carve-out never applied.
   let path = targetPath;
   if (!path && targetSpace) {
-    path = await pathOfSpace(targetSpace, branch);
+    path = await pathOfSpace(targetSpace, history);
   }
 
   for (const pat of reach) {
@@ -157,9 +157,9 @@ export async function roleReachesTarget(spec, hostSpaceId, target, branch) {
  * a name (the pattern then simply doesn't match; spaceId patterns
  * still can).
  */
-async function pathOfSpace(spaceId, branch) {
+async function pathOfSpace(spaceId, history) {
   try {
-    const chain = await getAncestorChain(String(spaceId), branch);
+    const chain = await getAncestorChain(String(spaceId), history);
     if (!Array.isArray(chain) || chain.length === 0) return null;
     // chain is [self, ..., storyRoot]; drop the root, reverse to
     // top-down, join names.
@@ -171,10 +171,10 @@ async function pathOfSpace(spaceId, branch) {
   }
 }
 
-async function spaceIsAtOrBelow(targetSpaceId, hostSpaceId, branch) {
+async function spaceIsAtOrBelow(targetSpaceId, hostSpaceId, history) {
   if (String(targetSpaceId) === String(hostSpaceId)) return true;
   try {
-    const chain = await getAncestorChain(String(targetSpaceId), branch);
+    const chain = await getAncestorChain(String(targetSpaceId), history);
     if (Array.isArray(chain)) {
       for (const node of chain) {
         if (String(node._id) === String(hostSpaceId)) return true;

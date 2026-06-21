@@ -92,7 +92,7 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
       // Fire onError so the wire's awaitResult fails fast instead of
       // waiting out the 60s timeout. Without this, a transport-act
       // whose receiving being / role isn't resolvable on the moment's
-      // branch leaves the originating socket hanging until the
+      // history leaves the originating socket hanging until the
       // DEFAULT_TIMEOUT_MS in transportAct.js trips. The substrate has
       // already decided this entry can't run; tell the wire now.
       if (handoff?.onError) {

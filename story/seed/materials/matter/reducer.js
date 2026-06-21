@@ -78,7 +78,7 @@ export function reduce(state, fact) {
  * Gone-predicate the fold engine consults after reducing. Ended
  * matter (end-matter writes spaceId=DELETED; the row stays on the
  * reel for audit) must TOMBSTONE its projection slot: tombstoning
- * frees the per-branch unique name index (partial filter
+ * frees the per-history unique name index (partial filter
  * tombstoned:false) and drops the slot from findByName, so a new
  * matter can take the name and ended matter stops resolving. Without
  * this the name stays locked forever while the chain says "created"

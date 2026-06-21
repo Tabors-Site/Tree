@@ -90,14 +90,17 @@ export async function foldPlace(beingId, orientation = ORIENTATION.FORWARD, opts
   if (!beingId) throw new Error("foldPlace: beingId is required");
   const ω = validateOrientation(orientation);
 
-  // Branch this fold runs in. Sourced from moment (the moment
-  // already carries the caller's branch via Pass 4 substrate) or an
-  // explicit opts.branch from non-moment callers. Every sub-fold
-  // inside this place-fold inherits the same branch so the whole
-  // place renders against one branch's facts. No silent default —
-  // a missing branch here means a perimeter threading bug, surfaced
+  // History this fold runs in. Sourced from moment (the moment
+  // already carries the caller's history via Pass 4 substrate) or an
+  // explicit opts.history from non-moment callers. Every sub-fold
+  // inside this place-fold inherits the same history so the whole
+  // place renders against one history's facts. No silent default —
+  // a missing history here means a perimeter threading bug, surfaced
   // loud at the fold seam.
-  const branch = assertHistoryOrThrow(
+  // SEAM: opts key stays `branch` (foldPlace's non-moment callers, e.g.
+  // cognition/human/myInnerFace.js, pass `branch`); the value is the
+  // history slot. In-moment callers route via opts.moment.actorAct.history.
+  const history = assertHistoryOrThrow(
     opts.moment?.actorAct?.history || opts.branch,
     "foldPlace(opts)",
   );
@@ -117,7 +120,7 @@ export async function foldPlace(beingId, orientation = ORIENTATION.FORWARD, opts
   // are added inside buildForwardFace. Inward folds only include self
   // because the world drops out.
   const weave = emptyWeave();
-  addReel(weave, { reelKind: "being", reelId: String(beingId), branch });
+  addReel(weave, { reelKind: "being", reelId: String(beingId), history });
 
   // Role spec, when present, gates occupant folds. Legacy callers (no
   // role) get unfiltered behavior.
@@ -125,7 +128,7 @@ export async function foldPlace(beingId, orientation = ORIENTATION.FORWARD, opts
 
   // The being itself is always folded — every orientation shows
   // the being to itself (the self is the carrier of orientation).
-  const { state: self, foldedSeq: selfFoldedSeq } = await fold("being", beingId, { branch });
+  const { state: self, foldedSeq: selfFoldedSeq } = await fold("being", beingId, { branch: history });
   stash("being", beingId, selfFoldedSeq);
 
   // Inward: the world drops out. The face is A_b in act-order.
@@ -135,7 +138,7 @@ export async function foldPlace(beingId, orientation = ORIENTATION.FORWARD, opts
   }
 
   // Forward AND half need the forward face built first.
-  const forwardFace = await buildForwardFace(beingId, self, stash, branch, role, weave);
+  const forwardFace = await buildForwardFace(beingId, self, stash, history, role, weave);
 
   if (ω === ORIENTATION.FORWARD) {
     return { orientation: ω, ...forwardFace, _weave: weave };
@@ -161,16 +164,16 @@ export async function foldPlace(beingId, orientation = ORIENTATION.FORWARD, opts
  * face return value is a legacy-caller convenience; the role-scoped
  * filter still trims that work when a role is on hand.
  */
-async function buildForwardFace(beingId, self, stash, branch = "0", role = null, weave = null) {
+async function buildForwardFace(beingId, self, stash, history = "0", role = null, weave = null) {
   const spaceId = self?.position || null;
   if (!spaceId) {
     return { self, space: null, occupants: [] };
   }
 
-  const { state: space, foldedSeq: spaceFoldedSeq } = await fold("space", spaceId, { branch });
+  const { state: space, foldedSeq: spaceFoldedSeq } = await fold("space", spaceId, { branch: history });
   stash?.("space", spaceId, spaceFoldedSeq);
-  if (weave) addReel(weave, { reelKind: "space", reelId: String(spaceId), branch });
-  const occupantRefs = await findByPosition(spaceId, branch);
+  if (weave) addReel(weave, { reelKind: "space", reelId: String(spaceId), history });
+  const occupantRefs = await findByPosition(spaceId, history);
 
   // Self is its own occupant of its position; filter it out so the
   // caller doesn't get the being twice.
@@ -191,7 +194,7 @@ async function buildForwardFace(beingId, self, stash, branch = "0", role = null,
   const occupants = await Promise.all(
     admitted.map(async (o) => {
       try {
-        const { state, foldedSeq } = await fold(o.type, o.id, { branch });
+        const { state, foldedSeq } = await fold(o.type, o.id, { branch: history });
         stash?.(o.type, o.id, foldedSeq);
         return { type: o.type, id: o.id, state };
       } catch (err) {

@@ -284,7 +284,7 @@ export async function ensureSeedDelegates(spaceRootId) {
         if (slot?.id) homeId = String(slot.id);
       }
 
-      // Look up by name on main (seed delegates are main-branch).
+      // Look up by name on main (seed delegates are main-history).
       const existingSlot = await findByName("being", spec.name, "0");
       if (existingSlot) {
         // Idempotent drift correction: each drift-correction set-being

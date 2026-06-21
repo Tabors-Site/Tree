@@ -283,12 +283,13 @@ async function doSee(socket, msg, ack, id) {
   return ackOk(ack, id, descriptor);
 }
 
-// tree — YOUR being-tree on one branch (the hierarchy view + grant surface).
-// Requires a bound name (it's your own beings). Branch comes from the portal's
-// current left stance (msg.payload.branch); a grant you make from this view
-// lands on that branch, so the tree you see is exactly the access you give.
-// Session-only read: no moment, no fact (the grant/revoke acts ride the normal
-// DO verb separately).
+// tree — YOUR being-tree on one history (the hierarchy view + grant surface).
+// Requires a bound name (it's your own beings). History comes from the portal's
+// current left stance (msg.payload.branch — wire payload key the portal client's
+// nameTree() still sends; SEAM with portal/core/client.js); a grant you make
+// from this view lands on that history, so the tree you see is exactly the
+// access you give. Session-only read: no moment, no fact (the grant/revoke acts
+// ride the normal DO verb separately).
 async function doTree(socket, msg, ack, id) {
   const nameId = socket.nameId || null;
   if (!nameId) {
@@ -296,9 +297,9 @@ async function doTree(socket, msg, ack, id) {
       "name tree requires a connected name (sign in first)");
   }
   const src = msg?.payload || msg || {};
-  const branch = src.branch || socket.currentHistory || null;
+  const history = src.branch || socket.currentHistory || null;
   const { buildNameTree } = await import("../../seed/ibp/descriptor.js");
-  const tree = await buildNameTree(nameId, branch);
+  const tree = await buildNameTree(nameId, history);
   if (!tree) {
     return ackError(ack, id, IBP_ERR.NAME_NOT_FOUND, `no such name: ${nameId}`);
   }

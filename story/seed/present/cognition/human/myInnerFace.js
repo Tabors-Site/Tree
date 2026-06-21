@@ -37,11 +37,11 @@ registerSeeOperation("my-inner-face", {
     const beingId = identity?.beingId || ctx?.beingId || null;
     if (!beingId) return null;
 
-    const _branch = history || ctx?.history || "0";
+    const _history = history || ctx?.history || "0";
 
     let beingSlot = null;
     try {
-      beingSlot = await loadOrFold("being", String(beingId), _branch);
+      beingSlot = await loadOrFold("being", String(beingId), _history);
     } catch (err) {
       log.warn("MyInnerFace", `loadOrFold being failed: ${err.message}`);
       return null;
@@ -68,7 +68,9 @@ registerSeeOperation("my-inner-face", {
     // against is the exact residue of what perception admitted.
     let foldedFace = null;
     try {
-      foldedFace = await foldPlace(String(beingId), "forward", { branch: _branch, role });
+      // foldPlace (stamper/) consumes the `branch` opts key (contract with
+      // the untouched stamper module); the local is _history.
+      foldedFace = await foldPlace(String(beingId), "forward", { branch: _history, role });
     } catch (err) {
       log.debug("MyInnerFace", `foldPlace failed: ${err.message}`);
       foldedFace = null;
@@ -80,7 +82,7 @@ registerSeeOperation("my-inner-face", {
         beingId:      String(beingId),
         role,
         orientation:  "forward",
-        history:      _branch,
+        history:      _history,
         currentSpace: positionId,
         rootId:       null,
         name:         being.name || null,

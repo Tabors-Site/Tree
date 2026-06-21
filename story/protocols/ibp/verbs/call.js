@@ -96,8 +96,8 @@ export async function handleCall(socket, env, ack) {
       } catch { /* fall to anonymous */ }
     }
 
-    // Cross-branch gate at the wire boundary. The caller's first-person
-    // frame is the socket's tracked branch; the target stance's branch
+    // Cross-history gate at the wire boundary. The caller's first-person
+    // frame is the socket's tracked history; the target stance's history
     // is what the address carries. Mismatch is forbidden until
     const callerHistory = socket.currentHistory || "0";
     let _targetHistoryResolved = null;
@@ -118,10 +118,10 @@ export async function handleCall(socket, env, ack) {
       // Impersonation refusal — see _shared.js for the doctrine.
       assertNoImpersonation(expanded, socket);
 
-      // Cross-branch dispatch: the summon record lands on the target
-      // being's inbox-reel on the TARGET'S branch; crossOrigin marks
-      // the caller's branch. emitFact attaches it. CROSS-WORLD.md.
-      _targetHistoryResolved = expanded?.right?.branch || "0";
+      // Cross-history dispatch: the summon record lands on the target
+      // being's inbox-reel on the TARGET'S history; crossOrigin marks
+      // the caller's history. emitFact attaches it. CROSS-WORLD.md.
+      _targetHistoryResolved = expanded?.right?.history || "0";
     } catch (err) {
       if (err && err.code === IBP_ERR.FORBIDDEN) throw err;
       // Parse failures fall through; callVerb owns address validation.
@@ -129,32 +129,32 @@ export async function handleCall(socket, env, ack) {
     const targetHistory = _targetHistoryResolved || callerHistory;
 
     // Pause / delete gate. SUMMON ALWAYS produces a summon Fact
-    // (writes the recipient's inbox); paused or deleted branches
+    // (writes the recipient's inbox); paused or deleted histories
     // refuse so the frozen / hidden world accumulates no new work.
     {
       const { isHistoryPaused, isHistoryDeleted } =
         await import("../../../seed/materials/history/histories.js");
       if (await isHistoryPaused(callerHistory)) {
         throw new IbpError(IBP_ERR.STORY_PAUSED,
-          `SUMMON refused: branch #${callerHistory} is paused.`,
-          { branch: callerHistory });
+          `SUMMON refused: history #${callerHistory} is paused.`,
+          { history: callerHistory });
       }
       if (await isHistoryDeleted(callerHistory)) {
         throw new IbpError(IBP_ERR.STORY_PAUSED,
-          `SUMMON refused: branch #${callerHistory} is deleted.`,
-          { branch: callerHistory, deleted: true });
+          `SUMMON refused: history #${callerHistory} is deleted.`,
+          { history: callerHistory, deleted: true });
       }
     }
 
     const result = await callVerb(address, message, {
       identity,
       currentUser:   socket.name,
-      // currentHistory is the FACT's branch (where the summon record
+      // currentHistory is the FACT's history (where the summon record
       // lands on the recipient's inbox-reel) — that's the target's
-      // branch. actorHistory is the caller's session branch: the auth
+      // history. actorHistory is the caller's session history: the auth
       // side (their grants live there) and the crossOrigin block on
-      // cross-branch summons both read it. A wire summon has no
-      // moment, so without the explicit thread the actor's branch
+      // cross-history summons both read it. A wire summon has no
+      // moment, so without the explicit thread the actor's history
       // never reached the seed at all.
       currentHistory: targetHistory,
       actorHistory:   callerHistory,

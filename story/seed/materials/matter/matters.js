@@ -112,15 +112,15 @@ function escapeRegex(s) {
  *
  * @param {string} type            the matter type, used as the prefix
  * @param {object} opts
- * @param {string} [opts.branch="0"]
+ * @param {string} [opts.history="0"]
  * @param {string} opts.spaceId
  * @param {string|null} [opts.parentMatterId=null]
  * @returns {Promise<string>}
  */
-export async function generateUniqueMatterName(type, { branch = "0", spaceId, parentMatterId = null } = {}) {
+export async function generateUniqueMatterName(type, { history = "0", spaceId, parentMatterId = null } = {}) {
   const safe = String(type || "matter").replace(/[^A-Za-z0-9_-]/g, "") || "matter";
   const pattern = new RegExp(`^${escapeRegex(safe)}[0-9]*$`, "i");
-  const existing = await listMatterNamesInFolder(branch, spaceId, parentMatterId, pattern);
+  const existing = await listMatterNamesInFolder(history, spaceId, parentMatterId, pattern);
   const taken = new Set(existing.map((n) => n.toLowerCase()));
   let n = existing.length;
   for (let i = 0; i < 10000; i++) {
@@ -142,17 +142,17 @@ export async function generateUniqueMatterName(type, { branch = "0", spaceId, pa
  * @param {string|null} [args.name]    explicit caller name
  * @param {*}           [args.content] resolved content (cas ref or shape)
  * @param {string}      args.type
- * @param {string}      [args.branch="0"]
+ * @param {string}      [args.history="0"]
  * @param {string}      args.spaceId
  * @param {string|null} [args.parentMatterId=null]
  * @returns {Promise<string>}
  */
-export async function resolveMatterName({ name, content, type, branch = "0", spaceId, parentMatterId = null }) {
+export async function resolveMatterName({ name, content, type, history = "0", spaceId, parentMatterId = null }) {
   if (typeof name === "string" && name.trim().length) return name.trim();
   if (content && typeof content === "object" && typeof content.name === "string" && content.name.length) {
     return content.name;
   }
-  return generateUniqueMatterName(type, { branch, spaceId, parentMatterId });
+  return generateUniqueMatterName(type, { history, spaceId, parentMatterId });
 }
 
 // Size cap applies universally. Stance-auth-based exemptions can
@@ -205,12 +205,12 @@ async function createMatter({
       `Unknown matter type "${type}". Registered types: seed basics plus extension-registered "<ext>:<type>" names.`,
     );
   }
-  const branch = assertHistoryOrThrow(moment?.actorAct?.history, "matters(moment)");
+  const history = assertHistoryOrThrow(moment?.actorAct?.history, "matters(moment)");
 
   const { loadOrFold } = await import("../projections.js");
   const { default: Projection } = await import("../history/projection.js");
   const spaceIdBare = String(spaceId);
-  const _spaceSlot = await loadOrFold("space", spaceIdBare, branch);
+  const _spaceSlot = await loadOrFold("space", spaceIdBare, history);
   const targetSpace = _spaceSlot ? {
     heavenSpace: _spaceSlot.state?.heavenSpace,
     parent:    _spaceSlot.state?.parent,
@@ -221,7 +221,7 @@ async function createMatter({
 
   const max = maxMatterPerSpace();
   const count = await Projection.countDocuments({
-    history: branch, type: "matter",
+    history: history, type: "matter",
     "state.spaceId": spaceIdBare,
     tombstoned: { $ne: true },
   });
@@ -322,7 +322,7 @@ async function createMatter({
     name,
     content: finalContent,
     type,
-    branch,
+    history,
     spaceId: spaceIdBare,
     parentMatterId,
   });
@@ -351,9 +351,9 @@ async function createMatter({
     params:  matterParams,
     actId,
     sessionId,
-    history: branch,
+    history: history,
   }]);
-  const _newSlot = await loadProjection("matter", matterId, branch);
+  const _newSlot = await loadProjection("matter", matterId, history);
   if (!_newSlot) {
     throw new Error(
       `createMatter: birth Fact stamped but row ${matterId} not materialized`,
@@ -378,7 +378,7 @@ async function createMatter({
   // the AI walk past blocking errors. After hooks run parallel so
   // awaiting the Promise.all adds no serialization latency beyond
   // the slowest single handler.
-  await hooks.run("afterMatter", { matter: newMatter, spaceId, beingId, type, sizeKB, action: "create", actId, sessionId, branch }).catch((err) => {
+  await hooks.run("afterMatter", { matter: newMatter, spaceId, beingId, type, sizeKB, action: "create", actId, sessionId, history }).catch((err) => {
     log.warn("Matter", `afterMatter hook chain failed: ${err?.message}`);
   });
 
@@ -396,8 +396,8 @@ async function editMatter({
 }) {
   if (!matterId || !beingId) throw new Error("Missing required fields");
 
-  const branch = assertHistoryOrThrow(moment?.actorAct?.history, "matters(moment)");
-  const _matterSlot = await loadOrFold("matter", matterId, branch);
+  const history = assertHistoryOrThrow(moment?.actorAct?.history, "matters(moment)");
+  const _matterSlot = await loadOrFold("matter", matterId, history);
   if (!_matterSlot) throw new Error("Matter not found");
   const matter = { _id: _matterSlot.id, ...(_matterSlot.state || {}) };
   if (String(matter.beingId) !== String(beingId)) throw new Error("Unauthorized");
@@ -486,7 +486,7 @@ async function editMatter({
     params:  { field: "content", value: newRef },
     actId,
     sessionId,
-    history: branch,
+    history: history,
   }, moment);
   matter.content = newRef;
 
@@ -497,15 +497,15 @@ async function editMatter({
   // Awaited: see comment in createMatter above. Callers (tool handlers
   // on the LLM path) need the syntax validator complete before they
   // return, or the next turn reads stale state.
-  await hooks.run("afterMatter", { matter, spaceId: matter.spaceId, beingId, type: matter.type || "generic", sizeKB: newSizeKB, deltaKB, action: "edit", actId, sessionId, branch }).catch((err) => {
+  await hooks.run("afterMatter", { matter, spaceId: matter.spaceId, beingId, type: matter.type || "generic", sizeKB: newSizeKB, deltaKB, action: "edit", actId, sessionId, history }).catch((err) => {
     log.warn("Matter", `afterMatter hook chain failed: ${err?.message}`);
   });
 
   return { message: "Matter updated successfully", matter };
 }
 
-async function getMatters({ spaceId, limit, offset, startDate, endDate, branch }) {
-  assertHistoryOrThrow(branch, "matters.getMatters(opts)");
+async function getMatters({ spaceId, limit, offset, startDate, endDate, history }) {
+  assertHistoryOrThrow(history, "matters.getMatters(opts)");
   if (!spaceId) throw new Error("Missing required parameter: spaceId");
 
   const dateRange = validateDateRange(startDate, endDate);
@@ -515,7 +515,7 @@ async function getMatters({ spaceId, limit, offset, startDate, endDate, branch }
   const { default: Projection } = await import("../history/projection.js");
   const spaceIdBare = String(spaceId);
   const where = {
-    branch, type: "matter",
+    history, type: "matter",
     "state.spaceId": spaceIdBare,
     tombstoned: { $ne: true },
   };
@@ -559,8 +559,8 @@ async function deleteMatterAndFile({
   actId = null, sessionId = null,
   moment = null,
 }) {
-  const branch = assertHistoryOrThrow(moment?.actorAct?.history, "matters(moment)");
-  const _mSlot = await loadOrFold("matter", matterId, branch);
+  const history = assertHistoryOrThrow(moment?.actorAct?.history, "matters(moment)");
+  const _mSlot = await loadOrFold("matter", matterId, history);
   if (!_mSlot) throw new Error("Matter not found");
   const matter = { _id: _mSlot.id, ...(_mSlot.state || {}) };
 
@@ -603,7 +603,7 @@ async function deleteMatterAndFile({
       params:  { field, value },
       actId,
       sessionId,
-      history: branch,
+      history: history,
     }, moment);
   await setMatterField("spaceId", DELETED);
   await setMatterField("beingId", DELETED);
@@ -618,7 +618,7 @@ async function deleteMatterAndFile({
       matter, spaceId, beingId: fileOwnerId,
       type: matter.type || "generic", fileSizeKB,
       action: "delete", fileDeleted: false,
-      actId, sessionId, branch,
+      actId, sessionId, history,
     }).catch(() => {});
   }
 
@@ -634,8 +634,8 @@ async function transferMatter({
     throw new Error("Missing required fields: matterId, targetSpace, beingId");
   }
 
-  const branch = assertHistoryOrThrow(moment?.actorAct?.history, "matters(moment)");
-  const _mSlot2 = await loadOrFold("matter", matterId, branch);
+  const history = assertHistoryOrThrow(moment?.actorAct?.history, "matters(moment)");
+  const _mSlot2 = await loadOrFold("matter", matterId, history);
   if (!_mSlot2) throw new Error("Matter not found");
   const matter = { _id: _mSlot2.id, ...(_mSlot2.state || {}) };
   if (matter.spaceId === DELETED) throw new Error("Cannot transfer deleted matter");
@@ -649,7 +649,7 @@ async function transferMatter({
     throw new Error("Only the matter author or the tree owner can transfer this matter");
   }
 
-  const _tSlot = await loadOrFold("space", targetSpaceBare, branch);
+  const _tSlot = await loadOrFold("space", targetSpaceBare, history);
   if (!_tSlot) throw new Error("Target Space not found");
 
   const targetRoot = await resolveRootSpace(targetSpaceBare);
@@ -668,7 +668,7 @@ async function transferMatter({
     params:  { field: "spaceId", value: targetSpaceBare },
     actId,
     sessionId,
-    history: branch,
+    history: history,
   }, moment);
   matter.spaceId = targetSpaceBare;
 
@@ -682,8 +682,8 @@ async function transferMatter({
  * overwrites name with the being's name, which the descriptor pass
  * specifically needs to avoid.
  */
-async function listMattersAt(spaceId, { limit = 50, branch } = {}) {
-  assertHistoryOrThrow(branch, "matters.listMattersAt(opts)");
+async function listMattersAt(spaceId, { limit = 50, history } = {}) {
+  assertHistoryOrThrow(history, "matters.listMattersAt(opts)");
   if (!spaceId) return [];
   const { default: Projection } = await import("../history/projection.js");
   const toEntry = (s) => {
@@ -706,29 +706,29 @@ async function listMattersAt(spaceId, { limit = 50, branch } = {}) {
     tombstoned: { $ne: true },
   });
 
-  if (branch === "0") {
+  if (history === "0") {
     const rows = await Projection.find(baseQuery("0"))
       .sort({ "state.createdAt": -1 })
       .limit(limit)
       .lean();
     return rows.map(toEntry);
   }
-  // Non-main: union branch's own matters with main's matters that
+  // Non-main: union this history's own matters with main's matters that
   // existed at branch creation. Shadow + tombstone semantics.
   const { getBranchPoint } = await import("../history/histories.js");
   const [historyRows, mainRows] = await Promise.all([
-    Projection.find(baseQuery(branch)).lean(),
+    Projection.find(baseQuery(history)).lean(),
     Projection.find(baseQuery("0")).lean(),
   ]);
   const shadowedIds = new Set(historyRows.map((s) => s.id));
   const tombs = await Projection.find({
-    history: branch, type: "matter", tombstoned: true,
+    history: history, type: "matter", tombstoned: true,
   }).select("id").lean();
   for (const t of tombs) shadowedIds.add(t.id);
   const mainVisible = [];
   for (const cand of mainRows) {
     if (shadowedIds.has(cand.id)) continue;
-    const bp = await getBranchPoint(branch, "matter", cand.id);
+    const bp = await getBranchPoint(history, "matter", cand.id);
     if (bp && bp > 0) mainVisible.push(cand);
   }
   const all = [...historyRows, ...mainVisible];
@@ -753,8 +753,8 @@ async function listMattersAt(spaceId, { limit = 50, branch } = {}) {
  */
 async function getMatter(matterId, opts = {}) {
   if (!matterId || typeof matterId !== "string") return null;
-  const branch = assertHistoryOrThrow(opts?.branch, "matters.getMatter(opts)");
-  const slot = await loadOrFold("matter", matterId, branch);
+  const history = assertHistoryOrThrow(opts?.history, "matters.getMatter(opts)");
+  const slot = await loadOrFold("matter", matterId, history);
   if (!slot) return null;
   return { _id: slot.id, ...(slot.state || {}) };
 }

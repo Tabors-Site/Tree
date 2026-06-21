@@ -128,9 +128,9 @@ export async function ensureSourceTree(opts = {}) {
   const ignore = opts.ignore || DEFAULT_IGNORE;
   const detached = opts.detached !== false;
 
-  // Branch is pinned to main ("0") throughout this file by design: the
+  // History is pinned to main ("0") throughout this file by design: the
   // ./source mirror is a heaven region, and heaven spaces live only on
-  // main (one canonical projection per story, no per-branch fork).
+  // main (one canonical projection per story, no per-history fork).
   const { findByHeavenSpace } = await import("../projections.js");
   const _sourceSlot = await findByHeavenSpace(HEAVEN_SPACE.SOURCE, "0");
   const sourceSpace = _sourceSlot ? { _id: _sourceSlot.id } : null;
@@ -190,7 +190,7 @@ export async function syncSourceTree({
 
   const stats = { created: 0, updated: 0, removed: 0, kept: 0 };
 
-  // Root matter for targetPath. Branch-aware via direct Projection query
+  // Root matter for targetPath. History-aware via direct Projection query
   // — the matter-by-spaceId + source type is a substrate-internal
   // lookup pattern, not a wire-facing one.
   const _rootMatterSlot = await ProjectionModel.findOne({

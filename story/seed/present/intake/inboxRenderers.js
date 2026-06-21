@@ -93,7 +93,7 @@ export function listInboxRenderers() {
  * renderer matches the entry's intent (panel falls back to free-text).
  *
  * @param {object} entry  the inbox entry (my-inbox shape)
- * @param {object} ctx    { story, branch, identity, viewerBeingId, ... }
+ * @param {object} ctx    { story, history, identity, viewerBeingId, ... }
  */
 export async function buildInboxRenderSpec(entry, ctx) {
   if (!entry || typeof entry !== "object") return null;

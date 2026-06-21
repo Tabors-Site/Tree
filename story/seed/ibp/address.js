@@ -199,7 +199,7 @@ export function expand(pa, ctx = {}) {
  * Resolve `@being` names to canonical beingIds on an expanded address.
  *
  * Doctrine: the address IS the identity. The left stance's `@being`
- * name plus the stance's (story, branch) triple uniquely identifies
+ * name plus the stance's (story, history) triple uniquely identifies
  * a being row via findByName. After this resolution, every local
  * stance with a `@being` qualifier also carries its `beingId`, and
  * the verb dispatcher reads the actor from the address directly . no
@@ -237,11 +237,11 @@ async function _resolveStanceBeingId(stance, ctx) {
   try {
     const { findByName } = await import("../materials/projections.js");
     // No literal "0" fallback — resolve the operator's `#main` pointer
-    // when the stance carries no explicit branch (the resolver should
+    // when the stance carries no explicit history (the resolver should
     // have canonicalized this earlier, but defensive coverage here).
     const { getDefaultHistory } = await import("../materials/history/historyRegistry.js");
-    const branch = stance.history || await getDefaultHistory();
-    const slot = await findByName("being", stance.being, branch);
+    const history = stance.history || await getDefaultHistory();
+    const slot = await findByName("being", stance.being, history);
     if (slot?.id) {
       return { ...stance, beingId: String(slot.id) };
     }
@@ -385,10 +385,10 @@ export function validate(pa) {
 
 function parseStance(input, ctx, opts = {}) {
   const { isLeftSide = false } = opts;
-  // historyPointer rides alongside `branch` throughout the function.
+  // historyPointer rides alongside `history` throughout the function.
   // The parser sets one or the other (never both) when a `#` qualifier
   // is present; both stay null when no `#` was typed. resolveHistoryPointers
-  // (wire-layer) later fills `branch` from `historyPointer` if needed.
+  // (wire-layer) later fills `history` from `historyPointer` if needed.
   let historyPointer = null;
   const s = input.trim();
   if (!s) {
@@ -446,7 +446,7 @@ function parseStance(input, ctx, opts = {}) {
   // expand. Allowed shapes: `treeos.ai#1a/path`, `#1a/path`, `#1a`,
   // `treeos.ai#1a`. Forbidden: more than one `#`, or `#` inside a path
   // segment (path comes after `#`, not before).
-  let branch = null;
+  let history = null;
   const hashIdx = rest.indexOf("#");
   if (hashIdx >= 0) {
     if (rest.indexOf("#", hashIdx + 1) >= 0) {
@@ -455,23 +455,23 @@ function parseStance(input, ctx, opts = {}) {
     }
     const before = rest.slice(0, hashIdx);
     const after = rest.slice(hashIdx + 1);
-    // Branch ends at the first "/" or "~" (whichever starts the path).
+    // History ends at the first "/" or "~" (whichever starts the path).
     const sl = after.indexOf("/");
     const ti = after.indexOf("~");
     let pathStart = -1;
     if (sl >= 0 && ti >= 0) pathStart = Math.min(sl, ti);
     else if (sl >= 0) pathStart = sl;
     else if (ti >= 0) pathStart = ti;
-    const branchStr = pathStart >= 0 ? after.slice(0, pathStart) : after;
-    if (!branchStr) {
+    const historyStr = pathStart >= 0 ? after.slice(0, pathStart) : after;
+    if (!historyStr) {
       throw paError("empty-history", input,
         `History qualifier "#" cannot be empty`);
     }
-    const parsedHistory = parseHistoryOrPointer(branchStr);
+    const parsedHistory = parseHistoryOrPointer(historyStr);
     if (parsedHistory.kind === "canonical") {
-      branch = parsedHistory.value;
+      history = parsedHistory.value;
     } else {
-      // Named pointer (`#main`, `#prod`, ...). Leave `branch` null
+      // Named pointer (`#main`, `#prod`, ...). Leave `history` null
       // and stash the name on `historyPointer`; the wire's
       // resolveHistoryPointers step fills in the canonical path
       // before dispatch.
@@ -489,11 +489,11 @@ function parseStance(input, ctx, opts = {}) {
   // A place identifier (e.g. "treeos.ai") never starts with "/" or "~", so a
   // leading slash or tilde means we're already inside the current place.
   if (!rest) {
-    // Pure-branch stance: `#1a` or `#1a@being` — no story, no path.
+    // Pure-history stance: `#1a` or `#1a@being` — no story, no path.
     // story NULL (not ctx) so expand's storyWasTyped is honest.
     return {
       story: null,
-      history: branch,
+      history,
       historyPointer,
       path: ctx.currentPath || null,
       being,
@@ -504,7 +504,7 @@ function parseStance(input, ctx, opts = {}) {
     // not typed — the "typed story = main" rule does not apply.
     return {
       story: null,
-      history: branch,
+      history,
       historyPointer,
       path: parsePath(rest, ctx),
       being,
@@ -527,19 +527,19 @@ function parseStance(input, ctx, opts = {}) {
       // Human shorthand `tabor` on the left side — no story typed.
       return {
         story: null,
-        history: branch,
+        history,
         historyPointer,
         path: "/",
         being: rest,
       };
     }
-    return { story: parseStory(rest), history: branch, historyPointer, path: null, being };
+    return { story: parseStory(rest), history, historyPointer, path: null, being };
   }
   const storyPart = rest.slice(0, boundary);
   const pathPart = rest.slice(boundary);
   return {
     story: parseStory(storyPart),
-    history: branch,
+    history,
     historyPointer,
     path: parsePath(pathPart, ctx),
     being,
@@ -611,7 +611,7 @@ function parseHistory(s) {
 //
 // The IBP wire layer's `resolveHistoryPointers` step later resolves
 // the pointer name to a canonical path via the @branch-registry being
-// before dispatch. Verbs read `expanded.<side>.branch` and trust it's
+// before dispatch. Verbs read `expanded.<side>.history` and trust it's
 // canonical because resolution either filled it in from a pointer or
 // the parser saw a canonical path to begin with.
 function parseHistoryOrPointer(s) {
@@ -729,14 +729,14 @@ function formatStance(stance, opts = {}) {
 
 function expandStance(stance, ctx) {
   if (!stance) return stance;
-  // Branch inheritance is keyed off whether the stance already named
+  // History inheritance is keyed off whether the stance already named
   // a story before expand. The doctrine (locked 2026-06-04 with
   // Tabor): when a typed address pins a story, the user pinned the
   // whole address — absence of `#` MEANS the `#main` pointer (which
   // every story has, defaulting to canonical "0" but operators can
   // re-point after a merge so the default address follows). Only
   // shorthands that omit the story (relative paths like `/foo`,
-  // `~`, `@bare`) fall through to the ambient branch the socket is
+  // `~`, `@bare`) fall through to the ambient history the socket is
   // tracking.
   //
   // The "no # = #main pointer" rule lets operators re-point main
@@ -746,30 +746,30 @@ function expandStance(stance, ctx) {
   //
   // Named pointer note: when the parser saw `#main` (or any pointer),
   // it set stance.historyPointer and left stance.history null. We do
-  // NOT default-fill branch in that case . the resolveHistoryPointers
+  // NOT default-fill history in that case . the resolveHistoryPointers
   // step (called by the wire layer after expand) looks up the pointer
   // in the .branches heaven space and fills stance.history with the
-  // canonical path. Until then, branch stays null as a marker.
+  // canonical path. Until then, history stays null as a marker.
   const storyWasTyped = !!stance.story;
   const story = stance.story || ctx.currentStory || null;
 
-  let branch = null;
+  let history = null;
   let historyPointer = stance.historyPointer || null;
   if (stance.history) {
     // Canonical was typed; use as-is.
-    branch = stance.history;
+    history = stance.history;
   } else if (historyPointer) {
-    // Pointer was typed; leave branch null for resolveHistoryPointers.
-    branch = null;
+    // Pointer was typed; leave history null for resolveHistoryPointers.
+    history = null;
   } else if (storyWasTyped) {
     // Typed story, no `#` → default to the `#main` pointer. The
-    // resolver fills branch from the registry; on a fresh story
+    // resolver fills history from the registry; on a fresh story
     // main → "0" so behavior is identical at install.
     historyPointer = "main";
   } else if (ctx.currentHistory) {
-    // Relative address with ambient branch context (the common case
+    // Relative address with ambient history context (the common case
     // from a wire-layer call that has a tracked socket.currentHistory).
-    branch = ctx.currentHistory;
+    history = ctx.currentHistory;
   } else {
     // Relative address, no ambient context. Fall through to `#main`
     // pointer rather than the literal "0" so story-level mains
@@ -780,7 +780,7 @@ function expandStance(stance, ctx) {
   return {
     ...stance,
     story,
-    history: branch,
+    history,
     historyPointer,
     path: stance.path || ctx.currentPath || null,
     being: stance.being || ctx.defaultBeing || null,
@@ -855,8 +855,8 @@ export function isValidBeing(being) {
 // createBranch; this validator just enforces the wire-side shape.
 const BRANCH_RE = /^(?:0|\d+(?:[a-z]+\d+)*(?:[a-z]+)?)$/;
 
-export function isValidHistory(branch) {
-  return typeof branch === "string" && BRANCH_RE.test(branch);
+export function isValidHistory(history) {
+  return typeof history === "string" && BRANCH_RE.test(history);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -995,14 +995,14 @@ export function parseWithContext(input, ctx = {}) {
 /**
  * @typedef {object} Stance
  * @property {string|null} story — e.g. "treeos.ai" (or null when implicit)
- * @property {string|null} branch — e.g. "1a" (or null pre-expand; "0" after expand for main)
+ * @property {string|null} history — e.g. "1a" (or null pre-expand; "0" after expand for main)
  * @property {string|null} path    — e.g. "/~tabor/flappybird" (or null)
  * @property {string|null} being   — e.g. "ruler" (or null)
  *
- * A Stance carries both a Position (story + branch + path) and a Being.
+ * A Stance carries both a Position (story + history + path) and a Being.
  * When `being` is null, the Stance reduces to a bare Position. When
- * `branch` is null in a freshly-parsed stance, the caller has not asked
- * for a specific branch and expand() will fill in "0" (main).
+ * `history` is null in a freshly-parsed stance, the caller has not asked
+ * for a specific history and expand() will fill in "0" (main).
  */
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -1030,9 +1030,9 @@ const STANCE_PAIR_SEPARATOR = " :: ";
  * Compose a stance into its canonical storage string.
  * Accepts:
  *   - string         — pass-through (assumed already formatted)
- *   - { place?, branch?, spaceId, name }
+ *   - { place?, history?, spaceId, name }
  *
- * Output: `<story>#<branch>/<spaceId>@<name>` (spaceId-rooted path
+ * Output: `<story>#<history>/<spaceId>@<name>` (spaceId-rooted path
  * form, full IBPA grammar). The history qualifier is part of the lane
  * identity: the same two beings talking on #1 and on #0 are in
  * different worlds, so they are different lanes.
@@ -1041,11 +1041,11 @@ const STANCE_PAIR_SEPARATOR = " :: ";
 function stanceString(input) {
   if (input == null) return null;
   if (typeof input === "string") return input.length > 0 ? input : null;
-  const { place, history: branch, spaceId, name } = input;
+  const { place, history, spaceId, name } = input;
   if (!spaceId || !name) return null;
   const storyPart = place || getStoryDomain();
-  const branchPart = branch ? `#${branch}` : "";
-  return `${storyPart}${branchPart}/${spaceId}@${name}`;
+  const historyPart = history ? `#${history}` : "";
+  return `${storyPart}${historyPart}/${spaceId}@${name}`;
 }
 
 /**
@@ -1075,12 +1075,12 @@ function canonicalStancePair(stanceA, stanceB) {
 const STANCE_CACHE_MAX = 2048;
 const stanceCache = new Map();
 
-async function loadBeingStanceFields(beingId, branch = "0") {
+async function loadBeingStanceFields(beingId, history = "0") {
   if (!beingId) return null;
-  // Cache key includes branch so a being's per-branch state
-  // (name + homeSpace can both differ across branches) doesn't
-  // serve stale data when the wire layer fetches on a non-main branch.
-  const key = `${branch}:${String(beingId)}`;
+  // Cache key includes history so a being's per-history state
+  // (name + homeSpace can both differ across histories) doesn't
+  // serve stale data when the wire layer fetches on a non-main history.
+  const key = `${history}:${String(beingId)}`;
   if (stanceCache.has(key)) {
     const v = stanceCache.get(key);
     stanceCache.delete(key);
@@ -1090,7 +1090,7 @@ async function loadBeingStanceFields(beingId, branch = "0") {
   let row = null;
   try {
     const { loadOrFold } = await import("../materials/projections.js");
-    const slot = await loadOrFold("being", String(beingId), branch);
+    const slot = await loadOrFold("being", String(beingId), history);
     row = slot ? { name: slot.state?.name, homeSpace: slot.state?.homeSpace || null } : null;
   } catch {
     row = null;
@@ -1112,8 +1112,8 @@ async function loadBeingStanceFields(beingId, branch = "0") {
  * Invalidate a being's cached stance fields. Call after rename or
  * home change so the next composition picks up the new values.
  *
- * Cache keys are `<branch>:<beingId>` (per-branch state), so the
- * invalidation sweeps every branch's entry for the being — the old
+ * Cache keys are `<history>:<beingId>` (per-history state), so the
+ * invalidation sweeps every history's entry for the being — the old
  * delete-by-bare-id never matched a key and renames served stale
  * stance fields until LRU eviction.
  */
@@ -1127,16 +1127,16 @@ export function invalidateStanceCache(beingId) {
 
 async function composeStanceForBeing(
   beingId,
-  { currentPosition = null, place = null, branch = "0" } = {},
+  { currentPosition = null, place = null, history = "0" } = {},
 ) {
   if (!beingId) return null;
-  const fields = await loadBeingStanceFields(beingId, branch);
+  const fields = await loadBeingStanceFields(beingId, history);
   if (!fields) return null;
   const spaceId = currentPosition || fields.homeSpace;
   if (!spaceId || !fields.name) return null;
   return {
     place: place || getStoryDomain(),
-    history: branch,
+    history,
     spaceId: String(spaceId),
     name: fields.name,
   };
@@ -1149,13 +1149,13 @@ async function composeStanceForBeing(
  * carries its lane identity for presenceKey lookup, replay, and
  * grouping.
  *
- * `branch` is the moment's branch — the world both stances stand in
+ * `history` is the moment's history — the world both stances stand in
  * (a bridge never crosses branches; the gate in address parsing
  * enforces it). It scopes the being lookups (loadOrFold walks the
- * branch's lineage, so branch-born beings compose correctly) and
+ * history's lineage, so history-born beings compose correctly) and
  * renders into the stance strings, making lane identity per-world.
  * Without it, moments off main composed from main's view: null for
- * branch-born beings (no lane identity at all) and stale names for
+ * history-born beings (no lane identity at all) and stale names for
  * diverged ones.
  */
 export async function computeIbpStampAddress({
@@ -1164,18 +1164,22 @@ export async function computeIbpStampAddress({
   addresseeBeingId,
   addresseePosition = null,
   place = null,
-  branch = "0",
+  // SEAM: callers in present/ (1-assign.js, llmMoment.js) still pass the
+  // history slot under the key `branch`; accept it until those dirs rename.
+  history: historyArg,
+  branch: branchArg,
 }) {
+  const history = historyArg ?? branchArg ?? "0";
   try {
     const askerStance = await composeStanceForBeing(askerBeingId, {
       currentPosition: askerPosition,
       place,
-      branch,
+      history,
     });
     const addresseeStance = await composeStanceForBeing(addresseeBeingId, {
       currentPosition: addresseePosition,
       place,
-      branch,
+      history,
     });
     return canonicalStancePair(askerStance, addresseeStance);
   } catch {

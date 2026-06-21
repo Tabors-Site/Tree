@@ -9,8 +9,8 @@
 // flat-app, future tooling) to render a global list — answers "what
 // beings exist?" the way `./operations` answers "what operations exist?"
 //
-// Branch-aware. Default branch is "0" (main); callers can scope to a
-// specific branch to see that branch's beings (lazy inheritance from
+// History-aware. Default history is "0" (main); callers can scope to a
+// specific history to see that history's beings (lazy inheritance from
 // main applies via listByType).
 
 const MAX_LIMIT = 500;
@@ -20,20 +20,20 @@ const MAX_LIMIT = 500;
  *
  * @param {object} [opts]
  * @param {number} [opts.limit=200]
- * @param {string} [opts.branch="0"]
+ * @param {string} [opts.history="0"]
  * @returns {Promise<{ beings: object[], count: number }>}
  */
 export async function describeBeingsCatalog(opts = {}) {
   const limit = Math.min(Math.max(Number(opts.limit) || 200, 1), MAX_LIMIT);
-  const branch = opts.branch || "0";
+  const history = opts.history || "0";
   const { listByType, loadProjections } = await import("../projections.js");
   const { beingCognition } = await import("./identity/lookups.js");
 
   // listByType gives us {type, id} pairs; batch-load the full slots to
   // get state (name, qualities, etc.) for each.
-  const slotRefs = await listByType("being", branch);
+  const slotRefs = await listByType("being", history);
   const slice = slotRefs.slice(0, limit);
-  const slots = await loadProjections("being", slice.map((r) => r.id), branch);
+  const slots = await loadProjections("being", slice.map((r) => r.id), history);
 
   const entries = slice.map((slotRef) => {
     const slot = slots.get(slotRef.id);

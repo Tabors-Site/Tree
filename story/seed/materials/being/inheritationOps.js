@@ -56,9 +56,9 @@ function actingNameOf(identity) {
 // The granted Name must be a declared, non-banished Name on this
 // story. Mirrors birth.js's explicit-trueName validation so you can't
 // hand a point to a typo or a banished Name.
-async function assertGrantableName(grantedName, branch) {
+async function assertGrantableName(grantedName, history) {
   const { loadProjection } = await import("../projections.js");
-  const nameSlot = await loadProjection("name", grantedName, branch);
+  const nameSlot = await loadProjection("name", grantedName, history);
   if (!nameSlot?.state) {
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
@@ -74,8 +74,8 @@ async function assertGrantableName(grantedName, branch) {
   }
 }
 
-async function assertAuthorityOverPosition(actingName, position, branch, opName) {
-  const ok = await hasAuthorityOver(actingName, position, branch);
+async function assertAuthorityOverPosition(actingName, position, history, opName) {
+  const ok = await hasAuthorityOver(actingName, position, history);
   if (!ok) {
     throw new IbpError(
       IBP_ERR.FORBIDDEN,

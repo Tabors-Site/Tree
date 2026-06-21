@@ -702,7 +702,7 @@ export function createView() {
       const sp = desc ? null : data;
       return desc ? [
         ["path",     desc.address?.pathByNames],
-        ["branch",   desc.address?.history],
+        ["history",  desc.address?.history],
         ["spaceId",  desc.spaceId],
         ["spaces",   (desc.children || []).length],
         ["beings",   (desc.beings || []).length],
