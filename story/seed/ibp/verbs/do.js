@@ -61,16 +61,17 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     throw new Error("story.do(target, operation, params): operation must be a non-empty string");
   }
 
-  // Fold-FIRST: a word bound via bindWord resolves from the live projection (the fold of declare-word
-  // facts), the registry-free path (philosophy/word/10.md §2). The fold is the primary source for the
-  // running system. The operations Map stays ONLY as the bootstrap registration buffer: early genesis
-  // (setIAmHomeSpace, sprout.js) dispatches do-ops BEFORE seedFold can populate the fold — the fold
-  // describes a reality that does not exist yet during the bootstrap — so the Map covers those pre-fold
-  // dispatches. After seedFold + the boot-end op-fold, every op resolves from the fold; the Map is the
-  // bootstrap buffer, never the truth. (Fold-ONLY dispatch is NOT achievable: the bootstrap precedes
-  // the fold. 10.md's "step 5 / dispatch fold-only" is superseded by this; the cutover's "no registry"
-  // is the READERS reading the fold (step 6), not deleting the buffer.)
-  let op = resolveDoOpFromFold(operation) || getOperation(operation);
+  // Fold-ONLY: a do-op resolves from the live projection (the fold of declare-word facts), the
+  // registry-free path (philosophy/word/10.md §2). The fold is the SOLE source the running system
+  // dispatches on — no Map fallback. This IS achievable because the seed declares its words BEFORE it
+  // builds the reality: genesis.js declares every do-op onto I_AM's reel (a fact needs only I_AM, not
+  // the space/being it will later describe) right after ensureIAm and BEFORE ensureSpaceRoot, so the
+  // first do-op dispatched while building the reality (create-space, set-being, set-space) already
+  // resolves from the fold. The operations Map stays ONLY as the module-load registration buffer that
+  // declareOpsToFold reads to KNOW what to declare — never a dispatch truth. (This supersedes the
+  // earlier "fold-only is not achievable" reading: the bootstrap was reordered to FOLLOW the fold, so
+  // 10.md step 5 lands — genesis is words, and the words are what the dispatch runs on.)
+  let op = resolveDoOpFromFold(operation);
   if (!op) {
     throw new Error(`Unknown DO operation: "${operation}". Use story.do.listOperations() to see available operations.`);
   }

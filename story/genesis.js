@@ -257,10 +257,35 @@ export async function genesis(app, opts = {}) {
   //   and every prior migration. Re-running the scaffold here would
   //   emit redundant idempotent re-writes and inflate the chain
   //   unnecessarily. The seed is the genesis when plant mode is active.
+  //
+  // The seed declares itself onto the chain BEFORE the reality it builds: the verb pasts, the concept
+  // .words, and the do-ops, all as I_AM declare-word facts on I_AM's OWN reel (of: I_AM, wordStore.js
+  // bindWord) — which needs only I_AM, not any space/being. A fact is laid before the reality it
+  // describes (the place is folded FROM facts), so the WORD fold does not depend on the PLACE fold.
+  // Declared after ensureIAm and BEFORE ensureSpaceRoot, every bootstrap do-op (create-space,
+  // set-being, set-space) resolves from the FOLD, not the Map: genesis IS words (word/10.md §2, 13.md).
+  // Idempotent (reboot dedup-skips; rehydrate refills the projection). Guarded: a fold failure logs.
+  const declareTheWords = async () => {
+    try {
+      await withIAmAct("the words declare themselves", async (ctx) => {
+        const { seedFold } = await import("./seed/present/word/wordFold.js");
+        await seedFold({ moment: ctx });
+      });
+      const { rehydrateWordProjection } = await import("./seed/present/word/wordStore.js");
+      await rehydrateWordProjection("0");
+    } catch (err) {
+      log.warn("Genesis", `seedFold (the seed declaring itself) failed: ${err.message}`);
+    }
+  };
+
   if (!plantedFromSeed) {
     await withGenesisGuard(async () => {
       // Step 1: "I am that I am" — birth I-Am alone, homeSpace=null.
       await ensureIAm();
+
+      // Step 1.5: the words declare themselves onto I_AM's reel, BEFORE the reality-building below,
+      // so every do-op dispatched while building the reality resolves fold-only (no Map fallback).
+      await declareTheWords();
 
       // Step 2: place root + heaven + tier-3 heaven spaces.
       // ensureSpaceRoot self-manages per-step moments (one withIAmAct
@@ -303,24 +328,13 @@ export async function genesis(app, opts = {}) {
     // populates caches, and skips creation (no fact emitted, no
     // moment opened on this branch).
     await ensureSpaceRoot();
+    // The planted chain already carries the word-declarations; declare (dedup-skips) + rehydrate to
+    // fill the live projection from the planted state, so the dispatch reads the fold.
+    await declareTheWords();
   }
 
-  // The seed declares itself onto the chain: the verb pasts, the concept .words, and the do-ops,
-  // all as I_AM declare-word facts in one moment (philosophy/word/10.md §2, GENESIS-FOLD.md). After
-  // this a boot reads the seed defining itself in the story. Idempotent: re-declares skip unchanged
-  // (the wordStore dedup). Guarded: a fold failure logs and degrades, it never crashes the boot.
-  try {
-    await withIAmAct("the words declare themselves", async (ctx) => {
-      const { seedFold } = await import("./seed/present/word/wordFold.js");
-      await seedFold({ moment: ctx });
-    });
-    // the seedFold act has sealed; rebuild the live word projection from the chain (covers reboot,
-    // where the declares dedup-skip and leave the in-memory projection unfilled).
-    const { rehydrateWordProjection } = await import("./seed/present/word/wordStore.js");
-    await rehydrateWordProjection("0");
-  } catch (err) {
-    log.warn("Genesis", `seedFold (the seed declaring itself) failed: ${err.message}`);
-  }
+  // (The seed declared itself BEFORE the reality — Step 1.5 above, and the planted else-branch — so
+  // every bootstrap do-op dispatched fold-only. Nothing left to declare here.)
 
   // ── POST-GENESIS RECONCILIATIONS ──
   // The I-Am exists now. Each subsequent scaffold step is its own
@@ -948,14 +962,24 @@ export async function genesis(app, opts = {}) {
   // here, at boot-end, lets the dispatch resolve them from the fold, not the Map.
   // Idempotent (skipIfUnchanged): ops already folded at seedFold skip.
   try {
-    const { declareOpsToFold, rehydrateWordProjection } =
+    const { declareOpsToFold, declareTypesToFold, declareRoleWordsToFold, rehydrateWordProjection } =
       await import("./seed/present/word/wordStore.js");
-    let folded = 0;
+    let folded = 0, typesFolded = 0, roleWordsFolded = 0;
     await withIAmAct("I declare the rest of my ops", async (ctx) => {
       folded = await declareOpsToFold({ moment: ctx });
     });
+    // The matter TYPES fold the same way (the types-Map migration): a type is a word with
+    // kind:"type", and getMatterType resolves it from the fold as well as the Map.
+    await withIAmAct("I declare my matter types", async (ctx) => {
+      typesFolded = await declareTypesToFold({ moment: ctx });
+    });
+    // The ROLE-WORDS too (the roleWordRegistry unification): a role-word is a word "role:op",
+    // kind:"roleword". This boot-end pass catches any bundle that registered after seedFold.
+    await withIAmAct("I declare my role-words", async (ctx) => {
+      roleWordsFolded = await declareRoleWordsToFold({ moment: ctx });
+    });
     await rehydrateWordProjection("0");
-    log.verbose("Genesis", `boot-end op fold: ${folded} op(s) reconciled into the word-fold`);
+    log.verbose("Genesis", `boot-end fold: ${folded} op(s) + ${typesFolded} type(s) + ${roleWordsFolded} role-word(s) reconciled into the word-fold`);
   } catch (err) {
     log.warn("Genesis", `boot-end op fold failed: ${err.message}`);
   }

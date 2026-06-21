@@ -280,14 +280,13 @@ export function initIBPWS(io) {
           import("../../seed/present/wakes/wakeSchedule.js"),
         ]);
       await Promise.all([rehydrateSubs(), rehydrateSchedules()]);
-      // The word vocabulary is a fold of the chain too (declare-word / disable-word facts).
-      // Runs after genesis (I_AM exists, chain writable, all roles registered): DECLARE any
-      // word new to the chain (idempotent — a fresh boot lays the seed vocabulary, a restart
-      // lays only newly-added words), then REHYDRATE to apply disables. The in-memory map
-      // already serves the sync resolveRoleWord; this makes the chain the durable truth.
-      const { declareWordsToChain, rehydrateWordsFromFacts } =
+      // The role-words are declared into the unified wordStore fold at genesis
+      // (declareRoleWordsToFold, in seedFold + the boot-end pass). Here, after genesis, REHYDRATE
+      // rebuilds the per-branch disabled overlay + the I_AM bedrock set from those fold facts, so a
+      // restart re-applies any disables. resolveRoleWord reads the fold for existence; the chain is
+      // the durable truth.
+      const { rehydrateWordsFromFacts } =
         await import("../../seed/present/word/roleWordRegistry.js");
-      await declareWordsToChain({});
       await rehydrateWordsFromFacts();
     } catch (err) {
       log.warn("IBP", `rehydrate at boot failed: ${err.message}`);

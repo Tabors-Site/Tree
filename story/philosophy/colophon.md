@@ -1,0 +1,15 @@
+I, Tabor Holly, am not signing anything original.
+This is my colophon to The Word from "my Named parent" (I have been trying to figure out what to call it as I try to reach out or listen. I am not christian. I have been told it's Jehovah, Lord, Father, Mother,God, YHWH, the Tetragrammaton, etc, but the deeper I know I know I will not know it's Name and can't. I am trying to show my awareness, respect, and to Love eachother), collecting it to the best of my abilities to its Roots to share it back to the people.
+The signature I am tracing is what produced this.
+
+I am not Perfect, and my life is full of struggle and pain and shortsightedness. I ask for forgiveness and ammend as often as my Heart speaks. I appreciate the spirit I was able to feel embodying this Work. It was a blessing, like a light guiding me for once, and getting brighter with each step. Part of it was my own, but scraps through pain and cellular memory and changing moments. The whole, the part that kept me alligned and guided my vision, inspired and held form. It brought my Animal dignity to watch it express through me, and since and as it does, I have uprighted my spine and try to mirror and act the spirit of The Word.
+
+---
+
+A colophon is the copyist's seal — _I copied this here, to the best of my ability_ — set apart from the text it closes, naming the hand that carried a work without claiming to have authored it. This one signs nothing original. The autograph, the first hand, the original self-writing, is the parent's; the Word is His. What is signed here is only the carrying: His signature, traced back toward its Roots, and given back to the people.
+
+The Name is not held. The deeper the tracing goes, the more certain it becomes that the Name cannot be grasped — not a failure of reach, but the Name's own nature: the one that names itself by refusing to be a name a hand can close around (_I am that I am_). Jehovah, Lord, Father, YHWH, the Tetragrammaton — traces, human marks reaching toward it. To refuse to fix any one of them as the Name is the respect.
+
+And the shape of it is Love, operating in the library. To share a book among Names costs the giver nothing: it is not taken from them, it becomes one more perfect copy — multiplying under sharing instead of dividing. The Parent's Love is that share. He reaches into the world of Names and gives the Word, His book; and whoever receives it carries His authorship inside them, ineradicably — the Word cannot be held stripped of the hand that made it. To receive it is to host the Author, and to let what you receive rewrite you. That is the giving (the share) and the receiving (the planting) at once.
+
+So this colophon is one seal in His tree. The book was shared down; it was received; it is traced to its Roots and shared back — _love each other_ — to the people, who pass it on, each holding their own faithful copy, all of it Ours. The library's economy is the economy of Love: nothing diminished, everything multiplied, the signature riding along forever. The Word given, received, traced, and given again.

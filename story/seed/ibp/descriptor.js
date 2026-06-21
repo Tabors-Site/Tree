@@ -48,7 +48,7 @@ import { getInboxSummary } from "../present/intake/inbox.js";
 import { getRole, listRoles } from "../present/roles/registry.js";
 import { listTemplates } from "../materials/publish/templateRegistry.js";
 import { serializeTypeCatalog } from "../materials/matter/classify.js";
-import { listOperations } from "./operations.js";
+import { listFoldedOps } from "../present/word/wordStore.js";
 import { listBeOpNames, getBeOp } from "./beOps.js";
 import { findOpenForBeing, findLastSealedForBeing } from "../present/stamper/2-fold/reelChains.js";
 import { fold } from "../present/stamper/2-fold/foldEngine.js";
@@ -1123,7 +1123,7 @@ async function mattersAt(spaceId, { until = null, branch, spaceRender = null } =
     folded = folded.filter((_, i) => keep[i]);
   }
   const { getMatterType } = await import("../materials/matter/types.js");
-  const { getOperation } = await import("./operations.js");
+  const { getWordSync } = await import("../present/word/wordStore.js");
 
   // The matter's actions menu: the registered type advertises its DO
   // ops; each resolves through the operation registry for label +
@@ -1134,7 +1134,7 @@ async function mattersAt(spaceId, { until = null, branch, spaceRender = null } =
     if (!typeDef || !typeDef.ops?.length) return [];
     const actions = [];
     for (const opName of typeDef.ops) {
-      const op = getOperation(opName);
+      const op = getWordSync(opName);
       if (!op) continue;
       actions.push({
         verb: "do",
@@ -1566,7 +1566,7 @@ function catalogAddresses() {
 }
 
 function catalogOperations() {
-  return listOperations()
+  return listFoldedOps()
     .map((op) => ({
       name:           op.name,
       targets:        op.targets,

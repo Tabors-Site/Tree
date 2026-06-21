@@ -103,19 +103,31 @@ export async function declareConcepts({ moment = null, branch = "0" } = {}) {
   return count;
 }
 
-// ── the genesis fold: one boot step, three shapes, one fold ──
+// ── the genesis fold: one boot step, six shapes, one fold ──
 //
 // (1) the verb pasts → declarePast (the runtime tense, sync); (2) the concept .words → bindWord
-// ({kind:"concept"}); (3) the do-ops → wordStore.declareOpsToFold ({kind:"op"}). All three land as
-// declare-word facts, folded together, read by kind. After this the story reads the seed in full:
-// the concepts as their bodies, the ops declared beside them. This is the shared seam, the one boot
-// call both halves meet at; wire it after the story is established, before the surface renders.
+// ({kind:"concept"}); (3) the do-ops → wordStore.declareOpsToFold ({kind:"op"}); (4) the matter
+// types → wordStore.declareTypesToFold ({kind:"type"}); (5) the reducers → declareReducersToFold
+// ({kind:"reducer"}, the per-kind fold logic); (6) the role-words → declareRoleWordsToFold
+// ({kind:"roleword"}, role:op -> .word source). All land as declare-word facts, folded together,
+// read by kind. After this the story reads the seed in full: the concepts as their bodies, the ops,
+// types, reducers, and role-words declared beside them. This is the shared seam, the one boot call
+// both halves meet at; wire it after the story is established, before the surface renders.
 export async function seedFold({ moment = null, branch = "0" } = {}) {
   foldWords();                                 // verb pasts, sync, the tense lookup
   await declareConcepts({ moment, branch });   // the concept descent, this half
   const store = await import("./wordStore.js");
   if (typeof store.declareOpsToFold === "function") {
     await store.declareOpsToFold({ moment, branch }); // the do-ops, the wordStore half
+  }
+  if (typeof store.declareTypesToFold === "function") {
+    await store.declareTypesToFold({ moment, branch }); // the matter types, same shape (kind:"type")
+  }
+  if (typeof store.declareReducersToFold === "function") {
+    await store.declareReducersToFold({ moment, branch }); // the per-kind reducers (kind:"reducer")
+  }
+  if (typeof store.declareRoleWordsToFold === "function") {
+    await store.declareRoleWordsToFold({ moment, branch }); // the role-words (kind:"roleword")
   }
   return true;
 }

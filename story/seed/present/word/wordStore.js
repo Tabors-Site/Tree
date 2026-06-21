@@ -24,6 +24,23 @@ async function _actor(actorBeingId) {
   return String(I_AM); // the origin being declares the seed vocabulary
 }
 
+let _iAmId = null;
+async function _iAm() {
+  if (_iAmId == null) { const { I_AM } = await import("../../materials/being/seedBeings.js"); _iAmId = String(I_AM); }
+  return _iAmId;
+}
+
+// BEDROCK (project_iam_genesis_immutable): is `name`'s current heaven ("0") declaration I_AM's? Then
+// it is genesis bedrock — immutable on "0" by anyone but I_AM (per-branch shadowing is still allowed).
+// Covers EVERY word kind (op/type/reducer/concept/roleword), since all are I_AM's words on "0". Reads
+// the latest "0" declare-word fact's author. Only consulted on a non-I_AM write to "0" (rare).
+async function _isIAmBedrock(name) {
+  const { default: Fact } = await import("../../past/fact/fact.js");
+  const decl = await Fact.find({ verb: "do", act: DECLARE, "params.word": String(name), history: "0" })
+    .sort({ date: -1, seq: -1 }).limit(1).lean();
+  return decl.length > 0 && String(decl[0].through) === (await _iAm());
+}
+
 // Lay facts THROUGH a proper act (assign opens it, the stamper seals it), never a bare emit.
 // Ride the caller's moment if given, else open I_AM's own act. Same shape as roleWordRegistry.
 async function _inAct(moment, label, fn) {
@@ -50,16 +67,24 @@ export async function bindWord(name, descriptor = {}, { moment = null, branch = 
   if (skipIfUnchanged) {
     const current = await getWord(name, branch);
     if (current) {
-      const { word: _w, ...curBinding } = current;
-      if (JSON.stringify(curBinding) === JSON.stringify(binding)) return { word: name, branch: String(branch), skipped: true };
+      // getWord now surfaces ownerExtension (the provenance) alongside the binding; strip it
+      // for the binding compare and check it separately, else the dedup never matches and a
+      // reboot re-declares every op (chain growth).
+      const { word: _w, ownerExtension: curOwner, ...curBinding } = current;
+      if (JSON.stringify(curBinding) === JSON.stringify(binding) && curOwner === ownerExtension) return { word: name, branch: String(branch), skipped: true };
     }
+  }
+  // BEDROCK guard — AFTER the dedup, so I_AM's idempotent genesis re-declares skip above and only a
+  // real override by ANOTHER reaches here. A non-I_AM cannot re-declare an I_AM "0" word on "0".
+  if (String(branch) === "0" && String(actor) !== (await _iAm()) && await _isIAmBedrock(name)) {
+    throw new Error(`the I_AM genesis word "${name}" is bedrock on heaven and cannot be re-declared by another — only I_AM may, or shadow it on your own branch`);
   }
   await _inAct(moment, `I declare the word ${name}`, (ctx) => emitFact({
     through: actor, history: String(branch), verb: "do", act: DECLARE,
     of: { kind: "being", id: actor },
     params: { word: name, ownerExtension, binding },
   }, ctx));
-  if (String(branch) === "0") _projection.set(name, binding); // keep the live projection current
+  if (String(branch) === "0") _projection.set(name, { ...binding, ownerExtension }); // live projection: binding + provenance
   return { word: name, branch: String(branch) };
 }
 
@@ -68,6 +93,10 @@ export async function bindWord(name, descriptor = {}, { moment = null, branch = 
 export async function disableWord(name, { moment = null, branch = "0", actorBeingId = null } = {}) {
   const { emitFact } = await import("../../past/fact/facts.js");
   const actor = await _actor(actorBeingId);
+  // BEDROCK: same guard as bindWord — a non-I_AM cannot disable an I_AM "0" word (shadow on a branch).
+  if (String(branch) === "0" && String(actor) !== (await _iAm()) && await _isIAmBedrock(name)) {
+    throw new Error(`the I_AM genesis word "${name}" is bedrock on heaven and cannot be disabled by another — only I_AM may, or shadow it on your own branch`);
+  }
   await _inAct(moment, `I disable the word ${name}`, (ctx) => emitFact({
     through: actor, history: String(branch), verb: "do", act: DISABLE,
     of: { kind: "being", id: actor },
@@ -87,12 +116,12 @@ export async function getWord(name, branch = "0") {
     verb: "do", act: { $in: [DECLARE, DISABLE] }, "params.word": String(name),
     history: { $in: branches },
   }).sort({ date: 1, seq: 1 }).lean();
-  let binding = null;
+  let binding = null, owner = null;
   for (const f of facts) {
-    if (f.act === DECLARE) binding = f.params?.binding ?? {};
-    else binding = null; // disable wins until a later re-declare
+    if (f.act === DECLARE) { binding = f.params?.binding ?? {}; owner = f.params?.ownerExtension ?? null; }
+    else { binding = null; owner = null; } // disable wins until a later re-declare
   }
-  return binding ? { word: String(name), ...binding } : null;
+  return binding ? { word: String(name), ...binding, ownerExtension: owner } : null;
 }
 
 // ── the live projection: an in-memory fold of the vocabulary, for sync reads ──
@@ -112,7 +141,7 @@ export async function rehydrateWordProjection(branch = "0") {
   for (const f of facts) {
     const name = f.params?.word;
     if (!name) continue;
-    if (f.act === DECLARE) _projection.set(String(name), f.params.binding ?? {});
+    if (f.act === DECLARE) _projection.set(String(name), { ...(f.params.binding ?? {}), ownerExtension: f.params.ownerExtension });
     else _projection.delete(String(name)); // disable; a later declare re-adds
   }
   return _projection.size;
@@ -195,9 +224,150 @@ export async function declareOpsToFold({ moment = null, branch = "0", filter = {
       matterTypes: Array.isArray(op.matterTypes) && op.matterTypes.length ? [...op.matterTypes] : undefined,
       factAction: typeof op.factAction === "string" && op.factAction ? op.factAction : name,
       skipAudit: !!op.skipAudit,
+      // args (the op's field schema) rides the fold so descriptor.js builds forms from the fold,
+      // not the Map (10.md step 6). Serializable, so a fact holds it.
+      args: op.args ? JSON.parse(JSON.stringify(op.args)) : undefined,
       useNamespaceKey: op.useNamespaceKey ? true : undefined,
     }, { moment, branch, skipIfUnchanged: true });
     n++;
   }
   return n;
+}
+
+// List the folded OP words (do-ops) from the live projection — the fold-based replacement for
+// operations.listOperations (10.md step 6: descriptor + catalogs read the fold, not the Map). Same
+// shape the callers used: {name, ...binding} (targets, factAction, ownerExtension, args, ...).
+export function listFoldedOps() {
+  const out = [];
+  for (const [name, b] of _projection) {
+    if (b?.kind === "op") out.push({ name, ...b });
+  }
+  return out;
+}
+
+// ── matter TYPES as words (the types-Map migration, mirroring the do-ops above) ──
+//
+// A matter type is a word with kind:"type" carrying its serializable shape (contentKinds, ops,
+// render, claims, ...). declareTypesToFold mirrors the registered types into the fold; getMatterType
+// resolves a type from the fold (resolveTypeFromFold) as well as the Map, until the Map retires.
+// (Like the do-ops, the types Map stays as the bootstrap buffer: seed types register at module load,
+// before seedFold can declare them, and getMatterType is read during the bootstrap that builds them.)
+export async function declareTypesToFold({ moment = null, branch = "0" } = {}) {
+  const { listMatterTypes } = await import("../../materials/matter/types.js");
+  let n = 0;
+  for (const t of listMatterTypes()) {
+    await bindWord(t.name, {
+      ownerExtension: t.ownerExtension || "seed",
+      kind: "type",
+      description: t.description ?? null,
+      contentKinds: Array.isArray(t.contentKinds) ? [...t.contentKinds] : ["text", "none"],
+      mimeTypes: Array.isArray(t.mimeTypes) ? [...t.mimeTypes] : null,
+      ops: Array.isArray(t.ops) ? [...t.ops] : [],
+      render: t.render && typeof t.render === "object" ? { ...t.render } : null,
+      claims: t.claims && typeof t.claims === "object" ? JSON.parse(JSON.stringify(t.claims)) : null,
+    }, { moment, branch, skipIfUnchanged: true });
+    n++;
+  }
+  return n;
+}
+
+// Resolve a matter TYPE from the fold into the def getMatterType returns (mirrors resolveDoOpFromFold).
+// Null when the word is unbound, disabled, or not a type. Rebuilds the Map's field shape so a fold
+// read is value-identical to a Map read (proven by verify-typesfold before getMatterType reads it).
+export function resolveTypeFromFold(name) {
+  const w = getWordSync(name);
+  if (!w || w.kind !== "type") return null;
+  return {
+    name: String(name),
+    description: w.description ?? null,
+    contentKinds: Array.isArray(w.contentKinds) && w.contentKinds.length ? [...w.contentKinds] : ["text", "none"],
+    mimeTypes: Array.isArray(w.mimeTypes) ? [...w.mimeTypes] : null,
+    ops: Array.isArray(w.ops) ? [...w.ops] : [],
+    render: w.render && typeof w.render === "object" ? { ...w.render } : null,
+    claims: w.claims && typeof w.claims === "object" ? w.claims : null,
+    ownerExtension: w.ownerExtension || "seed",
+  };
+}
+
+// List the folded TYPE words from the live projection (the fold-based listMatterTypes).
+export function listFoldedTypes() {
+  const out = [];
+  for (const [name, b] of _projection) {
+    if (b?.kind === "type") out.push(resolveTypeFromFold(name));
+  }
+  return out;
+}
+
+// ── role-words as words (the roleWordRegistry unification; ROLES-UNIFICATION.md) ──
+//
+// A role-word is a word named "role:op", kind:"roleword", carrying its IR SOURCE (the .word file).
+// The parsed IR stays HOST (roleWordRegistry's irCache); the fold carries only role:op -> source, the
+// same shape as an op's do.ref. declareRoleWordsToFold mirrors declareOpsToFold (reads the registered
+// role-words); resolveRoleWordSource is the sync source-read roleWordRegistry's resolveRoleWord uses.
+export async function declareRoleWordsToFold({ moment = null, branch = "0" } = {}) {
+  const { listRegistered } = await import("./roleWordRegistry.js");
+  let n = 0;
+  for (const w of listRegistered()) {
+    await bindWord(`${w.role}:${w.op}`, {
+      kind: "roleword", role: w.role, op: w.op, source: String(w.fileUrl),
+    }, { moment, branch, skipIfUnchanged: true });
+    n++;
+  }
+  return n;
+}
+
+// Resolve a role-word's IR SOURCE from the fold (sync). Null when unbound or not a roleword. The
+// caller turns the source into the parsed IR via the host irCache (wordOf).
+export function resolveRoleWordSource(role, op) {
+  const w = getWordSync(`${role}:${op}`);
+  if (!w || w.kind !== "roleword") return null;
+  return w.source || null;
+}
+
+// ── reducers as words (the reducer-Map migration; the per-kind fold logic) ──
+//
+// A reducer is the fold logic for an aggregate KIND (being/space/matter/name): {initial, reduce,
+// isGone?}, the functions the fold engine runs to fold a reel into state. The functions stay HOST
+// (the bottom turtle); what folds is the MAPPING — a word (kind:"reducer") saying "this kind's
+// reducer is THESE host functions", carrying their refs. reducers.get reads the fold first, the
+// static registry as the bootstrap / non-boot backstop. Named "<kind>-reducer" so it never collides
+// with the concept word of the same kind (10.md's "reducer is a field on the kind word" is the
+// eventual unification; a distinct word keeps this isolated from declareConcepts for now).
+export async function declareReducersToFold({ moment = null, branch = "0" } = {}) {
+  const reducers = await import("../../materials/reducers.js");
+  let n = 0;
+  for (const kind of reducers.types()) {
+    const r = reducers.get(kind); // fold-first get falls to the static registry here (kind not folded yet)
+    registerHostHandler(`reducer:${kind}:initial`, r.initial);
+    registerHostHandler(`reducer:${kind}:reduce`, r.reduce);
+    const binding = {
+      kind: "reducer",
+      forKind: kind,
+      initial: { ref: `reducer:${kind}:initial` },
+      reduce: { ref: `reducer:${kind}:reduce` },
+    };
+    if (typeof r.isGone === "function") { // optional (only matter tombstones today)
+      registerHostHandler(`reducer:${kind}:isGone`, r.isGone);
+      binding.isGone = { ref: `reducer:${kind}:isGone` };
+    }
+    await bindWord(`${kind}-reducer`, binding, { moment, branch, skipIfUnchanged: true });
+    n++;
+  }
+  return n;
+}
+
+// Resolve a kind's reducer from the fold into {initial, reduce, isGone?} (the host functions from
+// their refs). Null when the word is unbound or not a reducer. reducers.get reads this fold-first.
+export function resolveReducerFromFold(kind) {
+  const w = getWordSync(`${kind}-reducer`);
+  if (!w || w.kind !== "reducer") return null;
+  const initial = w.initial?.ref ? resolveHostHandler(w.initial.ref) : null;
+  const reduce = w.reduce?.ref ? resolveHostHandler(w.reduce.ref) : null;
+  if (typeof initial !== "function" || typeof reduce !== "function") return null;
+  const out = { initial, reduce };
+  if (w.isGone?.ref) {
+    const isGone = resolveHostHandler(w.isGone.ref);
+    if (typeof isGone === "function") out.isGone = isGone;
+  }
+  return out;
 }

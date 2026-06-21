@@ -12,6 +12,7 @@ import * as being  from "./being/reducer.js";
 import * as space  from "./space/reducer.js";
 import * as matter from "./matter/reducer.js";
 import * as name   from "./name/reducer.js";
+import { resolveReducerFromFold } from "../present/word/wordStore.js";
 
 const _registry = {
   being,
@@ -30,6 +31,12 @@ const _registry = {
  * @returns {{ initial: () => object, reduce: (state, fact) => object }}
  */
 export function get(type) {
+  // Fold-first: the kind->reducer mapping resolves from the word-fold (a "<type>-reducer" word
+  // carrying host-handler refs to the functions); the static _registry is the module-load backstop
+  // (the projection is empty in non-booted contexts). verify-reducerfold proves the fold resolves
+  // to the SAME host functions the registry holds.
+  const folded = resolveReducerFromFold(type);
+  if (folded) return folded;
   const r = _registry[type];
   if (!r) throw new Error(`reducers: no reducer registered for type "${type}"`);
   if (typeof r.initial !== "function" || typeof r.reduce !== "function") {

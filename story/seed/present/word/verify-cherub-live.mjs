@@ -77,8 +77,18 @@ try {
   for (const c of ["facts", "acts", "beings", "spaces", "matters", "reels", "reelheads", "names", "stamps"]) {
     try { await mongoose.connection.db.createCollection(c); } catch {}
   }
-  const spaceRoot = await withRetry(() => ensureSpaceRoot());
   await withRetry(() => ensureIAm());
+  // fold-only dispatch: the words declare themselves onto I_AM's reel BEFORE any do-op dispatches
+  // (ensureSpaceRoot's create-space). Mirrors genesis.js (ensureIAm -> the words -> the reality).
+  await withRetry(async () => {
+    const wc = { actId: randomUUID(), actorAct: { branch: "0", by: "i-am" }, identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+    const { seedFold } = await import("./wordFold.js");
+    await seedFold({ moment: wc });
+    await sealFacts(wc.deltaF);
+    const { rehydrateWordProjection } = await import("./wordStore.js");
+    await rehydrateWordProjection("0");
+  });
+  const spaceRoot = await withRetry(() => ensureSpaceRoot());
   await withRetry(() => ensureSeedDelegates(spaceRoot._id));
   const branch = "0";
   const cherub = await findByName("being", "cherub", branch);

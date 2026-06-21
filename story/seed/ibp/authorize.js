@@ -41,7 +41,7 @@
 import log from "../seedStory/log.js";
 import { IBP_ERR } from "./protocol.js";
 import { I_AM } from "../materials/being/seedBeings.js";
-import { getOperation } from "./operations.js";
+import { getWordSync } from "../present/word/wordStore.js";
 import { isExtensionBlockedAtSpace } from "../materials/space/extensionScope.js";
 import { authorizeViaRoles } from "./roleAuth.js";
 import { getSpaceRootId } from "../sprout.js";
@@ -85,7 +85,7 @@ export async function authorize(args) {
     args.action.includes(":")
   ) {
     try {
-      const op = getOperation(args.action);
+      const op = getWordSync(args.action); // ext-scope gate reads the fold, not the Map (10.md step 6)
       const ownerExt = op?.ownerExtension;
       if (ownerExt && ownerExt !== "seed") {
         const blocked = await isExtensionBlockedAtSpace(ownerExt, target.spaceId);
