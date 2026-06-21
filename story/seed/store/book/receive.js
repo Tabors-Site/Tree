@@ -101,12 +101,16 @@ export async function visit(book) {
 // what landed. A handler that throws aborts the whole receive (refuse-and-rollback).
 
 async function receiveImport(imp, opts, landed) {
-  // Resolve the dependency by its pinned root (the library / peer graph), then receive it
-  // transitively. Sealed-by-hash: imp.root is immutable, so the meaning can't drift.
-  // TODO(§2 step 5 — the Library): wire the sealed-by-hash resolver (fetch the book whose
-  // colophon.root === imp.root, then `await receive(dep, opts)`), recording undo. Until the
-  // Library exists there's nowhere to resolve from, so we record the unmet pin.
-  return { name: imp.name, root: imp.root, resolved: false };
+  // Resolve the dependency by its pinned root (sealed-by-hash, immutable — the lockfile) from the
+  // Library, then receive it transitively. A book imports another by colophon.root, so the meaning
+  // can't drift. The dep receives atomically on its own (a received language is an independently
+  // valid book); an unresolved pin is recorded, not fatal — the importer may already hold it.
+  if (!imp?.root) return { name: imp?.name ?? null, root: null, resolved: false, reason: "no root" };
+  const { resolveBook } = await import("./library.js");
+  const dep = await resolveBook(imp.root);
+  if (!dep) return { name: imp.name ?? null, root: imp.root, resolved: false, reason: "not in library" };
+  const got = await receive(dep, opts); // transitive (a master book pulls its graph)
+  return { name: imp.name ?? null, root: imp.root, resolved: true, kind: got.kind };
 }
 
 async function receiveMatter(matter, opts, landed) {
@@ -153,120 +157,28 @@ async function receiveMatter(matter, opts, landed) {
 }
 
 async function receiveReels(reels, opts, landed) {
-  // Instate each being-reel VERBATIM (facts keep their source ids + provenance), then verifyReel
-  // (self-contained — recomputes each fact's identity from p+content; needs NO act-chain). The
-  // book's colophon (verified in receive()) is the PROVENANCE; these gates protect the LOCAL
-  // chain from corruption on insert. NO act-chains: a being is living matter; its act-chain keys
-  // per (story, history, being) and stays home.
+  // Instate each being-reel VERBATIM via the shared core (past/reel/instateReel.js) — scope,
+  // integrity, dedup, reel-divergence, branch-collision, landed[]-tracked insert, verifyReel. The
+  // book's colophon (verified in receive()) is the PROVENANCE; the core's gates protect the LOCAL
+  // chain. NO act-chains: a being is living matter; its act-chain keys per (story, history, being)
+  // and stays home — graft adds the act layer around this same core, book-receive does not.
   const list = Array.isArray(reels) ? reels : [];
   if (list.length === 0) return 0;
 
-  const Fact = (await import("../../past/fact/fact.js")).default;
-  const History = (await import("../../materials/history/history.js")).default;
-  const ReelHead = (await import("../../past/reel/reelHead.js")).default;
-  const { computeHash, contentOf } = await import("../../past/fact/hash.js");
-  const { verifyReel } = await import("../../past/fact/verifyReel.js");
+  const deps = {
+    Fact: (await import("../../past/fact/fact.js")).default,
+    History: (await import("../../materials/history/history.js")).default,
+    ReelHead: (await import("../../past/reel/reelHead.js")).default,
+    ...(await import("../../past/fact/hash.js")),       // computeHash, contentOf
+    ...(await import("../../past/fact/verifyReel.js")), // verifyReel
+    graftRootFromParts: (await import("../../past/fact/chainRoots.js")).graftRootFromParts,
+  };
+  const { instateReel } = await import("../../past/reel/instateReel.js");
 
   let total = 0;
   for (const reel of list) {
-    const beingId = reel?.being ?? reel?.meta?.beingId;
-    if (!beingId) throw new Error("receive(reels): each reel needs `being` (the target being id).");
-    if (!Array.isArray(reel.facts)) throw new Error("receive(reels): reel.facts[] is required.");
-    const bid = String(beingId);
-
-    // SCOPE — every fact / reelHead must belong to THIS being (refuse a spliced-in foreign row).
-    for (const f of reel.facts) {
-      if (!(f.of && f.of.kind === "being" && String(f.of.id) === bid)) {
-        throw new Error(`receive(reels): SCOPE VIOLATION — a fact targets ${f.of?.kind}:${String(f.of?.id || "").slice(0, 10)}…, not being ${bid.slice(0, 10)}….`);
-      }
-    }
-    for (const rh of (reel.reelHeads || [])) {
-      if (String(rh._id).split(":").slice(1).join(":") !== `being:${bid}`) {
-        throw new Error(`receive(reels): SCOPE VIOLATION — reelHead ${rh._id} is not being ${bid.slice(0, 10)}….`);
-      }
-    }
-
-    // INTEGRITY — each fact _id must recompute from (p, contentOf). A tampered fact can't lie.
-    for (const f of reel.facts) {
-      if (typeof f._id !== "string" || computeHash(f.p, contentOf(f)) !== f._id) {
-        throw new Error(`receive(reels): FACT INTEGRITY FAILED at seq ${f.seq} (${String(f._id).slice(0, 12)}…).`);
-      }
-    }
-
-    // DEDUP → newFacts; mode = create | idempotent | merge.
-    const factIds = reel.facts.map((f) => String(f._id));
-    const have = new Set((await Fact.find({ _id: { $in: factIds } }).select("_id").lean()).map((r) => String(r._id)));
-    const newFacts = reel.facts.filter((f) => !have.has(String(f._id)));
-    const mode = have.size === 0 ? "create" : (newFacts.length === 0 ? "idempotent" : "merge");
-
-    // REEL-DIVERGENCE — a (history, seq) the being already holds with a DIFFERENT _id is a fork.
-    if (newFacts.length) {
-      const wantBySeq = new Map(newFacts.map((f) => [`${String(f.history ?? "0")}:${f.seq}`, String(f._id)]));
-      const seqs = [...new Set(newFacts.map((f) => f.seq))];
-      const clash = await Fact.find({ "of.kind": "being", "of.id": bid, seq: { $in: seqs } }).select("_id seq history").lean();
-      for (const e of clash) {
-        const want = wantBySeq.get(`${String(e.history ?? "0")}:${e.seq}`);
-        if (want && want !== String(e._id)) {
-          throw new Error(`receive(reels): REEL DIVERGENCE — being ${bid.slice(0, 10)}… already holds (history ${e.history ?? "0"}, seq ${e.seq}) with different content. Refusing.`);
-        }
-      }
-    }
-
-    // HISTORY (branch) collision — absent → insert; same parent+branchPoint → ok; differ → refuse.
-    const newHistories = [];
-    const normBP = (bp) => (bp instanceof Map ? Object.fromEntries(bp) : (bp || {}));
-    const bpKey = (bp) => JSON.stringify(Object.entries(normBP(bp)).sort());
-    for (const h of (reel.histories || [])) {
-      const ex = await History.findById(h._id).lean();
-      if (!ex) { newHistories.push(h); continue; }
-      if (ex.parent !== h.parent || bpKey(ex.branchPoint) !== bpKey(h.branchPoint)) {
-        throw new Error(`receive(reels): BRANCH COLLISION — history "${h._id}" exists with a different parent/branchPoint. Refusing.`);
-      }
-    }
-
-    // INSERT — push undo BEFORE each insert; receive()'s catch rolls back on any later throw.
-    if (newHistories.length) {
-      for (const h of newHistories) landed.push({ what: `History:${h._id}`, undo: async () => { await History.deleteOne({ _id: h._id }); } });
-      await History.insertMany(newHistories, { ordered: false });
-    }
-    for (const rh of (reel.reelHeads || [])) {
-      const ex = await ReelHead.findById(rh._id).select("head").lean();
-      if (!ex) {
-        landed.push({ what: `ReelHead:${rh._id}`, undo: async () => { await ReelHead.deleteOne({ _id: rh._id }); } });
-        await ReelHead.create(rh);
-      } else if ((rh.head || 0) > (ex.head || 0)) {
-        await ReelHead.updateOne({ _id: rh._id }, { $set: { head: rh.head, headHash: rh.headHash } }); // advance-only; pre-existing row, NOT rolled back
-      }
-    }
-    if (newFacts.length) {
-      for (const f of newFacts) landed.push({ what: `Fact:${String(f._id).slice(0, 10)}`, undo: async () => { await Fact.deleteOne({ _id: f._id }); } });
-      await Fact.insertMany(newFacts, { ordered: false });
-    }
-
-    // VERIFY the landed chain — verifyReel per (being, history). A break throws → receive() rolls back.
-    const reelHistories = [...new Set([
-      ...(reel.reelHeads || []).map((r) => String(r._id).split(":")[0]),
-      ...newFacts.map((f) => String(f.history ?? "0")),
-    ])];
-    for (const br of reelHistories) {
-      const vr = await verifyReel("being", bid, br);
-      if (!vr.ok) {
-        throw new Error(`receive(reels): POST-RECEIVE reel verification FAILED on being:${bid.slice(0, 8)}@${br} — ${vr.reason} at ${vr.brokenAt}.`);
-      }
-    }
-
-    // ROOT (optional) — if the reel declares a fingerprint, the LANDED heads must reproduce it.
-    if (reel.root) {
-      const { graftRootFromParts } = await import("../../past/fact/chainRoots.js");
-      const reelKeys = (reel.reelHeads || []).map((r) => String(r._id));
-      const landedReels = reelKeys.length ? await ReelHead.find({ _id: { $in: reelKeys } }).lean() : [];
-      const repro = graftRootFromParts({ beingId: bid, reelHeads: landedReels, actHeads: [] });
-      if (repro !== reel.root) {
-        throw new Error(`receive(reels): ROOT MISMATCH — landed heads reproduce ${repro.slice(0, 12)}… vs declared ${String(reel.root).slice(0, 12)}…. Refusing.`);
-      }
-    }
-
-    total += newFacts.length;
+    const r = await instateReel(reel, { landed }, deps);
+    total += r.newFacts.length;
   }
   return total;
 }

@@ -7,7 +7,7 @@
 // CAS layer that every story has, populated automatically by
 // putContent whenever owned bytes are created. Not all bytes here are
 // "installed" or "active" — they're just stored. The optional store
-// pack (story/resources/store/) sits on top of this layer and lets a
+// pack (story/shared/store/) sits on top of this layer and lets a
 // story choose which localStore items to expose as publishable
 // resources. See philosophy/OS/ROOTS.md for the four-layer model
 // (localStore, federation, peering, store).

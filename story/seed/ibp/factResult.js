@@ -51,3 +51,38 @@ export function stampsWordFact(result, kind, idFrom = null) {
   const id = factTarget != null ? factTarget : idFrom ? rest[idFrom] : null;
   return stampsFact(rest, factParams, id != null ? { kind, id } : null);
 }
+
+// emitWordFact — the ONE dispatcher-side emit for a FIXED-NOUN fact-word (17.md STEP 2). Lays the
+// single caller-attributed fact for an identity-fact word (beop / nameop), reading the VERB from the
+// word's binding (factVerb — explicit per-word, the hash-continuity anchor) and the target NOUN from
+// binding.noun, instead of a per-file hardcode. The four be:* emit sites + name's writeNameFact
+// collapse onto this. do-ops keep their OWN emit: their audit target is dynamic (resolveAuditTarget)
+// and their result is summarizeAuditResult, not a fixed noun + stripForAudit — forcing them through
+// here would be a weird word, not a cleanup (17.md: clean dirty wiring, do not wrap legitimate logic).
+//   binding: { factVerb, factAction, noun }
+//   ctx:     { through, actId, history }   (history may be the DESTINATION history, e.g. be:switch)
+//   result:  the op result, carrying _factParams + _factTarget (promoted by stampsWordFact)
+export async function emitWordFact(binding, ctx, result, moment) {
+  const { emitFact } = await import("../past/fact/facts.js");
+  const { stripForAudit } = await import("../materials/redact.js");
+  const targetId =
+    result && typeof result === "object" && result._factTarget?.id != null
+      ? String(result._factTarget.id)
+      : null;
+  await emitFact(
+    {
+      verb: binding.factVerb,
+      act: binding.factAction,
+      through: ctx.through,
+      of: { kind: binding.noun, id: targetId },
+      params:
+        result && typeof result === "object" && result._factParams
+          ? result._factParams
+          : null,
+      result: stripForAudit(result),
+      actId: ctx.actId,
+      history: ctx.history,
+    },
+    moment,
+  );
+}

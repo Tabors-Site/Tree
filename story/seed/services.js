@@ -241,6 +241,10 @@ import "./materials/publish/ops.js";
 // take a Book in (language/history/model/master) as the receiver's own act —
 // seal-check + atomic instate + colophon countersign, one do:receive-book fact.
 import "./store/book/ops.js";
+// Side-effect import. Registers the SHARE producer verbs (store/book/share-ops.js):
+// capture-book (SEE — package selected elements into a Book) + share-book (DO — lay a
+// sealed Book on the Library reel, one do:share-book catalog fact).
+import "./store/book/share-ops.js";
 // Side-effect import. Registers `set-render` . the canonical sensory
 // write op against `qualities.render` (the seed-owned namespace any
 // matter/space/being can carry: model + animations + sounds + future

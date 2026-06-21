@@ -119,6 +119,10 @@ export const HEAVEN_SPACE = Object.freeze({
   TOOLS: "tools",
   ROLES: "roles",
   OPERATIONS: "operations",
+  // The Library — this story's catalog of shared Books (5d.md: the 5D
+  // catalog, Ours). Each shared book is a fact on this space's reel
+  // (the reel IS the library); SEARCH reads it; only names act here.
+  LIBRARY: "library",
   // The source self-tree. Seed walks its own place/ directory at boot
   // and plants a recursive filesystem-origin matter tree under this
   // space, mirroring the codebase as Mongo data. After MIRROR.md

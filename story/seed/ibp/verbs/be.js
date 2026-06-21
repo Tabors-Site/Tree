@@ -39,6 +39,7 @@ import { BE_OPS } from "../beOps.js";
 // declareBeOpsToFold reads. Mirrors do.js/name.js. BE_OPS stays imported for the closed-set error
 // message. The handler bodies live with cherub (the bottom turtle), registered by ref.
 import { resolveBeOpFromFold } from "../../present/word/wordStore.js";
+import { emitWordFact } from "../factResult.js";
 import {
   assertVerbCaller,
   refuseHistoricalWrite,
@@ -443,19 +444,15 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       },
       moment,
     });
-    // EVERY ACT MAKES A FACT — the dispatcher stamps unconditionally (like do.js's auto-Fact). The
-    // .word always declares its factParams; stampsWordFact promoted them to _factParams. A gate
-    // refusal THROWS before this, so reaching here means the act happened — record it.
-    await emitFact({
-      verb:    "be",
-      act:     releaseOp.factAction, // "release"
-      through: identity.beingId,     // caller-attribution
-      of:      { kind: "being", id: String(result?._factTarget?.id) },
-      params:  result._factParams,
-      result:  stripForAudit(result),
-      actId:   moment?.actId || null,
-      history,
-    }, moment);
+    // EVERY ACT MAKES A FACT — emitWordFact stamps the one caller-attributed fact, reading verb (be)
+    // + noun (being) from the word's binding (17.md STEP 4). A gate refusal THROWS before this;
+    // reaching here means the act happened — record it.
+    await emitWordFact(
+      releaseOp,
+      { through: identity.beingId, actId: moment?.actId || null, history },
+      result,
+      moment,
+    );
     // result carries seatHistory (the handler's session effect) for the transport to re-seat
     // socket.currentHistory — passed through unchanged.
     return result;
@@ -499,19 +496,15 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       },
       moment,
     });
-    // EVERY ACT MAKES A FACT — stamp the be:switch audit on the NEW history (result.toHistory), the
-    // post-switch history's view of this being recording the switch-in. CROSS-HISTORY: not the current
+    // EVERY ACT MAKES A FACT — emitWordFact stamps the be:switch audit on the NEW history
+    // (result.toHistory — CROSS-HISTORY, the post-switch view records the switch-in), not the current
     // `history`. The transport seats socket.currentHistory from result.seatHistory after the seal.
-    await emitFact({
-      verb:    "be",
-      act:     switchOp.factAction, // "switch"
-      through: identity.beingId,    // caller-attribution
-      of:      { kind: "being", id: String(result?._factTarget?.id) },
-      params:  result._factParams,
-      result:  stripForAudit(result),
-      actId:   moment?.actId || null,
-      history: result.toHistory,    // the destination history's reel
-    }, moment);
+    await emitWordFact(
+      switchOp,
+      { through: identity.beingId, actId: moment?.actId || null, history: result.toHistory },
+      result,
+      moment,
+    );
     return result;
   }
 
@@ -559,19 +552,14 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       },
       moment,
     });
-    // EVERY ACT MAKES A FACT — the dispatcher stamps unconditionally (like do.js's auto-Fact). The
-    // .word always declares its factParams; stampsWordFact promoted them to _factParams. A gate
-    // refusal THROWS before this, so reaching here means the death happened — record it.
-    await emitFact({
-      verb:    "be",
-      act:     deathOp.factAction, // "death"
-      through: identity.beingId,   // caller-attribution
-      of:      { kind: "being", id: String(result?._factTarget?.id) },
-      params:  result._factParams,
-      result:  stripForAudit(result),
-      actId:   moment?.actId || null,
-      history,
-    }, moment);
+    // EVERY ACT MAKES A FACT — emitWordFact stamps the one be:death fact (verb+noun from the binding).
+    // A gate refusal THROWS before this; reaching here means the death happened — record it.
+    await emitWordFact(
+      deathOp,
+      { through: identity.beingId, actId: moment?.actId || null, history },
+      result,
+      moment,
+    );
     return { ...result, targetBeingId: result?._factTarget?.id || null };
   }
 
@@ -609,20 +597,14 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       },
       moment,
     });
-    // EVERY ACT MAKES A FACT — the dispatcher stamps unconditionally (like do.js's auto-Fact). The
-    // .word always declares its factParams; stampsWordFact promoted them to _factParams. A gate
-    // refusal THROWS before this, so reaching here means the re-point happened — record it. (Even a
-    // future idempotent BE op records the act + folds nothing; there is no lay-no-fact.)
-    await emitFact({
-      verb:    "be",
-      act:     truenameOp.factAction, // "truename"
-      through: identity.beingId,      // caller-attribution
-      of:      { kind: "being", id: String(result?._factTarget?.id) },
-      params:  result._factParams,
-      result:  stripForAudit(result),
-      actId:   moment?.actId || null,
-      history,
-    }, moment);
+    // EVERY ACT MAKES A FACT — emitWordFact stamps the one be:truename fact (verb+noun from binding).
+    // A gate refusal THROWS before this; reaching here means the re-point happened — record it.
+    await emitWordFact(
+      truenameOp,
+      { through: identity.beingId, actId: moment?.actId || null, history },
+      result,
+      moment,
+    );
     return { ...result, targetBeingId: result?._factTarget?.id || null };
   }
 

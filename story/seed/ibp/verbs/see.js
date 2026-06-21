@@ -714,21 +714,12 @@ export async function seeVerb(target, opts = {}) {
     );
   }
 
-  // Auto-on-entry role grants (seed/RolesAreAuth.md "Acquisition").
-  // After SEE passes authorize, scan the seen space's qualities.roles
-  // for entries with acquisition.autoOnEntry=true. For each such role,
-  // emit a silent grant for the actor (skipping if they already hold
-  // it). Public's owned spaces use this to admit visitors without a
-  // hardcoded floor — the role-walk authorize now handles them
-  // through the regular grants path, no special history.
-  if (identity?.beingId && identity?.name !== "arrival") {
-    await maybeAutoGrantOnEntry({
-      identity,
-      spaceId: resolved.spaceId,
-      history: seeHistory,
-      moment,
-    });
-  }
+  // (Auto-on-entry role grants USED to fire here — a silent grant emitted INSIDE this render.
+  // REMOVED 2026-06-21: a space is a NOUN and cannot act on a being. A space granting a being was
+  // the bug, not just the render-coupling. SEE is a pure read; it stamps nothing. The space still
+  // HAS its acquisition policy as a fact (qualities.roles[role].acquisition.autoOnEntry); a being
+  // that wants the role reads that policy (a see) and takes it ITSELF via its own word + do:take-role
+  // — an act BY the being, ON the being, dispatched cleanly. Acts come from beings, not nouns. 17.md.)
 
   return buildPlaceDescriptor(resolved, { identity, payload });
 }

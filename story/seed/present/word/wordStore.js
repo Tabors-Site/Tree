@@ -172,29 +172,59 @@ export function resolveHostHandler(ref) {
   return _hostHandlers.get(String(ref)) || null;
 }
 
-// Resolve a do-word from the FOLD into the op spec doVerb dispatches (the handler from its ref).
-// Returns null when the word is unbound, disabled, has no do-answer, or its handler matter is not
-// resolvable. doVerb calls this only on an operations-Map miss, so the fold is an additive source.
-export function resolveDoOpFromFold(name) {
-  const word = getWordSync(name);
-  if (!word?.do?.ref) return null;
-  const handler = resolveHostHandler(word.do.ref);
+// Resolve ANY word from the FOLD into its raw binding spec — the ONE resolver under all four verb
+// resolvers (17.md STEP 1). One `getWordSync` + one eager `resolveHostHandler` (a pure Map.get, safe
+// ahead of the auth gate) + the kind-agnostic field set. The per-verb resolvers below are thin
+// wrappers that prefix the name, assert the expected kind, and shape the return to their verb. The
+// word already carries its `kind`; the verb is redundant with it (17.md). Returns null when unbound,
+// disabled, has no do-answer (the runnable handler ref), or the handler ref is unresolvable.
+export function resolveWordFromFold(name) {
+  const w = getWordSync(name);
+  if (!w?.do?.ref) return null;
+  const handler = resolveHostHandler(w.do.ref);
   if (!handler) return null;
   const spec = {
+    name,
+    kind: w.kind || null,
     handler,
-    targets: Array.isArray(word.targets) && word.targets.length ? word.targets : ["being", "space", "matter"],
-    matterTypes: Array.isArray(word.matterTypes) && word.matterTypes.length ? word.matterTypes : null,
-    factAction: typeof word.factAction === "string" && word.factAction ? word.factAction : String(name),
-    skipAudit: !!word.skipAudit,
-    ownerExtension: word.ownerExtension || "seed",
+    factAction: typeof w.factAction === "string" && w.factAction ? w.factAction : null,
+    factVerb: typeof w.factVerb === "string" && w.factVerb ? w.factVerb : null,
+    noun: typeof w.noun === "string" && w.noun ? w.noun : null,
+    bootstrap: !!w.bootstrap,
+    targets: Array.isArray(w.targets) && w.targets.length ? w.targets : null,
+    matterTypes: Array.isArray(w.matterTypes) && w.matterTypes.length ? w.matterTypes : null,
+    skipAudit: !!w.skipAudit,
+    args: w.args,
+    label: w.label,
+    description: w.description,
+    ownerExtension: w.ownerExtension || "seed",
     _fromFold: true,
   };
-  // authAction is a function (the auth-key refinement) carried in the fact as a host ref. Resolve it
-  // so a fold op refines its auth (e.g. grant-role -> grant-role:<role>) exactly as a Map op does.
-  if (word.authAction?.ref) {
-    const fn = resolveHostHandler(word.authAction.ref);
+  // authAction is a function (the auth-key refinement) carried as a host ref. Resolve it so a fold op
+  // refines its auth (e.g. grant-role -> grant-role:<role>) exactly as a Map op does.
+  if (w.authAction?.ref) {
+    const fn = resolveHostHandler(w.authAction.ref);
     if (typeof fn === "function") spec.authAction = fn;
   }
+  return spec;
+}
+
+// Resolve a do-word from the FOLD into the op spec doVerb dispatches. Thin wrapper over
+// resolveWordFromFold (kind-agnostic, as the do path always was — a bare name with a do.ref is a
+// do-op). doVerb calls this only on an operations-Map miss, so the fold is an additive source.
+export function resolveDoOpFromFold(name) {
+  const w = resolveWordFromFold(name);
+  if (!w) return null;
+  const spec = {
+    handler: w.handler,
+    targets: w.targets || ["being", "space", "matter"],
+    matterTypes: w.matterTypes,
+    factAction: w.factAction || String(name),
+    skipAudit: w.skipAudit,
+    ownerExtension: w.ownerExtension,
+    _fromFold: true,
+  };
+  if (w.authAction) spec.authAction = w.authAction;
   return spec;
 }
 
@@ -408,11 +438,9 @@ export async function declareNameOpsToFold({ moment = null, history = "0" } = {}
 // (the verb dispatches "declare"); this namespaces it to the "name:<op>" word. Mirrors
 // resolveDoOpFromFold; nameVerb dispatches on this instead of getNameOp(NAME_OPS).
 export function resolveNameOpFromFold(opName) {
-  const w = getWordSync(`name:${opName}`);
-  if (!w || w.kind !== "nameop" || !w.do?.ref) return null;
-  const handler = resolveHostHandler(w.do.ref);
-  if (!handler) return null;
-  return { handler, args: w.args, label: w.label, description: w.description, ownerExtension: w.ownerExtension || "seed", _fromFold: true };
+  const w = resolveWordFromFold(`name:${opName}`);
+  if (!w || w.kind !== "nameop") return null;
+  return { handler: w.handler, args: w.args, label: w.label, description: w.description, ownerExtension: w.ownerExtension, _fromFold: true };
 }
 
 // ── BE ops as words (the BE_OPS-Map migration; the twin of the NAME ops above) ──
@@ -442,6 +470,10 @@ export async function declareBeOpsToFold({ moment = null, history = "0" } = {}) 
       // to the op name (be:truename). EVERY ACT MAKES A FACT — the dispatcher stamps unconditionally,
       // so there is no skipAudit (an op can't opt out; birth's no-stamp is its own operation check).
       factAction: op.factAction || opName,
+      // The fact's VERB (be) + target NOUN (being) ride the word explicitly — the hash-continuity
+      // anchor (17.md STEP 2); emitWordFact reads them instead of be.js hardcoding verb/of per site.
+      factVerb: "be",
+      noun: "being",
       args: op.args ? JSON.parse(JSON.stringify(op.args)) : undefined,
       label: op.label,
       description: op.description,
@@ -456,11 +488,9 @@ export async function declareBeOpsToFold({ moment = null, history = "0" } = {}) 
 // BARE (beVerb dispatches "birth"); this namespaces it to the "be:<op>" word. Mirrors
 // resolveNameOpFromFold; beVerb dispatches on this instead of getBeOp(BE_OPS).
 export function resolveBeOpFromFold(opName) {
-  const w = getWordSync(`be:${opName}`);
-  if (!w || w.kind !== "beop" || !w.do?.ref) return null;
-  const handler = resolveHostHandler(w.do.ref);
-  if (!handler) return null;
-  return { handler, bootstrap: !!w.bootstrap, factAction: w.factAction || opName, args: w.args, label: w.label, description: w.description, ownerExtension: w.ownerExtension || "seed", _fromFold: true };
+  const w = resolveWordFromFold(`be:${opName}`);
+  if (!w || w.kind !== "beop") return null;
+  return { handler: w.handler, bootstrap: w.bootstrap, factAction: w.factAction || opName, factVerb: w.factVerb || "be", noun: w.noun || "being", args: w.args, label: w.label, description: w.description, ownerExtension: w.ownerExtension, _fromFold: true };
 }
 
 // ── SEE ops as words (the seeOps-REGISTRY migration; the third verb-op set) ──
@@ -496,9 +526,7 @@ export async function declareSeeOpsToFold({ moment = null, history = "0" } = {})
 // (seeVerb dispatches "place" / "arrival-view" / "food:meals"); this namespaces it to the "see:<op>"
 // word. Mirrors resolveNameOpFromFold / resolveBeOpFromFold.
 export function resolveSeeOpFromFold(name) {
-  const w = getWordSync(`see:${name}`);
-  if (!w || w.kind !== "seeop" || !w.do?.ref) return null;
-  const handler = resolveHostHandler(w.do.ref);
-  if (!handler) return null;
-  return { name, handler, args: w.args, description: w.description, ownerExtension: w.ownerExtension || "seed", _fromFold: true };
+  const w = resolveWordFromFold(`see:${name}`);
+  if (!w || w.kind !== "seeop") return null;
+  return { name, handler: w.handler, args: w.args, description: w.description, ownerExtension: w.ownerExtension, _fromFold: true };
 }

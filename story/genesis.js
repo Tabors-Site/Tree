@@ -90,7 +90,7 @@ import {
   runExtensionMigrations,
   getLoadedExtensionNames,
   getBootReport,
-} from "./resources/loader.js";
+} from "./shared/loader.js";
 import { startCasSweep } from "./seed/materials/matter/casSweep.js";
 import { getBlockedExtensionsAtSpace } from "./seed/materials/space/extensionScope.js";
 import { hooks } from "./seed/hooks.js";
@@ -917,7 +917,7 @@ export async function genesis(app, opts = {}) {
   // handlers touch loader internals, which is why they live in the
   // loader module rather than seed.
   const { registerExtensionManagementOps, loadExtensions } =
-    await import("./resources/loader.js");
+    await import("./shared/loader.js");
   await registerExtensionManagementOps();
 
   // Load extensions. Manifests discovered, deps validated, routes
@@ -969,7 +969,7 @@ export async function genesis(app, opts = {}) {
   // the one-way layering rule). Looked up lazily so the loader
   // module is not pulled on places that skip it.
   try {
-    const { getExtension } = await import("./resources/loader.js");
+    const { getExtension } = await import("./shared/loader.js");
     setExtensionInstanceLookup(getExtension);
   } catch {
     // Loader unavailable (test rig, seed-only boot, etc.).

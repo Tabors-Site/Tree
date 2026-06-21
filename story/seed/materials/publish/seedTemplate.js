@@ -434,7 +434,7 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
     }
   } catch { /* registry unavailable in standalone tools; roles list still travels */ }
   try {
-    const { getLoadedExtensionNames } = await import("../../../resources/loader.js");
+    const { getLoadedExtensionNames } = await import("../../../shared/loader.js");
     const loadedExt = new Set(getLoadedExtensionNames());
     const sweep = (qualities) => {
       if (!qualities || typeof qualities !== "object") return;

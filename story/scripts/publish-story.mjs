@@ -24,7 +24,7 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 import { putContent } from "../seed/materials/matter/contentStore.js";
 import { buildTreeBlob } from "../seed/materials/matter/anchor.js";
-import { listingHashOf } from "../resources/store/code/lib/claims.js";
+import { listingHashOf } from "../shared/store/code/lib/claims.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "..");

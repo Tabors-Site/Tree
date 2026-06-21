@@ -183,7 +183,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
     if (required.length > 0) {
       let loadedExt = new Set();
       try {
-        const { getLoadedExtensionNames } = await import("../../../resources/loader.js");
+        const { getLoadedExtensionNames } = await import("../../../shared/loader.js");
         loadedExt = new Set(getLoadedExtensionNames());
       } catch { /* loader absent — every required extension reads as missing below */ }
       const missing = required.filter((name) => !loadedExt.has(name));

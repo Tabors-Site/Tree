@@ -124,7 +124,7 @@ import registerRoutes from "./transports/http/handler.js";
 import { initWebSocketServer } from "./transports/ws/websocket.js";
 import { initIBPHttp, initIBPWS } from "./protocols/ibp/index.js";
 import { sendOk, sendError, IBP_ERR } from "./seed/ibp/protocol.js";
-import { getExtension } from "./resources/loader.js";
+import { getExtension } from "./shared/loader.js";
 import securityHeaders from "./transports/http/middleware/securityHeaders.js";
 import { genesis, printReady } from "./genesis.js";
 import { fork } from "child_process";
@@ -366,6 +366,11 @@ await genesis(app, { registerRawWebhook });
 // deleted. Extension templates are already in the registry; this is
 // just the planting acting as I_AM at the chosen target.
 await runFirstBootActions();
+
+// (The genesis book — the seed's words AS a .book — is NOT rendered here. It is a static artifact,
+// the result of the .word files; it changes only when words change / on download, so it is built
+// ON DEMAND, once, when first needed (a share/download), not re-captured every boot. See
+// seed/store/book/genesisBook.js.)
 
 // Mirror mount (philosophy/OS/MIRROR.md). Source matter is populated
 // by genesis (source.js anchored each file's bytes into CAS); the

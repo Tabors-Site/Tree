@@ -365,6 +365,9 @@ const STORY_HEAVEN_SPACES = [
   { name: "tools", heavenSpace: HEAVEN_SPACE.TOOLS },
   { name: "roles", heavenSpace: HEAVEN_SPACE.ROLES },
   { name: "operations", heavenSpace: HEAVEN_SPACE.OPERATIONS },
+  // The Library — the catalog of shared Books. Each share-book lays a
+  // fact on this space's reel; receive-book reads + plants from it.
+  { name: "library", heavenSpace: HEAVEN_SPACE.LIBRARY },
   // source mirrors story/. Populated by seed/materials/space/
   // source.js (the disk-fold populator) at boot. After MIRROR.md
   // step 2 the chain is the truth: the FUSE mount (scripts/
