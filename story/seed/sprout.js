@@ -140,10 +140,11 @@ export async function withIAmAct(sourceLabel, fn) {
   // trips, delegate births) must serialize or the second seal forks
   // the chain. Reentrant per async context; see actChainLock.js.
   const { withActChainLock } = await import("./past/act/actChainLock.js");
-  return withActChainLock("0", I_AM, async () => {
+  const { getStoryDomain } = await import("./ibp/address.js");
+  const story = getStoryDomain();
+  return withActChainLock(story, "0", I_AM, async () => {
     const now = new Date();
 
-    const { getStoryDomain } = await import("./ibp/address.js");
     // Content-addressed like every act (past/act/actHash.js): identity
     // = hash of the opening, chained to the I-Am's previous sealed act.
     const { computeActId, readActHead } = await import("./past/act/actHash.js");
@@ -156,10 +157,10 @@ export async function withIAmAct(sourceLabel, fn) {
       inReplyTo: null,
       parentThread: null,
       startMessage: { content: sourceLabel || "I-Am acts.", source: "I-Am" },
-      story: getStoryDomain(),
+      story,
       history: "0",
     };
-    const p = await readActHead("0", I_AM);
+    const p = await readActHead(story, "0", I_AM);
     const actId = computeActId(p, opening);
     const plannedAct = {
       _id: actId,
@@ -178,7 +179,7 @@ export async function withIAmAct(sourceLabel, fn) {
       receivedAt: now,
       stampedAt: now,
       startMessage: { content: sourceLabel || "I-Am acts.", source: "I-Am" },
-      story: getStoryDomain(),
+      story,
       // I-Am scaffold acts on main.
       history: "0",
     };
@@ -245,10 +246,11 @@ export async function withBeingAct(beingId, sourceLabel, history, fn) {
   // scheduler's moments are NOT under this lock — their cross-check
   // is the CAS'd head advance at seal.
   const { withActChainLock } = await import("./past/act/actChainLock.js");
-  return withActChainLock(history, beingId, async () => {
+  const { getStoryDomain } = await import("./ibp/address.js");
+  const story = getStoryDomain();
+  return withActChainLock(story, history, beingId, async () => {
     const now = new Date();
 
-    const { getStoryDomain } = await import("./ibp/address.js");
     // Content-addressed like every act (past/act/actHash.js).
     const { computeActId, readActHead } = await import("./past/act/actHash.js");
     const opening = {
@@ -260,7 +262,7 @@ export async function withBeingAct(beingId, sourceLabel, history, fn) {
       inReplyTo: null,
       parentThread: null,
       startMessage: { content: sourceLabel || "graft act", source: beingId },
-      story: getStoryDomain(),
+      story,
       history: history,
     };
     // The actor NAME — the being expresses a trueName (the name whose key
@@ -274,7 +276,7 @@ export async function withBeingAct(beingId, sourceLabel, history, fn) {
           `cannot resolve the name that signs.`,
       );
     }
-    const p = await readActHead(history, beingId);
+    const p = await readActHead(story, history, beingId);
     const actId = computeActId(p, opening);
     const plannedAct = {
       _id: actId,
@@ -292,7 +294,7 @@ export async function withBeingAct(beingId, sourceLabel, history, fn) {
       receivedAt: now,
       stampedAt: now,
       startMessage: { content: sourceLabel || "graft act", source: beingId },
-      story: getStoryDomain(),
+      story,
       history: history,
     };
 

@@ -237,6 +237,10 @@ import "./present/intake/renderers/index.js";
 // graft-replicate (apply a bundle into a target). The walker primitive
 // in materials/refWalker.js is the engine; these ops wire it to DO.
 import "./materials/publish/ops.js";
+// Side-effect import. Registers the `receive-book` DO op (store/book/ops.js):
+// take a Book in (language/history/model/master) as the receiver's own act —
+// seal-check + atomic instate + colophon countersign, one do:receive-book fact.
+import "./store/book/ops.js";
 // Side-effect import. Registers `set-render` . the canonical sensory
 // write op against `qualities.render` (the seed-owned namespace any
 // matter/space/being can carry: model + animations + sounds + future

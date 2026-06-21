@@ -27,11 +27,14 @@
 //   priority / answers / status / end fields — scheduling and closure
 //     bookkeeping.
 //
-// Chain shape: per (history, being). p = the being's previous SEALED
-// act's identity on that history (ActHead, advanced only at seal —
-// a crashed moment leaves zero trace, including here). First act on
-// any history chains from GENESIS_PREV; cross-history biography
-// continuity is the be:switch fact on the REEL, not the act-chain.
+// Chain shape: per (story, history, being). p = the being's previous
+// SEALED act's identity on that (story, history). The story scopes the
+// chain to the reality the acts happened in — a Name acts across
+// stories, so without it a foreign act would interleave a local
+// (history, being) chain. ActHead advances only at seal — a crashed
+// moment leaves zero trace, including here. First act on any chain
+// chains from GENESIS_PREV; cross-history biography continuity is the
+// be:switch fact on the REEL, not the act-chain.
 
 import { computeHash, GENESIS_PREV } from "../fact/hash.js";
 import ActHead from "./actHead.js";
@@ -56,13 +59,13 @@ export function computeActId(p, act) {
   return computeHash(p, contentOfAct(act));
 }
 
-export function actHeadKey(history, beingId) {
-  return `${history}:${String(beingId)}`;
+export function actHeadKey(story, history, beingId) {
+  return `${story}:${history}:${String(beingId)}`;
 }
 
-/** The being's act-chain head on a history (GENESIS_PREV when none). */
-export async function readActHead(history, beingId) {
-  const row = await ActHead.findById(actHeadKey(history, beingId))
+/** The being's act-chain head on a (story, history) (GENESIS_PREV when none). */
+export async function readActHead(story, history, beingId) {
+  const row = await ActHead.findById(actHeadKey(story, history, beingId))
     .select("headHash").lean();
   return row?.headHash || GENESIS_PREV;
 }
@@ -82,13 +85,13 @@ export async function readActHead(history, beingId) {
  * act row, head — nothing lands), the moment fails loudly, the inbox
  * row stays open, and the retry re-opens from the new head.
  */
-export async function advanceActHead(history, beingId, actId, { session = null, expectPrev } = {}) {
-  const _id = actHeadKey(history, beingId);
+export async function advanceActHead(story, history, beingId, actId, { session = null, expectPrev } = {}) {
+  const _id = actHeadKey(story, history, beingId);
   if (expectPrev === undefined) {
     // Legacy unconditional advance (callers that own their serialization).
     const update = ActHead.updateOne(
       { _id },
-      { $set: { headHash: actId }, $setOnInsert: { history, beingId: String(beingId) } },
+      { $set: { headHash: actId }, $setOnInsert: { story, history, beingId: String(beingId) } },
       { upsert: true },
     );
     if (session) update.session(session);
@@ -102,7 +105,7 @@ export async function advanceActHead(history, beingId, actId, { session = null, 
     : { _id, headHash: expectPrev };
   const q = ActHead.updateOne(
     filter,
-    { $set: { headHash: actId }, $setOnInsert: { history, beingId: String(beingId) } },
+    { $set: { headHash: actId }, $setOnInsert: { story, history, beingId: String(beingId) } },
     // Upsert only for the first act (no head row yet). A non-genesis
     // upsert would resurrect a filtered-out row and mask the fork.
     { upsert: isGenesis },
@@ -135,9 +138,9 @@ export async function advanceActHead(history, beingId, actId, { session = null, 
  * @returns {{ok:true, count:number, headHash:string|null} |
  *           {ok:false, count:number, brokenAt:string, reason:string}}
  */
-export async function verifyActChain(history, beingId) {
+export async function verifyActChain(story, history, beingId) {
   const { default: Act } = await import("./act.js");
-  const head = await ActHead.findById(actHeadKey(history, beingId))
+  const head = await ActHead.findById(actHeadKey(story, history, beingId))
     .select("headHash").lean();
   let h = head?.headHash || GENESIS_PREV;
   let count = 0;
@@ -166,6 +169,7 @@ export async function verifyActChain(history, beingId) {
  * is legitimately absent, so the walk halts there rather than reporting a
  * missing-act. Degenerate at stopAtP = GENESIS_PREV this IS verifyActChain.
  *
+ * @param {string} story
  * @param {string} history
  * @param {string} beingId
  * @param {object} [opts]
@@ -173,11 +177,11 @@ export async function verifyActChain(history, beingId) {
  * @param {string} [opts.fromHead] head to walk from (default: the live ActHead)
  * @returns {{ok:true,count,headHash}|{ok:false,count,brokenAt,reason}}
  */
-export async function verifyActChainFrom(history, beingId, { stopAtP = GENESIS_PREV, fromHead } = {}) {
+export async function verifyActChainFrom(story, history, beingId, { stopAtP = GENESIS_PREV, fromHead } = {}) {
   const { default: Act } = await import("./act.js");
   let h = fromHead;
   if (h === undefined) {
-    const head = await ActHead.findById(actHeadKey(history, beingId)).select("headHash").lean();
+    const head = await ActHead.findById(actHeadKey(story, history, beingId)).select("headHash").lean();
     h = head?.headHash || GENESIS_PREV;
   }
   const headHash = (h && h !== GENESIS_PREV) ? h : null;

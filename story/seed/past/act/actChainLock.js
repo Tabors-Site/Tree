@@ -1,6 +1,6 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// Per-(history, being) act-chain lock. IN-PROCESS ONLY — the same
+// Per-(story, history, being) act-chain lock. IN-PROCESS ONLY — the same
 // scope warning as past/reel/appendLock.js applies verbatim.
 //
 // An act's identity chains off the head (`p` = ActHead.headHash at
@@ -40,8 +40,8 @@ import { AsyncLocalStorage } from "async_hooks";
 const _tails = new Map(); // chainKey -> Promise (tail of the chain)
 const _held = new AsyncLocalStorage(); // Set<chainKey> held by this async context
 
-function chainKey(history, beingId) {
-  return `${history}:${beingId}`;
+function chainKey(story, history, beingId) {
+  return `${story}:${history}:${beingId}`;
 }
 
 /**
@@ -51,13 +51,14 @@ function chainKey(history, beingId) {
  * Reentrant within one async context (see header).
  *
  * @template T
+ * @param {string} story
  * @param {string} history
  * @param {string} beingId
  * @param {() => Promise<T>} fn
  * @returns {Promise<T>}
  */
-export async function withActChainLock(history, beingId, fn) {
-  const key = chainKey(history, String(beingId));
+export async function withActChainLock(story, history, beingId, fn) {
+  const key = chainKey(story, history, String(beingId));
   const held = _held.getStore();
   if (held?.has(key)) return fn(); // reentrant: already ours
 

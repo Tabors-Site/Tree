@@ -185,10 +185,11 @@ export async function crossStoryDispatch({ envelope, actor, identity } = {}) {
   // Open + advance under the act-chain lock (read-compute-write on
   // the head); the CAS'd advance is the cross-check.
   const actId = await withActChainLock(
+    story,
     actor.history,
     actor.beingId,
     async () => {
-      const p = await readActHead(actor.history, actor.beingId);
+      const p = await readActHead(story, actor.history, actor.beingId);
       const id = computeActId(p, opening);
       // Sign the attempt act too. This is the one act path that bypasses
       // sealAct (the documented Stamp-opener exception above), so the
@@ -231,7 +232,7 @@ export async function crossStoryDispatch({ envelope, actor, identity } = {}) {
         status: "attempted",
         sig,
       });
-      await advanceActHead(actor.history, actor.beingId, id, { expectPrev: p });
+      await advanceActHead(story, actor.history, actor.beingId, id, { expectPrev: p });
       return id;
     },
   );

@@ -571,8 +571,9 @@ export async function plantGraft(bundle) {
             if (!v.ok) broken.push({ kind: "reel", key: rh._id, reason: v.reason, at: v.brokenAt });
           }
           for (const ah of dbActHeads) {
-            const beingId = ah.beingId ?? ah._id?.split(":")[1];
-            const v = await verifyActChain(ah.history || "0", beingId);
+            const seg = String(ah._id || "").split(":"); // <story>:<history>:<being>
+            const beingId = ah.beingId ?? seg[2];
+            const v = await verifyActChain(ah.story ?? seg[0], ah.history ?? seg[1] ?? "0", beingId);
             actsWalked++;
             if (!v.ok) broken.push({ kind: "act-chain", key: ah._id, reason: v.reason, at: v.brokenAt });
           }
@@ -700,7 +701,7 @@ async function captureBeingGraft(opts) {
   // Per-history heads (the being's reel + act-chain tips). Include main.
   const allHistories = [...new Set([...historySet, "0", ...historyById.keys()])];
   const reelKeys = allHistories.map((br) => reelKey(br, "being", beingId));
-  const actKeys = allHistories.map((br) => actHeadKey(br, beingId));
+  const actKeys = allHistories.map((br) => actHeadKey(story, br, beingId));
   const reelHeads = await ReelHead.find({ _id: { $in: reelKeys } }).lean();
   const actHeads = await ActHead.find({ _id: { $in: actKeys } }).lean();
 
@@ -1077,7 +1078,7 @@ export async function applyGraft(bundle, opts = {}) {
     }
   }
   for (const ah of bundle.actHeads || []) {
-    if (String(ah._id).split(":").slice(1).join(":") !== String(beingId)) {
+    if (String(ah._id).split(":").slice(2).join(":") !== String(beingId)) { // <story>:<history>:<being>
       throw new Error(`applyGraft: BUNDLE SCOPE VIOLATION — actHead ${ah._id} is not the grafted being's act-chain. Refusing.`);
     }
   }
@@ -1231,10 +1232,21 @@ export async function applyGraft(bundle, opts = {}) {
         if (!v.ok) throw new Error(`applyGraft: POST-GRAFT reel verification FAILED on being:${beingId.slice(0, 8)}@${br} (${v.reason} at ${v.brokenAt}).`);
       }
     }
-    const actHistories = [...new Set([...(bundle.actHeads || []).map((r) => String(r._id).split(":")[0]), ...newActs.map((a) => String(a.history ?? "0"))])];
-    for (const br of actHistories) {
-      const v = await verifyActChain(br, beingId);
-      if (!v.ok) throw new Error(`applyGraft: POST-GRAFT act-chain verification FAILED on being:${beingId.slice(0, 8)}@${br} (${v.reason}).`);
+    // (story, history) pairs to verify — actHead _id is now <story>:<history>:<being>,
+    // so split[0] is the STORY (not the history); pull both, prefer the row fields.
+    const actChainKeys = new Map();
+    for (const r of (bundle.actHeads || [])) {
+      const seg = String(r._id).split(":");
+      const st = r.story ?? seg[0];
+      const hi = r.history ?? seg[1] ?? "0";
+      if (st != null) actChainKeys.set(`${st} ${hi}`, [st, hi]);
+    }
+    for (const a of newActs) {
+      if (a.story != null) actChainKeys.set(`${a.story} ${String(a.history ?? "0")}`, [a.story, String(a.history ?? "0")]);
+    }
+    for (const [, [st, hi]] of actChainKeys) {
+      const v = await verifyActChain(st, hi, beingId);
+      if (!v.ok) throw new Error(`applyGraft: POST-GRAFT act-chain verification FAILED on being:${beingId.slice(0, 8)}@${st}:${hi} (${v.reason}).`);
     }
 
     // ── 10b. Provable replay: the LANDED heads (read from the DB) must

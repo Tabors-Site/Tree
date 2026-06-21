@@ -749,7 +749,7 @@ async function planActRow(opts = {}) {
     story: getStoryDomain(),
     history,
   };
-  const p = await readActHead(history, through);
+  const p = await readActHead(getStoryDomain(), history, through);
   actId = computeActId(p, opening);
   // A summon with no parent IS its own root.
   if (!resolvedRoot) resolvedRoot = actId;

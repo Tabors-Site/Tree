@@ -294,7 +294,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
             // chain. The moment fails loudly; its inbox row stays
             // open; the retry re-opens from the new head.
             const { advanceActHead } = await import("../../past/act/actHash.js");
-            await advanceActHead(actDoc.history || "0", actDoc.through, actDoc._id, {
+            await advanceActHead(actDoc.story, actDoc.history || "0", actDoc.through, actDoc._id, {
               session, expectPrev: actDoc.p,
             });
           });
@@ -325,7 +325,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
   if (!Array.isArray(deltaF) || deltaF.length === 0) {
     const { advanceActHead } = await import("../../past/act/actHash.js");
     try {
-      await advanceActHead(actDoc.history || "0", actDoc.through, actDoc._id, {
+      await advanceActHead(actDoc.story, actDoc.history || "0", actDoc.through, actDoc._id, {
         expectPrev: actDoc.p,
       });
     } catch (err) {
