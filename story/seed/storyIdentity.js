@@ -40,7 +40,6 @@ export function getStoryIdentity() {
   const keyDir = process.env.STORY_KEY_DIR || path.join(process.cwd(), ".story");
   const privateKeyPath = path.join(keyDir, "story.key");
   const publicKeyPath = path.join(keyDir, "story.key.pub");
-  const idPath = path.join(keyDir, "story.id");
 
   if (!fs.existsSync(keyDir)) {
     fs.mkdirSync(keyDir, { recursive: true });
@@ -68,11 +67,13 @@ export function getStoryIdentity() {
 
   // The story is a wallet: its id IS its public key, encoded the same
   // z... way as a being id (this story's I_AM shares this exact key,
-  // so storyId === I_AM's key id). Derived from the keypair, not a
-  // random uuid — the old story.id token is retired. Written to disk
-  // for operator visibility only; the public key is the source of truth.
+  // so storyId === I_AM's key id). Derived from the keypair every boot,
+  // never stored — story.key.pub is the only source of truth. Both the
+  // old random-uuid story.id token AND its derived on-disk cache are
+  // retired: identity is the key, not a file. (The whole-place CAS tie
+  // lives separately in storyRoot()/signedStoryRoot() — content, signed
+  // BY this key, not conflated with the key's id.)
   const storyId = keyIdFromPublicKeyPem(publicKey);
-  try { fs.writeFileSync(idPath, storyId, { mode: 0o644 }); } catch { /* visibility only */ }
 
   storyIdentity = {
     storyId,

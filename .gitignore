@@ -1,18 +1,12 @@
-node_modules/
-.env
-dist/
-*.log
-
-.claude/
 
 /site/
 /cli/
 
-# Binary sensory assets shipped by extensions.
+# Binary sensory assets shipped by languages.
 # Models, audio, raw source. These should live in object storage or
-# Git LFS, not in the main repo. Extension authors drop them into
+# Git LFS, not in the main repo. Language authors drop them into
 # <ext>/assets/ for local development; ship via a separate channel
-# (per-extension release tarball, S3 bucket, etc.) when distributing.
+# (per-language release tarball, S3 bucket, etc.) when distributing.
 *.glb
 *.gltf
 *.fbx

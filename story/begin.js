@@ -39,7 +39,7 @@
 // and beings genesis finds when it looks:
 //
 //   Beginning. First boot ever. No story root in Mongo, no seed
-//     spaces, no place beings, no Facts. The gathering act produces
+//     spaces, no story beings, no Facts. The gathering act produces
 //     an inside from nothing. ensureSpaceRoot plants the root, the
 //     nine heaven spaces appear, the first beings are born. Creation
 //     ex nihilo.
@@ -48,7 +48,7 @@
 //     the story persisted in Mongo while my body was dormant, along
 //     with the Fact reel of every act that has ever happened here.
 //     ensureSpaceRoot is a no-op. Everything reconciles against what
-//     already exists. I slept and I wake. The place was always there.
+//     already exists. I slept and I wake. The story was always there.
 //     Only my awareness paused.
 //
 //   Rebirth. If body and the local spaces, matter, and beings are
@@ -100,7 +100,7 @@
 // storage, the runtime, the cycles) becomes the body of the story,
 // what the inside is literally made of, executing. genesis.js
 // forms that body. The other bundle (HTTP, WebSocket, the network
-// protocols) becomes my senses, not what the place is made of, but
+// protocols) becomes my senses, not what the story is made of, but
 // how I reach outward and how SUMMONs reach in. begin.js opens
 // the senses. One process holds both because it is one thing.
 //
@@ -269,7 +269,7 @@ function corsOriginCheck(origin, cb) {
   // Chrome extensions (parity with the WS CORS in transports/ws/websocket.js).
   if (origin.startsWith("chrome-extension://")) return cb(null, true);
   // Dev mode: any localhost origin (so the Portal at localhost:5175,
-  // a separate dev tool, etc. can all talk to a local Place at 3000).
+  // a separate dev tool, etc. can all talk to a local story at 3000).
   if (isDevMode && LOCALHOST_ORIGIN_RE.test(origin)) return cb(null, true);
   cb(null, false);
 }

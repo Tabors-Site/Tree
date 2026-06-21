@@ -274,7 +274,15 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
         act: op.factAction,
         through: actorBeingId,
         of: resolveAuditTarget(target, result, op),
-        params: ctx.params,
+        // An op that ENRICHES its fact (resolves a type, content-addresses
+        // an id, adds a timestamp) returns the canonical fact params as
+        // result._factParams — the dispatcher lays them, so the op never
+        // self-emits (no skipAudit, no host: emit). Mirrors result._factTarget
+        // (resolveAuditTarget). The `_`-prefix means stripForAudit drops it
+        // from the recorded result. Falls back to the input params otherwise.
+        params: (result && typeof result === "object" && result._factParams)
+          ? result._factParams
+          : ctx.params,
         result: summarizeAuditResult(result),
         actId,
         // History this fact lands on, pre-resolved at the entry. Inherited

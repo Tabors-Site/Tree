@@ -24,10 +24,10 @@ mirror
 
 # Per land extension profile. Operator's choices for which extensions
 # wake with the I-Am. Not part of the kernel.
-resources/.disabled
-resources/.treeos-profile
-resources/.staging-*
-resources/.lockfile.json
+store/.disabled
+store/.treeos-profile
+store/.staging-*
+store/.lockfile.json
 
 # Old experiments kept for reference, not for shipping.
 .oldExtensions

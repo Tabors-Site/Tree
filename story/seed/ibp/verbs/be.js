@@ -32,7 +32,12 @@ import { IbpError, IBP_ERR } from "../protocol.js";
 import { I_AM } from "../../materials/being/seedBeings.js";
 import { getStoryDomain } from "../address.js";
 import { authorize, getAuthConfig } from "../authorize.js";
-import { BE_OPS, getBeOp } from "../beOps.js";
+import { BE_OPS } from "../beOps.js";
+// Fold-only dispatch: the BE op resolves from the live word-fold (the coin facts seedFold
+// declared at genesis), NOT the BE_OPS Map — which is now only the load-time registration buffer
+// declareBeOpsToFold reads. Mirrors do.js/name.js. BE_OPS stays imported for the closed-set error
+// message. The handler bodies live with cherub (the bottom turtle), registered by ref.
+import { resolveBeOpFromFold } from "../../present/word/wordStore.js";
 import {
   assertVerbCaller,
   refuseHistoricalWrite,
@@ -103,7 +108,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   // the table AND cherub is the resolved being, dispatch through it.
   // Future seed change could license other beings for these ops, but
   // cherub is the only one today.
-  const beOp = getBeOp(operation);
+  const beOp = resolveBeOpFromFold(operation);
 
   // ── Self-birth path (BE:birth on your own stance). ──────────────
   // Per the federation doctrine, be:birth is the only birth verb;
@@ -422,7 +427,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
         { actor: decision.actor },
       );
     }
-    const cherubReleaseOp = getBeOp("release");
+    const cherubReleaseOp = resolveBeOpFromFold("release");
     const result = cherubReleaseOp
       ? await cherubReleaseOp.handler({
           address,
@@ -474,7 +479,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
         "switch requires an authenticated caller",
       );
     }
-    const switchOp = getBeOp("switch");
+    const switchOp = resolveBeOpFromFold("switch");
     if (!switchOp) {
       throw new IbpError(IBP_ERR.INTERNAL, "switch op not registered");
     }
@@ -556,7 +561,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
         { actor: decision.actor },
       );
     }
-    const deathOp = getBeOp("death");
+    const deathOp = resolveBeOpFromFold("death");
     if (!deathOp) {
       throw new IbpError(IBP_ERR.INTERNAL, "death op not registered");
     }
@@ -657,7 +662,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
         { trueName: newTrueName },
       );
     }
-    const truenameOp = getBeOp("truename");
+    const truenameOp = resolveBeOpFromFold("truename");
     const result = await truenameOp.handler({
       address,
       addressKind,
@@ -717,7 +722,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
         { actor: decision.actor },
       );
     }
-    const cherubConnectOp = getBeOp("connect");
+    const cherubConnectOp = resolveBeOpFromFold("connect");
     if (!cherubConnectOp) {
       throw new IbpError(IBP_ERR.INTERNAL, "connect op not registered");
     }

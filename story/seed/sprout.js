@@ -691,12 +691,12 @@ export async function ensureIAm() {
   // whose _id is the I_AM constant. No indirection, no string-vs-uuid
   // mismatch.
   const id = I_AM;
-  const { mintCredentialSpec } = await import(
-    "./materials/being/identity/credentials.js"
-  );
-  const credential = await mintCredentialSpec(null);
+  // I_AM the being carries NO password. The root's authority is its Name's story key
+  // (the i-am Name has privateKeyEnc:null and signs with storyIdentity — see the
+  // name:declare just below), never a being credential; and a being password is OPTIONAL,
+  // owned by the Name. The auto-generated credential every other being gets at birth is a
+  // vestige at the root — nothing authenticates as the i-am being, so it carries none.
   const qualities = {
-    auth: { credentialPlain: credential.plain },
     cognition: { defaultKind: "scripted" },
   };
 
@@ -731,7 +731,6 @@ export async function ensureIAm() {
       of: { kind: "being", id },
       params: {
         name: I_AM,
-        password: credential.hash,
         roles: [],
         defaultRole: null,
         // The being expresses the i-am Name (the root identity). Every

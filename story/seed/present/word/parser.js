@@ -1012,6 +1012,11 @@ function oper(v) {
   const x = v.trim();
   if (/^".*"$/.test(x)) return { value: x.slice(1, -1) }; // a quoted literal FIRST, so "a. b." isn't mistaken for a dotted ref by the path check below
   if (x.startsWith("$")) return { ref: refKey(x.slice(1)) };
+  // nested literals: a value can be an object or array whose leaves recurse through
+  // refLit, so $refs and inner objects nest. resolveValue (evaluator) walks the result
+  // at run time. Enables `do create-matter with { content: { target: $address } }`.
+  if (x.startsWith("{") && x.endsWith("}")) return { value: parseObjectLiteral(x) };
+  if (x.startsWith("[") && x.endsWith("]")) return { value: parseArrayLiteral(x) };
   if (/^true$/i.test(x)) return { value: true };
   if (/^false$/i.test(x)) return { value: false };
   if (/^-?\d+(\.\d+)?$/.test(x)) return { value: Number(x) };
@@ -1028,6 +1033,49 @@ function refKey(s) {
     .replace(/^(the|a|an)\s+/i, "")
     .replace(/'s\s+/g, ".")
     .replace(/\s+/g, "-");
+}
+
+// Split top-level commas, respecting nested {}, [] and "..." (unlike splitTop, which only
+// masks quoted strings). Used for `with`/object params so a nested object's inner commas
+// never split the outer list.
+function splitTopCommas(s) {
+  const out = [];
+  let depth = 0,
+    inStr = false,
+    buf = "";
+  for (let i = 0; i < (s || "").length; i++) {
+    const ch = s[i];
+    if (inStr) {
+      buf += ch;
+      if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') { inStr = true; buf += ch; continue; }
+    if (ch === "{" || ch === "[") { depth++; buf += ch; continue; }
+    if (ch === "}" || ch === "]") { depth = Math.max(0, depth - 1); buf += ch; continue; }
+    if (ch === "," && depth === 0) { if (buf.trim()) out.push(buf.trim()); buf = ""; continue; }
+    buf += ch;
+  }
+  if (buf.trim()) out.push(buf.trim());
+  return out;
+}
+// A nested object literal "{ k: v, k2: { ... } }": each value recurses through refLit, so
+// $refs ({ref}) and inner objects/arrays nest. The evaluator's resolveValue walks the
+// result, resolving leaves at run time — one composable params shape, words all the way down.
+function parseObjectLiteral(s) {
+  const inner = s.trim().replace(/^\{/, "").replace(/\}$/, "").trim();
+  const obj = {};
+  if (!inner) return obj;
+  for (const it of splitTopCommas(inner)) {
+    const kv = it.match(/^("?[\w][\w.-]*"?)\s*:\s*(.+)$/);
+    if (kv) obj[camelKey(kv[1].replace(/^"|"$/g, ""))] = refLit(kv[2].trim());
+  }
+  return obj;
+}
+// An array literal "[ a, b, $c ]": each element recurses through refLit.
+function parseArrayLiteral(s) {
+  const inner = s.trim().replace(/^\[/, "").replace(/\]$/, "").trim();
+  return inner ? splitTopCommas(inner).map((it) => refLit(it)) : [];
 }
 
 // inferFlag (§5): a reflexive state predicate -> a DETERMINISTIC flow-local flag, so a
@@ -1166,12 +1214,19 @@ function doOpAct(op, rest, c) {
     if (w) paramsStr = w[1].trim();
   }
   if (paramsStr) {
-    const params = {};
-    for (const it of splitTop(paramsStr, /,\s*/)) {
-      const kv = it.match(/^([\w][\w.-]*)\s*:\s*(.+)$/);
-      if (kv) params[camelKey(kv[1])] = refLit(kv[2].trim());
+    let params;
+    // Two equivalent forms: a whole-object `with { k: v, … }` (clean for a big nested
+    // spec) or bare top-level pairs `with k: v, k: v` (values may still nest objects).
+    if (paramsStr.startsWith("{") && paramsStr.endsWith("}")) {
+      params = parseObjectLiteral(paramsStr);
+    } else {
+      params = {};
+      for (const it of splitTopCommas(paramsStr)) {
+        const kv = it.match(/^([\w][\w.-]*)\s*:\s*(.+)$/);
+        if (kv) params[camelKey(kv[1])] = refLit(kv[2].trim());
+      }
     }
-    if (Object.keys(params).length) act.params = params;
+    if (params && Object.keys(params).length) act.params = params;
   }
   return act;
 }

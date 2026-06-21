@@ -190,8 +190,11 @@ export async function seeVerb(target, opts = {}) {
   //   3. opts.payload — fallback: treat full payload as args
   //      (back-compat for wire callers that don't nest under .args)
   if (typeof addrString === "string" && /^[a-z][a-z0-9-]*(:[a-z][a-z0-9-]*)?$/i.test(addrString)) {
-    const { getSeeOperation } = await import("../seeOps.js");
-    const op = getSeeOperation(addrString);
+    // Fold-only dispatch: the SEE op resolves from the live word-fold (the coin facts seedFold
+    // declared), NOT the seeOps REGISTRY — which stays only the registration buffer + the routing
+    // check (the regex above) + metadata (listSeeOperations). Mirrors do.js/name.js/be.js.
+    const { resolveSeeOpFromFold } = await import("../../present/word/wordStore.js");
+    const op = resolveSeeOpFromFold(addrString);
     if (op) {
       // Authorize the SEE op via the role-walk. Anonymous callers hit
       // the arrival floor (canSee: ["arrival-view"] only); authenticated
@@ -648,8 +651,8 @@ export async function seeVerb(target, opts = {}) {
     // refuses raw SEE and we land here to swap in the filtered view).
     const isAnonymous = !identity?.beingId || identity?.name === "arrival";
     if (isAnonymous) {
-      const { getSeeOperation } = await import("../seeOps.js");
-      const arrivalOp = getSeeOperation("arrival-view");
+      const { resolveSeeOpFromFold } = await import("../../present/word/wordStore.js");
+      const arrivalOp = resolveSeeOpFromFold("arrival-view");
       if (arrivalOp) {
         // Resolve history: prefer the moment's actorAct.history, then
         // the wire-parsed currentHistory, then fall through to the

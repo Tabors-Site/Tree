@@ -414,3 +414,86 @@ export function resolveNameOpFromFold(opName) {
   if (!handler) return null;
   return { handler, args: w.args, label: w.label, description: w.description, ownerExtension: w.ownerExtension || "seed", _fromFold: true };
 }
+
+// ── BE ops as words (the BE_OPS-Map migration; the twin of the NAME ops above) ──
+//
+// A BE op (birth/connect/release/switch/death/truename) is a word named "be:<op>", kind:"beop",
+// carrying its handler by host ref (the handler lives with cherub's role, a function, never
+// serialized). Verb-namespaced "be:<op>" so be:connect/be:release never collide with name:connect/
+// name:release in the shared projection. Unlike NAME, a BE op also carries `bootstrap` (birth/connect
+// skip assertVerbCaller — the caller has no identity yet); it's a serializable boolean, so it rides
+// the binding. BE_OPS stays as the load-time registration buffer this reads. I_AM's own genesis
+// be:birth (sprout.js) is a raw emitFact, never beVerb, so it predates + grounds this fold untouched.
+export async function declareBeOpsToFold({ moment = null, history = "0" } = {}) {
+  const { listBeOpNames, getBeOp } = await import("../../ibp/beOps.js");
+  let n = 0;
+  for (const opName of listBeOpNames()) {
+    const op = getBeOp(opName);
+    if (!op?.handler) continue;
+    const ref = `be-op:${opName}`;
+    registerHostHandler(ref, op.handler);
+    await bindWord(`be:${opName}`, {
+      ownerExtension: "seed",
+      kind: "beop",
+      do: { ref },
+      bootstrap: op.bootstrap ? true : undefined, // birth/connect skip the caller assertion
+      args: op.args ? JSON.parse(JSON.stringify(op.args)) : undefined,
+      label: op.label,
+      description: op.description,
+    }, { moment, history, skipIfUnchanged: true });
+    n++;
+  }
+  return n;
+}
+
+// Resolve a BE op from the fold into the spec beVerb dispatches (handler + bootstrap, from the ref).
+// Null when unbound, disabled, not a beop, or the handler ref is unresolvable. The op name arrives
+// BARE (beVerb dispatches "birth"); this namespaces it to the "be:<op>" word. Mirrors
+// resolveNameOpFromFold; beVerb dispatches on this instead of getBeOp(BE_OPS).
+export function resolveBeOpFromFold(opName) {
+  const w = getWordSync(`be:${opName}`);
+  if (!w || w.kind !== "beop" || !w.do?.ref) return null;
+  const handler = resolveHostHandler(w.do.ref);
+  if (!handler) return null;
+  return { handler, bootstrap: !!w.bootstrap, args: w.args, label: w.label, description: w.description, ownerExtension: w.ownerExtension || "seed", _fromFold: true };
+}
+
+// ── SEE ops as words (the seeOps-REGISTRY migration; the third verb-op set) ──
+//
+// A SEE op is a word named "see:<op>", kind:"seeop", carrying its handler by host ref. SEE is read-
+// only — no fact, no bootstrap, no targets — so the binding is just the handler ref + args +
+// description. seeVerb dispatches resolveSeeOpFromFold; the seeOps REGISTRY stays as the registration
+// buffer + the routing check (isSeeOpName) + the metadata reads (listSeeOperations). The op name may
+// itself contain a colon (the "<ext>:<name>" extension form) — the "see:" prefix nests cleanly into
+// the word key ("see:food:meals"), no collision with name:/be:/role:op words.
+export async function declareSeeOpsToFold({ moment = null, history = "0" } = {}) {
+  const { listSeeOperations, getSeeOperation } = await import("../../ibp/seeOps.js");
+  let n = 0;
+  for (const { name } of listSeeOperations()) {
+    const op = getSeeOperation(name);
+    if (!op?.handler) continue;
+    const ref = `see-op:${name}`;
+    registerHostHandler(ref, op.handler);
+    await bindWord(`see:${name}`, {
+      ownerExtension: op.ownerExtension || "seed",
+      kind: "seeop",
+      do: { ref },
+      args: op.args ? JSON.parse(JSON.stringify(op.args)) : undefined,
+      description: op.description || undefined,
+    }, { moment, history, skipIfUnchanged: true });
+    n++;
+  }
+  return n;
+}
+
+// Resolve a SEE op from the fold into the spec seeVerb dispatches (the handler from its ref). Null
+// when unbound, disabled, not a seeop, or the handler ref is unresolvable. The op name arrives BARE
+// (seeVerb dispatches "place" / "arrival-view" / "food:meals"); this namespaces it to the "see:<op>"
+// word. Mirrors resolveNameOpFromFold / resolveBeOpFromFold.
+export function resolveSeeOpFromFold(name) {
+  const w = getWordSync(`see:${name}`);
+  if (!w || w.kind !== "seeop" || !w.do?.ref) return null;
+  const handler = resolveHostHandler(w.do.ref);
+  if (!handler) return null;
+  return { name, handler, args: w.args, description: w.description, ownerExtension: w.ownerExtension || "seed", _fromFold: true };
+}

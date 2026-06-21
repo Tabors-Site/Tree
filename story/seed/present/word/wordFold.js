@@ -103,14 +103,16 @@ export async function declareConcepts({ moment = null, history = "0" } = {}) {
   return count;
 }
 
-// ── the genesis fold: one boot step, seven shapes, one fold ──
+// ── the genesis fold: one boot step, nine shapes, one fold ──
 //
 // (1) the verb pasts → declarePast (the runtime tense, sync); (2) the concept .words → bindWord
 // ({kind:"concept"}); (3) the do-ops → wordStore.declareOpsToFold ({kind:"op"}); (4) the matter
 // types → wordStore.declareTypesToFold ({kind:"type"}); (5) the reducers → declareReducersToFold
 // ({kind:"reducer"}, the per-kind fold logic); (6) the role-words → declareRoleWordsToFold
 // ({kind:"roleword"}, role:op -> .word source); (7) the NAME verb ops → declareNameOpsToFold
-// ({kind:"nameop"}, name:<op> -> handler ref). All land as coin facts, folded together,
+// ({kind:"nameop"}, name:<op> -> handler ref); (8) the BE verb ops → declareBeOpsToFold
+// ({kind:"beop"}, be:<op> -> handler ref); (9) the SEE verb ops → declareSeeOpsToFold
+// ({kind:"seeop"}, see:<op> -> handler ref). All land as coin facts, folded together,
 // read by kind. After this the story reads the seed in full: the concepts as their bodies, the ops,
 // types, reducers, and role-words declared beside them. This is the shared seam, the one boot call
 // both halves meet at; wire it after the story is established, before the surface renders.
@@ -132,6 +134,12 @@ export async function seedFold({ moment = null, history = "0" } = {}) {
   }
   if (typeof store.declareNameOpsToFold === "function") {
     await store.declareNameOpsToFold({ moment, history }); // the NAME verb ops (kind:"nameop", name:<op>)
+  }
+  if (typeof store.declareBeOpsToFold === "function") {
+    await store.declareBeOpsToFold({ moment, history }); // the BE verb ops (kind:"beop", be:<op>)
+  }
+  if (typeof store.declareSeeOpsToFold === "function") {
+    await store.declareSeeOpsToFold({ moment, history }); // the SEE verb ops (kind:"seeop", see:<op>)
   }
   return true;
 }

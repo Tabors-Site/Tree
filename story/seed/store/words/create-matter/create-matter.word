@@ -16,10 +16,12 @@
 # resolveMatterName / matterContentId the JS handler calls — NO reimplementation.
 #
 # THE CONTROL strand is .word: the actor gate (refuse when no identified actor)
-# and the return. The lone WORLD write is the content-addressed do:create-matter
-# birth-fact emit inside emitBirth, which reuses the SAME emitFact the JS handler
-# calls and lays it into the live moment via ctx.moment — so the fact
-# attributes to the real caller, not to the i-am being override.
+# and the return. There is NO host: emit — the word lays no fact of its own. It
+# returns the enriched birth spec as `factParams` (the cut promotes it to the
+# dispatcher's _factParams) plus the content-addressed matterId; the ONE auto-Fact
+# path in do.js then lays the caller-attributed do:create-matter fact. resolve-
+# birth-spec stays a `see` (the floor: type resolution, CAS putContent, the
+# content-addressed id) — a read, not an escape.
 #
 # The bridge binds `target`, `targetKind`, the create `params` (spec: name, type,
 # content, coord, spaceId, parentMatterId), `caller` (the acting being), and
@@ -29,5 +31,4 @@ When a being brings matter into a space:
   If no caller:
     refuse with "create-matter requires an identified actor".
   see resolve-birth-spec(target, targetKind, params, caller, branch) as birth.
-  host: emitBirth(birth, caller, branch) as laid.
-  Return matterId: $birth.matterId, spaceId: $birth.spaceId, parentMatterId: $birth.parentMatterId.
+  Return matterId: $birth.matterId, spaceId: $birth.spaceId, parentMatterId: $birth.parentMatterId, factParams: $birth.enrichedSpec.

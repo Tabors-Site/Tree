@@ -15,14 +15,16 @@
 //
 // params: flat object — see comment above createSpaceHandler in space/ops.js
 //
-// skipAudit because the handler stamps the do:create-matter Fact
-// directly on the new matter's reel; eager-fold inside logFact runs
-// applyCreateMatter to materialize the row. One Fact per birth.
+// The op does NOT self-emit: resolve-birth-spec computes the enriched birth
+// spec + content-addressed id, the handler returns them as _factParams +
+// _factTarget, and the dispatcher's one auto-Fact path lays the caller-
+// attributed do:create-matter Fact (eager-fold inside logFact runs
+// applyCreateMatter to materialize the row). One Fact per birth, one emit
+// path for every op (do.js auto-Fact).
 
 import { registerOperation } from "../../../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
-import { emitFact } from "../../../past/fact/facts.js";
 import { detectTargetKind, targetIdOf } from "../../../materials/_targetShape.js";
 import { assertMatterCoordInBounds } from "../../../materials/matter/coordBounds.js";
 import { resolveMatterName } from "../../../materials/matter/matters.js";
@@ -60,7 +62,16 @@ async function _createMatterViaWord({ target, params, caller, moment }) {
       },
       env: { host: matterHostEnv() },
     });
-    return result || null;
+    if (!result) return null;
+    // The .word returns the enriched birth spec as `factParams`; promote it to
+    // the dispatcher's `_factParams` convention so the auto-emitted
+    // do:create-matter fact carries the resolved spec (type, cas-ref, name,
+    // coord) the matter reducer folds. `_factTarget` forces the MATTER target
+    // (resolveAuditTarget would otherwise pick the bare spaceId). The op no
+    // longer self-emits — the dispatcher lays the one caller-attributed fact.
+    if (result.factParams) { result._factParams = result.factParams; delete result.factParams; }
+    if (result.matterId) result._factTarget = { kind: "matter", id: String(result.matterId) };
+    return result;
   } catch (e) {
     if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
     throw e;
@@ -228,24 +239,15 @@ async function createMatterHandler(ctx) {
   // self is never inside its own hash), then carry it as target.id. The
   // same matter born the same way gets the same id.
   const matterId = matterContentId(enrichedSpec);
-  await emitFact(
-    {
-      verb: "do",
-      act: "create-matter",
-      through: String(actorBeingId),
-      of: { kind: "matter", id: matterId },
-      params: enrichedSpec,
-      actId: moment?.actId || null,
-      // Branch this matter is created on — sourced from the moment ctx
-      // so a plant under #1 lands matter on #1's reel, not main's.
-      history: moment?.actorAct?.history || "0",
-    },
-    moment,
-  );
+  // No self-emit. Return the enriched spec as _factParams + the content-
+  // addressed matter id as _factTarget; the dispatcher lays the one
+  // caller-attributed do:create-matter fact (one emit path for every op).
   return {
     matterId,
     spaceId,
     parentMatterId,
+    _factTarget: { kind: "matter", id: String(matterId) },
+    _factParams: enrichedSpec,
   };
 }
 
@@ -253,7 +255,6 @@ registerOperation("create-matter", {
   targets: ["space", "matter", "stance"],
   ownerExtension: "seed",
   factAction: "create-matter",
-  skipAudit: true,
   args: {
     name: { type: "text", label: "Name (defaults to the uploaded filename)", required: false },
     type: { type: "text", label: "Matter type (omit to classify from the content)", required: false },
