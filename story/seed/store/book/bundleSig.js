@@ -78,7 +78,7 @@ export async function signBundle(bundle, producerBeingId, history = "0") {
     const { getStoryIdentity } = await import("../../storyIdentity.js");
     signerId = getStoryIdentity().storyId;
   }
-  const { signAsName } = await import("../name/keys.js");
+  const { signAsName } = await import("../../materials/name/keys.js");
   bundle.meta.signature = {
     alg: "ed25519",
     signerId,
@@ -106,7 +106,7 @@ export async function verifyBundleSig(bundle) {
   if (!sig?.value) return { ok: true, signerId: null, reason: "unsigned-advisory" };
   const bundleHash = bundle?.meta?.bundleHash;
   if (!bundleHash) return { ok: false, signerId: sig.signerId || null, reason: "no-bundleHash" };
-  const { isKeyId, verifyNameSig } = await import("../name/keys.js");
+  const { isKeyId, verifyNameSig } = await import("../../materials/name/keys.js");
   if (!isKeyId(sig.signerId)) return { ok: false, signerId: sig.signerId || null, reason: "signer-not-keyid" };
   const ok = verifyNameSig(sig.signerId, sigPayload(bundleHash, sig.signerId), sig.value);
   return { ok, signerId: sig.signerId, reason: ok ? "verified" : "bad-sig" };

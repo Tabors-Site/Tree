@@ -157,9 +157,9 @@ async function runFirstBootActions() {
   }
   const { getSpaceRootId, getIAmBeingId } = await import("./seed/sprout.js");
   const { getTemplate } =
-    await import("./seed/materials/publish/templateRegistry.js");
+    await import("./seed/store/book/templateRegistry.js");
   const { plantTemplate } =
-    await import("./seed/materials/publish/seedPlant.js");
+    await import("./seed/store/book/seedPlant.js");
   const rootSpaceId = getSpaceRootId();
   const iAm = getIAmBeingId();
   let plantedAny = false;

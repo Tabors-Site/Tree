@@ -15,7 +15,7 @@ import Fact from "./past/fact/fact.js";
 import Matter from "./materials/matter/matter.js";
 
 import { emitFact } from "./past/fact/facts.js";
-import { captureGraft } from "./materials/publish/graft.js";
+import { captureGraft } from "./store/book/graft.js";
 import { resolveSpaceAccess } from "./materials/space/spaces.js";
 import {
   birthBeing,
@@ -232,7 +232,7 @@ import "./present/intake/inboxOps.js";
 // See seed/SUMMON.md "the receiving handler" + seed/present/intake/
 // inboxRenderers.js for the spec shape.
 import "./present/intake/renderers/index.js";
-// (The old materials/publish/ops.js DISSOLVED into the book layer: capture-template/plant-template/
+// (The old store/book/ops.js DISSOLVED into the book layer: capture-template/plant-template/
 // plant-template-by-name/capture-being/graft-being → capture-book/share-book/receive-book; clones →
 // the `library` SEE op; capture-graft (the whole-story genome) → `share-story`. All in book/share/
 // receive now. The captureGraft/plantGraft engines remain as internals those verbs call.)

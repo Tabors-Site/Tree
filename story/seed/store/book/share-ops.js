@@ -104,7 +104,7 @@ registerOperation("share-story", {
     if (!(await hasHeavenAuthority(identity.beingId))) {
       throw new IbpError(IBP_ERR.FORBIDDEN, "share-story: only beings with heaven authority may capture the whole story (the genome).");
     }
-    const { captureGraft } = await import("../../materials/publish/graft.js");
+    const { captureGraft } = await import("./graft.js");
     const result = await captureGraft({ capturedBy: String(identity.beingId), storyName: params?.storyName || null });
     return { savedTo: result.savedTo, counts: result.bundle.meta.counts, _skipAudit: true };
   },

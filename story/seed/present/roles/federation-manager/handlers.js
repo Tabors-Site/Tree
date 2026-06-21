@@ -286,7 +286,7 @@ async function handleDeliverTemplate(message, ctx) {
       }
     }
 
-    const { plantTemplate } = await import("../../../materials/publish/seedPlant.js");
+    const { plantTemplate } = await import("../../../store/book/seedPlant.js");
     const targetParentSpaceId = await resolveDefaultPlantParent(ctx);
     // The local federation-manager being plants on its own authority.
     // operatorBeingId is the audit-trail attribution (GRAFT_INITIATOR

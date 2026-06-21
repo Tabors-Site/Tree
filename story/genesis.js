@@ -177,7 +177,7 @@ export async function genesis(app, opts = {}) {
   if (process.env.PLANT_FROM_GRAFT) {
     const path = await import("path");
     const { GRAFTS_FOLDER, plantGraft } =
-      await import("./seed/materials/publish/graft.js");
+      await import("./seed/store/book/graft.js");
     const raw = process.env.PLANT_FROM_GRAFT;
     // Filename-only (no separator, not absolute) → resolve against
     // story/seeds/. Anything with a separator or absolute → use

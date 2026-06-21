@@ -52,9 +52,9 @@
 // See `bundle.js` for the bundle shape; see `graft.js` for the apply
 // side.
 
-import { ref, REF_INSERTION_POINT, REF_GRAFT_INITIATOR } from "../ref.js";
-import { remapRefs } from "../refWalker.js";
-import { redactSecrets } from "../redact.js";
+import { ref, REF_INSERTION_POINT, REF_GRAFT_INITIATOR } from "../../materials/ref.js";
+import { remapRefs } from "../../materials/refWalker.js";
+import { redactSecrets } from "../../materials/redact.js";
 import { emptyBundle } from "./bundle.js";
 
 /**
@@ -80,8 +80,8 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   // loadProjection silently skipped (continue on !slot) those rows and
   // produced incomplete bundles. The walker only sees what loadOrFold
   // surfaces.
-  const { loadProjection, loadOrFold } = await import("../projections.js");
-  const { default: Projection } = await import("../history/projection.js");
+  const { loadProjection, loadOrFold } = await import("../../materials/projections.js");
+  const { default: Projection } = await import("../../materials/history/projection.js");
 
   // Direct projection query for "children of space X in history B".
   // (The generic findByParent helper is being-specific; spaces don't
@@ -160,8 +160,8 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   // — travels. The earlier check gated on `state.password`, which is
   // present on every being (birthBeing hashes a credential for all
   // cognition kinds), so the filter excluded all beings.
-  const { beingCognition } = await import("../being/identity/lookups.js");
-  const { SEED_DELEGATES } = await import("../being/seedDelegates.js");
+  const { beingCognition } = await import("../../materials/being/identity/lookups.js");
+  const { SEED_DELEGATES } = await import("../../materials/being/seedDelegates.js");
   const SEED_DELEGATE_NAMES = new Set(SEED_DELEGATES.map((d) => d.name));
   for (const spaceId of capturedSpaceIds) {
     const beingRows = await Projection.find({
@@ -357,7 +357,7 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
     bundle.casBlobs = {};
     bundle.casManifest = { included: [], omitted: [] };
     if (wanted.size > 0) {
-      const { getContent } = await import("../matter/contentStore.js");
+      const { getContent } = await import("../../materials/matter/contentStore.js");
       let total = 0;
       for (const [hash, size] of wanted) {
         try {

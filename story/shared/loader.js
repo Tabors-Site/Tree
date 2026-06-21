@@ -906,7 +906,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
       // Extension-shipped clone bundles. Each entry in
       // manifest.provides.seeds is a relative path to a static JSON
-      // bundle (the shape lives in seed/materials/publish/bundle.js).
+      // bundle (the shape lives in seed/store/book/bundle.js).
       // The loader reads + validates each and registers it as
       // `<ext>:<localName>` so the portal's graft UI surfaces it
       // alongside other extensions' bundles. Operators graft via
@@ -915,7 +915,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       // seed/done/Chain-Rebuild.md for the bundle format + parameter
       // substitution doctrine.
       if (manifest.provides?.seeds && typeof manifest.provides.seeds === "object") {
-        const { registerTemplate } = await import("../seed/materials/publish/templateRegistry.js");
+        const { registerTemplate } = await import("../seed/store/book/templateRegistry.js");
         const { readFile } = await import("fs/promises");
         const namespace = (localName) => `${manifest.name}:${localName}`;
         for (const [localName, relPath] of Object.entries(manifest.provides.seeds)) {
@@ -1537,7 +1537,7 @@ async function installSeedPiece(entry) {
   try {
     const bundle = JSON.parse(fs.readFileSync(seedJsonPath, "utf8"));
     const fullName = pack ? `${pack}:${manifest.name}` : manifest.name;
-    const { registerTemplate } = await import("../seed/materials/publish/templateRegistry.js");
+    const { registerTemplate } = await import("../seed/store/book/templateRegistry.js");
     registerTemplate(fullName, bundle, pack || manifest.name);
     log.info("Loader", `Registered seed piece: ${fullName}`);
   } catch (err) {
@@ -1912,7 +1912,7 @@ export async function uninstallExtension(name) {
     } catch {}
     try {
       const { unregisterTemplatesFromExtension } =
-        await import("../seed/materials/publish/templateRegistry.js");
+        await import("../seed/store/book/templateRegistry.js");
       unregisterTemplatesFromExtension(name);
     } catch {}
     try {

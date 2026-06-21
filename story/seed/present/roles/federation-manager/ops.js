@@ -144,7 +144,7 @@ registerOperation("offer-template", {
     }
 
     // 2. Clone locally.
-    const { captureTemplate } = await import("../../../materials/publish/seedTemplate.js");
+    const { captureTemplate } = await import("../../../store/book/seedTemplate.js");
     let bundle;
     try {
       bundle = await captureTemplate(spaceId, { history });
@@ -233,7 +233,7 @@ registerOperation("offer-being", {
     }
 
     // Capture the being's graft bundle (verbatim, signed by this story).
-    const { captureGraft } = await import("../../../materials/publish/graft.js");
+    const { captureGraft } = await import("../../../store/book/graft.js");
     let bundle;
     try {
       ({ bundle } = await captureGraft({ beingId, capturedBy: ctx.identity?.beingId || null, returnOnly: true }));
@@ -438,7 +438,7 @@ registerOperation("fulfill-request", {
         `fulfill-request: requested subtree "${request.subtreePath}" not found on history ${history}`);
     }
 
-    const { captureTemplate } = await import("../../../materials/publish/seedTemplate.js");
+    const { captureTemplate } = await import("../../../store/book/seedTemplate.js");
     const bundle = await captureTemplate(spaceId, { history });
     const pushNegotiationId = uuidv4();
     await cacheBundle(ctx, pushNegotiationId, bundle);

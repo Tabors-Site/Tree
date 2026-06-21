@@ -30,14 +30,14 @@
 // see graft.js — GRAFT-AND-SEED.md draws the line.
 
 import { randomUUID as uuidv4 } from "node:crypto";
-import { isSentinelRef, isAggregateRef, refKind, refId } from "../ref.js";
-import { remapRefs } from "../refWalker.js";
+import { isSentinelRef, isAggregateRef, refKind, refId } from "../../materials/ref.js";
+import { remapRefs } from "../../materials/refWalker.js";
 import { assertValidBundle } from "./bundle.js";
 import { emitFact } from "../../past/fact/facts.js";
 import { withBeingAct } from "../../sprout.js";
-import { generateNameKeypair } from "../name/keys.js";
-import { encryptCredential } from "../being/identity/credentials.js";
-import { matterContentId } from "../matter/matterId.js";
+import { generateNameKeypair } from "../../materials/name/keys.js";
+import { encryptCredential } from "../../materials/being/identity/credentials.js";
+import { matterContentId } from "../../materials/matter/matterId.js";
 import log from "../../seedStory/log.js";
 
 /**
@@ -62,7 +62,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
   }
   // PLANT always lands on #main (the default-history pointer), never the literal "0" — #main is
   // re-pointable, so resolve it. An explicit opts.history overrides (e.g. an extension on its history).
-  const { getDefaultHistory } = await import("../history/historyRegistry.js");
+  const { getDefaultHistory } = await import("../../materials/history/historyRegistry.js");
   const history = opts.history ?? await getDefaultHistory();
 
   // ── Bundle integrity gate (BEFORE anything stamps) ──
@@ -122,7 +122,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
   {
     const blobs = bundle.casBlobs && typeof bundle.casBlobs === "object" ? bundle.casBlobs : null;
     if (blobs && Object.keys(blobs).length > 0) {
-      const { putContent } = await import("../matter/contentStore.js");
+      const { putContent } = await import("../../materials/matter/contentStore.js");
       const claimedMeta = new Map(
         (bundle.casManifest?.included || []).map((e) => [e.hash, e]),
       );
@@ -245,8 +245,8 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
     }
   }
 
-  const { loadProjection, loadOrFold } = await import("../projections.js");
-  const { default: Projection } = await import("../history/projection.js");
+  const { loadProjection, loadOrFold } = await import("../../materials/projections.js");
+  const { default: Projection } = await import("../../materials/history/projection.js");
 
   // ── 1. Verify the target parent space exists. ──
   // loadOrFold: a target parent inherited from the parent history

@@ -46,7 +46,7 @@ import {
 } from "../materials/space/spaces.js";
 import { getInboxSummary } from "../present/intake/inbox.js";
 import { getRole, listRoles } from "../present/roles/registry.js";
-import { listTemplates } from "../materials/publish/templateRegistry.js";
+import { listTemplates } from "../store/book/templateRegistry.js";
 import { serializeTypeCatalog } from "../materials/matter/classify.js";
 import { listFoldedOps } from "../present/word/wordStore.js";
 import { listBeOpNames, getBeOp } from "./beOps.js";
