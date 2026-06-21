@@ -23,7 +23,7 @@ Three seams in the substrate, and only these:
 
 2. **Clone / mitosis** (future) — exact-copy a tree of content into another substrate, preserving full fact/act history. Same walker, different remap policy (identity vs new-namespace).
 
-3. **Federation** (future, see `protocols/ibp/FEDERATION.md` Diff B) — when content from another reality enters our substrate via grafted facts, the walker remaps the foreign IDs into local namespace. Federation propagates facts (not beings or live state); the foreign IDs in those facts get remapped at the boundary.
+3. **Federation** (future, see `protocols/ibp/FEDERATION.md` Diff B) — when content from another story enters our substrate via grafted facts, the walker remaps the foreign IDs into local namespace. Federation propagates facts (not beings or live state); the foreign IDs in those facts get remapped at the boundary.
 
 That's the entire load. The walker is the keeper. Refs exist to serve the walker.
 

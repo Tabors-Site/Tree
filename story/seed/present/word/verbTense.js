@@ -6,17 +6,11 @@
 // extension that adds a verb declares its past the same way (declarePast), and regular verbs
 // need nothing.
 
-const DECLARED_PAST = new Map([
-  ["make", "made"], ["give", "gave"], ["take", "took"], ["see", "saw"], ["do", "did"],
-  ["set", "set"], ["be", "was"], ["speak", "spoke"], ["put", "put"], ["cut", "cut"],
-  ["read", "read"], ["run", "ran"], ["send", "sent"], ["build", "built"], ["bring", "brought"],
-  ["become", "became"], ["begin", "began"], ["hold", "held"], ["leave", "left"], ["let", "let"],
-  ["say", "said"],  // call → "said '…'"; reply → replied and call → called fall out of the -ied/-ed rules
-  // NOTE: irregular pasts are migrating OUT of this hardcoded map and INTO the foundation words
-  // (seed/words/word.word + verbs.word), folded at boot by wordFold.js. `drop`→`dropped` lives in
-  // verbs.word now, not here: it is the proof that pastOf reads from the Word, not this map.
-  // The entries above remain as the bootstrap until the full migration (9.md Phase 3).
-]);
+// The irregular pasts now ALL live in the foundation words (verbs.word), folded at boot by wordFold.js
+// (foldWords → declarePast). This map starts EMPTY and is filled from the Word: the full migration
+// (9.md Phase 3) is DONE — pastOf reads from the Word, never a hardcoded map. An extension that adds a
+// verb declares its past the same way (declarePast); regular verbs need nothing (the -ed rule fills them).
+const DECLARED_PAST = new Map();
 
 // the present → past of a verb: its declared past, or the -ed rule for regulars
 export function pastOf(verb) {

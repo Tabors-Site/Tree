@@ -1,7 +1,9 @@
 # ROLES-UNIFICATION — fold roleWordRegistry into wordStore (the last word-conversion step)
 
-Status: SCOPED, not built (2026-06-20). The THREE Map-as-truth registries (operations, matter-types,
-reducers) folded this session; verb-past and roles were ALREADY fold-backed before it (verb-past =
+Status: BUILT + VERIFIED 2026-06-20 (all 4 phases green: verify-word-fold 11/0, verify-rolewordfold
+4/0, verify-bedrock 4/0, all bridge/cut verifiers green; the 3-function API kept, REGISTRY is the
+pre-genesis buffer only, bedrock generalized into wordStore over every word kind). The THREE
+Map-as-truth registries (operations, matter-types, reducers) folded this session; verb-past and roles were ALREADY fold-backed before it (verb-past =
 verbs.word folded into verbTense's `pastOf` projection via foldWords/declarePast — NOT a Map-as-truth;
 modulo a hardcoded bootstrap remnant of ~20 irregular pasts still migrating to verbs.word per 9.md
 Phase 3. roles = roleWordRegistry's own declare-word fold). roleWordRegistry is the last fold system to

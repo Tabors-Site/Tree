@@ -25,8 +25,8 @@ const k = (role, op) => `${role}:${op}`;
 // EMPTY and is filled by those registrations + rehydrateWordsFromFacts at boot.
 // The PROJECTION (same shape as wakes' _registry): (role:op) -> { fileUrl, disabled }.
 // Populated in-memory at module-load for the SYNCHRONOUS hot path (resolveRoleWord), and
-// reconciled with the chain at boot (rehydrateWordsFromFacts). The chain — declare-word /
-// disable-word facts — is the source of truth; this map is its live fold. A word, once
+// reconciled with the chain at boot (rehydrateWordsFromFacts). The chain — coin /
+// retire facts — is the source of truth; this map is its live fold. A word, once
 // declared, is a fact forever: you DISABLE (a new fact), never delete. (No part-of-speech
 // tag: the part of speech is the ANGLE — do=verb, see=noun, `a X is a role`=role-noun,
 // seed=instantiable-noun — intrinsic to how the word is declared/used. A separate `shape`
@@ -40,13 +40,14 @@ const REGISTRY = new Map();
 // V2 is per-EXACT-branch; lineage inheritance (a disable on an ancestor dimming descendants,
 // mirroring wakes' _isInHistoryLineage) is the V2.1 refinement.
 const _historyDisabled = new Map();
-const _disabledOn = (key, branch) => !!_historyDisabled.get(String(branch))?.has(key);
+const _disabledOn = (key, branch) =>
+  !!_historyDisabled.get(String(branch))?.has(key);
 
 // The root story (heaven), where the base/seed vocabulary lives. It is the fallback for a
 // BRANCHLESS resolve — an existence query with no act context (a verifier, a global check).
 // This is NOT an act-default drifting to "0": a real act always threads its own branch.
 const ROOT = "0";
-// The resolved #main branch, cached at boot (declareWordsToChain / rehydrate resolve the
+// The resolved #main branch, cached at boot (declareRoleWordsToFold / rehydrate resolve the
 // pointer via getDefaultHistory). resolveRoleWord is SYNC and can't await the pointer, so it
 // PREFERS the cached #main over the root when an act gave no branch.
 let _mainHistory = null;
@@ -56,10 +57,14 @@ function wordOf(file) {
   if (!irCache.has(file)) {
     // a role registers a URL (new URL("./x.word", import.meta.url)); the built-in map
     // holds paths relative to THIS engine file. Resolve both.
-    const url = file instanceof URL ? file
-      : (typeof file === "string" && file.startsWith("file:")) ? new URL(file) // a source string from the fold
-      : (typeof file === "string" && file.startsWith("/")) ? file
-      : new URL(`./${file}`, import.meta.url);
+    const url =
+      file instanceof URL
+        ? file
+        : typeof file === "string" && file.startsWith("file:")
+          ? new URL(file) // a source string from the fold
+          : typeof file === "string" && file.startsWith("/")
+            ? file
+            : new URL(`./${file}`, import.meta.url);
     irCache.set(file, parse(readFileSync(url, "utf8")));
   }
   return irCache.get(file);
@@ -69,7 +74,7 @@ function wordOf(file) {
 // `registerRoleWord("cherub", "birth", new URL("./cherub.word", import.meta.url))`. Called
 // at role-load (pre-genesis, BEFORE the chain is writable), so it just populates the
 // in-memory projection (the sync resolveRoleWord works immediately). genesis later walks
-// the projection and DECLARES each word as a fact once the chain is up (declareWordsToChain).
+// the projection, and declareRoleWordsToFold declares each into the unified wordStore fold.
 export function registerRoleWord(role, op, fileUrl) {
   REGISTRY.set(k(role, op), { role, op, fileUrl });
 }
@@ -103,27 +108,25 @@ export function resolveRoleWordViaFold(role, op, branch) {
   if (_disabledOn(k(role, op), b)) return null;
   const source = resolveRoleWordSource(role, op); // sync read of the unified fold
   if (!source) return null;
-  try { return wordOf(source); } catch { return null; } // declared but unbacked
+  try {
+    return wordOf(source);
+  } catch {
+    return null;
+  } // declared but unbacked
 }
 
-// ── the chain backing: declare-word / disable-word facts (the vocabulary's durable truth) ──
+// ── the chain backing: coin / retire facts (the vocabulary's durable truth) ──
 //
 // The word vocabulary is a FOLD of the chain (the wakes pattern): the REGISTRY above is the
-// projection; these facts are the source. Declaring a word lays a permanent `do:declare-word`
-// fact; you never delete a word, you DISABLE it (a `do:disable-word` fact). At boot,
+// projection; these facts are the source. Declaring a word lays a permanent `do:coin`
+// fact; you never delete a word, you DISABLE it (a `do:retire` fact). At boot,
 // rehydrateWordsFromFacts replays them into the map. EVERY fact needs an ACTOR — the being
 // who declares/disables the word (its authority): I_AM for the seed vocabulary, the installer
 // for an extension's words, the operator for a disable. Only the DECLARATION is a fact; the
 // parsed IR is read lazily from the file (like wakes never persists the runtime cursor).
 
-const WORD_DECLARE = "declare-word";
-const WORD_DISABLE = "disable-word";
-
-async function _wordActor(actorBeingId) {
-  if (actorBeingId) return String(actorBeingId);
-  const { I_AM } = await import("../../materials/being/seedBeings.js");
-  return String(I_AM); // the origin being declares the seed vocabulary
-}
+const WORD_COIN = "coin";
+const WORD_RETIRE = "retire";
 
 // I_AM bedrock (the genesis vocabulary on "0" is immutable by anyone but I_AM) now lives in
 // wordStore.bindWord/disableWord as ONE guard over every word kind — op, type, reducer, concept,
@@ -132,74 +135,62 @@ async function _wordActor(actorBeingId) {
 // Resolve #main (the pointer), never the literal "0", and cache it for the sync
 // resolveRoleWord. Used wherever a branch isn't given.
 async function _ensureMainHistory() {
-  const { getDefaultHistory } = await import("../../materials/history/historyRegistry.js");
+  const { getDefaultHistory } =
+    await import("../../materials/history/historyRegistry.js");
   _mainHistory = await getDefaultHistory();
   return _mainHistory;
 }
 
-// Lay facts THROUGH a proper act — a Name making an act, opened by assign and sealed by the
-// stamper — NEVER a bare standalone emit (that would sidestep the stamper). Ride the caller's
-// moment if one was given, else open I_AM's own act (I_AM is the actor that makes the words).
-async function _inAct(moment, label, fn) {
-  if (moment) return fn(moment);
-  const { withIAmAct } = await import("../../sprout.js");
-  return withIAmAct(label, fn);
-}
+// (declareWordsToChain removed with the unification: role-words are declared into the unified
+// wordStore fold by declareRoleWordsToFold — in seedFold + the boot-end pass — as "role:op" words
+// with kind:"roleword", not by a separate {role,op} fact path. The IR-laying act runs there.)
 
-// Lay a `do:declare-word` fact for every registered word not already on the chain (idempotent
-// across restarts). Called once at genesis, AFTER ensureIAm + the chain is writable (the fact
-// needs an actor). Registration buffered the words pre-genesis; this flushes them.
-export async function declareWordsToChain({ moment = null, branch = null, actorBeingId = null } = {}) {
-  const { default: Fact } = await import("../../past/fact/fact.js");
-  const { emitFact } = await import("../../past/fact/facts.js");
-  const actor = await _wordActor(actorBeingId);
-  await _ensureMainHistory(); // cache #main so the sync resolveRoleWord has a fallback
-  // The seed vocabulary is I_AM's, declared on HEAVEN / root ("0") — a DELIBERATE heaven pin
-  // (I_AM's ops stay on heaven; the root vocabulary is inherited by EVERY branch). NOT #main,
-  // which people can repoint. An explicit `branch` overrides (e.g. an extension on its branch).
-  const br = branch != null ? String(branch) : "0";
-  const existing = await Fact.find({ verb: "do", act: WORD_DECLARE }).select("params").lean();
-  const onChain = new Set(existing.map((f) => k(f.params?.role, f.params?.op)));
-  const pending = [...REGISTRY.values()].filter((w) => !onChain.has(k(w.role, w.op)));
-  if (!pending.length) return 0;
-  // One I_AM act lays all the declarations (one act, many facts — like genesis), through the
-  // stamper. Never a standalone emit.
-  await _inAct(moment, "I declare the words", async (ctx) => {
-    for (const w of pending) {
-      await emitFact({
-        through: actor, history: br, verb: "do", act: WORD_DECLARE,
-        of: { kind: "being", id: actor },
-        params: { role: w.role, op: w.op, source: String(w.fileUrl) },
-      }, ctx);
-    }
-  });
-  return pending.length;
-}
-
-// Disable a word: append a `do:disable-word` fact (permanent) + flip the projection, so
+// Disable a word: append a `do:retire` fact (permanent) + flip the projection, so
 // resolveRoleWord returns null and acts using it fall through / refuse. The declaration
 // stays on the chain forever; this is itself the "new word that says it can't be used".
-export async function disableWord(role, op, { moment = null, branch = null, actorBeingId = null } = {}) {
+export async function disableWord(
+  role,
+  op,
+  { moment = null, branch = null, actorBeingId = null } = {},
+) {
   const { disableWord: disableWordInFold } = await import("./wordStore.js");
   const br = branch != null ? String(branch) : await _ensureMainHistory();
-  await disableWordInFold(`${role}:${op}`, { moment, branch: br, actorBeingId }); // the unified fold (bedrock-guarded there)
+  await disableWordInFold(`${role}:${op}`, {
+    moment,
+    branch: br,
+    actorBeingId,
+  }); // the unified fold (bedrock-guarded there)
   let s = _historyDisabled.get(br);
-  if (!s) { s = new Set(); _historyDisabled.set(br, s); }
+  if (!s) {
+    s = new Set();
+    _historyDisabled.set(br, s);
+  }
   s.add(k(role, op)); // disabled ON this branch only (the sync overlay)
 }
 
-// Re-enable a disabled word: a fresh `do:declare-word` fact (the fold's last action wins).
-export async function enableWord(role, op, { moment = null, branch = null, actorBeingId = null } = {}) {
+// Re-enable a disabled word: a fresh `do:coin` fact (the fold's last action wins).
+export async function enableWord(
+  role,
+  op,
+  { moment = null, branch = null, actorBeingId = null } = {},
+) {
   const { bindWord } = await import("./wordStore.js");
   const br = branch != null ? String(branch) : await _ensureMainHistory();
   const entry0 = REGISTRY.get(k(role, op)); // the registration buffer holds the IR source
-  await bindWord(`${role}:${op}`, {
-    kind: "roleword", role, op, source: String(entry0?.fileUrl ?? ""),
-  }, { moment, branch: br, actorBeingId }); // a fresh declare-word re-enables (bedrock-guarded in wordStore)
+  await bindWord(
+    `${role}:${op}`,
+    {
+      kind: "roleword",
+      role,
+      op,
+      source: String(entry0?.fileUrl ?? ""),
+    },
+    { moment, branch: br, actorBeingId },
+  ); // a fresh coin re-enables (bedrock-guarded in wordStore)
   _historyDisabled.get(br)?.delete(k(role, op)); // re-enabled ON this branch (the sync overlay)
 }
 
-// Rehydrate the projection from the chain (boot/recovery): replay declare-word / disable-word
+// Rehydrate the projection from the chain (boot/recovery): replay coin / retire
 // facts in date/seq order (declare = enable + ensure present, disable = mark off; last action
 // wins), grouped by the fact's branch into the per-branch overlay. Mirrors wakes
 // rehydrateFromFacts. Per-EXACT-branch (V2); lineage inheritance (a disable on an ancestor
@@ -208,25 +199,35 @@ export async function enableWord(role, op, { moment = null, branch = null, actor
 export async function rehydrateWordsFromFacts() {
   const { default: Fact } = await import("../../past/fact/fact.js");
   await _ensureMainHistory();
-  // The role-words now live in the UNIFIED wordStore fold: a declare-word fact carries
-  // params.word ("role:op") + params.binding.kind === "roleword"; a disable-word carries params.word.
+  // The role-words now live in the UNIFIED wordStore fold: a coin fact carries
+  // params.word ("role:op") + params.binding.kind === "roleword"; a retire carries params.word.
   // Rebuild the per-branch disabled overlay + the I_AM bedrock set from them. resolveRoleWord reads
   // the fold for EXISTENCE, so REGISTRY is no longer populated here (it is the pre-genesis buffer).
-  const facts = await Fact.find({ verb: "do", act: { $in: [WORD_DECLARE, WORD_DISABLE] } })
-    .sort({ date: 1, seq: 1 }).lean();
+  const facts = await Fact.find({
+    verb: "do",
+    act: { $in: [WORD_COIN, WORD_RETIRE] },
+  })
+    .sort({ date: 1, seq: 1 })
+    .lean();
   _historyDisabled.clear();
   const rolewordKeys = new Set(); // params.word of words whose declare marked them kind:"roleword"
   for (const f of facts) {
     const word = f.params?.word;
     if (!word) continue;
-    if (f.act === WORD_DECLARE && f.params?.binding?.kind === "roleword") rolewordKeys.add(word);
+    if (f.act === WORD_COIN && f.params?.binding?.kind === "roleword")
+      rolewordKeys.add(word);
     if (!rolewordKeys.has(word)) continue; // only role-words feed the per-branch overlay
     // ENABLED state (per EXACT branch): last action on the fact's branch wins (disable adds,
     // declare/enable removes). Facts always carry a branch; fall back to #main, never "0".
     const br = String(f.history ?? _mainHistory);
     let s = _historyDisabled.get(br);
-    if (f.act === WORD_DISABLE) { if (!s) { s = new Set(); _historyDisabled.set(br, s); } s.add(word); }
-    else if (s) s.delete(word);
+    if (f.act === WORD_RETIRE) {
+      if (!s) {
+        s = new Set();
+        _historyDisabled.set(br, s);
+      }
+      s.add(word);
+    } else if (s) s.delete(word);
   }
   return facts.length;
 }
@@ -264,22 +265,34 @@ export async function rehydrateWordsFromFacts() {
 // facts land on the real chain with seq continuity; only VESSEL mode overrides the actor.
 export async function runRoleWord(
   ir,
-  { moment, branch, trigger = {}, bindings = {}, beings = {}, through = null, iam = "i-am", env = {} },
+  {
+    moment,
+    branch,
+    trigger = {},
+    bindings = {},
+    beings = {},
+    through = null,
+    iam = "i-am",
+    env = {},
+  },
 ) {
   moment.deltaF ??= [];
   const vessel = through != null;
   const identity = vessel
-    ? { beingId: String(through), name: iam, nameId: iam }      // I_AM through the vessel
-    : (moment.identity || { beingId: null });                // the caller (default)
+    ? { beingId: String(through), name: iam, nameId: iam } // I_AM through the vessel
+    : moment.identity || { beingId: null }; // the caller (default)
   const wordCtx = {
     ...moment,
     identity,
     ...(vessel ? { actorAct: { ...(moment.actorAct || {}), by: iam } } : {}), // caller keeps its actorAct
     deltaF: moment.deltaF, // SAME array: facts land on the real moment
-    _inOp: true,              // the whole program is ONE op (see below)
+    _inOp: true, // the whole program is ONE op (see below)
   };
   const ctx = {
-    dryRun: false, moment: wordCtx, identity, history: branch,
+    dryRun: false,
+    moment: wordCtx,
+    identity,
+    history: branch,
     // default id-minter for `bind` sites (the home space): create-space honors the
     // target id, so a minted uuid becomes the home's id and later acts reference it.
     // A caller can override via env.mintId.

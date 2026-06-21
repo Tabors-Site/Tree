@@ -34,7 +34,7 @@ try {
   const probe = opsBefore[0]?.name;
 
   const n = await declareOpsToFold({ filter: { target: TARGET } });
-  (n > 0) ? ok(`declared ${n} "${TARGET}" ops into the fold (declare-word facts)`) : bad(`declared > 0`, { n });
+  (n > 0) ? ok(`declared ${n} "${TARGET}" ops into the fold (coin facts)`) : bad(`declared > 0`, { n });
 
   const w = await pollFor(() => getWord(probe), (v) => v && v.do?.ref === probe);
   (w && w.do?.ref === probe) ? ok(`"${probe}" reconstructs from the fold (do.ref), like a Being`) : bad(`fold reconstruct`, w);

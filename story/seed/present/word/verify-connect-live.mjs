@@ -89,8 +89,8 @@ try {
   // ── 1. correct password → token + seat, NO refusal, NO fact ──
   const good = await connect("alice", "alice-secret-1");
   !good.refused && good.result?.token ? ok(`correct password → returns a token (real generateToken, no stub)`) : bad(`correct password token`, good.refused?.message || good.result);
-  good.result?.seat === (alice.state?.homeBranch ?? "0") || good.result?.seat === "0"
-    ? ok(`returns seat = the being's homeBranch (${good.result?.seat})`) : bad(`seat = homeBranch`, good.result?.seat);
+  good.result?.seat === (alice.state?.homeHistory ?? "0") || good.result?.seat === "0"
+    ? ok(`returns seat = the being's homeHistory (${good.result?.seat})`) : bad(`seat = homeHistory`, good.result?.seat);
   (good.deltaF || []).length === 0 ? ok(`connect lays NO fact (CONTROL is private; only the session rides the return)`) : bad(`no fact`, good.deltaF);
 
   // the token is REAL: decode it back to alice's being id

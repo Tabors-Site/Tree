@@ -64,7 +64,7 @@ const birth = async (name) => {
 // drive the REAL ask-role op via doVerb → the cut handler → ask-role.word; seal here
 async function askRole(caller, role, space) {
   const branch = "0";
-  const sc = { actId: randomUUID(), actorAct: { branch, by: "i-am" }, identity: { beingId: String(caller) }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc = { actId: randomUUID(), actorAct: { history: branch, by: "i-am" }, identity: { beingId: String(caller) }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   try {
     const res = await doVerb({ kind: "space", id: String(space) }, "ask-role", { role }, { identity: { beingId: String(caller) }, moment: sc });
     if (sc.deltaF.length) await sealFacts(sc.deltaF);

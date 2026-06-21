@@ -61,7 +61,7 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     throw new Error("story.do(target, operation, params): operation must be a non-empty string");
   }
 
-  // Fold-ONLY: a do-op resolves from the live projection (the fold of declare-word facts), the
+  // Fold-ONLY: a do-op resolves from the live projection (the fold of coin facts), the
   // registry-free path (philosophy/word/10.md §2). The fold is the SOLE source the running system
   // dispatches on — no Map fallback. This IS achievable because the seed declares its words BEFORE it
   // builds the reality: genesis.js declares every do-op onto I_AM's reel (a fact needs only I_AM, not

@@ -1,7 +1,7 @@
-// wordStore.js . a word is a FOLD of declare-word facts, not a registry entry.
+// wordStore.js . a word is a FOLD of coin facts, not a registry entry.
 //
-// This is the connecter as a fold (philosophy/word/10.md §2). `bindWord` lays a declare-word
-// fact carrying the word's binding descriptor; `getWord` folds the declare-word / disable-word
+// This is the connecter as a fold (philosophy/word/10.md §2). `bindWord` lays a coin
+// fact carrying the word's binding descriptor; `getWord` folds the coin / retire
 // facts back into the current descriptor, the same call that reconstructs a Being from its facts.
 // No registry: language stops being the one exception to facts -> fold -> story.
 //
@@ -9,12 +9,12 @@
 // bundled-handler key), never an inline function -- a fact is data. A composite word carries no
 // handler at all, only a `can[]` grant-set pointing at words that already answer; words stack.
 //
-// Generalizes roleWordRegistry's (role:op) declare-word fold to any word + a full descriptor:
+// Generalizes roleWordRegistry's (role:op) coin fold to any word + a full descriptor:
 // same act names, same I_AM-is-the-seed-vocabulary actor, same "disable is a new fact" rule.
 // (9.md §2/§6; the words-stack doctrine; the wakes pattern of an in-memory projection over facts.)
 
-const DECLARE = "declare-word";
-const DISABLE = "disable-word";
+const COIN = "coin";
+const RETIRE = "retire";
 
 // Every word-fact needs an actor (the being whose authority declares it). I_AM declares the seed
 // vocabulary; an extension installer or a being in world declares its own. Mirrors roleWordRegistry.
@@ -33,10 +33,10 @@ async function _iAm() {
 // BEDROCK (project_iam_genesis_immutable): is `name`'s current heaven ("0") declaration I_AM's? Then
 // it is genesis bedrock — immutable on "0" by anyone but I_AM (per-branch shadowing is still allowed).
 // Covers EVERY word kind (op/type/reducer/concept/roleword), since all are I_AM's words on "0". Reads
-// the latest "0" declare-word fact's author. Only consulted on a non-I_AM write to "0" (rare).
+// the latest "0" coin fact's author. Only consulted on a non-I_AM write to "0" (rare).
 async function _isIAmBedrock(name) {
   const { default: Fact } = await import("../../past/fact/fact.js");
-  const decl = await Fact.find({ verb: "do", act: DECLARE, "params.word": String(name), history: "0" })
+  const decl = await Fact.find({ verb: "do", act: COIN, "params.word": String(name), history: "0" })
     .sort({ date: -1, seq: -1 }).limit(1).lean();
   return decl.length > 0 && String(decl[0].through) === (await _iAm());
 }
@@ -49,9 +49,9 @@ async function _inAct(moment, label, fn) {
   return withIAmAct(label, fn);
 }
 
-// Bind a word to its host: lay a declare-word fact carrying the binding descriptor. The descriptor
+// Bind a word to its host: lay a coin fact carrying the binding descriptor. The descriptor
 // is SERIALIZABLE -- handlers are refs to code matter, not inline functions, because a fact is data.
-// Re-binding lays a fresh declare-word fact; the fold's last declaration wins (the words-stack rule).
+// Re-binding lays a fresh coin fact; the fold's last declaration wins (the words-stack rule).
 // Returns { word, branch }.
 export async function bindWord(name, descriptor = {}, { moment = null, branch = "0", actorBeingId = null, skipIfUnchanged = false } = {}) {
   if (!name || typeof name !== "string") throw new Error("bindWord: a non-empty word name is required");
@@ -62,7 +62,7 @@ export async function bindWord(name, descriptor = {}, { moment = null, branch = 
   // passed as a ref). What survives is the word's serializable binding.
   const binding = JSON.parse(JSON.stringify(rest));
   // Idempotency (the genesis fold reruns every boot): if the word's latest binding already matches,
-  // skip the redundant declare-word fact, so a reboot does not grow the chain by a declare per boot.
+  // skip the redundant coin fact, so a reboot does not grow the chain by a declare per boot.
   // Safe by construction: a content difference always differs as JSON, so this never skips a real change.
   if (skipIfUnchanged) {
     const current = await getWord(name, branch);
@@ -79,8 +79,8 @@ export async function bindWord(name, descriptor = {}, { moment = null, branch = 
   if (String(branch) === "0" && String(actor) !== (await _iAm()) && await _isIAmBedrock(name)) {
     throw new Error(`the I_AM genesis word "${name}" is bedrock on heaven and cannot be re-declared by another — only I_AM may, or shadow it on your own branch`);
   }
-  await _inAct(moment, `I declare the word ${name}`, (ctx) => emitFact({
-    through: actor, history: String(branch), verb: "do", act: DECLARE,
+  await _inAct(moment, `I coin the word ${name}`, (ctx) => emitFact({
+    through: actor, history: String(branch), verb: "do", act: COIN,
     of: { kind: "being", id: actor },
     params: { word: name, ownerExtension, binding },
   }, ctx));
@@ -88,7 +88,7 @@ export async function bindWord(name, descriptor = {}, { moment = null, branch = 
   return { word: name, branch: String(branch) };
 }
 
-// Disable a word: lay a disable-word fact. The declaration stays on the chain forever; this is
+// Disable a word: lay a retire fact. The declaration stays on the chain forever; this is
 // the "new word that says it can't be used". A later re-bind (a fresh declare) re-enables it.
 export async function disableWord(name, { moment = null, branch = "0", actorBeingId = null } = {}) {
   const { emitFact } = await import("../../past/fact/facts.js");
@@ -97,15 +97,15 @@ export async function disableWord(name, { moment = null, branch = "0", actorBein
   if (String(branch) === "0" && String(actor) !== (await _iAm()) && await _isIAmBedrock(name)) {
     throw new Error(`the I_AM genesis word "${name}" is bedrock on heaven and cannot be disabled by another — only I_AM may, or shadow it on your own branch`);
   }
-  await _inAct(moment, `I disable the word ${name}`, (ctx) => emitFact({
-    through: actor, history: String(branch), verb: "do", act: DISABLE,
+  await _inAct(moment, `I retire the word ${name}`, (ctx) => emitFact({
+    through: actor, history: String(branch), verb: "do", act: RETIRE,
     of: { kind: "being", id: actor },
     params: { word: name },
   }, ctx));
   if (String(branch) === "0") _projection.delete(String(name));
 }
 
-// Ask for a word: fold its declare-word / disable-word facts into the current descriptor. Heaven
+// Ask for a word: fold its coin / retire facts into the current descriptor. Heaven
 // ("0", the seed vocabulary) is inherited by every branch; a branch's own facts layer on top, in
 // date/seq order, last action wins. A word whose last action is a disable folds to null (it is not
 // deleted, it is off). This is the read path the verb dispatch will use instead of a registry get.
@@ -113,12 +113,12 @@ export async function getWord(name, branch = "0") {
   const { default: Fact } = await import("../../past/fact/fact.js");
   const branches = String(branch) === "0" ? ["0"] : ["0", String(branch)];
   const facts = await Fact.find({
-    verb: "do", act: { $in: [DECLARE, DISABLE] }, "params.word": String(name),
+    verb: "do", act: { $in: [COIN, RETIRE] }, "params.word": String(name),
     history: { $in: branches },
   }).sort({ date: 1, seq: 1 }).lean();
   let binding = null, owner = null;
   for (const f of facts) {
-    if (f.act === DECLARE) { binding = f.params?.binding ?? {}; owner = f.params?.ownerExtension ?? null; }
+    if (f.act === COIN) { binding = f.params?.binding ?? {}; owner = f.params?.ownerExtension ?? null; }
     else { binding = null; owner = null; } // disable wins until a later re-declare
   }
   return binding ? { word: String(name), ...binding, ownerExtension: owner } : null;
@@ -127,7 +127,7 @@ export async function getWord(name, branch = "0") {
 // ── the live projection: an in-memory fold of the vocabulary, for sync reads ──
 //
 // getWord reads the chain per call (correct, slow). The verb dispatch needs a SYNC, fast read of the
-// current vocabulary, so _projection holds the fold of declare-word / disable-word facts on heaven
+// current vocabulary, so _projection holds the fold of coin / retire facts on heaven
 // "0" (the story vocabulary, inherited by every branch), kept current as bindWord lays facts and
 // rebuilt from the chain at boot by rehydrateWordProjection. A cache of the fold, not a registry:
 // the facts are the truth, this is their reading (the wakes / Being-row pattern).
@@ -135,13 +135,13 @@ const _projection = new Map(); // word name -> binding
 
 export async function rehydrateWordProjection(branch = "0") {
   const { default: Fact } = await import("../../past/fact/fact.js");
-  const facts = await Fact.find({ verb: "do", act: { $in: [DECLARE, DISABLE] }, history: String(branch), "params.word": { $exists: true } })
+  const facts = await Fact.find({ verb: "do", act: { $in: [COIN, RETIRE] }, history: String(branch), "params.word": { $exists: true } })
     .sort({ date: 1, seq: 1 }).lean();
   _projection.clear();
   for (const f of facts) {
     const name = f.params?.word;
     if (!name) continue;
-    if (f.act === DECLARE) _projection.set(String(name), { ...(f.params.binding ?? {}), ownerExtension: f.params.ownerExtension });
+    if (f.act === COIN) _projection.set(String(name), { ...(f.params.binding ?? {}), ownerExtension: f.params.ownerExtension });
     else _projection.delete(String(name)); // disable; a later declare re-adds
   }
   return _projection.size;
@@ -199,7 +199,7 @@ export function resolveDoOpFromFold(name) {
 }
 
 // Declare existing registered ops into the fold (the do-ops migration bridge, one concept at a time).
-// For each op matching the filter, register its bundled handler by ref and lay a declare-word fact
+// For each op matching the filter, register its bundled handler by ref and lay a coin fact
 // carrying its serializable descriptor; the op then resolves from the fold (resolveDoOpFromFold) as
 // well as the Map, until the Map is retired. NOTE: authAction is a function (not serializable), so an
 // op that refines its auth key keeps that refinement on the Map path until the host-ref form lands.

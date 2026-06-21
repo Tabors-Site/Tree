@@ -47,7 +47,7 @@ const poll = async (fn, t = 60000, e = 250) => { const t0 = Date.now(); while (D
 const ident = { beingId: I_AM, name: "i-am", nameId: "i-am" };
 
 async function drive(target, op, params) {
-  const sc = { actId: randomUUID(), actorAct: { branch: "0", by: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc = { actId: randomUUID(), actorAct: { history: "0", by: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   try {
     const res = await doVerb(target, op, params, { identity: ident, moment: sc });
     if (sc.deltaF.length) await sealFacts(sc.deltaF);

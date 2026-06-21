@@ -259,7 +259,7 @@ export async function genesis(app, opts = {}) {
   //   unnecessarily. The seed is the genesis when plant mode is active.
   //
   // The seed declares itself onto the chain BEFORE the reality it builds: the verb pasts, the concept
-  // .words, and the do-ops, all as I_AM declare-word facts on I_AM's OWN reel (of: I_AM, wordStore.js
+  // .words, and the do-ops, all as I_AM coin facts on I_AM's OWN reel (of: I_AM, wordStore.js
   // bindWord) — which needs only I_AM, not any space/being. A fact is laid before the reality it
   // describes (the place is folded FROM facts), so the WORD fold does not depend on the PLACE fold.
   // Declared after ensureIAm and BEFORE ensureSpaceRoot, every bootstrap do-op (create-space,

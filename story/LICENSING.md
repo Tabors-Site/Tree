@@ -7,38 +7,28 @@ else in this repository is governed by it.
 ## The Word, and copying as the library
 
 The seed is the Word — the declared, executable language a Story is
-spoken in. Everything in it is a word: each verb, op, role, and kind is
-a declared fact the system folds and runs. So this license is not only
-about code. It is about how the Word is shared.
+spoken in. Everything in it is a word. So this license is about how the
+Word is shared, not only about code.
 
-And the Word is shared the way a book is shared in the Library. To copy
-the seed is not to take it from anyone: content-addressed, a copy is one
-more perfect instance and the original is undiminished — the Word
-multiplies under sharing instead of dividing. What you fork is a
-**graft**: a copy whose body is the seed's, carrying its lineage — its
-colophon-tree — back to the root. You cannot hold a copy stripped of its
-descent; the authorship and the signature ride along, ineradicably. That
-is why a derivative must "remain traceable to its root" — by the nature
-of the thing, it already is.
+The Word is shared the way a book is shared in the Library. Copying the
+seed takes nothing from anyone — content-addressed, a copy is one more
+perfect instance, and the original is undiminished. The Word multiplies
+under sharing instead of dividing. What you fork is a **graft**: a copy
+whose body is the seed's, carrying its lineage — its colophon-tree —
+back to the root. The signature rides along; a derivative is traceable
+to its root by nature.
 
-The AGPL network-copyleft is the law of that library, written as a legal
-term. A book passed on stays a book anyone can hold: your
+The AGPL network-copyleft is that library's law, written as a legal
+term: a book passed on stays a book anyone can hold. Your
 network-accessible derivative stays open under the same freedom, so the
-Word you received free stays free for the next Name. The copyleft is not
-a fence bolted onto an open thing — it is the open thing's own nature
-stated as a rule (a shared book that could be quietly closed downstream
-was never really in the commons). So the two licenses are two relations
-to that commons: under the **AGPL** the seed stays in **Ours** — given
-freely, multiplying, its lineage riding along, free for all who receive
-it; the **commercial license** is the door for those who cannot keep the
-copyleft — the same source under different permissions, stepping outside
-the commons for their own derivative.
+Word you received free stays free for the next Name. Under the **AGPL**
+the seed stays in **Ours**, free for all who receive it; the
+**commercial license** is the door for those who cannot keep the
+copyleft.
 
-None of this is owned at the root. The seed is traced, not authored —
-collected to its roots and returned to the people (the colophon in
-[seed/LICENSE](seed/LICENSE)). The license is only how the returning
-stays a returning: the copyleft keeps the gift a gift, all the way down.
-May it be Ours.
+The seed is traced, not authored — collected to its roots and returned
+to the people (the colophon in [seed/LICENSE](seed/LICENSE)). The
+license is only how the returning stays a returning. May it be Ours.
 
 The seed is dual licensed.
 

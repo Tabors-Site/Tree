@@ -63,7 +63,7 @@ export function foldWords() {
   return total;
 }
 
-// ── the concept fold: declare each concept .word as an I_AM declare-word fact ──
+// ── the concept fold: declare each concept .word as an I_AM coin fact ──
 //
 // The companion to foldVerbPasts. Where that folds verbs.word's PASTS into the tense lookup, this
 // folds the twenty concept .words onto the chain, one bindWord each, carrying {kind:"concept", says,
@@ -86,7 +86,7 @@ function readConceptWord(name) {
 }
 
 // Declare every concept word into the fold, in descent order, each through bindWord as an I_AM
-// declare-word fact carrying {kind:"concept", says, axiom}. Dedup by word is the wordStore guard.
+// coin fact carrying {kind:"concept", says, axiom}. Dedup by word is the wordStore guard.
 export async function declareConcepts({ moment = null, branch = "0" } = {}) {
   const { bindWord } = await import("./wordStore.js");
   let count = 0;
@@ -109,7 +109,7 @@ export async function declareConcepts({ moment = null, branch = "0" } = {}) {
 // ({kind:"concept"}); (3) the do-ops → wordStore.declareOpsToFold ({kind:"op"}); (4) the matter
 // types → wordStore.declareTypesToFold ({kind:"type"}); (5) the reducers → declareReducersToFold
 // ({kind:"reducer"}, the per-kind fold logic); (6) the role-words → declareRoleWordsToFold
-// ({kind:"roleword"}, role:op -> .word source). All land as declare-word facts, folded together,
+// ({kind:"roleword"}, role:op -> .word source). All land as coin facts, folded together,
 // read by kind. After this the story reads the seed in full: the concepts as their bodies, the ops,
 // types, reducers, and role-words declared beside them. This is the shared seam, the one boot call
 // both halves meet at; wire it after the story is established, before the surface renders.

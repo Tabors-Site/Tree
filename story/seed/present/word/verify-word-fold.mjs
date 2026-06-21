@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // The word vocabulary as a FOLD of the chain (mirrors wakes-as-facts). Proves: declaring a
-// word lays a permanent do:declare-word fact (every fact needs an ACTOR — I_AM for the seed
+// word lays a permanent do:coin fact (every fact needs an ACTOR — I_AM for the seed
 // vocabulary); resolveRoleWord reads the in-memory projection (sync, unchanged hot path);
-// disabling lays a do:disable-word fact and the word stops resolving; a fresh rehydrate from
+// disabling lays a do:retire fact and the word stops resolving; a fresh rehydrate from
 // the chain reproduces the disabled state (it's a fact, not memory); re-enabling restores it;
 // the whole story stays permanent (nothing removed); and declareWordsToChain is idempotent.
 // Full begin.js boot. Scratch DB, wiped.
@@ -46,7 +46,8 @@ const bad = (l, d) => { fail++; console.log(`  ✗ ${l}`); if (d !== undefined) 
 const poll = async (fn, t = 60000, e = 250) => { const t0 = Date.now(); while (Date.now() - t0 < t) { const v = await fn(); if (v) return v; await new Promise((r) => setTimeout(r, e)); } return null; };
 
 const ROLE = "credential", OP = "credential-reset";
-const wordFacts = () => Fact.find({ verb: "do", act: { $in: ["declare-word", "disable-word"] } }).sort({ date: 1, seq: 1 }).lean();
+const WORD = `${ROLE}:${OP}`; // the unified word name (role:op) the fold keys on
+const wordFacts = () => Fact.find({ verb: "do", act: { $in: ["coin", "retire"] } }).sort({ date: 1, seq: 1 }).lean();
 
 console.log(`\n  verify-word-fold (the word registry as a chain fold)\n  DB: ${SCRATCH_DB.split("/").pop()}\n`);
 try {
@@ -56,45 +57,48 @@ try {
   // 1. the BOOT wiring auto-declared the seed vocabulary to the chain (poll — declareWordsToChain
   //    runs async after genesis). This is the landing: the registry IS a fold of the chain.
   const declared = await poll(async () => {
-    const n = await Fact.countDocuments({ verb: "do", act: "declare-word" });
+    const n = await Fact.countDocuments({ verb: "do", act: "coin" });
     return n >= 16 ? n : null;
   });
-  declared ? ok(`boot auto-declared the seed vocabulary: ${declared} do:declare-word facts on the chain (no manual call)`) : bad(`boot declare`, "no declare-word facts on the chain");
+  declared ? ok(`boot auto-declared the seed vocabulary: ${declared} do:coin facts on the chain (no manual call)`) : bad(`boot declare`, "no coin facts on the chain");
 
   // 2. a known word's declaration is a REAL fact, and it has an actor (I_AM)
-  const d1 = (await wordFacts()).find((f) => f.act === "declare-word" && f.params?.role === ROLE && f.params?.op === OP);
-  d1 && String(d1.through) === String(I_AM) ? ok(`do:declare-word for ${ROLE}:${OP} on the chain, actor = I_AM`) : bad(`declare fact`, d1);
+  const d1 = (await wordFacts()).find((f) => f.act === "coin" && f.params?.word === WORD && f.params?.binding?.kind === "roleword");
+  d1 && String(d1.through) === String(I_AM) ? ok(`do:coin for ${ROLE}:${OP} on the chain, actor = I_AM`) : bad(`declare fact`, d1);
 
   // 3. resolveRoleWord reads the projection → an IR (declared + backed). Stays synchronous.
   reg.resolveRoleWord(ROLE, OP) ? ok(`resolveRoleWord(${ROLE},${OP}) → IR (declared + backed, sync)`) : bad(`resolve`, "null");
 
-  // 4. DISABLE → a do:disable-word fact + resolveRoleWord goes null (acts fall through / refuse)
+  // 4. DISABLE → a do:retire fact + resolveRoleWord goes null (acts fall through / refuse)
   await reg.disableWord(ROLE, OP, {});
   const afterDisable = reg.resolveRoleWord(ROLE, OP);
-  const disFact = (await wordFacts()).find((f) => f.act === "disable-word" && f.params?.role === ROLE && f.params?.op === OP);
-  !afterDisable && disFact ? ok(`disableWord → do:disable-word fact on the chain + resolveRoleWord → null`) : bad(`disable`, { resolved: !!afterDisable, disFact: !!disFact });
+  const disFact = (await wordFacts()).find((f) => f.act === "retire" && f.params?.word === WORD);
+  !afterDisable && disFact ? ok(`disableWord → do:retire fact on the chain + resolveRoleWord → null`) : bad(`disable`, { resolved: !!afterDisable, disFact: !!disFact });
 
   // 5. REHYDRATE from the chain (simulate a restart) → the disable PERSISTS (it's a fact, not memory)
   await reg.rehydrateWordsFromFacts();
   !reg.resolveRoleWord(ROLE, OP) ? ok(`rehydrateWordsFromFacts → the disable persists (folded from the chain)`) : bad(`rehydrate persists disable`, "resolved");
 
-  // 6. RE-ENABLE → resolveRoleWord restored (a fresh declare-word, the fold's last action wins)
+  // 6. RE-ENABLE → resolveRoleWord restored (a fresh coin, the fold's last action wins)
   await reg.enableWord(ROLE, OP, {});
-  reg.resolveRoleWord(ROLE, OP) ? ok(`enableWord → resolveRoleWord restored (fresh declare-word, last action wins)`) : bad(`enable`, "null");
+  reg.resolveRoleWord(ROLE, OP) ? ok(`enableWord → resolveRoleWord restored (fresh coin, last action wins)`) : bad(`enable`, "null");
 
   // 7. the whole STORY is permanent on the chain: declare → disable → declare (nothing removed)
-  const story = (await wordFacts()).filter((f) => f.params?.role === ROLE && f.params?.op === OP).map((f) => f.act);
-  story.join(",") === "declare-word,disable-word,declare-word"
+  const story = (await wordFacts()).filter((f) => f.params?.word === WORD).map((f) => f.act);
+  story.join(",") === "coin,retire,coin"
     ? ok(`the vocabulary's whole story is permanent: declare → disable → declare (you DISABLE, never delete)`)
     : bad(`story`, story);
 
-  // 8. idempotent: re-running declareWordsToChain lays 0 (every word already declared)
-  const laid2 = await reg.declareWordsToChain({});
-  laid2 === 0 ? ok(`declareWordsToChain idempotent (re-run laid 0 — all words already on the chain)`) : bad(`idempotent`, laid2);
+  // 8. idempotent: re-running the fold declare lays 0 NEW facts (every word already declared, dedup-skip)
+  const { declareRoleWordsToFold } = await import(`${R}/seed/present/word/wordStore.js`);
+  const before8 = await Fact.countDocuments({ verb: "do", act: "coin" });
+  await declareRoleWordsToFold({});
+  const after8 = await Fact.countDocuments({ verb: "do", act: "coin" });
+  after8 === before8 ? ok(`declareRoleWordsToFold idempotent (re-run laid 0 new coin facts — dedup-skip)`) : bad(`idempotent`, { before: before8, after: after8 });
 
   // 9. PER-BRANCH (V2): disable `move:move` on a real child branch only — off there, ON on main.
   //    This is the capability: an extension's words on in one branch, off in another.
-  const { createBranch } = await import(`${R}/seed/materials/branch/branchCreation.js`);
+  const { createBranch } = await import(`${R}/seed/materials/history/branchCreation.js`);
   const made = await createBranch({ parent: "0", anchor: { atSeq: 1 }, createdBy: String(I_AM) });
   const BR = made.path;
   await reg.disableWord("move", "move", { branch: BR });

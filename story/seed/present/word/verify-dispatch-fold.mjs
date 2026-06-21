@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // verify-dispatch-fold . the DO verb resolves an op from the FOLD, not the operations Map.
 // bindWord an op + register its bundled handler by ref, then doVerb it: doVerb misses the Map,
-// folds the word's declare-word facts, resolves the handler ref, and runs it through the normal
+// folds the word's coin facts, resolves the handler ref, and runs it through the normal
 // gates and auto-Fact. Proves the fold drives behavior, additively (no existing op is touched).
 import fs from "fs"; import os from "os"; import path from "path"; import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -36,7 +36,7 @@ try {
   let ranFromFold = false;
   registerHostHandler("seed:test-fold-op", async (ctx) => { ranFromFold = true; return { ok: true, echo: ctx.params?.x ?? null }; });
 
-  // bind the word: a declare-word fact whose do-answer points at the ref. NOT in the operations Map.
+  // bind the word: a coin fact whose do-answer points at the ref. NOT in the operations Map.
   await bindWord("test-fold-op", { ownerExtension: "seed", do: { ref: "seed:test-fold-op" }, targets: ["being"], factAction: "test-fold-op" });
   await new Promise((r) => setTimeout(r, 500));
 

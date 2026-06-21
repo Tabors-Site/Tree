@@ -19,7 +19,7 @@ When Cherub connects with a name and a password:
     refuse with "Invalid credentials".
   If a being was found:
     host: generateToken(candidate) as token.
-    see the candidate's homeBranch as seat.
+    see the candidate's homeHistory as seat.
     Return token, seat.
 
 # Flow 2 — a signed-in Name reconnecting to a being it already owns. The bridge
@@ -34,7 +34,7 @@ When a signed-in Name connects to a being it owns:
         the being is owned.
   If the being is owned:
     host: generateToken(candidate) as token.
-    see the candidate's homeBranch as seat.
+    see the candidate's homeHistory as seat.
     Return token, seat, owned: true.
 
 # Flow 3 — inherit-connect / father-admit. An authenticated caller (already a
@@ -72,5 +72,5 @@ When an authenticated caller connects to inherit a descendant being:
   Otherwise:
     host: driverTrueNameForVessel(chosen) as driver.
   host: generateInheritToken(chosen, driver) as token.
-  see the chosen's homeBranch as seat.
+  see the chosen's homeHistory as seat.
   Return token, seatBranch: $seat, inherited: true, asFather: $candidateAsFather.

@@ -215,12 +215,24 @@ export function showNameForm({ client, storyDomain = "", onConnected = () => {} 
           busy(enter, false);
         }
       } else {
-        // No password: the portal can't open a session (connect needs the
-        // password to decrypt the key into the session). The holder enters by
-        // importing the private key as a password-bearing name, or acts over
-        // the API with the raw key. Guide them back to Connect.
-        setStatus("No password set — set one (or re-create with a password) to use this name in the portal. Your key is your backup.", "err");
-        busy(enter, false);
+        // No password: the key IS the proof — connect via it directly (the same path as
+        // "Connect with key / recovery phrase"). There is no password to recover this name,
+        // so remind ONCE more to save the key, then enter on the next click.
+        if (!enter.dataset.confirmed) {
+          enter.dataset.confirmed = "1";
+          enter.textContent = "Yes — I saved my key, enter";
+          setStatus("⚠ No password set. Your private key / 24 words are the ONLY way back into this name — nothing can recover it without them. Saved them? Click again to enter.", "err");
+          busy(enter, false);
+          return;
+        }
+        try {
+          const r = await client.nameConnectKey(reveal.privateKeyPem);
+          hideNameForm();
+          onConnected(r || { nameId: reveal?.nameId || null });
+        } catch (err) {
+          setStatus(`Couldn't enter with your key: ${err?.message || err}`, "err");
+          busy(enter, false);
+        }
       }
     };
     body.appendChild(enter);

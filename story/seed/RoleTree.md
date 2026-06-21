@@ -13,27 +13,27 @@ Snapshot of the seed-shipped role landscape after the single-gate refactor
 
 | Role | Hosted at (qualities.roles install) | Reach | canX summary | acquisition |
 |---|---|---|---|---|
-| `angel` | **heaven** (`<reality>/.`) | `["/**"]` (reality-wide via reach) | `canSee:["*"]`, `canDo:["grant-role:*", "revoke-role:*", "*"]`, full super-sudo | (default = queue) |
-| `global` | **reality root** (`<reality>/`) | host + descendants (whole reality) | `canSee:["place"]`, `canDo:[move, set-being:coord, set-being:position, ask-role, take-role]`, `canSummon:[@cherub]`, `canBe:[release]` | (default) |
-| `arrival` | **reality root** | `["/**"]` | `canSee:["arrival-view"]`, `canSummon:[@cherub:mate]`, `canBe:[birth, connect, release]`, no `canDo` | (default) |
+| `angel` | **heaven** (`<story>/.`) | `["/**"]` (story-wide via reach) | `canSee:["*"]`, `canDo:["grant-role:*", "revoke-role:*", "*"]`, full super-sudo | (default = queue) |
+| `global` | **story root** (`<story>/`) | host + descendants (whole story) | `canSee:["place"]`, `canDo:[move, set-being:coord, set-being:position, ask-role, take-role]`, `canSummon:[@cherub]`, `canBe:[release]` | (default) |
+| `arrival` | **story root** | `["/**"]` | `canSee:["arrival-view"]`, `canSummon:[@cherub:mate]`, `canBe:[birth, connect, release]`, no `canDo` | (default) |
 | `human` | (registry only — not installed at boot) | default | `canSee:["*"]`, `canDo:[{action:"*"}]`, `canSummon:[{pattern:"@*"}]`, `canBe:[{operation:"*"}]` — root founder | (default) |
 | `cherub` | (registry only) | default | gate role: `canDo:[grant-role:global, grant-role:human]`, `canSummon:[receiver:mate]`, `canBe:[birth, connect, release]` | (default) |
-| `birther` | (registry only) | default | `canBe:["birth"]` + birth-related summons | (default) |
+| `birther` | (registry only) | default | `canBe:["birth"]` + birth-related calls | (default) |
 | `public` | (registry only) | default | empty canX — placeholder; @public never acts | (default) |
 | `public-commons` | NOT registered as seed (template only) | default | `canSee:["*"]`, `canDo:[move, set-being:coord, set-being:position, create-space, create-matter]`, `canSummon:[@cherub]`, `canBe:[release]` | **`asked:"auto"`, `autoOnEntry:true`** |
 | `role-manager` | (registry only) | default | `canDo:[set-role, delete-role, set-world-signal]` | (default) |
 | `role-finder` | (registry only) | default | `canSee:[role-list, role-detail, ...]`, `canDo:[]` — read-only role registry inspector | (default) |
 | `roleflow-composer` | (registry only) | default | `canSee:[roleflow-detail], canDo:[set-roleflow]` | (default) |
 | `llm-assigner` | (registry only) | default | LLM connection management ops | (default) |
-| `reality-manager` | (registry only) | default | `canDo:[set-config, delete-config, close-reality]` | (default) |
+| `story-manager` | (registry only) | default | `canDo:[set-config, delete-config, close-story]` | (default) |
 | `branch-manager` | (registry only) | default | branch ops (create-branch, merge-branches, delete-branch) | (default) |
 | `merge-mediator` | (registry only) | default | merge-conflict resolution canSee + canDo | (default) |
 
-Default acquisition = `{asked:"queue", grabbed:false, autoOnEntry:false}` — requires explicit owner approval via the queued summon flow.
+Default acquisition = `{asked:"queue", grabbed:false, autoOnEntry:false}` — requires explicit owner approval via the queued call flow.
 
 ## The 11 seed beings (delegates) — what they hold at birth
 
-Every seed delegate is birthed by genesis at the reality root. `grantAngelToSeedDelegates()` then grants each one **two** things at heaven: `angel` (the identity-as-descendant-of-I-Am badge, gives heaven access) and their matching delegate role at the reality root (cherub→cherub, birther→birther, etc.). `@public` skipped from both (never acts). `@arrival` skipped from angel (anon visitors would inherit canSee:["*"]) but gets `arrival` role. **Every birthed being also gets `global` @ reality root via `_anointGlobal` (universal baseline).**
+Every seed delegate is birthed by genesis at the story root. `grantAngelToSeedDelegates()` then grants each one **two** things at heaven: `angel` (the identity-as-descendant-of-I-Am badge, gives heaven access) and their matching delegate role at the story root (cherub→cherub, birther→birther, etc.). `@public` skipped from both (never acts). `@arrival` skipped from angel (anon visitors would inherit canSee:["*"]) but gets `arrival` role. **Every birthed being also gets `global` @ story root via `_anointGlobal` (universal baseline).**
 
 **Why angel for delegates**: angel is about IDENTITY, not just canDo. Seed delegates ARE angels by birth — descendants of I-Am, with heaven-access by structural right. Their matching role carries the specific canX for day-to-day work; angel codifies their place in the heavenly hierarchy and the access path to heaven space when they later need to operate there. The chain back to I-Am IS their authority.
 
@@ -48,12 +48,12 @@ Every seed delegate is birthed by genesis at the reality root. `grantAngelToSeed
 | `@role-finder` | scripted | `role-finder` | `global` @ root, `angel` @ heaven |
 | `@roleflow-composer` | scripted | `roleflow-composer` | `global` @ root, `angel` @ heaven |
 | `@llm-assigner` | scripted | `llm-assigner` | `global` @ root, `angel` @ heaven |
-| `@reality-manager` | scripted | `reality-manager` | `global` @ root, `angel` @ heaven |
+| `@story-manager` | scripted | `story-manager` | `global` @ root, `angel` @ heaven |
 | `@branch-manager` | scripted | `branch-manager` | `global` @ root, `angel` @ heaven |
 
 Cognition note: every seed delegate is `scripted` — they have code handlers and don't go through LLM cognition. They speak in their delegate voice via the registry-fallback path in `roleFlow.js` (`origin === "seed"` lookup) without needing an explicit grant of their own delegate-role.
 
-## Newly-registered human (via `summon @cherub:mate`)
+## Newly-registered human (via `call @cherub:mate`)
 
 When an anonymous visitor registers, cherub's handler emits:
 
@@ -104,7 +104,7 @@ ASK              do(<host-space>, "ask-role", { role: "X" })
                  → permitted by global.canDo:[ask-role] on the asker
                  → role's acquisition.asked:
                      "auto"  → grant-role emitted internally, asker self-grants
-                     "queue" → summon to host owner with intent "role-request"
+                     "queue" → call to host owner with intent "role-request"
                      false   → FORBIDDEN
 
 TAKE             do(<host-space>, "take-role", { role: "X" })
@@ -130,13 +130,13 @@ Looking at this overview, here's what jumps out as worth deciding:
 Birth itself now grants `global` to every being. Cherub also grants `global` after the birth (line 601 of [cherub/role.js](seed/present/roles/cherub/role.js#L601)). The reducer may dedupe (same role + same anchor + same grantor=cherub vs I_AM = different grantors so probably NOT deduped). **Action: drop cherub's `global` grant and let `_anointGlobal` be authoritative.**
 
 ### 2. **Most roles are registry-only, not installed on any space**
-Only `angel` (on heaven), `global` (on reality root), and `arrival` (on reality root) actually live in `qualities.roles` after boot. All other seed roles (cherub, birther, llm-assigner, etc.) live only in the in-memory registry. The role-walk falls back to registry for seed roles (`origin: "seed"` check in `roleFlow.js`), but operators can't customize them via `set-role` because they're not space-hosted. **Action item: decide if seed delegate roles (cherub, birther, etc.) should also install onto reality root so operators can customize their canX without editing seed files.**
+Only `angel` (on heaven), `global` (on story root), and `arrival` (on story root) actually live in `qualities.roles` after boot. All other seed roles (cherub, birther, llm-assigner, etc.) live only in the in-memory registry. The role-walk falls back to registry for seed roles (`origin: "seed"` check in `roleFlow.js`), but operators can't customize them via `set-role` because they're not space-hosted. **Action item: decide if seed delegate roles (cherub, birther, etc.) should also install onto story root so operators can customize their canX without editing seed files.**
 
 ### 3. **`@public` has no purpose-of-action**
 Public has `global` granted at birth (via `_anointGlobal`) and `defaultRole: "public"`. But the doctrine says "@public never acts." If it never acts, granting `global` is benign noise. **Action: either skip `_anointGlobal` for @public, OR document that the grant is harmless and present for uniformity.**
 
 ### 4. **`acquisition` field defaults to `queue` but the queue path returns a placeholder message**
-Today `ask-role` with policy `"queue"` returns `{granted:false, path:"queue", message:"..."}` without actually summoning the host owner. The summon-to-owner flow needs wiring (or the queue path should be documented as "not yet implemented" until the UI lands). **Action: either wire the actual owner summon, or change the default for unset acquisition to `"closed"` (no ask) so we don't have a stub returning silent messages.**
+Today `ask-role` with policy `"queue"` returns `{granted:false, path:"queue", message:"..."}` without actually calling the host owner. The call-to-owner flow needs wiring (or the queue path should be documented as "not yet implemented" until the UI lands). **Action: either wire the actual owner call, or change the default for unset acquisition to `"closed"` (no ask) so we don't have a stub returning silent messages.**
 
 ### 5. **`human` has full wildcards (`canDo:[{action:"*"}]`)**
 Every registered human has `canDo:["*"]` via the `human` role. That's the "root founder" doctrine — first user can do anything. After multi-user systems land, the `human` role probably needs to narrow OR be granted only to the first user (not every registrant). **Action: confirm if every registrant should hold `human` or only the first. If only the first, cherub's registration flow should differentiate.**

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // verify-seedfold . the genesis fold runs at boot. seedFold declares the seed (verb pasts, concept
-// .words, do-ops) onto the chain as I_AM declare-word facts in one moment. After boot, asking for a
+// .words, do-ops) onto the chain as I_AM coin facts in one moment. After boot, asking for a
 // word folds it back: the seed declares itself. Also a regression check: a seedFold crash would
 // stop the boot before the delegates, so reaching cherub proves it did not crash genesis.
 import fs from "fs"; import os from "os"; import path from "path"; import { fileURLToPath } from "url";
@@ -44,7 +44,7 @@ try {
   const story = JSON.stringify(await assembleStory("world", { branch: "0" }));
   (story.includes("spoke the word being") && /A being is a presence/.test(story))
     ? ok(`the story reads the seed: "spoke the word being: A being is a presence..."`)
-    : bad(`story renders the seed`, story.includes("spoke the word") ? "name shown but body missing" : "no declare-word rendered in the story");
+    : bad(`story renders the seed`, story.includes("spoke the word") ? "name shown but body missing" : "no coin rendered in the story");
 
   // 5. completeness: every concept of the descent declared (not just spot-checks)
   const CONCEPTS = ["word", "iam", "base", "chain", "history", "story", "fold", "weave", "see", "do", "name", "being", "space", "matter", "be", "call", "can", "recall", "role", "roleflow"];
@@ -54,7 +54,7 @@ try {
 
   // 6. the do-ops declared into the fold alongside the concepts
   const { default: Fact } = await import(`${R}/seed/past/fact/fact.js`);
-  const opCount = await Fact.countDocuments({ verb: "do", act: "declare-word", history: "0", "params.binding.kind": "op" });
+  const opCount = await Fact.countDocuments({ verb: "do", act: "coin", history: "0", "params.binding.kind": "op" });
   (opCount > 30) ? ok(`${opCount} do-ops declared into the fold (the op set, beside the concepts)`) : bad(`op count`, opCount);
 
   console.log(`\n  ${pass} passed, ${fail} failed`);

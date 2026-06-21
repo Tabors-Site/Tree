@@ -187,7 +187,7 @@ export function unregisterMatterTypesFromExtension(extName) {
 
 export function getMatterType(name) {
   if (typeof name !== "string" || !name.length) return null;
-  // Fold-first: a type resolves from the word-fold (declare-word facts) when declared; the Map is the
+  // Fold-first: a type resolves from the word-fold (coin facts) when declared; the Map is the
   // module-load registration buffer + a backstop for non-booted contexts (the projection is empty
   // until rehydrate). verify-typesfold proves the fold read is value-identical to the Map.
   return resolveTypeFromFold(name) || REGISTRY.get(name) || null;

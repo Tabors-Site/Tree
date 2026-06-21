@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // verify-being-ops-fold . concept one (being): its ops mirror into the fold via declareOpsToFold.
-// Additive: the operations Map is untouched; the fold gains the same ops as declare-word facts,
+// Additive: the operations Map is untouched; the fold gains the same ops as coin facts,
 // so each resolves from the fold too (resolveDoOpFromFold), the bridge for the do-ops migration.
 import fs from "fs"; import os from "os"; import path from "path"; import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -33,7 +33,7 @@ try {
 
   // declare being's ops (target: being) into the fold
   const n = await declareOpsToFold({ filter: { target: "being" } });
-  (n > 0) ? ok(`declared ${n} being ops into the fold (declare-word facts)`) : bad(`declared > 0`, { n });
+  (n > 0) ? ok(`declared ${n} being ops into the fold (coin facts)`) : bad(`declared > 0`, { n });
 
   // the op now reconstructs from the fold, do-answer points at its handler ref
   const w = await pollFor(() => getWord(probe), (v) => v && v.do?.ref === probe);

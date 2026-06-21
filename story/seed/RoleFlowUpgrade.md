@@ -119,7 +119,7 @@ For complex worlds (a court system, a factory, a city simulation), decomposition
 
 The substrate is neutral. Authors choose based on their world's complexity.
 
-## Point 6: the two reality-manager roles — this is the unlock
+## Point 6: the two story-manager roles — this is the unlock
 
 This is the most important point in your list. Let me read it back:
 
@@ -149,13 +149,13 @@ Then in conversation, the user describes what they want. The role-helper drafts 
 
 **This is the user interface for TreeOS at scale.** Not forms. Not code. Conversation with a being whose job is to help you compose worlds.
 
-It also generalizes — once this pattern works for roles, it works for everything authorable. A "space architect" role that helps you design and place spaces. A "world designer" role that helps you set up world signals and time-based triggers. The reality-manager isn't a UI; it's a collection of LLM-powered helper beings that mediate authoring.
+It also generalizes — once this pattern works for roles, it works for everything authorable. A "space architect" role that helps you design and place spaces. A "world designer" role that helps you set up world signals and time-based triggers. The story-manager isn't a UI; it's a collection of LLM-powered helper beings that mediate authoring.
 
 ## Point 7: rulership and worker delegation
 
-You're sketching out something I'd call **delegation patterns**: a "boss" role doesn't do work directly, it summons workers with specific roles tailored to the task.
+You're sketching out something I'd call **delegation patterns**: a "boss" role doesn't do work directly, it calls workers with specific roles tailored to the task.
 
-A "factory-manager" role doesn't manufacture skateboards; it summons "factory-worker" beings with roles tailored to specific jobs (cutting, assembly, painting, QA). The manager's canDo includes summoning various worker types; the workers' roles are focused single-task roles.
+A "factory-manager" role doesn't manufacture skateboards; it calls "factory-worker" beings with roles tailored to specific jobs (cutting, assembly, painting, QA). The manager's canDo includes calling various worker types; the workers' roles are focused single-task roles.
 
 This is the same decomposition principle applied across beings rather than within one being. Instead of one giant manager-being doing everything, you have a manager-being that coordinates many smaller worker-beings.
 
@@ -163,12 +163,12 @@ For this to work cleanly:
 
 - The manager's role has canSummon for the worker types it manages.
 - The worker beings can be ephemeral (born to do a task, complete it, released) or persistent (always around, waiting for work).
-- The manager's roleFlow determines which workers to summon based on world state (incoming orders, queue length, etc.).
-- Workers might have their own roleFlows that determine what they do once summoned.
+- The manager's roleFlow determines which workers to call based on world state (incoming orders, queue length, etc.).
+- Workers might have their own roleFlows that determine what they do once called.
 
 This is "OS for AI agents" being literal: TreeOS becomes a substrate where teams of agents coordinate through roles, with the role/roleFlow system being the coordination primitive.
 
-And it composes with your point 6: when you author the manager's roleFlow in English ("when there's a backlog of more than 10 orders, summon more workers"), the LLM-helper does the structural translation. You describe the organization; the helper authors the implementation.
+And it composes with your point 6: when you author the manager's roleFlow in English ("when there's a backlog of more than 10 orders, call more workers"), the LLM-helper does the structural translation. You describe the organization; the helper authors the implementation.
 
 ## Putting it all together — what to do with this
 
@@ -180,7 +180,7 @@ You've sketched a coherent design that has several pieces, in rough priority:
 
 3. **The two role-manager LLM helpers (your point 6).** This is the unlock. Two roles for the role-manager that take natural-language requests and produce structured roles/roleFlows. Saves users from form-filling; makes the substrate accessible.
 
-4. **Delegation patterns documented (your point 7).** Show how manager-roles summon worker-roles. Maybe ship a small example (a simple factory? a kitchen? whatever has clear hierarchical work).
+4. **Delegation patterns documented (your point 7).** Show how manager-roles call worker-roles. Maybe ship a small example (a simple factory? a kitchen? whatever has clear hierarchical work).
 
 Of these, item 3 is the _highest-leverage_ item. It's not a substrate change — it's a role definition (or two role definitions) that you build using existing primitives. Maybe a day of work for the role definitions plus their system prompts. The payoff is enormous: every future user of TreeOS can author roles by describing them, not by filling out forms.
 
@@ -216,4 +216,4 @@ Worth queuing after branches land. Don't bundle with current work. But this is t
 
 That's the message to queue up. For you specifically — point 6 is the most valuable thing in your list. The substrate's done a lot of work to make composition possible; the helper-roles are what make it _usable_. Worth prioritizing those after the branch arc completes.
 
-You're seeing the right shape. Role composition through stacking, not inheritance. Sequence through world state, not role history. LLM-helpers for authoring. Delegation through summon. Each piece is grounded in primitives the substrate already has; the work is mostly documentation, examples, and one set of well-crafted helper-role definitions. Substantial product surface ahead, but the substrate supports all of it cleanly.
+You're seeing the right shape. Role composition through stacking, not inheritance. Sequence through world state, not role history. LLM-helpers for authoring. Delegation through call. Each piece is grounded in primitives the substrate already has; the work is mostly documentation, examples, and one set of well-crafted helper-role definitions. Substantial product surface ahead, but the substrate supports all of it cleanly.

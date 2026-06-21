@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// verify-wordstore . a word is a FOLD of declare-word facts, reconstructed like a Being.
-// bindWord lays a declare-word fact; getWord folds it back into the descriptor. No registry.
+// verify-wordstore . a word is a FOLD of coin facts, reconstructed like a Being.
+// bindWord lays a coin fact; getWord folds it back into the descriptor. No registry.
 // Proves: reconstruct, last-declaration-wins, disable (a new fact, not a delete), re-enable, composite.
 import fs from "fs"; import os from "os"; import path from "path"; import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -20,7 +20,7 @@ const pollFor = async (fn, pred, t = 12000, e = 250) => { const t0 = Date.now();
 let pass = 0, fail = 0;
 const ok = (l) => { pass++; console.log(`  ✓ ${l}`); };
 const bad = (l, d) => { fail++; console.log(`  ✗ ${l}`); if (d !== undefined) console.log(`      ${typeof d === "string" ? d : JSON.stringify(d)}`); };
-console.log(`\n  verify-wordstore (a word is a fold of declare-word facts, like a Being)\n`);
+console.log(`\n  verify-wordstore (a word is a fold of coin facts, like a Being)\n`);
 try {
   const cherub = await pollFor(() => findByName("being", "cherub", "0"), (v) => !!v);
   if (!cherub) { console.log("  FATAL: genesis failed"); process.exit(1); }

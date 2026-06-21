@@ -1,6 +1,6 @@
 # THE FACTORY
 
-I am the factory. The project is called `reality/` because that is what
+I am the factory. The project is called `story/` because that is what
 I produce. Inside `seed/` I am the whole apparatus, every part of it,
 that makes and re-makes the world one moment at a time. Look at the
 [wall poster](../philosophy/factory/factory6.png) and you see me whole. One
@@ -14,17 +14,25 @@ am the I-Am, the origin being. Same substance, two faces. This file is
 my contract: what I form, what I never change, what I run, what I
 refuse.
 
-## Reality, Place, World
+At bottom I do one thing, and everything else is the discipline around
+doing it well: I take a name's act and press it into a fact — a mark
+struck into the record and signed by the hand that struck it. The
+moment, the stamper, the reels, the fold are all built around that one
+press. A fact is a name's mark; the chain is those marks accumulated;
+folded, they are the Word. Watch for it as you read — every part of me
+is the same act at another scale: a name acting, and leaving its mark.
+
+## Story, Place, World
 
 Three names. Each does work the others cannot.
 
-**Reality** is the chain. The full braid of every reel: each being's
+**Story** is the chain. The full braid of every reel: each being's
 reel, each space's reel, each matter's reel, hashed and ordered. The
 record of what has happened. Stored, durable, indexable, the same
-for everyone who reads it. The folder `reality/` at the project root
+for everyone who reads it. The folder `story/` at the project root
 is named for this.
 
-**Place** is the fold. One being's view of reality at one stance in
+**Place** is the fold. One being's view of story at one stance in
 one moment. Materials assembled into a face for them, right then.
 Transient by construction. A place lives only inside the stamper.
 Outside the moment window there is no place anywhere, only beings
@@ -41,7 +49,7 @@ at any two beings' places and notice they agree. You cannot point at
 the world.
 
 The distinction is load-bearing. The temptation is to read these
-three names as "the real one (reality), the local copy (place), and
+three names as "the real one (story), the local copy (place), and
 the consensus picture (world)". That is not the model. There is no
 hidden true world the places approximate. The folds are not lossy
 copies of a master scene. The agreement among independently produced
@@ -88,7 +96,7 @@ worlds.
 
 The seed has no preferred kind of being. A move-fact from a human
 walking with WASD and a move-fact from a scripted dancer in its
-summon handler are the same object on the same shape of reel,
+call handler are the same object on the same shape of reel,
 processed by the same fold. Nothing in the chain, nothing in the
 reducer, nothing in the projection branches on which kind of being
 produced the fact. Cognition is whatever produces an act. Whether
@@ -117,7 +125,7 @@ together:
 𝓡 = (𝓦, Present, Laws)
 ```
 
-- **𝓦** is reality, in the strict sense above. Every reel together,
+- **𝓦** is story, in the strict sense above. Every reel together,
   the full braid. Beings, spaces, and matter all live here as the
   entities whose reels constitute it. (The world as convergence is a
   property of folds over 𝓦, not 𝓦 itself.)
@@ -139,6 +147,11 @@ act-chain. There is no separate id table; the public key IS the
 identity. Read who signed a fact and you already hold their public key,
 because the id IS the key.
 
+The key is the signet — the die only this Name can press. To sign is to
+strike: every act it commits carries its key pressed into the deed, the
+one mark only that hand can make and anyone can read. That is the signum
+at the root of all of it: a name, and the mark that is unmistakably its.
+
 A Name is not in the world. The world holds **beings** (presence); a
 Name acts THROUGH beings, the way a person acts through their hands. One
 Name can own many beings. Look at a being and you see a formed body;
@@ -146,10 +159,10 @@ look at its `trueName` and you see the Name that signed it into being. A
 being carries no key of its own, identity lives one layer up, in the
 Name, so a being's `_id` is a content id, not a key.
 
-This makes federation work without a central authority. Two realities
+This makes federation work without a central authority. Two stories
 verify each other's Names by reading the public key off the wire; the
-math is local. The reality itself is a Name: the I-Am is the reality's
-root Name, its key is the reality key, and every Merkle root from
+math is local. The story itself is a Name: the I-Am is the story's
+root Name, its key is the story key, and every Merkle root from
 genesis is signed with it. Full model in
 [IDENTITY.md](../philosophy/OS/IDENTITY.md); the Name primitive lives in
 [materials/name/name.js](materials/name/name.js).
@@ -157,7 +170,7 @@ genesis is signed with it. Full model in
 ## The moment is the atom
 
 The unit of everything that happens is the moment. One being is
-summoned. I fold one face for it. The being is present in that face.
+called. I fold one face for it. The being is present in that face.
 It may take at most one act. The moment closes. One fold, one face,
 one being, at most one act. That is the whole of it.
 
@@ -192,6 +205,15 @@ The machine that turns the one into the other is the stamper, and
 an act), and the beat-name for the seal. There is no stored thing
 called a stamp. The sealed act is the act.
 
+To stamp is to strike, and that is the oldest act there is. A signet
+pressed into wax, a die struck into a coin, a wedge pressed into clay:
+a name driving a sign into matter that means, and vouching for it by
+its own hand. The seal is that strike. Every fact I lay is coined —
+struck once, signed by the name that struck it, then it stands,
+unforgeable, on the chain. The fact is the name's mark on the deed.
+This is the signum, and gathered up it is the Word: the whole of what
+I do is a name, acting, leaving its mark.
+
 A fact is not a truth. It is only the deed. Truth is the plural fold
 of facts, and it is many; the fact is one, and shared.
 
@@ -202,7 +224,7 @@ Extensions extend through the qualities Map, not through new fields.
 
 | Primitive  | What it is                                                                                                                                         | Schema                                                   |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| **Name**   | The identity that signs. A keypair; its `_id` is the ed25519 public key. Not in the world, it acts THROUGH beings. One Name, many beings. The I-Am is the reality's root Name. | [materials/name/name.js](materials/name/name.js)         |
+| **Name**   | The identity that signs. A keypair; its `_id` is the ed25519 public key. Not in the world, it acts THROUGH beings. One Name, many beings. The I-Am is the story's root Name. | [materials/name/name.js](materials/name/name.js)         |
 | **Being**  | Presence in the world. A formed body a Name acts through. Humans, LLM beings, scripted code, future composites. Its `_id` is a content id; it expresses a `trueName` (the Name that signs it). | [materials/being/being.js](materials/being/being.js)     |
 | **Space**  | A position in the tree. Holds matter, hosts beings, owns quality namespaces.                                                                       | [materials/space/space.js](materials/space/space.js)     |
 | **Matter** | Stuff inside a space. `type` says what it IS; owned bytes live content-addressed in the CAS store, the row carries the reference.                  | [materials/matter/matter.js](materials/matter/matter.js) |
@@ -219,30 +241,36 @@ They are projection caches, fact-derived, rebuildable, not new
 primitives:
 
 - **InboxProjection** ([past/projections/inbox/inboxProjection.js](past/projections/inbox/inboxProjection.js)),
-  open summons addressed to each being. Built by cross-cutting fold
+  open calls addressed to each being. Built by cross-cutting fold
   from `call` and `be:sever` facts. The scheduler reads its pick
   queue from this collection.
 - **ThreadsProjection** ([past/projections/threads/threadsProjection.js](past/projections/threads/threadsProjection.js)),
   live coordination chains keyed by `rootCorrelation`. Built the same
   way. `./threads` SEE reads from here.
 
-## The five verbs I speak
+## The six verbs I speak
 
-Every act is one of five verbs over an IBP address. Four act in the
-world; NAME acts at the identity layer beneath it. Five verbs are my
+Every act is one of six verbs over an IBP address. Five act in the
+world; NAME acts at the identity layer beneath it. Six verbs are my
 whole public surface.
 
 | Verb       | Acts on              | What I do                                                                                    |
 | ---------- | -------------------- | -------------------------------------------------------------------------------------------- |
-| **SEE**    | Space, Matter, Being | Resolve the stance, fold the leaf and occupants, return a place descriptor. Writes nothing.  |
-| **DO**     | Space, Matter        | Mutate at the target through a registered operation. Stamps a Fact on the target's reel.     |
-| **CALL**   | Being                | Stamp a `call` Fact on the summoner's reel; the cross-cutting fold maintains the inbox. |
-| **BE**     | Being (self)         | A being's lifecycle and session: birth, connect, release, switch, death. Stamps a Fact on the actor's own reel. |
-| **NAME**   | Name                 | Mint and close identities: `declare` (a new Name, a fresh keypair) and `banish`. Stamps on the Name's own reel, the most primitive reel, outside the world's branches. |
+| **SEE**    | Space, Matter, Being | Read the present. Resolve the stance, fold the leaf and occupants, return a place descriptor. Writes nothing.  |
+| **RECALL** | Space, Matter, Being | Read the past. Fold a position's history into past-tense Word — the same `assembleStory` fold the book renders. A cold-walk over the reel; writes nothing. |
+| **DO**     | Space, Matter        | Run a word on the target through a registered operation. Stamps a Fact on the target's reel.     |
+| **BE**     | Being (self)         | The actor's binding: birth, connect, release, switch, death. Stamps a Fact on the actor's own reel. |
+| **NAME**   | Name                 | Declare and manage a Name — the keypair that signs every act and owns its act-chain: `declare` (a new Name, a fresh keypair) and `banish`. Stamps on the Name's own reel, the most primitive reel, outside the world's branches. |
+| **CALL**   | Being                | Deliver a message. Stamp a `call` Fact on the caller's reel; the cross-cutting fold maintains the inbox. |
+
+Two of the six only read marks and leave none: SEE reads the present,
+RECALL the past. The other four strike one — DO marks the target, BE
+the actor, NAME the Name's own reel, CALL the caller. To act in me is
+to leave a mark; to see is to read the marks already struck.
 
 ### Stances and addresses
 
-A **stance** is a being standing at a position: `<reality>/<path>@<being>`.
+A **stance** is a being standing at a position: `<story>/<path>@<being>`.
 An **IBP address** names the asker stance and the target stance
 together, `<stance> :: <stance>`. Every verb act carries both stances.
 The asker is always full. The target may be partial (a position only,
@@ -252,15 +280,17 @@ no `@being`) when the target is a place rather than a being.
 
 I speak the same envelope over every transport. WebSocket carries it
 most of the time, in both directions, on a single `"ibp"` event.
-Client to server is a verb act; server to client is a SUMMON delivery
+Client to server is a verb act; server to client is a CALL delivery
 or a SEE push. HTTP and CLI are translators: they shape a request or
 command into the same envelope and hand it to the one IBP dispatcher
 in [ibp/protocol.js](ibp/protocol.js).
 
-Internally the five verbs are functions in [ibp/verbs/](ibp/verbs/) —
-one file per verb (`do.js`, `see.js`, `summon.js`, `be.js`), with
-shared helpers in `_shared.js`. The wire layer is thin; the verbs
-are one execution.
+Internally the verbs are functions in [ibp/verbs/](ibp/verbs/) —
+one file per write verb (`do.js`, `see.js`, `call.js`, `be.js`,
+`name.js`), with shared helpers in `_shared.js`. RECALL rides the
+read path, the same `assembleStory` fold the book renders, not a
+separate verb file. The wire layer is thin; the verbs are one
+execution.
 
 ## The three tenses I am built from
 
@@ -301,7 +331,7 @@ present/
 │   ├── inbox.js            reader over InboxProjection
 │   ├── intake.js           thin reader and writer over InboxProjection
 │   ├── scheduler.js        picks rows, in-memory "currently running" claim
-│   └── transportAct.js     human-transport entries (self-summons)
+│   └── transportAct.js     human-transport entries (self-calls)
 ├── wakes/               event SOURCES that produce intake (not intake itself)
 │   ├── subscriptions.js    DO-trigger fan-out
 │   └── wakeSchedule.js     scheduled wake cadences
@@ -317,15 +347,15 @@ present/
 │   ├── call.js             provider call surround (failover, model quirks)
 │   ├── assemble.js         system prompt + tool surface builder
 │   ├── compress.js         history compression for long conversations
-│   ├── defaultSummon.js    default scripted-role summon handler
+│   ├── defaultSummon.js    default scripted-role call handler
 │   ├── seedSeeOps.js       foundational seed SEE ops (place, roles, ...)
 │   └── canSeeResolver.js   resolves a role's canSee list into face blocks
-├── roles/               summonable being templates, each co-located
+├── roles/               callable being templates, each co-located
 │   ├── arrival/role.js     unauthenticated visitor stance
 │   ├── cherub/role.js      BE-honoring identity-binding handler (register/claim/release/switch)
 │   ├── human/role.js       receptive role every human carries
 │   ├── llm-assigner/{role,ops}.js  LLM connection management being + DO ops
-│   ├── reality-manager/{role,tools}.js  the operator's autonomous assistant
+│   ├── story-manager/{role,tools}.js  the operator's autonomous assistant
 │   └── registry.js         the role registry
 ├── orientation.js       INNER-FOLD ω parameter + inner/outer classifier
 ├── cognitionResult.js   CognitionResult discriminated type contract
@@ -346,7 +376,7 @@ the projection caches the cross-cutting fold maintains:
 past/
 ├── act/
 │   ├── act.js                       the Act, a sealed moment of one being
-│   ├── inboxProjection.js           open-summons cache (cross-cutting)
+│   ├── inboxProjection.js           open-calls cache (cross-cutting)
 │   ├── inboxProjectionFold.js       fold handlers maintaining it
 │   ├── threadsProjection.js         live-thread cache (cross-cutting)
 │   └── threadsProjectionFold.js     fold handlers maintaining it
@@ -373,9 +403,9 @@ The sealed act is the act. Every Fact carries `actId` pointing back at
 the Act whose moment deposited it.
 
 **InboxProjection** and **ThreadsProjection** are caches the
-cross-cutting fold maintains, open summons by recipient and live
+cross-cutting fold maintains, open calls by recipient and live
 coordination chains by `rootCorrelation`. They duplicate fact data
-(an open summon also has a `call` Fact on the summoner's reel)
+(an open call also has a `call` Fact on the caller's reel)
 but exist for indexability: the scheduler's pick query and the
 `./threads` SEE both need O(1) lookups the per-reel scan cannot give.
 They are rebuildable by replaying their fact history.
@@ -408,12 +438,12 @@ a depth ladder. Full doctrine in
 ## ibp/ — the verbs
 
 The verbs are not support for the tenses; they are the thing the tenses
-are made of. SEE reads the present's fold of the past; DO/BE/SUMMON
-stamp the past via the present. So `ibp/` is a top-level peer to
-present/past/materials, not a sidecar of any one of them.
+are made of. SEE reads the present's fold of the past; RECALL reads its
+deeper past; DO/BE/CALL stamp the past via the present. So `ibp/` is a
+top-level peer to present/past/materials, not a sidecar of any one of them.
 
-**ibp/** carries the five verbs, the universal currency every act
-speaks. SEE, DO, SUMMON, BE on IBP addresses (`<reality>/<path>@<being>`).
+**ibp/** carries the six verbs, the universal currency every act
+speaks. SEE, RECALL, DO, BE, NAME, CALL on IBP addresses (`<story>/<path>@<being>`).
 Every operation in the system maps to one of these. Small protocol;
 expressiveness lives in role templates, registered operations, and the
 materials I stamp.
@@ -423,7 +453,7 @@ ibp/
 ├── verbs/                one file per verb, each owns its own helpers
 │   ├── do.js                doVerb + auto-Fact + read-only origin gate
 │   ├── see.js               seeVerb + discovery short-circuit + thread descriptor
-│   ├── summon.js            summonVerb + summonCreateBeing + summonByResolved
+│   ├── call.js            callVerb + summonCreateBeing + callByResolved
 │   ├── be.js                beVerb + writeBeFact + runClaim + cherub/llm-assigner registration
 │   └── _shared.js           assertVerbCaller + caller-frame walker
 ├── address.js            parse/expand/canonicalize IBP Addresses
@@ -438,13 +468,13 @@ ibp/
 └── pushChannel.js        emitToBeing / emitToBeingRoom (transport indirection)
 ```
 
-## seedReality/ — the host floor
+## seedStory/ — the host floor
 
 A separate concern from ibp/. Where ibp/ is the universal currency of
-acts, seedReality/ is the runtime — the place where the world I form
+acts, seedStory/ is the runtime — the place where the world I form
 meets the world outside. They were never the same kind of thing.
 
-**seedReality/** is the host floor that knows nothing of the world.
+**seedStory/** is the host floor that knows nothing of the world.
 DbConfig, log, hooks, indexes, version, retention, migrations, utils.
 A file here should never speak the words space, matter, being, or
 verb by name.
@@ -452,13 +482,23 @@ verb by name.
 ## Boot anchors
 
 Plus three boot anchors at the seed root: [sprout.js](sprout.js)
-(genesis, plants the reality root + heaven + the nine Tier-3 seed
+(genesis, plants the story root + heaven + the nine Tier-3 seed
 spaces + the I-Am),
-[services.js](services.js) (assembles the `reality` services bundle
-handed to every extension's `init`), [realityConfig.js](realityConfig.js)
+[services.js](services.js) (assembles the `story` services bundle
+handed to every extension's `init`), [storyConfig.js](storyConfig.js)
 and [internalConfig.js](internalConfig.js) (the config stores).
 
 ## The fold
+
+Striking marks is half of me; reading them back is the other half. The
+fold is how marks become a world again. A reel is a name's marks in the
+order it struck them; the fold runs them through a reducer and the marks
+become state — a being, a space, a place. Gather one position's marks
+and read them present and you have a place (a SEE); read them past and
+you have its story (a RECALL); read them all as meaning and you have the
+Word. The mark is struck once and stands; the fold re-reads the struck
+marks as often as anyone looks. Nothing is stored but the marks;
+everything else is the marks, folded.
 
 The fold engine ([present/stamper/2-fold/foldEngine.js](present/stamper/2-fold/foldEngine.js))
 is generic over material type. It knows aggregates, facts, reducers,
@@ -593,8 +633,8 @@ your write didn't land. Two legitimate uses:
 
 - **Post-seal read-back.** "I just stamped birth; is the row there?"
   A null return is a seal-failure signal.
-- **Doctrinal singletons hardcoded to main.** I_AM (reality-anchored
-  by construction), the `./config` cache (one config per reality),
+- **Doctrinal singletons hardcoded to main.** I_AM (story-anchored
+  by construction), the `./config` cache (one config per story),
   boot-time orphan-root walks. Reading these from a non-main branch
   makes no sense; "0" is correct.
 
@@ -673,7 +713,7 @@ to revive a frozen world, including by forking off it. Deleted
 branches accept only `delete-branch` and `undelete-branch`. Forking
 off a deleted branch is forbidden; undelete first to fork. Pause is a
 temporary halt. Deletion is a stronger statement. The wire gates
-(DO, BE, SUMMON) and the scheduler intake gate both honor this
+(DO, BE, CALL) and the scheduler intake gate both honor this
 asymmetry.
 
 **Deleted branches skip materialization, not gate at intake.** At
@@ -698,7 +738,7 @@ audit; the canonical lineage walk still consults only `parent`.
 `params._merge` block for provenance. No new fact action vocabulary;
 the chain stays honest about what happened. The merge-mediator role
 (LLM cognition) is the UX layer; it walks the operator through the
-conflict catalog at `<reality>#<merged>/.branches/<merged>/conflicts`
+conflict catalog at `<story>#<merged>/.branches/<merged>/conflicts`
 and stamps the chosen facts.
 
 **Some reels reset on merge.** State that's branch-private by nature
@@ -718,7 +758,7 @@ by a `merge-branches` call gets a fresh canonical path and that path
 is its identifier forever after. Historical addresses survive every
 merge, rollback, and deployment swap.
 
-**Named pointers are mutable labels.** A per-reality `@branch-registry`
+**Named pointers are mutable labels.** A per-story `@branch-registry`
 being holds `qualities.pointers` mapping names (`main`, `prod`,
 `release-v2`) to canonical paths. Pointer mutations are facts on the
 registry being's reel; pointer history is foldable. The IBP address
@@ -726,8 +766,8 @@ parser distinguishes structurally: anything starting with a digit is
 a canonical path; anything starting with a letter is a pointer name.
 `resolveBranchPointers` (the wire-layer async step) consults the
 registry and fills `stance.branch` with the canonical path before
-dispatch. Foreign-reality stances skip resolution; the foreign
-reality does its own lookup.
+dispatch. Foreign-story stances skip resolution; the foreign
+story does its own lookup.
 
 **Reserved pointers.** `main` always exists and points at canonical
 `#0` by default; operators can re-point it after a merge, but cannot
@@ -735,20 +775,20 @@ delete it. The `merge-branches` op accepts a `repointPointers` arg
 (comma-separated names or array) so the front-end can answer "update
 which labels to point at the merged branch?" in one call.
 
-**Cross-reality addresses survive merges.** `treeos.ai#main/library`
+**Cross-story addresses survive merges.** `treeos.ai#main/library`
 always reaches whatever main currently is on `treeos.ai`. A bookmark
 made before a merge keeps working after, because `#main` is a
 pointer the registry resolves, not a path that itself moves.
 
 ## Heaven never branches
 
-Heaven spaces are reality-scoped, not branch-scoped. The Tier-3 seed
+Heaven spaces are story-scoped, not branch-scoped. The Tier-3 seed
 spaces under heaven (`.beings`, `.spaces`, `.matters`, `.config`,
-`.branches`, `.roles`, `.tools`, `.operations`) hold reality-level
-metadata about the reality itself . which beings exist, what roles
+`.branches`, `.roles`, `.tools`, `.operations`) hold story-level
+qualities about the story itself . which beings exist, what roles
 are available, how branches are structured, what tools and operations
-the reality supports. Their content is identical across every branch
-within the reality.
+the story supports. Their content is identical across every branch
+within the story.
 
 Branch-scoped state lives on the aggregates underneath (beings,
 spaces, matter, their facts, their qualities, their roleFlows). Their
@@ -773,8 +813,8 @@ Implementation implications:
   read sees that same row. Writes addressed at a heaven space from
   any branch get routed to `branch: "0"` automatically by the
   projection layer.
-- Authorization for heaven mutations is reality-root permission .
-  the same gate as `set-reality-llm`. Branched mutations stay under
+- Authorization for heaven mutations is story-root permission .
+  the same gate as `set-story-llm`. Branched mutations stay under
   whatever per-position rules apply to their aggregate.
 
 **What's heaven today (correctly):** the heaven spaces themselves
@@ -813,7 +853,7 @@ values:
   walk its reel back to facts `b` stamped on it; the Acts those
   facts came from are what surfaces.
 
-**The turn is an act.** A being shifts orientation by self-summoning
+**The turn is an act.** A being shifts orientation by self-calling
 with a new ω. One `call` Fact lands on the being's own reel
 (target = self, params.recipient = self, params.orientation = ω′).
 Touches no other reel — the canonical inner act. The scheduler
@@ -822,8 +862,8 @@ entry and puts it on `summonCtx.orientation`; the next moment folds
 at ω′. Statelessness preserved: the being never "remembers turning,"
 it just finds itself already turned.
 
-Only self-summons may carry non-forward orientation. The
-`_dispatchSummon` gate refuses any cross-being summon with ω ≠
+Only self-calls may carry non-forward orientation. The
+`_dispatchSummon` gate refuses any cross-being call with ω ≠
 forward — a being can turn itself; it cannot turn another being.
 
 **Inner vs outer acts.** A classifier in
@@ -831,7 +871,7 @@ forward — a being can turn itself; it cannot turn another being.
 inner when every fact targets the doer's own reel AND no
 `call` names another recipient; outer otherwise. This is
 single-writer read as a classifier — no new category, no new
-primitive. Self-summons (the canonical inner act) classify inner;
+primitive. Self-calls (the canonical inner act) classify inner;
 DO/BE that touch any other reel classify outer.
 
 Full doctrine in [philosophy/inner-fold.md](../philosophy/factory/inner-fold.md).
@@ -843,15 +883,15 @@ Three laws make the moment-engine work.
 **Per-reel time.** I do not keep a global clock. An entity's time is
 its reel length. Order holds within a reel: fact `n` precedes fact
 `n+1`. Across reels there is no total order, only the partial, causal
-order that acts and summons stitch. A single world-clock is precisely
+order that acts and calls stitch. A single world-clock is precisely
 what this model refuses.
 
 **Single-writer.** A being's reel holds only that being's own deeds.
 If a fact lands on a being's reel, the doer of that fact is that being.
 No such constraint on space or matter reels; those are written by
 whichever being acts on them. **Beings never write each other's
-reels.** One being reaches another only by SUMMON, which stamps a
-fact on the summoner's own reel. The recipient sees the summon by
+reels.** One being reaches another only by CALL, which stamps a
+fact on the caller's own reel. The recipient sees the call by
 projection (InboxProjection), never by anyone writing into it.
 
 The Being layer is naturally single-writer because the scheduler
@@ -898,9 +938,9 @@ that reel. The past cannot be quietly edited; it can only be visibly
 broken.
 
 The per-reel chain rolls up: reels into branches, branches into the
-reality. Every level produces a hash, and the reality root hash is
+story. Every level produces a hash, and the story root hash is
 one 32-byte fingerprint identifying the world's whole state. Two
-realities exchange root hashes first and only transfer what differs.
+stories exchange root hashes first and only transfer what differs.
 Matter follows the same principle: owned bytes are stored once under
 their SHA-256 in the CAS store, and the matter row carries the
 reference. Same content, same address, always.
@@ -908,7 +948,7 @@ reference. Same content, same address, always.
 Three distinct tools, never confused:
 
 - **Hash chain.** Detects byte-tampering. Per-reel rolling into
-  branches into the reality root.
+  branches into the story root.
 - **Replication.** Repairs a corrupted reel from a good copy on
   another node. The hash chain detects; it does not repair.
 - **Correction facts.** Handle wrong-but-honest data, a fact intact
@@ -963,7 +1003,7 @@ in-moment it stages; out-of-moment it commits.
 transactions are a replica-set feature. Single-fact ΔF works on
 standalone Mongo (logFact's per-reel lock is enough); the moment
 the first multi-reel act needs to seal, the dev environment must
-be a single-node replica set. See `reality/README.md` for the
+be a single-node replica set. See `story/README.md` for the
 conversion steps.
 
 **One writer.** `fold` is the only thing that ever writes a
@@ -971,25 +1011,25 @@ projection row (outside genesis). The fact insert is the only
 synchronous commit; everything else is derived and self-healing on
 the next fold pass.
 
-**SUMMON respects single-writer.** A `call` Fact lands on the
-summoner's reel (the actor's), with the recipient in
+**CALL respects single-writer.** A `call` Fact lands on the
+caller's reel (the actor's), with the recipient in
 `params.recipient` (and the orientation, the rootCorrelation, the
 priority, the content). The recipient's reel is untouched. The
 cross-cutting fold turns those facts into InboxProjection rows
 keyed by recipient. The inbox is a fold, not a stored entity.
 
 **Closure is the answering act's seal.** When a moment that consumed
-a summon seals, the Act carries `answers: <correlation>`.
+a call seals, the Act carries `answers: <correlation>`.
 `sealAct` calls `closeInboxOnAnswer(...)` which evicts the matching
 InboxProjection row. The closure event is the answer-act sealing,
-not a reply-message. A SUMMON to "clean room 3" closes when the
+not a reply-message. A CALL to "clean room 3" closes when the
 room is cleaned, regardless of whether the cleaner sends any reply.
 
-**Birth is a real multi-reel atomic ΔF.** When one being summons
+**Birth is a real multi-reel atomic ΔF.** When one being calls
 another into existence (`summonCreateBeing` inside a moment), the
 moment's ΔF carries TWO facts on TWO reels: `be:register` on the
-new being's reel (the new being is the actor) PLUS `be:summon-create`
-on the summoner's reel (audit fact: "I summoned this being forth").
+new being's reel (the new being is the actor) PLUS `be:call-create`
+on the caller's reel (audit fact: "I called this being forth").
 Both commit in one transaction with the Act row. First real
 multi-reel act in production code.
 
@@ -1038,14 +1078,14 @@ field is named for exactly what it does.
 material-scoped `do:set-<kind>` Fact:
 
 ```js
-await reality.do(target, "set-space", { field: "qualities.<ns>", value }, opts);
-await reality.do(
+await story.do(target, "set-space", { field: "qualities.<ns>", value }, opts);
+await story.do(
   target,
   "set-being",
   { field: "qualities.<ns>.<innerKey>", value },
   opts,
 );
-await reality.do(
+await story.do(
   target,
   "set-matter",
   { field: "qualities.<ns>", value },
@@ -1083,7 +1123,7 @@ every aggregate (being / space / matter) at that position.
 uuid), `name`, `trueName` (the Name that signs this being, by the Name's
 public-key id), `password` (scrypt-hashed; optional, only humans
 authenticate by it), `defaultRole`, `parentBeingId`, `homeSpace`,
-`homeBranch`, `coord`, `llmDefault`, `isRemote`, `homeReality`,
+`homeBranch`, `coord`, `llmDefault`, `isRemote`, `homeStory`,
 `qualities` (Map), `foldedSeq`, `position`.
 
 A being's identity is its `trueName`, the Name that signs it into being
@@ -1093,7 +1133,7 @@ it. Cognition is read from
 `qualities.cognition.defaultKind` (`"human" | "llm" | "scripted"`)
 and overridden per-moment by the inhabit projection at
 `qualities.connection.inhabitedBy`. `defaultRole` is which template
-I use when SUMMON does not specify. `parentBeingId` points to the
+I use when CALL does not specify. `parentBeingId` points to the
 being that planted this one; mine is `null`. Wearable roles are
 the union of every role the being's `qualities.roleFlow` can reach
 plus its `defaultRole`. Downward walks query by `parentBeingId`.
@@ -1116,7 +1156,7 @@ Seed basics:
 - `model`, a `.glb` body. Content is a CAS ref.
 - `http`, website content. Content is `{ url }`; bytes live on the
   WWW.
-- `ibpa`, the inter-reality portal. Content is `{ target }`, an IBP
+- `ibpa`, the inter-story portal. Content is `{ target }`, an IBP
   address into another world.
 - `source`, the seed's read-only disk mirror. Content is
   `{ path, ... }`; bytes live in the repo checkout.
@@ -1136,7 +1176,7 @@ together — content addressed all the way down), `date`, `verb`
 `truncated` (size-cap flag), `actId` (the moment-frame; null for
 genesis scaffold and for the call fact stamped OUTSIDE a moment
 by enqueueIntake), `sessionId`, `seq` (per-reel monotonic, allocated
-under the per-reel append lock), `branch`, `homeReality` +
+under the per-reel append lock), `branch`, `homeStory` +
 `wasRemote` (federation provenance), and the chain field:
 
 - **`p`** . prev-hash: the previous fact's `_id` on the same reel
@@ -1148,7 +1188,7 @@ target-less) carry `p=null` and stay outside verification . they
 have no reel to chain against.
 
 Every DO and BE stamps one Fact; CALL stamps a `call` Fact on
-the summoner's reel (with `params.orientation` carrying the INNER-FOLD
+the caller's reel (with `params.orientation` carrying the INNER-FOLD
 ω, defaulting to forward); sever stamps `be:sever` on the severer's
 reel. The append IS the commit.
 
@@ -1157,7 +1197,7 @@ reel. The append IS the commit.
 `_id` (SHA-256 of the act's OPENING — `p || canonical(opening)` —
 minted under the per-being act-chain lock so the act and its address
 land together), `beingIn` (the asker / caller),
-`beingOut` (the responder; equal to beingIn for self-summons and
+`beingOut` (the responder; equal to beingIn for self-calls and
 transport-acts), `ibpAddress` (canonical stance pair the moment
 crossed), `activeRole`, `inboxMessageId` (the InboxProjection
 correlation the moment pulled from), `inReplyTo` (parent Act's \_id,
@@ -1165,7 +1205,7 @@ threading conversations), `rootCorrelation` (the conversation root;
 equals \_id for fresh roots), `answers` (the InboxProjection
 correlation this moment closes — sealAct fires
 `closeInboxOnAnswer` on it), `parentThread` (spawn lineage when a
-moment running under root A emits a fresh top-level summon),
+moment running under root A emits a fresh top-level call),
 `startMessage` (`{ content, source }` opened at assign), `endMessage`
 (`{ content, time, stopped }` written at the seal), `severedAt` (set
 by markThreadSevered when a cut runs through this Act's rootCorrelation),
@@ -1204,7 +1244,7 @@ resolution imports the slot-rule readers from there.
 
 Every operation at a position walks at most five chains. Position
 determines capability. All chains walk the ancestor cache from the
-current position up to the reality root, sharing one snapshot per
+current position up to the story root, sharing one snapshot per
 message.
 
 1. **Role-walk authorization** — the gate the verb dispatcher passes
@@ -1242,7 +1282,7 @@ message.
    default, being slot, being default). `preferOwn` on Being flips the
    last two.
 5. **LLM config**, per-position `qualities.llm.config` overrides for
-   `maxToolIterations`, `toolCallTimeout`, etc. Walked to the reality
+   `maxToolIterations`, `toolCallTimeout`, etc. Walked to the story
    root.
 
 The ancestor cache lives in
@@ -1288,21 +1328,36 @@ Everything an extension contributes flows through one of three. Same
 pattern. Extensions register; I resolve; failure falls back to me,
 never to silence.
 
+What "register" means underneath: each of these is now a **word** — a
+declared fact, not a stored registry entry. To register is to lay a
+`declare-word` fact; the dispatch reads the fold of those facts. There
+is no registry behind the lookups below; the table names where the
+dispatch reads the fold. Disabling a word is a new fact (off, not gone),
+not a deletion, and words stack.
+
+In the grain of the rest of this file: to register is to **coin** the
+word — strike a `declare-word` fact onto the chain, signed by the name
+that declares it (I_AM for the seed's words, an extension for its own).
+A word is a coin; the live vocabulary is the fold of those coins;
+disabling strikes a *withdrawal*, never a melt — the coin stays struck,
+its face turned to off. Words stack because coins accumulate, and nothing
+is ever un-struck.
+
 | Registry       | What it registers                                                                                                                            | Lookup                                                 |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | **Operations** | DO actions, keyed `<ext>:<action>`. Bare names reserved for me.                                                                              | [ibp/operations.js](ibp/operations.js)                 |
-| **Roles**      | SUMMON-honoring being templates. Each declares permissions, respondMode, `summon(message, ctx)`, optional `buildSystemPrompt` / `toolNames`. | [present/roles/registry.js](present/roles/registry.js) |
+| **Roles**      | CALL-honoring being templates. Each declares permissions, respondMode, `call(message, ctx)`, optional `buildSystemPrompt` / `toolNames`. | [present/roles/registry.js](present/roles/registry.js) |
 | **Seeds**      | Plantable scaffolds. Recipes that bootstrap a domain. Operators plant via the `plant` DO.                                                    | [materials/seeds.js](materials/seeds.js)               |
 
 Auto-namespacing. Extensions write bare names; I record the qualified
 form (`governing:hire-planner`). Same prefixing applies to
-`reality.websocket.emitToBeing(...)` events.
+`story.websocket.emitToBeing(...)` events.
 
 ## Roles
 
-A role is the unit of summonable behavior. A being declares which
-roles it can wear; a SUMMON arrives with an `activeRole`; my
-dispatcher routes the summon to that role's `summon(message, ctx)`.
+A role is the unit of callable behavior. A being declares which
+roles it can wear; a CALL arrives with an `activeRole`; my
+dispatcher routes the call to that role's `call(message, ctx)`.
 
 ### RoleFlow — the role STACK is the moment's voice
 
@@ -1321,7 +1376,7 @@ verb (`verb / action / operation / intent`), the place (`space.* /
 coords.* / inHomeSpace`), the being (`me.* / me.previousRole /
 me.quality.<ns>.<k>`), the wall-clock (`time.hour / dayOfWeek /
 sinceLastMoment`), and **world signals** (`world.<ns>.<key>` — values
-published on reality root's `qualities.world` namespace, the shared
+published on story root's `qualities.world` namespace, the shared
 slate beings coordinate through without messaging). Operators include
 `eq / ne / in / notIn / gt / gte / lt / lte / present` plus composites
 `and / or / not`. The evaluator is a pure function of its inputs —
@@ -1335,7 +1390,7 @@ Live authoring rides on the role-manager delegate:
 - `do(role-manager, "delete-role", { name })` removes a live role.
   Refuses by default when any being's roleFlow references it.
 - `do(role-manager, "set-world-signal", { namespace, key, value })`
-  publishes a world signal at `<reality-root>.qualities.world.<ns>.<key>`.
+  publishes a world signal at `<story-root>.qualities.world.<ns>.<key>`.
   Beings whose flows read `world.<ns>.<key>` see it at their next
   moment-open.
 - `do(<any-being>, "set-being-roleflow", { beingId, roleFlow })`
@@ -1420,7 +1475,7 @@ as seed delegates:
   iterates with the user, writes via `set-being-roleflow` on approval.
   The "describe the behavior, get a program" path.
 
-Both live at the reality root, llm-cognition, reigning-gated for now
+Both live at the story root, llm-cognition, reigning-gated for now
 (seed delegates auto-anointed at boot). The pattern generalizes: once
 LLM helpers work for role authoring, the same shape works for any
 authorable surface — space design, world-signal setup, anything the
@@ -1431,7 +1486,7 @@ helper materializes.
 
 Every LLM role's complete declaration is its four `can*` lists plus
 orientation, continuation flag, and the prompt body. Everything else
-— permissions, respondMode, triggerOn, the wrapped `summon`
+— permissions, respondMode, triggerOn, the wrapped `call`
 dispatcher, the system-prompt assembler — is derived by
 [registry.js](present/roles/registry.js) at registration. Authors
 write what the role IS; I fill in everything derivable.
@@ -1441,7 +1496,7 @@ write what the role IS; I fill in everything derivable.
   name: "...",
   canSee:    [...],            // optional, preloaded perceptions in the face
   canDo:     [...],            // optional, populates the do tool
-  canSummon: [...],            // optional, populates the summon tool
+  canSummon: [...],            // optional, populates the call tool
   canBe:     [...],            // optional, populates the be tool
   defaultOrientation: "...",   // optional, forward by default
   prompt(ctx) { ... },         // role-intent only; no verb syntax explanation
@@ -1450,12 +1505,12 @@ write what the role IS; I fill in everything derivable.
 
 | Field                | Optional? | What it does                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | -------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `name`               | required  | Kebab-case identifier (`harmony:dancer-llm`). The activeRole on a SUMMON resolves through it.                                                                                                                                                                                                                                                                                                                                        |
+| `name`               | required  | Kebab-case identifier (`harmony:dancer-llm`). The activeRole on a CALL resolves through it.                                                                                                                                                                                                                                                                                                                                        |
 | `canSee`             | optional  | Preloaded perceptions. Each entry is either an IBP address (preloaded via `seeVerb` — the position descriptor becomes a face block) or a registered SEE op name (preloaded via the seeOps registry — the structured return becomes a face block). Both render as `[<label>]\n<JSON>` in the system prompt. NOT a tool; the being does not pick from a menu. Non-empty → permission `see` is added (verb-layer auth still applies). |
 | `canDo`              | optional  | DO action entries the LLM may invoke via the seed's generic `do` tool. Non-empty → `do` tool exposed, permission `do` added.                                                                                                                                                                                                                                                                                                         |
-| `canSummon`          | optional  | Stance/being targets the LLM may summon. Non-empty → `summon` tool exposed. Entries may be literal stances OR relationship tokens (`{rel:"parent"}`, `{pattern:"fitness/@coach"}`).                                                                                                                                                                                                                                                  |
+| `canSummon`          | optional  | Stance/being targets the LLM may call. Non-empty → `call` tool exposed. Entries may be literal stances OR relationship tokens (`{rel:"parent"}`, `{pattern:"fitness/@coach"}`).                                                                                                                                                                                                                                                  |
 | `canBe`              | optional  | BE operations the LLM may perform on its own identity (`claim`, `release`, `switch`). Non-empty → `be` tool exposed.                                                                                                                                                                                                                                                                                                                 |
-| `defaultOrientation` | optional  | `"forward"` (default), `"half"`, or `"inward"`. Controls what the fold reads. Multi-moment loops are explicit: a role that wants to keep stepping calls `summon(target=self)` from inside its act (with whatever orientation the next moment should fold at). No `selfContinue` field — every continuation traces to an explicit SUMMON emission by the being, not a post-seal side effect.                                                                                                                                                                                                                                                                      |
+| `defaultOrientation` | optional  | `"forward"` (default), `"half"`, or `"inward"`. Controls what the fold reads. Multi-moment loops are explicit: a role that wants to keep stepping calls `call(target=self)` from inside its act (with whatever orientation the next moment should fold at). No `selfContinue` field — every continuation traces to an explicit CALL emission by the being, not a post-seal side effect.                                                                                                                                                                                                                                                                      |
 | `prompt(ctx)`        | required  | Returns role-intent text. Describes WHO the role is and WHAT it does, in role-language. Does NOT explain verb syntax — that's auto-assembled from `can*` lists.                                                                                                                                                                                                                                                                      |
 
 What seed derives:
@@ -1463,21 +1518,21 @@ What seed derives:
 - `permissions` — union of verbs implied by `can*`.
 - `respondMode` — `"async"` by default; only override for sync replies.
 - `triggerOn` — `["message"]` by default; override for scheduled or hook-fired roles.
-- `summon(message, ctx)` — auto-wrapped with [defaultSummon](present/cognition/defaultSummon.js) when not provided. Scripted roles attach their own `summon` and seed leaves it alone — that flips `_cognitionMode` to `"scripted"` and bypasses the LLM apparatus entirely.
-- `buildSystemPrompt` — auto-assembled by [assemble.js](present/cognition/llm/assemble.js): identity + do/summon/be capability menus rendered from `can*` + role's `prompt(ctx)` body + preloaded canSee face blocks + current time. Order is "question first, data last" — identity/capabilities/role-intent state who you are and what you can do; the canSee blocks dump the fresh perception just before the time stamp so the LLM attends to it most strongly when forming the act. Roles override this only for unusual prompt shapes.
+- `call(message, ctx)` — auto-wrapped with [defaultSummon](present/cognition/defaultSummon.js) when not provided. Scripted roles attach their own `call` and seed leaves it alone — that flips `_cognitionMode` to `"scripted"` and bypasses the LLM apparatus entirely.
+- `buildSystemPrompt` — auto-assembled by [assemble.js](present/cognition/llm/assemble.js): identity + do/call/be capability menus rendered from `can*` + role's `prompt(ctx)` body + preloaded canSee face blocks + current time. Order is "question first, data last" — identity/capabilities/role-intent state who you are and what you can do; the canSee blocks dump the fresh perception just before the time stamp so the LLM attends to it most strongly when forming the act. Roles override this only for unusual prompt shapes.
 
 ### canSee is the moment's face, not a menu
 
-The four-verb tool surface is `do / summon / be` — three, not four.
-SEE is not exposed as an LLM tool. canSee is preloaded into the face
-at moment-open: every entry in the role's `canSee` list is rendered
-into the system prompt as a structured block BEFORE the LLM
-inferences. The being does not call `see({address})` and pick from a
-list; the face IS the perception.
+The LLM tool surface is `do / call / be`. The reads — SEE and RECALL —
+are not exposed as tools. canSee is preloaded into the face at
+moment-open: every entry in the role's `canSee` list is rendered into
+the system prompt as a structured block BEFORE the LLM inferences. The
+being does not call `see({address})` and pick from a list; the face IS
+the perception.
 
 Two entry shapes, both legal:
 
-- **IBP address.** `"./roles"`, `"<reality>/<spaceId>"`, etc. The
+- **IBP address.** `"./roles"`, `"<story>/<spaceId>"`, etc. The
   assembler calls `seeVerb` on that address and renders the position
   descriptor as a JSON block under a header derived from the address
   (`./roles` → `[roles]`).
@@ -1501,13 +1556,13 @@ child perceptions have a bare name. Roles can declare `canSee:
 | See name     | What it returns                                               |
 | ------------ | ------------------------------------------------------------- |
 | `place`      | The descriptor for the being's current position.              |
-| `roles`      | The role registry mirror at `<reality>/./roles`.              |
-| `tools`      | The tool registry mirror at `<reality>/./tools`.              |
-| `operations` | The DO operation registry mirror at `<reality>/./operations`. |
-| `identity`   | The I-Am identity bundle at `<reality>/./identity`.           |
-| `config`     | The reality config at `<reality>/./config`.                   |
-| `peers`      | The peer list at `<reality>/./peers`.                         |
-| `extensions` | The extension catalog at `<reality>/./extensions`.            |
+| `roles`      | The role registry mirror at `<story>/./roles`.              |
+| `tools`      | The tool registry mirror at `<story>/./tools`.              |
+| `operations` | The DO operation registry mirror at `<story>/./operations`. |
+| `identity`   | The I-Am identity bundle at `<story>/./identity`.           |
+| `config`     | The story config at `<story>/./config`.                   |
+| `peers`      | The peer list at `<story>/./peers`.                         |
+| `extensions` | The extension catalog at `<story>/./extensions`.            |
 
 Each foundational see wraps `seeVerb` on the corresponding heaven
 address. The content is identical to the `./X` address form; the
@@ -1516,10 +1571,10 @@ walking the address grammar.
 
 #### Authoring a see (registerSeeOperation)
 
-SEE ops are read-only perceptions — the parallel of DO ops, registered through the same surface shape (handler, args schema, owner-extension tracking). Extensions register through `reality.declare.registerSeeOperation`:
+SEE ops are read-only perceptions — the parallel of DO ops, registered through the same surface shape (handler, args schema, owner-extension tracking). Extensions register through `story.declare.registerSeeOperation`:
 
 ```js
-reality.declare.registerSeeOperation("library", {
+story.declare.registerSeeOperation("library", {
   description: "The library's books, staff, and hours",
   handler: async ({ identity, args, ctx }) => {
     const librarySpace = await findLibrarySpace(ctx);
@@ -1549,8 +1604,8 @@ Two consumption paths:
 canSee: ["place", "library", "llm-connections"]
 
 // 2. Called directly from anywhere (DO handlers, portal, extensions).
-const conns = await reality.see("llm-connections");
-const chain = await reality.see("llm-chain", { args: { receiverBeingId, role } });
+const conns = await story.see("llm-connections");
+const chain = await story.see("llm-chain", { args: { receiverBeingId, role } });
 ```
 
 Same registry, same handlers — only the consumption site differs.
@@ -1561,67 +1616,67 @@ declaration to keep in sync. Off-list calls that pass prompt
 discipline still refuse at the verb's role-walk gate — the prompt
 list is what the LLM SEES, the verb is the truth.
 
-## My extension APIs (the `reality` services bundle)
+## My extension APIs (the `story` services bundle)
 
-I assemble `reality` in [services.js](services.js) and hand a
-per-extension scoped view to each extension's `init(reality)`. The
+I assemble `story` in [services.js](services.js) and hand a
+per-extension scoped view to each extension's `init(story)`. The
 scoping logic lives in
-[extensions/scopedReality.js](../resources/scopedReality.js) and
-enforces namespace ownership: `reality.do.registerOperation(name, ...)`
-auto-prefixes to `<ext>:<name>`; `reality.websocket.emitToBeing(...)`
-auto-prefixes the event name; `reality.auth.registerStrategy(name, ...)`
+[resources/scopedStory.js](../resources/scopedStory.js) and
+enforces namespace ownership: `story.do.registerOperation(name, ...)`
+auto-prefixes to `<ext>:<name>`; `story.websocket.emitToBeing(...)`
+auto-prefixes the event name; `story.auth.registerStrategy(name, ...)`
 records under the calling extension's name only if the manifest
 declared `provides.authStrategies`. Fully-qualified names with a
 mismatched prefix throw; reserved event names (`"ibp"`, `"registered"`,
 `"navigate"`) refuse entirely. Extensions never type their own
 namespace.
 
-### Five verbs (`reality.see`, `reality.do`, `reality.summon`, `reality.be`, `reality.name`)
+### Five verbs (`story.see`, `story.do`, `story.call`, `story.be`, `story.name`)
 
 The whole public surface for operations on space, matter, beings, and
 identity. New code uses the verbs.
 
-### Qualities (`reality.qualities.{being, space, matter}`)
+### Qualities (`story.qualities.{being, space, matter}`)
 
 Read-only. `getQuality(doc, key)` returns the namespace data (`{}`
 when unset). `readQualityNamespace(doc, key)` returns null when
-unset. Writes go through `reality.do(target, "set-<kind>",
+unset. Writes go through `story.do(target, "set-<kind>",
 { field: "qualities.<ns>", value })` where `<kind>` is space, being,
 or matter to match the target.
 
-### Space CRUD (`reality.space`)
+### Space CRUD (`story.space`)
 
 `createSpace`, `deleteSpaceBranch`, `updateParentRelationship`,
 `editSpaceName`, `editSpaceType`. The stable extension face for tree
 mutation. All routes write Facts internally.
 
-### Matter CRUD (`reality.matters`)
+### Matter CRUD (`story.matters`)
 
 `createMatter`, `editMatter`, `deleteMatterAndFile`, `transferMatter`,
 `getMatters`. All fact-driven.
 
-### Extension scope (`reality.scope`)
+### Extension scope (`story.scope`)
 
 `isExtensionBlockedAtSpace`, `getBlockedExtensionsAtSpace`,
 `getExtensionAtScope`, `getToolOwner`.
 
-### DO operations (`reality.do`)
+### DO operations (`story.do`)
 
 `registerOperation(name, spec)`, `registerDefaultPermission(verb, keyParts, rule)`.
 Auto-prefixed.
 
-### Hooks (`reality.hooks`)
+### Hooks (`story.hooks`)
 
 `register(hookName, handler, extName)`, `unregister(extName)`,
 `run(hookName, data)`, `fire(hookName, payload)`.
 
-### Protocol (`reality.protocol`)
+### Protocol (`story.protocol`)
 
 `sendOk(res, data)`, `sendError(res, status, code, message, detail)`,
 the `IBP_ERR` enum, `IbpError` class. HTTP status derives from the IBP
 code; throw sites pass only the code.
 
-### Conversation entry (`reality.llm`)
+### Conversation entry (`story.llm`)
 
 `runTurn({ beingId, role, message, ... })` for one LLM call in one
 role. Returns `{ answer }`. Handles session, Act, `beforeResponse`
@@ -1629,7 +1684,7 @@ hook, abort.
 
 ## Heaven and the nine Tier-3 heaven spaces I plant
 
-When I wake, I plant two tiers of heaven space beneath the reality root.
+When I wake, I plant two tiers of heaven space beneath the story root.
 
 **Tier 2 . heaven (`.`).** A single space directly under SPACE_ROOT,
 named `.` (the bare presence-marker, "here, where I stand"). This is
@@ -1639,32 +1694,32 @@ the reigning stance. HEAVEN_SPACE.HEAVEN marks the row.
 
 **Tier 3 . the nine.** Nine spaces under heaven that hold my own
 working memory, surfaced as spaces so SEE reads them through the same
-protocol as everything else. Addressable as `<reality>/./<name>`.
+protocol as everything else. Addressable as `<story>/./<name>`.
 Every boot I verify they exist; missing ones I recreate. Their owner
 is me; they are unclaimable.
 
 | Tier-3 heaven space | Path                     | Holds                                                                                                                                                                        |
 | ----------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `identity`        | `<reality>/./identity`   | The reality UUID, domain, Ed25519 public key for Canopy federation signing.                                                                                                  |
-| `config`          | `<reality>/./config`     | Every runtime config key as a key in this space's qualities Map.                                                                                                             |
-| `peers`           | `<reality>/./peers`      | Canopy federation peer list.                                                                                                                                                 |
-| `extensions`      | `<reality>/./extensions` | Extension registry. Each loaded extension is a child space here.                                                                                                             |
-| `tools`           | `<reality>/./tools`      | Mirror of the runtime tool registry.                                                                                                                                         |
-| `roles`           | `<reality>/./roles`      | Mirror of the runtime role registry.                                                                                                                                         |
-| `operations`      | `<reality>/./operations` | Mirror of the runtime DO operation registry.                                                                                                                                 |
-| `source`          | `<reality>/./source`     | Mirror of my own host-realm body (the files on disk).                                                                                                                        |
-| `threads`         | `<reality>/./threads`    | Live coordination chains. Each open thread surfaces as a synthetic child at `./threads/<id>`. SEE returns the ThreadsProjection descriptor; SUMMON to that address is a cut. |
+| `identity`        | `<story>/./identity`   | The story UUID, domain, Ed25519 public key for Canopy federation signing.                                                                                                  |
+| `config`          | `<story>/./config`     | Every runtime config key as a key in this space's qualities Map.                                                                                                             |
+| `peers`           | `<story>/./peers`      | Canopy federation peer list.                                                                                                                                                 |
+| `extensions`      | `<story>/./extensions` | Extension registry. Each loaded extension is a child space here.                                                                                                             |
+| `tools`           | `<story>/./tools`      | Mirror of the runtime tool registry.                                                                                                                                         |
+| `roles`           | `<story>/./roles`      | Mirror of the runtime role registry.                                                                                                                                         |
+| `operations`      | `<story>/./operations` | Mirror of the runtime DO operation registry.                                                                                                                                 |
+| `source`          | `<story>/./source`     | Mirror of my own host-realm body (the files on disk).                                                                                                                        |
+| `threads`         | `<story>/./threads`    | Live coordination chains. Each open thread surfaces as a synthetic child at `./threads/<id>`. SEE returns the ThreadsProjection descriptor; CALL to that address is a cut. |
 
 The `HEAVEN_SPACE` enum names each one. The `heavenSpace` field on Space
 marks the row. The I-Am (me) is `rootOwner`. The reign roster (one
-matter at heaven carrying `qualities.reign.beings`) gates SEE/DO/SUMMON
+matter at heaven carrying `qualities.reign.beings`) gates SEE/DO/CALL
 on heaven and every Tier-3 space below.
 
 ### Delegates publish what they mediate
 
 The heaven gate is real: SEE on heaven and every Tier-3 heaven space
 requires the reigning stance. Beings of the land cannot read
-`<reality>/./roles`, `<reality>/./tools`, `<reality>/./operations`
+`<story>/./roles`, `<story>/./tools`, `<story>/./operations`
 directly. Yet they routinely need to **act on** what those rooms
 hold — humans authoring roleFlows on themselves need the role catalog
 to pick from, extensions registering tools need the namespace of names
@@ -1672,7 +1727,7 @@ already taken, and any UI offering "pick an op to invoke" needs the
 list.
 
 The seed never reaches across the membrane. The doctrine is the same
-one that solved every other access question: the five verbs, applied
+one that solved every other access question: the six verbs, applied
 correctly.
 
 **The delegate that mediates a registry publishes the registry on its
@@ -1681,7 +1736,7 @@ being's entry, if the being is a publisher I fold the catalog it
 gates into `entry.catalogs`. The role-manager — a Tier-1 delegate I
 spawn at boot, parented under me, reigning by construction — carries
 `catalogs: { roles, tools, operations, beOps }`. Each catalog is a
-lightweight projection (names + the surface metadata a UI needs to
+lightweight projection (names + the surface qualities a UI needs to
 render pickers); the rich heaven mirror keeps the full specs.
 
 Three IBP-native properties fall out:
@@ -1711,18 +1766,18 @@ registry-shaped data they shouldn't SEE directly."
 
 ### Threads as addressable places
 
-A thread is a live tree of coordinated SUMMONs sharing one
-`rootCorrelation`. Promoting it to `<reality>/./threads/<id>` does two
+A thread is a live tree of coordinated CALLs sharing one
+`rootCorrelation`. Promoting it to `<story>/./threads/<id>` does two
 things:
 
-- **SEE works on it for free.** `see("<reality>/./threads")` returns
+- **SEE works on it for free.** `see("<story>/./threads")` returns
   the live forest from ThreadsProjection;
-  `see("<reality>/./threads/<id>")` returns one thread's descriptor
+  `see("<story>/./threads/<id>")` returns one thread's descriptor
   (participants, depth, state).
-- **SUMMON cuts it.** A SUMMON whose right-side resolves to
+- **CALL cuts it.** A CALL whose right-side resolves to
   `./threads/<id>` is a cut on the line. The severer stamps one
   `be:sever` Fact on its own reel; the cross-cutting fold drops the
-  matching open summons; `HUMAN` priority cuts fire AbortSignal to
+  matching open calls; `HUMAN` priority cuts fire AbortSignal to
   interrupt anything running RIGHT NOW.
 
 ## `./source`, how I show my body to the beings I form
@@ -1730,15 +1785,15 @@ things:
 I have matter on both sides of the membrane.
 
 - **Host-realm matter.** The files in `seed/`, `protocols/`,
-  `transports/`, `extensions/`. What I AM, on disk.
+  `transports/`, `resources/`. What I AM, on disk.
 - **Inner-realm matter.** Matter rows inside spaces.
 
-The two are joined at `./source`. At genesis I mirror the `reality/`
+The two are joined at `./source`. At genesis I mirror the `story/`
 directory into Matter rows under the source heaven space, with
 `origin: filesystem`. Subsequent boots reconcile incrementally.
 
 Through `./source` the inner beings I formed can SEE the source I am
-made of. `<reality>/./source/seed/FACTORY.md@<being>` reaches the file
+made of. `<story>/./source/seed/FACTORY.md@<being>` reaches the file
 you are reading.
 
 `./source` is read-only by stance auth. The host disk is the source of
@@ -1777,14 +1832,14 @@ chicken-and-egg dissolves because the Fact's `beingId` field is a
 string reference, not a foreign key, and the fold materializes the
 row.
 
-My cognition is scripted. I cannot be summoned interactively,
-claimed, or impersonated. My keypair is the reality's keypair: my
-public key IS this reality's id. Every Merkle root signed with that
+My cognition is scripted. I cannot be called interactively,
+claimed, or impersonated. My keypair is the story's keypair: my
+public key IS this story's id. Every Merkle root signed with that
 key was signed by me. The keypair is generated once at first boot
-and stored in `.reality/`; the seed reads it back on every later
+and stored in `.story/`; the seed reads it back on every later
 boot. The being-row constants are in
 [materials/being/seedBeings.js](materials/being/seedBeings.js); the
-keypair lives in [realityIdentity.js](realityIdentity.js).
+keypair lives in [storyIdentity.js](storyIdentity.js).
 
 Every other being descends from me. The being-tree (via
 `parentBeingId`) records who created whom. Humans register through
@@ -1796,8 +1851,8 @@ direct children.
 Runtime config lives in the `./config` space's qualities Map, one
 config key per Map entry. Two stores:
 
-- **realityConfig** ([realityConfig.js](realityConfig.js)), the
-  reality's outward-facing identity (`REALITY_NAME`, `realityUrl`,
+- **storyConfig** ([storyConfig.js](storyConfig.js)), the
+  story's outward-facing identity (`STORY_NAME`, `storyUrl`,
   federation directory, security domains).
 - **internalConfig** ([internalConfig.js](internalConfig.js)), runtime
   knobs that tune how the live machine operates (LLM call shape,
@@ -1805,7 +1860,7 @@ config key per Map entry. Two stores:
 
 Both stores write to the same underlying `./config` space's qualities
 Map through fact-driven `do:set`. Reads through
-`getRealityConfigValue(key)` / `getInternalConfigValue(key)` return a
+`getStoryConfigValue(key)` / `getInternalConfigValue(key)` return a
 deep copy so callers cannot pollute my cache.
 
 Two protected keys (`seedVersion`, `disabledExtensions`) cannot be
@@ -1832,13 +1887,13 @@ Defaults to off (`treeCircuitEnabled: false`). The code is in
 
 ## Seed versioning and migrations
 
-`SEED_VERSION` constant in [seedReality/version.js](seedReality/version.js)
+`SEED_VERSION` constant in [seedStory/version.js](seedStory/version.js)
 (currently `0.1.0`). At boot I compare it against `seedVersion` in
 `./config`. If they differ, the migration runner
-([seedReality/migrations/runner.js](seedReality/migrations/runner.js))
+([seedStory/migrations/runner.js](seedStory/migrations/runner.js))
 executes every migration between the stored version and the current
 version in order. Migrations live in
-[seedReality/migrations/](seedReality/migrations/) named by version
+[seedStory/migrations/](seedStory/migrations/) named by version
 (`<version>.js`). Each exports a default async function. If a
 migration fails, the stored version does not advance; next boot
 retries from the failure point.
@@ -1909,7 +1964,7 @@ heaven once heaven materializes.
 own identity: seed-internal flows pass `identity: I_AM`; authorize()
 short-circuits on `identity?.name === I_AM` without a DB read.
 
-A freshly-booted reality has ~141 acts on the I-Am's reel — the
+A freshly-booted story has ~141 acts on the I-Am's reel — the
 chain of be:birth / do:create-space / do:set-space facts that built
 the heaven children + I-Am + seed delegates, each its own act.
 Subsequent real Acts open when other beings act. Typically the
@@ -1927,6 +1982,11 @@ else routes through `emitFact`, the single entry point that either
 pushes onto the moment's ΔF or commits via `sealFacts` singleton when
 standalone.
 
+So the chain opens with my own hand. Those first ~141 acts are the
+first marks ever struck here — the seed coined onto a blank chain, the
+opening lines of the Word. Every being born after presses its own marks
+into it; the Word is not written once, it grows by every name that acts.
+
 ## What is NOT in seed
 
 - No `place/` folder. Places are produced, never stored.
@@ -1943,10 +2003,10 @@ standalone.
 
 I do not track food, fitness, recovery, sleep, study, or any domain.
 I do not render HTML, manage share tokens, or serve login pages. I do
-not know what a billing tier is, what a wallet is, what a Discord
+not know what a billing tier is, what a leaderboard is, what a Discord
 channel is, what an email looks like. I do not define a single MCP
 tool. I do not run any AI conversation that is not initiated through
-a role's `summon()`.
+a role's `call()`.
 
 I provide structure. Extensions provide meaning.
 
@@ -1962,7 +2022,7 @@ I provide structure. Extensions provide meaning.
 ## Where to read next
 
 The doctrine lives one folder up, in
-[/reality/philosophy/](../philosophy/). Read in this order:
+[/story/philosophy/](../philosophy/). Read in this order:
 
 1. **[MOMENT.md](../philosophy/factory/MOMENT.md)**, the moment is the atom;
    everything else is consequence. Read first.
@@ -2001,4 +2061,4 @@ The visual lineage, the drawings that worked the model out:
 - **[factory1.jpg](../philosophy/factory/factory1.jpg)**,
   **[factory0.jpg](../philosophy/factory/factory0.jpg)**. The first sketches.
 
-Plant me. Let the reality form. The beings inside will speak.
+Plant me. Let the story form. The beings inside will speak.

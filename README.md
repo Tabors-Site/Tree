@@ -27,7 +27,7 @@ Everything lives in [`story/`](story/). Start there.
 - [`story/philosophy/`](story/philosophy/), the doctrine
 - [`story/philosophy/I_AM.md`](story/philosophy/I_AM.md), the cryptographic root
 - [`story/philosophy/theorems.md`](story/philosophy/theorems.md), the formal results
-- [`story/extensions/README.md`](story/extensions/README.md), building extensions
+- [`story/resources/README.md`](story/resources/README.md), building extensions
 
 ## License
 

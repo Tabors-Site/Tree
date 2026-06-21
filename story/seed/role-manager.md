@@ -14,12 +14,12 @@ This plan is structured to be built in order. Each section names what the substr
 
 **RoleFlow** is a declarative, world-reactive system for composing a being's behavioral context at every moment.
 
-**A being's effective role stack at any moment is the result of evaluating its RoleFlow against the current fold of Reality.**
+**A being's effective role stack at any moment is the result of evaluating its RoleFlow against the current fold of Story.**
 
 Three layered concepts make this work:
 
 - **Being** — what something IS. Identity. Persists across moments. Carries `qualities.cognition.defaultKind`, `qualities.roleFlow`, and other persistent qualities.
-- **Role** — what a being WEARS. Permissions (canSee/canDo/canSummon/canBe) plus a system prompt plus optional `requiredCognition`. Roles are world data, stored at reality root, authored at runtime, composable.
+- **Role** — what a being WEARS. Permissions (canSee/canDo/canSummon/canBe) plus a system prompt plus optional `requiredCognition`. Roles are world data, stored at story root, authored at runtime, composable.
 - **Cognition** — how acts are PRODUCED. Three closed values: `"llm"`, `"human"`, `"scripted"`. Lives on the being, not the role. Computed at moment-assign as `qualities.inhabit ? "human" : qualities.cognition.defaultKind`.
 
 The doctrinal sentence to commit to FACTORY.md:
@@ -134,7 +134,7 @@ Permissions union. System prompts concatenate in stack order, separated by a div
 In the moment lifecycle, at moment-assign time, before fold:
 
 1. Read the being's `qualities.roleFlow`.
-2. Read the wake envelope (who summoned, why, what carrying).
+2. Read the wake envelope (who called, why, what carrying).
 3. Read the world state via SEE (the being's current space, position, neighbors, time of day, etc. — anything in the condition vocabulary).
 4. Evaluate roleFlow → composed role stack.
 5. Pass composed stack to fold (the fold respects the stack's canSee).
@@ -166,7 +166,7 @@ The expressive surface of the RoleFlow is determined by what conditions can be e
 
 **What:**
 
-- `verb` — "see" | "do" | "summon" | "be"
+- `verb` — "see" | "do" | "call" | "be"
 - `action` — DO action name
 - `operation` — BE op name
 - `intent` — classified message intent (if available)
@@ -207,7 +207,7 @@ qualities.roleFlow = [
   // Primary role selection
   { when: { connectedFrom: { eq: "$me.parent.beingId" } }, role: "human" },
   {
-    when: { and: [{ verb: "summon" }, { "caller.role": "human" }] },
+    when: { and: [{ verb: "call" }, { "caller.role": "human" }] },
     role: "human_conversationalist",
   },
   {
@@ -248,7 +248,7 @@ The condition vocabulary is a pure function. Same inputs always produce the same
 
 ### Storage
 
-Roles are stored at reality root in a canonical registry. One definition per role name. Edit once, propagate everywhere a being's roleFlow references that role name.
+Roles are stored at story root in a canonical registry. One definition per role name. Edit once, propagate everywhere a being's roleFlow references that role name.
 
 Role spec:
 
@@ -283,7 +283,7 @@ Role spec:
 Roles can come from three places:
 
 - **`origin: "extension"`** — registered by an extension's manifest. Standard library.
-- **`origin: "seed"`** — registered by reality root at boot. Built into the substrate.
+- **`origin: "seed"`** — registered by story root at boot. Built into the substrate.
 - **`origin: "live"`** — authored at runtime by a being with `canDo: ["create-role"]`. Stored on the chain as a fact; the registry rehydrates from facts.
 
 Live roles are first-class. The registry treats them identically to extension/seed roles. The role-manager being can author them via its UI.
@@ -414,7 +414,7 @@ The structural prerequisite. Touches every reader of `operatingMode`.
 - Every reader of `being.operatingMode` becomes `beingCognition(being)`.
 - Every writer of `operatingMode` at birth/plant migrates to `qualities.cognition.defaultKind`.
 - Cherub's registration path sets `defaultKind: "human"` for identity beings.
-- Birther's create-being uses substrate default: `defaultKind: "llm"` with the reality's default LLM connector.
+- Birther's create-being uses substrate default: `defaultKind: "llm"` with the story's default LLM connector.
 - Seed delegates (cherub, llm-assigner, arrival, drummer, etc.) get appropriate defaultKinds per existing operatingMode values.
 
 **Inhabit:**
@@ -493,7 +493,7 @@ Enables authoring roles at runtime via the chain.
 
 **Auth:**
 
-- `create-role` requires `canDo: ["create-role"]` on the calling being's effective role stack. By default, only reality-manager and explicitly-authorized roles have this.
+- `create-role` requires `canDo: ["create-role"]` on the calling being's effective role stack. By default, only story-manager and explicitly-authorized roles have this.
 
 **Verify:**
 
@@ -501,15 +501,15 @@ Enables authoring roles at runtime via the chain.
 - Reference the new role in a being's roleFlow. Confirm it composes correctly.
 - Restart. Confirm the role persists (rehydrated from chain).
 
-### Step 5: Reality-manager and role-manager beings + UI
+### Step 5: Story-manager and role-manager beings + UI
 
 The operator-facing authoring surface.
 
 **Substrate changes:**
 
-- Seed plant: `role-manager` being at reality root, with `canDo: ["create-role", "update-role", "delete-role"]` and reigning permissions.
+- Seed plant: `role-manager` being at story root, with `canDo: ["create-role", "update-role", "delete-role"]` and reigning permissions.
 - Role-manager's descriptor entry publishes `catalogs: { roles, permissions, beOps, operations }` (the delegate-as-catalog pattern from earlier).
-- Reality-manager's descriptor entry publishes whatever managerial catalogs are needed.
+- Story-manager's descriptor entry publishes whatever managerial catalogs are needed.
 
 **Portal UI:**
 
@@ -543,7 +543,7 @@ The mechanism that makes patterns 1, 2, and 5 (environmental, coordination, time
 **Substrate changes:**
 
 - Add `world.<namespace>.<key>` to the condition vocabulary.
-- World signals are read from space qualities — typically published on the reality root or on space qualities of relevant rooms.
+- World signals are read from space qualities — typically published on the story root or on space qualities of relevant rooms.
 - New DO op `set-world-signal` (or just `set-space-quality` if it covers the use case): writes to a space's qualities.
 
 **Verify:**
@@ -620,7 +620,7 @@ This is the doctrinal landing for what TreeOS is, finalized:
 
 TreeOS is a declarative behavioral programming substrate where the world itself is the source of truth and the trigger for behavior. Beings are reactive programs whose behavior at every moment is composed from a stack of roles, where the stack is determined by RoleFlow — conditional rules reading the world's current fold. Cognition (LLM, human, or scripted) is the universal-fallback leaf operation that produces acts within the composed role context. Roles are world data: authored at runtime, composable, replayable. The chain is the program; replay is the debugger; the substrate is the runtime.
 
-Roles + RoleFlow + the condition vocabulary form a small language for programming beings. Stacking gives combinatorial expressiveness from primitive role definitions. World signals enable coordination without message-passing. Spaces with qualities program their inhabitants. The reality-manager is the IDE.
+Roles + RoleFlow + the condition vocabulary form a small language for programming beings. Stacking gives combinatorial expressiveness from primitive role definitions. World signals enable coordination without message-passing. Spaces with qualities program their inhabitants. The story-manager is the IDE.
 
 The build plan above implements this architecture in seven core steps. Each step is independently testable, removes old mess, and stays primitive — no new substrate primitives beyond `qualities.cognition`, `qualities.roleFlow`, optional `requiredCognition` on roles, and the condition-vocabulary evaluator. Everything else is data and authoring conventions.
 
@@ -634,7 +634,7 @@ Comprehensive breakdown of everything that landed from the spec.
    New primitives in seed/present/roles/:
 
 roleFlow.js — pure evaluator. resolveActiveStack({ toBeing, entry, handoff, space, callerEnrichment, previousMoment, now, worldSignals }) returns [primary, ...modifiers]. Walks clauses, filters by requiredCognition, first-match-wins for primary, all matches for stacked. ~370 lines.
-roleComposer.js — folds the stack into one role-shaped spec. Unions canSee/canDo/canSummon/canBe/permissions. Composes prompts with named modifier framing ("Additionally, you are currently in this mode — emotions:bored: <body>") rather than bare divider. Primary's summon handler propagates for scripted dispatch. ~180 lines.
+roleComposer.js — folds the stack into one role-shaped spec. Unions canSee/canDo/canSummon/canBe/permissions. Composes prompts with named modifier framing ("Additionally, you are currently in this mode — emotions:bored: <body>") rather than bare divider. Primary's call handler propagates for scripted dispatch. ~180 lines.
 role-manager/role.js — role-manager delegate definition. canDo = set-role, delete-role, set-world-signal.
 role-manager/ops.js — the three DO ops (below).
 birther/role.js — authenticated-mint delegate (existed earlier, unchanged here).
@@ -661,7 +661,7 @@ Added in qualities qualities.roleFlow — array of { when?, role, stack? } claus
 Added in qualities (projected) qualities.connection.inhabitedBy — set/cleared by BE:connect / BE:release reducer
 Space row qualities (no schema change, new convention):
 
-qualities.world.<namespace>.<key> — world signals namespace on reality-root space
+qualities.world.<namespace>.<key> — world signals namespace on story-root space
 Roles registry (in-memory, not schema):
 
 requiredCognition field added to role spec
@@ -675,8 +675,8 @@ All registered through seed/present/roles/role-manager/ops.js:
 Op Purpose Refusal mode
 set-role Create/replace live role at ./roles/<name> AND hot-register into the in-memory registry Persisted to .roles mirror; in-memory hot-register error surfaces but mirror write succeeds
 delete-role Remove a live role Refuses with usage list when any being's roleFlow or defaultRole references it; force:true bypasses
-set-world-signal Write <reality-root>.qualities.world.<namespace>.<key> Validates kebab-case namespace + key segments
-Plumbing change in seed/scopedReality (now resources/scopedReality.js): declare.registerRole now auto-passes manifest.name as the third arg, so extension-registered roles get origin: "<ext-name>" instead of falsely tagged as "seed".
+set-world-signal Write <story-root>.qualities.world.<namespace>.<key> Validates kebab-case namespace + key segments
+Plumbing change in seed/scopedStory (now resources/scopedStory.js): declare.registerRole now auto-passes manifest.name as the third arg, so extension-registered roles get origin: "<ext-name>" instead of falsely tagged as "seed".
 
 BE:birth extended in seed/ibp/verbs/be.js: Payload now accepts roleFlow (array or JSON string). Threads through summonCreateBeing → createBeingWithHome → createBeing → stamps qualities.roleFlow at birth.
 
@@ -686,16 +686,16 @@ BE:birth extended in seed/ibp/verbs/be.js: Payload now accepts roleFlow (array o
 Loads being + space row (the space row now selects qualities too)
 Async-precomputes callerEnrichment = { cognition, isAncestor, isDescendant } (Being.findById + isAncestorOf × 2)
 Looks up previousMoment via findLastSealedForBeing
-Snapshots reality-root's qualities.world subtree via loadWorldSignals()
+Snapshots story-root's qualities.world subtree via loadWorldSignals()
 Calls resolveActiveStack, then composeStack, hands the composed role to the rest of the moment runner
 Dropped the roles[] carry-check entirely
-Past this boundary, the rest of the runner (assemble.js, momentum.js, llmMoment.js, summon.js) reads the composed spec as if it were a regular role — they don't know stacking exists.
+Past this boundary, the rest of the runner (assemble.js, momentum.js, llmMoment.js, call.js) reads the composed spec as if it were a regular role — they don't know stacking exists.
 
 5. Extensions
    resources/emotions/ — modifier-role pack. Eight roles: emotions:bored / tired / focused / curious / cautious / urgent / playful / formal. Each is a short prompt, no can\* entries, intent: "modifier" tag (docs-only).
 
 6. Portal changes
-   Shared module (reality/portal/shared/):
+   Shared module (portal/shared/):
 
 role-manager-panel.js — three-section panel (existing roles list, create new role form, your-own roleFlow editor) reading descriptor.beings[role-manager].catalogs via the delegate-as-catalog pattern. Exports renderFlowEditor(allRoles, ctx, { headerLabel, initialFlow, targetStance }) reusable across panels.
 being-flow-panel.js — per-being flow editor. Renders header (cognition, defaultRole, id tail) + the shared renderFlowEditor pointed at any being.
@@ -728,7 +728,7 @@ Step Title Status Notes
 2 RoleFlow evaluator + primary role ✅ Done Vocabulary covers everything in spec Section 4 except inTreeOf(beingId) as a callable and nearbyBeings.\* (those are Pattern 4 / Step 8 emergent territory)
 3 Role stacking ✅ Done stack:true, composer, requiredCognition filter on composed stack
 4 Live role registry ✅ Done set-role hot-registers, delete-role with reference safety, persistence via .roles mirror
-5 role-manager UI ✅ Mostly Role-manager panel, per-being flow editor, birther's initial roleFlow form — all built. Skin panel and reality-manager panel deferred (you said skip Chunk 7)
+5 role-manager UI ✅ Mostly Role-manager panel, per-being flow editor, birther's initial roleFlow form — all built. Skin panel and story-manager panel deferred (you said skip Chunk 7)
 6 Emotions extension ✅ Done 8 modifier roles shipped
 7 World signals ✅ Done world.<ns>.<k> in vocab, set-world-signal op, snapshot via loadWorldSignals
 8+ Emergent patterns 🟡 Substrate ready, not authored The patterns from Section 6 (goal-roles, behavior contagion via nearbyBeings, recursive authoring, time schedules, environmental programming) are all authorable today. The skids are there; no canonical examples shipped beyond emotions.
@@ -736,7 +736,7 @@ What needs further building
 Explicitly deferred (you said no):
 
 Skin panel — drag-and-drop qualities.render upload
-Reality-manager operator panel — config/extensions/llm aggregation surface
+Story-manager operator panel — config/extensions/llm aggregation surface
 Not built, would close authoring gaps:
 
 nearbyBeings.\* vocabulary — read other beings' current roles (Pattern 4: behavior contagion). Substrate change: need a nearbyBeings enrichment in assign.js that scans desc.beings at the moment's space and surfaces their currently-resolved roles. Then add nearbyBeings.anyWearing, nearbyBeings.countWearing to the field catalog.

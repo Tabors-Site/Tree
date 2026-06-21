@@ -47,15 +47,15 @@ Foundational seed roles:
 
 | Role | Hosted on | Implicit reach |
 |---|---|---|
-| `angel` | heaven (`<reality>/.`) | heaven + descendants (system spaces) |
-| `global` | reality root (`<reality>/`) | the whole reality |
-| `human` | reality root | the whole reality |
-| `arrival` | reality root (implicit floor) | the whole reality |
-| `cherub` | reality root | the whole reality |
-| `birther` / `llm-assigner` / `role-manager` / ... | reality root | the whole reality |
+| `angel` | heaven (`<story>/.`) | heaven + descendants (system spaces) |
+| `global` | story root (`<story>/`) | the whole story |
+| `human` | story root | the whole story |
+| `arrival` | story root (implicit floor) | the whole story |
+| `cherub` | story root | the whole story |
+| `birther` / `llm-assigner` / `role-manager` / ... | story root | the whole story |
 | `coder` (operator-authored) | wherever they author it (e.g. `/coders/`) | host + descendants |
 
-There is **no `scope: "global" | "anchored"` distinction**. There's just "where it lives." A role hosted at the reality root reaches everywhere because the reality root is everyone's ancestor.
+There is **no `scope: "global" | "anchored"` distinction**. There's just "where it lives." A role hosted at the story root reaches everywhere because the story root is everyone's ancestor.
 
 ### Reach — the add/remove knob
 
@@ -109,11 +109,11 @@ authorize:
   6. Deny
 ```
 
-When a human is birthed, cherub sets `members.owner = [<newBeingId>]` on their home space — they own their home and everything under it. Outside their home they need granted roles (the `human` role gives broad access by default; operators narrow it as the reality matures).
+When a human is birthed, cherub sets `members.owner = [<newBeingId>]` on their home space — they own their home and everything under it. Outside their home they need granted roles (the `human` role gives broad access by default; operators narrow it as the story matures).
 
 ### The `@public` being — implicit commons-role for visitors
 
-Every reality ships a seed delegate named `public`. Public is structurally a being but never acts: empty `canSee`/`canDo`/`canSummon`/`canBe`, empty `triggerOn`, no-op summon handler. It exists for ONE purpose — to be the recipient of ownership transfers.
+Every story ships a seed delegate named `public`. Public is structurally a being but never acts: empty `canSee`/`canDo`/`canSummon`/`canBe`, empty `triggerOn`, no-op call handler. It exists for ONE purpose — to be the recipient of ownership transfers.
 
 When a space owner transfers `members.owner` to public:
 
@@ -132,7 +132,7 @@ authorize:
   5. Explicit role-walk over qualities.rolesGranted
   6. Public-commons: target sits in a public-owned subtree → APPLY
      the seed-shipped commons role's canX (see + move + create-space +
-     create-matter + summon @cherub + release). MATCH → ALLOW.
+     create-matter + call @cherub + release). MATCH → ALLOW.
   7. Deny
 ```
 
@@ -174,16 +174,16 @@ Under roles-are-auth the `members.contributor` class (and any custom member clas
 
 Per the seed/RolesAreAuth.md flow + the be:birth refactor: there are TWO ways a new being comes into existence.
 
-**Path A — Delegated mint via summon:mate (the registration flow).**
+**Path A — Delegated mint via call:mate (the registration flow).**
 
 ```
-arrival → summon @cherub:mate → cherub mints the new being
-       (the summoner RECEIVES the new being as their own)
+arrival → call @cherub:mate → cherub mints the new being
+       (the caller RECEIVES the new being as their own)
 ```
 
-The arrival role's only outward capability is `summon @cherub:mate`. Cherub's `canSummon` declares `as: "receiver"` for `intent: "mate"` — that's the contract that says "this role accepts summon:mate from anonymous arrivals." Cherub's handler mints the new being with the human role + the visitor's chosen credentials, grants `global` + `human` at the place root, and binds the session.
+The arrival role's only outward capability is `call @cherub:mate`. Cherub's `canSummon` declares `as: "receiver"` for `intent: "mate"` — that's the contract that says "this role accepts call:mate from anonymous arrivals." Cherub's handler mints the new being with the human role + the visitor's chosen credentials, grants `global` + `human` at the place root, and binds the session.
 
-Mirror on `@birther`: any authenticated being can summon `@birther:mate` to commission a child being. Same shape, just from an authenticated caller instead of anonymous.
+Mirror on `@birther`: any authenticated being can call `@birther:mate` to commission a child being. Same shape, just from an authenticated caller instead of anonymous.
 
 **Path B — Direct be:birth (the operator flow).**
 
@@ -207,7 +207,7 @@ Per the doctrine, the role's canX is the gate. `canSee` is a list of SEE op name
 | `["place", "library"]` | Can call those two ops; raw position SEE refuses. |
 | `[]` | Cannot SEE anything |
 
-The seed-shipped `arrival` role hosts `canSee: ["arrival-view"]` — anonymous visitors get one filtered window into the reality (root layout + cherub only, via the `arrival-view` SEE op). They cannot enumerate beings, see matter, or descend into child spaces.
+The seed-shipped `arrival` role hosts `canSee: ["arrival-view"]` — anonymous visitors get one filtered window into the story (root layout + cherub only, via the `arrival-view` SEE op). They cannot enumerate beings, see matter, or descend into child spaces.
 
 `human` (the root-founder temporary role) and `angel` (super-sudo) carry `["*"]`. Other roles use named ops (the canonical `place` op covers most navigation needs).
 
@@ -306,11 +306,11 @@ saveTemplate("global", globalRole, "seed");
 // ...
 
 await installRoleOnSpace(heaven,        "angel",  angelRole, I_AM);
-await installRoleOnSpace(realityRoot,   "global", globalRole, I_AM);
-await installRoleOnSpace(realityRoot,   "human",  humanRole,  I_AM);
-await installRoleOnSpace(realityRoot,   "cherub", cherubRole, I_AM);
-// ... all the seed delegates' roles installed on reality root
-// (cherub & friends operate reality-wide)
+await installRoleOnSpace(storyRoot,   "global", globalRole, I_AM);
+await installRoleOnSpace(storyRoot,   "human",  humanRole,  I_AM);
+await installRoleOnSpace(storyRoot,   "cherub", cherubRole, I_AM);
+// ... all the seed delegates' roles installed on story root
+// (cherub & friends operate story-wide)
 ```
 
 `installRoleOnSpace(space, name, spec, identity)` emits `do:set-role` on the target space.
@@ -322,7 +322,7 @@ The bootstrap grants (I-Am grants angel to seed delegates) stay the same — the
 | Panel | What it shows |
 |---|---|
 | **Place panel** (current position) | Walks ancestors collecting all `qualities.roles[*]` → renders "roles in effect here" labeled by host space. Below: viewer's `qualities.rolesGranted` filtered to grants whose role reaches here, with canX they unlock. Below that (for space owners): "Author role here" — opens set-role form anchored at this space. |
-| **Reality tab** | SEE reality-root's `qualities.roles` — the foundational roles for this whole world. For angels: forms to author new global-reach roles, edit canX, etc. |
+| **Story tab** | SEE story-root's `qualities.roles` — the foundational roles for this whole world. For angels: forms to author new global-reach roles, edit canX, etc. |
 | **Heaven tab** (or sub-section) | SEE heaven's `qualities.roles` (`angel` + any heaven-only system roles). |
 | **Template library** | SEE the registry — the shelf of available role specs to install on spaces. "Install at <space>" buttons. |
 
@@ -363,19 +363,19 @@ The bootstrap grants (I-Am grants angel to seed delegates) stay the same — the
 
 Today the substrate has **two systems that look related but aren't actually wired together**:
 
-1. **Stance auth** — `seed/ibp/authorize.js` walks `qualities.permissions.<verb>.<keyParts>` on the target's ancestor chain. The `requires:` block matches against stance properties (`arrival`, `owner`, `contributor`, `memberClasses`, etc.) derived from the caller's relationship to the position. The keyParts INCLUDE role-name strings (e.g. `summon:@cherub:birth`) but those strings are just names — authorize never looks them up in the role registry.
+1. **Stance auth** — `seed/ibp/authorize.js` walks `qualities.permissions.<verb>.<keyParts>` on the target's ancestor chain. The `requires:` block matches against stance properties (`arrival`, `owner`, `contributor`, `memberClasses`, etc.) derived from the caller's relationship to the position. The keyParts INCLUDE role-name strings (e.g. `call:@cherub:birth`) but those strings are just names — authorize never looks them up in the role registry.
 
-2. **The role registry** — `seed/present/roles/registry.js`. Each role declares `canSee` / `canDo` / `canSummon` / `canBe`. These are used at moment-time to build the LLM frame (the prompt's capability list) and to dispatch the summon handler. They are NOT consulted by authorize.
+2. **The role registry** — `seed/present/roles/registry.js`. Each role declares `canSee` / `canDo` / `canSummon` / `canBe`. These are used at moment-time to build the LLM frame (the prompt's capability list) and to dispatch the call handler. They are NOT consulted by authorize.
 
 This is the load-bearing smell. A role's `canDo: ["set-config"]` is documentation for the LLM — it tells the model "you have this affordance" — but it doesn't actually grant the underlying permission. Authorization gates on whether the caller is a `contributor` of the target space, not on whether their role has `set-config` in its canDo list. Add a new role with canDo containing "set-config" and nothing changes downstream.
 
 The doctrine you sketched in auth3 + auth4 fuses these. Per the notes:
 
-- *"All permissions apply to beings/roles only, and what they can SEE / DO / SUMMON. Never controlling space/matter access. Those are through Acts."*
+- *"All permissions apply to beings/roles only, and what they can SEE / DO / CALL. Never controlling space/matter access. Those are through Acts."*
 - *"I-AM is first, and from him all permissions strangle as needed down the Being Tree. Each parent assigns and delegates the permissions they have to their child."*
 - *"Should Roles be local down the ancestry they came from? Meaning the spaces they were created at and down."*
 - *"This would be rolesGranted[], roleFlow. There would still be a global Role registry."*
-- *"When a new RoleDO happens, the Actor decides if its global / whole reality, or privatized (only inherited or given away)."*
+- *"When a new RoleDO happens, the Actor decides if its global / whole story, or privatized (only inherited or given away)."*
 
 The endgame: **roles ARE the access control.** A being's `rolesGranted[]` is the list of roles they hold; each entry is anchored at a space. When the being acts, authorize walks their granted roles, finds the ones whose anchor is an ancestor of the target, and checks if any of those roles' `canX` lists permits the action. Stance properties (`arrival`/`owner`/`contributor`) survive but they become INPUTS into role grants (the cherub anoints new humans into the `angel` role *because* they registered, not because they're a member class).
 
@@ -429,7 +429,7 @@ A role like `coder`:
 }
 ```
 
-When a being summons `@coder:set-matter`, authorize runs:
+When a being calls `@coder:set-matter`, authorize runs:
 
 1. **Find the actor's granted roles whose anchor is an ancestor of the target space** (or the actor's role is global-scope).
 2. **For each candidate role, check if any `canDo` entry matches `set-matter`.**
@@ -447,8 +447,8 @@ Being.qualities.rolesGranted = [
     grantedBy:     "<grantorBeingId>",
     grantedAt:     "<iso timestamp>",
     // No expiry field. Wall-clock expiry is a human-time concept the
-    // reality has no clock for; a grant lasts until revoked. Time-bound
-    // grants arrive with REALITY-time (a being's moments / reel seq /
+    // story has no clock for; a grant lasts until revoked. Time-bound
+    // grants arrive with STORY-time (a being's moments / reel seq /
     // harmony beats), enforced at the role-walk like everything else.
   },
   { role: "human", anchorSpaceId: "<placeRootId>", grantedBy: "i-am", grantedAt: "..." },
@@ -494,10 +494,10 @@ Every other being's authority flows through `rolesGranted`.
 
 ### Scope: global vs anchored
 
-Per auth4 — *"When a new RoleDO happens, the Actor decides if its global / whole reality, or privatized (only inherited or given away)."*
+Per auth4 — *"When a new RoleDO happens, the Actor decides if its global / whole story, or privatized (only inherited or given away)."*
 
-- **`scope: "global"`** — The role is available reality-wide. A grant of a global role takes effect everywhere; `anchorSpaceId` is the place root. Used for system roles (angel, human) and for explicitly public roles.
-- **`scope: "anchored"`** (default for new roles) — The role only takes effect at and below the anchor space. A coder granted at `<reality>/coders/` can act within that subtree but not outside it.
+- **`scope: "global"`** — The role is available story-wide. A grant of a global role takes effect everywhere; `anchorSpaceId` is the place root. Used for system roles (angel, human) and for explicitly public roles.
+- **`scope: "anchored"`** (default for new roles) — The role only takes effect at and below the anchor space. A coder granted at `<story>/coders/` can act within that subtree but not outside it.
 
 The scope is set when the role is authored (the `set-role` DO op gains a `scope` arg). Existing roles default to "anchored" with the place root as anchor — same as today's stance auth where heaven gates on `memberClasses: angel`.
 
@@ -514,7 +514,7 @@ Being.qualities.rolesGranted = [
 
 Match rules:
 - **Space anchor matches** when the target's spaceId equals `anchorSpaceId` OR is a descendant of it.
-- **Being anchor matches** when the target's being equals `anchorBeingId` (right-stance `@being` for SUMMON / DO-against-being / BE).
+- **Being anchor matches** when the target's being equals `anchorBeingId` (right-stance `@being` for CALL / DO-against-being / BE).
 - A grant entry has at most one anchor type populated (the other is null); both null is invalid (the role has nothing to anchor on).
 
 Use cases:
@@ -524,13 +524,13 @@ Use cases:
 
 ### The `global` role — baseline for every being
 
-A foundational role granted to **every authenticated being at birth** by their parent (cherub for new humans; the operator-being for sub-children). Carries the actions every being in this reality should have by default. Arrival is excluded — anonymous callers stay on their implicit read-only floor.
+A foundational role granted to **every authenticated being at birth** by their parent (cherub for new humans; the operator-being for sub-children). Carries the actions every being in this story should have by default. Arrival is excluded — anonymous callers stay on their implicit read-only floor.
 
 ```js
 {
   name: "global",
   scope: "anchored",
-  description: "Baseline role every authenticated being carries. Customize per reality.",
+  description: "Baseline role every authenticated being carries. Customize per story.",
   canDo: [
     { action: "move", description: "move yourself in space" },
     { action: "set-being:coord", description: "update your own coord" },
@@ -545,13 +545,13 @@ A foundational role granted to **every authenticated being at birth** by their p
 }
 ```
 
-Anchored at the place root with reality-wide reach via descendants. **Customizable per reality** — operators edit the global role's canDo to define their baseline. Default seed-shipped global is conservative (move + see-self + release); operators expand it as they decide what "everyone here can do."
+Anchored at the place root with story-wide reach via descendants. **Customizable per story** — operators edit the global role's canDo to define their baseline. Default seed-shipped global is conservative (move + see-self + release); operators expand it as they decide what "everyone here can do."
 
-Term-collision note: the role NAME is `global` (carries the "every being gets this" meaning) but its SCOPE field is `"anchored"` (the grant goes at place root). The `scope: "global"` distinction is about how a grant reaches (no anchor required, reality-wide intrinsic); the `global` role uses normal anchored grants.
+Term-collision note: the role NAME is `global` (carries the "every being gets this" meaning) but its SCOPE field is `"anchored"` (the grant goes at place root). The `scope: "global"` distinction is about how a grant reaches (no anchor required, story-wide intrinsic); the `global` role uses normal anchored grants.
 
 #### "Public" / "private" are implicit in the role's reach
 
-Per auth3 — *"All permissions apply to beings/roles only, and what they can SEE/DO/SUMMON. Never controlling space/matter access. Those are through Acts."*
+Per auth3 — *"All permissions apply to beings/roles only, and what they can SEE/DO/CALL. Never controlling space/matter access. Those are through Acts."*
 
 There is **no public/private property on a space**. A space is "public" if any granted role reaches it; "private" if no role does. The descriptor pipeline filters beings/matter/children at SEE-time — anything outside the actor's granted-role reach is simply not surfaced. The being literally doesn't load the SEE info for it. No flag, no gate-at-the-space; the role's reach IS the access surface.
 
@@ -584,9 +584,9 @@ The canX entries stay simple: action names, op names, being-name patterns, opera
 Per field:
 - **canSee** — list of SEE-op names (e.g. `"place"`, `"llm-chain"`, `"<ext>:<name>"`) or `"*"`. No patterns.
 - **canDo** — list of `{action, description?}`. Action is the DO op name. No patterns.
-- **canSummon** — list of `{pattern?, intent?, as?, description?}`. Each entry declares a summon edge this role participates in. The `as` field discriminates which side:
-  - `as: "actor"` (default if absent) — caller-side: this role can SEND a summon matching the entry's `pattern` + `intent`. Authorize consults these on the CALLER'S role at dispatch.
-  - `as: "receiver"` — receiver-side: this role ACCEPTS the summon when targeted. UI discovery + symmetric checks consult these on the TARGET'S role. `pattern` is irrelevant for receiver entries (the role IS the receiver); `intent` names what's accepted. The runtime gate is still the role's `summon(message, ctx)` function — `as: "receiver"` is a declaration, not a guard.
+- **canSummon** — list of `{pattern?, intent?, as?, description?}`. Each entry declares a call edge this role participates in. The `as` field discriminates which side:
+  - `as: "actor"` (default if absent) — caller-side: this role can SEND a call matching the entry's `pattern` + `intent`. Authorize consults these on the CALLER'S role at dispatch.
+  - `as: "receiver"` — receiver-side: this role ACCEPTS the call when targeted. UI discovery + symmetric checks consult these on the TARGET'S role. `pattern` is irrelevant for receiver entries (the role IS the receiver); `intent` names what's accepted. The runtime gate is still the role's `call(message, ctx)` function — `as: "receiver"` is a declaration, not a guard.
   
   `pattern` is the BEING-name pattern (`@coder*`), NOT a space path. One field, two surfaces — same shape as left-stance/right-stance everywhere else in the substrate. Example:
   
@@ -639,7 +639,7 @@ authorize({verb, target, action, intent, operation, identity}):
     // canX check (action-only; no patterns inside canX)
     if verb === "see"    && permitsSee(role, target):                  return ok
     if verb === "do"     && permitsDo(role, action):                   return ok
-    if verb === "summon" && permitsSummon(role, target.being, intent): return ok
+    if verb === "call"   && permitsSummon(role, target.being, intent): return ok
     if verb === "be"     && permitsBe(role, operation):                return ok
 
   return deny
@@ -700,7 +700,7 @@ Auth3 — *"A factory worker can't just have a coder role. It would need to eith
 This shape falls out for free:
 
 - **(a) travel + join** — the being moves to the coder space; an existing coder runs `grant-role(target=<this being>, role="coder", at=<here>)`. Now the being has `coder` granted at that space.
-- **(b) travel + ask** — same shape; the request goes through a SUMMON to a coder; the coder decides whether to grant.
+- **(b) travel + ask** — same shape; the request goes through a CALL to a coder; the coder decides whether to grant.
 - **(c) author own** — the being runs `set-role(name="my-coder", canDo=[...], scope="anchored")` at a space they own; they're automatically granted that role at that space.
 
 No special machinery needed beyond grant-role + the existing set-role op.
@@ -735,7 +735,7 @@ async function authorize({ identity, verb, target, action, intent, operation }) 
 function permits(role, verb, action, intent, operation) {
   if (verb === "see")    return matchAny(role.canSee, "*");
   if (verb === "do")     return matchAny(role.canDo, action);
-  if (verb === "summon") return matchAny(role.canSummon, `@${target.being}`, intent);
+  if (verb === "call")   return matchAny(role.canSummon, `@${target.being}`, intent);
   if (verb === "be")     return matchAny(role.canBe, operation);
   return false;
 }
@@ -808,7 +808,7 @@ If permitted, the op emits TWO facts atomically:
 - `do:grant-role(role=<newRole>, anchorSpaceId=<targetSpace>, grantedBy=<author>)` — the author is auto-granted the role at the target space.
 
 Scope-specific gates on the canDo check:
-- `scope: "global"` requires the author to hold a role with `canDo: ["set-role"]` reachable from the place root (so authoring a global role needs reality-wide permission — typically the angel role).
+- `scope: "global"` requires the author to hold a role with `canDo: ["set-role"]` reachable from the place root (so authoring a global role needs story-wide permission — typically the angel role).
 - `scope: "anchored"` requires the same canDo at the target space (or above).
 
 Without this gate a coder could author `super-admin` with canDo: `["*"]` and self-grant; the gate enforces that role authorship needs an existing role to back it.
@@ -833,7 +833,7 @@ The migration pass:
 
 3. **defaultRole → rolesGranted seed.** For each being with `defaultRole`, emit a `grant-role(<defaultRole>, anchor=<homeSpace>, grantedBy=I-Am)` so their existing default role appears in their granted list. Without this they wake up with zero granted roles.
 
-4. **qualities.permissions translation.** For each `qualities.permissions.<verb>.<keyParts> = { requires: { memberClasses: { includes: "X" } } }` rule, ensure a corresponding role exists with `canX: [<keyParts>]` and that members of class X are granted that role at the space. Most existing rules are seed defaults; a handful per reality. The migration script enumerates and converts.
+4. **qualities.permissions translation.** For each `qualities.permissions.<verb>.<keyParts> = { requires: { memberClasses: { includes: "X" } } }` rule, ensure a corresponding role exists with `canX: [<keyParts>]` and that members of class X are granted that role at the space. Most existing rules are seed defaults; a handful per story. The migration script enumerates and converts.
 
 5. **Cleanup.** After conversion, `qualities.permissions` namespace is empty. Authorize stops reading it. Stance-property derivation simplifies (no more memberClasses gating).
 
@@ -902,8 +902,8 @@ Already shows the LLM that'll respond. After this lands, it can also show:
 
 ## Out of scope
 
-- **Cross-world role propagation** — a granted role doesn't automatically transfer when the being walks into a foreign reality. Deferred to the cross-world doctrine.
-- **Time-bound grants** — no wall-clock expiry; the reality has no clock. When a reality-time unit exists (moments / reel seq / harmony beats), grants can carry a bound in that unit, enforced at the role-walk.
+- **Cross-world role propagation** — a granted role doesn't automatically transfer when the being walks into a foreign story. Deferred to the cross-world doctrine.
+- **Time-bound grants** — no wall-clock expiry; the story has no clock. When a story-time unit exists (moments / reel seq / harmony beats), grants can carry a bound in that unit, enforced at the role-walk.
 - **Composite roles via stacking** — `roleComposer.composeStack` keeps working for cognition-frame composition. The authorize walk treats stacked roles as a union (any role in the stack permits → allow). No new primitive.
 - **Role versioning** — when a role's canDo changes after being granted, the granted role uses the LATEST definition. Future versioned grants would freeze the canDo at grant-time. Out of scope.
 - **Permissions on Space/Matter directly** — auth3 is explicit: *"Never controlling space/matter access. Those are through Acts."* — so this stays. The space/matter doesn't have its own permission gate; the only gate is "did the actor's role permit this action."
@@ -914,7 +914,7 @@ Already shows the LLM that'll respond. After this lands, it can also show:
 >
 > **Grants flow down the being-tree, rooted at I-Am.** Every granted role carries `{role, anchorSpaceId, grantedBy, grantedAt}`. The grant chain back to I-Am is the proof of authority.
 >
-> **Roles are spatial.** Each grant is anchored at a space. The role's reach is that space and its descendants (or reality-wide if the role's scope is `"global"`).
+> **Roles are spatial.** Each grant is anchored at a space. The role's reach is that space and its descendants (or story-wide if the role's scope is `"global"`).
 >
 > **Acquiring a role is an act, not a status check.** A being holds a role because someone granted it OR because they authored it themselves at a space they owned. Authorization never derives roles from stance properties.
 
@@ -923,7 +923,7 @@ Already shows the LLM that'll respond. After this lands, it can also show:
 - ✓ I-Am can do anything anywhere (bootstrap angel role at the place root, scope:global).
 - ✓ Cherub can do BE birth/connect/release because the I-Am granted it the angel role at heaven.
 - ✓ A new human registers via cherub; cherub grants them the `human` role at the place root.
-- ✓ Human authors `coder` role at `<reality>/coders/`; they get auto-granted coder at that space.
+- ✓ Human authors `coder` role at `<story>/coders/`; they get auto-granted coder at that space.
 - ✓ Human births a child being; the child has zero granted roles by default. They can SEE the place root (default human role's canSee includes "place") but cannot DO anything until granted a role.
 - ✓ Parent grants child the human role at place root; child can now do everything a human can.
 - ✓ Coder grants a child being the coder role at the coders space; the child can do coder things in coders/ but not outside.

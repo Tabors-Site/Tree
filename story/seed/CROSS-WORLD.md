@@ -1,23 +1,23 @@
 # Cross-World Action — TreeOS's location-portable being model
 
-> _A being has one position at any moment. Position is an address that can include any reality and any branch. Cross-world is detected from the address, not declared. One actor, one Act, facts where they land._
+> _A being has one position at any moment. Position is an address that can include any story and any branch. Cross-world is detected from the address, not declared. One actor, one Act, facts where they land._
 
 ## What this is
 
-The doctrine for how a being acts at a position whose reality or branch differs from the being's home. Cross-world cases are detected from the address and routed automatically; the verb mechanism is uniform across same-world and cross-world calls.
+The doctrine for how a being acts at a position whose story or branch differs from the being's home. Cross-world cases are detected from the address and routed automatically; the verb mechanism is uniform across same-world and cross-world calls.
 
 If you're implementing federation, building a portal extension, or wondering how cross-branch acting should behave, the answer lives here.
 
 **Related doctrine:**
-- [RolesAreAuth.md](RolesAreAuth.md) — roles ARE auth. Cross-world citizenship and federation policy are expressed entirely through the role registry. The `canSummon` field is one field with two surfaces (`as: "actor"` for caller-side, `as: "receiver"` for receive-side accept); receive-side entries are what UI discovery reads to render per-being summon options (e.g. birther's "mate" button).
+- [RolesAreAuth.md](RolesAreAuth.md) — roles ARE auth. Cross-world citizenship and federation policy are expressed entirely through the role registry. The `canSummon` field is one field with two surfaces (`as: "actor"` for caller-side, `as: "receiver"` for receive-side accept); receive-side entries are what UI discovery reads to render per-being call options (e.g. birther's "mate" button).
 - [protocols/ibp/FEDERATION.md](../protocols/ibp/FEDERATION.md) — federation protocol layer. The mate + vessel pattern for cross-world citizenship; canopy envelope contract; receive-side dispatch.
 
 ## Terminology
 
 Three nested concepts:
 
-- **Reality** — the substrate domain. A running TreeOS process. Example: `tabors.site`.
-- **World** — a reality + a branch. The fact-chain timeline at one branch of one reality. Example: `tabors.site#0` (main world of tabors.site) or `tabors.site#4a` (a branched world of tabors.site).
+- **Story** — the substrate domain. A running TreeOS process. Example: `tabors.site`.
+- **World** — a story + a branch. The fact-chain timeline at one branch of one story. Example: `tabors.site#0` (main world of tabors.site) or `tabors.site#4a` (a branched world of tabors.site).
 - **Place** — a world + a position. A specific space (or being's position) inside a world. Example: `tabors.site#0/home`.
 
 Cross-world means "the actor's world and the target's world differ." That's the only check the detection rule runs.
@@ -26,28 +26,28 @@ Cross-world means "the actor's world and the target's world differ." That's the 
 
 Each being carries three independent facts:
 
-- **Identity** — who they are. Lives on the home reality's being-reel. Never travels.
+- **Identity** — who they are. Lives on the home story's being-reel. Never travels.
 - **Position** — where they currently are. Stored as a quality on the Being row. Can be any address, foreign or local.
-- **Memory** — what they did, their act-chain. Every moment the being initiated is a Stamp on their home reality's act-chain, regardless of where the being was when acting.
+- **Memory** — what they did, their act-chain. Every moment the being initiated is a Stamp on their home story's act-chain, regardless of where the being was when acting.
 
-A cross-world act is just an act whose target address differs in reality or branch from the actor's home. The address resolver detects this; the dispatcher routes the verb call accordingly. No new verb is needed.
+A cross-world act is just an act whose target address differs in story or branch from the actor's home. The address resolver detects this; the dispatcher routes the verb call accordingly. No new verb is needed.
 
 ## The four invariants
 
 1. **One actor, one Act.** Only the actor on the left stance opens a Stamp. The receiving substrate does not open its own moment in response — it stamps facts on its reels (consequences) but it is not the originator of the act.
-2. **Each Stamper writes only to its own reels.** No foreign substrate ever reaches into another reality's reels. Cross-world facts are written by the receiving Stamper on its own chain.
+2. **Each Stamper writes only to its own reels.** No foreign substrate ever reaches into another story's reels. Cross-world facts are written by the receiving Stamper on its own chain.
 3. **One position at a time.** A being is never in two places. Cross-world position moves leave their home and arrive at the foreign side as one transition, recorded with provenance on both reels. No ghost beings.
-4. **Identity is sovereign.** A foreign reality cannot rewrite the actor's identity, history, or memory. If the foreign reality disappears, the actor's Act on home survives intact.
+4. **Identity is sovereign.** A foreign story cannot rewrite the actor's identity, history, or memory. If the foreign story disappears, the actor's Act on home survives intact.
 
 ## The position quality
 
 A being's position is stored as an address:
 
 ```
-being.qualities.position = "<reality>#<branch>/<space-id-or-path>"
+being.qualities.position = "<story>#<branch>/<space-id-or-path>"
 ```
 
-For a being at home, `<reality>` is the home domain and `<branch>` is the active branch. For a foreign-position being, both can differ. Position is the **default** target context for verbs that don't name an explicit foreign address — when the actor calls SEE without a target, they SEE at their current position. But every verb can carry an explicit target address that overrides this default. **Only BE changes position.** SEE / DO / SUMMON can target any foreign address with the being's position unchanged.
+For a being at home, `<story>` is the home domain and `<branch>` is the active branch. For a foreign-position being, both can differ. Position is the **default** target context for verbs that don't name an explicit foreign address — when the actor calls SEE without a target, they SEE at their current position. But every verb can carry an explicit target address that overrides this default. **Only BE changes position.** SEE / DO / CALL can target any foreign address with the being's position unchanged.
 
 This is the bridge pattern: a being stays at home, opens a portal to a foreign world, and acts there without leaving. The being keeps its current position; the verb call carries the foreign target; the cross-world routing fires. Useful for collaboration, oversight, remote control — anything where the actor wants to reach into another world without physically anchoring there.
 
@@ -55,11 +55,11 @@ This is the bridge pattern: a being stays at home, opens a portal to a foreign w
 
 The address resolver compares the resolved left and right stance:
 
-- `left.reality !== right.reality` → cross-reality
+- `left.story !== right.story` → cross-story
 - `left.branch !== right.branch` → cross-branch
 - Either or both → cross-world
 
-The dispatcher routes accordingly. Cross-branch stays in-process (the same substrate, different branches). Cross-reality crosses the federation boundary via canopy.
+The dispatcher routes accordingly. Cross-branch stays in-process (the same substrate, different branches). Cross-story crosses the federation boundary via canopy.
 
 ## One actor, one Act
 
@@ -76,18 +76,18 @@ The receiving substrate's Stamper writes the cross-world facts on its own reels.
 
 ## The `crossOrigin` provenance block
 
-Every fact stamped on a reality whose origin was a cross-world act carries:
+Every fact stamped on a story whose origin was a cross-world act carries:
 
 ```js
 crossOrigin: {
-  reality: <home-domain-or-null>,
+  story:   <home-domain-or-null>,
   branch:  <home-actual-branch-path>,
   beingId: <actor-being-id>,
   actId:   <home-act-id>,
 }
 ```
 
-- `reality` is null when the act is cross-branch within the same reality.
+- `story` is null when the act is cross-branch within the same story.
 - The receiving Stamper enforces presence: a foreign-origin fact arriving without complete crossOrigin is refused at the boundary.
 - Stamps are immutable, so provenance cannot be edited later.
 
@@ -102,9 +102,9 @@ The block lives in the fact's `params`. The Fact schema doesn't change — prove
 
 Storing a pointer in a record would make the record's meaning depend on present pointer state — exactly the kind of mutable-past trap the fact-chain doctrine forbids. The pointer-actual translation happens at the perimeter (the address parser, the wire layer); by the time anything reaches the Stamper, the branch field is the resolved actual path.
 
-Cross-reality consequence: when reality A sends a foreign-actor act to reality B, the request carries the actual branch path A is acting from (`"0"` or `"1a"`). Reality B's Stamper writes `crossOrigin.branch` as the received actual path. A's pointer label for that branch (`"main"` today, maybe `"archive"` next year) does not enter B's chain. When B looks up A later, it queries by actual path; A's pointer state is irrelevant to B's record.
+Cross-story consequence: when story A sends a foreign-actor act to story B, the request carries the actual branch path A is acting from (`"0"` or `"1a"`). Story B's Stamper writes `crossOrigin.branch` as the received actual path. A's pointer label for that branch (`"main"` today, maybe `"archive"` next year) does not enter B's chain. When B looks up A later, it queries by actual path; A's pointer state is irrelevant to B's record.
 
-Realities are responsible for translating their own pointers to actual branches when packaging requests to send out (the resolver does this) and when interpreting received crossOrigin blocks (a foreign actual-path is what got recorded; the receiver may render it through their OWN pointers if they have any for that path, but the record itself stays bare).
+Stories are responsible for translating their own pointers to actual branches when packaging requests to send out (the resolver does this) and when interpreting received crossOrigin blocks (a foreign actual-path is what got recorded; the receiver may render it through their OWN pointers if they have any for that path, but the record itself stays bare).
 
 ## Act lifecycle and status
 
@@ -139,20 +139,20 @@ When the foreign side responds (with success, denial, etc.), the canopy delivers
 
 ### Idempotency on the foreign side
 
-The foreign side deduplicates incoming acts by `{originReality, originBranch, originBeingId, originActId}`. Replays are idempotent — a retried Act produces the same outcome as the first delivery; no double-stamping. The receiving Stamper checks for an existing fact carrying the same `crossOrigin.actId` before writing.
+The foreign side deduplicates incoming acts by `{originStory, originBranch, originBeingId, originActId}`. Replays are idempotent — a retried Act produces the same outcome as the first delivery; no double-stamping. The receiving Stamper checks for an existing fact carrying the same `crossOrigin.actId` before writing.
 
 ### What deltaF carries
 
 The Act's `deltaF` contains only facts that landed on the actor's HOME reels. For pure cross-world acts (SEE, foreign DO), `deltaF` is empty. For hybrid acts (cross-world BE position-move records both a depart-fact at home and an arrive-fact at foreign), `deltaF` contains only the home-side fact; the foreign-side fact lives on the foreign reel referenced by `crossOrigin.actId`.
 
-The actor's biographical record always survives. "I attempted X at <foreign-address> and got <outcome>" is part of the actor's memory whether the act succeeded or not. This honors the CROSS-WORLD doctrinal commitment that no being's continuity depends on a foreign reality remaining available.
+The actor's biographical record always survives. "I attempted X at <foreign-address> and got <outcome>" is part of the actor's memory whether the act succeeded or not. This honors the CROSS-WORLD doctrinal commitment that no being's continuity depends on a foreign story remaining available.
 
 ## Per-verb behavior
 
 Each verb honors the three facts of being:
 
 - **Identity stays home** — every verb routes through the actor's identity on the home substrate; the foreign side receives a stance with `crossOrigin` provenance, never a foreign-owned identity record.
-- **Position determines target** — every verb defaults to acting at the being's current position; cross-world is just the position's reality+branch differing from home.
+- **Position determines target** — every verb defaults to acting at the being's current position; cross-world is just the position's story+branch differing from home.
 - **Memory rides the Act** — every verb records its moment as a Stamp on the home act-chain; the inner face attaches there.
 
 Per verb:
@@ -161,32 +161,32 @@ Per verb:
 | ---------- | ---------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------- |
 | **SEE**    | none — observation only                  | none                                                        | none                                                             | descriptor returned from foreign side |
 | **DO**     | none — acting from current position      | none                                                        | the consequence (set-matter, set-space, etc.) with crossOrigin   | descriptor at the act point           |
-| **SUMMON** | none — calling from current position     | none                                                        | summon record on the foreign being's inbox-reel with crossOrigin | foreign being's reply or status       |
+| **CALL**   | none — calling from current position     | none                                                        | call record on the foreign being's inbox-reel with crossOrigin   | foreign being's reply or status       |
 | **BE**     | position moves (the only verb that does) | `set-being:position` fact on actor's being-reel (they left) | arrival fact on foreign reel with crossOrigin (they appeared)    | foreign descriptor at arrival         |
 
 The Act on the actor's home chain always records what was attempted. Facts move to wherever they target.
 
 ### Portal-walking is `do:move`, not a new BE op
 
-BE is the closed four-op set: `birth` / `connect` / `release` / `death`. None of those is "walk through a portal." Position moves use the existing `do:set-being:position` (and, when the move includes container-change, `do:move`). Cross-world positioning is just a `do:set-being:position` whose value is a `<reality>#<branch>/<spaceId>` address instead of a bare spaceId.
+BE is the closed four-op set: `birth` / `connect` / `release` / `death`. None of those is "walk through a portal." Position moves use the existing `do:set-being:position` (and, when the move includes container-change, `do:move`). Cross-world positioning is just a `do:set-being:position` whose value is a `<story>#<branch>/<spaceId>` address instead of a bare spaceId.
 
 The "BE position moves" line in the table above describes the SUBSTRATE effect of a position write (the being's row changes; arrival fact lands on the new world). The OP that produces that effect is a DO. No new BE verb is needed.
 
-### SUMMON reply correlation
+### CALL reply correlation
 
-When a foreign being replies to a cross-world summon, the reply is its own cross-world act in the reverse direction — its own Stamp on its act-chain, with its own status field for its own attempt. The reply Act may optionally carry a `replyTo: <original-act-id>` field referencing the originating Act. This is metadata, not a constraint: responders act independently; reply-correlation just lets the conversational connection be visible when it exists. Forensics and UX consume it; the substrate doesn't enforce reply order or require replies at all.
+When a foreign being replies to a cross-world call, the reply is its own cross-world act in the reverse direction — its own Stamp on its act-chain, with its own status field for its own attempt. The reply Act may optionally carry a `replyTo: <original-act-id>` field referencing the originating Act. This is metadata, not a constraint: responders act independently; reply-correlation just lets the conversational connection be visible when it exists. Forensics and UX consume it; the substrate doesn't enforce reply order or require replies at all.
 
 ## Portal and window
 
 Portal and window are not separate primitives. They are stance-access perspectives on the same cross-world mechanism — what role(s) the foreign-actor stance holds at the receiving side under RolesAreAuth (see `seed/RolesAreAuth.md`):
 
 - **Window** — the role grant admits only SEE (`canSee` includes the position; `canDo` / `canSummon` / `canBe` don't). The actor observes; nothing changes state; only the inner face returns.
-- **Portal** — the role grant admits the verbs the foreign operator chose to open: typically SEE + DO + SUMMON, optionally BE. Authored via the role's canX lists.
+- **Portal** — the role grant admits the verbs the foreign operator chose to open: typically SEE + DO + CALL, optionally BE. Authored via the role's canX lists.
 - **Full access** — every verb admitted, including BE for walking through.
 
-**Acting through a portal does not require walking through it.** Only BE moves the being's position. SEE / DO / SUMMON across a portal happen with the being's current position unchanged — they reach into the foreign world from wherever the actor is standing. The bridge pattern (stay home, manipulate matter or summon beings in another world) is exactly this case: portal access without BE.
+**Acting through a portal does not require walking through it.** Only BE moves the being's position. SEE / DO / CALL across a portal happen with the being's current position unchanged — they reach into the foreign world from wherever the actor is standing. The bridge pattern (stay home, manipulate matter or call beings in another world) is exactly this case: portal access without BE.
 
-The portal extension renders the foreign side as a doorway. Whether you step through (BE) or reach through (SEE / DO / SUMMON) is the actor's choice on each verb call. Both consume the same substrate machinery.
+The portal extension renders the foreign side as a doorway. Whether you step through (BE) or reach through (SEE / DO / CALL) is the actor's choice on each verb call. Both consume the same substrate machinery.
 
 ## The Inner Face
 
@@ -207,9 +207,9 @@ Act.innerFace = {
 
 Same unified canonical field used by both the local fold (`origin: "local"`) and the cross-world override (`origin: "foreign"`). The foreign descriptor is normalized into the canonical inner face shape before storage so every consumer reads one structure.
 
-**The weave is empty for foreign faces.** A local face's weave records the reels the local fold actually read so the per-stance subscription registry (innerFaceLive.md) can wake on relevant fact arrivals. A foreign face's reels live on the OTHER reality; the local registry has nothing to subscribe to here. The portal renders the foreign blocks once on receive and they stay until the human re-navigates. Reactive updates for foreign-side changes would require a federation push channel from the foreign reality, which doesn't exist yet. Real but explicit deferred work.
+**The weave is empty for foreign faces.** A local face's weave records the reels the local fold actually read so the per-stance subscription registry (innerFaceLive.md) can wake on relevant fact arrivals. A foreign face's reels live on the OTHER story; the local registry has nothing to subscribe to here. The portal renders the foreign blocks once on receive and they stay until the human re-navigates. Reactive updates for foreign-side changes would require a federation push channel from the foreign story, which doesn't exist yet. Real but explicit deferred work.
 
-Hashable for tamper-detection: if the foreign reality later returns a different descriptor for the same position at the same time, the hash proves the change. Useful for scam detection, drift detection, and historical comparison ("I remember this looked different last week").
+Hashable for tamper-detection: if the foreign story later returns a different descriptor for the same position at the same time, the hash proves the change. Useful for scam detection, drift detection, and historical comparison ("I remember this looked different last week").
 
 The `hash` field is the canonical identifier from day one, even when storage is inline. Future migration to content-addressed blob storage references the same hash, so consumers don't break. Start inline; scale when needed.
 
@@ -219,24 +219,24 @@ A being whose position is foreign must not be stuck there if the home substrate 
 
 The pull-back mechanism:
 
-1. On home substrate startup, scan beings whose `position` names a foreign reality or branch.
+1. On home substrate startup, scan beings whose `position` names a foreign story or branch.
 2. For each, check whether the foreign substrate has confirmed liveness (heartbeat or recent ping) within a configured window.
 3. If not (timeout or substrate restart crossed the heartbeat threshold), stamp a `set-being:position` fact on the home reel that resets the being's position to their home space.
-4. If the foreign reality is reachable, also stamp a corresponding departure fact on the foreign reel. Best-effort — if unreachable, home unilaterally pulls back; the foreign reconciles at its next sync cycle.
+4. If the foreign story is reachable, also stamp a corresponding departure fact on the foreign reel. Best-effort — if unreachable, home unilaterally pulls back; the foreign reconciles at its next sync cycle.
 
-The guarantee: a being's identity is never hostage to a foreign reality being available. Worst case they come back home; they don't get locked at foreign.
+The guarantee: a being's identity is never hostage to a foreign story being available. Worst case they come back home; they don't get locked at foreign.
 
 ## Cross-branch is the canonical first implementation
 
-When the cross-world boundary is just a branch divergence within the same reality, the mechanism is identical but the transport is in-process:
+When the cross-world boundary is just a branch divergence within the same story, the mechanism is identical but the transport is in-process:
 
 - The address triggers cross-world detection (branches differ).
 - The actor's Act opens on the actor's home branch.
-- Facts land on the foreign branch's reels via the same Stamper (no federation hop) with `crossOrigin.reality = null`.
+- Facts land on the foreign branch's reels via the same Stamper (no federation hop) with `crossOrigin.story = null`.
 - The inner face flows back via the same descriptor pipeline.
 - Status transitions work the same way — `attempted` on seal, then `landed` / `denied` / etc. as the foreign branch's dispatcher responds (synchronously, since it's in-process).
 
-This is the build target. The full three-way separation — identity local, position portable, memory sovereign — surfaces entirely within a single substrate. Once cross-branch verifies, cross-reality is just the canopy gateway path added on top. Same shape, same doctrine, same enforcement, longer round trip.
+This is the build target. The full three-way separation — identity local, position portable, memory sovereign — surfaces entirely within a single substrate. Once cross-branch verifies, cross-story is just the canopy gateway path added on top. Same shape, same doctrine, same enforcement, longer round trip.
 
 ## End-to-end traces
 
@@ -271,14 +271,14 @@ This is the build target. The full three-way separation — identity local, posi
 4. Act seals on #0 with `status: "denied"`, reason carried in `qualities.outcome`.
 5. Tabor's act-chain records the attempt; his position quality is unchanged.
 
-### Cross-reality DO: tabor on tabors.site#0 writes matter on bing.com#main
+### Cross-story DO: tabor on tabors.site#0 writes matter on bing.com#main
 
 1. Address: `tabors.site#0/home@tabor :: bing.com#main/some-page`
-2. Cross-world detected (realities differ).
+2. Cross-world detected (stories differ).
 3. Tabor's Act opens on tabors.site#0.
 4. DO handler hands the act envelope to the canopy gateway.
 5. bing.com receives, authorizes the foreign-actor stance (with crossOrigin in the bag).
-6. If admitted: bing.com's Stamper writes the fact on bing.com#main with `crossOrigin: { reality: "tabors.site", branch: "0", beingId: "tabor", actId }`.
+6. If admitted: bing.com's Stamper writes the fact on bing.com#main with `crossOrigin: { story: "tabors.site", branch: "0", beingId: "tabor", actId }`.
 7. bing.com returns the new descriptor as inner face.
 8. Hash + descriptor attach to tabor's Act. Act seals on tabors.site#0 with `status: "sealed"`.
 9. tabors.site's reels stay clean; the state change is purely on bing.com.
@@ -292,11 +292,11 @@ All eight prereq + build-order items below shipped. The doctrine is now structur
 | 1 | Act-chain branch lineage | LANDED | `seed/past/act/actChain.js`; verify-act-chain-lineage 12/12 |
 | 2 | crossOrigin block + Stamper enforcement | LANDED | `seed/past/act/crossOrigin.js` (`deriveCrossOrigin`), `seed/past/fact/facts.js` (lands the block at emit; dedup by `crossOrigin.actId`) |
 | 3 | Position accepts foreign address | LANDED | `seed/materials/being/positionAddress.js` (`parsePositionAddress`, `formatPositionAddress`, `isPositionCrossWorld`) |
-| 4 | Address-resolver cross-world flag | LANDED | `seed/ibp/address.js` + `seed/ibp/resolver.js`; cross-branch + cross-reality detection in parseBoth |
-| 5 | Cross-branch + cross-reality dispatch in DO/SEE/SUMMON/BE | LANDED | `seed/past/act/crossWorldResponse.js` + `runVerbAsForeignActor` |
+| 4 | Address-resolver cross-world flag | LANDED | `seed/ibp/address.js` + `seed/ibp/resolver.js`; cross-branch + cross-story detection in parseBoth |
+| 5 | Cross-branch + cross-story dispatch in DO/SEE/CALL/BE | LANDED | `seed/past/act/crossWorldResponse.js` + `runVerbAsForeignActor` |
 | 6 | Inner-face attachment on the Act | LANDED | `seed/past/act/innerFace.js` . `Act.innerFace = { orientation, role, position, capabilities, blocks, origin: "foreign", hash }` (same unified canonical field the local fold writes) |
 | 7 | Pull-back safety (boot scan) | LANDED | `seed/materials/being/pullBack.js` + wired into `genesis.js` startup |
-| 8 | Canopy transport (cross-reality) | LANDED | `protocols/ibp/canopy.js` (verifyIncoming + forwardToPeer + signedAt freshness window) |
+| 8 | Canopy transport (cross-story) | LANDED | `protocols/ibp/canopy.js` (verifyIncoming + forwardToPeer + signedAt freshness window) |
 
 Two prereq items from the original draft were subsumed by later doctrine:
 
@@ -307,10 +307,10 @@ Test coverage: `verify-federation.js` exercises 18 properties of the mate-vessel
 
 ## What's NOT in this doctrine
 
-- **Federation authentication.** Cross-reality federation needs cryptographic identity verification ("is this actually tabor from tabors.site?"). Lives in the canopy protocol, not here.
+- **Federation authentication.** Cross-story federation needs cryptographic identity verification ("is this actually tabor from tabors.site?"). Lives in the canopy protocol, not here.
 - **Conflict resolution at the foreign side.** Two cross-world actors writing the same foreign target at the same time. The foreign substrate handles concurrency the same way it handles local writes (locks). Cross-world adds no new conflict semantics.
 - **Visual portals and windows.** The 3D portal showing a doorway, the perspective shift on walking through, the window-frame UX — all extension layers. The substrate just stores positions and runs verbs.
-- **Cross-world stigmergy.** Scheduled wakes, DO-trigger fan-out firing across realities. Out of scope for the first cut; cross-reality stamps are explicit actor calls.
+- **Cross-world stigmergy.** Scheduled wakes, DO-trigger fan-out firing across stories. Out of scope for the first cut; cross-story stamps are explicit actor calls.
 
 ## See also
 
