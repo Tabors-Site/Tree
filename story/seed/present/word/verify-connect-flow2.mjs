@@ -37,9 +37,9 @@ await import(`${R}/begin.js`);
 const { findByName, loadProjection } = await import(`${R}/seed/materials/projections.js`);
 const { sealFacts } = await import(`${R}/seed/past/fact/facts.js`);
 const { nameVerb } = await import(`${R}/seed/ibp/verbs/name.js`);
-const { cherubBeOps } = await import(`${R}/seed/present/roles/cherub/role.js`);
+const { cherubBeOps } = await import(`${R}/seed/store/words/cherub/role.js`);
 const { resolveRoleWord, runRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
-const { connectHostEnv, selectConnectFlow } = await import(`${R}/seed/present/roles/cherub/connectHost.js`);
+const { connectHostEnv, selectConnectFlow } = await import(`${R}/seed/store/words/cherub/connectHost.js`);
 
 let pass = 0, fail = 0;
 const ok = (l) => { pass++; console.log(`  ✓ ${l}`); };
@@ -58,7 +58,7 @@ async function register({ name, password, nameId }) {
 async function declareName(name, password) {
   const branch = "0";
   const sc = { actId: randomUUID(), actorAct: { branch, by: "i-am" }, identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
-  const r = await nameVerb("declare", { name, password, soulType: "human" }, { identity: sc.identity, moment: sc, currentBranch: branch });
+  const r = await nameVerb("declare", { name, password, soulType: "human" }, { identity: sc.identity, moment: sc, currentHistory: branch });
   await sealFacts(sc.deltaF);
   return r.nameId;
 }

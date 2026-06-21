@@ -42,7 +42,7 @@ await import(`${R}/begin.js`); // full genesis: I_AM, cherub (+ its roles), dele
 const { findByName, loadProjection } = await import(`${R}/seed/materials/projections.js`);
 const { sealFacts } = await import(`${R}/seed/past/fact/facts.js`);
 const { nameVerb } = await import(`${R}/seed/ibp/verbs/name.js`);
-const { cherubBeOps } = await import(`${R}/seed/present/roles/cherub/role.js`);
+const { cherubBeOps } = await import(`${R}/seed/store/words/cherub/role.js`);
 
 let pass = 0, fail = 0;
 const ok = (l) => { pass++; console.log(`  ✓ ${l}`); };
@@ -82,7 +82,7 @@ try {
   let ownerName = null;
   {
     const sc = { actId: randomUUID(), actorAct: { branch, by: "i-am" }, identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
-    ownerName = (await nameVerb("declare", { name: "newcomer", password: "pw12345678", soulType: "human" }, { identity: sc.identity, moment: sc, currentBranch: branch })).nameId;
+    ownerName = (await nameVerb("declare", { name: "newcomer", password: "pw12345678", soulType: "human" }, { identity: sc.identity, moment: sc, currentHistory: branch })).nameId;
     await sealFacts(sc.deltaF);
   }
   console.log(`  arriving Name = ${String(ownerName).slice(0, 14)}…\n`);

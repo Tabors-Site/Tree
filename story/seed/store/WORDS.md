@@ -3,8 +3,9 @@
 Every word the seed declares, paired with its code (its connecter) if it has any.
 A word plus its logic is a portable unit: lift the bundle into another factory and it boots there.
 The factory itself is word-agnostic machinery (parser, fold, chain, dispatch, stamper, the
-operations Map in `ibp/operations.js`, the roleWordRegistry bridge) and holds no words — delete
-this store and the factory still boots, it just starts nothing.
+operations Map in `ibp/operations.js`, the roleWordRegistry bridge, the BE_OPS table) and holds no
+words — **the engine now holds zero built-in words** (cherub was the last hardcoded one; it
+self-registers). Delete this store and the factory still boots; it just starts nothing.
 
 Two physical shapes in `store/words/`:
 - **a flat `<name>.word`** — a CONCEPT: a pure declaration, no per-word code, grounds in the generic engine.
@@ -33,15 +34,16 @@ Two physical shapes in `store/words/`:
 | roleflow | a conditional being-quality folding to a role | present/roles/roleFlow.js |
 | see | read-only perception of the present fold | ibp/verbs/see.js |
 | do | change the world (make/give/take/set/move/grant/drop) | ibp/verbs/do.js + stamper |
-| be | the closed six-op set | ibp/verbs/be.js, beOps.js, cherub/role.js |
+| be | the closed six-op set | ibp/verbs/be.js, beOps.js, store/words/cherub/role.js |
 | call | a do that wakes a being | ibp/verbs/call.js |
 | recall | read the past as see reads the present | the fold/reel engine |
 | (verbs) | the verb schema + irregular pasts | folded by wordFold.js |
 
 ## Implementation bundles — `store/words/<dir>/` (the .word + its handler, portable)
 
-Extracted out of materials/ and roles/ into self-contained bundles. **Boot-verified 2026-06-19**:
-fresh wipe + boot registers all 12 ops, declares the 20 concepts, genesis clean, server up, no errors.
+**All 12 implementation words extracted. Boot-verified 2026-06-19** (fresh wipe + boot: 20 ops
+register, 20 concepts declared, genesis births through cherub:birth — `[Story] I am born.` — server
+up, zero errors).
 
 | bundle | words / ops | handler files | boot seam |
 |------|----|----|----|
@@ -52,23 +54,36 @@ fresh wipe + boot registers all 12 ops, declares the 20 concepts, genesis clean,
 | grant-role/ | being:grant-role | index.js + grantHost.js (carved from being/ops.js) | services.js |
 | credential/ | credential:attach/detach/read/reset | credentialOps.js + credentialHost.js | services.js |
 | branch-pointers/ | branch-manager:set-pointer + delete-pointer | index.js + branchManagerHost.js (carved from branch-manager/ops.js) | genesis.js |
-| set-world-signal/ | role-manager:set-world-signal | index.js (carved from role-manager/ops.js; role-managerHost.js absorbed) | genesis.js |
+| set-world-signal/ | role-manager:set-world-signal | index.js (carved from role-manager/ops.js) | genesis.js |
+| model/ | render:set-model *(inert)* | index.js [moved modelOp.js] + model.word | services.js |
+| create-matter/ | matter:create-matter | index.js + matterHost.js (carved from matter/ops.js) | services.js |
+| acquisition/ | acquisition:ask-role + take-role | index.js + acquisitionHost.js (carved from acquisitionOps.js) | services.js |
+| cherub/ | cherub:birth + connect (BE ops) | role.js + connectHost.js (whole dir; cherubBeOps feeds BE_OPS) | services.js + beOps.js |
 
-## Stay co-located (not extracted — flagged)
+*(inert)* = the .word is registered + declared + resolvable, but the JS handler still drives (the
+cut was never wired). **Wired** words run the .word through the bridge with the JS body as a
+clean-miss fallback: key, grant-role, credential, branch-pointers, set-world-signal, acquisition,
+cherub, and **create-matter** (wired + harness-verified 2026-06-19, verify-creatematter-cut 6/0).
+**Still inert:** set-model (wiring needs a from-scratch modelHost) and move/portal/set-render (the
+older inert moves).
 
-| word | where | why it stays |
-|------|----|----|
-| matter:create-matter | materials/matter/ | cut unwired (handler is pure JS); shares `assertMatterCoordInBounds` with set-matter; ops.js co-owns 4 non-word siblings |
-| acquisition (ask-role / take-role) | present/roles/ | `emitInternalGrant` is shared with the core SEE verb (see.js); refactor that to a shared module first |
-| cherub (birth / connect) | present/roles/cherub/ | frozen into the `cherubBeOps`/BE_OPS object; the .word is control-strand only; the ONLY word hardcoded in roleWordRegistry's built-in map. Whole-dir move only, separate session |
-| set-model (model.word) | materials/ | unwired cut: model.word is dormant (no registerRoleWord), handler is pure JS. Relocating is inert; wiring the cut is a separate CONVERTING decision |
+## Shared-module lifts (the untangles that unblocked the carves)
 
-## Demo / narrative programs (present/word/, NOT vocabulary)
+- **materials/matter/coordBounds.js** — `COORD_AXES` + `assertMatterCoordInBounds`, the single canonical body (it had been verbatim-duplicated in matter/ops.js AND matterHost.js). Imported by the kept matter/ops.js (set-matter) and the create-matter bundle. Killed the duplicate.
+- **present/roles/internalGrant.js** — `emitInternalGrant`, the pure grant-emit primitive lifted out of acquisitionOps.js. Imported by the **core SEE verb** (see.js, auto-on-entry grant) and the acquisition bundle. This lift is what let SEE stop reaching into a word bundle — the whole reason acquisition could move.
 
-genesis.word, harmony.word, sun.word, being.word, give.word, matter.word, space.word + the 3 .ir.js
-+ the *-demo.js runners are teaching scaffolding, not boot vocabulary. They must NOT land in
-store/words (being/matter/space would shadow the concept words). Recommended relocation:
-`present/word/examples/` (whole-dir; the parser/evaluator engine stays). Pending Tabor's call.
+## Stay co-located — NONE
+
+All implementation words have been extracted. The roleWordRegistry engine holds zero built-in words.
+Remaining flagged follow-ups (not extractions): wiring the two inert cuts (set-model, create-matter)
+live would each need a from-scratch host design (model.word references host fns that don't exist;
+create-matter's matterHost exists but the bridge was never wired) — a separate CONVERTING pass.
+
+## Demo / narrative programs — relocated to `present/word/examples/`
+
+genesis/harmony/sun/being/give/matter/space .word + the 3 .ir.js + the *-demo.js runners are teaching
+scaffolding (not vocabulary), moved whole to `present/word/examples/` (slated for eventual deletion).
+The parser/evaluator engine stays in present/word/.
 
 ## CAS — content-addressed, no source
 

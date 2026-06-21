@@ -1,20 +1,28 @@
-# model.word — set-model: give a being/space/matter its 3D body (modelOp.js).
+# model.word — set-model: give a being/space/matter its 3D body (store/words/model/, the
+# set-model DO op).
 #
-# The CONTROL strand (the clear-vs-set fork + the modelMatterId gate) is .word.
-# The genuine computes stay `host:`: assertMaySetModel (the per-kind auth gate,
-# throws on deny), resolveModelBlock (resolve the model matter + snapshot
-# hash/url/name — content-store work), and writeModel (the cross-kind set-<kind>
-# emit at qualities.render, the field-path dispatch over being/space/matter).
-# The bridge binds `target`, `kind`, `caller`, `branch`, and the params
-# (`modelMatterId`, `scale`, `rotation`, `clear`, `forMatterType`).
+# The CONTROL strand (the clear-vs-set fork + the modelMatterId gate) is .word. The
+# genuine computes stay host (modelHost.js): assert-may-set-model (the per-kind self/
+# author/owner auth gate, throws on deny), resolve-model-block (resolve the model matter +
+# snapshot hash/url/name — content-store work), write-model / clear-model (the set-<kind>
+# field-path enrichment over being/space/matter).
+#
+# THE DESIGN — param-ENRICHMENT, not a direct emit: set-model lays NO fact of its own. The
+# write/clear escapes MUTATE the op's params (field / value / merge, the set-<kind> shape)
+# in place, and the dispatcher's auto-fact + the qualities reducer apply the write. So the
+# JS fallback keeps working unchanged. The escapes are kebab-case (modelHost.js), invoked
+# via `see <escape>(...) as <bind>` (the key.word pattern for a kebab returning escape).
+#
+# The bridge binds `target`, `kind`, `caller`, `branch`, and the params (`modelMatterId`,
+# `scale`, `rotation`, `clear`, `forMatterType`).
 
 When a caller sets a model on a target:
-  host: assertMaySetModel(kind, target, caller).
+  see assert-may-set-model(kind, target, caller) as gated.
   If clear:
-    host: clearModel(target, kind, forMatterType).
+    see clear-model(kind, forMatterType) as cleared.
     Return cleared: true.
   If no modelMatterId:
-    refuse with "modelMatterId required: upload a model matter first, or pass clear=true".
-  host: resolveModelBlock(modelMatterId, scale, rotation) as model.
-  host: writeModel(target, kind, forMatterType, model).
+    refuse with "modelMatterId required: upload a model matter first, or pass clear=true" as invalid-input.
+  see resolve-model-block(modelMatterId, scale, rotation) as bundle.
+  see write-model(kind, forMatterType, bundle) as wrote.
   Return set: true.

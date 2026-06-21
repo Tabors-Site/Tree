@@ -43,7 +43,7 @@ const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { getSpaceRootId } = await import(`${R}/seed/sprout.js`);
 const { doVerb } = await import(`${R}/seed/ibp/verbs/do.js`);
 const { resolveRoleWord, runRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
-const { acquisitionHostEnv } = await import(`${R}/seed/present/roles/acquisitionHost.js`);
+const { acquisitionHostEnv } = await import(`${R}/seed/store/words/acquisition/acquisitionHost.js`);
 
 let pass = 0, fail = 0;
 const ok = (l) => { pass++; console.log(`  ✓ ${l}`); };
@@ -63,9 +63,9 @@ const birth = async (name) => {
 // drive the REAL take-role op via doVerb → the cut handler → take-role.word; seal here
 async function takeRole(caller, role, space) {
   const branch = "0";
-  const sc = { actId: randomUUID(), actorAct: { branch, by: String(caller) }, identity: { beingId: String(caller), nameId: String(caller) }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc = { actId: randomUUID(), actorAct: { branch, history: branch, by: String(caller) }, identity: { beingId: String(caller), nameId: String(caller) }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   try {
-    const res = await doVerb({ kind: "space", id: String(space) }, "take-role", { role }, { identity: { beingId: String(caller) }, moment: sc });
+    const res = await doVerb({ kind: "space", id: String(space) }, "take-role", { role }, { identity: { beingId: String(caller) }, moment: sc, currentHistory: "0" });
     if (sc.deltaF.length) await sealFacts(sc.deltaF);
     const result = res?.result ?? res; // doVerb may wrap the handler return
     return { result, deltaF: sc.deltaF, refused: null };

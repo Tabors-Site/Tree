@@ -41,7 +41,7 @@ const { sealFacts } = await import(`${R}/seed/past/fact/facts.js`);
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { doVerb } = await import(`${R}/seed/ibp/verbs/do.js`);
 const { resolveRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
-const { readPointers } = await import(`${R}/seed/materials/branch/branchRegistry.js`);
+const { readPointers } = await import(`${R}/seed/materials/history/historyRegistry.js`);
 
 let pass = 0, fail = 0;
 const ok = (l) => { pass++; console.log(`  ✓ ${l}`); };
@@ -53,9 +53,9 @@ const cherub = await poll(() => findByName("being", "cherub", "0"));
 // drive the REAL set-pointer op via doVerb → the cut handler → branch-manager.word
 async function setPointer(name, canonical) {
   const branch = "0";
-  const sc = { actId: randomUUID(), actorAct: { branch, by: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc = { actId: randomUUID(), actorAct: { branch, history: branch, by: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   try {
-    const res = await doVerb({ kind: "being", id: String(cherub.id) }, "set-pointer", { name, canonical }, { identity: ident, moment: sc });
+    const res = await doVerb({ kind: "being", id: String(cherub.id) }, "set-pointer", { name, canonical }, { identity: ident, moment: sc, currentHistory: "0" });
     if (sc.deltaF.length) await sealFacts(sc.deltaF);
     return { result: res?.result ?? res, deltaF: sc.deltaF, refused: null };
   } catch (e) { if (e && (e.name === "IbpError" || e.code)) return { result: null, deltaF: sc.deltaF, refused: e }; throw e; }

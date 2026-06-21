@@ -715,7 +715,7 @@ async function maybeAutoGrantOnEntry({ identity, spaceId, branch, moment }) {
       const policy = normalizeAcquisition(spec);
       if (!policy.autoOnEntry) continue;
       if (alreadyHoldsRole(heldGrants, roleName, spaceId)) continue;
-      const { emitInternalGrant } = await import("../../present/roles/acquisitionOps.js");
+      const { emitInternalGrant } = await import("../../present/roles/internalGrant.js");
       await emitInternalGrant({
         granteeBeingId: String(identity.beingId),
         role:           roleName,

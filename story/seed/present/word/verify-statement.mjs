@@ -36,7 +36,7 @@ try {
     typist = b.beingId;
   });
   await new Promise((r) => setTimeout(r, 1000));
-  const socket = { beingId: String(typist), name: "typist", nameId: String(typist), currentBranch: "0" };
+  const socket = { beingId: String(typist), name: "typist", nameId: String(typist), currentHistory: "0" };
 
   // 1. a VALID Word with no leading "I" and no period → first-person + terminator assumed → a fact lands
   const before = await Fact.countDocuments({ act: "create-space" });

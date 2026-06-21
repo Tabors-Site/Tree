@@ -556,7 +556,7 @@ export async function genesis(app, opts = {}) {
   // happens through their verb handlers (cherub owns the BE_OPS table;
   // llm-assigner is registered before the host/grant loop); the
   // registry entries are stubs that surface canX for the role-walk.
-  const { cherubRole } = await import("./seed/present/roles/cherub/role.js");
+  const { cherubRole } = await import("./seed/store/words/cherub/role.js");
   const { llmAssignerRole } = await import("./seed/present/roles/llm-assigner/role.js");
   registerRole("cherub", cherubRole, "seed");
   registerRole("llm-assigner", llmAssignerRole, "seed");
@@ -619,7 +619,7 @@ export async function genesis(app, opts = {}) {
       // delegate's canX through the qualities.roles host (not through a
       // registry-fallback hack). Each one-op-per-moment.
       const { humanRole } = await import("./seed/present/roles/human/role.js");
-      const { cherubRole } = await import("./seed/present/roles/cherub/role.js");
+      const { cherubRole } = await import("./seed/store/words/cherub/role.js");
       const { birtherRole } = await import("./seed/present/roles/birther/role.js");
       const { storyManagerRole } = await import("./seed/present/roles/story-manager/role.js");
       const { roleManagerRole } = await import("./seed/present/roles/role-manager/role.js");
@@ -679,39 +679,11 @@ export async function genesis(app, opts = {}) {
     }
   }
 
-  // ── Operator being. The first human inhabitant. ──
-  // plant.js gathered (name, password, consent) at first plant and
-  // stashed them in bootContext. If creds are present and no human
-  // yet exists, cherub mints the operator-being now — by the same
-  // mechanism every later register uses, just before the wire is up.
-  // The operator's parentBeingId is the I-Am (so they are the root
-  // operator); the act is authored by cherub for cleanliness of the
-  // auth path. scaffold:true bypasses the presentism guard because
-  // the scheduler/intake/Act machinery is still pre-genesis here.
-  {
-    const { consumePlantContext } = await import("./bootContext.js");
-    const plantCtx = consumePlantContext();
-    if (plantCtx?.operatorName && plantCtx?.operatorPassword) {
-      const { isFirstBeing } = await import("./seed/materials/being/identity.js");
-      if (await isFirstBeing()) {
-        try {
-          const { cherubBeing } = await import("./seed/present/roles/cherub/role.js");
-          // Operator mint is the I-Am acting through cherub. One Act
-          // for the whole register flow (cherub's home create, be:birth,
-          // rootOwner set) — all commit atomically.
-          await withIAmAct(`operator-being mint @${plantCtx.operatorName}`, async (ctx) => {
-            await cherubBeing.register(
-              { name: plantCtx.operatorName, password: plantCtx.operatorPassword },
-              { scaffold: true, moment: ctx },
-            );
-          });
-          log.info("Genesis", `I create @${plantCtx.operatorName}.`);
-        } catch (err) {
-          log.error("Genesis", `operator-being mint failed: ${err.message}`);
-        }
-      }
-    }
-  }
+  // ── The first human inhabitant arrives later, through the portal ──
+  // No being is minted at plant time. A human arrives by talking to
+  // cherub for a top-level being, then summon:births a kid they father.
+  // Plant only configures the story (peering/federation + the main
+  // config); the old plant->bootContext operator mint is retired.
 
   // ── Host runtime (nodeServerTest Phase 1). ──
   // Resolve the ./host spaces + beings, ensure the request-log
@@ -969,6 +941,25 @@ export async function genesis(app, opts = {}) {
   // Detached so a sync failure does not block boot. Errors are
   // logged inside the helpers.
   //
+  // Step 4 of the word cutover (philosophy/word/10.md §2): fold EVERY registered
+  // op into the word-fold, not only the ~38 that registered before seedFold. The
+  // late seed ops (the role-dir + host-role ops, imported after the genesis fold)
+  // and the just-loaded extension ops register after seedFold; declaring them
+  // here, at boot-end, lets the dispatch resolve them from the fold, not the Map.
+  // Idempotent (skipIfUnchanged): ops already folded at seedFold skip.
+  try {
+    const { declareOpsToFold, rehydrateWordProjection } =
+      await import("./seed/present/word/wordStore.js");
+    let folded = 0;
+    await withIAmAct("I declare the rest of my ops", async (ctx) => {
+      folded = await declareOpsToFold({ moment: ctx });
+    });
+    await rehydrateWordProjection("0");
+    log.verbose("Genesis", `boot-end op fold: ${folded} op(s) reconciled into the word-fold`);
+  } catch (err) {
+    log.warn("Genesis", `boot-end op fold failed: ${err.message}`);
+  }
+
   // Three parallel sync calls, three I-Am moments — independent
   // reconciliations of independent registries. Each is the I-Am's
   // act on its own substrate; running them as separate moments lets

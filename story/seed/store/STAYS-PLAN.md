@@ -5,8 +5,19 @@ with your reasoning unless SUPER HARD"). Execute ONE AT A TIME, verify each (nod
 contention-free resolve-check + a full boot), in the order below. The generic engine
 (parser/evaluator/fold/chain/dispatch, operations Map, roleWordRegistry bridge, BE_OPS) stays factory.
 
+## ✅ COMPLETE — all 4 stays extracted, final boot green, 11/11 per-cut harnesses pass (2026-06-19)
+
+set-model + create-matter (both move-inert + the coordBounds untangle that killed the duplicate),
+acquisition (the internalGrant lift de-coupled the core SEE verb), cherub (whole-dir; the engine now
+holds ZERO built-in words). Final fresh boot births via cherub:birth, zero errors. All 11 cut
+harnesses green. NOTE: the branch→history rename had left many present/word/verify-*.mjs DRIVERS
+stale (they set `moment.actorAct.branch` but the perimeter reads `moment.actorAct.history` /
+`targetHistory` / `opts.currentHistory`; plus `branchRegistry.js`→`historyRegistry.js` and a
+`seatBranch`→`seatHistory` field) — the 11 I ran are fixed + green; OTHER verify-*.mjs likely carry
+the same staleness (other-agent rename fallout to sweep).
+
 ## Decisions (made — not pending)
-- **matter/create-matter: WIRE THE CUT.** Word-first handler + JS clean-miss fallback, exactly like grant-role's `_grantRoleViaWord`. matter.word is unwired today; this carve wires it live (caller mode). Keep `skipAudit:true` (matterHost.emitBirth is the world write).
+- **matter/create-matter: MOVE-INERT** (revised from the design's wire-the-cut). The cut is UNWIRED today (no `_createMatterViaWord`; matterHostEnv has zero consumers), so wiring it is net-new code (ADDITION), not the clean extraction this task scopes — and it matches move/portal/set-render, which moved inert despite shipping hosts. So: register matter.word inert (createMatterHandler JS keeps driving, byte-identical), move matterHost.js as future-wiring weight, do the coordBounds lift (the real untangle), prune dead imports, fix the resolveMatterName history→branch bug. Mirror move/moveOp.js (inert), NOT grant-role (wired). Wiring live = separate follow-up. Keep `skipAudit:true`. (acquisition + cherub stay WIRED — their cuts are already live; preserve, don't add.)
 - **matter coordBounds home: materials/matter/coordBounds.js** (NOT under store/ — that would invert the dependency, kept ops.js importing from a word bundle).
 - **acquisition: lift emitInternalGrant → present/roles/internalGrant.js** (factory shared, function-export, no boot import). see.js:718 imports it instead of acquisitionOps.js. The bundle is already-wired (live cut) — preserve, don't add. FIX grantInternal `history:`→`branch:` (latent fork bug).
 - **set-model: MOVE-INERT.** Register the word (key `(render, set-model)` — op name differs from set-render so k(role,op) is unique), handler stays pure JS. Wiring needs a net-new modelHost.js + rewriting model.word's stale host-fn names = net-new code, a separate follow-up. Leave model.word byte-identical.

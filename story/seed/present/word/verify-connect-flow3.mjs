@@ -41,7 +41,7 @@ const { birthBeing } = await import(`${R}/seed/materials/being/identity/birth.js
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { getStoryDomain } = await import(`${R}/seed/ibp/address.js`);
 const { resolveRoleWord, runRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
-const { connectHostEnv, selectConnectFlow } = await import(`${R}/seed/present/roles/cherub/connectHost.js`);
+const { connectHostEnv, selectConnectFlow } = await import(`${R}/seed/store/words/cherub/connectHost.js`);
 const localDomain = getStoryDomain();
 
 let pass = 0, fail = 0;

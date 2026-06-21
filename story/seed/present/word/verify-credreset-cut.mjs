@@ -72,10 +72,10 @@ try {
   const beforeHash = before?.state?.password;
 
   // ── 1. authorized reset (via the REAL op, I_AM authority) → re-mints the credential ──
-  const sc = { actId: randomUUID(), actorAct: { branch: "0", by: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc = { actId: randomUUID(), actorAct: { branch: "0", history: "0", by: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   let res = null, refused = null;
   try {
-    res = await doVerb({ kind: "being", id: String(victim) }, "credential-reset", {}, { identity: ident, moment: sc });
+    res = await doVerb({ kind: "being", id: String(victim) }, "credential-reset", {}, { identity: ident, moment: sc, currentHistory: "0" });
     if (sc.deltaF.length) await sealFacts(sc.deltaF);
   } catch (e) { refused = e; }
   const r = res?.result ?? res;

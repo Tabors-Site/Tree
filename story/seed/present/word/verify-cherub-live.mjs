@@ -41,6 +41,15 @@ await import("../../materials/being/ops.js");
 const { registerRole } = await import("../../present/roles/registry.js");
 const { humanRole } = await import("../../present/roles/human/role.js");
 try { registerRole("human", humanRole); } catch { /* already registered */ }
+// The full boot imports cherub/role.js (via services.js / beOps.js), whose top-level
+// registerRoleWord("cherub","birth"|"connect") self-registers the cherub words. The
+// isolated test DB skips that boot, so import the module here to populate the registry —
+// otherwise resolveRoleWord("cherub","birth") returns null. (Sibling cut harnesses import
+// it for cherubBeOps; cherub-live needs only the registration side effect.)
+await import("../../store/words/cherub/role.js");
+// cherub.word's flow emits a do:grant-role; that op self-registers on import of its
+// word module (the full boot pulls it in). Import it so the dispatched act resolves.
+await import("../../store/words/grant-role/index.js");
 
 const { ensureSpaceRoot, ensureIAm } = await import("../../sprout.js");
 const { findByName } = await import("../../materials/projections.js");
@@ -81,8 +90,8 @@ try {
   // can be its own (form-being's trueName = a declared Name).
   let ownerName = null;
   await withRetry(async () => {
-    const sc = { actId: randomUUID(), actorAct: { branch, by: "i-am" }, identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
-    ownerName = (await nameVerb("declare", { name: "tabor", password: "pw12345678", soulType: "human" }, { identity: sc.identity, moment: sc, currentBranch: branch })).nameId;
+    const sc = { actId: randomUUID(), actorAct: { branch, history: branch, by: "i-am" }, identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+    ownerName = (await nameVerb("declare", { name: "tabor", password: "pw12345678", soulType: "human" }, { identity: sc.identity, moment: sc, currentHistory: branch })).nameId;
     await sealFacts(sc.deltaF);
   });
   console.log(`  arriving Name (father) = ${String(ownerName).slice(0, 14)}…\n`);
@@ -94,9 +103,9 @@ try {
   // "by I_AM, through Cherub"). name = "i-am" short-circuits authorize (the
   // bootstrap axiom), beingId = cherub is the vessel. _inOp mirrors runRoleWord
   // (the whole flow is one op; do-acts dispatch as nested sub-ops).
-  const moment = { actId: randomUUID(), actorAct: { branch, by: "i-am" }, identity: { beingId: String(cherub.id), name: "i-am", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [], _inOp: true };
+  const moment = { actId: randomUUID(), actorAct: { branch, history: branch, by: "i-am" }, identity: { beingId: String(cherub.id), name: "i-am", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [], _inOp: true };
   const ctx = {
-    dryRun: false, branch, moment,
+    dryRun: false, branch, history: branch, moment,
     identity: moment.identity,
     env: { iam: "i-am", mintId: () => randomUUID() }, // pre-mint ids for `bind` sites (the home)
     bindings: { name: "tabor-prime", password: "wordpass", ownerName: String(ownerName), placeRoot: String(spaceRoot._id) },
@@ -142,8 +151,8 @@ try {
   // deltaF (as runRoleWord sets) must list the fact ONCE, not twice. cherub.word
   // never reaches emit() (all doVerb/form-being), but the rich slices will, so
   // probe emit() directly: a be-op != form-being falls through evalAct to emit().
-  const probeSc = { actId: randomUUID(), actorAct: { branch, by: "i-am" }, identity: { beingId: String(cherub.id), name: "i-am", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [], _inOp: true };
-  const probeCtx = { dryRun: false, branch, moment: probeSc, identity: probeSc.identity, env: { iam: "i-am" }, bindings: {}, flows: [], deltaF: probeSc.deltaF /* SHARED, as runRoleWord does */ };
+  const probeSc = { actId: randomUUID(), actorAct: { branch, history: branch, by: "i-am" }, identity: { beingId: String(cherub.id), name: "i-am", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [], _inOp: true };
+  const probeCtx = { dryRun: false, branch, history: branch, moment: probeSc, identity: probeSc.identity, env: { iam: "i-am" }, bindings: {}, flows: [], deltaF: probeSc.deltaF /* SHARED, as runRoleWord does */ };
   await evaluate([{ kind: "act", verb: "be", act: "probe-emit", by: "I" }], probeCtx);
   probeSc.deltaF.length === 1
     ? ok(`live plain emit() lists the fact ONCE (no double-push on shared deltaF)`)

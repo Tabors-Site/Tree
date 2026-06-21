@@ -1,8 +1,8 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// matterHost.js — host-escape glue for create-matter (matter/ops.js, the
-// create-matter DO op). Wires the SAME primitives the JS createMatterHandler
-// calls into ctx.env.host so matter.word can reach the genuine COMPUTE through
+// matterHost.js — host-escape glue for create-matter (store/words/create-matter/,
+// the create-matter DO op). Wires the SAME primitives the JS createMatterHandler
+// calls into ctx.env.host so create-matter.word can reach the genuine COMPUTE through
 // `host:` escapes (the strand the cut deletes). NO reimplementation — the spec
 // build below is the exact orchestration the JS handler ran, calling the same
 // imported functions.
@@ -27,47 +27,15 @@
 // callHost invokes each as `fn({ args: [...] }, ctx)`; the write fn reads
 // ctx.moment to lay its fact into the in-flight moment.
 
-import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
-import { emitFact } from "../../past/fact/facts.js";
-import { detectTargetKind, targetIdOf } from "../_targetShape.js";
-import { resolveMatterName } from "./matters.js";
-import { matterContentId } from "./matterId.js";
+import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
+import { emitFact } from "../../../past/fact/facts.js";
+import { detectTargetKind, targetIdOf } from "../../../materials/_targetShape.js";
+import { resolveMatterName } from "../../../materials/matter/matters.js";
+import { matterContentId } from "../../../materials/matter/matterId.js";
+import { assertMatterCoordInBounds } from "../../../materials/matter/coordBounds.js";
 
 const historyOf = (ctx) =>
   ctx?.moment?.actorAct?.history || ctx?.history || "0";
-
-const COORD_AXES = ["x", "y", "z"];
-
-// Validate a coord write against the matter's space size. Throws
-// IbpError(INVALID_INPUT) on an out-of-bounds axis — the same doctrine
-// (and the same shape) as createMatterHandler's assertMatterCoordInBounds.
-async function assertMatterCoordInBounds(matterDoc, raw, branch = "0") {
-  const out = {};
-  for (const a of COORD_AXES) {
-    if (typeof raw[a] === "number" && Number.isFinite(raw[a])) out[a] = raw[a];
-  }
-  if (Object.keys(out).length === 0) return null;
-  const spaceId = matterDoc?.spaceId || null;
-  if (!spaceId || spaceId === "deleted") return out;
-  const { loadOrFold } = await import("../projections.js");
-  const spaceSlot = await loadOrFold("space", spaceId, branch);
-  const size = spaceSlot?.state?.size || null;
-  if (!size) return out;
-  for (const a of COORD_AXES) {
-    if (out[a] === undefined) continue;
-    const cap = typeof size[a] === "number" && size[a] > 0 ? size[a] : null;
-    if (cap === null) continue;
-    const high = Number.isInteger(out[a]) ? Math.trunc(cap) - 1 : cap - Number.EPSILON;
-    if (out[a] < 0 || out[a] > high) {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        `set-matter: coord.${a}=${out[a]} is out of bounds (0..${high} for this space)`,
-        { axis: a, value: out[a], cap: high },
-      );
-    }
-  }
-  return out;
-}
 
 export function matterHostEnv() {
   return {
@@ -88,7 +56,7 @@ export function matterHostEnv() {
       // spec.spaceId is the last resort.
       let spaceId = kind === "space" ? targetIdOf(target) : (spec.spaceId || null);
       if (!spaceId && parentMatterId) {
-        const { loadOrFold } = await import("../projections.js");
+        const { loadOrFold } = await import("../../../materials/projections.js");
         const parentSlot = await loadOrFold("matter", String(parentMatterId), branch);
         spaceId = parentSlot?.state?.spaceId || null;
       }
@@ -100,14 +68,14 @@ export function matterHostEnv() {
       // signals when omitted; the registry's contentKinds/mime gate below still
       // enforces the result.
       const { getMatterType, typeAllowsContentKind, typeAllowsMime } =
-        await import("./types.js");
+        await import("../../../materials/matter/types.js");
       let matterType = typeof spec.type === "string" && spec.type.length
         ? spec.type
         : null;
       const rawContent = spec.content ?? null;
       if (!matterType) {
-        const { classifyMatter } = await import("./classify.js");
-        const { isCasRef } = await import("./contentStore.js");
+        const { classifyMatter } = await import("../../../materials/matter/classify.js");
+        const { isCasRef } = await import("../../../materials/matter/contentStore.js");
         const input = {};
         if (typeof rawContent === "string") input.text = rawContent;
         else if (isCasRef(rawContent)) {
@@ -132,7 +100,7 @@ export function matterHostEnv() {
       // reference objects ride as-is for types carrying no owned bytes.
       let content = rawContent;
       {
-        const { putContent, hasContent, isCasRef } = await import("./contentStore.js");
+        const { putContent, hasContent, isCasRef } = await import("../../../materials/matter/contentStore.js");
         if (typeof content === "string") {
           if (!typeAllowsContentKind(typeDef, "text")) {
             throw new IbpError(IBP_ERR.INVALID_INPUT,

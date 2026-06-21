@@ -198,29 +198,9 @@ async function interactiveSetup(existingEnv = {}) {
     existingEnv.CUSTOM_LLM_API_SECRET_KEY ||
     crypto.randomBytes(32).toString("hex");
 
-  // The operator-being identity. Plant gathers the three strings
-  // the human types here — name, password, consent. Nothing is
-  // minted at plant time; there is no being yet to do the
-  // authoring. Genesis hands these to cherub once the cherub is
-  // alive; cherub authors the operator-being's BE.register using
-  // them, exactly like every later being's birth.
-  console.log("");
-  console.log("  ── Your being ──");
-  console.log("");
-  const operatorName = (await rl.question("  What is your name, human? ")).trim();
-  if (!operatorName) {
-    rl.close();
-    console.log("  No name given. Plant cancelled.\n");
-    process.exit(0);
-  }
-  const operatorPassword = (
-    await rl.question("  What is the password on your new being? ")
-  ).trim();
-  if (!operatorPassword) {
-    rl.close();
-    console.log("  No password given. Plant cancelled.\n");
-    process.exit(0);
-  }
+  // No being identity is gathered at plant time. The first human
+  // arrives later through the portal (talk to cherub for a top-level
+  // being). Plant only writes the story config + picks extensions.
 
   console.log("");
   console.log("  The seed is dual licensed. By default it is free and open");
@@ -232,7 +212,7 @@ async function interactiveSetup(existingEnv = {}) {
   console.log("");
   const consentAns = (
     await rl.question(
-      `  Do you, ${operatorName}, want to plant this seed to start new places, moment by moment? (y/N) `,
+      "  Do you want to plant this seed to start new places, moment by moment? (y/N) ",
     )
   ).trim().toLowerCase();
   const consent = consentAns === "y" || consentAns === "yes";
@@ -254,11 +234,6 @@ async function interactiveSetup(existingEnv = {}) {
   console.log("");
 
   await pickExtensions();
-
-  // Hand the gathered identity to genesis. Single-use, in-process.
-  // genesis consumes the slot exactly once after cherub is alive.
-  const { setPlantContext } = await import("./bootContext.js");
-  setPlantContext({ operatorName, operatorPassword });
 
   console.log("");
   console.log("  ════════════════════════════════════════════════════════════");

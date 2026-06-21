@@ -28,7 +28,7 @@
 // `canBe: ["birth", "connect", "release", "switch", "death"]`
 // and rely on the same static table.
 
-import { cherubBeOps } from "../present/roles/cherub/role.js";
+import { cherubBeOps } from "../store/words/cherub/role.js";
 
 export const BE_OPS = Object.freeze({
   birth:    cherubBeOps.birth,

@@ -58,6 +58,15 @@ import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { getStoryDomain } from "../../../ibp/address.js";
 import { birthBeing } from "../../../materials/being/identity/birth.js";
 import { hashPassword } from "../../../materials/being/identity/credentials.js";
+import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
+
+// Cherub is now a store-word bundle: self-register its co-located `.word` slices
+// (CONVERTING.md / the credentialOps pattern) at module load — BEFORE genesis, so
+// the sync resolveRoleWord finds the world strand the moment this file imports.
+// This replaces the engine's last hardcoded built-in REGISTRY entries (the engine
+// is now WORDLESS; every word self-registers via registerRoleWord).
+registerRoleWord("cherub", "birth", new URL("./cherub.word", import.meta.url));
+registerRoleWord("cherub", "connect", new URL("./cherub-connect.word", import.meta.url));
 
 const TREEOS_AUTH_WELCOME =
   "Welcome to TreeOS. This place is open to anyone who wants to inhabit it. Pick a username and password; you will receive an identity token immediately and start at your home.";
@@ -945,7 +954,7 @@ async function _registerHumanWithFreshHome({
     { kind: "space", id: homeId },
     "set-space",
     { field: "owner", value: String(result.beingId) },
-    { identity: I_AM, moment },
+    { identity: I_AM, moment, currentHistory: moment?.actorAct?.history || "0" },
   );
 
   // ── 4. Anoint the new human with the human role ──
@@ -965,7 +974,7 @@ async function _registerHumanWithFreshHome({
       anchorSpaceId: String(placeRootId),
       anchorBeingId: null,
     },
-    { identity: cherubIdentity, moment },
+    { identity: cherubIdentity, moment, currentHistory: moment?.actorAct?.history || "0" },
   );
 
   // ── 5. Record lineage (mother + father). ──
@@ -999,7 +1008,7 @@ async function _registerHumanWithFreshHome({
       value: { mother: motherBeingId, father: resolvedFatherId },
       merge: false,
     },
-    { identity: I_AM, moment },
+    { identity: I_AM, moment, currentHistory: moment?.actorAct?.history || "0" },
   );
 
   return result.being;
@@ -1032,7 +1041,7 @@ async function _birthViaWordOrJs({ name, password, importKey, parentBeingId, own
   //    (a literal "$ownerName" would reach birthBeing as a bogus trueName).
   if (importKey || !ownerNameId) return jsBirth();
 
-  const { resolveRoleWord, runRoleWord, bornBeingFrom } = await import("../../word/roleWordRegistry.js");
+  const { resolveRoleWord, runRoleWord, bornBeingFrom } = await import("../../../present/word/roleWordRegistry.js");
   const ir = resolveRoleWord("cherub", "birth", moment?.actorAct?.history);
   if (!ir || !moment) return jsBirth(); // not converted, or no moment → JS
 
@@ -1091,7 +1100,7 @@ async function _constantTimeReject(password) {
  * lays no fact, so a fresh minimal moment keeps the caller's moment untouched.
  */
 async function _connectViaWordOrJs({ name, password, moment }) {
-  const { resolveRoleWord, runRoleWord } = await import("../../word/roleWordRegistry.js");
+  const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
   const ir = resolveRoleWord("cherub", "connect", moment?.actorAct?.history);
   if (!ir) return null; // not converted → JS
   const { connectHostEnv, selectConnectFlow } = await import("./connectHost.js");
@@ -1132,7 +1141,7 @@ async function _connectViaWordOrJs({ name, password, moment }) {
  * falls through to Mode-2/Mode-3. Lays no fact.
  */
 async function _connectOwnedViaWord({ address, callerNameId, moment }) {
-  const { resolveRoleWord, runRoleWord } = await import("../../word/roleWordRegistry.js");
+  const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
   const ir = resolveRoleWord("cherub", "connect", moment?.actorAct?.history);
   if (!ir) return null;
   const targetName = extractTargetName(address);
@@ -1167,7 +1176,7 @@ async function _connectOwnedViaWord({ address, callerNameId, moment }) {
  * displacement) is sealed here (it landed on the fresh moment, not the caller's).
  */
 async function _connectInheritViaWord({ address, identity, moment }) {
-  const { resolveRoleWord, runRoleWord } = await import("../../word/roleWordRegistry.js");
+  const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
   const ir = resolveRoleWord("cherub", "connect", moment?.actorAct?.history);
   if (!ir) return null;
   const { connectHostEnv, selectConnectFlow } = await import("./connectHost.js");

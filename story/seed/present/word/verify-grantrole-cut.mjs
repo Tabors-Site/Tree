@@ -62,9 +62,9 @@ const birth = async (name) => {
   return bid;
 };
 const grant = async (target, params) => {
-  const sc = { actId: randomUUID(), actorAct: { branch: "0", by: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc = { actId: randomUUID(), actorAct: { branch: "0", history: "0", by: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   try {
-    const res = await doVerb({ kind: "being", id: String(target) }, "grant-role", params, { identity: ident, moment: sc });
+    const res = await doVerb({ kind: "being", id: String(target) }, "grant-role", params, { identity: ident, moment: sc, currentHistory: "0" });
     if (sc.deltaF.length) await sealFacts(sc.deltaF);
     return { result: res?.result ?? res, deltaF: sc.deltaF, refused: null };
   } catch (e) { if (e && (e.name === "IbpError" || e.code)) return { result: null, deltaF: sc.deltaF, refused: e }; throw e; }

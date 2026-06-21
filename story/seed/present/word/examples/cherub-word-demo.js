@@ -9,7 +9,7 @@ import { readFileSync } from "node:fs";
 import { parse } from "../parser.js";
 import { evaluate } from "../evaluator.js";
 
-const source = readFileSync(new URL("../../roles/cherub/cherub.word", import.meta.url), "utf8");
+const source = readFileSync(new URL("../../../store/words/cherub/cherub.word", import.meta.url), "utf8");
 const ir = parse(source);
 const flow = ir[0];
 

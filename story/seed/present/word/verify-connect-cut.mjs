@@ -38,7 +38,7 @@ await import(`${R}/begin.js`);
 
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const { sealFacts } = await import(`${R}/seed/past/fact/facts.js`);
-const { cherubBeOps } = await import(`${R}/seed/present/roles/cherub/role.js`);
+const { cherubBeOps } = await import(`${R}/seed/store/words/cherub/role.js`);
 const { getStoryDomain } = await import(`${R}/seed/ibp/address.js`);
 const storyDomain = getStoryDomain();
 
@@ -49,7 +49,7 @@ const poll = async (fn, t = 60000, e = 250) => { const t0 = Date.now(); while (D
 
 async function register({ name, password }) {
   const branch = "0";
-  const moment = { actId: randomUUID(), actorAct: { branch, by: "i-am" }, identity: { beingId: "i-am", name: "i-am", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [], _inOp: true };
+  const moment = { actId: randomUUID(), actorAct: { branch, history: branch, by: "i-am" }, identity: { beingId: "i-am", name: "i-am", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [], _inOp: true };
   const res = await cherubBeOps.birth.handler({ payload: { name, password }, ctx: { nameId: null, moment, req: {} } });
   await sealFacts(moment.deltaF);
   for (const fn of moment.afterSeal || []) { try { await fn(); } catch { /* angel grant; tolerated */ } }
@@ -59,7 +59,7 @@ async function register({ name, password }) {
 // drive the REAL connect handler Mode-1 (@cherub credential), time it (constant-time check)
 async function connect(name, password) {
   const branch = "0";
-  const ctx = { moment: { actId: randomUUID(), actorAct: { branch }, identity: { beingId: "arrival", name: "arrival" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] }, nameId: null };
+  const ctx = { moment: { actId: randomUUID(), actorAct: { branch, history: branch }, identity: { beingId: "arrival", name: "arrival" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] }, nameId: null };
   const t0 = process.hrtime.bigint();
   try {
     const res = await cherubBeOps.connect.handler({ address: `${storyDomain}/@cherub`, addressKind: "stance", payload: { name, password }, identity: null, ctx });
@@ -85,7 +85,7 @@ try {
   good.res?.name === "alice" ? ok(`response names @alice`) : bad(`name`, good.res?.name);
   String(good.res?.beingId) === String(alice.id) ? ok(`response beingId = @alice`) : bad(`beingId`, good.res?.beingId);
   good.res?.beingAddress === `${storyDomain}/@alice` ? ok(`response beingAddress = ${storyDomain}/@alice`) : bad(`beingAddress`, good.res?.beingAddress);
-  ("seatBranch" in (good.res || {})) ? ok(`response carries seatBranch (${good.res.seatBranch})`) : bad(`seatBranch`, good.res);
+  ("seatHistory" in (good.res || {})) ? ok(`response carries seatHistory (${good.res.seatHistory})`) : bad(`seatHistory`, good.res);
 
   // ── wrong password → refuse ──
   const wrong = await connect("alice", "nope");

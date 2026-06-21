@@ -61,8 +61,8 @@ const birth = async (name) => {
   return bid;
 };
 const drive = async (op, target) => {
-  const sc = { actId: randomUUID(), actorAct: { branch: "0", by: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
-  const res = await doVerb({ kind: "being", id: String(target) }, op, {}, { identity: ident, moment: sc });
+  const sc = { actId: randomUUID(), actorAct: { branch: "0", history: "0", by: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const res = await doVerb({ kind: "being", id: String(target) }, op, {}, { identity: ident, moment: sc, currentHistory: "0" });
   if (sc.deltaF.length) await sealFacts(sc.deltaF);
   return { result: res?.result ?? res, deltaF: sc.deltaF };
 };

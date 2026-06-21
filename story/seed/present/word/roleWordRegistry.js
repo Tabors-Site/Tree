@@ -17,10 +17,11 @@ import { evaluate } from "./evaluator.js";
 const k = (role, op) => `${role}:${op}`;
 
 // (role, op) -> the `.word` file that replaces its JS handler.
-// (role, op) -> the `.word` file, resolved relative to THIS engine file. Co-located
-// slices live with their role (`../roles/<role>/...`, CONVERTING.md); engine-local ones
-// (transitional) sit beside this file. As roles self-register via registerRoleWord, these
-// built-ins shrink to zero.
+// The engine now holds ZERO built-in words: every word self-registers via
+// registerRoleWord from its own bundle's module-load (the credentialOps pattern).
+// Cherub was the LAST built-in entry here; it moved to seed/store/words/cherub/ and
+// now self-registers (its role.js calls registerRoleWord at load). The map starts
+// EMPTY and is filled by those registrations + rehydrateWordsFromFacts at boot.
 // The PROJECTION (same shape as wakes' _registry): (role:op) -> { fileUrl, disabled }.
 // Populated in-memory at module-load for the SYNCHRONOUS hot path (resolveRoleWord), and
 // reconciled with the chain at boot (rehydrateWordsFromFacts). The chain — declare-word /
@@ -29,10 +30,7 @@ const k = (role, op) => `${role}:${op}`;
 // tag: the part of speech is the ANGLE — do=verb, see=noun, `a X is a role`=role-noun,
 // seed=instantiable-noun — intrinsic to how the word is declared/used. A separate `shape`
 // field would be a redundant copy of that truth, and a redundant copy drifts.)
-const REGISTRY = new Map([
-  [k("cherub", "birth"), { role: "cherub", op: "birth", fileUrl: "../roles/cherub/cherub.word" }],
-  [k("cherub", "connect"), { role: "cherub", op: "connect", fileUrl: "../roles/cherub/cherub-connect.word" }],
-]);
+const REGISTRY = new Map();
 
 // The per-branch DISABLED overlay: branch -> Set<"role:op"> turned off ON that branch. A
 // word's EXISTENCE (declared + backed, in REGISTRY) is branch-INDEPENDENT; its ENABLED state

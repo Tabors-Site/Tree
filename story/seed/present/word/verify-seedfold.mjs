@@ -47,14 +47,14 @@ try {
     : bad(`story renders the seed`, story.includes("spoke the word") ? "name shown but body missing" : "no declare-word rendered in the story");
 
   // 5. completeness: every concept of the descent declared (not just spot-checks)
-  const CONCEPTS = ["word", "iam", "base", "chain", "branch", "story", "fold", "weave", "see", "do", "name", "being", "space", "matter", "be", "call", "can", "recall", "role", "roleflow"];
+  const CONCEPTS = ["word", "iam", "base", "chain", "history", "story", "fold", "weave", "see", "do", "name", "being", "space", "matter", "be", "call", "can", "recall", "role", "roleflow"];
   let found = 0;
   for (const c of CONCEPTS) { const w = await getWord(c); if (w && w.kind === "concept") found++; }
   (found === CONCEPTS.length) ? ok(`all ${CONCEPTS.length} concept words declared (the full descent folded)`) : bad(`all concepts`, `${found}/${CONCEPTS.length}`);
 
   // 6. the do-ops declared into the fold alongside the concepts
   const { default: Fact } = await import(`${R}/seed/past/fact/fact.js`);
-  const opCount = await Fact.countDocuments({ verb: "do", act: "declare-word", branch: "0", "params.binding.kind": "op" });
+  const opCount = await Fact.countDocuments({ verb: "do", act: "declare-word", history: "0", "params.binding.kind": "op" });
   (opCount > 30) ? ok(`${opCount} do-ops declared into the fold (the op set, beside the concepts)`) : bad(`op count`, opCount);
 
   console.log(`\n  ${pass} passed, ${fail} failed`);

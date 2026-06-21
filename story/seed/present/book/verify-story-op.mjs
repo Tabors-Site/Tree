@@ -47,19 +47,19 @@ try {
   const ident = { beingId: String(cherub.id), nameId: String(cherub.id), name: "cherub" };
 
   // 1. world story — the whole branch, woven in the Word
-  const w = await seeVerb("story", { args: { scope: "world" }, identity: ident, currentBranch: "0" });
+  const w = await seeVerb("story", { args: { scope: "world" }, identity: ident, currentHistory: "0" });
   (w && Array.isArray(w.acts) && w.acts.length > 0 && typeof w.acts[0]?.line === "string")
     ? ok(`see story {scope:world} → ${w.acts.length} acts, woven: "${w.acts[0].line}"`)
     : bad(`world`, w);
 
   // 2. being story — defaults `being` to the caller (cherub), first person
-  const b = await seeVerb("story", { args: { scope: "being" }, identity: ident, currentBranch: "0" });
+  const b = await seeVerb("story", { args: { scope: "being" }, identity: ident, currentHistory: "0" });
   (b && Array.isArray(b.acts) && b.acts.length > 0 && b.acts.every((a) => typeof a.line === "string"))
     ? ok(`see story {scope:being} (defaults to caller) → ${b.acts.length} acts in cherub's thread`)
     : bad(`being`, b);
 
   // 3. lineage story — cherub + its descendants (the family)
-  const l = await seeVerb("story", { args: { scope: "lineage" }, identity: ident, currentBranch: "0" });
+  const l = await seeVerb("story", { args: { scope: "lineage" }, identity: ident, currentHistory: "0" });
   (l && Array.isArray(l.acts) && l.acts.length > 0)
     ? ok(`see story {scope:lineage} → ${l.acts.length} acts, the family story`)
     : bad(`lineage`, l);

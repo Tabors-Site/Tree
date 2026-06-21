@@ -1,6 +1,7 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// acquisitionOps.js — DO ops for acquiring roles.
+// store/words/acquisition/index.js — DO ops for acquiring roles, carved
+// out of present/roles/acquisitionOps.js into its own store-word bundle.
 //
 // Per seed/RolesAreAuth.md, every role declares an `acquisition`
 // block that says HOW other beings can come to hold it. The two
@@ -25,20 +26,21 @@
 // gate. Once acquired, the role-walk authorize handles enforcement
 // uniformly with all other grants (no special branches).
 //
-// SEE's auto-on-entry hook also flows through here: when SEE on a
-// space succeeds and the space hosts roles with `autoOnEntry: true`,
-// the seed silently emits the same internal grant for the actor.
+// SEE's auto-on-entry hook also flows through the SAME shared
+// internalGrant module: when SEE on a space succeeds and the space
+// hosts roles with `autoOnEntry: true`, the seed silently emits the
+// same internal grant for the actor.
 
-import { registerOperation } from "../../ibp/operations.js";
-import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
-import { getRoleSpecForGrant } from "./spaceLookup.js";
-import { normalizeAcquisition, alreadyHoldsRole } from "./acquisition.js";
-import { loadOrFold } from "../../materials/projections.js";
-import { I_AM } from "../../materials/being/seedBeings.js";
-import { registerRoleWord } from "../word/roleWordRegistry.js";
+import { registerOperation } from "../../../ibp/operations.js";
+import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
+import { getRoleSpecForGrant } from "../../../present/roles/spaceLookup.js";
+import { normalizeAcquisition, alreadyHoldsRole } from "../../../present/roles/acquisition.js";
+import { loadOrFold } from "../../../materials/projections.js";
+import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
+import { emitInternalGrant } from "../../../present/roles/internalGrant.js";
 
-// Self-register this module's co-located `.word` slices (CONVERTING.md): importing
-// acquisitionOps.js (at seed boot, or in a DRY harness) registers them so
+// Self-register this bundle's co-located `.word` slices (CONVERTING.md): importing
+// this index (at seed boot, or in a DRY harness) registers them so
 // resolveRoleWord("acquisition", <op>) finds them.
 registerRoleWord("acquisition", "take-role", new URL("./take-role.word", import.meta.url));
 registerRoleWord("acquisition", "ask-role", new URL("./ask-role.word", import.meta.url));
@@ -150,8 +152,8 @@ registerOperation("ask-role", {
       };
     }
 
-    const { callVerb } = await import("../../ibp/verbs/call.js");
-    const { getStoryDomain } = await import("../../ibp/address.js");
+    const { callVerb } = await import("../../../ibp/verbs/call.js");
+    const { getStoryDomain } = await import("../../../ibp/address.js");
     const story = getStoryDomain();
     const ownerStance = `${story}/@${ownerName}`;
     const askerStance = `${story}/@${identity.name}`;
@@ -217,7 +219,7 @@ async function _askRoleViaWord({ caller, role, space, moment }) {
   // I_AM authority and the queue summon reaches the owner FROM i-am (the host), not the asker (a
   // fresh asker holds no role permitting summon — it would be correctly denied). The asker rides
   // in the inbox CONTENT, not the call's `from` stance.
-  const { resolveRoleWord, runRoleWord } = await import("../word/roleWordRegistry.js");
+  const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
   const ir = resolveRoleWord("acquisition", "ask-role", moment?.actorAct?.history);
   if (!ir) return null;
   const { acquisitionHostEnv } = await import("./acquisitionHost.js");
@@ -242,7 +244,7 @@ async function _takeRoleViaWord({ caller, role, space, moment }) {
   // moment (a kernel moment carries none). NOT a host escape like ask-role, whose queue summon
   // reaches the owner FROM i-am; take-role has no summon, so nothing escapes to the host.
   if (!moment.identity?.beingId) moment.identity = { beingId: String(caller) };
-  const { resolveRoleWord, runRoleWord } = await import("../word/roleWordRegistry.js");
+  const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
   const ir = resolveRoleWord("acquisition", "take-role", moment?.actorAct?.history);
   if (!ir) return null;
   const { acquisitionHostEnv } = await import("./acquisitionHost.js");
@@ -333,45 +335,3 @@ registerOperation("take-role", {
     };
   },
 });
-
-// ──────────────────────────────────────────────────────────────────
-// Internal: emit a grant-role fact on the grantee's reel.
-//
-// Bypasses the grant-role op's "caller must have canDo grant-role:X"
-// check — the role's own acquisition policy is the gate that already
-// fired. The substrate writes the grant on I-Am's authority since
-// the policy decision IS the substrate's authority.
-// ──────────────────────────────────────────────────────────────────
-
-export async function emitInternalGrant({
-  granteeBeingId,
-  role,
-  anchorSpaceId,
-  grantedBy,
-  moment,
-  branch = null,
-}) {
-  const { emitFact } = await import("../../past/fact/facts.js");
-  await emitFact({
-    verb:    "do",
-    act:     "grant-role",
-    through: I_AM,
-    of:      { kind: "being", id: String(granteeBeingId) },
-    params:  {
-      role,
-      anchorSpaceId: anchorSpaceId ? String(anchorSpaceId) : null,
-      anchorBeingId: null,
-      grantedBy:     grantedBy ? String(grantedBy) : I_AM,
-      grantedAt:     new Date().toISOString(),
-    },
-    // The world this acquisition happened in. Callers pass it
-    // explicitly (the op's moment branch, the SEE's branch for
-    // auto-on-entry). The actorAct fallback covers in-moment ops; SEE
-    // has no moment, and its old fallback stamped every branch-side
-    // auto-grant onto main — invisible on the branch where the
-    // commons lives (the fork predates the grant), and a
-    // foreign-world write onto main's reel.
-    history: branch || moment?.actorAct?.history || "0",
-    actId:  moment?.actId || null,
-  }, moment);
-}

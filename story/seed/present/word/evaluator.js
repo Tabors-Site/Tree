@@ -579,7 +579,7 @@ async function evalAct(act, ctx) {
       if (act.of?.id && !(p && p.name != null)) p = { ...(p || {}), name: act.of.id };
       if (ctx.position) target = { kind: "space", id: String(ctx.position) };
     }
-    const res = await doVerb(target, act.act, p, { identity: ctx.identity, moment: ctx.moment });
+    const res = await doVerb(target, act.act, p, { identity: ctx.identity, moment: ctx.moment, currentHistory: ctx.history });
     // bind the id the op actually created (the home space), so later acts
     // (form-being's homeId, set-space's owner target) reference the real id and
     // not the pre-mint. create-space returns { spaceId } (space/ops.js).

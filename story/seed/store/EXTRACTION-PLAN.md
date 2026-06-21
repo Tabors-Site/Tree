@@ -13,13 +13,14 @@ the moved module imported at boot, and verify `registerOperation` + `registerRol
 (op in the Map AND `resolveRoleWord(role,op)` returns non-null). Op names + factAction strings stay
 byte-identical (the dispatch table, lineage fold, and portal UI all key on them).
 
-## STATUS — ✅ ALL 8 EXTRACTED + BOOT-VERIFIED (2026-06-19)
+## STATUS — ✅ ALL 12 EXTRACTED + BOOT-VERIFIED + 11/11 HARNESSES (2026-06-19)
 
-Fresh wipe + boot: all 12 ops register, 20 concepts declared onto the chain, genesis clean
-(`[Story] I am born.`), server up, zero errors. Items 1-8 below are all DONE and verified.
-Remaining: matter / acquisition / cherub / set-model stay co-located (flagged, see below);
-the present/word demo programs → `present/word/examples/` (Tabor's call); grant-role/index.js
-carries one harmless unused static `grantHostEnv` import to tidy.
+The 8 clean/medium words AND the 4 entangled stays (set-model, create-matter, acquisition, cherub)
+are all extracted into store/words/<dir>/ bundles. Final fresh boot: 20 ops register, 20 concepts
+declared, genesis births via cherub:birth (`[Story] I am born.`), server up, zero errors. All 11
+per-cut harnesses pass. The roleWordRegistry engine now holds ZERO built-in words. Demo programs
+moved to present/word/examples/. Nothing stays co-located. See store/WORDS.md (final map) +
+store/STAYS-PLAN.md (the stays + the 2 shared-module lifts).
 
 ## Order (lowest-entanglement first) + progress  [all 8 done]
 

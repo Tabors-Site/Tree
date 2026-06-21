@@ -35,6 +35,10 @@ if (mongoose.connection.name !== "story-word-bridge-live") { console.log(`  REFU
 await import("../../materials/space/ops.js");
 await import("../../materials/matter/ops.js");
 await import("../../materials/being/ops.js");
+// grant-role + cherub were carved into store-word bundles; import them so do:grant-role
+// dispatches and resolveRoleWord("cherub","birth") resolves (the engine built-in map is retired).
+await import("../../store/words/grant-role/index.js");
+await import("../../store/words/cherub/role.js");
 
 const { registerRole } = await import("../../present/roles/registry.js");
 const { humanRole } = await import("../../present/roles/human/role.js");
@@ -79,7 +83,7 @@ try {
   let ownerName = null;
   await withRetry(async () => {
     const sc = { actId: randomUUID(), actorAct: { branch, by: "i-am" }, identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
-    ownerName = (await nameVerb("declare", { name: "tabor", password: "pw12345678", soulType: "human" }, { identity: sc.identity, moment: sc, currentBranch: branch })).nameId;
+    ownerName = (await nameVerb("declare", { name: "tabor", password: "pw12345678", soulType: "human" }, { identity: sc.identity, moment: sc, currentHistory: branch })).nameId;
     await sealFacts(sc.deltaF);
   });
   console.log(`  arriving Name (father) = ${String(ownerName).slice(0, 14)}…\n`);

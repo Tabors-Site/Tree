@@ -40,7 +40,7 @@ const { withIAmAct } = await import(`${R}/seed/sprout.js`);
 const { birthBeing } = await import(`${R}/seed/materials/being/identity/birth.js`);
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { nameVerb } = await import(`${R}/seed/ibp/verbs/name.js`);
-const { cherubBeOps } = await import(`${R}/seed/present/roles/cherub/role.js`);
+const { cherubBeOps } = await import(`${R}/seed/store/words/cherub/role.js`);
 const { getStoryDomain } = await import(`${R}/seed/ibp/address.js`);
 const D = getStoryDomain();
 
@@ -66,7 +66,7 @@ async function register({ name, password, nameId }) {
 }
 async function declareName(name, password) {
   const sc = { actId: randomUUID(), actorAct: { branch: "0", by: "i-am" }, identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
-  const r = await nameVerb("declare", { name, password, soulType: "human" }, { identity: sc.identity, moment: sc, currentBranch: "0" });
+  const r = await nameVerb("declare", { name, password, soulType: "human" }, { identity: sc.identity, moment: sc, currentHistory: "0" });
   await sealFacts(sc.deltaF);
   return r.nameId;
 }

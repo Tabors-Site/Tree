@@ -53,9 +53,9 @@ const ident = { beingId: I_AM, name: "i-am", nameId: "i-am" };
 // drive the REAL set-world-signal op via doVerb → the cut handler → role-manager.word
 async function publish(namespace, key, value) {
   const branch = "0";
-  const sc = { actId: randomUUID(), actorAct: { branch, by: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc = { actId: randomUUID(), actorAct: { branch, history: branch, by: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   try {
-    const res = await doVerb({ kind: "space", id: String(getSpaceRootId()) }, "set-world-signal", { namespace, key, value }, { identity: ident, moment: sc });
+    const res = await doVerb({ kind: "space", id: String(getSpaceRootId()) }, "set-world-signal", { namespace, key, value }, { identity: ident, moment: sc, currentHistory: "0" });
     if (sc.deltaF.length) await sealFacts(sc.deltaF);
     return { result: res?.result ?? res, deltaF: sc.deltaF, refused: null };
   } catch (e) { if (e && (e.name === "IbpError" || e.code)) return { result: null, deltaF: sc.deltaF, refused: e }; throw e; }

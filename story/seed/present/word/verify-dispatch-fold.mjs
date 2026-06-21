@@ -48,7 +48,7 @@ try {
   const targetId = String(cherub.id ?? cherub._id);
   let result;
   await withIAmAct("test the fold op", async (moment) => {
-    result = await doVerb(targetId, "test-fold-op", { x: 42 }, { moment, identity: { name: "i-am", beingId: iam, nameId: iam }, currentBranch: "0" });
+    result = await doVerb(targetId, "test-fold-op", { x: 42 }, { moment, identity: { name: "i-am", beingId: iam, nameId: iam }, currentHistory: "0" });
   });
   (ranFromFold === true) ? ok(`doVerb ran the handler resolved from the FOLD (not the Map)`) : bad(`handler ran from fold`, { ranFromFold });
   (result && result.ok === true && result.echo === 42) ? ok(`the fold handler got ctx + returned its result (echo=42)`) : bad(`result`, result);

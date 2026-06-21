@@ -2,7 +2,7 @@
 // cherub-connect.word flow 1 (anonymous credential), LIVE through the bridge with ZERO
 // stubs. Proves the parser↔evaluator loop holds for a real branching/looping/refusing
 // slice: searchByName → foreach candidates → if local → verifyPassword → mark found +
-// break → if none refuse, else generateToken/seatBranch/return. The host: escapes hit
+// break → if none refuse, else generateToken/seatHistory/return. The host: escapes hit
 // the REAL connect primitives (connectHost.js); the CONTROL strand is the .word.
 // Full begin.js boot (real beings + password hashes). Scratch DB, wiped.
 
@@ -37,9 +37,9 @@ await import(`${R}/begin.js`); // full genesis
 
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const { sealFacts } = await import(`${R}/seed/past/fact/facts.js`);
-const { cherubBeOps } = await import(`${R}/seed/present/roles/cherub/role.js`);
+const { cherubBeOps } = await import(`${R}/seed/store/words/cherub/role.js`);
 const { resolveRoleWord, runRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
-const { connectHostEnv } = await import(`${R}/seed/present/roles/cherub/connectHost.js`);
+const { connectHostEnv } = await import(`${R}/seed/store/words/cherub/connectHost.js`);
 const { decodeToken } = await import(`${R}/seed/materials/being/identity/credentials.js`);
 
 let pass = 0, fail = 0;

@@ -1,5 +1,5 @@
 {
-  "name": "treeos-reality",
+  "name": "treeos-story",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -8,9 +8,9 @@
     "node": ">=18"
   },
   "scripts": {
-    "reality": "cd reality && node plant.js",
-    "start": "cd reality && node plant.js",
-    "dev": "cd reality && node plant.js",
+    "story": "cd story && node plant.js",
+    "start": "cd story && node plant.js",
+    "dev": "cd story && node plant.js",
     "build": "cd site && npm run build",
     "test": "node --test test/core.test.js"
   }

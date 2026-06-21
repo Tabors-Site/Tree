@@ -43,7 +43,7 @@ const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { getSpaceRootId } = await import(`${R}/seed/sprout.js`);
 const { doVerb } = await import(`${R}/seed/ibp/verbs/do.js`);
 const { resolveRoleWord, runRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
-const { acquisitionHostEnv } = await import(`${R}/seed/present/roles/acquisitionHost.js`);
+const { acquisitionHostEnv } = await import(`${R}/seed/store/words/acquisition/acquisitionHost.js`);
 
 let pass = 0, fail = 0;
 const ok = (l) => { pass++; console.log(`  ✓ ${l}`); };

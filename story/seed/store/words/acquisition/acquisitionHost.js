@@ -5,10 +5,10 @@
 // reaches through `host:` escapes (the strand the cut deletes). callHost invokes each as
 // `fn({ args }, ctx)`; the write op reads ctx.moment to lay its fact into the live
 // moment.
-import { getRoleSpecForGrant } from "./spaceLookup.js";
-import { normalizeAcquisition, alreadyHoldsRole } from "./acquisition.js";
-import { loadOrFold } from "../../materials/projections.js";
-import { emitInternalGrant } from "./acquisitionOps.js";
+import { getRoleSpecForGrant } from "../../../present/roles/spaceLookup.js";
+import { normalizeAcquisition, alreadyHoldsRole } from "../../../present/roles/acquisition.js";
+import { loadOrFold } from "../../../materials/projections.js";
+import { emitInternalGrant } from "../../../present/roles/internalGrant.js";
 
 const historyOf = (ctx) => ctx?.moment?.actorAct?.history || ctx?.history || "0";
 
@@ -41,7 +41,7 @@ export function acquisitionHostEnv() {
         anchorSpaceId:  found?.anchor,
         grantedBy:      String(caller),
         moment:      ctx?.moment || null,
-        history:         historyOf(ctx),
+        branch:          historyOf(ctx),
       });
       return true;
     },

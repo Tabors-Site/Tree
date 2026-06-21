@@ -167,6 +167,8 @@ import { nameVerb }   from "./ibp/verbs/name.js";
 // story-config ops live alongside their respective subjects.
 import "./materials/space/ops.js";
 import "./materials/matter/ops.js";
+// create-matter carved out; matter/ops.js still owns set/rename/end/purge.
+import "./store/words/create-matter/index.js";
 // Side-effect import. Registers the `classify-matter` SEE op — the
 // registry-driven "what matter type would this become?" read the
 // place flow previews with. See materials/matter/classify.js.
@@ -197,6 +199,9 @@ import "./materials/being/ops.js";
 // owns revoke-role / set-being / the LLM ops. See store/words/grant-role/.
 import "./store/words/grant-role/index.js";
 import "./store/words/credential/credentialOps.js";
+// Side-effect import. cherub moved to a store bundle; this fires its
+// registerRoleWord at boot independent of the beOps import chain.
+import "./store/words/cherub/role.js";
 // Side-effect import. Registers `do grant-inheritation` / `do
 // revoke-inheritation` — authority over a being-tree subtree, handed
 // between Names (delegation) or held by ownership. The being-tree's
@@ -211,7 +216,7 @@ import "./store/words/key/keyOps.js";
 // (walk-in for grabbed:true roles). The acquisition module lives in
 // present/roles/ because that's where the policy schema and the
 // in-effect role-walk live; these ops just front the policy.
-import "./present/roles/acquisitionOps.js";
+import "./store/words/acquisition/index.js";
 // Side-effect import. Registers the my-inbox SEE op. The 2D portal's
 // inbox panel reads my-inbox to surface pending summons; responses are
 // just SUMMON-BACK with `inReplyTo: <correlation>` (the substrate's

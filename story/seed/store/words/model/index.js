@@ -46,10 +46,14 @@ import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { detectTargetKind, targetIdOf } from "../../../materials/_targetShape.js";
 import { I_AM } from "../../../materials/being/seedBeings.js";
 import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
+// The auth gate + the model-matter resolve moved to modelHost.js (the host-escape glue);
+// import them back for the JS fallback below (the bodies are verbatim).
+import { resolveModelMatter, assertMaySetModel } from "./modelHost.js";
 
-// Register the dormant word INERT: it resolves but is not yet wired to a
-// bridge (its header names host fns that don't exist). The generic engine
-// stays factory; this only makes the .word discoverable for the follow-up.
+// Self-register this slice's co-located WORLD strand (CONVERTING.md): the bridge resolves
+// ("render", "set-model") to model.word, its host escapes wired by modelHost.js. WIRED:
+// _setModelViaWord runs the `.word` through the bridge (CALLER mode); the JS
+// setModelHandler below is the clean-miss fallback.
 registerRoleWord("render", "set-model", new URL("./model.word", import.meta.url));
 
 const SKINS_SPACE_NAME = "skins";
@@ -99,70 +103,39 @@ export async function ensureSkinsSpace(branch = "0", moment = null) {
   return id;
 }
 
-/** Resolve + validate a model matter: exists, type model, live cas bytes. */
-async function resolveModelMatter(modelMatterId, branch) {
-  const { loadOrFold } = await import("../../../materials/projections.js");
-  const slot = await loadOrFold("matter", String(modelMatterId), branch);
-  if (!slot) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, `set-model: model matter "${modelMatterId}" not found`);
-  }
-  const matter = { _id: slot.id, ...(slot.state || {}) };
-  if ((matter.type || "generic") !== "model") {
-    throw new IbpError(
-      IBP_ERR.INVALID_INPUT,
-      `set-model: matter "${modelMatterId}" is type "${matter.type || "generic"}", not "model"`,
-    );
-  }
-  const { isCasRef } = await import("../../../materials/matter/contentStore.js");
-  if (!isCasRef(matter.content)) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "set-model: model matter carries no stored bytes");
-  }
-  if (matter.content.purged) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "set-model: this model's bytes were purged");
-  }
-  return matter;
-}
-
-/** Self / author / owner gate per target kind. */
-async function assertMaySetModel(kind, targetId, identity, branch) {
-  const actor = String(identity.beingId);
-  const { loadOrFold } = await import("../../../materials/projections.js");
-
-  if (kind === "being") {
-    if (String(targetId) === actor) return; // your body is yours
-    const slot = await loadOrFold("being", String(targetId), branch);
-    const homeSpace = slot?.state?.homeSpace || null;
-    if (homeSpace && await isRootOwner(homeSpace, actor)) return;
-    throw new IbpError(IBP_ERR.FORBIDDEN, "set-model: only the being itself (or the tree owner) sets a being's model");
-  }
-
-  if (kind === "matter") {
-    const slot = await loadOrFold("matter", String(targetId), branch);
-    if (!slot) throw new IbpError(IBP_ERR.INVALID_INPUT, "set-model: target matter not found");
-    if (String(slot.state?.beingId) === actor) return; // author
-    if (slot.state?.spaceId && await isRootOwner(slot.state.spaceId, actor)) return;
-    throw new IbpError(IBP_ERR.FORBIDDEN, "set-model: only the matter's author (or the tree owner) sets its model");
-  }
-
-  if (kind === "space") {
-    const slot = await loadOrFold("space", String(targetId), branch);
-    if (!slot) throw new IbpError(IBP_ERR.INVALID_INPUT, "set-model: target space not found");
-    if (String(slot.state?.owner || "") === actor) return; // space owner
-    if (await isRootOwner(String(targetId), actor)) return;
-    throw new IbpError(IBP_ERR.FORBIDDEN, "set-model: only the space's owner (or the tree owner) sets its model");
-  }
-
-  throw new IbpError(IBP_ERR.INVALID_INPUT, `set-model: target must be being, space, or matter (got "${kind || "untyped"}")`);
-}
-
-async function isRootOwner(spaceId, actorId) {
+// set-model's world strand is model.word: the auth gate, the model-block resolve, and the
+// set-<kind> param-enrichment (via the host). CALLER mode (no `through`): the set attributes
+// to the asker. Returns {set:true,...} / {cleared:true,...} with params enriched in place
+// (field/value/merge), or null on a clean miss so the JS body runs. WordRefusal → IbpError.
+async function _setModelViaWord({ target, params, caller, moment }) {
+  if (!moment) return null;
+  const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
+  const ir = resolveRoleWord("render", "set-model", moment?.actorAct?.history);
+  if (!ir) return null;
+  const { modelHostEnv } = await import("./modelHost.js");
+  const branch = moment?.actorAct?.history;
   try {
-    const { resolveRootSpace } = await import("../../../materials/space/spaces.js");
-    const { getSpaceOwner } = await import("../../../materials/space/members.js");
-    const root = await resolveRootSpace(String(spaceId));
-    return String(getSpaceOwner(root) || "") === String(actorId);
-  } catch {
-    return false;
+    const { result } = await runRoleWord(ir, {
+      moment, branch,
+      trigger: {
+        target,
+        kind: detectTargetKind(target),
+        caller: caller ? String(caller) : null,
+        modelMatterId: params?.modelMatterId ?? null,
+        scale: params?.scale ?? null,
+        rotation: params?.rotation ?? null,
+        clear: params?.clear ?? false,
+        forMatterType: params?.forMatterType ?? null,
+        branch,
+      },
+      // The host env CLOSES OVER the op's params so write-model/clear-model enrich it in
+      // place (the same object the dispatcher's auto-fact reads). NO emit, NO skipAudit.
+      env: { host: modelHostEnv(params) },
+    });
+    return result || null;
+  } catch (e) {
+    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
+    throw e;
   }
 }
 
@@ -170,6 +143,12 @@ async function setModelHandler({ target, params, identity, moment }) {
   if (!identity?.beingId) {
     throw new IbpError(IBP_ERR.UNAUTHORIZED, "set-model: identity required");
   }
+  // THE CONVERSION: set-model's world strand is model.word (caller mode). It enriches the
+  // op's params (field/value/merge) in place and returns the §7 result; the JS body below
+  // is the clean-miss fallback.
+  const viaWord = await _setModelViaWord({ target, params, caller: identity.beingId, moment });
+  if (viaWord) return viaWord;
+
   const kind = detectTargetKind(target);
   const targetId = targetIdOf(target);
   if (!targetId) throw new IbpError(IBP_ERR.INVALID_INPUT, "set-model: target required");
