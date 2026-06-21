@@ -1,5 +1,5 @@
 // historiesCatalog.js — read-side helper that returns the history graph
-// as a plain object. Powers the synthetic `<story>/.branches[/<path>]`
+// as a plain object. Powers the synthetic `<story>/.histories[/<path>]`
 // SEE catalog the portal uses to draw its chip row.
 //
 // Returns:
@@ -22,14 +22,16 @@ import { readPointers } from "./historyRegistry.js";
 
 export async function describeHistoriesCatalog(historyPath = MAIN) {
   const path =
-    typeof historyPath === "string" && historyPath.length > 0 ? historyPath : MAIN;
+    typeof historyPath === "string" && historyPath.length > 0
+      ? historyPath
+      : MAIN;
   const isMainPath = path === MAIN;
 
   // Lineage: just ["0"] for main; ["0", ..., path] for everything else.
   const lineage = isMainPath ? [MAIN] : await resolveHistoryLineage(path);
 
   // Current history row. Main starts implicit (no document), but
-  // pause-branch upserts a row when the operator first pauses main.
+  // pause-history upserts a row when the operator first pauses main.
   // If a real row exists, surface it; otherwise synthesize the
   // implicit-live default. Either way the portal renders main and
   // non-main with the same shape.
@@ -98,10 +100,13 @@ export async function describeHistoriesCatalog(historyPath = MAIN) {
   let rootHash = null;
   let chainStoryRoot = null;
   try {
-    const { historyRoot, storyRoot } = await import("../../past/fact/chainRoots.js");
+    const { historyRoot, storyRoot } =
+      await import("../../past/fact/chainRoots.js");
     rootHash = await historyRoot(isMainPath ? MAIN : path);
     chainStoryRoot = await storyRoot();
-  } catch { /* fingerprints are additive — never block the catalog */ }
+  } catch {
+    /* fingerprints are additive — never block the catalog */
+  }
 
   return {
     current,
@@ -171,7 +176,8 @@ export async function describeMergeConflicts(historyPath) {
     return {
       history: historyPath,
       notAMerge: true,
-      reason: "history has no mergeSources (was not created by merge-branches)",
+      reason:
+        "history has no mergeSources (was not created by merge-histories)",
       conflicts: [],
     };
   }
@@ -248,8 +254,12 @@ export async function describeMergeConflicts(historyPath) {
     return o !== 0 ? o : a.reelKey.localeCompare(b.reelKey);
   });
 
-  const openConflicts = conflicts.filter(c => c.side === "conflict" && c.status === "open").length;
-  const resolvedConflicts = conflicts.filter(c => c.side === "conflict" && c.status === "resolved").length;
+  const openConflicts = conflicts.filter(
+    (c) => c.side === "conflict" && c.status === "open",
+  ).length;
+  const resolvedConflicts = conflicts.filter(
+    (c) => c.side === "conflict" && c.status === "resolved",
+  ).length;
   return {
     history: historyPath,
     sourceA,
@@ -311,7 +321,9 @@ async function _readMergeResolutions(mergedHistory, reelKeys) {
     history: mergedHistory,
     "params._merge": { $exists: true },
     $or: orClauses,
-  }).sort({ seq: 1, date: 1 }).lean();
+  })
+    .sort({ seq: 1, date: 1 })
+    .lean();
   // Latest fact per reel wins (if a conflict was resolved more than
   // once, the most recent decision is what's authoritative).
   const byReel = new Map();

@@ -16,14 +16,10 @@
 # `anchorBeingId`.
 
 When a being grants a role to a being:
-  If no caller:
-    refuse with "grant-role: identity required (the grantor's beingId)" as unauthorized.
-  If no role:
-    refuse with "grant-role: role is required" as invalid-input.
-  If no anchorSpaceId, and no anchorBeingId:
-    refuse with "grant-role: one of anchorSpaceId or anchorBeingId is required" as invalid-input.
-  If anchorSpaceId, and anchorBeingId:
-    refuse with "grant-role: only one of anchorSpaceId or anchorBeingId may be set" as invalid-input.
+  If no caller, refuse with "grant-role: identity required (the grantor's beingId)" as unauthorized.
+  If no role, refuse with "grant-role: role is required" as invalid-input.
+  If no anchorSpaceId, and no anchorBeingId, refuse with "grant-role: one of anchorSpaceId or anchorBeingId is required" as invalid-input.
+  If anchorSpaceId, and anchorBeingId, refuse with "grant-role: only one of anchorSpaceId or anchorBeingId may be set" as invalid-input.
   see role-exists(role) as known.
   If no known, refuse with "grant-role: role is not registered" as invalid-input.
   see grant-stamp() as grantedAt.

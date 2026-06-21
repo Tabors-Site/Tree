@@ -26,7 +26,6 @@
 import { registerOperation } from "../../../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { getSpaceRootId } from "../../../sprout.js";
-import { doVerb } from "../../../ibp/verbs/do.js";
 import { registerRoleWord, resolveRoleWord, runRoleWord } from "../../../present/word/roleWordRegistry.js";
 
 // Self-register this bundle's co-located `.word` slice (CONVERTING.md): importing
@@ -69,13 +68,21 @@ export function roleManagerHostEnv() {
     // value coercion: the SAME parseSignalValue (JSON / bare-number / true|false|null).
     "parse-signal-value": ({ args: [value] }) => parseSignalValue(value),
     // signal-field(ns, key) → the dynamic dotted field path qualities.world.<ns>.<key>,
-    // a pure compute (NO fact). The `.word` feeds it as the $-ref field of a targeted
-    // set-space on the story root, so the dynamic path is a perceived value, not a host
-    // write. (Same path the JS handler built.)
+    // a pure compute (NO fact). (Same path the JS handler built.)
     "signal-field": ({ args: [namespace, key] }) => {
       const ns = String(namespace || "").trim();
       const keyParts = String(key || "").split(".").map((s) => s.trim());
       return `qualities.world.${ns}.${keyParts.join(".")}`;
+    },
+    // signal-fact(ns, key, value) → the set-space fact params { field, value } the
+    // dispatcher lays as the lone do:set-space WORLD fact. A pure compute (NO fact):
+    // it shapes the SAME { field, value } the old `set the space root's $field to
+    // $value` sentence carried, so the auto-emitted fact is byte-identical. The
+    // `.word` returns this as `factParams`; the cut promotes it to _factParams.
+    "signal-fact": ({ args: [namespace, key, value] }) => {
+      const ns = String(namespace || "").trim();
+      const keyParts = String(key || "").split(".").map((s) => s.trim());
+      return { field: `qualities.world.${ns}.${keyParts.join(".")}`, value };
     },
     // story-root() → the story-root space id (a read), or null when it isn't planted
     // (the `.word` refuses INTERNAL on absence, mirroring the JS throw). The write itself
@@ -88,9 +95,14 @@ export function roleManagerHostEnv() {
 }
 
 // set-world-signal's world strand is set-world-signal.word, run through the bridge.
-// CALLER mode (no `through`): the signal-publish set-space attributes to the real
-// publisher, not I_AM. Returns the {published,namespace,key,value} result, or null
-// on a clean miss (not converted / no moment) so the JS body runs.
+// CALLER mode (no `through`): the lone do:set-space fact attributes to the real
+// publisher, not I_AM. The op no longer self-emits — the `.word` lays no fact and
+// returns the set-space params as `factParams`; here we promote them to the
+// dispatcher's _factParams convention so the auto-emitted do:set-space fact carries
+// { field, value }, and force the story-root SPACE target via _factTarget (the
+// fact lands on the story-root reel, where the world-signal qualities fold). Returns
+// the {published,namespace,key,value} result, or null on a clean miss (not converted
+// / no moment) so the JS body runs.
 async function _setWorldSignalViaWord({ namespace, key, value, moment }) {
   if (!moment) return null;
   const ir = resolveRoleWord("role-manager", "set-world-signal", moment?.actorAct?.history);
@@ -102,7 +114,10 @@ async function _setWorldSignalViaWord({ namespace, key, value, moment }) {
       trigger: { namespace, key, value, branch: history },
       env: { host: roleManagerHostEnv() },
     });
-    return result || null;
+    if (!result) return null;
+    if (result.factParams) { result._factParams = result.factParams; delete result.factParams; }
+    if (result.rootId) { result._factTarget = { kind: "space", id: String(result.rootId) }; delete result.rootId; }
+    return result;
   } catch (e) {
     if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
     throw e;
@@ -112,7 +127,12 @@ async function _setWorldSignalViaWord({ namespace, key, value, moment }) {
 registerOperation("set-world-signal", {
   targets: ["being", "space", "stance"],
   ownerExtension: "seed",
-  skipAudit: false,
+  // The op's WORLD effect is a do:set-space on the story root — so the dispatcher's
+  // one auto-Fact path stamps `do:set-space` (NOT do:set-world-signal), caller-
+  // attributed, of: the story-root reel. No self-emit, no skipAudit: the `.word`
+  // (and the JS fallback) return the set-space params as _factParams + the story-root
+  // _factTarget, and do.js lays the single fact. One emit path for every op.
+  factAction: "set-space",
   args: {
     namespace: { type: "text", label: "Publisher namespace (e.g. \"harmony\")",     required: true },
     key:       { type: "text", label: "Key path (e.g. \"tick.alive\" or \"weather\")", required: true },
@@ -151,15 +171,19 @@ registerOperation("set-world-signal", {
       throw new IbpError(IBP_ERR.INTERNAL, "set-world-signal: story root not initialized");
     }
 
+    // No self-emit. Return the set-space params as _factParams + the story-root id as
+    // _factTarget; the dispatcher lays the one caller-attributed do:set-space fact
+    // (byte-identical to the old `set the space root's $field to $value` write). The
+    // story root's reducer folds qualities.world.<ns>.<key> from that fact.
     const field = `qualities.world.${namespace}.${keyParts.join(".")}`;
-    await doVerb(
-      { kind: "space", id: String(rootId) },
-      "set-space",
-      { field, value },
-      { identity, moment },
-    );
-
-    return { published: true, namespace, key, value };
+    return {
+      published: true,
+      namespace,
+      key,
+      value,
+      _factTarget: { kind: "space", id: String(rootId) },
+      _factParams: { field, value },
+    };
   },
 });
 

@@ -1,11 +1,18 @@
 # take-role.word — walk-in role acquisition (acquisitionOps.js, the take-role op).
 #
 # A being takes an installed, take-acquirable role at a space. The CONTROL strand
-# (the gate chain + the idempotency check) is .word; the acquisition lookups and
-# the grant emit are `host:` escapes wired by acquisitionHost.js (the SAME
-# getRoleSpecForGrant / normalizeAcquisition / loadOrFold+alreadyHoldsRole /
-# emitInternalGrant the JS handler calls — no reimplementation). The lone WORLD
-# fact is the grant-role emit inside grantInternal. The bridge binds `caller` (the
+# (the gate chain + the idempotency check + the §7 return) is .word; the acquisition
+# lookups and the grant-record BUILD are `see` escapes wired by acquisitionHost.js (the
+# SAME getRoleSpecForGrant / normalizeAcquisition / loadOrFold+alreadyHoldsRole /
+# buildInternalGrant the JS handler calls — no reimplementation).
+#
+# NO host: emit — the word lays no fact of its own. `grant-internal` is a `see` (a pure
+# compute: it BUILDS the grant record, NO fact). On the GRANT path the word returns the
+# record as factParams + the grantee (the caller's being); the cut promotes it to
+# _factParams + _factTarget and the dispatcher's ONE auto-Fact lays the caller-attributed
+# do:grant-role (the reducer folds {role, anchorSpaceId, anchorBeingId, grantedBy,
+# grantedAt}). On the idempotent already-held path the word returns no factParams; the cut
+# sets _noFact so the dispatcher skips the auto-Fact. The bridge binds `caller` (the
 # acting being), `role`, `space`, `branch`.
 
 When a being takes a role at a space:
@@ -14,7 +21,6 @@ When a being takes a role at a space:
   see is-grabbable(found) as grabbable.
   If not grabbable, refuse with "role is not take-acquirable; try ask-role".
   see already-holds(caller, role, found) as held.
-  If held:
-    Return role, anchorSpaceId: $found.anchor, already: true.
-  host: grantInternal(caller, role, found) as granted.
-  Return role, anchorSpaceId: $found.anchor, granted: true.
+  If held, Return role, anchorSpaceId: $found.anchor, already: true.
+  see grant-internal(caller, role, found) as granted.
+  Return role, anchorSpaceId: $found.anchor, granted: true, granteeBeingId: $caller, factParams: { role: $granted.role, anchorSpaceId: $granted.anchorSpaceId, anchorBeingId: $granted.anchorBeingId, grantedBy: $granted.grantedBy, grantedAt: $granted.grantedAt }.

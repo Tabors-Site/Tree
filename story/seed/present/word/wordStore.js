@@ -437,6 +437,11 @@ export async function declareBeOpsToFold({ moment = null, history = "0" } = {}) 
       kind: "beop",
       do: { ref },
       bootstrap: op.bootstrap ? true : undefined, // birth/connect skip the caller assertion
+      // factAction + skipAudit let a .word-authored BE op return factParams and have the BE
+      // dispatcher stamp the one auto-Fact (mirroring the do-op fold) instead of a hardcoded
+      // writeBeFact. The act defaults to the op name (be:truename); skipAudit suppresses the stamp.
+      factAction: op.factAction || opName,
+      skipAudit: op.skipAudit ? true : undefined,
       args: op.args ? JSON.parse(JSON.stringify(op.args)) : undefined,
       label: op.label,
       description: op.description,
@@ -455,7 +460,7 @@ export function resolveBeOpFromFold(opName) {
   if (!w || w.kind !== "beop" || !w.do?.ref) return null;
   const handler = resolveHostHandler(w.do.ref);
   if (!handler) return null;
-  return { handler, bootstrap: !!w.bootstrap, args: w.args, label: w.label, description: w.description, ownerExtension: w.ownerExtension || "seed", _fromFold: true };
+  return { handler, bootstrap: !!w.bootstrap, factAction: w.factAction || opName, skipAudit: !!w.skipAudit, args: w.args, label: w.label, description: w.description, ownerExtension: w.ownerExtension || "seed", _fromFold: true };
 }
 
 // ── SEE ops as words (the seeOps-REGISTRY migration; the third verb-op set) ──

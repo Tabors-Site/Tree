@@ -22,12 +22,12 @@ export const STALE_SESSION_CODES = new Set([
   "NODE_NOT_FOUND",
   "BEING_NOT_FOUND",
   "SPACE_NOT_FOUND",
-  "BRANCH_NOT_FOUND",
-  "CROSS_BRANCH_FORBIDDEN",
+  "HISTORY_NOT_FOUND",
+  "CROSS_HISTORY_FORBIDDEN",
 ]);
 
 // Heaven children — catalogs (`./beings`, `./operations`, ...) and
-// dot-prefixed synthetic views (`/.acts/<id>`, `/.branches`) — are
+// dot-prefixed synthetic views (`/.acts/<id>`, `/.histories`) — are
 // addresses the 3D scene has nothing meaningful to render at. The
 // text/console/explorer views walk them happily; navigation tracks
 // the last NON-heaven address so the 3D view can restore on activate.
@@ -124,7 +124,11 @@ export function createNavigation(ctx) {
   function selectBeing(beingId, name) {
     state.set({
       selectedBeing: beingId
-        ? { beingId: String(beingId), name: name || null, lastSetAt: new Date().toISOString() }
+        ? {
+            beingId: String(beingId),
+            name: name || null,
+            lastSetAt: new Date().toISOString(),
+          }
         : null,
     });
   }
@@ -132,7 +136,10 @@ export function createNavigation(ctx) {
   // ── Hash sync ───────────────────────────────────────────────────
 
   function restoreAddressFromHash() {
-    const raw = (typeof location !== "undefined" ? location.hash : "").replace(/^#/, "");
+    const raw = (typeof location !== "undefined" ? location.hash : "").replace(
+      /^#/,
+      "",
+    );
     if (!raw) return null;
     if (raw.startsWith("inhabit=")) return null;
     return raw;
@@ -149,12 +156,16 @@ export function createNavigation(ctx) {
     const bq = history === "0" ? "" : `#${history}`;
     const next = `${story}${bq}${path === "/" ? "/" : path}`;
     if (existing !== next) {
-      try { history.replaceState(null, "", `${location.pathname}#${next}`); } catch {}
+      try {
+        history.replaceState(null, "", `${location.pathname}#${next}`);
+      } catch {}
     }
   }
 
   function clearLocationHash() {
-    try { history.replaceState(null, "", location.pathname); } catch {}
+    try {
+      history.replaceState(null, "", location.pathname);
+    } catch {}
   }
 
   // ── navigate ────────────────────────────────────────────────────
@@ -225,13 +236,14 @@ export function createNavigation(ctx) {
       // IBP-form address (story + history + path) so back/forward
       // restores the exact view even after history hops.
       if (!fromNav) {
-        const story = desc?.address?.place || state.get("discovery")?.story || "";
+        const story =
+          desc?.address?.place || state.get("discovery")?.story || "";
         const history = desc?.address?.history || "0";
         const path = desc?.address?.pathByNames || "/";
         const bq = history === "0" ? "" : `#${history}`;
         const canonical = story
           ? `${story}${bq}${path === "/" ? "/" : path}`
-          : (desc?.address?.pathByNames || address);
+          : desc?.address?.pathByNames || address;
         const navStack = state.get("navStack");
         const navIndex = state.get("navIndex");
         if (navStack[navIndex] !== canonical) {
@@ -250,37 +262,50 @@ export function createNavigation(ctx) {
       // a rewind must never write our LIVE position to a past space.
       if (
         !desc?.isHistorical &&
-        desc?.identity?.beingId && desc?.address?.spaceId
+        desc?.identity?.beingId &&
+        desc?.address?.spaceId
       ) {
         const stance = `${desc.address.pathByNames}@${desc.identity.name}`;
-        client.do(stance, "set-being", {
-          field: "position",
-          value: desc.address.spaceId,
-        }).catch((err) => {
-          // Surface the failure — this is the seam where every navigate
-          // stamps a position fact; a silent bounce here reads as "the
-          // portal isn't tracking my walks."
-          const msg = `${err?.code || ""} ${err?.message || err}`.trim();
-          console.warn("[portal:nav] set-being:position failed:", msg);
-          events.emit("status", `position write failed: ${msg}`);
-        });
+        client
+          .do(stance, "set-being", {
+            field: "position",
+            value: desc.address.spaceId,
+          })
+          .catch((err) => {
+            // Surface the failure — this is the seam where every navigate
+            // stamps a position fact; a silent bounce here reads as "the
+            // portal isn't tracking my walks."
+            const msg = `${err?.code || ""} ${err?.message || err}`.trim();
+            console.warn("[portal:nav] set-being:position failed:", msg);
+            events.emit("status", `position write failed: ${msg}`);
+          });
       }
       events.emit("navigated", { address, descriptor: desc });
       return desc;
     } catch (err) {
-      events.emit("status", `see failed: ${err.code || ""} ${err.message || ""}`);
+      events.emit(
+        "status",
+        `see failed: ${err.code || ""} ${err.message || ""}`,
+      );
       // A navigate to a history that no longer exists self-heals to
       // main rather than stranding the client on the previous
       // descriptor (where the self-position loop would storm the
       // gone history). Re-entry guard stops a loop if main fails too.
-      if ((err?.code === "BRANCH_NOT_FOUND" || err?.code === "CROSS_BRANCH_FORBIDDEN") && !_recoveringHistory) {
+      if (
+        (err?.code === "HISTORY_NOT_FOUND" ||
+          err?.code === "CROSS_HISTORY_FORBIDDEN") &&
+        !_recoveringHistory
+      ) {
         _recoveringHistory = true;
         clearLocationHash();
         try {
           await navigate(`${state.get("discovery")?.story || ""}/`);
           return;
         } catch (err2) {
-          console.warn("[portal:nav] history-gone recovery to main failed:", err2?.message || err2);
+          console.warn(
+            "[portal:nav] history-gone recovery to main failed:",
+            err2?.message || err2,
+          );
         } finally {
           _recoveringHistory = false;
         }
@@ -343,7 +368,10 @@ export function createNavigation(ctx) {
         const desc = await client.see(address);
         state.set({ descriptor: desc }, { reason: "now", resetCamera: false });
       } catch (err) {
-        console.warn("[portal:nav] resume-live (preserveCamera) failed:", err?.message);
+        console.warn(
+          "[portal:nav] resume-live (preserveCamera) failed:",
+          err?.message,
+        );
       }
       return;
     }
@@ -361,11 +389,15 @@ export function createNavigation(ctx) {
   function handleDescriptorEvent(event) {
     if (!state.get("currentAddress")) return;
     if (state.get("debugLiveEvents")) {
-      console.log("[portal:nav] live event:", event?.kind, event?.spaceId?.slice(0, 8));
+      console.log(
+        "[portal:nav] live event:",
+        event?.kind,
+        event?.spaceId?.slice(0, 8),
+      );
     }
     // Ghost-view guard: while rewound, live events must not replace
     // the descriptor — the user is observing a frozen past moment.
-    // The branch/timeline chrome still refreshes (shell listens for
+    // The history/timeline chrome still refreshes (shell listens for
     // this) so history visibly accumulates beyond the cursor.
     if (state.get("descriptor")?.isHistorical) {
       events.emit("live-while-historical", event);
@@ -423,7 +455,9 @@ export function createNavigation(ctx) {
     } catch (err) {
       if (fallbackCodes.has(err?.code) && restored !== "/") {
         clearLocationHash();
-        try { await navigate("/"); } catch {}
+        try {
+          await navigate("/");
+        } catch {}
       }
     }
   }
@@ -432,8 +466,9 @@ export function createNavigation(ctx) {
     state.set({ historicalAnchor: null }); // fresh connection lands in the present
     const client = ctx.client;
     const discovery = state.get("discovery");
-    const beingAddress = session.beingAddress
-      || (session.username && discovery?.story
+    const beingAddress =
+      session.beingAddress ||
+      (session.username && discovery?.story
         ? `${discovery.story}/@${session.username}`
         : null);
 
@@ -461,9 +496,10 @@ export function createNavigation(ctx) {
           const pos = desc?.identity?.position || null;
           const home = desc?.identity?.homeSpace || null;
           const targetSpace = pos || home || session.homeSpaceId || null;
-          landingAddress = targetSpace && discovery?.story
-            ? `${discovery.story}/${targetSpace}`
-            : beingAddress;
+          landingAddress =
+            targetSpace && discovery?.story
+              ? `${discovery.story}/${targetSpace}`
+              : beingAddress;
         }
       } catch (err) {
         if (STALE_SESSION_CODES.has(err?.code)) {
@@ -479,8 +515,9 @@ export function createNavigation(ctx) {
     } catch (err) {
       if (STALE_SESSION_CODES.has(err?.code)) {
         clearLocationHash();
-        try { await navigate(beingAddress || "/"); }
-        catch (err2) {
+        try {
+          await navigate(beingAddress || "/");
+        } catch (err2) {
           if (STALE_SESSION_CODES.has(err2?.code)) {
             await ctx.dropStaleSessionAndReconnect();
             return false;
@@ -492,7 +529,10 @@ export function createNavigation(ctx) {
   }
 
   function destroy() {
-    if (_refetchTimer) { clearTimeout(_refetchTimer); _refetchTimer = null; }
+    if (_refetchTimer) {
+      clearTimeout(_refetchTimer);
+      _refetchTimer = null;
+    }
   }
 
   return {

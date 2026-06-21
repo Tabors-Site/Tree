@@ -1,10 +1,12 @@
 #!/usr/bin/env node
-// take-role.word (the acquisition walk-in slice), LIVE through the bridge with ZERO
-// stubs. The CONTROL strand (the gate chain + idempotency) is .word; the acquisition
-// lookups + the grant emit are host: escapes wired by acquisitionHost.js. Proves a being
-// takes a grabbable role (a real grant-role fact lands, the being holds the role), the
-// idempotent re-take (already:true), and the refusals (not installed / not grabbable).
-// Full begin.js boot. Scratch DB, wiped.
+// take-role, LIVE: the REAL op driven through the dispatcher (doVerb → the cut →
+// take-role.word + the dispatcher's ONE auto-Fact). The CONTROL strand (the gate chain +
+// idempotency) is .word; the acquisition lookups + the grant-record BUILD are see escapes
+// wired by acquisitionHost.js — the .word lays NO fact, the dispatcher lays the caller-
+// attributed do:grant-role from the returned _factParams. Proves a being takes a grabbable
+// role (a real do:grant-role fact lands, caller-attributed, the being holds the role after
+// seal), the idempotent re-take (already:true, NO new grant), and the refusals (not
+// installed / not grabbable). Full begin.js boot. Scratch DB, wiped.
 
 import fs from "fs";
 import os from "os";
@@ -42,8 +44,7 @@ const { birthBeing } = await import(`${R}/seed/materials/being/identity/birth.js
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { getSpaceRootId } = await import(`${R}/seed/sprout.js`);
 const { doVerb } = await import(`${R}/seed/ibp/verbs/do.js`);
-const { resolveRoleWord, runRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
-const { acquisitionHostEnv } = await import(`${R}/seed/store/words/acquisition/acquisitionHost.js`);
+const { resolveRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
 
 let pass = 0, fail = 0;
 const ok = (l) => { pass++; console.log(`  ✓ ${l}`); };
@@ -60,16 +61,16 @@ const birth = async (name) => {
   return bid;
 };
 
-// run take-role.word LIVE; the grant lands on the moment, sealed here
+// drive the REAL take-role op via doVerb → the cut → take-role.word; the grant fact lands
+// on the moment via the dispatcher's auto-Fact, sealed here.
 async function takeRole(caller, role, space) {
   const branch = "0";
-  const sc = { actId: randomUUID(), actorAct: { branch }, identity: { beingId: String(caller) }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
-  const ir = resolveRoleWord("acquisition", "take-role");
+  const sc = { actId: randomUUID(), actorAct: { branch, history: branch, by: String(caller) }, identity: { beingId: String(caller), nameId: String(caller) }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   try {
-    const { result } = await runRoleWord(ir, { moment: sc, branch, trigger: { caller: String(caller), role, space: String(space), branch }, env: { host: acquisitionHostEnv() } });
+    const res = await doVerb({ kind: "space", id: String(space) }, "take-role", { role }, { identity: { beingId: String(caller) }, moment: sc, currentHistory: "0" });
     if (sc.deltaF.length) await sealFacts(sc.deltaF);
-    return { result, deltaF: sc.deltaF, refused: null };
-  } catch (e) { if (e && e.__wordRefusal) return { result: null, deltaF: sc.deltaF, refused: e }; throw e; }
+    return { result: res?.result ?? res, deltaF: sc.deltaF, refused: null };
+  } catch (e) { if (e && (e.name === "IbpError" || e.code)) return { result: null, deltaF: sc.deltaF, refused: e }; throw e; }
 }
 
 console.log(`\n  verify-take-role-live (acquisition walk-in, ZERO stubs)\n  DB: ${SCRATCH_DB.split("/").pop()}\n`);
@@ -97,16 +98,18 @@ try {
   // (set-space now invalidates the ancestor cache itself — no manual force-fresh needed.)
   console.log(`  arena=${arena.slice(0,10)} taker=${String(taker).slice(0,10)}\n`);
 
-  // ── 1. take a grabbable role → granted, a real grant-role fact, the being holds it ──
+  // ── 1. take a grabbable role → granted, a real do:grant-role fact, the being holds it ──
   const t = await takeRole(taker, "warrior", arena);
   t.result?.granted === true && t.result?.role === "warrior" ? ok(`take warrior → granted:true`) : bad(`granted`, t.refused?.message || t.result);
-  (t.deltaF || []).some((f) => f.act === "grant-role" && f.params?.role === "warrior") ? ok(`a real grant-role fact laid (the lone WORLD fact)`) : bad(`grant fact`, t.deltaF?.map((f) => f.act));
+  const grantFact = (t.deltaF || []).find((f) => f.act === "grant-role" && f.params?.role === "warrior");
+  grantFact ? ok(`a real do:grant-role fact laid (the dispatcher's ONE auto-Fact, the .word self-emits nothing)`) : bad(`grant fact`, t.deltaF?.map((f) => f.act));
+  String(grantFact?.through) === String(taker) ? ok(`grant attributes to the CALLER (through = @taker, not i-am) — caller-attribution default`) : bad(`caller attribution`, `through=${grantFact?.through}, want ${String(taker).slice(0,10)}`);
   const slot = await loadOrFold("being", String(taker), "0");
-  (slot?.state?.qualities?.rolesGranted || []).some((r) => (r.role || r) === "warrior") ? ok(`@taker now HOLDS the warrior role (rolesGranted)`) : bad(`holds role`, slot?.state?.qualities?.rolesGranted);
+  (slot?.state?.qualities?.rolesGranted || []).some((r) => (r.role || r) === "warrior") ? ok(`@taker now HOLDS the warrior role (rolesGranted) after seal`) : bad(`holds role`, slot?.state?.qualities?.rolesGranted);
 
-  // ── 2. idempotent re-take → already:true, NO second grant ──
+  // ── 2. idempotent re-take → already:true, NO second grant (the _noFact path) ──
   const t2 = await takeRole(taker, "warrior", arena);
-  t2.result?.already === true && (t2.deltaF || []).length === 0 ? ok(`re-take warrior → already:true, NO new fact (idempotent)`) : bad(`idempotent`, t2.result || t2.deltaF);
+  t2.result?.already === true && !(t2.deltaF || []).some((f) => f.act === "grant-role") ? ok(`re-take warrior → already:true, NO new grant fact (idempotent, _noFact)`) : bad(`idempotent`, t2.result || t2.deltaF?.map((f) => f.act));
 
   // ── 3. a NON-grabbable role → refuse ──
   const t3 = await takeRole(taker, "sage", arena);

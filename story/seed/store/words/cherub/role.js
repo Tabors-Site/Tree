@@ -71,6 +71,10 @@ registerRoleWord(
   "connect",
   new URL("./cherub-connect.word", import.meta.url),
 );
+// be:truename's world strand — the rung-3 verb-op worked example. The .word
+// reproduces the gate ordering + builds the fact params (truenameHost.js wires the
+// four floor see-ops); the BE dispatcher stamps the one fact from its factParams.
+registerRoleWord("cherub", "truename", new URL("./truename.word", import.meta.url));
 
 const TREEOS_AUTH_WELCOME =
   "Welcome to TreeOS. This place is open to anyone who wants to inhabit it. Pick a username and password; you will receive an identity token immediately and start at your home.";
@@ -883,16 +887,54 @@ async function deathHandler({ address, identity }) {
 }
 
 // be:truename — hand a being to a (declared) Name: re-point its trueName.
-// Inert, like deathHandler: beVerb owns the lookups (target being exists,
-// target Name exists + not banished) and threads the resolved ids through
-// authResult; this just returns a summary.
-async function truenameHandler({ address, identity, payload }) {
-  return {
-    granted: true,
-    address: address || null,
-    trueName: payload?.trueName || null,
-    byActor: identity?.beingId || null,
-  };
+// WIRED bundle (mirrors create-matter/index.js): the world strand is
+// truename.word — the handler runs it through the bridge (resolveRoleWord ->
+// runRoleWord, CALLER mode, the four floor reads wired by truenameHost.js) and the
+// .word RETURNS { trueName: nameId } as `factParams`; the shim promotes it to the
+// dispatcher's `_factParams` so beVerb lays the ONE caller-attributed be:truename
+// fact. The inert summary below is the clean-miss fallback (no .word IR).
+async function _truenameViaWord({ address, beingName, payload, identity, moment }) {
+  if (!moment) return null;
+  const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
+  const ir = resolveRoleWord("cherub", "truename", moment?.actorAct?.history);
+  if (!ir) return null;
+  const { truenameHostEnv } = await import("./truenameHost.js");
+  const history = moment?.actorAct?.history;
+  try {
+    const { result } = await runRoleWord(ir, {
+      moment, history,
+      trigger: {
+        caller: identity?.beingId ? String(identity.beingId) : null,
+        beingName: beingName || null,
+        trueNameToken: payload?.trueName ?? null,
+      },
+      env: { host: truenameHostEnv() },
+    });
+    if (!result) return null;
+    // Promote the .word's `factParams` ({ trueName: nameId }) to the dispatcher's
+    // `_factParams`, and `factTarget` to `_factTarget` (kind:being — the be:truename
+    // fact lands on the TARGET being's reel, BEING_ONLY_TARGET_VERBS). The op lays
+    // no fact of its own; beVerb's auto-Fact path stamps the one caller-attributed fact.
+    if (result.factParams) { result._factParams = result.factParams; delete result.factParams; }
+    if (result.factTarget) { result._factTarget = { kind: "being", id: String(result.factTarget) }; delete result.factTarget; }
+    return result;
+  } catch (e) {
+    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
+    throw e;
+  }
+}
+
+async function truenameHandler({ address, beingName, identity, payload, moment }) {
+  const result = await _truenameViaWord({ address, beingName, payload, identity, moment });
+  if (result) return result;
+  // NO JS fallback: truename.word IS the op, the single source of truth. If its IR is absent (the
+  // .word failed to register), the op honestly cannot run — that is the truthful state, not
+  // something a duplicated JS validation should paper over. (Tabor: the word is the source; no IR
+  // fallback even if the IR stays.)
+  throw new IbpError(
+    IBP_ERR.INTERNAL,
+    "be:truename: truename.word is not available (the word is the op — there is no JS fallback)",
+  );
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -968,6 +1010,9 @@ export const cherubBeOps = Object.freeze({
       trueName: { type: "text", label: "Target Name id", required: true },
     },
     handler: truenameHandler,
+    // The .word returns factParams; the BE dispatcher stamps be:truename from them
+    // (declareBeOpsToFold carries factAction into the fold spec).
+    factAction: "truename",
   },
 });
 

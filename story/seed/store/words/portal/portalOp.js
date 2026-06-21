@@ -71,7 +71,40 @@ registerRoleWord("portal", "form-portal", new URL("./portal.word", import.meta.u
 export const IBPA_RE =
   /^(?:[a-zA-Z0-9.\-_]+(?:#[^/]+)?|#[^/]+)\/.*$/;
 
+// The .word is the live path: run portal.word through the bridge (CALLER mode, host
+// see-ops wired by portalHost.js). It COMPOSES create-matter with a nested ibpa spec —
+// no host: emit. Returns the result, or null on a clean miss so the JS body below runs.
+async function _formPortalViaWord({ target, params, identity, moment }) {
+  if (!moment) return null;
+  const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
+  const ir = resolveRoleWord("portal", "form-portal", moment?.actorAct?.history);
+  if (!ir) return null;
+  const { portalHostEnv } = await import("./portalHost.js");
+  try {
+    const { result } = await runRoleWord(ir, {
+      moment,
+      history: moment?.actorAct?.history,
+      trigger: {
+        target,
+        foreignAddress: params?.target ?? null,
+        name: params?.name ?? null,
+        caller: identity?.beingId ? String(identity.beingId) : null,
+      },
+      env: { host: portalHostEnv() },
+    });
+    return result || null;
+  } catch (e) {
+    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
+    throw e;
+  }
+}
+
 async function formPortalHandler({ target, params, moment, identity }) {
+  // THE CONVERSION: form-portal's world strand is portal.word (composes create-matter).
+  // The JS body below is the clean-miss fallback.
+  const viaWord = await _formPortalViaWord({ target, params, identity, moment });
+  if (viaWord) return viaWord;
+
   const { target: foreignAddress, name } = params || {};
 
   if (typeof foreignAddress !== "string" || !foreignAddress.length) {
@@ -180,6 +213,10 @@ registerOperation("form-portal", {
   targets: ["space", "matter"],
   ownerExtension: "seed",
   factAction: "form-portal",
+  // form-portal lays NO fact of its own: portal.word composes do:create-matter,
+  // which lays the one caller-attributed fact. (The clean-miss JS fallback self-
+  // emits that same create-matter fact.) No redundant do:form-portal audit.
+  skipAudit: true,
   args: {
     target: {
       type: "text",

@@ -28,6 +28,7 @@
 import log from "../../seedStory/log.js";
 import Being from "../../materials/being/being.js";
 import { emitFact } from "../../past/fact/facts.js";
+import { stripForAudit } from "../../materials/redact.js";
 import { IbpError, IBP_ERR } from "../protocol.js";
 import { I_AM } from "../../materials/being/seedBeings.js";
 import { getStoryDomain } from "../address.js";
@@ -604,68 +605,19 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   // is untouched, so its reel + chain stay intact across the transfer.
   if (operation === "truename") {
     assertVerbCaller("be", opts);
-    if (!identity?.beingId) {
-      throw new IbpError(
-        IBP_ERR.UNAUTHORIZED,
-        "be:truename requires an authenticated caller",
-      );
-    }
-    if (!beingName) {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        "be:truename requires an explicit target being in the address (e.g. <story>/@<being>)",
-      );
-    }
-    const trueNameToken = payload?.trueName;
-    if (typeof trueNameToken !== "string" || !trueNameToken) {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        "be:truename requires payload.trueName (a Name pubkey or real-name)",
-      );
-    }
-    // The target can be a pubkey OR a real-name; resolve via the registry.
-    const { resolveNameId } = await import("../../materials/name/registry.js");
-    const newTrueName = await resolveNameId(trueNameToken);
-    if (!newTrueName) {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        `be:truename: no Name resolves for "${String(trueNameToken).slice(0, 16)}…" (pubkey or real-name)`,
-      );
-    }
-    const { findByName, loadProjection } =
-      await import("../../materials/projections.js");
-    const targetSlot = await findByName("being", beingName, history);
-    if (!targetSlot) {
-      throw new IbpError(
-        IBP_ERR.BEING_NOT_FOUND,
-        `be:truename target @${beingName} not found on history #${history}`,
-        { beingName, history },
-      );
-    }
-    const targetBeingId = String(targetSlot.id);
-    // The target Name must exist and not be banished. Names live on main
-    // (identity is above the history timeline); isNameBanished returns false
-    // for a MISSING name too, so assert existence separately.
-    const nameSlot = await loadProjection("name", String(newTrueName), "0");
-    if (!nameSlot?.state) {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        `be:truename: target Name "${String(newTrueName).slice(0, 12)}…" does not exist`,
-        { trueName: newTrueName },
-      );
-    }
-    const { isNameBanished } = await import("../../materials/name/closure.js");
-    if (await isNameBanished(newTrueName)) {
-      throw new IbpError(
-        IBP_ERR.FORBIDDEN,
-        `be:truename: target Name "${String(newTrueName).slice(0, 12)}…" is banished`,
-        { trueName: newTrueName },
-      );
-    }
+    // be:truename is AUTHORED by truename.word (run via the cherub handler). The .word owns the
+    // gates + the four floor see-ops (resolve the token to a nameId, resolve the target being,
+    // assert the Name exists + is not banished) + builds the fact params; the handler's JS
+    // clean-miss fallback reproduces them when the .word IR is absent. The BE dispatcher just runs
+    // the handler and stamps the ONE caller-attributed be:truename fact from the returned
+    // _factParams — mirroring do.js's auto-Fact path. NO inline validation here anymore: the Word is
+    // the source. of.kind is hard-asserted being (BEING_ONLY_TARGET_VERBS); the being's _id is
+    // untouched, so its reel + chain survive the transfer.
     const truenameOp = resolveBeOpFromFold("truename");
     const result = await truenameOp.handler({
       address,
       addressKind,
+      beingName,
       payload,
       identity,
       ctx: {
@@ -677,17 +629,19 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       },
       moment,
     });
-    await writeBeFact({
-      operation,
-      identity,
-      authResult: { ...result, targetBeingId, trueName: newTrueName },
-      payload,
-      beingName,
-      actId: moment?.actId || null,
-      moment,
-      history,
-    });
-    return { ...result, targetBeingId };
+    if (!truenameOp.skipAudit) {
+      await emitFact({
+        verb:    "be",
+        act:     truenameOp.factAction, // "truename"
+        through: identity.beingId,      // caller-attribution
+        of:      { kind: "being", id: String(result?._factTarget?.id) },
+        params:  result?._factParams,
+        result:  stripForAudit(result),
+        actId:   moment?.actId || null,
+        history,
+      }, moment);
+    }
+    return { ...result, targetBeingId: result?._factTarget?.id || null };
   }
 
   // ── Inhabit-connect path. ───────────────────────────────────────

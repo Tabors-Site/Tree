@@ -1,4 +1,4 @@
-// branchManagerHost.js — the host env for branch-manager.word's `host:` escapes (8.md §6/§7).
+// historyManagerHost.js — the host env for history-manager.word's `host:` escapes (8.md §6/§7).
 //
 // The CONTROL strand (the gate chain: identity present, name valid, canonical valid,
 // .histories space resolved) is the `.word`; the genuine computation + the heaven-routed
@@ -11,7 +11,7 @@
 // is a do/be verb — EXCEPT (a) genuine computation: the pointer-name + canonical-path
 // regex validation, the map merge; (b) reads the see-registry does not model yet: the
 // pointer map and the .histories heaven-space id are HEAVEN reads (MAIN-pinned, routed
-// through loadHeavenProjection / findHeavenSpace by the BRANCHES enum), which no `see`
+// through loadHeavenProjection / findHeavenSpace by the HISTORY enum), which no `see`
 // QUERY/READ form can shape today (see blockers); (c) the lone WORLD write, kept host
 // like take-role.word's grantInternal so it calls the SAME doVerb(set-space) the JS
 // handler calls, reading ctx.moment to lay its fact into the live moment.
@@ -29,12 +29,13 @@ import {
   findPointersSpaceId,
 } from "../../../materials/history/historyRegistry.js";
 
-// Mirrors CANONICAL_PATH_RE in ops.js (which mirrors BRANCH_RE in address.js). The
+// Mirrors CANONICAL_PATH_RE in ops.js (which mirrors HISTORY_RE in address.js). The
 // set-pointer handler rejects structurally-invalid `canonical` arguments with it.
 const CANONICAL_PATH_RE = /^(?:0|\d+(?:[a-z]+\d+)*(?:[a-z]+)?)$/;
 
 // history the write rides: the moment's act history, else the eval ctx history, else main.
-const historyOf = (ctx) => ctx?.moment?.actorAct?.history || ctx?.history || "0";
+const historyOf = (ctx) =>
+  ctx?.moment?.actorAct?.history || ctx?.history || "0";
 
 export function historyManagerHostEnv() {
   return {
@@ -44,7 +45,9 @@ export function historyManagerHostEnv() {
     // `.word` reads `If no validName:` to refuse). Normalization rides here so the value
     // the .word writes is exactly what the JS handler wrote (`name.trim().toLowerCase()`).
     "valid-pointer-name": ({ args: [name] }) => {
-      const n = String(name ?? "").trim().toLowerCase();
+      const n = String(name ?? "")
+        .trim()
+        .toLowerCase();
       return isPointerName(n) ? n : null;
     },
     // validCanonical(canonical) → the structural path check. Returns the trimmed path
@@ -68,14 +71,17 @@ export function historyManagerHostEnv() {
     // the `.word` then stamps it with `replace the space historiesSpace's qualities.pointers`.
     "set-pointer-map": ({ args: [current, name, canonical] }) => {
       const map = current && typeof current === "object" ? current : {};
-      const previous = Object.prototype.hasOwnProperty.call(map, name) ? map[name] : null;
+      const previous = Object.prototype.hasOwnProperty.call(map, name)
+        ? map[name]
+        : null;
       return { map: { ...map, [name]: canonical }, previous };
     },
 
     // ── delete-pointer's helpers ──────────────────────────────────────────────────────
     // isReservedPointer(name) → genuine computation: the reserved-list membership check
     // (the SAME RESERVED_POINTERS the JS handler tests), so the `.word` refuses #main etc.
-    "is-reserved-pointer": ({ args: [name] }) => RESERVED_POINTERS.includes(String(name)),
+    "is-reserved-pointer": ({ args: [name] }) =>
+      RESERVED_POINTERS.includes(String(name)),
 
     // delete-pointer-map(current, name) → the PRUNED map when the name is present, else null
     // (the `.word` reads `If no outcome:` for the no-op, matching the JS early return). A pure

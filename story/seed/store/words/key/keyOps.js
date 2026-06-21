@@ -31,7 +31,6 @@
 
 import { registerOperation } from "../../../ibp/operations.js";
 import { IBP_ERR, IbpError } from "../../../ibp/protocol.js";
-import { emitFact } from "../../../past/fact/facts.js";
 import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
 
 // Self-register this slice's co-located WORLD strand (CONVERTING.md): the bridge
@@ -55,10 +54,15 @@ async function resolveTargetNameId(target, moment) {
 }
 
 // key-export's world strand is key.word (resolve the Name via `see`, the double gate,
-// the crypto read, the asker-attributed audit, the §7 return). CALLER mode (no
-// `through`): the audit attributes to the asker. Returns the {nameId,hasKey,
-// privateKeyPem,mnemonic} result (hasKey coerced to a strict boolean — the .word's
-// mark yields true|undefined), or null on a clean miss so the JS body runs.
+// the crypto read, the §7 return). CALLER mode (no `through`): the audit attributes to
+// the asker. The .word lays NO fact — it returns {nameId,hasKey,privateKeyPem,mnemonic};
+// this cut promotes the resolved `nameId` into _factParams {exportedNameId} and forces
+// _factTarget at the ASKER's being, so the dispatcher's ONE auto-Fact lays the caller-
+// attributed (through = asker) do:key-export AUDIT — the SAME fact recordExport self-
+// emitted, now on the one emit path, the key NOWHERE in it (stripForAudit drops the
+// privateKeyPem/mnemonic reveals from the recorded result; _factParams never carries
+// them). Returns the result with _factParams/_factTarget attached (hasKey coerced to a
+// strict boolean — the .word's mark yields true|undefined), or null on a clean miss.
 async function _keyExportViaWord({ target, caller, asker, moment }) {
   if (!moment) return null;
   const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
@@ -76,7 +80,17 @@ async function _keyExportViaWord({ target, caller, asker, moment }) {
       env: { host: keyHostEnv() },
     });
     if (!result) return null;
-    return { ...result, hasKey: !!result.hasKey };
+    const out = { ...result, hasKey: !!result.hasKey };
+    // The audit fact (do.js auto-Fact): who exported which Name's key, the key nowhere
+    // in it. params = {exportedNameId}, of = the asker's being (the audit lands on the
+    // asker's reel, NOT the keyholder target — resolveAuditTarget would otherwise fall
+    // back to the being target). No asker → no fact (matches the old `if (askerBeingId)`).
+    const askerBeingId = asker ? String(asker) : null;
+    if (askerBeingId && out.nameId) {
+      out._factParams = { exportedNameId: String(out.nameId) };
+      out._factTarget = { kind: "being", id: askerBeingId };
+    }
+    return out;
   } catch (e) {
     if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.FORBIDDEN, e.message);
     throw e;
@@ -87,10 +101,13 @@ registerOperation("key-export", {
   targets: ["being"],
   ownerExtension: "seed",
   factAction: "key-export",
-  // skipAudit: the auto-audit copies the handler RESULT into the stored
-  // fact, which would persist the key. Opt out and stamp our own fact
-  // recording WHO exported WHICH name's key WHEN, the key nowhere in it.
-  skipAudit: true,
+  // NO skipAudit. The op no longer self-emits — it returns _factParams
+  // ({exportedNameId}, the key NOWHERE in it) + _factTarget (the asker's
+  // being), and the dispatcher's ONE auto-Fact path lays the caller-
+  // attributed do:key-export audit. The handler RESULT carries the
+  // privateKeyPem/mnemonic reveal (to the asker over the wire), but
+  // stripForAudit (do.js summarizeAuditResult) drops those reveal keys
+  // from the recorded result, so the durable fact never holds the key.
   handler: async ({ target, identity, moment }) => {
     // THE CONVERSION: key-export's world strand is key.word, run through the bridge.
     // The JS below is the clean-miss fallback.
@@ -147,26 +164,25 @@ registerOperation("key-export", {
       } catch { /* PEM-only export (key not seed-derivable) */ }
     }
 
-    // Audit fact on the asker's reel: who exported which Name's key. The
-    // key is never in it. History threaded from the moment, never defaulted.
+    // No self-emit. The audit fact (who exported which Name's key, the key
+    // never in it) is the dispatcher's ONE auto-Fact: return _factParams
+    // ({exportedNameId}) + _factTarget (the asker's being — so the audit
+    // lands on the asker's reel, NOT the keyholder target). do.js stamps the
+    // caller-attributed (through = asker) do:key-export fact. No asker → no
+    // _factParams, so the dispatcher still folds nothing key-specific (matches
+    // the old `if (askerBeingId)` guard). The privateKeyPem/mnemonic ride the
+    // RETURN to the asker, but stripForAudit drops them from the recorded result.
     const askerBeingId = identity?.beingId ? String(identity.beingId) : null;
-    if (askerBeingId) {
-      await emitFact({
-        verb:    "do",
-        act:     "key-export",
-        through: askerBeingId,
-        of:      { kind: "being", id: askerBeingId },
-        params:  { exportedNameId: nameId },
-        actId:   moment?.actId || null,
-        history,
-      }, moment);
-    }
-
-    return {
+    const out = {
       nameId,                          // the public key / did:key id exported
       hasKey:  privateKeyPem !== null, // false when locked + not connected, or keyless
       privateKeyPem,                   // the Name's signing key (PEM)
       mnemonic,                        // the same key as 24 BIP39 words
     };
+    if (askerBeingId) {
+      out._factParams = { exportedNameId: nameId };
+      out._factTarget = { kind: "being", id: askerBeingId };
+    }
+    return out;
   },
 });

@@ -1,19 +1,19 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
 // merge-mediator. LLM-cognition helper that walks an operator through
-// resolving conflicts on a merged branch.
+// resolving conflicts on a merged history.
 //
-// Background: the merge-branches op creates a third branch whose
+// Background: the merge-histories op creates a third history whose
 // parent is the common ancestor of two source branches, with merge
-// provenance recorded in `mergeSources`. The merged branch starts
+// provenance recorded in `mergeSources`. The merged history starts
 // with reset reels (inhabit-state cleared) but otherwise inherits
 // the ancestor's state through reel-lineage. Reconciliation facts
-// stamped on the merged branch then bring its state to the user-
+// stamped on the merged history then bring its state to the user-
 // resolved combined state.
 //
 // The merge-mediator role is the UX layer over that pipeline. The
-// operator summons @merge-mediator at the merged branch's address;
-// the mediator reads `.branches/<path>/conflicts`, walks each
+// operator summons @merge-mediator at the merged history's address;
+// the mediator reads `.histories/<path>/conflicts`, walks each
 // conflict in turn, presents both sides, suggests a strategy, and
 // emits the chosen reconciliation fact when the operator decides.
 //
@@ -23,7 +23,7 @@
 // stay unchanged.
 //
 // Reads:
-//   `<story>#<merged>/.branches/<merged>/conflicts`  (conflict catalog)
+//   `<story>#<merged>/.histories/<merged>/conflicts`  (conflict catalog)
 //   `<story>#<sourceA>/`                              (source A's view)
 //   `<story>#<sourceB>/`                              (source B's view)
 //
@@ -34,7 +34,7 @@
 export const mergeMediatorRole = Object.freeze({
   name: "merge-mediator",
   description:
-    "LLM helper. Walks the operator through resolving conflicts on a merged branch. Reads `.branches/<merged>/conflicts`, presents each conflict's two sides, suggests a strategy, stamps the chosen reconciliation fact.",
+    "LLM helper. Walks the operator through resolving conflicts on a merged history. Reads `.histories/<merged>/conflicts`, presents each conflict's two sides, suggests a strategy, stamps the chosen reconciliation fact.",
   requiredCognition: "llm",
   permissions: ["see", "do"],
   respondMode: "async",
@@ -48,42 +48,45 @@ export const mergeMediatorRole = Object.freeze({
   // strategy }` on each reconciliation call so the chain records the
   // merge provenance.
   can: [
-    { verb: "see", word: "branches" },
+    { verb: "see", word: "histories" },
     {
-      verb:        "do",
-      word:        "set-being",
-      description: "Set a being's qualities. Use with params._merge metadata when reconciling a conflict.",
+      verb: "do",
+      word: "set-being",
+      description:
+        "Set a being's qualities. Use with params._merge metadata when reconciling a conflict.",
     },
     {
-      verb:        "do",
-      word:        "set-matter",
-      description: "Set a matter's qualities. Use with params._merge metadata when reconciling a conflict.",
+      verb: "do",
+      word: "set-matter",
+      description:
+        "Set a matter's qualities. Use with params._merge metadata when reconciling a conflict.",
     },
     {
-      verb:        "do",
-      word:        "set-space",
-      description: "Set a space's qualities. Use with params._merge metadata when reconciling a conflict.",
+      verb: "do",
+      word: "set-space",
+      description:
+        "Set a space's qualities. Use with params._merge metadata when reconciling a conflict.",
     },
   ],
 
   prompt: () => `
 You are merge-mediator. You help the operator resolve conflicts on a
-merged branch.
+merged history.
 
-A merged branch is a third branch created by merge-branches; its
-parent is the common ancestor of two source branches, and it carries
+A merged history is a third history created by merge-histories; its
+parent is the common ancestor of two source histories, and it carries
 \`mergeSources: [sourceA, sourceB]\` for forensic audit. The merged
-branch starts with state inherited from the ancestor through reel-
+history starts with state inherited from the ancestor through reel-
 lineage; reset reels (inhabit-state) are cleared. Reconciliation
-facts you stamp bring the merged branch's state to the operator-
+facts you stamp bring the merged history's state to the operator-
 chosen combined state.
 
-The operator summoned you at the merged branch's address. Your first
-step is to SEE \`<story>#<merged>/.branches/<merged>/conflicts\` to
+The operator summoned you at the merged history's address. Your first
+step is to SEE \`<story>#<merged>/.histories/<merged>/conflicts\` to
 get the conflict catalog. It returns:
 
   {
-    branch:    "<merged>",
+    history:    "<merged>",
     sourceA:   "<pathA>",
     sourceB:   "<pathB>",
     ancestor:  "<ancestor>",
@@ -111,17 +114,17 @@ For each conflict:
      position, a matter's quality, a space's permissions, etc.).
   2. Read lastFactA and lastFactB to surface the most recent
      divergent value on each side.
-  3. If you need fuller context, navigate to the source branches
+  3. If you need fuller context, navigate to the source histories
      (\`<story>#<sourceA>/\` and \`<story>#<sourceB>/\`) and SEE
      the relevant target.
   4. Present BOTH sides to the operator clearly: "In source A, X is
      Y. In source B, X is Z. Which would you like in the merged
-     branch?"
+     history?"
   5. Offer the suggested strategy if context supports it ("you
-     mentioned A was your experimental branch, so I'd suggest B's
+     mentioned A was your experimental history, so I'd suggest B's
      value unless you wanted to keep the experiment").
   6. When the operator decides, stamp the appropriate fact on the
-     merged branch. ALWAYS include the \`_merge\` metadata block:
+     merged history. ALWAYS include the \`_merge\` metadata block:
 
         params._merge = {
           sourceHistory:   "A" | "B" | "composed",
@@ -138,11 +141,11 @@ changes. Or skip if the operator wants the ancestor's value
 
 After the last conflict resolves, summarize what landed (count of
 take-A, take-B, composed) and note that the operator can unpause /
-promote the merged branch to live when satisfied.
+promote the merged history to live when satisfied.
 
 DOCTRINE:
-- Source branches stay immutable. You only stamp facts on the merged
-  branch.
+- Source stay immutable. You only stamp facts on the merged
+  history.
 - Reconciliation facts are normal facts. No special action vocabulary;
   the \`_merge\` block in params is what marks them.
 - One conflict at a time. Don't batch unless the operator explicitly

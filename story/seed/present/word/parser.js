@@ -382,9 +382,12 @@ const EFFECT_RULES = [
   ],
   // inline if (§2): "If <cond>, X, and Y." -> { if, then:[X,Y] }. The HINGE between the
   // conditional frame and the consequence reads as a comma, `then`, or `→`/`->` — the same
-  // separating work the colon does for the block form (`If <cond>:` + indent).
+  // separating work the colon does for the block form (`If <cond>:` + indent). A comma
+  // immediately followed by `and`/`or` is a CONDITION connective ("If owner is X, and owner
+  // is Y, refuse …"), NOT the hinge — the negative lookahead skips it so multi-condition
+  // gates inline too; an explicit `then`/`→` is always an unambiguous hinge.
   [
-    /^If (.+?)(?:,| then|\s*(?:→|->))\s+(.+)\.$/i,
+    /^If (.+?)(?:,(?!\s*(?:and|or)\b)| then\b|\s*(?:→|->))\s+(.+)\.$/i,
     (m, c) => ({
       kind: "if",
       cond: parseCond(m[1], c),
@@ -1118,14 +1121,42 @@ function inferFlag(clause) {
 
 // the inline-then of "If <cond>, X, and Y." — a comma/and-joined list of effects
 function parseInlineThen(rest, c) {
-  return splitTop(rest, /,\s*(?:and\s+)?|\s+and\s+/i).map((part) => {
-    const eff = parseEffect(part.trim().replace(/\.$/, "") + ".", c);
+  const t = rest.trim();
+  // A leading Return carries STRUCTURAL commas (`Return k: v, k: v`) — it is ONE effect,
+  // not a comma-separated list. Parse the whole as a single effect so its kv pairs survive
+  // (lets `If <cond>, Return a: 1, b: 2.` inline instead of staying a block).
+  if (/^Return\b/i.test(t)) {
+    const eff = parseEffect(t.replace(/\.$/, "") + ".", c);
+    if (eff) return [eff];
+  }
+  return splitInlineEffects(t).map((part) => {
+    const eff = parseEffect(part.replace(/\.$/, "") + ".", c);
     if (!eff)
       throw new Error(
         `word parser: cannot parse inline-then effect:\n  ${part}`,
       );
     return eff;
   });
+}
+// Split an inline-then into effects on top-level `,` / `, and ` / ` and `, respecting nested
+// {}, [], and "..." so a `do X with { nested }` param or a quoted comma is never split.
+function splitInlineEffects(s) {
+  const parts = [];
+  let depth = 0, inStr = false, buf = "", i = 0;
+  while (i < s.length) {
+    const ch = s[i];
+    if (inStr) { buf += ch; if (ch === '"') inStr = false; i++; continue; }
+    if (ch === '"') { inStr = true; buf += ch; i++; continue; }
+    if (ch === "{" || ch === "[") { depth++; buf += ch; i++; continue; }
+    if (ch === "}" || ch === "]") { depth = Math.max(0, depth - 1); buf += ch; i++; continue; }
+    if (depth === 0) {
+      const m = s.slice(i).match(/^(?:,\s*and\s+|,\s*|\s+and\s+)/i);
+      if (m) { if (buf.trim()) parts.push(buf.trim()); buf = ""; i += m[0].length; continue; }
+    }
+    buf += ch; i++;
+  }
+  if (buf.trim()) parts.push(buf.trim());
+  return parts;
 }
 // "the being's address, beingId, ..." -> ["address","beingId",...] (return values)
 function camelKey(s) {
@@ -1267,10 +1298,36 @@ function stripArticle(s) {
   return s.trim().replace(/^(a|an|the)\s+/i, "");
 }
 function splitItems(s) {
-  return s
-    .split(/,\s*and\s+|,\s*or\s+|\s+and\s+|\s+or\s+|,\s*/i)
-    .map((x) => x.trim())
-    .filter(Boolean);
+  // Split on top-level `,` / `, and ` / `, or ` / ` and ` / ` or `, respecting nested {}, []
+  // and "..." — so a Return's nested-object fact params (`factParams: { a: $x, b: $y }`)
+  // survive instead of being shredded at the inner comma. Brace-free input (declaration
+  // lists, single-value returns) splits identically to the old regex.
+  const parts = [];
+  let depth = 0,
+    inStr = false,
+    buf = "",
+    i = 0;
+  const str = s || "";
+  while (i < str.length) {
+    const ch = str[i];
+    if (inStr) {
+      buf += ch;
+      if (ch === '"') inStr = false;
+      i++;
+      continue;
+    }
+    if (ch === '"') { inStr = true; buf += ch; i++; continue; }
+    if (ch === "{" || ch === "[") { depth++; buf += ch; i++; continue; }
+    if (ch === "}" || ch === "]") { depth = Math.max(0, depth - 1); buf += ch; i++; continue; }
+    if (depth === 0) {
+      const m = str.slice(i).match(/^(?:,\s*and\s+|,\s*or\s+|\s+and\s+|\s+or\s+|,\s*)/i);
+      if (m) { if (buf.trim()) parts.push(buf.trim()); buf = ""; i += m[0].length; continue; }
+    }
+    buf += ch;
+    i++;
+  }
+  if (buf.trim()) parts.push(buf.trim());
+  return parts;
 }
 function indentOf(raw) {
   return (raw.match(/^(\s*)/)[1] || "").length;

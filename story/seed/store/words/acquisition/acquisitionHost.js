@@ -1,14 +1,19 @@
 // acquisitionHost.js — host-escape glue for the acquisition ops (take-role, ask-role).
 // Wires the SAME primitives the JS handlers call into ctx.env.host: the role-spec
-// lookup, the take/asked policies, the already-holds check, the grant-role emit, and
+// lookup, the take/asked policies, the already-holds check, the grant-record BUILD, and
 // the queue-path owner summon. No reimplementation — only the env adapter the `.word`
-// reaches through `host:` escapes (the strand the cut deletes). callHost invokes each as
-// `fn({ args }, ctx)`; the write op reads ctx.moment to lay its fact into the live
-// moment.
+// reaches through `see`/`host:` escapes. callHost invokes each as `fn({ args }, ctx)`.
+//
+// The grant no longer self-emits: `grant-internal` is a `see` builtin (a pure compute,
+// NO fact) that BUILDS the grant record (buildInternalGrant — the SAME {role, anchor,
+// grantedBy, grantedAt} the reducer folds, grantedAt at the wall-clock floor). The
+// `.word` returns it as factParams and the dispatcher's ONE auto-Fact lays the caller-
+// attributed do:grant-role. The queue path's owner summon stays a host escape (a SUMMON
+// is a transport delivery, not a substrate fact).
 import { getRoleSpecForGrant } from "../../../present/roles/spaceLookup.js";
 import { normalizeAcquisition, alreadyHoldsRole } from "../../../present/roles/acquisition.js";
 import { loadOrFold } from "../../../materials/projections.js";
-import { emitInternalGrant } from "../../../present/roles/internalGrant.js";
+import { buildInternalGrant } from "../../../present/roles/internalGrant.js";
 
 const historyOf = (ctx) => ctx?.moment?.actorAct?.history || ctx?.history || "0";
 
@@ -33,17 +38,20 @@ export function acquisitionHostEnv() {
       const existing = slot?.state?.qualities?.rolesGranted || [];
       return alreadyHoldsRole(existing, String(role), found?.anchor);
     },
-    // the lone WORLD fact (auto path): the internal grant-role emit into the live moment.
-    grantInternal: async ({ args: [caller, role, found] }, ctx) => {
-      await emitInternalGrant({
+    // the grant record (auto / grabbed path): a pure compute, NO fact. Builds the SAME
+    // {role, anchorSpaceId, anchorBeingId, grantedBy, grantedAt} the reducer folds
+    // (grantedAt at the wall-clock floor), returned FLAT so the .word's Return reads
+    // $granted.role / .anchorSpaceId / .anchorBeingId / .grantedBy / .grantedAt straight
+    // into factParams. The dispatcher's ONE auto-Fact lays the caller-attributed
+    // do:grant-role from those params — the op no longer self-emits.
+    "grant-internal": ({ args: [caller, role, found] }) => {
+      const { granteeBeingId, grant } = buildInternalGrant({
         granteeBeingId: String(caller),
         role:           String(role),
         anchorSpaceId:  found?.anchor,
         grantedBy:      String(caller),
-        moment:      ctx?.moment || null,
-        history:          historyOf(ctx),
       });
-      return true;
+      return { granteeBeingId, ...grant };
     },
     // the queue path: summon the host's owner with intent "role-request" so they
     // approve by hand. The SAME loadOrFold / callVerb / getStoryDomain the JS

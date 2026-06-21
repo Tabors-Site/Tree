@@ -261,7 +261,16 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
   // momentum threads actId through moment. The entry-point guard
   // above already required moment.actId, so by the time we get
   // here the act has a frame.
-  const shouldAudit = !op.skipAudit && !opts.skipAudit;
+  // Conditional emit: an op whose world effect is CONDITIONAL (a grant only on the
+  // grabbed/auto path, none on the idempotent re-take or queue path) returns
+  // `_noFact: true` on the paths that lay nothing — the dispatcher then skips the
+  // auto-Fact for that result. `_`-prefixed, so stripForAudit drops it from the
+  // recorded result. Single-path ops (create-matter, key, set-world-signal) never set
+  // it and stamp unconditionally; this is the keystone extended to multi-path words.
+  const shouldAudit =
+    !op.skipAudit &&
+    !opts.skipAudit &&
+    !(result && typeof result === "object" && result._noFact);
   if (shouldAudit) {
     const actId = opts.moment.actId;
     const actorBeingId = opts.identity.beingId;

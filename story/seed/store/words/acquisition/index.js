@@ -40,7 +40,7 @@ import {
 } from "../../../present/roles/acquisition.js";
 import { loadOrFold } from "../../../materials/projections.js";
 import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
-import { emitInternalGrant } from "../../../present/roles/internalGrant.js";
+import { buildInternalGrant } from "../../../present/roles/internalGrant.js";
 
 // Self-register this bundle's co-located `.word` slices (CONVERTING.md): importing
 // this index (at seed boot, or in a DRY harness) registers them so
@@ -63,7 +63,11 @@ registerRoleWord(
 registerOperation("ask-role", {
   targets: ["space"],
   ownerExtension: "seed",
-  factAction: "ask-role",
+  // The world fact is a do:grant-role (what the being reducer folds), NOT a
+  // do:ask-role — the op no longer self-emits; the dispatcher's ONE auto-Fact lays
+  // the caller-attributed grant from the returned _factParams (auto path only). The
+  // queue/idempotent paths return _noFact, so no ask-role audit is laid either.
+  factAction: "grant-role",
   args: {
     role: { type: "text", label: "Role to ask for", required: true },
   },
@@ -123,27 +127,32 @@ registerOperation("ask-role", {
     );
     const existing = callerSlot?.state?.qualities?.rolesGranted || [];
     if (alreadyHoldsRole(existing, roleName, foundHost)) {
+      // Idempotent: no grant — _noFact so the dispatcher lays nothing.
       return {
         already: true,
         role: roleName,
         anchorSpaceId: foundHost,
+        _noFact: true,
       };
     }
 
     if (policy.asked === "auto") {
-      await emitInternalGrant({
+      // No self-emit: build the grant record and return it as _factParams + the
+      // grantee's being (_factTarget). The dispatcher's ONE auto-Fact lays the
+      // caller-attributed do:grant-role the reducer folds.
+      const { grant } = buildInternalGrant({
         granteeBeingId: String(identity.beingId),
         role: roleName,
         anchorSpaceId: foundHost,
         grantedBy: String(identity.beingId), // self-grant via the role's auto policy
-        moment,
-        history,
       });
       return {
         granted: true,
         path: "auto",
         role: roleName,
         anchorSpaceId: foundHost,
+        _factParams: grant,
+        _factTarget: { kind: "being", id: String(identity.beingId) },
       };
     }
 
@@ -161,6 +170,7 @@ registerOperation("ask-role", {
         role: roleName,
         anchorSpaceId: foundHost,
         message: `Role "${roleName}" needs manual approval but the host space has no owner to ask.`,
+        _noFact: true,
       };
     }
     const ownerSlot = await loadOrFold("being", String(ownerId), history);
@@ -172,6 +182,7 @@ registerOperation("ask-role", {
         role: roleName,
         anchorSpaceId: foundHost,
         message: `Role "${roleName}" needs manual approval but the owner couldn't be addressed.`,
+        _noFact: true,
       };
     }
 
@@ -208,6 +219,7 @@ registerOperation("ask-role", {
         role: roleName,
         anchorSpaceId: foundHost,
         message: `Failed to send request to @${ownerName}: ${err?.message || err}`,
+        _noFact: true,
       };
     }
 
@@ -217,6 +229,7 @@ registerOperation("ask-role", {
       role: roleName,
       anchorSpaceId: foundHost,
       message: `Requested. @${ownerName} will see this in their inbox.`,
+      _noFact: true,
     };
   },
 });
@@ -226,15 +239,18 @@ registerOperation("ask-role", {
 // ──────────────────────────────────────────────────────────────────
 
 // The bridge into take-role.word: run the slice's CONTROL strand (the gate chain +
-// idempotency) through the evaluator with the acquisition host escapes; return the
-// {role, anchorSpaceId, granted|already} result, or null on a clean miss (not converted /
-// no moment) so the JS handler runs. The grant fact lands on the real moment. A WordRefusal
-// (not installed / not grabbable) becomes the same IbpError the JS threw.
+// idempotency) through the evaluator with the acquisition see/host escapes; the .word
+// lays NO fact — shimGrantResult promotes the returned factParams to _factParams +
+// _factTarget (the grabbed path) or sets _noFact (the idempotent already path), and the
+// dispatcher's ONE auto-Fact lays the caller-attributed do:grant-role. Returns null on a
+// clean miss (not converted / no moment) so the JS handler runs. A WordRefusal (not
+// installed / not grabbable) becomes the same IbpError the JS threw.
 // ask-role's world strand is ask-role.word (the gate chain + the asked-policy §9 Match).
 // Same cut shape as take-role: prefer the bridge, the JS body is the clean-miss fallback.
-// The auto path's grant is I_AM-authority (like take-role); the queue path reaches the
-// owner with the CALL verb (see owner-of + see role-request build the payload, which keeps
-// the asker identified in the inbox content regardless of the call envelope's `from`).
+// The auto path's grant returns factParams (grantedBy the asker); the queue path reaches
+// the owner with the CALL verb (see owner-of + see role-request build the payload, which
+// keeps the asker identified in the inbox content regardless of the call envelope's
+// `from`) and returns _noFact (no grant — only the summon).
 async function _askRoleViaWord({ caller, role, space, moment }) {
   if (!moment) return null;
   // HOST ESCAPE: ask-role is HOST-facilitated — the host (i-am) runs the .word THROUGH the asker's
@@ -265,7 +281,7 @@ async function _askRoleViaWord({ caller, role, space, moment }) {
       },
       env: { host: acquisitionHostEnv() },
     });
-    return result || null;
+    return result ? shimGrantResult(result, caller) : null;
   } catch (e) {
     if (e && e.__wordRefusal)
       throw new IbpError(e.code || IBP_ERR.FORBIDDEN, e.message);
@@ -302,7 +318,7 @@ async function _takeRoleViaWord({ caller, role, space, moment }) {
       },
       env: { host: acquisitionHostEnv() },
     });
-    return result || null;
+    return result ? shimGrantResult(result, caller) : null;
   } catch (e) {
     if (e && e.__wordRefusal)
       throw new IbpError(e.code || IBP_ERR.FORBIDDEN, e.message);
@@ -310,10 +326,35 @@ async function _takeRoleViaWord({ caller, role, space, moment }) {
   }
 }
 
+// The dispatcher shim (mirrors create-matter's): on the GRANT path the .word returns
+// `factParams` (the grant record) → promote it to _factParams + force _factTarget at the
+// GRANTEE's being (the caller; resolveAuditTarget would otherwise pick the bare space
+// target), so the dispatcher's ONE auto-Fact lays the caller-attributed do:grant-role the
+// reducer folds. On the no-grant paths (the idempotent already:true return, and ask-role's
+// queue return) there is NO factParams → set _noFact so the dispatcher's conditional-emit
+// primitive SKIPS the auto-Fact (the queue path's owner summon already happened inside the
+// .word; it lays no grant). `granteeBeingId` (the .word's hint) is dropped from the
+// recorded result by stripForAudit's pass; we read it here as a sanity tie to the caller.
+function shimGrantResult(result, caller) {
+  if (result && typeof result === "object" && result.factParams) {
+    result._factParams = result.factParams;
+    delete result.factParams;
+    const grantee = result.granteeBeingId ? String(result.granteeBeingId) : String(caller);
+    result._factTarget = { kind: "being", id: grantee };
+  } else if (result && typeof result === "object") {
+    result._noFact = true;
+  }
+  return result;
+}
+
 registerOperation("take-role", {
   targets: ["space"],
   ownerExtension: "seed",
-  factAction: "take-role",
+  // The world fact is a do:grant-role (what the being reducer folds), NOT a
+  // do:take-role — the op no longer self-emits; the dispatcher's ONE auto-Fact lays
+  // the caller-attributed grant from the returned _factParams (the grabbed path). The
+  // idempotent already:true path returns _noFact, so nothing is laid.
+  factAction: "grant-role",
   args: {
     role: { type: "text", label: "Role to take", required: true },
   },
@@ -337,9 +378,10 @@ registerOperation("take-role", {
     }
 
     // THE CONVERSION (2.md Phase 4): the take-role world-strand is take-role.word, run
-    // through the bridge. The JS below is the clean-miss fallback. The grant lands on the
-    // real moment (emitInternalGrant's beingId=I_AM — the policy IS the substrate's
-    // authority, grantedBy the taker); a WordRefusal becomes the same IbpError.
+    // through the bridge. The JS below is the clean-miss fallback. The .word lays NO fact —
+    // it returns the grant record, the cut promotes it to _factParams + _factTarget, and the
+    // dispatcher's ONE auto-Fact lays the caller-attributed (through = taker) do:grant-role;
+    // a WordRefusal becomes the same IbpError.
     const viaWord = await _takeRoleViaWord({
       caller: identity.beingId,
       role: roleName,
@@ -375,26 +417,31 @@ registerOperation("take-role", {
     );
     const existing = callerSlot?.state?.qualities?.rolesGranted || [];
     if (alreadyHoldsRole(existing, roleName, foundHost)) {
+      // Idempotent: no grant — _noFact so the dispatcher lays nothing.
       return {
         already: true,
         role: roleName,
         anchorSpaceId: foundHost,
+        _noFact: true,
       };
     }
 
-    await emitInternalGrant({
+    // No self-emit: build the grant record and return it as _factParams + the
+    // grantee's being (_factTarget). The dispatcher's ONE auto-Fact lays the
+    // caller-attributed do:grant-role the reducer folds.
+    const { grant } = buildInternalGrant({
       granteeBeingId: String(identity.beingId),
       role: roleName,
       anchorSpaceId: foundHost,
       grantedBy: String(identity.beingId),
-      moment,
-      history,
     });
     return {
       granted: true,
       path: "grabbed",
       role: roleName,
       anchorSpaceId: foundHost,
+      _factParams: grant,
+      _factTarget: { kind: "being", id: String(identity.beingId) },
     };
   },
 });

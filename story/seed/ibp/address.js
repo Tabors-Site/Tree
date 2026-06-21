@@ -774,7 +774,7 @@ function expandStance(stance, ctx) {
   // it set stance.historyPointer and left stance.history null. We do
   // NOT default-fill history in that case . the resolveHistoryPointers
   // step (called by the wire layer after expand) looks up the pointer
-  // in the .branches heaven space and fills stance.history with the
+  // in the .histories heaven space and fills stance.history with the
   // canonical path. Until then, history stays null as a marker.
   const storyWasTyped = !!stance.story;
   const story = stance.story || ctx.currentStory || null;

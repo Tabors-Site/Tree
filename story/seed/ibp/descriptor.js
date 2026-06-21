@@ -484,7 +484,7 @@ export async function buildNameDescriptor(nameId) {
   if (!nameId) return null;
 
   // Names live on main ("0") and never fork — the name reel is story-wide,
-  // above the branch timeline (materials/name/name.js, closure.js). Read the
+  // above the history timeline (materials/name/name.js, closure.js). Read the
   // name on "0" via loadProjection (the cached fold of the name reel), NOT
   // fold(): fold() returns a truthy empty {} for an id that has no facts, so a
   // bogus pubkey would mint an empty descriptor instead of a clean 404.
@@ -560,8 +560,8 @@ export async function buildNameDescriptor(nameId) {
  * history you're standing on, so the tree you see is exactly the access you give.
  *
  * "Beings on this history" = your beings whose fold lives anywhere on the
- * history's reel-lineage (a being born on main is inherited by every sub-branch;
- * a being born on a sub-branch shows only there). De-duped to the row closest
+ * history's reel-lineage (a being born on main is inherited by every sub-history;
+ * a being born on a sub-history shows only there). De-duped to the row closest
  * to the history. Beings whose parent your Name does NOT own (e.g. parented
  * under @cherub) surface as roots, tagged with the parent's name for context.
  *
@@ -588,7 +588,7 @@ export async function buildNameTree(nameId, history) {
   const lineage = await resolveHistoryLineage(br);
   const rank = new Map(lineage.map((b, i) => [b, i]));
 
-  // The Name's beings whose fold-cache row lives anywhere on this branch's
+  // The Name's beings whose fold-cache row lives anywhere on this history's
   // lineage. Bounded scan, capped — same shape as buildNameDescriptor.
   const rows = await Projection.find({
     history: { $in: lineage },
@@ -602,7 +602,7 @@ export async function buildNameTree(nameId, history) {
     .limit(NAME_BEING_CAP)
     .lean();
 
-  // De-dupe by beingId, keeping the row on the branch CLOSEST to `br` (the
+  // De-dupe by beingId, keeping the row on the history CLOSEST to `br` (the
   // deepest lineage rank — the most current fold for where you stand).
   const byId = new Map();
   for (const r of rows) {
@@ -612,7 +612,7 @@ export async function buildNameTree(nameId, history) {
       byId.set(id, r);
   }
 
-  // Build a node per being, with its branch-scoped live inheritation points.
+  // Build a node per being, with its history-scoped live inheritation points.
   const nodes = new Map();
   for (const r of byId.values()) {
     const id = String(r.id);
@@ -843,7 +843,7 @@ async function placeAtSpaceRoot(
     isHomeRoot: false,
     // Surface the space root's `size` on the wire, same as placeAtSpace
     // does for non-root positions. Without this the 3D portal's sized-
-    // land render branch never fires at the story root . it falls
+    // land render history never fires at the story root . it falls
     // back to the infinite outdoor scene even though the root now
     // carries a default size at creation time.
     size: spaceRoot?.size || null,
@@ -1177,7 +1177,7 @@ async function synthesizeStamperChildren(parentPath, payload) {
       beingId: s.beingId,
       lastAct: s.lastAct,
       actCount: s.actCount,
-      branches: s.branches,
+      histories: s.histories,
     },
     qualities: {},
   }));
@@ -1787,7 +1787,7 @@ async function identityBlock(identity, { until = null, history } = {}) {
       } else {
         // loadOrFold (not loadProjection): a freshly-registered being
         // (cherub.birth that JUST sealed) may not have its projection
-        // slot materialized yet, AND on any non-main branch the slot
+        // slot materialized yet, AND on any non-main history the slot
         // doesn't exist until the lineage walk cold-folds it. Bare
         // loadProjection returns null in both cases . the portal then
         // sees identity.position = null, can't compute a landing
@@ -1834,7 +1834,7 @@ async function identityBlock(identity, { until = null, history } = {}) {
         // Visibility for the "freshly-registered being lands off-grid"
         // class of bugs. When the slot resolved but position is null,
         // something upstream (the be:birth reducer, the post-seal
-        // fold, the lineage walk on a non-main branch) failed to
+        // fold, the lineage walk on a non-main history) failed to
         // populate it. Without this warn the portal silently falls
         // back to homeSpace and the user never gets a signal that
         // anything went wrong — the deeper bug stays hidden.

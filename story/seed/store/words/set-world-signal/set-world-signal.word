@@ -1,17 +1,21 @@
 # role-manager.word — set-world-signal: publish a world signal to the story root
 # (role-manager/ops.js, the set-world-signal op).
 #
-# The WORLD strand is a SINGLE do:set-space on the story root at the field path
+# The WORLD effect is a do:set-space on the story root at the field path
 # `qualities.world.<namespace>.<key>` = value. The CONTROL strand (the two
 # kebab-case gates + the not-initialized guard) is `.word`. The genuine computes
 # stay `host:`:
 #   - validNamespace / validKey: regex validation (pure computation, not a read).
 #   - parseSignalValue: the JSON / type coercion of the raw value (computation).
-#   - publishSignal: the lone WORLD fact — a DYNAMIC dotted-field set-space the
-#     parser has no sentence form for yet, so it is reached as a `host:` escape
-#     that calls the SAME getSpaceRootId() + doVerb("set-space") the JS handler
-#     calls (no reimplementation). It reads ctx.moment to lay its fact into the
-#     live moment.
+#   - signalField: the dynamic dotted field-path qualities.world.<ns>.<key>.
+#   - storyRoot: the story-root space id (a read, refuses INTERNAL on absence).
+# There is NO host: emit and NO `set the space root's ...` write sentence — the
+# word lays no fact of its own. It returns the set-space params (field, value) as
+# `factParams` (the cut promotes them to the dispatcher's _factParams) plus the
+# story-root id; the ONE auto-Fact path in do.js then lays the caller-attributed
+# do:set-space fact (factAction = "set-space", target forced to the story root).
+# Every gate stays a `see` (a read, not an escape).
+#
 # The bridge binds `namespace`, `key`, `value`, and the actor identity.
 
 When a being publishes a world signal:
@@ -20,9 +24,7 @@ When a being publishes a world signal:
   see valid-key(key) as keyOk.
   If not keyOk, refuse with "set-world-signal: key segments must be kebab-case" as invalid-input.
   see parse-signal-value(value) as value.
-  see signal-field(namespace, key) as field.
   see story-root() as root.
-  If no root:
-    refuse with "set-world-signal: story root not initialized" as internal.
-  set the space root's $field to $value.
-  Return published: true, namespace: $namespace, key: $key, value: $value.
+  If no root, refuse with "set-world-signal: story root not initialized" as internal.
+  see signal-fact(namespace, key, value) as setSpaceParams.
+  Return published: true, namespace: $namespace, key: $key, value: $value, rootId: $root, factParams: $setSpaceParams.

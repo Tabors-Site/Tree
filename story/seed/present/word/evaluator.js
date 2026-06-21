@@ -798,7 +798,9 @@ async function evalAct(act, ctx) {
     // not the pre-mint. create-space returns { spaceId } (space/ops.js).
     if (act.bind)
       ctx.bindings[act.bind] = String(
-        res?.spaceId ?? res?.id ?? res?._id ?? ctx.bindings[act.bind],
+        // matterId first: a composed `do create-matter ... as x` binds the new
+        // matter (create-space has no matterId, so its spaceId still wins).
+        res?.matterId ?? res?.spaceId ?? res?.id ?? res?._id ?? ctx.bindings[act.bind],
       );
     return res;
   }

@@ -1032,11 +1032,13 @@ export async function genesis(app, opts = {}) {
       declareOpsToFold,
       declareTypesToFold,
       declareRoleWordsToFold,
+      declareSeeOpsToFold,
       rehydrateWordProjection,
     } = await import("./seed/present/word/wordStore.js");
     let folded = 0,
       typesFolded = 0,
-      roleWordsFolded = 0;
+      roleWordsFolded = 0,
+      seeOpsFolded = 0;
     await withIAmAct("I declare the rest of my ops", async (ctx) => {
       folded = await declareOpsToFold({ moment: ctx });
     });
@@ -1050,10 +1052,17 @@ export async function genesis(app, opts = {}) {
     await withIAmAct("I declare my role-words", async (ctx) => {
       roleWordsFolded = await declareRoleWordsToFold({ moment: ctx });
     });
+    // The SEE ops too: SEE is an OPEN registry, and the role-dir + host-role + extension see ops
+    // (llm-connections, http-stats, connections, harmony:neighbors, ...) register AFTER seedFold.
+    // This boot-end pass folds them so seeVerb resolves every see op from the fold (kind:"seeop").
+    // (NAME/BE need no boot-end pass — closed seed sets, fully caught at seedFold.)
+    await withIAmAct("I declare my see ops", async (ctx) => {
+      seeOpsFolded = await declareSeeOpsToFold({ moment: ctx });
+    });
     await rehydrateWordProjection("0");
     log.verbose(
       "Genesis",
-      `boot-end fold: ${folded} op(s) + ${typesFolded} type(s) + ${roleWordsFolded} role-word(s) reconciled into the word-fold`,
+      `boot-end fold: ${folded} op(s) + ${typesFolded} type(s) + ${roleWordsFolded} role-word(s) + ${seeOpsFolded} see-op(s) reconciled into the word-fold`,
     );
   } catch (err) {
     log.warn("Genesis", `boot-end op fold failed: ${err.message}`);

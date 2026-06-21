@@ -1,13 +1,17 @@
 #!/usr/bin/env node
-// key-export (key.word), LIVE through the bridge with ZERO stubs. The CONTROL strand
-// (resolve the Name via `see`, the double gate, the §7 return) is .word; the crypto key
-// reader + the BIP39 derive + the asker-attributed audit are host: escapes wired by
-// keyHost.js. Proves: the trueName resolution + the I_AM hard-refusal (the story key is
-// never exportable), and RULE 7 — the audit fact carries only `exportedNameId`, never any
-// key bytes. The full authorized REVEAL (a connected non-I_AM Name with an unlocked key)
-// needs a human-registration fixture; the .word + keyHost reuse the SAME loadSigningKey /
-// seedFromPrivateKeyPem / entropyToMnemonic / emitFact the JS handler calls, so the crypto
-// + audit are behavior-preserving by construction. CALLER mode. Full begin.js boot.
+// verify-keyexport-cut — the REAL key-export op via doVerb → the cut. key.word is the
+// CONTROL strand (resolve the Name via `see`, the double gate, the §7 return); the crypto
+// key reader + the BIP39 derive are host: escapes wired by keyHost.js. THE CUT: the .word
+// lays NO fact — the audit (who exported which Name's key) is the dispatcher's ONE auto-Fact.
+// The cut promotes the returned `nameId` into _factParams {exportedNameId} + forces
+// _factTarget at the ASKER's being, and do.js stamps the caller-attributed do:key-export
+// audit, the key NOWHERE in it (stripForAudit drops the privateKeyPem/mnemonic reveals).
+//
+// Proves: (1) the I_AM hard-refusal (the story key is never exportable) lays NO fact;
+// (2) the AUTHORIZED REVEAL — a connected non-I_AM sovereign Name with a system-encrypted
+// key — returns the PEM + 24-word mnemonic to the asker over the wire; and (3) RULE 7 — the
+// auto-Fact carries only {exportedNameId} (a public did:key id), attributed to the asker, the
+// key material NOWHERE in the durable fact (params or result). CALLER mode. Full begin.js boot.
 
 import fs from "fs";
 import os from "os";
@@ -42,8 +46,11 @@ const { findByName, loadOrFold } = await import(`${R}/seed/materials/projections
 const { withIAmAct } = await import(`${R}/seed/sprout.js`);
 const { birthBeing } = await import(`${R}/seed/materials/being/identity/birth.js`);
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
-const { resolveRoleWord, runRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
-const { keyHostEnv } = await import(`${R}/seed/store/words/key/keyHost.js`);
+const { resolveRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
+const { doVerb } = await import(`${R}/seed/ibp/verbs/do.js`);
+const { sealFacts, emitFact } = await import(`${R}/seed/past/fact/facts.js`);
+const { generateNameKeypair } = await import(`${R}/seed/materials/name/keys.js`);
+const { encryptCredential } = await import(`${R}/seed/materials/name/credentials.js`);
 
 let pass = 0, fail = 0;
 const ok = (l) => { pass++; console.log(`  ✓ ${l}`); };
@@ -51,52 +58,83 @@ const bad = (l, d) => { fail++; console.log(`  ✗ ${l}`); if (d !== undefined) 
 const poll = async (fn, t = 60000, e = 250) => { const t0 = Date.now(); while (Date.now() - t0 < t) { const v = await fn(); if (v) return v; await new Promise((r) => setTimeout(r, e)); } return null; };
 
 const cherub = await poll(() => findByName("being", "cherub", "0"));
-const birth = async (name) => {
+
+// Birth a being expressing a given trueName (default: the mother's, i.e. i-am via cherub).
+const birth = async (name, trueName) => {
   let bid = null;
   await withIAmAct(`birth ${name}`, async (ctx) => {
-    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: ctx, history: "0" });
+    const spec = { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" };
+    if (trueName) spec.trueName = trueName;
+    const b = await birthBeing({ spec, identity: I_AM, moment: ctx, history: "0" });
     bid = b.beingId;
   });
   return bid;
 };
 
-console.log(`\n  verify-keyexport-cut (key.word via the bridge — gate + resolution + rule 7)\n  DB: ${SCRATCH_DB.split("/").pop()}\n`);
+// Mint a sovereign Name row with a SYSTEM-ENCRYPTED private key (not password-locked),
+// so loadSigningKey decrypts it server-side without a live session — the authorized REVEAL
+// path. Returns { nameId, privateKeyPem }.
+const mintSovereignName = async () => {
+  const kp = generateNameKeypair(); // { publicKeyPem, privateKeyPem, nameId }
+  const enc = encryptCredential(kp.privateKeyPem); // system-encrypted at rest (not password-locked)
+  await withIAmAct(`mint name ${kp.nameId.slice(0, 12)}`, async (ctx) => {
+    await emitFact({
+      verb: "name", act: "declare", through: I_AM,
+      of: { kind: "name", id: kp.nameId },
+      params: { spec: { parentNameId: I_AM, privateKeyEnc: enc, identity: { alg: "ed25519", keyEnc: "system", v: 1 }, soulType: "scripted" } },
+      actId: ctx.actId, history: "0",
+    }, ctx);
+  });
+  return { nameId: kp.nameId, privateKeyPem: kp.privateKeyPem };
+};
+
+// Drive the REAL key-export op through doVerb (→ the cut → key.word + the dispatcher auto-Fact).
+const exportKey = async (beingId, identity) => {
+  const sc = { actId: randomUUID(), actorAct: { history: "0", by: identity?.nameId || "i-am" }, identity, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  try {
+    const res = await doVerb({ kind: "being", id: String(beingId) }, "key-export", {}, { identity, moment: sc, currentHistory: "0" });
+    if (sc.deltaF.length) await sealFacts(sc.deltaF);
+    return { result: res?.result ?? res, deltaF: sc.deltaF, refused: null };
+  } catch (e) { if (e && (e.name === "IbpError" || e.code)) return { result: null, deltaF: sc.deltaF, refused: e }; throw e; }
+};
+
+console.log(`\n  verify-keyexport-cut (REAL key-export op via doVerb → the cut)\n  DB: ${SCRATCH_DB.split("/").pop()}\n`);
 try {
   if (!cherub) { console.log("  FATAL: genesis failed"); process.exit(1); }
-  const ir = resolveRoleWord("name", "key-export");
-  ir ? ok(`key.word resolves through the bridge (self-registered)`) : bad(`resolves`, "null");
+  resolveRoleWord("name", "key-export") ? ok(`key.word resolves through the bridge (self-registered)`) : bad(`resolves`, "null");
 
-  // ── 1. I_AM hard-refusal: a being whose trueName resolves to i-am is NOT a door to
-  //       the story key. The `see` reads the trueName; gate 1 refuses before anything. ──
-  const being = await birth("keyholder");
-  const trueName = (await loadOrFold("being", String(being), "0"))?.state?.trueName;
-  console.log(`  @keyholder trueName = ${trueName}\n`);
-  const sc = { actId: randomUUID(), actorAct: { history: "0", by: "i-am" }, identity: { beingId: String(being), nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
-  let refused = null;
-  try {
-    await runRoleWord(ir, { moment: sc, history: "0", trigger: { target: { kind: "being", id: String(being) }, caller: "i-am", asker: String(being), branch: "0" }, env: { host: keyHostEnv() } });
-  } catch (e) { refused = e; }
-  refused && /story \(I_AM\) key is never exportable/i.test(refused.message) && !(sc.deltaF || []).length
-    ? ok(`@keyholder (trueName→i-am) → refuse "the story (I_AM) key is never exportable" [code ${refused.code}], NO fact`)
-    : bad(`i-am gate`, refused?.message || sc.deltaF?.map((f) => f.act));
-  refused?.code === "FORBIDDEN" ? ok(`the I_AM refusal carries code FORBIDDEN (gate, fail-closed)`) : bad(`code`, refused?.code);
+  // ── 1. I_AM hard-refusal: a being whose trueName resolves to i-am is NOT a door to the
+  //       story key. Gate 1 refuses; the dispatcher lays NO fact. ──
+  const iamBeing = await birth("keyholder");
+  const tn = (await loadOrFold("being", String(iamBeing), "0"))?.state?.trueName;
+  console.log(`  @keyholder trueName = ${tn}\n`);
+  const r1 = await exportKey(iamBeing, { beingId: String(iamBeing), nameId: "i-am" });
+  r1.refused && /story \(I_AM\) key is never exportable/i.test(r1.refused.message) && !(r1.deltaF || []).length
+    ? ok(`@keyholder (trueName→i-am) → refuse "the story (I_AM) key is never exportable" [code ${r1.refused.code}], NO fact`)
+    : bad(`i-am gate`, r1.refused?.message || r1.deltaF?.map((f) => f.act));
+  r1.refused?.code === "FORBIDDEN" ? ok(`the I_AM refusal carries code FORBIDDEN (gate, fail-closed)`) : bad(`code`, r1.refused?.code);
 
-  // ── 2. RULE 7: the audit fact (recordExport) records WHO exported WHICH Name — the key
-  //       is NOWHERE in it. Drive the host audit directly and inspect the fact's params. ──
-  const sc2 = { actId: randomUUID(), actorAct: { history: "0", by: "i-am" }, identity: { beingId: String(being) }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
-  await keyHostEnv().recordExport({ args: [String(being), "did:key:zSomeExportedName"] }, { moment: sc2 });
-  const audit = (sc2.deltaF || []).find((f) => f.act === "key-export");
+  // ── 2. the AUTHORIZED REVEAL: a connected non-I_AM sovereign Name exports its own key. ──
+  const { nameId, privateKeyPem } = await mintSovereignName();
+  const sovBeing = await birth("sovereign", nameId); // a being expressing the sovereign Name
+  console.log(`  @sovereign trueName = ${nameId.slice(0, 18)}…\n`);
+  const r2 = await exportKey(sovBeing, { beingId: String(sovBeing), nameId });
+  r2.result?.hasKey === true && r2.result?.privateKeyPem === privateKeyPem && typeof r2.result?.mnemonic === "string"
+    ? ok(`export @sovereign (acting AS the Name) → hasKey:true, privateKeyPem === the minted key, 24-word mnemonic returned to the asker`)
+    : bad(`reveal`, r2.refused?.message || { hasKey: r2.result?.hasKey, pemMatch: r2.result?.privateKeyPem === privateKeyPem, mnemonic: typeof r2.result?.mnemonic });
+
+  // ── 3. RULE 7: the do:key-export audit fact records WHO exported WHICH Name — attributed
+  //       to the asker, of the asker's being, params {exportedNameId} only, the key NOWHERE. ──
+  const audit = (r2.deltaF || []).find((f) => f.act === "key-export");
   const cleanParams = audit && JSON.stringify(Object.keys(audit.params || {}).sort()) === JSON.stringify(["exportedNameId"]);
-  // rule 7: the only param is the PUBLIC exportedNameId; no private key / mnemonic / PEM
-  // field anywhere. (exportedNameId is a public did:key id, never the secret.)
-  const noSecret = audit && !/private|mnemonic|BEGIN |pem/i.test(JSON.stringify(audit.params || {}));
-  audit && cleanParams && noSecret && audit.through === String(being)
-    ? ok(`rule 7: audit fact params = {exportedNameId} only (public id), NO key material, attributed to the asker`)
-    : bad(`rule 7`, { params: audit?.params });
+  const exportedOk = audit && audit.params?.exportedNameId === nameId;
+  // the key material must be NOWHERE in the durable fact — neither params nor the recorded result.
+  const noSecret = audit && !JSON.stringify(audit).includes(privateKeyPem) && (typeof r2.result?.mnemonic !== "string" || !JSON.stringify(audit).includes(r2.result.mnemonic)) && !/-----BEGIN/.test(JSON.stringify(audit));
+  audit && cleanParams && exportedOk && noSecret && audit.through === String(sovBeing) && String(audit.of?.id) === String(sovBeing)
+    ? ok(`rule 7: do:key-export fact = params {exportedNameId} only, through = the asker, of = the asker's being, NO key material (params or result)`)
+    : bad(`rule 7`, { params: audit?.params, through: audit?.through, of: audit?.of, noSecret });
 
   console.log(`\n  ${pass} passed, ${fail} failed`);
-  console.log(`  (note: the authorized key REVEAL — a connected non-I_AM Name with an unlocked key —`);
-  console.log(`   needs a human-registration fixture; gate + resolution + rule-7 proven here.)`);
   process.exit(fail === 0 ? 0 : 1);
 } catch (err) {
   console.log(`\n  ! crashed: ${err.stack || err.message}`);

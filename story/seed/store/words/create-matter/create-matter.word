@@ -28,7 +28,6 @@
 # `branch`.
 
 When a being brings matter into a space:
-  If no caller:
-    refuse with "create-matter requires an identified actor".
+  If no caller, refuse with "create-matter requires an identified actor".
   see resolve-birth-spec(target, targetKind, params, caller, branch) as birth.
   Return matterId: $birth.matterId, spaceId: $birth.spaceId, parentMatterId: $birth.parentMatterId, factParams: $birth.enrichedSpec.

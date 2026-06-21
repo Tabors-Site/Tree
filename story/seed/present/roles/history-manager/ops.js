@@ -1,10 +1,10 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// branch-manager ops. The DO operations the @branch-manager delegate
-// exposes for branch lifecycle.
+// history-manager ops. The DO operations the @history-manager delegate
+// exposes for history lifecycle.
 //
-// One op for Pass 3: `create-branch`. Forks a new world from a past
-// point of an existing branch. The substrate's createBranch helper
+// One op for Pass 3: `create-history`. Forks a new world from a past
+// point of an existing history. The substrate's createBranch helper
 // does the heavy lifting (path arithmetic, branchPoint snapshot,
 // History row, child space).
 //
@@ -227,7 +227,7 @@ registerOperation("create-branch", {
         const historiesSpaceId = await findPointersSpaceId();
         if (!historiesSpaceId) {
           pointerWarning =
-            ".branches heaven space not found; pointer attach skipped";
+            ".histories heaven space not found; pointer attach skipped";
         } else {
           await doVerb(
             { kind: "space", id: historiesSpaceId },
@@ -243,13 +243,13 @@ registerOperation("create-branch", {
     }
 
     // Auto-spawn a portal Matter at the story root on main pointing
-    // at the new branch's root. Lets viewers on main peek into every
-    // branch as a portal-window without manually issuing form-portal
+    // at the new history's root. Lets viewers on main peek into every
+    // history as a portal-window without manually issuing form-portal
     // for each one. Target uses the trailing-slash form
-    // `<story>#<branch>/` meaning "the root of that world" — the
+    // `<story>#<history >/` meaning "the root of that world" — the
     // resolver treats path segments as space NAMES, so passing a
     // UUID here would throw "Segment X not found." Best-effort;
-    // branch creation succeeds even if the portal spawn fails. See
+    // history creation succeeds even if the portal spawn fails. See
     // CROSS-WORLD.md + portalOp.js.
     let portalSpawned = null;
     try {
@@ -273,7 +273,7 @@ registerOperation("create-branch", {
       // manually if they care.
       // eslint-disable-next-line no-console
       console.warn(
-        `branch-manager: auto-portal for #${result.path} failed: ${err.message}`,
+        `history-manager: auto-portal for #${result.path} failed: ${err.message}`,
       );
     }
 
@@ -293,15 +293,15 @@ registerOperation("create-branch", {
   },
 });
 
-// pause-branch / unpause-branch — toggle the History row's paused
-// state. Paused branches refuse DO/BE/SUMMON at the wire-layer gate
+// pause-history / unpause-history — toggle the History row's paused
+// state. Paused histories refuse DO/BE/SUMMON at the wire-layer gate
 // (see protocols/ibp/verbs/* — they read isPaused and throw
 // STORY_PAUSED). SEEs still work so the user can rewind or inspect
 // frozen state.
 //
 // Pause metadata lives on the History row directly today; the doc's
 // header notes the eventual fact-driven version. For now this is a
-// direct write — the substrate doctrine says branch metadata is
+// direct write — the substrate doctrine says history metadata is
 // world data, but the reducer + reel haven't shipped yet (Pass 6.5).
 // Treat this as the stable public API regardless: callers see ops,
 // not collection mutations.
@@ -330,13 +330,13 @@ registerOperation("pause-history", {
         "pause-history: history is required",
       );
     }
-    // Main IS pauseable. Doctrine (Tabor 2026-06-04): every branch is
+    // Main IS pauseable. Doctrine (Tabor 2026-06-04): every history is
     // symmetric; main is not privileged. The "how do you unpause if
     // everything is paused?" recovery is solved by the gate exempting
-    // unpause-branch and create-branch — those run on any branch
+    // unpause-history and create-history — those run on any history
     // regardless of pause state. So a fully-frozen story can always
     // be revived. If main doesn't yet have a History row, upsert one
-    // (rows are normally only created at branch creation; main is
+    // (rows are normally only created at history creation; main is
     // implicit because its lineage walk starts from "0" without a
     // backing doc).
     const isMainHistory = historyPath === MAIN;
@@ -423,21 +423,21 @@ registerOperation("unpause-history", {
   },
 });
 
-// delete-branch / undelete-branch . mark-deleted toggle on the History
+// delete-history / undelete-history . mark-deleted toggle on the History
 // row. Mirrors pause/unpause structurally. Soft delete by doctrine:
 // every other lifecycle op in TreeOS is append-only (beings are
-// released not erased, spaces are archived not erased), so branches
-// follow the same shape. The chain preserves the fact that a branch
+// released not erased, spaces are archived not erased), so histories
+// follow the same shape. The chain preserves the fact that a history
 // existed and was deleted at T. Undelete is one toggle away.
 //
-// Deleted branches refuse DO/BE/SUMMON at the wire-layer gate (see
+// Deleted histories refuse DO/BE/SUMMON at the wire-layer gate (see
 // protocols/ibp/verbs/*) and at the scheduler intake gate. SEE stays
 // open so historians can still walk the chain. History listings filter
 // out deleted by default; the catalog still surfaces a specific
-// deleted branch if its path is asked for directly.
+// deleted history  if its path is asked for directly.
 //
-// Main IS deletable (symmetric-branch doctrine; same as pause). The
-// gates exempt undelete-branch and delete-branch themselves so a
+// Main IS deletable (symmetric-history doctrine; same as pause). The
+// gates exempt undelete-history and delete-history themselves so a
 // fully-deleted story can always be revived.
 
 registerOperation("delete-history", {
@@ -541,17 +541,17 @@ registerOperation("undelete-history", {
   },
 });
 
-// merge-branches . combine two source branches into a third.
+// merge-histories . combine two source histories into a third.
 //
 // Doctrine (see [seed/timeline.md](seed/timeline.md) "merging"):
 // merging is creation, not modification. A merge produces a third
-// branch whose parent is the common ancestor of sourceA and sourceB,
-// with its branchPoint snapshotting the ancestor's current state.
-// Reconciliation facts stamped on the merged branch bring its state
-// to the user-resolved combined state. The source branches stay
+// history whose parent is the common ancestor of sourceA and sourceB,
+// with its historyPoint snapshotting the ancestor's current state.
+// Reconciliation facts stamped on the merged history bring its state
+// to the user-resolved combined state. The source histories stay
 // immutable.
 //
-// The merged branch starts live (unpaused). Reconciliation happens
+// The merged history starts live (unpaused). Reconciliation happens
 // via normal DO ops; each reconciliation fact carries `params._merge`
 // for forensic audit. The `merge-mediator` role provides the UX layer
 // that walks an operator through conflicts (Phase 6 in the merge arc).
@@ -581,7 +581,7 @@ registerOperation("merge-histories", {
     },
     label: {
       type: "text",
-      label: "Label for the merged branch (optional human-readable name)",
+      label: "Label for the merged history (optional human-readable name)",
       required: false,
     },
     afterAction: {
@@ -594,13 +594,13 @@ registerOperation("merge-histories", {
     repointPointers: {
       type: "text",
       label:
-        'Comma-separated list of named pointers (e.g. "main,prod") to re-point at the merged branch in one call. Each name must match the pointer grammar (lowercase letter start). Updates land via the .branches heaven space\'s qualities.pointers.',
+        'Comma-separated list of named pointers (e.g. "main,prod") to re-point at the merged history in one call. Each name must match the pointer grammar (lowercase letter start). Updates land via the .histories heaven space\'s qualities.pointers.',
       required: false,
     },
     pauseResult: {
       type: "text",
       label:
-        'Pause the merged branch immediately after creation ("true" or "false", default "false"). Useful when conflicts need resolution before the branch should be live. Operators unpause via pause-branch op when ready.',
+        'Pause the merged history immediately after creation ("true" or "false", default "false"). Useful when conflicts need resolution before the history should be live. Operators unpause via pause-history op when ready.',
       required: false,
       default: "false",
     },
@@ -655,7 +655,7 @@ registerOperation("merge-histories", {
     }
 
     // Refuse degenerate merges where one source is the ancestor of
-    // the other. In that case the "merged" branch would just be a
+    // the other. In that case the "merged" history would just be a
     // copy of the deeper source; no merge work to do. Operators who
     // want that effect should just navigate to the deeper source.
     if (ancestor === sourceA || ancestor === sourceB) {
@@ -666,8 +666,8 @@ registerOperation("merge-histories", {
       );
     }
 
-    // Snapshot the ancestor's current heads. Each reel's branchPoint
-    // becomes its current max seq, so the merged branch inherits the
+    // Snapshot the ancestor's current heads. Each reel's historyPoint
+    // becomes its current max seq, so the merged history inherits the
     // full state at the ancestor as of right now. createBranch's
     // snapshotParentHeads uses atSeq as $lte on the seq filter; a
     // very large value catches every existing fact on the ancestor's
@@ -698,8 +698,8 @@ registerOperation("merge-histories", {
     );
     invalidateHistoryCache(result.path);
 
-    // Reset reels: state that's branch-private by nature (today,
-    // inhabit-state) is reset on the merged branch so divergent
+    // Reset reels: state that's history-private by nature (today,
+    // inhabit-state) is reset on the merged history so divergent
     // source states don't collide. Each reset stamps a fact with
     // params._merge for forensic audit.
     let resetCount = 0;
@@ -718,15 +718,15 @@ registerOperation("merge-histories", {
         resetCount = resetFacts.length;
       }
     } catch (err) {
-      // Reset failures don't roll back the merged branch (the branch
+      // Reset failures don't roll back the merged history (the history
       // and the resets are conceptually separate). Surface as part of
       // the response so the operator can investigate.
       resetWarning = err.message;
     }
 
-    // afterAction: optionally pause or delete the source branches so
+    // afterAction: optionally pause or delete the source histories so
     // the front-end can wire "auto-tidy after merge" through one op
-    // call. Failures here don't roll back the merged branch . the
+    // call. Failures here don't roll back the merged history . the
     // merge already succeeded; this is housekeeping. Failures surface
     // as a warning.
     const sourcesAffected = [];
@@ -781,7 +781,7 @@ registerOperation("merge-histories", {
 
     // repointPointers: optional. Accepts a comma-separated list or
     // an array. Each named pointer gets repointed at the merged
-    // branch in a single set-being write to the @branch-registry
+    // history in a single set-being write to the @history-registry
     // being's qualities.pointers map.
     let pointersRepointed = [];
     let repointWarning = null;
@@ -816,7 +816,7 @@ registerOperation("merge-histories", {
         const historiesSpaceId = await findPointersSpaceId();
         if (!historiesSpaceId) {
           repointWarning =
-            ".branches heaven space not found; pointer updates skipped";
+            ".histories heaven space not found; pointer updates skipped";
         } else {
           await doVerb(
             { kind: "space", id: historiesSpaceId },
@@ -831,19 +831,19 @@ registerOperation("merge-histories", {
       }
     }
 
-    // Surface source-branch pointers so the front-end can ask "this
-    // branch had #feature-x attached . want to move it to the merged
-    // branch, delete it, or leave it pointing at the now-historical
+    // Surface source-history pointers so the front-end can ask "this
+    // history had #feature-x attached . want to move it to the merged
+    // history, delete it, or leave it pointing at the now-historical
     // source?" Reverse lookup runs against the live pointer map.
     const [sourceAPointers, sourceBPointers] = await Promise.all([
       pointersFor(sourceA),
       pointersFor(sourceB),
     ]);
 
-    // pauseResult: freeze the merged branch immediately so operators
+    // pauseResult: freeze the merged history immediately so operators
     // can resolve conflicts before its scheduler starts ticking and
     // the state drifts from whatever they decide. Unpause via
-    // pause-branch when ready. Failures here are non-fatal . the
+    // pause-history when ready. Failures here are non-fatal . the
     // merge succeeded; the freeze is housekeeping.
     let resultPaused = false;
     let pauseResultWarning = null;
@@ -873,7 +873,7 @@ registerOperation("merge-histories", {
       parent: result.parent,
       ancestor,
       mergeSources: [sourceA, sourceB],
-      branchPoint: result.branchPoint,
+      historyPoint: result.historyPoint,
       createdAt: result.createdAt,
       resetCount,
       afterAction,
@@ -891,9 +891,9 @@ registerOperation("merge-histories", {
   },
 });
 
-// list-branches lived here briefly as a DO op. Retired 2026-06-02: the
+// list-histories lived here briefly as a DO op. Retired 2026-06-02: the
 // read-only graph belongs on a synthetic SEE catalog
-// (`<story>/.branches[/<path>]`), not a DO op. DOs open transport-act
+// (`<story>/.histories[/<path>]`), not a DO op. DOs open transport-act
 // moments that go through the scheduler and the orphan-act seal guard —
 // neither of which a read-only query should be paying for. The catalog
 // helper lives at seed/materials/history/historiesCatalog.js and is
@@ -901,6 +901,6 @@ registerOperation("merge-histories", {
 
 // set-pointer / delete-pointer (named-pointer registry management) were
 // carved out 2026-06-19 into the store bundle
-// seed/store/words/branch-pointers/ (index.js). The storage is still the
+// seed/store/words/history-pointers/ (index.js). The storage is still the
 // `.histories` heaven space's qualities.pointers; the ops just live with
 // their co-located `.word` slices now.

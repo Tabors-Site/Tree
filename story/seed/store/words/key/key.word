@@ -7,27 +7,27 @@
 # is .word. The genuine computation stays `host:`: loadKey (the crypto key reader,
 # i-am→story key / password-locked→session PEM / system-encrypted→decrypt, the
 # SAME loadSigningKey the seal signs with) and paperForm (the seed→24 BIP39 words
-# derive). The lone WORLD fact, the audit (who exported which Name's key, the key
-# nowhere in it), is the host `recordExport` escape: it must attribute to the ASKER
-# and land on the asker's reel (NOT I_AM through a being — see the cut-spec note),
-# so it reads the real moment rather than being a plain do-act the bridge would
-# re-attribute. The bridge binds `target` (the being target), `caller` (the
-# connected Name id = identity.nameId), `asker` (identity.beingId), `branch`.
+# derive).
 #
 # THE WALL: the trueName read is a `see` (a substrate READ is a verb, no fact); only
-# the crypto + the audit-fact stay host. The two gates lay no fact (CONTROL = recall).
+# the crypto stays host. The two gates lay no fact (CONTROL = recall).
+#
+# NO host: emit — the word lays no fact of its own. The lone WORLD fact, the audit
+# (who exported which Name's key, the key NOWHERE in it), is the dispatcher's ONE
+# auto-Fact: the cut promotes the returned `nameId` into _factParams {exportedNameId}
+# and forces _factTarget at the ASKER's being, so do.js lays the caller-attributed
+# (through = asker) do:key-export audit — the SAME fact recordExport used to self-emit,
+# now on the one emit path. The bridge binds `target` (the being target), `caller`
+# (the connected Name id = identity.nameId), `asker` (identity.beingId), `branch`.
 
 When a Name exports its key, with a target:
   see the target's trueName as owner.
   If no owner, refuse with "key-export: target being expresses no trueName (no Name to export)" as invalid-input.
   # the DOUBLE GATE, part 1: the story (I_AM) key is NEVER exportable through a being.
-  If the owner equals i-am, or the owner equals I_AM:
-    refuse with "key-export: the story (I_AM) key is never exportable through a being." as forbidden.
+  If the owner equals i-am, or the owner equals I_AM, refuse with "key-export: the story (I_AM) key is never exportable through a being." as forbidden.
   # the DOUBLE GATE, part 2: you may export only the key of the Name you are acting AS.
   If not the owner equals the caller, refuse with "key-export: you can export only the key of the Name you are connected as" as forbidden.
   see load-key(owner) as privateKey.
-  If privateKey:
-    the key is found.
+  If privateKey, the key is found.
   see paper-form(privateKey) as mnemonic.
-  host: recordExport(asker, owner).
   Return nameId: $owner, hasKey: $keyFound, privateKeyPem: $privateKey, mnemonic: $mnemonic.

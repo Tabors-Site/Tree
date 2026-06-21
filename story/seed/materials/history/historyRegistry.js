@@ -56,10 +56,12 @@ export const POINTER_NAME_MAX_LENGTH = 64;
  * paths, and by every pointer-writing op to gate its `name` arg.
  */
 export function isPointerName(s) {
-  return typeof s === "string"
-    && s.length >= 1
-    && s.length <= POINTER_NAME_MAX_LENGTH
-    && POINTER_NAME_RE.test(s);
+  return (
+    typeof s === "string" &&
+    s.length >= 1 &&
+    s.length <= POINTER_NAME_MAX_LENGTH &&
+    POINTER_NAME_RE.test(s)
+  );
 }
 
 /**
@@ -75,14 +77,16 @@ export function assertPointerName(name, opName = "pointer") {
     throw new Error(`${opName}: name cannot be empty`);
   }
   if (name.length > POINTER_NAME_MAX_LENGTH) {
-    throw new Error(`${opName}: name "${name.slice(0, 16)}..." exceeds max length (${POINTER_NAME_MAX_LENGTH})`);
+    throw new Error(
+      `${opName}: name "${name.slice(0, 16)}..." exceeds max length (${POINTER_NAME_MAX_LENGTH})`,
+    );
   }
   if (!POINTER_NAME_RE.test(name)) {
     throw new Error(
       `${opName}: name "${name}" is invalid. ` +
-      `Must start with a lowercase letter, end with a letter or digit, ` +
-      `and contain only lowercase letters, digits, and single hyphens ` +
-      `(no consecutive or trailing hyphens). Max ${POINTER_NAME_MAX_LENGTH} chars.`
+        `Must start with a lowercase letter, end with a letter or digit, ` +
+        `and contain only lowercase letters, digits, and single hyphens ` +
+        `(no consecutive or trailing hyphens). Max ${POINTER_NAME_MAX_LENGTH} chars.`,
     );
   }
   return name;
@@ -134,30 +138,30 @@ export async function getDefaultHistory() {
 export async function pointersFor(canonicalPath) {
   if (typeof canonicalPath !== "string" || !canonicalPath.length) return [];
   const map = await _readPointerMap();
-  return Object.keys(map).filter(name => map[name] === canonicalPath).sort();
+  return Object.keys(map)
+    .filter((name) => map[name] === canonicalPath)
+    .sort();
 }
 
 /**
  * Return the `.histories` heaven space's id, or null if heaven isn't
- * planted yet. Used by the merge-branches op and the pointer DO ops
+ * planted yet. Used by the merge-histories op and the pointer DO ops
  * to address writes at the storage location.
  */
 export async function findPointersSpaceId() {
-  const slot = await findHeavenSpace(HEAVEN_SPACE.BRANCHES);
+  const slot = await findHeavenSpace(HEAVEN_SPACE.HISTORIES);
   return slot?.id ? String(slot.id) : null;
 }
 
 async function _readPointerMap() {
   try {
-    const slot = await findHeavenSpace(HEAVEN_SPACE.BRANCHES);
+    const slot = await findHeavenSpace(HEAVEN_SPACE.HISTORIES);
     if (!slot?.id) {
       return { main: MAIN };
     }
     const proj = await loadHeavenProjection("space", String(slot.id));
     const quals = proj?.state?.qualities;
-    const ptrs = quals instanceof Map
-      ? quals.get("pointers")
-      : quals?.pointers;
+    const ptrs = quals instanceof Map ? quals.get("pointers") : quals?.pointers;
     if (!ptrs || typeof ptrs !== "object") {
       return { main: MAIN };
     }

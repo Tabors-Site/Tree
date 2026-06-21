@@ -1,17 +1,17 @@
 import { updateStanceBar } from "../shared/stance-bar.js";
-// branch-bar.js — branch + time navigation for the 3D portal.
+// history-bar.js — history + time navigation for the 3D portal.
 //
 // Three pieces of UI:
 //
-//   1. Top-left "Branches" button. Always visible. Click opens the
-//      branch tree panel.
+//   1. Top-left "Histories" button. Always visible. Click opens the
+//      history tree panel.
 //
-//   2. Branch tree panel. Centered overlay. Shows every branch (main +
+//   2. history tree panel. Centered overlay. Shows every history (main +
 //      children) as a tree, with fork points at their anchors. Click a
-//      branch to enter its timeline; close to dismiss without
+//      history to enter its timeline; close to dismiss without
 //      switching.
 //
-//   3. Timeline strip. Bottom-pinned. Opens when a branch is selected
+//   3. Timeline strip. Bottom-pinned. Opens when a history is selected
 //      from the tree panel. Wall-clock axis from place genesis to
 //      "now" — every dot is one of YOUR moments. Click to rewind;
 //      "branch here" forks at the selected instant; the strip's [×]
@@ -22,22 +22,22 @@ import { updateStanceBar } from "../shared/stance-bar.js";
 // still moves locally.
 
 let _state = {
-  client:        null,
-  story:       null,
-  buttonEl:      null,
-  panelEl:       null,
-  timelineEl:    null,
-  panelOpen:     false,
+  client: null,
+  story: null,
+  buttonEl: null,
+  panelEl: null,
+  timelineEl: null,
+  panelOpen: false,
   // Branch the timeline strip is bound to (may differ from the user's
   // active address-branch — they could pull up main's timeline while
   // standing in #1).
   timelineHistory: null,
-  graph:         null,    // { current, lineage, children } for active branch
-  graphAll:      null,    // full tree { byPath: Map, roots: [] }
-  marks:         [],      // [{ ts, seq, label }] for active timeline
-  firstTs:       null,
-  nowTs:         null,
-  atTimestamp:   null,    // null = present
+  graph: null, // { current, lineage, children } for active history
+  graphAll: null, // full tree { byPath: Map, roots: [] }
+  marks: [], // [{ ts, seq, label }] for active timeline
+  firstTs: null,
+  nowTs: null,
+  atTimestamp: null, // null = present
 
   // Timeline playback state. speed is a tier index from the
   // PLAYBACK_SPEEDS list. 0 = paused; >0 = forward playback (1x, 2x,
@@ -84,14 +84,14 @@ const TIMELINE_CONFIG = Object.freeze({
   // next batch loads anchored by the earliest's stampedAt (server
   // returns acts strictly older). Repeats until a batch comes back
   // smaller than the batch size (= reached the being's birth on this
-  // branch lineage).
+  // history lineage).
   INITIAL_MARK_BATCH: 500,
-  NEXT_MARK_BATCH:    500,
+  NEXT_MARK_BATCH: 500,
 
   // Trigger threshold: when the cursor is within this fraction of
   // the leftmost end of the strip ([firstTs, cursor]) → fetch next
   // batch. 0.1 = "within the leftmost 10%."
-  PREFETCH_THRESHOLD: 0.10,
+  PREFETCH_THRESHOLD: 0.1,
 
   // Empty-strip default window (used ONLY when the being has zero
   // marks yet). 5 minutes from now. After that first mark lands the
@@ -103,19 +103,20 @@ const TIMELINE_CONFIG = Object.freeze({
   LIVE_REFRESH_MS: 1000,
 });
 
-const PLAYBACK_TICK_MS    = TIMELINE_CONFIG.PLAYBACK_TICK_MS;
-const INITIAL_MARK_BATCH  = TIMELINE_CONFIG.INITIAL_MARK_BATCH;
-const NEXT_MARK_BATCH     = TIMELINE_CONFIG.NEXT_MARK_BATCH;
-const PREFETCH_THRESHOLD  = TIMELINE_CONFIG.PREFETCH_THRESHOLD;
+const PLAYBACK_TICK_MS = TIMELINE_CONFIG.PLAYBACK_TICK_MS;
+const INITIAL_MARK_BATCH = TIMELINE_CONFIG.INITIAL_MARK_BATCH;
+const NEXT_MARK_BATCH = TIMELINE_CONFIG.NEXT_MARK_BATCH;
+const PREFETCH_THRESHOLD = TIMELINE_CONFIG.PREFETCH_THRESHOLD;
 
 function _actToMark(a) {
   return {
-    ts:    a?.stampedAt || a?.receivedAt || null,
-    seq:   a?.lastFactSeq ?? null,
-    label: a?.facts?.[0]?.act
-      || (a?.endMessage?.content
+    ts: a?.stampedAt || a?.receivedAt || null,
+    seq: a?.lastFactSeq ?? null,
+    label:
+      a?.facts?.[0]?.act ||
+      (a?.endMessage?.content
         ? String(a.endMessage.content).slice(0, 40)
-        : (a?.activeRole || null)),
+        : a?.activeRole || null),
   };
 }
 
@@ -136,8 +137,8 @@ async function _maybeLoadOlderMarks(cursorMs) {
   if (total === 0) return;
   const earliest = _state.marks[0]; // sorted ascending by ts
   const earliestMs = earliest?.ts ? new Date(earliest.ts).getTime() : null;
-  const firstTsMs  = _state.firstTs ? new Date(_state.firstTs).getTime() : null;
-  const nowMs      = _state.nowTs ? new Date(_state.nowTs).getTime() : null;
+  const firstTsMs = _state.firstTs ? new Date(_state.firstTs).getTime() : null;
+  const nowMs = _state.nowTs ? new Date(_state.nowTs).getTime() : null;
   if (earliestMs == null || nowMs == null) return;
   // Trigger when the cursor enters the leftmost PREFETCH_THRESHOLD
   // of the strip, OR when the cursor is already at/before the earliest
@@ -180,7 +181,7 @@ async function _maybeLoadOlderMarks(cursorMs) {
       _renderTimeline();
     }
   } catch (err) {
-    console.warn("[branch-bar] older marks fetch failed:", err?.message);
+    console.warn("[history-bar] older marks fetch failed:", err?.message);
   } finally {
     _state.loadingMoreMarks = false;
   }
@@ -192,15 +193,17 @@ const PLAYBACK_SPEEDS = {
   "-3": -4,
   "-2": -2,
   "-1": -1,
-  "0":   0,
-  "1":   1,
-  "2":   2,
-  "3":   4,
-  "4":   8,
+  0: 0,
+  1: 1,
+  2: 2,
+  3: 4,
+  4: 8,
 };
 const MIN_SPEED_TIER = -4;
 const MAX_SPEED_TIER = 4;
-function _speedFactor(tier) { return PLAYBACK_SPEEDS[String(tier)] ?? 0; }
+function _speedFactor(tier) {
+  return PLAYBACK_SPEEDS[String(tier)] ?? 0;
+}
 function _speedLabel(tier) {
   const f = _speedFactor(tier);
   if (f === 0) return "paused";
@@ -208,14 +211,14 @@ function _speedLabel(tier) {
   return `${sign}${Math.abs(f)}x`;
 }
 
-// ── Branch switching: menus move the BEING, not just the view ──────
+// ── history switching: menus move the BEING, not just the view ──────
 //
-// Doctrine (Tabor, 2026-06-10): every branch jump from portal CHROME
+// Doctrine (Tabor, 2026-06-10): every history jump from portal CHROME
 // (timeline clicks, create-branch, merge) SWITCHES the session — BE
 // switch seats the socket on the destination and the address follows,
-// so who-you-are and where-you-look stay the same branch. The ONLY
-// ways to act cross-branch are walking through an ibpa portal or
-// typing a different branch into the address yourself; then the
+// so who-you-are and where-you-look stay the same history. The ONLY
+// ways to act cross-history are walking through an ibpa portal or
+// typing a different history into the address yourself; then the
 // address line shows the split (@you#0 → story#2/...) so you always
 // know exactly what's being sent on both sides.
 export async function switchIntoHistory(historyPath) {
@@ -224,43 +227,49 @@ export async function switchIntoHistory(historyPath) {
     // BE switch at the gate: seats socket.currentHistory on the
     // destination and stamps the be:switch fact on the destination
     // reel (your being's biography there records the arrival).
-    await _state.client.be("switch", `${_state.story}/@cherub`, { history: historyPath });
+    await _state.client.be("switch", `${_state.story}/@cherub`, {
+      history: historyPath,
+    });
   }
-  // Address follows the being — ALWAYS the explicit branch path. The
+  // Address follows the being — ALWAYS the explicit history path. The
   // bare `#<story>/` form resolves through the #main POINTER, which
   // is reassignable and may not be "0"; explicit paths can't drift.
   location.hash = `#${_state.story}#${historyPath}/`;
   _syncStanceBar();
 }
 
-// Pointer-truthful branch label: the canonical path, plus any named
+// Pointer-truthful history label: the canonical path, plus any named
 // pointers currently aimed at it ("#0 (main)", "#1a (prod)"). Never
 // hardcodes "0 = main" — pointers are reassignable; the catalog SEE
 // (_state.graph.pointers) is the live truth.
-function _branchLabel(path) {
+function _historyLabel(path) {
   const pointers = _state.graph?.pointers || {};
-  const aliases = Object.keys(pointers).filter((n) => pointers[n] === path).sort();
+  const aliases = Object.keys(pointers)
+    .filter((n) => pointers[n] === path)
+    .sort();
   return `#${path}${aliases.length ? ` (${aliases.join(",")})` : ""}`;
 }
 
-// Post-create ask: "switch into your being on that branch?" Yes →
+// Post-create ask: "switch into your being on that history?" Yes →
 // switch + go. No → stay put, with the two legitimate later routes
 // named (ibpa portal, timeline click).
-function _offerSwitchAfterBranch(path, note = "") {
+function _offerSwitchAfterhistory(path, note = "") {
   const here = _portalState()?.descriptor?.address?.history || "0";
-  const hereLabel = _branchLabel(here);
+  const hereLabel = _historyLabel(here);
   const yes = window.confirm(
     `History #${path} created${note}.\n\n` +
-    `Switch into your being on #${path}?\n\n` +
-    `OK — switch (you act on #${path}; your ${hereLabel} self stays where it is)\n` +
-    `Cancel — stay on ${hereLabel} (cross later via an ibpa portal, or click #${path} in the timeline)`,
+      `Switch into your being on #${path}?\n\n` +
+      `OK — switch (you act on #${path}; your ${hereLabel} self stays where it is)\n` +
+      `Cancel — stay on ${hereLabel} (cross later via an ibpa portal, or click #${path} in the timeline)`,
   );
   if (yes) {
     switchIntoHistory(path).catch((err) => {
-      _showBranchEvent(`switch failed: ${err?.message || err}`, { error: true });
+      _showhistoryEvent(`switch failed: ${err?.message || err}`, {
+        error: true,
+      });
     });
   } else {
-    _showBranchEvent(
+    _showhistoryEvent(
       `stayed on ${hereLabel} — form an ibpa portal to #${path}/ or switch from the timeline`,
       { sticky: 3500 },
     );
@@ -269,8 +278,8 @@ function _offerSwitchAfterBranch(path, note = "") {
 
 // ── Stance-bar sync ─────────────────────────────────────────────────
 // The full-address chip retired into the shared stance bar (the ONE
-// address bar). This side feeds it what the branch machinery knows:
-// the actor's seated branch and the live pointer map (for
+// address bar). This side feeds it what the history machinery knows:
+// the actor's seated history and the live pointer map (for
 // pointer-truthful tooltips).
 function _syncStanceBar() {
   updateStanceBar({
@@ -284,12 +293,19 @@ function _syncStanceBar() {
 // window.__state stays as the legacy fallback so the bar still works
 // mounted without a shell. The native port supplies getState only.
 function _portalState() {
-  return _state.getState?.()
-    || (typeof window !== "undefined" ? window.__state : null)
-    || {};
+  return (
+    _state.getState?.() ||
+    (typeof window !== "undefined" ? window.__state : null) ||
+    {}
+  );
 }
 
-export function mountHistoryBar({ client, story, buttonHost = null, getState = null }) {
+export function mountHistoryBar({
+  client,
+  story,
+  buttonHost = null,
+  getState = null,
+}) {
   _state.client = client;
   _state.story = story;
   _state.getState = typeof getState === "function" ? getState : null;
@@ -307,8 +323,13 @@ export function mountHistoryBar({ client, story, buttonHost = null, getState = n
   // Esc closes whichever overlay is open (panel first, then timeline).
   _state.onKeydown = (ev) => {
     if (ev.key !== "Escape") return;
-    if (_state.panelOpen) { _closePanel(); return; }
-    if (_state.timelineEl) { _closeTimeline(); }
+    if (_state.panelOpen) {
+      _closePanel();
+      return;
+    }
+    if (_state.timelineEl) {
+      _closeTimeline();
+    }
   };
   window.addEventListener("keydown", _state.onKeydown);
   return {
@@ -319,8 +340,12 @@ export function mountHistoryBar({ client, story, buttonHost = null, getState = n
     destroy: () => {
       document.removeEventListener("click", _state.onDocClick);
       window.removeEventListener("keydown", _state.onKeydown);
-      try { _closePanel(); } catch {}
-      try { _closeTimeline(); } catch {}
+      try {
+        _closePanel();
+      } catch {}
+      try {
+        _closeTimeline();
+      } catch {}
       _state.buttonEl?.remove();
       _state.buttonEl = null;
       _state.getState = null;
@@ -332,7 +357,7 @@ export function mountHistoryBar({ client, story, buttonHost = null, getState = n
     // The portal swaps its PortalClient on sign-in / register / sign-out
     // (a new authenticated or anonymous socket). The bar captured the
     // boot-time client; without this, after a first registration it
-    // keeps querying the dead pre-auth socket and the branch tree comes
+    // keeps querying the dead pre-auth socket and the history tree comes
     // back empty until a full page reload. Call this whenever the live
     // client changes so the bar's SEEs ride the current socket.
     setClient: (client, story) => {
@@ -351,11 +376,11 @@ function _createBranchButton({ hosted = false } = {}) {
   const b = document.createElement("button");
   b.id = "branch-tree-button";
   b.type = "button";
-  b.title = "branches & timeline";
+  b.title = "histories & timeline";
   if (hosted) {
     // Shell-hosted: a normal topbar button, present on all four views.
     // The panel + timeline it opens are fixed overlays, so the same
-    // branch/rewind surface tracks every view equally.
+    // history/rewind surface tracks every view equally.
     b.className = "nav-btn";
     b.textContent = "histories";
   } else {
@@ -395,14 +420,14 @@ function _createBranchButton({ hosted = false } = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// BRANCH TREE PANEL (centered modal-style)
+// HISTORY TREE PANEL (centered modal-style)
 // ─────────────────────────────────────────────────────────────────────
 
 async function _openPanel() {
   _state.panelOpen = true;
   if (_state.panelEl) _state.panelEl.remove();
   const el = document.createElement("div");
-  el.id = "branch-tree-panel";
+  el.id = "history-tree-panel";
   el.style.cssText = [
     "position: fixed",
     "top: 100px",
@@ -429,10 +454,10 @@ async function _openPanel() {
     </div>
     <div class="bp-tree" style="font-size:12px;line-height:1.7;"></div>
     <div class="bp-actions" style="margin-top:12px;padding-top:10px;border-top:1px solid #2c3a32;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-      <button type="button" class="bp-new" title="Create a new branch — fork a parent branch at a fact seq or a moment in time, scoped to the whole story or just a subtree" style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
+      <button type="button" class="bp-new" title="Create a new history — fork a parent history at a fact seq or a moment in time, scoped to the whole story or just a subtree" style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
         ✚ New
       </button>
-      <button type="button" class="bp-merge" title="Merge two branches" style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
+      <button type="button" class="bp-merge" title="Merge two histories" style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
         ⇄ Merge
       </button>
       <button type="button" class="bp-copy" title="Copy this place as a portable clone (facts only — its shape, no history). Downloads a .seed.json you can Graft elsewhere." style="background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 10px;font-family:inherit;font-size:11px;cursor:pointer;">
@@ -450,7 +475,7 @@ async function _openPanel() {
   el.querySelector(".bp-close").addEventListener("click", _closePanel);
   el.querySelector(".bp-new").addEventListener("click", (ev) => {
     ev.stopPropagation();
-    _openNewBranchDialog();
+    _openNewhistoryDialog();
   });
   el.querySelector(".bp-merge").addEventListener("click", (ev) => {
     ev.stopPropagation();
@@ -459,7 +484,7 @@ async function _openPanel() {
   el.querySelector(".bp-copy").addEventListener("click", (ev) => {
     ev.stopPropagation();
     _downloadClone().catch((err) => {
-      _showBranchEvent(`copy failed: ${err?.message || err}`);
+      _showhistoryEvent(`copy failed: ${err?.message || err}`);
     });
   });
   el.querySelector(".bp-graft").addEventListener("click", (ev) => {
@@ -470,15 +495,15 @@ async function _openPanel() {
     const file = ev.target.files?.[0];
     if (file) {
       _graftFromFile(file).catch((err) => {
-        _showBranchEvent(`graft failed: ${err?.message || err}`);
+        _showhistoryEvent(`graft failed: ${err?.message || err}`);
       });
     }
     // Reset so the same filename can be re-picked.
     ev.target.value = "";
   });
 
-  // Fetch every branch in one pass.
-  const tree = await _loadBranchTree();
+  // Fetch every history in one pass.
+  const tree = await _loadhistoryTree();
   _state.graphAll = tree;
   _renderTree(el.querySelector(".bp-tree"), tree);
 }
@@ -491,10 +516,10 @@ function _closePanel() {
   }
 }
 
-// Fetch the full branch tree by SEEing `.branches/0` (which gives main +
-// its immediate children) then recursively fetching each child branch.
+// Fetch the full history tree by SEEing `.histories/0` (which gives main +
+// its immediate children) then recursively fetching each child history.
 // Caps depth at 6 levels to avoid pathological deep trees.
-async function _loadBranchTree() {
+async function _loadhistoryTree() {
   const byPath = new Map();
   const roots = [];
   const seen = new Set();
@@ -503,18 +528,18 @@ async function _loadBranchTree() {
     seen.add(path);
     try {
       const catalog = await _state.client.see(
-        `${_state.story}/.branches/${path}`,
+        `${_state.story}/.histories/${path}`,
       );
-      const g = catalog?.branches;
+      const g = catalog?.histories;
       if (!g) return;
       if (g.current) byPath.set(g.current.path, g.current);
-      for (const ch of (g.children || [])) {
+      for (const ch of g.children || []) {
         byPath.set(ch.path, ch);
       }
       if (path === "0") {
         roots.push(g.current || { path: "0", label: "main" });
       }
-      for (const ch of (g.children || [])) {
+      for (const ch of g.children || []) {
         await visit(ch.path, depth + 1);
       }
     } catch (err) {
@@ -531,7 +556,7 @@ function _renderTree(container, tree) {
     container.textContent = "no histories available";
     return;
   }
-  // Children map: parent path → child branches list.
+  // Children map: parent path → child histories list.
   const childrenOf = new Map();
   for (const b of tree.byPath.values()) {
     const parentKey = b.parent || "0";
@@ -539,50 +564,60 @@ function _renderTree(container, tree) {
     if (!childrenOf.has(parentKey)) childrenOf.set(parentKey, []);
     childrenOf.get(parentKey).push(b);
   }
-  function render(branch, indent) {
+  function render(history, indent) {
     const row = document.createElement("div");
-    row.style.cssText = "display:flex;align-items:center;gap:8px;padding-left:" + (indent * 16) + "px;";
-    const chip = _branchChip(branch);
+    row.style.cssText =
+      "display:flex;align-items:center;gap:8px;padding-left:" +
+      indent * 16 +
+      "px;";
+    const chip = _historyChip(history);
     row.appendChild(chip);
     const meta = document.createElement("span");
     meta.style.cssText = "color:#6b7d72;font-size:10px;";
     const parts = [];
-    if (branch.label && branch.label !== `main` && branch.label !== `#${branch.path}`) {
-      parts.push(branch.label);
+    if (
+      history.label &&
+      history.label !== `main` &&
+      history.label !== `#${history.path}`
+    ) {
+      parts.push(history.label);
     }
-    if (Array.isArray(branch.mergeSources) && branch.mergeSources.length === 2) {
-      const [a, b] = branch.mergeSources;
+    if (
+      Array.isArray(history.mergeSources) &&
+      history.mergeSources.length === 2
+    ) {
+      const [a, b] = history.mergeSources;
       parts.push(`↶ merged from #${a} + #${b}`);
       // Lazy-load conflict counts. We don't block the tree render on
       // this; the SEE fires after first paint and patches the row
       // when it returns. Cached per session so reopening the tree is
       // cheap.
-      _decorateRowWithConflictCount(row, branch.path);
+      _decorateRowWithConflictCount(row, history.path);
     }
-    if (branch.createdAt) parts.push(_shortStamp(branch.createdAt));
-    if (branch.anchor) {
-      const anchorEntries = Object.entries(branch.anchor || {}).slice(0, 1);
+    if (history.createdAt) parts.push(_shortStamp(history.createdAt));
+    if (history.anchor) {
+      const anchorEntries = Object.entries(history.anchor || {}).slice(0, 1);
       if (anchorEntries.length) {
         const [, seq] = anchorEntries[0];
         parts.push(`anchor seq=${seq}`);
       }
     }
-    if (branch.paused) parts.push("PAUSED");
+    if (history.paused) parts.push("PAUSED");
     meta.textContent = parts.length ? "  " + parts.join(" · ") : "";
-    if (branch.paused) meta.style.color = "#e8b762";
+    if (history.paused) meta.style.color = "#e8b762";
     row.appendChild(meta);
-    // Pause/unpause control. Every branch including main is
-    // pauseable — the wire-layer gate exempts unpause-branch and
-    // create-branch, so a fully-frozen story can always be revived
-    // by clicking unpause here or by forking off a paused branch.
+    // Pause/unpause control. Every history including main is
+    // pauseable — the wire-layer gate exempts unpause-history and
+    // create-history, so a fully-frozen story can always be revived
+    // by clicking unpause here or by forking off a paused history.
     {
       const action = document.createElement("button");
       action.type = "button";
-      action.textContent = branch.paused ? "▶ unpause" : "❚❚ pause";
+      action.textContent = history.paused ? "▶ unpause" : "❚❚ pause";
       action.style.cssText = [
-        "background: " + (branch.paused ? "#13201b" : "#2a1f0a"),
-        "color: "      + (branch.paused ? "#8fbf9f" : "#e8b762"),
-        "border: 1px solid " + (branch.paused ? "#3d7a52" : "#6b5320"),
+        "background: " + (history.paused ? "#13201b" : "#2a1f0a"),
+        "color: " + (history.paused ? "#8fbf9f" : "#e8b762"),
+        "border: 1px solid " + (history.paused ? "#3d7a52" : "#6b5320"),
         "border-radius: 3px",
         "padding: 2px 8px",
         "margin-left: auto",
@@ -592,17 +627,18 @@ function _renderTree(container, tree) {
       ].join(";");
       action.addEventListener("click", async (ev) => {
         ev.stopPropagation();
-        await _togglePauseBranch(branch);
+        await _togglePausehistory(history);
       });
       row.appendChild(action);
     }
-    // "see branch" — full info for this branch (seq / branchPoint,
+    // "see history" — full info for this history (seq / historyPoint,
     // pointers aimed here, scope, lineage, children, who/when).
     {
       const info = document.createElement("button");
       info.type = "button";
       info.textContent = "ⓘ info";
-      info.title = "see full branch info (branch-point seqs, pointers, scope, lineage)";
+      info.title =
+        "see full history info (history-point seqs, pointers, scope, lineage)";
       info.style.cssText = [
         "background: #13201b",
         "color: #8fbf9f",
@@ -616,12 +652,12 @@ function _renderTree(container, tree) {
       ].join(";");
       info.addEventListener("click", (ev) => {
         ev.stopPropagation();
-        _openBranchInfoDialog(branch.path);
+        _openhistoryInfoDialog(history.path);
       });
       row.appendChild(info);
     }
     container.appendChild(row);
-    const kids = childrenOf.get(branch.path) || [];
+    const kids = childrenOf.get(history.path) || [];
     for (const k of kids) render(k, indent + 1);
   }
   for (const root of tree.roots) {
@@ -637,79 +673,81 @@ function _renderTree(container, tree) {
 // until the DO completes," and the DO's own success-path refresh
 // lands the authoritative state.
 let _toggleInFlight = 0;
-function _isToggleInFlight() { return _toggleInFlight > 0; }
+function _isToggleInFlight() {
+  return _toggleInFlight > 0;
+}
 
-async function _togglePauseBranch(branch) {
-  const op = branch.paused ? "unpause-history" : "pause-history";
+async function _togglePausehistory(history) {
+  const op = history.paused ? "unpause-history" : "pause-history";
   // Optimistic local flip so the button changes the instant the user
   // clicks — no waiting for the DO + tree refetch round-trip. The
   // server-confirmed state replaces it on the subsequent refetch; if
   // the DO fails the catch path restores and surfaces the error.
-  const prevPaused = !!branch.paused;
-  branch.paused = !prevPaused;
+  const prevPaused = !!history.paused;
+  history.paused = !prevPaused;
   _toggleInFlight++;
   if (_state.panelEl) {
     const treeContainer = _state.panelEl.querySelector(".bp-tree");
     if (treeContainer) _renderTree(treeContainer, _state.graphAll);
   }
-  // If the user just paused (or unpaused) the branch they themselves
+  // If the user just paused (or unpaused) the history they themselves
   // are currently on, flip the grayscale chrome immediately so the
   // visual cue matches the new story without waiting for navigate.
   const myHistory = _portalState()?.descriptor?.address?.history || "0";
-  if (branch.path === myHistory) {
-    window.dispatchEvent(new CustomEvent("branchbar:paused-self", {
-      detail: { paused: branch.paused },
-    }));
+  if (history.path === myHistory) {
+    window.dispatchEvent(
+      new CustomEvent("historybar:paused-self", {
+        detail: { paused: history.paused },
+      }),
+    );
   }
 
-  // Use a RELATIVE address (`/@branch-manager`) so the wire inherits
-  // socket.currentHistory automatically — whichever branch the server
-  // actually thinks the user is on, the DO targets that same branch
-  // and the cross-branch gate stays happy. The earlier approach of
+  // Use a RELATIVE address (`/@history-manager`) so the wire inherits
+  // socket.currentHistory automatically — whichever history the server
+  // actually thinks the user is on, the DO targets that same history
+  // and the cross-history gate stays happy. The earlier approach of
   // reading window.__state.descriptor.address.history raced the
-  // descriptor update: after creating a branch the socket flipped to
+  // descriptor update: after creating a history the socket flipped to
   // #1 but the local descriptor was still mid-refresh, so the DO went
-  // out with `localhost/@branch-manager` (typed-story means main),
-  // caller=#1 vs target=#0, CROSS_BRANCH_FORBIDDEN. Relative dodges
+  // out with `localhost/@history-manager` (typed-story means main),
+  // caller=#1 vs target=#0, CROSS_history_FORBIDDEN. Relative dodges
   // the whole question.
   try {
-    await _state.client.do(
-      `/@branch-manager`,
-      op,
-      { history: branch.path },
-    );
+    await _state.client.do(`/@history-manager`, op, { history: history.path });
     // Refetch the tree so the row's persisted state replaces our
     // optimistic flip (no-op when they match).
-    await _loadBranchTree();
+    await _loadhistoryTree();
     if (_state.panelEl) {
       const treeContainer = _state.panelEl.querySelector(".bp-tree");
       if (treeContainer) _renderTree(treeContainer, _state.graphAll);
     }
-    _showBranchEvent(
-      branch.paused
-        ? `❚❚ paused #${branch.path === "0" ? "main" : branch.path}`
-        : `▶ unpaused #${branch.path === "0" ? "main" : branch.path}`,
+    _showhistoryEvent(
+      history.paused
+        ? `❚❚ paused #${history.path === "0" ? "main" : history.path}`
+        : `▶ unpaused #${history.path === "0" ? "main" : history.path}`,
     );
   } catch (err) {
     // Revert the optimistic flip and surface the error.
-    branch.paused = prevPaused;
+    history.paused = prevPaused;
     if (_state.panelEl) {
       const treeContainer = _state.panelEl.querySelector(".bp-tree");
       if (treeContainer) _renderTree(treeContainer, _state.graphAll);
     }
-    if (branch.path === myHistory) {
-      window.dispatchEvent(new CustomEvent("branchbar:paused-self", {
-        detail: { paused: prevPaused },
-      }));
+    if (history.path === myHistory) {
+      window.dispatchEvent(
+        new CustomEvent("historybar:paused-self", {
+          detail: { paused: prevPaused },
+        }),
+      );
     }
-    console.warn(`[branch-bar] ${op} failed:`, err?.message || err);
-    _showBranchEvent(`${op} failed: ${err?.message || err}`, { error: true });
+    console.warn(`[history-bar] ${op} failed:`, err?.message || err);
+    _showhistoryEvent(`${op} failed: ${err?.message || err}`, { error: true });
   } finally {
     _toggleInFlight = Math.max(0, _toggleInFlight - 1);
   }
 }
 
-// ── Per-merged-branch conflict count cache ────────────────────────
+// ── Per-merged-history conflict count cache ────────────────────────
 // Per-session cache so reopening the tree doesn't refire every SEE.
 // Invalidated when the user opens the conflict panel + makes any
 // resolution (the panel's refresh path nukes the cached entry).
@@ -772,7 +810,7 @@ async function _decorateRowWithConflictCount(row, mergedPath) {
   }
   try {
     const catalog = await _state.client.see(
-      `${_state.story}/.branches/${mergedPath}/conflicts`,
+      `${_state.story}/.histories/${mergedPath}/conflicts`,
     );
     const totals = catalog?.conflicts?.totals || {};
     const counts = {
@@ -787,15 +825,15 @@ async function _decorateRowWithConflictCount(row, mergedPath) {
   }
 }
 
-function _branchChip(branch) {
-  const isMain = branch.path === "0";
-  const label = isMain ? "main" : `#${branch.path}`;
+function _historyChip(history) {
+  const isMain = history.path === "0";
+  const label = isMain ? "main" : `#${history.path}`;
   const b = document.createElement("button");
   b.type = "button";
   b.textContent = label;
   b.style.cssText = [
     "background: " + (isMain ? "#13201b" : "#2a1f0a"),
-    "color: "      + (isMain ? "#8fbf9f" : "#e8b762"),
+    "color: " + (isMain ? "#8fbf9f" : "#e8b762"),
     "border: 1px solid " + (isMain ? "#3d7a52" : "#6b5320"),
     "border-radius: 12px",
     "padding: 2px 12px",
@@ -803,24 +841,24 @@ function _branchChip(branch) {
     "font-size: 11px",
     "cursor: pointer",
   ].join(";");
-  b.title = "open this branch's timeline";
+  b.title = "open this history's timeline";
   b.addEventListener("click", (ev) => {
     ev.stopPropagation();
     _closePanel();
-    _openTimeline(branch.path);
+    _openTimeline(history.path);
   });
   return b;
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// TIMELINE STRIP (bottom-pinned, branch-specific)
+// TIMELINE STRIP (bottom-pinned, history-specific)
 // ─────────────────────────────────────────────────────────────────────
 
 async function _openTimeline(historyPath) {
   _closeTimeline();
   _state.timelineHistory = historyPath;
   const el = document.createElement("div");
-  el.id = "branch-timeline";
+  el.id = "history-timeline";
   el.style.cssText = [
     "position: fixed",
     "left: 50%",
@@ -864,7 +902,7 @@ async function _openTimeline(historyPath) {
       </span>
       <span class="bt-buttons" style="display:flex;gap:6px;">
         <button class="bt-now" type="button" style="display:none;background:#131a17;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:3px 10px;font-family:inherit;font-size:11px;cursor:pointer;">return to now</button>
-        <button class="bt-branch" type="button" style="display:none;background:#2a1f0a;color:#e8b762;border:1px solid #6b5320;border-radius:3px;padding:3px 10px;font-family:inherit;font-size:11px;cursor:pointer;">branch here</button>
+        <button class="bt-history" type="button" style="display:none;background:#2a1f0a;color:#e8b762;border:1px solid #6b5320;border-radius:3px;padding:3px 10px;font-family:inherit;font-size:11px;cursor:pointer;">history here</button>
       </span>
     </div>
     <div class="bt-detail" style="display:none;color:#c8d3cb;font-size:11px;line-height:1.4;padding:6px 8px;background:#0e1411;border:1px solid #2c3a32;border-radius:3px;font-family:ui-monospace,monospace;"></div>
@@ -878,11 +916,14 @@ async function _openTimeline(historyPath) {
     _returnToNow();
   });
   el.querySelector(".bt-now").addEventListener("click", _returnToNow);
-  el.querySelector(".bt-branch").addEventListener("click", _branchHere);
+  el.querySelector(".bt-history").addEventListener("click", _historyHere);
   el.querySelector(".bt-strip").addEventListener("click", (ev) => {
     if (!_state.firstTs || !_state.nowTs) return;
     const rect = ev.currentTarget.getBoundingClientRect();
-    const frac = Math.max(0, Math.min(1, (ev.clientX - rect.left - 10) / (rect.width - 20)));
+    const frac = Math.max(
+      0,
+      Math.min(1, (ev.clientX - rect.left - 10) / (rect.width - 20)),
+    );
     // Clicking the strip is an explicit scrub — kill any active
     // playback so the user's click position sticks until they press
     // play again.
@@ -923,26 +964,28 @@ async function _openTimeline(historyPath) {
   // last non-zero tier (default 1x forward). The tick loop reads
   // _state.playbackSpeed and advances cursorMs accordingly.
   el.querySelector(".bt-rew").addEventListener("click", () => _bumpSpeed(-1));
-  el.querySelector(".bt-ff").addEventListener("click",  () => _bumpSpeed(+1));
+  el.querySelector(".bt-ff").addEventListener("click", () => _bumpSpeed(+1));
   el.querySelector(".bt-playpause").addEventListener("click", _togglePlayPause);
   el.querySelector(".bt-mode").addEventListener("click", _toggleMode);
   _renderSpeedDisplay();
   _renderModeDisplay();
 
-  // The doctrine: clicking a branch in the panel SWITCHES YOUR BEING
-  // to that branch (BE switch seats the socket; the be:switch fact
+  // The doctrine: clicking a history in the panel SWITCHES YOUR BEING
+  // to that history (BE switch seats the socket; the be:switch fact
   // lands on the destination reel) and opens its timeline. View and
   // seat move together — only ibpa portals and hand-typed addresses
-  // act cross-branch.
+  // act cross-history.
   //
   // We also kick a direct _update so the strip is populated immediately
-  // without waiting for the navigate's after-call. Same-branch opens
-  // need it (no navigate fires); different-branch opens benefit from it
+  // without waiting for the navigate's after-call. Same-history opens
+  // need it (no navigate fires); different-history opens benefit from it
   // (the marks fetch runs concurrent with navigate instead of after).
   const currentHistory = _portalState()?.descriptor?.address?.history || "0";
   if (currentHistory !== historyPath) {
     switchIntoHistory(historyPath).catch((err) => {
-      _showBranchEvent(`switch failed: ${err?.message || err}`, { error: true });
+      _showhistoryEvent(`switch failed: ${err?.message || err}`, {
+        error: true,
+      });
     });
   }
   if (_portalState()?.descriptor) {
@@ -978,17 +1021,17 @@ function _closeTimeline() {
 // ─────────────────────────────────────────────────────────────────────
 
 async function _update(desc) {
-  // Always cache the latest graph for the active branch — even when the
+  // Always cache the latest graph for the active history — even when the
   // panel/timeline isn't open, so opening either is instant.
-  const branch = desc?.address?.history || "0";
-  _maybeSurfaceBranchSwitch(branch);
+  const history = desc?.address?.history || "0";
+  _maybeSurfacehistorySwitch(history);
   _syncStanceBar();
   try {
-    const r = await _state.client.see(`${_state.story}/.branches/${branch}`);
-    _state.graph = r?.branches || null;
+    const r = await _state.client.see(`${_state.story}/.histories/${history}`);
+    _state.graph = r?.histories || null;
     // The pointer map just refreshed — repaint the bar tooltips.
     _syncStanceBar();
-    // Server-confirmed pause state of the branch the user is on. Push
+    // Server-confirmed pause state of the history the user is on. Push
     // it to the chrome layer (main.js listens for the same custom
     // event the optimistic pause-button flip uses, so both paths
     // converge).
@@ -997,32 +1040,38 @@ async function _update(desc) {
     // would flip the grayscale chrome back, defeating the optimistic
     // visual the toggle just set.
     if (!_isToggleInFlight()) {
-      const myPaused = !!r?.branches?.current?.paused;
-      window.dispatchEvent(new CustomEvent("branchbar:paused-self", {
-        detail: { paused: myPaused },
-      }));
+      const myPaused = !!r?.histories?.current?.paused;
+      window.dispatchEvent(
+        new CustomEvent("historybar:paused-self", {
+          detail: { paused: myPaused },
+        }),
+      );
     }
-    // If the branch tree panel is open, refetch the full tree and
-    // repaint it so newly-created branches and freshly-flipped pause
+    // If the history tree panel is open, refetch the full tree and
+    // repaint it so newly-created histories and freshly-flipped pause
     // states appear without the user having to close + reopen the
     // panel or reload the page. The catalog SEE above only fetches
-    // the current branch's lineage; the panel needs every branch in
+    // the current history's lineage; the panel needs every history in
     // the place.
     //
-    // SKIP while a toggle DO is in flight — _togglePauseBranch already
+    // SKIP while a toggle DO is in flight — _togglePausehistory already
     // optimistically flipped the row, and a live-event refetch here
     // would read the SERVER's still-pre-toggle row, snap the panel
     // back, and confuse the user. The toggle's own success-path
     // refresh lands authoritative state when the DO completes.
     if (_state.panelEl && !_isToggleInFlight()) {
       try {
-        const tree = await _loadBranchTree();
+        const tree = await _loadHistoryTree();
         _state.graphAll = tree;
         const container = _state.panelEl.querySelector(".bp-tree");
         if (container) _renderTree(container, tree);
-      } catch { /* defensive — panel keeps its last paint */ }
+      } catch {
+        /* defensive — panel keeps its last paint */
+      }
     }
-  } catch { _state.graph = null; }
+  } catch {
+    _state.graph = null;
+  }
 
   // Track rewound state from descriptor flags.
   if (desc?.isHistorical && desc.asOf?.atTimestamp) {
@@ -1037,17 +1086,17 @@ async function _update(desc) {
   // Chrome jumps keep both stances together (menus SWITCH the being;
   // the address chip shows the split when an ibpa portal or a
   // hand-typed address diverges them — Tabor doctrine 2026-06-10).
-  // If an open timeline strip is bound to a different branch than the
+  // If an open timeline strip is bound to a different history than the
   // address, re-bind it. Without this, the strip stays labelled
   // "main" while the IBP address shows #1.
-  if (_state.timelineEl && _state.timelineHistory !== branch) {
-    _state.timelineHistory = branch;
+  if (_state.timelineEl && _state.timelineHistory !== history) {
+    _state.timelineHistory = history;
     _state.marks = [];
     _state.firstTs = null;
     _state.nowTs = null;
     const labelEl = _state.timelineEl.querySelector(".bt-label");
     if (labelEl) {
-      const historyLabel = branch === "0" ? "main" : `#${branch}`;
+      const historyLabel = history === "0" ? "main" : `#${history}`;
       labelEl.textContent = `timeline · ${historyLabel}`;
     }
   }
@@ -1055,10 +1104,10 @@ async function _update(desc) {
   // If no timeline open, nothing more to do.
   if (!_state.timelineEl) return;
 
-  // Load marks for the timeline's bound branch. First batch only —
+  // Load marks for the timeline's bound history. First batch only —
   // additional batches load progressively as the user rewinds toward
   // the earliest loaded mark (see _maybeLoadOlderMarks).
-  const tlHistory = _state.timelineHistory || branch;
+  const tlHistory = _state.timelineHistory || history;
   const myBeingId = desc?.identity?.beingId || null;
   _state.timelineBeingId = myBeingId;
   if (myBeingId) {
@@ -1073,11 +1122,11 @@ async function _update(desc) {
         : [];
       _state.marks = acts.map(_actToMark).filter((m) => m.ts);
       // If we got fewer than the batch size, we've already reached
-      // the being's birth — no more pages exist on this branch.
+      // the being's birth — no more pages exist on this history.
       _state.hasMoreMarks = acts.length >= INITIAL_MARK_BATCH;
       _state.loadingMoreMarks = false;
     } catch (err) {
-      console.warn("[branch-bar] acts fetch failed:", err?.message);
+      console.warn("[history-bar] acts fetch failed:", err?.message);
       _state.marks = [];
       _state.hasMoreMarks = false;
     }
@@ -1096,7 +1145,7 @@ async function _update(desc) {
   //   - a rewind cursor (atTimestamp) stays at its absolute moment
   //     and slides left as wall-clock advances — never re-centered
   _state.firstTs = _computeFirstTs(_state.marks);
-  _state.nowTs   = new Date().toISOString();
+  _state.nowTs = new Date().toISOString();
   _ensureTick();
 
   _renderTimeline();
@@ -1137,7 +1186,7 @@ function _ensureTick() {
       return;
     }
     _state.firstTs = _computeFirstTs(_state.marks);
-    _state.nowTs   = new Date().toISOString();
+    _state.nowTs = new Date().toISOString();
     _renderTimeline();
   }, 1000);
 }
@@ -1145,12 +1194,12 @@ function _ensureTick() {
 function _renderTimeline() {
   if (!_state.timelineEl) return;
   const marksEl = _state.timelineEl.querySelector(".bt-marks");
-  const cursor  = _state.timelineEl.querySelector(".bt-cursor");
-  const labelL  = _state.timelineEl.querySelector(".bt-label-left");
-  const labelR  = _state.timelineEl.querySelector(".bt-label-right");
-  const status  = _state.timelineEl.querySelector(".bt-status");
-  const nowBtn  = _state.timelineEl.querySelector(".bt-now");
-  const branchBtn = _state.timelineEl.querySelector(".bt-branch");
+  const cursor = _state.timelineEl.querySelector(".bt-cursor");
+  const labelL = _state.timelineEl.querySelector(".bt-label-left");
+  const labelR = _state.timelineEl.querySelector(".bt-label-right");
+  const status = _state.timelineEl.querySelector(".bt-status");
+  const nowBtn = _state.timelineEl.querySelector(".bt-now");
+  const historyBtn = _state.timelineEl.querySelector(".bt-history");
   marksEl.innerHTML = "";
 
   if (!_state.firstTs || !_state.nowTs) {
@@ -1160,7 +1209,7 @@ function _renderTimeline() {
     status.textContent = "live";
     status.style.color = "#6b7d72";
     nowBtn.style.display = "none";
-    branchBtn.style.display = "none";
+    historyBtn.style.display = "none";
     _renderDetail(null);
     return;
   }
@@ -1170,7 +1219,9 @@ function _renderTimeline() {
   // implementation), drop the selection so the detail row doesn't
   // describe a mark that's no longer rendered.
   if (_state.selectedMarkTs) {
-    const stillExists = _state.marks.some((m) => m.ts === _state.selectedMarkTs);
+    const stillExists = _state.marks.some(
+      (m) => m.ts === _state.selectedMarkTs,
+    );
     if (!stillExists) {
       _state.selectedMarkTs = null;
       _renderDetail(null);
@@ -1231,9 +1282,8 @@ function _renderTimeline() {
     marksEl.appendChild(dot);
   }
 
-  const historyLabel = _state.timelineHistory === "0"
-    ? "main"
-    : `#${_state.timelineHistory}`;
+  const historyLabel =
+    _state.timelineHistory === "0" ? "main" : `#${_state.timelineHistory}`;
   if (_state.atTimestamp) {
     const t = new Date(_state.atTimestamp).getTime();
     let cursorFrac;
@@ -1243,9 +1293,7 @@ function _renderTimeline() {
       // spacing the dots use so the cursor lines up exactly.
       const activeMark = _findMarkAtCursor(t);
       const idx = activeMark ? _state.marks.indexOf(activeMark) : -1;
-      cursorFrac = idx >= 0
-        ? (total === 1 ? 0.5 : idx / (total - 1))
-        : 0;
+      cursorFrac = idx >= 0 ? (total === 1 ? 0.5 : idx / (total - 1)) : 0;
     } else {
       cursorFrac = Math.max(0, Math.min(1, (t - start) / span));
     }
@@ -1266,7 +1314,7 @@ function _renderTimeline() {
     }
     status.style.color = "#e8b762";
     nowBtn.style.display = "inline-block";
-    branchBtn.style.display = "inline-block";
+    historyBtn.style.display = "inline-block";
   } else {
     cursor.style.display = "none";
     if (_state.playbackMode === "story") {
@@ -1276,7 +1324,7 @@ function _renderTimeline() {
     }
     status.style.color = "#6b7d72";
     nowBtn.style.display = "none";
-    branchBtn.style.display = "none";
+    historyBtn.style.display = "none";
   }
 }
 
@@ -1303,9 +1351,11 @@ function _rewindTo(atTimestamp) {
     // call _update here (that re-SEEs the catalog every tick).
     _renderTimeline();
   }
-  window.dispatchEvent(new CustomEvent("branchbar:rewind", {
-    detail: { atTimestamp },
-  }));
+  window.dispatchEvent(
+    new CustomEvent("historybar:rewind", {
+      detail: { atTimestamp },
+    }),
+  );
 }
 
 // Find the most-recent mark whose timestamp is ≤ cursorMs. Returns
@@ -1344,9 +1394,11 @@ function _returnToNow(opts = {}) {
   // "user explicitly clicked return-to-now." Main reads it on the
   // rendering side and skips the camera reset when preserving, so a
   // fast-forward that crosses into live doesn't yank the user's view.
-  window.dispatchEvent(new CustomEvent("branchbar:now", {
-    detail: { preserveCamera: opts.preserveCamera === true },
-  }));
+  window.dispatchEvent(
+    new CustomEvent("historybar:now", {
+      detail: { preserveCamera: opts.preserveCamera === true },
+    }),
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1372,12 +1424,16 @@ function _returnToNow(opts = {}) {
 
 function _bumpSpeed(delta) {
   // Find current tier from the signed factor; bump and clamp.
-  const currentFactor = _state.playbackSpeed === 0 && _state.cursorMs == null
-    ? 0
-    : _state.playbackSpeed;
+  const currentFactor =
+    _state.playbackSpeed === 0 && _state.cursorMs == null
+      ? 0
+      : _state.playbackSpeed;
   // Re-derive tier from stored speed (speeds are stored as tier values
   // directly, so just clamp).
-  let nextTier = Math.max(MIN_SPEED_TIER, Math.min(MAX_SPEED_TIER, currentFactor + delta));
+  let nextTier = Math.max(
+    MIN_SPEED_TIER,
+    Math.min(MAX_SPEED_TIER, currentFactor + delta),
+  );
   _setSpeed(nextTier);
 }
 
@@ -1404,9 +1460,11 @@ function _emitCloudFactor() {
   } else if (_state.atTimestamp) {
     factor = 0;
   }
-  window.dispatchEvent(new CustomEvent("branchbar:cloud-scale", {
-    detail: { factor },
-  }));
+  window.dispatchEvent(
+    new CustomEvent("historybar:cloud-scale", {
+      detail: { factor },
+    }),
+  );
 }
 
 function _setSpeed(tier) {
@@ -1436,7 +1494,8 @@ function _setSpeed(tier) {
 function _startPlayback() {
   if (_state.playbackTimer) return;
   _state.playbackTimer = setInterval(_playbackTick, PLAYBACK_TICK_MS);
-  if (typeof _state.playbackTimer.unref === "function") _state.playbackTimer.unref();
+  if (typeof _state.playbackTimer.unref === "function")
+    _state.playbackTimer.unref();
 }
 
 function _stopPlayback() {
@@ -1497,9 +1556,10 @@ function _playbackTick() {
 // with an accumulator so fractional rates (1x with 250ms tick = 0.25
 // marks/tick) advance smoothly without stutter.
 function _playbackTickStory(factor) {
-  const TICKS_PER_SEC = 1000 / PLAYBACK_TICK_MS;          // 4 at 250ms
-  const MARKS_PER_TICK_AT_1X = 1 / TICKS_PER_SEC;          // 0.25
-  _state.markAccumulator = (_state.markAccumulator || 0) + factor * MARKS_PER_TICK_AT_1X;
+  const TICKS_PER_SEC = 1000 / PLAYBACK_TICK_MS; // 4 at 250ms
+  const MARKS_PER_TICK_AT_1X = 1 / TICKS_PER_SEC; // 0.25
+  _state.markAccumulator =
+    (_state.markAccumulator || 0) + factor * MARKS_PER_TICK_AT_1X;
 
   // Step out integer marks; keep the fractional remainder for next tick.
   let steps = 0;
@@ -1508,7 +1568,7 @@ function _playbackTickStory(factor) {
   } else if (_state.markAccumulator <= -1) {
     steps = Math.ceil(_state.markAccumulator);
   } else {
-    return;  // sub-mark progress; wait for more ticks
+    return; // sub-mark progress; wait for more ticks
   }
   _state.markAccumulator -= steps;
 
@@ -1531,7 +1591,7 @@ function _playbackTickStory(factor) {
   const targetIdx = curIdx + steps;
 
   // Forward past the last mark → snap live, same shape as the human-
-  // mode forward-stop branch.
+  // mode forward-stop history.
   if (targetIdx >= marks.length) {
     _stopPlayback();
     _state.cursorMs = null;
@@ -1618,58 +1678,65 @@ async function _branchHere() {
   if (!_state.atTimestamp) return;
   const parent = _state.timelineHistory || "0";
   try {
-    // Relative `/@branch-manager` lets the wire inherit socket.currentHistory
+    // Relative `/@history-manager` lets the wire inherit socket.currentHistory
     // automatically — no descriptor-state guessing, no race with
-    // mid-flight branch switches. The cross-branch gate sees
+    // mid-flight history switches. The cross-history gate sees
     // caller=target by construction.
     _showBranchEvent(`creating branch from #${parent}…`);
     const result = await _state.client.do(
-      `/@branch-manager`,
+      `/@history-manager`,
       "create-branch",
-      { parent, atTimestamp: _state.atTimestamp, label: null },
+      {
+        parent,
+        atTimestamp: _state.atTimestamp,
+        label: null,
+      },
     );
     const r = result?.result || result;
     if (!r?.path) {
-      console.warn("[branch-bar] create-branch returned no path:", result);
+      console.warn("[history-bar] create-branch returned no path:", result);
       return;
     }
     _showBranchEvent(`✨ history #${r.path} created`, { sticky: 2500 });
     _closeTimeline();
     _offerSwitchAfterBranch(r.path);
   } catch (err) {
-    console.warn("[branch-bar] create-branch failed:", err?.message);
+    console.warn("[history-bar] create-branch failed:", err?.message);
     _showBranchEvent(`history failed: ${err?.message || err}`, { error: true });
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// BRANCH INFO ("see branch")
+// history INFO ("see history")
 // ─────────────────────────────────────────────────────────────────────
 //
-// SEEs `<story>/.branches/<path>` — the synthetic branch surface,
+// SEEs `<story>/.histories/<path>` — the synthetic history surface,
 // readable by any logged-in being — and renders the organized JSON it
-// returns: branch-point seqs, pointers aimed here, scope, lineage,
+// returns: history-point seqs, pointers aimed here, scope, lineage,
 // children, paused/deleted detail, who/when. A "raw" toggle dumps the
 // full payload for anyone who wants every field.
 
-let _branchInfoDialogEl = null;
+let _historyInfoDialogEl = null;
 
-async function _openBranchInfoDialog(historyPath) {
-  if (_branchInfoDialogEl) _closeBranchInfoDialog();
+async function _openhistoryInfoDialog(historyPath) {
+  if (_historyInfoDialogEl) _closehistoryInfoDialog();
   let graph = null;
   let err = null;
   try {
-    const desc = await _state.client.see(`${_state.story}/.branches/${historyPath}`);
-    graph = desc?.branches || null;
+    const desc = await _state.client.see(
+      `${_state.story}/.histories/${historyPath}`,
+    );
+    graph = desc?.histories || null;
   } catch (e) {
     err = e?.message || String(e);
   }
 
   const el = document.createElement("div");
-  el.id = "branch-info-dialog";
+  el.id = "history-info-dialog";
   el.style.cssText = [
     "position: fixed",
-    "top: 50%", "left: 50%",
+    "top: 50%",
+    "left: 50%",
     "transform: translate(-50%, -50%)",
     "width: min(560px, 92vw)",
     "max-height: 82vh",
@@ -1696,24 +1763,36 @@ async function _openBranchInfoDialog(historyPath) {
   const children = Array.isArray(graph?.children) ? graph.children : [];
 
   const rows = [];
-  const kv = (k, v) => rows.push(
-    `<div style="display:grid;grid-template-columns:130px 1fr;gap:8px;padding:3px 0;">
+  const kv = (k, v) =>
+    rows.push(
+      `<div style="display:grid;grid-template-columns:130px 1fr;gap:8px;padding:3px 0;">
        <span style="color:#9ab2a3;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">${_escape(k)}</span>
        <span style="color:#c8d3cb;word-break:break-word;">${v}</span>
      </div>`,
-  );
+    );
 
   if (err || !cur) {
-    rows.push(`<div style="color:#d97a7a;">${_escape(err || `branch "${historyPath}" not found`)}</div>`);
+    rows.push(
+      `<div style="color:#d97a7a;">${_escape(err || `history "${historyPath}" not found`)}</div>`,
+    );
   } else {
     kv("path", `#${_escape(cur.path)}`);
     if (cur.label) kv("label", _escape(cur.label));
     kv("live", cur.isLive ? "yes" : "no");
     kv("parent", cur.parent ? `#${_escape(cur.parent)}` : "main (root)");
     kv("lineage", lineage.map((p) => `#${_escape(p)}`).join(" → ") || "—");
-    kv("children", children.length ? children.map((c) => `#${_escape(c.path)}`).join(", ") : "—");
-    kv("pointers here", aimedHere.length ? aimedHere.map(_escape).join(", ") : "—");
-    const anchor = cur.anchor && typeof cur.anchor === "object" ? cur.anchor : {};
+    kv(
+      "children",
+      children.length
+        ? children.map((c) => `#${_escape(c.path)}`).join(", ")
+        : "—",
+    );
+    kv(
+      "pointers here",
+      aimedHere.length ? aimedHere.map(_escape).join(", ") : "—",
+    );
+    const anchor =
+      cur.anchor && typeof cur.anchor === "object" ? cur.anchor : {};
     const anchorKeys = Object.keys(anchor);
     kv(
       "branch-point",
@@ -1721,17 +1800,35 @@ async function _openBranchInfoDialog(historyPath) {
         ? anchorKeys.map((k) => `${_escape(k)} @ seq ${anchor[k]}`).join("<br>")
         : "(forked at genesis / no reels)",
     );
-    kv("scope", cur.scope?.path ? `subtree ${_escape(cur.scope.path)}` : "whole story");
-    kv("created", `${cur.createdAt ? _shortStamp(cur.createdAt) : "?"}${cur.createdBy ? ` by ${_escape(String(cur.createdBy).slice(0, 8))}` : ""}`);
-    if (cur.mergeSources?.length) kv("merged from", cur.mergeSources.map((s) => `#${_escape(s)}`).join(" + "));
-    if (cur.paused) kv("paused", `yes${cur.pausedAt ? ` (${_shortStamp(cur.pausedAt)})` : ""}`);
-    if (cur.deleted) kv("deleted", `yes${cur.deletedAt ? ` (${_shortStamp(cur.deletedAt)})` : ""}`);
+    kv(
+      "scope",
+      cur.scope?.path ? `subtree ${_escape(cur.scope.path)}` : "whole story",
+    );
+    kv(
+      "created",
+      `${cur.createdAt ? _shortStamp(cur.createdAt) : "?"}${cur.createdBy ? ` by ${_escape(String(cur.createdBy).slice(0, 8))}` : ""}`,
+    );
+    if (cur.mergeSources?.length)
+      kv(
+        "merged from",
+        cur.mergeSources.map((s) => `#${_escape(s)}`).join(" + "),
+      );
+    if (cur.paused)
+      kv(
+        "paused",
+        `yes${cur.pausedAt ? ` (${_shortStamp(cur.pausedAt)})` : ""}`,
+      );
+    if (cur.deleted)
+      kv(
+        "deleted",
+        `yes${cur.deletedAt ? ` (${_shortStamp(cur.deletedAt)})` : ""}`,
+      );
     if (cur.archivedBecause) kv("archived", _escape(cur.archivedBecause));
   }
 
   el.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <span style="color:#8fbf9f;font-size:13px;">branch #${_escape(historyPath)} · info</span>
+      <span style="color:#8fbf9f;font-size:13px;">history #${_escape(historyPath)} · info</span>
       <button type="button" class="bi-close" style="background:transparent;color:#6b7d72;border:none;font-size:18px;cursor:pointer;padding:0 4px;">×</button>
     </div>
     <div class="bi-body">${rows.join("")}</div>
@@ -1741,9 +1838,12 @@ async function _openBranchInfoDialog(historyPath) {
     </div>
   `;
   document.body.appendChild(el);
-  _branchInfoDialogEl = el;
+  _historyInfoDialogEl = el;
 
-  el.querySelector(".bi-close").addEventListener("click", _closeBranchInfoDialog);
+  el.querySelector(".bi-close").addEventListener(
+    "click",
+    _closehistoryInfoDialog,
+  );
   const rawBtn = el.querySelector(".bi-raw");
   const rawPre = el.querySelector(".bi-json");
   rawBtn.addEventListener("click", () => {
@@ -1760,17 +1860,17 @@ async function _openBranchInfoDialog(historyPath) {
   function escClose(ev) {
     if (ev.key === "Escape") {
       ev.stopPropagation();
-      _closeBranchInfoDialog();
+      _closehistoryInfoDialog();
       window.removeEventListener("keydown", escClose, true);
     }
   }
   window.addEventListener("keydown", escClose, true);
 }
 
-function _closeBranchInfoDialog() {
-  if (_branchInfoDialogEl) {
-    _branchInfoDialogEl.remove();
-    _branchInfoDialogEl = null;
+function _closehistoryInfoDialog() {
+  if (_historyInfoDialogEl) {
+    _historyInfoDialogEl.remove();
+    _historyInfoDialogEl = null;
   }
 }
 
@@ -1804,7 +1904,10 @@ function _openNewBranchDialog() {
   const atRoot = curPath === "/" || curPath === "";
 
   const opt = (b) => {
-    const label = b.path === "0" ? "main (#0)" : `#${b.path}${b.label ? ` — ${_escape(b.label)}` : ""}`;
+    const label =
+      b.path === "0"
+        ? "main (#0)"
+        : `#${b.path}${b.label ? ` — ${_escape(b.label)}` : ""}`;
     const sel = b.path === curHistory ? " selected" : "";
     return `<option value="${b.path}"${sel}>${label}</option>`;
   };
@@ -1818,7 +1921,8 @@ function _openNewBranchDialog() {
   el.id = "new-branch-dialog";
   el.style.cssText = [
     "position: fixed",
-    "top: 50%", "left: 50%",
+    "top: 50%",
+    "left: 50%",
     "transform: translate(-50%, -50%)",
     "width: min(520px, 92vw)",
     "max-height: 80vh",
@@ -1835,8 +1939,10 @@ function _openNewBranchDialog() {
     "pointer-events: auto",
     "box-shadow: 0 10px 40px rgba(0,0,0,0.55)",
   ].join(";");
-  const labelCss = "color:#9ab2a3;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;";
-  const inputCss = "background:#0a0d0c;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:5px 7px;font-family:inherit;font-size:12px;";
+  const labelCss =
+    "color:#9ab2a3;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;";
+  const inputCss =
+    "background:#0a0d0c;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:5px 7px;font-family:inherit;font-size:12px;";
   el.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
       <span style="color:#8fbf9f;font-size:13px;">new branch</span>
@@ -1874,7 +1980,7 @@ function _openNewBranchDialog() {
       <label style="display:grid;gap:4px;">
         <span style="${labelCss}">pointer (optional)</span>
         <input name="pointer" type="text" placeholder="e.g. feature-x" style="${inputCss}" />
-        <span style="color:#6b7d72;font-size:10px;">a movable name that addresses this branch. if it's already taken you'll be asked whether to move it here.</span>
+        <span style="color:#6b7d72;font-size:10px;">a movable name that addresses this history. if it's already taken you'll be asked whether to move it here.</span>
       </label>
 
       <div class="nb-error" style="display:none;color:#d97a7a;font-size:11px;padding:4px 6px;background:rgba(217,122,122,0.08);border:1px solid #5c2323;border-radius:3px;"></div>
@@ -1885,9 +1991,9 @@ function _openNewBranchDialog() {
     </form>
   `;
   document.body.appendChild(el);
-  _newBranchDialogEl = el;
+  _newhistoryDialogEl = el;
 
-  const close = () => _closeNewBranchDialog();
+  const close = () => _closeNewhistoryDialog();
   el.querySelector(".nb-close").addEventListener("click", close);
   el.querySelector(".nb-cancel").addEventListener("click", close);
 
@@ -1895,7 +2001,10 @@ function _openNewBranchDialog() {
   form.addEventListener("submit", async (ev) => {
     ev.preventDefault();
     const errEl = el.querySelector(".nb-error");
-    const fail = (msg) => { errEl.textContent = msg; errEl.style.display = "block"; };
+    const fail = (msg) => {
+      errEl.textContent = msg;
+      errEl.style.display = "block";
+    };
     errEl.style.display = "none";
     errEl.textContent = "";
 
@@ -1906,7 +2015,8 @@ function _openNewBranchDialog() {
       const raw = String(fd.get("atSeq") || "").trim();
       if (raw === "") return fail("enter a fact seq, or anchor by time");
       const n = Number(raw);
-      if (!Number.isInteger(n) || n < 0) return fail("fact seq must be a non-negative integer");
+      if (!Number.isInteger(n) || n < 0)
+        return fail("fact seq must be a non-negative integer");
       args.atSeq = n;
     } else {
       const raw = String(fd.get("atTimestamp") || "").trim();
@@ -1925,7 +2035,9 @@ function _openNewBranchDialog() {
       // empty or "/" → whole story (omit scope)
     }
 
-    const pointer = String(fd.get("pointer") || "").trim().toLowerCase();
+    const pointer = String(fd.get("pointer") || "")
+      .trim()
+      .toLowerCase();
     if (pointer) args.pointer = pointer;
 
     const submitBtn = el.querySelector(".nb-submit");
@@ -1935,39 +2047,55 @@ function _openNewBranchDialog() {
     try {
       let result;
       try {
-        result = await _state.client.do("/@branch-manager", "create-branch", args);
+        result = await _state.client.do(
+          "/@history-manager",
+          "create-branch",
+          args,
+        );
       } catch (err) {
         // Pointer already taken — ask whether to move it here, leaving the
-        // old branch on its canonical path without the pointer.
-        const conflict = err?.code === "RESOURCE_CONFLICT" || /already on branch|reassignPointer/i.test(err?.message || "");
+        // old history on its canonical path without the pointer.
+        const conflict =
+          err?.code === "RESOURCE_CONFLICT" ||
+          /already on history|reassignPointer/i.test(err?.message || "");
         if (conflict && pointer) {
           const heldBy = err?.data?.heldBy || err?.heldBy || null;
           const where = heldBy ? ` (currently on #${heldBy})` : "";
           const move = window.confirm(
             `The pointer "${pointer}" is already taken${where}.\n\n` +
-            `Move it to this new branch? The old branch keeps its canonical path` +
-            `${heldBy ? ` (#${heldBy})` : ""} but loses the "${pointer}" pointer.`,
+              `Move it to this new history? The old history keeps its canonical path` +
+              `${heldBy ? ` (#${heldBy})` : ""} but loses the "${pointer}" pointer.`,
           );
-          if (!move) throw new Error(`cancelled — "${pointer}" left where it was`);
+          if (!move)
+            throw new Error(`cancelled — "${pointer}" left where it was`);
           result = await _state.client.do(
-            "/@branch-manager",
+            "/@history-manager",
             "create-branch",
-            { ...args, reassignPointer: true },
+            {
+              ...args,
+              reassignPointer: true,
+            },
           );
         } else {
           throw err;
         }
       }
       const r = result?.result || result;
-      if (!r?.path) throw new Error(r?.error?.message || "create-branch returned no path");
-      _closeNewBranchDialog();
+      if (!r?.path)
+        throw new Error(r?.error?.message || "create-branch returned no path");
+      _closeNewhistoryDialog();
       _closePanel();
       const scopeNote = args.scope ? ` (subtree ${args.scope})` : "";
-      const ptrNote = (r.pointerAttached || (pointer && !r.pointerWarning)) ? ` · pointer "${pointer}"` : "";
-      _showBranchEvent(`✨ history #${r.path} created${scopeNote}${ptrNote}`, { sticky: 2500 });
-      _offerSwitchAfterBranch(r.path, scopeNote);
+      const ptrNote =
+        r.pointerAttached || (pointer && !r.pointerWarning)
+          ? ` · pointer "${pointer}"`
+          : "";
+      _showhistoryEvent(`✨ history #${r.path} created${scopeNote}${ptrNote}`, {
+        sticky: 2500,
+      });
+      _offerSwitchAfterhistory(r.path, scopeNote);
     } catch (err) {
-      console.warn("[branch-bar] create-branch failed:", err);
+      console.warn("[history-bar] create-branch failed:", err);
       fail(err?.message || String(err));
       submitBtn.disabled = false;
       submitBtn.textContent = prev;
@@ -1984,10 +2112,10 @@ function _openNewBranchDialog() {
   window.addEventListener("keydown", escClose, true);
 }
 
-function _closeNewBranchDialog() {
-  if (_newBranchDialogEl) {
-    _newBranchDialogEl.remove();
-    _newBranchDialogEl = null;
+function _closeNewhistoryDialog() {
+  if (_newhistoryDialogEl) {
+    _newhistoryDialogEl.remove();
+    _newhistoryDialogEl = null;
   }
 }
 
@@ -1995,14 +2123,14 @@ function _closeNewBranchDialog() {
 // MERGE DIALOG
 // ─────────────────────────────────────────────────────────────────────
 //
-// One modal overlay over the branch tree panel. Two source pickers,
+// One modal overlay over the history tree panel. Two source pickers,
 // the three afterAction choices, an optional comma-separated list of
-// named pointers to re-point at the merged branch, and a checkbox to
+// named pointers to re-point at the merged history, and a checkbox to
 // also summon the @merge-mediator role at the result for the LLM
-// walkthrough. All resolved in one `merge-branches` substrate call.
+// walkthrough. All resolved in one `merge-histories` substrate call.
 //
 // The dialog is a thin wrapper; substrate carries the doctrine. Every
-// decision the user makes lands as a fact on the merged branch's reel
+// decision the user makes lands as a fact on the merged history's reel
 // (either the merge fact itself or the mediator's reconciliation
 // stamps), so live SEE on the conflict catalog stays the source of
 // truth for both UI re-renders and the next mediator pickup point.
@@ -2034,14 +2162,15 @@ async function _downloadClone() {
   if (!addr) {
     throw new Error("no current address to copy from");
   }
-  const spaceId = _portalState()?.descriptor?.address?.spaceId
-    || _portalState()?.descriptor?.position?.spaceId
-    || null;
+  const spaceId =
+    _portalState()?.descriptor?.address?.spaceId ||
+    _portalState()?.descriptor?.position?.spaceId ||
+    null;
   if (!spaceId) {
     throw new Error("no spaceId on current descriptor to clone from");
   }
   const placeName = _portalState()?.descriptor?.address?.spaceName || "place";
-  _showBranchEvent(`copying ${placeName}…`);
+  _showhistoryEvent(`copying ${placeName}…`);
   const result = await _state.client.see("capture-template", {
     args: { spaceId, name: placeName },
   });
@@ -2050,9 +2179,12 @@ async function _downloadClone() {
     throw new Error("copy returned no bundle");
   }
   // Pretty-print + JSON download.
-  const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: "application/json" });
-  const url  = URL.createObjectURL(blob);
-  const stamp = bundle.meta?.createdAt?.replace(/[:.]/g, "-").slice(0, 19) || "snapshot";
+  const blob = new Blob([JSON.stringify(bundle, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const stamp =
+    bundle.meta?.createdAt?.replace(/[:.]/g, "-").slice(0, 19) || "snapshot";
   const a = document.createElement("a");
   a.href = url;
   a.download = `${placeName}-${stamp}.seed.json`;
@@ -2061,7 +2193,7 @@ async function _downloadClone() {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   const counts = `${bundle.content?.spaces?.length || 0} spaces, ${bundle.content?.beings?.length || 0} beings, ${bundle.content?.matter?.length || 0} matter`;
-  _showBranchEvent(`✓ copied ${placeName} (${counts})`);
+  _showhistoryEvent(`✓ copied ${placeName} (${counts})`);
 }
 
 async function _graftFromFile(file) {
@@ -2077,13 +2209,13 @@ async function _graftFromFile(file) {
     throw new Error(`bundle file is not valid JSON: ${err.message}`);
   }
   const srcName = bundle?.meta?.sourceScopeName || "bundle";
-  _showBranchEvent(`grafting ${srcName} under ${addr}…`);
+  _showhistoryEvent(`grafting ${srcName} under ${addr}…`);
   const result = await _state.client.do(addr, "plant-template", { bundle });
   const counts = `${result?.counts?.spaces || 0} spaces, ${result?.counts?.beings || 0} beings, ${result?.counts?.matter || 0} matter`;
-  _showBranchEvent(`✓ grafted ${srcName} (${counts})`);
-  // Refetch the tree so any newly created branches surface (clones
-  // don't make branches, but operators may follow up with a branch).
-  await _loadBranchTree();
+  _showhistoryEvent(`✓ grafted ${srcName} (${counts})`);
+  // Refetch the tree so any newly created histories surface (clones
+  // don't make histories, but operators may follow up with a history).
+  await _loadHistoryTree();
   if (_state.panelEl) {
     const treeContainer = _state.panelEl.querySelector(".bp-tree");
     if (treeContainer) _renderTree(treeContainer, _state.graphAll);
@@ -2095,15 +2227,18 @@ let _mergeDialogEl = null;
 function _openMergeDialog() {
   if (_mergeDialogEl) return;
   if (!_state.graphAll) {
-    _showBranchEvent("tree not loaded yet", { error: true });
+    _showhistoryEvent("tree not loaded yet", { error: true });
     return;
   }
-  const branches = Array.from(_state.graphAll.byPath.values())
-    .filter(b => !b.deleted)
+  const histories = Array.from(_state.graphAll.byPath.values())
+    .filter((b) => !b.deleted)
     .sort((a, b) => a.path.localeCompare(b.path));
 
   const opt = (b, selected) => {
-    const label = b.path === "0" ? "main (#0)" : `#${b.path}${b.label ? ` — ${_escape(b.label)}` : ""}`;
+    const label =
+      b.path === "0"
+        ? "main (#0)"
+        : `#${b.path}${b.label ? ` — ${_escape(b.label)}` : ""}`;
     const sel = selected ? " selected" : "";
     return `<option value="${b.path}"${sel}>${label}</option>`;
   };
@@ -2112,7 +2247,8 @@ function _openMergeDialog() {
   el.id = "merge-dialog";
   el.style.cssText = [
     "position: fixed",
-    "top: 50%", "left: 50%",
+    "top: 50%",
+    "left: 50%",
     "transform: translate(-50%, -50%)",
     "width: min(520px, 92vw)",
     "max-height: 80vh",
@@ -2138,7 +2274,7 @@ function _openMergeDialog() {
       <label style="display:grid;gap:4px;">
         <span style="color:#9ab2a3;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">source A</span>
         <select name="sourceA" style="background:#0a0d0c;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:5px 7px;font-family:inherit;font-size:12px;">
-          ${branches.map((b, i) => opt(b, i === 0)).join("")}
+          ${histories.map((h, i) => opt(h, i === 0)).join("")}
         </select>
       </label>
       <label style="display:grid;gap:4px;">
@@ -2264,16 +2400,18 @@ function _openMergeDialog() {
         // the SUMMON push channel; the conflict catalog SEE on the
         // merged branch reflects each reconciliation fact as it lands.
         try {
-          await _state.client.call(
-            `/@merge-mediator`,
-            {
-              from: "user",
-              content: `Walk me through the conflicts on #${r.path}. The conflict catalog is at /.branches/${r.path}/conflicts.`,
-            },
-          );
+          await _state.client.call(`/@merge-mediator`, {
+            from: "user",
+            content: `Walk me through the conflicts on #${r.path}. The conflict catalog is at /.branches/${r.path}/conflicts.`,
+          });
         } catch (err) {
-          console.warn("[branch-bar] mediator summon failed:", err?.message || err);
-          _showBranchEvent(`mediator summon failed: ${err?.message || err}`, { error: true });
+          console.warn(
+            "[branch-bar] mediator summon failed:",
+            err?.message || err,
+          );
+          _showBranchEvent(`mediator summon failed: ${err?.message || err}`, {
+            error: true,
+          });
         }
       }
     } catch (err) {
@@ -2328,7 +2466,8 @@ async function _openConflictPanel(mergedPath) {
   el.id = "conflict-panel";
   el.style.cssText = [
     "position: fixed",
-    "top: 50%", "left: 50%",
+    "top: 50%",
+    "left: 50%",
     "transform: translate(-50%, -50%)",
     "width: min(720px, 94vw)",
     "max-height: 84vh",
@@ -2371,8 +2510,12 @@ async function _openConflictPanel(mergedPath) {
   _conflictPanelEl = el;
 
   el.querySelector(".cp-close").addEventListener("click", _closeConflictPanel);
-  el.querySelector(".cp-refresh").addEventListener("click", () => _refreshConflictPanel());
-  el.querySelector(".cp-mediator").addEventListener("click", () => _summonMediatorForBranch(mergedPath));
+  el.querySelector(".cp-refresh").addEventListener("click", () =>
+    _refreshConflictPanel(),
+  );
+  el.querySelector(".cp-mediator").addEventListener("click", () =>
+    _summonMediatorForBranch(mergedPath),
+  );
 
   function escClose(ev) {
     if (ev.key === "Escape" && _conflictPanelEl) {
@@ -2435,31 +2578,46 @@ async function _refreshConflictPanel() {
   }
 
   const groups = {
-    open:     items.filter(it => it.side === "conflict" && it.status === "open"),
-    resolved: items.filter(it => it.side === "conflict" && it.status === "resolved"),
-    cleanA:   items.filter(it => it.side === "clean-A"),
-    cleanB:   items.filter(it => it.side === "clean-B"),
+    open: items.filter((it) => it.side === "conflict" && it.status === "open"),
+    resolved: items.filter(
+      (it) => it.side === "conflict" && it.status === "resolved",
+    ),
+    cleanA: items.filter((it) => it.side === "clean-A"),
+    cleanB: items.filter((it) => it.side === "clean-B"),
   };
 
   body.innerHTML = "";
   if (groups.open.length === 0 && groups.resolved.length === 0) {
     const note = document.createElement("div");
     note.style.cssText = "color:#8fbf9f;padding:8px 0 12px;";
-    note.textContent = "no two-sided conflicts. the merged branch inherits everything cleanly through reel-lineage.";
+    note.textContent =
+      "no two-sided conflicts. the merged branch inherits everything cleanly through reel-lineage.";
     body.appendChild(note);
   }
   if (groups.open.length > 0) {
-    body.appendChild(_groupHeader(`open conflicts (${groups.open.length})`, "#e8b762"));
-    for (const it of groups.open) body.appendChild(_renderConflictRow(it, sourceA, sourceB, "open"));
+    body.appendChild(
+      _groupHeader(`open conflicts (${groups.open.length})`, "#e8b762"),
+    );
+    for (const it of groups.open)
+      body.appendChild(_renderConflictRow(it, sourceA, sourceB, "open"));
   }
   if (groups.resolved.length > 0) {
-    body.appendChild(_groupHeader(`resolved (${groups.resolved.length})`, "#8fbf9f"));
-    for (const it of groups.resolved) body.appendChild(_renderConflictRow(it, sourceA, sourceB, "resolved"));
+    body.appendChild(
+      _groupHeader(`resolved (${groups.resolved.length})`, "#8fbf9f"),
+    );
+    for (const it of groups.resolved)
+      body.appendChild(_renderConflictRow(it, sourceA, sourceB, "resolved"));
   }
   if (groups.cleanA.length + groups.cleanB.length > 0) {
-    body.appendChild(_groupHeader(`clean (${groups.cleanA.length + groups.cleanB.length}) — auto-inherits from one side`, "#6b7d72"));
+    body.appendChild(
+      _groupHeader(
+        `clean (${groups.cleanA.length + groups.cleanB.length}) — auto-inherits from one side`,
+        "#6b7d72",
+      ),
+    );
     const cleanSummary = document.createElement("div");
-    cleanSummary.style.cssText = "padding:4px 0 12px;color:#6b7d72;font-size:10px;";
+    cleanSummary.style.cssText =
+      "padding:4px 0 12px;color:#6b7d72;font-size:10px;";
     cleanSummary.textContent = `${groups.cleanA.length} from #${sourceA}, ${groups.cleanB.length} from #${sourceB}`;
     body.appendChild(cleanSummary);
   }
@@ -2474,11 +2632,13 @@ function _groupHeader(text, color) {
 
 function _renderConflictRow(item, sourceA, sourceB, kind) {
   const row = document.createElement("div");
-  row.style.cssText = "border:1px solid #2c3a32;border-radius:4px;padding:8px 10px;margin-bottom:6px;display:grid;gap:6px;";
+  row.style.cssText =
+    "border:1px solid #2c3a32;border-radius:4px;padding:8px 10px;margin-bottom:6px;display:grid;gap:6px;";
   if (kind === "resolved") row.style.background = "rgba(45, 76, 55, 0.12)";
 
   const head = document.createElement("div");
-  head.style.cssText = "display:flex;justify-content:space-between;align-items:baseline;gap:8px;";
+  head.style.cssText =
+    "display:flex;justify-content:space-between;align-items:baseline;gap:8px;";
   const reel = document.createElement("code");
   reel.style.cssText = "color:#c8d3cb;font-size:11px;";
   reel.textContent = item.reelKey;
@@ -2491,28 +2651,35 @@ function _renderConflictRow(item, sourceA, sourceB, kind) {
 
   if (kind === "open") {
     const sides = document.createElement("div");
-    sides.style.cssText = "display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:10px;";
+    sides.style.cssText =
+      "display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:10px;";
     sides.appendChild(_sidePreview(`#${sourceA}`, item.lastFactA));
     sides.appendChild(_sidePreview(`#${sourceB}`, item.lastFactB));
     row.appendChild(sides);
 
     const actions = document.createElement("div");
     actions.style.cssText = "display:flex;gap:6px;margin-top:4px;";
-    actions.appendChild(_actionButton("✨ delegate to mediator", () =>
-      _summonMediatorForConflict(item, sourceA, sourceB)));
+    actions.appendChild(
+      _actionButton("✨ delegate to mediator", () =>
+        _summonMediatorForConflict(item, sourceA, sourceB),
+      ),
+    );
     row.appendChild(actions);
   } else {
     const res = item.resolution || {};
     const r = document.createElement("div");
     r.style.cssText = "font-size:10px;color:#9ab2a3;";
-    const strategy = res.strategy ? `strategy: ${res.strategy}` : "manual override";
+    const strategy = res.strategy
+      ? `strategy: ${res.strategy}`
+      : "manual override";
     const src = res.sourceHistory ? ` · from #${res.sourceHistory}` : "";
     const when = res.date ? ` · ${_shortStamp(res.date)}` : "";
     r.textContent = `${strategy}${src}${when}`;
     row.appendChild(r);
     if (res.value) {
       const v = document.createElement("pre");
-      v.style.cssText = "margin:0;padding:4px 6px;background:rgba(0,0,0,0.25);border-radius:3px;color:#c8d3cb;font-size:10px;white-space:pre-wrap;word-break:break-word;max-height:80px;overflow:auto;";
+      v.style.cssText =
+        "margin:0;padding:4px 6px;background:rgba(0,0,0,0.25);border-radius:3px;color:#c8d3cb;font-size:10px;white-space:pre-wrap;word-break:break-word;max-height:80px;overflow:auto;";
       v.textContent = JSON.stringify(res.value, null, 2);
       row.appendChild(v);
     }
@@ -2522,7 +2689,8 @@ function _renderConflictRow(item, sourceA, sourceB, kind) {
 
 function _sidePreview(label, fact) {
   const card = document.createElement("div");
-  card.style.cssText = "border:1px solid #1f2a23;border-radius:3px;padding:5px 7px;background:rgba(0,0,0,0.18);";
+  card.style.cssText =
+    "border:1px solid #1f2a23;border-radius:3px;padding:5px 7px;background:rgba(0,0,0,0.18);";
   const top = document.createElement("div");
   top.style.cssText = "color:#9ab2a3;margin-bottom:3px;";
   top.textContent = label;
@@ -2540,7 +2708,8 @@ function _sidePreview(label, fact) {
   card.appendChild(action);
   if (fact.params) {
     const params = document.createElement("pre");
-    params.style.cssText = "margin:2px 0 0;padding:0;color:#9ab2a3;font-size:10px;white-space:pre-wrap;word-break:break-word;max-height:70px;overflow:auto;";
+    params.style.cssText =
+      "margin:2px 0 0;padding:0;color:#9ab2a3;font-size:10px;white-space:pre-wrap;word-break:break-word;max-height:70px;overflow:auto;";
     params.textContent = JSON.stringify(fact.params, null, 2);
     card.appendChild(params);
   }
@@ -2551,7 +2720,8 @@ function _actionButton(label, onclick) {
   const b = document.createElement("button");
   b.type = "button";
   b.textContent = label;
-  b.style.cssText = "background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 8px;font-family:inherit;font-size:10px;cursor:pointer;";
+  b.style.cssText =
+    "background:#13201b;color:#8fbf9f;border:1px solid #3d7a52;border-radius:3px;padding:4px 8px;font-family:inherit;font-size:10px;cursor:pointer;";
   b.addEventListener("click", onclick);
   return b;
 }
@@ -2559,41 +2729,39 @@ function _actionButton(label, onclick) {
 async function _summonMediatorForBranch(historyPath) {
   try {
     _showBranchEvent("✨ summoning @merge-mediator…");
-    await _state.client.call(
-      `/@merge-mediator`,
-      {
-        from: "user",
-        content:
-          `Walk me through the conflicts on #${historyPath}. ` +
-          `The catalog is at ${_state.story}/.branches/${historyPath}/conflicts. ` +
-          `Pick up at the first row marked status=open and propose a resolution.`,
-      },
-    );
+    await _state.client.call(`/@merge-mediator`, {
+      from: "user",
+      content:
+        `Walk me through the conflicts on #${historyPath}. ` +
+        `The catalog is at ${_state.story}/.branches/${historyPath}/conflicts. ` +
+        `Pick up at the first row marked status=open and propose a resolution.`,
+    });
     _showBranchEvent("✨ mediator summoned", { sticky: 2200 });
     setTimeout(() => _refreshConflictPanel(), 800);
   } catch (err) {
     console.warn("[branch-bar] mediator summon failed:", err?.message || err);
-    _showBranchEvent(`mediator summon failed: ${err?.message || err}`, { error: true });
+    _showBranchEvent(`mediator summon failed: ${err?.message || err}`, {
+      error: true,
+    });
   }
 }
 
 async function _summonMediatorForConflict(item, sourceA, sourceB) {
   try {
     _showBranchEvent("✨ summoning @merge-mediator for one conflict…");
-    await _state.client.call(
-      `/@merge-mediator`,
-      {
-        from: "user",
-        content:
-          `Resolve this specific conflict on #${_conflictPanelBranch}: ` +
-          `reel ${item.reelKey} was touched on both #${sourceA} and #${sourceB}. ` +
-          `Suggested strategy: ${item.suggestedStrategy}. ` +
-          `Propose a resolution and stamp the reconciliation fact.`,
-      },
-    );
+    await _state.client.call(`/@merge-mediator`, {
+      from: "user",
+      content:
+        `Resolve this specific conflict on #${_conflictPanelBranch}: ` +
+        `reel ${item.reelKey} was touched on both #${sourceA} and #${sourceB}. ` +
+        `Suggested strategy: ${item.suggestedStrategy}. ` +
+        `Propose a resolution and stamp the reconciliation fact.`,
+    });
     setTimeout(() => _refreshConflictPanel(), 800);
   } catch (err) {
-    _showBranchEvent(`mediator summon failed: ${err?.message || err}`, { error: true });
+    _showBranchEvent(`mediator summon failed: ${err?.message || err}`, {
+      error: true,
+    });
   }
 }
 
@@ -2669,7 +2837,7 @@ function _shortStamp(iso) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function _humanStamp(iso) {
@@ -2680,8 +2848,8 @@ function _humanStamp(iso) {
   let rel;
   if (min < 1) rel = "just now";
   else if (min < 60) rel = `${min}m ago`;
-  else if (min < 1440) rel = `${Math.round(min/60)}h ago`;
-  else rel = `${Math.round(min/1440)}d ago`;
+  else if (min < 1440) rel = `${Math.round(min / 60)}h ago`;
+  else rel = `${Math.round(min / 1440)}d ago`;
   const pad = (n) => String(n).padStart(2, "0");
   return `${rel} (${pad(d.getHours())}:${pad(d.getMinutes())})`;
 }

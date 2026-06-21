@@ -99,7 +99,10 @@ export async function resolveStamperBeing(ref) {
   if (ref?.beingId) {
     const slot = await loadProjection("being", String(ref.beingId), "0");
     if (!slot) return null;
-    return { beingId: String(slot.id), name: slot.state?.name || String(slot.id).slice(0, 8) };
+    return {
+      beingId: String(slot.id),
+      name: slot.state?.name || String(slot.id).slice(0, 8),
+    };
   }
   if (ref?.name) {
     // Names can theoretically collide across kinds of lookup;
@@ -121,24 +124,33 @@ export async function resolveStamperBeing(ref) {
 export async function listStamperChildren({ limit = 100 } = {}) {
   const cap = Math.min(Math.max(1, Number(limit) || 100), 500);
   const heads = await ActHead.find({ headHash: { $ne: null } })
-    .select("history beingId headHash").lean();
+    .select("history beingId headHash")
+    .lean();
   if (heads.length === 0) return [];
 
-  const headActs = await Act.find({ _id: { $in: heads.map((h) => h.headHash) } })
-    .select("stampedAt through").lean();
-  const lastByAct = new Map(headActs.map((a) => [String(a._id), a.stampedAt || null]));
+  const headActs = await Act.find({
+    _id: { $in: heads.map((h) => h.headHash) },
+  })
+    .select("stampedAt through")
+    .lean();
+  const lastByAct = new Map(
+    headActs.map((a) => [String(a._id), a.stampedAt || null]),
+  );
 
-  const byBeing = new Map(); // beingId -> { branches, lastAct }
+  const byBeing = new Map(); // beingId -> { histories, lastAct }
   for (const h of heads) {
-    const cur = byBeing.get(h.beingId) || { branches: [], lastAct: null };
-    cur.branches.push(h.history);
+    const cur = byBeing.get(h.beingId) || { histories: [], lastAct: null };
+    cur.histories.push(h.history);
     const t = lastByAct.get(String(h.headHash));
     if (t && (!cur.lastAct || t > cur.lastAct)) cur.lastAct = t;
     byBeing.set(h.beingId, cur);
   }
 
   const page = [...byBeing.entries()]
-    .sort((a, b) => (b[1].lastAct?.getTime?.() || 0) - (a[1].lastAct?.getTime?.() || 0))
+    .sort(
+      (a, b) =>
+        (b[1].lastAct?.getTime?.() || 0) - (a[1].lastAct?.getTime?.() || 0),
+    )
     .slice(0, cap);
 
   const { loadProjection } = await import("../projections.js");
@@ -148,13 +160,21 @@ export async function listStamperChildren({ limit = 100 } = {}) {
     try {
       const slot = await loadProjection("being", beingId, "0");
       if (slot?.state?.name) name = slot.state.name;
-    } catch { /* keep the id stub */ }
+    } catch {
+      /* keep the id stub */
+    }
     let actCount = 0;
-    try { actCount = await Act.countDocuments({ through: beingId }); } catch { /* best effort */ }
+    try {
+      actCount = await Act.countDocuments({ through: beingId });
+    } catch {
+      /* best effort */
+    }
     out.push({
-      beingId, name, actCount,
+      beingId,
+      name,
+      actCount,
       lastAct: info.lastAct ? new Date(info.lastAct).toISOString() : null,
-      branches: info.branches.sort(),
+      histories: info.histories.sort(),
     });
   }
   return out;
@@ -172,14 +192,14 @@ function historyClauseFor(history) {
 
 function shortLabel(act) {
   const msg = act.startMessage?.content;
-  const text = typeof msg === "string" ? msg : (msg ? JSON.stringify(msg) : "");
+  const text = typeof msg === "string" ? msg : msg ? JSON.stringify(msg) : "";
   const label = text || "(act)";
   return label.length > 24 ? label.slice(0, 23) + "…" : label;
 }
 
 function previewOf(act) {
   const msg = act.startMessage?.content;
-  const text = typeof msg === "string" ? msg : (msg ? JSON.stringify(msg) : "");
+  const text = typeof msg === "string" ? msg : msg ? JSON.stringify(msg) : "";
   return text.slice(0, 400);
 }
 
@@ -193,7 +213,10 @@ function previewOf(act) {
  * @param {{beingId:string, name:string}} being
  * @param {{limit?:number, before?:string}} opts
  */
-export async function describeStamperSpace(being, { limit = 100, before = null } = {}) {
+export async function describeStamperSpace(
+  being,
+  { limit = 100, before = null } = {},
+) {
   const beingId = String(being.beingId);
   const name = being.name;
   const cap = Math.min(Math.max(1, Number(limit) || 100), 500);
@@ -202,16 +225,24 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
   // Lanes: every history this being has sealed acts on. Lane 0 is
   // main; the rest order by history creation time.
   const heads = await ActHead.find({ beingId, headHash: { $ne: null } })
-    .select("history headHash").lean();
+    .select("history headHash")
+    .lean();
   const historySet = new Set(heads.map((h) => h.history || MAIN));
   if (historySet.size === 0) historySet.add(MAIN);
   const historyMeta = new Map(); // history -> {createdAt: Date|null}
   for (const b of historySet) {
-    if (isMain(b)) { historyMeta.set(b, { createdAt: null }); continue; }
+    if (isMain(b)) {
+      historyMeta.set(b, { createdAt: null });
+      continue;
+    }
     try {
       const row = await loadHistory(b);
-      historyMeta.set(b, { createdAt: row?.createdAt ? new Date(row.createdAt) : null });
-    } catch { historyMeta.set(b, { createdAt: null }); }
+      historyMeta.set(b, {
+        createdAt: row?.createdAt ? new Date(row.createdAt) : null,
+      });
+    } catch {
+      historyMeta.set(b, { createdAt: null });
+    }
   }
   const histories = [...historySet].sort((a, b) => {
     if (isMain(a)) return -1;
@@ -230,15 +261,22 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
     const meta = historyMeta.get(history);
     if (!meta?.createdAt) return 0;
     let parent = MAIN;
-    try { parent = (await loadHistory(history))?.parent || MAIN; } catch { /* main */ }
+    try {
+      parent = (await loadHistory(history))?.parent || MAIN;
+    } catch {
+      /* main */
+    }
     const parentClause = historyClauseFor(parent);
     let x = 0;
     try {
       x = await Act.countDocuments({
-        through: beingId, ...parentClause,
+        through: beingId,
+        ...parentClause,
         stampedAt: { $lte: meta.createdAt },
       });
-    } catch { x = 0; }
+    } catch {
+      x = 0;
+    }
     // Recurse one level when the parent is itself a history so deep
     // forks anchor against the whole ancestry.
     if (!isMain(parent)) x += await forkXFor(parent);
@@ -255,27 +293,41 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
     const forkX = await forkXFor(history);
 
     let total = 0;
-    try { total = await Act.countDocuments({ through: beingId, ...clause }); } catch { /* 0 */ }
+    try {
+      total = await Act.countDocuments({ through: beingId, ...clause });
+    } catch {
+      /* 0 */
+    }
 
     const windowDesc = await Act.find({
-      through: beingId, ...clause,
+      through: beingId,
+      ...clause,
       ...(beforeDate ? { stampedAt: { $lt: beforeDate } } : {}),
-    }).sort({ stampedAt: -1, _id: -1 }).limit(cap).lean();
+    })
+      .sort({ stampedAt: -1, _id: -1 })
+      .limit(cap)
+      .lean();
     const window = windowDesc.reverse();
 
     let countOlder = 0;
     if (window.length > 0) {
       try {
         countOlder = await Act.countDocuments({
-          through: beingId, ...clause,
+          through: beingId,
+          ...clause,
           stampedAt: { $lt: window[0].stampedAt },
         });
-      } catch { countOlder = 0; }
+      } catch {
+        countOlder = 0;
+      }
     }
 
     const serialized = window.map((a) => ({
       _id: String(a._id),
-      history: history, lane, forkX, countOlder,
+      history: history,
+      lane,
+      forkX,
+      countOlder,
       startMessage: a.startMessage || null,
       stampedAt: a.stampedAt || null,
     }));
@@ -283,7 +335,14 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
 
     const headX = forkX + total;
     if (headX > maxHeadX) maxHeadX = headX;
-    lanes.push({ history: history, lane, forkX, headX, count: total, returned: window.length });
+    lanes.push({
+      history: history,
+      lane,
+      forkX,
+      headX,
+      count: total,
+      returned: window.length,
+    });
   }
 
   // ONE batched fact enrichment across every lane.
@@ -299,16 +358,26 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
       type: "stamp",
       coord: { x: a.forkX + a.countOlder + idx, y: a.lane * 2 },
       preview: previewOf(a),
-      previewBytes: 0, totalBytes: 0, mimeType: null, contentUrl: null,
-      external: null, purged: false, render: null, model: null, actions: [],
-      byBeingId: beingId, synthetic: true,
+      previewBytes: 0,
+      totalBytes: 0,
+      mimeType: null,
+      contentUrl: null,
+      external: null,
+      purged: false,
+      render: null,
+      model: null,
+      actions: [],
+      byBeingId: beingId,
+      synthetic: true,
       qualities: {
         stamper: {
           actId: a._id,
           history: a.history,
           factCount: (a.facts || []).length,
           facts: (a.facts || []).slice(0, 8).map((f) => ({
-            verb: f.verb, action: f.act, targetKind: f.of?.kind ?? null,
+            verb: f.verb,
+            action: f.act,
+            targetKind: f.of?.kind ?? null,
           })),
           stampedAt: a.stampedAt ? new Date(a.stampedAt).toISOString() : null,
         },
@@ -357,7 +426,9 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
     beingLineage: null,
     qualities: {},
     stamper: {
-      beingId, name, lanes,
+      beingId,
+      name,
+      lanes,
       window: { limit: cap, before: before || null },
     },
     identity: null,
@@ -375,14 +446,20 @@ export async function describeStamperSpace(being, { limit = 100, before = null }
 export async function listReelChildren({ limit = 100 } = {}) {
   const cap = Math.min(Math.max(1, Number(limit) || 100), 500);
   const heads = await ReelHead.find({ history: "0" })
-    .select("type id head headHash").limit(2000).lean();
+    .select("type id head headHash")
+    .limit(2000)
+    .lean();
   if (heads.length === 0) return [];
 
   const hashList = heads.map((h) => h.headHash).filter(Boolean);
   const headFacts = hashList.length
-    ? await Fact.find({ _id: { $in: hashList } }).select("date").lean()
+    ? await Fact.find({ _id: { $in: hashList } })
+        .select("date")
+        .lean()
     : [];
-  const dateByHash = new Map(headFacts.map((f) => [String(f._id), f.date || null]));
+  const dateByHash = new Map(
+    headFacts.map((f) => [String(f._id), f.date || null]),
+  );
 
   return heads
     .map((h) => ({
@@ -391,7 +468,9 @@ export async function listReelChildren({ limit = 100 } = {}) {
       history: "0",
       headSeq: h.head ?? 0,
       headHash8: h.headHash ? String(h.headHash).slice(0, 8) : null,
-      lastFactAt: h.headHash ? (dateByHash.get(String(h.headHash)) || null) : null,
+      lastFactAt: h.headHash
+        ? dateByHash.get(String(h.headHash)) || null
+        : null,
     }))
     .sort((a, b) => {
       const ta = a.lastFactAt ? new Date(a.lastFactAt).getTime() : 0;

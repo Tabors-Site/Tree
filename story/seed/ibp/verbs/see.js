@@ -12,7 +12,7 @@
 //   1. `<story>/.discovery` → buildDiscovery() (no auth, no parse).
 //   2. `<story>/./threads/<id>` → describeThread(id). Threads have no
 //      persistent Space row, so the standard resolveStance walk would
-//      fail; this branch handles them. SEE on the bare `/./threads`
+//      fail; this history handles them. SEE on the bare `/./threads`
 //      folder still routes normally; placeAtSpace injects the
 //      synthetic children for that case.
 //
@@ -41,7 +41,10 @@ import {
 import { describeReel } from "../../past/fact/facts.js";
 import { describeActChain } from "../../past/act/actChain.js";
 import { describeBeingsCatalog } from "../../materials/being/beingsCatalog.js";
-import { describeHistoriesCatalog, describeMergeConflicts } from "../../materials/history/historiesCatalog.js";
+import {
+  describeHistoriesCatalog,
+  describeMergeConflicts,
+} from "../../materials/history/historiesCatalog.js";
 import {
   registerSeeOperation,
   unregisterSeeOperation,
@@ -83,7 +86,7 @@ function isBeingsCatalogPath(path) {
   // Canonical path: `/./beings` (heaven child, history-0-pinned like
   // every other heaven catalog). The earlier `/.beings` top-level
   // form was retired . it sat outside heaven and could fork into
-  // branches, which the cross-branch being catalog isn't supposed to.
+  // histories, which the cross-history being catalog isn't supposed to.
   return /^\/?\.\/beings\/?$/.test(path);
 }
 // Public id-to-name directory. `<story>/.beings/<id>` and
@@ -97,25 +100,31 @@ function publicDirectoryTargetFromPath(path) {
   if (typeof path !== "string") return null;
   const m = path.match(/^\/?\.(beings|spaces)\/([^/]+)\/?$/);
   if (!m) return null;
-  return { kind: m[1] === "beings" ? "being" : "space", id: decodeURIComponent(m[2]) };
+  return {
+    kind: m[1] === "beings" ? "being" : "space",
+    id: decodeURIComponent(m[2]),
+  };
 }
-// `.histories` / `.branches/<historyPath>` — history tree catalog. Bare
+// `.histories` / `.histories/<historyPath>` — history tree catalog. Bare
 // returns the root view (main + its children). With a path returns the
 // lineage for that history + its direct children. Read-only synthetic
 // catalog; no Act/Fact, no scheduler involvement. Mirrors the
 // .beings / .acts pattern.
 //
-// `.branches/<historyPath>/conflicts` — merge conflict catalog. Only
-// meaningful when <historyPath> was created by merge-branches (has
+// `.histories/<historyPath>/conflicts` — merge conflict catalog. Only
+// meaningful when <historyPath> was created by merge-histories (has
 // mergeSources set). Returns the per-reel conflict descriptors the
 // merge-mediator role walks the operator through.
 function historiesTargetFromPath(path) {
   if (typeof path !== "string") return null;
-  const mConflicts = path.match(/^\/?\.branches\/([^/]+)\/conflicts\/?$/);
+  const mConflicts = path.match(/^\/?\.histories\/([^/]+)\/conflicts\/?$/);
   if (mConflicts) {
-    return { historyPath: decodeURIComponent(mConflicts[1]), kind: "conflicts" };
+    return {
+      historyPath: decodeURIComponent(mConflicts[1]),
+      kind: "conflicts",
+    };
   }
-  const m = path.match(/^\/?\.branches(?:\/([^/]+))?\/?$/);
+  const m = path.match(/^\/?\.histories(?:\/([^/]+))?\/?$/);
   if (!m) return null;
   return { historyPath: m[1] ? decodeURIComponent(m[1]) : "0", kind: "tree" };
 }
@@ -158,13 +167,18 @@ export async function seeVerb(target, opts = {}) {
   // field-picks). A relative stance `path@being` (suffix is a being, not the
   // story) and a bare `@being` (empty token) fall through to the position
   // parse below.
-  if (typeof addrString === "string" && addrString.includes("@") && !/[/#]/.test(addrString)) {
+  if (
+    typeof addrString === "string" &&
+    addrString.includes("@") &&
+    !/[/#]/.test(addrString)
+  ) {
     const at = addrString.indexOf("@");
     const token = addrString.slice(0, at);
     const story = addrString.slice(at + 1);
     const { getStoryDomain } = await import("../address.js");
     if (token && story && story === getStoryDomain()) {
-      const { resolveNameId } = await import("../../materials/name/registry.js");
+      const { resolveNameId } =
+        await import("../../materials/name/registry.js");
       const { buildNameDescriptor } = await import("../descriptor.js");
       const nameId = await resolveNameId(token);
       const descriptor = nameId ? await buildNameDescriptor(nameId) : null;
@@ -189,11 +203,15 @@ export async function seeVerb(target, opts = {}) {
   //      (so existing payload fields like at/live/limit stay distinct)
   //   3. opts.payload — fallback: treat full payload as args
   //      (back-compat for wire callers that don't nest under .args)
-  if (typeof addrString === "string" && /^[a-z][a-z0-9-]*(:[a-z][a-z0-9-]*)?$/i.test(addrString)) {
+  if (
+    typeof addrString === "string" &&
+    /^[a-z][a-z0-9-]*(:[a-z][a-z0-9-]*)?$/i.test(addrString)
+  ) {
     // Fold-only dispatch: the SEE op resolves from the live word-fold (the coin facts seedFold
     // declared), NOT the seeOps REGISTRY — which stays only the registration buffer + the routing
     // check (the regex above) + metadata (listSeeOperations). Mirrors do.js/name.js/be.js.
-    const { resolveSeeOpFromFold } = await import("../../present/word/wordStore.js");
+    const { resolveSeeOpFromFold } =
+      await import("../../present/word/wordStore.js");
     const op = resolveSeeOpFromFold(addrString);
     if (op) {
       // Authorize the SEE op via the role-walk. Anonymous callers hit
@@ -219,15 +237,19 @@ export async function seeVerb(target, opts = {}) {
           { actor: decision.actor, seeOp: addrString },
         );
       }
-      const dispatchArgs = opts.args
-        || (opts.payload && typeof opts.payload === "object" && opts.payload.args)
-        || opts.payload
-        || {};
+      const dispatchArgs =
+        opts.args ||
+        (opts.payload &&
+          typeof opts.payload === "object" &&
+          opts.payload.args) ||
+        opts.payload ||
+        {};
       // Op handlers receive the resolved history: either the caller's
       // currentHistory context, or the operator's `#main` pointer when
       // unset. Never literal "0" — the pointer is the source of truth.
-      const { getDefaultHistory } = await import("../../materials/history/historyRegistry.js");
-      const handlerHistory = opts.currentHistory || await getDefaultHistory();
+      const { getDefaultHistory } =
+        await import("../../materials/history/historyRegistry.js");
+      const handlerHistory = opts.currentHistory || (await getDefaultHistory());
       return await op.handler({
         identity: opts.identity || null,
         args: dispatchArgs,
@@ -238,7 +260,7 @@ export async function seeVerb(target, opts = {}) {
   }
 
   // Raw-position SEE. Authorize is run downstream by buildPlaceDescriptor
-  // (or the historical/follow-being/etc. branches below) which all
+  // (or the historical/follow-being/etc. histories below) which all
   // call authorize() before reading. For anonymous callers, the role-
   // walk's arrival floor (canSee: ["arrival-view"]) refuses raw-position
   // SEE because it lacks "*". No assertVerbCaller perimeter gate —
@@ -263,7 +285,7 @@ export async function seeVerb(target, opts = {}) {
   // — all rendered as they were at the past point. The shape stays the
   // same as live SEE; the data is historical. Top-level
   // `isHistorical: true` + `asOf: { atSeq?, atTimestamp? }` flags let
-  // portal renderers branch cleanly.
+  // portal renderers history cleanly.
   //
   // Doctrine: there is no globally-consistent "world snapshot" — each
   // reel resolves `until` to its own per-reel seq. For multi-reel
@@ -300,7 +322,10 @@ export async function seeVerb(target, opts = {}) {
   };
   const parsed = parseWithContext(addrString, parseCtx);
   const { resolveHistoryPointers } = await import("../address.js");
-  const expanded = await resolveHistoryPointers(expand(parsed, parseCtx), parseCtx);
+  const expanded = await resolveHistoryPointers(
+    expand(parsed, parseCtx),
+    parseCtx,
+  );
 
   // Thread descriptor short-circuit. SEE on `<story>/./threads/<id>`
   // returns the synthetic projection from describeThread instead of
@@ -353,7 +378,7 @@ export async function seeVerb(target, opts = {}) {
   // Stamper descriptor short-circuit. SEE on
   // `<story>/./factory/present/<being>` returns the synthetic
   // stamper space (the being's act-chain laid out spatially — one
-  // lane per branch, papers at coords, the stamper figure at the
+  // lane per history, papers at coords, the stamper figure at the
   // head) from describeStamperSpace. No persistent space row exists;
   // address.spaceId carries "stamper:<beingId>", which is also the
   // live-subscription key. SEE on `/./factory/present` itself routes
@@ -365,7 +390,11 @@ export async function seeVerb(target, opts = {}) {
     const decision = await authorize({
       identity,
       verb: "see",
-      target: { kind: "position", spaceId: factoryPresentId, isDiscovery: false },
+      target: {
+        kind: "position",
+        spaceId: factoryPresentId,
+        isDiscovery: false,
+      },
       moment,
       actorHistory: currentHistory || null,
     });
@@ -384,7 +413,7 @@ export async function seeVerb(target, opts = {}) {
       );
     }
     return describeStamperSpace(being, {
-      limit:  payload?.limit != null ? Number(payload.limit) : undefined,
+      limit: payload?.limit != null ? Number(payload.limit) : undefined,
       before: typeof payload?.before === "string" ? payload.before : undefined,
     });
   }
@@ -456,12 +485,15 @@ export async function seeVerb(target, opts = {}) {
   if (publicTarget) {
     const { loadOrFold } = await import("../../materials/projections.js");
     const storyDomain = getStoryDomain();
-    const { getDefaultHistory: _gDB } = await import("../../materials/history/historyRegistry.js");
-    const history = expanded.right?.history || parseCtx.currentHistory || await _gDB();
+    const { getDefaultHistory: _gDB } =
+      await import("../../materials/history/historyRegistry.js");
+    const history =
+      expanded.right?.history || parseCtx.currentHistory || (await _gDB());
     const slot = await loadOrFold(publicTarget.kind, publicTarget.id, history);
-    const notFoundCode = publicTarget.kind === "being"
-      ? IBP_ERR.BEING_NOT_FOUND
-      : IBP_ERR.SPACE_NOT_FOUND;
+    const notFoundCode =
+      publicTarget.kind === "being"
+        ? IBP_ERR.BEING_NOT_FOUND
+        : IBP_ERR.SPACE_NOT_FOUND;
     if (!slot) {
       throw new IbpError(
         notFoundCode,
@@ -505,8 +537,8 @@ export async function seeVerb(target, opts = {}) {
     };
   }
 
-  // Branches catalog short-circuit. SEE on `<story>/.branches` (or
-  // `<story>/.branches/<historyPath>`) returns the history tree as a
+  // Histories catalog short-circuit. SEE on `<story>/.histories` (or
+  // `<story>/.histories/<historyPath>`) returns the history tree as a
   // read-only graph. No Act, no Fact, no scheduler — same posture as
   // .beings / .acts. The portal calls this on every navigate to draw
   // the history chips; routing it through SEE keeps the chips out of
@@ -515,14 +547,15 @@ export async function seeVerb(target, opts = {}) {
   if (historiesTarget) {
     const storyDomain = getStoryDomain();
     // Resolve named pointers to canonical paths. A request for
-    // `.branches/main` should walk main's current canonical lineage;
+    // `.histories/main` should walk main's current canonical lineage;
     // re-pointing main later changes what this catalog returns
     // without needing per-caller updates. Canonical paths (digit
     // start) pass through untouched.
     let canonicalHistoryPath = historiesTarget.historyPath;
     if (/^[a-z]/.test(canonicalHistoryPath)) {
       try {
-        const { resolvePointer, isPointerName } = await import("../../materials/history/historyRegistry.js");
+        const { resolvePointer, isPointerName } =
+          await import("../../materials/history/historyRegistry.js");
         if (isPointerName(canonicalHistoryPath)) {
           const resolved = await resolvePointer(canonicalHistoryPath);
           if (resolved) canonicalHistoryPath = resolved;
@@ -530,13 +563,13 @@ export async function seeVerb(target, opts = {}) {
       } catch {
         // Pointer resolution unavailable (pre-bootstrap): fall through
         // with the literal string. describeHistoriesCatalog throws if
-        // it can't find a Branch row, surfacing the bad input.
+        // it can't find a History row, surfacing the bad input.
       }
     }
     const isConflictsView = historiesTarget.kind === "conflicts";
     const pathSuffix = isConflictsView
-      ? `/.branches/${historiesTarget.historyPath}/conflicts`
-      : `/.branches/${historiesTarget.historyPath}`;
+      ? `/.histories/${historiesTarget.historyPath}/conflicts`
+      : `/.histories /${historiesTarget.historyPath}`;
     const graph = isConflictsView
       ? null
       : await describeHistoriesCatalog(canonicalHistoryPath);
@@ -556,7 +589,7 @@ export async function seeVerb(target, opts = {}) {
       isHomeRoot: false,
       isHistoriesCatalog: !isConflictsView,
       isMergeConflictsCatalog: isConflictsView,
-      branches: graph,
+      histories: graph,
       conflicts,
       children: [],
       matters: [],
@@ -566,7 +599,7 @@ export async function seeVerb(target, opts = {}) {
 
   // Act-chain explorer short-circuit. SEE on `<story>/.acts/<beingId>`
   // returns the being's chain of moments on the address's history
-  // (newest-first), with branch lineage so a fresh branch sees its
+  // (newest-first), with history lineage so a fresh history sees its
   // parent's acts up to fork point.
   const actChainBeingId = actChainTargetFromPath(expanded.right?.path);
   if (actChainBeingId) {
@@ -579,11 +612,14 @@ export async function seeVerb(target, opts = {}) {
     // older than this timestamp. The 3D portal's timeline strip uses
     // this to fetch the next batch as the user scrubs into older
     // history.
-    const requestedBefore = typeof payload?.before === "string" && payload.before.length
-      ? payload.before
-      : undefined;
-    const { getDefaultHistory: _gDB } = await import("../../materials/history/historyRegistry.js");
-    const chainHistory = expanded.right?.history || parseCtx.currentHistory || await _gDB();
+    const requestedBefore =
+      typeof payload?.before === "string" && payload.before.length
+        ? payload.before
+        : undefined;
+    const { getDefaultHistory: _gDB } =
+      await import("../../materials/history/historyRegistry.js");
+    const chainHistory =
+      expanded.right?.history || parseCtx.currentHistory || (await _gDB());
     const chain = await describeActChain(actChainBeingId, {
       history: chainHistory,
       ...(requestedLimit ? { limit: requestedLimit } : {}),
@@ -614,15 +650,14 @@ export async function seeVerb(target, opts = {}) {
   // the wire-level SEE, history comes from the parsed address or the
   // socket's tracked currentHistory.
   // resolveHistoryPointers above canonicalizes expanded.right.history
-  // for both explicit-#branch and implicit-#main addresses. The
+  // for both explicit-#history and implicit-#main addresses. The
   // fallback chain below covers legacy callers that bypass parse;
   // the final fallback resolves the operator's `#main` pointer
   // through the registry — never literal "0".
-  const { getDefaultHistory: _gDB } = await import("../../materials/history/historyRegistry.js");
+  const { getDefaultHistory: _gDB } =
+    await import("../../materials/history/historyRegistry.js");
   const seeHistory =
-    expanded.right?.history ||
-    currentHistory ||
-    await _gDB();
+    expanded.right?.history || currentHistory || (await _gDB());
   const decision = await authorize({
     identity,
     verb: "see",
@@ -651,17 +686,19 @@ export async function seeVerb(target, opts = {}) {
     // refuses raw SEE and we land here to swap in the filtered view).
     const isAnonymous = !identity?.beingId || identity?.name === "arrival";
     if (isAnonymous) {
-      const { resolveSeeOpFromFold } = await import("../../present/word/wordStore.js");
+      const { resolveSeeOpFromFold } =
+        await import("../../present/word/wordStore.js");
       const arrivalOp = resolveSeeOpFromFold("arrival-view");
       if (arrivalOp) {
         // Resolve history: prefer the moment's actorAct.history, then
         // the wire-parsed currentHistory, then fall through to the
         // operator's `#main` pointer (never literal "0").
-        const { getDefaultHistory } = await import("../../materials/history/historyRegistry.js");
+        const { getDefaultHistory } =
+          await import("../../materials/history/historyRegistry.js");
         const arrivalHistory =
           moment?.actorAct?.history ||
           currentHistory ||
-          await getDefaultHistory();
+          (await getDefaultHistory());
         return await arrivalOp.handler({
           identity: identity || null,
           args: {},
@@ -683,7 +720,7 @@ export async function seeVerb(target, opts = {}) {
   // emit a silent grant for the actor (skipping if they already hold
   // it). Public's owned spaces use this to admit visitors without a
   // hardcoded floor — the role-walk authorize now handles them
-  // through the regular grants path, no special branch.
+  // through the regular grants path, no special history.
   if (identity?.beingId && identity?.name !== "arrival") {
     await maybeAutoGrantOnEntry({
       identity,
@@ -710,7 +747,11 @@ async function maybeAutoGrantOnEntry({ identity, spaceId, history, moment }) {
     const { normalizeAcquisition, alreadyHoldsRole } =
       await import("../../present/roles/acquisition.js");
 
-    const actorSlot = await loadOrFold("being", String(identity.beingId), history);
+    const actorSlot = await loadOrFold(
+      "being",
+      String(identity.beingId),
+      history,
+    );
     const heldGrants = actorSlot?.state?.qualities?.rolesGranted || [];
 
     for (const [roleName, spec] of Object.entries(roles)) {
@@ -718,12 +759,13 @@ async function maybeAutoGrantOnEntry({ identity, spaceId, history, moment }) {
       const policy = normalizeAcquisition(spec);
       if (!policy.autoOnEntry) continue;
       if (alreadyHoldsRole(heldGrants, roleName, spaceId)) continue;
-      const { emitInternalGrant } = await import("../../present/roles/internalGrant.js");
+      const { emitInternalGrant } =
+        await import("../../present/roles/internalGrant.js");
       await emitInternalGrant({
         granteeBeingId: String(identity.beingId),
-        role:           roleName,
-        anchorSpaceId:  String(spaceId),
-        grantedBy:      "auto-on-entry",
+        role: roleName,
+        anchorSpaceId: String(spaceId),
+        grantedBy: "auto-on-entry",
         moment,
         // The SEE's history — the world where the commons admitted the
         // visitor. A wire SEE has no moment, and emitInternalGrant's
@@ -797,7 +839,7 @@ function normalizeAtQualifier(optsAt, target) {
  *   isHistorical: true
  *   asOf:         { atSeq?, atTimestamp? }
  *
- * Portal renderers branch on isHistorical to surface visual cues and
+ * Portal renderers history on isHistorical to surface visual cues and
  * disable action UIs; the shape is otherwise live-compatible so they
  * can reuse all existing render code.
  */
@@ -806,7 +848,8 @@ function normalizeAtQualifier(optsAt, target) {
 // pattern doVerb uses for DO ops (do.js:206-210).
 seeVerb.registerOperation = registerSeeOperation;
 seeVerb.unregisterOperation = unregisterSeeOperation;
-seeVerb.unregisterOperationsFromExtension = unregisterSeeOperationsFromExtension;
+seeVerb.unregisterOperationsFromExtension =
+  unregisterSeeOperationsFromExtension;
 seeVerb.getOperation = getSeeOperation;
 seeVerb.listOperations = listSeeOperations;
 
@@ -844,7 +887,10 @@ async function seeAtTime({
   };
   const parsed = parseWithContext(addrString, parseCtx);
   const { resolveHistoryPointers } = await import("../address.js");
-  const expanded = await resolveHistoryPointers(expand(parsed, parseCtx), parseCtx);
+  const expanded = await resolveHistoryPointers(
+    expand(parsed, parseCtx),
+    parseCtx,
+  );
 
   if (threadIdFromPath(expanded.right?.path)) {
     throw new IbpError(
@@ -923,11 +969,12 @@ async function seeAtTime({
       if (histPosition && histPosition !== String(resolved.spaceId)) {
         const { loadProjection } =
           await import("../../materials/projections.js");
-        const { getDefaultHistory: _gDB } = await import("../../materials/history/historyRegistry.js");
+        const { getDefaultHistory: _gDB } =
+          await import("../../materials/history/historyRegistry.js");
         const _pSlot = await loadProjection(
           "space",
           histPosition,
-          resolved.history || await _gDB(),
+          resolved.history || (await _gDB()),
         );
         const positionRow = _pSlot
           ? {
@@ -1008,17 +1055,17 @@ async function _redirectResolvedToSpace(resolved, positionRow) {
   // mirrors the live resolver's output.
   //
   // History comes from the resolved stance — never a literal "0".
-  // loadOrFold (not loadProjection) so a sub-branch whose ancestors
+  // loadOrFold (not loadProjection) so a sub-history whose ancestors
   // were planted on a parent history still walks the lineage.
-  const { getDefaultHistory } = await import("../../materials/history/historyRegistry.js");
-  const walkHistory = resolved.history || await getDefaultHistory();
+  const { getDefaultHistory } =
+    await import("../../materials/history/historyRegistry.js");
+  const walkHistory = resolved.history || (await getDefaultHistory());
   const chain = [];
   let cursor = positionRow;
   while (cursor) {
     chain.unshift({ name: cursor.name, id: cursor._id });
     if (!cursor.parent) break;
-    const { loadOrFold: _lP } =
-      await import("../../materials/projections.js");
+    const { loadOrFold: _lP } = await import("../../materials/projections.js");
     const _cSlot = await _lP("space", cursor.parent, walkHistory);
     cursor = _cSlot
       ? {

@@ -1,15 +1,19 @@
 # ask-role.word — asked-policy role acquisition (acquisitionOps.js, the ask-role op).
 #
 # A being asks a space's role host for an installed role. The lookups are see-ops (the
-# role spec, the asked policy, the idempotency read), the grant is the one host: escape
-# left (a mutation, the grant-role emit in grantInternal, pending the do-op sweep), and the
-# asked policy decides resolution (§9 Match):
-#   auto  → grant immediately (the lone WORLD fact, grantInternal's grant-role).
+# role spec, the asked policy, the idempotency read), the grant-record BUILD is a `see`
+# (grant-internal: a pure compute, NO fact), and the asked policy decides resolution
+# (§9 Match):
+#   auto  → grant immediately. The word returns the grant record as factParams + the
+#           grantee; the cut promotes it and the dispatcher's ONE auto-Fact lays the
+#           caller-attributed do:grant-role (the lone WORLD fact).
 #   queue → reach the host's owner: see owner-of (resolve the owner being), see role-request
 #           (build the inbox payload), then CALL the owner to role-request (the summon verb,
 #           the reach recorded through the stamper; the owner approves later by hand). No
-#           owner → a graceful return.
-# The bridge binds `caller` (the acting being), `role`, `space`, `branch`.
+#           owner → a graceful return. The queue path lays NO grant fact (the cut sets
+#           _noFact, no factParams) — only the CALL summons the owner.
+# NO host: emit — the word lays no fact of its own. The bridge binds `caller` (the acting
+# being), `role`, `space`, `branch`.
 
 When a being asks for a role at a space:
   see role-spec-for-grant(role, space) as found.
@@ -17,16 +21,14 @@ When a being asks for a role at a space:
   see asked-policy(found) as asked.
   If no asked, refuse with "role is not ask-acquirable; acquisition.asked is false".
   see already-holds(caller, role, found) as held.
-  If held:
-    Return role, anchorSpaceId: $found.anchor, already: true.
+  If held, Return role, anchorSpaceId: $found.anchor, already: true.
   Match the asked:
     For auto:
-      host: grantInternal(caller, role, found) as granted.
-      Return role, anchorSpaceId: $found.anchor, granted: true, path: auto.
+      see grant-internal(caller, role, found) as granted.
+      Return role, anchorSpaceId: $found.anchor, granted: true, path: auto, granteeBeingId: $caller, factParams: { role: $granted.role, anchorSpaceId: $granted.anchorSpaceId, anchorBeingId: $granted.anchorBeingId, grantedBy: $granted.grantedBy, grantedAt: $granted.grantedAt }.
     For queue:
       see owner-of(found) as owner.
-      If no owner:
-        Return role, anchorSpaceId: $found.anchor, granted: false, path: queue, message: "Role needs manual approval but the host space has no owner to ask.".
+      If no owner, Return role, anchorSpaceId: $found.anchor, granted: false, path: queue, message: "Role needs manual approval but the host space has no owner to ask.".
       see role-request(role, found, caller) as request.
       call the owner to role-request, with the request as queued.
       Return role, anchorSpaceId: $found.anchor, granted: false, path: queue, status: $queued.status, message: "Requested. The owner will see this in their inbox.".
