@@ -1,24 +1,24 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// createBranch — the substrate-level branch creation primitive.
+// createBranch — the substrate-level history creation primitive.
 //
 // Composes:
-//   - Pick the new branch's path (next available segment under parent).
+//   - Pick the new history's path (next available segment under parent).
 //   - Eager-snapshot per-reel branchPoint map by aggregating parent's
 //     lineage facts up to the anchor (atSeq or atTimestamp).
 //   - Write the History row.
-//   - Plant a child space at `<story>/./branches/<path>` so SEE on
-//     the branches space lists the new branch with its qualities.
+//   - Plant a child space at `<story>/./histories/<path>` so SEE on
+//     the histories space lists the new history with its qualities.
 //   - Stamp a `do:create-branch` audit fact on main's reel (where the
-//     branch metadata projection lives — main is the registry of all
-//     branches).
+//     history metadata projection lives — main is the registry of all
+//     histories).
 //
 // Doctrine: the branchPoint is captured EAGERLY so future reads (and
 // allocSeq's lazy reelhead init) don't have to walk parent's reel on
 // every cold-start fold. It's a small upfront cost at create time for
-// fast operation forever after. Branches are created infrequently.
+// fast operation forever after. Histories are created infrequently.
 //
-// Returns the new branch's metadata: `{ path, parent, branchPoint }`.
+// Returns the new history's metadata: `{ path, parent, branchPoint }`.
 
 import History from "./history.js";
 import Fact from "../../past/fact/fact.js";
@@ -26,11 +26,11 @@ import { invalidateHistoryCache, resolveHistoryLineage, MAIN, isMain } from "./h
 import { nextChildPath, isValidHistoryPath } from "./historyPath.js";
 
 /**
- * Create a new branch.
+ * Create a new history.
  *
  * @param {object} args
- * @param {string} args.parent                parent branch path; "0" for main
- * @param {object} args.anchor                where the branch diverges from parent
+ * @param {string} args.parent                parent history path; "0" for main
+ * @param {object} args.anchor                where the history diverges from parent
  * @param {number} [args.anchor.atSeq]        substrate-native; preferred when caller knows it
  * @param {Date|string} [args.anchor.atTimestamp]  human helper; resolves to per-reel seqs
  * @param {string} [args.label]               optional human-readable label
@@ -272,7 +272,7 @@ async function _resolveHistoryScope({ passed, parentScope, parentHistoryPath, cr
   const allowed = await _hasStoryRootPermission(createdBy);
   if (!allowed) {
     throw new Error(
-      `createBranch: scope "${passed.path}" is not within parent branch's scope "${parentScope.path}". ` +
+      `createBranch: scope "${passed.path}" is not within parent history's scope "${parentScope.path}". ` +
       `Widening or moving to a disjoint scope requires story-root permission ` +
       `(heaven owner or angel role). ` +
       `Sub-branches inherit parent's scope by default; declare a narrower scope to fork within.`,

@@ -24,6 +24,7 @@
 // clean-miss fallback.
 
 import { registerOperation } from "../../../ibp/operations.js";
+import { laysFact, laysWordFact } from "../../../ibp/factResult.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { getSpaceRootId } from "../../../sprout.js";
 import { registerRoleWord, resolveRoleWord, runRoleWord } from "../../../present/word/roleWordRegistry.js";
@@ -115,9 +116,9 @@ async function _setWorldSignalViaWord({ namespace, key, value, moment }) {
       env: { host: roleManagerHostEnv() },
     });
     if (!result) return null;
-    if (result.factParams) { result._factParams = result.factParams; delete result.factParams; }
-    if (result.rootId) { result._factTarget = { kind: "space", id: String(result.rootId) }; delete result.rootId; }
-    return result;
+    // The .word authored { field, value } as `factParams`; land it as the one
+    // caller-attributed do:set-space fact, targeting the story-root space (rootId).
+    return laysWordFact(result, "space", "rootId");
   } catch (e) {
     if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
     throw e;
@@ -171,19 +172,15 @@ registerOperation("set-world-signal", {
       throw new IbpError(IBP_ERR.INTERNAL, "set-world-signal: story root not initialized");
     }
 
-    // No self-emit. Return the set-space params as _factParams + the story-root id as
-    // _factTarget; the dispatcher lays the one caller-attributed do:set-space fact
-    // (byte-identical to the old `set the space root's $field to $value` write). The
-    // story root's reducer folds qualities.world.<ns>.<key> from that fact.
+    // No self-emit: the act lays { field, value } as the do:set-space fact, targeting the
+    // story root (byte-identical to the old `set the space root's $field to $value` write).
+    // The story root's reducer folds qualities.world.<ns>.<key> from it.
     const field = `qualities.world.${namespace}.${keyParts.join(".")}`;
-    return {
-      published: true,
-      namespace,
-      key,
-      value,
-      _factTarget: { kind: "space", id: String(rootId) },
-      _factParams: { field, value },
-    };
+    return laysFact(
+      { published: true, namespace, key, value },
+      { field, value },
+      { kind: "space", id: rootId },
+    );
   },
 });
 

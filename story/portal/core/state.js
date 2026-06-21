@@ -14,7 +14,7 @@
 //                   socket-side `.discovery` SEE (clones, timezone, ...)
 //   descriptor      the current Position Description (what every view renders)
 //   currentAddress  the address the descriptor answers
-//   actorHistory     the session's seated branch (server "history" pushes)
+//   actorHistory     the session's seated history (server "history" pushes)
 //   selectedBeing   { beingId, name, lastSetAt } | null — cross-view focus
 //   history / navIndex   portal-internal navigation history
 //   connection      "idle" | "connected" | "disconnected" | "error"
@@ -67,7 +67,7 @@ export function createPortalState(initial = {}) {
   }
 
   return {
-    /** The live mutable model. Legacy readers (branch-bar's
+    /** The live mutable model. Legacy readers (history-bar's
      *  window.__state) point here; new code should prefer get(). */
     get raw() { return model; },
     /** get() → whole model; get("descriptor") → one field. */

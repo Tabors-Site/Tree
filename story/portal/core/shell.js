@@ -9,7 +9,7 @@
 //   2. The IBPA stance bar — always visible, on every view — plus
 //      back/forward/story/home/root and the four-view switcher.
 //   3. The content region (#view-root) the active view draws into,
-//      and the cross-view chrome: branch/timeline bar, status toast,
+//      and the cross-view chrome: history/timeline bar, status toast,
 //      ghost/paused cues.
 //
 // The kernel doesn't know which view is active; the shell doesn't
@@ -46,9 +46,9 @@ const SHELL_DOM = `
     <button class="nav-btn" id="nav-send"  title="Go to the typed address (Enter)">&#10132;</button>
     <button class="nav-btn" id="nav-place" title="Story root">/</button>
     <button class="nav-btn" id="nav-home"  title="Your home" disabled>~</button>
-    <span id="branch-button-slot" style="display:flex"></span>
+    <span id="history-button-slot" style="display:flex"></span>
     <nav id="view-switcher" title="views (Alt+1..5)"></nav>
-    <button class="nav-btn" id="nav-tree" style="display:none" title="your being hierarchy — see it on this branch, grant a name access">&#127795;</button>
+    <button class="nav-btn" id="nav-tree" style="display:none" title="your being hierarchy — see it on this history, grant a name access">&#127795;</button>
     <button class="nav-btn" id="lock-dot" style="display:none" title="signing session"></button>
     <span id="conn-dot" class="conn-idle" title="socket"></span>
   </header>
@@ -86,7 +86,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
   const tabs = []; // [{ ctx, unsubs: [] }]
   let activeCtx = null;
   let historyBar = null;
-  let branchBarRefreshTimer = null;
+  let historyBarRefreshTimer = null;
   let tabCounter = 0;
 
   // ── Chrome repaint ──────────────────────────────────────────────
@@ -253,7 +253,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
   }
 
   // Show the Being Picker (signed-in name, no being). Pick a being you own and
-  // connect into it — passwordless (owned connect), on the chosen branch. The
+  // connect into it — passwordless (owned connect), on the chosen history. The
   // be:connect issues the being-JWT; adoptSession reconnects this tab as that
   // being and lands the world.
   function presentBeingPicker(ctx, nameId) {
@@ -277,22 +277,22 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
         }
         presentNameForm(ctx);
       },
-      onConnect: async (beingName, branch) => {
+      onConnect: async (beingName, history) => {
         const result = await ctx.client.be(
           "connect",
           `${story}/@${beingName}`,
           {},
         );
         await ctx.adoptSession(result, beingName);
-        // Branch pick: if it differs from where connect seated us, switch.
+        // History pick: if it differs from where connect seated us, switch.
         if (
-          branch &&
+          history &&
           result?.seatHistory &&
-          branch !== String(result.seatHistory)
+          history !== String(result.seatHistory)
         ) {
           try {
             await ctx.client.be("switch", `${story}/@${beingName}`, {
-              history: branch,
+              history,
             });
           } catch {
             /* stay on home */
@@ -307,7 +307,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
       onBirthFirst: async (beingName) => {
         // Pre-flight the ONE error the async birth can't report back. Cherub
         // births on its OWN moment, so a failure there (e.g. the being name is
-        // already taken — names are the branch-wide being handle) never returns
+        // already taken — names are the history-wide being handle) never returns
         // through this summon's ack; it's logged + the inbox row evicted. The
         // common cause is a name collision, which we CAN see synchronously: if
         // SEE resolves a being by that name, the birth would fail, so refuse now
@@ -479,17 +479,17 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     }
   }
 
-  // ── Branch / timeline bar (chrome — applies to every view) ──────
+  // ── History / timeline bar (chrome — applies to every view) ──────
 
   async function ensureHistoryBar() {
     if (historyBar || !activeCtx?.client) return;
-    const { mountHistoryBar } = await import("../3d/branch-bar.js");
+    const { mountHistoryBar } = await import("../3d/history-bar.js");
     historyBar = mountHistoryBar({
       client: activeCtx.client,
       story: activeCtx.state.get("discovery")?.story || "treeos.ai",
-      // Topbar-hosted: branches/timeline are chrome, present on all
+      // Topbar-hosted: histories/timeline are chrome, present on all
       // four views equally (rewind state rides the shared model).
-      buttonHost: rootEl.querySelector("#branch-button-slot"),
+      buttonHost: rootEl.querySelector("#history-button-slot"),
       // The bar reads the ACTIVE tab's model through this accessor —
       // no window.__state dependency (kept only as legacy fallback).
       getState: () => activeCtx?.state.raw,
@@ -499,9 +499,9 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
   }
 
   function scheduleHistoryBarRefresh() {
-    if (branchBarRefreshTimer) return;
-    branchBarRefreshTimer = setTimeout(() => {
-      branchBarRefreshTimer = null;
+    if (historyBarRefreshTimer) return;
+    historyBarRefreshTimer = setTimeout(() => {
+      historyBarRefreshTimer = null;
       const desc = activeCtx?.state.get("descriptor");
       if (desc) historyBar?.update(desc);
     }, 500);
@@ -569,7 +569,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
   async function switchTab(ctx) {
     if (ctx === activeCtx) return;
     activeCtx = ctx;
-    window.__state = ctx.state.raw; // legacy readers (branch-bar)
+    window.__state = ctx.state.raw; // legacy readers (history-bar)
     historyBar?.setClient(ctx.client, ctx.state.get("discovery")?.story);
     const desc = ctx.state.get("descriptor");
     if (desc) historyBar?.update(desc);
@@ -713,10 +713,10 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
           ),
         ),
     onSwitchHistory: (historyPath) => {
-      import("../3d/branch-bar.js")
+      import("../3d/history-bar.js")
         .then((m) => m.switchIntoHistory(historyPath))
         .catch((err) =>
-          console.warn("[shell] branch switch failed:", err?.message || err),
+          console.warn("[shell] history switch failed:", err?.message || err),
         );
     },
     // Drive another being your name owns from the left stance. For EVERY BE op
@@ -727,14 +727,14 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     // drops, your name goes bodiless, and the floor (where @arrival is the auth
     // being a bodiless name rides) is simply where a bodiless name stands. Any
     // other being is an OWNED switch: your name be:connects it, after we confirm
-    // it's one of your beings ON that branch (the name tree), so a being you
+    // it's one of your beings ON that history (the name tree), so a being you
     // don't own / that isn't there comes back as a clear name error instead of
     // a confusing low-level connect failure.
-    onSwitchBeing: async (being, branch) => {
+    onSwitchBeing: async (being, history) => {
       const ctx = activeCtx;
       if (!ctx?.client) return;
       const story = ctx.state.get("discovery")?.story || "";
-      const hash = branch && branch !== "0" ? branch : "main";
+      const hash = history && history !== "0" ? history : "main";
       try {
         if (being === "arrival") {
           // Your NAME releases the being it's currently using (cur): the name is
@@ -768,8 +768,8 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
           repaintChrome();
           return;
         }
-        // Confirm ownership on this branch via the name tree (your beings there).
-        const tree = await ctx.client.nameTree(branch);
+        // Confirm ownership on this history via the name tree (your beings there).
+        const tree = await ctx.client.nameTree(history);
         const owned = new Set();
         const walk = (ns) =>
           (ns || []).forEach((n) => {
@@ -784,13 +784,13 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
         const result = await ctx.client.be("connect", `${story}/@${being}`, {});
         await ctx.adoptSession(result, being);
         if (
-          branch &&
+          history &&
           result?.seatHistory &&
-          branch !== String(result.seatHistory)
+          history !== String(result.seatHistory)
         ) {
           try {
             await ctx.client.be("switch", `${story}/@${being}`, {
-              history: branch,
+              history,
             });
           } catch {
             /* stay on home */
@@ -854,7 +854,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
   };
   listen(window, "hashchange", onHashChange);
 
-  // Rewind / return / pause events from the branch bar flow through
+  // Rewind / return / pause events from the history bar flow through
   // the active context's navigation.
   const onRewind = (ev) => {
     const at = ev?.detail?.atTimestamp;
@@ -866,11 +866,11 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     });
   };
   const onPaused = (ev) => {
-    document.body.classList.toggle("paused-branch", !!ev?.detail?.paused);
+    document.body.classList.toggle("paused-history", !!ev?.detail?.paused);
   };
-  listen(window, "branchbar:rewind", onRewind);
-  listen(window, "branchbar:now", onNow);
-  listen(window, "branchbar:paused-self", onPaused);
+  listen(window, "historybar:rewind", onRewind);
+  listen(window, "historybar:now", onNow);
+  listen(window, "historybar:paused-self", onPaused);
 
   // Alt+1..5 switch views; backslash flips 3d <-> text (back-compat).
   const onKeydown = (e) => {
@@ -950,7 +950,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     // Full shell teardown. The web page never calls this (the shell
     // lives as long as the document); the multi-window native shell
     // will. Removes every window listener, unmounts the active view,
-    // the branch bar, and destroys every tab's context.
+    // the history bar, and destroys every tab's context.
     destroy() {
       for (const [target, type, fn] of windowListeners.splice(0)) {
         try {

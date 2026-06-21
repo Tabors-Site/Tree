@@ -9,7 +9,7 @@
 // inheritation POINTS granted there (the Names you've given downward authority
 // over that subtree) with a ✕ to revoke, and a "+ grant a name" form to add one.
 //
-// History-scoped on purpose: switch history (the branch bar) to see and grant on
+// History-scoped on purpose: switch history (the history bar) to see and grant on
 // another timeline. A grant lands on the history shown here, so the tree you see
 // is exactly the access you give. Reading the tree is bodiless (the name
 // channel); GRANTING/REVOKING are world acts, so they need you to be DRIVING a

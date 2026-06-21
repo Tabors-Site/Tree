@@ -52,7 +52,7 @@ Stored in `seed/past/projections/inbox/inboxProjection.js`. Authoritative schema
 | `inboxSpaceId` | `params.inboxSpaceId` | Where the call was addressed |
 | `sentAt` | `params.sentAt` | FIFO tiebreaker within a priority class |
 | `activeRole` | `params.activeRole` | Which role the moment runs under |
-| `branch` | `fact.branch` | The branch the row's moment runs on; sever sweep deletes per branch |
+| `history` | `fact.history` | The history the row's moment runs on; sever sweep deletes per history |
 | `attachments` | `params.attachments` | Caller side metadata, opaque to seed |
 
 ## The scheduler picks rows
@@ -62,8 +62,8 @@ scheduler tick / wake event
   └─ pickNextIntake(spaceId, beingId, {excludeCorrelations})
        └─ InboxProjection.findOne({recipient, inboxSpaceId, _id ∉ excluded})
             .sort({priorityRank: 1, sentAt: 1})
-                 ← row picked (runs on the row's own branch;
-                   paused/deleted branch rows are excluded per pass)
+                 ← row picked (runs on the row's own history;
+                   paused/deleted history rows are excluded per pass)
        └─ scheduler in-memory: claim correlation for this being
        └─ assign + run moment with the picked row as the call
 ```

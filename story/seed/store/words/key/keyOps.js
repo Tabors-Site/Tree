@@ -30,6 +30,7 @@
 // the gate compares the resolved Name, not the being you drive.
 
 import { registerOperation } from "../../../ibp/operations.js";
+import { laysFact } from "../../../ibp/factResult.js";
 import { IBP_ERR, IbpError } from "../../../ibp/protocol.js";
 import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
 
@@ -86,11 +87,9 @@ async function _keyExportViaWord({ target, caller, asker, moment }) {
     // asker's reel, NOT the keyholder target — resolveAuditTarget would otherwise fall
     // back to the being target). No asker → no fact (matches the old `if (askerBeingId)`).
     const askerBeingId = asker ? String(asker) : null;
-    if (askerBeingId && out.nameId) {
-      out._factParams = { exportedNameId: String(out.nameId) };
-      out._factTarget = { kind: "being", id: askerBeingId };
-    }
-    return out;
+    return askerBeingId && out.nameId
+      ? laysFact(out, { exportedNameId: String(out.nameId) }, { kind: "being", id: askerBeingId })
+      : out;
   } catch (e) {
     if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.FORBIDDEN, e.message);
     throw e;
@@ -179,10 +178,8 @@ registerOperation("key-export", {
       privateKeyPem,                   // the Name's signing key (PEM)
       mnemonic,                        // the same key as 24 BIP39 words
     };
-    if (askerBeingId) {
-      out._factParams = { exportedNameId: nameId };
-      out._factTarget = { kind: "being", id: askerBeingId };
-    }
-    return out;
+    return askerBeingId
+      ? laysFact(out, { exportedNameId: nameId }, { kind: "being", id: askerBeingId })
+      : out;
   },
 });

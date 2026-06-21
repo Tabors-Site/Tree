@@ -47,7 +47,7 @@ const _portalTmpQ = new THREE.Quaternion();
 const _portalTmpQInv = new THREE.Quaternion();
 
 // Deterministic small hash for ground colors / portal accent — same
-// input always yields same hue so two viewers see the same branch as
+// input always yields same hue so two viewers see the same history as
 // the same color.
 function hashString(s) {
   let h = 0;
@@ -713,7 +713,7 @@ export class Scene {
       : null;
     // Self stance address for portal walk-through DO calls. Bare
     // `@<name>` resolves to this being's own stance regardless of
-    // the current SEE branch, so the DO targets the actor's home reel.
+    // the current SEE history, so the DO targets the actor's home reel.
     this._selfName = desc?.identity?.name
       || this._selfBeing?.name
       || null;
@@ -2680,8 +2680,8 @@ export class Scene {
     const sx = Math.max(4, Math.min(40, Number(size.x) || 20));
     const sz = Math.max(4, Math.min(40, Number(size.y) || 20));
 
-    // Ground plane — color modulated by branch id so different
-    // branches read as visibly different worlds. Higher saturation
+    // Ground plane — color modulated by history id so different
+    // histories read as visibly different worlds. Higher saturation
     // + lightness than before so the world isn't dim soup.
     const historyHash = hashString(p.target);
     const groundColor = new THREE.Color().setHSL((historyHash % 360) / 360, 0.45, 0.42);
@@ -2751,7 +2751,7 @@ export class Scene {
     // Stream the real models in (async, budgeted). loadModel caches by
     // URL globally and returns null on a miss — a cross-story model
     // whose bytes aren't reachable from this origin simply keeps its
-    // marker. Same-story / cross-branch portals (the common case)
+    // marker. Same-story / cross-history portals (the common case)
     // resolve from the shared content store and show the real world.
     for (const cand of modelCandidates.slice(0, PORTAL_CONFIG.MINI_MODEL_BUDGET)) {
       this._swapMiniModel(p, cand);
@@ -3389,7 +3389,7 @@ export class Scene {
     //   0   = paused (in past, no movement)
     //   2/4/8 = fast-forward (matching playback tier)
     //   -1/-2/-4/-8 = rewind (winds blow backward)
-    // Set via setCloudTimeScale from main.js on branchbar:cloud-scale.
+    // Set via setCloudTimeScale from main.js on historybar:cloud-scale.
     const scale = (typeof this._cloudTimeScale === "number")
       ? this._cloudTimeScale
       : 1;
@@ -3403,7 +3403,7 @@ export class Scene {
   }
 
   // Set the cloud drift multiplier. See _driftClouds for the table of
-  // factors. Called from main.js on branchbar:cloud-scale events.
+  // factors. Called from main.js on historybar:cloud-scale events.
   setCloudTimeScale(factor) {
     this._cloudTimeScale = Number.isFinite(factor) ? factor : 1;
   }

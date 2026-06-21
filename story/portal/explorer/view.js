@@ -120,8 +120,8 @@ export function createView() {
   function addressFor(path) {
     const m = ctx.state.get();
     const story = m.discovery?.story || "";
-    const branch = m.descriptor?.address?.history || "0";
-    const bq = branch === "0" ? "" : `#${branch}`;
+    const history = m.descriptor?.address?.history || "0";
+    const bq = history === "0" ? "" : `#${history}`;
     return `${story}${bq}${path === "/" ? "/" : path}`;
   }
 
@@ -150,16 +150,16 @@ export function createView() {
 
   function renderCrumbs(desc) {
     const story = ctx.state.get("discovery")?.story || "story";
-    const branch = desc?.address?.history || "0";
+    const history = desc?.address?.history || "0";
     const path = desc?.address?.pathByNames || "/";
     els.up.disabled = path === "/";
 
     const crumbs = [];
     crumbs.push(crumbButton(story, "/"));
-    if (branch !== "0") {
+    if (history !== "0") {
       const chip = document.createElement("span");
-      chip.className = "ex-branch";
-      chip.textContent = `#${branch}`;
+      chip.className = "ex-history";
+      chip.textContent = `#${history}`;
       crumbs.push(chip);
     }
     const segs = path.split("/").filter(Boolean);
@@ -484,8 +484,8 @@ export function createView() {
   // Being tile / row menu.
   function buildBeingMenu(b) {
     const story = ctx.state.get("discovery")?.story || "";
-    const branch = ctx.state.get("descriptor")?.address?.history || "0";
-    const bq = branch === "0" ? "" : `#${branch}`;
+    const history = ctx.state.get("descriptor")?.address?.history || "0";
+    const bq = history === "0" ? "" : `#${history}`;
     const stance = `${story}${bq}/@${beingName(b)}`;
     return [
       { label: "Select",     onPick: () => pickBeing(b) },

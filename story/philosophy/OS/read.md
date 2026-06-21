@@ -129,7 +129,7 @@ All of this is the graft package. The receiving substrate verifies all of it cry
 The chain is genuinely the substance. Without it, you don't have graft, you have key import. Real graft moves the chain.
 Good clarification to nail down. Rest well.You said: But what if they want to graft partial things how does that work?But what if they want to graft partial things how does that work? Do you just just chains at certain points?5:21 AMClaude responded: Yes, and this is where graft gets architecturally interesting because partial graft requires explicit decisions about what's coherent to extract.Yes, and this is where graft gets architecturally interesting because partial graft requires explicit decisions about what's coherent to extract. Let me work through it.
 The partial graft problem
-A being's full chain might be enormous. They've been alive for years, have thousands of acts, span multiple branches, have hundreds of relationships. Maybe the user just wants to bring over their last six months of work into a new substrate. Or just the acts related to a specific project. Or just enough chain to establish their current state without all the historical detail.
+A being's full chain might be enormous. They've been alive for years, have thousands of acts, span multiple histories, have hundreds of relationships. Maybe the user just wants to bring over their last six months of work into a new substrate. Or just the acts related to a specific project. Or just enough chain to establish their current state without all the historical detail.
 This needs to work, but partial chains are tricky because the chain's integrity depends on the prev-hash links. You can't just take fact #500 through fact #800 — fact #500 has a prev-hash pointing to fact #499, which isn't in your partial export. The hash chain is broken from the destination's perspective.
 So partial graft requires careful thought about what's actually coherent to extract.
 What coherent partial extracts look like
@@ -138,7 +138,7 @@ Chain prefix. Take facts #1 through #N. The chain is intact from genesis to some
 This is useful when the being wants to bring early history but not recent activity. Or when migrating a being who's been active for years but the destination only needs to know who they were originally.
 Chain from a checkpoint. Take facts #N through #current, with #N being a verifiable checkpoint (probably a signed snapshot or a fact specifically marked as a chain anchor). The bundle includes the checkpoint's verification data so the destination knows "this chain segment is authentic and starts from this known point."
 The destination plants a being whose chain begins at the checkpoint. Acts before the checkpoint aren't in the destination but are referenced by hash (so they could be fetched later if needed). The being's identity is verifiably the same; their history is partial but anchored.
-Specific branch only. A being might be active on multiple branches. Graft just one branch's worth of their activity. The bundle contains their facts on branch X only, with the branch's own verification context. The destination plants the being with activity in that one branch; other branches don't come along.
+Specific history only. A being might be active on multiple histories. Graft just one history's worth of their activity. The bundle contains their facts on history X only, with the history's own verification context. The destination plants the being with activity in that one history; other histories don't come along.
 This is useful for moving a specific project's work without dragging all the being's other activity.
 Time-windowed extract. Take facts within a specific time range, with appropriate anchoring. Similar to checkpoint-based, but the window is defined by time rather than by chain position.
 Subject-matter extract. Take facts related to a specific topic, project, or relationship. This is the trickiest because chain-prefix and checkpoint-based extracts are structurally clean (the chain is contiguous), but subject-matter extracts are non-contiguous (you're taking facts #50, 73, 81, 92, 105 because they're about project X). This breaks the chain's contiguous verification.
@@ -170,7 +170,7 @@ Key history (rotations) can be included even if some chain segments aren't, so s
 The identity is whole; the history is partial. The being is recognizable as themselves; their backstory is what's been brought along.
 What the substrate should support
 For partial graft to be a clean primitive, the substrate needs:
-A way to produce partial bundles. Tooling to extract a prefix, a checkpoint-based segment, a single branch, a time window, or a non-contiguous selection. Each with appropriate verification data.
+A way to produce partial bundles. Tooling to extract a prefix, a checkpoint-based segment, a single history, a time window, or a non-contiguous selection. Each with appropriate verification data.
 Verification logic for each extract type. The destination needs to know how to verify "this is a chain prefix" vs "this is checkpoint-anchored" vs "this is Merkle-proven non-contiguous." Different code paths for different verification semantics.
 Explicit metadata about partiality. The bundle declares what kind of partial it is and what's missing. The destination plants the being with this metadata visible. Anyone querying the being's chain in the destination knows "you're seeing a partial — here's what's been brought, here's what's elsewhere."
 Optional federation-fetch. If the destination wants more of the chain later, and the source reality is federated, fetch the missing facts on demand. This is opportunistic; partial grafts work without it, but federation makes them complete-able.
@@ -187,7 +187,7 @@ What to pin doctrinally
 Worth being explicit:
 
 Graft supports both full and partial transfer. Full graft brings the being's complete chain and matter; partial graft brings a coherent subset with explicit metadata about what's included.
-Partial extracts are verifiable through specific mechanisms: chain prefixes from genesis (verify by continuous hash), checkpoint-anchored segments (verify from signed checkpoint), single-branch extracts (verify within branch context), or non-contiguous selections with Merkle proofs.
+Partial extracts are verifiable through specific mechanisms: chain prefixes from genesis (verify by continuous hash), checkpoint-anchored segments (verify from signed checkpoint), single-history extracts (verify within history context), or non-contiguous selections with Merkle proofs.
 Partial grafts preserve cryptographic identity fully — the being is the same being. What's partial is the history available. The bundle declares its partiality; the destination plants the being with this metadata visible. Missing facts can optionally be fetched from federated source realities on demand.
 State snapshots can accompany partial chains: the being's current projected state signed at a point in time, accepted as authoritative without requiring full chain fold.
 

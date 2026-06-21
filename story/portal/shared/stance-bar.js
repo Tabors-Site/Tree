@@ -194,7 +194,7 @@ export function placeStanceBar(container) {
 /**
  * Merge new context and repaint. Both portals push partials —
  * navigation pushes the view side, the "history" socket push updates
- * the actor side, the branch catalog pushes pointers — and the bar
+ * the actor side, the history catalog pushes pointers — and the bar
  * stays whole because the context is one.
  */
 export function updateStanceBar(partial = {}) {

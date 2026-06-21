@@ -260,7 +260,7 @@ whole public surface.
 | **RECALL** | Space, Matter, Being | Read the past. Fold a position's history into past-tense Word — the same `assembleStory` fold the book renders. A cold-walk over the reel; writes nothing. |
 | **DO**     | Space, Matter        | Run a word on the target through a registered operation. Stamps a Fact on the target's reel.     |
 | **BE**     | Being (self)         | The actor's binding: birth, connect, release, switch, death. Stamps a Fact on the actor's own reel. |
-| **NAME**   | Name                 | Declare and manage a Name — the keypair that signs every act and owns its act-chain: `declare` (a new Name, a fresh keypair) and `banish`. Stamps on the Name's own reel, the most primitive reel, outside the world's branches. |
+| **NAME**   | Name                 | Declare and manage a Name — the keypair that signs every act and owns its act-chain: `declare` (a new Name, a fresh keypair) and `banish`. Stamps on the Name's own reel, the most primitive reel, outside the world's histories. |
 | **CALL**   | Being                | Deliver a message. Stamp a `call` Fact on the caller's reel; the cross-cutting fold maintains the inbox. |
 
 Two of the six only read marks and leave none: SEE reads the present,
@@ -614,10 +614,10 @@ Callers who want graceful "didn't exist" handling catch
 specifically — the named class distinguishes "this thing did not
 exist yet" from any other failure.
 
-The `branch` parameter walks lineage. `#0` is main; derived branches
+The `history` parameter walks lineage. `#0` is main; derived histories
 (`#1`, `#1a`, `#1a1`) inherit through the parent reel up to their
 branchPoint, then divergent facts. The read path is lineage-aware
-across forks; see the Branches section below for the doctrine.
+across forks; see the Histories section below for the doctrine.
 
 ### loadProjection vs loadOrFold — the two flavors of "read a slot"
 
@@ -665,107 +665,107 @@ pattern showed up across ~17 sites; fixing them at the seam (not
 patching the symptom per call) meant future branch features inherit
 the correct behavior automatically.
 
-## Branches
+## Histories
 
-Branches are divergent worlds sharing history with their parent up to
+Histories are divergent worlds sharing history with their parent up to
 a chosen branch point. `#0` is main; `#1`, `#1a`, `#1a1` descend from
-it. Lineage is captured eagerly in the Branch row's per-reel
+it. Lineage is captured eagerly in the History row's per-reel
 `branchPoint` map so cold-folds don't walk the parent's reel on every
 boot.
 
 **State inheritance through reel-lineage.** A read against a derived
-branch walks the parent reel up to the branchPoint, then the
+history walks the parent reel up to the branchPoint, then the
 divergent tail. `loadOrFold` is the lineage-aware reader. Raw
-`Branch.findById` and `Fact.find({branch})` are not. Every read site
+`History.findById` and `Fact.find({branch})` are not. Every read site
 that drives a behavioral decision must use the lineage walk or it
-silently treats derived branches as empty (the loadProjection vs
+silently treats derived histories as empty (the loadProjection vs
 loadOrFold distinction documented above).
 
 **Liveness inheritance through reel-lineage.** Scheduled wakes are
 not runtime-only state. They are facts on the being's reel
 (`wake-scheduled`, `wake-cancelled`). The in-memory scheduler
-registry is a projection of those facts. Branches inherit liveness
+registry is a projection of those facts. Histories inherit liveness
 the same way they inherit state, through the lineage walk. A wake
 scheduled on main before `#1` was created is in `#1`'s lineage. A
 cancellation past the branchPoint is not. The doctrinal claim is
 that **the chain is the truth of liveness, not just state.**
-Fold-from-genesis on any branch reconstructs the scheduler that
-produced that branch's facts. Branches are alive by default. Pause
+Fold-from-genesis on any history reconstructs the scheduler that
+produced that history's facts. Histories are alive by default. Pause
 and delete are explicit. See
 [present/wakes/wakeSchedule.js](present/wakes/wakeSchedule.js) for
 the implementation,
 [.test/scripts/verify-wake-replay.js](../.test/scripts/verify-wake-replay.js)
 for the test that pins the doctrine.
 
-**Branch deletion is mark-deleted, not purge.** Every lifecycle
+**History deletion is mark-deleted, not purge.** Every lifecycle
 operation in TreeOS is append-only. Beings released, not erased.
-Spaces archived, not erased. Branches follow the same shape. The
-chain preserves the fact that a branch existed and was deleted at T.
-Reversal is one `undelete-branch` op away. Deleted branches drop
+Spaces archived, not erased. Histories follow the same shape. The
+chain preserves the fact that a history existed and was deleted at T.
+Reversal is one `undelete-branch` op away. Deleted histories drop
 from default catalog listings but direct-path lookup still resolves
 so historians can SEE the chain. Purge is a separate explicit
 operation, built only when concrete need surfaces.
 
-**Lifecycle exemption asymmetry.** Paused branches accept the full
+**Lifecycle exemption asymmetry.** Paused histories accept the full
 lifecycle set: `pause-branch`, `unpause-branch`, `create-branch`,
 `delete-branch`, `undelete-branch`. The operator must always be able
 to revive a frozen world, including by forking off it. Deleted
-branches accept only `delete-branch` and `undelete-branch`. Forking
+histories accept only `delete-branch` and `undelete-branch`. Forking
 off a deleted branch is forbidden; undelete first to fork. Pause is a
 temporary halt. Deletion is a stronger statement. The wire gates
 (DO, BE, CALL) and the scheduler intake gate both honor this
 asymmetry.
 
-**Deleted branches skip materialization, not gate at intake.** At
-boot, `rehydrateFromFacts` enumerates non-deleted branches only.
-Deleted branches' wake facts stay in the chain (mark-deleted, not
+**Deleted histories skip materialization, not gate at intake.** At
+boot, `rehydrateFromFacts` enumerates non-deleted histories only.
+Deleted histories' wake facts stay in the chain (mark-deleted, not
 purge), but no runtime entry is instantiated for them. Undelete +
 rehydrate restores. The alternative (always materialize, gate at
-intake) would burn timers on every dead branch forever. The skip-at-
+intake) would burn timers on every dead history forever. The skip-at-
 materialize choice keeps the tick loop's working set proportional to
 the live world.
 
 **Merging is creation, not modification.** A merge produces a third
-branch whose `parent` is the common ancestor of the two sources,
+history whose `parent` is the common ancestor of the two sources,
 with `branchPoint` snapshotting the ancestor's current state.
-Reconciliation facts stamped on the merged branch bring its state to
-the user-resolved combined state. The source branches stay immutable.
-The merged branch records `mergeSources: [pathA, pathB]` for forensic
+Reconciliation facts stamped on the merged history bring its state to
+the user-resolved combined state. The source histories stay immutable.
+The merged history records `mergeSources: [pathA, pathB]` for forensic
 audit; the canonical lineage walk still consults only `parent`.
 
 **Reconciliation facts are normal facts.** Merging stamps `set-*`,
-`wake-scheduled`, `be:release`, etc. on the merged branch with a
+`wake-scheduled`, `be:release`, etc. on the merged history with a
 `params._merge` block for provenance. No new fact action vocabulary;
 the chain stays honest about what happened. The merge-mediator role
 (LLM cognition) is the UX layer; it walks the operator through the
-conflict catalog at `<story>#<merged>/.branches/<merged>/conflicts`
+conflict catalog at `<story>#<merged>/.histories/<merged>/conflicts`
 and stamps the chosen facts.
 
-**Some reels reset on merge.** State that's branch-private by nature
+**Some reels reset on merge.** State that's history-private by nature
 cannot be reconciled. The reset-reels registry
-([seed/materials/branch/resetReels.js](materials/branch/resetReels.js))
+([seed/materials/history/resetReels.js](materials/history/resetReels.js))
 enumerates them. V1: inhabit-state on Being. The merge-branches op
 stamps `be:release` for every inhabited being on the ancestor
-projection so the merged branch starts these reels cleared. Future
+projection so the merged history starts these reels cleared. Future
 rules go alongside in the same registry.
 
-**Canonical paths are immutable structural identifiers.** Every branch
+**Canonical paths are immutable structural identifiers.** Every history
 has a unique canonical path determined by its position in the branch
 tree (`#0`, `#1`, `#1a2`, `#7b3`). Once assigned, a canonical path
 never changes meaning and never refers to anything other than the
-branch it names. `#0` is forever first made; the merged branch produced
+history it names. `#0` is forever first made; the merged history produced
 by a `merge-branches` call gets a fresh canonical path and that path
 is its identifier forever after. Historical addresses survive every
 merge, rollback, and deployment swap.
 
-**Named pointers are mutable labels.** A per-story `@branch-registry`
+**Named pointers are mutable labels.** A per-story `@history-registry`
 being holds `qualities.pointers` mapping names (`main`, `prod`,
 `release-v2`) to canonical paths. Pointer mutations are facts on the
 registry being's reel; pointer history is foldable. The IBP address
 parser distinguishes structurally: anything starting with a digit is
 a canonical path; anything starting with a letter is a pointer name.
-`resolveBranchPointers` (the wire-layer async step) consults the
-registry and fills `stance.branch` with the canonical path before
+`resolveHistoryPointers` (the wire-layer async step) consults the
+registry and fills `stance.history` with the canonical path before
 dispatch. Foreign-story stances skip resolution; the foreign
 story does its own lookup.
 
@@ -773,7 +773,7 @@ story does its own lookup.
 `#0` by default; operators can re-point it after a merge, but cannot
 delete it. The `merge-branches` op accepts a `repointPointers` arg
 (comma-separated names or array) so the front-end can answer "update
-which labels to point at the merged branch?" in one call.
+which labels to point at the merged history?" in one call.
 
 **Cross-story addresses survive merges.** `treeos.ai#main/library`
 always reaches whatever main currently is on `treeos.ai`. A bookmark
@@ -782,19 +782,19 @@ pointer the registry resolves, not a path that itself moves.
 
 ## Heaven never branches
 
-Heaven spaces are story-scoped, not branch-scoped. The Tier-3 seed
+Heaven spaces are story-scoped, not history-scoped. The Tier-3 seed
 spaces under heaven (`.beings`, `.spaces`, `.matters`, `.config`,
-`.branches`, `.roles`, `.tools`, `.operations`) hold story-level
+`.histories`, `.roles`, `.tools`, `.operations`) hold story-level
 qualities about the story itself . which beings exist, what roles
-are available, how branches are structured, what tools and operations
-the story supports. Their content is identical across every branch
+are available, how histories are structured, what tools and operations
+the story supports. Their content is identical across every history
 within the story.
 
-Branch-scoped state lives on the aggregates underneath (beings,
+History-scoped state lives on the aggregates underneath (beings,
 spaces, matter, their facts, their qualities, their roleFlows). Their
-projections diverge per branch via the reel-lineage walk. Heaven
+projections diverge per history via the reel-lineage walk. Heaven
 projections do not diverge . there is one projection per heaven
-entry, regardless of which branch is querying.
+entry, regardless of which history is querying.
 
 The distinction worth pinning: **branched state is content; heaven
 is structure.** A being's position is content (branched). A role's
@@ -818,13 +818,13 @@ Implementation implications:
   whatever per-position rules apply to their aggregate.
 
 **What's heaven today (correctly):** the heaven spaces themselves
-(`.beings`, `.spaces`, `.matters`, `.config`, `.branches`, `.roles`,
+(`.beings`, `.spaces`, `.matters`, `.config`, `.histories`, `.roles`,
 `.tools`, `.operations`).
 
 **What needs to migrate to heaven:** the role registry (currently
 on `@role-manager`'s qualities; should be a heaven-scoped projection
 under `.roles/`). The pointer registry (currently on
-`@branch-registry`'s qualities, with reads hard-coded to main . that's
+`@history-registry`'s qualities, with reads hard-coded to main . that's
 heaven-semantic but not heaven-shaped storage). The federation peer
 list. The future public-directory id→name slices.
 
@@ -937,7 +937,7 @@ changes its hash, breaking the `p` link of every fact after it on
 that reel. The past cannot be quietly edited; it can only be visibly
 broken.
 
-The per-reel chain rolls up: reels into branches, branches into the
+The per-reel chain rolls up: reels into histories, histories into the
 story. Every level produces a hash, and the story root hash is
 one 32-byte fingerprint identifying the world's whole state. Two
 stories exchange root hashes first and only transfer what differs.
@@ -948,7 +948,7 @@ reference. Same content, same address, always.
 Three distinct tools, never confused:
 
 - **Hash chain.** Detects byte-tampering. Per-reel rolling into
-  branches into the story root.
+  histories into the story root.
 - **Replication.** Repairs a corrupted reel from a good copy on
   another node. The hash chain detects; it does not repair.
 - **Correction facts.** Handle wrong-but-honest data, a fact intact

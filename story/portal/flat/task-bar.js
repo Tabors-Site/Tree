@@ -65,7 +65,7 @@ export function renderTaskBar(container, { descriptor, discovery, session } = {}
   // narrowest, like a window menu bar.
   const tabs = [
     { id: "story", label: "Story", actions: storyActions(rootAddress) },
-    { id: "branch", label: "History", actions: historyActions(positionAddress) },
+    { id: "history", label: "History", actions: historyActions(positionAddress) },
     { id: "place", label: "Place", actions: placeActions(positionAddress, desc) },
     { id: "federation", label: "Federation", actions: federationActions() },
   ];
@@ -253,7 +253,7 @@ function openAction(action, opByName) {
   if (action.special === "federation-activity") {
     return renderFederationPanel(body, action, opByName, { refreshView });
   }
-  if (action.special === "branch-info") {
+  if (action.special === "history-info") {
     return renderHistoryInfo(body);
   }
   if (action.special === "birth-self") {
@@ -387,7 +387,7 @@ function renderCloseStory(body, action, opByName) {
   });
 }
 
-// "view branch info" — pick any branch and see its full record: the
+// "view history info" — pick any history and see its full record: the
 // branch-point seqs, pointers aimed at it, scope, lineage, children,
 // be:birth on self. Prompts for a name + password; dispatches BE:birth
 // against the caller's OWN stance. The current user becomes the new
@@ -428,7 +428,7 @@ function renderBirthSelf(body, action) {
   });
 }
 
-// who/when. Reads the synthetic `<story>/.branches/<path>` SEE
+// who/when. Reads the synthetic `<story>/.histories/<path>` SEE
 // (readable by any logged-in being); no mutation.
 async function renderHistoryInfo(body) {
   const story = flat.state?.discovery?.story
@@ -449,13 +449,13 @@ async function renderHistoryInfo(body) {
   body.appendChild(pickWrap);
 
   const info = document.createElement("div");
-  info.className = "branch-info-body";
+  info.className = "history-info-body";
   info.textContent = "loading…";
   body.appendChild(info);
 
-  const branches = await _loadAllBranches(client, story);
+  const histories = await _loadAllHistories(client, story);
   select.innerHTML = "";
-  for (const b of branches) {
+  for (const b of histories) {
     const o = document.createElement("option");
     o.value = b.path;
     o.textContent = b.path === "0"
@@ -463,37 +463,37 @@ async function renderHistoryInfo(body) {
       : `#${b.path}${b.label ? ` — ${b.label}` : ""}`;
     select.appendChild(o);
   }
-  select.value = branches.some((b) => b.path === currentHistory) ? currentHistory : (branches[0]?.path || "0");
+  select.value = histories.some((h) => h.path === currentHistory) ? currentHistory : (histories[0]?.path || "0");
 
   const renderFor = async (path) => {
     info.innerHTML = "";
     info.textContent = "loading…";
     let graph = null, err = null;
     try {
-      const desc = await client.see(`${story}/.branches/${path}`);
-      graph = desc?.branches || null;
+      const desc = await client.see(`${story}/.histories/${path}`);
+      graph = desc?.histories || null;
     } catch (e) {
       err = e?.code ? `${e.code}: ${e.message || ""}` : (e?.message || String(e));
     }
     info.innerHTML = "";
-    _renderBranchInfoFields(info, path, graph, err);
+    _renderHistoryInfoFields(info, path, graph, err);
   };
   select.addEventListener("change", () => renderFor(select.value));
   await renderFor(select.value);
 }
 
-// Recursively walk `.branches/<path>` to collect every branch for the
+// Recursively walk `.histories/<path>` to collect every history for the
 // picker. Depth-capped + seen-guarded like the 3D loader. Best-effort:
 // a failed sub-fetch just leaves that subtree out of the list.
-async function _loadAllBranches(client, story) {
+async function _loadAllHistories(client, story) {
   const out = new Map();
   const seen = new Set();
   async function visit(path, depth) {
     if (depth > 6 || seen.has(path)) return;
     seen.add(path);
     try {
-      const desc = await client.see(`${story}/.branches/${path}`);
-      const g = desc?.branches;
+      const desc = await client.see(`${story}/.histories/${path}`);
+      const g = desc?.histories;
       if (!g) return;
       if (g.current) out.set(g.current.path, g.current.label || null);
       for (const ch of (g.children || [])) out.set(ch.path, ch.label || null);
@@ -507,7 +507,7 @@ async function _loadAllBranches(client, story) {
     .sort((a, b) => a.path.localeCompare(b.path));
 }
 
-function _branchKv(container, k, v) {
+function _historyKv(container, k, v) {
   const row = document.createElement("div");
   row.className = "kv-block";
   const l = document.createElement("span");
@@ -521,12 +521,12 @@ function _branchKv(container, k, v) {
   container.appendChild(row);
 }
 
-function _renderBranchInfoFields(container, path, graph, err) {
+function _renderHistoryInfoFields(container, path, graph, err) {
   const cur = graph?.current;
   if (err || !cur) {
     const d = document.createElement("div");
     d.className = "action-result action-err";
-    d.textContent = err || `branch "${path}" not found`;
+    d.textContent = err || `history "${path}" not found`;
     container.appendChild(d);
     return;
   }
@@ -535,22 +535,22 @@ function _renderBranchInfoFields(container, path, graph, err) {
   const lineage = Array.isArray(graph.lineage) ? graph.lineage : [];
   const children = Array.isArray(graph.children) ? graph.children : [];
 
-  _branchKv(container, "path", `#${cur.path}`);
-  if (cur.label) _branchKv(container, "label", cur.label);
-  _branchKv(container, "live", cur.isLive ? "yes" : "no");
-  _branchKv(container, "parent", cur.parent ? `#${cur.parent}` : "main (root)");
-  _branchKv(container, "lineage", lineage.map((p) => `#${p}`).join(" → ") || "—");
-  _branchKv(container, "children", children.length ? children.map((c) => `#${c.path}`).join(", ") : "—");
-  _branchKv(container, "pointers here", aimed.length ? aimed.join(", ") : "—");
+  _historyKv(container, "path", `#${cur.path}`);
+  if (cur.label) _historyKv(container, "label", cur.label);
+  _historyKv(container, "live", cur.isLive ? "yes" : "no");
+  _historyKv(container, "parent", cur.parent ? `#${cur.parent}` : "main (root)");
+  _historyKv(container, "lineage", lineage.map((p) => `#${p}`).join(" → ") || "—");
+  _historyKv(container, "children", children.length ? children.map((c) => `#${c.path}`).join(", ") : "—");
+  _historyKv(container, "pointers here", aimed.length ? aimed.join(", ") : "—");
   const anchor = cur.anchor && typeof cur.anchor === "object" ? cur.anchor : {};
   const ak = Object.keys(anchor);
-  _branchKv(container, "branch-point", ak.length ? ak.map((k) => `${k} @ seq ${anchor[k]}`).join(", ") : "(forked at genesis / no reels)");
-  _branchKv(container, "scope", cur.scope?.path ? `subtree ${cur.scope.path}` : "whole story");
-  _branchKv(container, "created", `${cur.createdAt || "?"}${cur.createdBy ? ` by ${String(cur.createdBy).slice(0, 8)}` : ""}`);
-  if (cur.mergeSources?.length) _branchKv(container, "merged from", cur.mergeSources.map((s) => `#${s}`).join(" + "));
-  if (cur.paused) _branchKv(container, "paused", `yes${cur.pausedAt ? ` (${cur.pausedAt})` : ""}`);
-  if (cur.deleted) _branchKv(container, "deleted", `yes${cur.deletedAt ? ` (${cur.deletedAt})` : ""}`);
-  if (cur.archivedBecause) _branchKv(container, "archived", cur.archivedBecause);
+  _historyKv(container, "branch-point", ak.length ? ak.map((k) => `${k} @ seq ${anchor[k]}`).join(", ") : "(forked at genesis / no reels)");
+  _historyKv(container, "scope", cur.scope?.path ? `subtree ${cur.scope.path}` : "whole story");
+  _historyKv(container, "created", `${cur.createdAt || "?"}${cur.createdBy ? ` by ${String(cur.createdBy).slice(0, 8)}` : ""}`);
+  if (cur.mergeSources?.length) _historyKv(container, "merged from", cur.mergeSources.map((s) => `#${s}`).join(" + "));
+  if (cur.paused) _historyKv(container, "paused", `yes${cur.pausedAt ? ` (${cur.pausedAt})` : ""}`);
+  if (cur.deleted) _historyKv(container, "deleted", `yes${cur.deletedAt ? ` (${cur.deletedAt})` : ""}`);
+  if (cur.archivedBecause) _historyKv(container, "archived", cur.archivedBecause);
 
   const rawBtn = document.createElement("button");
   rawBtn.type = "button";
@@ -706,7 +706,7 @@ function placeActions(address, desc) {
 
 function historyActions(address) {
   return [
-    { label: "view history info", special: "branch-info" },
+    { label: "view history info", special: "history-info" },
     { label: "fork a branch", op: "create-branch", address },
     { label: "merge histories", op: "merge-histories", address },
     { label: "pause history", op: "pause-history", address },

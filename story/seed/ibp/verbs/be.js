@@ -629,13 +629,17 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       },
       moment,
     });
-    if (!truenameOp.skipAudit) {
+    // Conditional-emit doctrine (the keystone): stamp IFF the op returned _factParams — the params
+    // ARE the world-change. truename always returns them on success (and THROWS on a gate refusal,
+    // so nothing reaches here), so this is unconditional in practice; the guard keeps it honest and
+    // ready for BE's later conditional ops (be:connect's idempotent path).
+    if (!truenameOp.skipAudit && result?._factParams) {
       await emitFact({
         verb:    "be",
         act:     truenameOp.factAction, // "truename"
         through: identity.beingId,      // caller-attribution
         of:      { kind: "being", id: String(result?._factTarget?.id) },
-        params:  result?._factParams,
+        params:  result._factParams,
         result:  stripForAudit(result),
         actId:   moment?.actId || null,
         history,

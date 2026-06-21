@@ -137,13 +137,13 @@ export function createView() {
     window.addEventListener("beforeunload", onBeforeUnload);
     teardowns.push(() => window.removeEventListener("beforeunload", onBeforeUnload));
 
-    // Cloud drift follows timeline playback (branch bar dispatches).
+    // Cloud drift follows timeline playback (history bar dispatches).
     const onCloudScale = (ev) => {
       const f = Number(ev?.detail?.factor);
       scene?.setCloudTimeScale?.(Number.isFinite(f) ? f : 1);
     };
-    window.addEventListener("branchbar:cloud-scale", onCloudScale);
-    teardowns.push(() => window.removeEventListener("branchbar:cloud-scale", onCloudScale));
+    window.addEventListener("historybar:cloud-scale", onCloudScale);
+    teardowns.push(() => window.removeEventListener("historybar:cloud-scale", onCloudScale));
 
     // Gameplay key bundle. Esc closes popups; M opens the text view;
     // B/N step history; E uses the selected hotbar item.

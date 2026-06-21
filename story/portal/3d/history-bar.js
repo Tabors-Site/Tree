@@ -28,8 +28,8 @@ let _state = {
   panelEl: null,
   timelineEl: null,
   panelOpen: false,
-  // Branch the timeline strip is bound to (may differ from the user's
-  // active address-branch — they could pull up main's timeline while
+  // History the timeline strip is bound to (may differ from the user's
+  // active address-history — they could pull up main's timeline while
   // standing in #1).
   timelineHistory: null,
   graph: null, // { current, lineage, children } for active history
@@ -253,7 +253,7 @@ function _historyLabel(path) {
 // Post-create ask: "switch into your being on that history?" Yes →
 // switch + go. No → stay put, with the two legitimate later routes
 // named (ibpa portal, timeline click).
-function _offerSwitchAfterhistory(path, note = "") {
+function _offerSwitchAfterHistory(path, note = "") {
   const here = _portalState()?.descriptor?.address?.history || "0";
   const hereLabel = _historyLabel(here);
   const yes = window.confirm(
@@ -264,12 +264,12 @@ function _offerSwitchAfterhistory(path, note = "") {
   );
   if (yes) {
     switchIntoHistory(path).catch((err) => {
-      _showhistoryEvent(`switch failed: ${err?.message || err}`, {
+      _showHistoryEvent(`switch failed: ${err?.message || err}`, {
         error: true,
       });
     });
   } else {
-    _showhistoryEvent(
+    _showHistoryEvent(
       `stayed on ${hereLabel} — form an ibpa portal to #${path}/ or switch from the timeline`,
       { sticky: 3500 },
     );
@@ -309,7 +309,7 @@ export function mountHistoryBar({
   _state.client = client;
   _state.story = story;
   _state.getState = typeof getState === "function" ? getState : null;
-  _state.buttonEl = _createBranchButton({ hosted: !!buttonHost });
+  _state.buttonEl = _createHistoryButton({ hosted: !!buttonHost });
   (buttonHost || document.body).appendChild(_state.buttonEl);
   _syncStanceBar();
   // Click outside the panel closes it. Stored so destroy() can remove.
@@ -372,9 +372,9 @@ export function mountHistoryBar({
 // TOP-LEFT BUTTON
 // ─────────────────────────────────────────────────────────────────────
 
-function _createBranchButton({ hosted = false } = {}) {
+function _createHistoryButton({ hosted = false } = {}) {
   const b = document.createElement("button");
-  b.id = "branch-tree-button";
+  b.id = "history-tree-button";
   b.type = "button";
   b.title = "histories & timeline";
   if (hosted) {
@@ -484,7 +484,7 @@ async function _openPanel() {
   el.querySelector(".bp-copy").addEventListener("click", (ev) => {
     ev.stopPropagation();
     _downloadClone().catch((err) => {
-      _showhistoryEvent(`copy failed: ${err?.message || err}`);
+      _showHistoryEvent(`copy failed: ${err?.message || err}`);
     });
   });
   el.querySelector(".bp-graft").addEventListener("click", (ev) => {
@@ -495,7 +495,7 @@ async function _openPanel() {
     const file = ev.target.files?.[0];
     if (file) {
       _graftFromFile(file).catch((err) => {
-        _showhistoryEvent(`graft failed: ${err?.message || err}`);
+        _showHistoryEvent(`graft failed: ${err?.message || err}`);
       });
     }
     // Reset so the same filename can be re-picked.
@@ -721,7 +721,7 @@ async function _togglePausehistory(history) {
       const treeContainer = _state.panelEl.querySelector(".bp-tree");
       if (treeContainer) _renderTree(treeContainer, _state.graphAll);
     }
-    _showhistoryEvent(
+    _showHistoryEvent(
       history.paused
         ? `❚❚ paused #${history.path === "0" ? "main" : history.path}`
         : `▶ unpaused #${history.path === "0" ? "main" : history.path}`,
@@ -741,7 +741,7 @@ async function _togglePausehistory(history) {
       );
     }
     console.warn(`[history-bar] ${op} failed:`, err?.message || err);
-    _showhistoryEvent(`${op} failed: ${err?.message || err}`, { error: true });
+    _showHistoryEvent(`${op} failed: ${err?.message || err}`, { error: true });
   } finally {
     _toggleInFlight = Math.max(0, _toggleInFlight - 1);
   }
@@ -983,7 +983,7 @@ async function _openTimeline(historyPath) {
   const currentHistory = _portalState()?.descriptor?.address?.history || "0";
   if (currentHistory !== historyPath) {
     switchIntoHistory(historyPath).catch((err) => {
-      _showhistoryEvent(`switch failed: ${err?.message || err}`, {
+      _showHistoryEvent(`switch failed: ${err?.message || err}`, {
         error: true,
       });
     });
@@ -1682,7 +1682,7 @@ async function _branchHere() {
     // automatically — no descriptor-state guessing, no race with
     // mid-flight history switches. The cross-history gate sees
     // caller=target by construction.
-    _showBranchEvent(`creating branch from #${parent}…`);
+    _showHistoryEvent(`creating branch from #${parent}…`);
     const result = await _state.client.do(
       `/@history-manager`,
       "create-branch",
@@ -1697,12 +1697,12 @@ async function _branchHere() {
       console.warn("[history-bar] create-branch returned no path:", result);
       return;
     }
-    _showBranchEvent(`✨ history #${r.path} created`, { sticky: 2500 });
+    _showHistoryEvent(`✨ history #${r.path} created`, { sticky: 2500 });
     _closeTimeline();
-    _offerSwitchAfterBranch(r.path);
+    _offerSwitchAfterHistory(r.path);
   } catch (err) {
     console.warn("[history-bar] create-branch failed:", err?.message);
-    _showBranchEvent(`history failed: ${err?.message || err}`, { error: true });
+    _showHistoryEvent(`history failed: ${err?.message || err}`, { error: true });
   }
 }
 
@@ -1879,23 +1879,23 @@ function _closehistoryInfoDialog() {
 // ─────────────────────────────────────────────────────────────────────
 //
 // One modal over the tree panel. Maps directly to the create-branch op:
-//   parent  — which branch to fork (defaults to the one you're on)
+//   parent  — which history to fork (defaults to the one you're on)
 //   anchor  — a fact seq (substrate-native) OR a moment in time (human
 //             helper); exactly one is required
-//   scope   — omit for a whole-story branch, or a subtree path for a
-//             scoped branch (defaults to the position you're standing at;
+//   scope   — omit for a whole-story history, or a subtree path for a
+//             scoped history (defaults to the position you're standing at;
 //             "/" collapses to whole-story)
-// The branch-manager being carries the doctrine; this is a thin form.
+// The history-manager being carries the doctrine; this is a thin form.
 
-let _newBranchDialogEl = null;
+let _newHistoryDialogEl = null;
 
-function _openNewBranchDialog() {
-  if (_newBranchDialogEl) return;
+function _openNewHistoryDialog() {
+  if (_newHistoryDialogEl) return;
   if (!_state.graphAll) {
-    _showBranchEvent("tree not loaded yet", { error: true });
+    _showHistoryEvent("tree not loaded yet", { error: true });
     return;
   }
-  const branches = Array.from(_state.graphAll.byPath.values())
+  const histories = Array.from(_state.graphAll.byPath.values())
     .filter((b) => !b.deleted)
     .sort((a, b) => a.path.localeCompare(b.path));
 
@@ -1945,13 +1945,13 @@ function _openNewBranchDialog() {
     "background:#0a0d0c;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:5px 7px;font-family:inherit;font-size:12px;";
   el.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
-      <span style="color:#8fbf9f;font-size:13px;">new branch</span>
+      <span style="color:#8fbf9f;font-size:13px;">new history</span>
       <button type="button" class="nb-close" style="background:transparent;color:#6b7d72;border:none;font-size:18px;cursor:pointer;padding:0 4px;">×</button>
     </div>
     <form class="nb-form" style="display:grid;gap:12px;">
       <label style="display:grid;gap:4px;">
-        <span style="${labelCss}">parent branch (fork from)</span>
-        <select name="parent" style="${inputCss}">${branches.map(opt).join("")}</select>
+        <span style="${labelCss}">parent history (fork from)</span>
+        <select name="parent" style="${inputCss}">${histories.map(opt).join("")}</select>
       </label>
 
       <fieldset style="border:1px solid #2c3a32;border-radius:4px;padding:8px 10px;display:grid;gap:8px;">
@@ -1991,9 +1991,9 @@ function _openNewBranchDialog() {
     </form>
   `;
   document.body.appendChild(el);
-  _newhistoryDialogEl = el;
+  _newHistoryDialogEl = el;
 
-  const close = () => _closeNewhistoryDialog();
+  const close = () => _closeNewHistoryDialog();
   el.querySelector(".nb-close").addEventListener("click", close);
   el.querySelector(".nb-cancel").addEventListener("click", close);
 
@@ -2083,17 +2083,17 @@ function _openNewBranchDialog() {
       const r = result?.result || result;
       if (!r?.path)
         throw new Error(r?.error?.message || "create-branch returned no path");
-      _closeNewhistoryDialog();
+      _closeNewHistoryDialog();
       _closePanel();
       const scopeNote = args.scope ? ` (subtree ${args.scope})` : "";
       const ptrNote =
         r.pointerAttached || (pointer && !r.pointerWarning)
           ? ` · pointer "${pointer}"`
           : "";
-      _showhistoryEvent(`✨ history #${r.path} created${scopeNote}${ptrNote}`, {
+      _showHistoryEvent(`✨ history #${r.path} created${scopeNote}${ptrNote}`, {
         sticky: 2500,
       });
-      _offerSwitchAfterhistory(r.path, scopeNote);
+      _offerSwitchAfterHistory(r.path, scopeNote);
     } catch (err) {
       console.warn("[history-bar] create-branch failed:", err);
       fail(err?.message || String(err));
@@ -2112,10 +2112,10 @@ function _openNewBranchDialog() {
   window.addEventListener("keydown", escClose, true);
 }
 
-function _closeNewhistoryDialog() {
-  if (_newhistoryDialogEl) {
-    _newhistoryDialogEl.remove();
-    _newhistoryDialogEl = null;
+function _closeNewHistoryDialog() {
+  if (_newHistoryDialogEl) {
+    _newHistoryDialogEl.remove();
+    _newHistoryDialogEl = null;
   }
 }
 
@@ -2170,7 +2170,7 @@ async function _downloadClone() {
     throw new Error("no spaceId on current descriptor to clone from");
   }
   const placeName = _portalState()?.descriptor?.address?.spaceName || "place";
-  _showhistoryEvent(`copying ${placeName}…`);
+  _showHistoryEvent(`copying ${placeName}…`);
   const result = await _state.client.see("capture-template", {
     args: { spaceId, name: placeName },
   });
@@ -2193,7 +2193,7 @@ async function _downloadClone() {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   const counts = `${bundle.content?.spaces?.length || 0} spaces, ${bundle.content?.beings?.length || 0} beings, ${bundle.content?.matter?.length || 0} matter`;
-  _showhistoryEvent(`✓ copied ${placeName} (${counts})`);
+  _showHistoryEvent(`✓ copied ${placeName} (${counts})`);
 }
 
 async function _graftFromFile(file) {
@@ -2209,10 +2209,10 @@ async function _graftFromFile(file) {
     throw new Error(`bundle file is not valid JSON: ${err.message}`);
   }
   const srcName = bundle?.meta?.sourceScopeName || "bundle";
-  _showhistoryEvent(`grafting ${srcName} under ${addr}…`);
+  _showHistoryEvent(`grafting ${srcName} under ${addr}…`);
   const result = await _state.client.do(addr, "plant-template", { bundle });
   const counts = `${result?.counts?.spaces || 0} spaces, ${result?.counts?.beings || 0} beings, ${result?.counts?.matter || 0} matter`;
-  _showhistoryEvent(`✓ grafted ${srcName} (${counts})`);
+  _showHistoryEvent(`✓ grafted ${srcName} (${counts})`);
   // Refetch the tree so any newly created histories surface (clones
   // don't make histories, but operators may follow up with a history).
   await _loadHistoryTree();
@@ -2227,7 +2227,7 @@ let _mergeDialogEl = null;
 function _openMergeDialog() {
   if (_mergeDialogEl) return;
   if (!_state.graphAll) {
-    _showhistoryEvent("tree not loaded yet", { error: true });
+    _showHistoryEvent("tree not loaded yet", { error: true });
     return;
   }
   const histories = Array.from(_state.graphAll.byPath.values())
@@ -2280,7 +2280,7 @@ function _openMergeDialog() {
       <label style="display:grid;gap:4px;">
         <span style="color:#9ab2a3;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;">source B</span>
         <select name="sourceB" style="background:#0a0d0c;color:#c8d3cb;border:1px solid #2c3a32;border-radius:3px;padding:5px 7px;font-family:inherit;font-size:12px;">
-          ${branches.map((b, i) => opt(b, i === 1)).join("")}
+          ${histories.map((b, i) => opt(b, i === 1)).join("")}
         </select>
       </label>
       <label style="display:grid;gap:4px;">
@@ -2385,37 +2385,37 @@ function _openMergeDialog() {
       const summonMediator = fd.get("summonMediator") === "on";
       _closeMergeDialog();
       _closePanel();
-      _showBranchEvent(
+      _showHistoryEvent(
         `⇄ merged #${sourceA} + #${sourceB} → #${r.path}${summonMediator ? " · summoning mediator…" : ""}`,
         { sticky: 3500 },
       );
 
-      // Switch INTO the merged branch (being + view together) so the
+      // Switch INTO the merged history (being + view together) so the
       // conflict catalog surfaces in the active view AND the relative
-      // mediator summon below rides the merged branch's socket seat.
+      // mediator summon below rides the merged history's socket seat.
       await switchIntoHistory(r.path);
 
       if (summonMediator) {
         // Fire-and-forget. The mediator's first response arrives via
         // the SUMMON push channel; the conflict catalog SEE on the
-        // merged branch reflects each reconciliation fact as it lands.
+        // merged history reflects each reconciliation fact as it lands.
         try {
           await _state.client.call(`/@merge-mediator`, {
             from: "user",
-            content: `Walk me through the conflicts on #${r.path}. The conflict catalog is at /.branches/${r.path}/conflicts.`,
+            content: `Walk me through the conflicts on #${r.path}. The conflict catalog is at /.histories/${r.path}/conflicts.`,
           });
         } catch (err) {
           console.warn(
-            "[branch-bar] mediator summon failed:",
+            "[history-bar] mediator summon failed:",
             err?.message || err,
           );
-          _showBranchEvent(`mediator summon failed: ${err?.message || err}`, {
+          _showHistoryEvent(`mediator summon failed: ${err?.message || err}`, {
             error: true,
           });
         }
       }
     } catch (err) {
-      console.warn("[branch-bar] merge-branches failed:", err);
+      console.warn("[history-bar] merge-branches failed:", err);
       errEl.textContent = err?.message || String(err);
       errEl.style.display = "block";
       submitBtn.disabled = false;
@@ -2445,8 +2445,8 @@ function _closeMergeDialog() {
 // CONFLICT CATALOG PANEL
 // ─────────────────────────────────────────────────────────────────────
 //
-// Opens via the "↶ N open" link on a merged-branch row in the tree.
-// SEEs `<story>/.branches/<mergedPath>/conflicts` and renders the
+// Opens via the "↶ N open" link on a merged-history row in the tree.
+// SEEs `<story>/.histories/<mergedPath>/conflicts` and renders the
 // per-reel decision log. Every action on the panel either stamps a
 // reconciliation fact (via DO) or summons the mediator (via SUMMON);
 // both land in the same chain and the panel's re-render reflects
@@ -2456,10 +2456,10 @@ function _closeMergeDialog() {
 // push-based updates are a follow-up; the catalog SEE is cheap.
 
 let _conflictPanelEl = null;
-let _conflictPanelBranch = null;
+let _conflictPanelHistory = null;
 
 async function _openConflictPanel(mergedPath) {
-  _conflictPanelBranch = mergedPath;
+  _conflictPanelHistory = mergedPath;
   if (_conflictPanelEl) _conflictPanelEl.remove();
 
   const el = document.createElement("div");
@@ -2514,7 +2514,7 @@ async function _openConflictPanel(mergedPath) {
     _refreshConflictPanel(),
   );
   el.querySelector(".cp-mediator").addEventListener("click", () =>
-    _summonMediatorForBranch(mergedPath),
+    _summonMediatorForHistory(mergedPath),
   );
 
   function escClose(ev) {
@@ -2533,22 +2533,22 @@ function _closeConflictPanel() {
   if (_conflictPanelEl) {
     _conflictPanelEl.remove();
     _conflictPanelEl = null;
-    _conflictPanelBranch = null;
+    _conflictPanelHistory = null;
   }
 }
 
 async function _refreshConflictPanel() {
-  if (!_conflictPanelEl || !_conflictPanelBranch) return;
-  // Invalidate cached counts for this branch so the tree-row badge
+  if (!_conflictPanelEl || !_conflictPanelHistory) return;
+  // Invalidate cached counts for this history so the tree-row badge
   // re-fetches when the panel closes or the tree re-renders.
-  _conflictCountCache.delete(_conflictPanelBranch);
+  _conflictCountCache.delete(_conflictPanelHistory);
   const body = _conflictPanelEl.querySelector(".cp-body");
   const subtitle = _conflictPanelEl.querySelector(".cp-subtitle");
   body.innerHTML = `<div style="color:#6b7d72;padding:24px;text-align:center;">loading catalog…</div>`;
   let catalog;
   try {
     catalog = await _state.client.see(
-      `${_state.story}/.branches/${_conflictPanelBranch}/conflicts`,
+      `${_state.story}/.histories/${_conflictPanelHistory}/conflicts`,
     );
   } catch (err) {
     body.innerHTML = `<div style="color:#d97a7a;padding:16px;">failed to load catalog: ${_escape(err?.message || String(err))}</div>`;
@@ -2556,11 +2556,11 @@ async function _refreshConflictPanel() {
   }
   const c = catalog?.conflicts || catalog;
   if (c?.notFound) {
-    body.innerHTML = `<div style="color:#6b7d72;padding:16px;">branch #${_conflictPanelBranch} not found</div>`;
+    body.innerHTML = `<div style="color:#6b7d72;padding:16px;">history #${_conflictPanelHistory} not found</div>`;
     return;
   }
   if (c?.notAMerge) {
-    body.innerHTML = `<div style="color:#6b7d72;padding:16px;">#${_conflictPanelBranch} is not a merge result (no mergeSources)</div>`;
+    body.innerHTML = `<div style="color:#6b7d72;padding:16px;">#${_conflictPanelHistory} is not a merge result (no mergeSources)</div>`;
     return;
   }
 
@@ -2568,7 +2568,7 @@ async function _refreshConflictPanel() {
   const sourceB = c?.sourceB;
   const totals = c?.totals || {};
   subtitle.textContent =
-    `#${_conflictPanelBranch} merged from #${sourceA} + #${sourceB} · ` +
+    `#${_conflictPanelHistory} merged from #${sourceA} + #${sourceB} · ` +
     `${totals.conflictsOpen || 0} open, ${totals.conflictsResolved || 0} resolved, ${totals.cleanA + totals.cleanB || 0} clean`;
 
   const items = Array.isArray(c?.conflicts) ? c.conflicts : [];
@@ -2591,7 +2591,7 @@ async function _refreshConflictPanel() {
     const note = document.createElement("div");
     note.style.cssText = "color:#8fbf9f;padding:8px 0 12px;";
     note.textContent =
-      "no two-sided conflicts. the merged branch inherits everything cleanly through reel-lineage.";
+      "no two-sided conflicts. the merged history inherits everything cleanly through reel-lineage.";
     body.appendChild(note);
   }
   if (groups.open.length > 0) {
@@ -2726,21 +2726,21 @@ function _actionButton(label, onclick) {
   return b;
 }
 
-async function _summonMediatorForBranch(historyPath) {
+async function _summonMediatorForHistory(historyPath) {
   try {
-    _showBranchEvent("✨ summoning @merge-mediator…");
+    _showHistoryEvent("✨ summoning @merge-mediator…");
     await _state.client.call(`/@merge-mediator`, {
       from: "user",
       content:
         `Walk me through the conflicts on #${historyPath}. ` +
-        `The catalog is at ${_state.story}/.branches/${historyPath}/conflicts. ` +
+        `The catalog is at ${_state.story}/.histories/${historyPath}/conflicts. ` +
         `Pick up at the first row marked status=open and propose a resolution.`,
     });
-    _showBranchEvent("✨ mediator summoned", { sticky: 2200 });
+    _showHistoryEvent("✨ mediator summoned", { sticky: 2200 });
     setTimeout(() => _refreshConflictPanel(), 800);
   } catch (err) {
-    console.warn("[branch-bar] mediator summon failed:", err?.message || err);
-    _showBranchEvent(`mediator summon failed: ${err?.message || err}`, {
+    console.warn("[history-bar] mediator summon failed:", err?.message || err);
+    _showHistoryEvent(`mediator summon failed: ${err?.message || err}`, {
       error: true,
     });
   }
@@ -2748,25 +2748,25 @@ async function _summonMediatorForBranch(historyPath) {
 
 async function _summonMediatorForConflict(item, sourceA, sourceB) {
   try {
-    _showBranchEvent("✨ summoning @merge-mediator for one conflict…");
+    _showHistoryEvent("✨ summoning @merge-mediator for one conflict…");
     await _state.client.call(`/@merge-mediator`, {
       from: "user",
       content:
-        `Resolve this specific conflict on #${_conflictPanelBranch}: ` +
+        `Resolve this specific conflict on #${_conflictPanelHistory}: ` +
         `reel ${item.reelKey} was touched on both #${sourceA} and #${sourceB}. ` +
         `Suggested strategy: ${item.suggestedStrategy}. ` +
         `Propose a resolution and stamp the reconciliation fact.`,
     });
     setTimeout(() => _refreshConflictPanel(), 800);
   } catch (err) {
-    _showBranchEvent(`mediator summon failed: ${err?.message || err}`, {
+    _showHistoryEvent(`mediator summon failed: ${err?.message || err}`, {
       error: true,
     });
   }
 }
 
 // Small HTML-entity escape for user-provided strings rendered into the
-// dialog (branch labels, etc.). Defensive against any control chars
+// dialog (history labels, etc.). Defensive against any control chars
 // that might end up in option text.
 function _escape(s) {
   return String(s)
@@ -2777,17 +2777,17 @@ function _escape(s) {
     .replace(/'/g, "&#39;");
 }
 
-// Transient on-screen branch-event chip. Used for branch switches and
+// Transient on-screen history-event chip. Used for history switches and
 // create-branch confirmations so the user can never miss a world flip.
 // Reuses one DOM node — overlapping events stomp each other rather
 // than stacking, which keeps the chrome out of the way.
-let _branchChipEl = null;
-let _branchChipTimer = null;
-function _showBranchEvent(text, { sticky = 1500, error = false } = {}) {
+let _historyChipEl = null;
+let _historyChipTimer = null;
+function _showHistoryEvent(text, { sticky = 1500, error = false } = {}) {
   if (typeof document === "undefined") return;
-  if (!_branchChipEl) {
-    _branchChipEl = document.createElement("div");
-    _branchChipEl.style.cssText = [
+  if (!_historyChipEl) {
+    _historyChipEl = document.createElement("div");
+    _historyChipEl.style.cssText = [
       "position: fixed",
       "top: 50%",
       "left: 50%",
@@ -2803,34 +2803,34 @@ function _showBranchEvent(text, { sticky = 1500, error = false } = {}) {
       "box-shadow: 0 8px 24px rgba(0,0,0,0.6)",
       "transition: opacity 0.25s ease-out, transform 0.25s ease-out",
     ].join(";");
-    document.body.appendChild(_branchChipEl);
+    document.body.appendChild(_historyChipEl);
   }
   const bg = error ? "#3a1212" : "#2a1f0a";
   const border = error ? "#a04040" : "#6b5320";
   const color = error ? "#ffb0b0" : "#e8b762";
-  _branchChipEl.style.background = bg;
-  _branchChipEl.style.border = `1px solid ${border}`;
-  _branchChipEl.style.color = color;
-  _branchChipEl.textContent = text;
-  _branchChipEl.style.opacity = "1";
-  _branchChipEl.style.transform = "translate(-50%,-50%) scale(1)";
-  if (_branchChipTimer) clearTimeout(_branchChipTimer);
-  _branchChipTimer = setTimeout(() => {
-    if (_branchChipEl) _branchChipEl.style.opacity = "0";
+  _historyChipEl.style.background = bg;
+  _historyChipEl.style.border = `1px solid ${border}`;
+  _historyChipEl.style.color = color;
+  _historyChipEl.textContent = text;
+  _historyChipEl.style.opacity = "1";
+  _historyChipEl.style.transform = "translate(-50%,-50%) scale(1)";
+  if (_historyChipTimer) clearTimeout(_historyChipTimer);
+  _historyChipTimer = setTimeout(() => {
+    if (_historyChipEl) _historyChipEl.style.opacity = "0";
   }, sticky);
 }
 
-// Branch-switch detection. main.js calls into update() on every
+// History-switch detection. main.js calls into update() on every
 // navigate; we compare desc.address.history against the last seen one
 // and surface the change as an event chip. The user asked for "VERY
 // clear" — center-screen overlay does that.
-let _lastSeenBranch = null;
-function _maybeSurfaceBranchSwitch(branch) {
-  if (branch === _lastSeenBranch) return;
-  const prev = _lastSeenBranch;
-  _lastSeenBranch = branch;
+let _lastSeenHistory = null;
+function _maybeSurfaceHistorySwitch(history) {
+  if (history === _lastSeenHistory) return;
+  const prev = _lastSeenHistory;
+  _lastSeenHistory = history;
   if (prev === null) return; // first observation; not a switch
-  _showBranchEvent(`→ now viewing ${_branchLabel(branch)}`);
+  _showHistoryEvent(`→ now viewing ${_historyLabel(history)}`);
 }
 
 function _shortStamp(iso) {

@@ -16,7 +16,7 @@
 
 import { registerOperation } from "../../../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
-import { createBranch } from "../../../materials/history/branchCreation.js";
+import { createBranch } from "../../../materials/history/historyCreation.js";
 import {
   MAIN,
   invalidateHistoryCache,

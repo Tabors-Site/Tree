@@ -71,12 +71,12 @@ The set of reels the fold actually read while building this face:
 
 ```
 weave = [
-  { reelKind: "being"|"space"|"matter", reelId, branch },
+  { reelKind: "being"|"space"|"matter", reelId, history },
   ...
 ]
 ```
 
-Ordered, deduplicated by `reelKey({reelKind, reelId, branch})`. Built at
+Ordered, deduplicated by `reelKey({reelKind, reelId, history})`. Built at
 fold time by two paths that get merged:
 
 1. `foldPlace` records the position space's reel as it folds the

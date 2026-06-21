@@ -35,7 +35,7 @@ The source produces a transfer package. This includes:
 Facts from the relevant subtree (each with its hash as id, each signed by its actor).
 Beings referenced by those facts (each with their public key as id, with key history).
 Matter referenced by those facts (already content-addressed by hash).
-The lineage structure (mother-line, branch relationships) as data.
+The lineage structure (mother-line, history relationships) as data.
 The destination verifies the package. For each fact: recompute the hash and verify it matches the claimed id. Verify the signature against the actor's public key. Check the fact's p (previous hash) chains correctly. For matter: verify the content hash matches. For beings: verify any key rotations are properly signed.
 
 The destination integrates the verified content. Facts insert into the appropriate reels. Matter into the content store. Beings into the destination's known-beings index. None of this requires id rewriting — the ids are what they are.
@@ -113,7 +113,7 @@ The old graft was workable but architecturally heavy. The new graft is structura
 
 Bidirectional federation. Realities can exchange content freely because there's no namespace coordination to manage. Each substrate sees the cryptographic identity of what arrives and verifies it.
 
-Partial grafts become natural. You can graft just one being's recent history, or just one subtree, or just one branch — and the result is consistent because the cryptographic identity stitches everything together. No "incomplete remapping" failure modes.
+Partial grafts become natural. You can graft just one being's recent history, or just one subtree, or just one history — and the result is consistent because the cryptographic identity stitches everything together. No "incomplete remapping" failure modes.
 
 Multi-source merges. A reality could graft content from multiple sources, all containing references to the same beings (because beings have global crypto identity). The references resolve correctly because the keys identify the same being everywhere.
 
@@ -183,7 +183,7 @@ Federation doesn't require pre-established relationships. Any substrate can inte
 The substrate gains capabilities that conventional federation has been trying to get for years without quite achieving. Cryptographic identity is the missing piece that makes federation actually work without trust.
 
 Is this more powerful than what existed before in TreeOS itself
-This is the most interesting comparison. TreeOS before these changes was already novel — event-sourced state, beings as agents, branches as live timelines, role-based auth. The substrate had architectural commitments most systems don't have.
+This is the most interesting comparison. TreeOS before these changes was already novel — event-sourced state, beings as agents, histories as live timelines, role-based auth. The substrate had architectural commitments most systems don't have.
 
 But the substrate was still trust-bound. You trusted your TreeOS deployment to record your activity correctly. You trusted the federation gateway to route messages honestly. You trusted other operators to not tamper with their chains.
 

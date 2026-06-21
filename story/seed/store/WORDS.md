@@ -53,7 +53,7 @@ up, zero errors).
 | move/ | move:move | moveOp.js + moveHost.js | services.js |
 | grant-role/ | being:grant-role | index.js + grantHost.js (carved from being/ops.js) | services.js |
 | credential/ | credential:attach/detach/read/reset | credentialOps.js + credentialHost.js | services.js |
-| branch-pointers/ | branch-manager:set-pointer + delete-pointer | index.js + branchManagerHost.js (carved from branch-manager/ops.js) | genesis.js |
+| history-pointers/ | history-manager:set-pointer + delete-pointer | index.js + historyManagerHost.js (carved from history-manager/ops.js) | genesis.js |
 | set-world-signal/ | role-manager:set-world-signal | index.js (carved from role-manager/ops.js) | genesis.js |
 | model/ | render:set-model *(inert)* | index.js [moved modelOp.js] + model.word | services.js |
 | create-matter/ | matter:create-matter | index.js + matterHost.js (carved from matter/ops.js) | services.js |
@@ -62,7 +62,7 @@ up, zero errors).
 
 *(inert)* = the .word is registered + declared + resolvable, but the JS handler still drives (the
 cut was never wired). **Wired** words run the .word through the bridge with the JS body as a
-clean-miss fallback: key, grant-role, credential, branch-pointers, set-world-signal, acquisition,
+clean-miss fallback: key, grant-role, credential, history-pointers, set-world-signal, acquisition,
 cherub, and **create-matter** (wired + harness-verified 2026-06-19, verify-creatematter-cut 6/0).
 **Still inert:** set-model (wiring needs a from-scratch modelHost) and move/portal/set-render (the
 older inert moves).

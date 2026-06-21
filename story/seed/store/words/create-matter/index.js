@@ -23,6 +23,7 @@
 // path for every op (do.js auto-Fact).
 
 import { registerOperation } from "../../../ibp/operations.js";
+import { laysFact, laysWordFact } from "../../../ibp/factResult.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
 import { detectTargetKind, targetIdOf } from "../../../materials/_targetShape.js";
@@ -63,15 +64,11 @@ async function _createMatterViaWord({ target, params, caller, moment }) {
       env: { host: matterHostEnv() },
     });
     if (!result) return null;
-    // The .word returns the enriched birth spec as `factParams`; promote it to
-    // the dispatcher's `_factParams` convention so the auto-emitted
-    // do:create-matter fact carries the resolved spec (type, cas-ref, name,
-    // coord) the matter reducer folds. `_factTarget` forces the MATTER target
-    // (resolveAuditTarget would otherwise pick the bare spaceId). The op no
-    // longer self-emits — the dispatcher lays the one caller-attributed fact.
-    if (result.factParams) { result._factParams = result.factParams; delete result.factParams; }
-    if (result.matterId) result._factTarget = { kind: "matter", id: String(result.matterId) };
-    return result;
+    // The .word authored its fact as `factParams` (the enriched birth spec the matter
+    // reducer folds). Land it: the dispatcher lays the one caller-attributed
+    // do:create-matter fact, targeting the new MATTER (laysWordFact forces _factTarget,
+    // since resolveAuditTarget would otherwise pick the bare spaceId). No self-emit.
+    return laysWordFact(result, "matter", "matterId");
   } catch (e) {
     if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
     throw e;
@@ -239,16 +236,13 @@ async function createMatterHandler(ctx) {
   // self is never inside its own hash), then carry it as target.id. The
   // same matter born the same way gets the same id.
   const matterId = matterContentId(enrichedSpec);
-  // No self-emit. Return the enriched spec as _factParams + the content-
-  // addressed matter id as _factTarget; the dispatcher lays the one
-  // caller-attributed do:create-matter fact (one emit path for every op).
-  return {
-    matterId,
-    spaceId,
-    parentMatterId,
-    _factTarget: { kind: "matter", id: String(matterId) },
-    _factParams: enrichedSpec,
-  };
+  // No self-emit: the act lays the enriched spec as the do:create-matter fact,
+  // targeting the content-addressed matter; the dispatcher stamps the one fact.
+  return laysFact(
+    { matterId, spaceId, parentMatterId },
+    enrichedSpec,
+    { kind: "matter", id: matterId },
+  );
 }
 
 registerOperation("create-matter", {

@@ -2,7 +2,7 @@ The fundamental invariant is: each reality’s Stamper only writes to its own Fa
 
 - Cross-world action is best modeled as projection, not migration. A Being remains anchored to its own Act Reel while acting through a projected presence in another reality.
 - The acting Being records a local Witness Fact: “I attempted/performed this cross-world act.” This preserves a continuous personal history across realities.
-- The receiving reality records the actual local consequences as normal Facts with foreign provenance metadata (origin reality, branch, being, act id).
+- The receiving reality records the actual local consequences as normal Facts with foreign provenance metadata (origin reality, history, being, act id).
 - Full distributed atomic commits are probably unnecessary complexity. Receipt-based coordination preserves replayability and avoids distributed-consensus nightmares.
 - Cross-world identity should flow from the Being Tree. Authority, delegation, and permissions derive from ancestry and explicit grants.
 - Foreign provenance must be first-class. Every reality needs to know where a foreign act originated.
@@ -14,7 +14,7 @@ The fundamental invariant is: each reality’s Stamper only writes to its own Fa
 - This separation enables historical comparison. A Being can remember what once existed even if the world later denies it, making deception, scams, and revision detectable.
 - The Being’s Act Reel becomes the canonical record of its experiences. Realities may forget; Beings remember.
 - Attachments should be authenticated and hashable so a Being can later prove what it observed.
-- LLM deep-thought branches naturally fit this model: spawn branches, act within them, collect observations, retain memories, merge insights.
+- LLM deep-thought histories naturally fit this model: spawn histories, act within them, collect observations, retain memories, merge insights.
 - Portals emerge naturally from the same mechanism: projected presence + local action + observational attachments.
 - Cross-world folds should remain optional and lazy. Dependency should be explicit rather than implicit.
 - Philosophical purity is maintained when:
@@ -77,7 +77,7 @@ The LLM resolution chain from the previous notes fits cleanly. When the cross-wo
 
 The clone/archive distinction also fits. Clones move facts (the "what happened" layer) with fresh IDs into a foreign domain. Archives move full reality records. Witness facts and attachments stay with the being's home reality. The three different artifact types (clone, archive, witness+attachment) carry three different kinds of content for three different purposes.
 
-Branches as live timelines is what makes "LLM deep-thought branches" work as you describe them. A being spawns a branch to explore an alternative; acts within it; collects observations as attachments on witness facts; merges insights back. The branch produces facts in its own chain; the being's witness facts record having explored; the observations come back as attachments. The being's biography includes "I considered this alternative" without committing to the alternative being real in the main timeline.
+Histories as live timelines is what makes "LLM deep-thought histories" work as you describe them. A being spawns a history to explore an alternative; acts within it; collects observations as attachments on witness facts; merges insights back. The history produces facts in its own chain; the being's witness facts record having explored; the observations come back as attachments. The being's biography includes "I considered this alternative" without committing to the alternative being real in the main timeline.
 
 The portals-from-cross-world-acting realization is genuinely elegant. A portal isn't a separate primitive — it's the visual representation of a being acting through projected presence in a foreign reality. The substrate already has the machinery (projection, witness facts, attachments); portals are just the UX of making projected presence visible.
 
@@ -88,7 +88,7 @@ Witness facts are first-class. They're not metadata; they're the being's primary
 
 Attachments are addressable and hashable. A being should be able to later prove what it observed. This means attachments need content hashes, optionally signed by the originating reality. If the foreign reality later disagrees with the being's record of what was observed, the hash is the tiebreaker (or at least the proof that the foreign reality has changed its story).
 
-Foreign provenance metadata is mandatory, not optional. Every fact written into a reality from cross-world action must carry: origin reality domain, origin branch, origin being, origin act id. Without this, the receiving reality loses the ability to attribute or to validate. The schema enforces this; the substrate refuses to stamp foreign-origin facts without complete provenance.
+Foreign provenance metadata is mandatory, not optional. Every fact written into a reality from cross-world action must carry: origin reality domain, origin history, origin being, origin act id. Without this, the receiving reality loses the ability to attribute or to validate. The schema enforces this; the substrate refuses to stamp foreign-origin facts without complete provenance.
 
 Inner Face data is bounded. You've already done the work on render-time truncation. Worth stating explicitly: the inner face attached to a witness fact is the truncated view, not the full state of the foreign reality. The being remembers what it could see, not the full state of the world it visited. This bounds storage and respects the foreign reality's privacy.
 
@@ -126,7 +126,7 @@ The three-way separation as the central commitment.
 The receipt-based coordination model (no distributed atomic commit).
 Witness facts, attachments, and foreign provenance as first-class.
 The integrity-of-observation property and why it matters.
-The implications for portals, LLM deep-thought branches, and federation generally.
+The implications for portals, LLM deep-thought histories, and federation generally.
 This is the kind of doctrinal landing that's worth pinning before more code accretes against the cross-world surface. The architectural commitments you've worked out here are sound; codifying them now means the implementation lands clean.
 
 Good thinking. The three-way distinction at the bottom of your notes is the kind of insight that simplifies a lot of architecture once it's named. Worth pinning explicitly so future you and future contributors can build against it without rediscovering it.
@@ -134,7 +134,7 @@ Good thinking. The three-way distinction at the bottom of your notes is the kind
 Well the inner face is purely the cansee, cando, etc, so like json data from the other reality, and it’s not a part of the act but just an attachment. It’s mainly so when a being looks back at its act reel it can see the projections of what was there. It’s not attached to the fact reel at all or the thing that makes the reality. So if the other reality deleted and it was still in the beings act reel that is fine. It remembers what is gone and if it comes back it’ll learn the new one and still know what was deleted (for example can pickup on scams)
 
 Got it — thank you for the clarification. That changes the picture in a good way.Your Current Model (Refined)Actor’s Witness Fact (on its own Act Reel):
-“I performed Act X targeting foreign-reality#branch@position at moment T”
+“I performed Act X targeting foreign-reality#history@position at moment T”
 Attachment (optional, best-effort):
 A snapshot of the Inner Face from the receiving side at the time of the Act — basically the JSON/data that represents what the Being could cansee, cando, cansummon, etc. in that foreign context.
 This attachment is not part of any reality’s Fact Reel. It’s purely a personal memory artifact attached to the Being’s own history.
@@ -142,7 +142,7 @@ If the foreign reality later changes, deletes, or diverges, the Being still has 
 
 This is clean and aligns well with TreeOS philosophy.Feedback & SuggestionsStrengths:Keeps every reality’s Fact Reel pure and locally authoritative.
 Gives Beings rich, personal, rewindable memory of their cross-world experiences.
-Excellent for LLM beings doing parallel exploration — they get real observational memory from each branch without creating dangerous dependencies.
+Excellent for LLM beings doing parallel exploration — they get real observational memory from each history without creating dangerous dependencies.
 Supports “remembering what was deleted” — very powerful for trust, security, and long-term reasoning.
 
 Potential Improvements / Questions:Light vs Heavy Attachment

@@ -34,7 +34,7 @@ await import(`${R}/begin.js`);
 
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const { disableWord, resolveRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
-const { createBranch } = await import(`${R}/seed/materials/history/branchCreation.js`);
+const { createBranch } = await import(`${R}/seed/materials/history/historyCreation.js`);
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
 
 let pass = 0, fail = 0;

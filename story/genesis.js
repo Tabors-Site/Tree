@@ -805,7 +805,7 @@ export async function genesis(app, opts = {}) {
 
   // history-manager's create-history DO op. The substrate's history
   // helpers (seed/materials/history/) own the heavy lifting; the op
-  // is a thin handler routing through createHistory.
+  // is a thin handler routing through createBranch.
   const { registerHistoryManagerOps } =
     await import("./seed/present/roles/history-manager/ops.js");
   registerHistoryManagerOps();

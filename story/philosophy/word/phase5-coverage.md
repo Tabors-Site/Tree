@@ -51,7 +51,7 @@ The evaluator capabilities the slices need that do not exist. This is the handof
 | in-moment / relational query bound mid-flow (isAncestorOf graph walk; tree traversal with a predicate yielding anchors)               | 3       | cherub-connect, inheritation, (matter-types classification scoring)                                    |
 | state-read of a being's nested field used in a condition (`qualities.father`, foreign vs local)                                       | 3       | cherub-connect, inheritation, matter-types                                                             |
 | role inheritance (auto-inherit roles from parents on birth; `extends` merges parent capability and scope)                             | 3       | cherub-birth, governance-commons, subscription-schedule                                                |
-| branch-lineage inheritance and per-branch cancel (subscriptions/schedules inherit then cancel on the child)                           | 2       | subscription-schedule, (cherub-connect seatBranch)                                                     |
+| history-lineage inheritance and per-history cancel (subscriptions/schedules inherit then cancel on the child)                           | 2       | subscription-schedule, (cherub-connect seatBranch)                                                     |
 | collection-iteration: loop over a set, bind each element, break on a condition                                                        | 2       | cherub-connect, governance-commons                                                                     |
 | failure / refusal flow: emit a refusal or exception fact, halt the effect chain                                                       | 2       | cherub-connect, governance-commons                                                                     |
 | quantifier evaluation: `every`, `most`, `all`, `no` as counting predicates over collections                                           | 1       | governance-commons                                                                                     |
@@ -85,7 +85,7 @@ The evaluator capabilities the slices need that do not exist. This is the handof
 
 ## Runnable now
 
-None of the eight slices is runnable on the current parser-plus-evaluator. Honestly: zero. Every slice carries at least one `parser-gap` or `engine-gap` form, and most carry both. The closest are the slices that lean hardest on the existing `have` forms (`A X is a space.`, `A X is a role for a Y.`, the `When a E happens` event-flow, and the `host:` escape hatch) — `governance-commons` and `subscription-schedule` open with several `have` lines, and the matter-type registry's `A X is a matter type.` declarations parse today — but each still trips on its first real act (capability grants, `contains`, multi-effect bodies, branch-lineage inheritance). The four `have`-only forms are real and reused (six slices use the kind-declaration forms; two use the unparameterized event-flow), but no whole slice clears the bar. The single most universal blocker is the multi-effect flow body: seven of eight slices need it before any of their interesting behavior can run.
+None of the eight slices is runnable on the current parser-plus-evaluator. Honestly: zero. Every slice carries at least one `parser-gap` or `engine-gap` form, and most carry both. The closest are the slices that lean hardest on the existing `have` forms (`A X is a space.`, `A X is a role for a Y.`, the `When a E happens` event-flow, and the `host:` escape hatch) — `governance-commons` and `subscription-schedule` open with several `have` lines, and the matter-type registry's `A X is a matter type.` declarations parse today — but each still trips on its first real act (capability grants, `contains`, multi-effect bodies, history-lineage inheritance). The four `have`-only forms are real and reused (six slices use the kind-declaration forms; two use the unparameterized event-flow), but no whole slice clears the bar. The single most universal blocker is the multi-effect flow body: seven of eight slices need it before any of their interesting behavior can run.
 
 ## Draft .word corpus
 
@@ -121,7 +121,7 @@ That birth invokes the being's arrival into the world.
 ```
 When Cherub connects with a name and a password:
 
-  Cherub searches across all branches for a being with that name (up to 5 candidates, capped).
+  Cherub searches across all histories for a being with that name (up to 5 candidates, capped).
   For each candidate in order:
     If the candidate is local (not remote):
       Cherub verifies the password against the candidate's hash.
@@ -132,23 +132,23 @@ When Cherub connects with a name and a password:
   If a being was found:
     Cherub generates an identity token for the being.
     Cherub unlocks the signing session keyed by the being's trueName.
-    The transport seats the session on the being's home branch.
+    The transport seats the session on the being's home history.
     Return the being's address, beingId, name, and seatBranch.
 
 When a signed-in Name (the caller) connects to a being it owns:
 
   The caller has ctx.nameId set from the server-verified socket.
   The target is a being's name (not @cherub, extracted from the address).
-  Cherub searches for candidates with that being name (up to 5, across all branches).
+  Cherub searches for candidates with that being name (up to 5, across all histories).
   For each candidate in order:
     If the candidate is local:
-      Cherub loads the candidate's fresh projection at its home branch.
+      Cherub loads the candidate's fresh projection at its home history.
       Cherub reads the candidate's current trueName from the projection's state.
       If the current trueName equals the caller's nameId (verified match):
         The being is owned by the caller.
   If the being is owned:
     Cherub generates an identity token for the being with its trueName.
-    The transport seats the session on the being's home branch.
+    The transport seats the session on the being's home history.
     Return the being's address, beingId, name, seatBranch, and owned: true.
 
 When an authenticated being (the caller) connects to inherit a descendant being:
@@ -176,7 +176,7 @@ When an authenticated being (the caller) connects to inherit a descendant being:
     If the current inhabitant is not the father:
       Cherub emits a be:release fact for the current inhabitant with reason "father-priority".
   If inhabited as father (asFather is true):
-    Cherub loads the father's fresh projection at the target's home branch.
+    Cherub loads the father's fresh projection at the target's home history.
     Cherub reads the father's trueName from the projection's state.
     If the father is foreign (no local Name key exists):
       The driver trueName is the father's beingId (unsigned on this reality).
@@ -185,7 +185,7 @@ When an authenticated being (the caller) connects to inherit a descendant being:
   Otherwise (inherited, not as father):
     The driver trueName is the target being's trueName (the being keeps its own signer).
   Cherub generates an identity token for the target being with the driver trueName.
-  The transport seats the session on the target being's home branch.
+  The transport seats the session on the target being's home history.
   Return the being's address, beingId, name, seatBranch, inherited: true, and asFather: (true/false).
 ```
 
@@ -313,7 +313,7 @@ A schedule is a standing request to wake on a cadence.
 A schedule carries an interval, a priority, and content.
 
 A being declares a schedule to wake every N milliseconds.
-A schedule carries a branch so different branches wake on their own ticks.
+A schedule carries a history so different histories wake on their own ticks.
 When the tick comes due, the being's schedule fires.
 The being receives a summon carrying the scheduled content, and the being wakes.
 The schedule is the being's own request: the asker and receiver are the same being.
@@ -327,14 +327,14 @@ On each tick, every schedule whose next fire time has passed fires its summon.
 A subscription can also skip if the being already has an unconsumed summon, host: skipIfBacklog.
 A schedule can skip if the being's inbox backs up, when skipIfBacklog is true.
 
-A being's subscriptions inherit through branch lineage: a subscription on the parent branch reaches the child until the child cancels it on itself.
-A being's schedules inherit through branch lineage: a schedule on the parent branch ticks on the child until the child unschedules it on itself.
+A being's subscriptions inherit through history lineage: a subscription on the parent history reaches the child until the child cancels it on itself.
+A being's schedules inherit through history lineage: a schedule on the parent history ticks on the child until the child unschedules it on itself.
 
 When a being is released, every subscription for the being is dropped.
 When a being is released, every schedule for the being is dropped.
 ```
 
-- parser-gaps: `X carries a Y` (property declaration), `When the X happens, Y` (external/timer watch), `The X is the Y's own Z` (reflexive ownership), `When a X is Y, every Z for the X is dropped` (cleanup cascade). engine-gaps: capability grants (rule 14), branch-lineage inheritance, external/timer event watches, reflexive relationship marks (self-wake), cleanup cascades, coalesce batching, skipIfBacklog logic. (`A X is a space`, `A X is a role for a Y`, the two `When a E happens` event-flow forms, the event-derivation form, and `host: X` are `have`.)
+- parser-gaps: `X carries a Y` (property declaration), `When the X happens, Y` (external/timer watch), `The X is the Y's own Z` (reflexive ownership), `When a X is Y, every Z for the X is dropped` (cleanup cascade). engine-gaps: capability grants (rule 14), history-lineage inheritance, external/timer event watches, reflexive relationship marks (self-wake), cleanup cascades, coalesce batching, skipIfBacklog logic. (`A X is a space`, `A X is a role for a Y`, the two `When a E happens` event-flow forms, the event-derivation form, and `host: X` are `have`.)
 
 ### matter/types and space templates — type registry declarations
 

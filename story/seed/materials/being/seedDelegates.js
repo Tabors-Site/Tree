@@ -144,7 +144,7 @@ export const SEED_DELEGATES = [
     cognition: "scripted",
     invocableBy: "authenticated",
     description:
-      "Creates and manages branches — divergent worlds forked from a past moment of an existing branch. Click @branch-manager at the story root to mint a new branch, merge branches, or manage the named-pointer registry (set-pointer, delete-pointer).",
+      "Creates and manages histories — divergent worlds forked from a past moment of an existing history. Click @branch-manager at the story root to mint a new history, merge histories, or manage the named-pointer registry (set-pointer, delete-pointer).",
   },
   {
     name: "federation-manager",

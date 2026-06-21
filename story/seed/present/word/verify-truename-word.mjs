@@ -31,6 +31,7 @@ const { getStoryDomain } = await import(`${R}/seed/ibp/address.js`);
 const { getWordSync } = await import(`${R}/seed/present/word/wordStore.js`);
 const { resolveRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
 const { default: Fact } = await import(`${R}/seed/past/fact/fact.js`);
+const { IBP_ERR } = await import(`${R}/seed/ibp/protocol.js`);
 const pollFor = async (fn, pred, t = 16000, e = 250) => { const t0 = Date.now(); while (Date.now() - t0 < t) { const v = await fn(); if (pred(v)) return v; await new Promise((r) => setTimeout(r, e)); } return await fn(); };
 let pass = 0, fail = 0;
 const ok = (l) => { pass++; console.log(`  ✓ ${l}`); };
@@ -87,21 +88,49 @@ try {
     ? ok(`be:truename fact: params.trueName === resolved nameId, of:{kind:"being"}, result.trued (the WORD authored the params; the dispatcher stamped)`)
     : bad(`the fact's authored params`, { params: f?.params, of: f?.of, resultTrued: f?.result?.trued, wantName: nameId });
 
-  // (5) refusal: be:truename to a non-resolving Name refuses + lays NO fact
+  // (6) GATE-EQUIVALENCE: be.js's inline validation is DELETED, so truename.word's gates are the
+  // sole gate. Each must refuse with be.js's EXACT IbpError code (a different code would be a silent
+  // regression). Three distinct codes the old inline raised: INVALID_INPUT, BEING_NOT_FOUND, FORBIDDEN.
+  const expectRefusal = async (label, payload, addr) => {
+    let threw = false, code = null;
+    await withIAmAct(label, async (ctx) => {
+      try {
+        await beVerb("truename", payload, {
+          address: addr, addressKind: "stance",
+          identity: { beingId: I_AM, name: I_AM }, moment: ctx, currentHistory: "0",
+        });
+      } catch (e) { threw = true; code = e?.code || null; }
+    });
+    return { threw, code };
+  };
   const bogus = "z6Mkbogus000000000000000000000000000000000000";
-  let refused = false;
-  await withIAmAct("be:truename to a bogus name", async (ctx) => {
-    try {
-      await beVerb("truename", { trueName: bogus }, {
-        address: `${story}/.@tnbeing`, addressKind: "stance",
-        identity: { beingId: I_AM, name: I_AM }, moment: ctx, currentHistory: "0",
-      });
-    } catch { refused = true; }
+  const r1 = await expectRefusal("truename to a bogus name", { trueName: bogus }, `${story}/.@tnbeing`);
+  const f1 = await Fact.findOne({ verb: "be", act: "truename", "params.trueName": bogus }).lean();
+  (r1.threw && r1.code === IBP_ERR.INVALID_INPUT && !f1)
+    ? ok(`gate: non-resolving Name → ${IBP_ERR.INVALID_INPUT}, no fact (the .word If-no-nameId gate, be.js-equivalent)`)
+    : bad(`bogus-name gate`, { ...r1, want: IBP_ERR.INVALID_INPUT, fact: !!f1 });
+
+  const r2 = await expectRefusal("truename to a ghost being", { trueName: nameId }, `${story}/.@ghostbeing404`);
+  (r2.threw && r2.code === IBP_ERR.BEING_NOT_FOUND)
+    ? ok(`gate: missing target being → ${IBP_ERR.BEING_NOT_FOUND} (the .word If-no-targetId gate, be.js-equivalent)`)
+    : bad(`being-not-found gate`, { ...r2, want: IBP_ERR.BEING_NOT_FOUND });
+
+  // banished: declare a Name, banish it, truename to it → FORBIDDEN
+  let banishedName = null;
+  await withIAmAct("declare banishable name", async (ctx) => {
+    const r = await nameVerb("declare", { soulType: "scripted" }, { identity: I_AM, moment: ctx, currentHistory: "0" });
+    banishedName = r.nameId;
   });
-  const bogusFact = await Fact.findOne({ verb: "be", act: "truename", "params.trueName": bogus }).lean();
-  (refused && !bogusFact)
-    ? ok(`be:truename to a non-resolving Name refuses and lays NO fact`)
-    : bad(`refusal + no fact`, { refused, bogusFact: !!bogusFact });
+  await pollFor(() => loadProjection("name", banishedName, "0"), (s) => !!s?.state?.privateKeyEnc);
+  await withIAmAct("banish it", async (ctx) => {
+    await nameVerb("banish", {}, { identity: I_AM, address: `${banishedName}@${story}`, moment: ctx, currentHistory: "0" });
+  });
+  await pollFor(() => loadProjection("name", banishedName, "0"), (s) => !!s?.state?.closedAt);
+  const r3 = await expectRefusal("truename to a banished name", { trueName: banishedName }, `${story}/.@tnbeing`);
+  const f3 = await Fact.findOne({ verb: "be", act: "truename", "params.trueName": banishedName }).lean();
+  (r3.threw && r3.code === IBP_ERR.FORBIDDEN && !f3)
+    ? ok(`gate: banished Name → ${IBP_ERR.FORBIDDEN}, no fact (the .word If-banished gate, be.js-equivalent)`)
+    : bad(`banished gate`, { ...r3, want: IBP_ERR.FORBIDDEN, fact: !!f3 });
 
   console.log(`\n  ${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);

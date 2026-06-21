@@ -14,7 +14,7 @@ module ([seed/materials/publish/](../../seed/materials/publish/)).
 
 ## The one distinction
 
-- **GRAFT brings the thing itself.** A being, a branch, a subtree, moved
+- **GRAFT brings the thing itself.** A being, a history, a subtree, moved
   into another reality WITH its identity intact. Same public key, same
   act-chain, same history, hash-linked and signed exactly as it was at
   home. The grafted being is not a copy shaped like the original; it IS
@@ -43,7 +43,7 @@ construction. You could only ever produce a shell.
 [IDENTITY.md](IDENTITY.md) removed that wall. A being's id IS its public
 key, portable everywhere. Its acts are signed; its reels and act-chains
 verify self-certifyingly ([verifyReel](../../seed/past/fact/verifyReel.js),
-[verifyActChain](../../seed/past/act/actHash.js)); reality and branch
+[verifyActChain](../../seed/past/act/actHash.js)); reality and history
 Merkle roots prove whole regions at once. So a being's
 `{ key, signed act-chain, lineage, matter }` is now a verifiable, portable
 package. Graft moves that package and the receiver verifies it. Nothing is
@@ -52,7 +52,7 @@ rebuilt; the being continues.
 This is also why graft is mostly already built, under the wrong name: the
 whole-reality genome path (capture verbatim ids + full chains, verify the
 root reproduces) IS graft at reality scale. It generalizes down to a
-being or a branch, and out to landing in a living reality.
+being or a history, and out to landing in a living reality.
 
 ## The 2×2: what moves, and where it lands
 
@@ -62,7 +62,7 @@ compose freely.
 |                                | **at the reality root** (new)                | **at an existing position** (living)  |
 | ------------------------------ | -------------------------------------------- | ------------------------------------- |
 | **SEED** (shell, fresh ids)    | a new top-level world from a template        | a subtree planted under a position    |
-| **GRAFT** (identity preserved) | a being/branch into a fresh or empty reality | a being/branch into a running reality |
+| **GRAFT** (identity preserved) | a being/history into a fresh or empty reality | a being/history into a running reality |
 
 - **Placement = reality root.** The planted region becomes new top-level
   structure (or the whole of a fresh reality). For graft into an empty
@@ -73,12 +73,12 @@ compose freely.
   bring a being into a reality that is already running, without disturbing
   what is there.
 
-A word on "position" versus "branch", because the two are easy to conflate.
+A word on "position" versus "history", because the two are easy to conflate.
 Position is the landing spot, WHERE a transfer attaches in the destination
 (the code calls the sentinel for it the insertion point). Branch always
 means the lineage fork, WHICH fork of history the facts ride on, the
 git-style fork folded into every fact's hash. A position sits on some
-branch, but branch never names the landing spot. When you read "branch"
+history, but history never names the landing spot. When you read "branch"
 anywhere below, it is the fork; when you read "position", it is the place.
 
 All four quadrants are first-class. The substrate should not be able to do
@@ -88,7 +88,7 @@ three of them and fake the fourth.
 
 There is a third axis under WHAT and WHERE: **scope** — how much of the
 thing you bring. A graft ranges from one being, to a being and the subtree
-it owns, to a whole branch's worth of activity, up to the entire reality.
+it owns, to a whole history's worth of activity, up to the entire reality.
 Seed ranges the same way over structure.
 
 A whole-reality graft has a name of its own — the **genome** — but it is
@@ -143,12 +143,12 @@ chain. There is no id remapping, ever; that was the old shell operation.
 
 A graft inserts the source's facts and acts VERBATIM, by their original
 hashes, and never replays them. This is not a discipline anyone has to
-remember; it is structural. A fact's `_id` digest folds in its `branch`
+remember; it is structural. A fact's `_id` digest folds in its `history`
 and its provenance (`homeReality`, `wasRemote`); an act's folds its
-`branch` and `reality` ([hash.js contentOf](../../seed/past/fact/hash.js),
+`history` and `reality` ([hash.js contentOf](../../seed/past/fact/hash.js),
 [actHash.js contentOfAct](../../seed/past/act/actHash.js)). The hash is
 bound to WHERE the deed happened. Re-homing an imported fact (changing its
-reality, pushing it onto a different branch) changes its hash, and a
+reality, pushing it onto a different history) changes its hash, and a
 changed hash is a DIFFERENT fact. You cannot replay an imported fact as a
 local act: the act you would produce is provably not the one you imported.
 
@@ -166,7 +166,7 @@ The chain stays continuous; provenance flips at the boundary, visibly and
 tamper-evidently. Imported chains land by verbatim insert (original ids),
 never through `emitFact` — `emitFact` is the LOCAL writer, and a local
 write of a foreign fact is, by the digest, not that fact at all. This is
-the deepest payoff of putting branch and reality in the digest: the replay
+the deepest payoff of putting history and reality in the digest: the replay
 attack is not refused, it is unreachable.
 
 ## The import contract
@@ -218,8 +218,8 @@ receiver knows what it is verifying and what is missing.
   signed as a checkpoint (head hash + key, attested). The receiver
   verifies the segment from the checkpoint without the chain before it;
   earlier acts are referenced by hash and fetchable later.
-- **Single branch.** One branch's worth of the entity's activity, verified
-  within that branch's lineage. Useful for moving one project's work.
+- **Single history.** One history's worth of the entity's activity, verified
+  within that history's lineage. Useful for moving one project's work.
 - **State snapshot.** The entity's current folded state, signed at a point
   in time, accepted as authoritative current-state without folding a full
   chain. Pairs with any of the above for "current state + partial history."
@@ -229,9 +229,9 @@ All four are built (`capturePartialGraft` / `applyGraft`):
 - **genesis prefix** — the reel from birth to a cutoff, verified by `verifyReel`
   (genesis-rooted). Carries the being's birth, so it folds; a later graft merges
   the tail.
-- **signed checkpoint segment** — a contiguous suffix on one branch, anchored at
+- **signed checkpoint segment** — a contiguous suffix on one history, anchored at
   a signed checkpoint and verified by `verifyReelFrom`.
-- **single branch** — every fact of the being on one fork, anchored at the fork
+- **single history** — every fact of the being on one fork, anchored at the fork
   point, with the fork's lineage Branch rows carried so the receiver resolves
   and verifies just that slice. Same anchored verify as checkpoint segment.
 - **state snapshot** — no chain at all: a signed folded state landed as an
@@ -292,7 +292,7 @@ the wire adds on top of it.
   bytes of every request. Its `realityId` IS its public key, so first
   contact needs no key ceremony: knowing a peer is knowing its key. Inside
   that, the acting BEING signs the envelope it acts through: verb, address,
-  payload, act id, branch, home reality, and a wall clock timestamp, bound
+  payload, act id, history, home reality, and a wall clock timestamp, bound
   into one signature. The reality layer says "this really came from alpha.test";
   the being layer says "this being really asked for this exact deed." A
   peer can be marked strict (`requireSignedEnvelopes` on its peer record)
@@ -341,7 +341,7 @@ The names are being switched to match this doctrine. Today:
 - The code called **`seed`** ([seed.js](../../seed/materials/publish/seed.js))
   preserves ids verbatim and carries full chains. That is GRAFT behavior. It
   becomes **graft**, and generalizes from whole-reality-into-empty-DB to
-  being/branch scope and living-reality placement, and gains partial extracts.
+  being/history scope and living-reality placement, and gains partial extracts.
 
 The crypto-identity layer (signed acts, content-hash matter, pubkey beings,
 signed bundles) is the foundation both stand on. After the switch, the names

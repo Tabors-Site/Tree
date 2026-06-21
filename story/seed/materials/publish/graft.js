@@ -114,8 +114,8 @@ export async function captureGraft(opts = {}) {
   // ── 3. Collect every History ──
   // History registry: paths, branchPoints (per-reel snapshots of parent
   // heads at create-branch time), scopes, lifecycle flags.
-  const branches = await History.find({}).lean();
-  log.info("Graft", `captured ${branches.length} histories`);
+  const histories = await History.find({}).lean();
+  log.info("Graft", `captured ${histories.length} histories`);
 
   // ── 4. Collect every ReelHead ──
   // Per-reel-per-history seq counters. Without these the receiving
@@ -233,7 +233,7 @@ export async function captureGraft(opts = {}) {
       counts: {
         facts:     facts.length,
         acts:      acts.length,
-        branches:  branches.length,
+        histories: histories.length,
         reelHeads: reelHeads.length,
         actHeads:  actHeads.length,
         extensionCollections: Object.keys(extensionData).length,
@@ -250,7 +250,7 @@ export async function captureGraft(opts = {}) {
             await import("../../past/fact/chainRoots.js");
           return storyRootFromParts({
             story: getStoryDomain() || null,
-            histories: branches,
+            histories,
             reelHeads,
             actHeads,
           });
@@ -260,7 +260,7 @@ export async function captureGraft(opts = {}) {
 
     facts,
     acts,
-    branches,
+    histories,
     reelHeads,
     actHeads,
     extensionData,
@@ -315,7 +315,7 @@ export function assertValidGraft(bundle) {
       `seed: bundleVersion expected ${GRAFT_BUNDLE_VERSION}, got ${bundle.bundleVersion}`,
     );
   }
-  for (const collection of ["facts", "acts", "branches", "reelHeads"]) {
+  for (const collection of ["facts", "acts", "histories", "reelHeads"]) {
     if (!Array.isArray(bundle[collection])) {
       throw new Error(`seed: bundle.${collection} must be an array`);
     }
@@ -436,9 +436,9 @@ export async function plantGraft(bundle) {
   // Plant order matters for foreign-key-like references inside the
   // substrate's read paths. Histories are referenced by facts.history
   // and reelHeads.history; insert them first.
-  if (bundle.branches.length > 0) {
-    await History.insertMany(bundle.branches, { ordered: false });
-    log.info("Graft", `planted ${bundle.branches.length} histories`);
+  if (bundle.histories.length > 0) {
+    await History.insertMany(bundle.histories, { ordered: false });
+    log.info("Graft", `planted ${bundle.histories.length} histories`);
   }
 
   // ── 3. ReelHeads ──
@@ -636,7 +636,7 @@ export async function plantGraft(bundle) {
     counts: {
       facts:     bundle.facts.length,
       acts:      bundle.acts.length,
-      branches:  bundle.branches.length,
+      histories: bundle.histories.length,
       reelHeads: bundle.reelHeads.length,
       extensionCollections,
     },
@@ -695,7 +695,7 @@ async function captureBeingGraft(opts) {
       cur = row.parent ? String(row.parent) : null;
     }
   }
-  const branches = [...historyById.values()];
+  const histories = [...historyById.values()];
 
   // Per-history heads (the being's reel + act-chain tips). Include main.
   const allHistories = [...new Set([...historySet, "0", ...historyById.keys()])];
@@ -748,9 +748,9 @@ async function captureBeingGraft(opts) {
       beingId,
       lineage,
       graftRoot,
-      counts: { facts: facts.length, acts: acts.length, branches: branches.length, reelHeads: reelHeads.length, actHeads: actHeads.length },
+      counts: { facts: facts.length, acts: acts.length, histories: histories.length, reelHeads: reelHeads.length, actHeads: actHeads.length },
     },
-    facts, acts, branches, reelHeads, actHeads, casBlobs, casManifest,
+    facts, acts, histories, reelHeads, actHeads, casBlobs, casManifest,
   };
   // Provenance: this story vouches the extract is authentic. signerId =
   // storyId (a pubkey id a foreign receiver decodes from the id alone).
@@ -760,7 +760,7 @@ async function captureBeingGraft(opts) {
     bundle.meta.graftSig = { signerId: rid.storyId, value: signData(graftRoot) };
   } catch { /* unsigned extract (advisory) */ }
 
-  log.info("Graft", `captured being ${beingId.slice(0, 12)}… — ${facts.length} fact(s), ${acts.length} act(s), ${branches.length} lineage history(ies)`);
+  log.info("Graft", `captured being ${beingId.slice(0, 12)}… — ${facts.length} fact(s), ${acts.length} act(s), ${histories.length} lineage history(ies)`);
   return { bundle };
 }
 
@@ -851,10 +851,10 @@ export async function capturePartialGraft(opts = {}) {
         lineage: { parentBeingId: state.parentBeingId ?? null, homeStory: state.homeStory ?? story },
         graftRoot: snapshotRoot,
         partial: { mechanism: "state-snapshot", history, atHead, atSeq, stateHash, beyondExtract: opts.beyondExtract || "refuse" },
-        counts: { facts: 0, acts: 0, branches: 0, reelHeads: 0, actHeads: 0 },
+        counts: { facts: 0, acts: 0, histories: 0, reelHeads: 0, actHeads: 0 },
       },
       snapshot: { state, history, atHead, atSeq },
-      facts: [], acts: [], branches: [], reelHeads: [], actHeads: [], casBlobs: {}, casManifest: { included: [], omitted: [] },
+      facts: [], acts: [], histories: [], reelHeads: [], actHeads: [], casBlobs: {}, casManifest: { included: [], omitted: [] },
     };
     try {
       const { getStoryIdentity, signData } = await import("../../storyIdentity.js");
@@ -968,9 +968,9 @@ export async function capturePartialGraft(opts = {}) {
       lineage,
       graftRoot,
       partial: partialMeta,
-      counts: { facts: facts.length, acts: 0, branches: historiesToCarry.length, reelHeads: 1, actHeads: 0 },
+      counts: { facts: facts.length, acts: 0, histories: historiesToCarry.length, reelHeads: 1, actHeads: 0 },
     },
-    facts, acts: [], branches: historiesToCarry, reelHeads, actHeads: [], casBlobs: {}, casManifest: { included: [], omitted: [] },
+    facts, acts: [], histories: historiesToCarry, reelHeads, actHeads: [], casBlobs: {}, casManifest: { included: [], omitted: [] },
   };
   try {
     const { getStoryIdentity, signData } = await import("../../storyIdentity.js");
@@ -1138,7 +1138,7 @@ export async function applyGraft(bundle, opts = {}) {
   const newHistories = [];
   const normBP = (bp) => (bp instanceof Map ? Object.fromEntries(bp) : (bp || {}));
   const bpKey = (bp) => JSON.stringify(Object.entries(normBP(bp)).sort());
-  for (const b of bundle.branches || []) {
+  for (const b of bundle.histories || []) {
     const existing = await History.findById(b._id).lean();
     if (!existing) { newHistories.push(b); continue; }
     if (existing.parent !== b.parent || bpKey(existing.branchPoint) !== bpKey(b.branchPoint)) {
@@ -1174,12 +1174,12 @@ export async function applyGraft(bundle, opts = {}) {
   // the committed rows on a partial failure. deleteOne on a never-inserted
   // _id is a harmless no-op, so rollback then removes exactly what landed.
   const landed = [];
-  const counts = { facts: 0, acts: 0, branches: 0 };
+  const counts = { facts: 0, acts: 0, histories: 0 };
   try {
     if (newHistories.length > 0) {
       for (const b of newHistories) landed.push({ coll: "History", id: b._id });
       await History.insertMany(newHistories, { ordered: false });
-      counts.branches = newHistories.length;
+      counts.histories = newHistories.length;
     }
     // ReelHeads: create when absent; advance-only when present (never regress).
     for (const rh of bundle.reelHeads || []) {

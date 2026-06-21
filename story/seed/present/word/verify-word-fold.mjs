@@ -98,7 +98,7 @@ try {
 
   // 9. PER-BRANCH (V2): disable `move:move` on a real child branch only — off there, ON on main.
   //    This is the capability: an extension's words on in one branch, off in another.
-  const { createBranch } = await import(`${R}/seed/materials/history/branchCreation.js`);
+  const { createBranch } = await import(`${R}/seed/materials/history/historyCreation.js`);
   const made = await createBranch({ parent: "0", anchor: { atSeq: 1 }, createdBy: String(I_AM) });
   const BR = made.path;
   await reg.disableWord("move", "move", { history: BR });
