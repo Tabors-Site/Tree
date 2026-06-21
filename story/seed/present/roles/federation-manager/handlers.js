@@ -222,22 +222,35 @@ async function handleDeliverBeing(message, ctx) {
   // foreign sender.
   const operatorBeingId = ctx?.actorAct?.to || ctx?.actorAct?.through;
   try {
-    const { applyGraft } = await import("../../../materials/publish/graft.js");
-    const result = await applyGraft(bundle, { operatorBeingId });
-    // applyGraft inserts verbatim and does NOT fold (imported facts are
-    // foreign by construction; fold-on-read derives state). Trigger the
-    // first read so the grafted being is immediately visible to a SEE here.
+    // A delivered being is RECEIVED as a being-reel BOOK — reels only (doctrine: a book carries
+    // reels, NOT act-chains; the act-chain is the foreign Name's and stays home; the receiver gets
+    // the vessel reel). The receiving story vouches the colophon; the source's graftRoot rides as
+    // lineage provenance. (Replaces the retired applyGraft — all in book/receive now.)
+    const { makeBook } = await import("../../../store/book/book.js");
+    const { sealColophon } = await import("../../../store/book/colophon.js");
+    const { receive } = await import("../../../store/book/receive.js");
+    const body = { reels: [{ being: bundle.meta.beingId, facts: bundle.facts, reelHeads: bundle.reelHeads, histories: bundle.histories || [] }] };
+    if (bundle.casBlobs && Object.keys(bundle.casBlobs).length) {
+      body.matter = { casRefs: [], casBlobs: bundle.casBlobs, casManifest: {} }; // blobs hash-verify on the way in
+    }
+    let book = makeBook(
+      { title: `being ${String(bundle.meta.beingId).slice(0, 10)}`, body },
+      { sourceStory: bundle.sourceStory, createdBy: operatorBeingId, parent: bundle.meta?.graftRoot || null },
+    );
+    book = sealColophon(book); // the receiving story vouches
+    const result = await receive(book, { history: "0", actorBeingId: operatorBeingId });
+    // receive does NOT fold (verbatim instate); trigger the first read so the being is visible to SEE.
     try {
       const { loadOrFold } = await import("../../../materials/projections.js");
       await loadOrFold("being", bundle.meta.beingId, "0");
     } catch { /* fold-on-read will catch up on the next SEE */ }
     log.info("FederationManager",
-      `grafted being ${String(bundle.meta.beingId).slice(0, 12)}… from ${ctx?.askerStory || "?"} ` +
-      `[${result.mode}] — ${result.counts.facts} fact(s) landed verbatim`);
-    return { kind: "act", ok: true, content: `federation: grafted being ${String(bundle.meta.beingId).slice(0, 10)}… [${result.mode}]`, result };
+      `received being ${String(bundle.meta.beingId).slice(0, 12)}… from ${ctx?.askerStory || "?"} ` +
+      `as a reel book — ${result.reels} fact(s) landed`);
+    return { kind: "act", ok: true, content: `federation: received being ${String(bundle.meta.beingId).slice(0, 10)}… (${result.reels} fact(s))`, result };
   } catch (err) {
-    log.warn("FederationManager", `deliver-being graft failed: ${err.message || err}`);
-    return failure("graft-failed", err.message || String(err));
+    log.warn("FederationManager", `deliver-being receive failed: ${err.message || err}`);
+    return failure("receive-failed", err.message || String(err));
   }
 }
 

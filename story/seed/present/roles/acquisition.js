@@ -17,10 +17,12 @@
 //                 true : anyone can take the role at will
 //                 false: no take-role surface (default)
 //
-//   autoOnEntry → bool                       — silent grant on SEE
-//                 true : the SEE verb fires grant-role for the actor
-//                        when they first see a space hosting this role
-//                 false: no silent grants (default)
+//   autoOnEntry → bool                       — admit-on-entry policy
+//                 true : a being MAY acquire this role on entry. (The old
+//                        "SEE fires grant-role" mechanism was REMOVED — a
+//                        space is a NOUN, it can't grant a being; a being
+//                        reads this policy and self-takes via take-role.)
+//                 false: closed on entry (default)
 //
 // The default policy when the role spec has no `acquisition` block:
 // CLOSED on every axis. Extensions that don't declare a policy can't
@@ -31,7 +33,7 @@
 //
 // To make a role openly askable: declare `acquisition: { asked: "auto" }`.
 // To make a role walk-in: declare `acquisition: { grabbed: true }`.
-// To auto-grant on entry: declare `acquisition: { autoOnEntry: true }`.
+// To open entry self-take: declare `acquisition: { autoOnEntry: true }`.
 //
 // The "queue" path is reserved for when the summon-the-owner flow
 // lands; until then, undeclared = closed.

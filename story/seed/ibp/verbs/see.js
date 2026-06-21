@@ -724,53 +724,6 @@ export async function seeVerb(target, opts = {}) {
   return buildPlaceDescriptor(resolved, { identity, payload });
 }
 
-async function maybeAutoGrantOnEntry({ identity, spaceId, history, moment }) {
-  if (!spaceId) return;
-  try {
-    // loadOrFold both reads: the seen space may be inherited on this
-    // history (its qualities.roles live on a not-yet-folded lineage
-    // slot), and the actor's grants likewise.
-    const { loadOrFold } = await import("../../materials/projections.js");
-    const spaceSlot = await loadOrFold("space", String(spaceId), history);
-    const roles = spaceSlot?.state?.qualities?.roles;
-    if (!roles || typeof roles !== "object") return;
-
-    const { normalizeAcquisition, alreadyHoldsRole } =
-      await import("../../present/roles/acquisition.js");
-
-    const actorSlot = await loadOrFold(
-      "being",
-      String(identity.beingId),
-      history,
-    );
-    const heldGrants = actorSlot?.state?.qualities?.rolesGranted || [];
-
-    for (const [roleName, spec] of Object.entries(roles)) {
-      if (!spec || typeof spec !== "object") continue;
-      const policy = normalizeAcquisition(spec);
-      if (!policy.autoOnEntry) continue;
-      if (alreadyHoldsRole(heldGrants, roleName, spaceId)) continue;
-      const { emitInternalGrant } =
-        await import("../../present/roles/internalGrant.js");
-      await emitInternalGrant({
-        granteeBeingId: String(identity.beingId),
-        role: roleName,
-        anchorSpaceId: String(spaceId),
-        grantedBy: "auto-on-entry",
-        moment,
-        // The SEE's history — the world where the commons admitted the
-        // visitor. A wire SEE has no moment, and emitInternalGrant's
-        // actorAct fallback would land the grant on main, where this
-        // history's view can't inherit it (the fork predates it).
-        history,
-      });
-    }
-  } catch (_err) {
-    // Best-effort. SEE itself must not fail because the grant emit
-    // had a hiccup — the actor's view is already authorized.
-  }
-}
-
 /**
  * Infer the address shape when the caller doesn't say. `@` → stance;
  * `/` → position; otherwise → place. The verb's role-walk gate

@@ -232,11 +232,10 @@ import "./present/intake/inboxOps.js";
 // See seed/SUMMON.md "the receiving handler" + seed/present/intake/
 // inboxRenderers.js for the spec shape.
 import "./present/intake/renderers/index.js";
-// Side-effect import. Registers the publish layer: replicate-subtree
-// (extract a subtree's current shape into a portable bundle) and
-// graft-replicate (apply a bundle into a target). The walker primitive
-// in materials/refWalker.js is the engine; these ops wire it to DO.
-import "./materials/publish/ops.js";
+// (The old materials/publish/ops.js DISSOLVED into the book layer: capture-template/plant-template/
+// plant-template-by-name/capture-being/graft-being → capture-book/share-book/receive-book; clones →
+// the `library` SEE op; capture-graft (the whole-story genome) → `share-story`. All in book/share/
+// receive now. The captureGraft/plantGraft engines remain as internals those verbs call.)
 // Side-effect import. Registers the `receive-book` DO op (store/book/ops.js):
 // take a Book in (language/history/model/master) as the receiver's own act —
 // seal-check + atomic instate + colophon countersign, one do:receive-book fact.

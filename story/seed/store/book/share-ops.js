@@ -72,3 +72,40 @@ registerOperation("share-book", {
     );
   },
 });
+
+// library (SEE) — the catalog: the Books shared into this story's Library (the reel IS the
+// catalog). Replaces the old `clones` discovery op. Pure read; search/visit/plant start here.
+registerSeeOperation("library", {
+  ownerExtension: "seed",
+  description: "List the Books in this story's Library (the shared-book catalog)",
+  args: {},
+  handler: async () => {
+    const { listLibrary } = await import("./library.js");
+    return { books: await listLibrary() };
+  },
+});
+
+// share-story (DO) — capture the WHOLE story as a genome/master Book: full facts + acts +
+// histories + reelHeads, verbatim. It is the ONE book that DOES carry act-chains, because it is
+// YOU moving substrate (your whole reality, your Name's chains), not content shared among Names —
+// 5d.md's whole-story migration, the exception to "a book carries reels, not act-chains." Heaven-
+// gated. Replaces the old `capture-graft` op; the captureGraft engine is its internal.
+registerOperation("share-story", {
+  targets: ["space"],
+  ownerExtension: "seed",
+  factAction: "share-story",
+  skipAudit: true,
+  args: { storyName: { type: "text", label: "Story name (optional)", required: false } },
+  handler: async ({ identity, params }) => {
+    if (!identity?.beingId) {
+      throw new IbpError(IBP_ERR.UNAUTHORIZED, "share-story: identity required");
+    }
+    const { hasHeavenAuthority } = await import("../../materials/space/heavenLineage.js");
+    if (!(await hasHeavenAuthority(identity.beingId))) {
+      throw new IbpError(IBP_ERR.FORBIDDEN, "share-story: only beings with heaven authority may capture the whole story (the genome).");
+    }
+    const { captureGraft } = await import("../../materials/publish/graft.js");
+    const result = await captureGraft({ capturedBy: String(identity.beingId), storyName: params?.storyName || null });
+    return { savedTo: result.savedTo, counts: result.bundle.meta.counts, _skipAudit: true };
+  },
+});

@@ -121,11 +121,13 @@ export async function authorizeViaRoles(args) {
   // operator-authored bookkeeping and do NOT gate authorize.
   //
   // @public's spaces are NOT special at this layer. A public-owned
-  // space is just a space whose owner happens to be @public. Visitors
-  // get admitted via the regular role-walk because public's roles use
-  // acquisition.autoOnEntry=true to silently grant on first SEE; the
-  // grant rides in qualities.rolesGranted and the role-walk picks it
-  // up uniformly. No "public-commons" branch lives in this file.
+  // space is just a space whose owner happens to be @public. Public's
+  // roles set acquisition.autoOnEntry=true so a visitor may self-take
+  // them on entry (read the policy + take-role); once taken, the grant
+  // rides in qualities.rolesGranted and the role-walk picks it up
+  // uniformly. No "public-commons" branch lives in this file. (The old
+  // "SEE silently grants on first see" mechanism was removed — a space
+  // is a noun and can't act on a being.)
   const targetSpaceForOwner = deriveSpaceId(target);
   if (targetSpaceForOwner) {
     const claim = await findNearestOwnedAncestor(

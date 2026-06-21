@@ -80,7 +80,7 @@ export const SEED_DELEGATES = [
     cognition: "scripted",
     invocableBy: "no-one",
     description:
-      "The commons delegate (seed/RolesAreAuth.md). Holds the owner slot on spaces transferred to the public commons. Visitors get the commons role via auto-on-entry on those spaces, admitted through the regular role-walk. Never acts; never accepts SUMMONs. The silence IS the lock — Public-owned spaces can't be re-privatized except by I-Am (public's own owner) or by branching the timeline.",
+      "The commons delegate (seed/RolesAreAuth.md). Holds the owner slot on spaces transferred to the public commons. Visitors acquire the commons role by self-taking it on entry (the space's autoOnEntry policy), picked up by the regular role-walk. Never acts; never accepts SUMMONs. The silence IS the lock — Public-owned spaces can't be re-privatized except by I-Am (public's own owner) or by branching the timeline.",
   },
   {
     name: "cherub",

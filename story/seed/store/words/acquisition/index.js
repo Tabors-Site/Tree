@@ -26,10 +26,10 @@
 // gate. Once acquired, the role-walk authorize handles enforcement
 // uniformly with all other grants (no special branches).
 //
-// SEE's auto-on-entry hook also flows through the SAME shared
-// internalGrant module: when SEE on a space succeeds and the space
-// hosts roles with `autoOnEntry: true`, the seed silently emits the
-// same internal grant for the actor.
+// (SEE used to also flow through internalGrant via an auto-on-entry hook that silently emitted
+// the grant — REMOVED: a space is a NOUN and can't grant a being. A being now reads a space's
+// `autoOnEntry` policy and self-takes the role through THIS same take-role path. The acquisition
+// `.word`s are the one acquire surface: caller-authorized by the role's own policy, dispatcher stamps.)
 
 import { registerOperation } from "../../../ibp/operations.js";
 import { stampsFact, stampsWordFact } from "../../../ibp/factResult.js";
