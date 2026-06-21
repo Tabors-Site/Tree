@@ -91,16 +91,16 @@ async function foldRead(type, id, until = null, history) {
   if (!id) return null;
   try {
     if (until) {
-      // SEAM: foldAt's opts key is still `branch` (foldAt.js resolveUntil
-      // reads opts.branch); the value is the history slot.
+      // SEAM: foldAt's opts key is `history` (foldAt.js resolveUntil
+      // reads opts.history); the value is the history slot.
       const { state } = await foldAt(type, String(id), until, {
-        branch: history,
+        history,
       });
       return state;
     }
-    // SEAM: fold's opts key is still `branch` (foldEngine.js reads
-    // opts.branch); the value is the history slot.
-    const { state } = await fold(type, String(id), { branch: history });
+    // SEAM: fold's opts key is `history` (foldEngine.js reads
+    // opts.history); the value is the history slot.
+    const { state } = await fold(type, String(id), { history });
     return state;
   } catch (err) {
     if (err instanceof NoSuchHistoricalState) return null;

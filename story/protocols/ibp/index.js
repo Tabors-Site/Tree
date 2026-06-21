@@ -50,13 +50,13 @@ export function wireLiveHooks() {
   // specific event are free to skip — the cost is one descriptor
   // re-fetch by clients with a live subscription, bounded by their
   // own debounce in handleDescriptorEvent.
-  hooks.register("afterQualityWrite", async ({ spaceId, ns, target, branch }) => {
+  hooks.register("afterQualityWrite", async ({ spaceId, ns, target, history }) => {
     if (!spaceId) return;
     emitPositionInvalidate(spaceId, `qualities:${ns}`);
     if (target?.kind === "space") {
       try {
         const { loadProjection } = await import("../../seed/materials/projections.js");
-        const slot = await loadProjection("space", target.id, branch || "0");
+        const slot = await loadProjection("space", target.id, history || "0");
         if (slot?.state?.parent) emitPositionInvalidate(slot.state.parent, `child-metadata:${ns}`);
       } catch { /* defensive */ }
     }
@@ -92,7 +92,7 @@ export function wireLiveHooks() {
   // recreating every mesh in the scene. The delta is the
   // authoritative live path for coord; invalidate covers fields
   // the delta doesn't carry.
-  hooks.register("afterFieldWrite", async ({ spaceId, field, target, branch }) => {
+  hooks.register("afterFieldWrite", async ({ spaceId, field, target, history }) => {
     if (!spaceId) return;
     // Skip coord ONLY for being writes . set-being:coord has its own
     // lightweight emitPositionDelta path (see afterPositionUpdate
@@ -107,7 +107,7 @@ export function wireLiveHooks() {
     if (target?.kind === "space") {
       try {
         const { loadProjection } = await import("../../seed/materials/projections.js");
-        const slot = await loadProjection("space", target.id, branch || "0");
+        const slot = await loadProjection("space", target.id, history || "0");
         if (slot?.state?.parent) emitPositionInvalidate(slot.state.parent, `child-field:${field}`);
       } catch { /* defensive */ }
     }

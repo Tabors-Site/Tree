@@ -258,14 +258,9 @@ export function resolveActiveStack({
  * @param {string} history                 — the history ("0" for main)
  * @returns {Promise<Map<string, object>>}  role-name → spec
  */
-export async function computeAvailableRoles({ toBeing, positionSpaceId, history, branch }) {
+export async function computeAvailableRoles({ toBeing, positionSpaceId, history }) {
   const out = new Map();
   if (!toBeing) return out;
-  // SEAM: the sole caller (present/stamper/1-assign.js, owned by another
-  // agent) still passes the history slot under the old `branch` key.
-  // Accept either until that side renames to `history`; the value is the
-  // history. Drop the `branch` alias once 1-assign passes `history`.
-  if (history == null) history = branch;
   if (typeof history !== "string" || !history.length) {
     throw new Error("computeAvailableRoles requires `history` (no silent default)");
   }

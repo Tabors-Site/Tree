@@ -33,7 +33,11 @@ import { emitFact } from "../../past/fact/facts.js";
 import { IbpError, IBP_ERR } from "../protocol.js";
 import { isSourceSpaceId } from "../../materials/space/source.js";
 import { authorize } from "../authorize.js";
-import { assertVerbCaller, refuseHistoricalWrite, resolveHistoryForFact } from "./_shared.js";
+import {
+  assertVerbCaller,
+  refuseHistoricalWrite,
+  resolveHistoryForFact,
+} from "./_shared.js";
 import { stripForAudit } from "../../materials/redact.js";
 
 /**
@@ -58,22 +62,26 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
   assertVerbCaller("do", opts);
   refuseHistoricalWrite("do", target, opts);
   if (typeof operation !== "string" || operation.length === 0) {
-    throw new Error("story.do(target, operation, params): operation must be a non-empty string");
+    throw new Error(
+      "story.do(target, operation, params): operation must be a non-empty string",
+    );
   }
 
   // Fold-ONLY: a do-op resolves from the live projection (the fold of coin facts), the
   // registry-free path (philosophy/word/10.md §2). The fold is the SOLE source the running system
   // dispatches on — no Map fallback. This IS achievable because the seed declares its words BEFORE it
-  // builds the reality: genesis.js declares every do-op onto I_AM's reel (a fact needs only I_AM, not
+  // builds the story: genesis.js declares every do-op onto I_AM's reel (a fact needs only I_AM, not
   // the space/being it will later describe) right after ensureIAm and BEFORE ensureSpaceRoot, so the
-  // first do-op dispatched while building the reality (create-space, set-being, set-space) already
+  // first do-op dispatched while building the story (create-space, set-being, set-space) already
   // resolves from the fold. The operations Map stays ONLY as the module-load registration buffer that
   // declareOpsToFold reads to KNOW what to declare — never a dispatch truth. (This supersedes the
   // earlier "fold-only is not achievable" reading: the bootstrap was reordered to FOLLOW the fold, so
   // 10.md step 5 lands — genesis is words, and the words are what the dispatch runs on.)
   let op = resolveDoOpFromFold(operation);
   if (!op) {
-    throw new Error(`Unknown DO operation: "${operation}". Use story.do.listOperations() to see available operations.`);
+    throw new Error(
+      `Unknown DO operation: "${operation}". Use story.do.listOperations() to see available operations.`,
+    );
   }
 
   // Resolve history ONCE at the entry point. moment.actorAct?.history wins when
@@ -100,16 +108,21 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
   // materials/matter/types.js). Cheap: only fires when the op opted
   // in AND the target is matter.
   if (op.matterTypes) {
-    const { detectTargetKind, targetIdOf } = await import("../../materials/_targetShape.js");
+    const { detectTargetKind, targetIdOf } =
+      await import("../../materials/_targetShape.js");
     if (detectTargetKind(target) === "matter") {
       const { loadOrFold } = await import("../../materials/projections.js");
-      const slot = await loadOrFold("matter", String(targetIdOf(target)), history);
+      const slot = await loadOrFold(
+        "matter",
+        String(targetIdOf(target)),
+        history,
+      );
       const matterType = slot?.state?.type || "generic";
       if (!op.matterTypes.includes(matterType)) {
         throw new IbpError(
           IBP_ERR.INVALID_INPUT,
           `DO ${operation}: this op applies to matter type(s) ` +
-          `${op.matterTypes.join(", ")} — target is "${matterType}"`,
+            `${op.matterTypes.join(", ")} — target is "${matterType}"`,
           { operation, matterType, applies: [...op.matterTypes] },
         );
       }
@@ -142,7 +155,11 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     // lives at so the role-walk has a coherent path/spaceId to match
     // against role.reach + role host coverage.
     const auditTarget = resolveAuditTarget(target, null, op);
-    const spaceIdForAuth = await resolveAuthSpaceId(target, auditTarget, history);
+    const spaceIdForAuth = await resolveAuthSpaceId(
+      target,
+      auditTarget,
+      history,
+    );
     // Extract namespace for namespace-aware authorization. Three
     // forms handled: legacy set-qualities/clear-qualities (params.namespace),
     // and the material-scoped set-<kind> ops with
@@ -175,7 +192,7 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     }
     const decision = await authorize({
       identity,
-      verb:   "do",
+      verb: "do",
       // target.history = the history this DO's Fact lands on (resolved
       // once at the verb entry). Auth evaluates the same world the
       // stamp rides.
@@ -251,20 +268,23 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     // Phase 2: contribute to ctx.deltaF (if inside a moment) instead
     // of committing eagerly. sealAct will commit this Fact + the Act
     // row + any other Facts the moment produced in one transaction.
-    await emitFact({
-      verb:    "do",
-      act:     op.factAction,
-      through: actorBeingId,
-      of:      resolveAuditTarget(target, result, op),
-      params:  ctx.params,
-      result:  summarizeAuditResult(result),
-      actId,
-      // History this fact lands on, pre-resolved at the entry. Inherited
-      // from the moment's moment (set by assign from the intake
-      // entry, which the wire layer fills from the parsed `#`
-      // qualifier) or attached as opts.currentHistory by the wire.
-      history: history,
-    }, opts.moment);
+    await emitFact(
+      {
+        verb: "do",
+        act: op.factAction,
+        through: actorBeingId,
+        of: resolveAuditTarget(target, result, op),
+        params: ctx.params,
+        result: summarizeAuditResult(result),
+        actId,
+        // History this fact lands on, pre-resolved at the entry. Inherited
+        // from the moment's moment (set by assign from the intake
+        // entry, which the wire layer fills from the parsed `#`
+        // qualifier) or attached as opts.currentHistory by the wire.
+        history: history,
+      },
+      opts.moment,
+    );
   }
 
   return result;
@@ -306,7 +326,7 @@ async function resolveAuthSpaceId(target, auditTarget, history) {
   // op-handler already returned a kind (via result._factTarget or
   // schema-typed shapes), trust it.
   const kind = auditTarget?.kind || null;
-  const id   = auditTarget?.id   || null;
+  const id = auditTarget?.id || null;
   if (!id) return null;
 
   if (kind === "space") return id;
@@ -341,7 +361,8 @@ async function resolveAuthSpaceId(target, auditTarget, history) {
   const spaceSlot = await loadOrFold("space", id, history);
   if (spaceSlot) return String(spaceSlot.id);
   const beingSlot = await loadOrFold("being", id, history);
-  if (beingSlot) return beingSlot.position || beingSlot.state?.homeSpace || null;
+  if (beingSlot)
+    return beingSlot.position || beingSlot.state?.homeSpace || null;
   const matterSlot = await loadOrFold("matter", id, history);
   if (matterSlot) {
     return matterSlot.state?.spaceId ? String(matterSlot.state.spaceId) : null;
@@ -365,7 +386,11 @@ async function checkReadOnlySource(target, history) {
   if (target.kind === "matter" && target.id != null) {
     try {
       const { loadOrFold } = await import("../../materials/projections.js");
-      const slot = await loadOrFold("matter", String(target.id), history || "0");
+      const slot = await loadOrFold(
+        "matter",
+        String(target.id),
+        history || "0",
+      );
       if ((slot?.state?.type || "generic") === "source") {
         return "Cannot DO write on source matter: the seed's disk mirror is read-only";
       }
@@ -416,14 +441,22 @@ async function checkReadOnlySource(target, history) {
 function resolveAuditTarget(target, result, op) {
   if (result && typeof result === "object") {
     if (result._factTarget && result._factTarget.id) {
-      return { kind: result._factTarget.kind || null, id: String(result._factTarget.id) };
+      return {
+        kind: result._factTarget.kind || null,
+        id: String(result._factTarget.id),
+      };
     }
-    if (result.spaceId)  return { kind: "space",  id: String(result.spaceId) };
+    if (result.spaceId) return { kind: "space", id: String(result.spaceId) };
     if (result.matterId) return { kind: "matter", id: String(result.matterId) };
-    if (result.beingId)  return { kind: "being",  id: String(result.beingId) };
+    if (result.beingId) return { kind: "being", id: String(result.beingId) };
   }
   // Typed identity — the canonical shape.
-  if (target && typeof target === "object" && target.kind && target.id != null) {
+  if (
+    target &&
+    typeof target === "object" &&
+    target.kind &&
+    target.id != null
+  ) {
     return { kind: target.kind, id: String(target.id) };
   }
   // String id paired with an op that targets exactly one kind. The
@@ -441,14 +474,19 @@ function resolveAuditTarget(target, result, op) {
   // the right kind via their result; here we only get this far when
   // the result didn't carry one, which means the stance addressed a
   // space (the only kind a bare stance names).
-  if (target && typeof target === "object" && Array.isArray(target.chain) && target.spaceId) {
+  if (
+    target &&
+    typeof target === "object" &&
+    Array.isArray(target.chain) &&
+    target.spaceId
+  ) {
     return { kind: "space", id: String(target.spaceId) };
   }
   throw new Error(
     `resolveAuditTarget: unrecognized target shape for op "${op?.name || "?"}". ` +
-    `Expected { kind, id } or string id (with single-kind op). ` +
-    `Got ${typeof target}${target && typeof target === "object" ? ` with keys ${Object.keys(target).join(",")}` : ""}. ` +
-    `Migrate the caller — Mongoose rows do not cross the verb boundary; pass { kind, id } instead.`,
+      `Expected { kind, id } or string id (with single-kind op). ` +
+      `Got ${typeof target}${target && typeof target === "object" ? ` with keys ${Object.keys(target).join(",")}` : ""}. ` +
+      `Migrate the caller — Mongoose rows do not cross the verb boundary; pass { kind, id } instead.`,
   );
 }
 
@@ -459,7 +497,11 @@ function summarizeAuditResult(result) {
   if (result == null) return null;
   if (typeof result !== "object") return result;
   if (typeof result.toObject === "function") {
-    try { return { _id: String(result._id) }; } catch { return null; }
+    try {
+      return { _id: String(result._id) };
+    } catch {
+      return null;
+    }
   }
   // Omit one-time reveals (plaintext / private key / mnemonic / token) and transport
   // plumbing (_factTarget) so the durable audit fact never records cleartext credentials

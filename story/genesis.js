@@ -267,9 +267,9 @@ export async function genesis(app, opts = {}) {
   //   emit redundant idempotent re-writes and inflate the chain
   //   unnecessarily. The seed is the genesis when plant mode is active.
   //
-  // The seed declares itself onto the chain BEFORE the reality it builds: the verb pasts, the concept
+  // The seed declares itself onto the chain BEFORE the story it builds: the verb pasts, the concept
   // .words, and the do-ops, all as I_AM coin facts on I_AM's OWN reel (of: I_AM, wordStore.js
-  // bindWord) — which needs only I_AM, not any space/being. A fact is laid before the reality it
+  // bindWord) — which needs only I_AM, not any space/being. A fact is laid before the story it
   // describes (the place is folded FROM facts), so the WORD fold does not depend on the PLACE fold.
   // Declared after ensureIAm and BEFORE ensureSpaceRoot, every bootstrap do-op (create-space,
   // set-being, set-space) resolves from the FOLD, not the Map: genesis IS words (word/10.md §2, 13.md).
@@ -296,8 +296,8 @@ export async function genesis(app, opts = {}) {
       // Step 1: "I am that I am" — birth I-Am alone, homeSpace=null.
       await ensureIAm();
 
-      // Step 1.5: the words declare themselves onto I_AM's reel, BEFORE the reality-building below,
-      // so every do-op dispatched while building the reality resolves fold-only (no Map fallback).
+      // Step 1.5: the words declare themselves onto I_AM's reel, BEFORE the story-building below,
+      // so every do-op dispatched while building the story resolves fold-only (no Map fallback).
       await declareTheWords();
 
       // Step 2: place root + heaven + tier-3 heaven spaces.
@@ -354,7 +354,7 @@ export async function genesis(app, opts = {}) {
     await declareTheWords();
   }
 
-  // (The seed declared itself BEFORE the reality — Step 1.5 above, and the planted else-history — so
+  // (The seed declared itself BEFORE the story — Step 1.5 above, and the planted else-history — so
   // every bootstrap do-op dispatched fold-only. Nothing left to declare here.)
 
   // ── POST-GENESIS RECONCILIATIONS ──

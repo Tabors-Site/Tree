@@ -9,12 +9,12 @@
 // URL can: not just "where" but "where, and as what being,
 // addressing what other being or thing."
 //
-//   Position    = place/path           (where)
-//   Stance      = place/path@being     (where + as what being — one side of a bridge)
+//   Position    = story/path           (where)
+//   Stance      = story/path@being     (where + as what being — one side of a bridge)
 //   IBP Address = stance :: stance    (full bridged form — one being addressing another)
 //
 // Each level answers a different question. "What's the position?" →
-// just the place/path. "What's the stance?" → place/path@being (one
+// just the story/path. "What's the stance?" → story/path@being (one
 // side). "What's the IBP address?" → the full bridged form. The
 // shape is uniform across cross-being, face-to-face, same-being
 // thinking, and self — one grammar covers every conversation I can
@@ -27,11 +27,11 @@
 //   IbpAddress := Bridge | Stance
 //   Bridge     := Stance "::" Stance
 //   Stance     := Position "@" Being | Position | Being
-//   Position   := Place? Branch? Path?
-//   Place       := Domain (":" Port)?
+//   Position   := story? Branch? Path?
+//   story       := Domain (":" Port)?
 //   Branch     := "#" HistoryPath          (omitted = "0" = main)
 //   HistoryPath := number(letter+number)*  (e.g. "1", "1a", "1a1", "22zb")
-//   Path       := "/"                            (place space)
+//   Path       := "/"                            (story space)
 //               | "/" Segment ("/" Segment)*     (space — full chain or leaf-only)
 //               | "/~" UserSlug ("/" Segment)*   (home zone)
 //               | "~" ...                        (home shorthand; expands to /~<user>)
@@ -60,10 +60,10 @@
 //
 // Both sides of a bridge are stances. They use the SAME grammar. A
 // human user is represented as `<story>/@<username>` — i.e. a being at
-// the place root space. A bare identifier on the left side (e.g. `tabor`) is
+// the story root space. A bare identifier on the left side (e.g. `tabor`) is
 // the display shorthand for that. In future, the left side of a bridge
 // may carry a deeper path so the request reflects WHERE in the user's
-// place they're sending from (more location context for federated
+// story they're sending from (more location context for federated
 // requests).
 //
 // The parser accepts shorthands and expands them against an optional
@@ -180,7 +180,7 @@ export function format(pa, opts = {}) {
 
 /**
  * Expand an IBPA's shorthands against a context. Returns a new IBPA
- * with fully-resolved place / path / being fields on each stance.
+ * with fully-resolved story / path / being fields on each stance.
  * Useful at request time, where the server expects a fully-qualified
  * address.
  *
@@ -239,8 +239,9 @@ async function _resolveStanceBeingId(stance, ctx) {
     // No literal "0" fallback — resolve the operator's `#main` pointer
     // when the stance carries no explicit history (the resolver should
     // have canonicalized this earlier, but defensive coverage here).
-    const { getDefaultHistory } = await import("../materials/history/historyRegistry.js");
-    const history = stance.history || await getDefaultHistory();
+    const { getDefaultHistory } =
+      await import("../materials/history/historyRegistry.js");
+    const history = stance.history || (await getDefaultHistory());
     const slot = await findByName("being", stance.being, history);
     if (slot?.id) {
       return { ...stance, beingId: String(slot.id) };
@@ -301,19 +302,28 @@ export async function resolveHistoryPointers(pa, ctx = {}) {
     resolved.left.history !== resolved.right.history
   ) {
     let addr = null;
-    try { addr = format(resolved); } catch { /* error context only */ }
-    throw crossHistoryBridgeError(addr, resolved.left.history, resolved.right.history);
+    try {
+      addr = format(resolved);
+    } catch {
+      /* error context only */
+    }
+    throw crossHistoryBridgeError(
+      addr,
+      resolved.left.history,
+      resolved.right.history,
+    );
   }
   return resolved;
 }
 
 async function _resolveStancePointer(stance, ctx) {
   if (!stance || !stance.historyPointer) return stance;
-  if (stance.history) return stance;  // already canonical
+  if (stance.history) return stance; // already canonical
   const localStory = ctx.currentStory || getStoryDomain();
   if (stance.story && stance.story !== localStory) return stance;
   try {
-    const { resolvePointer } = await import("../materials/history/historyRegistry.js");
+    const { resolvePointer } =
+      await import("../materials/history/historyRegistry.js");
     const canonical = await resolvePointer(stance.historyPointer);
     if (canonical) {
       return { ...stance, history: canonical };
@@ -344,9 +354,9 @@ export function validate(pa) {
     if (stance.story != null && !isValidStory(stance.story)) {
       errors.push({
         side: label,
-        field: "place",
+        field: "story",
         value: stance.story,
-        reason: "invalid-place",
+        reason: "invalid-story",
       });
     }
     if (stance.path != null && !isValidPath(stance.path)) {
@@ -397,7 +407,7 @@ function parseStance(input, ctx, opts = {}) {
   // Bare being? "@ruler"
   if (s.startsWith("@")) {
     // On the left side of a bridge, `@tabor` is the explicit-@ form of
-    // the human-user shorthand: it means the user `tabor` at the place root.
+    // the human-user shorthand: it means the user `tabor` at the story root.
     if (isLeftSide) {
       return {
         story: ctx.currentStory || null,
@@ -423,7 +433,7 @@ function parseStance(input, ctx, opts = {}) {
     being = parseBeing(s.slice(atIdx));
     rest = s.slice(0, atIdx);
   }
-  // After stripping being, `rest` is a position (place+branch?+path).
+  // After stripping being, `rest` is a position (story+branch?+path).
   if (!rest) {
     return {
       // Leave story NULL so expand's storyWasTyped check stays
@@ -450,8 +460,11 @@ function parseStance(input, ctx, opts = {}) {
   const hashIdx = rest.indexOf("#");
   if (hashIdx >= 0) {
     if (rest.indexOf("#", hashIdx + 1) >= 0) {
-      throw paError("multiple-histories", input,
-        `Only one "#" history qualifier allowed per stance`);
+      throw paError(
+        "multiple-histories",
+        input,
+        `Only one "#" history qualifier allowed per stance`,
+      );
     }
     const before = rest.slice(0, hashIdx);
     const after = rest.slice(hashIdx + 1);
@@ -464,8 +477,11 @@ function parseStance(input, ctx, opts = {}) {
     else if (ti >= 0) pathStart = ti;
     const historyStr = pathStart >= 0 ? after.slice(0, pathStart) : after;
     if (!historyStr) {
-      throw paError("empty-history", input,
-        `History qualifier "#" cannot be empty`);
+      throw paError(
+        "empty-history",
+        input,
+        `History qualifier "#" cannot be empty`,
+      );
     }
     const parsedHistory = parseHistoryOrPointer(historyStr);
     if (parsedHistory.kind === "canonical") {
@@ -481,13 +497,13 @@ function parseStance(input, ctx, opts = {}) {
     rest = before + pathPortion;
   }
 
-  // Determine if `rest` includes a place identifier or is just a zone marker.
+  // Determine if `rest` includes a story identifier or is just a zone marker.
   // The three zone markers are:
-  //   "/"            → place zone (literal slash IS the place)
+  //   "/"            → story zone (literal slash IS the story root)
   //   "/<id>..."     → tree zone (slash followed by space id or full path)
   //   "~" / "~user"  → home zone (shorthand; expands to "/~<user>")
-  // A place identifier (e.g. "treeos.ai") never starts with "/" or "~", so a
-  // leading slash or tilde means we're already inside the current place.
+  // A story identifier (e.g. "treeos.ai") never starts with "/" or "~", so a
+  // leading slash or tilde means we're already inside the current story.
   if (!rest) {
     // Pure-history stance: `#1a` or `#1a@being` — no story, no path.
     // story NULL (not ctx) so expand's storyWasTyped is honest.
@@ -533,7 +549,13 @@ function parseStance(input, ctx, opts = {}) {
         being: rest,
       };
     }
-    return { story: parseStory(rest), history, historyPointer, path: null, being };
+    return {
+      story: parseStory(rest),
+      history,
+      historyPointer,
+      path: null,
+      being,
+    };
   }
   const storyPart = rest.slice(0, boundary);
   const pathPart = rest.slice(boundary);
@@ -703,7 +725,11 @@ function formatStance(stance, opts = {}) {
   // bar should stay quiet for the common case. Empty-string branches
   // are treated as absent: never render `#` with nothing after it,
   // because re-parsing that would throw "empty-history".
-  if (typeof stance.history === "string" && stance.history && stance.history !== "0") {
+  if (
+    typeof stance.history === "string" &&
+    stance.history &&
+    stance.history !== "0"
+  ) {
     out += `#${stance.history}`;
   }
   if (stance.path) {
@@ -953,7 +979,7 @@ export function getStoryDomain() {
 export function parseFromSocket(socket, input, extraCtx = {}) {
   const ctx = {
     currentStory: getStoryDomain(),
-    currentUser:    socket?.name || null,
+    currentUser: socket?.name || null,
     // The socket's first-person stance. The address parser fills
     // omitted fields from this ctx, so a client typing `/~` while on
     // `#1/some-place` correctly resolves to `treeos.ai#1/~`, not main.
@@ -962,8 +988,8 @@ export function parseFromSocket(socket, input, extraCtx = {}) {
     // parseStance falls through to the `#main` pointer — which the
     // operator may have re-pointed away from canonical "0". Never
     // hardcode "0" here; the pointer registry is the source of truth.
-    currentHistory:  socket?.currentHistory || null,
-    currentPath:    socket?.currentPath   || null,
+    currentHistory: socket?.currentHistory || null,
+    currentPath: socket?.currentPath || null,
     ...extraCtx,
   };
   try {
@@ -1091,7 +1117,9 @@ async function loadBeingStanceFields(beingId, history = "0") {
   try {
     const { loadOrFold } = await import("../materials/projections.js");
     const slot = await loadOrFold("being", String(beingId), history);
-    row = slot ? { name: slot.state?.name, homeSpace: slot.state?.homeSpace || null } : null;
+    row = slot
+      ? { name: slot.state?.name, homeSpace: slot.state?.homeSpace || null }
+      : null;
   } catch {
     row = null;
   }
@@ -1164,12 +1192,8 @@ export async function computeIbpStampAddress({
   addresseeBeingId,
   addresseePosition = null,
   place = null,
-  // SEAM: callers in present/ (1-assign.js, llmMoment.js) still pass the
-  // history slot under the key `branch`; accept it until those dirs rename.
-  history: historyArg,
-  branch: branchArg,
+  history = "0",
 }) {
-  const history = historyArg ?? branchArg ?? "0";
   try {
     const askerStance = await composeStanceForBeing(askerBeingId, {
       currentPosition: askerPosition,

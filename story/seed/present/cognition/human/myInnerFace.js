@@ -68,9 +68,9 @@ registerSeeOperation("my-inner-face", {
     // against is the exact residue of what perception admitted.
     let foldedFace = null;
     try {
-      // foldPlace (stamper/) consumes the `branch` opts key (contract with
+      // foldPlace (stamper/) consumes the `history` opts key (contract with
       // the untouched stamper module); the local is _history.
-      foldedFace = await foldPlace(String(beingId), "forward", { branch: _history, role });
+      foldedFace = await foldPlace(String(beingId), "forward", { history: _history, role });
     } catch (err) {
       log.debug("MyInnerFace", `foldPlace failed: ${err.message}`);
       foldedFace = null;

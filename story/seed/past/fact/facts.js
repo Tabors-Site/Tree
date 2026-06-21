@@ -540,10 +540,10 @@ export async function logFact(input, opts = {}) {
       try {
         const { fold } = await import("../../present/stamper/2-fold/foldEngine.js");
         // Fold runs on the SAME history the fact landed on. Without
-        // threading it the fold engine throws "branch is required"
-        // (post-doctrine-shift) and the seal aborts. (fold still takes
-        // the option key `branch`; see foldEngine.js.)
-        await fold(finalTarget.kind, finalTarget.id, { branch: history });
+        // threading it the fold engine throws "history is required"
+        // (post-doctrine-shift) and the seal aborts. (fold takes
+        // the option key `history`; see foldEngine.js.)
+        await fold(finalTarget.kind, finalTarget.id, { history });
       } catch (err) {
         // Self-healing: the next fold catches up. Log but don't throw —
         // the fact is the source of truth and is already on disk.
@@ -798,8 +798,8 @@ export async function foldAfterCommit(sortedReels) {
         // never on main's slot for a non-main reel. No `|| "0"` here —
         // a missing history means upstream broke the invariant and we
         // want it loud, not silently folded onto main.
-        // (fold still takes the option key `branch`; see foldEngine.js.)
-        await fold(reel.kind, reel.id, { branch: reel.history });
+        // (fold takes the option key `history`; see foldEngine.js.)
+        await fold(reel.kind, reel.id, { history: reel.history });
       } catch (err) {
         // Warn (not debug): the projection slot for this reel did NOT
         // materialize. Anyone who SEEs the aggregate next will hit

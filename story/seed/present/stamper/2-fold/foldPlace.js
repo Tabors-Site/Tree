@@ -97,11 +97,11 @@ export async function foldPlace(beingId, orientation = ORIENTATION.FORWARD, opts
   // place renders against one history's facts. No silent default —
   // a missing history here means a perimeter threading bug, surfaced
   // loud at the fold seam.
-  // SEAM: opts key stays `branch` (foldPlace's non-moment callers, e.g.
-  // cognition/human/myInnerFace.js, pass `branch`); the value is the
+  // SEAM: opts key is `history` (foldPlace's non-moment callers, e.g.
+  // cognition/human/myInnerFace.js, pass `history`); the value is the
   // history slot. In-moment callers route via opts.moment.actorAct.history.
   const history = assertHistoryOrThrow(
-    opts.moment?.actorAct?.history || opts.branch,
+    opts.moment?.actorAct?.history || opts.history,
     "foldPlace(opts)",
   );
 
@@ -128,7 +128,7 @@ export async function foldPlace(beingId, orientation = ORIENTATION.FORWARD, opts
 
   // The being itself is always folded — every orientation shows
   // the being to itself (the self is the carrier of orientation).
-  const { state: self, foldedSeq: selfFoldedSeq } = await fold("being", beingId, { branch: history });
+  const { state: self, foldedSeq: selfFoldedSeq } = await fold("being", beingId, { history });
   stash("being", beingId, selfFoldedSeq);
 
   // Inward: the world drops out. The face is A_b in act-order.
@@ -170,7 +170,7 @@ async function buildForwardFace(beingId, self, stash, history = "0", role = null
     return { self, space: null, occupants: [] };
   }
 
-  const { state: space, foldedSeq: spaceFoldedSeq } = await fold("space", spaceId, { branch: history });
+  const { state: space, foldedSeq: spaceFoldedSeq } = await fold("space", spaceId, { history });
   stash?.("space", spaceId, spaceFoldedSeq);
   if (weave) addReel(weave, { reelKind: "space", reelId: String(spaceId), history });
   const occupantRefs = await findByPosition(spaceId, history);
@@ -194,7 +194,7 @@ async function buildForwardFace(beingId, self, stash, history = "0", role = null
   const occupants = await Promise.all(
     admitted.map(async (o) => {
       try {
-        const { state, foldedSeq } = await fold(o.type, o.id, { branch: history });
+        const { state, foldedSeq } = await fold(o.type, o.id, { history });
         stash?.(o.type, o.id, foldedSeq);
         return { type: o.type, id: o.id, state };
       } catch (err) {

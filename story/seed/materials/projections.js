@@ -187,9 +187,7 @@ export async function loadOrFold(type, id, history) {
   // initProjection on the way out; the next loadProjection hits cache.
   try {
     const { fold } = await import("../present/stamper/2-fold/foldEngine.js");
-    // CROSS-DIR SEAM: foldEngine.fold still reads `opts.branch` (it lives
-    // outside materials/; its history→branch rename is a separate pass).
-    const { state, foldedSeq } = await fold(type, id, { branch: effectiveHistory });
+    const { state, foldedSeq } = await fold(type, id, { history: effectiveHistory });
     if (!state || Object.keys(state).length === 0) return null;
     // Re-read the slot — fold's initProjection landed the canonical
     // shape (with `position` lifted to the slot level for indexing).

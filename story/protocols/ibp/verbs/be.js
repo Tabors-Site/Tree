@@ -203,13 +203,13 @@ export async function handleBe(socket, env, ack) {
     // pre-switch history rides the payload for the audit fact, because
     // inside the moment actorAct.history is the destination, not the
     // old history.
-    // (opPayload.branch is the wire-contract destination key — the act
+    // (opPayload.history is the wire-contract destination key — the act
     // of branching-to; switchDest names the destination history value.)
     const switchDest =
       operation === "switch" &&
-      typeof opPayload?.branch === "string" &&
-      opPayload.branch.trim()
-        ? opPayload.branch.trim()
+      typeof opPayload?.history === "string" &&
+      opPayload.history.trim()
+        ? opPayload.history.trim()
         : null;
     if (switchDest) opPayload.fromHistory = callerHistory;
     const history = switchDest || callerHistory;

@@ -437,10 +437,10 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
             // History this write happened on. Live-SEE subscribers filter
             // by history on their end so a write on #1 doesn't invalidate
             // subscribers viewing main, and vice versa.
-            // SEAM: the afterFieldWrite/afterQualityWrite hook payload key
-            // is still `branch` (protocols/ibp/index.js destructures
-            // `branch`); the value is the history slot.
-            branch: factHistory,
+            // The afterFieldWrite/afterQualityWrite hook payload carries
+            // the history slot under the key `history` (protocols/ibp/index.js
+            // destructures `history`); the value is the history slot.
+            history: factHistory,
           };
           try {
             if (field.startsWith("qualities.")) {

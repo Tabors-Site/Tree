@@ -376,12 +376,12 @@ export class PortalClient {
    * History-scoped: pass the history you stand on; the tree + its inheritation
    * points reflect that timeline. Requires a connected name.
    *
-   * NOTE: the `branch` payload key is the name-event wire contract the server's
-   * doTree (protocols/ibp/nameSession.js) reads as `src.branch` — SEAM kept
+   * NOTE: the `history` payload key is the name-event wire contract the server's
+   * doTree (protocols/ibp/nameSession.js) reads as `src.history` — SEAM kept
    * deliberately, do not rename without the server side.
    */
   nameTree(history) {
-    return this._callName("tree", { branch: history || null });
+    return this._callName("tree", { history: history || null });
   }
 
   // ────────────────────────────────────────────────────────────────

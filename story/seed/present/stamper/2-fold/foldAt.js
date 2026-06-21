@@ -104,7 +104,7 @@ function assertType(type) {
  *
  * @param {string} type
  * @param {string} id
- * @param {{ atSeq?: number, atTimestamp?: Date|string, branch?: string }} until
+ * @param {{ atSeq?: number, atTimestamp?: Date|string, history?: string }} until
  * @returns {Promise<number|null>}
  */
 export async function resolveUntil(type, id, until, opts = {}) {
@@ -132,9 +132,9 @@ export async function resolveUntil(type, id, until, opts = {}) {
   // the entire scene empties out (the user's "grid spaces disappear in
   // past view on #1" symptom). History is required from the caller; the
   // historian path used to default to heaven silently.
-  // SEAM: opts key is still `branch` (foldEngine/descriptor convention);
+  // SEAM: opts key is `history` (foldEngine/descriptor convention);
   // the value is the history slot.
-  const history = assertHistoryOrThrow(opts.branch || until.branch, "resolveUntil(opts)");
+  const history = assertHistoryOrThrow(opts.history || until.history, "resolveUntil(opts)");
   if (history === "0") {
     const row = await Fact.findOne({
       "of.kind": type,
@@ -184,22 +184,22 @@ export async function resolveUntil(type, id, until, opts = {}) {
  * @param {object} until
  * @param {number} [until.atSeq]        substrate-native; the truth
  * @param {Date|string} [until.atTimestamp] human helper; resolves to highest seq with date <= this
- * @param {string} [until.branch="0"]   branch identifier (forward-compat)
+ * @param {string} [until.history="0"]   history identifier (forward-compat)
  * @returns {Promise<{ state: object, foldedSeq: number }>}
  */
 export async function foldAt(type, id, until, opts = {}) {
   assertType(type);
   if (!id) throw new Error("foldAt: id is required");
 
-  // History can come from opts.branch (the descriptor's threaded value;
-  // SEAM: opts key is still `branch` per the foldEngine/descriptor
-  // convention, value is the history slot) or from until.branch (legacy
+  // History can come from opts.history (the descriptor's threaded value;
+  // SEAM: opts key is `history` per the foldEngine/descriptor
+  // convention, value is the history slot) or from until.history (legacy
   // callers that packed it into the historical anchor). Prefer opts so
   // the descriptor sweep doesn't have to re-pack until objects. No
   // silent default — caller must attach history via descriptor or anchor.
-  const history = assertHistoryOrThrow(opts.branch || until?.branch, "foldAt(opts)");
+  const history = assertHistoryOrThrow(opts.history || until?.history, "foldAt(opts)");
 
-  const untilSeq = await resolveUntil(type, id, until, { branch: history });
+  const untilSeq = await resolveUntil(type, id, until, { history: history });
   if (untilSeq == null) {
     throw new NoSuchHistoricalState(type, id, until);
   }

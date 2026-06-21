@@ -19,7 +19,7 @@ node_modules
 localStore
 
 # mirror: live FUSE mount point. Bytes stream from localStore; nothing
-# real sits here. Created by reality/scripts/mirror-mount.mjs.
+# real sits here. Created by story/scripts/mirror-mount.mjs.
 mirror
 
 # Per land extension profile. Operator's choices for which extensions

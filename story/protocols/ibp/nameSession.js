@@ -285,7 +285,7 @@ async function doSee(socket, msg, ack, id) {
 
 // tree — YOUR being-tree on one history (the hierarchy view + grant surface).
 // Requires a bound name (it's your own beings). History comes from the portal's
-// current left stance (msg.payload.branch — wire payload key the portal client's
+// current left stance (msg.payload.history — wire payload key the portal client's
 // nameTree() still sends; SEAM with portal/core/client.js); a grant you make
 // from this view lands on that history, so the tree you see is exactly the
 // access you give. Session-only read: no moment, no fact (the grant/revoke acts
@@ -297,7 +297,7 @@ async function doTree(socket, msg, ack, id) {
       "name tree requires a connected name (sign in first)");
   }
   const src = msg?.payload || msg || {};
-  const history = src.branch || socket.currentHistory || null;
+  const history = src.history || socket.currentHistory || null;
   const { buildNameTree } = await import("../../seed/ibp/descriptor.js");
   const tree = await buildNameTree(nameId, history);
   if (!tree) {

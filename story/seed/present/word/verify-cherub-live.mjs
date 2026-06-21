@@ -128,7 +128,7 @@ try {
   }
   await withRetry(() => ensureIAm());
   // fold-only dispatch: the words declare themselves onto I_AM's reel BEFORE any do-op dispatches
-  // (ensureSpaceRoot's create-space). Mirrors genesis.js (ensureIAm -> the words -> the reality).
+  // (ensureSpaceRoot's create-space). Mirrors genesis.js (ensureIAm -> the words -> the story).
   await withRetry(async () => {
     const wc = {
       actId: randomUUID(),

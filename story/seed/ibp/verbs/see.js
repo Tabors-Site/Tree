@@ -906,13 +906,13 @@ async function seeAtTime({
       // currentHistory (seeVerb now threads it into parseCtx); foldAt's
       // assertHistoryOrThrow surfaces any threading regression here
       // loud rather than silently defaulting to heaven.
-      // SEAM: foldAt's opts key is still `branch` (foldAt.js reads
-      // opts.branch); the value is the history slot.
+      // foldAt's opts history-slot key is `history` (foldAt.js reads
+      // opts.history); the value is the history slot.
       const { state: beingState } = await foldAt(
         "being",
         String(followBeingId),
         at,
-        { branch: resolved.history },
+        { history: resolved.history },
       );
       const histPosition = beingState?.position
         ? String(beingState.position)

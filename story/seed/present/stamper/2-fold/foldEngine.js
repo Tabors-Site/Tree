@@ -258,17 +258,17 @@ export async function fold(type, id, opts = {}) {
   assertType(type);
   if (!id) throw new Error("fold: id is required");
   const skipCrossCutting = opts.skipCrossCutting === true;
-  // SEAM: opts key stays `branch` (the foldEngine/descriptor convention;
-  // facts.js + projections.js callers pass `branch`); the value is the
+  // SEAM: opts key is `history` (the foldEngine/descriptor convention;
+  // facts.js + projections.js callers pass `history`); the value is the
   // history slot.
-  if (typeof opts.branch !== "string" || !opts.branch.length) {
+  if (typeof opts.history !== "string" || !opts.history.length) {
     throw new Error(
-      `fold: opts.branch is required (got ${JSON.stringify(opts.branch)}). ` +
+      `fold: opts.history is required (got ${JSON.stringify(opts.history)}). ` +
       `Pass it from the fact's history or the wire layer; in-moment callers ` +
       `derive it from moment.actorAct.history or the target's address.`,
     );
   }
-  const history = opts.branch;
+  const history = opts.history;
 
   const slot = await loadProjection(type, id, history);
   if (!slot) {
@@ -373,16 +373,16 @@ export async function rebuild(type, id, opts = {}) {
   assertType(type);
   if (!id) throw new Error("rebuild: id is required");
   const skipCrossCutting = opts.skipCrossCutting !== false;
-  // SEAM: opts key stays `branch` (foldEngine/descriptor convention); value
+  // SEAM: opts key is `history` (foldEngine/descriptor convention); value
   // is the history slot.
-  if (typeof opts.branch !== "string" || !opts.branch.length) {
+  if (typeof opts.history !== "string" || !opts.history.length) {
     throw new Error(
-      `rebuild: opts.branch is required (got ${JSON.stringify(opts.branch)}). ` +
+      `rebuild: opts.history is required (got ${JSON.stringify(opts.history)}). ` +
       `Pass it from the fact's history or the wire layer; in-moment callers ` +
       `derive it from moment.actorAct.history or the target's address.`,
     );
   }
-  const history = opts.branch;
+  const history = opts.history;
 
   const reducer = reducers.get(type);
   // Pass 2 substrate: readReelBetween with a history returns the

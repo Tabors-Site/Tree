@@ -465,9 +465,9 @@ export async function getMatchingSubscribers(eventName, payload) {
   const spaceId = payload?.spaceId ? String(payload.spaceId) : null;
   // Subscriptions fan out from a fact that was just emitted on a
   // specific history; the chain walk has to read that history's view.
-  // Caller threads payload.history (the afterX hook payload key, still
-  // `branch` at the producer perimeter — see seam) from the emitting moment.
-  const history = payload?.history ?? payload?.branch;
+  // Caller threads payload.history (the afterX hook payload key) from
+  // the emitting moment.
+  const history = payload?.history;
 
   // Pre-compute the ancestor chain for the payload's space once per
   // call; reuse it across every ancestor-scoped subscription this
@@ -573,9 +573,8 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
   // history as the trigger; cross-history waking is forbidden by the
   // address bridge gate anyway. No fallback: if history is missing
   // the hook payload was malformed at the perimeter and we surface
-  // it loud via callByResolved's MISSING_BRANCH throw. (The hook
-  // payload key is still `branch` at the producer perimeter — seam.)
-  const history = payload?.history ?? payload?.branch ?? null;
+  // it loud via callByResolved's MISSING_BRANCH throw.
+  const history = payload?.history ?? null;
 
   let emitted = 0;
   for (const sub of matches) {

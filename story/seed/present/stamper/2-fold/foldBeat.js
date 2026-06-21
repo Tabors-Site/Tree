@@ -57,9 +57,9 @@ export async function runFoldBeat(setup = {}) {
   let foldedFace = null;
   if (beingId && history) {
     try {
-      // SEAM: foldPlace opts key stays `branch` (shared with non-moment
+      // SEAM: foldPlace opts key is `history` (shared with non-moment
       // callers like myInnerFace.js); the value is the history slot.
-      foldedFace = await foldPlace(beingId, orientation, { moment, branch: history, role });
+      foldedFace = await foldPlace(beingId, orientation, { moment, history, role });
     } catch {
       foldedFace = null;
     }
