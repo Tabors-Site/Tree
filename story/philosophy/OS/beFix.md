@@ -14,12 +14,12 @@ calls a being at the right. BE is the one verb where the actor IS the
 target. The mutation lands on the left stance, on the caller
 themselves.
 
-| Verb | Operates on | Direction |
-| --- | --- | --- |
-| SEE | right | left reads right |
-| DO | right | left mutates right |
-| SUMMON | right | left calls right |
-| BE | left | left mutates self |
+| Verb   | Operates on | Direction          |
+| ------ | ----------- | ------------------ |
+| SEE    | right       | left reads right   |
+| DO     | right       | left mutates right |
+| SUMMON | right       | left calls right   |
+| BE     | left        | left mutates self  |
 
 This is what distinguishes BE structurally. Birth, connect, release,
 switch, death are all transformations applied to the left being. The
@@ -102,11 +102,11 @@ birther's summon:mate handler runs
    ↓
 birther calls birthBeing with caller as father
    ↓
-new vessel-being lands on the local reality
+new being-being lands on the local reality
 ```
 
 The caller's own left stance does not change in this case; the
-vessel-being is a separate identity admitted to the reality. The
+being-being is a separate identity admitted to the reality. The
 substrate flow is the same primitive (summon:mate to a delegate
 that emits BE:birth); only the parent recorded on the new being
 differs.
@@ -177,7 +177,7 @@ What's wired (substrate side):
   (`roleAuth.permitsSummon`), the receiver-side gate enforces it
   (`roleAuth.permitsReceiverSummon`), the summon Fact records it, and
   the InboxProjection persists it. The wire shape `SUMMON @cherub,
-  intent: "mate"` cleanly carries through to cherub's `summon` handler.
+intent: "mate"` cleanly carries through to cherub's `summon` handler.
 - `canSummon` receiver entries are enforced. cherub and birther both
   declare `{intent: "mate", as: "receiver"}`; summons with any other
   intent (or with no intent at all) refuse at the receiver gate before

@@ -56,15 +56,28 @@
 import log from "../../seedStory/log.js";
 import { getInternalConfigValue } from "../../internalConfig.js";
 import Being from "../../materials/being/being.js";
-import { loadProjection, loadOrFold, assertHistoryOrThrow } from "../../materials/projections.js";
+import {
+  loadProjection,
+  loadOrFold,
+  assertHistoryOrThrow,
+} from "../../materials/projections.js";
 import Act from "../../past/act/act.js";
 import { getStoryConfigValue } from "../../storyConfig.js";
-import { resolveActiveStack, computeAvailableRoles } from "../roles/roleFlow.js";
+import {
+  resolveActiveStack,
+  computeAvailableRoles,
+} from "../roles/roleFlow.js";
 import { composeStack } from "../roles/roleComposer.js";
 import Space from "../../materials/space/space.js";
 import { computeIbpStampAddress } from "../../ibp/address.js";
-import { validateOrientation, DEFAULT_ORIENTATION } from "./2-fold/orientation.js";
-import { isAncestorOf, beingCognition } from "../../materials/being/identity/lookups.js";
+import {
+  validateOrientation,
+  DEFAULT_ORIENTATION,
+} from "./2-fold/orientation.js";
+import {
+  isAncestorOf,
+  beingCognition,
+} from "../../materials/being/identity/lookups.js";
 import { findLastSealedForBeing } from "./2-fold/reelChains.js";
 import { getSpaceRootId } from "../../sprout.js";
 
@@ -91,7 +104,13 @@ import { getSpaceRootId } from "../../sprout.js";
  *   skipped    — reason string when the entry can't run
  *                ("being-not-found" | "role-not-carried" | "role-unavailable")
  */
-export async function assign({ beingId, spaceId, entry, handoff = null, signal = null } = {}) {
+export async function assign({
+  beingId,
+  spaceId,
+  entry,
+  handoff = null,
+  signal = null,
+} = {}) {
   const kind = entry?.kind || "call";
   // ── assign: load the being ───────────────────────────────────────
   // History-aware via the intake entry. The moment runs in the caller's
@@ -105,9 +124,10 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     entry?.history || entry?.act?.history,
     "assign(entry)",
   );
-  const targetHistory = (typeof entry?.targetHistory === "string" && entry.targetHistory.length > 0)
-    ? entry.targetHistory
-    : history;
+  const targetHistory =
+    typeof entry?.targetHistory === "string" && entry.targetHistory.length > 0
+      ? entry.targetHistory
+      : history;
   // loadOrFold (not loadProjection): on a fresh history, the receiving
   // being's slot hasn't been cold-folded into this history's projection
   // table yet. Bare loadProjection returns null, assign returns
@@ -117,7 +137,10 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   // resolves on first access without manual rebuild.
   const slot = await loadOrFold("being", beingId, history);
   if (!slot) {
-    log.warn("Assign", `being ${String(beingId).slice(0, 8)} not found on history ${history}`);
+    log.warn(
+      "Assign",
+      `being ${String(beingId).slice(0, 8)} not found on history ${history}`,
+    );
     return { skipped: "being-not-found" };
   }
   // Flatten the slot into a row-shaped object so the downstream code
@@ -156,14 +179,22 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   // The flow's `caller.cognition / isAncestor / isDescendant` paths
   // need data that lives one DB hop away. We do those lookups here
   // (assign is async; the evaluator stays pure) and pass the result in.
-  const callerEnrichment = await enrichCallerForFlow({ toBeing, handoff, entry, history });
+  const callerEnrichment = await enrichCallerForFlow({
+    toBeing,
+    handoff,
+    entry,
+    history,
+  });
 
   // Previous moment lookup for `me.previousRole` and
   // `time.sinceLastMoment`. Best-effort; a being with no prior moment
   // gets a null `previousRole` and a null `sinceLastMoment`.
   const lastSealed = await findLastSealedForBeing(String(toBeing._id));
   const previousMoment = lastSealed
-    ? { activeRole: lastSealed.activeRole || null, stampedAt: lastSealed.stampedAt || null }
+    ? {
+        activeRole: lastSealed.activeRole || null,
+        stampedAt: lastSealed.stampedAt || null,
+      }
     : null;
 
   // World signals lookup. Snapshots story root's `qualities.world`
@@ -188,10 +219,10 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     toBeing,
     entry,
     handoff,
-    space:            spaceRow,
+    space: spaceRow,
     callerEnrichment,
     previousMoment,
-    now:              entry?.receivedAt ? new Date(entry.receivedAt) : null,
+    now: entry?.receivedAt ? new Date(entry.receivedAt) : null,
     worldSignals,
     availableRoles,
   });
@@ -233,27 +264,30 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   // place-driven wakes). For kind="transport-act" the asker IS the
   // acting being — they entered through their own transport, no
   // SUMMON envelope.
-  const askerBeingId = kind === "transport-act"
-    ? String(beingId)
-    : (handoff?.identity?.beingId || beingId);
-  const askerName = kind === "transport-act"
-    ? (entry?.identity?.name || null)
-    : (handoff?.identity?.name || null);
+  const askerBeingId =
+    kind === "transport-act"
+      ? String(beingId)
+      : handoff?.identity?.beingId || beingId;
+  const askerName =
+    kind === "transport-act"
+      ? entry?.identity?.name || null
+      : handoff?.identity?.name || null;
   // The session's signed-in Name (the INHABITOR driving this being). Same
   // fork as askerName, sourced from the verified-token identity threaded by
   // the wire. When the driver differs from the being's own trueName (a father
-  // driving the mother's vessel), this is who SIGNS. Null for place/scheduler
+  // driving the mother's being), this is who SIGNS. Null for place/scheduler
   // wakes with no live session -> the seal falls back to the being's trueName.
-  const sessionNameId = kind === "transport-act"
-    ? (entry?.identity?.nameId || null)
-    : (handoff?.identity?.nameId || null);
+  const sessionNameId =
+    kind === "transport-act"
+      ? entry?.identity?.nameId || null
+      : handoff?.identity?.nameId || null;
 
-  const actMessage = kind === "transport-act"
-    ? describeTransportAct(entry.act)
-    : entry.content;
-  const actSource = kind === "transport-act"
-    ? (askerName || "transport")
-    : (askerName || entry.from || "user");
+  const actMessage =
+    kind === "transport-act" ? describeTransportAct(entry.act) : entry.content;
+  const actSource =
+    kind === "transport-act"
+      ? askerName || "transport"
+      : askerName || entry.from || "user";
 
   // Plan the Act row but do NOT write it to Mongo. The Act gets
   // created at seal-time by stamped.js, only when cognition
@@ -261,28 +295,28 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   // seal needs (ibpAddress, rootCorrelation, parentThread); moment
   // threads it through to stamped via moment.plannedAct.
   const plannedAct = await planActRow({
-    through:           String(askerBeingId),
-    to:                String(beingId),
+    through: String(askerBeingId),
+    to: String(beingId),
     // Who signs: the session's Name (the inhabitor) when present, else the
     // acting being's own trueName (resolved inside planActRow).
-    inhabitorNameId:   sessionNameId,
+    inhabitorNameId: sessionNameId,
     addresseePosition: spaceId,
-    askerPosition:    handoff?.resolved?.spaceId || null,
-    message:           actMessage,
-    source:            actSource,
+    askerPosition: handoff?.resolved?.spaceId || null,
+    message: actMessage,
+    source: actSource,
     activeRole,
-    inboxMessageId:    entry.correlation,
-    inReplyTo:         entry.inReplyTo || null,
-    rootCorrelation:   entry.rootCorrelation || entry.correlation || null,
-    receivedAt:        entry.sentAt || null,
-    priority:          entry.priority || null,
+    inboxMessageId: entry.correlation,
+    inReplyTo: entry.inReplyTo || null,
+    rootCorrelation: entry.rootCorrelation || entry.correlation || null,
+    receivedAt: entry.sentAt || null,
+    priority: entry.priority || null,
     // History this moment runs on; stamped onto the Act so the act-chain
     // respects lineage on cross-history reads (mirrors the Fact schema).
     history,
     // Bucket 3 Option D: this moment answers the InboxProjection
     // row keyed by entry.correlation; stamped.js fires
     // closeInboxOnAnswer when the Act row materializes on seal.
-    answers:           entry.correlation || null,
+    answers: entry.correlation || null,
   });
 
   // ── assign: build the summon ctx moment.js dispatches on ─────────
@@ -293,7 +327,10 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   // entry (which came from the call Fact's params via the
   // InboxProjection). External summons carry forward; self-summons
   // may carry half or inward. Default is forward.
-  const orientation = validateOrientation(entry?.orientation, DEFAULT_ORIENTATION);
+  const orientation = validateOrientation(
+    entry?.orientation,
+    DEFAULT_ORIENTATION,
+  );
 
   // `history` was extracted up top alongside the projection load; it
   // becomes the actorAct.history seated on moment, which every Fact
@@ -318,16 +355,16 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
   // crossWorld.js's runVerbAsForeignActor stamps identity.story
   // with the cryptographically vouched canopySender; that flows here.
   // For same-story summons, askerStory is null (the local
-  // domain is implicit). See FEDERATION.md "mate + vessel".
+  // domain is implicit). See FEDERATION.md "mate + being".
   const askerStory = handoff?.identity?.story || null;
   // The asker's NAME (the signer), threaded from the verified identity. The
-  // birther records it as the vessel's qualities.father.nameId so cherub's
+  // birther records it as the being's qualities.father.nameId so cherub's
   // cross-story father-admit matches the cryptographically-proven name.
   const askerNameId = handoff?.identity?.nameId || null;
   const baseCtx = {
     kind,
     spaceId,
-    being:       activeRole,             // legacy field name; carries the active role
+    being: activeRole, // legacy field name; carries the active role
     activeRole,
     orientation,
     toBeing,
@@ -388,12 +425,16 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     //                                 "internal". Inbox eviction
     //                                 follows the shape's recover-
     //                                 ability semantics.
-    act: (content) => ({ kind: "act", ok: true, content: String(content ?? "") }),
+    act: (content) => ({
+      kind: "act",
+      ok: true,
+      content: String(content ?? ""),
+    }),
     idle: () => ({ kind: "see", ok: false }),
     failure: (shape, reason) => ({
-      kind:   "failure",
-      ok:     false,
-      shape:  String(shape || "internal"),
+      kind: "failure",
+      ok: false,
+      shape: String(shape || "internal"),
       reason: String(reason || ""),
     }),
     // The four verbs, pre-bound with this moment's identity + moment.
@@ -434,7 +475,7 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
       });
     },
     resolved: handoff?.resolved || {
-      being:       activeRole,
+      being: activeRole,
       activeRole,
       spaceId,
     },
@@ -472,20 +513,20 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
     moment = {
       ...baseCtx,
       message: {
-        from:            entry.from,
-        content:         entry.content,
-        correlation:     entry.correlation,
+        from: entry.from,
+        content: entry.content,
+        correlation: entry.correlation,
         rootCorrelation: entry.rootCorrelation || entry.correlation,
         activeRole,
         orientation,
         // Envelope intent — what the auth walk gated on. Without it
         // the role handler can't dispatch on the caller's purpose
         // (federation handshakes read this; see seed/SUMMON.md).
-        intent:          entry.intent || null,
-        inReplyTo:       entry.inReplyTo,
-        attachments:     entry.attachments,
-        sentAt:          entry.sentAt,
-        priority:        entry.priority,
+        intent: entry.intent || null,
+        inReplyTo: entry.inReplyTo,
+        attachments: entry.attachments,
+        sentAt: entry.sentAt,
+        priority: entry.priority,
         actId,
       },
     };
@@ -510,7 +551,7 @@ export async function assign({ beingId, spaceId, entry, handoff = null, signal =
 function describeTransportAct(act) {
   if (!act || typeof act !== "object") return "[transport-act]";
   const verb = (act.verb || "?").toUpperCase();
-  const op   = typeof act.act === "string" ? act.act : null;
+  const op = typeof act.act === "string" ? act.act : null;
   if (verb === "BE" || verb === "NAME") {
     return op ? `${verb} ${op}` : verb;
   }
@@ -523,7 +564,7 @@ function formatTransportTarget(t) {
   if (typeof t === "string") return t;
   if (typeof t === "object") {
     if (t.kind && t.id) return `${t.kind}/${truncId(t.id)}`;
-    if (t.spaceId)      return `space/${truncId(t.spaceId)}`;
+    if (t.spaceId) return `space/${truncId(t.spaceId)}`;
     if (typeof t.value === "string") return t.value;
   }
   return String(t);
@@ -636,7 +677,8 @@ async function planActRow(opts = {}) {
   let resolvedParentThread = null;
   if (!inReplyTo) {
     try {
-      const { getCurrentRootCorrelation } = await import("../intake/scheduler.js");
+      const { getCurrentRootCorrelation } =
+        await import("../intake/scheduler.js");
       const currentRoot = getCurrentRootCorrelation(String(through));
       if (currentRoot && currentRoot !== resolvedRoot) {
         resolvedParentThread = currentRoot;
@@ -675,12 +717,13 @@ async function planActRow(opts = {}) {
   // Everything downstream (Facts in deltaF, inner face attachment,
   // crossOrigin derivation) reads from here. See CROSS-WORLD.md.
   const { getStoryDomain } = await import("../../ibp/address.js");
-  const { computeActId, readActHead } = await import("../../past/act/actHash.js");
+  const { computeActId, readActHead } =
+    await import("../../past/act/actHash.js");
 
   // The actor NAME — who SIGNS the act and whom every fact attributes.
   // Resolved onto the row, NOT into the opening/digest, so act._id is
   // unchanged. THE INHABITOR SIGNS: prefer the session's signed-in Name (a
-  // father driving the mother's vessel signs as the father), else the acting
+  // father driving the mother's being signs as the father), else the acting
   // being's own trueName (its owner, for self-driven acts + place/scheduler
   // wakes with no live session). Key-gated: only a real key-bearing Name id
   // can be the signer, so a null / non-key inhabitor never downgrades or
@@ -689,11 +732,12 @@ async function planActRow(opts = {}) {
   const { isKeyId } = await import("../../materials/name/keys.js");
   const actorSlot = await loadOrFold("being", through, history);
   const ownTrueName = actorSlot?.state?.trueName || null;
-  const by = (inhabitorNameId && isKeyId(inhabitorNameId)) ? inhabitorNameId : ownTrueName;
+  const by =
+    inhabitorNameId && isKeyId(inhabitorNameId) ? inhabitorNameId : ownTrueName;
   if (!by) {
     throw new Error(
       `planActRow: acting being ${String(through).slice(0, 8)} has no signer name ` +
-      `(no session inhabitor, no trueName).`,
+        `(no session inhabitor, no trueName).`,
     );
   }
 
@@ -725,7 +769,7 @@ async function planActRow(opts = {}) {
     inboxMessageId,
     inReplyTo,
     rootCorrelation: resolvedRoot,
-    parentThread:    resolvedParentThread,
+    parentThread: resolvedParentThread,
     answers, // Bucket 3 Option D: closure key the seal evicts on
     receivedAt: receivedAt || now,
     stampedAt: now,
@@ -753,8 +797,8 @@ async function enrichCallerForFlow({ toBeing, handoff, entry, history = "0" }) {
   const kind = entry?.kind || "call";
   if (kind === "transport-act") {
     return {
-      cognition:    beingCognition(toBeing),
-      isAncestor:   false,
+      cognition: beingCognition(toBeing),
+      isAncestor: false,
       isDescendant: false,
     };
   }
@@ -762,20 +806,23 @@ async function enrichCallerForFlow({ toBeing, handoff, entry, history = "0" }) {
   if (!callerBeingId || String(callerBeingId) === String(toBeing._id)) {
     return { cognition: null, isAncestor: false, isDescendant: false };
   }
-  const [callerSlot, callerIsAncestor, meIsAncestorOfCaller] = await Promise.all([
-    // loadOrFold: the caller might be a being inherited from main on a
-    // sub-history. Bare loadProjection would return null, callerRow
-    // stays null, the enriched-caller fields drop out of role
-    // evaluation — a non-obvious behavioral change on non-main
-    // histories.
-    loadOrFold("being", callerBeingId, history),
-    isAncestorOf(callerBeingId, String(toBeing._id), history),
-    isAncestorOf(String(toBeing._id), callerBeingId, history),
-  ]);
-  const callerRow = callerSlot ? { _id: callerSlot.id, ...callerSlot.state } : null;
+  const [callerSlot, callerIsAncestor, meIsAncestorOfCaller] =
+    await Promise.all([
+      // loadOrFold: the caller might be a being inherited from main on a
+      // sub-history. Bare loadProjection would return null, callerRow
+      // stays null, the enriched-caller fields drop out of role
+      // evaluation — a non-obvious behavioral change on non-main
+      // histories.
+      loadOrFold("being", callerBeingId, history),
+      isAncestorOf(callerBeingId, String(toBeing._id), history),
+      isAncestorOf(String(toBeing._id), callerBeingId, history),
+    ]);
+  const callerRow = callerSlot
+    ? { _id: callerSlot.id, ...callerSlot.state }
+    : null;
   return {
-    cognition:    callerRow ? beingCognition(callerRow) : null,
-    isAncestor:   callerIsAncestor,
+    cognition: callerRow ? beingCognition(callerRow) : null,
+    isAncestor: callerIsAncestor,
     isDescendant: meIsAncestorOfCaller,
   };
 }

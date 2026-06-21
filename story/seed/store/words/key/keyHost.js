@@ -12,7 +12,7 @@
 // pure crypto (no fact). The third, recordExport, is the lone WORLD fact — the audit
 // (who exported which Name's key, the key NOWHERE in it). It is HOST, not a plain
 // do-act, on purpose: the audit attributes to the ASKER and lands on the ASKER's reel
-// (NOT I_AM-through-a-vessel, the cherub shape), so it reads the real moment here
+// (NOT I_AM-through-a-being, the cherub shape), so it reads the real moment here
 // rather than being a do-act the bridge would re-attribute. See the cut-spec note.
 
 import { loadSigningKey } from "../../../past/act/actSig.js";
@@ -20,7 +20,8 @@ import { seedFromPrivateKeyPem } from "../../../materials/name/keys.js";
 import { entropyToMnemonic } from "../../../materials/name/mnemonic.js";
 import { emitFact } from "../../../past/fact/facts.js";
 
-const historyOf = (ctx) => ctx?.moment?.actorAct?.history || ctx?.history || "0";
+const historyOf = (ctx) =>
+  ctx?.moment?.actorAct?.history || ctx?.history || "0";
 
 export function keyHostEnv() {
   return {
@@ -55,15 +56,18 @@ export function keyHostEnv() {
       const asker = askerBeingId ? String(askerBeingId) : null;
       if (!asker) return false;
       const sc = ctx?.moment || null;
-      await emitFact({
-        verb:    "do",
-        act:     "key-export",
-        through: asker,
-        of:      { kind: "being", id: asker },
-        params:  { exportedNameId: String(exportedNameId) },
-        actId:   sc?.actId || null,
-        history:  historyOf(ctx),
-      }, sc);
+      await emitFact(
+        {
+          verb: "do",
+          act: "key-export",
+          through: asker,
+          of: { kind: "being", id: asker },
+          params: { exportedNameId: String(exportedNameId) },
+          actId: sc?.actId || null,
+          history: historyOf(ctx),
+        },
+        sc,
+      );
       return true;
     },
   };

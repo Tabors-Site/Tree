@@ -58,7 +58,10 @@ function validateName(name) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "Name is required");
   const trimmed = name.trim();
   if (!BEING_NAME_RE.test(trimmed)) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "Name may only contain letters, numbers, hyphens, and underscores (1-32 chars)");
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "Name may only contain letters, numbers, hyphens, and underscores (1-32 chars)",
+    );
   }
   return trimmed;
 }
@@ -73,9 +76,15 @@ function validatePassword(password) {
   if (typeof password !== "string")
     throw new IbpError(IBP_ERR.INVALID_INPUT, "Password must be a string");
   if (password.length < MIN_PASSWORD)
-    throw new IbpError(IBP_ERR.INVALID_INPUT, `Password must be at least ${MIN_PASSWORD} characters`);
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      `Password must be at least ${MIN_PASSWORD} characters`,
+    );
   if (password.length > MAX_PASSWORD)
-    throw new IbpError(IBP_ERR.INVALID_INPUT, `Password must be ${MAX_PASSWORD} characters or fewer`);
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      `Password must be ${MAX_PASSWORD} characters or fewer`,
+    );
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -145,7 +154,7 @@ function validatePassword(password) {
  *                       identity tuple of a being from another world
  *                       who commissioned this birth via summon:mate
  *                       acceptance. Carries ONE structural right:
- *                       BE:connect eligibility (vessel right). NOT
+ *                       BE:connect eligibility (being right). NOT
  *                       in the identity chain; NOT authority over
  *                       the child. Null for solo births. See
  *                       seed/CROSS-WORLD.md + protocols/ibp/FEDERATION.md.
@@ -176,9 +185,17 @@ function validatePassword(password) {
  *   either the pending-view (in-moment) or the materialized row
  *   (standalone).
  */
-export async function birthBeing({ spec, identity, moment = null, history = null }) {
+export async function birthBeing({
+  spec,
+  identity,
+  moment = null,
+  history = null,
+}) {
   if (!spec || typeof spec !== "object") {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "birthBeing requires spec object");
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "birthBeing requires spec object",
+    );
   }
 
   // Accept bare-string identity shorthand (typically `I_AM` for
@@ -214,7 +231,11 @@ export async function birthBeing({ spec, identity, moment = null, history = null
   }
 
   const cognition = spec.cognition || "llm";
-  if (cognition !== "human" && cognition !== "llm" && cognition !== "scripted") {
+  if (
+    cognition !== "human" &&
+    cognition !== "llm" &&
+    cognition !== "scripted"
+  ) {
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
       `birthBeing("${name}"): cognition must be "llm" | "human" | "scripted" (got "${cognition}")`,
@@ -263,15 +284,18 @@ export async function birthBeing({ spec, identity, moment = null, history = null
   // loadOrFold walks the parent's lineage so a history-side birth finds
   // a parent who lives in main; the deltaF check covers atomic births
   // where the parent's be:birth is earlier in the same ΔF.
-  const { loadOrFold, findByName, findByNamePattern } = await import("../../projections.js");
+  const { loadOrFold, findByName, findByNamePattern } =
+    await import("../../projections.js");
   const parentSlot = await loadOrFold("being", parentBeingId, history);
-  const parentPending = parentSlot ? null : moment?.deltaF?.find(
-    (f) =>
-      f?.verb === "be" &&
-      f?.act === "birth" &&
-      f?.of?.kind === "being" &&
-      String(f?.of?.id) === String(parentBeingId),
-  );
+  const parentPending = parentSlot
+    ? null
+    : moment?.deltaF?.find(
+        (f) =>
+          f?.verb === "be" &&
+          f?.act === "birth" &&
+          f?.of?.kind === "being" &&
+          String(f?.of?.id) === String(parentBeingId),
+      );
   if (!parentSlot && !parentPending) {
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
@@ -313,13 +337,15 @@ export async function birthBeing({ spec, identity, moment = null, history = null
   // what stops a Name grafting a child under a subtree it doesn't control.
   {
     const minterBeingId = identity?.beingId ? String(identity.beingId) : null;
-    const isIAmMinter = minterBeingId === String(I_AM) || identity?.name === I_AM;
-    const underRoot   = String(parentBeingId) === String(I_AM);
-    const underSelf   = minterBeingId && String(parentBeingId) === minterBeingId;
+    const isIAmMinter =
+      minterBeingId === String(I_AM) || identity?.name === I_AM;
+    const underRoot = String(parentBeingId) === String(I_AM);
+    const underSelf = minterBeingId && String(parentBeingId) === minterBeingId;
     if (!isIAmMinter && !underRoot && !underSelf && !parentPending) {
       let gateHistory = history;
       if (!gateHistory) {
-        const { getDefaultHistory } = await import("../../history/historyRegistry.js");
+        const { getDefaultHistory } =
+          await import("../../history/historyRegistry.js");
         gateHistory = await getDefaultHistory();
       }
       // The minter's Name: its nameId if the act carried one, else the
@@ -327,8 +353,14 @@ export async function birthBeing({ spec, identity, moment = null, history = null
       let minterName = identity?.nameId ? String(identity.nameId) : null;
       if (!minterName && minterBeingId) {
         const { loadProjection } = await import("../../projections.js");
-        const minterSlot = await loadProjection("being", minterBeingId, gateHistory);
-        minterName = minterSlot?.state?.trueName ? String(minterSlot.state.trueName) : null;
+        const minterSlot = await loadProjection(
+          "being",
+          minterBeingId,
+          gateHistory,
+        );
+        minterName = minterSlot?.state?.trueName
+          ? String(minterSlot.state.trueName)
+          : null;
       }
       const { hasAuthorityOver } = await import("./inheritation.js");
       const covered = minterName
@@ -346,7 +378,7 @@ export async function birthBeing({ spec, identity, moment = null, history = null
   }
 
   // SOVEREIGN OVERRIDE. By default a being expresses the MOTHER's trueName
-  // (a vessel of the one that birthed it). An EXPLICIT spec.trueName makes the
+  // (a being of the one that birthed it). An EXPLICIT spec.trueName makes the
   // being the NAMED's OWN instead — sovereign, owned directly by that Name.
   // This is how a name births its FIRST being through cherub (summon:mate):
   // the child's trueName = the summoner's NAME, so the name owns it and
@@ -428,7 +460,8 @@ export async function birthBeing({ spec, identity, moment = null, history = null
   //
   let position = homeId;
   if (spec.birthHere === true) {
-    const parentPositionId = parentSlot?.state?.position || parentSlot?.position || null;
+    const parentPositionId =
+      parentSlot?.state?.position || parentSlot?.position || null;
     if (!parentPositionId) {
       throw new IbpError(
         IBP_ERR.INVALID_INPUT,
@@ -464,14 +497,21 @@ export async function birthBeing({ spec, identity, moment = null, history = null
           size = posPending?.params?.size || null;
         }
       }
-      if (size && Number.isFinite(size.x) && Number.isFinite(size.y) &&
-          size.x > 0 && size.y > 0) {
+      if (
+        size &&
+        Number.isFinite(size.x) &&
+        Number.isFinite(size.y) &&
+        size.x > 0 &&
+        size.y > 0
+      ) {
         resolvedCoord = {
           x: Math.floor(Math.random() * size.x),
           y: Math.floor(Math.random() * size.y),
         };
       }
-    } catch { /* defensive: any lookup failure leaves coord null */ }
+    } catch {
+      /* defensive: any lookup failure leaves coord null */
+    }
   }
 
   // ── Identity belongs to the NAME, not the being ──
@@ -495,13 +535,20 @@ export async function birthBeing({ spec, identity, moment = null, history = null
   // Caller-provided initial qualities deep-merge with the seeds
   // (auth.credentialPlain, cognition.defaultKind, optional roleFlow). No
   // signing key here — the key lives on the Name (trueName), not the being.
-  const qualities = (spec.qualities && typeof spec.qualities === "object")
-    ? { ...spec.qualities }
-    : {};
+  const qualities =
+    spec.qualities && typeof spec.qualities === "object"
+      ? { ...spec.qualities }
+      : {};
   if (credential.plain) {
-    qualities.auth = { ...(qualities.auth || {}), credentialPlain: credential.plain };
+    qualities.auth = {
+      ...(qualities.auth || {}),
+      credentialPlain: credential.plain,
+    };
   }
-  qualities.cognition = { ...(qualities.cognition || {}), defaultKind: cognition };
+  qualities.cognition = {
+    ...(qualities.cognition || {}),
+    defaultKind: cognition,
+  };
   if (Array.isArray(spec.roleFlow)) {
     qualities.roleFlow = spec.roleFlow;
   }
@@ -531,7 +578,7 @@ export async function birthBeing({ spec, identity, moment = null, history = null
       // The father's NAME — what cherub's cross-story father-admit matches
       // against (the cryptographically-proven id), NOT the beingId. Defaults
       // to the beingId for a pre-split father whose being id IS his pubkey.
-      nameId:  spec.father.nameId || spec.father.beingId,
+      nameId: spec.father.nameId || spec.father.beingId,
     };
   }
 
@@ -562,7 +609,7 @@ export async function birthBeing({ spec, identity, moment = null, history = null
     // parentBeingId. The mother (parentBeingId, the actor of birth) is
     // always on this history — her moment IS this moment. But the
     // father (qualities.father, when set) may live on a different
-    // history or a different story entirely (cross-world mate-vessel
+    // history or a different story entirely (cross-world mate-being
     // pattern). Deriving from "a parent" introduces ambiguity that
     // doesn't exist when we read from the one source that's always
     // authoritative — the history this fact is landing on.
@@ -595,15 +642,18 @@ export async function birthBeing({ spec, identity, moment = null, history = null
   // being inherits i-am until a separate name is declared and a being is
   // handed to it (be:rename).
   try {
-    await emitFact({
-      verb:    "be",
-      act:     "birth",
-      through: id,
-      of:      { kind: "being", id },
-      params:  factSpec,
-      actId:   moment?.actId || null,
-      history: history,
-    }, moment);
+    await emitFact(
+      {
+        verb: "be",
+        act: "birth",
+        through: id,
+        of: { kind: "being", id },
+        params: factSpec,
+        actId: moment?.actId || null,
+        history: history,
+      },
+      moment,
+    );
   } catch (err) {
     if (err.code === 11000) {
       throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Name already taken");
@@ -631,7 +681,8 @@ export async function birthBeing({ spec, identity, moment = null, history = null
   await _inheritParentRoles({
     childId: id,
     motherBeingId: parentBeingId,
-    fatherBeingId: spec.father?.story === getStoryDomain() ? spec.father?.beingId : null,
+    fatherBeingId:
+      spec.father?.story === getStoryDomain() ? spec.father?.beingId : null,
     moment,
     history,
   });
@@ -667,10 +718,10 @@ export async function birthBeing({ spec, identity, moment = null, history = null
   // so callers can use the id + spec fields immediately.
   if (moment) {
     return {
-      status:  "created",
+      status: "created",
       beingId: id,
       name,
-      being:   { _id: id, ...factSpec, _pending: true },
+      being: { _id: id, ...factSpec, _pending: true },
     };
   }
 
@@ -680,10 +731,10 @@ export async function birthBeing({ spec, identity, moment = null, history = null
   const { loadProjection } = await import("../../projections.js");
   const slot = await loadProjection("being", id, history);
   return {
-    status:  "created",
+    status: "created",
     beingId: id,
     name,
-    being:   slot ? { _id: slot.id, ...slot.state } : { _id: id, ...factSpec },
+    being: slot ? { _id: slot.id, ...slot.state } : { _id: id, ...factSpec },
   };
 }
 
@@ -717,13 +768,23 @@ export async function birthBeing({ spec, identity, moment = null, history = null
  * @param {object} args.moment           in-flight moment ctx (required)
  * @param {string} args.history
  */
-async function _inheritParentRoles({ childId, motherBeingId, fatherBeingId, moment, history }) {
+async function _inheritParentRoles({
+  childId,
+  motherBeingId,
+  fatherBeingId,
+  moment,
+  history,
+}) {
   // Read each parent's projection on the child's history (loadOrFold
   // walks lineage so a sub-history sees its effective view).
   const { loadOrFold } = await import("../../projections.js");
   const reads = await Promise.all([
-    motherBeingId ? loadOrFold("being", String(motherBeingId), history) : Promise.resolve(null),
-    fatherBeingId ? loadOrFold("being", String(fatherBeingId), history) : Promise.resolve(null),
+    motherBeingId
+      ? loadOrFold("being", String(motherBeingId), history)
+      : Promise.resolve(null),
+    fatherBeingId
+      ? loadOrFold("being", String(fatherBeingId), history)
+      : Promise.resolve(null),
   ]);
   const motherSlot = reads[0];
   const fatherSlot = reads[1];
@@ -754,21 +815,24 @@ async function _inheritParentRoles({ childId, motherBeingId, fatherBeingId, mome
   // child's reel within this same moment (no separate Acts; the
   // birth's actor stamps them in the birth's moment).
   for (const { grant, grantor } of composed) {
-    await emitFact({
-      verb:    "do",
-      act:     "grant-role",
-      through: grantor,
-      of:      { kind: "being", id: String(childId) },
-      params:  {
-        role:           grant.role,
-        anchorSpaceId:  grant.anchorSpaceId || null,
-        anchorBeingId:  grant.anchorBeingId || null,
-        grantedBy:      grantor,
-        inheritedFrom:  grantor,   // forensic marker — this came from parent inheritance
+    await emitFact(
+      {
+        verb: "do",
+        act: "grant-role",
+        through: grantor,
+        of: { kind: "being", id: String(childId) },
+        params: {
+          role: grant.role,
+          anchorSpaceId: grant.anchorSpaceId || null,
+          anchorBeingId: grant.anchorBeingId || null,
+          grantedBy: grantor,
+          inheritedFrom: grantor, // forensic marker — this came from parent inheritance
+        },
+        actId: moment?.actId || null,
+        history: history,
       },
-      actId:   moment?.actId || null,
-      history: history,
-    }, moment);
+      moment,
+    );
   }
 }
 
@@ -800,21 +864,24 @@ async function _anointGlobal({ childId, history, moment }) {
   const { I_AM } = await import("../seedBeings.js");
   const rootId = getSpaceRootId();
   if (!rootId) return; // boot-window edge; the I-Am birth itself runs before root materializes
-  await emitFact({
-    verb:    "do",
-    act:     "grant-role",
-    through: I_AM,
-    of:      { kind: "being", id: String(childId) },
-    params:  {
-      role:          "global",
-      anchorSpaceId: String(rootId),
-      anchorBeingId: null,
-      grantedBy:     I_AM,
-      grantedAt:     new Date().toISOString(),
+  await emitFact(
+    {
+      verb: "do",
+      act: "grant-role",
+      through: I_AM,
+      of: { kind: "being", id: String(childId) },
+      params: {
+        role: "global",
+        anchorSpaceId: String(rootId),
+        anchorBeingId: null,
+        grantedBy: I_AM,
+        grantedAt: new Date().toISOString(),
+      },
+      actId: moment?.actId || null,
+      history: history,
     },
-    actId:   moment?.actId || null,
-    history: history,
-  }, moment);
+    moment,
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -838,11 +905,17 @@ async function _anointGlobal({ childId, history, moment }) {
  */
 export async function generateUniqueName(role, opts = {}) {
   if (!role || typeof role !== "string") {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "generateUniqueName requires a role string");
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "generateUniqueName requires a role string",
+    );
   }
   const safeRole = role.replace(/[^a-zA-Z0-9_-]/g, "");
   if (!safeRole) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, `Role "${role}" produces no safe-name prefix`);
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      `Role "${role}" produces no safe-name prefix`,
+    );
   }
   const history = opts.history || "0";
   const { findByNamePattern } = await import("../../projections.js");
@@ -861,5 +934,8 @@ export async function generateUniqueName(role, opts = {}) {
     if (collision.length === 0) return candidate;
     n++;
   }
-  throw new IbpError(IBP_ERR.INTERNAL, `generateUniqueName exhausted ${MAX_RETRIES} retries for role "${role}"`);
+  throw new IbpError(
+    IBP_ERR.INTERNAL,
+    `generateUniqueName exhausted ${MAX_RETRIES} retries for role "${role}"`,
+  );
 }

@@ -9,7 +9,7 @@
 # SAME loadSigningKey the seal signs with) and paperForm (the seed→24 BIP39 words
 # derive). The lone WORLD fact, the audit (who exported which Name's key, the key
 # nowhere in it), is the host `recordExport` escape: it must attribute to the ASKER
-# and land on the asker's reel (NOT I_AM through a vessel — see the cut-spec note),
+# and land on the asker's reel (NOT I_AM through a being — see the cut-spec note),
 # so it reads the real moment rather than being a plain do-act the bridge would
 # re-attribute. The bridge binds `target` (the being target), `caller` (the
 # connected Name id = identity.nameId), `asker` (identity.beingId), `branch`.

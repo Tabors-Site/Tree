@@ -179,7 +179,7 @@ async function dispatchToPeer(ctx, peerStory, message) {
   };
   return await crossStoryDispatch({
     envelope,
-    actor:    { beingId: myBeingId, branch: history },
+    actor:    { beingId: myBeingId, history },
     identity: { beingId: myBeingId, name: "federation-manager" },
   });
 }

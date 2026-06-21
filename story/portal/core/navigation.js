@@ -1,8 +1,8 @@
 // TreeOS Portal . core/navigation.js
 //
-// The one navigate(address) flow. Branch stickiness, history
+// The one navigate(address) flow. History stickiness, history
 // push/replace, hash sync, live re-subscribe, descriptor publication,
-// stale-session and branch-gone recovery, the rewind/return-to-now
+// stale-session and gone-history recovery, the rewind/return-to-now
 // pair, and the per-navigate set-being:position emit all live here —
 // once. Views never SEE-and-render on their own; they subscribe to
 // the state model and render what navigation publishes.
@@ -15,7 +15,7 @@
 
 // Error codes that mean "this saved pointer no longer corresponds to
 // real substrate" — operator reset the DB, deleted being, tombstoned
-// home, JWT rotation, deleted branch.
+// home, JWT rotation, deleted history.
 export const STALE_SESSION_CODES = new Set([
   "UNAUTHORIZED",
   "FORBIDDEN",
@@ -43,13 +43,13 @@ export function createNavigation(ctx) {
   const { state, events } = ctx;
 
   let _refetchTimer = null;
-  let _recoveringBranch = false;
+  let _recoveringHistory = false;
 
   // ── Address shaping ─────────────────────────────────────────────
 
-  // Branch stickiness. Doctrine (2026-06-04): the address bar IS the
+  // History stickiness. Doctrine (2026-06-04): the address bar IS the
   // source of truth — a FULL typed address without `#` means main.
-  // Only relative shorthands ("/foo", "~") inherit the active branch.
+  // Only relative shorthands ("/foo", "~") inherit the active history.
   function withActiveHistory(address) {
     if (typeof address !== "string" || !address) return address;
     if (address.includes("#")) return address;
@@ -66,7 +66,7 @@ export function createNavigation(ctx) {
 
   // Resolve a console/explorer-style input into a dispatchable
   // address. "@being" targets a being at the current position;
-  // bare "/path" and "~" ride branch stickiness; full addresses
+  // bare "/path" and "~" ride history stickiness; full addresses
   // pass through.
   function resolveAddressInput(raw) {
     if (typeof raw !== "string" || !raw) return raw;
@@ -74,8 +74,8 @@ export function createNavigation(ctx) {
     if (trimmed.startsWith("@")) {
       const desc = state.get("descriptor");
       const story = state.get("discovery")?.story || desc?.address?.place || "";
-      const branch = desc?.address?.history || "0";
-      const bq = branch === "0" ? "" : `#${branch}`;
+      const history = desc?.address?.history || "0";
+      const bq = history === "0" ? "" : `#${history}`;
       const path = desc?.address?.pathByNames || "/";
       return `${story}${bq}${path}${trimmed}`.replace(/\/+@/, "/@");
     }
@@ -88,8 +88,8 @@ export function createNavigation(ctx) {
     const desc = state.get("descriptor");
     const story = state.get("discovery")?.story || "";
     const path = desc?.address?.pathByNames || "/";
-    const branch = desc?.address?.history || "0";
-    const bq = branch === "0" ? "" : `#${branch}`;
+    const history = desc?.address?.history || "0";
+    const bq = history === "0" ? "" : `#${history}`;
     return `${story}${bq}${path}`.replace(/\/+$/, "") || `${story}${bq}`;
   }
 
@@ -97,8 +97,8 @@ export function createNavigation(ctx) {
     const session = state.get("session");
     if (session?.beingAddress) return session.beingAddress;
     const story = state.get("discovery")?.story || "";
-    const branch = state.get("descriptor")?.address?.history || "0";
-    const bq = branch === "0" ? "" : `#${branch}`;
+    const history = state.get("descriptor")?.address?.history || "0";
+    const bq = history === "0" ? "" : `#${history}`;
     const name = session?.username || "arrival";
     return `${story}${bq}/@${name}`;
   }
@@ -111,8 +111,8 @@ export function createNavigation(ctx) {
   function stanceFor(beingName) {
     const desc = state.get("descriptor");
     const story = state.get("discovery")?.story || desc?.address?.place || "";
-    const branch = desc?.address?.history || "0";
-    const bq = branch === "0" ? "" : `#${branch}`;
+    const history = desc?.address?.history || "0";
+    const bq = history === "0" ? "" : `#${history}`;
     const path = desc?.address?.pathByNames || "/";
     return `${story}${bq}${path}@${beingName}`.replace(/\/+@/, "/@");
   }
@@ -144,9 +144,9 @@ export function createNavigation(ctx) {
     if (existing.startsWith("inhabit=")) return;
     const story = desc?.address?.place || state.get("discovery")?.story || "";
     if (!story) return;
-    const branch = desc?.address?.history || "0";
+    const history = desc?.address?.history || "0";
     const path = desc?.address?.pathByNames || "/";
-    const bq = branch === "0" ? "" : `#${branch}`;
+    const bq = history === "0" ? "" : `#${history}`;
     const next = `${story}${bq}${path === "/" ? "/" : path}`;
     if (existing !== next) {
       try { history.replaceState(null, "", `${location.pathname}#${next}`); } catch {}
@@ -222,13 +222,13 @@ export function createNavigation(ctx) {
       }
 
       // History push unless we're stepping through it. Store the FULL
-      // IBP-form address (story + branch + path) so back/forward
-      // restores the exact view even after branch hops.
+      // IBP-form address (story + history + path) so back/forward
+      // restores the exact view even after history hops.
       if (!fromNav) {
         const story = desc?.address?.place || state.get("discovery")?.story || "";
-        const branch = desc?.address?.history || "0";
+        const history = desc?.address?.history || "0";
         const path = desc?.address?.pathByNames || "/";
-        const bq = branch === "0" ? "" : `#${branch}`;
+        const bq = history === "0" ? "" : `#${history}`;
         const canonical = story
           ? `${story}${bq}${path === "/" ? "/" : path}`
           : (desc?.address?.pathByNames || address);
@@ -269,20 +269,20 @@ export function createNavigation(ctx) {
       return desc;
     } catch (err) {
       events.emit("status", `see failed: ${err.code || ""} ${err.message || ""}`);
-      // A navigate to a branch that no longer exists self-heals to
+      // A navigate to a history that no longer exists self-heals to
       // main rather than stranding the client on the previous
       // descriptor (where the self-position loop would storm the
-      // gone branch). Re-entry guard stops a loop if main fails too.
-      if ((err?.code === "BRANCH_NOT_FOUND" || err?.code === "CROSS_BRANCH_FORBIDDEN") && !_recoveringBranch) {
-        _recoveringBranch = true;
+      // gone history). Re-entry guard stops a loop if main fails too.
+      if ((err?.code === "BRANCH_NOT_FOUND" || err?.code === "CROSS_BRANCH_FORBIDDEN") && !_recoveringHistory) {
+        _recoveringHistory = true;
         clearLocationHash();
         try {
           await navigate(`${state.get("discovery")?.story || ""}/`);
           return;
         } catch (err2) {
-          console.warn("[portal:nav] branch-gone recovery to main failed:", err2?.message || err2);
+          console.warn("[portal:nav] history-gone recovery to main failed:", err2?.message || err2);
         } finally {
-          _recoveringBranch = false;
+          _recoveringHistory = false;
         }
       }
       throw err;

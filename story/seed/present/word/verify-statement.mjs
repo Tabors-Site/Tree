@@ -32,7 +32,7 @@ try {
   await new Promise((r) => setTimeout(r, 1200));
   let typist = null;
   await withIAmAct("birth typist", async (m) => {
-    const b = await birthBeing({ spec: { name: "typist", parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: m, branch: "0" });
+    const b = await birthBeing({ spec: { name: "typist", parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: m, history: "0" });
     typist = b.beingId;
   });
   await new Promise((r) => setTimeout(r, 1000));

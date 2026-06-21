@@ -63,12 +63,13 @@ const ARRIVAL_ROLE = "arrival";
  * @returns {Promise<{ok: boolean, role?: string, anchor?: string, reason?: string}>}
  */
 export async function authorizeViaRoles(args) {
-  const { identity, verb, target, action, intent, operation, seeOp, history } = args || {};
+  const { identity, verb, target, action, intent, operation, seeOp, history } =
+    args || {};
   if (typeof history !== "string" || !history.length) {
     throw new Error(
       "authorizeViaRoles requires `history` as a non-empty string. " +
-      "Callers must pass moment.actorAct?.history (or '0' for genesis / pre-summon paths) " +
-      "explicitly; no silent default.",
+        "Callers must pass moment.actorAct?.history (or '0' for genesis / pre-summon paths) " +
+        "explicitly; no silent default.",
     );
   }
   // actorHistory = the actor's history (their session.currentHistory
@@ -89,7 +90,15 @@ export async function authorizeViaRoles(args) {
   // arrival role (looked up at the story root's qualities.roles or
   // — if not yet installed there — the in-memory REGISTRY).
   if (!identity?.beingId) {
-    return await checkArrivalFloor({ verb, target, action, intent, operation, seeOp, history });
+    return await checkArrivalFloor({
+      verb,
+      target,
+      action,
+      intent,
+      operation,
+      seeOp,
+      history,
+    });
   }
 
   // Ownership step (seed/RolesAreAuth.md "Nearest claim wins").
@@ -119,7 +128,10 @@ export async function authorizeViaRoles(args) {
   // up uniformly. No "public-commons" branch lives in this file.
   const targetSpaceForOwner = deriveSpaceId(target);
   if (targetSpaceForOwner) {
-    const claim = await findNearestOwnedAncestor(String(targetSpaceForOwner), history);
+    const claim = await findNearestOwnedAncestor(
+      String(targetSpaceForOwner),
+      history,
+    );
     if (claim) {
       const actorIdStr = String(identity.beingId);
       if (claim.ownerIds.some((id) => String(id) === actorIdStr)) {
@@ -136,10 +148,14 @@ export async function authorizeViaRoles(args) {
   // on history #1. This is the "stay yourself when navigating across
   // branches" semantic — your identity travels with you; only an
   // explicit be:switch changes the history your session rides.
-  const slot = await loadOrFold("being", String(identity.beingId), actorHistory);
+  const slot = await loadOrFold(
+    "being",
+    String(identity.beingId),
+    actorHistory,
+  );
   const grants = readGrantsFromSlot(slot);
 
-  const targetPath  = derivePath(target);
+  const targetPath = derivePath(target);
   const targetBeing = deriveBeingName(target);
   let targetSpace = deriveSpaceId(target);
   // Fallback: when target carries no spaceId (BE on self, SUMMON to a
@@ -150,18 +166,28 @@ export async function authorizeViaRoles(args) {
   // fallback, BE on self always denied because reachCovers needs a
   // spaceId to evaluate "is target at or below the role's host."
   if (!targetSpace) {
-    targetSpace = String(slot?.state?.position || slot?.state?.homeSpace || "") || null;
+    targetSpace =
+      String(slot?.state?.position || slot?.state?.homeSpace || "") || null;
   }
 
   for (const grant of grants) {
     const { spec, hostSpaceId } = await getRoleSpecForGrant(grant, history);
     if (!spec) continue;
 
-    if (!await reachCovers(spec, hostSpaceId, { spaceId: targetSpace, path: targetPath }, history)) {
+    if (
+      !(await reachCovers(
+        spec,
+        hostSpaceId,
+        { spaceId: targetSpace, path: targetPath },
+        history,
+      ))
+    ) {
       continue;
     }
 
-    if (!permits(spec, verb, { action, intent, operation, seeOp, targetBeing })) {
+    if (
+      !permits(spec, verb, { action, intent, operation, seeOp, targetBeing })
+    ) {
       continue;
     }
 
@@ -177,19 +203,34 @@ export async function authorizeViaRoles(args) {
   // grants here (their being row doesn't exist on this story). Fall
   // through to the arrival floor so they can at least reach what every
   // anonymous visitor can . SUMMON @cherub:mate (cross-world
-  // citizenship via vessel), SUMMON @federation-manager (initiate a
+  // citizenship via being), SUMMON @federation-manager (initiate a
   // negotiation), arrival-view SEE. Without this fallthrough, any
   // peer story's outbound SUMMON to @federation-manager would deny
   // because the local grants table has no record of the remote
   // federation-manager being.
   if (identity?.canopyVerifiedSender || identity?.story) {
-    return await checkArrivalFloor({ verb, target, action, intent, operation, seeOp, history });
+    return await checkArrivalFloor({
+      verb,
+      target,
+      action,
+      intent,
+      operation,
+      seeOp,
+      history,
+    });
   }
 
   return {
     ok: false,
-    reason: `no granted role permits ${verb}` +
-      (action ? `:${action}` : operation ? `:${operation}` : intent ? `:${intent}` : "") +
+    reason:
+      `no granted role permits ${verb}` +
+      (action
+        ? `:${action}`
+        : operation
+          ? `:${operation}`
+          : intent
+            ? `:${intent}`
+            : "") +
       ` at this target`,
   };
 }
@@ -221,7 +262,11 @@ async function findNearestOwnedAncestor(targetSpaceId, history) {
   }
 
   let chain = null;
-  try { chain = await getAncestorChain(targetSpaceId, history); } catch { chain = null; }
+  try {
+    chain = await getAncestorChain(targetSpaceId, history);
+  } catch {
+    chain = null;
+  }
   if (!Array.isArray(chain)) return null;
   for (const node of chain) {
     const slot = await loadOrFold("space", String(node._id), history);
@@ -242,11 +287,15 @@ function readOwners(state) {
 // canX matching (action-only; no patterns inside canX)
 // ────────────────────────────────────────────────────────────────────
 
-function permits(spec, verb, { action, intent, operation, seeOp, targetBeing }) {
-  if (verb === "see")    return permitsSee(spec, seeOp);
-  if (verb === "do")     return permitsDo(spec, action);
+function permits(
+  spec,
+  verb,
+  { action, intent, operation, seeOp, targetBeing },
+) {
+  if (verb === "see") return permitsSee(spec, seeOp);
+  if (verb === "do") return permitsDo(spec, action);
   if (verb === "call") return permitsSummon(spec, targetBeing, intent);
-  if (verb === "be")     return permitsBe(spec, operation);
+  if (verb === "be") return permitsBe(spec, operation);
   return false;
 }
 
@@ -308,7 +357,12 @@ function permitsSummon(spec, targetBeing, intent) {
     const pattern = typeof entry === "string" ? entry : entry?.pattern;
     if (!pattern) continue;
     if (matchBeingNamePattern(pattern, targetBeing)) {
-      if (!intent || !entry?.intent || entry.intent === "*" || entry.intent === intent) {
+      if (
+        !intent ||
+        !entry?.intent ||
+        entry.intent === "*" ||
+        entry.intent === intent
+      ) {
         return true;
       }
     }
@@ -338,7 +392,9 @@ export function permitsReceiverSummon(role, intent) {
     return { ok: false, reason: "receiver role missing" };
   }
   const receiverEntries = Array.isArray(role.canSummon)
-    ? role.canSummon.filter((e) => typeof e === "object" && e?.as === "receiver")
+    ? role.canSummon.filter(
+        (e) => typeof e === "object" && e?.as === "receiver",
+      )
     : [];
   if (receiverEntries.length === 0) {
     // No declared receiver entries → role accepts anything. Current
@@ -352,7 +408,9 @@ export function permitsReceiverSummon(role, intent) {
   // declared receiver entries refuses; omitting intent can't be used
   // to bypass the receiver gate.
   if (!intent) {
-    const declared = receiverEntries.map((e) => e?.intent || "(any)").join(", ");
+    const declared = receiverEntries
+      .map((e) => e?.intent || "(any)")
+      .join(", ");
     return {
       ok: false,
       reason: `role "${role.name}" declares accepted intents [${declared}] but the summon carried no intent`,
@@ -395,7 +453,15 @@ function matchBeingNamePattern(pattern, targetBeing) {
 // Anonymous arrival floor
 // ────────────────────────────────────────────────────────────────────
 
-async function checkArrivalFloor({ verb, target, action, intent, operation, seeOp, history }) {
+async function checkArrivalFloor({
+  verb,
+  target,
+  action,
+  intent,
+  operation,
+  seeOp,
+  history,
+}) {
   // The arrival role's host IS the story root. The shared lookup
   // walks anchorSpaceId=storyRoot for qualities.roles.arrival; the
   // registry fallback covers boot-order edges before install.
@@ -405,20 +471,33 @@ async function checkArrivalFloor({ verb, target, action, intent, operation, seeO
     history,
   );
   if (!spec) {
-    return { ok: false, reason: "no arrival role registered; anonymous callers have no floor." };
+    return {
+      ok: false,
+      reason: "no arrival role registered; anonymous callers have no floor.",
+    };
   }
 
-  const targetPath  = derivePath(target);
+  const targetPath = derivePath(target);
   const targetSpace = deriveSpaceId(target);
   const targetBeing = deriveBeingName(target);
 
-  if (!await reachCovers(spec, hostSpaceId, { spaceId: targetSpace, path: targetPath }, history)) {
+  if (
+    !(await reachCovers(
+      spec,
+      hostSpaceId,
+      { spaceId: targetSpace, path: targetPath },
+      history,
+    ))
+  ) {
     return { ok: false, reason: "arrival floor does not reach this position." };
   }
   if (permits(spec, verb, { action, intent, operation, seeOp, targetBeing })) {
     return { ok: true, role: ARRIVAL_ROLE, anchor: hostSpaceId };
   }
-  return { ok: false, reason: "arrival floor does not permit this action; please authenticate." };
+  return {
+    ok: false,
+    reason: "arrival floor does not permit this action; please authenticate.",
+  };
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -436,7 +515,9 @@ function readGrantsFromSlot(slot) {
 function derivePath(target) {
   if (!target) return null;
   if (typeof target === "string") return target;
-  return target.path || target.address?.pathByNames || target.address?.path || null;
+  return (
+    target.path || target.address?.pathByNames || target.address?.path || null
+  );
 }
 
 function deriveSpaceId(target) {

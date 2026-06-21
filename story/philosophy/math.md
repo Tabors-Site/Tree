@@ -10,7 +10,7 @@ $$\mathcal{N}\ \text{names}\qquad \mathcal{B}\ \text{beings}\qquad \mathcal{S}\ 
 
 $$\mathcal{E} \;=\; \mathcal{B} \,\sqcup\, \mathcal{S} \,\sqcup\, \mathcal{M}$$
 
-Disjoint union — every entity that bears a reel is exactly one kind. $\mathcal{N}$ stands apart: a **name** is not a thing in the story but the identity that _acts_ in it — a keypair, the signer. A being _expresses_ a name; the name acts, the being is the vessel (see NAME). Also: $\mathcal{F}$ facts, $\mathcal{A}$ acts, $\mathcal{P}$ faces, $\mathcal{D}$ words, $\mathbb{W}$ histories.
+Disjoint union — every entity that bears a reel is exactly one kind. $\mathcal{N}$ stands apart: a **name** is not a thing in the story but the identity that _acts_ in it — a keypair, the signer. A being _expresses_ a name; the name acts, the being is the being (see NAME). Also: $\mathcal{F}$ facts, $\mathcal{A}$ acts, $\mathcal{P}$ faces, $\mathcal{D}$ words, $\mathbb{W}$ histories.
 
 ### HISTORIES
 
@@ -48,17 +48,17 @@ $$f = (\,t,\; a,\; n,\; w,\; p\,) \qquad\qquad \mathrm{id}(f) \;=\; H\big(\,p \;
 - $w \in \mathbb{W}$ — the **history** the deed happened in (committed in the digest)
 - $p$ — the **prev-hash**: $\mathrm{id}$ of the fact before $f$ in $\widehat{R}_t^{\,w}$ (genesis sentinel at $n=1$)
 
-There is no assigned identifier and no separate self-hash field — **the fact's identity IS its content hash**. The same deed, in the same history, after the same history, _is_ the same fact: storage dedup, transport ("do you have this hash?"), and tamper-evidence are properties of the addressing scheme, not mechanisms layered on it. $\mathrm{canon}$ is the canonical serialization (sorted keys, stable forms) — a versioned wire format. The actor is carried by the act, and the actor is a **name**: $\mathrm{by}(f) := \mathrm{by}(a) \in \mathcal{N}$, expressed _through_ a being $\mathrm{through}(f) \in \mathcal{B}$ — the vessel the name acted in.
+There is no assigned identifier and no separate self-hash field — **the fact's identity IS its content hash**. The same deed, in the same history, after the same history, _is_ the same fact: storage dedup, transport ("do you have this hash?"), and tamper-evidence are properties of the addressing scheme, not mechanisms layered on it. $\mathrm{canon}$ is the canonical serialization (sorted keys, stable forms) — a versioned wire format. The actor is carried by the act, and the actor is a **name**: $\mathrm{by}(f) := \mathrm{by}(a) \in \mathcal{N}$, expressed _through_ a being $\mathrm{through}(f) \in \mathcal{B}$ — the being the name acted in.
 
 ### ATTRIBUTION — _the law_
 
 Every fact's actor is the **authenticated name** — the verb refuses to stamp a fact whose seal it did not sign. A being never acts of its own accord; the name that owns it acts _through_ it, and no name can sign as another:
 
-$$\mathrm{by}(f) = \text{the name whose key sealed } f \quad\text{(unforgeable)},\qquad \mathrm{through}(f) \in \mathcal{B}\ \text{the vessel}$$
+$$\mathrm{by}(f) = \text{the name whose key sealed } f \quad\text{(unforgeable)},\qquad \mathrm{through}(f) \in \mathcal{B}\ \text{the being}$$
 
 What may land on a being's reel $R_b^w$, and what it does there:
 
-- **BE facts** (self-acts: birth, connect, release, switch, death) — the acting name is $b$'s own. Identity transformations come only from the left stance — a name in its own vessel.
+- **BE facts** (self-acts: birth, connect, release, switch, death) — the acting name is $b$'s own. Identity transformations come only from the left stance — a name in its own being.
 - **DO facts targeting $b$** — the acting name is whoever's, and the act passed the role-walk (the single auth gate). Another name CAN change your figure, exactly as far as roles permit (a grant, a set), never further.
 - **CALL facts naming $b$ as recipient** — the acting name is the caller's; the fact is the knock on the door, recorded on your reel. **Call facts are figure-inert**: the reducer folds no call action, so a call can never mutate what you are. Callers express; receivers decide (SUMMON.md sovereignty, made structural).
 
@@ -86,7 +86,7 @@ An act reads the face and yields facts:
 
 $$a(\Phi) = \Delta\mathcal{F},\qquad \Delta\mathcal{F} \subseteq \mathcal{F}\ \ (\text{finite})$$
 
-$\Delta\mathcal{F}$ lands across the vessel being's **own** reel and the reels of whatever was acted upon.
+$\Delta\mathcal{F}$ lands across the being being's **own** reel and the reels of whatever was acted upon.
 
 ### SEAL
 
@@ -129,7 +129,7 @@ Order holds _within_ a reel's view: $\;f_n \prec f_{n+1}\;$ in $\widehat{R}_e^{\
 
 ### CALL
 
-A call is an act toward another being — one name, through its vessel, knocking on another being's door, $\;\mathrm{call}:\mathcal{B}\to\mathcal{B}$. Like DO, it stamps its **target** with the right stance: the fact lands on the **recipient's** reel, attributed to the caller's name (2026-06-03 retarget — calling another being is not a self-act, so it left the BE namespace):
+A call is an act toward another being — one name, through its being, knocking on another being's door, $\;\mathrm{call}:\mathcal{B}\to\mathcal{B}$. Like DO, it stamps its **target** with the right stance: the fact lands on the **recipient's** reel, attributed to the caller's name (2026-06-03 retarget — calling another being is not a self-act, so it left the BE namespace):
 
 $$f = (\,t{=}b_j,\;\; \mathrm{by}{=}n_i,\;\; \mathrm{through}{=}b_i,\;\; n\,) \;\in\; \widehat{R}_{b_j}^{\,w}$$
 
@@ -149,9 +149,9 @@ A **name** is an identity — a keypair — and nothing in the story: it holds n
 
 - It **signs** every act done through it: $\mathrm{sig}(a) = \mathrm{Sign}_{\mathrm{sk}_n}(\mathrm{id}(a)\,\|\,\dots)$. Attribution (ATTRIBUTION) is the key's, not a label's — which is why no name can act as another.
 - It **owns** act-chains — one per being it acts through, per history ($A_b^w$, REELS). A name acts through many beings, in many histories, at once; the chains run in parallel under the one name.
-- It **uses** beings as vessels. A being is the name's presence in the story; the name is the being's identity. A name may express many beings; a being expresses exactly one name.
+- It **uses** beings as beings. A being is the name's presence in the story; the name is the being's identity. A name may express many beings; a being expresses exactly one name.
 
-A name's own reel **does not fork** — it stands above the histories, one identity whatever timeline its vessels stand in. Names are minted, never copied: a BE-birth binds a fresh vessel to its signer. The root name is **I-AM** (GENESIS) — the only name no other name minted, and the signer of every root hash (I_AM.md).
+A name's own reel **does not fork** — it stands above the histories, one identity whatever timeline its beings stand in. Names are minted, never copied: a BE-birth binds a fresh being to its signer. The root name is **I-AM** (GENESIS) — the only name no other name minted, and the signer of every root hash (I_AM.md).
 
 ### BEING & BECOMING
 
@@ -183,7 +183,7 @@ $$\mu_0 = (\,\text{I-AM},\;\; \text{I-AM},\;\; \mathrm{Fold}(\text{I-AM},\,\varn
 
 $$\mathcal{W} \;:=\; \mathrm{Seal}(\mu_0)$$
 
-$\mu_0$ is the one moment with no concurrency — before it the braid has not forked. **I-AM is the root name** — the keypair that signs $a_0$ and, by descent, every root after it (I_AM.md). It acts through itself: name and vessel are one at the root. Its first deeds **declare the words** the rest is said in — that a fact is a word, a verb is a word, a being is a word (WORD below); the language grounds itself before anything else is born. Every later being is minted by a BE-act of an existing name through a being; the I-AM is the root of both lines — the name no other name minted.
+$\mu_0$ is the one moment with no concurrency — before it the braid has not forked. **I-AM is the root name** — the keypair that signs $a_0$ and, by descent, every root after it (I_AM.md). It acts through itself: name and being are one at the root. Its first deeds **declare the words** the rest is said in — that a fact is a word, a verb is a word, a being is a word (WORD below); the language grounds itself before anything else is born. Every later being is minted by a BE-act of an existing name through a being; the I-AM is the root of both lines — the name no other name minted.
 
 ### WORD
 
@@ -301,30 +301,30 @@ Each kind unlocks one further scale, and the name is the last: **5D motion is si
 
 ### SYMBOL KEY
 
-| symbol                                    | meaning                                                       |
-| ----------------------------------------- | ------------------------------------------------------------- |
-| $\mathcal{N}$                             | names — keypairs; the signers, the only ones who act          |
-| $\mathcal{B},\ \mathcal{S},\ \mathcal{M}$ | beings, spaces, matter (the reel-bearing entities)            |
-| $\mathcal{E}$                             | all entities $=\mathcal{B}\sqcup\mathcal{S}\sqcup\mathcal{M}$ |
-| $\mathcal{F},\ \mathcal{A},\ \mathcal{P},\ \mathcal{D}$ | facts, acts, faces, words                        |
-| $\mathbb{W},\ w$                          | histories; main $= 0$                                |
-| $L(w),\ \beta_w$                          | lineage to main; per-reel branch points                       |
-| $R_e^w,\ \widehat{R}_e^{\,w}$             | an entity's own reel in $w$; its history-visible view         |
-| $A_b^w$                                   | a name's act-chain through being $b$ in history $w$             |
-| $\nu_b$                                   | the name being $b$ expresses                                  |
-| $f,\ a,\ \mu,\ \Phi$                      | fact, act, moment, face                                       |
-| $\mathrm{by}(f),\ \mathrm{through}(f)$    | the name that signed $f$; the being it acted through          |
-| $\mathrm{id}(\cdot)$                      | content-hash identity (facts, bundles)                        |
-| $\mathcal{W}$                             | the whole — union of all reels in all histories                  |
-| $\Delta\mathcal{F},\ \overline{\Delta\mathcal{F}}$ | one seal's facts; their stamped reversal             |
-| $\mathcal{R}$                             | the story — every history told from one root                  |
-| $\text{Ours}$                             | the library — federation of stories; its points are stories   |
-| $\mathrm{root}(\cdot)$                    | root hash — reel, history, or story                           |
-| $T_e^w$                                   | local time $= \lvert \widehat{R}_e^{\,w} \rvert$              |
-| $n$                                       | a fact's local index in its reel                              |
-| $p$                                       | a fact's prev-hash (the prior identity)                       |
-| $H,\ \mathrm{canon}$                      | hash function; canonical serialization                        |
-| $B$                                       | a bundle — a **book** (graft or seed)                         |
-| $\prec$                                   | ordered-before (within a reel's view only)                    |
-| $\varnothing$                             | empty / none                                                  |
-| $\sqcup$                                  | disjoint union                                                |
+| symbol                                                  | meaning                                                       |
+| ------------------------------------------------------- | ------------------------------------------------------------- |
+| $\mathcal{N}$                                           | names — keypairs; the signers, the only ones who act          |
+| $\mathcal{B},\ \mathcal{S},\ \mathcal{M}$               | beings, spaces, matter (the reel-bearing entities)            |
+| $\mathcal{E}$                                           | all entities $=\mathcal{B}\sqcup\mathcal{S}\sqcup\mathcal{M}$ |
+| $\mathcal{F},\ \mathcal{A},\ \mathcal{P},\ \mathcal{D}$ | facts, acts, faces, words                                     |
+| $\mathbb{W},\ w$                                        | histories; main $= 0$                                         |
+| $L(w),\ \beta_w$                                        | lineage to main; per-reel branch points                       |
+| $R_e^w,\ \widehat{R}_e^{\,w}$                           | an entity's own reel in $w$; its history-visible view         |
+| $A_b^w$                                                 | a name's act-chain through being $b$ in history $w$           |
+| $\nu_b$                                                 | the name being $b$ expresses                                  |
+| $f,\ a,\ \mu,\ \Phi$                                    | fact, act, moment, face                                       |
+| $\mathrm{by}(f),\ \mathrm{through}(f)$                  | the name that signed $f$; the being it acted through          |
+| $\mathrm{id}(\cdot)$                                    | content-hash identity (facts, bundles)                        |
+| $\mathcal{W}$                                           | the whole — union of all reels in all histories               |
+| $\Delta\mathcal{F},\ \overline{\Delta\mathcal{F}}$      | one seal's facts; their stamped reversal                      |
+| $\mathcal{R}$                                           | the story — every history told from one root                  |
+| $\text{Ours}$                                           | the library — federation of stories; its points are stories   |
+| $\mathrm{root}(\cdot)$                                  | root hash — reel, history, or story                           |
+| $T_e^w$                                                 | local time $= \lvert \widehat{R}_e^{\,w} \rvert$              |
+| $n$                                                     | a fact's local index in its reel                              |
+| $p$                                                     | a fact's prev-hash (the prior identity)                       |
+| $H,\ \mathrm{canon}$                                    | hash function; canonical serialization                        |
+| $B$                                                     | a bundle — a **book** (graft or seed)                         |
+| $\prec$                                                 | ordered-before (within a reel's view only)                    |
+| $\varnothing$                                           | empty / none                                                  |
+| $\sqcup$                                                | disjoint union                                                |

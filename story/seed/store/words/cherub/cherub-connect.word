@@ -56,7 +56,7 @@ When an authenticated caller connects to inherit a descendant being:
     see whether the caller is an ancestor of the candidate as asAncestor.
     # father-admit is SECURITY-CRITICAL (a LOCAL father is authed by beingId; a CROSS-
     # story father ONLY by the proven NAME + a verified signature, NEVER beingId — a
-    # beingId match for a cross father is the vessel-takeover attack). The discrimination
+    # beingId match for a cross father is the being-takeover attack). The discrimination
     # stays host (fatherMatch, connectHandler L472-510 verbatim); the .word just marks.
     host: fatherMatch(candidate, caller) as fatherOk.
     If fatherOk:
@@ -70,7 +70,7 @@ When an authenticated caller connects to inherit a descendant being:
     host: displaceInhabitor(chosen, caller) as displaced.
     host: driverTrueNameForFather(chosen, caller) as driver.
   Otherwise:
-    host: driverTrueNameForVessel(chosen) as driver.
+    host: driverTrueNameForbeing(chosen) as driver.
   host: generateInheritToken(chosen, driver) as token.
   see the chosen's homeHistory as seat.
   Return token, seatBranch: $seat, inherited: true, asFather: $candidateAsFather.

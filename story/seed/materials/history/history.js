@@ -3,20 +3,21 @@
 // History. A divergent world that shares history with its parent up
 // to a chosen branch point.
 //
-// Every branch traces back to main (#0). Branches form a tree:
+// Every history traces back to main (#0). Histories form a tree:
 //   #0 (main) → #1 → #1a → #1a1 → ...
 //
 // `path` is the canonical identifier. Per the user's address scheme
 // (seed/timeline.md, "addressing"): numbers and letters alternate
 // per level, segments are stable identifiers (#1 stays #1 even
-// after deletion of earlier branches).
+// after deletion of earlier histories).
 //
 // `branchPoint` captures the parent's per-reel seqs at the moment
-// the branch was created. A branch's first write to reel R picks up
-// at branchPoint[R] + 1, so seqs across the inherited-prefix +
-// divergent-tail combine into a single monotonic stream per reel.
+// the history was created (where it branched off). A history's first
+// write to reel R picks up at branchPoint[R] + 1, so seqs across the
+// inherited-prefix + divergent-tail combine into a single monotonic
+// stream per reel.
 //
-// History metadata is doctrinally world data — when a branch is
+// History metadata is doctrinally world data — when a history is
 // created, paused, or labeled, the change is a Fact on main's
 // `.histories` reel. The History Mongo doc here is the projection
 // of that fact stream, the same way Being / Space / Matter rows are
@@ -31,16 +32,16 @@ const HistorySchema = new mongoose.Schema({
   // descendants. Indexed unique. Pre-allocated by the create-branch
   // op based on the parent's existing children (next available
   // segment in the alternating-number/letter scheme).
-  _id:  { type: String },          // same as `path`; one doc per branch path
+  _id:  { type: String },          // same as `path`; one doc per history path
   path: { type: String, required: true, unique: true, index: true },
 
-  // Parent branch path. Null only for main ("0"). Forms the tree.
+  // Parent history path. Null only for main ("0"). Forms the tree.
   parent: { type: String, default: null, index: true },
 
   // Per-reel snapshot of the parent's heads at branch creation.
   // Mongo Map<reelKey, seq> where reelKey is `<type>:<id>`. Read
   // path walks this when assembling the lineage of facts to apply:
-  // facts in branch X are facts in parent's reel up to
+  // facts in history X are facts in parent's reel up to
   // branchPoint[reel] (inherited), then facts in X's storage above
   // branchPoint[reel] (divergent).
   branchPoint: { type: Map, of: Number, default: () => new Map() },
@@ -50,7 +51,7 @@ const HistorySchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   label:     { type: String, default: null },
 
-  // Pause state. While paused, every IBP verb against this branch
+  // Pause state. While paused, every IBP verb against this history
   // refuses with HISTORICAL_READ_ONLY's sibling code STORY_PAUSED
   // (Pass 6.5; substrate awareness lives on the doc, the gate ships
   // when the verbs learn to read it).
@@ -58,13 +59,13 @@ const HistorySchema = new mongoose.Schema({
   pausedBy: { type: String, ref: "Being", default: null },
   pausedAt: { type: Date, default: null },
 
-  // Live world marker. Operators can promote a branch to "live"
+  // Live world marker. Operators can promote a history to "live"
   // (Pass 10 in the build order). Default: only main is live.
   isLive:           { type: Boolean, default: false, index: true },
   archivedBecause:  { type: String, default: null },
 
   // Soft delete. Mark-deleted, never purge. Matches the append-only
-  // doctrine the rest of the world follows. Deleted branches refuse
+  // doctrine the rest of the world follows. Deleted histories refuse
   // new writes (DO/BE/SUMMON gated, scheduler skips), drop out of
   // default listings, and remain readable via SEE so the chain stays
   // forensically intact. Undelete is a single toggle. Purge is a
@@ -73,33 +74,33 @@ const HistorySchema = new mongoose.Schema({
   deletedBy: { type: String, ref: "Being", default: null },
   deletedAt: { type: Date, default: null },
 
-  // Merge provenance. Populated only when this branch was created by
+  // Merge provenance. Populated only when this history was created by
   // the merge-branches op; the canonical `parent` field stays a
   // single path (the common ancestor of the merge sources). The
-  // mergeSources array records which two source branches were
-  // combined to produce this branch . forensic audit, not a
+  // mergeSources array records which two source histories were
+  // combined to produce this history . forensic audit, not a
   // structural property the lineage walk consults.
   //
-  // Empty for branches created by create-branch.
+  // Empty for histories created by create-branch.
   mergeSources: { type: [String], default: () => [] },
 
-  // Subtree scope. When set, this branch is scoped to a specific
+  // Subtree scope. When set, this history is scoped to a specific
   // space subtree . writes to aggregates whose home space is NOT
   // inside `scope.spaceId`'s lineage are refused at the fact-emission
   // boundary (SCOPE_VIOLATION). Reads outside scope inherit from
-  // the parent branch's projection unchanged.
+  // the parent history's projection unchanged.
   //
-  // The doctrine: a subtree branch lets operators experiment on a
+  // The doctrine: a subtree history lets operators experiment on a
   // single feature without contaminating the rest of the story.
-  // Outside the scope, the branch is transparent . callers see the
-  // parent's state. Inside the scope, the branch diverges normally.
+  // Outside the scope, the history is transparent . callers see the
+  // parent's state. Inside the scope, the history diverges normally.
   //
   // `scope.path` is the user-facing path (e.g. "/library"); stored
   // for display + audit. `scope.spaceId` is the resolved canonical
   // _id, captured at branch creation time when the scope is locked
   // against the parent's view.
   //
-  // Whole-story branches (the default) have `scope: null`. The
+  // Whole-story histories (the default) have `scope: null`. The
   // fast path in logFact short-circuits when scope is null.
   scope: {
     type: {

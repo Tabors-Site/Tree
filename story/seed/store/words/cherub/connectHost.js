@@ -13,7 +13,10 @@
 // (recall / CONTROL is private); the token + seat ride the §7 `return`, never the chain.
 
 import { findBeingCandidatesByName } from "../../../materials/being/identity/lookups.js";
-import { verifyPassword, generateToken } from "../../../materials/being/identity/credentials.js";
+import {
+  verifyPassword,
+  generateToken,
+} from "../../../materials/being/identity/credentials.js";
 import { loadProjection } from "../../../materials/projections.js";
 import { getStoryDomain } from "../../../ibp/address.js";
 
@@ -23,11 +26,16 @@ import { getStoryDomain } from "../../../ibp/address.js";
 // evaluator from running both (flow 0 happening to return/refuse first is luck, not a
 // contract).
 export function selectConnectFlow(ir, kind) {
-  const flows = (Array.isArray(ir) ? ir : [ir]).filter((n) => n.kind === "flow");
-  if (kind === "credential") return flows.find((f) => (f.binds || []).includes("password"));
+  const flows = (Array.isArray(ir) ? ir : [ir]).filter(
+    (n) => n.kind === "flow",
+  );
+  if (kind === "credential")
+    return flows.find((f) => (f.binds || []).includes("password"));
   const clauseOf = (f) => String(f.when?.event || f.when?.op?.clause || "");
-  if (kind === "owned") return flows.find((f) => /\bowns?\b/i.test(clauseOf(f)));
-  if (kind === "inherit") return flows.find((f) => /inherit|descendant/i.test(clauseOf(f)));
+  if (kind === "owned")
+    return flows.find((f) => /\bowns?\b/i.test(clauseOf(f)));
+  if (kind === "inherit")
+    return flows.find((f) => /inherit|descendant/i.test(clauseOf(f)));
   return null;
 }
 
@@ -44,7 +52,8 @@ export function connectHostEnv() {
 
     // verifyPassword(candidate, password) → the real bcrypt check against the candidate's
     // stored hash (connectHandler L316).
-    verifyPassword: async ({ args: [candidate, password] }) => verifyPassword(candidate, password),
+    verifyPassword: async ({ args: [candidate, password] }) =>
+      verifyPassword(candidate, password),
 
     // generateToken(candidate) → mint the session token AND open the being's signing
     // session. In connectHandler (L325-331) the verified being's session is established as
@@ -55,7 +64,8 @@ export function connectHostEnv() {
     generateToken: async ({ args: [candidate] }) => {
       const token = generateToken(candidate);
       if (candidate?.trueName) {
-        const { unlockSigning } = await import("../../../materials/name/signingSession.js");
+        const { unlockSigning } =
+          await import("../../../materials/name/signingSession.js");
         unlockSigning(String(candidate.trueName));
       }
       return token;
@@ -87,7 +97,7 @@ export function connectHostEnv() {
     // cross logic (connectHandler L472-510). SECURITY-CRITICAL, kept HOST not .word: a
     // LOCAL father (father.story === this story) is authed by beingId; a CROSS-story
     // father is authed ONLY by the proven NAME + a verified envelope signature, NEVER by
-    // beingId (a beingId match for a cross father is the vessel-takeover attack the JS
+    // beingId (a beingId match for a cross father is the being-takeover attack the JS
     // guards). `caller` is the identity object {beingId,nameId,story,beingSigVerified}.
     fatherMatch: ({ args: [candidate, caller] }) => {
       const father = candidate?.qualities?.father || null;
@@ -97,11 +107,17 @@ export function connectHostEnv() {
       const storyMatches = String(father.story) === String(requesterStory);
       const isCrossStory = String(father.story) !== String(localDomain);
       if (storyMatches && isCrossStory) {
-        return !!(father.nameId && caller?.nameId &&
-          String(father.nameId) === String(caller.nameId) && caller?.beingSigVerified === true);
+        return !!(
+          father.nameId &&
+          caller?.nameId &&
+          String(father.nameId) === String(caller.nameId) &&
+          caller?.beingSigVerified === true
+        );
       }
       if (storyMatches) {
-        return !!(father.beingId && String(father.beingId) === String(caller?.beingId));
+        return !!(
+          father.beingId && String(father.beingId) === String(caller?.beingId)
+        );
       }
       return false;
     },
@@ -110,7 +126,7 @@ export function connectHostEnv() {
     // candidateAsFather flag the .word marked, not this return).
     selectCandidate: ({ args: [candidate] }) => candidate,
 
-    // displaceInhabitor(chosen, caller) → father-priority: stamp a be:release on the vessel
+    // displaceInhabitor(chosen, caller) → father-priority: stamp a be:release on the being
     // when a DIFFERENT being currently inhabits it (connectHandler L544-573). The ONE world
     // fact flow 3 lays; emitted into the moment (ctx.moment).
     displaceInhabitor: async ({ args: [chosen, caller] }, ctx) => {
@@ -118,33 +134,44 @@ export function connectHostEnv() {
       if (!current || String(current) === String(caller?.beingId)) return false;
       const { emitFact } = await import("../../../past/fact/facts.js");
       const sc = ctx?.moment || null;
-      await emitFact({
-        verb: "be", act: "release", through: String(current),
-        of: { kind: "being", id: String(chosen._id) },
-        params: {
-          releasedBy: "father-priority",
-          fatherBeingId: String(caller?.beingId),
-          fatherStory: chosen.qualities?.father?.story || getStoryDomain(),
+      await emitFact(
+        {
+          verb: "be",
+          act: "release",
+          through: String(current),
+          of: { kind: "being", id: String(chosen._id) },
+          params: {
+            releasedBy: "father-priority",
+            fatherBeingId: String(caller?.beingId),
+            fatherStory: chosen.qualities?.father?.story || getStoryDomain(),
+          },
+          actId: sc?.actId || null,
+          history: sc?.actorAct?.history || "0",
         },
-        actId: sc?.actId || null, history: sc?.actorAct?.history || "0",
-      }, sc);
+        sc,
+      );
       return true;
     },
 
     // driverTrueNameForFather(chosen, caller) → the SIGNER is the inhabitor: the father
-    // drives the vessel signing as HIMSELF (his local trueName, else his own id; never the
-    // vessel's trueName, or a cross father would sign as the mother — connectHandler L587-594).
+    // drives the being signing as HIMSELF (his local trueName, else his own id; never the
+    // being's trueName, or a cross father would sign as the mother — connectHandler L587-594).
     driverTrueNameForFather: async ({ args: [chosen, caller] }) => {
-      const proj = await loadProjection("being", String(caller?.beingId), chosen?.homeHistory || "0");
+      const proj = await loadProjection(
+        "being",
+        String(caller?.beingId),
+        chosen?.homeHistory || "0",
+      );
       return proj?.state?.trueName || String(caller?.beingId);
     },
 
-    // driverTrueNameForVessel(chosen) → ancestor/inherit (non-father): the vessel's own
+    // driverTrueNameForbeing(chosen) → ancestor/inherit (non-father): the being's own
     // trueName drives (connectHandler L587 default).
-    driverTrueNameForVessel: ({ args: [chosen] }) => chosen?.trueName ?? null,
+    driverTrueNameForbeing: ({ args: [chosen] }) => chosen?.trueName ?? null,
 
-    // generateInheritToken(chosen, driver) → the vessel's token, but signing as `driver`
+    // generateInheritToken(chosen, driver) → the being's token, but signing as `driver`
     // (connectHandler L595: generateToken({ ...targetBeing, trueName: driverTrueName })).
-    generateInheritToken: ({ args: [chosen, driver] }) => generateToken({ ...chosen, trueName: driver }),
+    generateInheritToken: ({ args: [chosen, driver] }) =>
+      generateToken({ ...chosen, trueName: driver }),
   };
 }

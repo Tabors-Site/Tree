@@ -527,7 +527,7 @@ The close is local to a reality; the identity is global to the key. These don't 
 What this reveals
 This is the real structural point: be:close closes a being's presence in a specific reality, not the being's cryptographic existence in the universe.
 
-A being can be present in multiple realities (their home reality, realities they've grafted into, realities where they have vessels). Closing them in one reality only affects that reality's records. The being's other presences continue unless those realities also close them.
+A being can be present in multiple realities (their home reality, realities they've grafted into, realities where they have beings). Closing them in one reality only affects that reality's records. The being's other presences continue unless those realities also close them.
 
 This is actually correct doctrinally. Realities are sovereign. Reality A doesn't get to dictate what reality B does. If reality A closes you, that's reality A's decision; reality B keeps its own records and makes its own decisions about your status.
 
@@ -605,7 +605,7 @@ Federation mirrors of your home reality. If other realities have mirrors of your
 
 Cross-reality identity records. If you've federated and other realities maintain records of you, those records can persist your identity through home-reality failure. You're "the being who federated from A back in 2025 and acted in B for years" — even if A is gone, B's records of you remain.
 
-Diversified presence. A being who exists in multiple realities (vessels, grafts, federation records) is more resilient than one whose existence is concentrated in a single reality. Diversification of presence is a kind of identity insurance.
+Diversified presence. A being who exists in multiple realities (beings, grafts, federation records) is more resilient than one whose existence is concentrated in a single reality. Diversification of presence is a kind of identity insurance.
 
 Out-of-band identity proofs. Things like government IDs, physical attestations, or social proof beyond the substrate can be the ultimate fallback. The substrate handles cryptographic identity well, but doesn't replace all forms of identity verification.
 

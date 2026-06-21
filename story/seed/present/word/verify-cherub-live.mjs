@@ -17,19 +17,30 @@ import { randomUUID } from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const storyRoot = path.resolve(__dirname, "../../..");
-for (const line of fs.readFileSync(path.resolve(storyRoot, ".env"), "utf8").split("\n")) {
-  const t = line.trim(); if (!t || t.startsWith("#")) continue;
-  const eq = t.indexOf("="); if (eq === -1) continue;
-  const k = t.slice(0, eq).trim(), v = t.slice(eq + 1).trim();
+for (const line of fs
+  .readFileSync(path.resolve(storyRoot, ".env"), "utf8")
+  .split("\n")) {
+  const t = line.trim();
+  if (!t || t.startsWith("#")) continue;
+  const eq = t.indexOf("=");
+  if (eq === -1) continue;
+  const k = t.slice(0, eq).trim(),
+    v = t.slice(eq + 1).trim();
   if (v && !process.env[k]) process.env[k] = v;
 }
 process.env.MONGODB_URI = "mongodb://localhost:27017/story-word-cherub-live";
 
 const mongoose = (await import("../../seedStory/dbConfig.js")).default;
 if (mongoose.connection.readyState !== 1) {
-  await new Promise((res, rej) => { mongoose.connection.once("connected", res); mongoose.connection.once("error", rej); });
+  await new Promise((res, rej) => {
+    mongoose.connection.once("connected", res);
+    mongoose.connection.once("error", rej);
+  });
 }
-if (mongoose.connection.name !== "story-word-cherub-live") { console.log(`  REFUSING wrong DB ${mongoose.connection.name}`); process.exit(2); }
+if (mongoose.connection.name !== "story-word-cherub-live") {
+  console.log(`  REFUSING wrong DB ${mongoose.connection.name}`);
+  process.exit(2);
+}
 
 await import("../../materials/space/ops.js");
 await import("../../materials/matter/ops.js");
@@ -40,7 +51,11 @@ await import("../../materials/being/ops.js");
 // so the explicit grant-role op (which checks the registry) resolves it.
 const { registerRole } = await import("../../present/roles/registry.js");
 const { humanRole } = await import("../../present/roles/human/role.js");
-try { registerRole("human", humanRole); } catch { /* already registered */ }
+try {
+  registerRole("human", humanRole);
+} catch {
+  /* already registered */
+}
 // The full boot imports cherub/role.js (via services.js / beOps.js), whose top-level
 // registerRoleWord("cherub","birth"|"connect") self-registers the cherub words. The
 // isolated test DB skips that boot, so import the module here to populate the registry —
@@ -53,35 +68,76 @@ await import("../../store/words/grant-role/index.js");
 
 const { ensureSpaceRoot, ensureIAm } = await import("../../sprout.js");
 const { findByName } = await import("../../materials/projections.js");
-const { ensureSeedDelegates } = await import("../../materials/being/seedDelegates.js");
+const { ensureSeedDelegates } =
+  await import("../../materials/being/seedDelegates.js");
 const { sealFacts } = await import("../../past/fact/facts.js");
 const { nameVerb } = await import("../../ibp/verbs/name.js");
 const { evaluate } = await import("./evaluator.js");
 const { resolveRoleWord } = await import("./roleWordRegistry.js");
 
-let pass = 0, fail = 0;
-const ok = (l) => { pass++; console.log(`  ✓ ${l}`); };
-const bad = (l, d) => { fail++; console.log(`  ✗ ${l}`); if (d) console.log(`      ${d}`); };
+let pass = 0,
+  fail = 0;
+const ok = (l) => {
+  pass++;
+  console.log(`  ✓ ${l}`);
+};
+const bad = (l, d) => {
+  fail++;
+  console.log(`  ✗ ${l}`);
+  if (d) console.log(`      ${d}`);
+};
 async function withRetry(fn, tries = 6) {
   for (let i = 0; i < tries; i++) {
-    try { return await fn(); }
-    catch (e) { const m = String(e?.message || e);
-      if (i < tries - 1 && /catalog changes|acquire .* lock|please retry|WriteConflict|TransientTransaction/i.test(m)) { await new Promise((r) => setTimeout(r, 250 * (i + 1))); continue; }
-      throw e; }
+    try {
+      return await fn();
+    } catch (e) {
+      const m = String(e?.message || e);
+      if (
+        i < tries - 1 &&
+        /catalog changes|acquire .* lock|please retry|WriteConflict|TransientTransaction/i.test(
+          m,
+        )
+      ) {
+        await new Promise((r) => setTimeout(r, 250 * (i + 1)));
+        continue;
+      }
+      throw e;
+    }
   }
 }
 
-console.log(`\n  verify-cherub-live (the full 5-act diff)\n  DB: ${mongoose.connection.name}\n`);
+console.log(
+  `\n  verify-cherub-live (the full 5-act diff)\n  DB: ${mongoose.connection.name}\n`,
+);
 try {
   await mongoose.connection.db.dropDatabase();
-  for (const c of ["facts", "acts", "beings", "spaces", "matters", "reels", "reelheads", "names", "stamps"]) {
-    try { await mongoose.connection.db.createCollection(c); } catch {}
+  for (const c of [
+    "facts",
+    "acts",
+    "beings",
+    "spaces",
+    "matters",
+    "reels",
+    "reelheads",
+    "names",
+    "stamps",
+  ]) {
+    try {
+      await mongoose.connection.db.createCollection(c);
+    } catch {}
   }
   await withRetry(() => ensureIAm());
   // fold-only dispatch: the words declare themselves onto I_AM's reel BEFORE any do-op dispatches
   // (ensureSpaceRoot's create-space). Mirrors genesis.js (ensureIAm -> the words -> the reality).
   await withRetry(async () => {
-    const wc = { actId: randomUUID(), actorAct: { branch: "0", by: "i-am" }, identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+    const wc = {
+      actId: randomUUID(),
+      actorAct: { history: "0", by: "i-am" },
+      identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" },
+      deltaF: [],
+      foldedSeqs: new Map(),
+      afterSeal: [],
+    };
     const { seedFold } = await import("./wordFold.js");
     await seedFold({ moment: wc });
     await sealFacts(wc.deltaF);
@@ -93,80 +149,170 @@ try {
   const branch = "0";
   const cherub = await findByName("being", "cherub", branch);
   if (!cherub) throw new Error("no cherub");
-  const arrival = await findByName("being", "arrival", branch); // the father vessel (the floor); may be absent
-  console.log(`  cherub=${cherub.id} placeRoot=${spaceRoot._id} branch=${branch}`);
+  const arrival = await findByName("being", "arrival", branch); // the father being (the floor); may be absent
+  console.log(
+    `  cherub=${cherub.id} placeRoot=${spaceRoot._id} branch=${branch}`,
+  );
 
   // the arriving Name (the father, via arrival) — declared first so the being
   // can be its own (form-being's trueName = a declared Name).
   let ownerName = null;
   await withRetry(async () => {
-    const sc = { actId: randomUUID(), actorAct: { branch, history: branch, by: "i-am" }, identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
-    ownerName = (await nameVerb("declare", { name: "tabor", password: "pw12345678", soulType: "human" }, { identity: sc.identity, moment: sc, currentHistory: branch })).nameId;
+    const sc = {
+      actId: randomUUID(),
+      actorAct: { branch, history: branch, by: "i-am" },
+      identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" },
+      deltaF: [],
+      foldedSeqs: new Map(),
+      afterSeal: [],
+    };
+    ownerName = (
+      await nameVerb(
+        "declare",
+        { name: "tabor", password: "pw12345678", soulType: "human" },
+        { identity: sc.identity, moment: sc, currentHistory: branch },
+      )
+    ).nameId;
     await sealFacts(sc.deltaF);
   });
-  console.log(`  arriving Name (father) = ${String(ownerName).slice(0, 14)}…\n`);
+  console.log(
+    `  arriving Name (father) = ${String(ownerName).slice(0, 14)}…\n`,
+  );
 
   // run cherub.word's full flow LIVE through the bridge's resolved IR
   const ir = resolveRoleWord("cherub", "birth");
   const flow = ir[0];
-  // The actor is I_AM (the story), acting THROUGH the Cherub vessel (bridge.md:
+  // The actor is I_AM (the story), acting THROUGH the Cherub being (bridge.md:
   // "by I_AM, through Cherub"). name = "i-am" short-circuits authorize (the
-  // bootstrap axiom), beingId = cherub is the vessel. _inOp mirrors runRoleWord
+  // bootstrap axiom), beingId = cherub is the being. _inOp mirrors runRoleWord
   // (the whole flow is one op; do-acts dispatch as nested sub-ops).
-  const moment = { actId: randomUUID(), actorAct: { branch, history: branch, by: "i-am" }, identity: { beingId: String(cherub.id), name: "i-am", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [], _inOp: true };
+  const moment = {
+    actId: randomUUID(),
+    actorAct: { branch, history: branch, by: "i-am" },
+    identity: { beingId: String(cherub.id), name: "i-am", nameId: "i-am" },
+    deltaF: [],
+    foldedSeqs: new Map(),
+    afterSeal: [],
+    _inOp: true,
+  };
   const ctx = {
-    dryRun: false, branch, history: branch, moment,
+    dryRun: false,
+    branch,
+    history: branch,
+    moment,
     identity: moment.identity,
     env: { iam: "i-am", mintId: () => randomUUID() }, // pre-mint ids for `bind` sites (the home)
-    bindings: { name: "tabor-prime", password: "wordpass", ownerName: String(ownerName), placeRoot: String(spaceRoot._id) },
-    beings: { Cherub: String(cherub.id), ...(arrival ? { Arrival: String(arrival.id) } : {}) }, // proper-name -> id (7.md)
+    bindings: {
+      name: "tabor-prime",
+      password: "wordpass",
+      ownerName: String(ownerName),
+      placeRoot: String(spaceRoot._id),
+    },
+    beings: {
+      Cherub: String(cherub.id),
+      ...(arrival ? { Arrival: String(arrival.id) } : {}),
+    }, // proper-name -> id (7.md)
     trigger: { name: "tabor-prime", password: "wordpass" },
-    deltaF: moment.deltaF, flows: [],
+    deltaF: moment.deltaF,
+    flows: [],
   };
   await withRetry(() => evaluate(flow, ctx));
 
   console.log(`  cherub.word laid ${moment.deltaF.length} fact(s):`);
-  for (const f of moment.deltaF) console.log(`    ${f.verb}:${f.act} -> ${f.of?.kind}:${String(f.of?.id ?? "").slice(0, 10)}`);
+  for (const f of moment.deltaF)
+    console.log(
+      `    ${f.verb}:${f.act} -> ${f.of?.kind}:${String(f.of?.id ?? "").slice(0, 10)}`,
+    );
   console.log("");
 
   const shape = moment.deltaF.map((f) => `${f.verb}:${f.act}`);
-  const EXPECT = ["do:create-space", "be:birth", "do:set-space", "do:grant-role", "do:set-being"];
+  const EXPECT = [
+    "do:create-space",
+    "be:birth",
+    "do:set-space",
+    "do:grant-role",
+    "do:set-being",
+  ];
   EXPECT.every((e) => shape.includes(e))
-    ? ok(`all five world acts present (${shape.join(", ")})`) : bad(`five acts present`, shape.join(", "));
+    ? ok(`all five world acts present (${shape.join(", ")})`)
+    : bad(`five acts present`, shape.join(", "));
 
   const birth = moment.deltaF.find((f) => f.verb === "be" && f.act === "birth");
-  birth?.params?.name === "tabor-prime" ? ok(`be:birth names @tabor-prime`) : bad(`be:birth names @tabor-prime`, birth?.params?.name);
-  String(birth?.params?.trueName) === String(ownerName) ? ok(`being is the new Name's own (trueName = the arriving Name)`) : bad(`trueName = arriving Name`, `got ${birth?.params?.trueName}`);
+  birth?.params?.name === "tabor-prime"
+    ? ok(`be:birth names @tabor-prime`)
+    : bad(`be:birth names @tabor-prime`, birth?.params?.name);
+  String(birth?.params?.trueName) === String(ownerName)
+    ? ok(`being is the new Name's own (trueName = the arriving Name)`)
+    : bad(`trueName = arriving Name`, `got ${birth?.params?.trueName}`);
   const newBeingId = String(birth?.of?.id ?? birth?.through);
 
   // the home owner = the new being (JS handler step 3: set-space owner = result.beingId)
   const setSpace = moment.deltaF.find((f) => f.act === "set-space");
   String(setSpace?.params?.value ?? setSpace?.params?.owner) === newBeingId
-    ? ok(`home owner set to the new being`) : bad(`home owner = new being`, JSON.stringify(setSpace?.params));
+    ? ok(`home owner set to the new being`)
+    : bad(`home owner = new being`, JSON.stringify(setSpace?.params));
 
   // the human role is granted (JS handler step 4, the explicit grant cherub.word reproduces)
-  const humanGrant = moment.deltaF.find((f) => f.act === "grant-role" && f.params?.role === "human");
-  humanGrant ? ok(`human role granted on the new being`) : bad(`human role granted`, "no human grant-role fact");
+  const humanGrant = moment.deltaF.find(
+    (f) => f.act === "grant-role" && f.params?.role === "human",
+  );
+  humanGrant
+    ? ok(`human role granted on the new being`)
+    : bad(`human role granted`, "no human grant-role fact");
 
   // lineage mother = Cherub, father = Arrival, resolved to being ids (JS handler step 5)
   const lv = moment.deltaF.find((f) => f.act === "set-being")?.params?.value;
-  (String(lv?.mother) === String(cherub.id) && (!arrival || String(lv?.father) === String(arrival.id)))
-    ? ok(`lineage: mother=Cherub, father=Arrival (proper names resolved to ids)`) : bad(`lineage`, JSON.stringify(lv));
+  String(lv?.mother) === String(cherub.id) &&
+  (!arrival || String(lv?.father) === String(arrival.id))
+    ? ok(
+        `lineage: mother=Cherub, father=Arrival (proper names resolved to ids)`,
+      )
+    : bad(`lineage`, JSON.stringify(lv));
 
   await sealFacts(moment.deltaF);
   const born = await findByName("being", "tabor-prime", branch);
-  born ? ok(`@tabor-prime materializes after seal (${String(born.id).slice(0, 10)}…)`) : bad(`@tabor-prime materializes`, "no row");
+  born
+    ? ok(
+        `@tabor-prime materializes after seal (${String(born.id).slice(0, 10)}…)`,
+      )
+    : bad(`@tabor-prime materializes`, "no row");
 
   // double-push guard (engine's flag): a LIVE plain-verb emit() with a SHARED
   // deltaF (as runRoleWord sets) must list the fact ONCE, not twice. cherub.word
   // never reaches emit() (all doVerb/form-being), but the rich slices will, so
   // probe emit() directly: a be-op != form-being falls through evalAct to emit().
-  const probeSc = { actId: randomUUID(), actorAct: { branch, history: branch, by: "i-am" }, identity: { beingId: String(cherub.id), name: "i-am", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [], _inOp: true };
-  const probeCtx = { dryRun: false, branch, history: branch, moment: probeSc, identity: probeSc.identity, env: { iam: "i-am" }, bindings: {}, flows: [], deltaF: probeSc.deltaF /* SHARED, as runRoleWord does */ };
-  await evaluate([{ kind: "act", verb: "be", act: "probe-emit", by: "I" }], probeCtx);
+  const probeSc = {
+    actId: randomUUID(),
+    actorAct: { branch, history: branch, by: "i-am" },
+    identity: { beingId: String(cherub.id), name: "i-am", nameId: "i-am" },
+    deltaF: [],
+    foldedSeqs: new Map(),
+    afterSeal: [],
+    _inOp: true,
+  };
+  const probeCtx = {
+    dryRun: false,
+    branch,
+    history: branch,
+    moment: probeSc,
+    identity: probeSc.identity,
+    env: { iam: "i-am" },
+    bindings: {},
+    flows: [],
+    deltaF: probeSc.deltaF /* SHARED, as runRoleWord does */,
+  };
+  await evaluate(
+    [{ kind: "act", verb: "be", act: "probe-emit", by: "I" }],
+    probeCtx,
+  );
   probeSc.deltaF.length === 1
-    ? ok(`live plain emit() lists the fact ONCE (no double-push on shared deltaF)`)
-    : bad(`emit() double-push guard`, `deltaF.length=${probeSc.deltaF.length} (expected 1)`);
+    ? ok(
+        `live plain emit() lists the fact ONCE (no double-push on shared deltaF)`,
+      )
+    : bad(
+        `emit() double-push guard`,
+        `deltaF.length=${probeSc.deltaF.length} (expected 1)`,
+      );
 
   console.log(`\n  ${pass} passed, ${fail} failed`);
   await mongoose.connection.db.dropDatabase();
@@ -174,6 +320,9 @@ try {
   process.exit(fail === 0 ? 0 : 1);
 } catch (err) {
   console.log(`\n  ! crashed: ${err.stack || err.message}`);
-  try { await mongoose.connection.db.dropDatabase(); await mongoose.disconnect(); } catch {}
+  try {
+    await mongoose.connection.db.dropDatabase();
+    await mongoose.disconnect();
+  } catch {}
   process.exit(3);
 }

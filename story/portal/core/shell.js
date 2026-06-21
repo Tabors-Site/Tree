@@ -16,14 +16,22 @@
 // know what a view renders. Both only share the state model.
 
 import "../styles/shell.css";
-import { initStanceBar, placeStanceBar, updateStanceBar } from "../shared/stance-bar.js";
+import {
+  initStanceBar,
+  placeStanceBar,
+  updateStanceBar,
+} from "../shared/stance-bar.js";
 import { setPortalStatus } from "../shared/portal-status.js";
 import { createViewHost, VIEW_NAMES } from "./views.js";
 import { createPortalContext } from "./context.js";
 import { resolvePlaceConfig } from "./config.js";
 import { showNameForm, hideNameForm } from "../shared/name-form.js";
 import { showBeingPicker, hideBeingPicker } from "../shared/being-picker.js";
-import { showNameTree, hideNameTree, isNameTreeOpen } from "../shared/name-tree-panel.js";
+import {
+  showNameTree,
+  hideNameTree,
+  isNameTreeOpen,
+} from "../shared/name-tree-panel.js";
 
 // The IBPA stance bar is PINNED TO THE VERY TOP — the portal's one
 // constant surface. The being-tab strip rides directly under it and
@@ -60,22 +68,22 @@ const SHELL_DOM = `
 export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
   rootEl.innerHTML = SHELL_DOM;
   const els = {
-    tabs:     rootEl.querySelector("#portal-tabs"),
-    topbar:   rootEl.querySelector("#portal-topbar"),
-    back:     rootEl.querySelector("#nav-back"),
-    forward:  rootEl.querySelector("#nav-forward"),
-    send:     rootEl.querySelector("#nav-send"),
-    place:    rootEl.querySelector("#nav-place"),
-    home:     rootEl.querySelector("#nav-home"),
+    tabs: rootEl.querySelector("#portal-tabs"),
+    topbar: rootEl.querySelector("#portal-topbar"),
+    back: rootEl.querySelector("#nav-back"),
+    forward: rootEl.querySelector("#nav-forward"),
+    send: rootEl.querySelector("#nav-send"),
+    place: rootEl.querySelector("#nav-place"),
+    home: rootEl.querySelector("#nav-home"),
     switcher: rootEl.querySelector("#view-switcher"),
-    tree:     rootEl.querySelector("#nav-tree"),
+    tree: rootEl.querySelector("#nav-tree"),
     viewRoot: rootEl.querySelector("#view-root"),
-    statement:     rootEl.querySelector("#statement-input"),
+    statement: rootEl.querySelector("#statement-input"),
     statementHint: rootEl.querySelector("#statement-hint"),
   };
 
   const viewHost = createViewHost(els.viewRoot);
-  const tabs = [];               // [{ ctx, unsubs: [] }]
+  const tabs = []; // [{ ctx, unsubs: [] }]
   let activeCtx = null;
   let historyBar = null;
   let branchBarRefreshTimer = null;
@@ -107,12 +115,15 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     if (!text) return;
     const m = activeCtx.state.get();
     const address = m.discovery?.story || m.descriptor?.address?.place;
-    if (!address) { els.statementHint.textContent = "no place to stand yet"; return; }
+    if (!address) {
+      els.statementHint.textContent = "no place to stand yet";
+      return;
+    }
     els.statementHint.textContent = "";
     try {
       const res = await activeCtx.client.type(text, address);
       if (res.ok) {
-        els.statement.value = "";                        // the views repaint from the new fact
+        els.statement.value = ""; // the views repaint from the new fact
         // A statement always resolves at the live edge. If we were viewing the past, the fact
         // landed NOW — snap forward to it (returnToNow clears the anchor + re-sees live).
         if (m.descriptor?.isHistorical) activeCtx.navigation?.returnToNow?.();
@@ -138,29 +149,32 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
         : "connect a Name to speak the Word…";
     }
     updateStanceBar({
-      story:    m.discovery?.story || m.descriptor?.address?.place || "",
-      username:   m.session?.username || null,
-      signedIn:   !!m.session?.token,
+      story: m.discovery?.story || m.descriptor?.address?.place || "",
+      username: m.session?.username || null,
+      signedIn: !!m.session?.token,
       viewHistory: m.descriptor?.address?.history || "0",
-      path:       m.descriptor?.address?.pathByNames || "/",
+      path: m.descriptor?.address?.pathByNames || "/",
       // The right stance's @qualifier: an explicitly-navigated stance
       // address wins; otherwise the selected being (clicking a being
       // in ANY view refines the IBPA — the address is the truth every
       // dispatch reads).
-      being:      m.descriptor?.address?.being || m.selectedBeing?.name || null,
+      being: m.descriptor?.address?.being || m.selectedBeing?.name || null,
       actorHistory: m.actorHistory || "0",
-      actorPath:   m.actorPosition || "/",
+      actorPath: m.actorPosition || "/",
     });
-    els.back.disabled    = !(m.navIndex > 0);
+    els.back.disabled = !(m.navIndex > 0);
     els.forward.disabled = !(m.navIndex < m.navStack.length - 1);
-    els.home.disabled    = !m.session?.token;
+    els.home.disabled = !m.session?.token;
     // Socket health dot — reads the live connection state the context
     // already tracks.
     const dot = rootEl.querySelector("#conn-dot");
     if (dot) {
-      dot.className = m.connection === "connected" ? "conn-ok"
-        : (m.connection === "error" || m.connection === "disconnected") ? "conn-err"
-        : "conn-idle";
+      dot.className =
+        m.connection === "connected"
+          ? "conn-ok"
+          : m.connection === "error" || m.connection === "disconnected"
+            ? "conn-err"
+            : "conn-idle";
       dot.title = `socket: ${m.connection || "idle"}`;
     }
     // The NAME lock. It is the ONE place to sign out of your name
@@ -176,14 +190,16 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
         lock.style.display = "";
         lock.textContent = "🔒";
         lock.className = "nav-btn lock-name";
-        lock.title = "signed in as your name — click to sign out (name:release)";
+        lock.title =
+          "signed in as your name — click to sign out (name:release)";
       }
     }
     // The hierarchy button rides with the lock: visible whenever a name is
     // signed in (it's your Name's being-tree). Text view only — the 3d world
     // shows the tree spatially; this panel is the text surface.
     if (els.tree) {
-      els.tree.style.display = (m.session?.token && viewHost.activeName === "GUI") ? "" : "none";
+      els.tree.style.display =
+        m.session?.token && viewHost.activeName === "GUI" ? "" : "none";
     }
     // Ghost cue follows the active tab's descriptor.
     document.body.classList.toggle("ghost-view", !!m.descriptor?.isHistorical);
@@ -200,11 +216,18 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     try {
       await activeCtx.client?.nameRelease();
     } catch (err) {
-      console.warn("[portal:shell] name release:", err?.code || err?.message || err);
+      console.warn(
+        "[portal:shell] name release:",
+        err?.code || err?.message || err,
+      );
     }
     // Drop the stored name-session so a refresh doesn't re-seat the released
     // name; back to the bare story (the Name menu).
-    try { activeCtx.clearSession?.(); } catch { /* best-effort */ }
+    try {
+      activeCtx.clearSession?.();
+    } catch {
+      /* best-effort */
+    }
     hideNameTree();
     presentNameForm(activeCtx);
   }
@@ -216,10 +239,14 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     hideBeingPicker();
     const story = ctx.state.get("discovery")?.story || "";
     showNameForm({
-      client:        ctx.client,
+      client: ctx.client,
       storyDomain: story,
-      onConnected:   async (result) => {
-        try { ctx.adoptNameSession?.(result?.token, result?.nameId); } catch { /* best-effort */ }
+      onConnected: async (result) => {
+        try {
+          ctx.adoptNameSession?.(result?.token, result?.nameId);
+        } catch {
+          /* best-effort */
+        }
         await presentNameGate(ctx);
       },
     });
@@ -234,28 +261,50 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     hideNameForm();
     const story = ctx.state.get("discovery")?.story || "";
     showBeingPicker({
-      client:        ctx.client,
+      client: ctx.client,
       storyDomain: story,
       nameId,
-      onSignOut:     async () => {
-        try { await ctx.client?.nameRelease(); } catch { /* best-effort */ }
-        try { ctx.clearSession?.(); } catch { /* best-effort */ }
+      onSignOut: async () => {
+        try {
+          await ctx.client?.nameRelease();
+        } catch {
+          /* best-effort */
+        }
+        try {
+          ctx.clearSession?.();
+        } catch {
+          /* best-effort */
+        }
         presentNameForm(ctx);
       },
-      onConnect:     async (beingName, branch) => {
-        const result = await ctx.client.be("connect", `${story}/@${beingName}`, {});
+      onConnect: async (beingName, branch) => {
+        const result = await ctx.client.be(
+          "connect",
+          `${story}/@${beingName}`,
+          {},
+        );
         await ctx.adoptSession(result, beingName);
         // Branch pick: if it differs from where connect seated us, switch.
-        if (branch && result?.seatHistory && branch !== String(result.seatHistory)) {
-          try { await ctx.client.be("switch", `${story}/@${beingName}`, { history: branch }); } catch { /* stay on home */ }
+        if (
+          branch &&
+          result?.seatHistory &&
+          branch !== String(result.seatHistory)
+        ) {
+          try {
+            await ctx.client.be("switch", `${story}/@${beingName}`, {
+              history: branch,
+            });
+          } catch {
+            /* stay on home */
+          }
         }
         repaintChrome();
       },
       // Birth the name's FIRST being through cherub (summon:mate). The socket is
       // a bodiless name at the arrival floor; the wire seats @arrival as the
-      // vessel, signed by the name, so cherub births a TOP-LEVEL being owned by
+      // being, signed by the name, so cherub births a TOP-LEVEL being owned by
       // the name. Then drive it (owned connect, passwordless) + land the world.
-      onBirthFirst:  async (beingName) => {
+      onBirthFirst: async (beingName) => {
         // Pre-flight the ONE error the async birth can't report back. Cherub
         // births on its OWN moment, so a failure there (e.g. the being name is
         // already taken — names are the branch-wide being handle) never returns
@@ -266,7 +315,9 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
         try {
           const seen = await ctx.client.see(`${story}/@${beingName}`);
           if (seen?.identity?.beingId) {
-            throw new Error(`@${beingName} is already taken on this story — pick another name`);
+            throw new Error(
+              `@${beingName} is already taken on this story — pick another name`,
+            );
           }
         } catch (err) {
           if (/already taken/i.test(err?.message || "")) throw err;
@@ -283,11 +334,21 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
           await new Promise((r) => setTimeout(r, 300));
           try {
             const d = await ctx.client.nameSee(nameId);
-            appeared = (d?.beings || []).find((b) => b.name === beingName) || null;
-          } catch { /* keep polling */ }
+            appeared =
+              (d?.beings || []).find((b) => b.name === beingName) || null;
+          } catch {
+            /* keep polling */
+          }
         }
-        if (!appeared) throw new Error("birth didn't land — the name may be taken, or cherub is busy. Try another name or reopen 'your beings'.");
-        const result = await ctx.client.be("connect", `${story}/@${beingName}`, {});
+        if (!appeared)
+          throw new Error(
+            "birth didn't land — the name may be taken, or cherub is busy. Try another name or reopen 'your beings'.",
+          );
+        const result = await ctx.client.be(
+          "connect",
+          `${story}/@${beingName}`,
+          {},
+        );
         await ctx.adoptSession(result, beingName);
         repaintChrome();
       },
@@ -303,11 +364,18 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
   async function presentNameHierarchy(ctx = activeCtx) {
     if (!ctx?.client) return;
     let nameId = null;
-    try { nameId = (await ctx.client.nameWhoami())?.nameId || null; } catch { /* not signed in */ }
-    if (!nameId) { presentNameForm(ctx); return; }
+    try {
+      nameId = (await ctx.client.nameWhoami())?.nameId || null;
+    } catch {
+      /* not signed in */
+    }
+    if (!nameId) {
+      presentNameForm(ctx);
+      return;
+    }
     const story = ctx.state.get("discovery")?.story || "";
-    const history  = ctx.state.get("descriptor")?.address?.history || "0";
-    const canAct  = !!ctx.state.get("session")?.beingId;
+    const history = ctx.state.get("descriptor")?.address?.history || "0";
+    const canAct = !!ctx.state.get("session")?.beingId;
     await showNameTree({
       client: ctx.client,
       story,
@@ -327,8 +395,16 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
   // being -> the landed world (panels down).
   async function presentNameGate(ctx = primaryCtx) {
     let who = null;
-    try { who = await ctx.client?.nameWhoami(); } catch { /* fall through to world */ return; }
-    if (!who?.nameId) { hideBeingPicker(); presentNameForm(ctx); return; }
+    try {
+      who = await ctx.client?.nameWhoami();
+    } catch {
+      /* fall through to world */ return;
+    }
+    if (!who?.nameId) {
+      hideBeingPicker();
+      presentNameForm(ctx);
+      return;
+    }
     const sess = ctx.state.get("session");
     if (!sess?.beingId) {
       hideNameForm();
@@ -339,12 +415,18 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
       if (who.lastBeing?.beingName) {
         try {
           const story = ctx.state.get("discovery")?.story || "";
-          const result = await ctx.client.be("connect", `${story}/@${who.lastBeing.beingName}`, {});
+          const result = await ctx.client.be(
+            "connect",
+            `${story}/@${who.lastBeing.beingName}`,
+            {},
+          );
           await ctx.adoptSession(result, who.lastBeing.beingName);
           hideBeingPicker();
           repaintChrome();
           return;
-        } catch { /* being gone / connect failed -> fall to the being menu */ }
+        } catch {
+          /* being gone / connect failed -> fall to the being menu */
+        }
       }
       // The being menu ("Your beings") is the TEXT view's surface; in the 3D
       // world you stand at the arrival floor and reach cherub there directly.
@@ -353,7 +435,8 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
       else hideBeingPicker();
       return;
     }
-    hideNameForm(); hideBeingPicker();
+    hideNameForm();
+    hideBeingPicker();
   }
   const maybeShowNameForm = () => presentNameGate(primaryCtx);
 
@@ -372,7 +455,10 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
         close.className = "ptab-close";
         close.textContent = "×";
         close.title = "close this being tab";
-        close.addEventListener("click", (ev) => { ev.stopPropagation(); closeTab(t.ctx); });
+        close.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          closeTab(t.ctx);
+        });
         tab.appendChild(close);
       }
       tab.addEventListener("click", () => switchTab(t.ctx));
@@ -399,7 +485,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     if (historyBar || !activeCtx?.client) return;
     const { mountHistoryBar } = await import("../3d/branch-bar.js");
     historyBar = mountHistoryBar({
-      client:  activeCtx.client,
+      client: activeCtx.client,
       story: activeCtx.state.get("discovery")?.story || "treeos.ai",
       // Topbar-hosted: branches/timeline are chrome, present on all
       // four views equally (rewind state rides the shared model).
@@ -425,35 +511,50 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
 
   function wireCtx(ctx) {
     const unsubs = [];
-    unsubs.push(ctx.state.subscribe((partial, meta) => {
-      if (ctx !== activeCtx) {
-        // Background tabs only repaint their label (session changes).
+    unsubs.push(
+      ctx.state.subscribe((partial, meta) => {
+        if (ctx !== activeCtx) {
+          // Background tabs only repaint their label (session changes).
+          if ("session" in partial) repaintTabs();
+          return;
+        }
         if ("session" in partial) repaintTabs();
-        return;
-      }
-      if ("session" in partial) repaintTabs();
-      repaintChrome();
-      if ("descriptor" in partial && partial.descriptor) {
-        historyBar?.update(partial.descriptor);
-        if (meta?.reason === "rewind") setPortalStatus("ghost view — return to now to act");
-      }
-    }));
-    unsubs.push(ctx.events.on("status", (text) => {
-      if (ctx === activeCtx) setPortalStatus(text);
-    }));
-    unsubs.push(ctx.events.on("client", (client) => {
-      if (ctx === activeCtx) {
-        historyBar?.setClient(client, ctx.state.get("discovery")?.story);
-        window.__state = ctx.state.raw;
-      }
-    }));
-    unsubs.push(ctx.events.on("history", () => {
-      if (ctx === activeCtx) historyBar?.refreshAddress?.();
-    }));
-    for (const type of ["live-position", "live-fact", "live-while-historical"]) {
-      unsubs.push(ctx.events.on(type, () => {
-        if (ctx === activeCtx) scheduleHistoryBarRefresh();
-      }));
+        repaintChrome();
+        if ("descriptor" in partial && partial.descriptor) {
+          historyBar?.update(partial.descriptor);
+          if (meta?.reason === "rewind")
+            setPortalStatus("ghost view — return to now to act");
+        }
+      }),
+    );
+    unsubs.push(
+      ctx.events.on("status", (text) => {
+        if (ctx === activeCtx) setPortalStatus(text);
+      }),
+    );
+    unsubs.push(
+      ctx.events.on("client", (client) => {
+        if (ctx === activeCtx) {
+          historyBar?.setClient(client, ctx.state.get("discovery")?.story);
+          window.__state = ctx.state.raw;
+        }
+      }),
+    );
+    unsubs.push(
+      ctx.events.on("history", () => {
+        if (ctx === activeCtx) historyBar?.refreshAddress?.();
+      }),
+    );
+    for (const type of [
+      "live-position",
+      "live-fact",
+      "live-while-historical",
+    ]) {
+      unsubs.push(
+        ctx.events.on(type, () => {
+          if (ctx === activeCtx) scheduleHistoryBarRefresh();
+        }),
+      );
     }
     return unsubs;
   }
@@ -468,7 +569,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
   async function switchTab(ctx) {
     if (ctx === activeCtx) return;
     activeCtx = ctx;
-    window.__state = ctx.state.raw;          // legacy readers (branch-bar)
+    window.__state = ctx.state.raw; // legacy readers (branch-bar)
     historyBar?.setClient(ctx.client, ctx.state.get("discovery")?.story);
     const desc = ctx.state.get("descriptor");
     if (desc) historyBar?.update(desc);
@@ -479,7 +580,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
 
   async function closeTab(ctx) {
     const i = tabs.findIndex((t) => t.ctx === ctx);
-    if (i < 0 || ctx === tabs[0].ctx) return;   // primary tab stays
+    if (i < 0 || ctx === tabs[0].ctx) return; // primary tab stays
     const [t] = tabs.splice(i, 1);
     for (const u of t.unsubs) u();
     // Closing a being's tab RELEASES that being (be:release). You stop driving
@@ -488,12 +589,14 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     // won't bring it back — you closed it on purpose. Best-effort; the
     // disconnect auto-release safety net covers a hard close.
     try {
-      const story   = ctx.state.get("discovery")?.story;
+      const story = ctx.state.get("discovery")?.story;
       const beingName = ctx.state.get("session")?.username;
       if (story && beingName && ctx.state.get("session")?.beingId) {
         await ctx.client?.be("release", `${story}/@${beingName}`, {});
       }
-    } catch { /* best effort; the disconnect auto-release covers a hard close */ }
+    } catch {
+      /* best effort; the disconnect auto-release covers a hard close */
+    }
     ctx.destroy();
     if (activeCtx === ctx) await switchTab(tabs[0].ctx);
     else repaintTabs();
@@ -528,12 +631,12 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
   async function addTabFromAck(ack, { spawnerName = null } = {}) {
     const cfg = resolvePlaceConfig();
     return addTabFromSession({
-      placeUrl:       activeCtx?.state.get("session")?.placeUrl || cfg.placeUrl,
+      placeUrl: activeCtx?.state.get("session")?.placeUrl || cfg.placeUrl,
       placeIsProxied: cfg.useProxy,
-      token:          ack.identityToken,
-      username:       ack.name,
-      beingAddress:   ack.beingAddress,
-      inherited:      true,
+      token: ack.identityToken,
+      username: ack.name,
+      beingAddress: ack.beingAddress,
+      inherited: true,
       spawnerName,
     });
   }
@@ -556,18 +659,28 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     const q = (s) => overlay.querySelector(`[data-el=${s}]`);
     const close = () => overlay.remove();
     q("cancel").addEventListener("click", close);
-    overlay.addEventListener("click", (ev) => { if (ev.target === overlay) close(); });
-    q("arrival").addEventListener("click", async () => { close(); await addTabFromSession(null); });
+    overlay.addEventListener("click", (ev) => {
+      if (ev.target === overlay) close();
+    });
+    q("arrival").addEventListener("click", async () => {
+      close();
+      await addTabFromSession(null);
+    });
     q("connect").addEventListener("click", async () => {
       const name = q("name").value.trim();
       const password = q("password").value;
-      if (!name) { q("error").textContent = "name required"; return; }
+      if (!name) {
+        q("error").textContent = "name required";
+        return;
+      }
       close();
       const ctx = await addTabFromSession(null);
       try {
         await ctx.signIn("connect", name, password);
       } catch (err) {
-        setPortalStatus(`connect failed: ${err?.code || ""} ${err?.message || err}`);
+        setPortalStatus(
+          `connect failed: ${err?.code || ""} ${err?.message || err}`,
+        );
       }
       repaintTabs();
     });
@@ -591,12 +704,20 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
   // ── Stance bar + nav buttons ────────────────────────────────────
 
   initStanceBar({
-    onNavigate: (raw) => activeCtx?.navigation.navigate(raw)
-      .catch((err) => setPortalStatus(`see failed: ${err?.code || ""} ${err?.message || ""}`)),
+    onNavigate: (raw) =>
+      activeCtx?.navigation
+        .navigate(raw)
+        .catch((err) =>
+          setPortalStatus(
+            `see failed: ${err?.code || ""} ${err?.message || ""}`,
+          ),
+        ),
     onSwitchHistory: (historyPath) => {
       import("../3d/branch-bar.js")
         .then((m) => m.switchIntoHistory(historyPath))
-        .catch((err) => console.warn("[shell] branch switch failed:", err?.message || err));
+        .catch((err) =>
+          console.warn("[shell] branch switch failed:", err?.message || err),
+        );
     },
     // Drive another being your name owns from the left stance. For EVERY BE op
     // the actor is your NAME, acting THROUGH the being it's currently using — a
@@ -622,10 +743,27 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
           // and only clear the being — bodiless, the name stands at the floor.
           const cur = ctx.state.get("session")?.username;
           if (!cur) return; // already bodiless
-          try { await ctx.client.be("release", `${story}/@${cur}`, {}); } catch { /* best-effort */ }
+          try {
+            await ctx.client.be("release", `${story}/@${cur}`, {});
+          } catch {
+            /* best-effort */
+          }
           const s = ctx.state.get("session") || {};
-          try { ctx.saveSession?.({ ...s, beingId: null, username: null, beingAddress: null }); } catch { /* best-effort */ }
-          try { await ctx.navigation.landAnonymous(); } catch { /* best-effort */ }
+          try {
+            ctx.saveSession?.({
+              ...s,
+              beingId: null,
+              username: null,
+              beingAddress: null,
+            });
+          } catch {
+            /* best-effort */
+          }
+          try {
+            await ctx.navigation.landAnonymous();
+          } catch {
+            /* best-effort */
+          }
           await presentNameGate(ctx);
           repaintChrome();
           return;
@@ -633,7 +771,11 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
         // Confirm ownership on this branch via the name tree (your beings there).
         const tree = await ctx.client.nameTree(branch);
         const owned = new Set();
-        const walk = (ns) => (ns || []).forEach((n) => { if (n?.name) owned.add(n.name); walk(n.children); });
+        const walk = (ns) =>
+          (ns || []).forEach((n) => {
+            if (n?.name) owned.add(n.name);
+            walk(n.children);
+          });
         walk(tree?.roots);
         if (!owned.has(being)) {
           setPortalStatus(`that name doesn't have @${being} on #${hash}`);
@@ -641,22 +783,40 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
         }
         const result = await ctx.client.be("connect", `${story}/@${being}`, {});
         await ctx.adoptSession(result, being);
-        if (branch && result?.seatHistory && branch !== String(result.seatHistory)) {
-          try { await ctx.client.be("switch", `${story}/@${being}`, { history: branch }); } catch { /* stay on home */ }
+        if (
+          branch &&
+          result?.seatHistory &&
+          branch !== String(result.seatHistory)
+        ) {
+          try {
+            await ctx.client.be("switch", `${story}/@${being}`, {
+              history: branch,
+            });
+          } catch {
+            /* stay on home */
+          }
         }
         repaintChrome();
       } catch (err) {
-        setPortalStatus(`couldn't drive @${being} on #${hash}: ${err?.code || err?.message || err}`);
+        setPortalStatus(
+          `couldn't drive @${being} on #${hash}: ${err?.code || err?.message || err}`,
+        );
       }
     },
   });
   placeStanceBar(rootEl.querySelector("#stance-slot"));
 
-  els.back.addEventListener("click",    () => activeCtx?.navigation.back());
+  els.back.addEventListener("click", () => activeCtx?.navigation.back());
   els.forward.addEventListener("click", () => activeCtx?.navigation.forward());
-  els.place.addEventListener("click",   () => activeCtx?.navigation.navigate("/").catch(() => {}));
-  els.home.addEventListener("click",    () => activeCtx?.navigation.navigate("/~").catch(() => {}));
-  rootEl.querySelector("#lock-dot")?.addEventListener("click", () => { toggleSigningLatch(); });
+  els.place.addEventListener("click", () =>
+    activeCtx?.navigation.navigate("/").catch(() => {}),
+  );
+  els.home.addEventListener("click", () =>
+    activeCtx?.navigation.navigate("/~").catch(() => {}),
+  );
+  rootEl.querySelector("#lock-dot")?.addEventListener("click", () => {
+    toggleSigningLatch();
+  });
   // The hierarchy button: toggle the Name Hierarchy panel for the active tab.
   els.tree?.addEventListener("click", () => {
     if (isNameTreeOpen()) hideNameTree();
@@ -668,8 +828,13 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     const input = document.getElementById("address-input");
     const raw = input?.value?.trim();
     if (raw) {
-      activeCtx?.navigation.navigate(raw)
-        .catch((err) => setPortalStatus(`see failed: ${err?.code || ""} ${err?.message || ""}`));
+      activeCtx?.navigation
+        .navigate(raw)
+        .catch((err) =>
+          setPortalStatus(
+            `see failed: ${err?.code || ""} ${err?.message || ""}`,
+          ),
+        );
     }
   });
 
@@ -696,7 +861,9 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     if (at) activeCtx?.navigation.rewindTo(at);
   };
   const onNow = (ev) => {
-    activeCtx?.navigation.returnToNow({ preserveCamera: ev?.detail?.preserveCamera === true });
+    activeCtx?.navigation.returnToNow({
+      preserveCamera: ev?.detail?.preserveCamera === true,
+    });
   };
   const onPaused = (ev) => {
     document.body.classList.toggle("paused-branch", !!ev?.detail?.paused);
@@ -709,11 +876,19 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
   const onKeydown = (e) => {
     if (e.altKey && !e.ctrlKey && !e.metaKey) {
       const i = ["1", "2", "3", "4", "5"].indexOf(e.key);
-      if (i >= 0 && VIEW_NAMES[i]) { e.preventDefault(); switchView(VIEW_NAMES[i]); return; }
+      if (i >= 0 && VIEW_NAMES[i]) {
+        e.preventDefault();
+        switchView(VIEW_NAMES[i]);
+        return;
+      }
     }
     if (e.code === "Backslash") {
       const t = e.target;
-      const inField = t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable);
+      const inField =
+        t &&
+        (t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.isContentEditable);
       if (inField) return;
       e.preventDefault();
       switchView(viewHost.activeName === "GUI" ? "3d" : "GUI");
@@ -729,7 +904,11 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
       if (!sess?.inherited) continue;
       const story = t.ctx.state.get("discovery")?.story;
       if (story && sess.username) {
-        try { t.ctx.client?.be("release", `${story}/@${sess.username}`, {}).catch(() => {}); } catch {}
+        try {
+          t.ctx.client
+            ?.be("release", `${story}/@${sess.username}`, {})
+            .catch(() => {});
+        } catch {}
       }
     }
   });
@@ -744,7 +923,9 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     // reach it so e.g. the flat identity chip re-presents the Name Form / being
     // menu instead of any view-local auth overlay.
     presentNameGate: (c = activeCtx) => presentNameGate(c),
-    get activeView() { return viewHost.activeName; },
+    get activeView() {
+      return viewHost.activeName;
+    },
   };
 
   // Primary tab in, chrome up.
@@ -757,7 +938,9 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     ...shellApi,
     viewHost,
     ensureHistoryBar,
-    get activeCtx() { return activeCtx; },
+    get activeCtx() {
+      return activeCtx;
+    },
     async startPrimary() {
       await primaryCtx.start();
       await maybeShowNameForm();
@@ -770,14 +953,24 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
     // the branch bar, and destroys every tab's context.
     destroy() {
       for (const [target, type, fn] of windowListeners.splice(0)) {
-        try { target.removeEventListener(type, fn); } catch {}
+        try {
+          target.removeEventListener(type, fn);
+        } catch {}
       }
-      try { historyBar?.destroy?.(); } catch {}
+      try {
+        historyBar?.destroy?.();
+      } catch {}
       historyBar = null;
       viewHost.destroy();
       for (const t of tabs.splice(0)) {
-        for (const u of t.unsubs) { try { u(); } catch {} }
-        try { t.ctx.destroy(); } catch {}
+        for (const u of t.unsubs) {
+          try {
+            u();
+          } catch {}
+        }
+        try {
+          t.ctx.destroy();
+        } catch {}
       }
       activeCtx = null;
       rootEl.innerHTML = "";

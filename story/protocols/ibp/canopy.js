@@ -387,13 +387,12 @@ export async function verifyIncoming(req, res, next) {
  * the actor's history + actId — those are required for the receiving
  * Stamper to attach crossOrigin correctly.
  *
- * The tuple's `branch` key carries the actor's home HISTORY value. The
- * key name stays `branch` because the seed federation layer
- * (seed/ibp/crossWorld.js) reads `actor.branch` across the cross-world
- * Act-chain — a SEAM to rename in lockstep with this tuple later.
+ * The tuple's `history` key carries the actor's home HISTORY value.
+ * The seed federation layer (seed/ibp/crossWorld.js) reads
+ * `actor.history` across the cross-world Act-chain.
  *
  * @param {object} req  Express request, post verifyIncoming
- * @returns {{ story: string, branch: string, beingId: string, actId: string, beingSig: object|null }|null}
+ * @returns {{ story: string, history: string, beingId: string, actId: string, beingSig: object|null }|null}
  */
 export function actorTupleFromRequest(req) {
   if (!req?.canopySender) return null;
@@ -404,7 +403,7 @@ export function actorTupleFromRequest(req) {
   // self-certifyingly against this nameId downstream), so a forged nameId can
   // never verify. story stays req.canopySender (ground truth) below.
   const nameId   = body?.identity?.nameId || null;
-  const branch   = body?.actorHistory || null;
+  const history  = body?.actorHistory || null;
   const actId    = body?.actorActId  || null;
   const beingSig = body?.beingSig    || null;
 
@@ -419,7 +418,7 @@ export function actorTupleFromRequest(req) {
     );
   }
 
-  if (!beingId || !branch || !actId) {
+  if (!beingId || !history || !actId) {
     throw new Error(
       "actorTupleFromRequest: cross-world envelope must carry identity.beingId, " +
       "actorHistory, and actorActId. The receiving Stamper needs the full tuple " +
@@ -429,7 +428,7 @@ export function actorTupleFromRequest(req) {
 
   return {
     story: req.canopySender,
-    branch,
+    history,
     beingId,
     nameId,
     actId,

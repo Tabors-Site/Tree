@@ -96,10 +96,10 @@ export async function dispatchIbp(carrier, msg, ack) {
           );
           const { peerAck } = await crossStoryDispatch({
             envelope: env,
-            // `branch` tuple key carries the actor's home HISTORY — kept
-            // as `branch` because seed/ibp/crossWorld.js reads actor.branch
-            // across the cross-world Act-chain (SEAM: rename in lockstep).
-            actor: { beingId: actorBeingId, branch: actorHistory, nameId: actorNameId },
+            // `history` tuple key carries the actor's home HISTORY;
+            // seed/ibp/crossWorld.js reads actor.history across the
+            // cross-world Act-chain.
+            actor: { beingId: actorBeingId, history: actorHistory, nameId: actorNameId },
             identity: { beingId: actorBeingId, name: carrier?.name || null, nameId: actorNameId },
           });
           if (typeof ack === "function") ack(peerAck);

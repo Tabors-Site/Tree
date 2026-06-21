@@ -15,7 +15,7 @@
 //     assertion: I AM. Every other being is "(being) a (role) doing
 //     X"; I_AM is simply I_AM. That assertion is its first BE.
 //
-//  3. Seed + act → world. The seed is the vessel: potential,
+//  3. Seed + act → world. The seed is the being: potential,
 //     structure in latency. The act is the becoming: agency
 //     unfolding. The world is what they bring forth: the place, the
 //     tree of spaces. I_AM is the seed with the act inside it,

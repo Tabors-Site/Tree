@@ -32,7 +32,7 @@ Simple AnalogyThink of it like this:Name = Your real legal identity + passport +
 Being = Your current body/avatar in a specific reality (temporary, local)
 One Name can control many Beings across different realities (like having multiple characters in different games).
 
-You (the Name) stay at home, but you can send your "vessel" (a Being) into other realities to act.Key Changes in This RefactorName becomes the real identitynameId = public key (same as the current beingId)
+You (the Name) stay at home, but you can send your "being" (a Being) into other realities to act.Key Changes in This RefactorName becomes the real identitynameId = public key (same as the current beingId)
 Owns the private key, signs all acts, owns the permanent act chain
 Lives under I_AM in a flat hierarchy
 
@@ -41,7 +41,7 @@ Has an ownerNameId (points to which Name controls it)
 Forms a tree for containment and authority (parentBeingId)
 
 Acts now record three things clearlyactorNameId → Who signed this (the Name)
-vesselBeingId → Which body/avatar performed the action
+beingBeingId → Which body/avatar performed the action
 Targets → What was affected
 
 New Verb: NAMEUsed for identity operations (create name, delegate, etc.)
@@ -49,9 +49,9 @@ Uses simpler addressing (name@tabor instead of full spatial paths)
 
 Authority ChangeInstead of messy per-being mother lines, authority now flows through inheritation points on the Being tree.
 
-Why This Is a Big ImprovementMuch cleaner cross-reality behavior (your Name stays home, only vessels travel)
+Why This Is a Big ImprovementMuch cleaner cross-reality behavior (your Name stays home, only beings travel)
 Clear separation between "who you are" vs "what body you're using right now"
-Better foundation for the vessel/mate pattern you want
+Better foundation for the being/mate pattern you want
 Makes I_AM cleaner as pure root
 Prepares for SAM (your "first son" operational root) nicely
 
@@ -1324,7 +1324,7 @@ A few that seem real:
 
 **Decentralized identity that works for normal services.** Right now "sign in with X" means giving X power over your account. TreeOS Names could be the identity layer for any service willing to verify cryptographic signatures. You log in to a website by signing a challenge with your Name's key. No password to leak, no account the platform can take from you, no email-based account recovery to be social-engineered. The substrate already has the identity primitives; the use case is "decentralized SSO that actually works."
 
-**A substrate that AI agents naturally want to live in.** This one is more speculative but follows from the architecture. AI agents need persistent identity (they have it through Names), reliable memory (they have it through chains), ability to collaborate with humans cleanly (cognition labels make this honest), portable across hosts (vessels and migration handle this). Most current AI agent infrastructure is ad-hoc. TreeOS provides everything an agent needs to exist as a first-class participant. The first agents that get serious about long-term identity and history will probably need something like TreeOS to operate in.
+**A substrate that AI agents naturally want to live in.** This one is more speculative but follows from the architecture. AI agents need persistent identity (they have it through Names), reliable memory (they have it through chains), ability to collaborate with humans cleanly (cognition labels make this honest), portable across hosts (beings and migration handle this). Most current AI agent infrastructure is ad-hoc. TreeOS provides everything an agent needs to exist as a first-class participant. The first agents that get serious about long-term identity and history will probably need something like TreeOS to operate in.
 
 **A way to give value back to creators without payment processors.** Resources flow through the Root System. Realities can stamp facts about resource usage, attribution, derived work. Compensation models could be built directly into the substrate — micropayments through resource consumption, royalties through derivation chains, gifting through direct transfer. The infrastructure for "creators get paid for their work without intermediary tax" could be substrate-native.
 

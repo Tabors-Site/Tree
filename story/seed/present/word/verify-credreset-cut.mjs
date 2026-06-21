@@ -55,7 +55,7 @@ const cherub = await poll(() => findByName("being", "cherub", "0"));
 const birth = async (name) => {
   let bid = null;
   await withIAmAct(`birth ${name}`, async (ctx) => {
-    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: ctx, branch: "0" });
+    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: ctx, history: "0" });
     bid = b.beingId;
   });
   return bid;
@@ -72,7 +72,7 @@ try {
   const beforeHash = before?.state?.password;
 
   // ── 1. authorized reset (via the REAL op, I_AM authority) → re-mints the credential ──
-  const sc = { actId: randomUUID(), actorAct: { branch: "0", history: "0", by: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc = { actId: randomUUID(), actorAct: { history: "0", by: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   let res = null, refused = null;
   try {
     res = await doVerb({ kind: "being", id: String(victim) }, "credential-reset", {}, { identity: ident, moment: sc, currentHistory: "0" });
@@ -129,10 +129,10 @@ try {
   //  closed on. The authority FOLD itself is the SAME hasCredentialAuthority the JS
   //  calls, unchanged; this proves the .word's `If not authorized: refuse` wiring.)
   const noAuth = "noauth-" + randomUUID();
-  const sc2 = { actId: randomUUID(), actorAct: { branch: "0", by: noAuth }, identity: { beingId: noAuth }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc2 = { actId: randomUUID(), actorAct: { history: "0", by: noAuth }, identity: { beingId: noAuth }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   let gateRefused = null;
   try {
-    await runRoleWord(ir, { moment: sc2, branch: "0", trigger: { caller: noAuth, target: String(victim), branch: "0" }, env: { host: credentialHostEnv() } });
+    await runRoleWord(ir, { moment: sc2, history: "0", trigger: { caller: noAuth, target: String(victim), branch: "0" }, env: { host: credentialHostEnv() } });
   } catch (e) { gateRefused = e; }
   gateRefused && /no credential authority/i.test(gateRefused.message) && !(sc2.deltaF || []).some((f) => f.act === "set-being")
     ? ok(`an asker with no credential authority → refuse "no credential authority", NO writes`)

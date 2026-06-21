@@ -996,7 +996,7 @@ And as you noted, SUMMON can also connect processes — meaning a summon to a be
 
 What BE adds
 
-You didn’t mention BE explicitly but it completes the picture. BE is the verb for self-transformation: birth (create new being), connect (inhabit a vessel), release (end the being), position-move (change where you are).
+You didn’t mention BE explicitly but it completes the picture. BE is the verb for self-transformation: birth (create new being), connect (inhabit a being), release (end the being), position-move (change where you are).
 
 In conventional OSes, these are handled by separate mechanisms — fork for process creation, exec for code change, exit for termination, chdir for position. TreeOS unifies them under one verb because they share the structural property of “the actor changes itself.” The verb stays simple; the operations differ.
 

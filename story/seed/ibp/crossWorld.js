@@ -42,7 +42,9 @@ import { getStoryDomain } from "./address.js";
 // fresh canopy bodies. In-memory: the envelope being-sig freshness
 // window bounds what a restart could let back in.
 const seenForeignActs = new Map(); // "story|actId" -> expiresAt (ms)
-const SEEN_ACT_TTL_MS = Number(process.env.CROSS_SEEN_ACT_TTL_MS || 10 * 60_000);
+const SEEN_ACT_TTL_MS = Number(
+  process.env.CROSS_SEEN_ACT_TTL_MS || 10 * 60_000,
+);
 const SEEN_ACT_MAX = 50_000;
 
 function checkAndRecordForeignAct(story, actId) {
@@ -82,16 +84,24 @@ function checkAndRecordForeignAct(story, actId) {
  * through getDefaultHistory.
  */
 async function resolveLocalTargetHistory(address) {
-  const { getDefaultHistory } = await import("../materials/history/historyRegistry.js");
+  const { getDefaultHistory } =
+    await import("../materials/history/historyRegistry.js");
   const localDefault = await getDefaultHistory();
   try {
-    const { parse, expand, resolveHistoryPointers } = await import("./address.js");
+    const { parse, expand, resolveHistoryPointers } =
+      await import("./address.js");
     const raw = String(address || "");
     const rhs = raw.includes("::") ? raw.split("::").pop().trim() : raw;
     if (!rhs) return localDefault;
-    const expandCtx = { currentStory: getStoryDomain(), currentHistory: localDefault };
+    const expandCtx = {
+      currentStory: getStoryDomain(),
+      currentHistory: localDefault,
+    };
     const parsed = parse(rhs);
-    const expanded = await resolveHistoryPointers(expand(parsed, expandCtx), expandCtx);
+    const expanded = await resolveHistoryPointers(
+      expand(parsed, expandCtx),
+      expandCtx,
+    );
     return expanded?.right?.history || localDefault;
   } catch {
     // Parse failure: fall back to local main. Worst case the verb path
@@ -108,7 +118,7 @@ async function resolveLocalTargetHistory(address) {
  *
  * @param {object} opts
  * @param {object} opts.envelope   { id, verb, address, payload }
- * @param {object} opts.actor      { beingId, branch } — the actor's
+ * @param {object} opts.actor      { beingId, history } — the actor's
  *                                  identity on this (home) substrate
  * @param {object} [opts.identity] { beingId, name } — caller identity
  *                                  forwarded in the envelope
@@ -122,8 +132,8 @@ export async function crossStoryDispatch({ envelope, actor, identity } = {}) {
   if (!actor?.beingId) {
     throw new Error("crossStoryDispatch: actor.beingId required");
   }
-  if (!actor?.branch) {
-    throw new Error("crossStoryDispatch: actor.branch required");
+  if (!actor?.history) {
+    throw new Error("crossStoryDispatch: actor.history required");
   }
 
   const now = new Date();
@@ -156,7 +166,7 @@ export async function crossStoryDispatch({ envelope, actor, identity } = {}) {
   // ordinary post-split being whose id is a content hash only resolves a key
   // via its nameId.
   const actorNameId = actor.nameId || actor.beingId;
-  const signingPem = await loadSigningKey(actorNameId, actor.branch);
+  const signingPem = await loadSigningKey(actorNameId, actor.history);
   const opening = {
     through: actor.beingId,
     to: actor.beingId,
@@ -170,63 +180,79 @@ export async function crossStoryDispatch({ envelope, actor, identity } = {}) {
       source: actor.beingId,
     },
     story,
-    history: actor.branch,
+    history: actor.history,
   };
   // Open + advance under the act-chain lock (read-compute-write on
   // the head); the CAS'd advance is the cross-check.
-  const actId = await withActChainLock(actor.branch, actor.beingId, async () => {
-    const p = await readActHead(actor.branch, actor.beingId);
-    const id = computeActId(p, opening);
-    // Sign the attempt act too. This is the one act path that bypasses
-    // sealAct (the documented Stamp-opener exception above), so the
-    // signature has to be attached here to keep "every act is signed"
-    // true. ΔF is empty (the consequences land on the foreign chain), so
-    // factIds = [].
-    const sig = await signActDoc(
-      { _id: id, p, by: actorNameId, through: actor.beingId, to: actor.beingId, story, history: actor.branch },
-      [],
-      signingPem,
-    );
-    await Act.create({
-      _id: id,
-      p,
-      by: actorNameId,
-      through: actor.beingId,
-      to: actor.beingId,
-      ibpAddress: envelope.address,
-      activeRole: null,
-      inboxMessageId: null,
-      inReplyTo: null,
-      rootCorrelation: id,
-      parentThread: null,
-      receivedAt: now,
-      stampedAt: now,
-      startMessage: {
-        content: `cross-story ${envelope.verb}`,
-        source: actor.beingId,
-      },
-      story,
-      history: actor.branch,
-      status: "attempted",
-      sig,
-    });
-    await advanceActHead(actor.branch, actor.beingId, id, { expectPrev: p });
-    return id;
-  });
+  const actId = await withActChainLock(
+    actor.history,
+    actor.beingId,
+    async () => {
+      const p = await readActHead(actor.history, actor.beingId);
+      const id = computeActId(p, opening);
+      // Sign the attempt act too. This is the one act path that bypasses
+      // sealAct (the documented Stamp-opener exception above), so the
+      // signature has to be attached here to keep "every act is signed"
+      // true. ΔF is empty (the consequences land on the foreign chain), so
+      // factIds = [].
+      const sig = await signActDoc(
+        {
+          _id: id,
+          p,
+          by: actorNameId,
+          through: actor.beingId,
+          to: actor.beingId,
+          story,
+          history: actor.history,
+        },
+        [],
+        signingPem,
+      );
+      await Act.create({
+        _id: id,
+        p,
+        by: actorNameId,
+        through: actor.beingId,
+        to: actor.beingId,
+        ibpAddress: envelope.address,
+        activeRole: null,
+        inboxMessageId: null,
+        inReplyTo: null,
+        rootCorrelation: id,
+        parentThread: null,
+        receivedAt: now,
+        stampedAt: now,
+        startMessage: {
+          content: `cross-story ${envelope.verb}`,
+          source: actor.beingId,
+        },
+        story,
+        history: actor.history,
+        status: "attempted",
+        sig,
+      });
+      await advanceActHead(actor.history, actor.beingId, id, { expectPrev: p });
+      return id;
+    },
+  );
   // Stamper live loop parity: this direct open is the one seal path
   // that bypasses sealAct, so fire afterAct here too (cross-story
   // attempt acts push to stamper-space subscribers like any other).
   try {
     const { hooks } = await import("../hooks.js");
-    hooks.run("afterAct", {
-      actId,
-      beingIn: actor.beingId,
-      beingOut: actor.beingId,
-      activeRole: null,
-      endMessage: null,
-      stoppedAt: now,
-    }).catch(() => {});
-  } catch { /* observation only */ }
+    hooks
+      .run("afterAct", {
+        actId,
+        beingIn: actor.beingId,
+        beingOut: actor.beingId,
+        activeRole: null,
+        endMessage: null,
+        stoppedAt: now,
+      })
+      .catch(() => {});
+  } catch {
+    /* observation only */
+  }
 
   // 2. Forward to peer with the actor's identity tuple. The
   // forwardToPeer import is lazy so this seed module doesn't pull
@@ -245,15 +271,19 @@ export async function crossStoryDispatch({ envelope, actor, identity } = {}) {
       payload: envelope.payload,
       nameId: actorNameId,
       actId,
-      history: actor.branch,
+      history: actor.history,
       story,
     },
     signingPem,
   );
   const peerAck = await forwardToPeer({
     ...envelope,
-    identity: identity || { beingId: actor.beingId, name: null, nameId: actor.nameId || null },
-    actorHistory: actor.branch,
+    identity: identity || {
+      beingId: actor.beingId,
+      name: null,
+      nameId: actor.nameId || null,
+    },
+    actorHistory: actor.history,
     actorActId: actId,
     beingSig,
   });
@@ -298,7 +328,7 @@ export async function crossStoryDispatch({ envelope, actor, identity } = {}) {
  * Inbound cross-story dispatch. Run a substrate verb as the foreign
  * actor. The synthetic moment carries actorAct as a JS object —
  * NOT a Mongo row, since the actor's Act lives on their home
- * substrate. emitFact reads { story, branch, through, _id } off this
+ * substrate. emitFact reads { story, history, through, _id } off this
  * object to compute the crossOrigin block for any facts the verb
  * produces. After the verb returns, sealFacts commits the deltaF.
  *
@@ -309,25 +339,31 @@ export async function crossStoryDispatch({ envelope, actor, identity } = {}) {
  * @param {("see"|"do"|"summon"|"be")} opts.verb
  * @param {string} opts.address    IBP address string
  * @param {object} opts.payload    verb-specific payload
- * @param {object} opts.actor      { story, branch, beingId, actId }
+ * @param {object} opts.actor      { story, history, beingId, actId }
  *                                  the foreign actor's identity tuple
  * @param {object} [opts.carrier]  the original carrier (for identity
  *                                  + canopySender propagation)
  * @returns {Promise<{ descriptor: object|null, result: any }>}
  */
-export async function runVerbAsForeignActor({ verb, address, payload, actor, carrier } = {}) {
+export async function runVerbAsForeignActor({
+  verb,
+  address,
+  payload,
+  actor,
+  carrier,
+} = {}) {
   if (!verb || !address) {
     throw new Error("runVerbAsForeignActor: verb + address required");
   }
-  if (!actor?.story || !actor?.branch || !actor?.beingId || !actor?.actId) {
+  if (!actor?.story || !actor?.history || !actor?.beingId || !actor?.actId) {
     throw new Error(
-      "runVerbAsForeignActor: actor must carry { story, branch, beingId, actId }",
+      "runVerbAsForeignActor: actor must carry { story, history, beingId, actId }",
     );
   }
 
   // Cross-story being-sig gate, BEFORE any verb work or seal. If the
   // envelope carries the actor's own signature over { verb, address,
-  // payload, nameId, actId, branch, story }, verify it against the actor's
+  // payload, nameId, actId, history, story }, verify it against the actor's
   // NAME (which IS the pubkey) — self-certifying, no callback to the actor's
   // home story. A present-but-invalid sig is a hard refusal; an absent sig
   // is accepted (the story-level canopy sig that got us here already
@@ -343,7 +379,7 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
         payload,
         nameId: actorNameId,
         actId: actor.actId,
-        history: actor.branch,
+        history: actor.history,
         story: actor.story,
       },
       actor.beingSig,
@@ -371,7 +407,7 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
       if (peer?.requireSignedEnvelopes) {
         throw new Error(
           `runVerbAsForeignActor: cross-story being-sig verification failed ` +
-          `(peer ${actor.story} requires signed envelopes; got ${v.reason})`,
+            `(peer ${actor.story} requires signed envelopes; got ${v.reason})`,
         );
       }
     }
@@ -382,7 +418,7 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
   if (!checkAndRecordForeignAct(actor.story, actor.actId)) {
     throw new Error(
       `runVerbAsForeignActor: foreign act ${String(actor.actId).slice(0, 16)}… ` +
-      `from ${actor.story} was already dispatched (replay refused)`,
+        `from ${actor.story} was already dispatched (replay refused)`,
     );
   }
 
@@ -393,7 +429,7 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
     by: actorNameId,
     through: actor.beingId,
     story: actor.story,
-    history: actor.branch,
+    history: actor.history,
   };
 
   // Synthetic moment. Carries actorAct + deltaF for emitFact to push
@@ -416,7 +452,7 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
     beingId: actor.beingId,
     name: null,
     // The NAME the foreign actor signed as (verified self-certifyingly above).
-    // Cherub's father-admit matches the vessel's qualities.father.nameId
+    // Cherub's father-admit matches the being's qualities.father.nameId
     // against THIS (the proven id), never the client-supplied beingId.
     nameId: actorNameId,
     // The verifyIncoming middleware will already have stamped
@@ -424,12 +460,12 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
     canopyVerifiedSender: actor.story,
     // `story` is the canopy-verified home story of the foreign
     // actor. Downstream gates (e.g. cherub's BE:connect father-admit
-    // check) read this to match against the target vessel's
-    // qualities.father.story. See FEDERATION.md "mate + vessel".
+    // check) read this to match against the target being's
+    // qualities.father.story. See FEDERATION.md "mate + being".
     story: actor.story,
     // True only when the actor's own envelope signature verified
     // against its key id (self-certifying). Father-admit requires it:
-    // taking over a vessel needs the father's OWN key, not just the
+    // taking over a being needs the father's OWN key, not just the
     // peer story's vouch.
     beingSigVerified,
   };
@@ -448,18 +484,13 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
     );
   } else if (verb === "call") {
     const { callVerb } = await import("./verbs/call.js");
-    result = await callVerb(
-      address,
-      payload?.message,
-      { identity, moment },
-    );
+    result = await callVerb(address, payload?.message, { identity, moment });
   } else if (verb === "be") {
     const { beVerb } = await import("./verbs/be.js");
-    result = await beVerb(
-      payload?.act,
-      payload?.opPayload,
-      { identity, moment },
-    );
+    result = await beVerb(payload?.act, payload?.opPayload, {
+      identity,
+      moment,
+    });
   } else {
     throw new Error(`runVerbAsForeignActor: unknown verb "${verb}"`);
   }
@@ -481,8 +512,9 @@ export async function runVerbAsForeignActor({ verb, address, payload, actor, car
   // so the seam has to live here.
   if (Array.isArray(moment.afterSeal) && moment.afterSeal.length > 0) {
     for (const cb of moment.afterSeal) {
-      try { await cb(); }
-      catch (err) {
+      try {
+        await cb();
+      } catch (err) {
         const log = (await import("../seedStory/log.js")).default;
         log.warn("CrossWorld", `afterSeal callback failed: ${err.message}`);
       }

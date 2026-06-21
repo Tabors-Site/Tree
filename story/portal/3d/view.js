@@ -493,11 +493,11 @@ export function createView() {
     // stance — the same string the right side of the bar shows.
     if (!rootDelegate) return ctx.navigation.stanceFor(b.being);
     const story = state().discovery?.story;
-    // Branch qualifier matters: acting on a being from a non-main
-    // branch must carry `#<branch>` or the server's cross-branch gate
+    // History qualifier matters: acting on a being from a non-main
+    // history must carry `#<history>` or the server's cross-history gate
     // refuses (expand() defaults a bare typed story to #main).
-    const branch = state().descriptor?.address?.history || "0";
-    const bq = branch === "0" ? "" : `#${branch}`;
+    const history = state().descriptor?.address?.history || "0";
+    const bq = history === "0" ? "" : `#${history}`;
     return `${story}${bq}/@${b.being}`;
   }
 
@@ -819,8 +819,8 @@ export function createView() {
           }
 
           const story = state().discovery.story;
-          const branch = state().descriptor?.address?.history || "0";
-          const bq = branch === "0" ? "" : `#${branch}`;
+          const history = state().descriptor?.address?.history || "0";
+          const bq = history === "0" ? "" : `#${history}`;
           const made = await client().do(`${story}${bq}/skins`, "create-matter", {
             type:    "model",
             name:    file.name.replace(/\.(glb|gltf)$/i, ""),
@@ -948,8 +948,8 @@ export function createView() {
     currentSummonBeing = null;
     const stance = beingAddress(b);
     const story = state().discovery.story;
-    const branch = state().descriptor.address?.history || "0";
-    const bq = branch === "0" ? "" : `#${branch}`;
+    const history = state().descriptor.address?.history || "0";
+    const bq = history === "0" ? "" : `#${history}`;
     const fromStance = state().session?.username
       ? `${story}${bq}/@${state().session.username}`
       : `${story}${bq}/@arrival`;

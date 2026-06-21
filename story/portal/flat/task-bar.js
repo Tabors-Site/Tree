@@ -80,8 +80,8 @@ export function renderTaskBar(container, { descriptor, discovery, session } = {}
       || (desc.residents || []).find((b) => (b.being || b.name) === selName)
     : null;
   if (beingEntry) {
-    const branch = desc.address?.history || "0";
-    const bq = branch === "0" ? "" : `#${branch}`;
+    const history = desc.address?.history || "0";
+    const bq = history === "0" ? "" : `#${history}`;
     const stance = `${story}${bq}${path}@${selName}`.replace(/\/+@/, "/@");
     tabs.push({
       id: "being",
@@ -204,8 +204,8 @@ function openAction(action, opByName) {
   }
   if (action.special === "being-facts" || action.special === "being-acts") {
     const story = flat.state?.discovery?.story || "";
-    const branch = flat.state?.descriptor?.address?.history || "0";
-    const bq = branch === "0" ? "" : `#${branch}`;
+    const history = flat.state?.descriptor?.address?.history || "0";
+    const bq = history === "0" ? "" : `#${history}`;
     const id = action.being?.beingId;
     if (!id) return;
     const path = action.special === "being-facts" ? `/.reel/being/${id}` : `/.acts/${id}`;

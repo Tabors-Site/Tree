@@ -6,7 +6,7 @@
 // acts + grants stay valid (facts at the time stand). Going forward:
 //
 //   - The dead being cannot act. No new Acts open on its chain;
-//     no new Facts stamp with it as `through` (the vessel acted through).
+//     no new Facts stamp with it as `through` (the being acted through).
 //   - The dead being cannot be acted upon. No new Facts stamp with
 //     it as `of.id` (recipient). Summons refuse. BE ops on it
 //     refuse. Role grants/revocations refuse.
@@ -47,8 +47,8 @@ export async function isBeingDead(beingId, history) {
   if (typeof history !== "string" || !history.length) {
     throw new Error(
       "isBeingDead requires history as a non-empty string. " +
-      "Pass moment?.actorAct?.history or the explicit history the " +
-      "read is happening on — no main-bias default.",
+        "Pass moment?.actorAct?.history or the explicit history the " +
+        "read is happening on — no main-bias default.",
     );
   }
   const slot = await loadOrFold("being", String(beingId), history);

@@ -59,9 +59,9 @@ being or a branch, and out to landing in a living reality.
 Each operation answers WHAT moves; placement answers WHERE it lands. They
 compose freely.
 
-| | **at the reality root** (new) | **at an existing position** (living) |
-| --- | --- | --- |
-| **SEED** (shell, fresh ids) | a new top-level world from a template | a subtree planted under a position |
+|                                | **at the reality root** (new)                | **at an existing position** (living)  |
+| ------------------------------ | -------------------------------------------- | ------------------------------------- |
+| **SEED** (shell, fresh ids)    | a new top-level world from a template        | a subtree planted under a position    |
 | **GRAFT** (identity preserved) | a being/branch into a fresh or empty reality | a being/branch into a running reality |
 
 - **Placement = reality root.** The planted region becomes new top-level
@@ -99,7 +99,7 @@ that a smaller graft does not is the reality's OWN identity: its `realityId`
 (which is I_AM's key) travels too, so the planted result IS the same
 reality, a mirror or a migration. That is exactly why the genome lands only
 in an empty store — two realities cannot share one, and a reality grafted
-into a *different* reality would be two identities in one place. A being
+into a _different_ reality would be two identities in one place. A being
 grafted into a living reality is the opposite case: the being keeps its own
 identity while taking up residence under a host reality that keeps its.
 
@@ -187,7 +187,7 @@ doctrine, not tunable preference.
   in behind itself, and integrating a bundle never triggers a fetch from
   another reality. The bundle is CLOSED; what it declares is all that
   lands. A foreign being that wants live presence and agency here gains it
-  through vessel citizenship (do:mate), never as a side effect of someone
+  through being citizenship (do:mate), never as a side effect of someone
   else's graft.
 
 - **The import is itself an act.** Accepting a graft stamps a local
@@ -225,6 +225,7 @@ receiver knows what it is verifying and what is missing.
   chain. Pairs with any of the above for "current state + partial history."
 
 All four are built (`capturePartialGraft` / `applyGraft`):
+
 - **genesis prefix** — the reel from birth to a cutoff, verified by `verifyReel`
   (genesis-rooted). Carries the being's birth, so it folds; a later graft merges
   the tail.
@@ -335,8 +336,8 @@ being signature in [seed/past/act/actSig.js](../../seed/past/act/actSig.js).
 The names are being switched to match this doctrine. Today:
 
 - The code called **`graft`** ([clone.js](../../seed/materials/publish/clone.js)
-  + [graft.js](../../seed/materials/publish/graft.js)) re-mints every id and
-  carries no history. That is SEED behavior. It becomes **seed**.
+  - [graft.js](../../seed/materials/publish/graft.js)) re-mints every id and
+    carries no history. That is SEED behavior. It becomes **seed**.
 - The code called **`seed`** ([seed.js](../../seed/materials/publish/seed.js))
   preserves ids verbatim and carries full chains. That is GRAFT behavior. It
   becomes **graft**, and generalizes from whole-reality-into-empty-DB to

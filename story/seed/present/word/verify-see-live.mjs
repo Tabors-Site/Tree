@@ -50,7 +50,7 @@ const cherub = await poll(() => findByName("being", "cherub", "0"));
 const birth = async (name, extraSpec = {}) => {
   let bid = null;
   await withIAmAct(`birth ${name}`, async (ctx) => {
-    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global", ...extraSpec }, identity: I_AM, moment: ctx, branch: "0" });
+    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global", ...extraSpec }, identity: I_AM, moment: ctx, history: "0" });
     bid = b.beingId;
   });
   return bid;
@@ -58,7 +58,7 @@ const birth = async (name, extraSpec = {}) => {
 
 // run a SEE node and return the bindings it produced
 async function see(node, bindings = {}) {
-  const ctx = { dryRun: false, moment: { actId: randomUUID() }, branch: "0", bindings: { ...bindings }, deltaF: [] };
+  const ctx = { dryRun: false, moment: { actId: randomUUID() }, history: "0", bindings: { ...bindings }, deltaF: [] };
   await evaluate(node, ctx);
   return { bindings: ctx.bindings, deltaF: ctx.deltaF };
 }

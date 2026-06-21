@@ -12,7 +12,7 @@ const bad = (l, d) => { fail++; console.log(`  ✗ ${l}`); if (d !== undefined) 
 
 // run a hand-built flow dry, return the verbs:ops it laid + bindings + result/refusal
 async function run(flow, trigger = {}, bindings = {}, env = {}) {
-  const ctx = { dryRun: true, moment: { actId: "t" }, branch: "0", trigger, bindings: { ...bindings }, deltaF: [], env };
+  const ctx = { dryRun: true, moment: { actId: "t" }, history: "0", trigger, bindings: { ...bindings }, deltaF: [], env };
   let refused = null;
   try { await evaluate(flow, ctx); }
   catch (e) { if (e && e.__wordRefusal) refused = e; else throw e; }

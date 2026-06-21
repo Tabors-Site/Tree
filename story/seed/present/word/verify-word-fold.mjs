@@ -101,7 +101,7 @@ try {
   const { createBranch } = await import(`${R}/seed/materials/history/branchCreation.js`);
   const made = await createBranch({ parent: "0", anchor: { atSeq: 1 }, createdBy: String(I_AM) });
   const BR = made.path;
-  await reg.disableWord("move", "move", { branch: BR });
+  await reg.disableWord("move", "move", { history: BR });
   const moveOnBranch = reg.resolveRoleWord("move", "move", BR);
   const moveOnMain = reg.resolveRoleWord("move", "move", "0");
   !moveOnBranch && moveOnMain ? ok(`move:move disabled on branch "${BR}" only → null on "${BR}", IR on main (on in one branch, off in another)`) : bad(`per-branch disable`, { onBranch: !!moveOnBranch, onMain: !!moveOnMain });
@@ -113,7 +113,7 @@ try {
     : bad(`per-branch rehydrate`, { onBranch: !!reg.resolveRoleWord("move", "move", BR), onMain: !!reg.resolveRoleWord("move", "move", "0") });
 
   // 11. re-enable on the branch → restored there too
-  await reg.enableWord("move", "move", { branch: BR });
+  await reg.enableWord("move", "move", { history: BR });
   reg.resolveRoleWord("move", "move", BR) ? ok(`enable move:move on "${BR}" → restored on "${BR}"`) : bad(`per-branch enable`, "null");
 
   console.log(`\n  ${pass} passed, ${fail} failed`);

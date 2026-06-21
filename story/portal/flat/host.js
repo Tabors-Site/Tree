@@ -357,8 +357,8 @@ function wireKeyboardShortcuts(ctx) {
       if (gTimer) { clearTimeout(gTimer); gTimer = null; }
       const story = _state.discovery?.story;
       if (!story) return;
-      const branch = _state.descriptor?.address?.history || "0";
-      const bq = branch === "0" ? "" : `#${branch}`;
+      const history = _state.descriptor?.address?.history || "0";
+      const bq = history === "0" ? "" : `#${history}`;
       if      (ev.key === "h") { ev.preventDefault(); flat.navigate(`${story}${bq}/`); }
       else if (ev.key === "b") { ev.preventDefault(); flat.navigate(`${story}${bq}/./beings`); }
       else if (ev.key === "o") { ev.preventDefault(); flat.navigate(`${story}${bq}/./operations`); }
@@ -403,9 +403,9 @@ async function refreshOperations(ctx) {
 
 function buildAddressString(descriptor, discovery) {
   const story = discovery?.story || descriptor?.address?.place || "";
-  const branch  = descriptor?.address?.history || "0";
+  const history = descriptor?.address?.history || "0";
   const path    = descriptor?.address?.pathByNames || "/";
-  const bq      = branch === "0" ? "" : `#${branch}`;
+  const bq      = history === "0" ? "" : `#${history}`;
   return `${story}${bq}${path}`;
 }
 

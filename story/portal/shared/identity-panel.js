@@ -328,7 +328,7 @@ export function renderIdentityPanel(body, { state, doOp, see, signOut, being = n
   const nameId = session?.nameId || identity?.nameId || null;
 
   // THE NAME — your identity, the thing that SIGNS. The same name across every
-  // being you drive and every branch/story; its public key is below. This is
+  // being you drive and every history/story; its public key is below. This is
   // the permanent identity (the being below is just the presence it acts through).
   if (nameId) {
     const nm = section(wrap, "your name");
@@ -337,7 +337,7 @@ export function renderIdentityPanel(body, { state, doOp, see, signOut, being = n
   }
 
   // THE BEING — the presence you're driving. `@name` is a world label (it can
-  // differ per branch/story); the id is a local presence handle (a content
+  // differ per history/story); the id is a local presence handle (a content
   // hash of the birth), NOT the signing key — that's the Name above.
   const who = section(wrap, `@${name}`);
   noteLine(who, "the being you're driving — its name is a world label; the id below is a local presence handle", "idp-sub");

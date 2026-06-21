@@ -50,9 +50,15 @@ import { listTemplates } from "../materials/publish/templateRegistry.js";
 import { serializeTypeCatalog } from "../materials/matter/classify.js";
 import { listFoldedOps } from "../present/word/wordStore.js";
 import { listBeOpNames, getBeOp } from "./beOps.js";
-import { findOpenForBeing, findLastSealedForBeing } from "../present/stamper/2-fold/reelChains.js";
+import {
+  findOpenForBeing,
+  findLastSealedForBeing,
+} from "../present/stamper/2-fold/reelChains.js";
 import { fold } from "../present/stamper/2-fold/foldEngine.js";
-import { foldAt, NoSuchHistoricalState } from "../present/stamper/2-fold/foldAt.js";
+import {
+  foldAt,
+  NoSuchHistoricalState,
+} from "../present/stamper/2-fold/foldAt.js";
 import { loadProjection } from "../materials/projections.js";
 import { redactSecrets } from "../materials/redact.js";
 import { BE_OPS } from "./beOps.js";
@@ -87,7 +93,9 @@ async function foldRead(type, id, until = null, history) {
     if (until) {
       // SEAM: foldAt's opts key is still `branch` (foldAt.js resolveUntil
       // reads opts.branch); the value is the history slot.
-      const { state } = await foldAt(type, String(id), until, { branch: history });
+      const { state } = await foldAt(type, String(id), until, {
+        branch: history,
+      });
       return state;
     }
     // SEAM: fold's opts key is still `branch` (foldEngine.js reads
@@ -102,7 +110,7 @@ async function foldRead(type, id, until = null, history) {
 
 // Wire-shape versions. Bump when the descriptor / discovery shape
 // changes in a way clients must opt into.
-export const DESCRIPTOR_VERSION   = "1.0";
+export const DESCRIPTOR_VERSION = "1.0";
 export const IBP_PROTOCOL_VERSION = "1.0";
 // ── Place discovery payload ──
 // Returned by `ibp:see <story>/.discovery` once a socket is open. The
@@ -128,7 +136,9 @@ export async function buildDiscovery() {
   try {
     const { signedStoryRoot } = await import("../past/fact/chainRoots.js");
     chainBlock = await signedStoryRoot();
-  } catch { /* additive — discovery never blocks on the fingerprint */ }
+  } catch {
+    /* additive — discovery never blocks on the fingerprint */
+  }
 
   // Merge two sources: the live role registry (SUMMON-honoring roles
   // registered by the seed + extensions) and the canonical system
@@ -159,7 +169,8 @@ export async function buildDiscovery() {
     // files before POSTing bytes. The HTTP carrier re-enforces.
     upload: {
       enabled: getStoryConfigValue("uploadEnabled") !== false,
-      maxUploadBytes: Number(getStoryConfigValue("maxUploadBytes")) || 104857600,
+      maxUploadBytes:
+        Number(getStoryConfigValue("maxUploadBytes")) || 104857600,
       allowedMimeTypes: getStoryConfigValue("allowedMimeTypes") || null,
     },
     // The chain fingerprint, SIGNED by the story (= I_AM) key. A peer
@@ -189,12 +200,14 @@ function beingsAtSpace(space, { writeAllowed, authorizedHere }) {
   // skip them so only entries naming a being surface here.
   const STANCE_NAMES = new Set(["arrival", "owner", "member"]);
   if (beingHomes) {
-    const names = beingHomes instanceof Map
-      ? Array.from(beingHomes.keys())
-      : Object.keys(beingHomes);
+    const names =
+      beingHomes instanceof Map
+        ? Array.from(beingHomes.keys())
+        : Object.keys(beingHomes);
     for (const name of names) {
       if (STANCE_NAMES.has(name)) continue;
-      const home = beingHomes instanceof Map ? beingHomes.get(name) : beingHomes[name];
+      const home =
+        beingHomes instanceof Map ? beingHomes.get(name) : beingHomes[name];
       const invocableBy = home?.invocableBy || "owner";
       beings.push({
         being: name,
@@ -234,11 +247,11 @@ async function occupantsByPosition(spaceId, existing, history) {
   // tombstone semantics for non-main; main short-circuits to its
   // own path. We only get back {type, id, position, foldedSeq};
   // resolve names via a batched projection load.
-  const { findByPosition, loadProjections } = await import(
-    "../materials/projections.js"
+  const { findByPosition, loadProjections } =
+    await import("../materials/projections.js");
+  const refs = (await findByPosition(spaceId, history)).filter(
+    (r) => r.type === "being",
   );
-  const refs = (await findByPosition(spaceId, history))
-    .filter((r) => r.type === "being");
   const ids = refs.map((r) => r.id);
   const slots = await loadProjections("being", ids, history);
   const out = [];
@@ -285,16 +298,21 @@ function truncate(s, n) {
 // endMessage as "what they last said" so the speech bubble can
 // persist between moments.
 async function callToActivity(summon, opts = {}) {
-  const { getDefaultHistory } = await import("../materials/history/historyRegistry.js");
-  const history = opts.history || await getDefaultHistory();
+  const { getDefaultHistory } =
+    await import("../materials/history/historyRegistry.js");
+  const history = opts.history || (await getDefaultHistory());
   if (!summon) return null;
 
   if (opts.sealed) {
     const raw = summon.endMessage;
     const text =
       raw && typeof raw === "object"
-        ? typeof raw.content === "string" ? raw.content : ""
-        : typeof raw === "string" ? raw : "";
+        ? typeof raw.content === "string"
+          ? raw.content
+          : ""
+        : typeof raw === "string"
+          ? raw
+          : "";
     if (!text) return null;
     return {
       kind: "said",
@@ -441,7 +459,7 @@ async function inferActivityTarget(summon) {
  * @param {object} [opts.until]    — historical anchor: { atSeq?, atTimestamp? }
  * @returns {object} Place descriptor
  */
-// Cap the vessel list so a prolific Name stays bounded on the wire; the
+// Cap the being list so a prolific Name stays bounded on the wire; the
 // exact total rides alongside as `beingCount`.
 const NAME_BEING_CAP = 200;
 
@@ -484,21 +502,28 @@ export async function buildNameDescriptor(nameId) {
   // (it carries password + the qualities map). Capped list + exact count. The
   // `state.trueName` filter is an unindexed scan, bounded + fine for a Name
   // Form read; main-scoped (names + their beings live on "0").
-  const rows = await Projection
-    .find({ history: "0", type: "being", "state.trueName": String(nameId), tombstoned: { $ne: true } })
+  const rows = await Projection.find({
+    history: "0",
+    type: "being",
+    "state.trueName": String(nameId),
+    tombstoned: { $ne: true },
+  })
     .select("id state.name state.defaultRole state.homeSpace state.homeHistory")
     .sort({ id: 1 })
     .limit(NAME_BEING_CAP)
     .lean();
   const beings = rows.map((r) => ({
-    beingId:     String(r.id),
-    name:        r.state?.name || null,
+    beingId: String(r.id),
+    name: r.state?.name || null,
     defaultRole: r.state?.defaultRole || null,
-    homeSpace:   r.state?.homeSpace ? String(r.state.homeSpace) : null,
-    homeHistory:  r.state?.homeHistory || null,
+    homeSpace: r.state?.homeSpace ? String(r.state.homeSpace) : null,
+    homeHistory: r.state?.homeHistory || null,
   }));
   const beingCount = await Projection.countDocuments({
-    history: "0", type: "being", "state.trueName": String(nameId), tombstoned: { $ne: true },
+    history: "0",
+    type: "being",
+    "state.trueName": String(nameId),
+    tombstoned: { $ne: true },
   });
   // The Name's whole biography of acts, across every being it acts through
   // (act.nameId is index-backed). factCount is deliberately omitted — Fact has
@@ -508,16 +533,16 @@ export async function buildNameDescriptor(nameId) {
   // FIELD-PICK — never `{ ...state }`. privateKeyEnc never appears here.
   // `identity` is the key SCHEME only (alg / encoding / version), no key bytes.
   return {
-    isName:            true,
-    nameId:            String(nameId),
-    name:              state.name ?? null,
-    parentNameId:      state.parentNameId ?? null,
-    soulType:          state.soulType ?? null,
-    identity:          state.identity ?? null,
-    isBanished:        banished,
-    closedAt:          state.closedAt ?? null,
-    createdAt:         state.createdAt ?? null,
-    updatedAt:         state.updatedAt ?? null,
+    isName: true,
+    nameId: String(nameId),
+    name: state.name ?? null,
+    parentNameId: state.parentNameId ?? null,
+    soulType: state.soulType ?? null,
+    identity: state.identity ?? null,
+    isBanished: banished,
+    closedAt: state.closedAt ?? null,
+    createdAt: state.createdAt ?? null,
+    updatedAt: state.updatedAt ?? null,
     beings,
     beingCount,
     actCount,
@@ -552,19 +577,28 @@ export async function buildNameTree(nameId, history) {
   // the operator default if none was threaded.
   let br = history ? String(history) : null;
   if (!br) {
-    const { getDefaultHistory } = await import("../materials/history/historyRegistry.js");
+    const { getDefaultHistory } =
+      await import("../materials/history/historyRegistry.js");
     br = await getDefaultHistory();
   }
-  const { resolveHistoryLineage } = await import("../materials/history/histories.js");
-  const { livePointsAt } = await import("../materials/being/identity/inheritation.js");
+  const { resolveHistoryLineage } =
+    await import("../materials/history/histories.js");
+  const { livePointsAt } =
+    await import("../materials/being/identity/inheritation.js");
   const lineage = await resolveHistoryLineage(br);
   const rank = new Map(lineage.map((b, i) => [b, i]));
 
   // The Name's beings whose fold-cache row lives anywhere on this branch's
   // lineage. Bounded scan, capped — same shape as buildNameDescriptor.
-  const rows = await Projection
-    .find({ history: { $in: lineage }, type: "being", "state.trueName": String(nameId), tombstoned: { $ne: true } })
-    .select("id history state.name state.trueName state.parentBeingId state.homeHistory state.defaultRole")
+  const rows = await Projection.find({
+    history: { $in: lineage },
+    type: "being",
+    "state.trueName": String(nameId),
+    tombstoned: { $ne: true },
+  })
+    .select(
+      "id history state.name state.trueName state.parentBeingId state.homeHistory state.defaultRole",
+    )
     .limit(NAME_BEING_CAP)
     .lean();
 
@@ -574,7 +608,8 @@ export async function buildNameTree(nameId, history) {
   for (const r of rows) {
     const id = String(r.id);
     const prev = byId.get(id);
-    if (!prev || (rank.get(r.history) ?? -1) > (rank.get(prev.history) ?? -1)) byId.set(id, r);
+    if (!prev || (rank.get(r.history) ?? -1) > (rank.get(prev.history) ?? -1))
+      byId.set(id, r);
   }
 
   // Build a node per being, with its branch-scoped live inheritation points.
@@ -583,14 +618,16 @@ export async function buildNameTree(nameId, history) {
     const id = String(r.id);
     const points = await livePointsAt(id, br);
     nodes.set(id, {
-      beingId:       id,
-      name:          r.state?.name || null,
-      trueName:      r.state?.trueName || null,
-      parentBeingId: r.state?.parentBeingId ? String(r.state.parentBeingId) : null,
-      homeHistory:    r.state?.homeHistory || null,
-      defaultRole:   r.state?.defaultRole || null,
-      points:        [...points],
-      children:      [],
+      beingId: id,
+      name: r.state?.name || null,
+      trueName: r.state?.trueName || null,
+      parentBeingId: r.state?.parentBeingId
+        ? String(r.state.parentBeingId)
+        : null,
+      homeHistory: r.state?.homeHistory || null,
+      defaultRole: r.state?.defaultRole || null,
+      points: [...points],
+      children: [],
     });
   }
 
@@ -603,18 +640,21 @@ export async function buildNameTree(nameId, history) {
     else roots.push(node);
   }
   for (const root of roots) {
-    if (!root.parentBeingId) { root.parentName = null; continue; }
+    if (!root.parentBeingId) {
+      root.parentName = null;
+      continue;
+    }
     const p = await loadProjection("being", root.parentBeingId, br);
     root.parentName = p?.state?.name || null;
   }
 
   return {
-    isNameTree:        true,
-    nameId:            String(nameId),
-    name:              nameSlot.state.name ?? null,
-    history:           br,
+    isNameTree: true,
+    nameId: String(nameId),
+    name: nameSlot.state.name ?? null,
+    history: br,
     roots,
-    beingCount:        nodes.size,
+    beingCount: nodes.size,
     descriptorVersion: DESCRIPTOR_VERSION,
   };
 }
@@ -634,10 +674,13 @@ export async function lastOpenBeingForName(nameId, history = "0") {
   // The name's own be:connect / be:release facts, oldest-first. nameId is the
   // signer (the name acting); target is the being connected/released.
   const facts = await Fact.find({
-    by:     String(nameId),
-    verb:   "be",
-    act:    { $in: ["connect", "release"] },
-  }).sort({ date: 1 }).select("act of date").lean();
+    by: String(nameId),
+    verb: "be",
+    act: { $in: ["connect", "release"] },
+  })
+    .sort({ date: 1 })
+    .select("act of date")
+    .lean();
 
   const latest = new Map(); // beingId -> { act, date } (its most recent be-action)
   for (const f of facts) {
@@ -647,7 +690,8 @@ export async function lastOpenBeingForName(nameId, history = "0") {
   }
   let best = null;
   for (const [bid, la] of latest) {
-    if (la.act === "connect" && (!best || la.date > best.date)) best = { beingId: bid, date: la.date };
+    if (la.act === "connect" && (!best || la.date > best.date))
+      best = { beingId: bid, date: la.date };
   }
   if (!best) return null;
 
@@ -656,8 +700,8 @@ export async function lastOpenBeingForName(nameId, history = "0") {
   const slot = await loadProjection("being", best.beingId, history);
   if (!slot?.state || slot.tombstoned) return null;
   return {
-    beingId:    best.beingId,
-    beingName:  slot.state.name || null,
+    beingId: best.beingId,
+    beingName: slot.state.name || null,
     homeHistory: slot.state.homeHistory || "0",
   };
 }
@@ -669,22 +713,28 @@ export async function buildPlaceDescriptor(resolved, opts = {}) {
   // upstream canonicalizes resolved.history for both #explicit and
   // #main-implicit addresses. The defensive fallback resolves the
   // operator's `#main` pointer through the registry — never literal "0".
-  const { getDefaultHistory } = await import("../materials/history/historyRegistry.js");
+  const { getDefaultHistory } =
+    await import("../materials/history/historyRegistry.js");
   const historyOpts = {
     ...opts,
-    history: resolved.history || opts.history || await getDefaultHistory(),
+    history: resolved.history || opts.history || (await getDefaultHistory()),
   };
   if (resolved.isSpaceRoot) return placeAtSpaceRoot(resolved, historyOpts);
   return placeAtSpace(resolved, historyOpts);
 }
 
-async function placeAtSpaceRoot(resolved, { identity, until = null, history } = {}) {
+async function placeAtSpaceRoot(
+  resolved,
+  { identity, until = null, history } = {},
+) {
   const storyDomain = getStoryDomain();
   const spaceRootId = getSpaceRootId();
   const isRegistered = (beingName) => !!getRole(beingName);
 
   const spaceRoot = await foldRead("space", spaceRootId, until, history);
-  let children = spaceRootId ? await childrenOf(spaceRootId, "/", { until, history }) : [];
+  let children = spaceRootId
+    ? await childrenOf(spaceRootId, "/", { until, history })
+    : [];
 
   // The childrenOf walk filters out heaven spaces (so .config/.tools
   // etc. don't pollute the place-root listing). Heaven IS a seed
@@ -697,7 +747,8 @@ async function placeAtSpaceRoot(resolved, { identity, until = null, history } = 
     const _hSlot = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, history);
     const heaven = _hSlot ? { _id: _hSlot.id, ...(_hSlot.state || {}) } : null;
     if (heaven) {
-      const folded = (await foldRead("space", heaven._id, until, history)) || heaven;
+      const folded =
+        (await foldRead("space", heaven._id, until, history)) || heaven;
       children = [
         {
           name: folded.name || heaven.name,
@@ -713,7 +764,9 @@ async function placeAtSpaceRoot(resolved, { identity, until = null, history } = 
     }
   }
 
-  const matters = spaceRootId ? await listMattersAt(spaceRootId, { until, history }) : [];
+  const matters = spaceRootId
+    ? await listMattersAt(spaceRootId, { until, history })
+    : [];
 
   // My place-root beings — ensureSeedDelegates plants them; this list
   // makes them addressable from the place descriptor without walking
@@ -737,24 +790,27 @@ async function placeAtSpaceRoot(resolved, { identity, until = null, history } = 
   // misconfigured place), the entry surfaces anyway with _beingId:
   // null so the label and action surface still render . it just
   // can't carry coord/inbox/activity until the row catches up.
-  const { SEED_DELEGATES } = await import("../materials/being/seedDelegates.js");
+  const { SEED_DELEGATES } =
+    await import("../materials/being/seedDelegates.js");
   const { findByName } = await import("../materials/projections.js");
   // Delegates homed in their own heaven rooms (the host tier) do NOT
   // surface at the story root — their position is truthful and the
   // occupants query finds them in their rooms. Only root-homed
   // delegates ride the hardcoded roster.
   const rootDelegates = SEED_DELEGATES.filter((d) => !d.homeHeavenSpace);
-  const delegateSlots = (await Promise.all(
-    rootDelegates.map((d) => findByName("being", d.name, history)),
-  )).filter(Boolean);
+  const delegateSlots = (
+    await Promise.all(
+      rootDelegates.map((d) => findByName("being", d.name, history)),
+    )
+  ).filter(Boolean);
   const delegateIdByName = new Map(
     delegateSlots.map((s) => [s.state?.name, String(s.id)]),
   );
   const seedDelegateEntries = rootDelegates.map((d) => ({
-    being:       d.name,
+    being: d.name,
     invocableBy: d.invocableBy || "authenticated",
-    available:   isRegistered(d.name),
-    _beingId:    delegateIdByName.get(d.name) || null,
+    available: isRegistered(d.name),
+    _beingId: delegateIdByName.get(d.name) || null,
   }));
   // Merge in transient occupants . any being whose position points at
   // the space root and isn't already a seed delegate above. Mirrors
@@ -803,9 +859,13 @@ async function placeAtSpaceRoot(resolved, { identity, until = null, history } = 
   };
 }
 
-async function placeAtSpace(resolved, { identity, payload, until = null, history } = {}) {
+async function placeAtSpace(
+  resolved,
+  { identity, payload, until = null, history } = {},
+) {
   const storyDomain = getStoryDomain();
-  if (!resolved.leafSpace) throw new Error("Resolved space missing leafSpace reference");
+  if (!resolved.leafSpace)
+    throw new Error("Resolved space missing leafSpace reference");
 
   // Fold the leaf before reading its qualities (Slice H seam).
   // Resolver's leafSpace is a snapshot; fold catches the projection up
@@ -821,7 +881,12 @@ async function placeAtSpace(resolved, { identity, payload, until = null, history
   // set-being:position fires with the wrong value (often coerced to a
   // sibling space's id), occupant queries miss, and the user keeps
   // showing up at the wrong room every navigate.
-  const folded = await foldRead("space", resolved.leafSpace._id, until, history);
+  const folded = await foldRead(
+    "space",
+    resolved.leafSpace._id,
+    until,
+    history,
+  );
   const space = folded
     ? { _id: resolved.leafSpace._id, ...folded }
     : resolved.leafSpace;
@@ -839,27 +904,30 @@ async function placeAtSpace(resolved, { identity, payload, until = null, history
   // own); a past view of /./threads still surfaces the CURRENT live
   // forest. The doctrine: threads-at-time would require historical
   // inbox + Act reconstruction, which is its own future slice.
-  const children = space.heavenSpace === HEAVEN_SPACE.THREADS
-    ? await synthesizeThreadChildren(space._id, pathByNames, payload)
-    : space.heavenSpace === HEAVEN_SPACE.FACTORY_PRESENT
-      ? await synthesizeStamperChildren(pathByNames, payload)
-      : space.heavenSpace === HEAVEN_SPACE.FACTORY_PAST
-        ? await synthesizeReelChildren(payload)
-        : await childrenOf(space._id, pathByNames, {
-            until, history,
-            // Heaven-region parents (host, factory) list their own
-            // heaven-marked children; ordinary listings keep
-            // filtering them out.
-            includeHeavenChildren: !!space.heavenSpace,
-          });
-  const matters  = await mattersAt(space._id, {
-    until, history,
+  const children =
+    space.heavenSpace === HEAVEN_SPACE.THREADS
+      ? await synthesizeThreadChildren(space._id, pathByNames, payload)
+      : space.heavenSpace === HEAVEN_SPACE.FACTORY_PRESENT
+        ? await synthesizeStamperChildren(pathByNames, payload)
+        : space.heavenSpace === HEAVEN_SPACE.FACTORY_PAST
+          ? await synthesizeReelChildren(payload)
+          : await childrenOf(space._id, pathByNames, {
+              until,
+              history,
+              // Heaven-region parents (host, factory) list their own
+              // heaven-marked children; ordinary listings keep
+              // filtering them out.
+              includeHeavenChildren: !!space.heavenSpace,
+            });
+  const matters = await mattersAt(space._id, {
+    until,
+    history,
     // The containing space's render block — carries per-type model
     // defaults (qualities.render.matterModels.<type>) that matter
     // entries fall back to when they carry no override of their own.
     spaceRender: serializeQualities(space.qualities)?.render || null,
   });
-  const lineage  = buildLineage(resolved);
+  const lineage = buildLineage(resolved);
   // (siblings retired 2026-06-11: a full childrenOf sweep of the
   // parent ran on every SEE and nothing ever read the result.)
 
@@ -872,14 +940,20 @@ async function placeAtSpace(resolved, { identity, payload, until = null, history
   // ask "can I do X here?" rather than read this flag.
   // Defensive: leave both false on any error so a broken read never
   // silently grants writes.
-  let writeAllowed   = false;
+  let writeAllowed = false;
   let authorizedHere = false;
   if (identity?.beingId) {
     try {
-      const access  = await resolveSpaceAccess(space._id, identity.beingId, history);
-      writeAllowed   = !!(access?.ok && access?.isOwner === true);
+      const access = await resolveSpaceAccess(
+        space._id,
+        identity.beingId,
+        history,
+      );
+      writeAllowed = !!(access?.ok && access?.isOwner === true);
       authorizedHere = !!access?.ok;
-    } catch { /* defensive */ }
+    } catch {
+      /* defensive */
+    }
   }
 
   // ── Beings list = position truth, not home registration. ─────────
@@ -898,7 +972,10 @@ async function placeAtSpace(resolved, { identity, payload, until = null, history
   const positionedHere = await occupantsByPosition(space._id, [], history);
   // Cross-index for the residents enrichment.
   const positionedIds = new Set(
-    positionedHere.map((e) => e._beingId).filter(Boolean).map(String),
+    positionedHere
+      .map((e) => e._beingId)
+      .filter(Boolean)
+      .map(String),
   );
   // Residents = registered entries that are NOT currently at this space.
   // (Registered entries who ARE here naturally appear in positionedHere
@@ -913,11 +990,23 @@ async function placeAtSpace(resolved, { identity, payload, until = null, history
   // metadata when the being is also here). Position-only entries
   // remain visible.
   const renderEntries = positionedHere.map((occ) => {
-    const reg = registered.find((r) => r._beingId && String(r._beingId) === String(occ._beingId));
-    return reg ? { ...occ, invocableBy: reg.invocableBy, available: reg.available } : occ;
+    const reg = registered.find(
+      (r) => r._beingId && String(r._beingId) === String(occ._beingId),
+    );
+    return reg
+      ? { ...occ, invocableBy: reg.invocableBy, available: reg.available }
+      : occ;
   });
-  const beings    = await enrichBeings(space._id, renderEntries, { identity, until, history });
-  const residents = await enrichBeings(space._id, residentsRaw,   { identity, until, history });
+  const beings = await enrichBeings(space._id, renderEntries, {
+    identity,
+    until,
+    history,
+  });
+  const residents = await enrichBeings(space._id, residentsRaw, {
+    identity,
+    until,
+    history,
+  });
 
   // Being-tree lineage. When the stance carries a beingId (a stance
   // address like <story>/<path>@<name>), surface the immediate
@@ -971,7 +1060,7 @@ async function placeAtSpace(resolved, { identity, payload, until = null, history
 function serializeAsOf(until) {
   if (!until) return null;
   return {
-    atSeq:       until.atSeq       ?? null,
+    atSeq: until.atSeq ?? null,
     atTimestamp: until.atTimestamp ?? null,
   };
 }
@@ -992,7 +1081,9 @@ function serializeAsOf(until) {
 async function childrenOf(parentId, parentPath, opts = {}) {
   const { until = null, history } = opts;
   let rows = await listSpaceChildren(parentId, opts);
-  let folded = await Promise.all(rows.map((s) => foldRead("space", s._id, until, history)));
+  let folded = await Promise.all(
+    rows.map((s) => foldRead("space", s._id, until, history)),
+  );
   // Historical SEE: null fold = the child space didn't exist yet at
   // `until` — exclude it rather than render its live state (same rule
   // as mattersAt).
@@ -1021,8 +1112,8 @@ async function childrenOf(parentId, parentPath, opts = {}) {
       // render block (set-model writes it); the parent's descriptor
       // reaches in here so the scene can place every doorway-body at
       // its coord without extra SEEs.
-      model:    qualities?.render?.model || null,
-      scale:    qualities?.render?.scale ?? null,
+      model: qualities?.render?.model || null,
+      scale: qualities?.render?.scale ?? null,
       rotation: qualities?.render?.rotation ?? null,
       qualities,
     };
@@ -1040,24 +1131,25 @@ async function childrenOf(parentId, parentPath, opts = {}) {
 // position, stance, priority, limit — push down to the projection's
 // $match, so filtering scales on busy systems.
 async function synthesizeThreadChildren(parentId, parentPath, payload) {
-  const filters = payload && typeof payload === "object"
-    ? {
-        limit:    payload.limit    != null ? Number(payload.limit) : undefined,
-        being:    payload.being    || null,
-        role:     payload.role     || null,
-        position: payload.position || null,
-        stance:   payload.stance   || null,
-        priority: payload.priority || null,
-      }
-    : {};
+  const filters =
+    payload && typeof payload === "object"
+      ? {
+          limit: payload.limit != null ? Number(payload.limit) : undefined,
+          being: payload.being || null,
+          role: payload.role || null,
+          position: payload.position || null,
+          stance: payload.stance || null,
+          priority: payload.priority || null,
+        }
+      : {};
   const live = await listLiveThreads(filters);
   return live.map((t) => ({
-    name:      t.id,
-    spaceId:   `thread:${t.id}`,
-    type:      "thread",
+    name: t.id,
+    spaceId: `thread:${t.id}`,
+    type: "thread",
     synthetic: true,
-    path:      parentPath === "/" ? `/${t.id}` : `${parentPath}/${t.id}`,
-    thread:    { id: t.id, lastAct: t.lastAct },
+    path: parentPath === "/" ? `/${t.id}` : `${parentPath}/${t.id}`,
+    thread: { id: t.id, lastAct: t.lastAct },
     qualities: {},
   }));
 }
@@ -1071,14 +1163,22 @@ async function synthesizeStamperChildren(parentPath, payload) {
   const limit = payload?.limit != null ? Number(payload.limit) : undefined;
   const list = await listStamperChildren({ limit });
   return list.map((s) => ({
-    name:      s.name,
-    spaceId:   `stamper:${s.beingId}`,
-    type:      "stamper",
+    name: s.name,
+    spaceId: `stamper:${s.beingId}`,
+    type: "stamper",
     synthetic: true,
-    coord:     null,
-    model:     null,
-    path:      parentPath === "/" ? `/${encodeURIComponent(s.name)}` : `${parentPath}/${encodeURIComponent(s.name)}`,
-    stamper:   { beingId: s.beingId, lastAct: s.lastAct, actCount: s.actCount, branches: s.branches },
+    coord: null,
+    model: null,
+    path:
+      parentPath === "/"
+        ? `/${encodeURIComponent(s.name)}`
+        : `${parentPath}/${encodeURIComponent(s.name)}`,
+    stamper: {
+      beingId: s.beingId,
+      lastAct: s.lastAct,
+      actCount: s.actCount,
+      branches: s.branches,
+    },
     qualities: {},
   }));
 }
@@ -1090,14 +1190,17 @@ async function synthesizeReelChildren(payload) {
   const limit = payload?.limit != null ? Number(payload.limit) : undefined;
   const list = await listReelChildren({ limit });
   return list.map((r) => ({
-    name:      `${r.kind}:${r.id.slice(0, 8)}`,
-    spaceId:   `reel:${r.history}:${r.kind}:${r.id}`,
-    type:      "reel",
+    name: `${r.kind}:${r.id.slice(0, 8)}`,
+    spaceId: `reel:${r.history}:${r.kind}:${r.id}`,
+    type: "reel",
     synthetic: true,
-    path:      `/.reel/${r.kind}/${r.id}`,
+    path: `/.reel/${r.kind}/${r.id}`,
     reel: {
-      kind: r.kind, id: r.id, history: r.history,
-      headSeq: r.headSeq, headHash8: r.headHash8,
+      kind: r.kind,
+      id: r.id,
+      history: r.history,
+      headSeq: r.headSeq,
+      headHash8: r.headHash8,
       lastFactAt: r.lastFactAt ? new Date(r.lastFactAt).toISOString() : null,
       ...(r.kind === "being" ? { actsPath: `/.acts/${r.id}` } : {}),
     },
@@ -1111,10 +1214,15 @@ async function synthesizeReelChildren(payload) {
 // extra round-trip. Slice H completion (2026-05-23): each matter
 // folds before its qualities surface, same shape as the children
 // loop above.
-async function mattersAt(spaceId, { until = null, history, spaceRender = null } = {}) {
+async function mattersAt(
+  spaceId,
+  { until = null, history, spaceRender = null } = {},
+) {
   if (!spaceId) return [];
   let rows = await listMattersAt(spaceId, { history });
-  let folded = await Promise.all(rows.map((m) => foldRead("matter", m.matterId, until, history)));
+  let folded = await Promise.all(
+    rows.map((m) => foldRead("matter", m.matterId, until, history)),
+  );
   // Historical SEE: a null fold means this matter had NO facts at or
   // before `until` — it did not exist yet at that moment. Falling back
   // to the live row would haunt the rewound scene with future matter,
@@ -1156,7 +1264,11 @@ async function mattersAt(spaceId, { until = null, history, spaceRender = null } 
     const type = f.type ?? m.type ?? "generic";
     const typeDef = getMatterType(type);
     const isLegacyText = typeof content === "string";
-    const isCas = !!(content && typeof content === "object" && content.kind === "cas");
+    const isCas = !!(
+      content &&
+      typeof content === "object" &&
+      content.kind === "cas"
+    );
     const qualities = serializeQualities(f.qualities ?? m.qualities ?? {});
     return {
       matterId: m.matterId,
@@ -1168,30 +1280,45 @@ async function mattersAt(spaceId, { until = null, history, spaceRender = null } 
       // the descriptor stays hot-path cheap.
       preview: isCas
         ? (content.preview ?? null)
-        : (isLegacyText ? content.slice(0, 400) : null),
+        : isLegacyText
+          ? content.slice(0, 400)
+          : null,
       previewBytes: isCas
-        ? (content.preview ? Buffer.byteLength(content.preview, "utf8") : 0)
-        : (isLegacyText ? Buffer.byteLength(content, "utf8") : 0),
+        ? content.preview
+          ? Buffer.byteLength(content.preview, "utf8")
+          : 0
+        : isLegacyText
+          ? Buffer.byteLength(content, "utf8")
+          : 0,
       totalBytes: isCas
         ? (content.size ?? 0)
-        : (isLegacyText ? Buffer.byteLength(content, "utf8") : 0),
+        : isLegacyText
+          ? Buffer.byteLength(content, "utf8")
+          : 0,
       mimeType: isCas
-        ? (content.mimeType || null)
-        : (content && typeof content === "object" ? content.contentType || null : null),
+        ? content.mimeType || null
+        : content && typeof content === "object"
+          ? content.contentType || null
+          : null,
       // The transport hint for fetching the bytes. The HASH is the
       // protocol-level identity; the URL is today's byte carrier.
       // http matter points straight at its external URL — the
       // portal embeds/links it (render.mode says which).
       contentUrl: isCas
-        ? (!content.purged ? `/api/v1/content/${content.hash}` : null)
-        : (content && typeof content === "object" && typeof content.url === "string"
-            ? content.url
-            : null),
+        ? !content.purged
+          ? `/api/v1/content/${content.hash}`
+          : null
+        : content &&
+            typeof content === "object" &&
+            typeof content.url === "string"
+          ? content.url
+          : null,
       // External reference shapes (web / cross-story) are small
       // structured pointers, not bytes — surface them whole so the
       // portal gets videoId / title / matterRef without a second
       // round-trip. CAS bytes never ride the descriptor.
-      external: !isCas && content && typeof content === "object" ? content : null,
+      external:
+        !isCas && content && typeof content === "object" ? content : null,
       purged: isCas ? content.purged === true : false,
       render: typeDef?.render || null,
       // This matter's 3D body, resolution order: the per-matter
@@ -1201,18 +1328,19 @@ async function mattersAt(spaceId, { until = null, history, spaceRender = null } 
       // whose CONTENT IS a model (type render mode "model" — the
       // /skins catalog rows), the matter displays AS its own glb; then
       // the type's extension default (render.model on the type def).
-      model: qualities?.render?.model
-        || spaceRender?.matterModels?.[type]
-        || (typeDef?.render?.mode === "model" && isCas && !content.purged
-              ? {
-                  matterId: m.matterId,
-                  hash:     content.hash,
-                  url:      `/api/v1/content/${content.hash}`,
-                  name:     f.name ?? m.name ?? content.name ?? null,
-                }
-              : null)
-        || typeDef?.render?.model
-        || null,
+      model:
+        qualities?.render?.model ||
+        spaceRender?.matterModels?.[type] ||
+        (typeDef?.render?.mode === "model" && isCas && !content.purged
+          ? {
+              matterId: m.matterId,
+              hash: content.hash,
+              url: `/api/v1/content/${content.hash}`,
+              name: f.name ?? m.name ?? content.name ?? null,
+            }
+          : null) ||
+        typeDef?.render?.model ||
+        null,
       actions: buildMatterActions(type),
       byBeingId: f.beingId ?? m.beingId,
       qualities,
@@ -1226,11 +1354,14 @@ async function mattersAt(spaceId, { until = null, history, spaceRender = null } 
 // affordance: name, beingId, cognition, defaultRole. Cap at 200 to
 // stay bounded for prolific parents; deeper inspection happens via
 // dedicated SEE on each child stance.
-async function listBeingChildren(parentBeingId, { until = null, history } = {}) {
+async function listBeingChildren(
+  parentBeingId,
+  { until = null, history } = {},
+) {
   if (!parentBeingId) return [];
-  const { beingCognition } = await import("../materials/being/identity/lookups.js");
-  const rows = await Being
-    .find({ parentBeingId: String(parentBeingId) })
+  const { beingCognition } =
+    await import("../materials/being/identity/lookups.js");
+  const rows = await Being.find({ parentBeingId: String(parentBeingId) })
     .select("_id name defaultRole homeSpace qualities createdAt")
     .sort({ createdAt: 1 })
     .limit(200)
@@ -1239,12 +1370,12 @@ async function listBeingChildren(parentBeingId, { until = null, history } = {}) 
   // Live path: project from the rows as-is.
   if (!until) {
     return rows.map((b) => ({
-      beingId:     String(b._id),
-      name:        b.name || null,
+      beingId: String(b._id),
+      name: b.name || null,
       defaultRole: b.defaultRole || null,
-      cognition:   beingCognition(b),
-      homeSpace:   b.homeSpace ? String(b.homeSpace) : null,
-      createdAt:   b.createdAt || null,
+      cognition: beingCognition(b),
+      homeSpace: b.homeSpace ? String(b.homeSpace) : null,
+      createdAt: b.createdAt || null,
     }));
   }
 
@@ -1259,12 +1390,12 @@ async function listBeingChildren(parentBeingId, { until = null, history } = {}) 
     const f = folded[i];
     if (!f) continue;
     out.push({
-      beingId:     String(rows[i]._id),
-      name:        f.name || rows[i].name || null,
+      beingId: String(rows[i]._id),
+      name: f.name || rows[i].name || null,
       defaultRole: f.defaultRole || rows[i].defaultRole || null,
-      cognition:   beingCognition(f),
-      homeSpace:   f.homeSpace ? String(f.homeSpace) : null,
-      createdAt:   rows[i].createdAt || null,
+      cognition: beingCognition(f),
+      homeSpace: f.homeSpace ? String(f.homeSpace) : null,
+      createdAt: rows[i].createdAt || null,
     });
   }
   return out;
@@ -1311,9 +1442,8 @@ function buildActions(beingName, def, identity) {
   const isAnonymous = !identity?.beingId || identity?.name === "arrival";
   const out = [];
   for (const entry of def.canBe) {
-    const opName = typeof entry === "string"
-      ? entry
-      : (entry?.action || entry?.name || null);
+    const opName =
+      typeof entry === "string" ? entry : entry?.action || entry?.name || null;
     if (!opName) continue;
     const op = BE_OPS[opName];
     if (!op) continue;
@@ -1322,21 +1452,22 @@ function buildActions(beingName, def, identity) {
     // users see logout. Other beings' canBe lists pass through unfiltered.
     if (beingName === "cherub") {
       const isAcquireOp = opName === "birth" || opName === "connect";
-      const isHeldOp    = opName === "release";
+      const isHeldOp = opName === "release";
       if (isAcquireOp && !isAnonymous) continue;
-      if (isHeldOp    &&  isAnonymous) continue;
+      if (isHeldOp && isAnonymous) continue;
     }
     // Reshape per-being. Cherub's BE_OPS labels are arrival-flow-
     // centric ("Register", "Log in"); for other beings the same op
     // means something else (a parent birthing a child, a session-
     // already-authenticated user releasing). Adjust label + args so
     // the portal renders meaningful copy.
-    let label       = op.label || opName;
+    let label = op.label || opName;
     let description = op.description || "";
-    let args        = op.args || {};
+    let args = op.args || {};
     if (beingName !== "cherub" && opName === "birth") {
       label = "Mint child";
-      description = "Birth a new being from yourself. The child's parent is you.";
+      description =
+        "Birth a new being from yourself. The child's parent is you.";
       // Populate the role dropdown from the live registry so the
       // operator sees every role currently available (seed, extension,
       // and operator-authored "live" entries). Non-human cognition
@@ -1344,40 +1475,41 @@ function buildActions(beingName, def, identity) {
       // typo-prone free-text input.
       const roleNames = listRoles().slice().sort();
       args = {
-        name:      { type: "text", label: "Child name", required: true },
+        name: { type: "text", label: "Child name", required: true },
         cognition: {
-          type:    "select",
-          label:   "Cognition",
-          enum:    ["llm", "scripted", "human"],
+          type: "select",
+          label: "Cognition",
+          enum: ["llm", "scripted", "human"],
           required: false,
           default: "llm",
         },
         role: {
-          type:    "select",
-          label:   "Default role (fallback when no roleFlow clause matches)",
-          enum:    roleNames,
+          type: "select",
+          label: "Default role (fallback when no roleFlow clause matches)",
+          enum: roleNames,
           required: true,
-          default: roleNames.includes("human") ? "human" : (roleNames[0] || ""),
+          default: roleNames.includes("human") ? "human" : roleNames[0] || "",
         },
         // Optional birth-time roleFlow. Operators paste a JSON array
         // of clauses; be.js parses and the spec lands at
         // qualities.roleFlow on the new being. Empty = use defaultRole
         // unconditionally (no flow program).
         roleFlow: {
-          type:        "multiline",
-          label:       "Initial role flow (JSON array of clauses, optional)",
-          required:    false,
-          description: "[{ \"when\": {...}, \"role\": \"foo\" }, { \"stack\": true, \"when\": {...}, \"role\": \"bar\" }]",
+          type: "multiline",
+          label: "Initial role flow (JSON array of clauses, optional)",
+          required: false,
+          description:
+            '[{ "when": {...}, "role": "foo" }, { "stack": true, "when": {...}, "role": "bar" }]',
         },
       };
     }
     out.push({
-      verb:        "be",
-      action:      opName,
+      verb: "be",
+      action: opName,
       label,
       description,
       args,
-      bootstrap:   op.bootstrap === true,
+      bootstrap: op.bootstrap === true,
     });
   }
   return out;
@@ -1390,10 +1522,11 @@ async function enrichBeings(spaceId, entries, opts = {}) {
   // Defensive fallback: callers from buildPlaceDescriptor pass
   // the resolved history. When called directly without one, resolve
   // the operator's `#main` pointer rather than literal "0".
-  const { getDefaultHistory } = await import("../materials/history/historyRegistry.js");
-  const history = opts.history || await getDefaultHistory();
+  const { getDefaultHistory } =
+    await import("../materials/history/historyRegistry.js");
+  const history = opts.history || (await getDefaultHistory());
   const identity = opts.identity || null;
-  const until    = opts.until    || null;
+  const until = opts.until || null;
   // The inbox + open/sealed-Act helpers are live-only projections
   // today. For historical SEE we surface empty inbox / null activity
   // rather than misleading current-state data — a past view shouldn't
@@ -1432,11 +1565,17 @@ async function enrichBeings(spaceId, entries, opts = {}) {
   // Pair folded states with their being ids by index (foldRead may
   // return a state without _id when historical). We track ids
   // explicitly so historical fold results map back to the right row.
-  const idsAndFolded = beingIds.map((id, i) => ({ id, folded: foldedBeings[i] }));
+  const idsAndFolded = beingIds.map((id, i) => ({
+    id,
+    folded: foldedBeings[i],
+  }));
   const qualitiesByBeing = new Map(
     idsAndFolded
       .filter(({ folded }) => folded)
-      .map(({ id, folded }) => [String(id), serializeQualities(folded.qualities)]),
+      .map(({ id, folded }) => [
+        String(id),
+        serializeQualities(folded.qualities),
+      ]),
   );
   const coordByBeing = new Map(
     idsAndFolded
@@ -1444,34 +1583,40 @@ async function enrichBeings(spaceId, entries, opts = {}) {
       .map(({ id, folded }) => [String(id), folded.coord || null]),
   );
 
-  const activities = await Promise.all(entries.map(async (e) => {
-    if (!e._beingId) return null;
-    if (until) return null; // historical: see comment on inboxByBeing
-    const open = await findOpenForBeing(e._beingId);
-    if (open) return callToActivity(open, { history });
-    // No Act in flight. Fall back to what this being last SAID so
-    // the speech bubble persists between moments. Without this the
-    // bubble vanishes the instant a moment seals.
-    const sealed = await findLastSealedForBeing(e._beingId);
-    return callToActivity(sealed, { sealed: true, history });
-  }));
+  const activities = await Promise.all(
+    entries.map(async (e) => {
+      if (!e._beingId) return null;
+      if (until) return null; // historical: see comment on inboxByBeing
+      const open = await findOpenForBeing(e._beingId);
+      if (open) return callToActivity(open, { history });
+      // No Act in flight. Fall back to what this being last SAID so
+      // the speech bubble persists between moments. Without this the
+      // bubble vanishes the instant a moment seals.
+      const sealed = await findLastSealedForBeing(e._beingId);
+      return callToActivity(sealed, { sealed: true, history });
+    }),
+  );
 
   return entries.map((entry, i) => {
     const def = getRole(entry.being);
     const inboxKey = entry._beingId ? String(entry._beingId) : null;
     const inb = (inboxKey && inboxByBeing[inboxKey]) || {
-      total: 0, unconsumed: 0, recent: [],
-      activeFrom: null, pendingFrom: [], queueDepth: 0,
+      total: 0,
+      unconsumed: 0,
+      recent: [],
+      activeFrom: null,
+      pendingFrom: [],
+      queueDepth: 0,
     };
     const { _beingId, ...wireEntry } = entry;
     return {
       ...wireEntry,
       // Surface the being's id on the wire. Clients (explorers, link
       // builders) need it to address `.reel/being/<id>` / `.acts/<id>`.
-      beingId:     inboxKey,
+      beingId: inboxKey,
       permissions: def ? def.permissions : null,
       respondMode: def ? def.respondMode : null,
-      triggerOn:   def ? def.triggerOn   : null,
+      triggerOn: def ? def.triggerOn : null,
       // canSummon entries — both sides of the summon edge. Entries
       // discriminate via `as: "actor"|"receiver"` (default "actor").
       // UI discovery filters `as:"receiver"` to render per-being
@@ -1482,7 +1627,7 @@ async function enrichBeings(spaceId, entries, opts = {}) {
       // Per-being action surface. The portal renders this generically
       // as a menu + arg-schema form; one entry per BE op the role is
       // licensed for, filtered by identity state (cherub-only today).
-      actions:     buildActions(entry.being, def, identity),
+      actions: buildActions(entry.being, def, identity),
       // Delegate-as-catalog: a delegate publishes the registry-shaped
       // data it mediates as part of its own descriptor entry. Askers
       // who can SEE the delegate (which is liberal — beings list at the
@@ -1490,19 +1635,20 @@ async function enrichBeings(spaceId, entries, opts = {}) {
       // reading the heaven-gated mirror spaces directly. role-manager
       // publishes roles/tools/operations/be-ops; future delegates that
       // gate other registries follow the same shape.
-      catalogs:    buildCatalogs(entry.being),
+      catalogs: buildCatalogs(entry.being),
       inbox: inb,
       activity: activities[i],
-      busy:        inb.activeFrom !== null,
-      talkingTo:   inb.activeFrom,
-      queueDepth:  inb.queueDepth,
+      busy: inb.activeFrom !== null,
+      talkingTo: inb.activeFrom,
+      queueDepth: inb.queueDepth,
       pendingFrom: inb.pendingFrom,
-      coord:       (inboxKey && coordByBeing.get(inboxKey)) || null,
+      coord: (inboxKey && coordByBeing.get(inboxKey)) || null,
       // The being's 3D body — a model matter block written by
       // set-model ({ matterId, hash, url, name }; bytes load from
       // /api/v1/content/<hash>). Null = portal default for the role.
-      model:       (inboxKey && qualitiesByBeing.get(inboxKey)?.render?.model) || null,
-      qualities:   (inboxKey && qualitiesByBeing.get(inboxKey)) || {},
+      model:
+        (inboxKey && qualitiesByBeing.get(inboxKey)?.render?.model) || null,
+      qualities: (inboxKey && qualitiesByBeing.get(inboxKey)) || {},
     };
   });
 }
@@ -1527,23 +1673,26 @@ function buildCatalogs(beingName) {
 
 function buildRoleManagerCatalogs() {
   return {
-    roles:      catalogRoles(),
-    addresses:  catalogAddresses(),
+    roles: catalogRoles(),
+    addresses: catalogAddresses(),
     operations: catalogOperations(),
-    beOps:      catalogBeOps(),
+    beOps: catalogBeOps(),
   };
 }
 
 function catalogRoles() {
-  return listRoles().slice().sort().map((name) => {
-    const r = getRole(name);
-    return {
-      name,
-      origin:            r?.origin || null,
-      requiredCognition: r?.requiredCognition || null,
-      permissions:       Array.isArray(r?.permissions) ? r.permissions : [],
-    };
-  });
+  return listRoles()
+    .slice()
+    .sort()
+    .map((name) => {
+      const r = getRole(name);
+      return {
+        name,
+        origin: r?.origin || null,
+        requiredCognition: r?.requiredCognition || null,
+        permissions: Array.isArray(r?.permissions) ? r.permissions : [],
+      };
+    });
 }
 
 // canSee on a role names IBP addresses (paths the LLM may read via the
@@ -1572,23 +1721,25 @@ function catalogAddresses() {
 function catalogOperations() {
   return listFoldedOps()
     .map((op) => ({
-      name:           op.name,
-      targets:        op.targets,
-      factAction:     op.factAction,
+      name: op.name,
+      targets: op.targets,
+      factAction: op.factAction,
       ownerExtension: op.ownerExtension,
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function catalogBeOps() {
-  return listBeOpNames().sort().map((name) => {
-    const op = getBeOp(name);
-    return {
-      name,
-      label:       op?.label || null,
-      description: op?.description || null,
-    };
-  });
+  return listBeOpNames()
+    .sort()
+    .map((name) => {
+      const op = getBeOp(name);
+      return {
+        name,
+        label: op?.label || null,
+        description: op?.description || null,
+      };
+    });
 }
 
 // ── Wire-shape helpers ──
@@ -1605,8 +1756,8 @@ async function identityBlock(identity, { until = null, history } = {}) {
   // the camera resumes at where THEY were at the past point. If the
   // asker didn't exist yet at that point, we surface null position +
   // coord (the client falls back to default spawn).
-  let position  = null;
-  let coord     = null;
+  let position = null;
+  let coord = null;
   let homeSpace = null;
   // Stale = the JWT names a being that no longer exists in the
   // substrate (operator dropped the DB, ended the being, etc.). The
@@ -1621,9 +1772,14 @@ async function identityBlock(identity, { until = null, history } = {}) {
   if (identity.beingId) {
     try {
       if (until) {
-        const folded = await foldRead("being", identity.beingId, until, history);
+        const folded = await foldRead(
+          "being",
+          identity.beingId,
+          until,
+          history,
+        );
         if (folded) {
-          position  = folded.position ? String(folded.position) : null;
+          position = folded.position ? String(folded.position) : null;
           homeSpace = folded.homeSpace ? String(folded.homeSpace) : null;
           const coordQ = folded.qualities?.coord;
           coord = coordQ || folded.coord || null;
@@ -1655,15 +1811,19 @@ async function identityBlock(identity, { until = null, history } = {}) {
         // Position rides at the slot level (sparse-indexed for
         // findByPosition); qualities + other reducer state ride at
         // slot.state. Coord lives under qualities.coord typically.
-        position  = slot?.position ? String(slot.position) : (slot?.state?.position || null);
+        position = slot?.position
+          ? String(slot.position)
+          : slot?.state?.position || null;
         homeSpace = slot?.state?.homeSpace || null;
         const quals = slot?.state?.qualities;
         const coordQ = quals instanceof Map ? quals.get("coord") : quals?.coord;
         coord = coordQ || slot?.state?.coord || null;
         // Cognition lives at qualities.cognition.defaultKind.
-        const cog = quals instanceof Map ? quals.get("cognition") : quals?.cognition;
+        const cog =
+          quals instanceof Map ? quals.get("cognition") : quals?.cognition;
         if (cog?.defaultKind === "human") {
-          const { isSigningUnlocked } = await import("../materials/name/signingSession.js");
+          const { isSigningUnlocked } =
+            await import("../materials/name/signingSession.js");
           // The signing session is keyed by NAMEID (the Name's key is what
           // signs), not beingId — a being's _id is a content hash post-split.
           // Read the viewer's name; absent name => not unlocked.
@@ -1701,7 +1861,7 @@ async function identityBlock(identity, { until = null, history } = {}) {
   }
   return {
     beingId: identity.beingId,
-    name:    identity.name,
+    name: identity.name,
     position,
     // homeSpace exposed so the portal can fall back to "/<homeSpace>"
     // when position is null (freshly-registered being whose slot
@@ -1729,4 +1889,3 @@ function serializeQualities(quals) {
   // (read server-side for decryption) are untouched.
   return redactSecrets(obj);
 }
-

@@ -41,7 +41,7 @@ try {
 
   // 4. end to end: the world story reads the seed declaring itself, body and all
   const { assembleStory } = await import(`${R}/seed/present/book/assemble.js`);
-  const story = JSON.stringify(await assembleStory("world", { branch: "0" }));
+  const story = JSON.stringify(await assembleStory("world", { history: "0" }));
   (story.includes("spoke the word being") && /A being is a presence/.test(story))
     ? ok(`the story reads the seed: "spoke the word being: A being is a presence..."`)
     : bad(`story renders the seed`, story.includes("spoke the word") ? "name shown but body missing" : "no coin rendered in the story");

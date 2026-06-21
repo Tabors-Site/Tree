@@ -195,7 +195,7 @@ real perception-aware decision. It declares `canSee: ["place"]`; on a
 `summon:mate` request, its summon handler reads the resolved `place`
 block's `payload.beings[]` / `payload.residents[]` and refuses with
 `kind: "failure", shape: "refused"` when an occupant already carries
-the prospective vessel name. The refusal is honest: birthBeing would
+the prospective being name. The refusal is honest: birthBeing would
 throw on uniqueness anyway, but answering at the perception layer
 makes the gate visible (the audit shows the role saw and declined)
 and distinct from infra failure (`shape: "refused"` vs the infra

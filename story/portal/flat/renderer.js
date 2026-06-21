@@ -42,9 +42,13 @@ export function clearDetail() {
 export function renderDescriptor(desc, { session, discovery }) {
   if (!desc) return;
   renderTopBar(desc, { session, discovery });
-  // The task menubar sits at the top of every view (Story / Branch /
+  // The task menubar sits at the top of every view (Story / History /
   // Place) so its actions are always reachable, like a window menu bar.
-  renderTaskBar(document.getElementById("task-menubar"), { descriptor: desc, session, discovery });
+  renderTaskBar(document.getElementById("task-menubar"), {
+    descriptor: desc,
+    session,
+    discovery,
+  });
   // Explorer dispatch — .reel/<kind>/<id>, .acts/<beingId>, .beings,
   // .threads/<id> return synthetic descriptors with is{Reel,ActChain,
   // BeingsCatalog,Thread} flags. Take over the middle area and render
@@ -146,13 +150,12 @@ function renderCounts(desc) {
   if (m) m.textContent = desc.matters?.length ? `${desc.matters.length}` : "";
 }
 
-
 // Update the connection-status pill in the top bar. Called from main.js
 // via flat.setConnection() whenever the socket state changes.
 export function setConnectionStatus(state, detail = "") {
   const pill = document.getElementById("connection-pill");
   if (!pill) return;
-  const dot  = pill.querySelector(".conn-dot");
+  const dot = pill.querySelector(".conn-dot");
   const text = pill.querySelector(".conn-text");
   pill.title = `socket: ${state}${detail ? " — " + detail : ""}`;
   dot.className = "conn-dot";
@@ -202,7 +205,8 @@ function renderBeings(desc, { session, discovery }) {
 
     if (b.respondMode) meta.appendChild(badge(b.respondMode, "mode"));
     if (b.available === false) meta.appendChild(badge("busy", "busy"));
-    if (b.inbox?.unconsumed > 0) meta.appendChild(badge(`inbox ${b.inbox.unconsumed}`, "queue"));
+    if (b.inbox?.unconsumed > 0)
+      meta.appendChild(badge(`inbox ${b.inbox.unconsumed}`, "queue"));
     if (b.activity?.kind) meta.appendChild(badge(b.activity.kind, "activity"));
 
     li.appendChild(meta);
@@ -244,7 +248,9 @@ function renderBeings(desc, { session, discovery }) {
     chatBtn.textContent = "chat";
     chatBtn.className = "btn-sm btn-primary";
     chatBtn.disabled = !session?.token;
-    chatBtn.title = session?.token ? "summon this being" : "claim an identity first";
+    chatBtn.title = session?.token
+      ? "summon this being"
+      : "claim an identity first";
     chatBtn.onclick = () => {
       flat.selectBeing?.(b.beingId, b.being);
       openChatFor(b);
@@ -259,16 +265,21 @@ function renderBeings(desc, { session, discovery }) {
     // dispatch — the substrate checks the caller's role's canSummon
     // entries with as === "actor" against this target. See
     // seed/RolesAreAuth.md ("canSummon is one field, two surfaces,
-    // discriminated by as") + FEDERATION.md "mate + vessel".
+    // discriminated by as") + FEDERATION.md "mate + being".
     if (Array.isArray(b.canSummon) && session?.token) {
       for (const offer of b.canSummon) {
         if (offer?.as !== "receiver" || !offer?.intent) continue;
         const btn = document.createElement("button");
-        btn.textContent = offer.intent === "mate"
-          ? (b.being === "cherub" ? "birth your first being" : "birth a child")
-          : offer.intent;
+        btn.textContent =
+          offer.intent === "mate"
+            ? b.being === "cherub"
+              ? "birth your first being"
+              : "birth a child"
+            : offer.intent;
         btn.className = "btn-sm";
-        btn.title = offer.description || `summon @${b.being} with intent="${offer.intent}"`;
+        btn.title =
+          offer.description ||
+          `summon @${b.being} with intent="${offer.intent}"`;
         btn.onclick = () => openIntentSummon(b, offer);
         actions.appendChild(btn);
       }
@@ -287,31 +298,35 @@ function renderBeings(desc, { session, discovery }) {
 // For "mate" specifically: the message can include optional name,
 // homeSpaceId, password, cognition, defaultRole — all defaulted by
 // the birther's handler. The summoner (you) becomes the father of
-// the vessel-child; the target being becomes the mother.
+// the being-child; the target being becomes the mother.
 function openIntentSummon(beingEntry, offer) {
   const isCherub = beingEntry.being === "cherub";
-  const promptText = offer.intent === "mate"
-    ? (isCherub
+  const promptText =
+    offer.intent === "mate"
+      ? isCherub
         ? `Birth your first being through your name. It will be a top-level being, owned by you (cherub is right below I_AM). Name it:`
-        : `Summon @${beingEntry.being} to mate. The new child has @${beingEntry.being} as mother and you as father. Optional: child name. (Leave blank for auto-generated.)`)
-    : `Summon @${beingEntry.being} with intent="${offer.intent}". Optional message:`;
+        : `Summon @${beingEntry.being} to mate. The new child has @${beingEntry.being} as mother and you as father. Optional: child name. (Leave blank for auto-generated.)`
+      : `Summon @${beingEntry.being} with intent="${offer.intent}". Optional message:`;
   const userInput = window.prompt(promptText, "");
   if (userInput === null) return;
   const stance = beingEntry.stance || `@${beingEntry.being}`;
   // Intent rides on the envelope (per seed/SUMMON.md); only the
   // intent-specific payload fields go in content.
-  const content = userInput.trim().length > 0
-    ? { name: userInput.trim() }
-    : {};
-  flat.sendSummon(stance, content, { intent: offer.intent })
+  const content = userInput.trim().length > 0 ? { name: userInput.trim() } : {};
+  flat
+    .sendSummon(stance, content, { intent: offer.intent })
     .then((res) => {
       const summary = res?.reply?.from
         ? `summoned @${beingEntry.being} (${offer.intent}); reply from ${res.reply.from}`
         : `summoned @${beingEntry.being} (${offer.intent})`;
-      try { flat.setStatus?.(summary); } catch {}
+      try {
+        flat.setStatus?.(summary);
+      } catch {}
     })
     .catch((err) => {
-      try { flat.setStatus?.(`summon failed: ${err?.message || err}`); } catch {}
+      try {
+        flat.setStatus?.(`summon failed: ${err?.message || err}`);
+      } catch {}
     });
 }
 
@@ -330,8 +345,8 @@ function openIntentSummon(beingEntry, offer) {
 
 function renderLineage(desc, { session, discovery }) {
   const section = document.getElementById("lineage-section");
-  const ul      = document.getElementById("lineage-list");
-  const count   = document.getElementById("lineage-count");
+  const ul = document.getElementById("lineage-list");
+  const count = document.getElementById("lineage-count");
   if (!section || !ul) return;
 
   const items = Array.isArray(desc.beingLineage) ? desc.beingLineage : null;
@@ -346,7 +361,11 @@ function renderLineage(desc, { session, discovery }) {
   ul.innerHTML = "";
 
   if (items.length === 0) {
-    ul.appendChild(emptyRow("(no descendants yet — BE:birth from your own stance to mint one)"));
+    ul.appendChild(
+      emptyRow(
+        "(no descendants yet — BE:birth from your own stance to mint one)",
+      ),
+    );
     return;
   }
 
@@ -365,8 +384,9 @@ function renderLineage(desc, { session, discovery }) {
     name.textContent = `@${child.name || child.beingId.slice(0, 8)}`;
     meta.appendChild(name);
 
-    if (child.cognition)   meta.appendChild(badge(child.cognition, "mode"));
-    if (child.defaultRole) meta.appendChild(badge(child.defaultRole, "activity"));
+    if (child.cognition) meta.appendChild(badge(child.cognition, "mode"));
+    if (child.defaultRole)
+      meta.appendChild(badge(child.defaultRole, "activity"));
 
     li.appendChild(meta);
 
@@ -418,24 +438,26 @@ async function triggerInhabit(child, { story }) {
       return;
     }
     const token = ack.data?.identityToken;
-    const name  = ack.data?.name || child.name;
+    const name = ack.data?.name || child.name;
     if (!token) {
       setStatus(`inhabit ok but no token returned (server bug?)`);
       return;
     }
     // Stash a one-shot session blob in the URL hash. The new tab reads
     // it on boot, copies into sessionStorage, clears the hash.
-    const blob = encodeURIComponent(JSON.stringify({
-      token,
-      username: name,
-      placeUrl: flat.state.session?.placeUrl || window.location.origin,
-      inherited: true,
-      // Who authorized this inhabit. Inheriter tab persists it and
-      // listens for the spawner's pagehide on a BroadcastChannel —
-      // when the spawner tab closes, the inheriter releases itself
-      // (borrowed presence; lender leaves, lease ends).
-      spawnerName: flat.state.session?.username || null,
-    }));
+    const blob = encodeURIComponent(
+      JSON.stringify({
+        token,
+        username: name,
+        placeUrl: flat.state.session?.placeUrl || window.location.origin,
+        inherited: true,
+        // Who authorized this inhabit. Inheriter tab persists it and
+        // listens for the spawner's pagehide on a BroadcastChannel —
+        // when the spawner tab closes, the inheriter releases itself
+        // (borrowed presence; lender leaves, lease ends).
+        spawnerName: flat.state.session?.username || null,
+      }),
+    );
     const url = `${window.location.pathname}#inhabit=${blob}`;
     window.open(url, "_blank");
     setStatus(`opened new tab for @${name}`);
@@ -472,7 +494,8 @@ function renderMatter(desc, { discovery } = {}) {
     if (m.preview) {
       const prev = document.createElement("span");
       prev.className = "row-preview";
-      prev.textContent = m.preview.length > 60 ? m.preview.slice(0, 60) + "…" : m.preview;
+      prev.textContent =
+        m.preview.length > 60 ? m.preview.slice(0, 60) + "…" : m.preview;
       meta.appendChild(prev);
     }
     li.appendChild(meta);
@@ -521,14 +544,20 @@ function detectCatalogItemPath(path) {
   if (typeof path !== "string") return null;
   // Item names can contain colons (`harmony:dancer-llm`), hyphens, dots.
   // Catch the catalog kind and the rest of the path (anything after).
-  const m = path.match(/^\/(?:\.\/)?(operations|roles|extensions)\/([^/]+)\/?$/);
+  const m = path.match(
+    /^\/(?:\.\/)?(operations|roles|extensions)\/([^/]+)\/?$/,
+  );
   return m ? { kind: m[1], name: m[2] } : null;
 }
 
 const CATALOG_META = {
   operations: { icon: "⚙", title: "operations", sub: "registered DO actions" },
-  roles:      { icon: "◎", title: "roles",      sub: "summonable role templates" },
-  threads:    { icon: "⧖", title: "threads",    sub: "live coordination chains (rootCorrelations)" },
+  roles: { icon: "◎", title: "roles", sub: "summonable role templates" },
+  threads: {
+    icon: "⧖",
+    title: "threads",
+    sub: "live coordination chains (rootCorrelations)",
+  },
   extensions: { icon: "⊕", title: "extensions", sub: "installed extensions" },
 };
 
@@ -614,7 +643,11 @@ function renderCatalogRow(kind, item, discovery) {
     sub.appendChild(open);
   }
 
-  if (item.spaceId && !String(item.spaceId).startsWith("thread:") && discovery?.story) {
+  if (
+    item.spaceId &&
+    !String(item.spaceId).startsWith("thread:") &&
+    discovery?.story
+  ) {
     const reel = document.createElement("a");
     reel.className = "btn-explore";
     reel.href = `#${discovery.story}/.reel/space/${item.spaceId}`;
@@ -667,9 +700,11 @@ function renderCatalogItemDetail(desc, { kind, name }, { discovery }) {
 
   // Per-kind body. Read from qualities.<kind>.
   const q = desc.qualities || {};
-  if (kind === "operations") renderOperationDetail(pane, q.operation || {}, name);
+  if (kind === "operations")
+    renderOperationDetail(pane, q.operation || {}, name);
   else if (kind === "roles") renderRoleDetail(pane, q.role || {}, name);
-  else if (kind === "extensions") renderExtensionDetail(pane, q.extension || q, name);
+  else if (kind === "extensions")
+    renderExtensionDetail(pane, q.extension || q, name);
 }
 
 function renderOperationDetail(pane, op, name) {
@@ -678,8 +713,12 @@ function renderOperationDetail(pane, op, name) {
   if (Array.isArray(op.targets) && op.targets.length) {
     grid.appendChild(kvBlock("targets", op.targets.join(", ")));
   }
-  if (op.factAction) grid.appendChild(kvBlock("stamps factAction", op.factAction, { mono: true }));
-  if (op.ownerExtension) grid.appendChild(kvBlock("from extension", op.ownerExtension));
+  if (op.factAction)
+    grid.appendChild(
+      kvBlock("stamps factAction", op.factAction, { mono: true }),
+    );
+  if (op.ownerExtension)
+    grid.appendChild(kvBlock("from extension", op.ownerExtension));
   grid.appendChild(kvBlock("skipAudit", op.skipAudit ? "true" : "false"));
   pane.appendChild(grid);
 
@@ -693,7 +732,8 @@ function renderOperationDetail(pane, op, name) {
 function renderRoleDetail(pane, role, name) {
   const top = section("role");
   top.appendChild(kvBlock("name", name, { mono: true }));
-  if (role.respondMode) top.appendChild(kvBlock("respondMode", role.respondMode));
+  if (role.respondMode)
+    top.appendChild(kvBlock("respondMode", role.respondMode));
   if (Array.isArray(role.triggerOn) && role.triggerOn.length) {
     top.appendChild(kvBlock("triggerOn", role.triggerOn.join(", ")));
   }
@@ -717,11 +757,11 @@ function renderRoleDetail(pane, role, name) {
     (e) => typeof e === "object" && e?.as === "receiver",
   );
   const caps = [
-    ["canSee",                            role.canSee],
-    ["canDo",                             role.canDo],
-    ["canSummon (initiates)",             summonActor],
-    ["canSummon (accepts as receiver)",   summonReceiver],
-    ["canBe",                             role.canBe],
+    ["canSee", role.canSee],
+    ["canDo", role.canDo],
+    ["canSummon (initiates)", summonActor],
+    ["canSummon (accepts as receiver)", summonReceiver],
+    ["canBe", role.canBe],
   ];
   for (const [label, list] of caps) {
     if (!Array.isArray(list) || list.length === 0) continue;
@@ -730,11 +770,12 @@ function renderRoleDetail(pane, role, name) {
     ul.className = "verb-list";
     for (const entry of list) {
       const li = document.createElement("li");
-      const display = typeof entry === "object"
-        ? (entry.intent
+      const display =
+        typeof entry === "object"
+          ? entry.intent
             ? `intent="${entry.intent}"${entry.pattern ? ` target=${entry.pattern}` : ""}${entry.description ? ` — ${entry.description}` : ""}`
-            : (entry.pattern || JSON.stringify(entry)))
-        : String(entry);
+            : entry.pattern || JSON.stringify(entry)
+          : String(entry);
       li.innerHTML = `<code>${escapeHtml(display)}</code>`;
       ul.appendChild(li);
     }
@@ -755,12 +796,23 @@ function renderExtensionDetail(pane, ext, name) {
   if (ext.version) top.appendChild(kvBlock("version", ext.version));
   if (ext.description) top.appendChild(kvBlock("description", ext.description));
   if (ext.author) top.appendChild(kvBlock("author", ext.author));
-  if (ext.installedAt) top.appendChild(kvBlock("installed at", String(ext.installedAt)));
-  if (ext.enabled != null) top.appendChild(kvBlock("enabled", String(ext.enabled)));
+  if (ext.installedAt)
+    top.appendChild(kvBlock("installed at", String(ext.installedAt)));
+  if (ext.enabled != null)
+    top.appendChild(kvBlock("enabled", String(ext.enabled)));
   pane.appendChild(top);
 
   // Provides — list whatever capability arrays it advertises.
-  const provideKeys = ["operations", "roles", "tools", "hooks", "seeds", "subscriptions", "schedules", "routes"];
+  const provideKeys = [
+    "operations",
+    "roles",
+    "tools",
+    "hooks",
+    "seeds",
+    "subscriptions",
+    "schedules",
+    "routes",
+  ];
   for (const k of provideKeys) {
     const v = ext[k];
     if (Array.isArray(v) && v.length) {
@@ -789,9 +841,17 @@ function renderExtensionDetail(pane, ext, name) {
 }
 
 function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;",
-  }[c]));
+  return String(s).replace(
+    /[&<>"']/g,
+    (c) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      })[c],
+  );
 }
 
 function renderOperationRowBody(main, item) {
@@ -818,15 +878,15 @@ function renderRoleRowBody(main, item) {
   }
   // Compact capability summary: counts of canDo/canSee/canSummon/canBe.
   const caps = [];
-  if (role.canDo?.length)     caps.push(`do:${role.canDo.length}`);
-  if (role.canSee?.length)    caps.push(`see:${role.canSee.length}`);
+  if (role.canDo?.length) caps.push(`do:${role.canDo.length}`);
+  if (role.canSee?.length) caps.push(`see:${role.canSee.length}`);
   if (role.canSummon?.length) caps.push(`sum:${role.canSummon.length}`);
-  if (role.canBe?.length)     caps.push(`be:${role.canBe.length}`);
+  if (role.canBe?.length) caps.push(`be:${role.canBe.length}`);
   if (caps.length) {
     const c = document.createElement("span");
     c.className = "dim catalog-ts";
     c.textContent = caps.join(" · ");
-    c.title = `canDo: ${(role.canDo||[]).join(", ") || "—"}\ncanSee: ${(role.canSee||[]).join(", ") || "—"}\ncanSummon: ${(role.canSummon||[]).join(", ") || "—"}\ncanBe: ${(role.canBe||[]).join(", ") || "—"}`;
+    c.title = `canDo: ${(role.canDo || []).join(", ") || "—"}\ncanSee: ${(role.canSee || []).join(", ") || "—"}\ncanSummon: ${(role.canSummon || []).join(", ") || "—"}\ncanBe: ${(role.canBe || []).join(", ") || "—"}`;
     main.appendChild(c);
   }
 }
@@ -873,8 +933,10 @@ function renderExplorer(desc, { discovery }) {
   middle.appendChild(pane);
 
   if (desc.isReel) renderReelExplorer(pane, desc.reel, discovery);
-  else if (desc.isActChain) renderActChainExplorer(pane, desc.actChain, discovery);
-  else if (desc.isBeingsCatalog) renderBeingsCatalog(pane, desc.beingsCatalog, discovery);
+  else if (desc.isActChain)
+    renderActChainExplorer(pane, desc.actChain, discovery);
+  else if (desc.isBeingsCatalog)
+    renderBeingsCatalog(pane, desc.beingsCatalog, discovery);
   else if (desc.isThread) renderThreadDetail(pane, desc.thread, discovery);
 }
 
@@ -901,11 +963,16 @@ function renderThreadDetail(pane, thread, discovery) {
   const sub = document.createElement("div");
   sub.className = "explorer-sub";
   const parts = [];
-  parts.push(`state: <span class="thread-state thread-state-${thread.state}">${thread.state}</span>`);
+  parts.push(
+    `state: <span class="thread-state thread-state-${thread.state}">${thread.state}</span>`,
+  );
   parts.push(`${thread.depth} act${thread.depth === 1 ? "" : "s"}`);
-  if (thread.liveCount)     parts.push(`<span class="dim">${thread.liveCount} live</span>`);
-  if (thread.completeCount) parts.push(`<span class="dim">${thread.completeCount} complete</span>`);
-  if (thread.severedCount)  parts.push(`<span class="chain-bad">${thread.severedCount} severed</span>`);
+  if (thread.liveCount)
+    parts.push(`<span class="dim">${thread.liveCount} live</span>`);
+  if (thread.completeCount)
+    parts.push(`<span class="dim">${thread.completeCount} complete</span>`);
+  if (thread.severedCount)
+    parts.push(`<span class="chain-bad">${thread.severedCount} severed</span>`);
   sub.innerHTML = parts.join(" · ");
   header.appendChild(sub);
 
@@ -915,13 +982,17 @@ function renderThreadDetail(pane, thread, discovery) {
   const meta = section("thread");
   meta.appendChild(kvBlock("rootCorrelation", thread.id, { mono: true }));
   meta.appendChild(kvBlock("state", thread.state));
-  if (thread.rootStartedAt) meta.appendChild(kvBlock("started at", String(thread.rootStartedAt)));
-  if (thread.lastAct)       meta.appendChild(kvBlock("last act at", String(thread.lastAct)));
+  if (thread.rootStartedAt)
+    meta.appendChild(kvBlock("started at", String(thread.rootStartedAt)));
+  if (thread.lastAct)
+    meta.appendChild(kvBlock("last act at", String(thread.lastAct)));
   if (thread.parentThread && discovery?.story) {
-    meta.appendChild(kvBlock("parent thread", thread.parentThread, {
-      mono: true,
-      link: `#${discovery.story}/./threads/${thread.parentThread}`,
-    }));
+    meta.appendChild(
+      kvBlock("parent thread", thread.parentThread, {
+        mono: true,
+        link: `#${discovery.story}/./threads/${thread.parentThread}`,
+      }),
+    );
   }
   if (Array.isArray(thread.participants) && thread.participants.length) {
     const row = document.createElement("div");
@@ -1025,7 +1096,8 @@ function renderBeingCatalogRow(b, discovery) {
   if (b.cognition) main.appendChild(badge(b.cognition, "mode"));
   if (b.defaultRole) {
     const role = badge(b.defaultRole, "activity");
-    role.title = b.roles?.length > 1 ? `roles: ${b.roles.join(", ")}` : `default role`;
+    role.title =
+      b.roles?.length > 1 ? `roles: ${b.roles.join(", ")}` : `default role`;
     main.appendChild(role);
   }
   if (b.createdAt) {
@@ -1093,8 +1165,9 @@ function renderReelExplorer(pane, reel, discovery) {
 
   const sub = document.createElement("div");
   sub.className = "explorer-sub";
-  sub.innerHTML = `${count} fact${count === 1 ? "" : "s"} · newest first · `
-    + chainVerdictSummary(verdict);
+  sub.innerHTML =
+    `${count} fact${count === 1 ? "" : "s"} · newest first · ` +
+    chainVerdictSummary(verdict);
   header.appendChild(sub);
 
   // Quick-nav: if the target is a being, offer a one-click jump to its acts.
@@ -1147,7 +1220,7 @@ function verifyChain(facts) {
       // Oldest in the window. Genesis if p is null/zero; otherwise we
       // can't check (the predecessor is outside the visible window).
       if (!f.p || /^0+$/.test(String(f.p))) out.perBlock.push("genesis");
-      else                                  out.perBlock.push("edge");
+      else out.perBlock.push("edge");
     }
   }
   return out;
@@ -1175,14 +1248,22 @@ function renderFactBlock(f, discovery, chainStatus = "edge") {
   // · (window edge — predecessor outside visible range), ✗ (broken link).
   const chain = document.createElement("span");
   chain.className = `block-chain chain-${chainStatus}`;
-  chain.textContent = chainStatus === "ok"      ? "✓"
-                    : chainStatus === "genesis" ? "◇"
-                    : chainStatus === "broken"  ? "✗"
-                    :                             "·";
-  chain.title = chainStatus === "ok"      ? "prev-hash matches predecessor block"
-              : chainStatus === "genesis" ? "first fact on this reel (genesis)"
-              : chainStatus === "broken"  ? "prev-hash DOES NOT match predecessor — chain broken here"
-              :                             "predecessor outside visible window";
+  chain.textContent =
+    chainStatus === "ok"
+      ? "✓"
+      : chainStatus === "genesis"
+        ? "◇"
+        : chainStatus === "broken"
+          ? "✗"
+          : "·";
+  chain.title =
+    chainStatus === "ok"
+      ? "prev-hash matches predecessor block"
+      : chainStatus === "genesis"
+        ? "first fact on this reel (genesis)"
+        : chainStatus === "broken"
+          ? "prev-hash DOES NOT match predecessor — chain broken here"
+          : "predecessor outside visible window";
   summary.appendChild(chain);
 
   const seq = document.createElement("span");
@@ -1205,7 +1286,11 @@ function renderFactBlock(f, discovery, chainStatus = "edge") {
 
   const doer = document.createElement("span");
   doer.className = "block-doer";
-  doer.textContent = f.beingName ? `@${f.beingName}` : (f.through ? short(f.through) : "?");
+  doer.textContent = f.beingName
+    ? `@${f.beingName}`
+    : f.through
+      ? short(f.through)
+      : "?";
   doer.title = f.through || "";
   summary.appendChild(doer);
 
@@ -1219,7 +1304,9 @@ function renderFactBlock(f, discovery, chainStatus = "edge") {
   hash.className = "block-hash";
   // The fact's identity IS its content hash (_id) under full CAS.
   hash.textContent = `#${short(f._id, 10)}`;
-  hash.title = f._id ? `identity: ${f._id}\nprev: ${f.p || "(genesis)"}` : "(no identity)";
+  hash.title = f._id
+    ? `identity: ${f._id}\nprev: ${f.p || "(genesis)"}`
+    : "(no identity)";
   summary.appendChild(hash);
 
   const toggle = document.createElement("button");
@@ -1246,25 +1333,40 @@ function renderFactBlock(f, discovery, chainStatus = "edge") {
   const detail = document.createElement("div");
   detail.className = "block-detail hidden";
 
-  detail.appendChild(kvBlock("identity (hash)", f._id || "(none)", { mono: true }));
+  detail.appendChild(
+    kvBlock("identity (hash)", f._id || "(none)", { mono: true }),
+  );
   detail.appendChild(kvBlock("p (prev)", f.p || "(genesis)", { mono: true }));
-  if (f.actId) detail.appendChild(kvBlock("act id", f.actId, { mono: true, link: discovery && f.through ? `#${discovery.story}/.acts/${f.through}` : null }));
+  if (f.actId)
+    detail.appendChild(
+      kvBlock("act id", f.actId, {
+        mono: true,
+        link:
+          discovery && f.through
+            ? `#${discovery.story}/.acts/${f.through}`
+            : null,
+      }),
+    );
   if (f.params != null) detail.appendChild(jsonKv("params", f.params));
   if (f.result != null) detail.appendChild(jsonKv("result", f.result));
   // Target link — clickable for navigation into the target's own reel.
   if (discovery?.story && f.of?.kind && f.of?.id) {
     const linkText = `${f.of.kind}/${f.of.id}`;
-    detail.appendChild(kvBlock("target", linkText, {
-      mono: true,
-      link: `#${discovery.story}/.reel/${f.of.kind}/${f.of.id}`,
-    }));
+    detail.appendChild(
+      kvBlock("target", linkText, {
+        mono: true,
+        link: `#${discovery.story}/.reel/${f.of.kind}/${f.of.id}`,
+      }),
+    );
   }
   // Doer link — to the doer's own facts.
   if (discovery?.story && f.through) {
-    detail.appendChild(kvBlock("doer", f.beingName || f.through, {
-      mono: true,
-      link: `#${discovery.story}/.reel/being/${f.through}`,
-    }));
+    detail.appendChild(
+      kvBlock("doer", f.beingName || f.through, {
+        mono: true,
+        link: `#${discovery.story}/.reel/being/${f.through}`,
+      }),
+    );
   }
 
   li.appendChild(detail);
@@ -1341,9 +1443,10 @@ function renderActBlock(a, discovery) {
   // startMessage carries the meaning. Prefer the response when it's a
   // non-empty string; otherwise format the inbound (which may itself
   // be an object — subscription wakes carry { event, spaceId, ... }).
-  const endText = (typeof a.endMessage?.content === "string" && a.endMessage.content.trim())
-    ? a.endMessage.content
-    : null;
+  const endText =
+    typeof a.endMessage?.content === "string" && a.endMessage.content.trim()
+      ? a.endMessage.content
+      : null;
   const startText = formatActPayload(a.startMessage?.content);
 
   // A structured act has no prose response: its content IS the Facts it
@@ -1351,9 +1454,10 @@ function renderActBlock(a, discovery) {
   // but the act produced Facts, show what it DID rather than echoing the
   // wake that triggered it. An act with neither prose nor Facts is a
   // SEE that left no trace and never reaches here.
-  const actText = (!endText && Array.isArray(a.facts) && a.facts.length)
-    ? a.facts.map(factActionLabel).filter(Boolean).join(", ")
-    : null;
+  const actText =
+    !endText && Array.isArray(a.facts) && a.facts.length
+      ? a.facts.map(factActionLabel).filter(Boolean).join(", ")
+      : null;
   const headline = endText || actText || startText;
   const isResponse = !!endText;
   const isStructuredAct = !endText && !!actText;
@@ -1410,7 +1514,9 @@ function renderActBlock(a, discovery) {
 
   const root = document.createElement("code");
   root.className = "block-hash";
-  root.textContent = a.rootCorrelation ? `root:${short(a.rootCorrelation, 8)}` : "(no root)";
+  root.textContent = a.rootCorrelation
+    ? `root:${short(a.rootCorrelation, 8)}`
+    : "(no root)";
   root.title = a.rootCorrelation || "";
   sub.appendChild(root);
 
@@ -1424,7 +1530,10 @@ function renderActBlock(a, discovery) {
     triggerLine.textContent = "from: " + truncate(startText, 100);
     triggerLine.title = startText;
     sub.appendChild(triggerLine);
-  } else if (typeof a.endMessage?.content === "string" && a.endMessage.content) {
+  } else if (
+    typeof a.endMessage?.content === "string" &&
+    a.endMessage.content
+  ) {
     const out = document.createElement("span");
     out.className = "block-end dim";
     out.textContent = "↳ " + truncate(a.endMessage.content, 120);
@@ -1436,21 +1545,32 @@ function renderActBlock(a, discovery) {
   const detail = document.createElement("div");
   detail.className = "block-detail hidden";
   detail.appendChild(kvBlock("act id", a._id, { mono: true }));
-  if (a.ibpAddress) detail.appendChild(kvBlock("ibp address", a.ibpAddress, { mono: true }));
+  if (a.ibpAddress)
+    detail.appendChild(kvBlock("ibp address", a.ibpAddress, { mono: true }));
   if (a.activeRole) detail.appendChild(kvBlock("role", a.activeRole));
   if (a.priority) detail.appendChild(kvBlock("priority", a.priority));
   if (a.to && discovery?.story) {
-    detail.appendChild(kvBlock("being out", a.to, {
-      mono: true,
-      link: `#${discovery.story}/.reel/being/${a.to}`,
-    }));
+    detail.appendChild(
+      kvBlock("being out", a.to, {
+        mono: true,
+        link: `#${discovery.story}/.reel/being/${a.to}`,
+      }),
+    );
   }
-  if (a.rootCorrelation) detail.appendChild(kvBlock("rootCorrelation", a.rootCorrelation, { mono: true }));
-  if (a.inReplyTo)       detail.appendChild(kvBlock("inReplyTo",       a.inReplyTo,       { mono: true }));
-  if (a.parentThread)    detail.appendChild(kvBlock("parentThread",    a.parentThread,    { mono: true }));
-  if (a.answers)         detail.appendChild(kvBlock("answers (summon)", a.answers,        { mono: true }));
-  if (a.startMessage?.content) detail.appendChild(jsonKv("in (start message)", a.startMessage));
-  if (a.endMessage?.content || a.endMessage?.stopped) detail.appendChild(jsonKv("out (end message)", a.endMessage));
+  if (a.rootCorrelation)
+    detail.appendChild(
+      kvBlock("rootCorrelation", a.rootCorrelation, { mono: true }),
+    );
+  if (a.inReplyTo)
+    detail.appendChild(kvBlock("inReplyTo", a.inReplyTo, { mono: true }));
+  if (a.parentThread)
+    detail.appendChild(kvBlock("parentThread", a.parentThread, { mono: true }));
+  if (a.answers)
+    detail.appendChild(kvBlock("answers (summon)", a.answers, { mono: true }));
+  if (a.startMessage?.content)
+    detail.appendChild(jsonKv("in (start message)", a.startMessage));
+  if (a.endMessage?.content || a.endMessage?.stopped)
+    detail.appendChild(jsonKv("out (end message)", a.endMessage));
   // The Facts this moment stamped — the act's substrate-change content,
   // the other half of "what happened" alongside any prose end message.
   if (Array.isArray(a.facts) && a.facts.length) {
@@ -1459,9 +1579,12 @@ function renderActBlock(a, discovery) {
   // The face this moment ran under . what the being saw and could do.
   // Stamped on every act; renders a faint marker when absent (legacy).
   detail.appendChild(renderFace(a.innerFace, discovery));
-  if (a.severedAt)       detail.appendChild(kvBlock("severed at", String(a.severedAt)));
-  if (a.receivedAt)      detail.appendChild(kvBlock("received at", String(a.receivedAt)));
-  if (a.stampedAt)       detail.appendChild(kvBlock("stamped at", String(a.stampedAt)));
+  if (a.severedAt)
+    detail.appendChild(kvBlock("severed at", String(a.severedAt)));
+  if (a.receivedAt)
+    detail.appendChild(kvBlock("received at", String(a.receivedAt)));
+  if (a.stampedAt)
+    detail.appendChild(kvBlock("stamped at", String(a.stampedAt)));
 
   li.appendChild(detail);
 
@@ -1476,7 +1599,7 @@ function renderActBlock(a, discovery) {
     toggle.click();
   };
   head.onclick = expand;
-  sub.onclick  = expand;
+  sub.onclick = expand;
   return li;
 }
 
@@ -1500,7 +1623,12 @@ function factSummaryLine(f) {
   if (f.verb === "call") {
     const c = p?.content;
     if (typeof c === "string" && c) return `"${c}"`;
-    if (c && typeof c === "object" && typeof c.content === "string" && c.content) {
+    if (
+      c &&
+      typeof c === "object" &&
+      typeof c.content === "string" &&
+      c.content
+    ) {
       return `"${c.content}"`;
     }
   }
@@ -1519,17 +1647,26 @@ function factSummaryLine(f) {
   // step reads "→ (5, 4)" rather than "coord = {"x":5,"y":4}".
   if (/^set/.test(f.act) && p?.field) {
     const v = p.value;
-    if (p.field === "coord" && v && typeof v.x === "number" && typeof v.y === "number") {
+    if (
+      p.field === "coord" &&
+      v &&
+      typeof v.x === "number" &&
+      typeof v.y === "number"
+    ) {
       return `→ (${v.x}, ${v.y})`;
     }
-    const vs = typeof v === "string" ? v
-              : typeof v === "number" || typeof v === "boolean" ? String(v)
-              : safeJson(v, 60);
+    const vs =
+      typeof v === "string"
+        ? v
+        : typeof v === "number" || typeof v === "boolean"
+          ? String(v)
+          : safeJson(v, 60);
     return `${p.field} = ${vs}`;
   }
   // place-being / move — coords or path.
   if (/place|move/.test(f.act) && p) {
-    if (typeof p.x === "number" && typeof p.y === "number") return `→ (${p.x}, ${p.y})`;
+    if (typeof p.x === "number" && typeof p.y === "number")
+      return `→ (${p.x}, ${p.y})`;
     if (p.path) return `→ ${p.path}`;
   }
   // Generic fallback: short JSON of params.
@@ -1545,7 +1682,9 @@ function safeJson(v, cap = 80) {
     const s = JSON.stringify(v);
     if (!s) return null;
     return s.length > cap ? s.slice(0, cap) + "…" : s;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 function truncate(s, n) {
@@ -1562,14 +1701,14 @@ function formatActPayload(c) {
   if (typeof c === "string") return c;
   if (typeof c !== "object") return String(c);
   // Common nested shapes — peel the outer wrapper.
-  if (typeof c.text === "string"    && c.text.trim())    return c.text;
+  if (typeof c.text === "string" && c.text.trim()) return c.text;
   if (typeof c.content === "string" && c.content.trim()) return c.content;
   // Subscription / scheduled-wake / drummer-tick / DO-trigger shape.
   if (c.event) {
     const parts = [String(c.event)];
-    if (c.spaceId)      parts.push(`at space/${shortIdInline(c.spaceId)}`);
+    if (c.spaceId) parts.push(`at space/${shortIdInline(c.spaceId)}`);
     if (c.actorBeingId) parts.push(`by being/${shortIdInline(c.actorBeingId)}`);
-    if (c.matterId)     parts.push(`on matter/${shortIdInline(c.matterId)}`);
+    if (c.matterId) parts.push(`on matter/${shortIdInline(c.matterId)}`);
     if (c.drumMatterId) parts.push(`drum/${shortIdInline(c.drumMatterId)}`);
     return parts.join(" ");
   }
@@ -1598,7 +1737,9 @@ function formatTs(ts) {
     if (isNaN(d.getTime())) return "";
     // Compact local time; full ISO sits in title.
     return d.toLocaleString(undefined, { hour12: false });
-  } catch { return ""; }
+  } catch {
+    return "";
+  }
 }
 
 function kvBlock(label, value, { mono = false, link = null } = {}) {
@@ -1679,17 +1820,19 @@ function renderFace(face, discovery) {
   const body = document.createElement("div");
   body.className = "face-body";
 
-  if (face.orientation) body.appendChild(kvBlock("orientation", face.orientation));
-  if (face.role)        body.appendChild(kvBlock("role", face.role));
+  if (face.orientation)
+    body.appendChild(kvBlock("orientation", face.orientation));
+  if (face.role) body.appendChild(kvBlock("role", face.role));
   if (face.origin && face.origin !== "local") {
     body.appendChild(kvBlock("origin", face.origin));
   }
 
   if (face.position) {
     const positionName = face.position.name || face.position.id || "(position)";
-    const link = (face.position.id && discovery?.story)
-      ? `#${discovery.story}/.reel/space/${face.position.id}`
-      : null;
+    const link =
+      face.position.id && discovery?.story
+        ? `#${discovery.story}/.reel/space/${face.position.id}`
+        : null;
     body.appendChild(kvBlock("position", positionName, { link }));
   }
 
@@ -1719,7 +1862,8 @@ function renderFace(face, discovery) {
       const label = b.label || b.key || "(block)";
       let preview;
       if (typeof b.payload === "string") {
-        preview = b.payload.length > 80 ? b.payload.slice(0, 80) + "..." : b.payload;
+        preview =
+          b.payload.length > 80 ? b.payload.slice(0, 80) + "..." : b.payload;
       } else if (b.payload != null) {
         try {
           const s = JSON.stringify(b.payload);
@@ -1748,8 +1892,8 @@ function renderFace(face, discovery) {
 
 export function showInspector({ kind, entry }) {
   const empty = document.getElementById("empty-detail");
-  const chat  = document.getElementById("chat-panel");
-  const insp  = document.getElementById("inspector");
+  const chat = document.getElementById("chat-panel");
+  const insp = document.getElementById("inspector");
   empty.classList.add("hidden");
   chat.classList.add("hidden");
   insp.classList.remove("hidden");
@@ -1761,11 +1905,11 @@ export function showInspector({ kind, entry }) {
     // and the panel is the whole point of the being's existence.
     if (entry?.being === "role-manager") {
       renderRoleManagerPanel(insp, entry, {
-        story:    flat.state.discovery?.story,
-        username:   flat.state.session?.username || null,
+        story: flat.state.discovery?.story,
+        username: flat.state.session?.username || null,
         descriptor: flat.state.descriptor,
-        see:        (addr) => flat.state.client.see(addr),
-        doOp:       flat.doOp,
+        see: (addr) => flat.state.client.see(addr),
+        doOp: flat.doOp,
       });
       return;
     }
@@ -1778,11 +1922,11 @@ export function showInspector({ kind, entry }) {
 // ── Being inspector ─────────────────────────────────────────────
 
 function renderBeingInspector(insp, b) {
-  const fl       = flat.state;
-  const story  = fl.discovery?.story;
-  const path     = fl.descriptor?.address?.pathByNames || "/";
-  const stance   = `${story}${path}@${b.being}`.replace(/\/+@/, "/@");
-  const isSelf   = fl.session?.username === b.being;
+  const fl = flat.state;
+  const story = fl.discovery?.story;
+  const path = fl.descriptor?.address?.pathByNames || "/";
+  const stance = `${story}${path}@${b.being}`.replace(/\/+@/, "/@");
+  const isSelf = fl.session?.username === b.being;
 
   // Header
   const h = document.createElement("h3");
@@ -1811,7 +1955,10 @@ function renderBeingInspector(insp, b) {
     state.appendChild(kv("triggerOn", b.triggerOn.join(", ")));
   }
   state.appendChild(kv("available", b.available === false ? "no" : "yes"));
-  if (b.busy) state.appendChild(kv("busy", b.talkingTo ? `talking to ${b.talkingTo}` : "yes"));
+  if (b.busy)
+    state.appendChild(
+      kv("busy", b.talkingTo ? `talking to ${b.talkingTo}` : "yes"),
+    );
   if (b.activity) {
     const act = `${b.activity.kind}${b.activity.content ? ` — ${b.activity.content}` : ""}`;
     state.appendChild(kv("activity", act));
@@ -1821,8 +1968,10 @@ function renderBeingInspector(insp, b) {
   // ─── Inbox
   const ib = b.inbox || {};
   const inbox = section("inbox");
-  inbox.appendChild(kv("total / unconsumed", `${ib.total ?? 0} / ${ib.unconsumed ?? 0}`));
-  if (ib.queueDepth)   inbox.appendChild(kv("queue depth", ib.queueDepth));
+  inbox.appendChild(
+    kv("total / unconsumed", `${ib.total ?? 0} / ${ib.unconsumed ?? 0}`),
+  );
+  if (ib.queueDepth) inbox.appendChild(kv("queue depth", ib.queueDepth));
   if (Array.isArray(ib.pendingFrom) && ib.pendingFrom.length) {
     inbox.appendChild(kv("pending from", ib.pendingFrom.join(", ")));
   }
@@ -1835,9 +1984,14 @@ function renderBeingInspector(insp, b) {
     ul.className = "inbox-list";
     for (const r of ib.recent.slice(0, 5)) {
       const li = document.createElement("li");
-      const w = document.createElement("span"); w.className = "msg-who"; w.textContent = r.from || "?";
-      const c = document.createElement("span"); c.className = "msg-content"; c.textContent = " " + (r.content || "").slice(0, 80);
-      li.appendChild(w); li.appendChild(c);
+      const w = document.createElement("span");
+      w.className = "msg-who";
+      w.textContent = r.from || "?";
+      const c = document.createElement("span");
+      c.className = "msg-content";
+      c.textContent = " " + (r.content || "").slice(0, 80);
+      li.appendChild(w);
+      li.appendChild(c);
       ul.appendChild(li);
     }
     inbox.appendChild(ul);
@@ -1855,14 +2009,22 @@ function renderBeingInspector(insp, b) {
   insp.appendChild(nav);
 
   // ─── Permissions
-  if (b.permissions && typeof b.permissions === "object" && Object.keys(b.permissions).length) {
+  if (
+    b.permissions &&
+    typeof b.permissions === "object" &&
+    Object.keys(b.permissions).length
+  ) {
     const sec = section("permissions");
     sec.appendChild(jsonBlock(b.permissions));
     insp.appendChild(sec);
   }
 
   // ─── Qualities
-  if (b.qualities && typeof b.qualities === "object" && Object.keys(b.qualities).length) {
+  if (
+    b.qualities &&
+    typeof b.qualities === "object" &&
+    Object.keys(b.qualities).length
+  ) {
     const sec = section("qualities");
     sec.appendChild(jsonBlock(b.qualities));
     insp.appendChild(sec);
@@ -1873,7 +2035,7 @@ function renderBeingInspector(insp, b) {
   if (b.being === "cherub") {
     // Cherub is the authentication being. Show connect + birth inline.
     be.appendChild(beInlineForm("connect", stance, ["name", "password"]));
-    be.appendChild(beInlineForm("birth",   stance, ["name", "password"]));
+    be.appendChild(beInlineForm("birth", stance, ["name", "password"]));
   } else {
     // For any other being: release if you are them. No bind-as-other
     // shortcut anymore . release first, then connect through cherub.
@@ -1894,11 +2056,11 @@ function renderBeingInspector(insp, b) {
     flowSec.className = "panel-section";
     insp.appendChild(flowSec);
     renderBeingFlowPanel(flowSec, b, {
-      story:    story,
-      username:   fl.session.username,
+      story: story,
+      username: fl.session.username,
       descriptor: fl.descriptor,
-      see:        (addr) => fl.client.see(addr),
-      doOp:       flat.doOp,
+      see: (addr) => fl.client.see(addr),
+      doOp: flat.doOp,
     });
   }
 
@@ -1921,7 +2083,9 @@ function renderBeingInspector(insp, b) {
   ];
   // De-dup by name (an op listing both targets shows once).
   const seen = new Set();
-  const unique = ops.filter((o) => seen.has(o.name) ? false : (seen.add(o.name), true));
+  const unique = ops.filter((o) =>
+    seen.has(o.name) ? false : (seen.add(o.name), true),
+  );
   if (unique.length) {
     const sec = section(`DO actions (${unique.length})`);
     for (const op of unique) sec.appendChild(doInlineForm(op, stance));
@@ -1932,9 +2096,9 @@ function renderBeingInspector(insp, b) {
 // ── Matter inspector ────────────────────────────────────────────
 
 function renderMatterInspector(insp, m) {
-  const fl      = flat.state;
+  const fl = flat.state;
   const story = fl.discovery?.story;
-  const path    = fl.descriptor?.address?.pathByNames || "/";
+  const path = fl.descriptor?.address?.pathByNames || "/";
   const matterAddress = `${story}${path}`.replace(/\/+$/, "") || story;
 
   const h = document.createElement("h3");
@@ -1948,8 +2112,8 @@ function renderMatterInspector(insp, m) {
   insp.appendChild(sub);
 
   const meta = section("meta");
-  if (m.type)       meta.appendChild(kv("type", m.type));
-  if (m.byBeingId)  meta.appendChild(kv("written by", m.byBeingId));
+  if (m.type) meta.appendChild(kv("type", m.type));
+  if (m.byBeingId) meta.appendChild(kv("written by", m.byBeingId));
   insp.appendChild(meta);
 
   if (m.preview) {
@@ -1961,7 +2125,11 @@ function renderMatterInspector(insp, m) {
     insp.appendChild(sec);
   }
 
-  if (m.qualities && typeof m.qualities === "object" && Object.keys(m.qualities).length) {
+  if (
+    m.qualities &&
+    typeof m.qualities === "object" &&
+    Object.keys(m.qualities).length
+  ) {
     const sec = section("qualities");
     sec.appendChild(jsonBlock(m.qualities));
     insp.appendChild(sec);
@@ -1971,7 +2139,10 @@ function renderMatterInspector(insp, m) {
   const matterOps = flat.operationsForTarget("matter");
   if (matterOps.length) {
     const sec = section(`DO actions (${matterOps.length})`);
-    for (const op of matterOps) sec.appendChild(doInlineForm(op, matterAddress, { matterId: m.matterId }));
+    for (const op of matterOps)
+      sec.appendChild(
+        doInlineForm(op, matterAddress, { matterId: m.matterId }),
+      );
     insp.appendChild(sec);
   }
 }
@@ -2019,7 +2190,11 @@ function beInlineForm(op, stance, fields) {
       const r = await flat.beOp(op, stance, creds);
       showResult(result, JSON.stringify(r, null, 2), "ok");
     } catch (err) {
-      showResult(result, `${err.code || "error"}: ${err.message || String(err)}`, "err");
+      showResult(
+        result,
+        `${err.code || "error"}: ${err.message || String(err)}`,
+        "err",
+      );
     } finally {
       btn.disabled = false;
     }
@@ -2054,7 +2229,11 @@ function beButton(op, stance, payload) {
       const r = await flat.beOp(op, stance, payload || {});
       showResult(result, JSON.stringify(r, null, 2), "ok");
     } catch (err) {
-      showResult(result, `${err.code || "error"}: ${err.message || String(err)}`, "err");
+      showResult(
+        result,
+        `${err.code || "error"}: ${err.message || String(err)}`,
+        "err",
+      );
     } finally {
       btn.disabled = false;
     }
@@ -2110,28 +2289,48 @@ function renderLlmSection(insp, b, { story, stance } = {}) {
   sec.appendChild(flowDiv);
 
   // Per-being qualities.llm summary.
-  const cfg = (b.qualities?.llm) || {};
+  const cfg = b.qualities?.llm || {};
   const configDiv = document.createElement("div");
   configDiv.className = "llm-config";
   const cfgTitle = document.createElement("div");
   cfgTitle.className = "kv-label";
   cfgTitle.textContent = `${b.being}'s LLM config`;
   configDiv.appendChild(cfgTitle);
-  const defaultLen = Array.isArray(cfg.default) ? cfg.default.length : (cfg.default ? 1 : 0);
-  configDiv.appendChild(kv("default fallback", `${defaultLen} connection${defaultLen === 1 ? "" : "s"}`));
-  const slots = (cfg.slots && typeof cfg.slots === "object") ? cfg.slots : {};
+  const defaultLen = Array.isArray(cfg.default)
+    ? cfg.default.length
+    : cfg.default
+      ? 1
+      : 0;
+  configDiv.appendChild(
+    kv(
+      "default fallback",
+      `${defaultLen} connection${defaultLen === 1 ? "" : "s"}`,
+    ),
+  );
+  const slots = cfg.slots && typeof cfg.slots === "object" ? cfg.slots : {};
   const slotKeys = Object.keys(slots);
   if (slotKeys.length) {
     for (const r of slotKeys) {
-      const list = Array.isArray(slots[r]) ? slots[r] : (slots[r] ? [slots[r]] : []);
-      configDiv.appendChild(kv(`slot: ${r}`, `${list.length} connection${list.length === 1 ? "" : "s"}`));
+      const list = Array.isArray(slots[r])
+        ? slots[r]
+        : slots[r]
+          ? [slots[r]]
+          : [];
+      configDiv.appendChild(
+        kv(
+          `slot: ${r}`,
+          `${list.length} connection${list.length === 1 ? "" : "s"}`,
+        ),
+      );
     }
   } else {
     configDiv.appendChild(kv("role slots", "(none)"));
   }
-  if (cfg.forceReceiver === true) configDiv.appendChild(kv("forceReceiver", "yes — chain caps here"));
-  if (cfg.forceActor === true)    configDiv.appendChild(kv("forceActor",    "yes — chain jumps to actor side"));
-  if (cfg.preferOwn === true)     configDiv.appendChild(kv("preferOwn",     "yes"));
+  if (cfg.forceReceiver === true)
+    configDiv.appendChild(kv("forceReceiver", "yes — chain caps here"));
+  if (cfg.forceActor === true)
+    configDiv.appendChild(kv("forceActor", "yes — chain jumps to actor side"));
+  if (cfg.preferOwn === true) configDiv.appendChild(kv("preferOwn", "yes"));
   sec.appendChild(configDiv);
 
   // Edit affordance — link out to the set-being-llm DO form. Already
@@ -2147,7 +2346,7 @@ function renderLlmSection(insp, b, { story, stance } = {}) {
   // resolves names). Role defaults to "main" — a future enhancement
   // can let the user pick a different role here.
   const receiverBeingId = b.beingId || null;
-  const actorBeingName  = fl.session?.username || null;
+  const actorBeingName = fl.session?.username || null;
   const role = b.defaultRole || "main";
 
   if (!receiverBeingId) {
@@ -2158,74 +2357,82 @@ function renderLlmSection(insp, b, { story, stance } = {}) {
   // SEE op call. The 7-step chain is a read-only perception — no Fact
   // stamped. `story.see("llm-chain", args)` dispatches through the
   // unified SEE ops registry (parallel to story.do).
-  Promise.resolve(fl.client.see("llm-chain", {
-    args: {
-      receiverBeingId,
-      receiverSpaceId: fl.descriptor?.position?.spaceId || null,
-      actorBeingName,
-      role,
-    },
-  })).then((res) => {
-    flowDiv.innerHTML = "";
-    const r = (res && res.result) || res || {};
-    const chain = Array.isArray(r.chain) ? r.chain : [];
-    const reason = r.reason || null;
-    const chosen = r.chosen || null;
+  Promise.resolve(
+    fl.client.see("llm-chain", {
+      args: {
+        receiverBeingId,
+        receiverSpaceId: fl.descriptor?.position?.spaceId || null,
+        actorBeingName,
+        role,
+      },
+    }),
+  )
+    .then((res) => {
+      flowDiv.innerHTML = "";
+      const r = (res && res.result) || res || {};
+      const chain = Array.isArray(r.chain) ? r.chain : [];
+      const reason = r.reason || null;
+      const chosen = r.chosen || null;
 
-    if (chain.length === 0) {
+      if (chain.length === 0) {
+        const p = document.createElement("div");
+        p.className = "sub";
+        p.textContent = reason || "(no candidates in chain)";
+        flowDiv.appendChild(p);
+        return;
+      }
+
+      const head = document.createElement("div");
+      head.className = "kv-label";
+      head.textContent = `chain preview — role: ${role}`;
+      flowDiv.appendChild(head);
+
+      const ul = document.createElement("ul");
+      ul.className = "llm-chain";
+      for (const entry of chain) {
+        const li = document.createElement("li");
+        li.className = "llm-chain-entry";
+        const isChosen =
+          chosen &&
+          entry.connectionId === chosen.connectionId &&
+          entry.step === chosen.step &&
+          entry.source === chosen.source;
+        const marker = document.createElement("span");
+        marker.className = "llm-chain-marker";
+        marker.textContent = isChosen ? "✓" : " ";
+        const step = document.createElement("span");
+        step.className = "llm-chain-step";
+        step.textContent = `step ${entry.step}`;
+        const src = document.createElement("span");
+        src.className = "llm-chain-source";
+        src.textContent = entry.source;
+        const model = document.createElement("span");
+        model.className = "llm-chain-model";
+        model.textContent =
+          entry.model || entry.name || entry.connectionId.slice(0, 8);
+        if (isChosen) li.style.fontWeight = "bold";
+        li.appendChild(marker);
+        li.appendChild(step);
+        li.appendChild(src);
+        li.appendChild(model);
+        ul.appendChild(li);
+      }
+      flowDiv.appendChild(ul);
+
+      if (reason) {
+        const rDiv = document.createElement("div");
+        rDiv.className = "sub muted";
+        rDiv.textContent = `reason: ${reason}`;
+        flowDiv.appendChild(rDiv);
+      }
+    })
+    .catch((err) => {
+      flowDiv.innerHTML = "";
       const p = document.createElement("div");
-      p.className = "sub";
-      p.textContent = reason || "(no candidates in chain)";
+      p.className = "sub muted";
+      p.textContent = `(preview failed: ${err?.message || err})`;
       flowDiv.appendChild(p);
-      return;
-    }
-
-    const head = document.createElement("div");
-    head.className = "kv-label";
-    head.textContent = `chain preview — role: ${role}`;
-    flowDiv.appendChild(head);
-
-    const ul = document.createElement("ul");
-    ul.className = "llm-chain";
-    for (const entry of chain) {
-      const li = document.createElement("li");
-      li.className = "llm-chain-entry";
-      const isChosen = chosen && entry.connectionId === chosen.connectionId
-        && entry.step === chosen.step && entry.source === chosen.source;
-      const marker = document.createElement("span");
-      marker.className = "llm-chain-marker";
-      marker.textContent = isChosen ? "✓" : " ";
-      const step = document.createElement("span");
-      step.className = "llm-chain-step";
-      step.textContent = `step ${entry.step}`;
-      const src = document.createElement("span");
-      src.className = "llm-chain-source";
-      src.textContent = entry.source;
-      const model = document.createElement("span");
-      model.className = "llm-chain-model";
-      model.textContent = entry.model || entry.name || entry.connectionId.slice(0, 8);
-      if (isChosen) li.style.fontWeight = "bold";
-      li.appendChild(marker);
-      li.appendChild(step);
-      li.appendChild(src);
-      li.appendChild(model);
-      ul.appendChild(li);
-    }
-    flowDiv.appendChild(ul);
-
-    if (reason) {
-      const rDiv = document.createElement("div");
-      rDiv.className = "sub muted";
-      rDiv.textContent = `reason: ${reason}`;
-      flowDiv.appendChild(rDiv);
-    }
-  }).catch((err) => {
-    flowDiv.innerHTML = "";
-    const p = document.createElement("div");
-    p.className = "sub muted";
-    p.textContent = `(preview failed: ${err?.message || err})`;
-    flowDiv.appendChild(p);
-  });
+    });
 }
 
 function showResult(el, text, kind) {
@@ -2291,4 +2498,3 @@ function emptyRow(text) {
   li.textContent = text;
   return li;
 }
-

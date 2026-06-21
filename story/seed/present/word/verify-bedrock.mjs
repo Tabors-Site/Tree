@@ -26,24 +26,24 @@ try {
   await ws.bindWord("test-bedrock-word", { kind: "op", do: { ref: "noop" } }, {});
   // a real seed word is bedrock too: a non-I_AM cannot disable "set-space" on "0"
   let blocked = false;
-  try { await ws.disableWord("set-space", { actorBeingId: NOT_IAM, branch: "0" }); }
+  try { await ws.disableWord("set-space", { actorBeingId: NOT_IAM, history: "0" }); }
   catch (e) { blocked = /bedrock/.test(e.message); }
   blocked ? ok(`non-I_AM disable of the I_AM "0" word "set-space" is REFUSED (bedrock covers ops too)`) : bad(`set-space not protected`, blocked);
   // a non-I_AM cannot re-declare the bedrock word on "0"
   let reBlocked = false;
-  try { await ws.bindWord("test-bedrock-word", { kind: "op", do: { ref: "evil" } }, { actorBeingId: NOT_IAM, branch: "0" }); }
+  try { await ws.bindWord("test-bedrock-word", { kind: "op", do: { ref: "evil" } }, { actorBeingId: NOT_IAM, history: "0" }); }
   catch (e) { reBlocked = /bedrock/.test(e.message); }
   reBlocked ? ok(`non-I_AM re-declare of an I_AM "0" word is REFUSED (bindWord guard)`) : bad(`re-declare not blocked`, reBlocked);
   // a non-I_AM MAY shadow it on its own branch (not "0") — the bedrock guard must NOT fire there.
   // (the disable may still fail for an unrelated reason — the synthetic actor — but NOT as bedrock;
   // the end-to-end per-branch shadowing with a real being is exercised by verify-word-fold.)
   let bedrockOnBranch = false;
-  try { await ws.disableWord("test-bedrock-word", { actorBeingId: NOT_IAM, branch: "shadowbranch" }); }
+  try { await ws.disableWord("test-bedrock-word", { actorBeingId: NOT_IAM, history: "shadowbranch" }); }
   catch (e) { bedrockOnBranch = /bedrock/.test(e.message); }
   !bedrockOnBranch ? ok(`the bedrock guard does NOT fire on a non-"0" branch (per-branch shadowing allowed)`) : bad(`bedrock fired on a branch`, bedrockOnBranch);
   // I_AM may always change its own "0" word
   let iamOk = true;
-  try { await ws.disableWord("test-bedrock-word", { branch: "0" }); }
+  try { await ws.disableWord("test-bedrock-word", { history: "0" }); }
   catch (e) { iamOk = false; }
   iamOk ? ok(`I_AM may disable its own "0" word (the guard never blocks I_AM)`) : bad(`I_AM blocked`, iamOk);
   console.log(`\n  ${pass} passed, ${fail} failed`);

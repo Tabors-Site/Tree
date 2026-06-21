@@ -9,8 +9,9 @@ The doctrine for how a being acts at a position whose story or branch differs fr
 If you're implementing federation, building a portal extension, or wondering how cross-branch acting should behave, the answer lives here.
 
 **Related doctrine:**
+
 - [RolesAreAuth.md](RolesAreAuth.md) — roles ARE auth. Cross-world citizenship and federation policy are expressed entirely through the role registry. The `canSummon` field is one field with two surfaces (`as: "actor"` for caller-side, `as: "receiver"` for receive-side accept); receive-side entries are what UI discovery reads to render per-being call options (e.g. birther's "mate" button).
-- [protocols/ibp/FEDERATION.md](../protocols/ibp/FEDERATION.md) — federation protocol layer. The mate + vessel pattern for cross-world citizenship; canopy envelope contract; receive-side dispatch.
+- [protocols/ibp/FEDERATION.md](../protocols/ibp/FEDERATION.md) — federation protocol layer. The mate + being pattern for cross-world citizenship; canopy envelope contract; receive-side dispatch.
 
 ## Terminology
 
@@ -157,12 +158,12 @@ Each verb honors the three facts of being:
 
 Per verb:
 
-| Verb       | Position effect                          | Home reels                                                  | Foreign reels                                                    | Inner face on Act                     |
-| ---------- | ---------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------- | ------------------------------------- |
-| **SEE**    | none — observation only                  | none                                                        | none                                                             | descriptor returned from foreign side |
-| **DO**     | none — acting from current position      | none                                                        | the consequence (set-matter, set-space, etc.) with crossOrigin   | descriptor at the act point           |
-| **CALL**   | none — calling from current position     | none                                                        | call record on the foreign being's inbox-reel with crossOrigin   | foreign being's reply or status       |
-| **BE**     | position moves (the only verb that does) | `set-being:position` fact on actor's being-reel (they left) | arrival fact on foreign reel with crossOrigin (they appeared)    | foreign descriptor at arrival         |
+| Verb     | Position effect                          | Home reels                                                  | Foreign reels                                                  | Inner face on Act                     |
+| -------- | ---------------------------------------- | ----------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------- |
+| **SEE**  | none — observation only                  | none                                                        | none                                                           | descriptor returned from foreign side |
+| **DO**   | none — acting from current position      | none                                                        | the consequence (set-matter, set-space, etc.) with crossOrigin | descriptor at the act point           |
+| **CALL** | none — calling from current position     | none                                                        | call record on the foreign being's inbox-reel with crossOrigin | foreign being's reply or status       |
+| **BE**   | position moves (the only verb that does) | `set-being:position` fact on actor's being-reel (they left) | arrival fact on foreign reel with crossOrigin (they appeared)  | foreign descriptor at arrival         |
 
 The Act on the actor's home chain always records what was attempted. Facts move to wherever they target.
 
@@ -287,23 +288,23 @@ This is the build target. The full three-way separation — identity local, posi
 
 All eight prereq + build-order items below shipped. The doctrine is now structural in the substrate; this section stays as a forensic record of the build path.
 
-| # | Item | Status | Lives at |
-|---|------|--------|----------|
-| 1 | Act-chain branch lineage | LANDED | `seed/past/act/actChain.js`; verify-act-chain-lineage 12/12 |
-| 2 | crossOrigin block + Stamper enforcement | LANDED | `seed/past/act/crossOrigin.js` (`deriveCrossOrigin`), `seed/past/fact/facts.js` (lands the block at emit; dedup by `crossOrigin.actId`) |
-| 3 | Position accepts foreign address | LANDED | `seed/materials/being/positionAddress.js` (`parsePositionAddress`, `formatPositionAddress`, `isPositionCrossWorld`) |
-| 4 | Address-resolver cross-world flag | LANDED | `seed/ibp/address.js` + `seed/ibp/resolver.js`; cross-branch + cross-story detection in parseBoth |
-| 5 | Cross-branch + cross-story dispatch in DO/SEE/CALL/BE | LANDED | `seed/past/act/crossWorldResponse.js` + `runVerbAsForeignActor` |
-| 6 | Inner-face attachment on the Act | LANDED | `seed/past/act/innerFace.js` . `Act.innerFace = { orientation, role, position, capabilities, blocks, origin: "foreign", hash }` (same unified canonical field the local fold writes) |
-| 7 | Pull-back safety (boot scan) | LANDED | `seed/materials/being/pullBack.js` + wired into `genesis.js` startup |
-| 8 | Canopy transport (cross-story) | LANDED | `protocols/ibp/canopy.js` (verifyIncoming + forwardToPeer + signedAt freshness window) |
+| #   | Item                                                  | Status | Lives at                                                                                                                                                                             |
+| --- | ----------------------------------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Act-chain branch lineage                              | LANDED | `seed/past/act/actChain.js`; verify-act-chain-lineage 12/12                                                                                                                          |
+| 2   | crossOrigin block + Stamper enforcement               | LANDED | `seed/past/act/crossOrigin.js` (`deriveCrossOrigin`), `seed/past/fact/facts.js` (lands the block at emit; dedup by `crossOrigin.actId`)                                              |
+| 3   | Position accepts foreign address                      | LANDED | `seed/materials/being/positionAddress.js` (`parsePositionAddress`, `formatPositionAddress`, `isPositionCrossWorld`)                                                                  |
+| 4   | Address-resolver cross-world flag                     | LANDED | `seed/ibp/address.js` + `seed/ibp/resolver.js`; cross-branch + cross-story detection in parseBoth                                                                                    |
+| 5   | Cross-branch + cross-story dispatch in DO/SEE/CALL/BE | LANDED | `seed/past/act/crossWorldResponse.js` + `runVerbAsForeignActor`                                                                                                                      |
+| 6   | Inner-face attachment on the Act                      | LANDED | `seed/past/act/innerFace.js` . `Act.innerFace = { orientation, role, position, capabilities, blocks, origin: "foreign", hash }` (same unified canonical field the local fold writes) |
+| 7   | Pull-back safety (boot scan)                          | LANDED | `seed/materials/being/pullBack.js` + wired into `genesis.js` startup                                                                                                                 |
+| 8   | Canopy transport (cross-story)                        | LANDED | `protocols/ibp/canopy.js` (verifyIncoming + forwardToPeer + signedAt freshness window)                                                                                               |
 
 Two prereq items from the original draft were subsumed by later doctrine:
 
 - **`crossOrigin` in the stance bag via `deriveStanceProperties`** — RETIRED. The stance-bag derivation retired with PERMISSIONS.md (replaced by RolesAreAuth.md). The role-walk's `authorizeViaRoles` reads identity tuples from the moment's `actorAct` and the canopy's verified sender, not from a derived property bag. Same information, surfaced through the role-walk instead of the bag.
 - **"qualities.permissions admit what verbs" for portal vs window** — RETIRED. The same per-position permission is now expressed as the role's `canSee` / `canDo` / `canSummon` / `canBe` lists with optional `reach` filters. The portal-vs-window distinction is what role grants the foreign visitor holds, not a `qualities.permissions` rule. See RolesAreAuth.md.
 
-Test coverage: `verify-federation.js` exercises 18 properties of the mate-vessel + canopy + father-admit flow.
+Test coverage: `verify-federation.js` exercises 18 properties of the mate-being + canopy + father-admit flow.
 
 ## What's NOT in this doctrine
 
@@ -315,8 +316,7 @@ Test coverage: `verify-federation.js` exercises 18 properties of the mate-vessel
 ## See also
 
 - `seed/RolesAreAuth.md` — how the foreign-actor stance is gated at the receiving side (canSee / canDo / canSummon / canBe + reach)
-- `protocols/ibp/FEDERATION.md` — canopy verifyIncoming, signedAt freshness, mate-vessel pattern
-- `seed/done/DualBeingParents.md` — father-as-vessel doctrine; BE:connect father-admit
+- `protocols/ibp/FEDERATION.md` — canopy verifyIncoming, signedAt freshness, mate-being pattern
+- `seed/done/DualBeingParents.md` — father-as-being doctrine; BE:connect father-admit
 - `seed/FACTORY.md` — Stamper / Act doctrine and per-aggregate reels
 - `philosophy/CROSS-WORLD/` — source material for this doctrine
-

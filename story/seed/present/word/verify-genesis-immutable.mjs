@@ -34,7 +34,7 @@ await import(`${R}/begin.js`);
 
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const { disableWord, resolveRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
-const { createBranch } = await import(`${R}/seed/materials/branch/branchCreation.js`);
+const { createBranch } = await import(`${R}/seed/materials/history/branchCreation.js`);
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
 
 let pass = 0, fail = 0;
@@ -54,7 +54,7 @@ try {
 
   // 1. a non-I_AM actor disabling a genesis word ON HEAVEN → DENIED
   let denied = null;
-  try { await disableWord("move", "move", { actorBeingId: notIAm, branch: "0" }); }
+  try { await disableWord("move", "move", { actorBeingId: notIAm, history: "0" }); }
   catch (e) { denied = e.message; }
   denied && /bedrock/.test(denied) ? ok(`non-I_AM disabling a genesis word on heaven → DENIED ("${denied.slice(0, 48)}…")`)
                                    : bad(`should have denied`, denied || "no throw");
@@ -64,7 +64,7 @@ try {
   const made = await createBranch({ parent: "0", anchor: { atSeq: 1 }, createdBy: String(I_AM) });
   const BR = made.path;
   let shadowErr = null;
-  try { await disableWord("move", "move", { actorBeingId: notIAm, branch: BR }); }
+  try { await disableWord("move", "move", { actorBeingId: notIAm, history: BR }); }
   catch (e) { shadowErr = e.message; }
   !shadowErr ? ok(`non-I_AM shadowing the word on branch "${BR}" → allowed (V2 preserved)`) : bad(`shadow should be allowed`, shadowErr);
   (!resolveRoleWord("move", "move", BR) && resolveRoleWord("move", "move", "0"))
@@ -73,7 +73,7 @@ try {
 
   // 3. I_AM disabling its own genesis word on heaven → ALLOWED (no actorBeingId → I_AM)
   let iamErr = null;
-  try { await disableWord("move", "move", { branch: "0" }); }
+  try { await disableWord("move", "move", { history: "0" }); }
   catch (e) { iamErr = e.message; }
   !iamErr ? ok(`I_AM may disable its own genesis word on heaven (only I_AM may)`) : bad(`I_AM should be allowed`, iamErr);
 

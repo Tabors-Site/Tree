@@ -36,27 +36,27 @@ Read [`philosophy/I_AM.md`](philosophy/I_AM.md) for the cryptographic root, [`ph
 
 Every act inside the story is one verb at one IBP address (`<story>/<path>@<being>`).
 
-| Verb   | Acts on        | What it does                                                            |
-| ------ | -------------- | ----------------------------------------------------------------------- |
-| SEE    | right (target) | Read a position's present, return a descriptor. Writes nothing.        |
-| RECALL | right (target) | Read the past — fold a position's history of facts. Writes nothing.    |
-| DO     | right (target) | Run a word on the target (a registered op). Stamps a fact.             |
-| BE     | left (actor)   | Change the actor's binding. Stamps a fact on the actor's reel.         |
-| NAME   | left (actor)   | Declare and manage a Name — the keypair that owns the act-chain.       |
-| CALL   | right (target) | Deliver a message to a being's inbox. Stamps a fact.                   |
+| Verb   | Acts on        | What it does                                                        |
+| ------ | -------------- | ------------------------------------------------------------------- |
+| SEE    | right (target) | Read a position's present, return a descriptor. Writes nothing.     |
+| RECALL | right (target) | Read the past — fold a position's history of facts. Writes nothing. |
+| DO     | right (target) | Run a word on the target (a registered op). Stamps a fact.          |
+| BE     | left (actor)   | Change the actor's binding. Stamps a fact on the actor's reel.      |
+| NAME   | left (actor)   | Declare and manage a Name — the keypair that owns the act-chain.    |
+| CALL   | right (target) | Deliver a message to a being's inbox. Stamps a fact.                |
 
 BE is the one verb where the actor IS the target. Its five ops are birth, connect, release, switch, death.
 
 ## The primitives
 
-| Primitive | What it is                                                                                                  |
-| --------- | ----------------------------------------------------------------------------------------------------------- |
-| Name      | A keypair. The identity that signs every act and owns its act-chain and lineage. The story's own Name is I_AM. |
-| Being     | A presence — a vessel a Name uses to act in a place (a uuid owned by a Name). Humans, LLM beings, scripted beings. |
-| Space     | A position in the tree. Holds matter, hosts beings, owns quality namespaces.                                |
-| Matter    | Stuff inside a space. Types declare what it IS (file, model, http, ibpa, source, and extension types).      |
-| Fact      | One recorded change. Content addressed; chained through prev-hashes; signed at the seal step.               |
-| Act       | One sealed moment of a Name, through a being. Every fact carries the actId of its act.                     |
+| Primitive | What it is                                                                                                        |
+| --------- | ----------------------------------------------------------------------------------------------------------------- |
+| Name      | A keypair. The identity that signs every act and owns its act-chain and lineage. The story's own Name is I_AM.    |
+| Being     | A presence — a being a Name uses to act in a place (a uuid owned by a Name). Humans, LLM beings, scripted beings. |
+| Space     | A position in the tree. Holds matter, hosts beings, owns quality namespaces.                                      |
+| Matter    | Stuff inside a space. Types declare what it IS (file, model, http, ibpa, source, and extension types).            |
+| Fact      | One recorded change. Content addressed; chained through prev-hashes; signed at the seal step.                     |
+| Act       | One sealed moment of a Name, through a being. Every fact carries the actId of its act.                            |
 
 Seed schemas never change. Everything an extension defines lives in the `qualities` Map on the relevant primitive.
 

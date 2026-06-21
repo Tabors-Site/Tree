@@ -49,7 +49,7 @@ const cherub = await poll(() => findByName("being", "cherub", "0"));
 const birth = async (name) => {
   let bid = null;
   await withIAmAct(`birth ${name}`, async (ctx) => {
-    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: ctx, branch: "0" });
+    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: ctx, history: "0" });
     bid = b.beingId;
   });
   return bid;
@@ -63,7 +63,7 @@ try {
 
   // I_AM calls @owner with a role-request — a hand-built call node (the parser surface lands later)
   const sc = { actId: randomUUID(), actorAct: { history: "0", by: "i-am" }, identity: { beingId: I_AM, name: "i-am", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
-  const ctx = { dryRun: false, moment: sc, identity: sc.identity, branch: "0", bindings: { owner: ownerSlot }, deltaF: sc.deltaF, env: {} };
+  const ctx = { dryRun: false, moment: sc, identity: sc.identity, history: "0", bindings: { owner: ownerSlot }, deltaF: sc.deltaF, env: {} };
   const node = { kind: "call", being: { ref: "owner" }, intent: "role-request", content: { role: "warrior", from: "i-am" }, bind: "sent" };
 
   let res = null, err = null;

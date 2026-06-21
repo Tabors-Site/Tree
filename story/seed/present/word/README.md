@@ -72,8 +72,8 @@ Moon sets,  sky is now dawn
 The sun validates the three general engine capabilities a stateful program needs:
 
 - **state / fold** (`ctx.state`): a fact with `sets` folds into the world state (here, `sky`).
-- **watches over state** (`when: { state: { sky: "dusk" } }`): a watch fires on a *state*, not only an event.
-- **the driver** (`drive`): a wheel that, each turn, fires every watch matching the current state. A *transition* (Sun sets) writes the next state; a *rider* (the gardener) just acts. The new state enables the next turn.
+- **watches over state** (`when: { state: { sky: "dusk" } }`): a watch fires on a _state_, not only an event.
+- **the driver** (`drive`): a wheel that, each turn, fires every watch matching the current state. A _transition_ (Sun sets) writes the next state; a _rider_ (the gardener) just acts. The new state enables the next turn.
 
 Coupling, not a clock: the sun setting writes `sky=night`, which the moon's watch was waiting on; the moon setting writes `sky=dawn`, which the sun's watch was waiting on. The wheel turns itself. `ctx.maxTurns` bounds the observation. This is the choq from rule 12 with state: a lawful dance, no timer.
 
@@ -104,7 +104,7 @@ Remaining for the full gate: run the whole five-act sequence live (the `create-s
 
 - The five-act sequence and order, from the real handler.
 - `verb` + `op` dispatch (`do:create-space`, `be:form-being`, ...).
-- The `by` / `through` split: `form-being` is `by Cherub` with no `through` (the new being has no vessel yet).
+- The `by` / `through` split: `form-being` is `by Cherub` with no `through` (the new being has no being yet).
 - One act, many facts: `form-being` dispatches to `birthBeing`, which lays `be:birth` plus the inherited-role and global grants (Tabor's "one act lays on multiple reels").
 
 ## What is stubbed or deferred (on purpose)

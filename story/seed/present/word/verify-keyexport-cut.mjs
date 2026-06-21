@@ -54,7 +54,7 @@ const cherub = await poll(() => findByName("being", "cherub", "0"));
 const birth = async (name) => {
   let bid = null;
   await withIAmAct(`birth ${name}`, async (ctx) => {
-    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: ctx, branch: "0" });
+    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: ctx, history: "0" });
     bid = b.beingId;
   });
   return bid;
@@ -71,10 +71,10 @@ try {
   const being = await birth("keyholder");
   const trueName = (await loadOrFold("being", String(being), "0"))?.state?.trueName;
   console.log(`  @keyholder trueName = ${trueName}\n`);
-  const sc = { actId: randomUUID(), actorAct: { branch: "0", by: "i-am" }, identity: { beingId: String(being), nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc = { actId: randomUUID(), actorAct: { history: "0", by: "i-am" }, identity: { beingId: String(being), nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   let refused = null;
   try {
-    await runRoleWord(ir, { moment: sc, branch: "0", trigger: { target: { kind: "being", id: String(being) }, caller: "i-am", asker: String(being), branch: "0" }, env: { host: keyHostEnv() } });
+    await runRoleWord(ir, { moment: sc, history: "0", trigger: { target: { kind: "being", id: String(being) }, caller: "i-am", asker: String(being), branch: "0" }, env: { host: keyHostEnv() } });
   } catch (e) { refused = e; }
   refused && /story \(I_AM\) key is never exportable/i.test(refused.message) && !(sc.deltaF || []).length
     ? ok(`@keyholder (trueName→i-am) → refuse "the story (I_AM) key is never exportable" [code ${refused.code}], NO fact`)
@@ -83,7 +83,7 @@ try {
 
   // ── 2. RULE 7: the audit fact (recordExport) records WHO exported WHICH Name — the key
   //       is NOWHERE in it. Drive the host audit directly and inspect the fact's params. ──
-  const sc2 = { actId: randomUUID(), actorAct: { branch: "0", by: "i-am" }, identity: { beingId: String(being) }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc2 = { actId: randomUUID(), actorAct: { history: "0", by: "i-am" }, identity: { beingId: String(being) }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   await keyHostEnv().recordExport({ args: [String(being), "did:key:zSomeExportedName"] }, { moment: sc2 });
   const audit = (sc2.deltaF || []).find((f) => f.act === "key-export");
   const cleanParams = audit && JSON.stringify(Object.keys(audit.params || {}).sort()) === JSON.stringify(["exportedNameId"]);

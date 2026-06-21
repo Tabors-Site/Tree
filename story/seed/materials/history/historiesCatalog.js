@@ -279,15 +279,15 @@ function _summarizeFact(fact) {
   };
 }
 
-// Read reconciliation facts on the merged branch's reels. A reel is
+// Read reconciliation facts on the merged history's reels. A reel is
 // considered resolved when there's at least one fact stamped on the
-// merged branch's storage for that reel carrying `params._merge`.
+// merged history's storage for that reel carrying `params._merge`.
 // Returns a Map<reelKey, latest-resolution-fact>.
 //
-// Implementation: ONE query against Fact with branch=mergedHistory and
+// Implementation: ONE query against Fact with history=mergedHistory and
 // params._merge exists, filtered to the conflict reel set. Cheaper than
 // per-reel queries; bounded by the number of reconciliation facts in
-// the merged branch (small even for large merges).
+// the merged history (small even for large merges).
 async function _readMergeResolutions(mergedHistory, reelKeys) {
   if (!reelKeys || reelKeys.size === 0) return new Map();
   const { default: Fact } = await import("../../past/fact/fact.js");
@@ -326,7 +326,7 @@ function _summarizeResolution(fact) {
   return {
     seq: fact.seq,
     act: fact.act,
-    branch: fact.history,
+    history: fact.history,
     date: fact.date ? new Date(fact.date).toISOString() : null,
     through: fact.through || null,
     strategy: fact.params?._merge?.strategy || null,

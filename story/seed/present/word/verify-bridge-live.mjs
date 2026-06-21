@@ -73,7 +73,7 @@ try {
   // fold-only dispatch: the words declare themselves onto I_AM's reel BEFORE any do-op dispatches
   // (ensureSpaceRoot's create-space). Mirrors genesis.js (ensureIAm -> the words -> the reality).
   await withRetry(async () => {
-    const wc = { actId: randomUUID(), actorAct: { branch: "0", by: "i-am" }, identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+    const wc = { actId: randomUUID(), actorAct: { history: "0", by: "i-am" }, identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
     const { seedFold } = await import("./wordFold.js");
     await seedFold({ moment: wc });
     await sealFacts(wc.deltaF);
@@ -82,18 +82,18 @@ try {
   });
   const spaceRoot = await withRetry(() => ensureSpaceRoot());
   await withRetry(() => ensureSeedDelegates(spaceRoot._id));
-  const branch = "0";
-  const cherub = await findByName("being", "cherub", branch);
+  const history = "0";
+  const cherub = await findByName("being", "cherub", history);
   if (!cherub) throw new Error("no cherub");
-  const arrival = await findByName("being", "arrival", branch);
-  console.log(`  cherub=${cherub.id} placeRoot=${spaceRoot._id} branch=${branch}`);
+  const arrival = await findByName("being", "arrival", history);
+  console.log(`  cherub=${cherub.id} placeRoot=${spaceRoot._id} history=${history}`);
 
   // the arriving Name (the father, via arrival), declared first so form-being's
   // trueName = a declared Name.
   let ownerName = null;
   await withRetry(async () => {
-    const sc = { actId: randomUUID(), actorAct: { branch, by: "i-am" }, identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
-    ownerName = (await nameVerb("declare", { name: "tabor", password: "pw12345678", soulType: "human" }, { identity: sc.identity, moment: sc, currentHistory: branch })).nameId;
+    const sc = { actId: randomUUID(), actorAct: { history, by: "i-am" }, identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+    ownerName = (await nameVerb("declare", { name: "tabor", password: "pw12345678", soulType: "human" }, { identity: sc.identity, moment: sc, currentHistory: history })).nameId;
     await sealFacts(sc.deltaF);
   });
   console.log(`  arriving Name (father) = ${String(ownerName).slice(0, 14)}…\n`);
@@ -105,14 +105,14 @@ try {
   // must derive the i-am-through-Cherub actor model itself.
   const moment = {
     actId: randomUUID(),
-    actorAct: { branch, by: String(ownerName) },
+    actorAct: { history, by: String(ownerName) },
     identity: { beingId: String(arrival?.id ?? "arrival"), name: "tabor", nameId: String(ownerName) },
     deltaF: [], foldedSeqs: new Map(), afterSeal: [],
   };
   const sealedActorAct = JSON.stringify(moment.actorAct);
 
   await withRetry(() => runRoleWord(ir, {
-    moment, branch,
+    moment, history,
     trigger: { name: "tabor-prime", password: "wordpass" },
     bindings: { ownerName: String(ownerName), placeRoot: String(spaceRoot._id) },
     beings: { Cherub: String(cherub.id), ...(arrival ? { Arrival: String(arrival.id) } : {}) },
@@ -147,7 +147,7 @@ try {
     ? ok(`lineage: mother=Cherub, father=Arrival (proper names resolved to ids)`) : bad(`lineage`, JSON.stringify(lv));
 
   await sealFacts(moment.deltaF);
-  const born = await findByName("being", "tabor-prime", branch);
+  const born = await findByName("being", "tabor-prime", history);
   born ? ok(`@tabor-prime materializes after seal (${String(born.id).slice(0, 10)}…)`) : bad(`@tabor-prime materializes`, "no row");
 
   // ── the two new assertions: the derivation is correct AND clean ──

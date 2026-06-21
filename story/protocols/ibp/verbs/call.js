@@ -61,7 +61,10 @@ export async function handleCall(socket, env, ack) {
   try {
     const { address, payload } = env;
     if (!payload?.message || typeof payload.message !== "object") {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "SUMMON payload must include a `message` object");
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "SUMMON payload must include a `message` object",
+      );
     }
 
     // Normalize threading: activeRole may live at payload.activeRole or
@@ -73,14 +76,18 @@ export async function handleCall(socket, env, ack) {
 
     // A socket DRIVING a being acts as it (signed by socket.nameId). A socket
     // that has a NAME but NO being yet (a fresh name at the arrival floor) acts
-    // THROUGH the shared @arrival being — the vessel it uses to reach cherub —
+    // THROUGH the shared @arrival being — the being it uses to reach cherub —
     // SIGNED BY ITS NAME. So the actor is a real being (@arrival, which carries
     // the arrival role that permits SUMMON @cherub:mate), and the nameId rides
     // as the signer so cherub's mate handler sees askerNameId = the connected
     // name and births the name's first being. Nothing bodiless: a name always
     // acts through a being.
     let identity = socket.beingId
-      ? { beingId: socket.beingId, name: socket.name, nameId: socket.nameId || null }
+      ? {
+          beingId: socket.beingId,
+          name: socket.name,
+          nameId: socket.nameId || null,
+        }
       : null;
     if (!identity && socket.nameId) {
       // A name can NEVER sign a world act bodiless — it acts THROUGH a being
@@ -90,10 +97,18 @@ export async function handleCall(socket, env, ack) {
       // resolved, fall to ANONYMOUS (identity null) — never a bodiless name
       // signature (that would be the funk the invariant forbids).
       try {
-        const { findByName } = await import("../../../seed/materials/projections.js");
+        const { findByName } =
+          await import("../../../seed/materials/projections.js");
         const arrival = await findByName("being", "arrival", "0");
-        if (arrival?.id) identity = { beingId: String(arrival.id), name: "arrival", nameId: socket.nameId };
-      } catch { /* fall to anonymous */ }
+        if (arrival?.id)
+          identity = {
+            beingId: String(arrival.id),
+            name: "arrival",
+            nameId: socket.nameId,
+          };
+      } catch {
+        /* fall to anonymous */
+      }
     }
 
     // Cross-history gate at the wire boundary. The caller's first-person
@@ -102,17 +117,24 @@ export async function handleCall(socket, env, ack) {
     const callerHistory = socket.currentHistory || "0";
     let _targetHistoryResolved = null;
     try {
-      const { parseFromSocket, expand, resolveBeingIds, resolveHistoryPointers, getStoryDomain } =
-        await import("../../../seed/ibp/address.js");
+      const {
+        parseFromSocket,
+        expand,
+        resolveBeingIds,
+        resolveHistoryPointers,
+        getStoryDomain,
+      } = await import("../../../seed/ibp/address.js");
       const parsed = parseFromSocket(socket, address);
       const expandCtx = {
         currentStory: getStoryDomain(),
-        currentUser:    socket.name,
-        currentHistory:  callerHistory,
-        currentPath:    socket.currentPath || null,
+        currentUser: socket.name,
+        currentHistory: callerHistory,
+        currentPath: socket.currentPath || null,
       };
       const expandedWithPointers = await resolveHistoryPointers(
-        expand(parsed, expandCtx), expandCtx);
+        expand(parsed, expandCtx),
+        expandCtx,
+      );
       const expanded = await resolveBeingIds(expandedWithPointers, expandCtx);
 
       // Impersonation refusal — see _shared.js for the doctrine.
@@ -135,20 +157,24 @@ export async function handleCall(socket, env, ack) {
       const { isHistoryPaused, isHistoryDeleted } =
         await import("../../../seed/materials/history/histories.js");
       if (await isHistoryPaused(callerHistory)) {
-        throw new IbpError(IBP_ERR.STORY_PAUSED,
+        throw new IbpError(
+          IBP_ERR.STORY_PAUSED,
           `SUMMON refused: history #${callerHistory} is paused.`,
-          { history: callerHistory });
+          { history: callerHistory },
+        );
       }
       if (await isHistoryDeleted(callerHistory)) {
-        throw new IbpError(IBP_ERR.STORY_PAUSED,
+        throw new IbpError(
+          IBP_ERR.STORY_PAUSED,
           `SUMMON refused: history #${callerHistory} is deleted.`,
-          { history: callerHistory, deleted: true });
+          { history: callerHistory, deleted: true },
+        );
       }
     }
 
     const result = await callVerb(address, message, {
       identity,
-      currentUser:   socket.name,
+      currentUser: socket.name,
       // currentHistory is the FACT's history (where the summon record
       // lands on the recipient's inbox-reel) — that's the target's
       // history. actorHistory is the caller's session history: the auth
@@ -157,9 +183,9 @@ export async function handleCall(socket, env, ack) {
       // moment, so without the explicit thread the actor's history
       // never reached the seed at all.
       currentHistory: targetHistory,
-      actorHistory:   callerHistory,
-      currentPath:   socket.currentPath || null,
-      onResponse:    emitUpdateForSocket(socket),
+      actorHistory: callerHistory,
+      currentPath: socket.currentPath || null,
+      onResponse: emitUpdateForSocket(socket),
     });
 
     return ackOk(ack, id, result);
@@ -168,6 +194,11 @@ export async function handleCall(socket, env, ack) {
       return ackError(ack, id, err.code, err.message, err.detail);
     }
     log.error("IBP", `SUMMON failed: ${err.message}`);
-    return ackError(ack, id, IBP_ERR.INTERNAL, err.message || "Internal IBP error");
+    return ackError(
+      ack,
+      id,
+      IBP_ERR.INTERNAL,
+      err.message || "Internal IBP error",
+    );
   }
 }

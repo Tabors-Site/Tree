@@ -20,7 +20,7 @@
 //
 // IR shape: see philosophy/word/5.md. Each act carries `verb` (one of the five),
 // `op` (the operation within that verb), `by` (the acting Name), `through` (the
-// vessel, absent here, a NAME-layer-ish form act), `of` (the target), `params`.
+// being, absent here, a NAME-layer-ish form act), `of` (the target), `params`.
 // `bind` names a fresh id for later reference; `$name` reads a binding; `{ref}`
 // points at one.
 
@@ -32,43 +32,66 @@ export const cherubBirth = {
   effects: [
     // 1. make a home space
     {
-      kind: "act", verb: "do", op: "create-space",
+      kind: "act",
+      verb: "do",
+      op: "create-space",
       by: "Cherub",
       of: { kind: "space", bind: "home" },
-      params: { name: "$name", type: "home-territory", parent: "$placeRoot", size: { x: 100, y: 100 } },
+      params: {
+        name: "$name",
+        type: "home-territory",
+        parent: "$placeRoot",
+        size: { x: 100, y: 100 },
+      },
     },
     // 2. form the being under a new Name (birthBeing mints the Name and lays
     //    be:birth + the inherited-role grants + the global grant: one act, many facts)
     {
-      kind: "act", verb: "be", op: "form-being",
-      by: "Cherub", through: null, // the new being has no vessel yet
+      kind: "act",
+      verb: "be",
+      op: "form-being",
+      by: "Cherub",
+      through: null, // the new being has no being yet
       bind: "child",
       params: {
-        name: "$name", password: "$password",
-        cognition: "human", defaultRole: "human",
-        parentBeingId: "Cherub", homeId: "$home",
+        name: "$name",
+        password: "$password",
+        cognition: "human",
+        defaultRole: "human",
+        parentBeingId: "Cherub",
+        homeId: "$home",
       },
     },
     // 3. make the being the home's owner
     {
-      kind: "act", verb: "do", op: "set-space",
+      kind: "act",
+      verb: "do",
+      op: "set-space",
       by: "I_AM",
       of: { kind: "space", ref: "home" },
       params: { field: "owner", value: "$child" },
     },
     // 4. grant the being the human role
     {
-      kind: "act", verb: "do", op: "grant-role",
+      kind: "act",
+      verb: "do",
+      op: "grant-role",
       by: "Cherub",
       of: { kind: "being", ref: "child" },
       params: { role: "human", anchorSpaceId: "$placeRoot" },
     },
     // 5. record the being's lineage
     {
-      kind: "act", verb: "do", op: "set-being",
+      kind: "act",
+      verb: "do",
+      op: "set-being",
       by: "I_AM",
       of: { kind: "being", ref: "child" },
-      params: { field: "qualities.lineage", value: { mother: "Cherub", father: null }, merge: false },
+      params: {
+        field: "qualities.lineage",
+        value: { mother: "Cherub", father: null },
+        merge: false,
+      },
     },
   ],
 };

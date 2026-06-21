@@ -45,11 +45,22 @@
 // and ride the cherub-as-actor path in be.js.
 
 import log from "../../../seed/seedStory/log.js";
-import { parseFromSocket, expand, resolveBeingIds, resolveHistoryPointers, getStoryDomain } from "../../../seed/ibp/address.js";
+import {
+  parseFromSocket,
+  expand,
+  resolveBeingIds,
+  resolveHistoryPointers,
+  getStoryDomain,
+} from "../../../seed/ibp/address.js";
 import { resolveStance } from "../../../seed/ibp/resolver.js";
 import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
 import { assertNoImpersonation } from "./_shared.js";
-import { ackOk, ackError, stripBeingQualifier, extractBeingQualifier } from "../envelope.js";
+import {
+  ackOk,
+  ackError,
+  stripBeingQualifier,
+  extractBeingQualifier,
+} from "../envelope.js";
 import { getOperation, listOperations } from "../../../seed/ibp/operations.js";
 import { dispatchTransportAct } from "../../../seed/present/intake/transportAct.js";
 import { emitToBeingRoom } from "../../../seed/ibp/pushChannel.js";
@@ -71,13 +82,16 @@ export async function handleDo(socket, env, ack) {
     const { address, payload } = env;
     const action = typeof payload?.act === "string" ? payload.act : null;
     if (!action) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "ibp DO payload must include `act`");
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "ibp DO payload must include `act`",
+      );
     }
     if (!getOperation(action)) {
       throw new IbpError(
         IBP_ERR.ACTION_NOT_SUPPORTED,
         `Unknown DO action: "${action}"`,
-        { action, available: listOperations().map(op => op.name) },
+        { action, available: listOperations().map((op) => op.name) },
       );
     }
 
@@ -87,24 +101,27 @@ export async function handleDo(socket, env, ack) {
     // matter-targeting, the @qualifier is informational and gets
     // stripped before path resolution.
     const op = getOperation(action);
-    const beingTargetedOnly = Array.isArray(op?.targets)
-      && op.targets.length > 0
-      && op.targets.every((t) => t === "being");
+    const beingTargetedOnly =
+      Array.isArray(op?.targets) &&
+      op.targets.length > 0 &&
+      op.targets.every((t) => t === "being");
     const qualifier = extractBeingQualifier(address);
     const positionString = stripBeingQualifier(address);
 
     const parsed = parseFromSocket(socket, positionString);
     const expandCtx = {
       currentStory: getStoryDomain(),
-      currentUser:    socket.name,
-      currentHistory:  socket.currentHistory || "0",
-      currentPath:    socket.currentPath   || null,
+      currentUser: socket.name,
+      currentHistory: socket.currentHistory || "0",
+      currentPath: socket.currentPath || null,
     };
     // Resolve named pointers (#main, #prod, ...) to canonical paths
     // before resolveBeingIds runs (findByName needs the canonical
     // history for the lineage walk).
     const expandedWithPointers = await resolveHistoryPointers(
-      expand(parsed, expandCtx), expandCtx);
+      expand(parsed, expandCtx),
+      expandCtx,
+    );
     const expanded = await resolveBeingIds(expandedWithPointers, expandCtx);
 
     // Impersonation refusal — see _shared.js for the doctrine.
@@ -136,28 +153,35 @@ export async function handleDo(socket, env, ack) {
     // exempt create-branch off a deleted target. To fork off a
     // deleted history, undelete it first.
     const PAUSE_LIFECYCLE_OPS = new Set([
-      "unpause-branch", "pause-branch", "create-branch",
-      "delete-branch", "undelete-branch",
+      "unpause-branch",
+      "pause-branch",
+      "create-branch",
+      "delete-branch",
+      "undelete-branch",
     ]);
-    const DELETE_LIFECYCLE_OPS = new Set([
-      "delete-branch", "undelete-branch",
-    ]);
+    const DELETE_LIFECYCLE_OPS = new Set(["delete-branch", "undelete-branch"]);
     if (!PAUSE_LIFECYCLE_OPS.has(action)) {
-      const { isHistoryPaused } = await import("../../../seed/materials/history/histories.js");
+      const { isHistoryPaused } =
+        await import("../../../seed/materials/history/histories.js");
       if (await isHistoryPaused(targetHistory)) {
-        throw new IbpError(IBP_ERR.STORY_PAUSED,
+        throw new IbpError(
+          IBP_ERR.STORY_PAUSED,
           `DO refused: history #${targetHistory} is paused. ` +
-          `Unpause via @branch-manager or fork a new branch off it.`,
-          { history: targetHistory });
+            `Unpause via @branch-manager or fork a new branch off it.`,
+          { history: targetHistory },
+        );
       }
     }
     if (!DELETE_LIFECYCLE_OPS.has(action)) {
-      const { isHistoryDeleted } = await import("../../../seed/materials/history/histories.js");
+      const { isHistoryDeleted } =
+        await import("../../../seed/materials/history/histories.js");
       if (await isHistoryDeleted(targetHistory)) {
-        throw new IbpError(IBP_ERR.STORY_PAUSED,
+        throw new IbpError(
+          IBP_ERR.STORY_PAUSED,
           `DO refused: history #${targetHistory} is deleted. ` +
-          `Undelete via @branch-manager to restore writes.`,
-          { history: targetHistory, deleted: true });
+            `Undelete via @branch-manager to restore writes.`,
+          { history: targetHistory, deleted: true },
+        );
       }
     }
 
@@ -183,7 +207,8 @@ export async function handleDo(socket, env, ack) {
     // target.)
     let target;
     if (beingTargetedOnly && qualifier) {
-      const { findByName } = await import("../../../seed/materials/projections.js");
+      const { findByName } =
+        await import("../../../seed/materials/projections.js");
       const beingSlot = await findByName("being", qualifier, callerHistory);
       if (!beingSlot) {
         throw new IbpError(
@@ -217,42 +242,55 @@ export async function handleDo(socket, env, ack) {
 
     // Resolve operation args. Canonical: payload.args. Fallback: every
     // payload field except reserved keys.
-    const args = payload.args !== undefined
-      ? payload.args
-      : (() => {
-          const { action: _a, identity: _i, correlation: _c, matterId: _m, ...rest } = payload;
-          return rest;
-        })();
+    const args =
+      payload.args !== undefined
+        ? payload.args
+        : (() => {
+            const {
+              action: _a,
+              identity: _i,
+              correlation: _c,
+              matterId: _m,
+              ...rest
+            } = payload;
+            return rest;
+          })();
 
     // nameId is the session's signed-in Name (server ground truth from the
     // verified token). It rides the identity so the seal can sign as the
-    // INHABITOR (e.g. a father driving the mother's vessel) rather than the
+    // INHABITOR (e.g. a father driving the mother's being) rather than the
     // being's own trueName. Sourced from socket.nameId ONLY, never the
     // payload — a forged payload.nameId is ignored by the signer resolution.
-    const identity = { beingId, name: socket.name, nameId: socket.nameId || null };
-    const correlation = typeof payload?.correlation === "string" ? payload.correlation : null;
+    const identity = {
+      beingId,
+      name: socket.name,
+      nameId: socket.nameId || null,
+    };
+    const correlation =
+      typeof payload?.correlation === "string" ? payload.correlation : null;
 
     // Enqueue the transport-act. Returns immediately with the
     // moment's correlation; the moment runs on the scheduler's
     // own time. The handoff attached inside dispatchTransportAct
     // fires when the moment seals; we hook it to push the result.
-    const { correlation: momentCorrelation, awaitResult } = await dispatchTransportAct({
-      beingId,
-      act: {
-        verb:   "do",
-        target,
-        act: action,
-        args,
-      },
-      correlation,
-      identity,
-      // history — actor's world; where the moment opens and the Act seals.
-      // targetHistory — target's world; where the Fact lands. Differs from
-      // history on cross-world calls; emitFact attaches crossOrigin
-      // automatically. See seed/CROSS-WORLD.md.
-      history: callerHistory,
-      targetHistory,
-    });
+    const { correlation: momentCorrelation, awaitResult } =
+      await dispatchTransportAct({
+        beingId,
+        act: {
+          verb: "do",
+          target,
+          act: action,
+          args,
+        },
+        correlation,
+        identity,
+        // history — actor's world; where the moment opens and the Act seals.
+        // targetHistory — target's world; where the Fact lands. Differs from
+        // history on cross-world calls; emitFact attaches crossOrigin
+        // automatically. See seed/CROSS-WORLD.md.
+        history: callerHistory,
+        targetHistory,
+      });
 
     // Fire-and-forget: when the moment seals, push the result to
     // every socket the being holds. The originating socket gets it
@@ -268,22 +306,36 @@ export async function handleDo(socket, env, ack) {
           actId,
           result,
         });
-        try { emitToBeingRoom(beingId, IBP_EVENT, envelope); } catch {}
+        try {
+          emitToBeingRoom(beingId, IBP_EVENT, envelope);
+        } catch {}
       })
       .catch((err) => {
         const envelope = buildTransportActReply({
           correlation: momentCorrelation,
-          result:      { error: { message: err?.message || "transport-act failed" } },
+          result: {
+            error: { message: err?.message || "transport-act failed" },
+          },
         });
-        try { emitToBeingRoom(beingId, IBP_EVENT, envelope); } catch {}
+        try {
+          emitToBeingRoom(beingId, IBP_EVENT, envelope);
+        } catch {}
       });
 
-    return ackOk(ack, id, { correlation: momentCorrelation, status: "accepted" });
+    return ackOk(ack, id, {
+      correlation: momentCorrelation,
+      status: "accepted",
+    });
   } catch (err) {
     if (isIbpError(err)) {
       return ackError(ack, id, err.code, err.message, err.detail);
     }
     log.error("IBP", `DO failed: ${err.message}`);
-    return ackError(ack, id, IBP_ERR.INTERNAL, err.message || "Internal IBP error");
+    return ackError(
+      ack,
+      id,
+      IBP_ERR.INTERNAL,
+      err.message || "Internal IBP error",
+    );
   }
 }

@@ -326,7 +326,7 @@ export function mountHistoryBar({ client, story, buttonHost = null, getState = n
       _state.getState = null;
     },
     // Repaint the actor side of the stance bar (cheap) — main.js
-    // calls this on every server "branch" push so the left stance
+    // calls this on every server "history" push so the left stance
     // stays truthful without a full descriptor round-trip.
     refreshAddress: () => _syncStanceBar(),
     // The portal swaps its PortalClient on sign-in / register / sign-out

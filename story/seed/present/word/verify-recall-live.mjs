@@ -56,12 +56,12 @@ try {
   // a FRESH being — its chain is idle, so its verdict won't fork I_AM's busy genesis chain
   let sageId = null, sageName = null;
   await withIAmAct("birth sage", async (m) => {
-    const b = await birthBeing({ spec: { name: "sage", parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: m, branch: "0" });
+    const b = await birthBeing({ spec: { name: "sage", parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: m, history: "0" });
     sageId = b.beingId; sageName = b.name;
   });
   await new Promise((r) => setTimeout(r, 1500)); // let sage's birth + grants settle
   const ident = { beingId: String(sageId), nameId: String(sageId), name: sageName || "sage" };
-  const reader = () => ({ dryRun: false, branch: "0", identity: ident, bindings: {}, deltaF: [], flows: [] });
+  const reader = () => ({ dryRun: false, history: "0", identity: ident, bindings: {}, deltaF: [], flows: [] });
 
   // 1. recall your OWN thread → recalled; binds the WOVEN view (the story in the Word); NO fact
   const c1 = reader(); await evaluate({ kind: "recall", of: String(sageId), as: "mine" }, c1);
@@ -97,7 +97,7 @@ try {
   // 6. the VERDICT — recall + a published conclusion + the declared why → ONE do:verdict memory fact
   let verdict = null;
   await withBeingAct(String(sageId), "verdict", "0", async (m) => {
-    const cv = { dryRun: false, branch: "0", moment: m, identity: ident, bindings: {}, deltaF: m.deltaF, flows: [] };
+    const cv = { dryRun: false, history: "0", moment: m, identity: ident, bindings: {}, deltaF: m.deltaF, flows: [] };
     await evaluate({ kind: "recall", of: "world", that: "it was good", because: "it served its purpose" }, cv);
     verdict = m.deltaF.find((f) => f.act === "verdict");
     if (m.deltaF.length) await sealFacts(m.deltaF);
@@ -108,7 +108,7 @@ try {
 
   // 7. the book renders the verdict in the Word — "sage saw the world that it was good (because …)"
   await new Promise((r) => setTimeout(r, 500));
-  const world = await assembleStory("world", { branch: "0" });
+  const world = await assembleStory("world", { history: "0" });
   const line = world.find((a) => /saw the world that it was good \(because it served its purpose\)/.test(a.line));
   line ? ok(`the book reads the verdict-memory in the Word: "${line.line}"`) : bad(`verdict render`, world.map((a) => a.line).slice(-3));
 

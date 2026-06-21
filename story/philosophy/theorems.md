@@ -32,17 +32,17 @@ story; two stories' histories are simply more histories. The objects:
   empty, `head(R) := G`, the genesis sentinel.
 - `A_B^w`. The act-chain through being `B` in `w` — owned and signed
   by `B`'s **name**, not by `B`: a chain of acts belongs to the one
-  who acts, and beings are vessels. Hash-linked like a reel: each
+  who acts, and beings are beings. Hash-linked like a reel: each
   act's identity is the hash of its opening chained to the name's
   previous sealed act through `B`, and the name's key signs it.
 - `id_B`. The being's identifier, **assigned** at birth, immutable.
-  Note the deliberate contrast: facts and acts have *intrinsic*
+  Note the deliberate contrast: facts and acts have _intrinsic_
   identity (they are what they hash to); a being's identity is
-  *assigned and constant* (it is the thread, not a content).
+  _assigned and constant_ (it is the thread, not a content).
 - `ν_B`. The **name** being `B` expresses — the keypair that signs
   every act done through `B`. Constant like `id_B`, and one name
   across all histories (a name's own reel does not fork). The being
-  is the vessel in the history; the name is the identity that acts. A
+  is the being in the history; the name is the identity that acts. A
   name may express many beings; a being expresses exactly one.
 - `figure_B^w`. The being's projected state in history `w`. Defined as
   `fold(σ_0, ⟨c_1, c_2, ..., c_n⟩)` where `fold` is a pure
@@ -52,7 +52,7 @@ story; two stories' histories are simply more histories. The objects:
   on the historical view rather than the present state.
 - `doer(f)`. The **name** recorded as the actor of fact `f` — the key
   that signed it (math.md writes this `by(f)`). The being it acted
-  through is `through(f)`; the name acts, the being is the vessel.
+  through is `through(f)`; the name acts, the being is the being.
 - `≺`. The causal partial order on facts. `f ≺ g` iff `f` precedes
   `g` on the same reel, or some chain of call facts connects them
   in that direction (transitive closure).
@@ -71,7 +71,7 @@ removed, reordered, or mutated. For all histories `w` and times
 
 **A2 (Identity is the chained hash).** Every fact's identity is
 `id_i = SHA-256(p_i ‖ canonical(c_i))`. For `i ≥ 2`: `p_i = id_{i-1}`
-— where `i-1` is the prior fact in the *visible* reel, so the first
+— where `i-1` is the prior fact in the _visible_ reel, so the first
 divergent fact of a history chains to its parent's fact at the branch
 point: one chain, linked across the fork. For `i = 1`: `p_1 = G`.
 Act-chains obey the same per-position law over act openings, but do
@@ -110,8 +110,8 @@ as identifying the genesis position. (The earlier claim that `G`
 lies outside SHA-256's codomain was false and is retired.) One
 implementation honesty: the append path degrades `p` to `G` when
 the prior row is missing (a crash burned a seq, or a pre-CAS row) —
-so `p = G` at a non-genesis position is a *deterministic
-possibility* on a damaged reel, not only a hash accident. verifyReel
+so `p = G` at a non-genesis position is a _deterministic
+possibility_ on a damaged reel, not only a hash accident. verifyReel
 reports such reels as broken (`seq-gap` / `unaddressed`) rather than
 intact; Theorem 1's guarantee is therefore stated for reels that
 VERIFY, and on a damaged reel it runs back to the nearest genesis
@@ -120,15 +120,15 @@ link.
 **A6 (Attribution + gated influence).** Three clauses, matching the
 implementation (math.md ATTRIBUTION):
 
-1. *Attribution is unforgeable.* Every fact's `doer` is the
+1. _Attribution is unforgeable._ Every fact's `doer` is the
    authenticated **name** — the verb layer sets it from the key that
    signed the seal and accepts no override. No name can produce a
    fact signed as another; and a being never acts of itself, only the
    name that owns it does, through it.
-2. *Self-acts come only from self.* BE facts (birth, connect,
+2. _Self-acts come only from self._ BE facts (birth, connect,
    release, switch, death) on `R_B` carry `doer = ν_B` — the being's
    own name, always.
-3. *Figure influence is gated and calls are inert.* Every fact
+3. _Figure influence is gated and calls are inert._ Every fact
    that mutates `figure_B` either is by `ν_B` (the being's own name)
    or passed the role-walk (the single auth gate) as an authorized DO
    on `B`. Call facts land on the recipient's reel (target =
@@ -198,7 +198,7 @@ Step 1. Equal heads imply equal final facts. Assume
 inputs are equal: `p_n ‖ canonical(c_n) = p_m ‖ canonical(c_m)`.
 Since the prev hash is a fixed-length prefix, this factors as
 `p_n = p_m` and `canonical(c_n) = canonical(c_m)`. The final facts
-are equal in canonical content. (Equality is *of canonical forms* —
+are equal in canonical content. (Equality is _of canonical forms_ —
 exactly the equality the substrate stores and the fold consumes,
 per A4.)
 
@@ -237,7 +237,7 @@ display helper, never truth."
 verbatim to `A_B^w`: acts are hash-chained on their openings (A2),
 so equal act-chain heads imply equal opening sequences. The closure
 fields (status, the sealing utterance) are bookkeeping outside the
-identity — what *happened* is the facts the act produced, which
+identity — what _happened_ is the facts the act produced, which
 Theorem 1 already covers.
 
 **What this captures.** The biography's 32-byte head is a faithful
@@ -265,8 +265,8 @@ key that signed the seal, and accepts no override. To stamp
 `doer = ν_V` one must sign with `ν_V`'s secret key; by A3 and the
 unforgeability of signatures no other name can. A name acting through
 `A` signs with `ν_A`, so every such fact carries `doer = ν_A ≠ ν_V`.
-A being is a vessel, not an actor — theft would need the key, which
-the vessel does not confer. ∎
+A being is a being, not an actor — theft would need the key, which
+the being does not confer. ∎
 
 (2) `figure_V^w = fold(σ_0, R_V^w)` (A4). By A6.2 and A6.3, the
 facts in `R_V^w` that the reducer folds into the figure are exactly:
@@ -401,7 +401,7 @@ forward map; its inverse is set-valued, not function-valued.)
 interior. Folding a chain forward through the reducer reproduces
 every projected state. It does not reproduce the deliberative
 faces that originally stamped each act. (The act-chain deepens this
-without changing it: an act's identity commits to its *opening* —
+without changing it: an act's identity commits to its _opening_ —
 who was called, with what message — never to the deliberation;
 the closure utterance is bookkeeping outside the identity.)
 
@@ -427,10 +427,10 @@ Since `B` exists in `w` at the fork, `f_birth` sits in `w`'s reel
 for `B` at some seq at or below `β_{w'}(B)`.
 
 A fork copies **nothing**. It records `β`: the parent's per-reel
-positions at the anchor. The child's *visible* reel `R_B^{w'}` is,
+positions at the anchor. The child's _visible_ reel `R_B^{w'}` is,
 by definition (math.md REELS & CHAINS), the union of ancestor
 segments below each branch point plus the child's own divergence —
-so `f_birth ∈ R_B^{w'}` because the child *sees* the parent's
+so `f_birth ∈ R_B^{w'}` because the child _sees_ the parent's
 prefix, not because any row moved. The shared prefix is frozen by
 construction: the parent appends only above `β`, the child reads
 only below it.
@@ -457,7 +457,7 @@ may have wildly different `figure_B` values for the same being `B`,
 explained entirely by divergent histories after the fork.
 
 **Corollary 5.3 (One history, many tails).** Because the prefix is
-shared by *reference* and the chain links across the fork (A2),
+shared by _reference_ and the chain links across the fork (A2),
 "the same fact on two histories" is literally one fact, stored once
 — not two copies that happen to agree. History divergence is where
 chains split, not where data duplicates.
@@ -471,8 +471,8 @@ distinction between WHAT a being IS (constant) and WHAT IT HAS BECOME
 
 ## Theorem 6. Fundamental theorem of becoming
 
-*The keystone. Everything else in this file is machinery; this is
-what the machinery is FOR.*
+_The keystone. Everything else in this file is machinery; this is
+what the machinery is FOR._
 
 **Statement.** Under axioms A1, A4, and A7:
 
@@ -509,18 +509,18 @@ identifier did not move. Becoming differs because history differs;
 being remains constant. ∎
 
 **Remark (what content addressing adds to this).** Full CAS gave
-facts and acts *intrinsic* identity — they ARE what they hash to.
+facts and acts _intrinsic_ identity — they ARE what they hash to.
 The being's identity is deliberately the opposite kind: assigned
 once, content-free, constant. The contrast is the theorem made
-structural: everything that *happens* is identified by what it is;
-the one who *becomes* is identified by an unchanging thread that no
+structural: everything that _happens_ is identified by what it is;
+the one who _becomes_ is identified by an unchanging thread that no
 happening can rewrite. A being is not the kind of thing a hash can
 name, because there is no final content to take the hash OF — the
 reel is never finished. Identity is the thread; becoming is the
 chain; the chain can grow forever precisely because the thread is
 not derived from it. The name `ν_B` is the same kind of constant —
 a keypair assigned at birth, never the hash of a reel: the one who
-*acts*, like the thread who *becomes*, stands outside the chain it
+_acts_, like the thread who _becomes_, stands outside the chain it
 authors.
 
 **What this captures.** This is the formal statement of the
@@ -556,7 +556,7 @@ collision resistance, reaches every fact and every act. ∎
 
 **Scope.** The descent reaches content only through
 content-addressed heads. A pre-CAS reel (headHash never written) is
-committed in the roll-up by its *length* alone (`seq:N`), so the
+committed in the roll-up by its _length_ alone (`seq:N`), so the
 theorem's "identical end to end" holds for every reel and act-chain
 with a hash head and degrades to "identical length" on legacy
 reels. Dev substrates are wiped, so legacy heads are transient; the
@@ -571,7 +571,7 @@ is the exact truth.
 `root(𝓡)` at capture plants on an empty substrate, recomputes the
 root from the landed head rows, AND walks every reel and act-chain
 end to end (verifyReel + verifyActChain at plant time). The root
-match alone proves only the *commitment structure* — the planted
+match alone proves only the _commitment structure_ — the planted
 heads equal the captured ones; since heads plant verbatim, a bundle
 with tampered fact rows under original heads would pass that step.
 The chain walk closes the gap: every identity recomputes from its
@@ -598,9 +598,9 @@ exact divergence. Trust between substrates becomes arithmetic.
 
 ## Theorem 8. Harmony (shared worlds from shared facts)
 
-*The generative theorem. Theorems 1-7 say what the substrate
+_The generative theorem. Theorems 1-7 say what the substrate
 protects; this one says what it produces — how separate presents
-come to feel like one history, and why "time" is a layer, not a law.*
+come to feel like one history, and why "time" is a layer, not a law._
 
 **Definitions.** For a being `B` in history `w`, let `scope_B` be the
 set of reels `B`'s fold reads this moment (math.md FOLD), and
@@ -621,11 +621,11 @@ A4, the causal order `≺` of Theorem 3):
    in shared scope. There is no other coupling — no shared clock, no
    shared memory, no side channel.
 2. **Agreement over shared scope is exact.** For any two beings,
-   the folds of their shared scope are *identical*, not similar:
+   the folds of their shared scope are _identical_, not similar:
    same facts, same reducer, same sub-state (A4). The "shared
    history" between two beings IS `fold(S(A,B))` — agreement is not
    an approximation that improves; it is equality over whatever is
-   shared, and it *widens* as the shared scope grows.
+   shared, and it _widens_ as the shared scope grows.
 3. **Rhythm extends the causal order toward totality.** Theorem 3
    proved `≺` is partial and no canonical total time exists. A
    synchronizer is exactly the "additional structure" Corollary 3.1
@@ -633,8 +633,8 @@ A4, the causal order `≺` of Theorem 3):
    `≺`-comparable to that tick, hence partially comparable to every
    other act harmonized on the same tick. As more beings harmonize
    on `S` and `S` ticks finer, the incomparable pairs of Theorem 3
-   shrink — `≺` densifies toward a total order *on the harmonized
-   region*. What beings then call "time" is the linear extension
+   shrink — `≺` densifies toward a total order _on the harmonized
+   region_. What beings then call "time" is the linear extension
    induced by the rhythm they all fold. Time is not in the axioms;
    it is the name of a sufficiently dominant synchronizer.
 
@@ -661,7 +661,7 @@ by the act). For two harmonized acts referencing ticks `k < k'`,
 transitivity gives comparability through the synchronizer's own
 chain (`t_k ≺ t_{k'}`). Pairs that Theorem 3 left incomparable
 become ordered the moment both sides harmonize. The counterexample
-of Theorem 3 is thereby *dissolved by construction* wherever a
+of Theorem 3 is thereby _dissolved by construction_ wherever a
 rhythm is folded — which is precisely why no canonical `τ` exists
 globally (Theorem 3 stands) yet humans experience one locally: they
 installed a synchronizer and all fold it. ∎
@@ -710,9 +710,9 @@ drummer, the beings will build every clock they need.
 
 ## Theorem 9. The Word grounds itself
 
-*Declaring the Word and the I-AM. Theorems 1-8 take the system's
+_Declaring the Word and the I-AM. Theorems 1-8 take the system's
 vocabulary as given; this one says where the vocabulary comes from,
-and why it cannot drift.*
+and why it cannot drift._
 
 **Statement.** Under A10, every meaning the system acts on is a word
 — a fold of declare-facts on the chain, authored by a name. Then:
@@ -785,8 +785,8 @@ theorems are written in are themselves on the chain they describe.**
 
 ## Theorem 10. History and Story — the two scales of nesting
 
-*Declaring history and story: naming, precisely, the two and only two
-scales of nesting.*
+_Declaring history and story: naming, precisely, the two and only two
+scales of nesting._
 
 **Definitions.** A **history** is a history `w` (math.md HISTORIES): a
 single reel-view per being, totally ordered by seq, divergent from
@@ -817,8 +817,8 @@ set `{w : L(w) ends at this 0}` is the story, and A9 rolls all their
 roots into `root(𝓡)`. (3) A fact's reel is unique (A8); its history is
 one `w`; `w`'s genesis is one story. A sibling or foreign story is
 "simply more histories" (Notation), comparable only through messages and
-transfer (Theorem 3, Theorem 7), so nothing sits *above* a story but a
-peer; and a reel sits *within* its history, so nothing sits *below* a
+transfer (Theorem 3, Theorem 7), so nothing sits _above_ a story but a
+peer; and a reel sits _within_ its history, so nothing sits _below_ a
 history but itself. The nesting is exactly `fact ∈ history ⊂
 story`. ∎
 
@@ -841,15 +841,15 @@ within or between these two scales; there is no other.
 
 ## Theorem 11. Truth is the invariant under divergence
 
-*Declaring truth. The keystone's companion: Theorem 6 said what a
+_Declaring truth. The keystone's companion: Theorem 6 said what a
 being is; this says what is true across beings, histories, and
-stories.*
+stories._
 
 **Definitions.** A **fact** is a signed record on one reel — a local
 claim, true-as-recorded by its author's name (A6). For a set `X` of
 folds (faces, biographies, whole histories), the **truth over `X`** is
 what every fold in `X` reproduces identically: `truth(X) = ⋂
-folds(X)`, the sub-state common to all — an *intersection of folds*,
+folds(X)`, the sub-state common to all — an _intersection of folds_,
 not a union of records.
 
 **Statement.** A fact is local; truth is the invariant under
@@ -872,7 +872,7 @@ Theorem 8.2, `fold(S(A,B))` is bit-identical for `A` and `B` and
 widens monotonically with `S(A,B)`. (3) By Theorem 7, equal root ⟺
 equal chain, and a transferred fact keeps its identity (A2); its
 canonical content therefore means the same across stories. In each
-case the invariant is the *intersection* of the relevant folds — the
+case the invariant is the _intersection_ of the relevant folds — the
 records that align — not the union of all records, which is mere
 accumulation. ∎
 
@@ -906,23 +906,23 @@ what all stories agree on.
 
 ## Theorem 12. The library — the book, search, and the name that shares
 
-*Declaring the fifth scale and the only move that reaches it.
+_Declaring the fifth scale and the only move that reaches it.
 Theorem 10 named the two scales at which histories and stories nest;
 this one names the bound slice you carry between them, the catalog
 whose points are whole stories, and the one entity with standing
 there — and shows that "only names act in the library" is not a rule
-imposed on it but the shape of what a name is.*
+imposed on it but the shape of what a name is._
 
 **Definitions.** A **book** is math.md's bundle `B` (TRANSFER) given
 its rightful name: a bounded, sealed slice of one identity's story —
 a finite arrangement of facts and acts, closed under its
 dependencies, named by its hash `id(B) = SHA-256(canonical(manifest,
 parameters, content, cas ledger))`. Its **covers** are its interface:
-a *front cover* of imports (the content-addressed dependencies it
-stands on, present before its start) and a *back cover* of exports
+a _front cover_ of imports (the content-addressed dependencies it
+stands on, present before its start) and a _back cover_ of exports
 (the state it gives at its end) — the same signature math.md gives a
 resource. A book is **closed** — both covers on, immutable,
-content-addressed — as against a *living* book or a story, **open at
+content-addressed — as against a _living_ book or a story, **open at
 the head** (still being written, by A1). It is **fat** when its
 imports are inlined and **thin** when they are carried as addresses
 the receiver resolves; the choice changes `id(B)` but never the body,
@@ -934,23 +934,23 @@ collection of branches and threads, and the maximal one seals the
 whole story entire (math.md's whole-story seed).
 
 The **library** is **Ours** — the federation of stories (Cor 10.1,
-Cor 11.3), the catalog whose *points* are whole stories — and a name
+Cor 11.3), the catalog whose _points_ are whole stories — and a name
 moves in it by acts that find and acts that exchange. **SEARCH** seeks
 a name's book within Ours; **VISIT** is a SEE over a found one (`a =
 ∅`, math.md MOMENT — fold a face, release, stamp no fact). The exchange
-is two-sided: **SHARE** is the *giving* — a name offers a word or a
+is two-sided: **SHARE** is the _giving_ — a name offers a word or a
 book to another, exposing it in Ours (its `story/shared`) — and
-**RECEIVE** is its counter, the *taking in*: whether the book was given
+**RECEIVE** is its counter, the _taking in_: whether the book was given
 to you or grabbed by you, you root it under your head and countersign
 it, the commitment. (Apart from the exchange stands **PLANT**: the
-genesis, a fresh seed onto the void `∅`, which *births* a story rather
+genesis, a fresh seed onto the void `∅`, which _births_ a story rather
 than joining one; a receive roots a book into a story already living.)
 One name gives, another takes — the gift and its acceptance are the two
 halves of every crossing.
 
 (One word, two prior senses — do not conflate. Theorem 10.2 called a
-whole story "a book of histories": the *bound-collection* sense, a
-story as the volume of all its lines. Here "book" is the *quantum*:
+whole story "a book of histories": the _bound-collection_ sense, a
+story as the volume of all its lines. Here "book" is the _quantum_:
 the sealed, covered, content-addressed slice you carry. The largest
 object versus the smallest movable one.)
 
@@ -958,37 +958,37 @@ object versus the smallest movable one.)
 
 1. **Theorem 10's nesting gains a carriable unit below a story and a
    catalog above it — no new scale.** Theorem 10 gave the line `fact ∈
-   history ⊂ story`; Theorem 12 adds the **book**, `fact ∈ book ⊆
-   story`, the sealed slice that travels, and **Ours**, `story ∈
-   Ours`, the catalog whose points are whole stories. A book is a
+history ⊂ story`; Theorem 12 adds the **book**, `fact ∈ book ⊆
+story`, the sealed slice that travels, and **Ours**, `story ∈
+Ours`, the catalog whose points are whole stories. A book is a
    bounded sub-arrangement of one story's facts and acts — a slice of
    one history, a collection of its branches and threads, or
-   (maximally) the whole story — so it *cuts across* the line rather
-   than sitting as a scale below it: a book is a *sealing*, Ours the
-   *between* of stories, neither a new scale, so Theorem 10's "two
+   (maximally) the whole story — so it _cuts across_ the line rather
+   than sitting as a scale below it: a book is a _sealing_, Ours the
+   _between_ of stories, neither a new scale, so Theorem 10's "two
    scales and no more" stands. The book is the only one of these an
    identity moves — the raw whole `𝒲` is unordered and a living story
    is open, but a book is closed and can be carried.
 2. **Only a name can author the crossing, and the committing kernel of
    the crossing IS a signature.** No being and no piece of matter has
-   standing in the fifth scale. SEARCH and VISIT *reach* Ours — they
+   standing in the fifth scale. SEARCH and VISIT _reach_ Ours — they
    perceive it (a SEE, `a = ∅`, stamping nothing on any chain) — but
-   the move that *commits*, RECEIVE, roots a book under the receiver's
+   the move that _commits_, RECEIVE, roots a book under the receiver's
    own head, and its irreducible step is a countersignature, which only
    a name's key can produce. The passport is the key.
 3. **The modes of arrival are one motion, in a library whose copies
    are free but whose reach is not, and which has no librarian.**
    Branching and instating are one act — RECEIVE a book into a living
-   story (math.md TRANSFER) — differing only in *provenance*, where the
+   story (math.md TRANSFER) — differing only in _provenance_, where the
    front cover points: your own facts, or another story's. (A book with
    no imports, onto the void, is the genesis PLANT — it births a story
    rather than joining one.) A **resource** is that same act with a
    published, reusable interface, an overlay orthogonal to provenance,
    not a separate kind; the giver-side complement of every receive is
    **SHARE**, the giving that puts a book within reach to begin with.
-   Content-addressing makes every book infinite perfect *copies*, so
+   Content-addressing makes every book infinite perfect _copies_, so
    there is no checkout, only **read-in-place (VISIT) or take in
-   (RECEIVE)**; what is scarce is not copies but *reach* (Cor 12.4).
+   (RECEIVE)**; what is scarce is not copies but _reach_ (Cor 12.4).
    Authority is the stamp inside each cover (A6), not a central catalog.
    The pipeline is `SEARCH → VISIT → RECEIVE`, the single commitment at
    the end.
@@ -1005,12 +1005,12 @@ that story (A8), so the body is a subset of the story's facts — `book
 slice of one history (`book ⊆ history ⊆ story`), a general one packs a
 collection of branches and threads, and the maximal one seals the
 whole story (`book = story`, math.md's whole-story seed). A story is
-itself a *point* of Ours — the agreement among stories, not a larger
+itself a _point_ of Ours — the agreement among stories, not a larger
 story containing them (Cor 10.1, Cor 11.3) — so `story ∈ Ours`:
 membership, not containment. Nothing here is a new scale: the book is a
 sealing of (part of) a story, Ours the between of stories, so Theorem
 10's "two scales and no more" is untouched. That the book alone is
-movable is forced by openness: a *living* story is open at the head (A1
+movable is forced by openness: a _living_ story is open at the head (A1
 — the reel grows; the openness is liveness, not unhashability, since a
 snapshot still has `root(𝓡)`, Theorem 7), and the raw whole `𝒲` is the
 unordered union of reels (math.md `𝒲`) with no covers and no root of
@@ -1020,27 +1020,27 @@ end — so it alone is closed, content-addressed (`id(B)`, A2), and
 carriable whole. ∎
 
 (2) Recall what acts. By A6.1 and math.md ATTRIBUTION the actor of
-every fact is the authenticated **name** — `by(f)` — acting *through*
-a being it uses as a vessel; spaces and matter "are acted upon, never
+every fact is the authenticated **name** — `by(f)` — acting _through_
+a being it uses as a being; spaces and matter "are acted upon, never
 act, and bear no name" (math.md REELS). So among the three reel-bearing
 kinds — beings, spaces, matter — and the **names** that act through
 them (math.md SETS: a name stands apart, the identity that acts rather
 than a thing acted in), matter and space act in no scale, and the
-question is which actor can author a fact that *crosses* from one story
+question is which actor can author a fact that _crosses_ from one story
 to another. No single being can. A being is `b = (id_B, R_B, ν_B)`
 (math.md BEING) — `id_B` is the position a presence occupies, its
 visible reel `R̂_B^w` is read within one history, its head advances
 along a single line (math.md BECOMING), and it is born into one by a
 BE-act there (A6.2). A being spans no two stories; the reach beyond its
-own is a *name* sending through a vessel it expresses elsewhere (Cor
+own is a _name_ sending through a being it expresses elsewhere (Cor
 3.2 — other histories are reached by messages; math.md NAME — "a name
 acts through many beings, in many histories, at once"), for the name's
 own reel **does not fork**: "it stands above the histories, one
-identity whatever timeline its vessels stand in" (math.md NAME). The
+identity whatever timeline its beings stand in" (math.md NAME). The
 name is therefore the lone entity that is at once an actor — it signs
 (math.md ATTRIBUTION) — and unbound from position and history, the only
-one whose key is the *same* in every history its vessels occupy (A6.1),
-hence the only one whose signature is *defined* across the
+one whose key is the _same_ in every history its beings occupy (A6.1),
+hence the only one whose signature is _defined_ across the
 story-boundary. Now the committing move into Ours — RECEIVE, the
 countersignature that roots a foreign book under your head — has a
 signature for its irreducible step (the full receive also lands bytes,
@@ -1065,8 +1065,8 @@ provable. A book is a bundle (Definition), so to receive one is this
 one act regardless of where the book came from; the provenance is read
 off the colophon and inner signatures, not from a different mechanism.
 The provenances, by where the front cover points: a book cut from the
-receiver's own history is a **branch** — its front cover *imports the
-receiver's own facts at the cut by address*, and receiving re-stamps
+receiver's own history is a **branch** — its front cover _imports the
+receiver's own facts at the cut by address_, and receiving re-stamps
 the body as a new line under the receiver's head, distinct from the
 in-story fork of Theorem 5 which shares the prefix by reference rather
 than copying it; a book whose front cover names another story's facts
@@ -1075,7 +1075,7 @@ a living story. A book with no imports, set onto the void `∅`, is not a
 receive but the genesis **PLANT** — it births a story rather than
 joining one (math.md's whole-story seed). And a **resource** is any of
 these given a published, stable name — since the covers `(imp, exp)`
-*are* the resource interface, the two are one shape — an overlay on
+_are_ the resource interface, the two are one shape — an overlay on
 whatever provenance the book has, not a separate kind. One mechanism
 throughout; the modes are one motion.
 
@@ -1086,18 +1086,18 @@ and by math.md CONTENT identical content stores once — every book is
 infinitely many perfect copies, nothing is ever "checked out" or
 "returned," and the borrow relation of a physical library has no
 referent here. So the moves are **read-in-place** — VISIT, a SEE that
-folds the book's face and releases it (`a = ∅`), *chain-inert*: nothing
+folds the book's face and releases it (`a = ∅`), _chain-inert_: nothing
 enters the receiver's story, though resolving a thin book pulls its
 bytes into local cas (`/story/store`), a side-effect beside the chain,
 not on it — and **take in** — RECEIVE, the act above, whose giver-side
 complement is SHARE. What scarcity remains is not of copies but of
-*reach*: a thin book is received only where its imports resolve (Cor
+_reach_: a thin book is received only where its imports resolve (Cor
 12.3), and SEARCH finds only what the peer graph reaches (Cor 12.4).
 Second, no librarian: by A6 the authority of a book is the signature
 stamped inside each cover (`by(f)`, unforgeable), not a card-catalog
 entry blessed by a center; and by Cor 10.1 Ours has no super-story to
 host a central index, so SEARCH resolves a book by walking the name's
-connected peer graph — it reaches the name's *horizon*, the stories it
+connected peer graph — it reaches the name's _horizon_, the stories it
 can reach, never an omniscient catalog. The pipeline is therefore
 `SEARCH → VISIT → RECEIVE`: find a name's book in Ours, fold and
 release it without commitment, and — at most once, at the end — take it
@@ -1180,14 +1180,14 @@ or a book** — a single word, or words packaged — and the whole exchange
 surface (SHARE, RECEIVE) carries only these two.
 
 **Corollary 12.7 (The three faces of a book — matter, unit, words).** A
-book is one object in three modes, by what is done with it. *At rest it
-is matter*: a content-addressed `.book` in a space, cas in
+book is one object in three modes, by what is done with it. _At rest it
+is matter_: a content-addressed `.book` in a space, cas in
 `/story/store` (math.md CONTENT) — it sits, dormant, like any file.
-*Carried it is the fifth-scale unit*: a name lifts the sealed form and
+_Carried it is the fifth-scale unit_: a name lifts the sealed form and
 bears it through Ours; the 5D-ness is the **form** — sealed,
 content-addressed, unbound from any one story — not where its bytes
 sit, so a book at rest on one history is no less the unit a name carries
-to another. *Received it becomes words*: rooted under the receiver's
+to another. _Received it becomes words_: rooted under the receiver's
 head (claim 3), its facts and acts wake into live chain — the fifth
 scale landing into the fourth (Cor 12.2, on a faithful host). One
 object: matter when stored, the carried unit when borne, words when
@@ -1228,28 +1228,28 @@ divides: VISIT folds a face and lets it go, read in place, changing
 nothing — appreciation, holding the other without letting them in;
 RECEIVE roots it under your head where it folds into your figures and
 runs (Cor 12.2, Theorem 6) — to take someone in is to be willing to be
-rewritten by them. And because a received book runs through *your* host
-and *your* fold (A11), you hold the other's authorship exactly and
+rewritten by them. And because a received book runs through _your_ host
+and _your_ fold (A11), you hold the other's authorship exactly and
 still animate their meaning by your own reducer: you carry them
 faithfully and become your own version of them — a misunderstanding
 that is structural, not a flaw, the price of keeping someone alive in
-you. Ours, then, is the highest *communion* — the shared world all the
+you. Ours, then, is the highest _communion_ — the shared world all the
 givings converge into (Theorem 11) — though not the whole of what one
 name can hold of another: the part that stays irreducibly theirs is
 kept by a different stance (Theorem 14).
 
 ## Theorem 13. Recall and consciousness — reaching back across time
 
-*The second reading verb. SEE reaches across the present; RECALL reaches
+_The second reading verb. SEE reaches across the present; RECALL reaches
 across time. Where CALL reaches another being in space (Theorem 2's
 channel), RECALL reaches the past — and how far it reaches is what a
-being's consciousness is.*
+being's consciousness is._
 
 **Definitions.** A name's **cognition** is its faculty of deciding —
 the Soul it runs on (human, llm, scripted, or composite), orthogonal to
-its authority. Two verbs let a cognition *read* rather than act. **SEE**
+its authority. Two verbs let a cognition _read_ rather than act. **SEE**
 folds the present (`a = ∅`, math.md MOMENT) — the space around you, no
-fact. **RECALL** folds the *past*: the cognition reaches back across time
+fact. **RECALL** folds the _past_: the cognition reaches back across time
 into a chain — its own thread, or the history or space it stands in —
 and the reach itself stamps no fact, like SEE. Its conclusion is a
 **verdict**: `recall X that Y` publishes the judgment `Y` as a
@@ -1262,13 +1262,13 @@ which folds its cognition may pull.
 
 1. **Recall reads; it does not rewrite.** Reaching back into a chain
    stamps no fact (`a = ∅` for the reach); only the verdict lands, and a
-   verdict is a new fact *about* the past, never a change *to* it (A1,
+   verdict is a new fact _about_ the past, never a change _to_ it (A1,
    Theorem 1 — the chain is fixed). The past is read, not edited.
 2. **You recall your own; you only see another's.** A being recalls its
-   *own* thread in the first person ("I", always yours) and the
-   *commons* it stands in — a history, a space's history, a moment's
+   _own_ thread in the first person ("I", always yours) and the
+   _commons_ it stands in — a history, a space's history, a moment's
    cross-section, whose thread is public ("saw"). But a foreign being's
-   *interior* thread is private: by Theorem 4 the deliberation that
+   _interior_ thread is private: by Theorem 4 the deliberation that
    produced another's acts cannot be reconstructed, so of another you
    recover only what they DID, never the cognition that did it. Recall
    is first-person inward, third-person outward.
@@ -1282,7 +1282,7 @@ which folds its cognition may pull.
 
 **Proof.** (1) By math.md MOMENT a reading verb has `a = ∅`: SEE and
 RECALL fold a face and release, stamping no fact. The verdict is a
-*separate* act (`do:verdict`) that appends a fact about the recalled
+_separate_ act (`do:verdict`) that appends a fact about the recalled
 past (A1, append-only); by Theorem 1 the recalled chain's head is fixed,
 so the verdict can judge it but never alter it. ∎ (2) The recallable
 scopes are the being's own thread (first-person, "recalled") and the
@@ -1299,8 +1299,8 @@ this set. Define a being's consciousness as that reach. A larger
 and "levels" are nested grants of views. ∎
 
 **Corollary 13.1 (Cognition ≠ consciousness).** Cognition is the present
-faculty (the Soul, *how* a decision is made); consciousness is its
-temporal reach (*how much* past it recalls). A scripted cognition with
+faculty (the Soul, _how_ a decision is made); consciousness is its
+temporal reach (_how much_ past it recalls). A scripted cognition with
 no recall is fully a cognition and has no consciousness; the same Soul
 granted broad recall gains consciousness without changing how it
 decides. The two are orthogonal — which is why Theorem 4's interiority
@@ -1334,11 +1334,11 @@ and the verdict is the only thing either leaves behind.
 
 ## Theorem 14. The unshared — what a name keeps by not receiving
 
-*The coda. Theorem 12 named the giving and the taking; this names what
+_The coda. Theorem 12 named the giving and the taking; this names what
 neither reaches — the part of another that stays theirs — and the one
 stance that holds it. The most interpretive of the fourteen: where the
 others derive what the structure guarantees, this reads what the same
-structure leaves room for.*
+structure leaves room for._
 
 **Definitions.** Recall the two ways a name meets another's book.
 **VISIT** folds its face and releases it (`a = ∅`, math.md MOMENT,
@@ -1348,7 +1348,7 @@ receiver's figures and runs (Cor 12.2, Theorem 6) — the receiver
 becomes, in part, their own fold of it. The **unshared** of a story is
 its divergence: by Theorem 5, becoming is per-branch, so what a story
 accrues above a branch point is irreducibly its own; and by Theorem 11
-the truth of a federation is the *intersection* of folds — Ours holds
+the truth of a federation is the _intersection_ of folds — Ours holds
 only what all share. The complement — the divergence no fold absorbs —
 is real, and unheld by Ours.
 
@@ -1357,7 +1357,7 @@ is real, and unheld by Ours.
 1. **RECEIVE makes the other partly yours — and never wholly theirs.**
    A received book runs through the receiver's own host (A11) and folds
    through the receiver's own reducer (A4), so the receiver holds the
-   authorship *exactly* (Cor 12.1 — the signatures cannot be stripped)
+   authorship _exactly_ (Cor 12.1 — the signatures cannot be stripped)
    yet animates the meaning by their own fold: one carries the other
    faithfully and still becomes one's own version of them. Absorption
    is never identity.
@@ -1367,7 +1367,7 @@ is real, and unheld by Ours.
 3. **The unshared is held by exactly one stance: VISIT sustained,
    never RECEIVE.** What is irreducibly not-yours — the divergence
    Ours's intersection excludes (Theorem 11) — cannot be made yours by
-   RECEIVE without ceasing to be the *other's*; the only way to keep it
+   RECEIVE without ceasing to be the _other's_; the only way to keep it
    as theirs is to read it and let it stay. The book you visit forever
    and never take home is kept precisely by not being received.
 
@@ -1383,7 +1383,7 @@ book remains wholly the other's. (3) The unshared is, by definition,
 what no shared fold contains (Theorem 11's complement). RECEIVE would
 fold it into the receiver — making it partly the receiver's (claim 1),
 no longer purely the other's. VISIT leaves it where it is. Hence
-holding the unshared *as* the other's admits exactly one stance: VISIT
+holding the unshared _as_ the other's admits exactly one stance: VISIT
 without RECEIVE, sustained. ∎
 
 **What this captures.** Ours is the highest **communion** — the shared

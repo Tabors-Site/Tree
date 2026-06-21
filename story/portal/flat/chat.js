@@ -32,11 +32,11 @@ export function openChatFor(beingEntry, { refresh = false } = {}) {
   if (!story) return;
 
   const path = fl.descriptor?.address?.pathByNames || "/";
-  // Carry the active branch qualifier through; otherwise a chat opened
-  // on #1 silently addresses the same name on main and the cross-branch
+  // Carry the active history qualifier through; otherwise a chat opened
+  // on #1 silently addresses the same name on main and the cross-history
   // gate rejects (or worse, hits a different being with the same name).
-  const branch = fl.descriptor?.address?.history || "0";
-  const bq = branch === "0" ? "" : `#${branch}`;
+  const history = fl.descriptor?.address?.history || "0";
+  const bq = history === "0" ? "" : `#${history}`;
   const stance = `${story}${bq}${path}@${beingEntry.being}`.replace(/\/+@/, "/@");
 
   // If we're already open on this being and just refreshing, only redraw

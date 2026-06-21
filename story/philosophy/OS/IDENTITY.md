@@ -23,7 +23,7 @@ The rule underneath both categories is: **an id is derived from the thing's natu
 
 - **Content** has bytes and context. Address it by the **hash** of those: facts, acts, matter (the row id is `SHA-256` of its birth spec), and eventually rules. Same content anywhere, same id.
 - **Agents** have a keypair. Address them by the **public key**: beings and realities. The id IS the verification key.
-- **Position** has neither bytes nor a key. A **space** is a slot in the tree, and its nature is to be a *stable handle that survives renames and structural moves*. The honest representation of that nature is an **opaque, locally unique id** — a uuid. A space's real identity is its position (the parent chain); the row id is just the stable name of the slot. Hashing `{parent, name}` would only hash its position-label, buys no dedup (siblings are already name unique), and would wrongly make two different realities' identically-named heaven slots share an id — they are different slots and must be different ids.
+- **Position** has neither bytes nor a key. A **space** is a slot in the tree, and its nature is to be a _stable handle that survives renames and structural moves_. The honest representation of that nature is an **opaque, locally unique id** — a uuid. A space's real identity is its position (the parent chain); the row id is just the stable name of the slot. Hashing `{parent, name}` would only hash its position-label, buys no dedup (siblings are already name unique), and would wrongly make two different realities' identically-named heaven slots share an id — they are different slots and must be different ids.
 
 So the uuid on a space is not a holdout from the old world; it is the correct id for a position. This is the **one** place in the substrate where an opaque random id is honest, precisely because opacity-with-stability IS what a space is. Everywhere else, the id derives from content or from a key. If you ever see a random uuid standing in for a fact, act, matter, being, or reality, that is the bug; a random uuid naming a space is the rule.
 
@@ -31,7 +31,7 @@ So the uuid on a space is not a holdout from the old world; it is the correct id
 
 Creating a being is creating a wallet.
 
-- You get a **public key**. That is your permanent global address, your `beingId`. It is what other beings reference for stances, mates, vessels, summons. It works in every reality. Your display NAME can change per branch or per reality (names fold from facts), but this underlying identity never moves.
+- You get a **public key**. That is your permanent global address, your `beingId`. It is what other beings reference for stances, mates, beings, summons. It works in every reality. Your display NAME can change per branch or per reality (names fold from facts), but this underlying identity never moves.
 - You get a **private key**. It signs your acts and proves you are you. The home reality holds it encrypted and signs on your behalf (custodial). You can also EXPORT it (the auth gated `key-export` op, owner only, direct response channel): the key PEM plus the same key as a 24 word BIP39 phrase you can write on paper. And you can IMPORT it: `be:birth` accepts the exported key (PEM or the 24 words) and births you on that reality WITH this identity — same key, same id. The wire layer holds the imported key OUT of the chain (the secret stash; a credential in a fact would be a plaintext secret in the fixed past). It is your recovery and your exit.
 
 Encoding: a `beingId` is the bare `z<base58btc(0xed01 || raw 32-byte ed25519 public key)>` — the did:key VALUE, deliberately colon free. Ids flow through colon delimited keys everywhere (projection slots `<branch>:<type>:<id>`, reel keys, act-head keys), so a `did:tree:` or `did:key:` prefix would corrupt key parsing; the prefix is display only (`did:key:z...` renders fine in any UI). The `z` is multibase base58btc (path and URL safe, so the id flows through IBP addresses and WebSocket routes) and the `0xed01` multicodec makes the id self describing and algorithm agile. Realities use the same encoding for their `realityId`.
@@ -103,7 +103,7 @@ The human operator (the founder) is NOT the cryptographic root and is NOT requir
 
 ## I_AM, the reality from above
 
-I_AM is the one being that breaks the surface pattern, on purpose. Its internal `_id` stays the literal string `i-am`, because that is how the world names itself from inside (and the whole seed already references it that way). But its KEY identity, the `z...` public key it presents to peers, is the reality's public key. Two views of one key: `i-am` from inside, the `z...` id (= realityId) from above. Every OTHER being, the founder, the seed delegates, every human, every vessel-child, gets its own independent keypair at birth, and that key signs its acts. I_AM is the exception that proves the rule: agents are named by their key, and I_AM simply shares its key with the world it is.
+I_AM is the one being that breaks the surface pattern, on purpose. Its internal `_id` stays the literal string `i-am`, because that is how the world names itself from inside (and the whole seed already references it that way). But its KEY identity, the `z...` public key it presents to peers, is the reality's public key. Two views of one key: `i-am` from inside, the `z...` id (= realityId) from above. Every OTHER being, the founder, the seed delegates, every human, every being-child, gets its own independent keypair at birth, and that key signs its acts. I_AM is the exception that proves the rule: agents are named by their key, and I_AM simply shares its key with the world it is.
 
 ## What the frontend builds (built 2026-06-12, the portal identity panel)
 
@@ -118,12 +118,14 @@ I_AM is the one being that breaks the surface pattern, on purpose. Its internal 
 Cryptographic identity makes a lot provable, and a few things it cannot, by the custody choice we made. Name them so they are known, not surprises.
 
 What it CLOSES:
+
 - Identity within a verification: a signature checks against the id itself. Self certifying, no trusted directory.
 - Content integrity: facts, acts, and matter are named by their content hash; the Merkle roots prove whole world replay; the reality root is bound to the reality key.
 - Reality provenance: a foreign reality verifies a world back to its founder, self certifyingly.
 - Portability and recovery: you can export your key and prove ownership anywhere, even if your home reality is offline.
 
 What it does NOT close:
+
 - **Custodial signing (the one true red flag, for HOSTED beings only).** When a reality holds a being's private key, it CAN technically forge any act by that being. The signature proves "this reality vouches for this being's act," not "this being personally pressed the button." This bites ONLY when you let someone else's reality hold your key. Running your own reality dissolves it entirely (see "Sovereign self hosting" above): the custodian becomes you, and no edge signing is needed. For genuinely hosted beings the mitigations are the secondary unlock and the full Merkle audit trail, which raise the bar and make tampering attributable. Acceptable because a user who wants the guarantee can always self host, and most others either do that or only join realities they trust.
 - No client side (edge) signing as a separate feature, because self hosting already provides it: your own reality is your edge.
 - Role and rule content addressing is deferred (authority retroactivity: a content addressed role is immutable per hash, which fights in place role editing).

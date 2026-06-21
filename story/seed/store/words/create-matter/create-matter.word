@@ -19,7 +19,7 @@
 # and the return. The lone WORLD write is the content-addressed do:create-matter
 # birth-fact emit inside emitBirth, which reuses the SAME emitFact the JS handler
 # calls and lays it into the live moment via ctx.moment — so the fact
-# attributes to the real caller, not to the i-am vessel override.
+# attributes to the real caller, not to the i-am being override.
 #
 # The bridge binds `target`, `targetKind`, the create `params` (spec: name, type,
 # content, coord, spaceId, parentMatterId), `caller` (the acting being), and

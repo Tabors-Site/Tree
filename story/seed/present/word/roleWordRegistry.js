@@ -245,24 +245,24 @@ export async function rehydrateWordsFromFacts() {
 //              story root the home is made under). Merged over trigger.
 //   beings     proper-name -> being id (cherub:birth's { Cherub, Arrival }); the
 //              evaluator resolves a proper noun to its id through this (7.md bridge).
-//   through    the vessel being the acts run THROUGH (identity.beingId): cherub:birth
+//   through    the being being the acts run THROUGH (identity.beingId): cherub:birth
 //              acts "by I_AM through Cherub", so through = the cherub being id.
 //   iam        the bootstrap actor name; name === "i-am" short-circuits authorize
 //              (the privileged birth acts are denied for an ordinary summoned name).
 //
 // ATTRIBUTION (two modes; `through` presence is the signal):
-//   VESSEL mode (through != null) — the `.word` acts are I_AM's, acting THROUGH a vessel
+//   being mode (through != null) — the `.word` acts are I_AM's, acting THROUGH a being
 //     (cherub:birth: I_AM through Cherub). The privileged seed acts go through doVerb's
 //     authorize, which short-circuits on name === "i-am" (the bootstrap axiom); an
 //     ordinary summoned name would be denied. So we run under a DERIVED identity (i-am,
-//     beingId = the vessel) and override actorAct.by to i-am, so the facts attribute
+//     beingId = the being) and override actorAct.by to i-am, so the facts attribute
 //     to I_AM.
 //   CALLER mode (through == null, THE DEFAULT) — the acts are the CALLER's: a DO-op cut
 //     (take-role) or connect, where the being itself acts. We run under the REAL moment's
 //     identity + actorAct, so the facts attribute to the being that did them (no per-cut
 //     attribution workaround). Most slices want this.
 // Either mode SHARES the real moment's deltaF / foldedSeqs / afterSeal by reference, so
-// facts land on the real chain with seq continuity; only VESSEL mode overrides the actor.
+// facts land on the real chain with seq continuity; only being mode overrides the actor.
 export async function runRoleWord(
   ir,
   {
@@ -277,14 +277,14 @@ export async function runRoleWord(
   },
 ) {
   moment.deltaF ??= [];
-  const vessel = through != null;
-  const identity = vessel
-    ? { beingId: String(through), name: iam, nameId: iam } // I_AM through the vessel
+  const being = through != null;
+  const identity = being
+    ? { beingId: String(through), name: iam, nameId: iam } // I_AM through the being
     : moment.identity || { beingId: null }; // the caller (default)
   const wordCtx = {
     ...moment,
     identity,
-    ...(vessel ? { actorAct: { ...(moment.actorAct || {}), by: iam } } : {}), // caller keeps its actorAct
+    ...(being ? { actorAct: { ...(moment.actorAct || {}), by: iam } } : {}), // caller keeps its actorAct
     deltaF: moment.deltaF, // SAME array: facts land on the real moment
     _inOp: true, // the whole program is ONE op (see below)
   };

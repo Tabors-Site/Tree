@@ -34,7 +34,10 @@
 import { registerOperation } from "../../../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { getRoleSpecForGrant } from "../../../present/roles/spaceLookup.js";
-import { normalizeAcquisition, alreadyHoldsRole } from "../../../present/roles/acquisition.js";
+import {
+  normalizeAcquisition,
+  alreadyHoldsRole,
+} from "../../../present/roles/acquisition.js";
 import { loadOrFold } from "../../../materials/projections.js";
 import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
 import { emitInternalGrant } from "../../../present/roles/internalGrant.js";
@@ -42,8 +45,16 @@ import { emitInternalGrant } from "../../../present/roles/internalGrant.js";
 // Self-register this bundle's co-located `.word` slices (CONVERTING.md): importing
 // this index (at seed boot, or in a DRY harness) registers them so
 // resolveRoleWord("acquisition", <op>) finds them.
-registerRoleWord("acquisition", "take-role", new URL("./take-role.word", import.meta.url));
-registerRoleWord("acquisition", "ask-role", new URL("./ask-role.word", import.meta.url));
+registerRoleWord(
+  "acquisition",
+  "take-role",
+  new URL("./take-role.word", import.meta.url),
+);
+registerRoleWord(
+  "acquisition",
+  "ask-role",
+  new URL("./ask-role.word", import.meta.url),
+);
 
 // ──────────────────────────────────────────────────────────────────
 // ask-role
@@ -66,12 +77,20 @@ registerOperation("ask-role", {
     }
     const hostSpaceId = String(target?.id || target?.spaceId || "").trim();
     if (!hostSpaceId) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "ask-role: target must be a space");
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "ask-role: target must be a space",
+      );
     }
 
     // THE CONVERSION: ask-role's world strand is ask-role.word, run through the bridge.
     // The JS below is the clean-miss fallback.
-    const viaWord = await _askRoleViaWord({ caller: identity.beingId, role: roleName, space: hostSpaceId, moment });
+    const viaWord = await _askRoleViaWord({
+      caller: identity.beingId,
+      role: roleName,
+      space: hostSpaceId,
+      moment,
+    });
     if (viaWord) return viaWord;
 
     const history = moment?.actorAct?.history || "0";
@@ -97,8 +116,12 @@ registerOperation("ask-role", {
     // Idempotent: skip if the caller already holds the role at this
     // host. loadOrFold: the caller's grants may live on an inherited
     // (not yet folded) slot on this history.
-    const callerSlot = await loadOrFold("being", String(identity.beingId), history);
-    const existing   = callerSlot?.state?.qualities?.rolesGranted || [];
+    const callerSlot = await loadOrFold(
+      "being",
+      String(identity.beingId),
+      history,
+    );
+    const existing = callerSlot?.state?.qualities?.rolesGranted || [];
     if (alreadyHoldsRole(existing, roleName, foundHost)) {
       return {
         already: true,
@@ -110,9 +133,9 @@ registerOperation("ask-role", {
     if (policy.asked === "auto") {
       await emitInternalGrant({
         granteeBeingId: String(identity.beingId),
-        role:           roleName,
-        anchorSpaceId:  foundHost,
-        grantedBy:      String(identity.beingId), // self-grant via the role's auto policy
+        role: roleName,
+        anchorSpaceId: foundHost,
+        grantedBy: String(identity.beingId), // self-grant via the role's auto policy
         moment,
         history,
       });
@@ -161,19 +184,19 @@ registerOperation("ask-role", {
       await callVerb(
         ownerStance,
         {
-          from:    askerStance,
+          from: askerStance,
           // Envelope intent: the caller's stated purpose. Read by the
           // auth gate (canSummon entries with intent: "role-request"),
           // routed by multi-role receivers, and surfaced by the inbox
           // panel as the dispatch key for its render surface.
           // See seed/SUMMON.md.
-          intent:  "role-request",
+          intent: "role-request",
           content: {
-            role:          roleName,
+            role: roleName,
             anchorSpaceId: foundHost,
-            askerBeingId:  String(identity.beingId),
-            askerName:     identity.name,
-            reason:        target?.reason || null,
+            askerBeingId: String(identity.beingId),
+            askerName: identity.name,
+            reason: target?.reason || null,
           },
         },
         { identity, moment },
@@ -190,8 +213,8 @@ registerOperation("ask-role", {
 
     return {
       granted: false,
-      path:    "queue",
-      role:    roleName,
+      path: "queue",
+      role: roleName,
       anchorSpaceId: foundHost,
       message: `Requested. @${ownerName} will see this in their inbox.`,
     };
@@ -215,24 +238,37 @@ registerOperation("ask-role", {
 async function _askRoleViaWord({ caller, role, space, moment }) {
   if (!moment) return null;
   // HOST ESCAPE: ask-role is HOST-facilitated — the host (i-am) runs the .word THROUGH the asker's
-  // being (`through: caller` → runRoleWord's vessel identity, i-am). So the auto-grant carries
+  // being (`through: caller` → runRoleWord's being identity, i-am). So the auto-grant carries
   // I_AM authority and the queue summon reaches the owner FROM i-am (the host), not the asker (a
   // fresh asker holds no role permitting summon — it would be correctly denied). The asker rides
   // in the inbox CONTENT, not the call's `from` stance.
-  const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
-  const ir = resolveRoleWord("acquisition", "ask-role", moment?.actorAct?.history);
+  const { resolveRoleWord, runRoleWord } =
+    await import("../../../present/word/roleWordRegistry.js");
+  const ir = resolveRoleWord(
+    "acquisition",
+    "ask-role",
+    moment?.actorAct?.history,
+  );
   if (!ir) return null;
   const { acquisitionHostEnv } = await import("./acquisitionHost.js");
   const history = moment?.actorAct?.history || "0";
   try {
     const { result } = await runRoleWord(ir, {
-      moment, history, through: String(caller),
-      trigger: { caller: String(caller), role: String(role), space: String(space), branch: history },
+      moment,
+      history,
+      through: String(caller),
+      trigger: {
+        caller: String(caller),
+        role: String(role),
+        space: String(space),
+        branch: history,
+      },
       env: { host: acquisitionHostEnv() },
     });
     return result || null;
   } catch (e) {
-    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.FORBIDDEN, e.message);
+    if (e && e.__wordRefusal)
+      throw new IbpError(e.code || IBP_ERR.FORBIDDEN, e.message);
     throw e;
   }
 }
@@ -244,20 +280,32 @@ async function _takeRoleViaWord({ caller, role, space, moment }) {
   // moment (a kernel moment carries none). NOT a host escape like ask-role, whose queue summon
   // reaches the owner FROM i-am; take-role has no summon, so nothing escapes to the host.
   if (!moment.identity?.beingId) moment.identity = { beingId: String(caller) };
-  const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
-  const ir = resolveRoleWord("acquisition", "take-role", moment?.actorAct?.history);
+  const { resolveRoleWord, runRoleWord } =
+    await import("../../../present/word/roleWordRegistry.js");
+  const ir = resolveRoleWord(
+    "acquisition",
+    "take-role",
+    moment?.actorAct?.history,
+  );
   if (!ir) return null;
   const { acquisitionHostEnv } = await import("./acquisitionHost.js");
   const history = moment?.actorAct?.history || "0";
   try {
     const { result } = await runRoleWord(ir, {
-      moment, history,
-      trigger: { caller: String(caller), role: String(role), space: String(space), branch: history },
+      moment,
+      history,
+      trigger: {
+        caller: String(caller),
+        role: String(role),
+        space: String(space),
+        branch: history,
+      },
       env: { host: acquisitionHostEnv() },
     });
     return result || null;
   } catch (e) {
-    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.FORBIDDEN, e.message);
+    if (e && e.__wordRefusal)
+      throw new IbpError(e.code || IBP_ERR.FORBIDDEN, e.message);
     throw e;
   }
 }
@@ -275,18 +323,29 @@ registerOperation("take-role", {
     }
     const roleName = String(params?.role || "").trim();
     if (!roleName) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "take-role: `role` is required");
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "take-role: `role` is required",
+      );
     }
     const hostSpaceId = String(target?.id || target?.spaceId || "").trim();
     if (!hostSpaceId) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "take-role: target must be a space");
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "take-role: target must be a space",
+      );
     }
 
     // THE CONVERSION (2.md Phase 4): the take-role world-strand is take-role.word, run
     // through the bridge. The JS below is the clean-miss fallback. The grant lands on the
     // real moment (emitInternalGrant's beingId=I_AM — the policy IS the substrate's
     // authority, grantedBy the taker); a WordRefusal becomes the same IbpError.
-    const viaWord = await _takeRoleViaWord({ caller: identity.beingId, role: roleName, space: hostSpaceId, moment });
+    const viaWord = await _takeRoleViaWord({
+      caller: identity.beingId,
+      role: roleName,
+      space: hostSpaceId,
+      moment,
+    });
     if (viaWord) return viaWord;
 
     const history = moment?.actorAct?.history || "0";
@@ -309,8 +368,12 @@ registerOperation("take-role", {
       );
     }
 
-    const callerSlot = await loadOrFold("being", String(identity.beingId), history);
-    const existing   = callerSlot?.state?.qualities?.rolesGranted || [];
+    const callerSlot = await loadOrFold(
+      "being",
+      String(identity.beingId),
+      history,
+    );
+    const existing = callerSlot?.state?.qualities?.rolesGranted || [];
     if (alreadyHoldsRole(existing, roleName, foundHost)) {
       return {
         already: true,
@@ -321,9 +384,9 @@ registerOperation("take-role", {
 
     await emitInternalGrant({
       granteeBeingId: String(identity.beingId),
-      role:           roleName,
-      anchorSpaceId:  foundHost,
-      grantedBy:      String(identity.beingId),
+      role: roleName,
+      anchorSpaceId: foundHost,
+      grantedBy: String(identity.beingId),
       moment,
       history,
     });

@@ -15,7 +15,7 @@ const bad = (l, d) => { fail++; console.log(`  ✗ ${l}`); if (d !== undefined) 
 async function run(src, bindings = {}) {
   const flow = parse(src)[0];
   const ctx = {
-    dryRun: true, branch: "main", moment: { actId: "<a>" },
+    dryRun: true, history: "main", moment: { actId: "<a>" },
     identity: { beingId: "tester", name: "tester", nameId: "tester" },
     env: {}, bindings: { ...bindings }, deltaF: [], flows: [],
   };
@@ -115,7 +115,7 @@ console.log("\n  verify-controlflow-parse (.word -> parse -> evaluate)\n");
   const flow = parse(src)[0];
   const node = flow.effects[0];
   const dispatch = async (type) => {
-    const ctx = { dryRun: true, branch: "main", moment: { actId: "<a>" }, identity: { nameId: "t" }, env: {}, bindings: { matter: { type } }, deltaF: [], flows: [] };
+    const ctx = { dryRun: true, history: "main", moment: { actId: "<a>" }, identity: { nameId: "t" }, env: {}, bindings: { matter: { type } }, deltaF: [], flows: [] };
     await evaluate(flow, ctx);
     return ctx.deltaF.map((f) => f.act);
   };

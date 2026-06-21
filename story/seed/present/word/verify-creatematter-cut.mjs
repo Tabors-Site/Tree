@@ -50,7 +50,7 @@ const ident = { beingId: I_AM, name: "i-am", nameId: "i-am" };
 
 const cherub = await poll(() => findByName("being", "cherub", "0"));
 const create = async (target, params, who = ident) => {
-  const sc = { actId: randomUUID(), actorAct: { branch: "0", history: "0", by: who?.nameId || null }, identity: who, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc = { actId: randomUUID(), actorAct: { history: "0", by: who?.nameId || null }, identity: who, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   try {
     const res = await doVerb(target, "create-matter", params, { identity: who, moment: sc, currentHistory: "0" });
     if (sc.deltaF.length) await sealFacts(sc.deltaF);

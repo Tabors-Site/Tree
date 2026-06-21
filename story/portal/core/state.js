@@ -14,7 +14,7 @@
 //                   socket-side `.discovery` SEE (clones, timezone, ...)
 //   descriptor      the current Position Description (what every view renders)
 //   currentAddress  the address the descriptor answers
-//   actorHistory     the session's seated branch (server "branch" pushes)
+//   actorHistory     the session's seated branch (server "history" pushes)
 //   selectedBeing   { beingId, name, lastSetAt } | null — cross-view focus
 //   history / navIndex   portal-internal navigation history
 //   connection      "idle" | "connected" | "disconnected" | "error"

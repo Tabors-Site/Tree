@@ -4,7 +4,7 @@
 // the flat (text) portal. One DOM node, re-parented between hosts,
 // so the two views can never disagree:
 //
-//   [ story#aBranch/@being ] :: [ story#vBranch/path@being ]
+//   [ story#aHistory/@being ] :: [ story#vHistory/path@being ]
 //        the actor stance          the receiving stance
 //
 // The LEFT stance ALWAYS shows the being you are using (the one your
@@ -13,19 +13,19 @@
 //
 // Both sides are editable and both auto-update:
 //   - LEFT (who you are, where your acts land): edit the @being to
-//     SWITCH to another being your name owns, and/or the #branch to
+//     SWITCH to another being your name owns, and/or the #history to
 //     switch timeline, then Enter. A being you don't own / that isn't
-//     on that branch comes back as a name error ("that name doesn't
-//     have @<being> on #<branch>"); other garbled edits restore on blur.
+//     on that history comes back as a name error ("that name doesn't
+//     have @<being> on #<history>"); other garbled edits restore on blur.
 //   - RIGHT (what you are looking at): a normal address input; Enter
 //     navigates. Same id (#address-input) the portals always used,
 //     so existing styling and the flat portal's "/" focus shortcut
 //     keep working untouched.
 //
-// Branches render EXPLICIT on both sides (#0 included) — pointers
+// Histories render EXPLICIT on both sides (#0 included) — pointers
 // (#main etc.) are reassignable, explicit paths can't drift; pointer
 // aliases ride the tooltips. When the two stances sit on different
-// branches the bar turns amber: the cross-branch acting state, always
+// histories the bar turns amber: the cross-history acting state, always
 // visible, never a surprise.
 
 let _bar = null; // { el, left, sep, right }
@@ -84,15 +84,15 @@ function _paint() {
     `you are @${_ctx.username || "arrival"} — acts land on #${_ctx.actorHistory}${_historyAliases(_ctx.actorHistory)}\n` +
     `edit @being to drive another being you own, and/or #history to switch timeline, then Enter`;
   right.title = `the receiving stance — what you're looking at` +
-    `${_historyAliases(_ctx.viewHistory) ? `\nbranch${_historyAliases(_ctx.viewHistory)}` : ""}`;
+    `${_historyAliases(_ctx.viewHistory) ? `\nhistory${_historyAliases(_ctx.viewHistory)}` : ""}`;
   sep.title = crossed
     ? `cross-history: your being is seated on #${_ctx.actorHistory} while viewing #${_ctx.viewHistory} — acts from here land cross-history`
     : "your being and the view are on the same history";
 }
 
-// Pull the #branch segment out of an actor-stance string the user
+// Pull the #history segment out of an actor-stance string the user
 // edited: "story#1a/@name" → "1a". Null when absent/garbled.
-function _parseBranchEdit(raw) {
+function _parseHistoryEdit(raw) {
   const m = String(raw).match(/#([0-9][0-9a-z]*)(?=\/|$)/i);
   return m ? m[1] : null;
 }
@@ -107,7 +107,7 @@ function _parseBeingEdit(raw) {
 /**
  * Create the bar once. Callbacks:
  *   onNavigate(raw)            — right-side Enter (a normal address)
- *   onSwitchHistory(path)       — left-side Enter, only the #branch changed
+ *   onSwitchHistory(path)       — left-side Enter, only the #history changed
  *   onSwitchBeing(being, path) — left-side Enter, the @being changed (drive
  *                                another being your name owns, on `path`)
  */
@@ -147,12 +147,12 @@ export function initStanceBar({ onNavigate, onSwitchHistory, onSwitchBeing } = {
     if (e.key === "Escape") { left.blur(); _paint(); return; }
     if (e.key !== "Enter") return;
     const raw = left.value.trim();
-    const targetHistory = _parseBranchEdit(raw) || _ctx.actorHistory;
+    const targetHistory = _parseHistoryEdit(raw) || _ctx.actorHistory;
     const targetBeing = _parseBeingEdit(raw);
     const curBeing = _ctx.username || "arrival";
     left.blur();
-    // A changed @being wins: drive that being (on the parsed branch). Else a
-    // changed #branch alone is a BE switch (keep the being). Else restore —
+    // A changed @being wins: drive that being (on the parsed history). Else a
+    // changed #history alone is a BE switch (keep the being). Else restore —
     // the left side names who you are, not a free-text field.
     if (targetBeing && targetBeing !== curBeing && _cbs.onSwitchBeing) {
       _cbs.onSwitchBeing(targetBeing, targetHistory);
@@ -193,7 +193,7 @@ export function placeStanceBar(container) {
 
 /**
  * Merge new context and repaint. Both portals push partials —
- * navigation pushes the view side, the "branch" socket push updates
+ * navigation pushes the view side, the "history" socket push updates
  * the actor side, the branch catalog pushes pointers — and the bar
  * stays whole because the context is one.
  */

@@ -29,7 +29,7 @@ handler; the live gate already births via the evaluator).
    intended difference) -> deletion is justified. The actor model is now RESOLVED
    in `cherub.word` (Tabor): all five acts are **by I_AM, through Cherub** (the
    implicit-actor rule); **Cherub is the mother, Arrival the father** (the new
-   Name's vessel at the floor); the being is the **new Name's own** (its
+   Name's being at the floor); the being is the **new Name's own** (its
    trueName), not I_AM's. The handler's incidental Cherub/I_AM mix is the silent
    assumption being corrected, not a delta to preserve, so the diff validates
    against this clean model (the new being's trueName = the arriving Name, father
@@ -46,10 +46,10 @@ handler; the live gate already births via the evaluator).
      `generateToken`, `unlockSigning`, `seatBranch`. These are the HOW (the
      transport/session), not world acts, so they don't go in the `.word` and
      don't get deleted; the handler keeps them around the `.word` run.
-   So birthHandler becomes: run `cherub.word` (the world acts, via the bridge) +
-   do the session plumbing (host). The world-sequencing is what dies. Then run
-   the e2e suite (cherub-mate, father-signs, registration). **Green = a `.js`
-   died and function is preserved.** That is the moment this stops being a wrapper.
+     So birthHandler becomes: run `cherub.word` (the world acts, via the bridge) +
+     do the session plumbing (host). The world-sequencing is what dies. Then run
+     the e2e suite (cherub-mate, father-signs, registration). **Green = a `.js`
+     died and function is preserved.** That is the moment this stops being a wrapper.
 
    The diff in step 4 compares only the WORLD strand (the five facts + birthBeing's
    grants); the token/session is host and is not part of the world diff.

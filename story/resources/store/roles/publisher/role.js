@@ -9,8 +9,8 @@
 //   - FOREIGN. The being stays home and REACHES ACROSS in its left
 //     stance, acting on the store over cross-story IBP with its full
 //     identity. It never moves; its key is simply granted the role here.
-//     (The do:mate vessel-child is a further variant: a foreign story
-//     fathers a vessel here and acts through it.)
+//     (The do:mate being-child is a further variant: a foreign story
+//     fathers a being here and acts through it.)
 //
 // The role does not care which. Whoever holds it, identified by key, may
 // summon the registrar with the publish-listing / retire-listing
@@ -41,7 +41,11 @@ export const publisherRole = Object.freeze({
   // publish/retire intents ride the summon envelope.
   can: [
     { verb: "see", word: "identity" },
-    { verb: "call", word: "@registrar", description: "Summon the store registrar to publish or retire a listing." },
+    {
+      verb: "call",
+      word: "@registrar",
+      description: "Summon the store registrar to publish or retire a listing.",
+    },
   ],
 
   label: "Store Publisher",

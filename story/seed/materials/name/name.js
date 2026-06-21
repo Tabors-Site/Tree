@@ -9,7 +9,7 @@
 // the NAME's chain: the identity layer, lifted up off the Being.
 //
 // A Name is NOT in the world. The world contains Beings (presence); a
-// Name acts THROUGH beings (vessels). One Name owns many Beings. The
+// Name acts THROUGH beings (beings). One Name owns many Beings. The
 // Being is the formed body; the Name is who signed it into being.
 // `Being.name` is a display label, never the identity; the identity is
 // this row's `_id` (the ed25519 public key, did:key "z..." form).
@@ -116,7 +116,7 @@ const NameSchema = new mongoose.Schema({
   // above the history timeline (no history seating) and its row only ever
   // exists on its home story (the story is implicit — a story's
   // data is that story's). A Name acting on a foreign story is
-  // recorded there as the actor id on the FACTS it lays through a vessel,
+  // recorded there as the actor id on the FACTS it lays through a being,
   // with `crossOrigin` pointing home — never as a mirrored Name row.
 
   // Open characterizing layer, story-wide and LEAN. A Name is identity,
@@ -125,7 +125,11 @@ const NameSchema = new mongoose.Schema({
   // qualities) belongs to the BEING. This holds only name-level metadata
   // an extension might attach (a display profile, peering prefs). Default
   // empty Map.
-  qualities: { type: Map, of: mongoose.Schema.Types.Mixed, default: () => new Map() },
+  qualities: {
+    type: Map,
+    of: mongoose.Schema.Types.Mixed,
+    default: () => new Map(),
+  },
 
   // Projection cache markers (same as Being). `foldedSeq` is the highest
   // fact-seq the fold has applied here. Reducer-owned timestamps so the

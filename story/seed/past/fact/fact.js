@@ -47,10 +47,10 @@ import mongoose from "mongoose";
 const FactSchema = new mongoose.Schema({
   // The fact's content hash — supplied by the stamper, never
   // defaulted. 64 hex chars.
-  _id:  { type: String },
-  date: { type: Date,   default: Date.now },
+  _id: { type: String },
+  date: { type: Date, default: Date.now },
 
-  // The vessel being the name acted THROUGH. I am the actor only when
+  // The being being the name acted THROUGH. I am the actor only when
   // no being yet exists (pre-being scaffold flows: server boot, migrations).
   through: { type: String, ref: "Being", required: true },
 
@@ -66,7 +66,12 @@ const FactSchema = new mongoose.Schema({
   // / release — left stance, the actor itself), SUMMON for one
   // being calling another (right stance: the recipient). The three
   // stamping verbs are peers; SEE never appends a Fact.
-  verb:   { type: String, enum: ["do", "be", "call", "name"], default: "do", index: true },
+  verb: {
+    type: String,
+    enum: ["do", "be", "call", "name"],
+    default: "do",
+    index: true,
+  },
 
   // The operation or sub-event name. Operations register a
   // `factAction` (defaults to the operation name); helpers may write
@@ -76,9 +81,12 @@ const FactSchema = new mongoose.Schema({
   // What was acted on. Optional — some acts (multi-being ops,
   // place-level config) have no single positional target.
   of: {
-    kind: { type: String, enum: ["space", "matter", "being", "name", "place", "stance"] },
-    id:   { type: String },
-    _id:  false,
+    kind: {
+      type: String,
+      enum: ["space", "matter", "being", "name", "place", "stance"],
+    },
+    id: { type: String },
+    _id: false,
   },
 
   // Per-reel monotonic seq, allocated atomically at append time. The
@@ -91,18 +99,18 @@ const FactSchema = new mongoose.Schema({
 
   // Free-form input and output payloads. Capped at logFact write time;
   // oversized values are clipped and `truncated` is set.
-  params:    { type: mongoose.Schema.Types.Mixed, default: null },
-  result:    { type: mongoose.Schema.Types.Mixed, default: null },
+  params: { type: mongoose.Schema.Types.Mixed, default: null },
+  result: { type: mongoose.Schema.Types.Mixed, default: null },
   truncated: { type: Boolean, default: false },
 
   // Correlation. actId binds the Fact to a wake; sessionId binds
   // it to a transport session (WS, CLI, HTTP).
-  actId:  { type: String, ref: "Act", default: null },
+  actId: { type: String, ref: "Act", default: null },
   sessionId: { type: String, default: null, index: true },
 
   // Federation provenance. Set when the verb call arrived from
   // another story via canopy.
-  homeStory:  { type: String, default: null },
+  homeStory: { type: String, default: null },
   wasRemote: { type: Boolean, default: false },
 
   // INTEGRITY — per-reel hash chain.
@@ -161,11 +169,15 @@ const FactSchema = new mongoose.Schema({
   history: { type: String, default: "0", index: true },
 });
 
-FactSchema.index({ through: 1, date: -1 });                                          // a being's reel
+FactSchema.index({ through: 1, date: -1 }); // a being's reel
 FactSchema.index({ "of.kind": 1, "of.id": 1, date: -1 }, { sparse: true }); // a target's reel (date-ordered, legacy)
-FactSchema.index({ "of.kind": 1, "of.id": 1, seq: 1 }, {                     // a target's reel (seq-ordered, fold path; main / history-implicit)
-  partialFilterExpression: { seq: { $type: "number" } },
-});
+FactSchema.index(
+  { "of.kind": 1, "of.id": 1, seq: 1 },
+  {
+    // a target's reel (seq-ordered, fold path; main / history-implicit)
+    partialFilterExpression: { seq: { $type: "number" } },
+  },
+);
 // Per-reel uniqueness backstop — history-aware. Reel identity is
 // (history, of.kind, of.id); seq is per-reel. The old
 // history-blind unique index collided whenever main and a history
@@ -174,13 +186,16 @@ FactSchema.index({ "of.kind": 1, "of.id": 1, seq: 1 }, {                     // 
 //
 // Old index name `target_seq_unique` (without history) is dropped at
 // startup by the index-sync repair to release the collision.
-FactSchema.index({ history: 1, "of.kind": 1, "of.id": 1, seq: 1 }, {
-  unique: true,
-  partialFilterExpression: { seq: { $type: "number" } },
-  name: "history_target_seq_unique",
-});
-FactSchema.index({ actId: 1 }, { sparse: true });                                 // facts within a summon
-FactSchema.index({ verb: 1, act: 1, date: -1 });                                  // "every register, newest first"
+FactSchema.index(
+  { history: 1, "of.kind": 1, "of.id": 1, seq: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { seq: { $type: "number" } },
+    name: "history_target_seq_unique",
+  },
+);
+FactSchema.index({ actId: 1 }, { sparse: true }); // facts within a summon
+FactSchema.index({ verb: 1, act: 1, date: -1 }); // "every register, newest first"
 
 const Fact = mongoose.model("Fact", FactSchema, "facts");
 export default Fact;

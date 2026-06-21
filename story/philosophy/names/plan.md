@@ -23,7 +23,7 @@ Being
 A Being is the in-world presence of a Name. It's the formed body the Name acts through.
 Beings don't have their own keypairs. They don't sign things — the Name behind them signs. They don't have their own chains — their lifecycle facts live in the Name's chain.
 A Being is transient. Think of it like a process in an operating system. The Name (user) spawns Beings (processes) to do specific work in the world. When the work is done, the Being can be despawned. The Name persists; the Being's lifecycle is bounded.
-A Name can have many Beings simultaneously. Different Beings for different purposes — one for handling requests, one for background work, one for cross-reality action through a vessel. Each Being is a specific formed presence of the same underlying Name.
+A Name can have many Beings simultaneously. Different Beings for different purposes — one for handling requests, one for background work, one for cross-reality action through a being. Each Being is a specific formed presence of the same underlying Name.
 Beings occupy positions in spaces, hold matter, execute the four world-layer verbs (SEE, DO, SUMMON, BE). When you wrote code that operated on a Being's position or a Being's matter, that code stays mostly the same. What changes is who's authorized — the Being's authority comes from the Name behind it, not from the Being's own credentials.
 Soul
 A Soul is what's actually making decisions. It's the cognition behind the Name's acts.

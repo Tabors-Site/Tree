@@ -75,7 +75,7 @@ try {
   await withRetry(() => ensureIAm(), "ensureIAm"); // the I_AM being (Name/Being refactor)
   // fold-only dispatch: the words declare themselves onto I_AM's reel BEFORE any do-op dispatches.
   await withRetry(async () => {
-    const wc = { actId: randomUUID(), actorAct: { branch: "0", by: "i-am" }, identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+    const wc = { actId: randomUUID(), actorAct: { history: "0", by: "i-am" }, identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
     const { seedFold } = await import("./wordFold.js");
     await seedFold({ moment: wc });
     await sealFacts(wc.deltaF);

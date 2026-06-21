@@ -1,16 +1,16 @@
 // TreeOS Portal — the Name Hierarchy Panel (text view).
 //
-// YOUR being-tree on the branch you stand on (the IBPA left stance), and the
+// YOUR being-tree on the history you stand on (the IBPA left stance), and the
 // surface for handing another Name authority over part of it.
 //
-// What it shows: every being your Name owns on THIS branch, nested by
+// What it shows: every being your Name owns on THIS history, nested by
 // parentBeingId (a being whose parent your Name doesn't own — e.g. parented
 // under @cherub — sits at the top, tagged "under @cherub"). Each node lists the
 // inheritation POINTS granted there (the Names you've given downward authority
 // over that subtree) with a ✕ to revoke, and a "+ grant a name" form to add one.
 //
-// Branch-scoped on purpose: switch branch (the branch bar) to see and grant on
-// another timeline. A grant lands on the branch shown here, so the tree you see
+// History-scoped on purpose: switch history (the branch bar) to see and grant on
+// another timeline. A grant lands on the history shown here, so the tree you see
 // is exactly the access you give. Reading the tree is bodiless (the name
 // channel); GRANTING/REVOKING are world acts, so they need you to be DRIVING a
 // being (the embodiment rule) — when you're at the arrival floor with no being,
@@ -68,7 +68,7 @@ export async function showNameTree({ client, story = "", nameId, history, canAct
   const tools = el("div", "nt-tools");
   if (reopen) {
     const refresh = el("button", "nt-x", "⟳");
-    refresh.title = "refresh for the branch you stand on now";
+    refresh.title = "refresh for the history you stand on now";
     refresh.onclick = () => reopen();
     tools.appendChild(refresh);
   }
@@ -81,8 +81,8 @@ export async function showNameTree({ client, story = "", nameId, history, canAct
 
   card.appendChild(el("p", "nt-sub",
     canAct
-      ? "The beings you own on this branch. Grant a Name a point on any node to hand it authority over that being and everything under it. Switch branch to grant on another timeline."
-      : "The beings you own on this branch. Drive one of your beings to grant or revoke (a grant is a world act, so it needs a being to act through)."));
+      ? "The beings you own on this history. Grant a Name a point on any node to hand it authority over that being and everything under it. Switch history to grant on another timeline."
+      : "The beings you own on this history. Drive one of your beings to grant or revoke (a grant is a world act, so it needs a being to act through)."));
 
   const status = el("div", "nt-status");
   const list = el("div", "nt-list");
@@ -105,7 +105,7 @@ export async function showNameTree({ client, story = "", nameId, history, canAct
 
   const roots = Array.isArray(tree?.roots) ? tree.roots : [];
   if (roots.length === 0) {
-    list.appendChild(el("div", "nt-empty", "No beings on this branch yet. Birth one (drive @cherub / the being menu), or switch to the branch where your beings live."));
+    list.appendChild(el("div", "nt-empty", "No beings on this history yet. Birth one (drive @cherub / the being menu), or switch to the history where your beings live."));
     return panel;
   }
 

@@ -33,7 +33,7 @@ export function actorHistoryFrom(moment, hint) {
   if (typeof history !== "string" || !history.length) {
     throw new Error(
       `actorHistoryFrom: moment.actorAct.history missing${hint ? ` (${hint})` : ""}. ` +
-      `Every moment opener (planActRow, withIAmAct, withBeingAct) must seat the Act on the ctx.`
+        `Every moment opener (planActRow, withIAmAct, withBeingAct) must seat the Act on the ctx.`,
     );
   }
   return history;
@@ -47,7 +47,7 @@ export function actorStoryFrom(moment, hint) {
   const story = moment?.actorAct?.story;
   if (typeof story !== "string" || !story.length) {
     throw new Error(
-      `actorStoryFrom: moment.actorAct.story missing${hint ? ` (${hint})` : ""}.`
+      `actorStoryFrom: moment.actorAct.story missing${hint ? ` (${hint})` : ""}.`,
     );
   }
   return story;
@@ -68,26 +68,26 @@ export function actorStoryFrom(moment, hint) {
 export function deriveCrossOrigin(actorAct, target) {
   if (!actorAct || !target) return null;
   const actorStory = actorAct.story;
-  const actorHistory  = actorAct.history;
+  const actorHistory = actorAct.history;
   const targetStory = target?.world?.story;
-  const targetHistory  = target?.world?.history;
+  const targetHistory = target?.world?.history;
   if (!actorStory || !actorHistory || !targetStory || !targetHistory) {
     return null;
   }
   if (actorStory === targetStory && actorHistory === targetHistory) {
-    return null;  // same world; no foreign provenance
+    return null; // same world; no foreign provenance
   }
   return {
     // null when cross-history within the same story; the foreign
     // domain when cross-story. Receiving substrate consumes both
     // shapes uniformly.
     story: actorStory === targetStory ? null : actorStory,
-    history:  actorHistory,
+    history: actorHistory,
     // beingId = the POSITION the act came through (stays the dedupe key with
     // actId). nameId = the SIGNER-of-record (the foreign actor's name), so a
-    // foreign father's facts attribute to HIS name, not the vessel's owner.
+    // foreign father's facts attribute to HIS name, not the being's owner.
     beingId: actorAct.through,
-    nameId:  actorAct.by ?? null,
-    actId:   actorAct._id,
+    nameId: actorAct.by ?? null,
+    actId: actorAct._id,
   };
 }

@@ -611,7 +611,7 @@ beings (what is acted on), and acts are the events that connect them.
 - **Authority and roles.** Names with roles, inheritation points, and sovereignty
   give a structured, verifiable authority model, not just behavior.
 - **Identity persistence.** Lamport processes are usually session scoped. Names
-  persist across sessions, branches, and even realities via vessels.
+  persist across sessions, branches, and even realities via beings.
 
 None of this violates Lamport's causality principles; it extends them with
 structured world primitives. The causality engine is Lamport like; the world it
@@ -654,7 +654,6 @@ sourcing plus capabilities plus DIDs plus a specific theory of names and beings.
 The first five exist in distributed systems literature. The last is the original
 contribution, and the value is in the combination, each piece drawn from a real
 lineage and assembled into something structurally coherent.
-
 
 ---
 
@@ -989,7 +988,7 @@ Position-based queries. "What's in this space?" requires structure that Lamport 
 
 Authority and roles. Lamport processes don't have authority concepts beyond "this process can do this thing." TreeOS has Names with roles, inheritation points, sovereignty over chains. The authority model is structured and verifiable, not just behavioral.
 
-Identity persistence. Lamport processes are typically scoped to a session. TreeOS Names persist across sessions, branches, even realities (via vessels). Identity is durable, cryptographic, sovereign.
+Identity persistence. Lamport processes are typically scoped to a session. TreeOS Names persist across sessions, branches, even realities (via beings). Identity is durable, cryptographic, sovereign.
 
 These additions don't violate Lamport's causality principles — they extend them with structured world primitives. The causality engine is Lamport-like; the world it operates on is richer.
 

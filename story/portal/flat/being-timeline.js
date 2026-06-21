@@ -81,11 +81,11 @@ export async function renderTimelineSection(container, being, ctx) {
 async function fetchActs(story, beingId) {
   if (!story) return [];
   try {
-    // Qualify the SEE with the active branch so the timeline reads the
+    // Qualify the SEE with the active history so the timeline reads the
     // right reel. Without the qualifier, typed story means main, and
     // a #1 user's flat-app timeline silently displays main's acts.
-    const branch = flat.state.descriptor?.address?.history || "0";
-    const bq = branch === "0" ? "" : `#${branch}`;
+    const history = flat.state.descriptor?.address?.history || "0";
+    const bq = history === "0" ? "" : `#${history}`;
     const desc = await flat.state.client.see(`${story}${bq}/.acts/${beingId}`);
     const chain = desc?.actChain;
     return Array.isArray(chain?.acts) ? chain.acts.slice(0, MAX_ACTS) : [];
@@ -188,8 +188,8 @@ async function openHistoricalView({ story, being, whenISO, pastContainer }) {
   // identity — everything — folds to its own state at that point.
   let descriptor;
   try {
-    const branch = flat.state.descriptor?.address?.history || "0";
-    const bq = branch === "0" ? "" : `#${branch}`;
+    const history = flat.state.descriptor?.address?.history || "0";
+    const bq = history === "0" ? "" : `#${history}`;
     descriptor = await flat.state.client.see(`${story}${bq}/@${being.being}`, {
       at: { atTimestamp: whenISO },
     });

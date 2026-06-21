@@ -54,7 +54,7 @@ function parseUrl(url) {
 // IBPA_RE in portalOp.js). url and ibpa are completely different
 // reference worlds with their own input fields: a url is an http
 // link into the WWW (web matter, embeds); an ibpa is an IBP address
-// into another story / branch / position (type "ibpa" — the
+// into another story / history / position (type "ibpa" — the
 // inter-story portal; four verbs go through it, never an iframe).
 const IBPA_SHAPE_RE = /^(?:[a-zA-Z0-9.\-_]+(?:#[^/]+)?|#[^/]+)\/.*$/;
 
@@ -202,11 +202,11 @@ export function renderMatterComposer(body, action, { refreshView } = {}) {
   form.appendChild(urlField);
 
   // A COMPLETELY different reference world from url: an IBP address
-  // into another story / branch / position. Becomes type "ibpa"
+  // into another story / history / position. Becomes type "ibpa"
   // (the inter-story portal) via form-portal — verbs go through
   // it; it never opens an iframe.
   const ibpaField = el("div", "op-field");
-  ibpaField.appendChild(el("label", null, "ibpa (a doorway — another story / branch)"));
+  ibpaField.appendChild(el("label", null, "ibpa (a doorway — another story / history)"));
   const ibpaInput = document.createElement("input");
   ibpaInput.type = "text";
   ibpaInput.placeholder = "other.world#0/library  or  #1a/<spaceId>";

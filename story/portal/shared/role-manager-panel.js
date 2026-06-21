@@ -45,49 +45,84 @@ import "../styles/role-manager-panel.css";
 // seed/present/roles/roleFlow.js for the matching set on the server.
 const FIELDS = [
   // Who
-  { path: "verb",                 label: "the verb",                  type: "select", options: ["do", "call", "be"] },
-  { path: "action",               label: "the DO action name",        type: "text"   },
-  { path: "operation",            label: "the BE op name",            type: "text"   },
-  { path: "intent",               label: "the intent",                type: "text"   },
-  { path: "connectedFrom",        label: "the asker's beingId",       type: "text"   },
-  { path: "caller.role",          label: "the asker's role",          type: "role"   },
-  { path: "caller.name",          label: "the asker's name",          type: "text"   },
-  { path: "caller.cognition",     label: "the asker's cognition",     type: "select", options: ["llm", "human", "scripted"] },
-  { path: "caller.isSelf",        label: "the asker is me",           type: "bool"   },
-  { path: "caller.isAncestor",    label: "the asker is my ancestor",  type: "bool"   },
-  { path: "caller.isDescendant",  label: "the asker is my descendant", type: "bool"  },
+  {
+    path: "verb",
+    label: "the verb",
+    type: "select",
+    options: ["do", "call", "be"],
+  },
+  { path: "action", label: "the DO action name", type: "text" },
+  { path: "operation", label: "the BE op name", type: "text" },
+  { path: "intent", label: "the intent", type: "text" },
+  { path: "connectedFrom", label: "the asker's beingId", type: "text" },
+  { path: "caller.role", label: "the asker's role", type: "role" },
+  { path: "caller.name", label: "the asker's name", type: "text" },
+  {
+    path: "caller.cognition",
+    label: "the asker's cognition",
+    type: "select",
+    options: ["llm", "human", "scripted"],
+  },
+  { path: "caller.isSelf", label: "the asker is me", type: "bool" },
+  {
+    path: "caller.isAncestor",
+    label: "the asker is my ancestor",
+    type: "bool",
+  },
+  {
+    path: "caller.isDescendant",
+    label: "the asker is my descendant",
+    type: "bool",
+  },
 
   // Where
-  { path: "space.id",             label: "this space's id",            type: "text"   },
-  { path: "space.name",           label: "this space's name",          type: "text"   },
-  { path: "space.type",           label: "this space's type",          type: "text"   },
-  { path: "space.heavenSpace",      label: "this space's heavenSpace tag", type: "text"   },
-  { path: "coords.x",             label: "my X coord",                 type: "number" },
-  { path: "coords.y",             label: "my Y coord",                 type: "number" },
-  { path: "inHomeSpace",          label: "I am at home",               type: "bool"   },
+  { path: "space.id", label: "this space's id", type: "text" },
+  { path: "space.name", label: "this space's name", type: "text" },
+  { path: "space.type", label: "this space's type", type: "text" },
+  {
+    path: "space.heavenSpace",
+    label: "this space's heavenSpace tag",
+    type: "text",
+  },
+  { path: "coords.x", label: "my X coord", type: "number" },
+  { path: "coords.y", label: "my Y coord", type: "number" },
+  { path: "inHomeSpace", label: "I am at home", type: "bool" },
 
   // Me
-  { path: "me.cognition",         label: "my cognition",               type: "select", options: ["llm", "human", "scripted"] },
-  { path: "me.role",              label: "my default role",            type: "role"   },
-  { path: "me.previousRole",      label: "my previous moment's role",  type: "role"   },
-  { path: "me.position",          label: "my current position",        type: "text"   },
+  {
+    path: "me.cognition",
+    label: "my cognition",
+    type: "select",
+    options: ["llm", "human", "scripted"],
+  },
+  { path: "me.role", label: "my default role", type: "role" },
+  { path: "me.previousRole", label: "my previous moment's role", type: "role" },
+  { path: "me.position", label: "my current position", type: "text" },
 
   // Time
-  { path: "time.hour",            label: "hour of day (0–23)",         type: "number" },
-  { path: "time.dayOfWeek",       label: "day of week (0=Sun…6=Sat)",  type: "number" },
-  { path: "time.sinceLastMoment", label: "seconds since last moment",  type: "number" },
+  { path: "time.hour", label: "hour of day (0–23)", type: "number" },
+  {
+    path: "time.dayOfWeek",
+    label: "day of week (0=Sun…6=Sat)",
+    type: "number",
+  },
+  {
+    path: "time.sinceLastMoment",
+    label: "seconds since last moment",
+    type: "number",
+  },
 ];
 
 const OPS = [
-  { value: "eq",      label: "is"                },
-  { value: "ne",      label: "is not"            },
-  { value: "in",      label: "is one of"         },
-  { value: "notIn",   label: "is not one of"     },
-  { value: "gt",      label: ">"                 },
-  { value: "gte",     label: "≥"                 },
-  { value: "lt",      label: "<"                 },
-  { value: "lte",     label: "≤"                 },
-  { value: "present", label: "is present"        }, // value: true | false
+  { value: "eq", label: "is" },
+  { value: "ne", label: "is not" },
+  { value: "in", label: "is one of" },
+  { value: "notIn", label: "is not one of" },
+  { value: "gt", label: ">" },
+  { value: "gte", label: "≥" },
+  { value: "lt", label: "<" },
+  { value: "lte", label: "≤" },
+  { value: "present", label: "is present" }, // value: true | false
 ];
 
 // ──────────────────────────────────────────────────────────────
@@ -121,27 +156,32 @@ export async function renderRoleManagerPanel(container, beingEntry, ctx) {
     const msg = document.createElement("div");
     msg.className = "rm-sub";
     msg.style.marginTop = "8px";
-    msg.textContent = "role-manager catalogs missing from descriptor. Reload the place and try again.";
+    msg.textContent =
+      "role-manager catalogs missing from descriptor. Reload the place and try again.";
     container.appendChild(msg);
     return;
   }
   const c = rmEntry.catalogs;
 
   const catalogs = {
-    roles:      (c.roles      || []).map((r) => r.name).sort(),
-    addresses:  (c.addresses  || []).map((a) => a.name),
-    doActions:  (c.operations || []).map((o) => o.name).sort(),
-    beOps:      (c.beOps      || []).map((o) => o.name).sort(),
+    roles: (c.roles || []).map((r) => r.name).sort(),
+    addresses: (c.addresses || []).map((a) => a.name),
+    doActions: (c.operations || []).map((o) => o.name).sort(),
+    beOps: (c.beOps || []).map((o) => o.name).sort(),
   };
 
   container.appendChild(renderRolesSection(c.roles || []));
-  container.appendChild(renderCreateRoleSection(catalogs, ctx, () => {
-    renderRoleManagerPanel(container, beingEntry, ctx);
-  }));
-  container.appendChild(await renderFlowEditorSection(
-    catalogs.roles.map((n) => ({ name: n })),
-    ctx,
-  ));
+  container.appendChild(
+    renderCreateRoleSection(catalogs, ctx, () => {
+      renderRoleManagerPanel(container, beingEntry, ctx);
+    }),
+  );
+  container.appendChild(
+    await renderFlowEditorSection(
+      catalogs.roles.map((n) => ({ name: n })),
+      ctx,
+    ),
+  );
 }
 
 function findRoleManagerEntry(beingEntry, ctx) {
@@ -184,7 +224,8 @@ function renderRolesSection(allRoles) {
     const bits = [];
     if (r.origin) bits.push(r.origin);
     if (r.requiredCognition) bits.push(`needs ${r.requiredCognition}`);
-    if (Array.isArray(r.permissions) && r.permissions.length) bits.push(r.permissions.join("/"));
+    if (Array.isArray(r.permissions) && r.permissions.length)
+      bits.push(r.permissions.join("/"));
     meta.textContent = bits.join(" · ");
     li.appendChild(meta);
 
@@ -217,7 +258,7 @@ function renderCreateRoleSection(catalogs, ctx, onCreated) {
   // intents this role ACCEPTS when targeted). Submit combines them
   // into a single canSummon array with each entry tagged `as:"actor"`
   // or `as:"receiver"`. See seed/RolesAreAuth.md "canSummon: one
-  // field, two surfaces" + FEDERATION.md "mate + vessel".
+  // field, two surfaces" + FEDERATION.md "mate + being".
   const selected = {
     canSee: [],
     canDo: [],
@@ -226,16 +267,41 @@ function renderCreateRoleSection(catalogs, ctx, onCreated) {
     canBe: [],
   };
 
-  const nameInput        = field("name (kebab-case)",       "text");
-  const cognitionSelect  = selectField("required cognition", ["", "llm", "human", "scripted"]);
+  const nameInput = field("name (kebab-case)", "text");
+  const cognitionSelect = selectField("required cognition", [
+    "",
+    "llm",
+    "human",
+    "scripted",
+  ]);
 
-  const canSeePicker             = chipPicker({ label: "canSee — IBP addresses this role can read",                       source: catalogs.addresses, state: selected.canSee });
-  const canDoPicker              = chipPicker({ label: "canDo — DO action names",                                          source: catalogs.doActions, state: selected.canDo  });
-  const canSummonActorPicker     = chipPicker({ label: "canSummon (initiates) — beings this role can SEND summons to",     source: catalogs.roles,     state: selected.canSummonActor });
-  const canSummonReceiverPicker  = chipPicker({ label: "canSummon (accepts) — intents this role ACCEPTS when targeted",   source: [],                 state: selected.canSummonReceiver });
-  const canBePicker              = chipPicker({ label: "canBe — BE op names",                                              source: catalogs.beOps,     state: selected.canBe  });
+  const canSeePicker = chipPicker({
+    label: "canSee — IBP addresses this role can read",
+    source: catalogs.addresses,
+    state: selected.canSee,
+  });
+  const canDoPicker = chipPicker({
+    label: "canDo — DO action names",
+    source: catalogs.doActions,
+    state: selected.canDo,
+  });
+  const canSummonActorPicker = chipPicker({
+    label: "canSummon (initiates) — beings this role can SEND summons to",
+    source: catalogs.roles,
+    state: selected.canSummonActor,
+  });
+  const canSummonReceiverPicker = chipPicker({
+    label: "canSummon (accepts) — intents this role ACCEPTS when targeted",
+    source: [],
+    state: selected.canSummonReceiver,
+  });
+  const canBePicker = chipPicker({
+    label: "canBe — BE op names",
+    source: catalogs.beOps,
+    state: selected.canBe,
+  });
 
-  const promptInput      = field("system prompt", "multiline");
+  const promptInput = field("system prompt", "multiline");
 
   form.appendChild(nameInput.wrap);
   form.appendChild(cognitionSelect.wrap);
@@ -275,13 +341,13 @@ function renderCreateRoleSection(catalogs, ctx, onCreated) {
         ),
       ];
       await ctx.doOp(stance, "set-role", {
-        name:              nameInput.input.value.trim(),
+        name: nameInput.input.value.trim(),
         requiredCognition: cognitionSelect.input.value || "",
-        canSee:            selected.canSee,
-        canDo:             selected.canDo,
-        canSummon:         canSummonCombined,
-        canBe:             selected.canBe,
-        prompt:            promptInput.input.value,
+        canSee: selected.canSee,
+        canDo: selected.canDo,
+        canSummon: canSummonCombined,
+        canBe: selected.canBe,
+        prompt: promptInput.input.value,
       });
       status.textContent = `created — restart to register in memory.`;
       if (typeof onCreated === "function") onCreated();
@@ -400,12 +466,14 @@ function chipPicker({ label, source, state }) {
 
   input.oninput = renderDrop;
   input.onfocus = renderDrop;
-  input.onblur  = () => setTimeout(() => drop.classList.add("rm-hidden"), 120);
+  input.onblur = () => setTimeout(() => drop.classList.add("rm-hidden"), 120);
   input.onkeydown = (ev) => {
     if (ev.key === "Enter") {
       ev.preventDefault();
       const q = input.value.trim();
-      const exact = (source || []).find((s) => s.toLowerCase() === q.toLowerCase());
+      const exact = (source || []).find(
+        (s) => s.toLowerCase() === q.toLowerCase(),
+      );
       addItem(exact || q);
     } else if (ev.key === "Backspace" && input.value === "" && state.length) {
       state.pop();
@@ -429,9 +497,9 @@ async function renderFlowEditorSection(allRoles, ctx) {
   // entry point.
   const flow = await loadFlowForSelf(ctx);
   return renderFlowEditor(allRoles, ctx, {
-    headerLabel:    "your role flow",
-    initialFlow:    flow,
-    targetStance:   `${ctx.story}${ctx.history && ctx.history !== "0" ? `#${ctx.history}` : ""}/@${ctx.username}`,
+    headerLabel: "your role flow",
+    initialFlow: flow,
+    targetStance: `${ctx.story}${ctx.history && ctx.history !== "0" ? `#${ctx.history}` : ""}/@${ctx.username}`,
   });
 }
 
@@ -447,7 +515,11 @@ async function renderFlowEditorSection(allRoles, ctx) {
  * @param {Array}  target.initialFlow      current roleFlow on the target being (or empty)
  * @param {string} target.targetStance     where to save (`<story>/@<name>`)
  */
-export function renderFlowEditor(allRoles, ctx, { headerLabel, initialFlow, targetStance }) {
+export function renderFlowEditor(
+  allRoles,
+  ctx,
+  { headerLabel, initialFlow, targetStance },
+) {
   const sec = document.createElement("section");
   sec.className = "rm-section";
 
@@ -457,7 +529,8 @@ export function renderFlowEditor(allRoles, ctx, { headerLabel, initialFlow, targ
 
   const hint = document.createElement("div");
   hint.className = "rm-sub";
-  hint.textContent = "Primary clauses compete via first-match-wins; stacked clauses (modifiers) ALL apply when their conditions match. Permissions union; prompts concatenate.";
+  hint.textContent =
+    "Primary clauses compete via first-match-wins; stacked clauses (modifiers) ALL apply when their conditions match. Permissions union; prompts concatenate.";
   sec.appendChild(hint);
 
   const draft = Array.isArray(initialFlow) ? deepCopy(initialFlow) : [];
@@ -469,7 +542,9 @@ export function renderFlowEditor(allRoles, ctx, { headerLabel, initialFlow, targ
   function rerender() {
     list.innerHTML = "";
     draft.forEach((clause, idx) => {
-      list.appendChild(renderClause(clause, idx, draft, allRoles, () => rerender()));
+      list.appendChild(
+        renderClause(clause, idx, draft, allRoles, () => rerender()),
+      );
     });
     list.appendChild(renderDefaultRow(draft, allRoles, () => rerender()));
   }
@@ -484,9 +559,12 @@ export function renderFlowEditor(allRoles, ctx, { headerLabel, initialFlow, targ
   addClauseBtn.onclick = () => {
     // Insert before the terminal default (the clause with no `when`).
     const insertAt = draft.findIndex((c) => !c.when);
-    const newClause = { when: { [FIELDS[0].path]: "" }, role: allRoles[0]?.name || "" };
+    const newClause = {
+      when: { [FIELDS[0].path]: "" },
+      role: allRoles[0]?.name || "",
+    };
     if (insertAt >= 0) draft.splice(insertAt, 0, newClause);
-    else               draft.push(newClause);
+    else draft.push(newClause);
     rerender();
   };
   actions.appendChild(addClauseBtn);
@@ -559,14 +637,16 @@ function renderClause(clause, idx, draft, allRoles, onChange) {
   }
 
   Object.keys(clause.when).forEach((path, condIdx) => {
-    row.appendChild(renderConditionLine({
-      clause,
-      path,
-      value: clause.when[path],
-      prefix: condIdx === 0 ? "WHEN" : "AND",
-      allRoles,
-      onChange,
-    }));
+    row.appendChild(
+      renderConditionLine({
+        clause,
+        path,
+        value: clause.when[path],
+        prefix: condIdx === 0 ? "WHEN" : "AND",
+        allRoles,
+        onChange,
+      }),
+    );
   });
 
   const andBtn = document.createElement("button");
@@ -596,7 +676,9 @@ function renderClause(clause, idx, draft, allRoles, onChange) {
     roleSelect.appendChild(opt);
   }
   roleSelect.value = clause.role || "";
-  roleSelect.onchange = () => { clause.role = roleSelect.value; };
+  roleSelect.onchange = () => {
+    clause.role = roleSelect.value;
+  };
   thenLine.appendChild(roleSelect);
 
   const removeClauseBtn = document.createElement("button");
@@ -612,7 +694,14 @@ function renderClause(clause, idx, draft, allRoles, onChange) {
   return row;
 }
 
-function renderConditionLine({ clause, path, value, prefix, allRoles, onChange }) {
+function renderConditionLine({
+  clause,
+  path,
+  value,
+  prefix,
+  allRoles,
+  onChange,
+}) {
   const line = document.createElement("div");
   line.className = "rm-condition";
 
@@ -669,9 +758,15 @@ function renderConditionLine({ clause, path, value, prefix, allRoles, onChange }
   };
   line.appendChild(opSel);
 
-  const valInput = renderValueInput(fieldSpec, opSel.value, raw, allRoles, (next) => {
-    clause.when[path] = packOperand(opSel.value, next);
-  });
+  const valInput = renderValueInput(
+    fieldSpec,
+    opSel.value,
+    raw,
+    allRoles,
+    (next) => {
+      clause.when[path] = packOperand(opSel.value, next);
+    },
+  );
   line.appendChild(valInput);
 
   const rm = document.createElement("button");
@@ -706,7 +801,7 @@ function renderValueInput(fieldSpec, op, raw, allRoles, onUpdate) {
     return sel;
   }
 
-  const isList = (op === "in" || op === "notIn");
+  const isList = op === "in" || op === "notIn";
   if (isList) {
     const input = document.createElement("input");
     input.type = "text";
@@ -714,7 +809,10 @@ function renderValueInput(fieldSpec, op, raw, allRoles, onUpdate) {
     input.placeholder = "comma-separated";
     input.value = Array.isArray(raw) ? raw.join(", ") : String(raw || "");
     input.oninput = () => {
-      const parts = input.value.split(",").map((s) => s.trim()).filter(Boolean);
+      const parts = input.value
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
       onUpdate(parts);
     };
     return input;
@@ -782,7 +880,9 @@ function renderValueInput(fieldSpec, op, raw, allRoles, onUpdate) {
 // ── Default (terminal) row ─────────────────────────────────────
 
 function renderDefaultRow(draft, allRoles, onChange) {
-  let defaultClause = draft.find((c) => !c.when || Object.keys(c.when).length === 0);
+  let defaultClause = draft.find(
+    (c) => !c.when || Object.keys(c.when).length === 0,
+  );
   if (!defaultClause) {
     defaultClause = { role: "" };
     draft.push(defaultClause);
@@ -838,8 +938,9 @@ async function loadFlowForSelf(ctx) {
     const desc = await see(`${story}${bq}/@${username}`);
     const myId = desc.identity?.beingId || null;
     const pool = [].concat(desc.beings || [], desc.residents || []);
-    const mine = (myId && pool.find((b) => String(b.beingId) === String(myId)))
-              || pool.find((b) => b.being === username || b.name === username);
+    const mine =
+      (myId && pool.find((b) => String(b.beingId) === String(myId))) ||
+      pool.find((b) => b.being === username || b.name === username);
     const rf = mine?.qualities?.roleFlow;
     return Array.isArray(rf) ? rf : [];
   } catch {
@@ -938,4 +1039,3 @@ function randomId() {
 function inferFieldSpec(path) {
   return { path, label: path, type: "text" };
 }
-

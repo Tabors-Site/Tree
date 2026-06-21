@@ -102,12 +102,12 @@ This unification (the seed gaining coherence, not shedding capability) covers fe
 
 Three distinct concepts in RolesAreAuth share or border on the word "global"; keeping them precise matters for federation:
 
-| | **The `global` role** | **`globalRoles`** | **Normal roles** |
-|---|---|---|---|
-| What | A specific role NAME | Roles in the heaven registry marked as universally usable | All other roles |
-| Who holds it | Granted to every being on this reality at birth | Any being can adopt them without a grant, pick-up-and-use | Held only by beings with explicit grants |
-| Purpose | Customizable per-reality baseline ("everyone here can do X") | Public toolkits, roles anyone can pick up to build with; no permission gate to adopt | Per-node anchored roles; explicit grant required |
-| For foreign actors | Not granted (foreign actors aren't birthed here) | Available, foreign actors can adopt globalRoles same as locals | Need explicit `grant-role` to a specific foreign beingId |
+|                    | **The `global` role**                                        | **`globalRoles`**                                                                    | **Normal roles**                                         |
+| ------------------ | ------------------------------------------------------------ | ------------------------------------------------------------------------------------ | -------------------------------------------------------- |
+| What               | A specific role NAME                                         | Roles in the heaven registry marked as universally usable                            | All other roles                                          |
+| Who holds it       | Granted to every being on this reality at birth              | Any being can adopt them without a grant, pick-up-and-use                            | Held only by beings with explicit grants                 |
+| Purpose            | Customizable per-reality baseline ("everyone here can do X") | Public toolkits, roles anyone can pick up to build with; no permission gate to adopt | Per-node anchored roles; explicit grant required         |
+| For foreign actors | Not granted (foreign actors aren't birthed here)             | Available, foreign actors can adopt globalRoles same as locals                       | Need explicit `grant-role` to a specific foreign beingId |
 
 The orthogonal `scope` field on a role spec (`"anchored"` vs `"global"`) is a SEPARATE axis, it controls how a role's REACH works once held (per-anchor descendants vs reality-wide). A role can be a globalRole (anyone can adopt) AND `scope: "anchored"` (its reach is anchor-bound); the two dimensions don't conflict.
 
@@ -116,28 +116,28 @@ The orthogonal `scope` field on a role spec (`"anchored"` vs `"global"`) is a SE
 - Foreign actor's reality is cryptographically vouched via canopy (`req.canopySender`). Their beingId is what their home reality told us.
 - The foreign actor carries ZERO grants on this reality. Cross-world role propagation is out of scope, home-side roles don't transfer.
 - The receiving reality's `authorize` evaluates the foreign actor against THIS reality's registry. The foreign actor doesn't get the local `global` role (only beings birthed here get that).
-- BUT: the foreign actor CAN adopt any **globalRole** registered on this reality, same as a local being could. If the reality publishes open roles in its heaven registry, a "republic" of openly-usable roles, foreign actors can act under them directly. No grant, no mate, no vessel needed.
+- BUT: the foreign actor CAN adopt any **globalRole** registered on this reality, same as a local being could. If the reality publishes open roles in its heaven registry, a "republic" of openly-usable roles, foreign actors can act under them directly. No grant, no mate, no being needed.
 - For roles that aren't globalRoles (the per-node anchored ones), the foreign actor needs explicit `grant-role` from someone on this reality holding `grant-role:<rolename>`, same gate as for a local being acquiring a non-global role.
 
 **The receiving reality's federation posture is expressed entirely through what it publishes as globalRoles.** A reality that wants to be open registers permissive globalRoles; a reality that wants tight federation publishes a minimal set or none. Operators don't author a special federation-policy sublanguage, they curate their globalRoles registry, and that IS their federation policy. Foreign actors arrive, see what's openly available, and either find a fit or don't.
 
-## Cross-world citizenship: mate + vessel (an option for native local presence)
+## Cross-world citizenship: mate + being (an option for native local presence)
 
 The previous section covered direct cross-world participation, a foreign actor adopting a globalRole on the receiving reality and acting there as themselves, via the canopy round-trip. That works, and for many cases it's all you need.
 
 But it has a structural property worth naming: **the foreign actor's acts stay on their HOME reality's chain**, with consequence Facts landing on the receiving reality's reels carrying `crossOrigin` provenance. Each act is split across two chains. The receiving reality's record of what the foreign actor did is fragmentary, just the consequences, with provenance pointing back.
 
-When a being wants their acts and facts to **live wholly on the foreign reality**, a clean, native biographical presence there, they can mate-birth a vessel. The vessel IS a local being; the vessel's acts are local acts; the vessel's biography is wholly contained in the foreign reality's chain. The father (the foreign being who commissioned the vessel) keeps their sovereignty at home, but their actions THROUGH the vessel are recorded as the vessel's actions, in the foreign reality's chain.
+When a being wants their acts and facts to **live wholly on the foreign reality**, a clean, native biographical presence there, they can mate-birth a being. The being IS a local being; the being's acts are local acts; the being's biography is wholly contained in the foreign reality's chain. The father (the foreign being who commissioned the being) keeps their sovereignty at home, but their actions THROUGH the being are recorded as the being's actions, in the foreign reality's chain.
 
 This is a **distinct architectural option**, not a replacement for direct cross-world action. Two paths:
 
-| | Direct cross-world action | Mate-vessel pattern |
-|---|---|---|
-| When to use | Quick interactions; the receiving reality has open globalRoles that admit your case | You want sustained, native presence; clean local biography on the foreign reality |
-| Act-chain locality | Actor's Act on home; foreign Facts on theirs (crossOrigin) | All acts + facts on the foreign reality (vessel is local) |
-| Required mechanism | None beyond canopy + adoptable globalRole | summon:mate, vessel, BE:connect |
-| Sovereignty preserved | Yes (acts are yours, on your chain) | Yes (your home identity untouched; vessel acts as itself) |
-| Cost / setup | Per-call canopy round-trip | One-time birth; subsequent connects are cheap |
+|                       | Direct cross-world action                                                           | Mate-being pattern                                                                |
+| --------------------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| When to use           | Quick interactions; the receiving reality has open globalRoles that admit your case | You want sustained, native presence; clean local biography on the foreign reality |
+| Act-chain locality    | Actor's Act on home; foreign Facts on theirs (crossOrigin)                          | All acts + facts on the foreign reality (being is local)                          |
+| Required mechanism    | None beyond canopy + adoptable globalRole                                           | summon:mate, being, BE:connect                                                    |
+| Sovereignty preserved | Yes (acts are yours, on your chain)                                                 | Yes (your home identity untouched; being acts as itself)                          |
+| Cost / setup          | Per-call canopy round-trip                                                          | One-time birth; subsequent connects are cheap                                     |
 
 Both honor "GRASP without SOVEREIGNTY loss", they're two different shapes of grasp.
 
@@ -161,7 +161,7 @@ The summon is the asking. The birth is the doing. Two separable verbs; two separ
 
 A reality that wants to admit foreign cross-world citizenship publishes a `birther` role whose cognition auto-accepts incoming `summon:mate` requests (subject to whatever filters the operator configures, rate-limits, allow/blocklists, etc.). Whoever the operator anoints as the reality's birther becomes the "make me a child here" service.
 
-A foreign actor wanting native presence on bing.com summons:mate against bing.com's birther. Auto-accept fires. Birther stamps be:birth on bing.com's chain. Child has birther as mother (full structural parent in bing.com) and the foreign actor as father (BE:connect eligibility). Vessel ready.
+A foreign actor wanting native presence on bing.com summons:mate against bing.com's birther. Auto-accept fires. Birther stamps be:birth on bing.com's chain. Child has birther as mother (full structural parent in bing.com) and the foreign actor as father (BE:connect eligibility). being ready.
 
 Operators who don't want to admit foreign citizenship simply don't anoint a birther role on their reality, or restrict who can summons:mate against it. Same registry, same role mechanism, same operator surface. No federation-specific config.
 
@@ -169,12 +169,12 @@ Peer-to-peer mating between non-birther beings works through the same mechanism:
 
 ### The two parental rights
 
-| | Mother (right stance) | Father (left stance, dual-parent only) |
-|---|---|---|
-| Identity chain | In the chain (structural parent) | NOT in the chain |
-| Governance authority | Full | None, cannot grant roles, set qualities, govern |
-| `BE:connect` eligibility | Yes (her usual parental connection) | Yes (vessel right) |
-| Removability | Permanent (recorded at birth) | Permanent (recorded at birth); see policy on revocation |
+|                          | Mother (right stance)               | Father (left stance, dual-parent only)                  |
+| ------------------------ | ----------------------------------- | ------------------------------------------------------- |
+| Identity chain           | In the chain (structural parent)    | NOT in the chain                                        |
+| Governance authority     | Full                                | None, cannot grant roles, set qualities, govern         |
+| `BE:connect` eligibility | Yes (her usual parental connection) | Yes (being right)                                       |
+| Removability             | Permanent (recorded at birth)       | Permanent (recorded at birth); see policy on revocation |
 
 Father carries exactly ONE structural right: BE:connect eligibility. That's it. Father is a tightly-bounded structural right, connection eligibility plus the metadata link recording parentage.
 
@@ -208,25 +208,25 @@ being-A     BE:disconnect ──────────────▶    child
 3. Birther-B calls `be:birth(father={reality:"A", beingId:"<being-A>"})` on B's own chain. Birther is the actor (= mother); the param carries the father. The Stamper records:
    - **Mother:** birther-B (full structural parent in B).
    - **Father:** the foreign A-being (the verified canopy tuple, stored at `child.qualities.father`).
-4. The summon reply carries C's identifier back to A so A knows what vessel exists for them.
+4. The summon reply carries C's identifier back to A so A knows what being exists for them.
 5. C is a fully native B-being. Identity in B. Roles granted by B-mechanisms (whatever the birther's policy admits at birth). Subject to B's authorize like any local being.
-6. A can `BE:connect` into C as a vessel, inhabit it, act through it. While connected, A acts AS C; acts attribute to C in B's chain. A's home identity in A is untouched.
-7. A disconnects to return home. The vessel C either persists (dormant, ready for next connect) or releases per policy.
+6. A can `BE:connect` into C as a being, inhabit it, act through it. While connected, A acts AS C; acts attribute to C in B's chain. A's home identity in A is untouched.
+7. A disconnects to return home. The being C either persists (dormant, ready for next connect) or releases per policy.
 
 ### Why no foreign-arrival role is needed
 
 A previous draft of this doc flagged "foreign-actor default access" as an open architectural piece, should a `foreign-arrival` role exist? The answer is no, because the receiving reality's existing role registry already covers it.
 
 - **For direct cross-world action**, the foreign actor can adopt any `globalRole` the receiving reality publishes (no grant needed; that's what makes a role global in the registry sense). A reality wanting open federation publishes permissive globalRoles; a closed reality publishes none. The registry IS the federation policy.
-- **For sustained native presence**, the mate-vessel pattern gives a clean local biography on the foreign reality.
+- **For sustained native presence**, the mate-being pattern gives a clean local biography on the foreign reality.
 
-Cross-reality actors are not anonymous (they have a canopy-verified beingId), but they have no grants on this reality until they adopt a globalRole or birth a vessel. Anonymous arrival floor stays for genuinely-unauthenticated visitors browsing the discovery surface.
+Cross-reality actors are not anonymous (they have a canopy-verified beingId), but they have no grants on this reality until they adopt a globalRole or birth a being. Anonymous arrival floor stays for genuinely-unauthenticated visitors browsing the discovery surface.
 
 Each reality's `authorize` stays purely local. No federation-permissions sublanguage; the role registry IS the federation surface. **GRASP gained without SOVEREIGNTY lost, two routes, same outcome.**
 
 ### BE:connect remains local
 
-The actual `BE:connect` act is stamped in the vessel's own chain. The father's connect REQUEST crosses worlds (canopy-routed, summon-shaped), but the act-of-connecting is performed by reality B when the foreign request is authorized. The "BE doesn't cross worlds" doctrine stays intact: what crosses is the request to connect; the connection itself is local to the vessel.
+The actual `BE:connect` act is stamped in the being's own chain. The father's connect REQUEST crosses worlds (canopy-routed, summon-shaped), but the act-of-connecting is performed by reality B when the foreign request is authorized. The "BE doesn't cross worlds" doctrine stays intact: what crosses is the request to connect; the connection itself is local to the being.
 
 ### Implementation surface
 
@@ -238,7 +238,7 @@ Not yet built; pending implementation:
 - **Birther role**, a role whose cognition auto-accepts `summon:mate` (and dispatches `be:birth(father=summoner)`). Operators anoint a being with this role to make it the reality's "make me a child here" service. Realities that don't publish a birther don't admit foreign citizenship via this path.
 - **`BE:connect` authorization**, learns to admit father-eligibility: the requester matches `child.mother` OR `child.father`. Father-eligibility check: match the canopy-verified `{reality, beingId}` against the child's stored father tuple.
 - **Cross-world `BE:connect` request routing.** Father's connect-request crosses worlds as a SUMMON-shaped envelope. The receiving reality validates father-match, performs the local `BE:connect` act, returns the connection context. Father's home reality records connect-lifecycle facts on their own chain.
-- **Single-connector invariant.** When a being is already inhabited, new connect requests refuse or queue per policy. The vessel's home reality enforces.
+- **Single-connector invariant.** When a being is already inhabited, new connect requests refuse or queue per policy. The being's home reality enforces.
 
 ### Cross-reality branch semantics
 
@@ -285,15 +285,15 @@ An operator DO op name and the wire intent it emits now COINCIDE. When the opera
 
 The first six carry the template (content) cargo through the offer/accept review handshake. The seventh, `deliver-being`, carries the being (identity) cargo one-shot; see "The identity path" below.
 
-| Intent | Direction | Payload | Response |
-|---|---|---|---|
-| `offer-template` | sender → peer | `{negotiationId, manifest, bundleHash, label?, sourceSubtreePath?}` | `{kind:"pending-review", negotiationId}` (operator decides) |
-| `accept-template` | peer → sender | `{negotiationId}` | `{kind:"acknowledged"}`; sender then sends `deliver-template` |
-| `reject-template` | peer → sender | `{negotiationId, reason?}` | `{kind:"acknowledged"}` (sender seals negotiation) |
-| `deliver-template` | sender → peer | `{negotiationId, bundle}` | `{kind:"template-result", success, summary, error?}` |
-| `request-template` | puller → offerer | `{negotiationId, subtreePath, label?}` | `{kind:"pending-review", negotiationId}` (operator decides) |
-| `template-result` | peer → sender | `{negotiationId, success, summary?, error?}` | `{kind:"acknowledged"}` (terminal) |
-| `deliver-being` | sender → peer | `{negotiationId, bundle}` | `{kind:"act", grafted verbatim}` (auto-accepted, no review) |
+| Intent             | Direction        | Payload                                                             | Response                                                      |
+| ------------------ | ---------------- | ------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `offer-template`   | sender → peer    | `{negotiationId, manifest, bundleHash, label?, sourceSubtreePath?}` | `{kind:"pending-review", negotiationId}` (operator decides)   |
+| `accept-template`  | peer → sender    | `{negotiationId}`                                                   | `{kind:"acknowledged"}`; sender then sends `deliver-template` |
+| `reject-template`  | peer → sender    | `{negotiationId, reason?}`                                          | `{kind:"acknowledged"}` (sender seals negotiation)            |
+| `deliver-template` | sender → peer    | `{negotiationId, bundle}`                                           | `{kind:"template-result", success, summary, error?}`          |
+| `request-template` | puller → offerer | `{negotiationId, subtreePath, label?}`                              | `{kind:"pending-review", negotiationId}` (operator decides)   |
+| `template-result`  | peer → sender    | `{negotiationId, success, summary?, error?}`                        | `{kind:"acknowledged"}` (terminal)                            |
+| `deliver-being`    | sender → peer    | `{negotiationId, bundle}`                                           | `{kind:"act", grafted verbatim}` (auto-accepted, no review)   |
 
 ### Push flow (worked example)
 
@@ -410,15 +410,15 @@ Where the template path has a review handshake (offer, accept/reject, deliver, r
 
 The GRAFT scope is not limited to a single being. A graft can carry a being, a branch's worth, or the whole reality (the genome). Being-graft is what `offer-being` / `deliver-being` wires today; the broader scopes ride the same `captureGraft` / `applyGraft` primitives.
 
-| | Template path (content) | Identity path (being) |
-|---|---|---|
-| Cargo | The SHAPE of a region (template, fresh ids on planting) | The ENTITY itself (verbatim id + chain) |
-| Push op → wire intent | `offer-template` → `offer-template` | `offer-being` → `deliver-being` |
-| Pull op | `request-template` (peer fulfills via `fulfill-request`) | none (peer-to-peer only, no pull) |
-| Review handshake | offer → accept/reject → deliver → result | none, one-shot auto-accept |
-| Why | receiver inspects the manifest before committing | self-certifying (signed graftRoot, no callback) |
-| Primitives | `captureTemplate` / `plantTemplate` (`seedPlant.js`) | `captureGraft` / `applyGraft` (`graft.js`) |
-| Handler | `handleOfferTemplate` / `handleDeliverTemplate` | `handleDeliverBeing` |
+|                       | Template path (content)                                  | Identity path (being)                           |
+| --------------------- | -------------------------------------------------------- | ----------------------------------------------- |
+| Cargo                 | The SHAPE of a region (template, fresh ids on planting)  | The ENTITY itself (verbatim id + chain)         |
+| Push op → wire intent | `offer-template` → `offer-template`                      | `offer-being` → `deliver-being`                 |
+| Pull op               | `request-template` (peer fulfills via `fulfill-request`) | none (peer-to-peer only, no pull)               |
+| Review handshake      | offer → accept/reject → deliver → result                 | none, one-shot auto-accept                      |
+| Why                   | receiver inspects the manifest before committing         | self-certifying (signed graftRoot, no callback) |
+| Primitives            | `captureTemplate` / `plantTemplate` (`seedPlant.js`)     | `captureGraft` / `applyGraft` (`graft.js`)      |
+| Handler               | `handleOfferTemplate` / `handleDeliverTemplate`          | `handleDeliverBeing`                            |
 
 ### Authority asymmetry
 
@@ -455,7 +455,7 @@ The identity path (`offer-being`) has its own posture: there is no receiver revi
 
 ## What's NOT built / remaining work
 
-### 1. The mate / vessel implementation
+### 1. The mate / being implementation
 
 The cross-world citizenship pattern (see above) is the seed's settled answer to federation auth. It needs concrete machinery:
 
@@ -469,10 +469,11 @@ See the [Implementation surface](#implementation-surface) section above for the 
 - Single-connector invariant enforcement
 
 **Parked (orthogonal future work):**
+
 - **cosign-birth**, multiple beings each contributing some of their granted roles to a new child's initial state. Deliberately-composed beings.
 - **`be:close`**, beings have arcs; closure is one-way completion. Closed beings persist in the chain but no longer act. Distinct from release.
 
-### 2. Public id-to-name directory  
+### 2. Public id-to-name directory
 
 For foreign beings appearing in local faces (descriptor renderings, act-chain inspectors), names need to be resolvable. Two SEE-callable endpoints on every reality:
 
@@ -525,33 +526,33 @@ Would need the foreign reality to expose a render-target stream (a SEE op return
 
 ## Summary
 
-| Layer | Status |
-|---|---|
-| Canopy outbound (`forwardToPeer`) | ✓ Built, carries cross-world envelope |
-| Canopy inbound (`verifyIncoming`, `actorTupleFromRequest`) | ✓ Built, forgery defense holds |
-| Dispatcher integration (`dispatchIbp` fork) | ✓ Built |
-| `crossRealityDispatch` (outbound helper) | ✓ Built |
-| `runVerbAsForeignActor` (inbound helper) | ✓ Built |
-| Act lifecycle (status, inner face, idempotency) | ✓ Built |
-| Pull-back safety | ✓ Built, wired into boot |
-| Auth via roles (RolesAreAuth) | ✓ Built |
-| Cross-reality branch semantics | ✓ Resolved: caller addresses foreign reality's branch explicitly |
-| Cross-world citizenship doctrine | ✓ Resolved: mate produces vessel-child; father has BE:connect eligibility |
-| `do:form-portal` op | ✓ Built |
-| 3D portal renderer (canvas summary) | ✓ Built |
-| `summon:mate` op + father field + BE:connect father-admit | Not built, primary remaining federation work |
-| Cross-world BE:connect request routing | Not built, companion to summon:mate |
-| Public id-to-name directory | Not built, small addition |
-| Replay-window enforcement | Not built, small addition |
-| End-to-end live round-trip test | Not built, needs `verify-federation.js` |
-| Cross-world walking-through UX | Substrate ready; UX wiring pending |
-| Foreign-position default-target audit | Pending |
-| Real camera-through render-to-texture | Deferred (big lift) |
+| Layer                                                      | Status                                                                   |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------ |
+| Canopy outbound (`forwardToPeer`)                          | ✓ Built, carries cross-world envelope                                    |
+| Canopy inbound (`verifyIncoming`, `actorTupleFromRequest`) | ✓ Built, forgery defense holds                                           |
+| Dispatcher integration (`dispatchIbp` fork)                | ✓ Built                                                                  |
+| `crossRealityDispatch` (outbound helper)                   | ✓ Built                                                                  |
+| `runVerbAsForeignActor` (inbound helper)                   | ✓ Built                                                                  |
+| Act lifecycle (status, inner face, idempotency)            | ✓ Built                                                                  |
+| Pull-back safety                                           | ✓ Built, wired into boot                                                 |
+| Auth via roles (RolesAreAuth)                              | ✓ Built                                                                  |
+| Cross-reality branch semantics                             | ✓ Resolved: caller addresses foreign reality's branch explicitly         |
+| Cross-world citizenship doctrine                           | ✓ Resolved: mate produces being-child; father has BE:connect eligibility |
+| `do:form-portal` op                                        | ✓ Built                                                                  |
+| 3D portal renderer (canvas summary)                        | ✓ Built                                                                  |
+| `summon:mate` op + father field + BE:connect father-admit  | Not built, primary remaining federation work                             |
+| Cross-world BE:connect request routing                     | Not built, companion to summon:mate                                      |
+| Public id-to-name directory                                | Not built, small addition                                                |
+| Replay-window enforcement                                  | Not built, small addition                                                |
+| End-to-end live round-trip test                            | Not built, needs `verify-federation.js`                                  |
+| Cross-world walking-through UX                             | Substrate ready; UX wiring pending                                       |
+| Foreign-position default-target audit                      | Pending                                                                  |
+| Real camera-through render-to-texture                      | Deferred (big lift)                                                      |
 
 **Where this leaves federation:** the transport, auth (cryptographic), envelope, dispatch, seed doctrine, AND the cross-world citizenship model are settled. Two routes for foreign-actor presence:
 
 - **Direct**, foreign actor adopts a globalRole the receiving reality publishes. Acts go through canopy each time; actor's Act stays on their home; consequence Facts land on the receiving reality with crossOrigin. Already works end-to-end on the seed side (modulo live testing).
-- **Native**, foreign actor mates with a receiving-reality being, births a vessel-child there, and BE:connects into the vessel. Vessel acts and facts live wholly on the receiving reality. Needs `summon:mate` + father field + BE:connect father-admit + cross-world connect routing, the primary remaining federation work.
+- **Native**, foreign actor mates with a receiving-reality being, births a being-child there, and BE:connects into the being. being acts and facts live wholly on the receiving reality. Needs `summon:mate` + father field + BE:connect father-admit + cross-world connect routing, the primary remaining federation work.
 
 A reality's federation posture is expressed entirely through its role registry, which roles it publishes as globalRoles. No federation-permissions sublanguage; no `foreign-arrival` config decision; the registry IS the policy.
 

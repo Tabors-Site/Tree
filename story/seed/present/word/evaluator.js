@@ -36,7 +36,12 @@ import { getPath } from "./cond.js";
 //     rolls back. NO fact laid.
 const BREAK = { __wordBreak: true };
 class WordRefusal extends Error {
-  constructor(message, code = "FORBIDDEN") { super(message || "refused"); this.name = "WordRefusal"; this.__wordRefusal = true; this.code = code; }
+  constructor(message, code = "FORBIDDEN") {
+    super(message || "refused");
+    this.name = "WordRefusal";
+    this.__wordRefusal = true;
+    this.code = code;
+  }
 }
 
 // Run a program (a node or an array of nodes) against a context, return ctx.deltaF.
@@ -49,7 +54,10 @@ export async function evaluate(program, ctx) {
   try {
     for (const node of nodes) await evalNode(node, ctx);
   } catch (e) {
-    if (e && e.__wordReturn) { ctx.result = e.result; return ctx.deltaF; } // success terminator
+    if (e && e.__wordReturn) {
+      ctx.result = e.result;
+      return ctx.deltaF;
+    } // success terminator
     throw e; // WordRefusal + real errors propagate to the verb layer
   }
   return ctx.deltaF;
@@ -57,32 +65,58 @@ export async function evaluate(program, ctx) {
 
 async function evalNode(node, ctx) {
   switch (node.kind) {
-    case "flow":    return evalFlow(node, ctx);
-    case "act":     return evalAct(node, ctx);
-    case "see":     return evalSee(node, ctx);      // the READ verb: query the substrate, no fact
-    case "call":    return evalCall(node, ctx);     // the CALL verb: reach another being (space), lays the reach record
-    case "recall":  return evalRecall(node, ctx);   // the RECALL verb: reach back across TIME into a chain (no fact); a verdict records the conclusion
-    case "closure": return evalClosure(node, ctx);
-    case "if":      return evalIf(node, ctx);       // §2: branch in the moment
-    case "mark":    return evalMark(node, ctx);     // §5: a flow-local flag a sibling cond reads
-    case "foreach": return evalForeach(node, ctx);  // §3: iterate a source
-    case "break":   throw BREAK;                    // §3: halt the nearest foreach
-    case "refuse":  return evalRefuse(node, ctx);   // §7: host halt, no fact
-    case "return":  return evalReturn(node, ctx);   // §7: success terminator, no fact
-    case "gate":    return evalGate(node, ctx);     // §8: pre-seal precondition, fail-closed
-    case "match":   return evalMatch(node, ctx);    // §9: type dispatch (flat surface)
-    case "derive":  return evalDerive(node, ctx);   // §7: emit a fact, OR register a read-rule
+    case "flow":
+      return evalFlow(node, ctx);
+    case "act":
+      return evalAct(node, ctx);
+    case "see":
+      return evalSee(node, ctx); // the READ verb: query the substrate, no fact
+    case "call":
+      return evalCall(node, ctx); // the CALL verb: reach another being (space), lays the reach record
+    case "recall":
+      return evalRecall(node, ctx); // the RECALL verb: reach back across TIME into a chain (no fact); a verdict records the conclusion
+    case "closure":
+      return evalClosure(node, ctx);
+    case "if":
+      return evalIf(node, ctx); // §2: branch in the moment
+    case "mark":
+      return evalMark(node, ctx); // §5: a flow-local flag a sibling cond reads
+    case "foreach":
+      return evalForeach(node, ctx); // §3: iterate a source
+    case "break":
+      throw BREAK; // §3: halt the nearest foreach
+    case "refuse":
+      return evalRefuse(node, ctx); // §7: host halt, no fact
+    case "return":
+      return evalReturn(node, ctx); // §7: success terminator, no fact
+    case "gate":
+      return evalGate(node, ctx); // §8: pre-seal precondition, fail-closed
+    case "match":
+      return evalMatch(node, ctx); // §9: type dispatch (flat surface)
+    case "derive":
+      return evalDerive(node, ctx); // §7: emit a fact, OR register a read-rule
     // ── the LAW strand (§11 + is/can/cannot): the OBJECTIVE register's first move.
     // Registered, NEVER run as effects — read backward off the reel (computed-on-read,
     // Q6/Q7). The parser's reasoning guard is the subject/object wall; everything here
     // is the law side of it (government-innerfold.md). Collected into ctx.laws until the
     // role/type-registry integration arms them in authorizeViaRoles / registerMatterType.
-    case "is": case "can": case "cannot":
-    case "law": case "capability": case "extends": case "property":
-    case "prohibition": case "derive-rule": case "lifetime":
-    case "inheritance-rule": case "relate": case "declare":
-      (ctx.laws ??= []).push(node); return undefined;
-    default: throw new Error(`word: unknown node kind "${node.kind}"`);
+    case "is":
+    case "can":
+    case "cannot":
+    case "law":
+    case "capability":
+    case "extends":
+    case "property":
+    case "prohibition":
+    case "derive-rule":
+    case "lifetime":
+    case "inheritance-rule":
+    case "relate":
+    case "declare":
+      (ctx.laws ??= []).push(node);
+      return undefined;
+    default:
+      throw new Error(`word: unknown node kind "${node.kind}"`);
   }
 }
 
@@ -132,11 +166,20 @@ async function evalMark(node, ctx) {
 async function evalSee(node, ctx) {
   const { getPath } = await import("./cond.js");
   if (ctx.dryRun) {
-    const tag = node.read || (typeof node.of === "string" ? node.of : (node.descendsFrom !== undefined ? "descends" : "see"));
+    const tag =
+      node.read ||
+      (typeof node.of === "string"
+        ? node.of
+        : node.descendsFrom !== undefined
+          ? "descends"
+          : "see");
     if (node.bind) ctx.bindings[node.bind] = `<see:${tag}>`;
     return ctx.bindings[node.bind];
   }
-  const entity = (v) => (v && typeof v === "object" && v.ref != null) ? getPath(v.ref, ctx) : resolveValue(v, ctx);
+  const entity = (v) =>
+    v && typeof v === "object" && v.ref != null
+      ? getPath(v.ref, ctx)
+      : resolveValue(v, ctx);
   let result = null;
 
   // A registered SEE-op: a read or pure-compute exposed as a verb (the host:->see
@@ -155,8 +198,10 @@ async function evalSee(node, ctx) {
     result = await seeQuery(node.of, resolveValue(node.where, ctx) || {});
     if (node.one) result = Array.isArray(result) ? (result[0] ?? null) : result;
   } else if (node.descendsFrom !== undefined) {
-    const subject = entity(node.of), ancestor = entity(node.descendsFrom);
-    const { isAncestorOf } = await import("../../materials/being/identity/lookups.js");
+    const subject = entity(node.of),
+      ancestor = entity(node.descendsFrom);
+    const { isAncestorOf } =
+      await import("../../materials/being/identity/lookups.js");
     result = await isAncestorOf(
       String(ancestor?.beingId ?? ancestor?._id ?? ancestor),
       String(subject?._id ?? subject?.beingId ?? subject),
@@ -167,25 +212,42 @@ async function evalSee(node, ctx) {
     // grant gates). `credential:true` = credential authority (being -> being, the re-mint
     // gate); else general authority (name -> being). Resolved via the canonical walks the
     // JS gates call, exactly as `descends from` resolves via isAncestorOf.
-    const subject = entity(node.of), object = entity(node.hasAuthorityOver);
+    const subject = entity(node.of),
+      object = entity(node.hasAuthorityOver);
     // Resolve the #main pointer, never floor to literal "0": an authority WALK on the wrong
     // tree is an auth bug (never-default-history-zero). hasCredentialAuthority self-resolves a
     // falsy history, but hasAuthorityOver hands history straight to walkUp, so resolve here.
     let history = node.history ?? ctx.history;
     if (!history) {
-      const { getDefaultHistory } = await import("../../materials/history/historyRegistry.js");
+      const { getDefaultHistory } =
+        await import("../../materials/history/historyRegistry.js");
       history = await getDefaultHistory();
     }
     const objId = String(object?.beingId ?? object?._id ?? object);
     if (node.credential) {
-      const { hasCredentialAuthority } = await import("../../materials/being/identity/lineage.js");
-      result = await hasCredentialAuthority(String(subject?.beingId ?? subject?._id ?? subject), objId, history);
+      const { hasCredentialAuthority } =
+        await import("../../materials/being/identity/lineage.js");
+      result = await hasCredentialAuthority(
+        String(subject?.beingId ?? subject?._id ?? subject),
+        objId,
+        history,
+      );
     } else {
-      const { hasAuthorityOver } = await import("../../materials/being/identity/inheritation.js");
-      result = await hasAuthorityOver(String(subject?.nameId ?? subject?.trueName ?? subject), objId, history);
+      const { hasAuthorityOver } =
+        await import("../../materials/being/identity/inheritation.js");
+      result = await hasAuthorityOver(
+        String(subject?.nameId ?? subject?.trueName ?? subject),
+        objId,
+        history,
+      );
     }
   } else if (node.read != null) {
-    result = await seeRead(entity(node.of), node.read, node.fresh, node.history ?? ctx.history);
+    result = await seeRead(
+      entity(node.of),
+      node.read,
+      node.fresh,
+      node.history ?? ctx.history,
+    );
   }
 
   if (node.bind) ctx.bindings[node.bind] = result;
@@ -196,17 +258,29 @@ async function evalSee(node, ctx) {
 // canonical cross-history sweep so the candidate shape (_id, homeHistory, ...state) matches
 // what the flows read; other queries hit the read-model (the fold) directly.
 async function seeQuery(kind, where) {
-  if (kind === "being" && where && where.name && Object.keys(where).length === 1) {
-    const { findBeingCandidatesByName } = await import("../../materials/being/identity/lookups.js");
+  if (
+    kind === "being" &&
+    where &&
+    where.name &&
+    Object.keys(where).length === 1
+  ) {
+    const { findBeingCandidatesByName } =
+      await import("../../materials/being/identity/lookups.js");
     return findBeingCandidatesByName(String(where.name));
   }
-  const { default: Projection } = await import("../../materials/history/projection.js");
+  const { default: Projection } =
+    await import("../../materials/history/projection.js");
   const q = { type: kind, tombstoned: { $ne: true } };
   for (const k of Object.keys(where || {})) q[`state.${k}`] = where[k];
   const rows = await Projection.find(q).lean();
   // tag each row with its `kind` so a later `see <row>'s <quality>` READ knows which
   // projection to re-read (space/matter, not just being).
-  return rows.map((r) => ({ _id: r.id, kind, homeHistory: r.state?.homeHistory, ...(r.state || {}) }));
+  return rows.map((r) => ({
+    _id: r.id,
+    kind,
+    homeHistory: r.state?.homeHistory,
+    ...(r.state || {}),
+  }));
 }
 
 // read a bound entity's dotted quality; `fresh` re-reads the projection (vs the bound
@@ -225,10 +299,18 @@ async function seeRead(subject, quality, fresh, history) {
   const id = str ? subject : (subject?._id ?? subject?.id);
   if (fresh && id) {
     const { loadProjection } = await import("../../materials/projections.js");
-    const proj = await loadProjection(kind, String(id), (str ? null : subject?.homeHistory) || history || "0");
+    const proj = await loadProjection(
+      kind,
+      String(id),
+      (str ? null : subject?.homeHistory) || history || "0",
+    );
     src = proj?.state ?? src;
   }
-  return String(quality).split(".").reduce((o, k) => (o == null ? o : o[k]), src) ?? null;
+  return (
+    String(quality)
+      .split(".")
+      .reduce((o, k) => (o == null ? o : o[k]), src) ?? null
+  );
 }
 
 // ── recall (the SIXTH verb): reach back across TIME into a chain — the inner fold ──────
@@ -243,8 +325,14 @@ async function seeRead(subject, quality, fresh, history) {
 // is private, the JUDGMENT is the fact. IR: { kind:"recall", of:<ref|"world">, as?, that? }.
 async function evalRecall(node, ctx) {
   const history = ctx.history ?? "0";
-  const ownBeing = ctx.identity?.beingId != null ? String(ctx.identity.beingId) : null;
-  const ownName  = ctx.identity?.nameId  != null ? String(ctx.identity.nameId)  : (ctx.identity?.name != null ? String(ctx.identity.name) : null);
+  const ownBeing =
+    ctx.identity?.beingId != null ? String(ctx.identity.beingId) : null;
+  const ownName =
+    ctx.identity?.nameId != null
+      ? String(ctx.identity.nameId)
+      : ctx.identity?.name != null
+        ? String(ctx.identity.name)
+        : null;
 
   // resolve the recall TARGET to a STORY scope (who × when × where) — the SAME fold the book and
   // the frontend story-views read. RECALL is the cognition changing views into the past/world:
@@ -255,23 +343,51 @@ async function evalRecall(node, ctx) {
   //   <being> / own  → a being's own thread                   (own → recalled, else saw)
   // mode renders first-person ("I", your own thread) vs third-person ("saw", anything else).
   const of = node.of;
-  const resolveRef = (v) => (v && typeof v === "object" && v.ref != null) ? getPath(v.ref, ctx) : resolveValue(v, ctx);
-  const idOf = (v) => { const r = resolveRef(v); return String(r?._id ?? r?.id ?? r ?? ""); };
-  let scope = "world", params = { history }, mode = "saw", ofLabel = "the world";
+  const resolveRef = (v) =>
+    v && typeof v === "object" && v.ref != null
+      ? getPath(v.ref, ctx)
+      : resolveValue(v, ctx);
+  const idOf = (v) => {
+    const r = resolveRef(v);
+    return String(r?._id ?? r?.id ?? r ?? "");
+  };
+  let scope = "world",
+    params = { history },
+    mode = "saw",
+    ofLabel = "the world";
   if (of === "world" || of?.ref === "world") {
-    scope = "world"; mode = "saw"; ofLabel = "the world";
+    scope = "world";
+    mode = "saw";
+    ofLabel = "the world";
   } else if (of && typeof of === "object" && of.lineage !== undefined) {
-    const b = idOf(of.lineage) || ownBeing; const own = b === ownBeing;
-    scope = "lineage"; params.being = b; if (of.depth != null) params.depth = of.depth;
-    mode = own ? "recalled" : "saw"; ofLabel = own ? "my lineage" : "their lineage";
+    const b = idOf(of.lineage) || ownBeing;
+    const own = b === ownBeing;
+    scope = "lineage";
+    params.being = b;
+    if (of.depth != null) params.depth = of.depth;
+    mode = own ? "recalled" : "saw";
+    ofLabel = own ? "my lineage" : "their lineage";
   } else if (of && typeof of === "object" && of.moment !== undefined) {
-    scope = "moment"; params.moment = idOf(of.moment); mode = "saw"; ofLabel = "that moment";
-  } else if (of && typeof of === "object" && (of.place !== undefined || of.space !== undefined)) {
-    scope = "place"; params.space = idOf(of.place ?? of.space); mode = "saw"; ofLabel = "that place";
+    scope = "moment";
+    params.moment = idOf(of.moment);
+    mode = "saw";
+    ofLabel = "that moment";
+  } else if (
+    of &&
+    typeof of === "object" &&
+    (of.place !== undefined || of.space !== undefined)
+  ) {
+    scope = "place";
+    params.space = idOf(of.place ?? of.space);
+    mode = "saw";
+    ofLabel = "that place";
   } else {
-    const id = idOf(of) || ownBeing; const own = id === ownBeing || id === ownName;
-    scope = "being"; params.being = own ? ownBeing : id;
-    mode = own ? "recalled" : "saw"; ofLabel = own ? "my own thread" : "their thread";
+    const id = idOf(of) || ownBeing;
+    const own = id === ownBeing || id === ownName;
+    scope = "being";
+    params.being = own ? ownBeing : id;
+    mode = own ? "recalled" : "saw";
+    ofLabel = own ? "my own thread" : "their thread";
   }
 
   // CONSCIOUSNESS-LEVEL (Tabor): which views a being may recall is granted via `can recall <view>`
@@ -282,7 +398,19 @@ async function evalRecall(node, ctx) {
 
   if (ctx.dryRun) {
     if (node.as) ctx.bindings[node.as] = `<${mode}>`;
-    if (node.that !== undefined) ctx.deltaF.push({ verb: "do", act: "verdict", params: { mode, of: ofLabel, that: resolveValue(node.that, ctx), ...(node.because !== undefined ? { because: resolveValue(node.because, ctx) } : {}) } });
+    if (node.that !== undefined)
+      ctx.deltaF.push({
+        verb: "do",
+        act: "verdict",
+        params: {
+          mode,
+          of: ofLabel,
+          that: resolveValue(node.that, ctx),
+          ...(node.because !== undefined
+            ? { because: resolveValue(node.because, ctx) }
+            : {}),
+        },
+      });
     return mode;
   }
 
@@ -290,7 +418,10 @@ async function evalRecall(node, ctx) {
   // inner fold the cognition reflects on. recall lays nothing; only the verdict writes. The focal
   // is your own being when recalled (first person), null when saw (third person).
   const { assembleStory } = await import("../book/assemble.js");
-  const view = await assembleStory(scope, { ...params, nameId: mode === "recalled" ? (params.being || ownBeing) : null });
+  const view = await assembleStory(scope, {
+    ...params,
+    nameId: mode === "recalled" ? params.being || ownBeing : null,
+  });
   const thread = view;
   if (node.as) ctx.bindings[node.as] = view;
 
@@ -302,11 +433,24 @@ async function evalRecall(node, ctx) {
   // computation: continuity for a stateless being, NOT transparency-of-thought. The being's own
   // chain is its memory; this verdict is the note it leaves itself, in the Word (the new-test form).
   if (node.that !== undefined) {
-    await emit({
-      verb: "do", act: "verdict", by: ownName, through: ownBeing,
-      of: { kind: "being", id: ownBeing },   // the memory lands on the being's OWN reel — its chain is its memory
-      params: { mode, of: ofLabel, that: resolveValue(node.that, ctx), ...(node.because !== undefined ? { because: resolveValue(node.because, ctx) } : {}) },
-    }, ctx);
+    await emit(
+      {
+        verb: "do",
+        act: "verdict",
+        by: ownName,
+        through: ownBeing,
+        of: { kind: "being", id: ownBeing }, // the memory lands on the being's OWN reel — its chain is its memory
+        params: {
+          mode,
+          of: ofLabel,
+          that: resolveValue(node.that, ctx),
+          ...(node.because !== undefined
+            ? { because: resolveValue(node.because, ctx) }
+            : {}),
+        },
+      },
+      ctx,
+    );
   }
   return thread;
 }
@@ -319,13 +463,25 @@ async function evalRecall(node, ctx) {
 // named `call` at the surface now; the full rename comes later. (RECALL — reaching across
 // TIME into a chain — is the private twin; it lays no fact by itself.)
 async function evalCall(node, ctx) {
-  const entity = (v) => (v && typeof v === "object" && v.ref != null) ? getPath(v.ref, ctx) : resolveValue(v, ctx);
+  const entity = (v) =>
+    v && typeof v === "object" && v.ref != null
+      ? getPath(v.ref, ctx)
+      : resolveValue(v, ctx);
   // `saying <msg>` = a conveyed message (intent "message"); `to <act>[, with <payload>]` =
   // summon-to-act. `to` is an INTENT LABEL (kebab), NOT a parsed act — the owner receives it
   // plus the content and decides (a request). The structured payload rides in with/saying/content.
-  const toIntent = node.to ? String(node.to).trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "").toLowerCase() : null;
+  const toIntent = node.to
+    ? String(node.to)
+        .trim()
+        .replace(/[^a-z0-9]+/gi, "-")
+        .replace(/^-+|-+$/g, "")
+        .toLowerCase()
+    : null;
   const intent = toIntent || node.intent || "message";
-  const content = resolveValue(node.with ?? node.saying ?? node.content ?? {}, ctx);
+  const content = resolveValue(
+    node.with ?? node.saying ?? node.content ?? {},
+    ctx,
+  );
   if (ctx.dryRun) {
     const r = `<call:${intent}>`;
     if (node.bind) ctx.bindings[node.bind] = r;
@@ -339,23 +495,47 @@ async function evalCall(node, ctx) {
   const target = entity(node.of ?? node.being);
   let toName = target?.name ?? target?.state?.name;
   if (!toName) {
-    const id = target?._id ?? target?.id ?? (typeof target === "string" ? target : null);
-    if (id) toName = (await loadOrFold("being", String(id), ctx.history || "0"))?.state?.name;
+    const id =
+      target?._id ?? target?.id ?? (typeof target === "string" ? target : null);
+    if (id)
+      toName = (await loadOrFold("being", String(id), ctx.history || "0"))
+        ?.state?.name;
   }
-  if (!toName) throw new WordRefusal("call: cannot address the target being", "INVALID_INPUT");
+  if (!toName)
+    throw new WordRefusal(
+      "call: cannot address the target being",
+      "INVALID_INPUT",
+    );
   // the caller (the Name acting through its being) is the `from` stance. When the moment carries
   // only a beingId (a role-op threading its actor without a name), resolve the name off the being
   // so the `from` is a real stance — otherwise summon authorizes @undefined as anonymous.
   let fromName = ctx.identity?.name || ctx.identity?.nameId;
   if (!fromName && ctx.identity?.beingId) {
-    fromName = (await loadOrFold("being", String(ctx.identity.beingId), ctx.history || "0"))?.state?.name;
+    fromName = (
+      await loadOrFold(
+        "being",
+        String(ctx.identity.beingId),
+        ctx.history || "0",
+      )
+    )?.state?.name;
   }
   // A call must address FROM a real stance — `@undefined` is NEVER acceptable. An actor with no
   // resolvable name is a HARD ERROR here, not a silent slide into anonymous downstream.
-  if (!fromName) throw new WordRefusal("call: the caller has no resolvable name — cannot address from @undefined", "INVALID_INPUT");
-  const message = { from: `${story}/@${fromName}`, content, ...(node.intent ? { intent: node.intent } : {}) };
+  if (!fromName)
+    throw new WordRefusal(
+      "call: the caller has no resolvable name — cannot address from @undefined",
+      "INVALID_INPUT",
+    );
+  const message = {
+    from: `${story}/@${fromName}`,
+    content,
+    ...(node.intent ? { intent: node.intent } : {}),
+  };
   const { callVerb } = await import("../../ibp/verbs/call.js");
-  const result = await callVerb(`${story}/@${toName}`, message, { identity: ctx.identity, moment: ctx.moment });
+  const result = await callVerb(`${story}/@${toName}`, message, {
+    identity: ctx.identity,
+    moment: ctx.moment,
+  });
   if (node.bind) ctx.bindings[node.bind] = result;
   return result;
 }
@@ -385,7 +565,7 @@ async function evalForeach(node, ctx) {
       for (const n of node.body || []) await evalNode(n, ctx);
     } catch (e) {
       if (e === BREAK) return; // §3 break: stop THIS loop, continue after it
-      throw e;                 // refuse / return / real errors unwind past the loop
+      throw e; // refuse / return / real errors unwind past the loop
     }
   }
 }
@@ -395,7 +575,10 @@ async function evalForeach(node, ctx) {
 // back. A §8 gate's onFail is a refuse. Distinct from a cond's negation (§10) and from
 // break (loop-only). The message resolves $binding placeholders.
 async function evalRefuse(node, ctx) {
-  const m = typeof node.message === "string" ? resolveValue(node.message, ctx) : (resolveValue(node.message, ctx) || "refused");
+  const m =
+    typeof node.message === "string"
+      ? resolveValue(node.message, ctx)
+      : resolveValue(node.message, ctx) || "refused";
   throw new WordRefusal(String(m), node.code || "FORBIDDEN");
 }
 
@@ -408,12 +591,16 @@ async function evalReturn(node, ctx) {
   const { getPath } = await import("./cond.js");
   const result = {};
   for (const name of node.values || []) result[name] = ctx.bindings[name];
-  if (node.extra) for (const k of Object.keys(node.extra)) {
-    const v = node.extra[k];
-    // a {ref} reads a binding/flag/path (e.g. owned:(true/false) from a §5 flag);
-    // anything else ($name or a literal) goes through resolveValue.
-    result[k] = (v && typeof v === "object" && v.ref != null) ? getPath(v.ref, ctx) : resolveValue(v, ctx);
-  }
+  if (node.extra)
+    for (const k of Object.keys(node.extra)) {
+      const v = node.extra[k];
+      // a {ref} reads a binding/flag/path (e.g. owned:(true/false) from a §5 flag);
+      // anything else ($name or a literal) goes through resolveValue.
+      result[k] =
+        v && typeof v === "object" && v.ref != null
+          ? getPath(v.ref, ctx)
+          : resolveValue(v, ctx);
+    }
   throw { __wordReturn: true, result };
 }
 
@@ -428,10 +615,15 @@ async function evalGate(node, ctx) {
   const { resolveCond } = await import("./cond.js");
   const cond = node.cond
     ? node.cond
-    : (node.resolvedBy ? { resolvedBy: node.resolvedBy, args: node.args, negated: node.negated } : null);
+    : node.resolvedBy
+      ? { resolvedBy: node.resolvedBy, args: node.args, negated: node.negated }
+      : null;
   if (await resolveCond(cond, ctx)) return; // precondition holds
   if (node.onFail) return evalNode(node.onFail, ctx);
-  throw new WordRefusal(resolveValue(node.message, ctx) || "precondition failed", node.code || "INVALID_INPUT");
+  throw new WordRefusal(
+    resolveValue(node.message, ctx) || "precondition failed",
+    node.code || "INVALID_INPUT",
+  );
 }
 
 // ── match (§9): type dispatch — keeps a flat surface flat ───────────────────────────
@@ -443,10 +635,16 @@ async function evalMatch(node, ctx) {
   const { resolveCond, getPath } = await import("./cond.js");
   const onVal = node.on != null ? getPath(node.on, ctx) : undefined;
   for (const c of node.cases || []) {
-    const hit = c.label !== undefined ? String(onVal) === String(c.label)
-      : c.when ? await resolveCond(c.when, ctx)
-      : true; // default
-    if (hit) { for (const n of c.body || []) await evalNode(n, ctx); return; }
+    const hit =
+      c.label !== undefined
+        ? String(onVal) === String(c.label)
+        : c.when
+          ? await resolveCond(c.when, ctx)
+          : true; // default
+    if (hit) {
+      for (const n of c.body || []) await evalNode(n, ctx);
+      return;
+    }
   }
 }
 
@@ -462,13 +660,18 @@ async function evalDerive(node, ctx) {
     return undefined;
   }
   const [verb, action] = String(node.fact?.type || "do:derive").split(":");
-  return emit({
-    verb,
-    act: action,
-    through: node.attributedTo ? resolveName(node.attributedTo, ctx) : (ctx.identity?.nameId ?? ctx.identity?.beingId ?? null),
-    of: node.of ? resolveTarget(node.of, ctx) : undefined,
-    params: resolveValue(node.params, ctx) || {},
-  }, ctx);
+  return emit(
+    {
+      verb,
+      act: action,
+      through: node.attributedTo
+        ? resolveName(node.attributedTo, ctx)
+        : (ctx.identity?.nameId ?? ctx.identity?.beingId ?? null),
+      of: node.of ? resolveTarget(node.of, ctx) : undefined,
+      params: resolveValue(node.params, ctx) || {},
+    },
+    ctx,
+  );
 }
 
 // ── standing watches + the pulse (rules 6, 12: the choq) ──────────────────────
@@ -503,8 +706,12 @@ export async function pump(ctx) {
 
 function matches(when, fact, ctx) {
   if (!when) return false;
-  if (when.on) return fact._event === when.on;            // a named event (a beat)
-  if (when.act) return fact.verb === when.act.verb && (!when.act.act || fact.act === when.act.act);
+  if (when.on) return fact._event === when.on; // a named event (a beat)
+  if (when.act)
+    return (
+      fact.verb === when.act.verb &&
+      (!when.act.act || fact.act === when.act.act)
+    );
   if (when.state) return stateMatches(when.state, ctx?.state || {}); // a world state (rule 6 over state)
   return false;
 }
@@ -538,15 +745,16 @@ async function tickWheel(ctx) {
     (f) => f.when?.state && stateMatches(f.when.state, ctx.state ?? {}),
   );
   if (!matching.length) return false;
-  for (const flow of matching) for (const effect of flow.effects) await evalNode(effect, ctx);
+  for (const flow of matching)
+    for (const effect of flow.effects) await evalNode(effect, ctx);
   return JSON.stringify(ctx.state ?? {}) !== before; // did a transition advance the wheel?
 }
 
 // ── act (the deed; sealed, it is a fact) ──────────────────────────────────────
 
 async function evalAct(act, ctx) {
-  const by = resolveName(act.by, ctx);                                 // rule 9: actor is a Name
-  const through = act.through ? resolveBeing(act.through, ctx) : null; // by/through split: the vessel
+  const by = resolveName(act.by, ctx); // rule 9: actor is a Name
+  const through = act.through ? resolveBeing(act.through, ctx) : null; // by/through split: the being
   const params = resolveValue(act.params, ctx);
 
   // the escape hatch (5.md compute-call): genuine host computation only
@@ -576,39 +784,54 @@ async function evalAct(act, ctx) {
       // "I make <X>": X NAMES the new space; create-space raises it UNDER its target, which
       // is where the actor STANDS (the position the session reports) — of names the child,
       // not the parent. So the noun becomes the name and the position becomes the target.
-      if (act.of?.id && !(p && p.name != null)) p = { ...(p || {}), name: act.of.id };
+      if (act.of?.id && !(p && p.name != null))
+        p = { ...(p || {}), name: act.of.id };
       if (ctx.position) target = { kind: "space", id: String(ctx.position) };
     }
-    const res = await doVerb(target, act.act, p, { identity: ctx.identity, moment: ctx.moment, currentHistory: ctx.history });
+    const res = await doVerb(target, act.act, p, {
+      identity: ctx.identity,
+      moment: ctx.moment,
+      currentHistory: ctx.history,
+    });
     // bind the id the op actually created (the home space), so later acts
     // (form-being's homeId, set-space's owner target) reference the real id and
     // not the pre-mint. create-space returns { spaceId } (space/ops.js).
-    if (act.bind) ctx.bindings[act.bind] = String(res?.spaceId ?? res?.id ?? res?._id ?? ctx.bindings[act.bind]);
+    if (act.bind)
+      ctx.bindings[act.bind] = String(
+        res?.spaceId ?? res?.id ?? res?._id ?? ctx.bindings[act.bind],
+      );
     return res;
   }
 
   // every other verb emits its own fact (the act, sealed)
-  return emit({
-    verb: act.verb,
-    act: act.act,                   // the operation within the verb (do:create-space, ...)
-    through: through || by,         // the deed lands under the acting being / Name
-    by,                             // the actor Name (rule 9)
-    of: resolveTarget(act.of, ctx),
-    to: act.to !== undefined ? resolveBeing(act.to, ctx) : undefined, // the receiver (rule 17)
-    params,
-    _event: act.event,              // a derived event this act counts as ("that is a beat")
-    _sets: act.sets,                // this act's effect on world state (folded below)
-  }, ctx);
+  return emit(
+    {
+      verb: act.verb,
+      act: act.act, // the operation within the verb (do:create-space, ...)
+      through: through || by, // the deed lands under the acting being / Name
+      by, // the actor Name (rule 9)
+      of: resolveTarget(act.of, ctx),
+      to: act.to !== undefined ? resolveBeing(act.to, ctx) : undefined, // the receiver (rule 17)
+      params,
+      _event: act.event, // a derived event this act counts as ("that is a beat")
+      _sets: act.sets, // this act's effect on world state (folded below)
+    },
+    ctx,
+  );
 }
 
 // rule 13: a closure names a bounded span
 async function evalClosure(node, ctx) {
-  return emit({
-    verb: "do", act: "close-span",
-    through: resolveName(node.by, ctx),
-    of: { kind: "span" },
-    params: { name: node.name },
-  }, ctx);
+  return emit(
+    {
+      verb: "do",
+      act: "close-span",
+      through: resolveName(node.by, ctx),
+      of: { kind: "span" },
+      params: { name: node.name },
+    },
+    ctx,
+  );
 }
 
 // ── primitive dispatch ────────────────────────────────────────────────────────
@@ -636,13 +859,24 @@ async function formBeing(spec, ctx) {
   if (ctx.dryRun) {
     const beingId = `<being:${spec.name}>`; // birthBeing computes a content hash; placeholder here
     ctx.deltaF.push({
-      verb: "be", act: "birth", through: beingId, of: { kind: "being", id: beingId },
-      params: spec, actId: ctx.moment?.actId, history: ctx.history,
+      verb: "be",
+      act: "birth",
+      through: beingId,
+      of: { kind: "being", id: beingId },
+      params: spec,
+      actId: ctx.moment?.actId,
+      history: ctx.history,
     });
     return { beingId, name: spec.name };
   }
-  const { birthBeing } = await import("../../materials/being/identity/birth.js");
-  return birthBeing({ spec, identity: ctx.identity, moment: ctx.moment, history: ctx.history });
+  const { birthBeing } =
+    await import("../../materials/being/identity/birth.js");
+  return birthBeing({
+    spec,
+    identity: ctx.identity,
+    moment: ctx.moment,
+    history: ctx.history,
+  });
 }
 
 async function callHost(builtin, params, ctx) {
@@ -670,8 +904,11 @@ function resolveBeing(ref, ctx) {
 
 function resolveTarget(of, ctx) {
   if (!of) return undefined;
-  if (of.bind) { // a fresh id this act creates (e.g. the home space)
-    const id = ctx.dryRun ? `<${of.bind}>` : (ctx.env?.mintId?.(of.kind) ?? undefined);
+  if (of.bind) {
+    // a fresh id this act creates (e.g. the home space)
+    const id = ctx.dryRun
+      ? `<${of.bind}>`
+      : (ctx.env?.mintId?.(of.kind) ?? undefined);
     ctx.bindings[of.bind] = id;
     return { kind: of.kind, id };
   }
@@ -694,7 +931,12 @@ function resolveValue(v, ctx) {
   // a being's proper name -> its id (the 7.md name/id bridge: the Word names
   // beings by proper noun, the system keys them by id). Scoped to ctx.beings so
   // ordinary strings (roles, names) pass through untouched.
-  if (typeof v === "string" && ctx.beings && Object.prototype.hasOwnProperty.call(ctx.beings, v)) return ctx.beings[v];
+  if (
+    typeof v === "string" &&
+    ctx.beings &&
+    Object.prototype.hasOwnProperty.call(ctx.beings, v)
+  )
+    return ctx.beings[v];
   if (Array.isArray(v)) return v.map((x) => resolveValue(x, ctx));
   if (v && typeof v === "object") {
     const out = {};

@@ -555,7 +555,7 @@ async function sendIntent(ctx, peerStory, message) {
   try {
     const result = await crossStoryDispatch({
       envelope,
-      actor:    { beingId: actorBeingId, branch: actorHistory },
+      actor:    { beingId: actorBeingId, history: actorHistory },
       identity: { beingId: actorBeingId, name: ctx.identity?.name || null },
     });
     if (result?.peerAck?.status !== "ok") {

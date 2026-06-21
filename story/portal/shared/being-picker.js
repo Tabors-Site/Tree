@@ -31,7 +31,7 @@ export function hideBeingPicker() {
  * @param {object}   opts.client        the PortalClient (nameSee)
  * @param {string}   opts.storyDomain shown in the header
  * @param {string}   opts.nameId        the signed-in name
- * @param {Function} opts.onConnect     (beingName, branch) => drive that being
+ * @param {Function} opts.onConnect     (beingName, history) => drive that being
  * @param {Function} opts.onBirthFirst  (beingName) => summon:mate @cherub
  * @param {Function} opts.onSignOut     () => release the name (Name menu)
  */
@@ -120,13 +120,13 @@ export async function showBeingPicker({ client, storyDomain = "", nameId, onConn
     const row = el("div", "bp-row");
     const meta = el("div", "bp-meta");
     meta.appendChild(el("div", "bp-name", `@${b.name || "(unnamed)"}`));
-    meta.appendChild(el("div", "bp-branch", `#${b.homeHistory || "main"}`));
+    meta.appendChild(el("div", "bp-history", `#${b.homeHistory || "main"}`));
     row.appendChild(meta);
 
-    const branchInput = el("input", "bp-branch-input");
-    branchInput.value = b.homeHistory || "0";
-    branchInput.title = "branch to connect on";
-    row.appendChild(branchInput);
+    const historyInput = el("input", "bp-history-input");
+    historyInput.value = b.homeHistory || "0";
+    historyInput.title = "history to connect on";
+    row.appendChild(historyInput);
 
     const go = el("button", "bp-btn bp-primary bp-connect", "Drive");
     go.onclick = async () => {
@@ -134,7 +134,7 @@ export async function showBeingPicker({ client, storyDomain = "", nameId, onConn
       status.textContent = `Connecting to @${b.name}…`;
       status.className = "bp-status";
       try {
-        await onConnect(b.name, branchInput.value.trim() || b.homeHistory || "0");
+        await onConnect(b.name, historyInput.value.trim() || b.homeHistory || "0");
         hideBeingPicker();
       } catch (err) {
         status.textContent = `Connect failed: ${err?.message || err}`;
@@ -184,10 +184,10 @@ function injectStyles() {
 .bp-row{display:flex;align-items:center;gap:9px;padding:9px 11px;background:#0c1118;border:1px solid #232a36;border-radius:9px;}
 .bp-meta{flex:1;min-width:0;}
 .bp-name{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.bp-branch{font-family:ui-monospace,monospace;font-size:11px;color:#7d8aa0;}
-.bp-branch-input{width:58px;padding:6px 7px;border:1px solid #2a3240;background:#0b0f15;color:#e7eaf0;
+.bp-history{font-family:ui-monospace,monospace;font-size:11px;color:#7d8aa0;}
+.bp-history-input{width:58px;padding:6px 7px;border:1px solid #2a3240;background:#0b0f15;color:#e7eaf0;
   border-radius:7px;font-family:ui-monospace,monospace;font-size:12px;outline:none;}
-.bp-branch-input:focus{border-color:#4a6cf7;}
+.bp-history-input:focus{border-color:#4a6cf7;}
 .bp-connect{flex:0 0 auto;}
 .bp-loading,.bp-empty{padding:12px;color:#9aa6ba;font-size:12.5px;}
 .bp-foot{margin-top:14px;border-top:1px solid #1d2430;padding-top:11px;}
