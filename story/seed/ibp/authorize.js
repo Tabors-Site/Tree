@@ -88,7 +88,10 @@ export async function authorize(args) {
       const op = getWordSync(args.action); // ext-scope gate reads the fold, not the Map (10.md step 6)
       const ownerExt = op?.ownerExtension;
       if (ownerExt && ownerExt !== "seed") {
-        const blocked = await isExtensionBlockedAtSpace(ownerExt, target.spaceId);
+        const blocked = await isExtensionBlockedAtSpace(
+          ownerExt,
+          target.spaceId,
+        );
         if (blocked) {
           return {
             ok: false,
@@ -146,13 +149,14 @@ export async function authorize(args) {
   if (!targetHistory) {
     const isAnonymous = !identity?.beingId || identity?.name === "arrival";
     if (isAnonymous) {
-      const { getDefaultHistory } = await import("../materials/history/historyRegistry.js");
+      const { getDefaultHistory } =
+        await import("../materials/history/historyRegistry.js");
       targetHistory = await getDefaultHistory();
     } else {
       throw new Error(
         `authorize: history could not be resolved for ${verb}:${args.action || args.seeOp || args.operation || args.intent || "?"} ` +
-        `(identity=${identity?.name || identity?.beingId || "anonymous"}). ` +
-        `Pass moment, include history on the parsed target, or thread actorHistory.`,
+          `(identity=${identity?.name || identity?.beingId || "anonymous"}). ` +
+          `Pass moment, include history on the parsed target, or thread actorHistory.`,
       );
     }
   }
@@ -168,8 +172,7 @@ export async function authorize(args) {
   // foreign actor holds HERE were granted here, on local histories, so
   // their grants read from the target's history instead.
   const actorActIsLocal =
-    !moment?.actorAct?.story ||
-    moment.actorAct.story === getStoryDomain();
+    !moment?.actorAct?.story || moment.actorAct.story === getStoryDomain();
   const actorHistory =
     args.actorHistory ||
     (actorActIsLocal ? moment?.actorAct?.history : null) ||
@@ -178,18 +181,22 @@ export async function authorize(args) {
     identity,
     verb,
     target,
-    action:      args.action || null,
-    intent:      args.intent || null,
-    operation:   args.operation || null,
-    seeOp:       args.seeOp || null,
-    history:     targetHistory,
+    action: args.action || null,
+    intent: args.intent || null,
+    operation: args.operation || null,
+    seeOp: args.seeOp || null,
+    history: targetHistory,
     actorHistory,
   });
 
   // Adapt to the verb-dispatch return shape. roleAuth returns
   // {ok, role?, anchor?, reason?}; verb dispatchers expect {ok, actor, reason?}.
   if (result.ok) {
-    return { ok: true, actor: result.role || "permitted", reason: result.reason || null };
+    return {
+      ok: true,
+      actor: result.role || "permitted",
+      reason: result.reason || null,
+    };
   }
 
   // 5. Inheritation coverage (fallback, DO-on-being only). The role-walk
@@ -201,17 +208,22 @@ export async function authorize(args) {
   // authorized acts (the hot path) never pay for the tree walk. Purely
   // additive: it can GRANT but never deny.
   if (verb === "do" && identity?.nameId && args.auditBeingId) {
-    const { hasAuthorityOver } = await import(
-      "../materials/being/identity/inheritation.js"
-    );
-    if (await hasAuthorityOver(identity.nameId, String(args.auditBeingId), targetHistory)) {
+    const { hasAuthorityOver } =
+      await import("../materials/being/identity/inheritation.js");
+    if (
+      await hasAuthorityOver(
+        identity.nameId,
+        String(args.auditBeingId),
+        targetHistory,
+      )
+    ) {
       return { ok: true, actor: String(identity.nameId) };
     }
   }
 
   return {
-    ok:     false,
-    actor:  "anonymous",
+    ok: false,
+    actor: "anonymous",
     reason: result.reason || null,
   };
 }
@@ -223,7 +235,7 @@ export async function authorize(args) {
 /**
  * Read story-level BE config flags. Defaults to true/true. These
  * flags are operator-controlled toggles for the registration flow;
- * they're NOT permission rules. Stored under place-root
+ * they're NOT permission rules. Stored under story-root
  * `qualities.auth.{birth_enabled, connect_enabled}`.
  */
 export async function getAuthConfig() {
@@ -237,7 +249,7 @@ export async function getAuthConfig() {
     return auth && key in auth ? auth[key] : fallback;
   };
   return {
-    birth_enabled:   get("birth_enabled",   true) !== false,
+    birth_enabled: get("birth_enabled", true) !== false,
     connect_enabled: get("connect_enabled", true) !== false,
   };
 }

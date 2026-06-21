@@ -39,7 +39,7 @@ const VALID_TARGETS = new Set([
   "space",
   "being",
   "matter",
-  "place",
+  "story",
   "stance",
   "position",
 ]);
@@ -49,7 +49,7 @@ const VALID_TARGETS = new Set([
  *
  * @param {string} name - "<action>" for seed ops, "<ext>:<action>" for extensions
  * @param {object} spec
- * @param {string[]} spec.targets - target kinds the op accepts: space|being|matter|place|stance|position
+ * @param {string[]} spec.targets - target kinds the op accepts: space|being|matter|story|stance|position
  * @param {Function} spec.handler - async ({ target, params, identity, moment }) => result
  * @param {object} [spec.schema] - payload validation (Zod / JSON schema). Currently stored only; enforcement is on the roadmap.
  * @param {string} [spec.factAction] - name written into the Fact. Defaults to operation name.
@@ -169,9 +169,10 @@ export function registerOperation(name, spec) {
     // The advertisement direction lives on the type def (its `ops`
     // list → the descriptor's actions menu); this is the enforcement
     // direction. See materials/matter/types.js.
-    matterTypes: Array.isArray(spec.matterTypes) && spec.matterTypes.length > 0
-      ? Object.freeze([...spec.matterTypes])
-      : null,
+    matterTypes:
+      Array.isArray(spec.matterTypes) && spec.matterTypes.length > 0
+        ? Object.freeze([...spec.matterTypes])
+        : null,
     ownerExtension,
   });
   log.verbose("Operations", `Registered: ${name} (${ownerExtension})`);

@@ -79,8 +79,9 @@ export async function resolveStance(stance, opts = {}) {
   // set-pointer). Every return shape carries an explicit canonical
   // history field; the verb layer reads this to thread into moment
   // + emitFact.
-  const { getDefaultHistory } = await import("../materials/history/historyRegistry.js");
-  const history = stance.history || await getDefaultHistory();
+  const { getDefaultHistory } =
+    await import("../materials/history/historyRegistry.js");
+  const history = stance.history || (await getDefaultHistory());
 
   // story root: path is "/". The story root IS a Space (the heavenSpace:
   // SPACE_ROOT row created by ensureSpaceRoot), so we surface its id as
@@ -227,7 +228,7 @@ export async function resolveStance(stance, opts = {}) {
   }
 
   // Plain position: "/<segments>". First segment is a tree root under
-  // the place root.
+  // the story root.
   const segments = path.slice(1).split("/").filter(Boolean);
   if (segments.length === 0) {
     throw new IbpError(IBP_ERR.ADDRESS_PARSE_ERROR, `Invalid path "${path}"`);
@@ -272,12 +273,12 @@ function base(over = {}) {
 }
 
 /**
- * Walk a sequence of path segments under the place root, matching each
+ * Walk a sequence of path segments under the story root, matching each
  * segment by UUID (preferred) or by name. Returns the resolved-stance
  * shape pointing at the final leaf.
  *
  * `startAt` (optional) seeds the walk inside a known Space row instead
- * of starting from the place root — used by the "/~" branch to walk
+ * of starting from the story root — used by the "/~" branch to walk
  * children of the caller's homeSpace.
  */
 async function walkSpacePath({

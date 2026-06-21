@@ -44,7 +44,12 @@ import {
 } from "../../present/stamper/2-fold/orientation.js";
 import { IbpError, IBP_ERR } from "../protocol.js";
 import { I_AM } from "../../materials/being/seedBeings.js";
-import { parseWithContext, expand, resolveHistoryPointers, getStoryDomain } from "../address.js";
+import {
+  parseWithContext,
+  expand,
+  resolveHistoryPointers,
+  getStoryDomain,
+} from "../address.js";
 import { resolveStance } from "../resolver.js";
 import { authorize } from "../authorize.js";
 import { permitsReceiverSummon } from "../roleAuth.js";
@@ -55,7 +60,12 @@ import {
 } from "../../materials/space/threads.js";
 import { getRole } from "../../present/roles/registry.js";
 import { attachHandoff, wake } from "../../present/intake/scheduler.js";
-import { assertVerbCaller, refuseHistoricalWrite, resolveHistoryForFact, normalizeIdentity } from "./_shared.js";
+import {
+  assertVerbCaller,
+  refuseHistoricalWrite,
+  resolveHistoryForFact,
+  normalizeIdentity,
+} from "./_shared.js";
 
 // Legacy numeric priority (used by inbox queue ordering and the
 // older wake APIs) mapped to the SUMMON envelope's enum. The Act
@@ -90,9 +100,15 @@ export async function callVerb(stance, message, opts = {}) {
   const validatedMessage = validateCallMessage(message);
 
   const {
-    identity = null, currentUser = null, currentStory = null,
-    currentHistory = null, currentPath = null, actorHistory = null,
-    onResponse = null, onError = null, moment = null,
+    identity = null,
+    currentUser = null,
+    currentStory = null,
+    currentHistory = null,
+    currentPath = null,
+    actorHistory = null,
+    onResponse = null,
+    onError = null,
+    moment = null,
   } = opts;
 
   // Top-level operation count (one-DO/BE/SUMMON-per-moment doctrine;
@@ -115,10 +131,13 @@ export async function callVerb(stance, message, opts = {}) {
     // through to the `#main` pointer for every relative summon and
     // resolveStance walked the wrong history for off-main callers.
     currentHistory: moment?.actorAct?.history || currentHistory || null,
-    currentPath:   currentPath || null,
+    currentPath: currentPath || null,
   };
   const parsed = parseWithContext(stance, parseCtx);
-  const expanded = await resolveHistoryPointers(expand(parsed, parseCtx), parseCtx);
+  const expanded = await resolveHistoryPointers(
+    expand(parsed, parseCtx),
+    parseCtx,
+  );
 
   // Thread-target history. SUMMON whose right-side path names
   // `.threads/<id>` is a cut, not a call. The thread is addressable
@@ -132,13 +151,13 @@ export async function callVerb(stance, message, opts = {}) {
   if (targetThreadId) {
     // Stance auth: broad gate. Is the asker allowed to address
     // `.threads` on this story at all? The default rule
-    // `summon:.threads:*` matches against the place root and
+    // `summon:.threads:*` matches against the story root and
     // requires non-arrival (an authenticated being). Per-position
     // overrides at `.threads` can tighten this.
     const threadsSpaceId = await getThreadsSpaceId();
     const decision = await authorize({
       identity,
-      verb:   "call",
+      verb: "call",
       target: { kind: "thread", id: targetThreadId, spaceId: threadsSpaceId },
       moment,
       // The caller's session history (their grants live there). The
@@ -147,11 +166,14 @@ export async function callVerb(stance, message, opts = {}) {
       actorHistory: actorHistory || null,
     });
     if (!decision.ok) {
-      throw new IbpError(IBP_ERR.FORBIDDEN, decision.reason || "Not allowed to address .threads");
+      throw new IbpError(
+        IBP_ERR.FORBIDDEN,
+        decision.reason || "Not allowed to address .threads",
+      );
     }
 
     const priority = validatedMessage.priority || "INTERACTIVE";
-    const reason   = validatedMessage.content || "thread cut";
+    const reason = validatedMessage.content || "thread cut";
     // Participation check happens inside cutThread: the asker must
     // be a participant in this specific rootCorrelation chain (or
     // I_AM). Facts live on Act rows, not on Space ancestry —
@@ -165,11 +187,11 @@ export async function callVerb(stance, message, opts = {}) {
       moment,
     });
     return {
-      status:    "accepted",
-      thread:    targetThreadId,
-      severed:   result.severed,
+      status: "accepted",
+      thread: targetThreadId,
+      severed: result.severed,
       cancelled: result.cancelled,
-      aborted:   result.aborted,
+      aborted: result.aborted,
     };
   }
 
@@ -177,10 +199,16 @@ export async function callVerb(stance, message, opts = {}) {
 
   const qualifier = resolved.being;
   if (!qualifier) {
-    throw new IbpError(IBP_ERR.ROLE_UNAVAILABLE, "SUMMON requires a stance with an @qualifier");
+    throw new IbpError(
+      IBP_ERR.ROLE_UNAVAILABLE,
+      "SUMMON requires a stance with an @qualifier",
+    );
   }
   if (!resolved.spaceId) {
-    throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Stance does not resolve to a known space");
+    throw new IbpError(
+      IBP_ERR.SPACE_NOT_FOUND,
+      "Stance does not resolve to a known space",
+    );
   }
 
   // Resolve the qualifier to a Being: direct name first (the canonical
@@ -190,24 +218,29 @@ export async function callVerb(stance, message, opts = {}) {
   // support); the role-shorthand search walks values to find a match.
   // When multiple beings share the role, the first hit wins; addressing
   // a specific instance uses its name.
-  const { findByName, loadOrFold } = await import("../../materials/projections.js");
+  const { findByName, loadOrFold } =
+    await import("../../materials/projections.js");
   // History resolution at the perimeter: inside-moment continuations
   // ride moment.actorAct?.history; wire-originated calls ride opts.currentHistory.
   // Throws MISSING_BRANCH if neither was attached (a threading bug at
   // the perimeter, surfaced loud per the history-hardening doctrine).
   const history = resolveHistoryForFact(moment, currentHistory, "call");
   let toBeingSlot = await findByName("being", qualifier, history);
-  let toBeing = toBeingSlot ? { _id: toBeingSlot.id, ...toBeingSlot.state } : null;
+  let toBeing = toBeingSlot
+    ? { _id: toBeingSlot.id, ...toBeingSlot.state }
+    : null;
   if (!toBeing && resolved.spaceId) {
     const spaceSlot = await loadOrFold("space", resolved.spaceId, history);
-    const beings = spaceSlot?.state?.qualities instanceof Map
-      ? spaceSlot.state.qualities.get("beings")
-      : spaceSlot?.state?.qualities?.beings;
+    const beings =
+      spaceSlot?.state?.qualities instanceof Map
+        ? spaceSlot.state.qualities.get("beings")
+        : spaceSlot?.state?.qualities?.beings;
     let homeBeingId = beings?.[qualifier]?.beingId || null;
     if (!homeBeingId && beings && typeof beings === "object") {
-      const entries = beings instanceof Map
-        ? Array.from(beings.values())
-        : Object.values(beings);
+      const entries =
+        beings instanceof Map
+          ? Array.from(beings.values())
+          : Object.values(beings);
       const hit = entries.find((e) => e && e.role === qualifier);
       homeBeingId = hit?.beingId || null;
     }
@@ -234,9 +267,8 @@ export async function callVerb(stance, message, opts = {}) {
   // permission writes the flow that gates which roles wake the being).
   // We still want to fail loudly if the role itself doesn't exist —
   // that catches typos before they reach the moment runner.
-  const activeRole = validatedMessage.activeRole
-    || toBeing.defaultRole
-    || qualifier;
+  const activeRole =
+    validatedMessage.activeRole || toBeing.defaultRole || qualifier;
 
   const role = getRole(activeRole);
   if (!role) {
@@ -250,8 +282,16 @@ export async function callVerb(stance, message, opts = {}) {
   // for the findByName lookup; pass it through to _dispatchCall so
   // the fact emission uses the same value.
   return _dispatchCall({
-    resolved, toBeing, activeRole, role, validatedMessage,
-    identity, onResponse, onError, moment, history,
+    resolved,
+    toBeing,
+    activeRole,
+    role,
+    validatedMessage,
+    identity,
+    onResponse,
+    onError,
+    moment,
+    history,
     actorHistory,
   });
 }
@@ -291,15 +331,29 @@ export async function callVerb(stance, message, opts = {}) {
  */
 export async function callByResolved(args) {
   const {
-    toBeingId, inboxSpaceId, message, activeRole: roleOverride,
+    toBeingId,
+    inboxSpaceId,
+    message,
+    activeRole: roleOverride,
     identity: rawIdentity,
-    onResponse, onError, moment = null, history: argsHistory = null,
+    onResponse,
+    onError,
+    moment = null,
+    history: argsHistory = null,
   } = args || {};
   // Accept bare-string identity shorthand (typically `I_AM` for seed-
   // internal summons) alongside the regular `{beingId, name}` shape.
   const identity = normalizeIdentity(rawIdentity);
-  if (!toBeingId)    throw new IbpError(IBP_ERR.INVALID_INPUT, "callByResolved requires toBeingId");
-  if (!inboxSpaceId) throw new IbpError(IBP_ERR.INVALID_INPUT, "callByResolved requires inboxSpaceId");
+  if (!toBeingId)
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "callByResolved requires toBeingId",
+    );
+  if (!inboxSpaceId)
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "callByResolved requires inboxSpaceId",
+    );
 
   const validatedMessage = validateCallMessage(message);
 
@@ -307,11 +361,22 @@ export async function callByResolved(args) {
   const history = resolveHistoryForFact(moment, argsHistory, "call");
   const toSlot = await loadOrFold("being", toBeingId, history);
   if (!toSlot) {
-    throw new IbpError(IBP_ERR.BEING_NOT_FOUND, `No being with id ${toBeingId} on history ${history}`);
+    throw new IbpError(
+      IBP_ERR.BEING_NOT_FOUND,
+      `No being with id ${toBeingId} on history ${history}`,
+    );
   }
-  const toBeing = { _id: toSlot.id, position: toSlot.position, ...toSlot.state };
+  const toBeing = {
+    _id: toSlot.id,
+    position: toSlot.position,
+    ...toSlot.state,
+  };
 
-  const activeRole = roleOverride || validatedMessage.activeRole || toBeing.defaultRole || toBeing.name;
+  const activeRole =
+    roleOverride ||
+    validatedMessage.activeRole ||
+    toBeing.defaultRole ||
+    toBeing.name;
   const role = getRole(activeRole);
   if (!role) {
     throw new IbpError(
@@ -321,9 +386,20 @@ export async function callByResolved(args) {
   }
 
   return _dispatchCall({
-    resolved: { spaceId: inboxSpaceId, leafId: inboxSpaceId, being: activeRole },
-    toBeing, activeRole, role, validatedMessage,
-    identity, onResponse, onError, moment, history,
+    resolved: {
+      spaceId: inboxSpaceId,
+      leafId: inboxSpaceId,
+      being: activeRole,
+    },
+    toBeing,
+    activeRole,
+    role,
+    validatedMessage,
+    identity,
+    onResponse,
+    onError,
+    moment,
+    history,
   });
 }
 
@@ -338,13 +414,21 @@ export async function callByResolved(args) {
  * or registers a handoff and nudges the scheduler.
  */
 async function _dispatchCall({
-  resolved, toBeing, activeRole, role, validatedMessage,
-  identity, onResponse, onError, moment = null, history,
+  resolved,
+  toBeing,
+  activeRole,
+  role,
+  validatedMessage,
+  identity,
+  onResponse,
+  onError,
+  moment = null,
+  history,
   actorHistory = null,
 }) {
   const decision = await authorize({
     identity,
-    verb:   "call",
+    verb: "call",
     // `being` is the TARGET BEING'S NAME — canSummon patterns
     // ("@cherub", "@food-*") match being names, and beings are
     // addressed individually even when several share a role. Passing
@@ -417,9 +501,7 @@ async function _dispatchCall({
   //
   // For seed-internal flows with no identity (DO-trigger fan-out,
   // scheduled wakes, genesis scaffolding), the summoner is I_AM.
-  const summonerBeingId = identity?.beingId
-    ? String(identity.beingId)
-    : I_AM;
+  const summonerBeingId = identity?.beingId ? String(identity.beingId) : I_AM;
   const messageId = randomUUID();
   const sentAt = new Date().toISOString();
 
@@ -432,8 +514,8 @@ async function _dispatchCall({
     throw new IbpError(
       IBP_ERR.FORBIDDEN,
       `SUMMON with orientation="${orientation}" is only valid for self-summon ` +
-      `(summoner must equal recipient). Got summoner=${summonerBeingId.slice(0, 8)} ` +
-      `recipient=${recipientBeingId.slice(0, 8)}.`,
+        `(summoner must equal recipient). Got summoner=${summonerBeingId.slice(0, 8)} ` +
+        `recipient=${recipientBeingId.slice(0, 8)}.`,
     );
   }
 
@@ -450,68 +532,79 @@ async function _dispatchCall({
   // recorded as `beingId`. Renamed from `be:summon` on 2026-06-03
   // because the BE namespace is for self-acts (birth/connect/release);
   // summoning another being is not a self-act.
-  await emitFact({
-    verb:    "call",
-    act:     "call",
-    through: summonerBeingId,
-    // The actor NAME (the summoner's signing identity). In-moment summons
-    // would have emitFact derive this from moment.actorAct.by; we
-    // set it explicitly so the MOMENT-LESS wire summon (no moment.actorAct,
-    // the summon becomes the RECIPIENT's moment) still links to the
-    // summoner's Name. Precedence mirrors emitFact: moment's actor name,
-    // then the caller's signed-in Name, then I_AM for seed-internal flows.
-    by:      moment?.actorAct?.by ?? identity?.nameId ?? (summonerBeingId === I_AM ? I_AM : null),
-    of:      { kind: "being", id: recipientBeingId }, // right stance
-    params:  {
-      correlation:     messageId,
-      rootCorrelation: validatedMessage.rootCorrelation || messageId,
-      inReplyTo:       validatedMessage.inReplyTo || null,
-      sender:          validatedMessage.from,
-      content:         validatedMessage.content,
-      // Envelope intent: the caller's stated purpose. Persisted on the
-      // Fact so the audit chain records WHAT THE CALLER SAID THEY WERE
-      // DOING, separately from the payload (content) and from what the
-      // receiver chose to do (later facts on the receiver's reel). Null
-      // when no intent was set; the receiver's role decides on the basis
-      // of (intent, content) together.
-      intent:          validatedMessage.intent || null,
-      priority:        validatedMessage.priority || "INTERACTIVE",
-      activeRole,
-      orientation,
-      attachments:     validatedMessage.attachments,
-      inboxSpaceId:    inboxNodeId,
-      sentAt,
-      // Cross-history provenance for MOMENT-LESS summons. In-moment
-      // summons get crossOrigin derived by emitFact from
-      // moment.actorAct; a wire summon has no moment (the summon
-      // becomes the RECIPIENT's moment), so when the caller's session
-      // history differs from the fact's destination history the block
-      // is attached here. actId is null — there is no home-side act
-      // for a wire summon; the keystroke is not an act.
-      ...(!moment?.actorAct && actorHistory && actorHistory !== history
-        ? {
-            crossOrigin: {
-              story: null,
-              history:  actorHistory,
-              beingId: summonerBeingId,
-              actId:   null,
-            },
-          }
-        : {}),
+  await emitFact(
+    {
+      verb: "call",
+      act: "call",
+      through: summonerBeingId,
+      // The actor NAME (the summoner's signing identity). In-moment summons
+      // would have emitFact derive this from moment.actorAct.by; we
+      // set it explicitly so the MOMENT-LESS wire summon (no moment.actorAct,
+      // the summon becomes the RECIPIENT's moment) still links to the
+      // summoner's Name. Precedence mirrors emitFact: moment's actor name,
+      // then the caller's signed-in Name, then I_AM for seed-internal flows.
+      by:
+        moment?.actorAct?.by ??
+        identity?.nameId ??
+        (summonerBeingId === I_AM ? I_AM : null),
+      of: { kind: "being", id: recipientBeingId }, // right stance
+      params: {
+        correlation: messageId,
+        rootCorrelation: validatedMessage.rootCorrelation || messageId,
+        inReplyTo: validatedMessage.inReplyTo || null,
+        sender: validatedMessage.from,
+        content: validatedMessage.content,
+        // Envelope intent: the caller's stated purpose. Persisted on the
+        // Fact so the audit chain records WHAT THE CALLER SAID THEY WERE
+        // DOING, separately from the payload (content) and from what the
+        // receiver chose to do (later facts on the receiver's reel). Null
+        // when no intent was set; the receiver's role decides on the basis
+        // of (intent, content) together.
+        intent: validatedMessage.intent || null,
+        priority: validatedMessage.priority || "INTERACTIVE",
+        activeRole,
+        orientation,
+        attachments: validatedMessage.attachments,
+        inboxSpaceId: inboxNodeId,
+        sentAt,
+        // Cross-history provenance for MOMENT-LESS summons. In-moment
+        // summons get crossOrigin derived by emitFact from
+        // moment.actorAct; a wire summon has no moment (the summon
+        // becomes the RECIPIENT's moment), so when the caller's session
+        // history differs from the fact's destination history the block
+        // is attached here. actId is null — there is no home-side act
+        // for a wire summon; the keystroke is not an act.
+        ...(!moment?.actorAct && actorHistory && actorHistory !== history
+          ? {
+              crossOrigin: {
+                story: null,
+                history: actorHistory,
+                beingId: summonerBeingId,
+                actId: null,
+              },
+            }
+          : {}),
+      },
+      actId: moment?.actId || null,
+      // History the summon fact lands on, pre-resolved at the entry point
+      // (callVerb / callByResolved both call resolveHistoryForFact
+      // before dispatching here). _dispatchCall trusts the value.
+      history,
     },
-    actId: moment?.actId || null,
-    // History the summon fact lands on, pre-resolved at the entry point
-    // (callVerb / callByResolved both call resolveHistoryForFact
-    // before dispatching here). _dispatchCall trusts the value.
-    history,
-  }, moment);
+    moment,
+  );
 
   const innerCtx = {
-    spaceId:     inboxNodeId,
-    being:       activeRole,
+    spaceId: inboxNodeId,
+    being: activeRole,
     activeRole,
     toBeing,
-    message:    { ...validatedMessage, correlation: messageId, sentAt, activeRole },
+    message: {
+      ...validatedMessage,
+      correlation: messageId,
+      sentAt,
+      activeRole,
+    },
     resolved,
     identity,
   };
@@ -532,20 +625,21 @@ async function _dispatchCall({
       resolved,
       responseFromStance,
       onResponse: typeof onResponse === "function" ? onResponse : () => {},
-      onError: typeof onError === "function"
-        ? onError
-        : (err) => {
-            if (typeof onResponse === "function") {
-              onResponse({
-                from:        responseFromStance,
-                content:     `[${err.code || "error"}] ${err.message || "summoning failed"}`,
-                correlation: randomUUID(),
-                inReplyTo:   messageId,
-                sentAt:      new Date().toISOString(),
-                error:       true,
-              });
-            }
-          },
+      onError:
+        typeof onError === "function"
+          ? onError
+          : (err) => {
+              if (typeof onResponse === "function") {
+                onResponse({
+                  from: responseFromStance,
+                  content: `[${err.code || "error"}] ${err.message || "summoning failed"}`,
+                  correlation: randomUUID(),
+                  inReplyTo: messageId,
+                  sentAt: new Date().toISOString(),
+                  error: true,
+                });
+              }
+            },
     });
 
     // Phase 2: defer the scheduler-nudge until AFTER sealAct commits.
@@ -588,7 +682,10 @@ async function _dispatchCall({
  */
 function validateCallMessage(message) {
   if (!message || typeof message !== "object") {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "story.call requires a `message` object");
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "story.call requires a `message` object",
+    );
   }
   if (typeof message.from !== "string" || !message.from.length) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "`message.from` is required");
@@ -609,13 +706,16 @@ function validateCallMessage(message) {
   // match declared entries. Reject them at the perimeter.
   if (message.intent !== undefined && message.intent !== null) {
     if (typeof message.intent !== "string" || !message.intent.length) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "`message.intent` must be a non-empty string");
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "`message.intent` must be a non-empty string",
+      );
     }
     if (!/^[a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)?$/.test(message.intent)) {
       throw new IbpError(
         IBP_ERR.INVALID_INPUT,
         `\`message.intent\` "${message.intent}" must be kebab-case (lowercase, digits, dashes; ` +
-        `optional single namespace prefix via ":")`,
+          `optional single namespace prefix via ":")`,
       );
     }
   }
@@ -625,7 +725,8 @@ function validateCallMessage(message) {
   // here so the Fact, InboxProjection, and Act all carry the same
   // canonical value.
   if (message.priority !== undefined && message.priority !== null) {
-    message.priority = _PRIORITY_NUM_TO_ENUM[message.priority] || message.priority;
+    message.priority =
+      _PRIORITY_NUM_TO_ENUM[message.priority] || message.priority;
   }
   // Orientation (INNER-FOLD spec). External summons must carry
   // forward — only self-summons may set half or inward, enforced
@@ -649,23 +750,27 @@ async function runCalling(role, ctx) {
   try {
     result = await role.call(ctx.message, ctx);
   } catch (err) {
-    log.error("Verbs", `being "${ctx.being}" summoning errored: ${err.message}`);
+    log.error(
+      "Verbs",
+      `being "${ctx.being}" summoning errored: ${err.message}`,
+    );
     throw new IbpError(IBP_ERR.LLM_FAILED, `Summoning failed: ${err.message}`);
   }
   if (!result || typeof result !== "object") {
     return null; // no-response (role chose not to reply)
   }
   return {
-    from:        `${pathOfResolved(ctx.resolved)}@${ctx.toBeing.name}`,
-    content:     result.text ?? result.content ?? "",
+    from: `${pathOfResolved(ctx.resolved)}@${ctx.toBeing.name}`,
+    content: result.text ?? result.content ?? "",
     correlation: randomUUID(),
-    inReplyTo:   ctx.message.correlation,
-    sentAt:      new Date().toISOString(),
-    actId:       result.actId || null,
+    inReplyTo: ctx.message.correlation,
+    sentAt: new Date().toISOString(),
+    actId: result.actId || null,
   };
 }
 
 function pathOfResolved(resolved) {
-  if (resolved?.pathByNames) return `${getStoryDomain()}${resolved.pathByNames}`;
+  if (resolved?.pathByNames)
+    return `${getStoryDomain()}${resolved.pathByNames}`;
   return `${getStoryDomain()}/`;
 }

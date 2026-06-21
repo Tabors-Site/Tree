@@ -9,11 +9,11 @@
 //
 // Dispatch flow:
 //
-//   1. Resolve the target being from the address (bare place defaults
+//   1. Resolve the target being from the address (bare story defaults
 //      to @cherub, the welcome character).
 //   2. Look up the op in BE_OPS. Unknown op = ACTION_NOT_SUPPORTED.
 //      . assertVerbCaller unless the op is `bootstrap: true`.
-//      . place-level flags (birth_enabled / connect_enabled) gate
+//      . story-level flags (birth_enabled / connect_enabled) gate
 //        birth / connect.
 //      . authorize() the BE call.
 //      . run BE_OPS[op].handler(...).
@@ -33,15 +33,19 @@ import { I_AM } from "../../materials/being/seedBeings.js";
 import { getStoryDomain } from "../address.js";
 import { authorize, getAuthConfig } from "../authorize.js";
 import { BE_OPS, getBeOp } from "../beOps.js";
-import { assertVerbCaller, refuseHistoricalWrite, resolveHistoryForFact } from "./_shared.js";
+import {
+  assertVerbCaller,
+  refuseHistoricalWrite,
+  resolveHistoryForFact,
+} from "./_shared.js";
 
 /**
  * BE. Run an identity operation. Returns the operation's result
  * (typically `{ identityToken, beingAddress, ... }` for auth flows).
  *
  * opts:
- *   address      stance or place string the BE call addresses
- *   addressKind  "stance" | "place"
+ *   address      stance or story string the BE call addresses
+ *   addressKind  "stance" | "story"
  *   identity     authenticated identity (required for release)
  *   socket       optional WS socket passed through to auth hooks
  *   req          optional Express req for HTTP-arrival flows
@@ -55,18 +59,18 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   refuseHistoricalWrite("be", payload, opts);
 
   const {
-    address     = null,
+    address = null,
     addressKind = null,
-    identity    = null,
+    identity = null,
     // The connection's signed-in Name (server ground truth, threaded from the
     // wire's socket.nameId). Lets connect admit an OWNED being with no
     // password. NEVER sourced from the client payload.
-    nameId      = null,
-    socket      = null,
-    req         = null,
+    nameId = null,
+    socket = null,
+    req = null,
     currentStory = null,
-    currentHistory  = null,
-    moment   = null,
+    currentHistory = null,
+    moment = null,
   } = opts;
 
   // Resolve history ONCE at the entry. Inside a moment the seated
@@ -91,7 +95,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     );
   }
 
-  // Bare-place address defaults to @cherub, the welcome character.
+  // Bare-story address defaults to @cherub, the welcome character.
   const beingName = extractBeingFromAddress(address, addressKind) || "cherub";
 
   // Static-table dispatch. BE_OPS holds the canonical five ops
@@ -104,7 +108,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   // ── Self-birth path (BE:birth on your own stance). ──────────────
   // Per the federation doctrine, be:birth is the only birth verb;
   // the actor (left stance) becomes the mother. Solo birth — father
-  // stays null. Surfaced from the 2D portal place-tab's "+ birth a
+  // stays null. Surfaced from the 2D portal story-tab's "+ birth a
   // being" affordance. The doctrinal endgame is "BE:birth on self"
   // having literal semantics: target is the caller's own stance,
   // child has the caller as parent (mother). Same machinery as the
@@ -112,11 +116,11 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   // own (no intermediary). See FEDERATION.md "be:birth is the only
   // birth verb".
   const isSelfTarget = !!(
-    operation === "birth"
-    && identity?.beingId
-    && identity?.name
-    && beingName
-    && String(beingName).toLowerCase() === String(identity.name).toLowerCase()
+    operation === "birth" &&
+    identity?.beingId &&
+    identity?.name &&
+    beingName &&
+    String(beingName).toLowerCase() === String(identity.name).toLowerCase()
   );
   if (isSelfTarget) {
     assertVerbCaller("be", opts);
@@ -141,10 +145,13 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     }
     const childName = payload?.name;
     if (!childName || typeof childName !== "string") {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "BE:birth requires payload.name");
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "BE:birth requires payload.name",
+      );
     }
     const childCognition = payload?.cognition || "llm";
-    const childPassword  = payload?.password || null;
+    const childPassword = payload?.password || null;
     const childRoleField = payload?.role || payload?.defaultRole || null;
     let childHomeId = payload?.homeId || payload?.homeSpace || null;
     if (!childHomeId) {
@@ -152,7 +159,11 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       // birther path below for the doctrine.
       const { loadOrFold } = await import("../../materials/projections.js");
       const callerHistory = moment?.actorAct?.history || history;
-      const callerSlot = await loadOrFold("being", identity.beingId, callerHistory);
+      const callerSlot = await loadOrFold(
+        "being",
+        identity.beingId,
+        callerHistory,
+      );
       childHomeId = callerSlot?.state?.homeSpace || null;
     }
     if (!childHomeId) {
@@ -161,13 +172,14 @@ export async function beVerb(operation, payload = {}, opts = {}) {
         "BE:birth (self) requires a homeId (caller has no homeSpace to inherit)",
       );
     }
-    const { birthBeing } = await import("../../materials/being/identity/birth.js");
+    const { birthBeing } =
+      await import("../../materials/being/identity/birth.js");
     const childSpec = {
-      name:          childName,
-      cognition:     childCognition,
-      password:      childPassword,
-      parentBeingId: String(identity.beingId),  // mother is the caller
-      homeId:        String(childHomeId),
+      name: childName,
+      cognition: childCognition,
+      password: childPassword,
+      parentBeingId: String(identity.beingId), // mother is the caller
+      homeId: String(childHomeId),
     };
     if (childRoleField) childSpec.role = childRoleField;
     const result = await birthBeing({
@@ -180,10 +192,10 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       history,
     });
     return {
-      beingId:      result.beingId,
-      name:         result.name,
+      beingId: result.beingId,
+      name: result.name,
       beingAddress: `${getStoryDomain()}/@${result.name}`,
-      selfBirth:    true,
+      selfBirth: true,
     };
   }
 
@@ -199,13 +211,16 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   if (operation === "birth" && beingName === "birther") {
     assertVerbCaller("be", opts);
     if (!identity?.beingId) {
-      throw new IbpError(IBP_ERR.UNAUTHORIZED, "BE:birth via @birther requires an authenticated caller");
+      throw new IbpError(
+        IBP_ERR.UNAUTHORIZED,
+        "BE:birth via @birther requires an authenticated caller",
+      );
     }
     const authConfig = await getAuthConfig();
     if (!authConfig.birth_enabled) {
       throw new IbpError(IBP_ERR.FORBIDDEN, "Birth is disabled on this story");
     }
-    // Auth gate (the standard rule is be:create-being via the place-
+    // Auth gate (the standard rule is be:create-being via the story-
     // root default, which admits all authenticated callers; per-position
     // rules can tighten).
     const decision = await authorize({
@@ -233,8 +248,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     // lands. Override at mint-time via payload.homeSpace (existing
     // space) or payload.homeParent (mint a new sub-space).
     const childName = payload?.name;
-    const childCognition = payload?.cognition || "llm";  // substrate default
-    const childPassword  = payload?.password || null;
+    const childCognition = payload?.cognition || "llm"; // substrate default
+    const childPassword = payload?.password || null;
     const childRoleField = payload?.role || payload?.defaultRole || null;
     // Initial roleFlow: when the operator wants the child born with a
     // configured behavioral program (the spec's Step 5 birther flow:
@@ -244,21 +259,30 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     let childRoleFlow = null;
     if (Array.isArray(payload?.roleFlow)) {
       childRoleFlow = payload.roleFlow;
-    } else if (typeof payload?.roleFlow === "string" && payload.roleFlow.trim()) {
-      try { childRoleFlow = JSON.parse(payload.roleFlow); }
-      catch (e) {
+    } else if (
+      typeof payload?.roleFlow === "string" &&
+      payload.roleFlow.trim()
+    ) {
+      try {
+        childRoleFlow = JSON.parse(payload.roleFlow);
+      } catch (e) {
         throw new IbpError(
           IBP_ERR.INVALID_INPUT,
           `BE:birth: roleFlow must be a valid JSON array (parse error: ${e.message})`,
         );
       }
       if (!Array.isArray(childRoleFlow)) {
-        throw new IbpError(IBP_ERR.INVALID_INPUT,
-          "BE:birth: roleFlow must be an array of clauses");
+        throw new IbpError(
+          IBP_ERR.INVALID_INPUT,
+          "BE:birth: roleFlow must be an array of clauses",
+        );
       }
     }
     if (!childName || typeof childName !== "string") {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "BE:birth requires payload.name");
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "BE:birth requires payload.name",
+      );
     }
 
     // Home resolution. The wire carries one of three shapes:
@@ -270,7 +294,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     // The createBeingWithHome orchestrator that used to live inside
     // birth retired 2026-06-04; the homeParent path now inlines a
     // do:create-space here before calling birthBeing.
-    let childHomeId = payload?.homeId || payload?.homeSpace || null;  // homeSpace accepted as legacy alias during caller migration
+    let childHomeId = payload?.homeId || payload?.homeSpace || null; // homeSpace accepted as legacy alias during caller migration
     const childHomeParent = payload?.homeParent || null;
     if (!childHomeId && !childHomeParent) {
       // loadOrFold: a caller inherited from main onto a sub-history
@@ -285,7 +309,11 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       // not where the mother lives.
       const { loadOrFold } = await import("../../materials/projections.js");
       const callerHistory = moment?.actorAct?.history || history;
-      const callerSlot = await loadOrFold("being", identity.beingId, callerHistory);
+      const callerSlot = await loadOrFold(
+        "being",
+        identity.beingId,
+        callerHistory,
+      );
       childHomeId = callerSlot?.state?.homeSpace || null;
     }
     if (!childHomeId && !childHomeParent) {
@@ -304,38 +332,42 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       const { emitFact: _emitFact } = await import("../../past/fact/facts.js");
       const { randomUUID: _uuidv4 } = await import("node:crypto");
       const newHomeId = _uuidv4();
-      await _emitFact({
-        verb:    "do",
-        act:     "create-space",
-        through: String(identity.beingId),
-        of:      { kind: "space", id: newHomeId },
-        params: {
-          name: childName,
-          type: "child-home",
-          parent: String(childHomeParent),
-          // No initial owner class — set after the child being is
-          // birthed (the child becomes their own home's owner).
-          size: { x: 100, y: 100 },
-          qualities: {},
+      await _emitFact(
+        {
+          verb: "do",
+          act: "create-space",
+          through: String(identity.beingId),
+          of: { kind: "space", id: newHomeId },
+          params: {
+            name: childName,
+            type: "child-home",
+            parent: String(childHomeParent),
+            // No initial owner class — set after the child being is
+            // birthed (the child becomes their own home's owner).
+            size: { x: 100, y: 100 },
+            qualities: {},
+          },
+          actId: moment?.actId || null,
+          // The child's home space lands on the same history as the
+          // child's be:birth — the history this verb resolved.
+          history,
         },
-        actId:  moment?.actId || null,
-        // The child's home space lands on the same history as the
-        // child's be:birth — the history this verb resolved.
-        history,
-      }, moment);
+        moment,
+      );
       childHomeId = newHomeId;
     }
 
-    const { birthBeing } = await import("../../materials/being/identity/birth.js");
+    const { birthBeing } =
+      await import("../../materials/being/identity/birth.js");
     const childSpec = {
-      name:          childName,
-      cognition:     childCognition,
-      password:      childPassword,
+      name: childName,
+      cognition: childCognition,
+      password: childPassword,
       parentBeingId: String(identity.beingId),
-      homeId:        String(childHomeId),
+      homeId: String(childHomeId),
     };
-    if (childRoleField)  childSpec.role     = childRoleField;
-    if (childRoleFlow)   childSpec.roleFlow = childRoleFlow;
+    if (childRoleField) childSpec.role = childRoleField;
+    if (childRoleFlow) childSpec.roleFlow = childRoleFlow;
 
     const result = await birthBeing({
       spec: childSpec,
@@ -351,8 +383,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     // the birth fact already, and findBeingParent walks it. Mirrors the
     // be:summon-create collapse from 2026-06-03.
     return {
-      beingId:      result.beingId,
-      name:         result.name,
+      beingId: result.beingId,
+      name: result.name,
       beingAddress: `${getStoryDomain()}/@${result.name}`,
     };
   }
@@ -370,7 +402,10 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   if (operation === "release" && beingName !== "cherub") {
     assertVerbCaller("be", opts);
     if (!identity?.beingId) {
-      throw new IbpError(IBP_ERR.UNAUTHORIZED, "release requires an authenticated caller");
+      throw new IbpError(
+        IBP_ERR.UNAUTHORIZED,
+        "release requires an authenticated caller",
+      );
     }
     const decision = await authorize({
       identity,
@@ -389,9 +424,20 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     }
     const cherubReleaseOp = getBeOp("release");
     const result = cherubReleaseOp
-      ? await cherubReleaseOp.handler({ address, addressKind, payload, identity,
-          ctx: { socket, address: { kind: addressKind, value: address }, identity, req, moment },
-          moment })
+      ? await cherubReleaseOp.handler({
+          address,
+          addressKind,
+          payload,
+          identity,
+          ctx: {
+            socket,
+            address: { kind: addressKind, value: address },
+            identity,
+            req,
+            moment,
+          },
+          moment,
+        })
       : { released: true };
     await writeBeFact({
       operation,
@@ -423,7 +469,10 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   if (operation === "switch") {
     assertVerbCaller("be", opts);
     if (!identity?.beingId) {
-      throw new IbpError(IBP_ERR.UNAUTHORIZED, "switch requires an authenticated caller");
+      throw new IbpError(
+        IBP_ERR.UNAUTHORIZED,
+        "switch requires an authenticated caller",
+      );
     }
     const switchOp = getBeOp("switch");
     if (!switchOp) {
@@ -434,7 +483,13 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       addressKind,
       payload,
       identity,
-      ctx: { socket, address: { kind: addressKind, value: address }, identity, req, moment },
+      ctx: {
+        socket,
+        address: { kind: addressKind, value: address },
+        identity,
+        req,
+        moment,
+      },
       moment,
     });
     // Stamp the audit fact on the NEW history (result.toHistory) — the
@@ -462,7 +517,10 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   if (operation === "death") {
     assertVerbCaller("be", opts);
     if (!identity?.beingId) {
-      throw new IbpError(IBP_ERR.UNAUTHORIZED, "death requires an authenticated caller");
+      throw new IbpError(
+        IBP_ERR.UNAUTHORIZED,
+        "death requires an authenticated caller",
+      );
     }
     if (!beingName) {
       throw new IbpError(
@@ -507,7 +565,13 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       addressKind,
       payload,
       identity,
-      ctx: { socket, address: { kind: addressKind, value: address }, identity, req, moment },
+      ctx: {
+        socket,
+        address: { kind: addressKind, value: address },
+        identity,
+        req,
+        moment,
+      },
       moment,
     });
     // Thread the resolved targetBeingId into writeBeFact so the
@@ -536,7 +600,10 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   if (operation === "truename") {
     assertVerbCaller("be", opts);
     if (!identity?.beingId) {
-      throw new IbpError(IBP_ERR.UNAUTHORIZED, "be:truename requires an authenticated caller");
+      throw new IbpError(
+        IBP_ERR.UNAUTHORIZED,
+        "be:truename requires an authenticated caller",
+      );
     }
     if (!beingName) {
       throw new IbpError(
@@ -546,7 +613,10 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     }
     const trueNameToken = payload?.trueName;
     if (typeof trueNameToken !== "string" || !trueNameToken) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "be:truename requires payload.trueName (a Name pubkey or real-name)");
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "be:truename requires payload.trueName (a Name pubkey or real-name)",
+      );
     }
     // The target can be a pubkey OR a real-name; resolve via the registry.
     const { resolveNameId } = await import("../../materials/name/registry.js");
@@ -557,7 +627,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
         `be:truename: no Name resolves for "${String(trueNameToken).slice(0, 16)}…" (pubkey or real-name)`,
       );
     }
-    const { findByName, loadProjection } = await import("../../materials/projections.js");
+    const { findByName, loadProjection } =
+      await import("../../materials/projections.js");
     const targetSlot = await findByName("being", beingName, history);
     if (!targetSlot) {
       throw new IbpError(
@@ -588,8 +659,17 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     }
     const truenameOp = getBeOp("truename");
     const result = await truenameOp.handler({
-      address, addressKind, payload, identity,
-      ctx: { socket, address: { kind: addressKind, value: address }, identity, req, moment },
+      address,
+      addressKind,
+      payload,
+      identity,
+      ctx: {
+        socket,
+        address: { kind: addressKind, value: address },
+        identity,
+        req,
+        moment,
+      },
       moment,
     });
     await writeBeFact({
@@ -617,7 +697,10 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     assertVerbCaller("be", opts);
     const authConfig = await getAuthConfig();
     if (!authConfig.connect_enabled) {
-      throw new IbpError(IBP_ERR.FORBIDDEN, "Connect is disabled on this story");
+      throw new IbpError(
+        IBP_ERR.FORBIDDEN,
+        "Connect is disabled on this story",
+      );
     }
     const decision = await authorize({
       identity,
@@ -643,7 +726,14 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       addressKind,
       payload,
       identity,
-      ctx: { socket, address: { kind: addressKind, value: address }, identity, req, moment, nameId },
+      ctx: {
+        socket,
+        address: { kind: addressKind, value: address },
+        identity,
+        req,
+        moment,
+        nameId,
+      },
       moment,
     });
     await writeBeFact({
@@ -666,14 +756,22 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       assertVerbCaller("be", opts);
     }
 
-    // Place-level flags gate birth and connect.
+    // story-level flags gate birth and connect.
     if (operation === "birth" || operation === "connect") {
       const authConfig = await getAuthConfig();
       if (operation === "birth" && !authConfig.birth_enabled) {
-        throw new IbpError(IBP_ERR.FORBIDDEN, "Registration is disabled on this story", { operation });
+        throw new IbpError(
+          IBP_ERR.FORBIDDEN,
+          "Registration is disabled on this story",
+          { operation },
+        );
       }
       if (operation === "connect" && !authConfig.connect_enabled) {
-        throw new IbpError(IBP_ERR.FORBIDDEN, "Connect is disabled on this story", { operation });
+        throw new IbpError(
+          IBP_ERR.FORBIDDEN,
+          "Connect is disabled on this story",
+          { operation },
+        );
       }
     }
 
@@ -708,7 +806,14 @@ export async function beVerb(operation, payload = {}, opts = {}) {
         addressKind,
         payload,
         identity,
-        ctx: { socket, address: { kind: addressKind, value: address }, identity, req, moment, nameId },
+        ctx: {
+          socket,
+          address: { kind: addressKind, value: address },
+          identity,
+          req,
+          moment,
+          nameId,
+        },
         moment,
       });
     } finally {
@@ -770,7 +875,16 @@ export async function beVerb(operation, payload = {}, opts = {}) {
  * before emitFact runs — an act without a frame doesn't get a Fact,
  * and a BE without a Fact didn't happen.
  */
-async function writeBeFact({ operation, identity, authResult, payload, beingName = "cherub", actId = null, moment = null, history }) {
+async function writeBeFact({
+  operation,
+  identity,
+  authResult,
+  payload,
+  beingName = "cherub",
+  actId = null,
+  moment = null,
+  history,
+}) {
   if (!actId) {
     throw new IbpError(
       IBP_ERR.INTERNAL,
@@ -784,13 +898,18 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
   }
   if (!actorBeingId) actorBeingId = I_AM;
 
-  const safeResult = authResult && typeof authResult === "object"
-    ? { beingAddress: authResult.beingAddress || null, note: authResult.note || null }
-    : null;
+  const safeResult =
+    authResult && typeof authResult === "object"
+      ? {
+          beingAddress: authResult.beingAddress || null,
+          note: authResult.note || null,
+        }
+      : null;
 
-  const safeParams = payload && typeof payload === "object"
-    ? { name: payload.name || null, from: payload.from || null }
-    : null;
+  const safeParams =
+    payload && typeof payload === "object"
+      ? { name: payload.name || null, from: payload.from || null }
+      : null;
 
   // Target selection. BE = identity acting on itself; the fact's
   // target is always a being (the actor's own identity, or the
@@ -809,7 +928,8 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
   let target;
   let connectionParams = null;
   if (operation === "connect") {
-    const targetBeingId = authResult?.beingId || identity?.beingId || actorBeingId;
+    const targetBeingId =
+      authResult?.beingId || identity?.beingId || actorBeingId;
     target = { kind: "being", id: String(targetBeingId) };
     // inhabitedBy = the identity now driving this being. For
     // credential-connect (cherub binding fresh auth), this is the
@@ -866,7 +986,7 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
     target = { kind: "being", id: String(actorBeingId) };
     connectionParams = {
       fromHistory: authResult?.fromHistory || null,
-      toHistory:   authResult?.toHistory   || null,
+      toHistory: authResult?.toHistory || null,
     };
   } else {
     // birth and any future BE op: identity-on-self. The actor's own
@@ -878,22 +998,25 @@ async function writeBeFact({ operation, identity, authResult, payload, beingName
     ? { ...(safeParams || {}), ...connectionParams }
     : safeParams;
 
-  await emitFact({
-    verb:    "be",
-    act:     operation,
-    through: actorBeingId,
-    of:      target,
-    params:  mergedParams,
-    result:  safeResult,
-    actId,
-    // History the BE fact lands on, pre-resolved by beVerb at the
-    // entry point. writeBeFact trusts the value rather than
-    // re-resolving from a scope that may not have currentHistory
-    // (this function ran as nested-helper-with-implicit-closure
-    // before B perimeter hardening; missing-history surfaced as a
-    // ReferenceError only when an actual transport-act fired).
-    history,
-  }, moment);
+  await emitFact(
+    {
+      verb: "be",
+      act: operation,
+      through: actorBeingId,
+      of: target,
+      params: mergedParams,
+      result: safeResult,
+      actId,
+      // History the BE fact lands on, pre-resolved by beVerb at the
+      // entry point. writeBeFact trusts the value rather than
+      // re-resolving from a scope that may not have currentHistory
+      // (this function ran as nested-helper-with-implicit-closure
+      // before B perimeter hardening; missing-history surfaced as a
+      // ReferenceError only when an actual transport-act fired).
+      history,
+    },
+    moment,
+  );
 }
 
 // (runClaim retired . both modes (credentials, token re-claim) now
@@ -917,7 +1040,7 @@ function extractStoryFromAddress(address, addressKind) {
   let head = address.includes("::")
     ? address.split("::").pop().trim()
     : address;
-  // For "place" addresses there's no path-separator slash, but the
+  // For "story" addresses there's no path-separator slash, but the
   // input may still carry a history qualifier (e.g. "treeos.ai#1").
   // Fall through to the strip logic instead of returning whole.
   if (addressKind === "stance") {
@@ -939,4 +1062,3 @@ function extractBeingFromAddress(address, addressKind) {
   const m = address.match(/@([a-z][a-z0-9-]*)$/i);
   return m ? m[1].toLowerCase() : null;
 }
-

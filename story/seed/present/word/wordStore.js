@@ -371,3 +371,46 @@ export function resolveReducerFromFold(kind) {
   }
   return out;
 }
+
+// ── NAME ops as words (the NAME_OPS-Map migration; mirrors declareOpsToFold) ──
+//
+// A NAME op (declare/connect/release/set-password/banish) is a word named "name:<op>",
+// kind:"nameop", carrying its handler by host ref (the handler stays bottom-turtle JS in
+// ibp/nameOps.js, a function, never serialized into the fact). Verb-NAMESPACED like role-words
+// ("role:op") and reducers ("<kind>-reducer"), NOT bare: the live projection is one shared map keyed
+// by word name, so a bare "connect"/"release" would collide with a do-op/type of the same name and,
+// once BE folds the same way, with be:connect/be:release. The "name:" prefix isolates them and lets
+// the BE/SEE verb-op cutovers coexist. declareNameOpsToFold mirrors declareOpsToFold; the NAME_OPS
+// object stays only as the load-time registration buffer this reads (like the operations Map).
+export async function declareNameOpsToFold({ moment = null, history = "0" } = {}) {
+  const { listNameOpNames, getNameOp } = await import("../../ibp/nameOps.js");
+  let n = 0;
+  for (const opName of listNameOpNames()) {
+    const op = getNameOp(opName);
+    if (!op?.handler) continue;
+    const ref = `name-op:${opName}`;
+    registerHostHandler(ref, op.handler);
+    await bindWord(`name:${opName}`, {
+      ownerExtension: "seed",
+      kind: "nameop",
+      do: { ref }, // the runnable answer (the handler), resolved host-side from its ref
+      args: op.args ? JSON.parse(JSON.stringify(op.args)) : undefined,
+      label: op.label,
+      description: op.description,
+    }, { moment, history, skipIfUnchanged: true });
+    n++;
+  }
+  return n;
+}
+
+// Resolve a NAME op from the fold into the spec nameVerb dispatches (the handler from its ref). Null
+// when unbound, disabled, not a nameop, or the handler ref is unresolvable. The op name arrives BARE
+// (the verb dispatches "declare"); this namespaces it to the "name:<op>" word. Mirrors
+// resolveDoOpFromFold; nameVerb dispatches on this instead of getNameOp(NAME_OPS).
+export function resolveNameOpFromFold(opName) {
+  const w = getWordSync(`name:${opName}`);
+  if (!w || w.kind !== "nameop" || !w.do?.ref) return null;
+  const handler = resolveHostHandler(w.do.ref);
+  if (!handler) return null;
+  return { handler, args: w.args, label: w.label, description: w.description, ownerExtension: w.ownerExtension || "seed", _fromFold: true };
+}

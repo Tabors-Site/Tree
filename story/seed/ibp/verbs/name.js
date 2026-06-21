@@ -23,7 +23,7 @@ import { IbpError, IBP_ERR } from "../protocol.js";
 import { getStoryDomain } from "../address.js";
 import { I_AM } from "../../materials/being/seedBeings.js";
 import { emitFact } from "../../past/fact/facts.js";
-import { getNameOp } from "../nameOps.js";
+import { resolveNameOpFromFold } from "../../present/word/wordStore.js";
 import { resolveNameId } from "../../materials/name/registry.js";
 import {
   assertVerbCaller,
@@ -92,11 +92,16 @@ export async function nameVerb(operation, payload = {}, opts = {}) {
     );
   }
 
-  const nameOp = getNameOp(operation);
+  // Fold-ONLY: the NAME op resolves from the live word-fold (the coin facts seedFold declared at
+  // genesis Step 1.5), NOT the NAME_OPS Map — which is now only the load-time registration buffer
+  // declareNameOpsToFold reads. Mirrors do.js's resolveDoOpFromFold. I_AM's own bootstrap
+  // name:declare (sprout.js) is a raw emitFact, never a nameVerb call, so it predates and grounds
+  // this fold — only WORLD-driven NAME acts dispatch here.
+  const nameOp = resolveNameOpFromFold(operation);
   if (!nameOp) {
     throw new IbpError(
       IBP_ERR.ACTION_NOT_SUPPORTED,
-      `name: unknown operation "${operation}" (declare | banish)`,
+      `name: unknown operation "${operation}" (declare | connect | release | set-password | banish)`,
     );
   }
 

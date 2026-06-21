@@ -210,9 +210,7 @@ export async function assign({
   const availableRoles = await computeAvailableRoles({
     toBeing,
     positionSpaceId: toBeing?.position || null,
-    // SEAM: computeAvailableRoles (present/roles/) still destructures
-    // `branch`; the value is the history slot.
-    branch: history || "0",
+    history,
   });
 
   const stack = resolveActiveStack({
@@ -695,9 +693,7 @@ async function planActRow(opts = {}) {
     addresseePosition,
     // The moment's history: scopes the being lookups (history-born
     // beings compose) and renders into the lane identity.
-    // SEAM: computeIbpStampAddress (ibp/address.js) still destructures
-    // `branch`; the value is the history slot.
-    branch: history,
+    history,
   });
 
   const now = new Date();

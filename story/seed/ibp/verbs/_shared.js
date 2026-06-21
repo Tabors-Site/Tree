@@ -48,7 +48,7 @@ export function normalizeIdentity(identity) {
  * unauthenticated SEE path does not call this function. So a missing
  * identity here is always a perimeter threading bug.
  *
- * Normalizes the bare-string identity shorthand in place on `opts`.
+ * Normalizes the bare-string identity shorthand in story on `opts`.
  */
 export function assertVerbCaller(verb, opts) {
   if (typeof opts.identity === "string") {
@@ -57,11 +57,13 @@ export function assertVerbCaller(verb, opts) {
   if (opts.identity) return;
 
   const frame = captureCallerFrame();
-  log.warn("Verbs",
-    `place.${verb}: not a being verb (left stance requires identity) (caller: ${frame})`);
+  log.warn(
+    "Verbs",
+    `story.${verb}: not a being verb (left stance requires identity) (caller: ${frame})`,
+  );
   throw new IbpError(
     IBP_ERR.NOT_A_BEING,
-    `place.${verb}: not a being verb (left stance requires identity)`,
+    `story.${verb}: not a being verb (left stance requires identity)`,
   );
 }
 
@@ -80,13 +82,13 @@ export function assertVerbCaller(verb, opts) {
  */
 export function refuseHistoricalWrite(verb, target, opts) {
   const fromOpts = opts && typeof opts === "object" ? opts.at : null;
-  const fromTarget = (target && typeof target === "object") ? target.at : null;
+  const fromTarget = target && typeof target === "object" ? target.at : null;
   if (fromOpts == null && fromTarget == null) return;
   throw new IbpError(
     IBP_ERR.HISTORICAL_READ_ONLY,
-    `place.${verb}: Historical reads cannot include write verbs. ` +
-    `SEE with at: is allowed; DO/SUMMON/BE are not. ` +
-    `To act, omit at: and operate on current state.`,
+    `story.${verb}: Historical reads cannot include write verbs. ` +
+      `SEE with at: is allowed; DO/SUMMON/BE are not. ` +
+      `To act, omit at: and operate on current state.`,
   );
 }
 
@@ -125,7 +127,7 @@ export function resolveHistoryForFact(moment, currentHistory, verb) {
   const frame = captureCallerFrame();
   throw new IbpError(
     IBP_ERR.MISSING_BRANCH || "MISSING_BRANCH",
-    `place.${verb}: history missing at the perimeter (none of ` +
+    `story.${verb}: history missing at the perimeter (none of ` +
       `opts.currentHistory, moment.targetHistory, or moment.actorAct.history ` +
       `was attached). The wire layer must thread the target's history into the ` +
       `verb opts. (caller: ${frame})`,
