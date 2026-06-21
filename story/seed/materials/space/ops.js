@@ -24,6 +24,7 @@ import { getStoryDomain } from "../../ibp/address.js";
 import { IbpError, IBP_ERR, mapPatternsToIbpError } from "../../ibp/protocol.js";
 import { I_AM } from "../being/seedBeings.js";
 import { detectTargetKind, targetIdOf, loadTargetRow } from "../_targetShape.js";
+import { targetsFact } from "../../ibp/factResult.js";
 import {
   setOwner,
   removeOwner,
@@ -127,13 +128,12 @@ async function setOnSpaceHandler({ target, params, identity, moment }) {
       // belt-and-suspenders hasAccess check via resolveSpaceAccess
       // retired with the contributor class — the role's canDo +
       // reach is the single source of truth.
-      return {
+      return targetsFact({
         written: true,
         spaceId: String(target.spaceId),
         namespace,
         kind: "space",
-        _factTarget: { kind: "space", id: String(target.spaceId) },
-      };
+      }, { kind: "space", id: target.spaceId });
     }
 
     if (parts.length === 1 && value !== null) {
@@ -571,11 +571,10 @@ async function createSpaceChild({ target, params, identity, moment, kind }) {
 
 function shapeNewSpace(newSpace) {
   const spaceId = String(newSpace._id);
-  return {
+  return targetsFact({
     spaceId,
     name: newSpace.name,
     position: `${getStoryDomain()}/${spaceId}`,
-    _factTarget: { kind: "space", id: spaceId },
-  };
+  }, { kind: "space", id: spaceId });
 }
 

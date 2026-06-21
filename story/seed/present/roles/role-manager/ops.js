@@ -32,6 +32,7 @@ import { HEAVEN_SPACE } from "../../../materials/space/heavenSpaces.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { registerRole, unregisterRole, getRole } from "../registry.js";
 import Being from "../../../materials/being/being.js";
+import { targetsFact } from "../../../ibp/factResult.js";
 
 export function registerRoleManagerOps() {
   // The actual registerOperation call lives at module load (side effect),
@@ -160,13 +161,12 @@ registerOperation("set-role", {
       );
     }
 
-    return {
+    return targetsFact({
       written: true,
       name,
       origin:  "live",
       hotRegistered: true,
-      _factTarget: { kind: "space", id: name },
-    };
+    }, { kind: "space", id: name });
   },
 });
 

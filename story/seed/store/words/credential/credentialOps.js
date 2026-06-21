@@ -38,6 +38,7 @@ import {
 import { hasCredentialAuthority } from "../../../materials/being/identity/lineage.js";
 import { doVerb } from "../../../ibp/verbs/do.js";
 import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
+import { targetsFact } from "../../../ibp/factResult.js";
 
 // Self-register this module's co-located `.word` slices (CONVERTING.md): importing
 // credentialOps.js (at seed boot, or in a DRY harness) registers them so
@@ -155,7 +156,7 @@ registerOperation("credential-read", {
     // mode). The dispatcher needs _factTarget (the asker's reel) for the audit fact,
     // which the .word omits — re-add it around the bridge result. JS = clean-miss fallback.
     const viaWord = await _credentialReadViaWord({ caller: askerBeingId, target: targetBeingId, history, moment });
-    if (viaWord) return { _factTarget: { kind: "being", id: askerBeingId || targetBeingId }, ...viaWord };
+    if (viaWord) return targetsFact(viaWord, { kind: "being", id: askerBeingId || targetBeingId });
 
     const ok = await hasCredentialAuthority(askerBeingId, targetBeingId, history);
     if (!ok) {
@@ -170,12 +171,11 @@ registerOperation("credential-read", {
     const blob = readCredentialPlainFromBeing(beingRow);
     const plaintext = blob ? decryptCredential(blob) : null;
     const reelBeingId = askerBeingId || targetBeingId;
-    return {
-      _factTarget: { kind: "being", id: reelBeingId },
+    return targetsFact({
       targetBeingId,
       hasPlain: plaintext !== null,
       plaintext,
-    };
+    }, { kind: "being", id: reelBeingId });
   },
 });
 
@@ -226,7 +226,7 @@ registerOperation("credential-reset", {
     // which the .word return omits — re-add it around the bridge result. JS body below
     // is the clean-miss fallback.
     const viaWord = await _credentialResetViaWord({ caller: askerBeingId, target: targetBeingId, history, moment });
-    if (viaWord) return { _factTarget: { kind: "being", id: askerBeingId || targetBeingId }, ...viaWord };
+    if (viaWord) return targetsFact(viaWord, { kind: "being", id: askerBeingId || targetBeingId });
 
     const ok = await hasCredentialAuthority(askerBeingId, targetBeingId, history);
     if (!ok) {
@@ -260,11 +260,10 @@ registerOperation("credential-reset", {
       opts,
     );
     const reelBeingId = askerBeingId || targetBeingId;
-    return {
-      _factTarget: { kind: "being", id: reelBeingId },
+    return targetsFact({
       targetBeingId,
       plaintext: decryptCredential(credential.plain),
-    };
+    }, { kind: "being", id: reelBeingId });
   },
 });
 
@@ -282,7 +281,7 @@ registerOperation("credential-detach", {
     const askerBeingId = askerBeingIdOf(identity);
     // THE CONVERSION: the world strand is credential-detach.word (caller mode). JS fallback.
     const viaWord = await _credentialGateViaWord("credential-detach", { caller: askerBeingId, target: targetBeingId, moment });
-    if (viaWord) return { _factTarget: { kind: "being", id: askerBeingId || targetBeingId }, ...viaWord };
+    if (viaWord) return targetsFact(viaWord, { kind: "being", id: askerBeingId || targetBeingId });
     // Self-only EXCEPT I_AM which has universal authority on its own
     // story (parallels hasCredentialAuthority's I_AM short-circuit).
     if (askerBeingId !== targetBeingId && askerBeingId !== I_AM) {
@@ -293,11 +292,10 @@ registerOperation("credential-detach", {
       );
     }
     const reelBeingId = askerBeingId || targetBeingId;
-    return {
-      _factTarget: { kind: "being", id: reelBeingId },
+    return targetsFact({
       targetBeingId,
       detached: true,
-    };
+    }, { kind: "being", id: reelBeingId });
   },
 });
 
@@ -321,7 +319,7 @@ registerOperation("credential-attach", {
     const askerBeingId = askerBeingIdOf(identity);
     // THE CONVERSION: the world strand is credential-attach.word (caller mode). JS fallback.
     const viaWord = await _credentialGateViaWord("credential-attach", { caller: askerBeingId, target: targetBeingId, moment });
-    if (viaWord) return { _factTarget: { kind: "being", id: askerBeingId || targetBeingId }, ...viaWord };
+    if (viaWord) return targetsFact(viaWord, { kind: "being", id: askerBeingId || targetBeingId });
     // Being-parent-only EXCEPT I_AM (universal authority on its own
     // story).
     if (askerBeingId !== I_AM) {
@@ -336,10 +334,9 @@ registerOperation("credential-attach", {
       }
     }
     const reelBeingId = askerBeingId || targetBeingId;
-    return {
-      _factTarget: { kind: "being", id: reelBeingId },
+    return targetsFact({
       targetBeingId,
       attached: true,
-    };
+    }, { kind: "being", id: reelBeingId });
   },
 });

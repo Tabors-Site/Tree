@@ -30,7 +30,7 @@ store/STAYS-PLAN.md (the stays + the 2 shared-module lifts).
 - [ ] 4. **move** → `store/words/move/` (move.word, moveOp.js, moveHost.js). services.js:182. LOW.
 - [ ] 5. **grant-role** → `store/words/grant-role/` (grant-role.word + grantHost.js; carve grantRoleHandler/_grantRoleViaWord out of being/ops.js into a new index.js). ADD services.js import beside :194. LOW.
 - [ ] 6. **credential** (group, 4 words) → `store/words/credential/` (4 .word + ops.js + host.js; share 4 helpers). services.js:195. 3 verifiers gate. LOW.
-- [ ] 7. **branch-pointers** (set-pointer + delete-pointer) → `store/words/branch-pointers/` (carve 2 of 8 ops from branch-manager/ops.js, shared host.js + new index.js). ADD genesis.js boot import. MEDIUM.
+- [ ] 7. **history-pointers** (set-pointer + delete-pointer) → `store/words/history-pointers/` (carve 2 of 8 ops from history-manager/ops.js, shared host.js + new index.js). ADD genesis.js boot import. MEDIUM.
 - [ ] 8. **set-world-signal** → `store/words/set-world-signal/` (carve from role-manager/ops.js's mixed 3-op file; disjoint helpers parseSignalValue/NS_SEGMENT_RE move too). ADD genesis.js boot import. MEDIUM.
 
 ## Stay co-located (do NOT move — flagged)
@@ -44,7 +44,7 @@ store/STAYS-PLAN.md (the stays + the 2 shared-module lifts).
 - **roleWordRegistry built-in map (L32-35):** NO edit for any moved word — they self-register via `registerRoleWord` at module-load; `new URL("./x.word", import.meta.url)` resolves against the moved module's own dir. The only built-in-map entries are cherub (which stays).
 - **operations Map (ibp/operations.js):** NEVER moves; each handler keeps calling `registerOperation(name, {...})` from its new home — only the import PATH deepens to `../../../`.
 - **services.js side-effect imports:** repoint one line per bundle (key:204, set-render:235, portal:193, move:182, credential:195); ADD a new import for grant-role beside :194 (being/ops.js stays for revoke-role/set-being/LLM ops).
-- **root genesis.js dynamic imports:** branch-pointers + set-world-signal register through genesis.js's `await import()` of the role-dir ops.js (branch-manager 754-756, role-manager 742-744). After carving, ADD an explicit `await import()` of the new store bundle index.js beside those, or the .word silently goes dark.
+- **root genesis.js dynamic imports:** history-pointers + set-world-signal register through genesis.js's `await import()` of the role-dir ops.js (history-manager 754-756, role-manager 742-744). After carving, ADD an explicit `await import()` of the new store bundle index.js beside those, or the .word silently goes dark.
 - **declareWordsToChain / rehydrate:** no edit — fresh dev DB, params.source path changes are fine (no migration); resolveRoleWord keys on (role,op), path-agnostic.
 
 ## Gaps / decisions (adopted)

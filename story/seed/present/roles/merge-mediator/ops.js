@@ -18,6 +18,6 @@ import log from "../../../seedStory/log.js";
 export function registerMergeMediatorOps() {
   // No ops to register today. The entry-point shape exists so
   // genesis.js can import + call this uniformly with role-manager,
-  // llm-assigner, and branch-manager.
+  // llm-assigner, and history-manager.
   log.verbose("merge-mediator", "no DO ops registered (mediator uses normal state-setting ops with params._merge)");
 }

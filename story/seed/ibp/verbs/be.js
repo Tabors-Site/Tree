@@ -395,24 +395,24 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     };
   }
 
-  // ── Release on a non-cherub being. ──────────────────────────────
-  // The inheriter tab's pagehide fires BE:release on its own stance
-  // (e.g. `<story>/@puppet`) to clear inhabitedBy. Cherub's release
-  // handler is a no-op (the token is a stateless JWT; the connection
-  // reducer derives qualities.connection.inhabitedBy from the fact
-  // stream). We route this through cherub's release handler so the
-  // writeBeFact below stamps a be:release fact on the target's reel
-  // and the connection-tracking reducer clears the inhabitedBy
-  // projection. Without this branch the call would land in the
-  // closed-set tail and throw ROLE_UNAVAILABLE.
-  if (operation === "release" && beingName !== "cherub") {
+  // ── Release (self) — drop the caller's being from the session. ──────
+  // ONE dedicated branch for ALL release, cherub-addressed or not — unified
+  // with switch/death/truename (release is SELF: the handler drops
+  // identity.beingId and ignores the address, so beingName never mattered;
+  // the old code funkily split this into a non-cherub branch HERE plus the
+  // generic cherub dispatch below, which then stamped via writeBeFact). The
+  // portal fires BE:release on the caller's own stance — close-tab, or an
+  // inheriter tab's pagehide on `@puppet` — to clear inhabitedBy.
+  // release.word authors the be:release FACT (the connection reducer derives
+  // qualities.connection.inhabitedBy from it); the cherub handler keeps the
+  // HOST session effects (lockSigning the being-keyed latch + seatHistory for
+  // the transport's re-seat).
+  if (operation === "release") {
     assertVerbCaller("be", opts);
-    if (!identity?.beingId) {
-      throw new IbpError(
-        IBP_ERR.UNAUTHORIZED,
-        "release requires an authenticated caller",
-      );
-    }
+    // The .word owns the op gate (no-caller) + the be:release FACT (clears inhabitedBy); the cherub
+    // handler keeps the HOST session effects (lockSigning the being-keyed latch + seatHistory for the
+    // transport's re-seat). authorize() is the verb-level role-walk, kept here like do.js. The
+    // dispatcher stamps the one be:release fact from the word's _factParams. No inline op-validation.
     const decision = await authorize({
       identity,
       verb: "be",
@@ -428,33 +428,36 @@ export async function beVerb(operation, payload = {}, opts = {}) {
         { actor: decision.actor },
       );
     }
-    const cherubReleaseOp = resolveBeOpFromFold("release");
-    const result = cherubReleaseOp
-      ? await cherubReleaseOp.handler({
-          address,
-          addressKind,
-          payload,
-          identity,
-          ctx: {
-            socket,
-            address: { kind: addressKind, value: address },
-            identity,
-            req,
-            moment,
-          },
-          moment,
-        })
-      : { released: true };
-    await writeBeFact({
-      operation,
-      identity,
-      authResult: result,
+    const releaseOp = resolveBeOpFromFold("release");
+    const result = await releaseOp.handler({
+      address,
+      addressKind,
       payload,
-      beingName,
-      actId: moment?.actId || null,
+      identity,
+      ctx: {
+        socket,
+        address: { kind: addressKind, value: address },
+        identity,
+        req,
+        moment,
+      },
       moment,
-      history,
     });
+    // EVERY ACT MAKES A FACT — the dispatcher stamps unconditionally (like do.js's auto-Fact). The
+    // .word always declares its factParams; stampsWordFact promoted them to _factParams. A gate
+    // refusal THROWS before this, so reaching here means the act happened — record it.
+    await emitFact({
+      verb:    "be",
+      act:     releaseOp.factAction, // "release"
+      through: identity.beingId,     // caller-attribution
+      of:      { kind: "being", id: String(result?._factTarget?.id) },
+      params:  result._factParams,
+      result:  stripForAudit(result),
+      actId:   moment?.actId || null,
+      history,
+    }, moment);
+    // result carries seatHistory (the handler's session effect) for the transport to re-seat
+    // socket.currentHistory — passed through unchanged.
     return result;
   }
 
@@ -474,12 +477,10 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   // stamp leaves the session's history untouched.
   if (operation === "switch") {
     assertVerbCaller("be", opts);
-    if (!identity?.beingId) {
-      throw new IbpError(
-        IBP_ERR.UNAUTHORIZED,
-        "switch requires an authenticated caller",
-      );
-    }
+    // The .word owns the op gates (no-caller, no-history, destination-missing/paused, being-lives-on)
+    // + the cross-history fact. NO authorize() — switching your OWN session's history needs no role
+    // gate. The handler runs switch.word; the dispatcher stamps the one be:switch fact from the word's
+    // _factParams ON THE DESTINATION HISTORY (result.toHistory). No inline op-validation.
     const switchOp = resolveBeOpFromFold("switch");
     if (!switchOp) {
       throw new IbpError(IBP_ERR.INTERNAL, "switch op not registered");
@@ -498,18 +499,19 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       },
       moment,
     });
-    // Stamp the audit fact on the NEW history (result.toHistory) — the
-    // post-switch history's view of this being records the switch-in.
-    await writeBeFact({
-      operation,
-      identity,
-      authResult: result,
-      payload,
-      beingName,
-      actId: moment?.actId || null,
-      moment,
-      history: result.toHistory,
-    });
+    // EVERY ACT MAKES A FACT — stamp the be:switch audit on the NEW history (result.toHistory), the
+    // post-switch history's view of this being recording the switch-in. CROSS-HISTORY: not the current
+    // `history`. The transport seats socket.currentHistory from result.seatHistory after the seal.
+    await emitFact({
+      verb:    "be",
+      act:     switchOp.factAction, // "switch"
+      through: identity.beingId,    // caller-attribution
+      of:      { kind: "being", id: String(result?._factTarget?.id) },
+      params:  result._factParams,
+      result:  stripForAudit(result),
+      actId:   moment?.actId || null,
+      history: result.toHistory,    // the destination history's reel
+    }, moment);
     return result;
   }
 
@@ -522,31 +524,10 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   // refuses any further facts riding this being.
   if (operation === "death") {
     assertVerbCaller("be", opts);
-    if (!identity?.beingId) {
-      throw new IbpError(
-        IBP_ERR.UNAUTHORIZED,
-        "death requires an authenticated caller",
-      );
-    }
-    if (!beingName) {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        "be:death requires an explicit target being in the address (e.g. <story>/@<being>)",
-      );
-    }
-    // Resolve beingName → beingId on the target's history. The death
-    // fact lands on THAT being's reel; the resolution must come from
-    // the projection (the canonical source) on the operating history.
-    const { findByName } = await import("../../materials/projections.js");
-    const targetSlot = await findByName("being", beingName, history);
-    if (!targetSlot) {
-      throw new IbpError(
-        IBP_ERR.BEING_NOT_FOUND,
-        `be:death target @${beingName} not found on history #${history}`,
-        { beingName, history },
-      );
-    }
-    const targetBeingId = String(targetSlot.id);
+    // The kill AUTHORITY is the verb-level role-walk (the host's being-tree authority over the
+    // target) — it stays here, like do.js's authorize, run BEFORE the op. death.word owns the op
+    // gates (caller, target, target-exists) + builds the fact params; the BE dispatcher stamps the
+    // one be:death fact from them. NO inline op-validation: the Word is the source.
     const decision = await authorize({
       identity,
       verb: "be",
@@ -563,12 +544,10 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       );
     }
     const deathOp = resolveBeOpFromFold("death");
-    if (!deathOp) {
-      throw new IbpError(IBP_ERR.INTERNAL, "death op not registered");
-    }
     const result = await deathOp.handler({
       address,
       addressKind,
+      beingName,
       payload,
       identity,
       ctx: {
@@ -580,19 +559,20 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       },
       moment,
     });
-    // Thread the resolved targetBeingId into writeBeFact so the
-    // be:death fact lands on the dying being's reel (not the actor's).
-    await writeBeFact({
-      operation,
-      identity,
-      authResult: { ...result, targetBeingId },
-      payload,
-      beingName,
-      actId: moment?.actId || null,
-      moment,
+    // EVERY ACT MAKES A FACT — the dispatcher stamps unconditionally (like do.js's auto-Fact). The
+    // .word always declares its factParams; stampsWordFact promoted them to _factParams. A gate
+    // refusal THROWS before this, so reaching here means the death happened — record it.
+    await emitFact({
+      verb:    "be",
+      act:     deathOp.factAction, // "death"
+      through: identity.beingId,   // caller-attribution
+      of:      { kind: "being", id: String(result?._factTarget?.id) },
+      params:  result._factParams,
+      result:  stripForAudit(result),
+      actId:   moment?.actId || null,
       history,
-    });
-    return { ...result, targetBeingId };
+    }, moment);
+    return { ...result, targetBeingId: result?._factTarget?.id || null };
   }
 
   // ── be:truename — hand a being to a (declared) Name. ────────────
@@ -629,22 +609,20 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       },
       moment,
     });
-    // Conditional-emit doctrine (the keystone): stamp IFF the op returned _factParams — the params
-    // ARE the world-change. truename always returns them on success (and THROWS on a gate refusal,
-    // so nothing reaches here), so this is unconditional in practice; the guard keeps it honest and
-    // ready for BE's later conditional ops (be:connect's idempotent path).
-    if (!truenameOp.skipAudit && result?._factParams) {
-      await emitFact({
-        verb:    "be",
-        act:     truenameOp.factAction, // "truename"
-        through: identity.beingId,      // caller-attribution
-        of:      { kind: "being", id: String(result?._factTarget?.id) },
-        params:  result._factParams,
-        result:  stripForAudit(result),
-        actId:   moment?.actId || null,
-        history,
-      }, moment);
-    }
+    // EVERY ACT MAKES A FACT — the dispatcher stamps unconditionally (like do.js's auto-Fact). The
+    // .word always declares its factParams; stampsWordFact promoted them to _factParams. A gate
+    // refusal THROWS before this, so reaching here means the re-point happened — record it. (Even a
+    // future idempotent BE op records the act + folds nothing; there is no lay-no-fact.)
+    await emitFact({
+      verb:    "be",
+      act:     truenameOp.factAction, // "truename"
+      through: identity.beingId,      // caller-attribution
+      of:      { kind: "being", id: String(result?._factTarget?.id) },
+      params:  result._factParams,
+      result:  stripForAudit(result),
+      actId:   moment?.actId || null,
+      history,
+    }, moment);
     return { ...result, targetBeingId: result?._factTarget?.id || null };
   }
 
@@ -782,17 +760,16 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     } finally {
       if (_bCtx && !_bWasInOp) _bCtx._inOp = false;
     }
-    // ONE fact per birth. cherub's birth handler delegates to
-    // birthBeing, which already stamped `be:birth` on the new being's
-    // reel with the full spec (homeSpace, defaultRole, parentBeingId,
-    // qualities, …). A second writeBeFact("birth") here would emit a
-    // duplicate be:birth with only `{ name, from }` in params; the
-    // reducer reapplies the latest be:birth's params verbatim and
-    // would clobber the freshly-set state (homeSpace → null,
-    // defaultRole → null, parentBeingId → null), leaving the just-born
-    // being homeless. The birther path above carries the same
-    // discipline. Skip the audit fact for birth; connect / release
-    // still need it (no upstream fact carries their state otherwise).
+    // ONE fact per BE op. This generic cherub dispatch now handles birth +
+    // connect only — release has its own dedicated branch above (switch/death/
+    // truename likewise). connect is still legacy → writeBeFact builds its
+    // params from payload + connectionParams. birth stamps NOTHING here:
+    // cherub's birth handler delegates to birthBeing, which already stamped
+    // be:birth on the new being's reel with the full spec (homeSpace,
+    // defaultRole, parentBeingId, qualities, …). A second writeBeFact("birth")
+    // would emit a duplicate be:birth with only { name, from } and the reducer
+    // would clobber the freshly-set state (homeSpace/defaultRole/parentBeingId
+    // → null), leaving the just-born being homeless.
     if (operation !== "birth") {
       await writeBeFact({
         operation,

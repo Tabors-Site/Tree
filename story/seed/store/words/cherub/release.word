@@ -1,0 +1,15 @@
+# release.word — be:release: drop the being from the session (frame reset). The fact is
+# the world-change (clears inhabitedBy: applyConnectionState folds it on the be:release
+# act); the SESSION EFFECTS are HOST and stay in the handler — lockSigning(beingId) unbinds
+# the being-keyed signing latch, and seatHistory (the being's home history) is returned for
+# the transport to re-seat socket.currentHistory. RELEASE DROPS THE BEING, NOT THE NAME (one
+# name drives many beings; releasing one leaves you at the auth floor, still your name). The
+# word authors only the fact; the handler keeps the session plumbing. No floor reads.
+#
+# The bridge binds caller (the actor's beingId) — the released being is the caller itself.
+
+# NOTE: applyConnectionState clears inhabitedBy from the be:release ACTION (not from a param),
+# so the fact params don't drive the fold — byActor is the honest record of who released.
+When a being releases itself:
+  If no caller, refuse with "be:release requires an authenticated caller" as unauthorized.
+  Return released: true, factTarget: $caller, factParams: { byActor: $caller }.

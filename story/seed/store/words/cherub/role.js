@@ -75,6 +75,15 @@ registerRoleWord(
 // reproduces the gate ordering + builds the fact params (truenameHost.js wires the
 // four floor see-ops); the BE dispatcher stamps the one fact from its factParams.
 registerRoleWord("cherub", "truename", new URL("./truename.word", import.meta.url));
+// be:death's world strand — the rung-3 verb-op #2 (a pure fact-lay; the kill authority is the
+// verb-level authorize() in be.js). The .word owns the op gates + builds the fact params.
+registerRoleWord("cherub", "death", new URL("./death.word", import.meta.url));
+// be:release's world strand — the rung-3 verb-op #3 (the first fact-vs-session split: the .word
+// authors the be:release FACT; the handler keeps the HOST session effects — lockSigning + seatHistory).
+registerRoleWord("cherub", "release", new URL("./release.word", import.meta.url));
+// be:switch's world strand — verb-op #4 (the CROSS-HISTORY fact: the .word authors be:switch on the
+// destination history; the transport seats socket.currentHistory from seatHistory after the seal).
+registerRoleWord("cherub", "switch", new URL("./switch.word", import.meta.url));
 
 const TREEOS_AUTH_WELCOME =
   "Welcome to TreeOS. This place is open to anyone who wants to inhabit it. Pick a username and password; you will receive an identity token immediately and start at your home.";
@@ -731,31 +740,48 @@ function extractTargetName(address) {
 // list keyed by jti is on the roadmap.
 // ────────────────────────────────────────────────────────────────────
 
-async function releaseHandler({ identity }) {
-  // Frame reset. The session unbinds the being; the transport seats
-  // the socket's currentHistory back to the being's homeHistory (the
-  // history they were birthed on, what they own as their present).
-  // findHomeHistoryOfBeing falls back to the default history for
-  // unknown ids and legacy rows.
-  //
-  // Sign-out closes the signing session: a released identity must not
-  // keep an open unlock latch behind it (secondary unlock re-locks on
-  // sign out, per IDENTITY.md).
-  //
-  // RELEASE DROPS THE BEING, NOT THE NAME. This locks only the
-  // transitional being-keyed latch (lockSigning(beingId)); it must NEVER
-  // clear the connection's NAME session (socket.nameId / lockSigning(nameId)
-  // / nameRelease). In the portal-name model one name drives many beings
-  // across tabs, so releasing one being leaves you logged in at the auth
-  // floor (still your name), free to connect another owned being or birth
-  // one. Logging the name out is name:logout's job alone (nameSession.js).
+// be:release — drop the being from the session (frame reset). WIRED bundle (mirrors truename/death):
+// the world strand is release.word — the handler runs it (no floor reads) for the be:release FACT
+// (stampsWordFact promotes its factParams/factTarget; applyConnectionState clears inhabitedBy from the
+// release act), then keeps the HOST session effects: lockSigning(beingId) unbinds the being-keyed
+// signing latch (a released identity must not keep an open unlock latch — IDENTITY.md), and
+// seatHistory (the home history) is returned for the transport to re-seat socket.currentHistory.
+// RELEASE DROPS THE BEING, NOT THE NAME — never lockSigning the nameId / clear socket.nameId; one
+// name drives many beings across tabs, so releasing one leaves you at the auth floor, still your name
+// (name:logout alone logs the name out). NO JS fallback for the fact — the word is the op.
+async function _releaseViaWord({ identity, moment }) {
+  if (!moment) return null;
+  const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
+  const ir = resolveRoleWord("cherub", "release", moment?.actorAct?.history);
+  if (!ir) return null;
+  try {
+    const { result } = await runRoleWord(ir, {
+      moment, history: moment?.actorAct?.history,
+      trigger: { caller: identity?.beingId ? String(identity.beingId) : null },
+      env: { host: {} }, // release.word has no floor see-ops
+    });
+    if (!result) return null;
+    const { stampsWordFact } = await import("../../../ibp/factResult.js");
+    return stampsWordFact(result, "being");
+  } catch (e) {
+    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
+    throw e;
+  }
+}
+
+async function releaseHandler({ identity, moment }) {
+  const wordResult = await _releaseViaWord({ identity, moment });
+  if (!wordResult) {
+    throw new IbpError(IBP_ERR.INTERNAL, "be:release: release.word is not available (the word is the op — there is no JS fallback)");
+  }
+  // Session effects (HOST, not a world-change): unbind the being-keyed signing latch — NEVER the
+  // name session. seatHistory is the home history the transport re-seats socket.currentHistory to.
   if (identity?.beingId) {
-    const { lockSigning } =
-      await import("../../../materials/name/signingSession.js");
+    const { lockSigning } = await import("../../../materials/name/signingSession.js");
     lockSigning(String(identity.beingId));
   }
   const seatHistory = await findHomeHistoryOfBeing(identity?.beingId);
-  return { released: true, seatHistory };
+  return { ...wordResult, seatHistory };
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -780,84 +806,53 @@ async function releaseHandler({ identity }) {
 // after T" without an explicit terminator.
 // ────────────────────────────────────────────────────────────────────
 
-async function switchHandler({ payload, identity, moment }) {
-  const targetHistory = String(payload?.history || "").trim();
-  if (!targetHistory) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "be:switch requires `history`");
-  }
-
-  const { isMain, loadHistory } =
-    await import("../../../materials/history/histories.js");
-  if (!isMain(targetHistory)) {
-    // The destination must exist and be live. The wire's pause/delete
-    // gate checks the moment's history (which handleBe points at the
-    // destination for switch); these checks are the seed-level
-    // authority for callers that don't come through the wire.
-    const row = await loadHistory(targetHistory);
-    if (!row) {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        `be:switch: history "${targetHistory}" not found`,
-      );
-    }
-    if (row.deleted) {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        `be:switch: history "${targetHistory}" is deleted`,
-      );
-    }
-    if (row.paused) {
-      throw new IbpError(
-        IBP_ERR.STORY_PAUSED,
-        `be:switch: history "${targetHistory}" is paused`,
-      );
-    }
-  }
-
-  // The caller must exist on the destination: their reel must fold to
-  // a birthed state in that history's lineage view. Without this gate
-  // a being born on #1 switching to a sibling (or to a history forked
-  // before their birth) would stamp be:switch as the first fact of an
-  // orphan reel — a biography with no be:birth, folding to a nameless,
-  // grantless state.
-  const { loadOrFold } = await import("../../../materials/projections.js");
-  const destSlot = await loadOrFold(
-    "being",
-    String(identity.beingId),
-    targetHistory,
-  );
-  if (!destSlot?.state?.name) {
-    throw new IbpError(
-      IBP_ERR.FORBIDDEN,
-      `be:switch: @${identity?.name || identity?.beingId} does not exist on history ` +
-        `"${targetHistory}" (born after the fork, or on a different lineage). ` +
-        `A session can only be seated on a history where the being's reel folds to a birth.`,
-    );
-  }
-  if (destSlot.state?.qualities?.death?.time) {
-    throw new IbpError(
-      IBP_ERR.FORBIDDEN,
-      `be:switch: @${identity?.name || identity?.beingId} is dead on history "${targetHistory}"`,
-    );
-  }
-
-  // The pre-switch history. On the wire path handleBe threads it in
-  // the payload (the moment itself rides the DESTINATION history, so
-  // actorAct.history is not the old history there). In-moment
-  // self-switches have no wire hint; the actor's act history IS the
-  // history they were seated on.
+// be:switch — re-seat the session onto another history. WIRED bundle (mirrors release/death/truename):
+// the world strand is switch.word — the handler runs it (floor reads: destination-missing/paused,
+// being-lives-on) for the CROSS-HISTORY be:switch FACT (stampsWordFact promotes its factParams
+// {fromHistory,toHistory} + factTarget; the BE dispatcher stamps it on result.toHistory — the
+// destination history's view of this being records the switch-in). NO session effect here: the
+// transport seats socket.currentHistory from result.seatHistory AFTER the seal (stamp-then-seat).
+// fromHistory (the pre-switch seat) is host-derived and bound into the trigger. NO JS fallback — the
+// word is the op.
+async function _switchViaWord({ payload, identity, moment }) {
+  if (!moment) return null;
+  const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
+  const ir = resolveRoleWord("cherub", "switch", moment?.actorAct?.history);
+  if (!ir) return null;
+  const { switchHostEnv } = await import("./switchHost.js");
+  // The pre-switch history. On the wire path handleBe threads payload.fromHistory (the moment rides
+  // the DESTINATION history, so actorAct.history is not the old one there); in-moment self-switches
+  // have no wire hint, so the actor's act history IS the seat they were on.
   const fromHistory =
     (typeof payload?.fromHistory === "string" && payload.fromHistory) ||
-    moment?.actorAct?.history ||
-    null;
+    moment?.actorAct?.history || null;
+  try {
+    const { result } = await runRoleWord(ir, {
+      moment, history: moment?.actorAct?.history,
+      trigger: {
+        caller: identity?.beingId ? String(identity.beingId) : null,
+        history: String(payload?.history || "").trim(),
+        fromHistory,
+      },
+      env: { host: switchHostEnv() },
+    });
+    if (!result) return null;
+    const { stampsWordFact } = await import("../../../ibp/factResult.js");
+    return stampsWordFact(result, "being");
+  } catch (e) {
+    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
+    throw e;
+  }
+}
 
-  return {
-    switched: true,
-    fromHistory,
-    toHistory: targetHistory,
-    seatHistory: targetHistory,
-    beingId: identity?.beingId || null,
-  };
+async function switchHandler({ payload, identity, moment }) {
+  const result = await _switchViaWord({ payload, identity, moment });
+  if (!result) {
+    throw new IbpError(IBP_ERR.INTERNAL, "be:switch: switch.word is not available (the word is the op — there is no JS fallback)");
+  }
+  // No session effect in the handler: the transport seats socket.currentHistory from result.seatHistory
+  // AFTER the moment seals (stamp-then-seat). The handler hands back the seat inputs + the fact.
+  return result;
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -878,12 +873,46 @@ async function switchHandler({ payload, identity, moment }) {
 // authority list (mother + governance roles); for now, I_AM only.
 // ────────────────────────────────────────────────────────────────────
 
-async function deathHandler({ address, identity }) {
-  return {
-    closed: true,
-    address: address || null,
-    byActor: identity?.beingId || null,
-  };
+// be:death — close a being's lifecycle. WIRED bundle (mirrors truename): the world strand is
+// death.word — the handler runs it through the bridge (CALLER mode, the one floor read wired by
+// deathHost.js); the .word RETURNS { byActor } as `factParams` + the target as `factTarget`, and
+// stampsWordFact promotes them so beVerb stamps the ONE caller-attributed be:death fact on the dying
+// being's reel. NO JS fallback — the word is the op. The kill authority is be.js's verb-level
+// authorize() (run before this), not an op concern.
+async function _deathViaWord({ beingName, payload, identity, moment }) {
+  if (!moment) return null;
+  const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
+  const ir = resolveRoleWord("cherub", "death", moment?.actorAct?.history);
+  if (!ir) return null;
+  const { deathHostEnv } = await import("./deathHost.js");
+  const history = moment?.actorAct?.history;
+  try {
+    const { result } = await runRoleWord(ir, {
+      moment, history,
+      trigger: {
+        caller: identity?.beingId ? String(identity.beingId) : null,
+        beingName: beingName || null,
+      },
+      env: { host: deathHostEnv() },
+    });
+    if (!result) return null;
+    const { stampsWordFact } = await import("../../../ibp/factResult.js");
+    return stampsWordFact(result, "being"); // factParams {byActor} + factTarget → _factParams/_factTarget
+  } catch (e) {
+    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
+    throw e;
+  }
+}
+
+async function deathHandler({ beingName, identity, payload, moment }) {
+  const result = await _deathViaWord({ beingName, payload, identity, moment });
+  if (result) return result;
+  // NO JS fallback: death.word IS the op (the single source of truth). If its IR is absent the op
+  // honestly cannot run — that is the truthful state, not papered over by a JS duplicate.
+  throw new IbpError(
+    IBP_ERR.INTERNAL,
+    "be:death: death.word is not available (the word is the op — there is no JS fallback)",
+  );
 }
 
 // be:truename — hand a being to a (declared) Name: re-point its trueName.
@@ -911,13 +940,11 @@ async function _truenameViaWord({ address, beingName, payload, identity, moment 
       env: { host: truenameHostEnv() },
     });
     if (!result) return null;
-    // Promote the .word's `factParams` ({ trueName: nameId }) to the dispatcher's
-    // `_factParams`, and `factTarget` to `_factTarget` (kind:being — the be:truename
-    // fact lands on the TARGET being's reel, BEING_ONLY_TARGET_VERBS). The op lays
-    // no fact of its own; beVerb's auto-Fact path stamps the one caller-attributed fact.
-    if (result.factParams) { result._factParams = result.factParams; delete result.factParams; }
-    if (result.factTarget) { result._factTarget = { kind: "being", id: String(result.factTarget) }; delete result.factTarget; }
-    return result;
+    // The .word built its fact params (factParams { trueName } + factTarget). stampsWordFact promotes
+    // them to the dispatcher's _factParams/_factTarget (kind:being — BEING_ONLY_TARGET_VERBS) and
+    // strips them from the returned result. One shared cut for every word-authored fact (factResult.js).
+    const { stampsWordFact } = await import("../../../ibp/factResult.js");
+    return stampsWordFact(result, "being");
   } catch (e) {
     if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
     throw e;
@@ -982,6 +1009,8 @@ export const cherubBeOps = Object.freeze({
     label: "Release this being",
     args: {},
     handler: releaseHandler,
+    // release.word returns factParams; the BE dispatcher stamps be:release from them.
+    factAction: "release",
   },
   switch: {
     description:
@@ -992,6 +1021,9 @@ export const cherubBeOps = Object.freeze({
       history: { type: "text", label: "Target history path", required: true },
     },
     handler: switchHandler,
+    // switch.word returns factParams {fromHistory,toHistory}; the BE dispatcher stamps the
+    // be:switch fact on the DESTINATION history (be.js passes result.toHistory as the fact history).
+    factAction: "switch",
   },
   death: {
     description:
@@ -1000,6 +1032,8 @@ export const cherubBeOps = Object.freeze({
     label: "Close being",
     args: {},
     handler: deathHandler,
+    // death.word returns factParams; the BE dispatcher stamps be:death from them.
+    factAction: "death",
   },
   truename: {
     description:

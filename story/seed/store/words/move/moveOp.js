@@ -31,6 +31,7 @@ import { registerOperation } from "../../../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { detectTargetKind, targetIdOf } from "../../../materials/_targetShape.js";
 import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
+import { targetsFact } from "../../../ibp/factResult.js";
 
 // Self-register this slice's co-located WORLD strand (CONVERTING.md): the bridge
 // resolves ("move", "move") to move.word, its host escapes wired by moveHost.js.
@@ -165,13 +166,12 @@ async function moveHandler({ target, params, moment }) {
   // so the fact's target IS the moved subject, not the room it was
   // moved from. The reducer for that kind reads the move fact and
   // updates the right field (coord, parent, or spaceId).
-  return {
+  return targetsFact({
     moved: true,
     kind,
     mode: coord ? "coord" : "container",
     fromSpaceId,
-    _factTarget: { kind, id: String(targetId) },
-  };
+  }, { kind, id: targetId });
 }
 
 registerOperation("move", {

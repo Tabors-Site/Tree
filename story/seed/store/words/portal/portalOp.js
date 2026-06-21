@@ -42,6 +42,7 @@ import { emitFact } from "../../../past/fact/facts.js";
 import { detectTargetKind, targetIdOf } from "../../../materials/_targetShape.js";
 import { matterContentId } from "../../../materials/matter/matterId.js";
 import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
+import { targetsFact } from "../../../ibp/factResult.js";
 
 // Self-register this module's co-located `.word` slice (CONVERTING.md): importing
 // portalOp.js (at seed boot, or in a DRY harness) registers it so
@@ -200,13 +201,12 @@ async function formPortalHandler({ target, params, moment, identity }) {
     moment,
   );
 
-  return {
+  return targetsFact({
     formed: true,
     matterId,
     spaceId,
     target: foreignAddress,
-    _factTarget: { kind: "matter", id: matterId },
-  };
+  }, { kind: "matter", id: matterId });
 }
 
 registerOperation("form-portal", {

@@ -32,7 +32,7 @@
 // same internal grant for the actor.
 
 import { registerOperation } from "../../../ibp/operations.js";
-import { laysFact, laysNoFact, laysWordFact } from "../../../ibp/factResult.js";
+import { stampsFact, stampsWordFact } from "../../../ibp/factResult.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { getRoleSpecForGrant } from "../../../present/roles/spaceLookup.js";
 import {
@@ -64,11 +64,11 @@ registerRoleWord(
 registerOperation("ask-role", {
   targets: ["space"],
   ownerExtension: "seed",
-  // The world fact is a do:grant-role (what the being reducer folds), NOT a
-  // do:ask-role — the op no longer self-emits; the dispatcher's ONE auto-Fact lays
-  // the caller-attributed grant from the returned _factParams (auto path only). The
-  // queue/idempotent paths return _noFact, so no ask-role audit is laid either.
-  factAction: "grant-role",
+  // EVERY ask stamps its own do:ask-role fact (every act makes a fact). The auto path's
+  // factParams carries the grant record (grantedBy/grantedAt) — applyRoleGrants folds the
+  // role grant from a do:ask-role too. The queue/already/no-owner paths' factParams carry
+  // just the outcome (no grantedBy): the ask is recorded, but nothing folds.
+  factAction: "ask-role",
   args: {
     role: { type: "text", label: "Role to ask for", required: true },
   },
@@ -128,20 +128,25 @@ registerOperation("ask-role", {
     );
     const existing = callerSlot?.state?.qualities?.rolesGranted || [];
     if (alreadyHoldsRole(existing, roleName, foundHost)) {
-      // Idempotent re-ask: nothing changed, so the act lays no fact.
-      return laysNoFact({ already: true, role: roleName, anchorSpaceId: foundHost });
+      // Idempotent re-ask: the role's already held (no grant record), but the ask is an
+      // act — it stamps a do:ask-role in the being's history.
+      return stampsFact(
+        { already: true, role: roleName, anchorSpaceId: foundHost },
+        { role: roleName, anchorSpaceId: foundHost, outcome: "already" },
+        { kind: "being", id: identity.beingId },
+      );
     }
 
     if (policy.asked === "auto") {
-      // No self-emit: the act lays the grant record as a do:grant-role fact on the
-      // grantee's reel; the dispatcher's ONE auto-Fact stamps it, caller-attributed.
+      // No self-emit: the act lays the grant record as a do:ask-role fact on the grantee's
+      // reel (applyRoleGrants folds the grant from it); the dispatcher stamps it, caller-attributed.
       const { grant } = buildInternalGrant({
         granteeBeingId: String(identity.beingId),
         role: roleName,
         anchorSpaceId: foundHost,
         grantedBy: String(identity.beingId), // self-grant via the role's auto policy
       });
-      return laysFact(
+      return stampsFact(
         { granted: true, path: "auto", role: roleName, anchorSpaceId: foundHost },
         grant,
         { kind: "being", id: identity.beingId },
@@ -156,24 +161,22 @@ registerOperation("ask-role", {
     const hostSlot = await loadOrFold("space", foundHost, history);
     const ownerId = hostSlot?.state?.owner;
     if (!ownerId) {
-      return laysNoFact({
-        granted: false,
-        path: "queue",
-        role: roleName,
-        anchorSpaceId: foundHost,
-        message: `Role "${roleName}" needs manual approval but the host space has no owner to ask.`,
-      });
+      return stampsFact(
+        { granted: false, path: "queue", role: roleName, anchorSpaceId: foundHost,
+          message: `Role "${roleName}" needs manual approval but the host space has no owner to ask.` },
+        { role: roleName, anchorSpaceId: foundHost, outcome: "queue-no-owner" },
+        { kind: "being", id: identity.beingId },
+      );
     }
     const ownerSlot = await loadOrFold("being", String(ownerId), history);
     const ownerName = ownerSlot?.state?.name;
     if (!ownerName) {
-      return laysNoFact({
-        granted: false,
-        path: "queue",
-        role: roleName,
-        anchorSpaceId: foundHost,
-        message: `Role "${roleName}" needs manual approval but the owner couldn't be addressed.`,
-      });
+      return stampsFact(
+        { granted: false, path: "queue", role: roleName, anchorSpaceId: foundHost,
+          message: `Role "${roleName}" needs manual approval but the owner couldn't be addressed.` },
+        { role: roleName, anchorSpaceId: foundHost, outcome: "queue-no-owner" },
+        { kind: "being", id: identity.beingId },
+      );
     }
 
     const { callVerb } = await import("../../../ibp/verbs/call.js");
@@ -203,22 +206,20 @@ registerOperation("ask-role", {
         { identity, moment },
       );
     } catch (err) {
-      return laysNoFact({
-        granted: false,
-        path: "queue",
-        role: roleName,
-        anchorSpaceId: foundHost,
-        message: `Failed to send request to @${ownerName}: ${err?.message || err}`,
-      });
+      return stampsFact(
+        { granted: false, path: "queue", role: roleName, anchorSpaceId: foundHost,
+          message: `Failed to send request to @${ownerName}: ${err?.message || err}` },
+        { role: roleName, anchorSpaceId: foundHost, outcome: "queue-failed" },
+        { kind: "being", id: identity.beingId },
+      );
     }
 
-    return laysNoFact({
-      granted: false,
-      path: "queue",
-      role: roleName,
-      anchorSpaceId: foundHost,
-      message: `Requested. @${ownerName} will see this in their inbox.`,
-    });
+    return stampsFact(
+      { granted: false, path: "queue", role: roleName, anchorSpaceId: foundHost,
+        message: `Requested. @${ownerName} will see this in their inbox.` },
+      { role: roleName, anchorSpaceId: foundHost, outcome: "queue" },
+      { kind: "being", id: identity.beingId },
+    );
   },
 });
 
@@ -227,18 +228,19 @@ registerOperation("ask-role", {
 // ──────────────────────────────────────────────────────────────────
 
 // The bridge into take-role.word: run the slice's CONTROL strand (the gate chain +
-// idempotency) through the evaluator with the acquisition see/host escapes; the .word
-// lays NO fact — shimGrantResult promotes the returned factParams to _factParams +
-// _factTarget (the grabbed path) or sets _noFact (the idempotent already path), and the
-// dispatcher's ONE auto-Fact lays the caller-attributed do:grant-role. Returns null on a
-// clean miss (not converted / no moment) so the JS handler runs. A WordRefusal (not
-// installed / not grabbable) becomes the same IbpError the JS threw.
+// idempotency) through the evaluator with the acquisition see escapes; the .word lays NO
+// fact — EVERY take stamps a do:take-role (every act makes a fact): shimGrantResult promotes
+// the returned factParams to _factParams + _factTarget, and the dispatcher's ONE auto-Fact
+// lays it caller-attributed. The grab path's factParams carries the grant record (the reducer
+// folds the grant); the idempotent path's carries just the outcome (no grant record → no
+// fold). Returns null on a clean miss (not converted / no moment) so the JS handler runs. A
+// WordRefusal (not installed / not grabbable) becomes the same IbpError the JS threw.
 // ask-role's world strand is ask-role.word (the gate chain + the asked-policy §9 Match).
-// Same cut shape as take-role: prefer the bridge, the JS body is the clean-miss fallback.
-// The auto path's grant returns factParams (grantedBy the asker); the queue path reaches
-// the owner with the CALL verb (see owner-of + see role-request build the payload, which
-// keeps the asker identified in the inbox content regardless of the call envelope's
-// `from`) and returns _noFact (no grant — only the summon).
+// Same cut shape: prefer the bridge, the JS body is the clean-miss fallback. EVERY ask stamps
+// a do:ask-role — the auto path's factParams carries the grant record (grantedBy the asker);
+// the queue path's carries just the outcome, and the CALL verb summons the owner (see owner-of
+// + see role-request build the payload, keeping the asker identified in the inbox content
+// regardless of the call envelope's `from`).
 async function _askRoleViaWord({ caller, role, space, moment }) {
   if (!moment) return null;
   // HOST ESCAPE: ask-role is HOST-facilitated — the host (i-am) runs the .word THROUGH the asker's
@@ -314,14 +316,14 @@ async function _takeRoleViaWord({ caller, role, space, moment }) {
   }
 }
 
-// The dispatcher shim (mirrors create-matter's): on the GRANT path the .word returns
-// `factParams` (the grant record) → promote it to _factParams + force _factTarget at the
-// GRANTEE's being (the caller; resolveAuditTarget would otherwise pick the bare space
-// target), so the dispatcher's ONE auto-Fact lays the caller-attributed do:grant-role the
-// reducer folds. On the no-grant paths (the idempotent already:true return, and ask-role's
-// queue return) there is NO factParams → set _noFact so the dispatcher's conditional-emit
-// primitive SKIPS the auto-Fact (the queue path's owner summon already happened inside the
-// .word; it lays no grant). `granteeBeingId` (the .word's hint) is dropped from the
+// The dispatcher shim (mirrors create-matter's): EVERY path's .word returns `factParams`
+// (every act makes a fact) → stampsWordFact promotes it to _factParams + forces _factTarget at
+// the GRANTEE's being (the caller; resolveAuditTarget would otherwise pick the bare space
+// target), so the dispatcher's ONE auto-Fact lays the caller-attributed do:take-role/do:ask-role.
+// On the GRANT paths factParams carries the grant record (grantedBy/grantedAt) and the reducer
+// folds the role grant; on the no-grant paths (idempotent already, ask-role's queue) factParams
+// carries just the outcome (no grantedBy) so the act is recorded but nothing folds. The queue
+// path's owner summon is its own CALL fact. `granteeBeingId` (the .word's hint) is dropped from the
 // recorded result by stripForAudit's pass; we read it here as a sanity tie to the caller.
 function shimGrantResult(result, caller) {
   // The .word authored the grant as `factParams` + `granteeBeingId` (the reel it lands on);
@@ -330,17 +332,17 @@ function shimGrantResult(result, caller) {
   if (result && typeof result === "object" && result.granteeBeingId == null) {
     result.granteeBeingId = String(caller);
   }
-  return laysWordFact(result, "being", "granteeBeingId");
+  return stampsWordFact(result, "being", "granteeBeingId");
 }
 
 registerOperation("take-role", {
   targets: ["space"],
   ownerExtension: "seed",
-  // The world fact is a do:grant-role (what the being reducer folds), NOT a
-  // do:take-role — the op no longer self-emits; the dispatcher's ONE auto-Fact lays
-  // the caller-attributed grant from the returned _factParams (the grabbed path). The
-  // idempotent already:true path returns _noFact, so nothing is laid.
-  factAction: "grant-role",
+  // EVERY take stamps its own do:take-role fact (every act makes a fact). The grab path's
+  // factParams carries the grant record (grantedBy/grantedAt) — applyRoleGrants folds the
+  // role grant from a do:take-role too. The idempotent path's factParams carries just the
+  // outcome (no grantedBy), so it records the take in the being's history but folds nothing.
+  factAction: "take-role",
   args: {
     role: { type: "text", label: "Role to take", required: true },
   },
@@ -403,8 +405,13 @@ registerOperation("take-role", {
     );
     const existing = callerSlot?.state?.qualities?.rolesGranted || [];
     if (alreadyHoldsRole(existing, roleName, foundHost)) {
-      // Idempotent re-take: nothing changed, so the act lays no fact.
-      return laysNoFact({ already: true, role: roleName, anchorSpaceId: foundHost });
+      // Idempotent re-take: the role's already held, so no grant record (nothing folds) —
+      // but the take is still an act, so it stamps a do:take-role in the being's history.
+      return stampsFact(
+        { already: true, role: roleName, anchorSpaceId: foundHost },
+        { role: roleName, anchorSpaceId: foundHost, outcome: "already" },
+        { kind: "being", id: identity.beingId },
+      );
     }
 
     // No self-emit: the act lays the grant record as a do:grant-role fact on the
@@ -415,7 +422,7 @@ registerOperation("take-role", {
       anchorSpaceId: foundHost,
       grantedBy: String(identity.beingId),
     });
-    return laysFact(
+    return stampsFact(
       { granted: true, path: "grabbed", role: roleName, anchorSpaceId: foundHost },
       grant,
       { kind: "being", id: identity.beingId },

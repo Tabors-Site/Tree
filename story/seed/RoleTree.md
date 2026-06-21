@@ -26,7 +26,7 @@ Snapshot of the seed-shipped role landscape after the single-gate refactor
 | `roleflow-composer` | (registry only) | default | `canSee:[roleflow-detail], canDo:[set-roleflow]` | (default) |
 | `llm-assigner` | (registry only) | default | LLM connection management ops | (default) |
 | `story-manager` | (registry only) | default | `canDo:[set-config, delete-config, close-story]` | (default) |
-| `branch-manager` | (registry only) | default | branch ops (create-branch, merge-branches, delete-branch) | (default) |
+| `history-manager` | (registry only) | default | history ops (create-branch, merge-histories, delete-history) | (default) |
 | `merge-mediator` | (registry only) | default | merge-conflict resolution canSee + canDo | (default) |
 
 Default acquisition = `{asked:"queue", grabbed:false, autoOnEntry:false}` — requires explicit owner approval via the queued call flow.
@@ -49,7 +49,7 @@ Every seed delegate is birthed by genesis at the story root. `grantAngelToSeedDe
 | `@roleflow-composer` | scripted | `roleflow-composer` | `global` @ root, `angel` @ heaven |
 | `@llm-assigner` | scripted | `llm-assigner` | `global` @ root, `angel` @ heaven |
 | `@story-manager` | scripted | `story-manager` | `global` @ root, `angel` @ heaven |
-| `@branch-manager` | scripted | `branch-manager` | `global` @ root, `angel` @ heaven |
+| `@history-manager` | scripted | `history-manager` | `global` @ root, `angel` @ heaven |
 
 Cognition note: every seed delegate is `scripted` — they have code handlers and don't go through LLM cognition. They speak in their delegate voice via the registry-fallback path in `roleFlow.js` (`origin === "seed"` lookup) without needing an explicit grant of their own delegate-role.
 

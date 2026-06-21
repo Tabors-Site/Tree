@@ -149,7 +149,7 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   //   - Human-cognition beings — replicating an operator's identity
   //     onto another story is a security smell. They stay home.
   //
-  //   - Seed delegates — cherub, arrival, llm-assigner, branch-manager,
+  //   - Seed delegates — cherub, arrival, llm-assigner, history-manager,
   //     role-{manager,finder}, roleflow-composer, story-manager,
   //     birther. Every story already plants these at boot
   //     (seed/materials/being/seedDelegates.js); replicating them

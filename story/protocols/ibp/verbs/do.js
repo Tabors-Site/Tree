@@ -167,7 +167,7 @@ export async function handleDo(socket, env, ack) {
         throw new IbpError(
           IBP_ERR.STORY_PAUSED,
           `DO refused: history #${targetHistory} is paused. ` +
-            `Unpause via @branch-manager or fork a new branch off it.`,
+            `Unpause via @history-manager or fork a new branch off it.`,
           { history: targetHistory },
         );
       }
@@ -179,7 +179,7 @@ export async function handleDo(socket, env, ack) {
         throw new IbpError(
           IBP_ERR.STORY_PAUSED,
           `DO refused: history #${targetHistory} is deleted. ` +
-            `Undelete via @branch-manager to restore writes.`,
+            `Undelete via @history-manager to restore writes.`,
           { history: targetHistory, deleted: true },
         );
       }

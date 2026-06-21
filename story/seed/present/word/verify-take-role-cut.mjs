@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // take-role.word (the acquisition walk-in slice), LIVE through the bridge with ZERO
 // stubs. The CONTROL strand (the gate chain + idempotency) is .word; the acquisition
-// lookups + the grant emit are host: escapes wired by acquisitionHost.js. Proves a being
-// takes a grabbable role (a real grant-role fact lands, the being holds the role), the
-// idempotent re-take (already:true), and the refusals (not installed / not grabbable).
+// lookups + the grant-record build are see escapes wired by acquisitionHost.js. Proves a
+// being takes a grabbable role (a do:take-role fact lands carrying the grant record, the
+// reducer folds the grant, the being holds the role); the idempotent re-take STILL stamps
+// its do:take-role act (every act makes a fact) but folds no duplicate; and the refusals.
 // Full begin.js boot. Scratch DB, wiped.
 
 import fs from "fs";
@@ -100,15 +101,23 @@ try {
   // ── 1. take a grabbable role → granted, a real grant-role fact, the being holds it ──
   const t = await takeRole(taker, "warrior", arena);
   t.result?.granted === true && t.result?.role === "warrior" ? ok(`take warrior → granted:true`) : bad(`granted`, t.refused?.message || t.result);
-  const grantFact = (t.deltaF || []).find((f) => f.act === "grant-role" && f.params?.role === "warrior");
-  grantFact ? ok(`a real grant-role fact laid (the lone WORLD fact)`) : bad(`grant fact`, t.deltaF?.map((f) => f.act));
-  String(grantFact?.by) === String(taker) ? ok(`grant attributes to the CALLER (nameId = @taker, not i-am) — caller-attribution default`) : bad(`caller attribution`, `nameId=${grantFact?.by}, want ${String(taker).slice(0,10)}`);
+  const takeFact = (t.deltaF || []).find((f) => f.act === "take-role" && f.params?.role === "warrior");
+  takeFact ? ok(`a real do:take-role fact laid (the act — every act makes a fact)`) : bad(`take fact`, t.deltaF?.map((f) => f.act));
+  takeFact?.params?.grantedBy ? ok(`it carries the grant record (grantedBy/grantedAt) — applyRoleGrants folds the grant from the take`) : bad(`grant record on the take fact`, takeFact?.params);
+  String(takeFact?.by) === String(taker) ? ok(`the take attributes to the CALLER (nameId = @taker) — caller-attribution default`) : bad(`caller attribution`, `nameId=${takeFact?.by}, want ${String(taker).slice(0,10)}`);
   const slot = await loadOrFold("being", String(taker), "0");
   (slot?.state?.qualities?.rolesGranted || []).some((r) => (r.role || r) === "warrior") ? ok(`@taker now HOLDS the warrior role (rolesGranted)`) : bad(`holds role`, slot?.state?.qualities?.rolesGranted);
 
-  // ── 2. idempotent re-take → already:true, NO second grant ──
+  // ── 2. idempotent re-take → the take IS stamped (every act makes a fact), but NO duplicate grant ──
   const t2 = await takeRole(taker, "warrior", arena);
-  t2.result?.already === true && !(t2.deltaF || []).some((f) => f.act === "grant-role") ? ok(`re-take warrior → already:true, NO new grant (idempotent; the do:take-role op record via doVerb is expected)`) : bad(`idempotent`, t2.result || t2.deltaF);
+  const reTakeFact = (t2.deltaF || []).find((f) => f.act === "take-role" && f.params?.role === "warrior");
+  (t2.result?.already === true && reTakeFact && !reTakeFact.params?.grantedBy)
+    ? ok(`re-take → already:true; the take IS stamped (do:take-role, outcome:already) but carries NO grant record → nothing re-folds`)
+    : bad(`idempotent re-take`, { already: t2.result?.already, fact: reTakeFact?.params });
+  const slot2 = await loadOrFold("being", String(taker), "0");
+  ((slot2?.state?.qualities?.rolesGranted || []).filter((r) => (r.role || r) === "warrior").length === 1)
+    ? ok(`@taker still holds warrior EXACTLY once (the re-take folded no duplicate)`)
+    : bad(`no duplicate grant`, slot2?.state?.qualities?.rolesGranted);
 
   // ── 3. a NON-grabbable role → refuse ──
   const t3 = await takeRole(taker, "sage", arena);

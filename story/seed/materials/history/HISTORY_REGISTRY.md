@@ -98,11 +98,11 @@ Roughly two days of focused effort.
 ### 1. The registry being
 
 A reality-level delegate `@branch-registry` holds `qualities.pointers`.
-Per-reality, planted at genesis alongside `@branch-manager` and
+Per-reality, planted at genesis alongside `@history-manager` and
 `@llm-assigner`.
 
 Permissions: pointer updates restricted to reality-root or
-branch-manager. Reads open to any authenticated being (or arrival).
+history-manager. Reads open to any authenticated being (or arrival).
 
 ### 2. Registry ops
 

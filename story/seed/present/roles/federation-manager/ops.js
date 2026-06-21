@@ -51,7 +51,7 @@ import { getStoryDomain } from "../../../ibp/address.js";
 export function registerFederationManagerOps() {
   // registerOperation / registerSeeOperation calls below run at module
   // load; this is the explicit entry point so genesis.js can import + call
-  // it the same way it does for branch-manager / role-manager / llm-assigner.
+  // it the same way it does for history-manager / role-manager / llm-assigner.
 }
 
 // ────────────────────────────────────────────────────────────────────

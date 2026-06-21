@@ -37,6 +37,7 @@ import { registerOperation } from "../../../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { getRole } from "../registry.js";
 import { doVerb } from "../../../ibp/verbs/do.js";
+import { targetsFact } from "../../../ibp/factResult.js";
 
 registerOperation("set-being-roleflow", {
   targets: ["being", "stance"],
@@ -125,13 +126,12 @@ registerOperation("set-being-roleflow", {
       { identity, moment },
     );
 
-    return {
+    return targetsFact({
       written:       true,
       beingId,
       clauseCount:   validated.length,
       unknownRoles:  unknownRoles.length ? unknownRoles : undefined,
       notes:         params?.notes || undefined,
-      _factTarget:   { kind: "being", id: beingId },
-    };
+    }, { kind: "being", id: beingId });
   },
 });

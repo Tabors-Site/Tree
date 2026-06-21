@@ -1,0 +1,24 @@
+# switch.word — be:switch: re-seat this SESSION onto another history (which reel my acts ride).
+# Per-session: only THIS socket's currentHistory changes; identity is invariant across histories.
+# The fact is CROSS-HISTORY: be:switch lands on the DESTINATION history's reel (that history's view
+# of this being records the switch-in at T); the BE dispatcher passes result.toHistory as the fact's
+# history. The SESSION EFFECT is HOST: the transport seats socket.currentHistory from seatHistory
+# AFTER the moment seals (stamp-then-seat) — never in the word. The word authors only the fact + the
+# seat inputs. No authorize() (switching your OWN session's history needs no role gate beyond a caller).
+#
+# Simplified from the handler's six checks to FOUR gates: destination-missing folds found+deleted
+# into one (both invalid-input); destination-paused stays distinct (story-paused — frozen, not bogus);
+# being-lives-on folds "born here" + "not dead" into one (a session may only seat where the reel folds
+# to a LIVING birth). caller / history / fromHistory are bound by the trigger (fromHistory = the
+# pre-switch seat, host-derived).
+
+When a being switches their session to another history:
+  If no caller, refuse with "be:switch requires an authenticated caller" as unauthorized.
+  If no history, refuse with "be:switch requires a history" as invalid-input.
+  see destination-missing(history) as missing.
+  If missing, refuse with "be:switch: destination history not found or deleted" as invalid-input.
+  see destination-paused(history) as paused.
+  If paused, refuse with "be:switch: destination history is paused" as story-paused.
+  see being-lives-on(caller, history) as canLive.
+  If not canLive, refuse with "be:switch: you have no living birth on that history (born after the fork, or dead there) - a session may only seat where your reel folds to a living being" as forbidden.
+  Return switched: true, fromHistory: $fromHistory, toHistory: $history, seatHistory: $history, factTarget: $caller, factParams: { fromHistory: $fromHistory, toHistory: $history }.

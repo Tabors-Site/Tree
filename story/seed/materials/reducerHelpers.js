@@ -406,7 +406,13 @@ export function applyTrueName(state, fact) {
  */
 export function applyRoleGrants(state, fact) {
   if (fact?.verb !== "do") return state;
-  const isGrant  = fact.act === "grant-role";
+  // A role grant folds from WHICHEVER act granted it: an explicit do:grant-role, or a being
+  // TAKING (do:take-role) / being granted via ASK (do:ask-role). Take/ask ALWAYS stamp their
+  // act (every act makes a fact) but carry the grant record (grantedBy/grantedAt) ONLY when
+  // they actually granted — the no-grant paths (an idempotent re-take, a queued ask) stamp
+  // the act with no grantedBy, so the `!grantedBy` guard below stops them here (nothing folds).
+  const isGrant  =
+    fact.act === "grant-role" || fact.act === "take-role" || fact.act === "ask-role";
   const isRevoke = fact.act === "revoke-role";
   if (!isGrant && !isRevoke) return state;
   if (fact?.of?.kind !== "being") return state;

@@ -23,7 +23,7 @@
 // path for every op (do.js auto-Fact).
 
 import { registerOperation } from "../../../ibp/operations.js";
-import { laysFact, laysWordFact } from "../../../ibp/factResult.js";
+import { stampsFact, stampsWordFact } from "../../../ibp/factResult.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
 import { detectTargetKind, targetIdOf } from "../../../materials/_targetShape.js";
@@ -66,9 +66,9 @@ async function _createMatterViaWord({ target, params, caller, moment }) {
     if (!result) return null;
     // The .word authored its fact as `factParams` (the enriched birth spec the matter
     // reducer folds). Land it: the dispatcher lays the one caller-attributed
-    // do:create-matter fact, targeting the new MATTER (laysWordFact forces _factTarget,
+    // do:create-matter fact, targeting the new MATTER (stampsWordFact forces _factTarget,
     // since resolveAuditTarget would otherwise pick the bare spaceId). No self-emit.
-    return laysWordFact(result, "matter", "matterId");
+    return stampsWordFact(result, "matter", "matterId");
   } catch (e) {
     if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
     throw e;
@@ -238,7 +238,7 @@ async function createMatterHandler(ctx) {
   const matterId = matterContentId(enrichedSpec);
   // No self-emit: the act lays the enriched spec as the do:create-matter fact,
   // targeting the content-addressed matter; the dispatcher stamps the one fact.
-  return laysFact(
+  return stampsFact(
     { matterId, spaceId, parentMatterId },
     enrichedSpec,
     { kind: "matter", id: matterId },

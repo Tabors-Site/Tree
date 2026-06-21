@@ -1,28 +1,28 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// branch-manager. The delegate that creates and manages divergent
-// worlds (branches).
+// history-manager. The delegate that creates and manages divergent
+// histories.
 //
-// A branch is a new world that shares history with its parent up to
-// a chosen past point, then runs independently. branch-manager is
-// the operator-facing surface for that: SUMMON me with a
-// `create-branch` action and I plant a new branch at the next
-// available path under the chosen parent. The substrate handles the
-// rest — the new branch is queryable through SEE on
-// `<story>/./branches/<path>` and can accept its own facts via
+// A history is a new world that shares its trail with the parent up
+// to a chosen past point, then runs independently. history-manager
+// is the operator-facing surface for that: SUMMON me with a
+// `create-branch` action and I plant a new history at the next
+// available path under the chosen parent. The kernel handles the
+// rest. The new history is queryable through SEE on
+// `<story>/./histories/<path>` and can accept its own facts via
 // moment.actorAct?.history threading (Pass 4 wires that).
 //
 // Pause / unpause / promote-to-live ship in later passes (6.5 and
 // 10 respectively). The role advertises the can entry but the
-// substrate doesn't have those ops yet.
+// kernel doesn't have those ops yet.
 //
 // I am scripted cognition. The portal renders my can entries as a form;
 // no LLM apparatus runs here.
 
 export const historyManagerRole = Object.freeze({
-  name: "branch-manager",
+  name: "history-manager",
   description:
-    "Creates and manages branches — divergent worlds forked from a past moment. Click @branch-manager at the story root to mint a new branch from a chosen parent + anchor.",
+    "Creates and manages histories. Divergent worlds forked from a past moment. Click @history-manager at the story root to mint a new history from a chosen parent + anchor.",
   requiredCognition: "scripted",
   permissions: ["do"],
   respondMode: "async",
@@ -32,7 +32,7 @@ export const historyManagerRole = Object.freeze({
     {
       verb:        "do",
       word:        "create-branch",
-      description: "fork a new world from a past point of an existing branch. The new branch inherits history up to the anchor; future facts diverge.",
+      description: "fork a new history from a past point of an existing history. The new history inherits its trail up to the anchor; future facts diverge.",
     },
   ],
 

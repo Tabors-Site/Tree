@@ -1,0 +1,20 @@
+# death.word — be:death: close a being's lifecycle (one-way; the chain locks). The
+# CONTROL strand: the op gates (identity -> target -> exists) and the fact-lay. The
+# kill AUTHORITY (the host's being-tree role-walk over the target) is the VERB's gate,
+# run in be.js BEFORE this word — like do.js's authorize, a verb-level concern, not an
+# op one. The one floor read (resolve the target being from the address handle) stays a
+# host see (deathHost.js). The word lays NO fact of its own: it RETURNS the death fact's
+# params (byActor) + the target being as factTarget; the BE dispatcher stamps the one
+# caller-attributed be:death fact on the dying being's reel (applyDeath folds
+# qualities.death + scrubs the being from every place). Death is unconditional — a being
+# dies once — so there is no idempotent no-fact path.
+#
+# The bridge binds caller (the actor's beingId) and beingName (the address handle, for
+# resolve-target-being).
+
+When a being deaths a being:
+  If no caller, refuse with "be:death requires an authenticated caller" as unauthorized.
+  If no beingName, refuse with "be:death requires an explicit target being in the address (e.g. <story>/@<being>)" as invalid-input.
+  see resolve-target-being(beingName) as targetId.
+  If no targetId, refuse with "be:death: target being not found on this history" as being-not-found.
+  Return closed: true, targetBeingId: $targetId, factTarget: $targetId, factParams: { byActor: $caller }.

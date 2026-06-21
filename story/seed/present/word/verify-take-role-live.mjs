@@ -98,18 +98,19 @@ try {
   // (set-space now invalidates the ancestor cache itself — no manual force-fresh needed.)
   console.log(`  arena=${arena.slice(0,10)} taker=${String(taker).slice(0,10)}\n`);
 
-  // ── 1. take a grabbable role → granted, a real do:grant-role fact, the being holds it ──
+  // ── 1. take a grabbable role → granted, a real do:take-role fact, the being holds it ──
   const t = await takeRole(taker, "warrior", arena);
   t.result?.granted === true && t.result?.role === "warrior" ? ok(`take warrior → granted:true`) : bad(`granted`, t.refused?.message || t.result);
-  const grantFact = (t.deltaF || []).find((f) => f.act === "grant-role" && f.params?.role === "warrior");
-  grantFact ? ok(`a real do:grant-role fact laid (the dispatcher's ONE auto-Fact, the .word self-emits nothing)`) : bad(`grant fact`, t.deltaF?.map((f) => f.act));
-  String(grantFact?.through) === String(taker) ? ok(`grant attributes to the CALLER (through = @taker, not i-am) — caller-attribution default`) : bad(`caller attribution`, `through=${grantFact?.through}, want ${String(taker).slice(0,10)}`);
+  const takeFact = (t.deltaF || []).find((f) => f.act === "take-role" && f.params?.role === "warrior");
+  takeFact ? ok(`a real do:take-role fact laid (the dispatcher's ONE auto-Fact, the .word self-emits nothing)`) : bad(`take fact`, t.deltaF?.map((f) => f.act));
+  String(takeFact?.through) === String(taker) ? ok(`the take attributes to the CALLER (through = @taker, not i-am) — caller-attribution default`) : bad(`caller attribution`, `through=${takeFact?.through}, want ${String(taker).slice(0,10)}`);
   const slot = await loadOrFold("being", String(taker), "0");
   (slot?.state?.qualities?.rolesGranted || []).some((r) => (r.role || r) === "warrior") ? ok(`@taker now HOLDS the warrior role (rolesGranted) after seal`) : bad(`holds role`, slot?.state?.qualities?.rolesGranted);
 
-  // ── 2. idempotent re-take → already:true, NO second grant (the _noFact path) ──
+  // ── 2. idempotent re-take → the take IS stamped (every act makes a fact), no duplicate grant ──
   const t2 = await takeRole(taker, "warrior", arena);
-  t2.result?.already === true && !(t2.deltaF || []).some((f) => f.act === "grant-role") ? ok(`re-take warrior → already:true, NO new grant fact (idempotent, _noFact)`) : bad(`idempotent`, t2.result || t2.deltaF?.map((f) => f.act));
+  const reTake = (t2.deltaF || []).find((f) => f.act === "take-role" && f.params?.role === "warrior");
+  (t2.result?.already === true && reTake && !reTake.params?.grantedBy) ? ok(`re-take → already:true; the take IS stamped (do:take-role, outcome:already) but no grant record → no duplicate fold`) : bad(`idempotent re-take`, { already: t2.result?.already, fact: reTake?.params });
 
   // ── 3. a NON-grabbable role → refuse ──
   const t3 = await takeRole(taker, "sage", arena);

@@ -101,22 +101,25 @@ try {
   arena ? ok(`arena: greeter(auto) + member(queue) + sage(false), owner @askowner`) : bad(`arena`, "no space");
   console.log(`  arena=${arena.slice(0,10)} asker=${String(asker).slice(0,10)} owner=${String(owner).slice(0,10)}\n`);
 
-  // ── 1. AUTO policy → granted immediately, a real grant-role fact, the asker holds it ──
+  // ── 1. AUTO policy → granted immediately, a do:ask-role fact carries the grant, asker holds it ──
   const a = await askRole(asker, "greeter", arena);
   a.result?.granted === true && a.result?.path === "auto" ? ok(`ask greeter (asked:auto) → granted:true, path:auto`) : bad(`auto granted`, a.refused?.message || a.result);
-  (a.deltaF || []).some((f) => f.act === "grant-role" && f.params?.role === "greeter") ? ok(`a real grant-role fact laid (the lone WORLD fact)`) : bad(`grant fact`, a.deltaF?.map((f) => f.act));
+  const askFact = (a.deltaF || []).find((f) => f.act === "ask-role" && f.params?.role === "greeter");
+  (askFact && askFact.params?.grantedBy) ? ok(`a do:ask-role fact laid carrying the grant record (applyRoleGrants folds the grant from the ask)`) : bad(`ask fact + grant record`, a.deltaF?.map((f) => f.act));
   const slot = await loadOrFold("being", String(asker), "0");
   (slot?.state?.qualities?.rolesGranted || []).some((r) => (r.role || r) === "greeter") ? ok(`@asker now HOLDS the greeter role`) : bad(`holds`, slot?.state?.qualities?.rolesGranted);
 
-  // ── 2. idempotent re-ask → already:true, NO second grant ──
+  // ── 2. idempotent re-ask → the ask IS stamped (every act makes a fact), no duplicate grant ──
   const a2 = await askRole(asker, "greeter", arena);
-  a2.result?.already === true && !(a2.deltaF || []).some((f) => f.act === "grant-role") ? ok(`re-ask greeter → already:true, NO new grant`) : bad(`idempotent`, a2.result || a2.deltaF?.map((f) => f.act));
+  const reAsk = (a2.deltaF || []).find((f) => f.act === "ask-role" && f.params?.role === "greeter");
+  (a2.result?.already === true && reAsk && !reAsk.params?.grantedBy) ? ok(`re-ask → already:true; the ask IS stamped (do:ask-role, outcome:already) but no grant record → nothing re-folds`) : bad(`idempotent re-ask`, { already: a2.result?.already, fact: reAsk?.params });
 
-  // ── 3. QUEUE policy → summon the owner, granted:false, NO grant fact ──
+  // ── 3. QUEUE policy → the ask IS stamped (outcome:queue, no grant), AND the owner is summoned ──
   const a3 = await askRole(asker, "member", arena);
-  a3.result?.granted === false && a3.result?.path === "queue" && /Requested/i.test(a3.result?.message || "") && !(a3.deltaF || []).some((f) => f.act === "grant-role")
-    ? ok(`ask member (asked:queue) → granted:false, path:queue, owner summoned ("${a3.result.message}"), NO grant`)
-    : bad(`queue`, a3.refused?.message || a3.result);
+  const queueAsk = (a3.deltaF || []).find((f) => f.act === "ask-role" && f.params?.role === "member");
+  (a3.result?.granted === false && a3.result?.path === "queue" && /Requested/i.test(a3.result?.message || "") && queueAsk && !queueAsk.params?.grantedBy)
+    ? ok(`ask member (asked:queue) → granted:false, path:queue, owner summoned; the ask IS stamped (do:ask-role, outcome:queue) but folds no grant`)
+    : bad(`queue`, a3.refused?.message || a3.result || queueAsk?.params);
 
   // ── 4. asked:false → refuse "not ask-acquirable" ──
   const a4 = await askRole(asker, "sage", arena);

@@ -24,7 +24,7 @@
 // clean-miss fallback.
 
 import { registerOperation } from "../../../ibp/operations.js";
-import { laysFact, laysWordFact } from "../../../ibp/factResult.js";
+import { stampsFact, stampsWordFact } from "../../../ibp/factResult.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { getSpaceRootId } from "../../../sprout.js";
 import { registerRoleWord, resolveRoleWord, runRoleWord } from "../../../present/word/roleWordRegistry.js";
@@ -118,7 +118,7 @@ async function _setWorldSignalViaWord({ namespace, key, value, moment }) {
     if (!result) return null;
     // The .word authored { field, value } as `factParams`; land it as the one
     // caller-attributed do:set-space fact, targeting the story-root space (rootId).
-    return laysWordFact(result, "space", "rootId");
+    return stampsWordFact(result, "space", "rootId");
   } catch (e) {
     if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
     throw e;
@@ -176,7 +176,7 @@ registerOperation("set-world-signal", {
     // story root (byte-identical to the old `set the space root's $field to $value` write).
     // The story root's reducer folds qualities.world.<ns>.<key> from it.
     const field = `qualities.world.${namespace}.${keyParts.join(".")}`;
-    return laysFact(
+    return stampsFact(
       { published: true, namespace, key, value },
       { field, value },
       { kind: "space", id: rootId },

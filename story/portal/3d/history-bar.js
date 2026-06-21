@@ -1674,7 +1674,7 @@ function _renderDetail(mark) {
   detail.style.display = "block";
 }
 
-async function _branchHere() {
+async function _historyHere() {
   if (!_state.atTimestamp) return;
   const parent = _state.timelineHistory || "0";
   try {
@@ -2373,7 +2373,7 @@ function _openMergeDialog() {
       if (repointPointers) args.repointPointers = repointPointers;
 
       const result = await _state.client.do(
-        "/@branch-manager",
+        "/@history-manager",
         "merge-histories",
         args,
       );
@@ -2415,7 +2415,7 @@ function _openMergeDialog() {
         }
       }
     } catch (err) {
-      console.warn("[history-bar] merge-branches failed:", err);
+      console.warn("[history-bar] merge-histories failed:", err);
       errEl.textContent = err?.message || String(err);
       errEl.style.display = "block";
       submitBtn.disabled = false;

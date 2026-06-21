@@ -139,12 +139,12 @@ export const SEED_DELEGATES = [
       "Conversational interface for place-level administration (extensions, config, peers). Carries the story-manager role with canDo for set-config, install-extension, etc. — granted at the story root with story-wide reach.",
   },
   {
-    name: "branch-manager",
-    role: "branch-manager",
+    name: "history-manager",
+    role: "history-manager",
     cognition: "scripted",
     invocableBy: "authenticated",
     description:
-      "Creates and manages histories — divergent worlds forked from a past moment of an existing history. Click @branch-manager at the story root to mint a new history, merge histories, or manage the named-pointer registry (set-pointer, delete-pointer).",
+      "Creates and manages histories. Divergent worlds forked from a past moment of an existing history. Click @history-manager at the story root to mint a new history, merge histories, or manage the named-pointer registry (set-pointer, delete-pointer).",
   },
   {
     name: "federation-manager",

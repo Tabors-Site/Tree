@@ -196,15 +196,15 @@ html, body {
 }
 
 /* ── Frozen-world cues. body.ghost-view (rewound to the past) and
- *    body.paused-branch (this branch is frozen) desaturate the view
+ *    body.paused-history (this history is frozen) desaturate the view
  *    and pin a chip naming WHY. Applies to every view, not just 3D. */
 
 body.ghost-view #view-root,
-body.paused-branch #view-root {
+body.paused-history #view-root {
   filter: grayscale(1) brightness(0.85);
 }
 body.ghost-view::after,
-body.paused-branch::after {
+body.paused-history::after {
   position: fixed;
   top: 16px;
   right: 16px;
@@ -220,4 +220,4 @@ body.paused-branch::after {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 body.ghost-view::after  { content: "GHOST VIEW · viewing the past"; }
-body.paused-branch::after { content: "PAUSED · this branch is frozen"; }
+body.paused-history::after { content: "PAUSED · this history is frozen"; }

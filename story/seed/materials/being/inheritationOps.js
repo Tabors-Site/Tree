@@ -30,6 +30,7 @@
 // file for side effects.
 
 import { registerOperation } from "../../ibp/operations.js";
+import { targetsFact } from "../../ibp/factResult.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
 import { I_AM } from "./seedBeings.js";
 import { hasAuthorityOver } from "./identity/inheritation.js";
@@ -113,12 +114,11 @@ registerOperation("grant-inheritation", {
     }
     await assertGrantableName(grantedName, history);
     await assertAuthorityOverPosition(actingName, position, history, "grant-inheritation");
-    return {
-      _factTarget: { kind: "being", id: position },
+    return targetsFact({
       name: grantedName,
       position,
       grantedBy: actingName,
-    };
+    }, { kind: "being", id: position });
   },
 });
 
@@ -150,11 +150,10 @@ registerOperation("revoke-inheritation", {
       );
     }
     await assertAuthorityOverPosition(actingName, position, history, "revoke-inheritation");
-    return {
-      _factTarget: { kind: "being", id: position },
+    return targetsFact({
       name: grantedName,
       position,
       revokedBy: actingName,
-    };
+    }, { kind: "being", id: position });
   },
 });

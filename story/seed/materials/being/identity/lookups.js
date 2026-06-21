@@ -61,7 +61,7 @@ const SEED_SYSTEM_BEING_NAMES = [
   "roleflow-composer",
   "llm-assigner",
   "story-manager",
-  "branch-manager",
+  "history-manager",
   "federation-manager",
 ];
 
