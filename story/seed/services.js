@@ -81,7 +81,7 @@ import {
 import {
   createMatter,
   editMatter,
-  deleteMatterAndFile,
+  endMatter,
   transferMatter,
   getMatters,
 } from "./materials/matter/matters.js";
@@ -89,7 +89,6 @@ import {
   isExtensionBlockedAtSpace,
   getBlockedExtensionsAtSpace,
   getExtensionAtScope,
-  getToolOwner,
 } from "./materials/space/extensionScope.js";
 import {
   getAncestorChain,
@@ -462,7 +461,7 @@ export function buildStoryServices({
     matters: {
       createMatter,
       editMatter,
-      deleteMatterAndFile,
+      endMatter,
       transferMatter,
       getMatters,
     },
@@ -497,7 +496,6 @@ export function buildStoryServices({
       isExtensionBlockedAtSpace,
       getBlockedExtensionsAtSpace,
       getExtensionAtScope,
-      getToolOwner,
     },
 
     // declare: the setup voice. The four verbs above are how

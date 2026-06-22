@@ -53,6 +53,15 @@ export function reduce(state, fact) {
   // Updates both spaceId and position; one fact, one intent recorded.
   next = applyMove(next, fact);
 
+  // do:end-matter — the matter is ended. ONE act, ONE fact (the verb names the intent the being
+  // sees: "delete matter"); the two consequences — absent from its space (spaceId=DELETED, which
+  // isGone tombstones from) and unheld (beingId=DELETED) — are FOLDED here, not hand-stamped as
+  // two set-matter facts (23.md: one act, one fact, the rest is the fold). The bytes are untouched
+  // (content-addressed + shared; casSweep owns blob lifecycle).
+  if (fact?.act === "end-matter" && fact?.of?.kind === "matter") {
+    next = { ...next, spaceId: DELETED, beingId: DELETED };
+  }
+
   // do:purge-content — the bytes behind the current content hash were
   // physically removed from the content store; mark the ref purged.
   next = applyPurgeContent(next, fact);

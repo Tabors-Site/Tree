@@ -10,19 +10,19 @@
 // operation registry. That layer is gone.
 //
 // IBP is the main now. The four verbs (SEE / DO / SUMMON / BE) are
-// my universal grammar; every act inside me already speaks them.
-// The LLM voice's tool dispatch goes direct from getToolHandler to
-// the verb dispatcher — no protocol wrapper between the inference
-// loop and story.do. Tools are verb-tagged at registration; the
-// verb tells the dispatcher how to gate the call.
+// my universal grammar; every act inside me already speaks them. The
+// internal cognition speaks WORD (14.md §4.5) — there is no JSON tool
+// registry to announce; a being's act is one Word parsed into a verb
+// dispatch. The old self-loop's JSON tool surface is gone.
 //
 // MCP lives on as a future wrapper around the verbs, not a parallel
 // surface inside them. If an external MCP client wants to call into
-// this place, I'd activate this transport: it announces my tool
-// registry to MCP clients and translates inbound MCP tool calls
-// into IBP verb dispatches at intake. Same shape as transports/http/
-// and transports/ws/ — an edge adapter that turns an outside
-// protocol into one of my four verbs and then steps out of the way.
+// this place, I'd activate this transport: it would expose the verb
+// dispatcher (or the DO operation registry) to MCP clients and
+// translate inbound MCP tool calls into IBP verb dispatches at intake.
+// Same shape as transports/http/ and transports/ws/ — an edge adapter
+// that turns an outside protocol into one of my four verbs and then
+// steps out of the way.
 //
 // I do not call this myself. genesis.js does not import this file.
 // An operator (or a future config flag) wires it in when they want
@@ -58,21 +58,19 @@
 //
 // Boot:
 //   1. Open an McpServer (from @modelcontextprotocol/sdk).
-//   2. Enumerate my seed tool registry. For each tool, register it
-//      with the MCP server using:
-//        - the tool's existing JSON schema (already built by
-//          z.toJSONSchema inside seed/present/cognition/llm/tools.js).
-//        - a thin handler that calls getToolHandler(name)(args) and
-//          wraps the return as MCP's { content: [{ type: "text", text }] }.
+//   2. Enumerate the DO operation registry (seed/ibp/operations.js).
+//      For each op, register it with the MCP server using:
+//        - the op's JSON schema (built by zod 4's z.toJSONSchema).
+//        - a thin handler that dispatches through the verb dispatcher
+//          and wraps the return as MCP's { content: [{ type: "text", text }] }.
 //   3. Mount three HTTP routes (POST / GET / DELETE /mcp) protected
 //      by the standard `authenticate` middleware, so every inbound
 //      tool call rides a verified beingId into the verb dispatcher.
 //
 // Per-call:
 //   external MCP client emits tool call
-//     → mcp transport unwraps name + args
-//     → handler = getToolHandler(name)
-//     → handler runs (typically wrapping story.see/do/summon/be)
+//     → mcp transport unwraps op name + args
+//     → dispatch through the verb dispatcher (story.see/do/summon/be)
 //     → verb dispatcher authorizes (stance auth + extension-scope gate)
 //     → operation handler runs, Fact is stamped
 //     → result wrapped into MCP's content shape, returned to client
@@ -105,9 +103,10 @@ export async function initMcpServer(app, opts = {}) {
 
   log.warn(
     "MCP",
-    `MCP transport is a stub. To activate: import the MCP SDK, wire ` +
-    `getToolHandler from seed/present/cognition/llm/tools.js into MCP tool ` +
-    `registrations, and mount routes at ${mountPath}. See header comment.`,
+    `MCP transport is a stub. To activate: import the MCP SDK, expose the ` +
+    `DO operation registry (seed/ibp/operations.js) as MCP tools that ` +
+    `dispatch through the verb dispatcher, and mount routes at ${mountPath}. ` +
+    `See header comment.`,
   );
 
   // SHAPE (to fill in when activated):
@@ -116,24 +115,18 @@ export async function initMcpServer(app, opts = {}) {
   //   const { StreamableHTTPServerTransport } = await import(
   //     "@modelcontextprotocol/sdk/server/streamableHttp.js"
   //   );
-  //   const { listToolNames, getToolDef, getToolHandler } = await import(
-  //     "../../seed/present/cognition/llm/tools.js"
-  //   );
   //   const authenticate = (await import("../http/middleware/authenticate.js")).default;
   //
   //   const mcp = new McpServer({ name: "treeos", version: getSeedVersion() });
   //
-  //   for (const name of listToolNames()) {
-  //     const def = getToolDef(name);
-  //     const handler = getToolHandler(name);
-  //     if (!handler) continue;             // def-only tools skipped
+  //   // Enumerate the DO operation registry and register each op as an
+  //   // MCP tool whose handler dispatches through the verb layer
+  //   // (story.do / the verb dispatcher), which authorizes + stamps.
+  //   for (const op of listDoOperations()) {
   //     mcp.registerTool(
-  //       name,
-  //       {
-  //         description: def.function.description,
-  //         inputSchema: def.function.parameters,
-  //       },
-  //       async (args) => wrapAsMcpResult(await handler(args)),
+  //       op.name,
+  //       { description: op.description, inputSchema: op.schema },
+  //       async (args) => wrapAsMcpResult(await dispatchDo(op.name, args)),
   //     );
   //   }
   //

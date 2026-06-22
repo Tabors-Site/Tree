@@ -266,14 +266,14 @@ async function endMatterHandler({ target, identity, moment }) {
   const matterId = targetIdOf(target);
   if (!matterId) throw new Error("end-matter: matterId required");
   const history = moment?.actorAct?.history || "0";
-  const { deleteMatterAndFile } = await import("./matters.js");
+  const { endMatter } = await import("./matters.js");
   let beingId = identity?.beingId;
   if (!beingId) {
     const { loadOrFold } = await import("../projections.js");
     const matterSlot = await loadOrFold("matter", matterId, history);
     beingId = matterSlot?.state?.beingId || null;
   }
-  await deleteMatterAndFile({
+  await endMatter({
     matterId,
     beingId: String(beingId || ""),
     actId: moment?.actId || null,
@@ -300,7 +300,7 @@ async function endMatterHandler({ target, identity, moment }) {
 //
 // Auth: the role-walk gates canDo "purge-content" (advertised on the
 // file/model types); the handler additionally enforces
-// author-or-root-owner, same shape as deleteMatterAndFile.
+// author-or-root-owner, same shape as endMatter.
 
 async function purgeContentHandler({ target, params, identity, moment }) {
   const matterId = targetIdOf(target);
@@ -361,21 +361,11 @@ async function purgeContentHandler({ target, params, identity, moment }) {
     );
   }
 
-  // Fact first — the chain explains the missing bytes. The physical
-  // delete runs after the moment seals (afterSeal) so a refused seal
-  // never leaves bytes gone without a fact; standalone callers (no
-  // moment) emit-and-commit immediately, then delete.
-  const { emitFact: _emit } = await import("../../past/fact/facts.js");
-  await _emit({
-    verb:    "do",
-    act:     "purge-content",
-    through: String(identity.beingId),
-    of:      { kind: "matter", id: String(matterId) },
-    params:  { hash, force, referents: others.length },
-    actId:   moment?.actId || null,
-    history: history,
-  }, moment);
-
+  // ONE act, ONE fact (23.md): purge-content returns its OWN do:purge-content fact (the dispatcher
+  // stamps it; applyPurgeContent folds it, marking the ref purged) — no self-emit, no skipAudit. The
+  // physical delete still runs AFTER the moment seals (afterSeal), so the chain explains the missing
+  // bytes BEFORE they go (fact-first is preserved: the dispatcher's fact seals in-moment, then the host
+  // deleteContent runs post-seal). deleteContent is the host floor, gated by the refcount check above.
   const doDelete = async () => {
     const { deleteContent } = await import("./contentStore.js");
     await deleteContent(hash);
@@ -386,7 +376,11 @@ async function purgeContentHandler({ target, params, identity, moment }) {
     await doDelete();
   }
 
-  return { purged: true, matterId: String(matterId), hash, sharedReferents: others.length };
+  return stampsFact(
+    { purged: true, matterId: String(matterId), hash, sharedReferents: others.length },
+    { hash, force, referents: others.length },
+    { kind: "matter", id: String(matterId) },
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -430,9 +424,9 @@ registerOperation("purge-content", {
   targets: ["matter"],
   ownerExtension: "seed",
   factAction: "purge-content",
-  // The handler stamps the purge fact itself (fact-first, delete on
-  // afterSeal); a second auto-fact would double-record the act.
-  skipAudit: true,
+  // ONE act, ONE fact: the handler returns stampsFact and the dispatcher stamps the do:purge-content
+  // fact (applyPurgeContent folds it); the physical delete runs on afterSeal, so fact-first holds.
+  // No skipAudit (23.md: every act its own dispatcher-stamped fact).
   args: {
     hash:  { type: "text", label: "Content hash (defaults to the matter's current content)", required: false },
     force: { type: "bool", label: "Purge even when other matter shares these bytes", default: false, required: false },

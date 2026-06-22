@@ -32,7 +32,7 @@ const QUALITIES_PREFIX = "qualities.";
 // verb separates the intent (an audit-trail "rename") from the bare
 // scalar write, but the fold is the same one-field update on the
 // matter row's name. See materials/matter/ops.js renameMatterHandler.
-const SET_ACTIONS = new Set(["set-space", "set-being", "set-matter", "set-model", "rename-matter"]);
+const SET_ACTIONS = new Set(["set-space", "set-being", "set-matter", "set-model", "rename-matter", "set-render", "set-being-roleflow"]);
 const CREATE_ACTIONS = new Set(["create-space", "create-matter"]);
 
 // Plain scalar/array fields the `do:set` op writes on a single
@@ -70,7 +70,7 @@ const SCALAR_SET_FIELDS = new Set([
   // Plaintext never touches this field.
   "password",
   // Matter scalars added in Slice C-matter-full (2026-05-23). The
-  // editMatter content update, deleteMatterAndFile soft-delete
+  // editMatter content update, endMatter soft-delete
   // (spaceId/beingId=DELETED), and transferMatter cross-space move
   // all stamp do:set facts on these fields. The shared reducer is
   // safe because the verb handler enforces kind=matter before

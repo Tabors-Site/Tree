@@ -240,7 +240,7 @@ let _llmPanelState = {
   error:    "",
 };
 
-export function showLlmAssignerPanel({ client, place, currentSpaceId, onClose, onSpawnTutorial }) {
+export function showLlmAssignerPanel({ client, place, currentSpaceId, onClose }) {
   if (_llmAssignerPanelEl) return;
   document.exitPointerLock?.();
 
@@ -271,14 +271,6 @@ export function showLlmAssignerPanel({ client, place, currentSpaceId, onClose, o
       <button class="llm-close" type="button" style="background:transparent;
         color:#6b7d72; border:none; font-size:18px; line-height:1;
         cursor:pointer; padding:0 4px;">×</button>
-    </div>
-
-    <div style="margin-bottom:10px; font-size:11px;">
-      <button class="llm-spawn-tutorial" type="button"
-        style="background:transparent; border:none; padding:0;
-          color:#8fbf9f; cursor:pointer; font:inherit; text-align:left;">
-        \u{25B6} Spawn the LLM setup video in the place
-      </button>
     </div>
 
     <div class="llm-tabs" style="display:flex; gap:4px; margin-bottom:12px;
@@ -598,36 +590,7 @@ export function showLlmAssignerPanel({ client, place, currentSpaceId, onClose, o
     if (typeof onClose === "function") onClose();
   });
 
-  // Spawn link: fires the llm-assigner:start-tutorial DO. The op is
-  // idempotent server-side (marker on qualities.tutorial.purpose), so
-  // only one is ever active at a time. On success the panel closes
-  // and the caller's onSpawnTutorial refetches the descriptor — the
-  // new matter's video screen mounts in the 3D scene.
-  const spawnLink = el.querySelector(".llm-spawn-tutorial");
-  spawnLink.addEventListener("click", async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const original = spawnLink.textContent;
-    spawnLink.style.opacity = "0.5";
-    spawnLink.textContent   = "spawning...";
-    try {
-      if (typeof onSpawnTutorial === "function") {
-        await onSpawnTutorial();
-      } else {
-        await client.do("/", "llm-assigner:start-tutorial", {});
-      }
-      hideLlmAssignerPanel();
-      if (typeof onClose === "function") onClose();
-    } catch (err) {
-      showError(fmtErr(err, "spawn failed"));
-      spawnLink.style.opacity = "1";
-      spawnLink.textContent   = original;
-    }
-  });
-
-  // Initial mount. The intro YouTube tutorial used to live here as
-  // a popup; it's now 3D placed matter (see scene.js video-screen
-  // mesh). The panel is back to its CRUD-only role.
+  // Initial mount. The panel is back to its CRUD-only role.
   (async () => {
     await refreshConnections();
     // Restore last-active tab; fall back to "being" if node was active

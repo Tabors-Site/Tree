@@ -16,6 +16,7 @@
 // return every child space of P alongside beings and matter at P.
 
 import { applySetQualities, applySetField, applyCreateSpace, applyMove } from "../reducerHelpers.js";
+import { DELETED } from "./heavenSpaces.js";
 
 /**
  * Empty initial state. Today: empty — the fold derives qualities +
@@ -68,6 +69,14 @@ export function reduce(state, fact) {
   // where the new value rides params.value.)
   if (fact?.act === "set-space" && fact?.params?.field === "parent") {
     next = { ...next, position: fact.params.value ?? null };
+  }
+
+  // do:end-space — the space is ended. ONE act, ONE fact (the verb names "delete space"); the reducer
+  // FOLDS the two consequences — parent=DELETED (the sentinel that hides it from parent-query readers,
+  // mirrored onto position) and members.owner=the deleter (revival audit), derived from the fact's
+  // `through` (the actor IS the deleter). Replaces the two hand-stamped set-space facts (23.md).
+  if (fact?.act === "end-space" && fact?.of?.kind === "space") {
+    next = { ...next, parent: DELETED, position: DELETED, owner: String(fact.through || next.owner || "") };
   }
 
   // updatedAt is reducer-owned (no Mongoose timestamps on Space). On

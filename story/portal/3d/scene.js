@@ -3017,8 +3017,8 @@ export class Scene {
 
   _makeVideoScreenMesh(matter) {
     // The YouTube specialization: same screen shell, plus the Player
-    // API wiring (resume position, ENDED → onMatterEnded, playback
-    // ticks back to the substrate via save-playback).
+    // API wiring (resume position + ENDED → onMatterEnded, the generic
+    // scene callbacks).
     const url =
       `https://www.youtube.com/embed/${encodeURIComponent(matter.content.videoId)}` +
       `?enablejsapi=1&autoplay=1&mute=1&modestbranding=1&rel=0`;
@@ -3030,10 +3030,11 @@ export class Scene {
     group.userData.videoId     = matter.content.videoId;
     group.userData.isVideoMesh = true;
 
-    // Resume position lives in the matter's qualities so it survives
-    // across browsers/devices. Persisted by emitPlaybackTick →
-    // llm-assigner:save-playback DO.
-    const resumeAt = Number(matter?.qualities?.tutorial?.playbackSeconds);
+    // Resume position: no op persists a playback position today, so a
+    // generic video always starts from 0. (emitPlaybackTick still fires
+    // for any future playback-persisting consumer; nothing writes the
+    // field now that the tutorial is gone.)
+    const resumeAt = 0;
 
     // Attach the Player API once it's ready so we can listen for ENDED
     // and tick the current time back to the substrate.

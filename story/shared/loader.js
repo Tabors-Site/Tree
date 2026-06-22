@@ -9,7 +9,6 @@ import express from "express";
 import { fileURLToPath, pathToFileURL } from "url";
 import { buildStoryServices } from "../seed/services.js";
 import { hooks } from "../seed/hooks.js";
-import { getToolOwner } from "../seed/materials/space/extensionScope.js";
 import log from "../seed/seedStory/log.js";
 import { buildScopedStory } from "./scopedStory.js";
 import {
@@ -1903,13 +1902,9 @@ export async function uninstallExtension(name) {
     await new Promise((r) => setTimeout(r, 2000));
     loaded.delete(name);
 
-    // Clean up tool definitions so stale entries don't linger in the
-    // registry after uninstall.
-    try {
-      const { unregisterToolsForExtension } =
-        await import("../seed/present/cognition/llm/tools.js");
-      unregisterToolsForExtension(name, getToolOwner);
-    } catch {}
+    // No JSON tool registry to clean up — the cognition speaks WORD
+    // (14.md §4.5); the seed-tool registry retired. Templates, matter
+    // types, and ops still have per-extension unregister paths below.
     try {
       const { unregisterTemplatesFromExtension } =
         await import("../seed/store/book/templateRegistry.js");
@@ -1934,11 +1929,6 @@ export async function uninstallExtension(name) {
       const { unregisterSeeOperationsFromExtension } =
         await import("../seed/ibp/seeOps.js");
       unregisterSeeOperationsFromExtension(name);
-    } catch {}
-    try {
-      const { clearToolOwnersForExtension } =
-        await import("../seed/materials/space/extensionScope.js");
-      clearToolOwnersForExtension(name);
     } catch {}
     // DELIBERATE asymmetry, not an omission: the extension's ROLES
     // stay registered on uninstall. Grants already given reference

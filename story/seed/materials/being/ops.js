@@ -3,7 +3,6 @@
 // being/ops.js — DO operations that target Being.
 //
 //   set-being             — write a Being field (schema fields or qualities)
-//   end-being             — chain-disconnect target Being from the projection
 //   add-llm-connection    — register a new LLM connection on a Being
 //   update-llm-connection — change fields on an existing connection
 //   delete-llm-connection — remove a connection
@@ -249,18 +248,11 @@ async function setOnBeingHandler({ target, params, moment }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// end-being
-// ─────────────────────────────────────────────────────────────────────
-//
-// Symmetry stub. No current internal callers; identity-ending lives on
-// the BE verb where the rest of identity logic lives.
-
-async function endBeingHandler({ target }) {
-  throw new Error(
-    "end-being is not implemented at the DO layer. Identity-ending belongs on BE (be.unregister, etc.).",
-  );
-}
+// (end-being removed 2026-06-21: it was a throwing symmetry stub — "not implemented at the DO layer"
+// — with no internal callers and no reducer fold. Identity-ending lives on the BE verb, where the
+// rest of identity logic lives. A do-op that always throws is dirty; deleted rather than carried.
+// NOTE: seedPlant's graft-rollback still stamps a do:end-being AUDIT fact directly via emitFact —
+// inert in the being fold today; reversing a grafted being properly is a separate seed/graft concern.)
 
 // ─────────────────────────────────────────────────────────────────────
 // LLM connection ops
@@ -386,13 +378,6 @@ registerOperation("set-being", {
   handler: setOnBeingHandler,
 });
 
-registerOperation("end-being", {
-  targets: ["being"],
-  ownerExtension: "seed",
-  factAction: "end-being",
-  args: {},
-  handler: endBeingHandler,
-});
 
 // ────────────────────────────────────────────────────────────────────
 // grant-role / revoke-role

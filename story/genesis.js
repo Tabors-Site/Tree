@@ -97,18 +97,6 @@ import { hooks } from "./seed/hooks.js";
 import { syncExtensionsToTree } from "./seed/sprout.js";
 import log from "./seed/seedStory/log.js";
 
-/**
- * Register seed-shipped tool definitions through the same path
- * extensions use. Thin wrapper that hands the bundle to
- * `registerToolBundle` with `ownerExt: "seed"`. See
- * seed/present/cognition/llm/tools.js for the unified registration logic.
- */
-async function registerSeedTools(tools) {
-  const { registerToolBundle } =
-    await import("./seed/present/cognition/llm/tools.js");
-  await registerToolBundle(tools, { ownerExt: "seed" });
-}
-
 // Boot mode, decided once per process. Read by printReady at the
 // end so the closing line ("I am born." vs "I am awake.") matches
 // what actually happened. "Beginning" if Mongo held no place root
@@ -476,46 +464,12 @@ export async function genesis(app, opts = {}) {
     await import("./seed/present/roles/story-manager/role.js");
   registerRole("story-manager", storyManagerRole, "seed");
 
-  // Seed-shipped verb tools. ONE generic tool per verb (see / do /
-  // summon / be). Tool exposure is DERIVED at prompt-build time
-  // from which of the role's four can* lists are non-empty . a
-  // role with non-empty canDo gets the do tool, non-empty canSee
-  // gets the see tool, etc. There is no role-side toolNames field;
-  // the four can* lists ARE the role's body, and the tool surface
-  // follows from the body.
-  //
-  // Adding a capability to a being is editing one can* list . never
-  // registering a new tool. The verb set is structurally universal.
-  //
-  // be is mostly identity-bind/release/switch handled by scripted
-  // seed roles (cherub, llm-assigner) out of band. Shipped for
-  // symmetry; LLM roles that need it (notably for `switch`) just
-  // populate canBe.
-  // SEE is not exposed as an LLM tool. canSee is preloaded into the
-  // face by the assembler at moment-open (address entries via
-  // seeVerb, named entries via the seeResolver registry). To see
-  // more, the being moves (DO), changes role (BE / roleFlow), or
-  // the role spec is edited. The seed registers only do / call /
-  // be tools below; canSee covers perception.
-  const { seedDoTool } =
-    await import("./seed/present/cognition/llm/seedDoTool.js");
-  const { seedCallTool } =
-    await import("./seed/present/cognition/llm/seedCallTool.js");
-  const { seedBeTool } =
-    await import("./seed/present/cognition/llm/seedBeTool.js");
-  // end-turn is the explicit no-act call — the moment-level mirror
-  // of the IBP SEE verb. Always available, bypasses canDo / canSummon
-  // / canBe and the verb-permission filter (see resolveToolsForRole).
-  // Lets the LLM declare "I have seen, I will not act" deliberately
-  // instead of relying on the implicit no-tool-call → cognitionSee path.
-  const { seedEndTurnTool } =
-    await import("./seed/present/cognition/llm/seedEndTurnTool.js");
-  await registerSeedTools([
-    seedDoTool,
-    seedCallTool,
-    seedBeTool,
-    seedEndTurnTool,
-  ]);
+  // No seed verb-tools, no JSON tool registry. The cognition speaks
+  // WORD (14.md §4.5): each role's vocabulary is rendered AS Word
+  // (renderVocabularyAsWord) and the being's one Word is parsed +
+  // run via runRoleWord onto the moment's deltaF — there is no
+  // do/call/be/end-turn JSON tool. A role's capability is its can*
+  // lists (the words it may speak); the verb set is the WORD grammar.
 
   // The receptive role every human being carries. Without it, SUMMONs
   // to a human are rejected with ROLE_UNAVAILABLE. The role's summon
@@ -784,12 +738,9 @@ export async function genesis(app, opts = {}) {
   }
 
   // LLM-management ops. Six bare seed ops (add-llm / delete-llm /
-  // assign-slot / set-being-llm / set-space-llm / set-story-llm)
-  // plus three llm-assigner-prefixed tutorial ops (start-tutorial /
-  // save-playback / complete-tutorial) that drive the welcome flow.
-  // The substrate ops are callable by any being with the appropriate
-  // canDo (or owner-check on the target space) — no llm-assigner
-  // delegate routing required.
+  // assign-slot / set-being-llm / set-space-llm / set-story-llm),
+  // callable by any being with the appropriate canDo (or owner-check
+  // on the target space) — no llm-assigner delegate routing required.
   const { registerLlmAssignerOps } =
     await import("./seed/present/roles/llm-assigner/ops.js");
   registerLlmAssignerOps();
@@ -863,12 +814,6 @@ export async function genesis(app, opts = {}) {
       // they limit how much work the place can hold at once.
       maxRunTurns: { setter: setInternalConfig },
       maxIntake: { setter: setInternalConfig },
-      maxRegisteredTools: {
-        load: () =>
-          import("./seed/present/cognition/llm/tools.js").then(
-            (m) => m.setMaxTools,
-          ),
-      },
       sessionTTL: {
         load: () =>
           import("./seed/present/session.js").then(
@@ -927,10 +872,9 @@ export async function genesis(app, opts = {}) {
   await registerExtensionManagementOps();
 
   // Load extensions. Manifests discovered, deps validated, routes
-  // attached to `app`, hooks wired, tools registered into the seed
-  // tool registry. After this returns, the extension surface is live
-  // in memory. (MCP retired 2026-05-22; tools dispatch direct from
-  // the LLM voice via getToolHandler in cognition/llm/tools.js.)
+  // attached to `app`, hooks wired. After this returns, the extension
+  // surface is live in memory. (No JSON tool registry — the cognition
+  // speaks WORD, 14.md §4.5; extensions add ops to the DO registry.)
   await loadExtensions(app, null, {
     getConfigValue: getStoryConfigValue,
     registerRawWebhook: opts.registerRawWebhook,
@@ -1074,14 +1018,14 @@ export async function genesis(app, opts = {}) {
     log.warn("Genesis", `boot-end op fold failed: ${err.message}`);
   }
 
-  // Three parallel sync calls, three I-Am moments — independent
+  // Two parallel sync calls, two I-Am moments — independent
   // reconciliations of independent registries. Each is the I-Am's
   // act on its own substrate; running them as separate moments lets
   // them progress in parallel (Promise.all) without a shared deltaF.
+  // (The JSON tool registry retired with the Word cutover — 14.md
+  // §4.5 — so there is no tools sync.)
   (async () => {
     try {
-      const { syncToolsToSubstrate } =
-        await import("./seed/present/cognition/llm/tools.js");
       const { syncRolesToSubstrate } =
         await import("./seed/present/roles/registry.js");
       const { syncOperationsToSubstrate } =
@@ -1089,35 +1033,19 @@ export async function genesis(app, opts = {}) {
       // Each sync function self-manages per-item moments now.
       // No outer withIAmAct wrappers — per the one-DO-per-moment
       // doctrine, each per-item create/refresh/delete is its own act.
-      const [t, r, o] = await Promise.all([
-        syncToolsToSubstrate(),
+      const [r, o] = await Promise.all([
         syncRolesToSubstrate(),
         syncOperationsToSubstrate(),
       ]);
       log.verbose(
         "RegistryMirror",
-        `synced: tools(${t.created}+${t.kept}-${t.removed}) ` +
-          `roles(${r.created}+${r.kept}-${r.removed}) ` +
+        `synced: roles(${r.created}+${r.kept}-${r.removed}) ` +
           `operations(${o.created}+${o.kept}-${o.removed})`,
       );
     } catch (err) {
       log.warn("RegistryMirror", `registry sync failed: ${err.message}`);
     }
   })();
-
-  // Tool-description audit. Walks every registered role's declared
-  // tools and logs misconfigurations loudly before the first LLM
-  // call. The same gap would block a summon at runtime via
-  // assertAllToolsResolve in stamp.js. Surfacing it at boot
-  // means the operator sees it without waiting for a user to
-  // trigger the broken role.
-  try {
-    const { auditToolDescriptions } =
-      await import("./seed/present/cognition/llm/tools.js");
-    await auditToolDescriptions();
-  } catch (err) {
-    log.warn("Tools", `tool-description audit failed: ${err.message}`);
-  }
 
   hooks.run("afterBoot", {}).catch(() => {});
 }

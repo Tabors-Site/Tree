@@ -28,13 +28,17 @@
 // uses. One snapshot per turn; zero new queries; one extra
 // allowed[] check per confined extension.
 //
-// The tool-ownership map lives in the bottom half of this file.
-// It supports the scope filter (filterToolNamesByScope drops tools
-// owned by blocked extensions) and is colocated here because it
-// shares no consumer outside scope resolution.
+// ALL RULES FOLD (TreeOS doctrine). These scope rules live as FACTS on
+// the chain — the per-space blocked[]/allowed[] sit in a Space's folded
+// qualities, never an in-code registry — and resolution is just a fold up
+// the parent chain. (The dead tool-ownership Map that once sat below was
+// deleted with the JSON tool registry; scope no longer filters "tools".)
+// Extensions are retiring in favor of BOOKS as the word-bundling unit; the
+// boot-loaded confined set is the last in-code residue, to become a folded
+// word once scope goes book/word-scoped — at which point "extension" here
+// reads as "word/book".
 
 import log from "../../seedStory/log.js";
-import { getInternalConfigValue } from "../../internalConfig.js";
 import Space from "./space.js";
 import { HEAVEN_SPACE } from "./heavenSpaces.js";
 import {
@@ -206,114 +210,3 @@ export function notifyScopeChange({
       log.debug("Scope", `afterScopeChange hook error: ${err.message}`),
     );
 }
-
-// ─────────────────────────────────────────────────────────────────────────
-// TOOL OWNERSHIP
-// ─────────────────────────────────────────────────────────────────────────
-
-import { getStoryConfigValue } from "../../storyConfig.js";
-
-const _toolOwnership = new Map(); // toolName -> { extName, verb }
-function maxToolOwners() {
-  return Number(getInternalConfigValue("maxRegisteredTools")) || 1000;
-}
-
-/**
- * Register a tool's owning extension and its verb tag. The verb tag
- * is what gates scope behavior — `verb: "see"` is read-only by
- * definition; `verb: "do"` mutates. Restricted-access extensions get
- * filtered down to their SEE-tagged tools via this verb.
- */
-export function registerToolOwner(toolName, extName, verb = null) {
-  if (
-    typeof toolName !== "string" ||
-    toolName.length === 0 ||
-    toolName.length > 64
-  )
-    return;
-  if (typeof extName !== "string" || extName.length === 0) return;
-  if (_toolOwnership.size >= maxToolOwners() && !_toolOwnership.has(toolName)) {
-    log.warn(
-      "Scope",
-      `Tool ownership cap reached (${maxToolOwners()}). "${toolName}" rejected.`,
-    );
-    return;
-  }
-  _toolOwnership.set(toolName, { extName, verb: verb || null });
-}
-
-export function getToolOwner(toolName) {
-  return _toolOwnership.get(toolName)?.extName || null;
-}
-
-/**
- * Remove all tool ownership entries for an extension.
- * Called during extension uninstall.
- */
-export function clearToolOwnersForExtension(extName) {
-  for (const [name, info] of _toolOwnership) {
-    if (info.extName === extName) _toolOwnership.delete(name);
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────
-// TOOL FILTERING
-// ─────────────────────────────────────────────────────────────────────────
-
-/**
- * Filter tool names by scope.
- * Removes tools from blocked extensions.
- * For restricted extensions (access mode "read"), only keeps read-only tools.
- */
-export function filterToolNamesByScope(
-  toolNames,
-  blockedExtensions,
-  restrictedExtensions,
-) {
-  if (
-    (!blockedExtensions || blockedExtensions.size === 0) &&
-    (!restrictedExtensions || restrictedExtensions.size === 0)
-  ) {
-    return toolNames;
-  }
-  return toolNames.filter((name) => {
-    const info = _toolOwnership.get(name);
-    if (!info) return true; // seed tool, no owner, always passes
-    if (blockedExtensions?.has(info.extName)) return false;
-    if (restrictedExtensions?.has(info.extName)) {
-      const access = restrictedExtensions.get(info.extName);
-      if (access === "read") return info.verb === "see";
-    }
-    return true;
-  });
-}
-
-/**
- * Filter resolved tool objects by scope.
- * Tool objects have shape { type: "function", function: { name, ... } }
- */
-export function filterToolsByScope(
-  tools,
-  blockedExtensions,
-  restrictedExtensions,
-) {
-  if (
-    (!blockedExtensions || blockedExtensions.size === 0) &&
-    (!restrictedExtensions || restrictedExtensions.size === 0)
-  ) {
-    return tools;
-  }
-  return tools.filter((tool) => {
-    const name = tool?.function?.name || tool?.name;
-    if (!name) return true;
-    const info = _toolOwnership.get(name);
-    if (!info) return true;
-    if (blockedExtensions?.has(info.extName)) return false;
-    if (restrictedExtensions?.has(info.extName)) {
-      const access = restrictedExtensions.get(info.extName);
-      if (access === "read") return info.verb === "see";
-    }
-    return true;
-  });
-}
-

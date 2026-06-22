@@ -36,8 +36,7 @@
 import { registerOperation } from "../../../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { getRole } from "../registry.js";
-import { doVerb } from "../../../ibp/verbs/do.js";
-import { targetsFact } from "../../../ibp/factResult.js";
+import { stampsFact } from "../../../ibp/factResult.js";
 
 registerOperation("set-being-roleflow", {
   targets: ["being", "stance"],
@@ -116,22 +115,17 @@ registerOperation("set-being-roleflow", {
       validated.push(out);
     }
 
-    // Route the actual write through set-being so the fact stamps on
-    // the target being's reel. We're a thin typed front; the reducer +
-    // projection pipeline handles materialization.
-    await doVerb(
-      { kind: "being", id: beingId },
-      "set-being",
-      { field: "qualities.roleFlow", value: validated, merge: false },
-      { identity, moment },
-    );
-
-    return targetsFact({
+    // ONE act, ONE fact (23.md): set-being-roleflow returns its OWN fact — do:set-being-roleflow
+    // carrying the roleFlow as a qualities.roleFlow set — and the dispatcher stamps it on the target
+    // being's reel. The being reducer folds it via applySetQualities (set-being-roleflow is in
+    // SET_ACTIONS), exactly as the inner doVerb(set-being) used to. No inner doVerb, one fact, the fold
+    // materializes. (Was: an inner set-being write + a re-targeted audit fact = two facts for one act.)
+    return stampsFact({
       written:       true,
       beingId,
       clauseCount:   validated.length,
       unknownRoles:  unknownRoles.length ? unknownRoles : undefined,
       notes:         params?.notes || undefined,
-    }, { kind: "being", id: beingId });
+    }, { field: "qualities.roleFlow", value: validated, merge: false }, { kind: "being", id: beingId });
   },
 });

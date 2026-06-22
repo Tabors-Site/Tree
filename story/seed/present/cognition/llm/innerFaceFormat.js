@@ -2,56 +2,21 @@
 //
 // innerFaceFormat.js . LLM-side presentation of the canonical inner
 // face. Pure formatter . takes ctx.innerFace and renders the canSee
-// blocks into the prompt prose the LLM expects.
+// blocks into the prompt WORD the cognition reads.
 //
 // Per philosophy/names/innerFace.md: per-soul reformatting is allowed
 // at the presentation layer. The 2-fold beat builds the canonical face
 // once (orientation + role + position + capabilities + blocks); this
-// file turns the blocks into the [<label>]\n<JSON> shape the existing
-// prompt builder feeds the model.
+// file turns the blocks into WORD (present tense). The cognition speaks
+// Word; there is no JSON-block shape.
 //
 // String payloads pass through verbatim (a SEE resolver that framed
-// its own block keeps that framing). Object payloads JSON-pretty-
-// print under the block's label header. Empty / null faces and empty
-// blocks lists return "".
-
-/**
- * Format an inner face's blocks into the LLM prompt's perception
- * section. Pure function.
- *
- * @param {object|null} innerFace . the canonical face built by
- *   buildInnerFace (or null when no face is on hand).
- * @returns {string} the rendered block, or "" when nothing to render.
- */
-export function formatInnerFaceBlocksForPrompt(innerFace) {
-  if (!innerFace || !Array.isArray(innerFace.blocks) || innerFace.blocks.length === 0) {
-    return "";
-  }
-  const out = [];
-  for (const block of innerFace.blocks) {
-    if (!block || block.kind === "truncated") continue;
-    const rendered = renderBlock(block);
-    if (rendered) out.push(rendered);
-  }
-  return out.join("\n\n");
-}
-
-function renderBlock(block) {
-  const label = block.label || block.key || "(block)";
-  const payload = block.payload;
-  if (payload == null) return null;
-  if (typeof payload === "string") {
-    return payload.length > 0 ? payload : null;
-  }
-  try {
-    return `[${label}]\n${JSON.stringify(payload, null, 2)}`;
-  } catch {
-    return null;
-  }
-}
+// its own Word keeps that framing). Object payloads render as readable
+// present-tense lines. Empty / null faces and empty blocks lists
+// return "".
 
 // ────────────────────────────────────────────────────────────────────
-// Word-native face render (14.md §1 + §4 step 1, the face half)
+// Word face render (14.md §1 + §4 step 1, the face half)
 // ────────────────────────────────────────────────────────────────────
 //
 // The being's face — the canSee blocks folded from the being/space/matter reels at its position

@@ -10,9 +10,9 @@
 // canStarResolver registry.
 //
 // `resolveBareCapabilities` runs the same resolver path the LLM
-// cognition's prompt builder uses (assemble.js's renderCapabilities)
-// but returns bare-name string lists instead of the rendered prompt
-// blocks. This is what the kernel consumes when building an
+// cognition's prompt builder uses (assemble.js's renderVocabularyAsWord)
+// but returns bare-name string lists instead of the rendered Word
+// vocabulary. This is what the kernel consumes when building an
 // innerFace . it doesn't care HOW the LLM rendered the menu, only
 // WHAT the being was licensed to dispatch at the moment.
 //

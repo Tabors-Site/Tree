@@ -116,8 +116,6 @@ export function createView() {
       onBeingProximity: (being, inRange) => onBeingProximity(being, inRange),
       onBeingActivate: (being) => onBeingActivate(being),
       onMatterActivate: (matter) => onMatterActivate(matter),
-      onMatterEnded: (info) => onMatterEnded(info),
-      onMatterPlaybackTick: (info) => onMatterPlaybackTick(info),
       isInputBlocked: isGameplayInputBlocked,
     });
     scene.onMove = (intent) => fireMove(intent);
@@ -410,48 +408,6 @@ export function createView() {
     } else {
       setHud("Move tool: click a tree or matter to pick it up.");
     }
-  }
-
-  // ── Matter lifecycle callbacks ──────────────────────────────────
-
-  async function onMatterEnded({ matterId }) {
-    if (!client() || !matterId || !state().discovery?.story) return;
-    try {
-      await client().do("/", "llm-assigner:complete-tutorial", { matterId });
-    } catch (err) {
-      console.warn("[3D] llm-assigner:complete-tutorial failed:", err?.code || err?.message || err);
-    }
-  }
-
-  async function onMatterPlaybackTick({ matterId, currentTime }) {
-    if (!client()?.connected || !matterId || !state().discovery?.story) return;
-    try {
-      await client().do("/", "llm-assigner:save-playback", { matterId, currentTime });
-    } catch (err) {
-      console.warn("[3D] save-playback failed:", err?.code || "", err?.message || err);
-    }
-  }
-
-  async function spawnLlmAssignerTutorial() {
-    if (!client()) throw new Error("Not connected");
-    if (!isAuthed()) throw new Error("Not authenticated. Sign in via @cherub first.");
-    if (!state().discovery?.story) throw new Error("Story not yet discovered");
-    if (!client().connected) {
-      const deadline = Date.now() + 3000;
-      while (!client().connected && Date.now() < deadline) {
-        await new Promise((r) => setTimeout(r, 100));
-      }
-      if (!client().connected) throw new Error("Portal socket not connected (after 3s)");
-    }
-    const result = await client().do("/", "llm-assigner:start-tutorial", {});
-    // Re-fetch — even when created:false this session may not have the
-    // matter rendered yet.
-    const address = state().currentAddress;
-    if (address) {
-      const desc = await client().see(address);
-      ctx.state.set({ descriptor: desc }, { reason: "live", resetCamera: false });
-    }
-    return result;
   }
 
   // ── Navigation hooks from the scene ─────────────────────────────
@@ -924,7 +880,6 @@ export function createView() {
       place:          state().discovery.story,
       currentSpaceId: state().descriptor?.address?.spaceId || null,
       onClose:        () => {},
-      onSpawnTutorial: spawnLlmAssignerTutorial,
     });
   }
 

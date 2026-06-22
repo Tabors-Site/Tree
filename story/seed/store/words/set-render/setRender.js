@@ -40,7 +40,8 @@
 
 import { registerOperation } from "../../../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
-import { detectTargetKind } from "../../../materials/_targetShape.js";
+import { detectTargetKind, targetIdOf } from "../../../materials/_targetShape.js";
+import { stampsFact } from "../../../ibp/factResult.js";
 import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
 
 // Self-register the co-located world strand so resolveRoleWord("render",
@@ -177,25 +178,20 @@ async function setRenderHandler(ctx) {
   const block = validateRenderBlock(params);
   const merge = params?.merge !== false;
 
-  // Sugar over set-<kind> with field locked to qualities.render. The
-  // inner doVerb runs through the normal DO dispatch (auth, audit,
-  // reducer-friendly fact shape). moment threads through so the
-  // inner fact joins the caller's moment's deltaF and rides the
-  // same actId. set-render itself is skipAudit so we don't stamp two
-  // facts for one logical write.
-  const { doVerb } = await import("../../../ibp/verbs/do.js");
-  const innerOp = `set-${kind}`;
-  return doVerb(
-    target,
-    innerOp,
+  // ONE act, ONE fact (23.md): set-render returns its OWN fact — do:set-render carrying the render
+  // block as a qualities.render set — and the dispatcher stamps it. The target's reducer folds it via
+  // applySetQualities (set-render is in SET_ACTIONS), exactly as the inner set-<kind> used to. The old
+  // sugar (an inner doVerb(set-<kind>) + skipAudit so the outer wouldn't double-stamp) is gone: the
+  // verb names what the being does ("set how this renders"), one fact, the fold derives the qualities.
+  return stampsFact(
+    { rendered: true },
     { field: "qualities.render", value: block, merge },
-    { identity, moment },
+    { kind, id: String(targetIdOf(target)) },
   );
 }
 
 registerOperation("set-render", {
   targets: ["matter", "space", "being"],
   ownerExtension: "seed",
-  skipAudit: true,
   handler: setRenderHandler,
 });

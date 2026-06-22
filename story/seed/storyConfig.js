@@ -424,6 +424,16 @@ registerOperation("delete-config", {
 // begin.js's existing SIGTERM handler closes WS / Mongo / HTTP and calls
 // process.exit. skipAudit: there's nothing to fold once the world stops,
 // and the act-chain can't observe its own server's death.
+//
+// TODO (23.md — library-reel batch): close-story is a STORY-LEVEL lifecycle
+// act. Closing the whole story halts EVERY future act across ALL its reels
+// (being, matter, fact) — it is NOT close-history (which ends one branch).
+// So its fact belongs on the LIBRARY reel (the out-of-history story reel,
+// like config), paired with a dispatch gate that refuses acts once the
+// story is closed — NOT a space-reel do-op. Grouped with config/history in
+// the library-reel batch; until that lands it stays a host-control shutdown
+// (the skipAudit is honest here precisely because the story-level fact has
+// no home yet — a space reel is the wrong reel).
 
 registerOperation("close-story", {
   targets: ["space"],

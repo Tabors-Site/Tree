@@ -13,13 +13,6 @@
 //                    or the budget closes. The moment must
 //                    happen somehow, or fail honestly.
 //
-//   MODEL QUIRKS     post-call salvage when a small model emits
-//                    tool-call text into its content field
-//                    instead of using the function-calling
-//                    protocol. Retry once without tools so the
-//                    moment produces something the rest of the
-//                    chain can carry forward.
-//
 //   RESPONSE PARSE   raw provider text into a structured payload
 //                    for internal-shape callers. Strict JSON
 //                    first, then fence-stripping, then tail-
@@ -29,10 +22,10 @@
 //                    delivers SOMETHING the moment can leave
 //                    behind.
 //
-// All three cluster at the same instant in the loop: call
-// (through failover), parse (with quirks normalized). They lived
-// inline in runTurn for years; pulling them here lets runTurn
-// read as the loop and this file own the call mechanics.
+// Both cluster at the same instant in the loop: call (through
+// failover), parse. They lived inline in runTurn for years; pulling
+// them here lets runTurn read as the loop and this file own the call
+// mechanics.
 //
 // I am not the being. I am the machinery the being's inference
 // passes through. runTurn is my only seed-side caller. External
@@ -270,117 +263,6 @@ export async function callWithFailover(callFn, primaryClient, beingId, rootId, o
   throw new Error(
     `All LLM connections failed (primary + ${stack.length} failover). Check your connections.`,
   );
-}
-
-// ─────────────────────────────────────────────────────────────────
-// MODEL QUIRKS
-// ─────────────────────────────────────────────────────────────────
-//
-// Salvage path. Some small local models emit tool-call syntax as
-// plain text in their content field instead of using the function-
-// calling protocol. I pop the malformed assistant message, retry
-// without tools and with a corrective system line, and surface the
-// model's actual prose. Better a partial answer than a silent drop.
-
-/**
- * Look at the assistant's message for the tool-call-in-content
- * quirk. When I find it, I retry through the semaphore (concurrency
- * limits still apply) and return one of three shapes:
- *
- *   { earlyReturn }   internal-mode caller exits with this payload
- *   { breakLoop }     chat-mode caller exits the loop
- *   null              no quirk; caller continues normally
- */
-export async function handleModelQuirks(
-  assistantMessage,
-  session,
-  tools,
-  openai,
-  MODEL,
-  ctx,
-  isInternal,
-  isCustom,
-  resolvedConnectionId,
-) {
-  if (
-    !assistantMessage.tool_calls?.length &&
-    assistantMessage.content &&
-    tools.length > 0
-  ) {
-    const _content = assistantMessage.content;
-    const looksLikeToolCall =
-      /<tool_call>/i.test(_content) ||
-      /<function[=\s]/i.test(_content) ||
-      /```tool_code/i.test(_content);
-
-    if (looksLikeToolCall) {
-      log.warn(
-        "LLM",
-        `Model returned tool-call text instead of function calling (${MODEL}). Retrying without tools.`,
-      );
-
-      // Drop the malformed message before retrying so the model
-      // doesn't see its own bad output in the context.
-      session.messages.pop();
-
-      const requestOpts = ctx.signal ? { signal: ctx.signal } : {};
-      const fallbackResponse = await openai.chat.completions.create(
-        {
-          model: MODEL,
-          messages: [
-            ...session.messages,
-            {
-              role: "system",
-              content:
-                "Answer the user's question directly in plain text. Do not use XML, function call, or tool_call syntax.",
-            },
-          ],
-        },
-        requestOpts,
-      );
-
-      const fallbackChoice = fallbackResponse?.choices?.[0];
-      if (fallbackChoice?.message?.content) {
-        session.messages.push(fallbackChoice.message);
-
-        if (isInternal) {
-          const raw = fallbackChoice.message.content;
-          const _llmProvider = {
-            isCustom,
-            model: MODEL,
-            connectionId: resolvedConnectionId || null,
-          };
-          try {
-            const p = JSON.parse(raw);
-            p._llmProvider = _llmProvider;
-            return { earlyReturn: p };
-          } catch {
-            // The model can't produce structured output. I return the
-            // raw text under action:"respond" so the caller still has
-            // something to show the user.
-            return {
-              earlyReturn: {
-                action: "respond",
-                content: raw,
-                _noToolSupport: true,
-                _llmProvider,
-              },
-            };
-          }
-        }
-      } else {
-        // The retry returned empty. Better to surface the original
-        // tool-call text than to drop the turn silently.
-        log.warn(
-          "LLM",
-          `Fallback retry produced no content for ${MODEL}. Using original text.`,
-        );
-        session.messages.push(assistantMessage);
-      }
-      return { breakLoop: true };
-    }
-  }
-  return null;
 }
 
 // ─────────────────────────────────────────────────────────────────

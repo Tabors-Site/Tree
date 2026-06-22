@@ -145,9 +145,8 @@
 // the LLM needs to know its frame of reference for this turn.
 
 import log from "../../../seedStory/log.js";
-import { getToolDescription, resolveTools } from "./tools.js";
 import { resolveCanStar } from "../../roles/canStarResolver.js";
-import { formatInnerFaceBlocksForPrompt, formatInnerFaceBlocksAsWord } from "./innerFaceFormat.js";
+import { formatInnerFaceBlocksAsWord } from "./innerFaceFormat.js";
 import { getSpaceName } from "../../../materials/space/spaces.js";
 // Side-effect import: registers the foundational seed SEE ops (place,
 // roles, tools, operations, identity, config, peers, extensions) in
@@ -181,14 +180,6 @@ export async function buildPrompt(role, ctx) {
     );
   }
 
-  // Hard gate: every tool the role declares (across all four verbs)
-  // must resolve to a registered description, or the role cannot run.
-  // A role with an unregistered or misnamed tool would ship a bare
-  // entry to the LLM and either confuse it or get it to invoke a
-  // nonexistent tool. Better to refuse the summon than to hand the
-  // model a broken prompt.
-  assertAllToolsResolve(role);
-
   // Read the live data that constitutes the being for this instant.
   // name comes from the Being row (the durable key); space comes
   // from currentSpace (where the being is standing for this summon);
@@ -220,22 +211,17 @@ export async function buildPrompt(role, ctx) {
     ? ""
     : await renderCanSeeBlocks(role, ctx);
 
-  // What this being can see, do, summon, and be — for this instant.
-  // The capability surface is per-summon; a role's tool set is a
-  // function of right-now, not a property the being carries between
-  // calls. ctx threads through so the can* resolver layer can expand
+  // What this being can speak — for this instant. The capability
+  // surface is per-summon; a role's vocabulary is a function of
+  // right-now, not a property the being carries between calls. ctx
+  // threads through so the can* resolver layer can expand
   // relationship-tokens (e.g. { rel: "parent" }) against the live
   // being and its lineage.
   //
-  // 14.md (the cognition speaks Word): a word-native role renders its
-  // vocabulary as WORD GRAMMAR (the words it may speak) instead of the
-  // JSON-schema capability menu. `wordNative` is the per-role transition
-  // flag — the JSON path is untouched for every other role until the
-  // Word path is proven and the JSON envelope retires (14.md §4.5). The
-  // end-state is always-Word, no flag (oneWordMode IS the system).
-  const capabilities = role.wordNative
-    ? await renderVocabularyAsWord(role, ctx)
-    : await renderCapabilities(role, ctx);
+  // 14.md (the cognition speaks Word), unconditional: the role renders
+  // its vocabulary as WORD GRAMMAR (the words it may speak) — there is
+  // no JSON-schema capability menu. oneWordMode IS the system.
+  const capabilities = await renderVocabularyAsWord(role, ctx);
 
   const body = await Promise.resolve(role.prompt(ctx));
   const bodyStr = typeof body === "string" ? body.trim() : "";
@@ -283,95 +269,30 @@ export async function buildPrompt(role, ctx) {
 // canSee face blocks (preloaded perception)
 // ────────────────────────────────────────────────────────────────────
 
-function renderCanSeeBlocks(role, ctx) {
+function renderCanSeeBlocks(_role, ctx) {
   // canSee was already resolved at the 2-fold beat into ctx.innerFace.blocks — the facts folded
   // from the being/space/matter reels at the being's position. We reformat those blocks for the
-  // prompt: a word-native role gets them as WORD (present tense; formatInnerFaceBlocksAsWord), every
-  // other role keeps the [<label>]\n<JSON> shape (14.md §4 step 1, the face half).
-  return role?.wordNative
-    ? formatInnerFaceBlocksAsWord(ctx?.innerFace)
-    : formatInnerFaceBlocksForPrompt(ctx?.innerFace);
+  // prompt as WORD (present tense; 14.md §4 step 1, the face half). The cognition speaks Word; the
+  // [<label>]\n<JSON> shape retired with the JSON envelope.
+  return formatInnerFaceBlocksAsWord(ctx?.innerFace);
 }
 
 // ────────────────────────────────────────────────────────────────────
-// Capability sections
+// Vocabulary (the words the being may speak)
 // ────────────────────────────────────────────────────────────────────
 
-async function renderCapabilities(role, ctx) {
-  const sections = [];
-
-  // Expand can* entries through the resolver layer BEFORE rendering.
-  // Most entries pass through unchanged (literal strings or
-  // {name, description} objects); relationship tokens like
-  // {rel: "parent"} or {pattern: "<glob>"} expand to concrete entries
-  // via registered resolvers. Today the resolver registry is empty;
-  // every entry passes through as a literal. Future resolvers
-  // (lineage, predecessor, child-list, path-pattern) plug in there
-  // without changing this assembler or the role specs.
-  const beingCtx = {
-    being: ctx?.being || null,
-    role,
-    currentSpace: ctx?.currentSpace || null,
-    rootId: ctx?.rootId || null,
-    name: ctx?.name || null,
-  };
-  // canSee is preloaded into the face by renderCanSeeBlocks; it is
-  // not a capability menu. The remaining three verbs (do / summon /
-  // be) stay as menus . the LLM picks one to act through.
-  //
-  // canSummon's `as: "receiver"` entries are receiver-side declarations
-  // (what this role accepts when targeted), not menu items. Only
-  // actor-side entries (default `as: "actor"`) belong in the LLM's
-  // "what I can call" menu. See seed/RolesAreAuth.md "canSummon: one
-  // field, two surfaces."
-  const actorSummonEntries = Array.isArray(role.canSummon)
-    ? role.canSummon.filter(
-        (e) => typeof e !== "object" || (e?.as ?? "actor") === "actor",
-      )
-    : null;
-  const [doEntries, summonEntries, beEntries] = await Promise.all([
-    resolveCanStar(role.canDo, beingCtx),
-    resolveCanStar(actorSummonEntries, beingCtx),
-    resolveCanStar(role.canBe, beingCtx),
-  ]);
-
-  const doBlock = renderCapabilityList(doEntries, "do", {
-    dispatcher: "do",
-    targetWord: "action",
-  });
-  const summonBlock = renderCapabilityList(summonEntries, "call", {
-    dispatcher: "call",
-    targetWord: "stance",
-  });
-  const beBlock = renderCapabilityList(beEntries, "be", {
-    dispatcher: "be",
-    targetWord: "operation",
-    suffix: "(for creating new beings)",
-  });
-
-  if (doBlock) sections.push(doBlock);
-  if (summonBlock) sections.push(summonBlock);
-  if (beBlock) sections.push(beBlock);
-
-  // Exit gate. Architectural: the seed enforces this. Render after the
-  // capability list so the LLM sees it as the closing instruction in
-  // the capabilities section.
-  const exitBlock = renderExit(role);
-  if (exitBlock) sections.push(exitBlock);
-
-  if (sections.length === 0) return "";
-
-  return "and can:\n\n" + sections.join("\n\n");
-}
-
-// 14.md §1 + §4 step 1 — the WORD-NATIVE vocabulary render. The being's granted words are emitted
-// as WORD GRAMMAR (the verb + the word-name + an arg shape) — the vocabulary it may speak this
-// moment — not as JSON tool schemas. The cognition picks ONE declared word and speaks it as Word
-// (in-vocabulary by construction: the "guide" of 13.md §1). The same can* data renderCapabilities
-// uses; the difference is the shape — Word the cognition speaks, not a menu it tool-calls. The
-// output is then parsed by the word parser → runRoleWord (14.md §4 step 2), the same path cherub.word
-// runs. This collapses the JSON envelope (executeTool / seedDoTool / the parameters blocks) to terser
-// Word grammar + the shared fold — `do create-space .config.`, not a JSON.stringify'd arguments blob.
+// 14.md §1 + §4 step 1 — the WORD vocabulary render, unconditional. The being's granted words are
+// emitted as WORD GRAMMAR (the verb + the word-name + an arg shape) — the vocabulary it may speak
+// this moment — not as JSON tool schemas. The cognition picks ONE declared word and speaks it as
+// Word (in-vocabulary by construction: the "guide" of 13.md §1). The output is then parsed by the
+// word parser → runRoleWord (14.md §4 step 2), the same path cherub.word runs. There is no JSON
+// envelope — `do create-space .config.`, not a JSON.stringify'd arguments blob.
+//
+// canSee is preloaded into the face by renderCanSeeBlocks; it is not a capability menu. The three
+// act-capable verbs (do / call / be) are the speakable vocabulary. canSummon's `as: "receiver"`
+// entries are receiver-side declarations (what this role accepts when targeted), not speakable
+// words — only actor-side entries (default `as: "actor"`) belong here. Relationship tokens
+// ({rel:"parent"}, {pattern:"<glob>"}) expand to concrete entries via the canStar resolver layer.
 export async function renderVocabularyAsWord(role, ctx) {
   const beingCtx = {
     being: ctx?.being || null,
@@ -380,7 +301,7 @@ export async function renderVocabularyAsWord(role, ctx) {
     rootId: ctx?.rootId || null,
     name: ctx?.name || null,
   };
-  // canSummon receiver-side declarations are not speakable words (see renderCapabilities).
+  // canSummon receiver-side declarations are not speakable words.
   const actorSummonEntries = Array.isArray(role.canSummon)
     ? role.canSummon.filter((e) => typeof e !== "object" || (e?.as ?? "actor") === "actor")
     : null;
@@ -403,101 +324,6 @@ export async function renderVocabularyAsWord(role, ctx) {
     "",
     "You may also `see <address>.` to look elsewhere. Speak your one Word.",
   ].join("\n");
-}
-
-function renderExit(role) {
-  const required = role?.exit?.requires;
-  if (!required) return null;
-  return [
-    "exit:",
-    `  Your turn ends after \`${required}\` fires. Call it exactly once;`,
-    `  the loop will not let you end without it.`,
-  ].join("\n");
-}
-
-/**
- * Render one of the four can* lists into the prompt body.
- *
- * Symmetric across the four verbs. Each can* list describes what the
- * role is licensed for at that verb . canSee lists addresses the
- * role may read, canDo lists action names it may invoke, canSummon
- * lists stance targets it may address, canBe lists BE operations.
- *
- * The LLM dispatches through ONE generic verb-tool per verb
- * (`see`, `do`, `summon`, `be`) registered by the seed. The can*
- * entries are descriptors the LLM reads to know what's allowed; the
- * substrate role-walk at the verb is the actual gate.
- *
- * Entry shapes accepted (in either pattern):
- *
- *   "name"                   . either a registered tool name (gets a
- *                              description lookup) or a free-form
- *                              descriptor (rendered as-is).
- *
- *   { name, description }    . self-describing object. Either field
- *                              may also be `stance`/`address`/`action`/
- *                              `target` for ergonomic clarity.
- *
- * Pattern A (ergonomic wrappers): extensions can keep registering
- * specific tools like `step` that pre-fill verb args, and list them
- * in canDo. The description lookup still works.
- *
- * Pattern B (verb-generic): roles list bare descriptors and rely on
- * the seed verb-tool. No tool registration per entry needed.
- */
-function renderCapabilityList(names, label, opts = {}) {
-  if (!Array.isArray(names) || names.length === 0) return null;
-  const { dispatcher, targetWord, suffix } = opts;
-  const headerExtras = [];
-  if (dispatcher) {
-    headerExtras.push(
-      `call via the \`${dispatcher}\` tool with the ${targetWord || "name"} below`,
-    );
-  }
-  if (suffix) headerExtras.push(suffix);
-  const header = headerExtras.length > 0
-    ? `${label}: (${headerExtras.join("; ")})`
-    : `${label}:`;
-  const lines = names.map((entry) => renderCapabilityEntry(entry));
-  return [header, ...lines].join("\n");
-}
-
-function renderCapabilityEntry(entry) {
-  if (entry && typeof entry === "object") {
-    const name =
-      entry.name || entry.stance || entry.address || entry.action || entry.target || "(unnamed)";
-    const desc = entry.description ? `: ${entry.description}` : "";
-    return `  - ${name}${desc}`;
-  }
-  if (typeof entry === "string") return `  - ${entry}`;
-  return `  - ${String(entry)}`;
-}
-
-/**
- * Verify the four seed verb-tools are registered. The role declares
- * nothing tool-name-shaped . the can* lists are descriptors, and
- * tool exposure is derived from which can* lists are populated.
- * The only thing to assert is that the seed registered its four
- * verb-tools at genesis. If those are missing, no role can run.
- */
-function assertAllToolsResolve(_role) {
-  // SEE retired from the LLM toolset. canSee preloads into the face;
-  // the being does not pick from a menu and the verb is not exposed
-  // as an action. To see more, move (DO), change role (BE /
-  // roleFlow), or edit the role spec.
-  const SEED_VERB_TOOLS = ["do", "call", "be"];
-  const missing = SEED_VERB_TOOLS.filter((name) => !getToolDescription(name));
-  if (missing.length === 0) return;
-  log.error(
-    "Prompt",
-    `Seed verb-tools missing from the registry: ${missing.join(", ")}. ` +
-      `Genesis did not register them. No LLM role can run.`,
-  );
-  throw new Error(
-    `Seed verb-tools missing from the registry: ${missing.join(", ")}. ` +
-      `genesis.js must register seedDoTool / seedCallTool / seedBeTool ` +
-      `before any LLM role can be summoned.`,
-  );
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -640,79 +466,3 @@ export async function buildSystemPromptForRole(role, ctx) {
 
   return `${positionBlock}${rolePrompt}${timeBlock}`;
 }
-
-/**
- * Resolve the OpenAI-compatible tools array for a role at this moment.
- *
- * The tool surface is DERIVED from the role's four can* lists.
- *
- *   canSee non-empty    → expose the `see`    tool
- *   canDo non-empty     → expose the `do`     tool
- *   canSummon non-empty → expose the `summon` tool
- *   canBe non-empty     → expose the `be`     tool
- *
- * That's it. Every LLM provider call is one of see / do / summon / be.
- * The role's four can* lists are the body; the tool surface follows.
- *
- * Tree-tool config (`qualities.tools.{allowed,blocked}`) and the
- * role's permissions still gate the final list . a position can
- * tighten the four verbs available inside its subtree, and the
- * role's permissions filter drops tools whose verb-tag isn't on the
- * role.
- */
-export function resolveToolsForRole(
-  role,
-  treeToolConfig = null,
-  rolePermissions = null,
-) {
-  if (!role) return [];
-
-  // The three act-capable verbs are conditional on the role declaring
-  // a non-empty list. canSee is NOT a tool — it's preloaded into the
-  // face by renderCanSeeBlocks; the prior `canSee → push "see"` line
-  // was a dead reference (no see-verb tool was registered for it).
-  let toolNames = [];
-  if (Array.isArray(role.canDo) && role.canDo.length > 0) toolNames.push("do");
-  // canSummon entries may be `as: "actor"` (default — caller side; this
-  // role can SEND) or `as: "receiver"` (receive side — this role
-  // accepts when targeted). The summon TOOL only makes sense for
-  // actor entries; a role whose only canSummon is receive-side has
-  // nothing to initiate. See seed/RolesAreAuth.md "canSummon: one
-  // field, two surfaces."
-  if (Array.isArray(role.canSummon)
-      && role.canSummon.some((e) => typeof e !== "object" || (e?.as ?? "actor") === "actor")) {
-    toolNames.push("call");
-  }
-  if (Array.isArray(role.canBe) && role.canBe.length > 0) toolNames.push("be");
-
-  if (treeToolConfig) {
-    if (Array.isArray(treeToolConfig.allowed)) {
-      toolNames = [...new Set([...toolNames, ...treeToolConfig.allowed])];
-    }
-    if (Array.isArray(treeToolConfig.blocked)) {
-      const blockedSet = new Set(treeToolConfig.blocked);
-      toolNames = toolNames.filter((t) => !blockedSet.has(t));
-    }
-  }
-
-  const permsForFilter = Array.isArray(rolePermissions)
-    ? rolePermissions
-    : Array.isArray(role.permissions)
-      ? role.permissions
-      : null;
-  const acting = resolveTools(toolNames, permsForFilter);
-
-  // end-turn is universally available. It bypasses the role's canDo /
-  // canSummon / canBe gating and the verb-permission filter because
-  // it is moment-control, not a substrate verb — every cognition
-  // needs the option to release a moment without acting, regardless
-  // of what its role is licensed to dispatch. Appended AFTER the
-  // gated set so a role with an empty action surface still has at
-  // least end-turn (the cognition can always say "I see; I do not act").
-  const endTurn = resolveTools(["end-turn"], null);
-  // If end-turn somehow isn't registered (early boot, test harness),
-  // fall through silently — the implicit no-tool-call → cognitionSee
-  // path still works.
-  return endTurn.length > 0 ? [...acting, ...endTurn] : acting;
-}
-

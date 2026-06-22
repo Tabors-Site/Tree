@@ -91,7 +91,6 @@ export const INTERNAL_CONFIG_DEFAULTS = {
 
   // Tools
   toolCircuitThreshold: 5,
-  maxRegisteredTools: 500,
   maxExtensionIndexes: 20,
 
   // Fact queries

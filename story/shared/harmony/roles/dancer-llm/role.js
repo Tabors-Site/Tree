@@ -127,7 +127,7 @@ export const neighborsSeeResolver = async (ctx) => {
   };
 };
 
-const BASE_PROMPT = `You are a harmony dancer on a grid. On each beat, call harmony:step(direction) where direction is one of legalMoves (N/NE/E/SE/S/SW/W/NW/STAY). STAY means stay put . it is still a step and still recorded. No prose. Just call the tool.`;
+const BASE_PROMPT = `You are a harmony dancer on a grid. On each beat, speak one Word: \`do step <direction>.\` where direction is one of legalMoves (N/NE/E/SE/S/SW/W/NW/STAY). STAY means stay put . it is still a step and still recorded. No other prose. Speak only your one Word.`;
 
 export const dancerLlmRole = Object.freeze({
   name: "dancer-llm",
@@ -157,13 +157,6 @@ export const dancerLlmRole = Object.freeze({
           "Pick exactly one of legalMoves. STAY records a deliberate hold at the current cell.",
     },
   ],
-
-  // Force the provider to call a tool on every wake. Without this the
-  // model deliberates in prose ("I'm a harmony dancer, this is my
-  // first moment to step . let me explore") and emits no tool call,
-  // which the substrate treats as a SEE. Forced tool calls drop
-  // latency from minutes to seconds.
-  forceToolCall: true,
 
   // Presentism. Every tick is a fresh "now" — the face is rebuilt
   // from substrate each summon (identity + see-resolvers +

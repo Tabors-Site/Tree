@@ -554,7 +554,12 @@ async function getMatters({ spaceId, limit, offset, startDate, endDate, history 
   };
 }
 
-async function deleteMatterAndFile({
+// endMatter — retire a matter. The being only ever sees "delete matter"; there is no file work
+// (the old `deleteMatterAndFile` name was a fossil from when JS owned the blob 1:1 — content-
+// addressing dissolved that, so the bytes are never deleted here, only the reference is dropped and
+// casSweep reclaims at refcount-zero). Auth + storage accounting only; the do:end-matter fact is the
+// dispatcher's, and the matter reducer folds the ended state from it (23.md: one act, one fact).
+async function endMatter({
   matterId, beingId,
   actId = null, sessionId = null,
   moment = null,
@@ -591,22 +596,12 @@ async function deleteMatterAndFile({
     ? Math.ceil(matter.content.size / 1024)
     : 0;
 
-  // Fact-driven soft-delete. Two do:set facts on the matter's reel:
-  // spaceId=DELETED, beingId=DELETED. The per-reel append lock keeps
-  // them visible-together to a concurrent fold.
-  const setMatterField = (field, value) =>
-    emitFact({
-      verb:    "do",
-      act:     "set-matter",
-      through: String(beingId),
-      of:      { kind: "matter", id: String(matter._id) },
-      params:  { field, value },
-      actId,
-      sessionId,
-      history: history,
-    }, moment);
-  await setMatterField("spaceId", DELETED);
-  await setMatterField("beingId", DELETED);
+  // ONE act, ONE fact (23.md). end-matter stamps NO fact here: the do:end-matter the dispatcher
+  // auto-Fact lays IS the act, and the matter reducer FOLDS its two consequences — absent from its
+  // space (spaceId=DELETED, which isGone tombstones from) and unheld (beingId=DELETED). The old
+  // two hand-stamped set-matter facts were the 2-field-object false shape; the verb names the intent
+  // the being sees ("delete matter"), the reducer derives the rest. The bytes are never touched
+  // (content-addressed + shared; casSweep owns blob lifecycle) — this verb has no host/file effect.
   matter.spaceId = DELETED;
   matter.beingId = DELETED;
 
@@ -799,7 +794,7 @@ async function getMatterContent(matterId, opts = {}) {
 
 export {
   createMatter, editMatter, getMatter, getMatters, getMatterContent,
-  deleteMatterAndFile,
+  endMatter,
   transferMatter,
   listMattersAt,
 };

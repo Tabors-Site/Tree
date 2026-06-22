@@ -50,6 +50,7 @@ import { validateOrientation } from "./orientation.js";
 import { resolveBareCapabilities } from "../../roles/capabilities.js";
 import { resolveCanSee } from "./canSeeResolver.js";
 import { emptyWeave, addReel, mergeWeaves } from "./weave.js";
+import { streamRasterFace, hasRasterSubscribers } from "./rasterStream.js";
 
 const STORAGE_FIELD_MAX = 10_000;  // 10KB per string field . defensive
 const STORAGE_LIST_MAX  = 1_000;   // 1000 entries per list . defensive
@@ -193,7 +194,7 @@ export async function buildInnerFace(role, ctx = {}) {
     addReel(weave, { reelKind: "being", reelId: String(ctx.beingId), history });
   }
 
-  return {
+  const face = {
     orientation,
     role:         clampString(role?.name || null, STORAGE_FIELD_MAX),
     position:     position
@@ -210,6 +211,24 @@ export async function buildInnerFace(role, ctx = {}) {
     weave,
     origin:       "local",
   };
+
+  // Live rasterization (25.md Pillar D / 26.md). Stream the face's pieces
+  // in rasterization order (self -> capabilities -> world) to any watcher
+  // of this being -- pure observability over the fold just computed; the
+  // face returned is unchanged, and a moment nobody watches pays nothing.
+  // The one stream serves all three cognitions (portal / llm / scripted).
+  const rasterKey = ctx?.beingId != null ? String(ctx.beingId) : null;
+  if (hasRasterSubscribers(rasterKey)) {
+    streamRasterFace(rasterKey, {
+      role:         face.role,
+      position:     face.position,
+      capabilities: face.capabilities,
+      blocks:       face.blocks,
+      face,
+    });
+  }
+
+  return face;
 }
 
 /**

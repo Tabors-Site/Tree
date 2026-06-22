@@ -770,30 +770,14 @@ export async function deleteSpaceHistory(
     );
 
   try {
-    // Fact-driven soft-delete (2026-05-23, refit 2026-06-07). Two
-    // do:set facts on the space's reel: members.owner becomes the
-    // deleter (revival audit), parent flips to DELETED (the sentinel
-    // that hides the space from parent-query readers). The per-reel
-    // lock around the pair keeps them visible-together to a concurrent
-    // fold.
-    const { doVerb } = await import("../../ibp/verbs/do.js");
-    const opts = {
-      identity: beingId ? { beingId: String(beingId) } : I_AM,
-      moment: actId ? { actId } : null,
-    };
-    const target = { kind: "space", id: String(spaceId) };
-    await doVerb(
-      target,
-      "set-space",
-      { field: "owner", value: String(beingId) },
-      opts,
-    );
-    await doVerb(
-      target,
-      "set-space",
-      { field: "parent", value: DELETED },
-      opts,
-    );
+    // ONE act, ONE fact (23.md). end-space stamps NO fact here: the do:end-space the dispatcher
+    // auto-Fact lays IS the act, and the space reducer FOLDS its two consequences — parent flips to
+    // DELETED (the sentinel that hides the space from parent-query readers) and members.owner becomes
+    // the deleter (revival audit), derived from the fact's `through` (the actor IS the deleter). The
+    // old two hand-stamped set-space facts (owner, parent) were the false shape; the verb names the
+    // intent ("delete space"), the reducer derives the rest. The per-reel lock still brackets the
+    // soft-delete so a concurrent fold sees a coherent slot. deleteSpaceHistory is the end-space op's
+    // only caller (services.js merely re-exports it), so the op's one auto-Fact is the whole record.
     spaceToDelete.owner = String(beingId);
     spaceToDelete.parent = DELETED;
   } finally {
