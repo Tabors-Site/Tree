@@ -1,23 +1,3 @@
-# Rename finding — role → ABLE, roleflow → FLOW (summary)
-
-**Decision (Tabor, 2026-06-22): `role` → `able` · `roleflow` → `flow`.**
-
-**Why `able`.** A being isn't defined by what it IS but by what it CAN — it's a **bundle of ables** (cans). An *able* spans BOTH sides of the face: a can-SEE and a can-DO are both ables (see = able, do = able). That's why the search kept returning to it — every other candidate named only one facet:
-- **prism / lens** named the *feeling* (a bare signal → many marks/colors, "from nothing to something," the overwhelming-new-life punch) — but they're perception-side (*reveal*, not *enable*) and smell of sight ("lens keeps it feeling visual… it's off"). prism's root is *prisma = "sawn"* — cutting, **subtractive** ("that's cutting; I mean more forming potential").
-- **mantle** = a cloak that *wraps around* you; an able sits *in front* — the thing you see and act through.
-- **facet** = static, *possessed* not gained. **role** = a temporary *enacted* persona. **palette** = the menu, not the wearer.
-- **able** is the thing all of them gestured at: *"an able is any prism through which the Name encounters or affects the Word."* Revelation and capability arrive together (color-vision glasses don't just reveal — they grant a new *can*). Stackable, borne, changes moment to moment, additive (opens new cans), gives character + expanded options — every original criterion, and it spans see+do.
-
-**`flow` (roleflow → flow).** The able's flow. *"ABLE FLOWS = FLOW = what moves the world through beings"* — flow is the able in motion (the old roleflow's conditional/sequencing, now just the able's flow).
-
-**Audit phrasing:** *"which **ables** did your name have when it made that act through that being."*
-
-**Build note:** this is a doctrine decision; the code-wide `role → able` / `roleFlow → flow` rename is a mechanical sweep for later (biggest pieces first). New code keeps `role` until the sweep, to stay consistent.
-
-===
-
-## The raw dialogue
-
 what is the better word for role and roleflow. i know flow can replace roleflow but role is like a kind of noun that dictates who the being is, and they can be stacked. its like a title etc but im trying to find perfect word
 
 For roleflow → flow, yes — clean. Once the noun is right, the role's flow is just its flow. The noun is the real question.
