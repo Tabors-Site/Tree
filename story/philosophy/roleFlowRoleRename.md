@@ -531,3 +531,18 @@ That may be why your intuition keeps returning to it. "Prism" describes the feel
 
 ABLE = ROLE
 FLOW = ABLE FLOWS = FLOW = WHAT MOVES THE WORLD THROUGH BEINGS
+
+====
+
+the clincher: "able" is already the suffix.
+
+-able (Latin -abilis, "fit to, capable of") is the mark english uses to mint a capacity out of a verb. seeable, doable, knowable, lovable. so the noun and the suffix are one morpheme doing one job at two scales:
+
+  see + able  →  seeable   (the able for seeing)
+  do  + able  →  doable    (the able for doing)
+
+a being's ables ARE its -able verbs. "which ables did your name have when it made that act through that being" reads, underneath, as: what was -able to it? the capacity and the grammar that marks the capacity collapse into the same word.
+
+this is why able beats prism, lens, mantle, facet. those name the feeling of the thing — the worn glass, the revealed color, the cloak. able names the thing AND carries its own grammar: grant a being the see-able and "see" becomes "seeable" for it, in one move. the word self-describes, like the rest of the word does. the verb wears the able and becomes the can.
+
+mantle wraps. lens is only sight. prism only reveals. able does all of it and conjugates.

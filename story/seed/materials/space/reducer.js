@@ -15,7 +15,7 @@
 // The root space has `position: null`. This lets `findByPosition(P)`
 // return every child space of P alongside beings and matter at P.
 
-import { applySetQualities, applySetField, applyCreateSpace, applyMove } from "../reducerHelpers.js";
+import { applySetQualities, applySetField, applyCreateSpace, applyMakeHeaven, applyMove } from "../reducerHelpers.js";
 import { DELETED } from "./heavenSpaces.js";
 
 /**
@@ -44,6 +44,11 @@ export function reduce(state, fact) {
   // do:birth — derives the initial row state from spec. No-op for
   // legacy birth facts that lack .spec; safe to compose now.
   next = applyCreateSpace(next, fact);
+
+  // do:make-heaven — the HEAVEN WORD. AFTER applyCreateSpace so a space's
+  // birth (heavenSpace:null) lands first; this sets the real flag. Heaven-ness
+  // is decomposed out of birth — its own fact, exactly like owner/qualities.
+  next = applyMakeHeaven(next, fact);
 
   // do:set — scalar fields (name, type, parent, owner, ...) and
   // qualities paths. Both appliers gate themselves on their own

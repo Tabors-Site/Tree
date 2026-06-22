@@ -364,6 +364,37 @@ registerOperation("create-space", {
   handler: createSpaceHandler,
 });
 
+// ─────────────────────────────────────────────────────────────────────
+// make-heaven — THE HEAVEN WORD
+// ─────────────────────────────────────────────────────────────────────
+//
+// Heaven-ness is a separable attribute decomposed OUT of a space's birth
+// (the same shape as owner/qualities): a being makes a space a heaven space
+// with its OWN do — one fact on the space's reel — which applyMakeHeaven
+// folds onto state.heavenSpace. create-space.word lays it as an inner act
+// after the birth (the place root, heaven `.`, the tier-3 regions, the
+// host/factory children all born this one way). No able grant exists for
+// this op, so authorize() fails it closed for everyone — only the I-Am
+// (which short-circuits authorize) can mark a heaven space, preserving the
+// genesis-only, fixed-topology, immutable-after-genesis heaven invariant.
+registerOperation("make-heaven", {
+  targets: ["space"],
+  ownerExtension: "seed",
+  factAction: "make-heaven",
+  args: {
+    heavenSpace: { type: "text", label: "Heaven marker (which heaven space)", required: true },
+  },
+  handler: ({ target, params }) => {
+    const spaceId = String(targetIdOf(target));
+    const which = params?.heavenSpace;
+    if (!which || typeof which !== "string") {
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "make-heaven requires a heavenSpace marker");
+    }
+    // ONE act, ONE fact: the dispatcher stamps do:make-heaven; applyMakeHeaven folds heavenSpace.
+    return stampsFact({ spaceId, heavenSpace: which }, { heavenSpace: which }, { kind: "space", id: spaceId });
+  },
+});
+
 registerOperation("set-space", {
   targets: ["space", "stance"],
   ownerExtension: "seed",

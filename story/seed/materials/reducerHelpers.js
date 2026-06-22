@@ -541,15 +541,20 @@ export function applyCreateSpace(state, fact) {
   const spec = fact?.params;
   if (!spec || typeof spec !== "object") return state;
 
-  // Owner of the new space. Genesis spaces (heaven + heaven children)
-  // seed owner to I-Am; user trees seed owner to their creator. The
-  // spec carries owner directly; ownerId is accepted as a shorthand
-  // alias.
+  // Owner + heavenSpace are DECOMPOSED OUT of the birth: create-space.word lays
+  // them as their OWN do's (a set-space owner + a make-heaven). In the create-
+  // matter birth-as-auto-fact shape those inner do's seal in the SAME moment but
+  // BEFORE this birth fact (the op's auto-Fact lands last in deltaF). So PRESERVE
+  // an already-set owner/heavenSpace here — never null it from the slim .word
+  // birth spec — making the fold order-independent for these two. The fat
+  // direct-emit birth facts (graft replay + any pre-cutover caller) still carry
+  // owner/heaven in spec and win via the spec.* branch; the slim .word birth
+  // omits them and the before-facts win via state.*.
   const initialOwner = spec.owner
     ? String(spec.owner)
     : spec.ownerId
       ? String(spec.ownerId)
-      : null;
+      : (state.owner ?? null);
 
   return {
     ...state,
@@ -557,7 +562,7 @@ export function applyCreateSpace(state, fact) {
     type:         spec.type ?? null,
     parent:       spec.parent ?? spec.parentId ?? null,
     owner:        initialOwner,
-    heavenSpace:    spec.heavenSpace ?? null,
+    heavenSpace:  spec.heavenSpace ?? state.heavenSpace ?? null,
     size:         spec.size ?? null,
     // Space's own coord within its parent. The createSpace handler
     // assigns a random coord inside the parent's size when none was
@@ -604,6 +609,23 @@ export function applyCreateSpace(state, fact) {
  * motion, set-being:position for cross-space). `move` is what beings
  * do TO things in their world.
  */
+/**
+ * do:make-heaven — the HEAVEN WORD. Heaven-ness is a separable attribute
+ * decomposed OUT of a space's birth (the same shape as owner/qualities): a
+ * being makes a space a heaven space with its own do, its own fact on the
+ * space's reel. create-space.word lays it as an inner act after the birth.
+ * Only the I-Am can author it (the op has no able grant, so it fails closed
+ * for everyone else — the genesis-only heaven-creation gate). Wired AFTER
+ * applyCreateSpace in the space reducer so the birth (heavenSpace:null) lands
+ * first and this sets the real flag.
+ */
+export function applyMakeHeaven(state, fact) {
+  if (fact?.act !== "make-heaven" || fact?.of?.kind !== "space") return state;
+  const which = fact?.params?.heavenSpace;
+  if (typeof which !== "string" || !which) return state;
+  return { ...state, heavenSpace: which };
+}
+
 export function applyMove(state, fact) {
   if (fact?.verb !== "do" || fact?.act !== "move") return state;
   const kind = fact?.of?.kind;

@@ -134,12 +134,116 @@ function clampBlock(block, fieldMax) {
   };
 }
 
+// ── Past-fold: the inward / half face, folded from the act-chain ──
+//
+// INNER-FOLD §2. When a being folds INWARD the world drops out and its
+// OWN act-chain stands in as the face — the SAME rasterize, only the
+// source is the being's acts instead of the space/matter/being reels.
+// HALF keeps the world and appends the braid-walked recall. These
+// render the act rows into the SAME { key, source, label, payload }
+// block shape the world reads use, so the past-face is just more face
+// blocks — one face-fold, source by orientation, no separate codepath.
+// (Replaces the old cognition/llm pastFaceRender + spliced pastFaceBlock.)
+// No wall-clock: an act's place in the chain (its index) is its "when".
+
+const PAST_BANNER =
+  "(older acts; less context available — entries below predate inner-face capture)";
+
+function formatPastMessage(msg) {
+  if (msg == null) return "";
+  if (typeof msg === "string") return msg.trim();
+  if (typeof msg === "object") {
+    if (typeof msg.content === "string") return msg.content.trim();
+    try { return JSON.stringify(msg.content ?? msg); } catch { return ""; }
+  }
+  return String(msg);
+}
+
+function formatPastCapList(list) {
+  if (!Array.isArray(list) || list.length === 0) return "[]";
+  const parts = list.map(v =>
+    v && typeof v === "object" && v.kind === "truncated"
+      ? `+${v.count} more`
+      : (typeof v === "string" ? v : String(v ?? "")),
+  );
+  return `[${parts.join(", ")}]`;
+}
+
+// Render one past act into a Word payload from its committed innerFace
+// (clamped for the render budget). Index is the act's chain position —
+// its "when" — not a wall-clock. Legacy acts (no captured face) render
+// reduced (index + in/out).
+function renderPastEntry(index, row) {
+  const snap = clampForRender(row?.innerFace);
+  const inLine = formatPastMessage(row?.startMessage);
+  const outLine = formatPastMessage(row?.endMessage);
+  if (!snap) {
+    return [
+      `[${index}]`,
+      inLine ? `  in:  ${inLine}` : null,
+      outLine ? `  out: ${outLine}` : null,
+    ].filter(Boolean).join("\n");
+  }
+  const ableSuffix = snap.able ? `  able: ${snap.able}` : "";
+  const where = snap.position?.name ? `at ${snap.position.name}` : null;
+  const could = `do=${formatPastCapList(snap.capabilities?.canDo)}, summon=${formatPastCapList(snap.capabilities?.canSummon)}, be=${formatPastCapList(snap.capabilities?.canBe)}`;
+  const blockKeys = Array.isArray(snap.blocks)
+    ? snap.blocks.filter(b => b && b.kind !== "truncated").map(b => b?.label || b?.key || null).filter(Boolean)
+    : [];
+  const lines = [`[${index}]${ableSuffix}`];
+  if (where) lines.push(`  ${where}`);
+  lines.push(`  could: ${could}`);
+  if (blockKeys.length) lines.push(`  saw: ${blockKeys.join(", ")}`);
+  if (inLine) lines.push(`  in:  ${inLine}`);
+  if (outLine) lines.push(`  out: ${outLine}`);
+  return lines.join("\n");
+}
+
+// Inward: the act-chain (oldest first) as face blocks, one per act.
+function inwardBlocks(actChain) {
+  const acts = Array.isArray(actChain) ? actChain : [];
+  if (acts.length === 0) {
+    return [{ key: "inward-fold", source: "past", label: "Inward fold", payload: "Your act-chain is empty. No prior acts to reflect on." }];
+  }
+  const out = acts.map((row, i) => ({
+    key: `act-${i + 1}`, source: "past", label: `act ${i + 1}`, payload: renderPastEntry(i + 1, row),
+  }));
+  if (acts.some(r => !r?.innerFace)) {
+    out.unshift({ key: "inward-banner", source: "past", label: "note", payload: PAST_BANNER });
+  }
+  return out;
+}
+
+// Half: the braid-walked recall as face blocks, grouped by stitched reel.
+function halfBlocks(recalled) {
+  const acts = Array.isArray(recalled) ? recalled : [];
+  if (acts.length === 0) return [];
+  const byReel = new Map();
+  for (const row of acts) {
+    const key = row?.stitchedReel ? `${row.stitchedReel.kind}:${row.stitchedReel.id}` : "(unknown)";
+    if (!byReel.has(key)) byReel.set(key, []);
+    byReel.get(key).push(row);
+  }
+  const out = [];
+  let index = 1;
+  for (const [reelKey, rows] of byReel) {
+    out.push({
+      key: `recall-${reelKey}`, source: "past", label: `acts that touched ${reelKey}`,
+      payload: rows.map(r => renderPastEntry(index++, r)).join("\n\n"),
+    });
+  }
+  return out;
+}
+
 /**
  * Build the canonical inner face for one moment.
  *
  * Called from the 2-fold beat (foldBeat.runFoldBeat) AFTER foldPlace
- * has produced the forward face. Resolves capabilities and the able's
- * canSee list ONCE, here, and returns the unified face object.
+ * has produced the fold at this orientation. Resolves capabilities and
+ * the orientation's block source ONCE, here, and returns the unified
+ * face object. The blocks come from the orientation's source: forward =
+ * the world (canSee reels), inward = the being's own act-chain, half =
+ * world + the braid-walked recall — one rasterize, source by orientation.
  *
  * Inputs:
  *   able . the active able spec
@@ -156,13 +260,19 @@ export async function buildInnerFace(able, ctx = {}) {
   // string lists.
   const capabilities = await resolveBareCapabilities(able, ctx);
 
-  // canSee . the able's declared perception this moment. Resolved
-  // once, here. Each block is { key, source, label, payload }. An
-  // inward orientation drops the world: canSee is the world; we
-  // skip the resolution and let the inward past-face stand alone.
+  // Blocks . the face's perception this moment, from the ORIENTATION's
+  // source (one rasterize, source by orientation):
+  //   forward — the world: the able's canSee reels, resolved here.
+  //   inward  — the world drops out; the being's own act-chain stands in
+  //             as the face (INNER-FOLD §2) — folded into the same blocks.
+  //   half    — the world AND the braid-walked recall, appended.
+  // Each block is { key, source, label, payload } whether the source is
+  // the world reels or the act-chain.
   let blocks = [];
   let canSeeWeave = emptyWeave();
-  if (orientation !== "inward" && Array.isArray(able?.canSee) && able.canSee.length > 0) {
+  if (orientation === "inward") {
+    blocks = inwardBlocks(foldedFace?.actChain);
+  } else if (Array.isArray(able?.canSee) && able.canSee.length > 0) {
     try {
       const resolved = await resolveCanSee(able.canSee, ctx);
       blocks = Array.isArray(resolved?.blocks) ? resolved.blocks : [];
@@ -171,6 +281,9 @@ export async function buildInnerFace(able, ctx = {}) {
       blocks = [];
       canSeeWeave = emptyWeave();
     }
+  }
+  if (orientation === "half") {
+    blocks = [...blocks, ...halfBlocks(foldedFace?.recalled)];
   }
 
   const position = extractPosition(foldedFace);
