@@ -274,13 +274,19 @@ export async function runRoleWord(
     through = null,
     iam = "i-am",
     env = {},
+    identity: identityOverride = null,
   },
 ) {
   moment.deltaF ??= [];
   const being = through != null;
-  const identity = being
-    ? { beingId: String(through), name: iam, nameId: iam } // I_AM through the being
-    : moment.identity || { beingId: null }; // the caller (default)
+  // identity override (opt-in): a being acting AS ITSELF — e.g. a word-native LLM cognition emitting
+  // its own Word (14.md) — passes its own {beingId, name} so the acts attribute to the being (through
+  // = beingId) and sign by its OWN Name (by = moment.actorAct.by), NOT I_AM. Without it: through-mode
+  // = I_AM through the being (seed-internal), caller-mode = moment.identity (the session caller).
+  const identity = identityOverride
+    || (being
+      ? { beingId: String(through), name: iam, nameId: iam } // I_AM through the being
+      : moment.identity || { beingId: null }); // the caller (default)
   const wordCtx = {
     ...moment,
     identity,
