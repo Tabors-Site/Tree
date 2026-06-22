@@ -44,9 +44,9 @@
 //   2. Wire this transport into boot: import + start it from
 //      genesis.js (or behind a story-config flag), passing the
 //      express app + the authenticate seat for inbound calls.
-//   3. The per-tool JSON schema is now produced by zod 4's built-in
-//      z.toJSONSchema (the retired zod-to-json-schema package is gone),
-//      so confirm the enumeration in "Shape" step 2 still matches.
+//   3. Each op carries its own JSON schema on its spec (seed/ibp/
+//      operations.js) — there is no zod step anymore. Confirm the
+//      enumeration in "Shape" step 2 still reads that schema directly.
 //
 // Nothing imports this file at boot, so the missing dependency does
 // not affect the running story; it only matters the day you turn
@@ -60,7 +60,7 @@
 //   1. Open an McpServer (from @modelcontextprotocol/sdk).
 //   2. Enumerate the DO operation registry (seed/ibp/operations.js).
 //      For each op, register it with the MCP server using:
-//        - the op's JSON schema (built by zod 4's z.toJSONSchema).
+//        - the op's JSON schema (stored directly on the op spec).
 //        - a thin handler that dispatches through the verb dispatcher
 //          and wraps the return as MCP's { content: [{ type: "text", text }] }.
 //   3. Mount three HTTP routes (POST / GET / DELETE /mcp) protected

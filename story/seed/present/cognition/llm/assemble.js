@@ -202,13 +202,11 @@ export async function buildPrompt(able, ctx) {
   // Resolved fresh at every summon . the matter moves and the
   // being's read of it is only ever now.
   //
-  // Inward orientation suppresses the preload — INNER-FOLD §2:
-  // "the world drops out" — so the past-face block stands in place
-  // of the world-data. The caller (llmMoment) sets suppressCanSee
-  // via ctx when ω=inward.
-  const preloaded = ctx?.suppressCanSee
-    ? ""
-    : await renderCanSeeBlocks(able, ctx);
+  // The face section. renderCanSeeBlocks renders ctx.innerFace.blocks —
+  // which buildInnerFace already sourced by ORIENTATION (forward = the
+  // world reels, inward = the being's act-chain, half = both). One call
+  // covers every orientation; no suppression, no separate past-face.
+  const preloaded = await renderCanSeeBlocks(able, ctx);
 
   // What this being can speak — for this instant. The capability
   // surface is per-summon; a able's vocabulary is a function of
@@ -224,17 +222,6 @@ export async function buildPrompt(able, ctx) {
 
   const body = await Promise.resolve(able.prompt(ctx));
   const bodyStr = typeof body === "string" ? body.trim() : "";
-
-  // Past-face block. Empty on forward. Populated by llmMoment on
-  // half / inward (INNER-FOLD §2). Half appends a block of past acts
-  // surfaced by the braid-walk alongside the live world; inward
-  // replaces the world face with the act-chain in act-order and the
-  // forward path's preloaded canSee blocks are passed empty so the
-  // world drops out. The renderer (renderInwardPastFace /
-  // renderHalfPastFace, in llmMoment.js) has already applied the
-  // render-time clamps to the per-act innerFace; we just
-  // splice the rendered string in.
-  const pastFaceBlock = typeof ctx?.pastFaceBlock === "string" ? ctx.pastFaceBlock : "";
 
   // Assemble — the SYSTEM message: the being's stable state for this
   // instant. The order is stable -> volatile so an OpenAI-compatible
@@ -255,7 +242,7 @@ export async function buildPrompt(able, ctx) {
   // wants the clock takes a time-able/see; it is not baked into the
   // canonical face. (Baking it in also broke prefix reuse: a fresh
   // timestamp every moment made the system message never byte-identical.)
-  return [identity, capabilities, bodyStr, pastFaceBlock, preloaded]
+  return [identity, capabilities, bodyStr, preloaded]
     .filter(Boolean)
     .join("\n\n");
 }

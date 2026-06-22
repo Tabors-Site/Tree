@@ -51,7 +51,7 @@ const VALID_TARGETS = new Set([
  * @param {object} spec
  * @param {string[]} spec.targets - target kinds the op accepts: space|being|matter|story|stance|position
  * @param {Function} spec.handler - async ({ target, params, identity, moment }) => result
- * @param {object} [spec.schema] - payload validation (Zod / JSON schema). Currently stored only; enforcement is on the roadmap.
+ * @param {object} [spec.schema] - payload validation (JSON schema). Currently stored only; enforcement is on the roadmap.
  * @param {string} [spec.factAction] - name written into the Fact. Defaults to operation name.
  * @param {boolean} [spec.skipAudit] - if true, no Fact is stamped. Reserve for ops where audit adds nothing.
  * @param {string} [spec.ownerExtension] - registering extension name (default "seed")

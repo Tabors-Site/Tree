@@ -257,6 +257,13 @@ export async function createSpace({
   actId = null,
   sessionId = null,
   moment = null,
+  // mintOnly: the create-space.word path. Run the full birth COMPUTE (validate,
+  // resolve parent, hook, sibling-uniqueness, max-children, mint the id) but DON'T
+  // emit the birth fact — return the finalized slim spec + the minted id + a
+  // `releaseLock` the caller hands to afterSeal (so the parent-lock spans the
+  // dispatcher's birth seal). owner/heaven are decomposed out (the .word lays
+  // them). The kernel/direct path (mintOnly:false) is unchanged: emit-fat + tail.
+  mintOnly = false,
 } = {}) {
   name = assertValidSpaceName(name);
   type = assertValidSpaceType(type);

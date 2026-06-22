@@ -348,8 +348,8 @@ export async function buildInnerFace(able, ctx = {}) {
  * Take a stored inner face and return a render-ready copy with the
  * tight LLM-budget caps applied. Pure function; does not mutate.
  *
- * Renderers (renderInwardPastFace, renderHalfPastFace) call this
- * once per past-act entry before formatting. The {kind:"truncated"}
+ * renderPastEntry (above) calls this once per past-act entry before
+ * folding the act into the inner face's blocks. The {kind:"truncated"}
  * sentinel from a storage-side cap rides through unchanged, so a
  * renderer that already shows "... (N more)" works without having
  * to know which layer did the truncation.

@@ -390,8 +390,6 @@ import { Client, GatewayIntentBits } from "discord.js";
 ## Init Function (index.js)
 
 ```js
-import { z } from "zod";
-
 export async function init(reality) {
   // Register hooks
   reality.hooks.register("enrichContext", async ({ context, meta }) => {

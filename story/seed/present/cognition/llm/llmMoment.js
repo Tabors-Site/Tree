@@ -96,7 +96,6 @@ import {
   isCognitionFailure,
 } from "../cognitionResult.js";
 import { buildSystemPromptForAble } from "./assemble.js";
-import { renderInwardPastFace, renderHalfPastFace } from "./pastFaceRender.js";
 import {
   getClientForBeing,
   getLlmTimeout,
@@ -306,20 +305,15 @@ async function runLlmMomentInner({ being, envelope, able, signal, moment }) {
   // that secretly carries its own history every tick is a quietly
   // ruminating contemplative, not a forward voice.
   //
-  // ORIENTATION (INNER-FOLD §2). The three turns honored here:
-  //   forward — world only. The forward face (preloaded canSee
-  //             blocks via the able) carries the perception. The
-  //             past-face block is empty.
-  //   inward  — A_b alone. foldPlace(beingId, "inward") returns the
-  //             act-chain in act-order; renderInwardPastFace turns
-  //             it into the past-face block. The world drops out:
-  //             ctx.enrichedContext stays empty and the canSee
-  //             preload is skipped (the world block is absent).
-  //   half    — world + braid-walk recall. The forward canSee
-  //             preload still runs (world stays); the past-face
-  //             block holds the recalled subset surfaced by causal
-  //             adjacency (foldPlace's recall walks stitches on
-  //             entities present in the forward face).
+  // ORIENTATION (INNER-FOLD §2). The three turns, all folded into the
+  // canonical face's BLOCKS by buildInnerFace (one rasterize, source by
+  // orientation — no separate past-face render):
+  //   forward — world only. The face blocks are the able's canSee reels.
+  //   inward  — A_b alone. The face blocks ARE the being's act-chain
+  //             (foldPlace returns it in act-order); the world drops out
+  //             (enrichedContext also stays empty).
+  //   half    — world + braid-walk recall. The face blocks are the canSee
+  //             reels PLUS the recalled subset surfaced by causal adjacency.
   // Orientation rides on the summon (INNER-FOLD §4). A being only
   // turns by self-summoning with a new ω; external callers always
   // arrive forward. The pickOrientation helper enforces the
@@ -328,23 +322,12 @@ async function runLlmMomentInner({ being, envelope, able, signal, moment }) {
 
   // Beat 2 (runFoldBeat in moment.js) already ran foldPlace at this
   // orientation and stashed both the spatial fold and the canonical
-  // inner face on moment. We just read them through. Inward and
-  // half synthesize a past-face prompt block from the foldedFace's
-  // past axis (actChain / recalled); forward leaves it empty.
-  const foldedFace = moment?.foldedFace || null;
-  let pastFaceBlock = "";
-  try {
-    if (orientation === "inward") {
-      pastFaceBlock = renderInwardPastFace(foldedFace?.actChain);
-    } else if (orientation === "half") {
-      pastFaceBlock = renderHalfPastFace(foldedFace?.recalled);
-    }
-  } catch (faceErr) {
-    log.warn("LLM", `past-face render(${orientation}) failed for being=${beingId.slice(0, 8)}: ${faceErr.message}`);
-    if (orientation === "inward") {
-      pastFaceBlock = "[Inward fold]\n(act-chain unavailable this moment)";
-    }
-  }
+  // inner face on moment. We just read moment.innerFace through. The
+  // past-face is no longer rendered here: buildInnerFace folds the
+  // orientation's source INTO the face's blocks (inward = the being's
+  // act-chain, half = world + the braid-walked recall), so the inner
+  // face already carries it — one face-fold, source by orientation, no
+  // separate past-face codepath.
 
   // Inward drops the world. Skip enrichContext (it gathers per-space
   // extension surface) so the world-data path stays empty. Half and
@@ -360,9 +343,9 @@ async function runLlmMomentInner({ being, envelope, able, signal, moment }) {
       });
 
   // promptCtx flows into buildSystemPromptForAble + resolveBare-
-  // Capabilities. The pastFaceBlock rides through into buildPrompt's
-  // assembly; suppressCanSee tells the assembler to skip the able's
-  // preloaded canSee blocks on inward (world drops out).
+  // Capabilities. The inner face (built at beat 2) already carries the
+  // orientation's blocks, so there is no pastFaceBlock / suppressCanSee
+  // to thread — buildPrompt just renders ctx.innerFace.
   // History-aware aggregate reader for see-resolvers and prompt builders.
   // Same shape as ctx.read on moment (see 1-assign.js baseCtx): hides
   // loadOrFold + history threading behind one call. SEE-resolvers run
@@ -379,12 +362,11 @@ async function runLlmMomentInner({ being, envelope, able, signal, moment }) {
     enrichedContext,
     being,
     orientation,
-    pastFaceBlock,
-    // The canonical inner face built at beat 2. assemble.js reads
-    // ctx.innerFace.blocks via innerFaceFormat to render the canSee
-    // section of the prompt; no per-soul rebuild.
+    // The canonical inner face built at beat 2 already carries the
+    // orientation's blocks (forward = world, inward = act-chain, half =
+    // both). assemble.js reads ctx.innerFace.blocks via innerFaceFormat to
+    // render the face section; no per-soul rebuild, no separate past-face.
     innerFace: moment?.innerFace || null,
-    suppressCanSee: orientation === "inward",
     history: _summonHistory,
     read: async (kind, id) => {
       if (!id) return null;
