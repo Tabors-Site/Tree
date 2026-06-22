@@ -19,9 +19,7 @@
 When a being takes a role at a space:
   see role-spec-for-grant(role, space) as found.
   If no found, refuse with "role is not installed on this space or any ancestor".
-  see is-grabbable(found) as grabbable.
-  If not grabbable, refuse with "role is not take-acquirable; try ask-role".
-  see already-holds(caller, role, found) as held.
-  If held, Return role, anchorSpaceId: $found.anchor, already: true, granteeBeingId: $caller, factParams: { role: $role, anchorSpaceId: $found.anchor, outcome: "already" }.
+  If not is-grabbable(found), refuse with "role is not take-acquirable; try ask-role".
+  If already-holds(caller, role, found), Return role, anchorSpaceId: $found.anchor, already: true, granteeBeingId: $caller, factParams: { role: $role, anchorSpaceId: $found.anchor, outcome: "already" }.
   see grant-internal(caller, role, found) as granted.
   Return role, anchorSpaceId: $found.anchor, granted: true, granteeBeingId: $caller, factParams: { role: $granted.role, anchorSpaceId: $granted.anchorSpaceId, anchorBeingId: $granted.anchorBeingId, grantedBy: $granted.grantedBy, grantedAt: $granted.grantedAt }.

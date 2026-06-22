@@ -1,28 +1,23 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// library.js — the Library: this story's catalog of shared Books (5d.md — the 5D catalog, Ours).
+// library.js — the Library: this story's ONE 5D fact reel (5d.md — Ours, the catalog of worlds).
 //
-// The library SPACE's reel IS the library (place-is-folded-from-facts): each `do:share-book` fact
-// on it is a catalog entry. The book BODY lives as CAS — the store is symbols (11.md), the fact
-// carries only its address. This module is the READ side + the CAS body store; the share-book op
-// (share-ops.js) does the laying. `resolveBook` backs receive.js's import resolver — a book imports
-// another by `colophon.root`, sealed-by-hash (the lockfile, language.md), so meaning can't drift.
+// The library is the 5th reel KIND (`of:{kind:"library", id:<story>}`), one reel per story, OUT of
+// any history (it never forks — separated by kind, not by a history marker; the facts ride
+// history "0", the reel's main short-circuit). It holds the name-level / cross-history facts —
+// shared books, federation peers, story config — all **signed by the Name** acting there (a 5D
+// NAME-ACT: through=null, the being stays home; verb:"name"). NOT a heaven *space*; a story-level
+// reel. The book BODY is CAS (the store is symbols); the fact carries only its address.
 //
-// No librarian (5d.md): the catalog is just the reel; provenance is the colophon stamp inside each
-// book, not an institution. No scarcity — the body is CAS, infinite perfect copies (the Love economy).
+// `resolveBook` backs receive.js's import resolver (import-by-colophon.root, the lockfile). No
+// librarian: the reel IS the catalog; provenance is the colophon stamp; infinite perfect copies (Love).
 
-import { HEAVEN_SPACE } from "../../materials/space/heavenSpaces.js";
+let _cache = new Map(); // colophon.root -> book (a projection of the reel; rebuilt on miss)
 
-let _libraryId = null;
-const _cache = new Map(); // colophon.root -> book (a projection of the reel; rebuilt on miss)
-
-/** The library space id (a heaven space, always history "0"). Resolved + cached. */
+/** The library reel id = this story's domain (one library per story). */
 export async function getLibraryId() {
-  if (_libraryId) return _libraryId;
-  const { findByHeavenSpace } = await import("../../materials/projections.js");
-  const lib = await findByHeavenSpace(HEAVEN_SPACE.LIBRARY, "0");
-  _libraryId = lib?.id ? String(lib.id) : null;
-  return _libraryId;
+  const { getStoryDomain } = await import("../../ibp/address.js");
+  return getStoryDomain();
 }
 
 /** Store a book BODY as CAS (the symbols). Returns a cas ref { kind:"cas", hash, size }. */
@@ -43,9 +38,8 @@ export async function loadBookBody(hash) {
 /** Every catalog entry on the library reel: [{ root, title, author, sharedBy, bodyRef, kind, seq }]. */
 export async function listLibrary() {
   const libraryId = await getLibraryId();
-  if (!libraryId) return [];
   const Fact = (await import("../../past/fact/fact.js")).default;
-  const facts = await Fact.find({ "of.kind": "space", "of.id": libraryId, verb: "do", act: "share-book" }).sort({ seq: 1 }).lean();
+  const facts = await Fact.find({ "of.kind": "library", "of.id": libraryId, act: "share-book" }).sort({ seq: 1 }).lean();
   return facts.map((f) => ({ ...(f.params || {}), seq: f.seq, factId: f._id }));
 }
 
@@ -74,21 +68,28 @@ export function bookFactParams(book, bodyRef, { sharedBy = null, kind = null } =
 }
 
 /**
- * Lay a book on the library reel DIRECTLY — the genesis / internal path (no dispatch frame). It
- * CAS-stores the body + emitFacts the do:share-book catalog fact within the given moment. The
- * share-book OP uses stampsFact instead (the dispatcher stamps — the keystone); this is the
- * equivalent for the I_AM genesis scaffold, producing the identical fact shape.
+ * Lay a book on the library reel as a 5D NAME-ACT fact — verb:"name", bodiless (through=null),
+ * signed by `by` (the Name). CAS-stores the body, emitFacts the catalog fact within the given
+ * withNameAct moment (history "0" — the reel's main short-circuit). The act-chain advances on the
+ * name's 5D chain (<story>:5d:<name>); the fact lands on the library reel.
  * @param {object} book   a sealed book
- * @param {object} ctx    { moment, through?, kind? }  — the I_AM act frame
+ * @param {object} ctx    { moment, by, kind? }  — the name-act frame + the signing Name
  */
-export async function layBookOnLibrary(book, { moment, through = "i-am", kind = null } = {}) {
+export async function layBookOnLibrary(book, { moment, by = "i-am", kind = null } = {}) {
   const libraryId = await getLibraryId();
-  if (!libraryId) throw new Error("layBookOnLibrary: the library space is not planted");
   const bodyRef = await storeBookBody(book);
   const { emitFact } = await import("../../past/fact/facts.js");
-  const params = bookFactParams(book, bodyRef, { sharedBy: through, kind });
   await emitFact(
-    { verb: "do", act: "share-book", through, of: { kind: "space", id: libraryId }, params, history: "0" },
+    {
+      verb: "name", // 5D / identity layer — a bodiless name-act, not a do/be world-fact
+      act: "share-book",
+      through: null, // the being stays home
+      by,
+      of: { kind: "library", id: libraryId },
+      params: bookFactParams(book, bodyRef, { sharedBy: by, kind }),
+      actId: moment?.actId,
+      history: "0", // the library reel never forks
+    },
     moment,
   );
   _cache.set(String(book?.colophon?.root), book);
@@ -96,4 +97,4 @@ export async function layBookOnLibrary(book, { moment, through = "i-am", kind = 
 }
 
 /** Drop the in-memory cache (after a fresh share, or in tests). */
-export function clearLibraryCache() { _cache.clear(); _libraryId = null; }
+export function clearLibraryCache() { _cache = new Map(); }

@@ -60,7 +60,9 @@ const ActSchema = new mongoose.Schema({
   // below is the being the name acted THROUGH. See materials/name/name.js.
   by: { type: String, ref: "Name", default: null, index: true },
 
-  through: { type: String, ref: "Being", required: true, index: true },
+  // through = the being the name acted THROUGH (3D/4D). NULL for a 5D NAME-ACT: a name acting in
+  // the library has no being (5d.md — the being stays home); `by` is the actor + chain key there.
+  through: { type: String, ref: "Being", default: null, index: true },
   to:      { type: String, ref: "Being", default: null, index: true },
 
   ibpAddress: { type: String, default: null, index: true },

@@ -20,8 +20,6 @@ When a being trues a name:
   If no nameId, refuse with "be:truename: no Name resolves for that token (pubkey or real-name)" as invalid-input.
   see resolve-target-being(beingName) as targetId.
   If no targetId, refuse with "be:truename: target being not found on this history" as being-not-found.
-  see name-exists(nameId) as exists.
-  If not exists, refuse with "be:truename: target Name does not exist" as invalid-input.
-  see name-banished(nameId) as banished.
-  If banished, refuse with "be:truename: target Name is banished" as forbidden.
+  If not name-exists(nameId), refuse with "be:truename: target Name does not exist" as invalid-input.
+  If name-banished(nameId), refuse with "be:truename: target Name is banished" as forbidden.
   Return trued: true, targetBeingId: $targetId, factTarget: $targetId, factParams: { trueName: $nameId }.

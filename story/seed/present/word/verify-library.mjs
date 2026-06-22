@@ -25,7 +25,7 @@ const { sealColophon, verifyColophon } = await import(`${R}/seed/store/book/colo
 const { receive } = await import(`${R}/seed/store/book/receive.js`);
 const lib = await import(`${R}/seed/store/book/library.js`);
 const { ensureGenesisBook, genesisRoot } = await import(`${R}/seed/store/book/genesisBook.js`);
-const { withIAmAct } = await import(`${R}/seed/sprout.js`);
+const { withNameAct } = await import(`${R}/seed/sprout.js`);
 const ws = await import(`${R}/seed/present/word/wordStore.js`);
 const poll = async (fn, t = 20000, e = 300) => { const t0 = Date.now(); while (Date.now() - t0 < t) { const v = await fn(); if (v) return v; await new Promise((r) => setTimeout(r, e)); } return await fn(); };
 let pass = 0, fail = 0; const ok = (l) => { pass++; console.log("  ✓ " + l); }; const bad = (l, d) => { fail++; console.log("  ✗ " + l); if (d !== undefined) console.log("      " + JSON.stringify(d).slice(0, 200)); };
@@ -33,9 +33,9 @@ console.log("\n  verify-library (share → catalog → resolve → receive)\n");
 try {
   await poll(() => findByName("being", "cherub", "0"), (v) => !!v);
 
-  // 1. The library heaven space exists.
-  const libSpace = await poll(() => findByHeavenSpace(HEAVEN_SPACE.LIBRARY, "0"), (v) => !!v);
-  libSpace?.id ? ok(`library heaven space planted (${String(libSpace.id).slice(0, 8)}…)`) : bad("no library space");
+  // 1. The library is a story-level REEL (not a heaven space) — id = the story domain.
+  const libraryId = await lib.getLibraryId();
+  libraryId ? ok(`library reel id resolves (kind="library", id="${String(libraryId)}")`) : bad("no library id");
 
   // 2. The genesis book is NOT live-rendered at boot (a static .book of words). The library is
   //    empty until ensureGenesisBook is called ON DEMAND (a share/download) — it builds the .book
@@ -62,7 +62,7 @@ try {
 
   // 4. SHARE it onto the library reel (the direct lay mechanism the share-book op mirrors).
   const sharedRoot = book.colophon.root;
-  await withIAmAct("test share", async (moment) => { await lib.layBookOnLibrary(book, { moment, kind: "language" }); });
+  await withNameAct("i-am", "test share", async (moment) => { await lib.layBookOnLibrary(book, { moment, by: "i-am", kind: "language" }); });
   lib.clearLibraryCache();
   const catalog1 = await lib.listLibrary();
   const entry = catalog1.find((e) => String(e.root) === String(sharedRoot));

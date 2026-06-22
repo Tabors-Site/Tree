@@ -1,5 +1,9 @@
 note: this was alreadys tarted in word/14.md
 
+> Related: [rasterize.md](rasterize.md) (the inner face rasterized one Word/fact at a time — keystrokes
+> as the serialization channel) and [word/20.md](word/20.md) ("each moment is really just a word").
+> Same idea: every keystroke an act → one word per moment.
+
 no i mean this
 so it means it could get to a point where like evry key tap on the keyboard hcanges the world live?
 

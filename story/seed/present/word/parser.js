@@ -384,15 +384,21 @@ const EFFECT_RULES = [
   // conditional frame and the consequence reads as a comma, `then`, or `→`/`->` — the same
   // separating work the colon does for the block form (`If <cond>:` + indent). A comma
   // immediately followed by `and`/`or` is a CONDITION connective ("If owner is X, and owner
-  // is Y, refuse …"), NOT the hinge — the negative lookahead skips it so multi-condition
-  // gates inline too; an explicit `then`/`→` is always an unambiguous hinge.
+  // is Y, refuse …"), NOT the hinge; an explicit `then`/`→` is always an unambiguous hinge.
+  // The loose matcher just catches an `If …` effect line; splitInlineIf finds the hinge at
+  // paren/brace/bracket/quote depth 0, so a comma INSIDE a see-op's args (`op(a, b)`) or a
+  // `with { … }` object never mis-reads as the hinge (the as-removal: inline see-op conds).
   [
-    /^If (.+?)(?:,(?!\s*(?:and|or)\b)| then\b|\s*(?:→|->))\s+(.+)\.$/i,
-    (m, c) => ({
-      kind: "if",
-      cond: parseCond(m[1], c),
-      then: parseInlineThen(m[2], c),
-    }),
+    /^If\s+(.+)\.$/i,
+    (m, c) => {
+      const split = splitInlineIf(m[1]);
+      if (!split) return null; // no hinge: a malformed inline If (cannot-parse, fail loud)
+      return {
+        kind: "if",
+        cond: parseCond(split.cond, c),
+        then: parseInlineThen(split.then, c),
+      };
+    },
   ],
   // ── SEE: the READ verb (substrate query, NO fact). evalSee consumes `kind:"see"`.
   // The wall: reads are VERBS, not host: escapes (only crypto/computation stays host).
@@ -845,7 +851,10 @@ function parseCond(text, c) {
   // an explicit host predicate cond: "host: isAncestorOf(caller, candidate)" -> resolvedBy
   if ((hm = raw.match(/^host:\s*(\w+)\(([^)]*)\)$/i)))
     return { resolvedBy: hm[1], args: argList(hm[2]).map((r) => ({ ref: r })) };
-  const t = raw.replace(/\s*\(.*?\)\s*/g, " ").trim(); // drop parenthetical glosses ("(not remote)")
+  // drop parenthetical GLOSSES ("(not remote)") — a paren with whitespace before it — but KEEP
+  // a see-op CALL's args (`missing(history)`, the `(` hugs its name), so an inline see-op cond
+  // survives the and/or split to parseLeaf (the as-removal: `If destination-missing(history)`).
+  const t = raw.replace(/\s+\([^)]*\)/g, " ").replace(/\s+/g, " ").trim();
   const ors = splitTop(t, /,?\s+or\s+/i); // absorb a comma before the connective ("X, or Y")
   if (ors.length > 1) return { any: ors.map((p) => parseCond(p, c)) };
   const ands = splitTop(t, /,?\s+and\s+/i); // ("X, and Y" -> no trailing comma on X)
@@ -870,6 +879,16 @@ function parseLeaf(t, c) {
   }
   const neg = (node) => (negated ? { ...node, negated: true } : node);
   let m;
+  // INLINE SEE-OP CALL as a predicate (the as-removal): `destination-missing(history)`,
+  // `being-lives-on(caller, history)`. The op runs through ctx.env.host — the SAME registry
+  // `see <op>(args) as v` dispatches via callHost — and the cond reads its result's truthiness.
+  // A live check with NO bind, NO fact: the noun's own check IS the condition. `not <op>(args)`
+  // negates via the block above. (A `(` hugging its name marks a call; a gloss has a space.)
+  if ((m = s.match(/^([a-z][\w-]*)\((.*)\)$/i)))
+    return neg({
+      seeCall: m[1],
+      args: m[2].trim() ? argList(m[2]).map((r) => ({ ref: r })) : [],
+    });
   // DEIXIS (here/there/where): `there` sets the EXISTENTIAL context, `is/are` makes the
   // claim within it — so "there is <X>" is a PRESENCE check, "there is no <X>" its absence.
   // ≡ the bare `[no] <X>` flag, but reads as the natural conditional (the `If` is the
@@ -918,6 +937,17 @@ function parseLeaf(t, c) {
         path: refKey(m[1]),
         against: refLit(m[2]),
       },
+    });
+  // strict ordered compares — the live-object form: `the hero's health is less than 5` reads
+  // the fold at eval time (a live sensor, not a snapshot). `less than`/`greater than` are the
+  // unambiguous spellings (no `under`/`over`/`below` synonyms — those surface in prose words).
+  if ((m = s.match(/^(.+?)\s+is less than\s+(.+)$/i)))
+    return neg({
+      test: { op: "compare", as: "lt", path: refKey(m[1]), against: refLit(m[2]) },
+    });
+  if ((m = s.match(/^(.+?)\s+is greater than\s+(.+)$/i)))
+    return neg({
+      test: { op: "compare", as: "gt", path: refKey(m[1]), against: refLit(m[2]) },
     });
   // a single bareword cond is a flow-local flag read: "signedIn", "asFather"
   if (/^[A-Za-z]\w*$/.test(s.trim())) {
@@ -1138,8 +1168,38 @@ function parseInlineThen(rest, c) {
     return eff;
   });
 }
+// Find the hinge of an inline `If <cond>, <then>.` — scanning at paren/brace/bracket/quote
+// depth 0 so a comma INSIDE a see-op's args (`being-lives-on(caller, history)`) or a nested
+// `{ … }` never reads as the hinge. The hinge is ` then `, `→`/`->`, or a top-level comma NOT
+// immediately followed by `and`/`or` (those join multi-conditions, §2). Returns { cond, then }
+// at the FIRST (leftmost) hinge — preserving the old lazy-regex leftmost semantics — or null
+// when no hinge exists (a malformed inline If). The depth walk mirrors splitInlineEffects /
+// splitTopCommas, extended to count `()` (which neither of those does).
+function splitInlineIf(inner) {
+  let depth = 0,
+    inStr = false;
+  for (let i = 0; i < inner.length; i++) {
+    const ch = inner[i];
+    if (inStr) {
+      if (ch === '"') inStr = false;
+      continue;
+    }
+    if (ch === '"') { inStr = true; continue; }
+    if (ch === "(" || ch === "{" || ch === "[") { depth++; continue; }
+    if (ch === ")" || ch === "}" || ch === "]") { depth = Math.max(0, depth - 1); continue; }
+    if (depth !== 0) continue;
+    const rest = inner.slice(i);
+    const explicit = rest.match(/^\s+then\s+/i) || rest.match(/^\s*(?:→|->)\s*/);
+    if (explicit)
+      return { cond: inner.slice(0, i).trim(), then: rest.slice(explicit[0].length).trim() };
+    if (ch === "," && !/^\s*(?:and|or)\b/i.test(inner.slice(i + 1)))
+      return { cond: inner.slice(0, i).trim(), then: inner.slice(i + 1).trim() };
+  }
+  return null;
+}
 // Split an inline-then into effects on top-level `,` / `, and ` / ` and `, respecting nested
-// {}, [], and "..." so a `do X with { nested }` param or a quoted comma is never split.
+// (), {}, [], and "..." so a `do X with { nested }` param, an `op(a, b)` arg comma, or a
+// quoted comma is never split.
 function splitInlineEffects(s) {
   const parts = [];
   let depth = 0, inStr = false, buf = "", i = 0;
@@ -1147,8 +1207,8 @@ function splitInlineEffects(s) {
     const ch = s[i];
     if (inStr) { buf += ch; if (ch === '"') inStr = false; i++; continue; }
     if (ch === '"') { inStr = true; buf += ch; i++; continue; }
-    if (ch === "{" || ch === "[") { depth++; buf += ch; i++; continue; }
-    if (ch === "}" || ch === "]") { depth = Math.max(0, depth - 1); buf += ch; i++; continue; }
+    if (ch === "(" || ch === "{" || ch === "[") { depth++; buf += ch; i++; continue; }
+    if (ch === ")" || ch === "}" || ch === "]") { depth = Math.max(0, depth - 1); buf += ch; i++; continue; }
     if (depth === 0) {
       const m = s.slice(i).match(/^(?:,\s*and\s+|,\s*|\s+and\s+)/i);
       if (m) { if (buf.trim()) parts.push(buf.trim()); buf = ""; i += m[0].length; continue; }

@@ -32,7 +32,7 @@ import mongoose from "mongoose";
 const ReelHeadSchema = new mongoose.Schema({
   _id:    { type: String },           // "<history>:<type>:<id>"
   history: { type: String, required: true, default: "0", index: true },
-  type:   { type: String, required: true, enum: ["being", "space", "matter"] },
+  type:   { type: String, required: true, enum: ["being", "space", "matter", "library"] },
   id:     { type: String, required: true },
   head:   { type: Number, required: true, default: 0 },
   // The reel's ROOT HASH: the head fact's identity (`_id`), which

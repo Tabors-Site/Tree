@@ -280,9 +280,15 @@ export async function genesis(app, opts = {}) {
         const { seedFold } = await import("./seed/present/word/wordFold.js");
         await seedFold({ moment: ctx });
       });
-      const { rehydrateWordProjection } =
+      const { rehydrateWordProjection, getWordSync } =
         await import("./seed/present/word/wordStore.js");
       await rehydrateWordProjection("0");
+      // 9.md Phase 5 / 17.md STEP 7: the descent symmetry guard. With the foundation folded, assert
+      // kernel == word.word — every concept is in the fold, grounds on declared words, and its host
+      // pointers resolve. SOFT during the transition (logs the axiom/theorem split + any gaps); flip
+      // to { strict:true } once the foundation is clean to make a gap a boot error.
+      const { assertDescentSymmetry } = await import("./seed/present/word/axioms.js");
+      assertDescentSymmetry(getWordSync);
     } catch (err) {
       log.warn(
         "Genesis",

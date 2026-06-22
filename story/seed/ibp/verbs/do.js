@@ -249,7 +249,25 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
 
   let result;
   try {
-    result = await op.handler(ctx);
+    if (op.matter) {
+      // NATIVE WORD (P5): the op's body is MATTER — a content-addressed blob — not a host handler.
+      // Run it through the engine lane's production entry `runWordBody` (matterWord.js), which fetches
+      // the blob from CAS by hash and dispatches to its matter TYPE's run-op, enforcing executability +
+      // the effect-class (pure → replay-safe, cached by hash; effectful → a one-time fact-source). The
+      // op's params are the inputs; the run-op's output is the result the auto-Fact below stamps —
+      // a native word still flows through the SAME auth + one-fact path as a handler op (op.matter
+      // rides resolveDoOpFromFold, so factAction/targets/auth are uniform). CONTRACT NOTES, the two
+      // open co-design points with the engine lane: (1) inputs pass as [ctx.params] — fine for the `js`
+      // driver (an object), but `wasm` needs a real numbers/linear-memory marshalling layer, so
+      // structured-params-over-wasm is unresolved; (2) effect-class→fact: this stamps BOTH pure and
+      // effectful once (every-act-makes-a-fact) — whether a PURE native word should stamp at all
+      // (computation vs fact-source, the is-be cut one level down) is the other open point.
+      const { runWordBody } = await import("../../present/word/matterWord.js");
+      const ran = await runWordBody(op.matter, [ctx.params]);
+      result = ran && typeof ran === "object" && "result" in ran ? ran.result : ran;
+    } else {
+      result = await op.handler(ctx);
+    }
   } finally {
     if (_ctx && !_wasInOp) _ctx._inOp = false;
   }

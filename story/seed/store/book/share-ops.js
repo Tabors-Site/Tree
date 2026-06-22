@@ -13,11 +13,9 @@
 import { registerOperation } from "../../ibp/operations.js";
 import { registerSeeOperation } from "../../ibp/seeOps.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
-import { stampsFact } from "../../ibp/factResult.js";
 import { verifyColophon } from "./colophon.js";
 import { kindOf } from "./book.js";
 import { captureBook } from "./capture.js";
-import { getLibraryId, storeBookBody, bookFactParams } from "./library.js";
 
 // capture-book (SEE) — pure read. Pull selected story elements into an UNSIGNED book; the caller
 // seals (sealColophon, the Name vouches) then shares. SEE = "nothing enters your story."
@@ -42,14 +40,16 @@ registerSeeOperation("capture-book", {
   },
 });
 
-// share-book (DO) — lay a sealed Book on the Library reel. Refuse-before-share (verifyColophon,
-// mirroring receive's seal-check). The dispatcher stamps the do:share-book fact, attributed to the
-// sharing Name, landing on the library reel (_factTarget wins in resolveAuditTarget).
+// share-book (DO) — lay a sealed Book on the Library reel as a 5D NAME-ACT. Refuse-before-share
+// (verifyColophon, mirroring receive's seal-check). Sharing a book is a NAME acting in the library
+// (5d.md: only names act there; the being stays home) — so the op opens its OWN withNameAct and
+// lays a bodiless verb:"name" fact on the library reel (kind="library"), NOT a do-fact. The outer
+// dispatch is the trigger (skipAudit); the library write is the name-act it spawns.
 registerOperation("share-book", {
   targets: ["space"],
   ownerExtension: "seed",
   factAction: "share-book",
-  // NO skipAudit — the dispatcher stamping the catalog fact onto the library reel IS the point.
+  skipAudit: true, // the op lays its OWN 5D name-act fact on the library reel (not a do-fact)
   handler: async ({ params, identity }) => {
     const book = params?.book;
     if (!book || typeof book !== "object") {
@@ -59,17 +59,14 @@ registerOperation("share-book", {
     if (!v.ok) {
       throw new IbpError(IBP_ERR.INVALID_INPUT, `share-book: colophon verification failed — ${v.reason}`);
     }
-    const libraryId = await getLibraryId();
-    if (!libraryId) {
-      throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "share-book: the library space is not planted");
-    }
-    // Store the body as CAS (symbols); the fact carries its address. Infinite perfect copies.
-    const bodyRef = await storeBookBody(book);
-    return stampsFact(
-      { root: v.root, bodyRef, signers: v.signers ?? [], unsigned: !!v.unsigned },
-      bookFactParams(book, bodyRef, { sharedBy: identity?.nameId ?? null, kind: kindOf(book) }),
-      { kind: "space", id: libraryId },
+    // The acting Name — the sharer's identity (falls back to the I_AM for seed-internal shares).
+    const nameId = identity?.nameId ?? identity?.beingId ?? "i-am";
+    const { withNameAct } = await import("../../sprout.js");
+    const { layBookOnLibrary } = await import("./library.js");
+    const result = await withNameAct(nameId, "share-book", async (moment) =>
+      layBookOnLibrary(book, { moment, by: nameId, kind: kindOf(book) }),
     );
+    return { root: v.root, bodyRef: result.bodyRef, signers: v.signers ?? [], unsigned: !!v.unsigned, _skipAudit: true };
   },
 });
 

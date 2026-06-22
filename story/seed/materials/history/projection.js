@@ -30,7 +30,7 @@ const ProjectionSchema = new mongoose.Schema({
   _id:        { type: String },
 
   history:    { type: String, required: true, index: true },
-  type:       { type: String, required: true, enum: ["being", "space", "matter", "name"] },
+  type:       { type: String, required: true, enum: ["being", "space", "matter", "name", "library"] },
   id:         { type: String, required: true },
 
   // Reducer output. Mixed because reducers determine which fields live

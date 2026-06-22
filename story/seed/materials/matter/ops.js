@@ -18,6 +18,12 @@ import { registerOperation } from "../../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
 import { targetIdOf, loadTargetRow } from "../_targetShape.js";
 import { assertMatterCoordInBounds } from "./coordBounds.js";
+import { registerRoleWord } from "../../present/word/roleWordRegistry.js";
+import { stampsFact, stampsWordFact } from "../../ibp/factResult.js";
+
+// Self-register the co-located world strand so resolveRoleWord("matter", "rename-matter") finds it
+// (CONVERTING.md step 3). The cut prefers the bridge; the JS handler is the clean-miss fallback.
+registerRoleWord("matter", "rename-matter", new URL("./rename-matter.word", import.meta.url));
 
 const RESERVED_SET_META_NS = new Set([
   // none today; the set kept for symmetry with space/being
@@ -168,7 +174,40 @@ async function setOnMatterHandler({ target, params, moment }) {
 // applySetField on the name field — rename-matter is added to
 // SET_ACTIONS in reducerHelpers.js so the same fold path applies.
 
+// WIRED: rename-matter.word is the live path; the JS body below is the clean-miss fallback. The .word
+// runs the SAME world read (load + per-folder uniqueness) through resolve-rename-spec (renameMatterHost.js),
+// returns {matterId, name}, and the dispatcher lays the do:rename-matter fact (stampsWordFact targets the
+// matter via matterId). Behavior-preserving; no second fact (the auto-Fact path stamps once).
+async function _renameMatterViaWord({ target, params, moment }) {
+  if (!moment) return null;
+  const { resolveRoleWord, runRoleWord } = await import("../../present/word/roleWordRegistry.js");
+  const ir = resolveRoleWord("matter", "rename-matter", moment?.actorAct?.history);
+  if (!ir) return null;
+  const { renameMatterHostEnv } = await import("./renameMatterHost.js");
+  const history = moment?.actorAct?.history;
+  try {
+    const { result } = await runRoleWord(ir, {
+      moment, history,
+      trigger: {
+        target,
+        name: params?.name,
+        allowReplace: params?.allowReplace === true,
+        branch: history,
+      },
+      env: { host: renameMatterHostEnv() },
+    });
+    if (!result) return null;
+    return stampsWordFact(result, "matter", "matterId");
+  } catch (e) {
+    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
+    throw e;
+  }
+}
+
 async function renameMatterHandler({ target, params, moment }) {
+  const viaWord = await _renameMatterViaWord({ target, params, moment });
+  if (viaWord) return viaWord;
+
   const newName = params?.name;
   if (typeof newName !== "string" || !newName.length) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "rename-matter: `name` is required and must be a non-empty string");
@@ -208,7 +247,15 @@ async function renameMatterHandler({ target, params, moment }) {
       );
     }
   }
-  return { matterId, name: newName };
+  // Lay the name EXACTLY like set-being / set-space lay a scalar (Tabor): _factParams
+  // { field:"name", value } so applySetField folds it onto the row — the rename-matter.word path
+  // does the same. (The bare { name } the auto-Fact used to stamp was the "weird funk" — applySetField
+  // folds only { field, value }, so the name never reached the row. This is the fix.)
+  return stampsFact(
+    { matterId, name: newName },
+    { field: "name", value: newName },
+    { kind: "matter", id: matterId },
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────

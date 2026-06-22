@@ -1,0 +1,22 @@
+# rename-matter.word — rename-matter: give a matter a new name (materials/matter/ops.js, the
+# rename-matter DO op).
+#
+# A being gives an existing matter a new name. The CONTROL strand is .word: the `name`-required gate
+# (a non-empty new name) and the return. The world READ — load the matter, require its spaceId, and run
+# the per-folder uniqueness check — is one host see-op, `resolve-rename-spec` (renameMatterHost.js),
+# reusing loadTargetRow + listMatterNamesInFolder; it reimplements nothing and lays no fact. There is
+# NO host: emit: the word authors the fact params and the ONE auto-Fact path in do.js lays the
+# caller-attributed do:rename-matter fact (the cut's stampsWordFact targets the MATTER via matterId).
+#
+# The fact lays the name EXACTLY like set-being / set-space lay a scalar field (Tabor): params
+# { field: "name", value: <name> }, NOT the bare { name } the JS handler stamped. That old shape was
+# the "weird funk" — applySetField (the reducer rename-matter shares with set-matter:name via
+# SET_ACTIONS) folds only { field, value }, so { name } never reached the row. Emitting { field, value }
+# is the fix this conversion lands: rename-matter now actually folds the matter's name.
+#
+# The bridge binds `target` (the matter), the new `name`, and the `allowReplace` flag.
+
+When a being renames a matter:
+  If no name, refuse with "rename-matter: `name` is required and must be a non-empty string" as invalid-input.
+  see resolve-rename-spec(target, name, allowReplace, branch) as renamed.
+  Return matterId: $renamed.matterId, name: $renamed.name, factParams: { field: "name", value: $renamed.name }.

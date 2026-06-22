@@ -25,14 +25,10 @@
 # The bridge binds `subject` ({kind,id} of the moved thing), `coord`, `to`, `branch`.
 
 When a being brings matter into a space:
-  see require-mode(coord, to) as modeOk.
-  If not modeOk, refuse with "move: must specify either `coord` (in-space) or `to` (cross-space), not both".
-  see require-subject-kind(subject) as kindOk.
-  If not kindOk, refuse with "move: target must be a space or matter".
-  see valid-coord-shape(coord) as coordOk.
-  If not coordOk, refuse with "move: `coord` must be { x, y[, z] } with finite numbers".
-  see valid-to(to) as toOk.
-  If not toOk, refuse with "move: `to` must be a space id string".
+  If not require-mode(coord, to), refuse with "move: must specify either `coord` (in-space) or `to` (cross-space), not both".
+  If not require-subject-kind(subject), refuse with "move: target must be a space or matter".
+  If not valid-coord-shape(coord), refuse with "move: `coord` must be { x, y[, z] } with finite numbers".
+  If not valid-to(to), refuse with "move: `to` must be a space id string".
   # a space cannot move into itself. A native gate: the predecessor host gates above
   # guarantee a real typed subject + a real non-empty string `to` reach here, so the plain
   # `equals` (String-coercing, via idEquals) matches the old host String(to) !== String(id).

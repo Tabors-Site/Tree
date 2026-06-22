@@ -19,7 +19,7 @@
 import ReelHead from "./reelHead.js";
 import { getBranchPoint, isMain, MAIN } from "../../materials/history/histories.js";
 
-const VALID_TYPES = new Set(["being", "space", "matter", "name"]);
+const VALID_TYPES = new Set(["being", "space", "matter", "name", "library"]);
 
 // `_id` shape is `<history>:<type>:<id>` for all histories. Main is `"0"`
 // — explicit, not implicit-by-absence — so queries that filter on

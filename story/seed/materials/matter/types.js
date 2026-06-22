@@ -141,6 +141,18 @@ export function registerMatterType(name, def = {}, extName = "seed") {
       ? Object.freeze({ ...def.render })
       : null,
     claims: freezeClaims(def.claims),
+    // EXECUTABLE matter (native-words-via-matter, 21.md P5): a type whose bytes can be RUN. The
+    // word engine fetches the matter blob by hash and dispatches to this type's run-op HANDLER
+    // (registered via matterWord.registerDriver — the name/handler split do-ops already use). The
+    // effect-class lives HERE, on the type (Tabor): `pure` folds like compiled Word (replay-safe,
+    // cached by hash); `effectful` is a fact-source (stamped once, never recomputed). `entry` is the
+    // exported function the run-op calls. Null = inert matter (a note, a file, a model asset).
+    executable: def.executable && typeof def.executable === "object"
+      ? Object.freeze({
+          effect: def.executable.effect === "pure" ? "pure" : "effectful",
+          entry: typeof def.executable.entry === "string" && def.executable.entry.length ? def.executable.entry : "run",
+        })
+      : null,
     ownerExtension: owner,
   }));
   log.verbose("MatterTypes", `Registered: ${name} (${owner})`);
@@ -327,4 +339,28 @@ registerMatterType("connection", {
   render: { icon: "plug", mode: "qualities" },
   // No claims block: never auto-classified. Only the websocket-pool
   // being creates these (seed/materials/host/host.js).
+});
+
+// ── EXECUTABLE matter types (native-words-via-matter, 21.md P5) ──
+// The floor of "a word's body is matter": a word can point at a blob of one of these types, and the
+// engine RUNS it (matterWord.runMatterWord) via the type's run-op handler. The type declares the
+// effect-class; the executor (the run-op handler) is registered separately in matterWord.js, the
+// same name/handler split do-ops use. "resource types" (a model, code) are just matter types — this
+// is where the executable ones live, not a separate "resource" registry.
+registerMatterType("wasm", {
+  description: "A WebAssembly module — a word's body as sandboxed, deterministic bytes. Run with no imports (no ambient authority), so it is PURE by default: replay-safe, cached by hash.",
+  contentKinds: ["binary"],
+  mimeTypes: ["application/wasm"],
+  ops: ["set-matter", "end-matter", "purge-content"],
+  render: { icon: "code", mode: "download" },
+  executable: { effect: "pure", entry: "run" },
+  claims: { mimeTypes: ["application/wasm"], extensions: [".wasm"] },
+});
+
+registerMatterType("js", {
+  description: "A JavaScript body — a word's body as JS source. The wider trust hole: full ambient authority unless externally sandboxed, so EFFECTFUL by default (a fact-source). A word may override to pure when its body is genuinely pure.",
+  contentKinds: ["text"],
+  ops: ["set-matter", "end-matter"],
+  render: { icon: "code", mode: "text" },
+  executable: { effect: "effectful", entry: "run" },
 });

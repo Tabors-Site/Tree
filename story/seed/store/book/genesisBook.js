@@ -87,20 +87,19 @@ export async function writeGenesisBookFile() {
  * static `.book` file; falling back to a ONE-TIME live build if no file exists yet.
  */
 export async function ensureGenesisBook() {
-  const libraryId = await getLibraryId();
-  if (!libraryId) return null; // library space not planted yet
   const existing = await listLibrary();
   if (existing.length > 0) {
     _genesisRoot = existing.find((e) => e.kind === "genesis")?.root ?? existing[0].root;
     return _genesisRoot;
   }
 
-  const { withIAmAct } = await import("../../sprout.js");
-  const { I_AM } = await import("../../materials/being/seedBeings.js");
-  return withIAmAct("lay the genesis book", async (moment) => {
+  // The genesis book is laid as a 5D NAME-ACT — the I_AM Name signs it onto the library reel with
+  // no being (5d.md: only names act in the library; the being stays home). The first signature.
+  const { withNameAct } = await import("../../sprout.js");
+  return withNameAct("i-am", "lay the genesis book", async (moment) => {
     const book = loadGenesisBookFile() || (await buildGenesisBook()); // static file, else one-time live build
     _genesisRoot = book?.colophon?.root ?? null;
-    await layBookOnLibrary(book, { moment, through: I_AM, kind: "genesis" });
+    await layBookOnLibrary(book, { moment, by: "i-am", kind: "genesis" });
     return _genesisRoot;
   });
 }

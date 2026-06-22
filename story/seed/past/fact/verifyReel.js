@@ -27,7 +27,7 @@
 import Fact from "./fact.js";
 import { computeHash, contentOf, GENESIS_PREV } from "./hash.js";
 
-const REEL_KINDS = new Set(["being", "space", "matter"]);
+const REEL_KINDS = new Set(["being", "space", "matter", "library"]);
 
 /**
  * Walk a reel and verify its hash chain on one history's view.

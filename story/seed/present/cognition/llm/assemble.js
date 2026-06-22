@@ -147,7 +147,7 @@
 import log from "../../../seedStory/log.js";
 import { getToolDescription, resolveTools } from "./tools.js";
 import { resolveCanStar } from "../../roles/canStarResolver.js";
-import { formatInnerFaceBlocksForPrompt } from "./innerFaceFormat.js";
+import { formatInnerFaceBlocksForPrompt, formatInnerFaceBlocksAsWord } from "./innerFaceFormat.js";
 import { getSpaceName } from "../../../materials/space/spaces.js";
 // Side-effect import: registers the foundational seed SEE ops (place,
 // roles, tools, operations, identity, config, peers, extensions) in
@@ -226,7 +226,16 @@ export async function buildPrompt(role, ctx) {
   // calls. ctx threads through so the can* resolver layer can expand
   // relationship-tokens (e.g. { rel: "parent" }) against the live
   // being and its lineage.
-  const capabilities = await renderCapabilities(role, ctx);
+  //
+  // 14.md (the cognition speaks Word): a word-native role renders its
+  // vocabulary as WORD GRAMMAR (the words it may speak) instead of the
+  // JSON-schema capability menu. `wordNative` is the per-role transition
+  // flag — the JSON path is untouched for every other role until the
+  // Word path is proven and the JSON envelope retires (14.md §4.5). The
+  // end-state is always-Word, no flag (oneWordMode IS the system).
+  const capabilities = role.wordNative
+    ? await renderVocabularyAsWord(role, ctx)
+    : await renderCapabilities(role, ctx);
 
   const body = await Promise.resolve(role.prompt(ctx));
   const bodyStr = typeof body === "string" ? body.trim() : "";
@@ -275,11 +284,13 @@ export async function buildPrompt(role, ctx) {
 // ────────────────────────────────────────────────────────────────────
 
 function renderCanSeeBlocks(role, ctx) {
-  // canSee was already resolved at the 2-fold beat into
-  // ctx.innerFace.blocks. We just reformat those blocks into the LLM
-  // prompt prose shape ([<label>]\n<JSON>). No per-soul resolution.
-  void role;
-  return formatInnerFaceBlocksForPrompt(ctx?.innerFace);
+  // canSee was already resolved at the 2-fold beat into ctx.innerFace.blocks — the facts folded
+  // from the being/space/matter reels at the being's position. We reformat those blocks for the
+  // prompt: a word-native role gets them as WORD (present tense; formatInnerFaceBlocksAsWord), every
+  // other role keeps the [<label>]\n<JSON> shape (14.md §4 step 1, the face half).
+  return role?.wordNative
+    ? formatInnerFaceBlocksAsWord(ctx?.innerFace)
+    : formatInnerFaceBlocksForPrompt(ctx?.innerFace);
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -351,6 +362,47 @@ async function renderCapabilities(role, ctx) {
   if (sections.length === 0) return "";
 
   return "and can:\n\n" + sections.join("\n\n");
+}
+
+// 14.md §1 + §4 step 1 — the WORD-NATIVE vocabulary render. The being's granted words are emitted
+// as WORD GRAMMAR (the verb + the word-name + an arg shape) — the vocabulary it may speak this
+// moment — not as JSON tool schemas. The cognition picks ONE declared word and speaks it as Word
+// (in-vocabulary by construction: the "guide" of 13.md §1). The same can* data renderCapabilities
+// uses; the difference is the shape — Word the cognition speaks, not a menu it tool-calls. The
+// output is then parsed by the word parser → runRoleWord (14.md §4 step 2), the same path cherub.word
+// runs. This collapses the JSON envelope (executeTool / seedDoTool / the parameters blocks) to terser
+// Word grammar + the shared fold — `do create-space .config.`, not a JSON.stringify'd arguments blob.
+export async function renderVocabularyAsWord(role, ctx) {
+  const beingCtx = {
+    being: ctx?.being || null,
+    role,
+    currentSpace: ctx?.currentSpace || null,
+    rootId: ctx?.rootId || null,
+    name: ctx?.name || null,
+  };
+  // canSummon receiver-side declarations are not speakable words (see renderCapabilities).
+  const actorSummonEntries = Array.isArray(role.canSummon)
+    ? role.canSummon.filter((e) => typeof e !== "object" || (e?.as ?? "actor") === "actor")
+    : null;
+  const [doEntries, summonEntries, beEntries] = await Promise.all([
+    resolveCanStar(role.canDo, beingCtx),
+    resolveCanStar(actorSummonEntries, beingCtx),
+    resolveCanStar(role.canBe, beingCtx),
+  ]);
+  const nameOf = (e) => (typeof e === "string" ? e : e?.name || "");
+  const descOf = (e) => (typeof e === "object" && e?.description ? `  — ${e.description}` : "");
+  const lines = [];
+  for (const e of doEntries) { const n = nameOf(e); if (n) lines.push(`do ${n} <target>.${descOf(e)}`); }
+  for (const e of summonEntries) { const n = nameOf(e); if (n) lines.push(`call ${n.startsWith("@") ? n : "@" + n} "<said>".${descOf(e)}`); }
+  for (const e of beEntries) { const n = nameOf(e); if (n) lines.push(`be ${n}.${descOf(e)}`); }
+  if (lines.length === 0) return "";
+  return [
+    "The words you may speak — your vocabulary this moment. Choose ONE and speak it as Word, not JSON:",
+    "",
+    ...lines,
+    "",
+    "You may also `see <address>.` to look elsewhere. Speak your one Word.",
+  ].join("\n");
 }
 
 function renderExit(role) {

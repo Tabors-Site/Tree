@@ -8,10 +8,11 @@
 // The fold engine never imports a specific reducer; it asks
 // `reducers.get(type)` and gets back `{ initial, reduce }`.
 
-import * as being  from "./being/reducer.js";
-import * as space  from "./space/reducer.js";
-import * as matter from "./matter/reducer.js";
-import * as name   from "./name/reducer.js";
+import * as being   from "./being/reducer.js";
+import * as space   from "./space/reducer.js";
+import * as matter  from "./matter/reducer.js";
+import * as name    from "./name/reducer.js";
+import * as library from "./library/reducer.js";
 import { resolveReducerFromFold } from "../present/word/wordStore.js";
 
 const _registry = {
@@ -19,6 +20,7 @@ const _registry = {
   space,
   matter,
   name,
+  library,
 };
 
 /**

@@ -7,18 +7,17 @@
 // domains. Things the discovery payload surfaces, things a peer
 // story sees when it reaches in.
 //
-// At genesis I plant the `./config` heaven space and write the
-// boot-time settings into its qualities Map. Every later boot, I
-// read that Map back through `initStoryConfig()`.
-// `getStoryConfigValue(key)` and `setStoryConfigValue(key, value)`
-// are the only sanctioned paths in or out for story-identity keys.
+// Config lives on the ONE 5D library reel (of:{kind:"library"}) — each setting is a config-set
+// NAME-ACT (verb:"name", bodiless, signed by the acting Name; no being, out of any history; 5d.md).
+// `initStoryConfig()` folds those facts back through the library reducer into a read cache. There
+// is no `./config` heaven space anymore. `getStoryConfigValue(key)` / `setStoryConfigValue(key,
+// value)` are the only sanctioned paths in/out for story-identity keys; boot-time defaults come
+// from CONFIG_DEFAULTS + the env fallback in getStoryConfigValue (nothing is pre-seeded at genesis).
 //
-// Seed runtime knobs (LLM call shape, scheduler backpressure, hook
-// timeouts, cleanup intervals — the apparatus's internal tuning)
-// live in [internalConfig.js](internalConfig.js). Both files write to the
-// SAME underlying store (this file owns the storage primitive);
-// the split is conceptual — readers reach the right surface at
-// import-site.
+// Seed runtime knobs (LLM call shape, scheduler backpressure, hook timeouts, cleanup intervals —
+// the apparatus's internal tuning) live in [internalConfig.js](internalConfig.js). Both files write
+// to the SAME underlying store (this file owns the storage primitive); the split is conceptual —
+// readers reach the right surface at import-site.
 
 // Module-state declarations FIRST (before imports that may chain
 // back into this module during their own top-level). `var` is used
@@ -35,8 +34,6 @@ var initialized = false;
 var cachedStoryUrl = null;
 
 import log from "./seedStory/log.js";
-import Space from "./materials/space/space.js";
-import { HEAVEN_SPACE } from "./materials/space/heavenSpaces.js";
 import { I_AM } from "./materials/being/seedBeings.js";
 import { registerOperation } from "./ibp/operations.js";
 // NOTE: protocol.js + identity.js are pulled in lazily inside the
@@ -142,32 +139,27 @@ function deepCopy(value) {
 
 async function loadConfigFromDb() {
   try {
-    const { findByHeavenSpace } = await import("./materials/projections.js");
-    const configSlot = await findByHeavenSpace(HEAVEN_SPACE.CONFIG, "0");
-    if (!configSlot || !configSlot.state?.qualities) {
-      log.warn(
-        "Story",
-        "No config heaven space found or qualities is empty. Using empty config.",
-      );
-      configCache = {};
-      return;
-    }
-    // All config keys live under qualities.config.<key>.
-    const q = configSlot.state.qualities;
-    const configNs = q instanceof Map ? q.get("config") : q.config;
-    if (!configNs || typeof configNs !== "object") {
-      configCache = {};
-      return;
-    }
-    const raw =
-      configNs instanceof Map ? Object.fromEntries(configNs) : { ...configNs };
+    // Config lives on the ONE 5D library reel (of:{kind:"library"}) as config-set/config-delete
+    // NAME-ACTS — story-level data, out of any history, no being. Replay those facts through the
+    // library reducer (facts-as-projection: the fold IS the truth). No more ./config heaven space.
+    const Fact = (await import("./past/fact/fact.js")).default;
+    const { getStoryDomain } = await import("./ibp/address.js");
+    const { initial, reduce } = await import("./materials/library/reducer.js");
+    const libraryId = getStoryDomain();
+    const facts = await Fact.find({
+      "of.kind": "library",
+      "of.id": libraryId,
+      act: { $in: ["config-set", "config-delete"] },
+    }).sort({ seq: 1 }).lean();
 
-    // Strip keys that would fail validation (manual DB edits, proto
-    // pollution injected directly into MongoDB, Mongoose lean() leaks).
+    let state = initial();
+    for (const f of facts) state = reduce(state, f);
+
+    // Strip keys that would fail validation (manual DB edits, proto pollution, lean() leaks).
     const clean = {};
-    for (const [k, v] of Object.entries(raw)) {
+    for (const [k, v] of Object.entries(state.config || {})) {
       if (DANGEROUS_KEYS.has(k)) {
-        log.warn("Story", `Dangerous config key "${k}" found in DB. Skipped.`);
+        log.warn("Story", `Dangerous config key "${k}" found on the library reel. Skipped.`);
         continue;
       }
       if (k.startsWith("$") || k.startsWith("_")) continue;
@@ -177,7 +169,7 @@ async function loadConfigFromDb() {
   } catch (err) {
     log.error(
       "Story",
-      `Failed to load config from DB: ${err.message}. Using empty config.`,
+      `Failed to load config from the library reel: ${err.message}. Using empty config.`,
     );
     configCache = {};
   }
@@ -198,32 +190,33 @@ export function getStoryConfigValue(key) {
   return null;
 }
 
-// Cached _id of the `./config` heaven space. Looked up on first write
-// and stable thereafter — the heaven spaces are created once at
-// genesis and never deleted. Avoids the heavenSpace-marker scan on every
-// config write during boot.
-let cachedConfigSpaceId = null;
-async function getConfigSpace() {
-  const { loadProjection, findByHeavenSpace } =
-    await import("./materials/projections.js");
-  if (cachedConfigSpaceId) {
-    const slot = await loadProjection("space", cachedConfigSpaceId, "0");
-    if (slot) return { _id: slot.id, ...slot.state };
-    cachedConfigSpaceId = null; // stale; refetch
-  }
-  const slot = await findByHeavenSpace(HEAVEN_SPACE.CONFIG, "0");
-  if (slot) {
-    cachedConfigSpaceId = String(slot.id);
-    return { _id: slot.id, ...slot.state };
-  }
-  return null;
+// A config write is a 5D NAME-ACT on the library reel — emit a config-set/config-delete fact
+// (verb:"name", bodiless, signed by the acting Name) within its own withNameAct. Self-contained:
+// no moment threading, no ./config space. The acting Name is the caller's identity, else the I_AM.
+async function nameActConfig(act, params, identity) {
+  const nameId = (identity?.nameId ?? identity?.beingId) || I_AM;
+  const { withNameAct } = await import("./sprout.js");
+  const { emitFact } = await import("./past/fact/facts.js");
+  const { getStoryDomain } = await import("./ibp/address.js");
+  const libraryId = getStoryDomain();
+  await withNameAct(nameId, `config:${act}:${params.key}`, async (m) => {
+    await emitFact(
+      {
+        verb: "name",
+        act,
+        through: null,
+        by: nameId,
+        of: { kind: "library", id: libraryId },
+        params,
+        actId: m.actId,
+        history: "0",
+      },
+      m,
+    );
+  });
 }
 
-export async function setStoryConfigValue(
-  key,
-  value,
-  { internal, identity, moment } = {},
-) {
+export async function setStoryConfigValue(key, value, { internal, identity } = {}) {
   validateKey(key);
   if (PROTECTED_KEYS.has(key) && !internal) {
     throw new Error(
@@ -231,69 +224,23 @@ export async function setStoryConfigValue(
     );
   }
   validateValue(value);
-  if (!moment) {
-    throw new Error(
-      `setStoryConfigValue(${key}) requires moment. Runtime callers thread the moment's ctx; seed-internal callers (e.g. migrations) wrap in withIAmAct(...).`,
-    );
-  }
 
-  const configSpace = await getConfigSpace();
-  if (!configSpace) {
-    throw new Error(
-      "Config write failed: config heaven space not found at <story>/./config. Story may need repair.",
-    );
-  }
-
-  // Route through do.set-space so the write IS a Fact on the `./config`
-  // space's reel. internal=true (seed scaffolding) attributes via the
-  // scaffold path; user-driven writes thread caller identity. Either
-  // way, the fact joins the wrapping moment's ΔF.
-  const { doVerb } = await import("./ibp/verbs/do.js");
-  const opts = identity ? { identity, moment } : { identity: I_AM, moment };
-  await doVerb(
-    { kind: "space", id: String(configSpace._id) },
-    "set-space",
-    { field: `qualities.config.${key}`, value },
-    opts,
-  );
+  await nameActConfig("config-set", { key, value }, identity);
 
   if (!configCache) configCache = {};
   configCache[key] = value;
-
   log.verbose("Story", `Config set: ${key}`);
 }
 
-export async function deleteStoryConfigValue(
-  key,
-  { internal, identity, moment } = {},
-) {
+export async function deleteStoryConfigValue(key, { internal, identity } = {}) {
   validateKey(key);
   if (PROTECTED_KEYS.has(key) && !internal) {
     throw new Error(
       `Config key "${key}" is protected and cannot be deleted manually`,
     );
   }
-  if (!moment) {
-    throw new Error(
-      `deleteStoryConfigValue(${key}) requires moment. Runtime callers thread the moment's ctx; seed-internal callers wrap in withIAmAct(...).`,
-    );
-  }
 
-  const configSpace = await getConfigSpace();
-  if (!configSpace) {
-    throw new Error(
-      "Config delete failed: config heaven space not found at <story>/./config.",
-    );
-  }
-
-  const { doVerb } = await import("./ibp/verbs/do.js");
-  const opts = identity ? { identity, moment } : { identity: I_AM, moment };
-  await doVerb(
-    { kind: "space", id: String(configSpace._id) },
-    "set-space",
-    { field: `qualities.config.${key}`, value: null },
-    opts,
-  );
+  await nameActConfig("config-delete", { key }, identity);
 
   if (configCache) delete configCache[key];
   log.verbose("Story", `Config deleted: ${key}`);
@@ -406,21 +353,16 @@ export async function reloadStoryConfig() {
 // DO operations: set-config / delete-config
 // ─────────────────────────────────────────────────────────────────────
 //
-// Reads route through `ibp:see` on `<story>/./config` (returns the
-// cached snapshot); writes route through the two ops below which wrap
-// setStoryConfigValue / deleteStoryConfigValue. The wrappers
-// handle cache invalidation, validation, and the PROTECTED_KEYS gate
-// (seedVersion and disabledExtensions can only be written from
-// scaffold flows).
+// Writes route through the two ops below, which wrap setStoryConfigValue /
+// deleteStoryConfigValue. The helpers themselves lay the canonical Fact — a 5D NAME-ACT
+// (config-set / config-delete, verb:"name", bodiless) on the library reel — and handle cache
+// invalidation, validation, and the PROTECTED_KEYS gate (seedVersion / disabledExtensions are
+// scaffold-only). `skipAudit: true` so the outer DO dispatch does NOT double-stamp; the helper's
+// name-act IS the audit Fact. The op `targets:["space"]` is just the dispatch vehicle — config is
+// no longer a space (the target is ignored; the write lands on the library reel).
 //
-// `skipAudit: true` because the underlying helpers route their writes
-// through `do.set-space` on the `./config` space and that inner set IS
-// the canonical audit Fact. Without skipAudit the outer op would
-// double-stamp.
-//
-// Self-register at module load — `seed/services.js` imports
-// storyConfig.js as a side effect so the registry is populated
-// before any caller dispatches.
+// Self-register at module load — `seed/services.js` imports storyConfig.js as a side effect so the
+// registry is populated before any caller dispatches.
 
 registerOperation("set-config", {
   targets: ["space"],
@@ -430,7 +372,7 @@ registerOperation("set-config", {
     key: { type: "text", label: "Config key", required: true },
     value: { type: "json", label: "Value (JSON)", required: true },
   },
-  handler: async ({ params, identity, moment }) => {
+  handler: async ({ params, identity }) => {
     const { key, value } = params || {};
     if (!key || typeof key !== "string") {
       throw new Error("set-config: `key` is required");
@@ -440,16 +382,12 @@ registerOperation("set-config", {
         "set-config: `value` is required (use delete-config to remove)",
       );
     }
-    // I_AM-internal flows (migrations, first-boot bootstrap, manifest
-    // sync) may write PROTECTED_KEYS (seedVersion, disabledExtensions).
-    // Other beings stay subject to the protected-key gate inside
-    // setStoryConfigValue. `internal` used to be derived from a
-    // `scaffold` ctx field; `identity.beingId === I_AM` is the same
-    // signal post-retirement.
+    // I_AM-internal flows (migrations, first-boot bootstrap, manifest sync) may write
+    // PROTECTED_KEYS (seedVersion, disabledExtensions). Other beings stay subject to the
+    // protected-key gate inside setStoryConfigValue.
     await setStoryConfigValue(key, value, {
       internal: identity?.beingId === I_AM,
       identity,
-      moment,
     });
     return { key, value };
   },
@@ -462,7 +400,7 @@ registerOperation("delete-config", {
   args: {
     key: { type: "text", label: "Config key", required: true },
   },
-  handler: async ({ params, identity, moment }) => {
+  handler: async ({ params, identity }) => {
     const { key } = params || {};
     if (!key || typeof key !== "string") {
       throw new Error("delete-config: `key` is required");
@@ -470,7 +408,6 @@ registerOperation("delete-config", {
     await deleteStoryConfigValue(key, {
       internal: identity?.beingId === I_AM,
       identity,
-      moment,
     });
     return { deleted: true, key };
   },

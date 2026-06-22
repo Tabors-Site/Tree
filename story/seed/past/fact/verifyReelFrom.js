@@ -20,7 +20,7 @@
 import Fact from "./fact.js";
 import { computeHash, contentOf, GENESIS_PREV } from "./hash.js";
 
-const REEL_KINDS = new Set(["being", "space", "matter"]);
+const REEL_KINDS = new Set(["being", "space", "matter", "library"]);
 
 /**
  * Walk a reel's hash chain from a declared anchor, history-aware.

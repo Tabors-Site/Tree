@@ -80,10 +80,11 @@ function resolveTest(test, ctx) {
   }
 }
 
-// Resolve a condition to a boolean. The four leaf modes (8.md Engine answers):
+// Resolve a condition to a boolean. The leaf modes (8.md Engine answers):
 //   all/any      → recurse AND / OR
 //   test         → a parser-lifted skeleton, resolved here
-//   resolvedBy   → a domain predicate, delegated to a host builtin (ctx.env.host)
+//   resolvedBy   → a domain predicate (host builtin, spread args), via ctx.env.host
+//   seeCall      → an inline see-op call (host builtin, `{ args }` object), via ctx.env.host
 //   flag         → a flow-local boolean the parser named via inferFlag (§5/Q4)
 // `negated` flips the leaf last (XOR), distinct from negation on an act (§10).
 export async function resolveCond(cond, ctx) {
@@ -105,6 +106,14 @@ export async function resolveCond(cond, ctx) {
     const fn = ctx?.env?.host?.[cond.resolvedBy];
     const args = Array.isArray(cond.args) ? cond.args.map((a) => resolveOperand(a, ctx)) : [];
     v = fn ? !!(await fn(...args, ctx)) : false;
+  } else if (cond.seeCall) {
+    // an inline SEE-OP call as a predicate (the as-removal): `If destination-missing(history)`.
+    // Dispatches through ctx.env.host EXACTLY as the evaluator's callHost runs `see <op>(args)
+    // as v` — the op takes a single `{ args }` object (the see-op convention, NOT resolvedBy's
+    // spread), lays no fact, and its truthiness IS the condition. Fail-closed when unregistered.
+    const fn = ctx?.env?.host?.[cond.seeCall];
+    const args = Array.isArray(cond.args) ? cond.args.map((a) => resolveOperand(a, ctx)) : [];
+    v = fn ? !!(await fn({ args }, ctx)) : false;
   } else if (cond.flag != null) {
     // a bare flag: a §5 boolean mark, OR a bound value the prose reads as present/absent
     // ("if no candidates", "if no target"). Truthy iff present AND non-empty, so an empty

@@ -50,9 +50,10 @@ const FactSchema = new mongoose.Schema({
   _id: { type: String },
   date: { type: Date, default: Date.now },
 
-  // The being being the name acted THROUGH. I am the actor only when
-  // no being yet exists (pre-being scaffold flows: server boot, migrations).
-  through: { type: String, ref: "Being", required: true },
+  // The being the name acted THROUGH (the presence). NULL for a 5D NAME-fact: a name acting in
+  // the library has no being (5d.md — the being stays home; verb:"name" library facts are bodiless,
+  // signed by `by`). The logFact guard enforces "through OR a name-act" structurally.
+  through: { type: String, ref: "Being", default: null },
 
   // The actor NAME — the Name (identity) that DID this fact, taken
   // DIRECTLY from the moment's act (act.by), never re-resolved here.
@@ -83,7 +84,7 @@ const FactSchema = new mongoose.Schema({
   of: {
     kind: {
       type: String,
-      enum: ["space", "matter", "being", "name", "place", "stance"],
+      enum: ["space", "matter", "being", "name", "library", "place", "stance"],
     },
     id: { type: String },
     _id: false,

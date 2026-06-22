@@ -22,7 +22,7 @@
 import { IbpError, IBP_ERR } from "../protocol.js";
 import { getStoryDomain } from "../address.js";
 import { I_AM } from "../../materials/being/seedBeings.js";
-import { emitFact } from "../../past/fact/facts.js";
+import { emitWordFact, stampsFact } from "../factResult.js";
 import { resolveNameOpFromFold } from "../../present/word/wordStore.js";
 import { resolveNameId } from "../../materials/name/registry.js";
 import {
@@ -124,47 +124,43 @@ export async function nameVerb(operation, payload = {}, opts = {}) {
     history,
   });
 
-  await writeNameFact({
-    operation,
-    identity,
-    result,
-    actId: moment?.actId || null,
+  // EVERY ACT MAKES A FACT — emitWordFact stamps the one name:<op> fact through the keystone (the
+  // twin of the BE ops), reading the verb (name) + target NOUN (name) from the word's binding.
+  // declareNameFact attaches the fact's params (declare → {spec}; banish/connect/release →
+  // {byActor}) + the target name. The keystone's name-policy OMITS the result field entirely, so the
+  // minted `reveal` cannot reach the chain — it rides ONLY the RETURN below to the asker.
+  const { factResult, through } = declareNameFact(result, { operation, identity });
+  await emitWordFact(
+    nameOp,
+    { through, actId: moment?.actId || null, history },
+    factResult,
     moment,
-    history,
-  });
+  );
 
   // `reveal` (declare only) carries the freshly minted key ONCE for backup —
-  // private key + 24 words + public key. It rode the handler return, never the
+  // private key + 24 words + public key. It rides the handler return, never the
   // fact. Null for banish/connect/release and for imported keys.
   return { ok: true, operation, nameId: result.nameId, reveal: result.reveal || null };
 }
 
 /**
- * Stamp the name:<op> fact. The fact's TARGET is the name acted on (the
- * NEW name for declare — making its reel; the addressed name for banish).
- * The ACTOR (fact.nameId) is filled by emitFact from the moment's act —
- * I_AM today. Mirrors writeBeFact.
+ * Declare the one name:<op> fact on a name-op result, for the dispatcher to stamp through the
+ * keystone (emitWordFact) — the twin of be.js's declareConnectFact. The fact's TARGET is the name
+ * acted on (the NEW name for declare — making its reel; the addressed name for banish). The params:
+ * declare records the public spec; banish/connect/release record only `byActor`. The ACTOR
+ * (`through`) is the caller's being, or I_AM for the pre-world ops (every being's trueName is i-am
+ * today). The minted `reveal` (declare) is NOT touched here and never reaches the fact: the keystone
+ * OMITS the result field for a name-op, so the key rides ONLY the verb's RETURN to the asker.
  */
-async function writeNameFact({ operation, identity, result, actId, moment, history }) {
-  if (!actId) {
-    throw new IbpError(
-      IBP_ERR.INTERNAL,
-      `name ${operation}: missing ambient actId. Thread moment from the caller's moment, ` +
-        `or open one via withIAmAct(...) / withBeingAct(...).`,
-    );
-  }
+function declareNameFact(result, { operation, identity }) {
   const actorBeingId = identity?.beingId || I_AM;
-  const params = operation === "declare"
-    ? { spec: result.spec }
-    : { byActor: String(actorBeingId) };
-
-  await emitFact({
-    verb:    "name",
-    act:     operation,            // "declare" | "banish"
-    through: actorBeingId,
-    of:      { kind: "name", id: String(result.nameId) },
-    params,
-    actId,
-    history,
-  }, moment);
+  const params =
+    operation === "declare"
+      ? { spec: result.spec }
+      : { byActor: String(actorBeingId) };
+  const factResult = stampsFact(result, params, {
+    kind: "name",
+    id: String(result.nameId),
+  });
+  return { factResult, through: String(actorBeingId) };
 }

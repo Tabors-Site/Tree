@@ -29,7 +29,7 @@ try {
     ? ok(`every Map type folds: ${folded.length} folded >= ${mapTypes.length} in the Map`)
     : bad(`fold count`, { folded: folded.length, map: mapTypes.length });
   // The parity that makes a fold-first getMatterType safe: field-by-field value-identity.
-  const FIELDS = ["name", "description", "contentKinds", "mimeTypes", "ops", "render", "claims", "ownerExtension"];
+  const FIELDS = ["name", "description", "contentKinds", "mimeTypes", "ops", "render", "claims", "executable", "ownerExtension"];
   const mismatches = [];
   for (const m of mapTypes) {
     const f = resolveTypeFromFold(m.name);
@@ -43,6 +43,12 @@ try {
   (file && file.ops.includes("set-matter") && file.contentKinds.includes("binary"))
     ? ok(`"file" type folds with its ops + contentKinds (a real type, not a stub)`)
     : bad(`file type`, file);
+  // 21.md P5: an EXECUTABLE matter type folds with its run-op declaration (effect-class + entry), so
+  // the production fold-first getMatterType sees it as runnable — not just the Map backstop.
+  const wasm = resolveTypeFromFold("wasm");
+  (wasm && wasm.executable && wasm.executable.effect === "pure" && wasm.executable.entry === "run")
+    ? ok(`"wasm" folds as EXECUTABLE (effect=pure, entry=run) — the run-op + effect-class ride the fold`)
+    : bad(`wasm executable did not ride the fold`, wasm);
   console.log(`\n  ${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);
 } catch (e) { console.log("\n  ! crashed: " + (e.stack || e.message)); process.exit(3); }

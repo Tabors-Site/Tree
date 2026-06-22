@@ -46,7 +46,7 @@ import { withReelLock } from "../reel/appendLock.js";
 // Reel-bearing target kinds — those with their own seq counter. Other
 // kinds (place, stance) and target-less facts carry seq:null and stay
 // outside the fold model for now.
-const REEL_KINDS = new Set(["being", "space", "matter", "name"]);
+const REEL_KINDS = new Set(["being", "space", "matter", "name", "library"]);
 
 // ─────────────────────────────────────────────────────────────────────────
 // WRITE
@@ -67,6 +67,7 @@ const VALID_TARGET_KINDS = new Set([
   "matter",
   "being",
   "name",
+  "library",
   "place",
   "stance",
 ]);
@@ -134,8 +135,13 @@ export async function logFact(input, opts = {}) {
   // CROSS-WORLD.md.
   history = input.history;
 
-  if (!through || !act) {
-    throw new Error("logFact requires through and act");
+  // EMBODIMENT (see below): WORLD facts (do/be/summon) require `through` (a body); the ONE
+  // bodiless case is the name/identity-and-5D layer — verb:"name" facts (declare/banish on the
+  // name reel, and the 5D library acts share-book/peer-add/config on the library reel) are signed
+  // by the Name with NO being (5d.md: the being stays home; only the name acts there). Those
+  // require `by` (the signer) instead of `through`.
+  if ((!through && verb !== "name") || !act) {
+    throw new Error("logFact requires through (or, for verb:name, a bodiless name-act) and act");
   }
   if (typeof history !== "string" || !history.length) {
     throw new Error(

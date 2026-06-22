@@ -180,24 +180,12 @@ export async function runSeedMigrations(moment) {
     }
   }
 
-  // Persist the new seedVersion. The fact joins the migrations
-  // moment's ΔF (same withIAmAct as the migrations themselves) so the
-  // version bump commits atomically with whatever the migrations did.
-  // scaffold:true bypasses stance auth (this is the I-Am acting on
-  // its own .config space); moment carries the actId.
-  const { findByHeavenSpace } = await import("../../materials/projections.js");
-  const { HEAVEN_SPACE } = await import("../../materials/space/heavenSpaces.js");
-  const { doVerb } = await import("../../ibp/verbs/do.js");
-  const configNode = await findByHeavenSpace(HEAVEN_SPACE.CONFIG, "0");
-  if (!configNode) {
-    throw new Error("Cannot persist seedVersion: .config heaven space not found");
-  }
-  await doVerb(
-    { kind: "space", id: String(configNode.id) },
-    "set-config",
-    { key: "seedVersion", value: currentVersion },
-    { identity: I_AM, moment },
-  );
+  // Persist the new seedVersion as a config-set NAME-ACT on the library reel (5d.md — config is
+  // story-level data on the one library reel now, not a ./config heaven space). internal:true to
+  // pass the PROTECTED_KEYS gate (seedVersion). It is its own name-act, not folded into the
+  // migrations moment — fine on a fresh DB (genesis rebuilds every boot).
+  const { setStoryConfigValue } = await import("../../storyConfig.js");
+  await setStoryConfigValue("seedVersion", currentVersion, { internal: true, identity: I_AM });
 
   if (ran > 0) {
     log.verbose("Seed", `${ran} migration(s) applied. Seed is now at ${currentVersion}`);

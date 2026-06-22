@@ -36,6 +36,11 @@ const ctx = {
       hasAuthorityOver: async (nameId, beingId) => nameId === "z6Name" && beingId === "b-cand",
       // an existence lookup (findByName) used as a gate predicate:
       nameExists: async (name) => name === "taken",
+      // see-op CONVENTION ops: take a single { args } object (NOT spread) — the same shape
+      // the evaluator's callHost passes `see <op>(args) as v`. The inline `If <op>(args)` cond
+      // (the as-removal) dispatches through THIS, exercising cond.seeCall.
+      "destination-missing": async ({ args: [history] }) => String(history) === "ghost",
+      "being-lives-on": async ({ args: [caller, history] }) => caller === "b-cand" && history === "0",
     },
   },
 };
@@ -75,6 +80,24 @@ await is("NEGATED resolvedBy hasAuthorityOver other being → true",
   { negated: true, resolvedBy: "hasAuthorityOver", args: [{ ref: "identity.nameId" }, "b-other"] }, ctx, true);
 await is("resolvedBy unknown host builtin → false (fail-closed)",
   { resolvedBy: "noSuchHost", args: [] }, ctx, false);
+
+// ── seeCall: an inline see-op call as a predicate (the as-removal, `{ args }` convention) ──
+await is("seeCall destination-missing(ghost) → true",
+  { seeCall: "destination-missing", args: ["ghost"] }, ctx, true);
+await is("seeCall destination-missing(home) → false",
+  { seeCall: "destination-missing", args: [{ ref: "identity.story" }] }, ctx, false);
+await is("NEGATED seeCall being-lives-on(caller, '0') → false (caller lives on)",
+  { negated: true, seeCall: "being-lives-on", args: [{ ref: "identity.beingId" }, "0"] }, ctx, false);
+await is("seeCall unknown op → false (fail-closed)",
+  { seeCall: "noSuchSeeOp", args: [] }, ctx, false);
+
+// ── test:compare strict (the live-object form `the hero's health is less than 5`) ──
+await is("compare lt: backers(2) < quorum(2) → false",
+  { test: { op: "compare", as: "lt", path: "backers", against: { ref: "quorum" } } }, ctx, false);
+await is("compare lt: backers(2) < 5 → true",
+  { test: { op: "compare", as: "lt", path: "backers", against: 5 } }, ctx, true);
+await is("compare gt: backers(2) > 1 → true",
+  { test: { op: "compare", as: "gt", path: "backers", against: 1 } }, ctx, true);
 
 // ── flag: a §5 flow-local boolean the parser named ──
 await is("flag beingFound (set)", { flag: "beingFound" }, ctx, true);

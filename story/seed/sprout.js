@@ -319,6 +319,83 @@ export async function withBeingAct(beingId, sourceLabel, history, fn) {
   });
 }
 
+/**
+ * withNameAct — open + seal a 5D NAME-ACT: a Name acts in the library with NO being (5d.md — the
+ * being stays home; only the name acts there). The act-chain keys by the NAME (not a being), on
+ * history "0" (the library reel never forks — separated by KIND, not by a history marker). `by` is
+ * the name itself (it IS the signer); `through` is null. The 4D peer of withBeingAct, with the body
+ * dropped: by/through stay split (as the schema already has them), through goes home.
+ *
+ * @param {string} nameId       the acting Name (the signer + the chain key)
+ * @param {string} sourceLabel  short human label for the act's startMessage
+ * @param {(moment) => Promise<*>} fn
+ * @returns {Promise<*>} fn's return value
+ */
+export async function withNameAct(nameId, sourceLabel, fn) {
+  if (typeof nameId !== "string" || !nameId.length) {
+    throw new Error("withNameAct: nameId is required");
+  }
+  if (typeof fn !== "function") {
+    throw new Error("withNameAct: fn must be a function");
+  }
+  const { withActChainLock } = await import("./past/act/actChainLock.js");
+  const { getStoryDomain } = await import("./ibp/address.js");
+  const story = getStoryDomain();
+  // Keyed by the NAME on the 5D marker history "5d" — runs parallel to that name's being-chains
+  // (different key AND different history, so even the I_AM, whose name==being id, never collides).
+  return withActChainLock(story, "5d", nameId, async () => {
+    const now = new Date();
+    const { computeActId, readActHead } = await import("./past/act/actHash.js");
+    const opening = {
+      through: null, // 5D: the being stays home
+      to: null,
+      ibpAddress: null,
+      activeRole: null,
+      inboxMessageId: null,
+      inReplyTo: null,
+      parentThread: null,
+      startMessage: { content: sourceLabel || "name acts.", source: nameId },
+      story,
+      history: "5d",
+    };
+    const p = await readActHead(story, "5d", nameId);
+    const actId = computeActId(p, opening);
+    const plannedAct = {
+      _id: actId,
+      p,
+      by: nameId,    // the Name IS the signer + the chain key
+      through: null, // no body
+      to: null,
+      ibpAddress: null,
+      activeRole: null,
+      inboxMessageId: null,
+      inReplyTo: null,
+      rootCorrelation: actId,
+      parentThread: null,
+      answers: null,
+      receivedAt: now,
+      stampedAt: now,
+      startMessage: { content: sourceLabel || "name acts.", source: nameId },
+      story,
+      history: "5d",
+    };
+    const moment = { actId, deltaF: [], afterSeal: [], actorAct: plannedAct };
+    const result = await fn(moment);
+    if (moment.deltaF.length === 0) return result;
+    const sealed = await sealAct(plannedAct, {
+      content: `${sourceLabel}: sealed.`,
+      stopped: false,
+      deltaF: moment.deltaF,
+      afterSeal: moment.afterSeal,
+      opCount: moment._opCount || 0,
+    });
+    if (!sealed) {
+      throw new Error(`withNameAct(${sourceLabel}): sealAct returned null — Act did not materialize`);
+    }
+    return result;
+  });
+}
+
 // `withBatch` is intentionally NOT defined here. Earlier sketches
 // modeled a batch as "many ops folded into one moment with a label" —
 // that violates the moment-act discipline. Per philosophy/MOMENT.md,
@@ -339,35 +416,20 @@ const STORY_HEAVEN_SPACE = {
   heavenSpace: HEAVEN_SPACE.HEAVEN,
 };
 
+// NOTE: identity / peers / library / config are NOT planted as heaven spaces anymore — they were
+// "facts dumped on a space reel." Story/name-level data lives on the ONE 5D library reel now
+// (of:{kind:"library"}, name-signed, out of any history): config = config-set/config-delete facts
+// (storyConfig.js), books = share-book facts, peers = peer-add/remove facts. identity's domain is
+// read from process.env.STORY_DOMAIN (the space's quality had zero readers). The defaults that the
+// old ./config space pre-seeded (STORY_NAME, storyUrl) are covered by CONFIG_DEFAULTS + the env
+// fallback in getStoryConfigValue — no genesis seed needed. The KEEP-list (extensions/tools/roles/
+// operations/source/threads/histories/host/factory) are registry-mirrors / structural containers,
+// not data storage.
 const STORY_HEAVEN_SPACES = [
-  {
-    name: "identity",
-    heavenSpace: HEAVEN_SPACE.IDENTITY,
-    buildQualities: () => {
-      const domain = process.env.STORY_DOMAIN || "localhost";
-      return new Map([["domain", domain]]);
-    },
-  },
-  {
-    name: "config",
-    heavenSpace: HEAVEN_SPACE.CONFIG,
-    buildQualities: () => {
-      const name = process.env.STORY_NAME || "My Place";
-      const domain = process.env.STORY_DOMAIN || "localhost";
-      return new Map([
-        ["STORY_NAME", name],
-        ["storyUrl", `http://${domain}:${process.env.PORT || 3000}`],
-      ]);
-    },
-  },
-  { name: "peers", heavenSpace: HEAVEN_SPACE.PEERS },
   { name: "extensions", heavenSpace: HEAVEN_SPACE.EXTENSIONS },
   { name: "tools", heavenSpace: HEAVEN_SPACE.TOOLS },
   { name: "roles", heavenSpace: HEAVEN_SPACE.ROLES },
   { name: "operations", heavenSpace: HEAVEN_SPACE.OPERATIONS },
-  // The Library — the catalog of shared Books. Each share-book lays a
-  // fact on this space's reel; receive-book reads + plants from it.
-  { name: "library", heavenSpace: HEAVEN_SPACE.LIBRARY },
   // source mirrors story/. Populated by seed/materials/space/
   // source.js (the disk-fold populator) at boot. After MIRROR.md
   // step 2 the chain is the truth: the FUSE mount (scripts/

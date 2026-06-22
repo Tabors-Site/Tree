@@ -180,16 +180,41 @@ export function resolveHostHandler(ref) {
 // disabled, has no do-answer (the runnable handler ref), or the handler ref is unresolvable.
 export function resolveWordFromFold(name) {
   const w = getWordSync(name);
-  if (!w?.do?.ref) return null;
-  const handler = resolveHostHandler(w.do.ref);
-  if (!handler) return null;
+  if (!w) return null;
+  // A word's BODY is EITHER a host-handler ref (do.ref → bottom-turtle JS) OR matter (a content-
+  // addressed blob run through its matter TYPE's run-op — P5 native-words, matterWord.js). A
+  // matter-bodied word resolves WITHOUT a host handler; the dispatcher routes it to runMatterWord
+  // instead of calling a JS handler. Shape matches runMatterWord's `matter` param ({hash,type,
+  // effect?,entry?}); the binding side (bindWord carrying matter:{…}) is the engine lane's wiring.
+  const matter =
+    w.matter && w.matter.hash && w.matter.type
+      ? {
+          hash: String(w.matter.hash),
+          type: String(w.matter.type),
+          ...(w.matter.effect === "pure" || w.matter.effect === "effectful"
+            ? { effect: w.matter.effect }
+            : {}),
+          ...(typeof w.matter.entry === "string" && w.matter.entry
+            ? { entry: w.matter.entry }
+            : {}),
+        }
+      : null;
+  const handler = w.do?.ref ? resolveHostHandler(w.do.ref) : null;
+  // Unrunnable: neither a resolvable host handler nor a matter body. (A do.ref that fails to resolve
+  // with NO matter fallback stays null — the prior "missing handler → null" contract, preserved.)
+  if (!handler && !matter) return null;
   const spec = {
     name,
     kind: w.kind || null,
     handler,
+    matter,
     factAction: typeof w.factAction === "string" && w.factAction ? w.factAction : null,
     factVerb: typeof w.factVerb === "string" && w.factVerb ? w.factVerb : null,
     noun: typeof w.noun === "string" && w.noun ? w.noun : null,
+    // resultPolicy.keep: the fail-closed allowlist the keystone (emitWordFact) curates the stamped
+    // fact's result to. Carried through so the dispatcher's resolved binding reaches the policy.
+    resultPolicy:
+      w.resultPolicy && Array.isArray(w.resultPolicy.keep) ? w.resultPolicy : null,
     bootstrap: !!w.bootstrap,
     targets: Array.isArray(w.targets) && w.targets.length ? w.targets : null,
     matterTypes: Array.isArray(w.matterTypes) && w.matterTypes.length ? w.matterTypes : null,
@@ -217,6 +242,7 @@ export function resolveDoOpFromFold(name) {
   if (!w) return null;
   const spec = {
     handler: w.handler,
+    matter: w.matter || null, // a native do-op: body is matter, dispatch routes to runMatterWord
     targets: w.targets || ["being", "space", "matter"],
     matterTypes: w.matterTypes,
     factAction: w.factAction || String(name),
@@ -295,6 +321,7 @@ export async function declareTypesToFold({ moment = null, history = "0" } = {}) 
       ops: Array.isArray(t.ops) ? [...t.ops] : [],
       render: t.render && typeof t.render === "object" ? { ...t.render } : null,
       claims: t.claims && typeof t.claims === "object" ? JSON.parse(JSON.stringify(t.claims)) : null,
+      executable: t.executable && typeof t.executable === "object" ? { ...t.executable } : null, // 21.md P5: the run-op + effect-class ride the fold
     }, { moment, history, skipIfUnchanged: true });
     n++;
   }
@@ -315,6 +342,7 @@ export function resolveTypeFromFold(name) {
     ops: Array.isArray(w.ops) ? [...w.ops] : [],
     render: w.render && typeof w.render === "object" ? { ...w.render } : null,
     claims: w.claims && typeof w.claims === "object" ? w.claims : null,
+    executable: w.executable && typeof w.executable === "object" ? { ...w.executable } : null, // 21.md P5
     ownerExtension: w.ownerExtension || "seed",
   };
 }
@@ -424,6 +452,15 @@ export async function declareNameOpsToFold({ moment = null, history = "0" } = {}
       ownerExtension: "seed",
       kind: "nameop",
       do: { ref }, // the runnable answer (the handler), resolved host-side from its ref
+      // factAction/factVerb/noun let nameVerb stamp the one name:<op> fact through the keystone
+      // (emitWordFact), the twin of the be ops — instead of a hardcoded writeNameFact. The fact's
+      // VERB (name) + target NOUN (name) ride the word explicitly (the hash-continuity anchor). The
+      // keystone's per-kind result policy OMITS the result field for a nameop, so name:declare's
+      // freshly minted `reveal` (private key + mnemonic) can never reach the chain — it rides the
+      // handler RETURN to the asker only, as it always has (the no-result invariant, now enforced).
+      factAction: op.factAction || opName,
+      factVerb: "name",
+      noun: "name",
       args: op.args ? JSON.parse(JSON.stringify(op.args)) : undefined,
       label: op.label,
       description: op.description,
@@ -440,7 +477,7 @@ export async function declareNameOpsToFold({ moment = null, history = "0" } = {}
 export function resolveNameOpFromFold(opName) {
   const w = resolveWordFromFold(`name:${opName}`);
   if (!w || w.kind !== "nameop") return null;
-  return { handler: w.handler, args: w.args, label: w.label, description: w.description, ownerExtension: w.ownerExtension, _fromFold: true };
+  return { handler: w.handler, factAction: w.factAction || opName, factVerb: w.factVerb || "name", noun: w.noun || "name", args: w.args, label: w.label, description: w.description, ownerExtension: w.ownerExtension, _fromFold: true };
 }
 
 // ── BE ops as words (the BE_OPS-Map migration; the twin of the NAME ops above) ──
@@ -452,6 +489,17 @@ export function resolveNameOpFromFold(opName) {
 // skip assertVerbCaller — the caller has no identity yet); it's a serializable boolean, so it rides
 // the binding. BE_OPS stays as the load-time registration buffer this reads. I_AM's own genesis
 // be:birth (sprout.js) is a raw emitFact, never beVerb, so it predates + grounds this fold untouched.
+// Per-op result-curation for the be:<op> facts: a fail-CLOSED ALLOWLIST of what the stamped fact's
+// `result` may record, restoring the old writeBeFact `safeResult`. The keystone (emitWordFact)
+// otherwise falls through to stripForAudit — a DENYLIST that drops only known secret-named fields, so
+// any FUTURE handler-result field not in REVEAL_KEYS/SECRET_KEYS would auto-land on the immutable
+// chain (fail-OPEN). Only `connect` returns a rich auth result (beingId/name/seatHistory/firstUser/…),
+// so only it must narrow back to {beingAddress, note}; the other BE ops return small word results
+// stripForAudit already keeps minimal. The fact's `result` rides the CAS hash and a being-connect is
+// security-sensitive, so the allowlist is the right posture (no minted key/token leaks today —
+// identityToken is in REVEAL_KEYS — this keeps the surface fail-closed against future drift).
+const BE_RESULT_POLICY = { connect: { keep: ["beingAddress", "note"] } };
+
 export async function declareBeOpsToFold({ moment = null, history = "0" } = {}) {
   const { listBeOpNames, getBeOp } = await import("../../ibp/beOps.js");
   let n = 0;
@@ -470,6 +518,9 @@ export async function declareBeOpsToFold({ moment = null, history = "0" } = {}) 
       // to the op name (be:truename). EVERY ACT MAKES A FACT — the dispatcher stamps unconditionally,
       // so there is no skipAudit (an op can't opt out; birth's no-stamp is its own operation check).
       factAction: op.factAction || opName,
+      // resultPolicy.keep is the fail-closed allowlist the keystone curates the stamped result to
+      // (BE_RESULT_POLICY); undefined for ops that keep the stripForAudit default.
+      resultPolicy: BE_RESULT_POLICY[opName],
       // The fact's VERB (be) + target NOUN (being) ride the word explicitly — the hash-continuity
       // anchor (17.md STEP 2); emitWordFact reads them instead of be.js hardcoding verb/of per site.
       factVerb: "be",
@@ -490,7 +541,7 @@ export async function declareBeOpsToFold({ moment = null, history = "0" } = {}) 
 export function resolveBeOpFromFold(opName) {
   const w = resolveWordFromFold(`be:${opName}`);
   if (!w || w.kind !== "beop") return null;
-  return { handler: w.handler, bootstrap: w.bootstrap, factAction: w.factAction || opName, factVerb: w.factVerb || "be", noun: w.noun || "being", args: w.args, label: w.label, description: w.description, ownerExtension: w.ownerExtension, _fromFold: true };
+  return { handler: w.handler, bootstrap: w.bootstrap, factAction: w.factAction || opName, factVerb: w.factVerb || "be", noun: w.noun || "being", resultPolicy: w.resultPolicy || null, args: w.args, label: w.label, description: w.description, ownerExtension: w.ownerExtension, _fromFold: true };
 }
 
 // ── SEE ops as words (the seeOps-REGISTRY migration; the third verb-op set) ──

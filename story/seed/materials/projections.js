@@ -26,7 +26,7 @@
 import Projection, { projectionKey } from "./history/projection.js";
 
 const MAIN = "0";
-const VALID_TYPES = new Set(["being", "space", "matter", "name"]);
+const VALID_TYPES = new Set(["being", "space", "matter", "name", "library"]);
 
 function assertType(type) {
   if (!VALID_TYPES.has(type)) {

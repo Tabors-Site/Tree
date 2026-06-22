@@ -69,6 +69,32 @@ export async function emitWordFact(binding, ctx, result, moment) {
     result && typeof result === "object" && result._factTarget?.id != null
       ? String(result._factTarget.id)
       : null;
+
+  // RESULT-CONTRACT POLICY (17.md STEP 4/5). A fact's `result` rides the CAS hash, so the unified
+  // emitter must reproduce the EXACT result shape of the per-verb writer it collapses — and on NAME
+  // that shape is the difference between a clean fact and a minted private key on the immutable
+  // chain (the [[project_audit_fact_cleartext_leak]] class). Three policies, in precedence:
+  //   1. verb "name" → OMIT result. HARD security floor: a name-op fact NEVER carries a result.
+  //      name:declare's handler returns `reveal` (the fresh private key + 24 words) to the ASKER
+  //      only; writeNameFact stamped no result, and the keystone keeps that — independent of field
+  //      names or REVEAL_KEYS, so a leak cannot slip through a mis-named sub-field of `reveal`.
+  //   2. binding.resultPolicy.keep → CURATE to those (scrubbed) fields. be:connect keeps
+  //      {beingAddress, note}, matching writeBeFact's curated `safeResult`.
+  //   3. otherwise → stripForAudit(result), as the four already-collapsed be:* ops do (unchanged).
+  let factResult;
+  let omitResult = false;
+  if (binding.factVerb === "name") {
+    omitResult = true; // the key-safety floor — no result on a name fact, ever
+  } else if (binding.resultPolicy && Array.isArray(binding.resultPolicy.keep)) {
+    const stripped = stripForAudit(result);
+    factResult = {};
+    for (const k of binding.resultPolicy.keep) {
+      factResult[k] = stripped && typeof stripped === "object" ? (stripped[k] ?? null) : null;
+    }
+  } else {
+    factResult = stripForAudit(result);
+  }
+
   await emitFact(
     {
       verb: binding.factVerb,
@@ -79,7 +105,7 @@ export async function emitWordFact(binding, ctx, result, moment) {
         result && typeof result === "object" && result._factParams
           ? result._factParams
           : null,
-      result: stripForAudit(result),
+      ...(omitResult ? {} : { result: factResult }),
       actId: ctx.actId,
       history: ctx.history,
     },

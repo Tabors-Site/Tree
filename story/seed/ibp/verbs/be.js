@@ -27,8 +27,6 @@
 
 import log from "../../seedStory/log.js";
 import Being from "../../materials/being/being.js";
-import { emitFact } from "../../past/fact/facts.js";
-import { stripForAudit } from "../../materials/redact.js";
 import { IbpError, IBP_ERR } from "../protocol.js";
 import { I_AM } from "../../materials/being/seedBeings.js";
 import { getStoryDomain } from "../address.js";
@@ -39,7 +37,7 @@ import { BE_OPS } from "../beOps.js";
 // declareBeOpsToFold reads. Mirrors do.js/name.js. BE_OPS stays imported for the closed-set error
 // message. The handler bodies live with cherub (the bottom turtle), registered by ref.
 import { resolveBeOpFromFold } from "../../present/word/wordStore.js";
-import { emitWordFact } from "../factResult.js";
+import { emitWordFact, stampsFact } from "../factResult.js";
 import {
   assertVerbCaller,
   refuseHistoricalWrite,
@@ -659,16 +657,17 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       },
       moment,
     });
-    await writeBeFact({
-      operation,
-      identity,
-      authResult: result,
-      payload,
-      beingName,
-      actId: moment?.actId || null,
+    // EVERY ACT MAKES A FACT — emitWordFact stamps the one be:connect fact (verb+noun from the
+    // binding), reading the fact's params/target the dispatcher declared on the auth result. The
+    // keystone's per-kind result policy curates connect's result field; the session token rides the
+    // RETURN to the caller (declareConnectFact left `result` untouched), never the fact.
+    const { factResult, through } = declareConnectFact(result, { identity, payload });
+    await emitWordFact(
+      cherubConnectOp,
+      { through, actId: moment?.actId || null, history },
+      factResult,
       moment,
-      history,
-    });
+    );
     return result;
   }
 
@@ -742,27 +741,24 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     } finally {
       if (_bCtx && !_bWasInOp) _bCtx._inOp = false;
     }
-    // ONE fact per BE op. This generic cherub dispatch now handles birth +
-    // connect only — release has its own dedicated branch above (switch/death/
-    // truename likewise). connect is still legacy → writeBeFact builds its
-    // params from payload + connectionParams. birth stamps NOTHING here:
-    // cherub's birth handler delegates to birthBeing, which already stamped
-    // be:birth on the new being's reel with the full spec (homeSpace,
-    // defaultRole, parentBeingId, qualities, …). A second writeBeFact("birth")
-    // would emit a duplicate be:birth with only { name, from } and the reducer
-    // would clobber the freshly-set state (homeSpace/defaultRole/parentBeingId
-    // → null), leaving the just-born being homeless.
-    if (operation !== "birth") {
-      await writeBeFact({
-        operation,
-        identity,
-        authResult: result,
-        payload,
-        beingName,
-        actId: moment?.actId || null,
+    // ONE fact per BE op. This generic cherub dispatch handles birth + connect only — release has
+    // its own dedicated branch above (switch/death/truename likewise). connect stamps the one
+    // be:connect fact through the keystone (emitWordFact), exactly like the four other BE ops:
+    // declareConnectFact declares the fact's params/target on the auth result, the keystone reads
+    // verb+noun from the binding. birth stamps NOTHING here: cherub's birth handler delegates to
+    // birthBeing, which ALREADY stamped the canonical be:birth on the new being's reel with the full
+    // spec (homeSpace, defaultRole, parentBeingId, qualities, …) — its single, direct stamp IS the
+    // keystone-shaped be:birth (verb:be / act:birth / of:being / params:spec). A second stamp here
+    // would duplicate it as { name, from } and the reducer would clobber the freshly-set state
+    // (homeSpace/defaultRole/parentBeingId → null), leaving the just-born being homeless. One stamp.
+    if (operation === "connect") {
+      const { factResult, through } = declareConnectFact(result, { identity, payload });
+      await emitWordFact(
+        beOp,
+        { through, actId: moment?.actId || null, history },
+        factResult,
         moment,
-        history,
-      });
+      );
     }
     return result;
   }
@@ -790,155 +786,42 @@ export async function beVerb(operation, payload = {}, opts = {}) {
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * One Fact per BE op, same as DO. The actor is the calling identity;
- * birth/connect from arrival has none, so the row names the newly-
- * bound being from authResult. The wire layer routes BE through
- * cherub-as-actor so the actId is always present. The guard throws
- * before emitFact runs — an act without a frame doesn't get a Fact,
- * and a BE without a Fact didn't happen.
+ * Declare the one be:connect fact on a connect result, for the dispatcher to stamp through the
+ * keystone (emitWordFact) — the last BE op to leave the old writeBeFact path, joining release /
+ * switch / death / truename. connect = an identity binding to a being: the fact lands on the TARGET
+ * being (the one connected to — the auth result's beingId for the cherub credential / inherit
+ * paths, identity.beingId for a re-claim) and records the driver now inhabiting it (the caller's
+ * being, or the being ITSELF for a fresh credential-connect that arrives with no prior identity).
+ * The actor (`through`) is the caller's being, or the newly-bound being for that anonymous arrival.
+ *
+ * The session token rides the caller RETURN, never the fact: declareConnectFact leaves the original
+ * `result` untouched and returns a SEPARATE `factResult` carrying the _factParams/_factTarget the
+ * keystone reads. The keystone's per-kind result policy curates connect's stamped result field to
+ * {beingAddress, note}; stripForAudit also drops the identityToken either way (REVEAL_KEYS), so no
+ * token can reach the chain. (birth never passes through here — birthBeing stamps its own canonical
+ * be:birth directly; switch/death/truename/release each have their own dedicated dispatch branch.)
  */
-async function writeBeFact({
-  operation,
-  identity,
-  authResult,
-  payload,
-  beingName = "cherub",
-  actId = null,
-  moment = null,
-  history,
-}) {
-  if (!actId) {
-    throw new IbpError(
-      IBP_ERR.INTERNAL,
-      `BE ${operation} @${beingName}: missing ambient actId. Thread moment from the caller's moment (runtime), or open one via withIAmAct(...) / withBeingAct(...).`,
-      { operation, beingName },
-    );
-  }
-  let actorBeingId = identity?.beingId || null;
-  if (!actorBeingId && authResult && typeof authResult === "object") {
-    actorBeingId = authResult.userId || authResult.beingId || null;
-  }
-  if (!actorBeingId) actorBeingId = I_AM;
-
-  const safeResult =
-    authResult && typeof authResult === "object"
-      ? {
-          beingAddress: authResult.beingAddress || null,
-          note: authResult.note || null,
-        }
-      : null;
-
-  const safeParams =
-    payload && typeof payload === "object"
-      ? { name: payload.name || null, from: payload.from || null }
-      : null;
-
-  // Target selection. BE = identity acting on itself; the fact's
-  // target is always a being (the actor's own identity, or the
-  // specific being whose identity is being changed). Stance targets
-  // retired 2026-06-03 in favor of the runtime invariant
-  // BEING_ONLY_TARGET_VERBS in facts.js.
-  //
-  //   connect: target = the being being connected to (authResult.beingId
-  //            for cherub credential / inherit paths; identity.beingId
-  //            for re-claim where the user re-asserts their own session).
-  //   release: target = the being being released (identity.beingId — the
-  //            caller IS the one releasing their own connection).
-  //   birth / other: target = the actor's own being (self-act).
-  //            authResult.beingAddress is recorded in `result` for
-  //            audit, not as the target shape.
-  let target;
-  let connectionParams = null;
-  if (operation === "connect") {
-    const targetBeingId =
-      authResult?.beingId || identity?.beingId || actorBeingId;
-    target = { kind: "being", id: String(targetBeingId) };
-    // inhabitedBy = the identity now driving this being. For
-    // credential-connect (cherub binding fresh auth), this is the
-    // being itself (self-connect). For inherit-connect, this is the
-    // caller (parent driving child).
-    const driverId = identity?.beingId
-      ? String(identity.beingId)
-      : String(targetBeingId);
-    connectionParams = { inhabitedBy: driverId };
-  } else if (operation === "release") {
-    // The caller is releasing themselves. Target = caller's being so
-    // the fact lands on that being's reel and clears inhabitedBy.
-    const targetBeingId = identity?.beingId || actorBeingId;
-    target = { kind: "being", id: String(targetBeingId) };
-    connectionParams = { inhabitedBy: null };
-  } else if (operation === "death") {
-    // The dying being is resolved by the death dispatch path above
-    // (findByName on the address's beingName) and threaded here via
-    // authResult.targetBeingId. The fact lands on THAT being's reel
-    // — its final fact. The actor (caller) is recorded as
-    // params.byActor so audit can see who performed the close. Today
-    // only I_AM passes authorize, but the structural shape supports
-    // future authority models.
-    const targetBeingId = authResult?.targetBeingId;
-    if (!targetBeingId) {
-      throw new IbpError(
-        IBP_ERR.INTERNAL,
-        "be:death requires a resolved target being id (set by beVerb's death dispatch path).",
-      );
-    }
-    target = { kind: "being", id: String(targetBeingId) };
-    connectionParams = { byActor: String(actorBeingId) };
-  } else if (operation === "truename") {
-    // The being whose trueName changes was resolved in beVerb's truename
-    // history and threaded via authResult.targetBeingId. The new Name id
-    // rides params.trueName; the fact lands on that being's reel, and the
-    // being reducer's applyTrueName folds it onto the row.
-    const targetBeingId = authResult?.targetBeingId;
-    if (!targetBeingId) {
-      throw new IbpError(
-        IBP_ERR.INTERNAL,
-        "be:truename requires a resolved target being id (set by beVerb's truename branch).",
-      );
-    }
-    target = { kind: "being", id: String(targetBeingId) };
-    // The RESOLVED nameId (a pubkey), threaded from beVerb's truename branch
-    // — NOT the raw payload token, which may be a real-name.
-    connectionParams = { trueName: String(authResult?.trueName) };
-  } else if (operation === "switch") {
-    // Per-session history change on the caller's own being. Target =
-    // the caller's being; params record from/to so the audit fact
-    // surfaces the transition. The fact lands on the NEW history
-    // (beVerb passed result.toHistory as `history`).
-    target = { kind: "being", id: String(actorBeingId) };
-    connectionParams = {
-      fromHistory: authResult?.fromHistory || null,
-      toHistory: authResult?.toHistory || null,
-    };
-  } else {
-    // birth and any future BE op: identity-on-self. The actor's own
-    // being is the target.
-    target = { kind: "being", id: String(actorBeingId) };
-  }
-
-  const mergedParams = connectionParams
-    ? { ...(safeParams || {}), ...connectionParams }
-    : safeParams;
-
-  await emitFact(
+function declareConnectFact(result, { identity, payload }) {
+  const actorBeingId =
+    identity?.beingId ||
+    (result && typeof result === "object"
+      ? result.userId || result.beingId
+      : null) ||
+    I_AM;
+  const targetBeingId = result?.beingId || identity?.beingId || actorBeingId;
+  const driverId = identity?.beingId
+    ? String(identity.beingId)
+    : String(targetBeingId);
+  const factResult = stampsFact(
+    result,
     {
-      verb: "be",
-      act: operation,
-      through: actorBeingId,
-      of: target,
-      params: mergedParams,
-      result: safeResult,
-      actId,
-      // History the BE fact lands on, pre-resolved by beVerb at the
-      // entry point. writeBeFact trusts the value rather than
-      // re-resolving from a scope that may not have currentHistory
-      // (this function ran as nested-helper-with-implicit-closure
-      // before B perimeter hardening; missing-history surfaced as a
-      // ReferenceError only when an actual transport-act fired).
-      history,
+      name: payload?.name || null,
+      from: payload?.from || null,
+      inhabitedBy: driverId,
     },
-    moment,
+    { kind: "being", id: String(targetBeingId) },
   );
+  return { factResult, through: String(actorBeingId) };
 }
 
 // (runClaim retired . both modes (credentials, token re-claim) now
