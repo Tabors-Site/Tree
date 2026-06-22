@@ -24,7 +24,7 @@
 // row's beingIn IS the being.
 //
 // Subscription content carries a small envelope describing what
-// changed; the receiving role's summon() decides whether the
+// changed; the receiving able's summon() decides whether the
 // moment should actually act on it. The original DO actor (whoever
 // fired the triggering write) lives in the SUMMON content as
 // `actorBeingId`, not in `from` — the asker on the wire is always
@@ -534,7 +534,7 @@ export async function getMatchingSubscribers(eventName, payload) {
  * subscribing being itself, at the position where the triggering
  * event happened. The original DO actor (whoever fired the
  * triggering write) is carried in the SUMMON content as
- * `actorBeingId` so the receiving role can distinguish "I caused
+ * `actorBeingId` so the receiving able can distinguish "I caused
  * this" from "someone else's write reached my attention."
  *
  * @param {string} eventName
@@ -641,7 +641,7 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
 }
 
 // Single-SUMMON delivery. The verb runs auth (the I_AM passes
-// universally) and dispatches through the standard inbox + role
+// universally) and dispatches through the standard inbox + able
 // path. There is no direct appendToInbox + wake bypass.
 //
 // History rides explicitly as args.history (not via moment — this
@@ -811,8 +811,8 @@ function _inboxNodeIdForSubscriber(sub, payload) {
 }
 
 function _renderTriggerContent(eventName, payload) {
-  // Compact, predictable envelope the receiving role template parses.
-  // Keep this stable — role templates will pattern-match on `event`
+  // Compact, predictable envelope the receiving able template parses.
+  // Keep this stable — able templates will pattern-match on `event`
   // and the payload fields. Trim what's likely large (full matter
   // content) to references only.
   const out = { event: eventName };
@@ -827,12 +827,12 @@ function _renderTriggerContent(eventName, payload) {
   if (payload?.timestamp) out.timestamp = payload.timestamp;
   else out.timestamp = new Date().toISOString();
   // For afterQualityWrite / afterFieldWrite, surface the WRITTEN
-  // VALUE so the receiving role can read it directly off the wake
+  // VALUE so the receiving able can read it directly off the wake
   // without folding the matter / space / being. The drummer's tick
   // is the canonical case: the dancer wakes on
   // afterQualityWrite{field:"qualities.harmony.tick"} and needs the
   // tick number (`value.n`) to frame this beat. The target reference
-  // (matterId / spaceId / actorBeingId) is still carried so a role
+  // (matterId / spaceId / actorBeingId) is still carried so a able
   // that wants the full fold can do it; this is just the inline read.
   if (payload?.field) out.field = String(payload.field);
   if (payload?.value !== undefined) out.value = payload.value;

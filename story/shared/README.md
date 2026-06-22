@@ -21,8 +21,8 @@ seed new vocabulary. It can contribute exactly five things:
 
 - **DO operations** — new actions on the DO verb. The only LLM-callable
   surface your extension adds.
-- **Roles** — templates a Being wears when summoned.
-- **See-resolvers** — structured per-role views the prompt assembler
+- **Ables** — templates a Being wears when summoned.
+- **See-resolvers** — structured per-able views the prompt assembler
   pre-renders into the system prompt.
 - **Seeds** — plantable scaffolds an operator can run.
 - **Hooks / subscriptions / scheduled wakes** — lifecycle reactivity.
@@ -51,13 +51,13 @@ several patterns; not knowing they are gone is the #1 way to overbuild.
   `import Being from "../../seed/materials/being/being.js"`.
   Same for Space, Matter, Fact. Direct registry lookups bypass the
   seed's typing.
-- **A `toolNames` field on roles.** It does not exist. The role spec
+- **A `toolNames` field on ables.** It does not exist. The able spec
   IS its four `can*` lists; tool exposure follows from which lists are
   populated.
 - **Tool-syntax instructions in `prompt(ctx)`.** The system prompt
-  already renders the four verbs and the role's licensed targets. Do
-  not restate `do({action, args})` syntax in the role body; that is
-  role-intent space, not assembler space.
+  already renders the four verbs and the able's licensed targets. Do
+  not restate `do({action, args})` syntax in the able body; that is
+  able-intent space, not assembler space.
 
 ---
 
@@ -96,7 +96,7 @@ export async function init(reality) {
 }
 ```
 
-That is the whole contract. Any LLM role with
+That is the whole contract. Any LLM able with
 `canDo: [{action: "hello:greet", description: "..."}]` can invoke it
 via `do({action: "hello:greet"})`.
 
@@ -153,7 +153,7 @@ service bundle (assembled in
 - `reality.hooks` — `{ register, unregister, run, fire }` lifecycle bus.
 - `reality.qualities.{being,space,matter}` — read API (`getQuality`,
   `readQualityNamespace`). Writes go through DO.
-- `reality.declare` — `{ registerRole, subscribe, schedule, aggregate }`.
+- `reality.declare` — `{ registerAble, subscribe, schedule, aggregate }`.
 
 ### Declared via `needs.services`
 
@@ -162,7 +162,7 @@ service bundle (assembled in
 | `models` | `Being`, `Space`, `Matter`, `Fact`, `Act`, `LlmConnection`. |
 | `auth` | `createBeing`, `verifyPassword`, `generateToken`, ... |
 | `session` | `createSession`, `endSession`, `SESSION_TYPES`, ... |
-| `llm` | `runLlmMoment`, `getClientForBeing`, `resolveRootLlmForRole`, `registerBeingLlmSlot`, `registerRootSpaceLlmSlot`, `registerFailoverResolver`. |
+| `llm` | `runLlmMoment`, `getClientForBeing`, `resolveRootLlmForAble`, `registerBeingLlmSlot`, `registerRootSpaceLlmSlot`, `registerFailoverResolver`. |
 | `websocket` | `emitToBeing`, `emitNavigate`, `registerSocketHandler`, `getIO`. Event names auto-namespaced. |
 | `space` | `createSpace`, `getAncestorChain`, `snapshotAncestors`, ... |
 | `matters` | `createMatter`, `editMatter`, `deleteMatterAndFile`, ... |
@@ -221,7 +221,7 @@ Full reference: [EXTENSION_FORMAT.md](./EXTENSION_FORMAT.md).
 
 ```js
 export async function init(reality) {
-  // register ops, roles, subscriptions, hooks here...
+  // register ops, ables, subscriptions, hooks here...
   return {
     router:  expressRouter,         // mounted at /api/v1/<ext>/
     jobs:    { start() {}, stop() {} },
@@ -302,14 +302,14 @@ now throws. Every write must be a Fact on the aggregate's reel.
 
 ---
 
-## 7. Roles
+## 7. Ables
 
-A **role** is a template a Being wears for a moment. The role spec is
+A **able** is a template a Being wears for a moment. The able spec is
 PURE DATA — name, description, the four `can*` lists, and the
-`prompt(ctx)` body. The seed registry runs the role; you do not
+`prompt(ctx)` body. The seed registry runs the able; you do not
 write engine glue.
 
-Specifically: do not write a `summon` function in your role for LLM
+Specifically: do not write a `summon` function in your able for LLM
 cognition. The registry auto-wraps `defaultSummon`, which calls
 `runLlmMoment` with the right envelope and routes the discriminated
 result (act / see / failure). Defining your own `summon` is the
@@ -320,17 +320,17 @@ reads the fold and acts in code, no LLM call). The harmony drummer
 and dancer-toward are scripted; the dancer-llm and reality-manager
 are pure data.
 
-### The complete role spec (LLM cognition)
+### The complete able spec (LLM cognition)
 
 ```js
-reality.declare.registerRole("meal-logger", {
+reality.declare.registerAble("meal-logger", {
   name: "meal-logger",
   description: "Records what the user just ate at this position.",
   permissions: ["see", "do"],
   respondMode: "async",
   triggerOn:   ["message"],
 
-  // The body: four can* lists. THIS IS THE ROLE.
+  // The body: four can* lists. THIS IS THE ABLE.
   // canSee is the preloaded face. Entries are EITHER IBP addresses
   // (preloaded via seeVerb; the position descriptor becomes a JSON
   // block) OR registered see names (preloaded via the seeResolver
@@ -355,11 +355,11 @@ reality.declare.registerRole("meal-logger", {
 
   // Multi-moment work is explicit: from inside an act, emit
   // summon(target=self) to wake yourself again for the next step.
-  // The role's act IS the loop signal; the seed never synthesizes
+  // The able's act IS the loop signal; the seed never synthesizes
   // continuations on its own.
 
-  // Role-intent body. NO verb syntax explanation; the assembler handles
-  // that. This is the role's character, persona, and goal.
+  // Able-intent body. NO verb syntax explanation; the assembler handles
+  // that. This is the able's character, persona, and goal.
   prompt: (ctx) =>
     `You log what the user ate. Be brief. Confirm and move on.`,
 
@@ -371,23 +371,23 @@ reality.declare.registerRole("meal-logger", {
 }, "my-ext");
 ```
 
-### The four `can*` lists ARE the role
+### The four `can*` lists ARE the able
 
 | List | Entries | What the assembler does |
 |---|---|---|
 | `canSee`    | IBP addresses OR registered see names | Preloads each into the moment's face as a `[<label>]\n<JSON>` block. NO tool. |
-| `canDo`     | action names the role may invoke      | Renders as menu under `do:`; LLM picks via the `do` tool. |
-| `canSummon` | stance targets the role may address   | Renders as menu under `summon:`; LLM picks via the `summon` tool. |
-| `canBe`     | BE operations the role may perform    | Renders as menu under `be:`; LLM picks via the `be` tool. |
+| `canDo`     | action names the able may invoke      | Renders as menu under `do:`; LLM picks via the `do` tool. |
+| `canSummon` | stance targets the able may address   | Renders as menu under `summon:`; LLM picks via the `summon` tool. |
+| `canBe`     | BE operations the able may perform    | Renders as menu under `be:`; LLM picks via the `be` tool. |
 
 canSee is different from the other three. It declares perception
 (what the being already sees this moment) rather than capability
 (what tool calls the being may make). The do / summon / be lists
 populate menus the LLM picks from; canSee populates the face the
-LLM reads. To see more, the being moves (DO), changes role (BE /
-roleFlow), or the role spec is edited.
+LLM reads. To see more, the being moves (DO), changes able (BE /
+flow), or the able spec is edited.
 
-There is no `toolNames` field. The role spec is described once; the
+There is no `toolNames` field. The able spec is described once; the
 tool surface follows.
 
 ### Entry shapes
@@ -409,17 +409,17 @@ licenses.
 
 ### The `prompt(ctx)` body
 
-Role-intent only. Persona, goal, constraints. The assembler renders
+Able-intent only. Persona, goal, constraints. The assembler renders
 in this order:
 
-- `I am <name>, <role> at <space>.`
+- `I am <name>, <able> at <space>.`
 - `and can:` followed by the do / summon / be capability menus.
 - Your `prompt(ctx)` body.
 - Preloaded canSee face blocks (each entry resolved into a `[<label>]\n<JSON>` block).
 - `[Time] <ISO>`.
 
 Order is question-first, data-last: the identity, capabilities, and
-role-intent state who the being is and what it can do; the canSee
+able-intent state who the being is and what it can do; the canSee
 blocks dump the fresh perception just before the time stamp so the
 LLM attends most strongly to that data when forming its act. This
 mirrors how operators get the best results pasting code at the end
@@ -431,7 +431,7 @@ read state" or similar. The assembler instructs the LLM on the verbs.
 
 ### Multi-moment loops
 
-Multi-moment work is **explicit**. A role that wants to keep stepping
+Multi-moment work is **explicit**. A able that wants to keep stepping
 emits `summon(target=<own stance>)` as part of its act — same SUMMON
 tool any other being uses, just pointed at itself. The seed never
 synthesizes continuations on its own; every wake-call traces to a
@@ -443,7 +443,7 @@ acts, or `"forward"` (default) to fold the world. Only self-summons
 may carry `half` or `inward`; cross-being summons must stay `forward`.
 
 The no-act release (the explicit `end-turn` tool, or simply no tool
-call at all) ends the loop. Roles with one-shot work declare nothing
+call at all) ends the loop. Ables with one-shot work declare nothing
 extra — they act once and the moment closes naturally.
 
 Harmony dancers are externally ticked: each wake comes from outside
@@ -453,7 +453,7 @@ Harmony dancers are externally ticked: each wake comes from outside
 
 ## 8. Sees (registerSeeResolver: extension-authored perceptions)
 
-A **see** is a perception in a moment's face. Roles declare them in
+A **see** is a perception in a moment's face. Ables declare them in
 `canSee`; the assembler resolves each entry into the system prompt
 as `[<name>]\n<JSON>` at moment-open. canSee accepts BOTH IBP
 addresses (preloaded via `seeVerb`) AND registered see names
@@ -474,16 +474,16 @@ core.declare.registerSeeResolver("meal-history", async (ctx) => {
 });
 ```
 
-Bare names are auto-namespaced `<ext>:<name>`. A role inside the
+Bare names are auto-namespaced `<ext>:<name>`. A able inside the
 same extension can reference the bare suffix in canSee (`canSee:
 ["meal-history"]` resolves to `my-ext:meal-history` if no seed see
 collides); cross-extension references use the qualified form
 (`canSee: ["my-ext:meal-history"]`).
 
-### Reference from a role
+### Reference from a able
 
 ```js
-core.declare.registerRole("meal-logger", {
+core.declare.registerAble("meal-logger", {
   // ...
   canSee: [
     "place",                  // seed see: current position descriptor
@@ -523,7 +523,7 @@ names for the common heaven children:
 | Bare name    | Returns                                            |
 | ------------ | -------------------------------------------------- |
 | `place`      | Position descriptor for the being's current space. |
-| `roles`      | The role registry mirror at `<reality>/./roles`.   |
+| `ables`      | The able registry mirror at `<reality>/./ables`.   |
 | `tools`      | The tool registry mirror at `<reality>/./tools`.   |
 | `operations` | The DO operation registry mirror.                  |
 | `identity`   | The I-Am identity bundle.                          |
@@ -533,7 +533,7 @@ names for the common heaven children:
 
 ### When to write a custom see
 
-Write one when the role needs a focused, role-specific projection
+Write one when the able needs a focused, able-specific projection
 (a dancer's neighbor view, a worker's plan slice, an admin's audit
 summary). Use the foundational sees plus IBP-address entries in
 canSee for general-purpose reads. A see SHOULD be a pure function
@@ -550,8 +550,8 @@ const helper = await reality.be("create-being", {
   name:          `helper-${shortId()}`,
   password:      null,                   // auto-generated for AI beings
   operatingMode: "llm",                   // "llm" | "scripted" | "human" | "composite"
-  roles:         ["my-ext:helper"],       // registered role name(s)
-  defaultRole:   "my-ext:helper",
+  ables:         ["my-ext:helper"],       // registered able name(s)
+  defaultAble:   "my-ext:helper",
   homeSpace:     spaceId,
   parentBeingId: beingId,                 // lineage
   llmDefault:    null,                    // optional LlmConnection id
@@ -576,7 +576,7 @@ await reality.summon(`${realityDomain}/${spaceId}@${helper.name}`, {
 For LLM beings, the cognition is one call to the model per moment via
 [`../seed/present/cognition/llm/llmMoment.js`](../seed/present/cognition/llm/llmMoment.js).
 One call, one decision, one act. Multi-step work uses many moments;
-the role keeps stepping by emitting `summon(target=self)` as part of
+the able keeps stepping by emitting `summon(target=self)` as part of
 its act (any orientation). The detailed shape is at
 [`/factory/being-types`](../../site/src/components/Welcome/FactoryBeingTypes.jsx)
 on the site.
@@ -631,7 +631,7 @@ reality.declare.subscribe(beingId, {
 ```
 
 The seed fans matching events as SUMMONs to the subscribing being's
-inbox. The role's `summon` interprets the wake content.
+inbox. The able's `summon` interprets the wake content.
 
 ### Wake payload
 
@@ -666,7 +666,7 @@ reality.declare.schedule(beingId, {
 });
 ```
 
-Default emitter sends as `@I-AM`. The receiving being's role.summon
+Default emitter sends as `@I-AM`. The receiving being's able.summon
 reads `message.content`.
 
 ---
@@ -681,7 +681,7 @@ Operators plant from the seed hotbar in the portal.
 return {
   seeds: [{
     name: "food-tracker",
-    description: "Food tracking position with a meal-logger role.",
+    description: "Food tracking position with a meal-logger able.",
     async scaffold({ rootSpaceId, identity, reality, plantedSeedId, summonCtx }) {
       const opOpts = { identity, summonCtx };
       const space = await reality.do(rootSpaceId, "create-space", {
@@ -737,7 +737,7 @@ position. The loader records ownership at op registration.
 
 ## 15. A worked example: feedback
 
-Collects short notes at any space. One op, one role, one hook, one
+Collects short notes at any space. One op, one able, one hook, one
 see. Two files.
 
 **`resources/feedback/manifest.js`**
@@ -771,7 +771,7 @@ export async function init(reality) {
     },
   });
 
-  // 2. See. Pre-renders the latest note as structured data. Roles
+  // 2. See. Pre-renders the latest note as structured data. Ables
   //    reference this by name in their canSee list.
   reality.declare.registerSeeResolver("recent", async (ctx) => {
     const spaceId = ctx.currentSpace || ctx.rootId;
@@ -783,9 +783,9 @@ export async function init(reality) {
     return { latest: notes[notes.length - 1], total: notes.length };
   });
 
-  // 3. Role. canDo lists the action; canSee preloads the recent-note
+  // 3. Able. canDo lists the action; canSee preloads the recent-note
   //    view into the moment's face. The seed `do` tool dispatches.
-  reality.declare.registerRole("feedback-collector", {
+  reality.declare.registerAble("feedback-collector", {
     name: "feedback-collector",
     description: "Collects one feedback note and exits.",
     permissions: ["do"],
@@ -818,7 +818,7 @@ export async function init(reality) {
 ```
 
 That is the whole extension. No tool registrations. No mongoose calls.
-No factory duplication. One op, one role, one resolver, one hook.
+No factory duplication. One op, one able, one resolver, one hook.
 
 ---
 
@@ -902,7 +902,7 @@ field.
 Every verb call passes through `authorize` in
 [`../seed/ibp/authorize.js`](../seed/ibp/authorize.js). Four layers:
 
-1. **Facts.** Owner / contributor / role / home / operating mode of
+1. **Facts.** Owner / contributor / able / home / operating mode of
    the being at this position.
 2. **Per-position rules.** Walk the ancestor chain for
    `qualities.permissions.<verb>.<keyParts>`.
@@ -949,13 +949,13 @@ translates into `do({action: "harmony:step"})` is the retired pattern.
 Domain-tuned argument shapes belong in the op handler, which can
 derive `gridSpaceId` from the actor's position or whatever else.
 
-**Adding `toolNames` to a role.** The field doesn't exist. The role's
+**Adding `toolNames` to a able.** The field doesn't exist. The able's
 body is its four `can*` lists; tool exposure follows from which lists
 are populated.
 
 **Restating verb syntax in `prompt(ctx)`.** The assembler renders the
-four verbs and the role's licensed targets. The role body is
-role-intent only.
+four verbs and the able's licensed targets. The able body is
+able-intent only.
 
 **Prose-returning sees.** Return structured objects. Prose input
 invites prose hallucination — the LLM free-associates features that
@@ -963,8 +963,8 @@ aren't in the data.
 
 **Asking the LLM to call a `see` tool.** There is no see tool.
 canSee is preloaded into the face; the being already sees what the
-role declared. To see more, the being moves (DO), changes role (BE
-/ roleFlow), or the role spec is edited.
+able declared. To see more, the being moves (DO), changes able (BE
+/ flow), or the able spec is edited.
 
 **Calling `mongoose.model("X")`.** Import from the seed:
 `import Being from "../../seed/materials/being/being.js"`.
@@ -990,10 +990,10 @@ rejects. Each namespace is owned at registration.
 handler with no `summonCtx.actId` throws. Forward `summonCtx` down
 into every sub-call.
 
-**Defining `summon` on an LLM role.** Don't. The registry auto-wraps
+**Defining `summon` on an LLM able.** Don't. The registry auto-wraps
 `defaultSummon`, which calls `runLlmMoment` and routes the
 discriminated result. Writing your own `summon` is duplicating the
-dispatcher. The role spec is pure data; the substrate runs it.
+dispatcher. The able spec is pure data; the substrate runs it.
 Custom `summon` is only for scripted cognition (the function reads
 the fold and acts in code, no LLM call).
 
@@ -1006,7 +1006,7 @@ the fold and acts in code, no LLM call).
 - **The seed's own contract:** [`../seed/FACTORY.md`](../seed/FACTORY.md).
 - **The four verbs in code:** [`../seed/ibp/verbs/`](../seed/ibp/verbs/).
 - **DO operation registry:** [`../seed/ibp/operations.js`](../seed/ibp/operations.js).
-- **Role registry:** [`../seed/present/roles/registry.js`](../seed/present/roles/registry.js).
+- **Able registry:** [`../seed/present/ables/registry.js`](../seed/present/ables/registry.js).
 - **One LLM moment:** [`../seed/present/cognition/llm/llmMoment.js`](../seed/present/cognition/llm/llmMoment.js).
 - **Default summon dispatcher:** [`../seed/present/cognition/defaultSummon.js`](../seed/present/cognition/defaultSummon.js).
 - **The four seed verb-tools:** [`../seed/present/cognition/llm/seedSeeTool.js`](../seed/present/cognition/llm/seedSeeTool.js), `seedDoTool.js`, `seedSummonTool.js`, `seedBeTool.js`.

@@ -37,18 +37,18 @@ import {
 } from "../../../materials/being/identity/credentials.js";
 import { hasCredentialAuthority } from "../../../materials/being/identity/lineage.js";
 import { doVerb } from "../../../ibp/verbs/do.js";
-import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
+import { registerAbleWord } from "../../../present/word/ableWordRegistry.js";
 import { targetsFact } from "../../../ibp/factResult.js";
 
 // Self-register this module's co-located `.word` slices (CONVERTING.md): importing
 // credentialOps.js (at seed boot, or in a DRY harness) registers them so
-// resolveRoleWord("credential", "credential-reset") finds the world strand. The cut
+// resolveAbleWord("credential", "credential-reset") finds the world strand. The cut
 // in the handler runs it through the bridge with credentialHostEnv(); the JS body is
 // the clean-miss fallback.
-registerRoleWord("credential", "credential-reset", new URL("./credential-reset.word", import.meta.url));
-registerRoleWord("credential", "credential-read", new URL("./credential-read.word", import.meta.url));
-registerRoleWord("credential", "credential-detach", new URL("./credential-detach.word", import.meta.url));
-registerRoleWord("credential", "credential-attach", new URL("./credential-attach.word", import.meta.url));
+registerAbleWord("credential", "credential-reset", new URL("./credential-reset.word", import.meta.url));
+registerAbleWord("credential", "credential-read", new URL("./credential-read.word", import.meta.url));
+registerAbleWord("credential", "credential-detach", new URL("./credential-detach.word", import.meta.url));
+registerAbleWord("credential", "credential-attach", new URL("./credential-attach.word", import.meta.url));
 
 // credential-detach / credential-attach: pure-gate world strands (self-only / being-
 // parent-only). The detach/attach RECORD is the dispatcher's audit fact, so the .word
@@ -56,13 +56,13 @@ registerRoleWord("credential", "credential-attach", new URL("./credential-attach
 // detached|attached} or null on a clean miss. The cut re-adds _factTarget.
 async function _credentialGateViaWord(opName, { caller, target, moment }) {
   if (!moment) return null;
-  const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
-  const ir = resolveRoleWord("credential", opName, moment?.actorAct?.history);
+  const { resolveAbleWord, runAbleWord } = await import("../../../present/word/ableWordRegistry.js");
+  const ir = resolveAbleWord("credential", opName, moment?.actorAct?.history);
   if (!ir) return null;
   const { credentialHostEnv } = await import("./credentialHost.js");
   const b = moment?.actorAct?.history;
   try {
-    const { result } = await runRoleWord(ir, {
+    const { result } = await runAbleWord(ir, {
       moment, history: b,
       trigger: { caller: String(caller), target: String(target), branch: b },
       env: { host: credentialHostEnv() },
@@ -79,13 +79,13 @@ async function _credentialGateViaWord(opName, { caller, target, moment }) {
 // re-adds _factTarget (the asker's reel) + coerces hasPlain to a strict boolean.
 async function _credentialReadViaWord({ caller, target, history, moment }) {
   if (!moment) return null;
-  const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
-  const ir = resolveRoleWord("credential", "credential-read", moment?.actorAct?.history);
+  const { resolveAbleWord, runAbleWord } = await import("../../../present/word/ableWordRegistry.js");
+  const ir = resolveAbleWord("credential", "credential-read", moment?.actorAct?.history);
   if (!ir) return null;
   const { credentialHostEnv } = await import("./credentialHost.js");
   const b = history || moment?.actorAct?.history; // the moment's history; never floor to "0"
   try {
-    const { result } = await runRoleWord(ir, {
+    const { result } = await runAbleWord(ir, {
       moment, history: b,
       trigger: { caller: String(caller), target: String(target), branch: b },
       env: { host: credentialHostEnv() },
@@ -194,13 +194,13 @@ registerOperation("credential-read", {
 // attribute to the asker. Returns {targetBeingId, plaintext}, or null on a clean miss.
 async function _credentialResetViaWord({ caller, target, history, moment }) {
   if (!moment) return null;
-  const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
-  const ir = resolveRoleWord("credential", "credential-reset", moment?.actorAct?.history);
+  const { resolveAbleWord, runAbleWord } = await import("../../../present/word/ableWordRegistry.js");
+  const ir = resolveAbleWord("credential", "credential-reset", moment?.actorAct?.history);
   if (!ir) return null;
   const { credentialHostEnv } = await import("./credentialHost.js");
   const b = history || moment?.actorAct?.history; // the moment's history; never floor to "0"
   try {
-    const { result } = await runRoleWord(ir, {
+    const { result } = await runAbleWord(ir, {
       moment, history: b,
       trigger: { caller: String(caller), target: String(target), branch: b },
       env: { host: credentialHostEnv() },

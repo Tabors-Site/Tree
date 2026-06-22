@@ -5,9 +5,9 @@
 // Every Space carries `owner: String` (a beingId, or null when
 // unowned at this position — in which case the ancestor walk inherits
 // from the parent). Owner of a space implicitly has authority over it
-// + descendants without any role grant. Every other authority shape
-// lives in qualities.roles + qualities.rolesGranted per
-// seed/RolesAreAuth.md; role-walk authorize() is the gate.
+// + descendants without any able grant. Every other authority shape
+// lives in qualities.ables + qualities.ablesGranted per
+// seed/AblesAreAuth.md; able-walk authorize() is the gate.
 //
 // Authorization vs invariants. authorize() approves the call before
 // it reaches the handler. The state-consistency checks below
@@ -40,8 +40,8 @@ export function getSpaceOwner(spaceRow) {
  *
  * Authority: an existing owner can transfer; an unowned space with a
  * parent can be claimed by the parent's owner. The previous owner
- * keeps NO implicit write access on transfer — under RolesAreAuth,
- * any continued authority requires a granted role.
+ * keeps NO implicit write access on transfer — under AblesAreAuth,
+ * any continued authority requires a granted able.
  */
 export async function setSpaceOwner(spaceId, newOwnerId, actor, history, moment = null) {
   if (typeof history !== "string" || !history) {
@@ -79,26 +79,42 @@ export async function setSpaceOwner(spaceId, newOwnerId, actor, history, moment 
 
   const locked = await acquireSpaceLock(spaceId, actor);
   if (!locked) throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Space ownership is being modified");
+  // CAS check inside the lock: re-read owner, abort if a concurrent writer
+  // raced past us. On the abort path the lock is released immediately; on
+  // the success path the lock is handed to afterSeal so it SPANS the
+  // dispatcher's stamp — the CAS-check and the owner fact stay atomic, so a
+  // concurrent reassign that slips in afterward re-reads the new owner and
+  // aborts. (A failed seal that never runs afterSeal leaks the lock only
+  // until its 30s TTL, which the sweep + boot integrity-check reclaim.)
   try {
-    // CAS check inside the lock: re-read owner, abort if a concurrent
-    // writer raced past us.
     const curSlot = await loadOrFold("space", spaceId, history);
     const current = curSlot ? curSlot.state : space;
     const currentOwnerNow = getSpaceOwner(current);
     if (String(currentOwnerNow ?? null) !== String(previousOwnerId ?? null)) {
       throw new Error("Ownership changed concurrently. Retry the operation.");
     }
+  } catch (err) {
+    releaseSpaceLock(spaceId, actor);
+    throw err;
+  }
 
-    await emitOwnerFact(spaceId, String(newOwnerId), actor, history, moment);
-
+  // ONE act, ONE fact (23.md): set-owner returns its OWN do:set-owner fact —
+  // the dispatcher stamps it and applySetField folds the `owner` scalar
+  // (set-owner is in SET_ACTIONS). No inner emitOwnerFact, no skipAudit. The
+  // post-seal cleanup (release lock + invalidate + hook) rides afterSeal so the
+  // held lock brackets the stamp.
+  const cleanup = () => {
+    releaseSpaceLock(spaceId, actor);
     invalidateSpace(spaceId);
     hooks.run("afterMembersChange", {
       spaceId, action: "setSpaceOwner",
       targetUserId: newOwnerId, previousOwnerId,
     }).catch(() => {});
-  } finally {
-    releaseSpaceLock(spaceId, actor);
-  }
+  };
+  if (moment?.afterSeal) moment.afterSeal.push(cleanup);
+  else cleanup();
+
+  return { field: "owner", value: String(newOwnerId) };
 }
 
 /**
@@ -131,29 +147,25 @@ export async function removeSpaceOwner(spaceId, actor, history, moment = null) {
 
   const locked = await acquireSpaceLock(spaceId, actor);
   if (!locked) throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Space ownership is being modified");
-  try {
-    await emitOwnerFact(spaceId, null, actor, history, moment);
+
+  // ONE act, ONE fact (23.md): remove-owner returns its do:remove-owner fact
+  // (owner=null, folded by applySetField); the lock + cleanup ride afterSeal so
+  // the held lock spans the dispatcher's stamp, mirroring setSpaceOwner. No inner
+  // emitOwnerFact, no skipAudit.
+  const cleanup = () => {
+    releaseSpaceLock(spaceId, actor);
     invalidateSpace(spaceId);
     hooks.run("afterMembersChange", {
       spaceId, action: "removeSpaceOwner", targetUserId: removedOwnerId,
     }).catch(() => {});
-  } finally {
-    releaseSpaceLock(spaceId, actor);
-  }
+  };
+  if (moment?.afterSeal) moment.afterSeal.push(cleanup);
+  else cleanup();
+
+  return { field: "owner", value: null };
 }
 
 // ── Internal plumbing ─────────────────────────────────────────────
-
-async function emitOwnerFact(spaceId, ownerId, actor, history, moment) {
-  const target = { kind: "space", id: String(spaceId) };
-  const { doVerb } = await import("../../ibp/verbs/do.js");
-  await doVerb(
-    target,
-    "set-space",
-    { field: "owner", value: ownerId },
-    { identity: { beingId: actor }, currentHistory: history, moment },
-  );
-}
 
 async function assertResolvedOwner(spaceId, beingId, history) {
   const { resolveSpaceAccess } = await import("./spaces.js");

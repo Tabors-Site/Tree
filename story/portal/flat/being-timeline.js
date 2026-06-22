@@ -121,10 +121,10 @@ function renderActRow(act, being, pastContainer, story) {
   when.textContent = formatTime(act.stampedAt || act.receivedAt);
   head.appendChild(when);
 
-  const role = document.createElement("span");
-  role.className = "tl-row-role";
-  role.textContent = act.activeRole || "(no role)";
-  head.appendChild(role);
+  const able = document.createElement("span");
+  able.className = "tl-row-able";
+  able.textContent = act.activeAble || "(no able)";
+  head.appendChild(able);
 
   if (asOfSeq != null) {
     const seqLabel = document.createElement("span");
@@ -298,7 +298,7 @@ async function openHistoricalView({ story, being, whenISO, pastContainer }) {
 }
 
 // Render the historical state of the inspected being. Picks the
-// fields that matter for a snapshot (identity, role, position,
+// fields that matter for a snapshot (identity, able, position,
 // qualities) from the enriched descriptor entry.
 function renderBeingHistorical(container, beingEntry) {
   const dl = document.createElement("div");

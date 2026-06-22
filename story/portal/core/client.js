@@ -281,7 +281,7 @@ export class PortalClient {
    *
    * @param {string} stance   "<place>/<path>@<being>" — being qualifier mandatory
    * @param {object} message  { from, content, correlation?, inReplyTo?, attachments? }
-   * @param {object} [threading]  optional { rootCorrelation?, priority?, activeRole? }
+   * @param {object} [threading]  optional { rootCorrelation?, priority?, activeAble? }
    */
   async call(stance, message, threading = {}) {
     if (!message || typeof message !== "object") {

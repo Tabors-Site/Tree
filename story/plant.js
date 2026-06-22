@@ -206,7 +206,7 @@ async function interactiveSetup(existingEnv = {}) {
   console.log("  The seed is dual licensed. By default it is free and open");
   console.log("  under the AGPL-3.0; a separate commercial license is");
   console.log("  available for closed-source or hosted use. This covers the");
-  console.log("  seed only, not extensions, roleFlows, clones, or portals.");
+  console.log("  seed only, not extensions, flows, clones, or portals.");
   console.log("  See seed/LICENSE and story/LICENSING.md, or write");
   console.log("  taborgreat@gmail.com.");
   console.log("");

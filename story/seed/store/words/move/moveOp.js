@@ -30,7 +30,7 @@ import Space from "../../../materials/space/space.js";
 import { registerOperation } from "../../../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { detectTargetKind, targetIdOf } from "../../../materials/_targetShape.js";
-import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
+import { registerAbleWord } from "../../../present/word/ableWordRegistry.js";
 import { targetsFact } from "../../../ibp/factResult.js";
 
 // Self-register this slice's co-located WORLD strand (CONVERTING.md): the bridge
@@ -38,7 +38,7 @@ import { targetsFact } from "../../../ibp/factResult.js";
 // Registered at module load (operations.js imports this file at seed boot, and a
 // DRY harness importing moveOp.js triggers it too), so the `.word` is available
 // wherever a booted story exists; the cut reads it via the bridge.
-registerRoleWord("move", "move", new URL("./move.word", import.meta.url));
+registerAbleWord("move", "move", new URL("./move.word", import.meta.url));
 
 async function moveHandler({ target, params, moment }) {
   const { coord, to, target: explicitTarget } = params || {};

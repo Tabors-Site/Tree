@@ -171,7 +171,7 @@ export async function crossStoryDispatch({ envelope, actor, identity } = {}) {
     through: actor.beingId,
     to: actor.beingId,
     ibpAddress: envelope.address,
-    activeRole: null,
+    activeAble: null,
     inboxMessageId: null,
     inReplyTo: null,
     parentThread: null,
@@ -216,7 +216,7 @@ export async function crossStoryDispatch({ envelope, actor, identity } = {}) {
         through: actor.beingId,
         to: actor.beingId,
         ibpAddress: envelope.address,
-        activeRole: null,
+        activeAble: null,
         inboxMessageId: null,
         inReplyTo: null,
         rootCorrelation: id,
@@ -246,7 +246,7 @@ export async function crossStoryDispatch({ envelope, actor, identity } = {}) {
         actId,
         beingIn: actor.beingId,
         beingOut: actor.beingId,
-        activeRole: null,
+        activeAble: null,
         endMessage: null,
         stoppedAt: now,
       })
@@ -505,7 +505,7 @@ export async function runVerbAsForeignActor({
 
   // Run afterSeal callbacks. callByResolved queues `wake()` here when
   // it enqueues a SUMMON onto a receiver's inbox (triggerOn:["message"]
-  // roles); without firing the callbacks, the receiver's runLoop never
+  // ables); without firing the callbacks, the receiver's runLoop never
   // starts and the inbox entry sits forever. Same shape stamped.js
   // uses to drain afterSeal at moment seal. This is the missing seam
   // for cross-story SUMMONs to actually deliver — the normal sealAct

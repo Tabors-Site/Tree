@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// The SCRIBE, end to end: it registers as a real summoned role with the NEVER-PRESS guard, it
+// The SCRIBE, end to end: it registers as a real summoned able with the NEVER-PRESS guard, it
 // drafts + grounds Word from intent, it refuses what won't resolve, and it presses NOTHING —
 // the draft is handed to YOU, and only YOUR press lays the fact. Proves the draft→press
 // handoff and the three guards. Full boot.
@@ -36,8 +36,8 @@ const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const { sealFacts } = await import(`${R}/seed/past/fact/facts.js`);
 const { withIAmAct } = await import(`${R}/seed/sprout.js`);
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
-const { registerRole } = await import(`${R}/seed/present/roles/registry.js`);
-const { scribeRole } = await import(`${R}/seed/present/roles/scribe/role.js`);
+const { registerAble } = await import(`${R}/seed/present/ables/registry.js`);
+const { scribeAble } = await import(`${R}/seed/present/ables/scribe/able.js`);
 const { draftWord } = await import(`${R}/seed/present/book/scribe.js`);
 const { typeIntoBook } = await import(`${R}/seed/present/book/type.js`);
 const { assembleBook } = await import(`${R}/seed/present/book/assemble.js`);
@@ -55,14 +55,14 @@ try {
   const home = cherub.state?.homeSpace;
   const identity = { beingId: I_AM, name: "i-am", nameId: "i-am" };
 
-  // 1. registers as a real role, with the never-press guard
+  // 1. registers as a real able, with the never-press guard
   let regErr = null;
-  try { registerRole(scribeRole.name, scribeRole, "seed"); } catch (e) { regErr = e; }
-  !regErr ? ok(`scribe registers as a real summoned role`) : bad(`register`, regErr.message);
-  (!scribeRole.can.some((e) => e.verb === "do") && !scribeRole.permissions.includes("do"))
+  try { registerAble(scribeAble.name, scribeAble, "seed"); } catch (e) { regErr = e; }
+  !regErr ? ok(`scribe registers as a real summoned able`) : bad(`register`, regErr.message);
+  (!scribeAble.can.some((e) => e.verb === "do") && !scribeAble.permissions.includes("do"))
     ? ok(`the never-press guard: no \`do\` word in its \`can\`, see-only — it cannot commit on your behalf`)
-    : bad(`never-press guard`, { can: scribeRole.can, permissions: scribeRole.permissions });
-  scribeRole.requiredCognition === "llm" ? ok(`llm cognition: intent → the Word`) : bad(`cognition`, scribeRole.requiredCognition);
+    : bad(`never-press guard`, { can: scribeAble.can, permissions: scribeAble.permissions });
+  scribeAble.requiredCognition === "llm" ? ok(`llm cognition: intent → the Word`) : bad(`cognition`, scribeAble.requiredCognition);
 
   // 2. drafts + grounds a valid line, refuses what won't resolve — and presses NOTHING
   const before = await assembleBook("0");

@@ -235,7 +235,7 @@ export async function reviveTree(treeId, beingId, history) {
 
   const access = await resolveSpaceAccess(treeId, beingId, history);
   if (!access.ok || !access.isOwner) {
-    // Admin bypass retired 2026-05-18; role-walk gates
+    // Admin bypass retired 2026-05-18; able-walk gates
     // non-owner revival policies. For now: owner only.
     throw new Error("Only the tree's owner can revive a tripped tree");
   }

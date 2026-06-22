@@ -7,20 +7,20 @@
 // client. This file builds that chain by walking right-to-left across
 // the IBPA (actor :: receiver):
 //
-//   Step 0  receiver being   — role-slot list
+//   Step 0  receiver being   — able-slot list
 //   Step 1  receiver being   — default list
-//   Step 2  receiver space   — role-slot + default, walking ancestors
-//   Step 3  receiver story — role-slot + default
+//   Step 2  receiver space   — able-slot + default, walking ancestors
+//   Step 3  receiver story — able-slot + default
 //   Step 3.5 cross-boundary  — opens only if forceActor fired upstream
-//   Step 4  actor being      — role-slot + default
-//   Step 5  actor space      — role-slot + default, walking ancestors
-//   Step 6  actor story    — role-slot + default
+//   Step 4  actor being      — able-slot + default
+//   Step 5  actor space      — able-slot + default, walking ancestors
+//   Step 6  actor story    — able-slot + default
 //
 // Each container exposes a unified `qualities.llm` shape:
 //
 //   qualities.llm = {
 //     default:       string[]     — independent ordered list
-//     slots:         { role: string[] } — each role's own independent list
+//     slots:         { able: string[] } — each able's own independent list
 //     preferOwn:     bool         — SOFT: this container's connections jump
 //                                   to front WITHIN the step
 //     forceActor:    bool         — HARD: chain skips remaining receiver-side,
@@ -30,7 +30,7 @@
 //
 // Each fallback list is INDEPENDENT. A being with 5 connections under
 // `slots["coder"]` and 3 under `default` produces 5+3=8 candidates in
-// chain order for role=coder (slot list exhausts before default).
+// chain order for able=coder (slot list exhausts before default).
 //
 // Force-flag walk: closest-to-step-0 wins. The first force flag
 // encountered on the receiver-side walk (steps 0..3) determines the
@@ -80,10 +80,10 @@ function readQualitiesField(qualities, name) {
  * the chain walker. Reads legacy `beingLlm` / `enforced` / `locked`
  * so pre-rewire qualities data still resolves.
  *
- * Returns { defaultList, slotList(role), preferOwn, forceActor,
+ * Returns { defaultList, slotList(able), preferOwn, forceActor,
  * forceReceiver }.
  */
-export function readContainerLlm(container, role) {
+export function readContainerLlm(container, able) {
   if (!container) {
     return {
       defaultList: [],
@@ -99,16 +99,16 @@ export function readContainerLlm(container, role) {
   // default list = new `qualities.llm.default[]`.
   const defaultList = toIdList(llm?.default);
 
-  // role-slot list — check new shape first, then legacy `slots` /
+  // able-slot list — check new shape first, then legacy `slots` /
   // `beingLlm.slots`. Reject prototype-polluted slot names + invalid
   // patterns.
   let slotList = [];
-  if (role && typeof role === "string" && SLOT_NAME_PATTERN.test(role)) {
+  if (able && typeof able === "string" && SLOT_NAME_PATTERN.test(able)) {
     const newSlots = llm?.slots;
-    if (newSlots && typeof newSlots === "object" && Object.hasOwn(newSlots, role)) {
-      slotList = toIdList(newSlots[role]);
-    } else if (beingLlm?.slots && typeof beingLlm.slots === "object" && Object.hasOwn(beingLlm.slots, role)) {
-      slotList = toIdList(beingLlm.slots[role]);
+    if (newSlots && typeof newSlots === "object" && Object.hasOwn(newSlots, able)) {
+      slotList = toIdList(newSlots[able]);
+    } else if (beingLlm?.slots && typeof beingLlm.slots === "object" && Object.hasOwn(beingLlm.slots, able)) {
+      slotList = toIdList(beingLlm.slots[able]);
     }
   }
 
@@ -190,8 +190,8 @@ async function loadStoryRoot(history) {
 // Append a container's candidates to the chain under a labeled step.
 // Returns { added, hitForceReceiver, hitForceActor } so the walker can
 // decide what to do next.
-function appendContainerCandidates(chain, container, role, step, tried) {
-  const norm = readContainerLlm(container, role);
+function appendContainerCandidates(chain, container, able, step, tried) {
+  const norm = readContainerLlm(container, able);
   const ordered = [];
 
   // slot list first within this container (per the step table).
@@ -229,7 +229,7 @@ function appendContainerCandidates(chain, container, role, step, tried) {
 
 /**
  * Build the ordered LLM connection-id chain for a (actor, receiver,
- * role) triple. Returns:
+ * able) triple. Returns:
  *
  *   {
  *     chain: Array<{ step, source, connectionId }>,
@@ -241,7 +241,7 @@ function appendContainerCandidates(chain, container, role, step, tried) {
  * storyDomain field is currently informational — same-story is the
  * common case and the resolver walks LOCAL projections regardless.
  */
-export async function buildLlmChain({ actor, receiver, role, history = "0" } = {}) {
+export async function buildLlmChain({ actor, receiver, able, history = "0" } = {}) {
   const chain = [];
   const tried = new Set();
   let reason = null;
@@ -255,7 +255,7 @@ export async function buildLlmChain({ actor, receiver, role, history = "0" } = {
 
   const consumeContainer = async (container, stepLabel, sideIsReceiver) => {
     const before = chain.length;
-    const r = appendContainerCandidates(chain, container, role, stepLabel, tried);
+    const r = appendContainerCandidates(chain, container, able, stepLabel, tried);
     // On receiver-side: act on force flags. On actor-side: forceReceiver
     // caps the actor sub-walk, forceActor is a no-op.
     if (sideIsReceiver) {
@@ -287,7 +287,7 @@ export async function buildLlmChain({ actor, receiver, role, history = "0" } = {
   // 0-vs-1 distinction for forensics).
   if (receiverBeing) {
     const before = chain.length;
-    const norm = readContainerLlm(receiverBeing, role);
+    const norm = readContainerLlm(receiverBeing, able);
     for (const id of norm.slotList) {
       if (!tried.has(id)) {
         chain.push({ step: "0", source: "receiver-being:slot", connectionId: id });
@@ -316,7 +316,7 @@ export async function buildLlmChain({ actor, receiver, role, history = "0" } = {
   if (boundary !== "force-actor" && receiver?.spaceId) {
     const ancestors = await loadSpaceAncestors(receiver.spaceId, history);
     for (const space of ancestors) {
-      const norm = readContainerLlm(space, role);
+      const norm = readContainerLlm(space, able);
       for (const id of norm.slotList) {
         if (!tried.has(id)) {
           chain.push({ step: "2", source: "receiver-space:slot", connectionId: id });
@@ -346,7 +346,7 @@ export async function buildLlmChain({ actor, receiver, role, history = "0" } = {
   if (boundary !== "force-actor") {
     const storyRoot = await loadStoryRoot(history);
     if (storyRoot) {
-      const norm = readContainerLlm(storyRoot, role);
+      const norm = readContainerLlm(storyRoot, able);
       for (const id of norm.slotList) {
         if (!tried.has(id)) {
           chain.push({ step: "3", source: "receiver-story:slot", connectionId: id });
@@ -400,7 +400,7 @@ export async function buildLlmChain({ actor, receiver, role, history = "0" } = {
   // Step 4: actor being.
   const actorBeing = await loadBeing(actor?.beingId, history);
   if (actorBeing) {
-    const norm = readContainerLlm(actorBeing, role);
+    const norm = readContainerLlm(actorBeing, able);
     for (const id of norm.slotList) {
       if (!tried.has(id)) {
         chain.push({ step: "4", source: "actor-being:slot", connectionId: id });
@@ -423,7 +423,7 @@ export async function buildLlmChain({ actor, receiver, role, history = "0" } = {
   if (actor?.spaceId) {
     const ancestors = await loadSpaceAncestors(actor.spaceId, history);
     for (const space of ancestors) {
-      const norm = readContainerLlm(space, role);
+      const norm = readContainerLlm(space, able);
       for (const id of norm.slotList) {
         if (!tried.has(id)) {
           chain.push({ step: "5", source: "actor-space:slot", connectionId: id });
@@ -451,7 +451,7 @@ export async function buildLlmChain({ actor, receiver, role, history = "0" } = {
     // appeared (rare, but covers operator edits between walks).
     const storyRoot = await loadStoryRoot(history);
     if (storyRoot) {
-      const norm = readContainerLlm(storyRoot, role);
+      const norm = readContainerLlm(storyRoot, able);
       for (const id of norm.slotList) {
         if (!tried.has(id)) {
           chain.push({ step: "6", source: "actor-story:slot", connectionId: id });

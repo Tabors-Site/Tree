@@ -10,11 +10,11 @@ Specs: `book.md` · `language.md` · `search.md` · `5d.md` · `colophon.md` · 
 
 ## 0. Foundation — DONE (the floor it all stands on)
 
-- [x] Word-fold cutover — ops / matter-types / reducers / role-words fold from the chain
+- [x] Word-fold cutover — ops / matter-types / reducers / able-words fold from the chain
       (coin = declare, retire = disable). No Map trusted as truth.
 - [x] **The keystone** — the act authors its fact, the **dispatcher is the one scribe**
       (`_factParams`). No `host:` emit, no `skipAudit`. `do.js` + `be.js` (other agent).
-- [x] **Every act makes a fact** — take/ask always stamp `do:take-role`/`do:ask-role`
+- [x] **Every act makes a fact** — take/ask always stamp `do:take-able`/`do:ask-able`
       (grant record on grant, outcome on no-op); reducer folds the grant from the granting
       act; **`_noFact` dissolved**.
 - [x] `factResult.js` vocabulary — `stampsFact` / `targetsFact` / `stampsWordFact`. Full
@@ -22,7 +22,7 @@ Specs: `book.md` · `language.md` · `search.md` · `5d.md` · `colophon.md` · 
 - [x] Grammar: nested-object params (`do x with { a: { b: $c } }`), inline-ifs
       (`If cond, then.`, multi-condition, Return-as-then), brace-aware splits.
 - [x] `form-portal` composes `create-matter` — the composite-word proof.
-- [x] Rung-1 ops dissolved: create-matter, key, set-world-signal, take-role, ask-role, portal.
+- [x] Rung-1 ops dissolved: create-matter, key, set-world-signal, take-able, ask-able, portal.
 - [x] Rung 2 (other agent): NAME/BE/SEE verb-op-sets fold from the chain.
 - [x] Rung 3 first op (other agent): `be:truename` authored by a `.word`.
 - [x] branch→history rename (data + readers); coin rename; verb-past.
@@ -40,7 +40,7 @@ Specs: `book.md` · `language.md` · `search.md` · `5d.md` · `colophon.md` · 
 - [ ] Retrofit `be:truename`'s cut to `stampsWordFact` (the shared helper).
 - [ ] Decide cherub-connect's `host:` **session ops** (search / verify / token / seat):
       bless as the legitimate session/transport floor, or dissolve to see-ops. (Lean: floor.)
-- [ ] **(Long) full `_factParams` migration** — every default-path do-op (grant-role, move,
+- [ ] **(Long) full `_factParams` migration** — every default-path do-op (grant-able, move,
       set-being/space/matter, …) authors its fact so the dispatcher stamps uniformly from the
       op. Uniform vocabulary; the LLM layer wants every op authorable.
 

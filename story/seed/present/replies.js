@@ -11,15 +11,15 @@
 // aggregation.
 //
 //   EMISSION  (emitReplyToAsker, emitReplyToStance)
-//     A role's summon() has finished its moment and the role
+//     A able's summon() has finished its moment and the able
 //     wants someone else to have the next moment. I build the
 //     reply envelope, hand it to callByResolved, it lands in
 //     the asker's inbox. The asker's next moment will respond to
-//     it. defaultCall is the canonical caller; every role that
+//     it. defaultCall is the canonical caller; every able that
 //     passes its act back up a chain ends here.
 //
 //   AGGREGATION  (aggregate)
-//     A role's summon() requested N sibling moments in parallel
+//     A able's summon() requested N sibling moments in parallel
 //     and needs to wait for K of them to come back before its
 //     own moment can continue. The aggregate handle lets the
 //     caller await the gather and feed in arriving replies
@@ -28,7 +28,7 @@
 //
 // Both halves share a discipline: neither touches the inbox
 // directly. Emission writes through the verb (callByResolved);
-// aggregation never reads — replies are forwarded by the role's
+// aggregation never reads — replies are forwarded by the able's
 // summon() handler via notify(). Only SUMMONs make SUMMONs, and
 // replies are SUMMONs.
 //
@@ -93,7 +93,7 @@ function parseAskerStance(stance) {
 /**
  * Shape a moment's result into the response inbox row the scheduler
  * pushes back through handoff.onResponse. The mapping (text/content/
- * actId) is what role.summon returned; intake just routes the row.
+ * actId) is what able.summon returned; intake just routes the row.
  *
  * Sits with reply emission because it produces the same shape: an
  * inbox-bound envelope from a moment's outcome. moment.js stays pure
@@ -131,7 +131,7 @@ export function buildResponseEntry({ result, handoff, originalEntry }) {
  * @param {object} opts
  * @param {string} opts.fromNodeId       Replier's home (scope spaceId)
  * @param {object} opts.fromBeing        Replier Being doc
- * @param {string} [opts.fromRoleName]   Stance qualifier; default fromBeing.name
+ * @param {string} [opts.fromAbleName]   Stance qualifier; default fromBeing.name
  * @param {object} opts.originalMessage  Inbox entry being responded to (carries .from)
  * @param {string} opts.exitText         Reply content
  * @param {number|string} [opts.priority]  Default 3 / "INTERACTIVE"
@@ -141,7 +141,7 @@ export function buildResponseEntry({ result, handoff, originalEntry }) {
 export async function emitReplyToAsker({
   fromNodeId,
   fromBeing,
-  fromRoleName,
+  fromAbleName,
   originalMessage,
   exitText,
   priority = 3,
@@ -189,9 +189,9 @@ export async function emitReplyToAsker({
       return false;
     }
     const fromQualifier =
-      fromRoleName ||
+      fromAbleName ||
       fromBeing?.name ||
-      fromBeing?.defaultRole ||
+      fromBeing?.defaultAble ||
       "sub-being";
     const fromStance = `${storyDomain}/${fromNodeId}@${fromQualifier}`;
 
@@ -206,13 +206,13 @@ export async function emitReplyToAsker({
     await callByResolved({
       toBeingId:    String(askerBeing._id),
       inboxSpaceId: String(askerStance.spaceId),
-      activeRole:   askerBeing.defaultRole || null,
+      activeAble:   askerBeing.defaultAble || null,
       message: {
         from:            fromStance,
         content,
         correlation,
         rootCorrelation,
-        activeRole:      askerBeing.defaultRole || null,
+        activeAble:      askerBeing.defaultAble || null,
         inReplyTo:       originalMessage?.correlation || null,
         priority:        priorityEnumFor(priority),
         sentAt:          new Date().toISOString(),
@@ -251,7 +251,7 @@ export async function emitReplyToAsker({
  * @param {string} opts.askerStance      e.g. "treeos.ai/<userHomeId>@tabor"
  * @param {string} opts.fromNodeId       Replier's home (scope spaceId)
  * @param {object} opts.fromBeing        Replier Being doc
- * @param {string} [opts.fromRoleName]   Stance qualifier
+ * @param {string} [opts.fromAbleName]   Stance qualifier
  * @param {string} opts.exitText         Reply content
  * @param {string} [opts.inReplyTo]      Correlation of the wake-SUMMON
  * @param {string} [opts.rootCorrelation] Chain root (propagates from wake)
@@ -263,7 +263,7 @@ export async function emitReplyToStance({
   askerStance,
   fromNodeId,
   fromBeing,
-  fromRoleName,
+  fromAbleName,
   exitText,
   inReplyTo = null,
   rootCorrelation = null,
@@ -307,9 +307,9 @@ export async function emitReplyToStance({
       return false;
     }
     const fromQualifier =
-      fromRoleName ||
+      fromAbleName ||
       fromBeing?.name ||
-      fromBeing?.defaultRole ||
+      fromBeing?.defaultAble ||
       "sub-being";
     const fromStance = `${storyDomain}/${fromNodeId}@${fromQualifier}`;
 
@@ -320,13 +320,13 @@ export async function emitReplyToStance({
     await callByResolved({
       toBeingId:    String(askerBeing._id),
       inboxSpaceId: String(parsed.spaceId),
-      activeRole:   askerBeing.defaultRole || null,
+      activeAble:   askerBeing.defaultAble || null,
       message: {
         from:            fromStance,
         content,
         correlation,
         rootCorrelation: rootC,
-        activeRole:      askerBeing.defaultRole || null,
+        activeAble:      askerBeing.defaultAble || null,
         inReplyTo,
         priority:        priorityEnumFor(priority),
         sentAt:          new Date().toISOString(),
@@ -409,12 +409,12 @@ export async function findChainInitialCaller(
 // matcher (correlation ids the caller is expecting, plus a predicate),
 // and resolves when matching replies arrive. The caller drives
 // delivery by notifying the aggregator from its own SUMMON-receiving
-// path (typically inside the role template's `summon` handler).
+// path (typically inside the able template's `summon` handler).
 //
 // **Why not poll the inbox directly?** Polling adds latency and
 // contention with the scheduler that's already serializing inbox
 // writes. The aggregator instead piggybacks on the SUMMON-arrives
-// moment: whenever a SUMMON places at the being, the role template
+// moment: whenever a SUMMON places at the being, the able template
 // forwards it through `notify(reply)`. If the reply matches an open
 // aggregation, the aggregator resolves (or partially fills) without
 // consulting the inbox.
@@ -430,7 +430,7 @@ export async function findChainInitialCaller(
 // the partial replies it had collected so far.
 
 /**
- * Begin an aggregation. Returns a handle the role template uses to
+ * Begin an aggregation. Returns a handle the able template uses to
  * await the result and to feed in incoming replies.
  *
  * @param {object} opts

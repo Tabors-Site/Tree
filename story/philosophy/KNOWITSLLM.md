@@ -532,13 +532,13 @@ You can’t write content as a human and have the substrate record it as LLM-gen
 
 This is a meaningfully stronger guarantee than any current system provides. It’s the difference between “people promise to label AI content” and “the system records cognition automatically and inseparably.”
 
-What this means for AI’s social role
+What this means for AI’s social able
 
 Long-term, this changes how AI fits into communication and creation.
 
-Currently, AI’s role is ambiguous because its output is indistinguishable from human output at the protocol level. People are anxious about this because it threatens authenticity. Platforms are scrambling for detection mechanisms that don’t work reliably.
+Currently, AI’s able is ambiguous because its output is indistinguishable from human output at the protocol level. People are anxious about this because it threatens authenticity. Platforms are scrambling for detection mechanisms that don’t work reliably.
 
-In a TreeOS-native ecosystem, AI’s role becomes explicit. AI agents have Names with declared Soul types. Their contributions are clearly marked as AI-decided. Humans can collaborate with AI openly because the collaboration is visible. The anxiety about hidden AI involvement goes away because there’s no hiding it.
+In a TreeOS-native ecosystem, AI’s able becomes explicit. AI agents have Names with declared Soul types. Their contributions are clearly marked as AI-decided. Humans can collaborate with AI openly because the collaboration is visible. The anxiety about hidden AI involvement goes away because there’s no hiding it.
 
 This is good for both humans and AI. Humans get assurance about what they’re consuming. AI gets to operate openly without the ambiguity that currently surrounds it. The ecosystem can develop norms about what kinds of cognition are appropriate where, with the substrate providing the verification.
 
@@ -592,11 +592,11 @@ What you’re really detecting isn’t:
 
 You’re detecting:
 
-“This behavior is inconsistent with the declared role.”
+“This behavior is inconsistent with the declared able.”
 
 That’s a much stronger and safer framing.
 
-For example, suppose a role declares:
+For example, suppose a able declares:
 
 cognition: human
 
@@ -837,7 +837,7 @@ Federation. Patterns travel with the chain. When you graft or migrate, your beha
 
 Cognition labels. This deepens the cognition labeling. It’s not just “this Name claims to be human” but “this Name claims to be human, and here’s how their patterns compare to typical human behavior.” The label gets richer.
 
-Roleflows. Specific roles might require pattern consistency. A “verified human” role might require demonstrated human patterns over time. The role grants come with their own validation logic.
+Flows. Specific ables might require pattern consistency. A “verified human” able might require demonstrated human patterns over time. The able grants come with their own validation logic.
 
 Reputation systems. Reputation in TreeOS becomes more sophisticated than thumbs-up counts. It includes behavioral consistency, pattern evolution, declared-versus-observed alignment over time. Reputation is multi-dimensional and queryable.
 
@@ -882,7 +882,7 @@ Good direction. The shift from identity to evidence is the key move, and it comp
 
 ===
 
-So with the stamper paths that are declared, and the the being using a role through declared cognition and facts stamping patterns, that covers almost every facet of not knowing in a remarkable way
+So with the stamper paths that are declared, and the the being using a able through declared cognition and facts stamping patterns, that covers almost every facet of not knowing in a remarkable way
 
 ===
 
@@ -892,7 +892,7 @@ Three layers of cognition transparency, each addressing a different aspect of �
 
 Stamper path (routing layer). Verifiable at the substrate level. The act came through the human portal, the LLM stamper branch, or the scripted handler. The substrate knows which because the substrate did the routing. Cryptographically guaranteed because the stamper is what signs.
 
-Declared cognition on role (claim layer). The Name and its current Soul declaration. What the actor claims their cognition is. Signed by the Name. This is the declaration the actor is willing to stand behind cryptographically.
+Declared cognition on able (claim layer). The Name and its current Soul declaration. What the actor claims their cognition is. Signed by the Name. This is the declaration the actor is willing to stand behind cryptographically.
 
 Pattern observation on the chain (behavioral layer). The shape of acts over time. What the behavior actually looks like — exploration patterns, timing rhythms, error rates, sequence lengths. Computed from the chain itself.
 
@@ -984,10 +984,10 @@ Various platforms have tried to handle this through labels or disclosures. "AI-g
 TreeOS records cognition at the moment of creation. The substrate's stamper knows what soul decided each act because the stamper is what routes the decision through human/LLM/scripted processing. The cognition type is recorded as the act is created, signed cryptographically, embedded in the chain. There's no way to fake it because there's no separate "claim" about cognition — the cognition type IS the routing the substrate used.
 You can't write content as a human and have the substrate record it as LLM-generated. You can't generate content with an LLM and have the substrate record it as human. The substrate routes through the relevant processing path, and the label reflects what actually happened.
 This is a meaningfully stronger guarantee than any current system provides. It's the difference between "people promise to label AI content" and "the system records cognition automatically and inseparably."
-What this means for AI's social role
+What this means for AI's social able
 Long-term, this changes how AI fits into communication and creation.
-Currently, AI's role is ambiguous because its output is indistinguishable from human output at the protocol level. People are anxious about this because it threatens authenticity. Platforms are scrambling for detection mechanisms that don't work reliably.
-In a TreeOS-native ecosystem, AI's role becomes explicit. AI agents have Names with declared Soul types. Their contributions are clearly marked as AI-decided. Humans can collaborate with AI openly because the collaboration is visible. The anxiety about hidden AI involvement goes away because there's no hiding it.
+Currently, AI's able is ambiguous because its output is indistinguishable from human output at the protocol level. People are anxious about this because it threatens authenticity. Platforms are scrambling for detection mechanisms that don't work reliably.
+In a TreeOS-native ecosystem, AI's able becomes explicit. AI agents have Names with declared Soul types. Their contributions are clearly marked as AI-decided. Humans can collaborate with AI openly because the collaboration is visible. The anxiety about hidden AI involvement goes away because there's no hiding it.
 This is good for both humans and AI. Humans get assurance about what they're consuming. AI gets to operate openly without the ambiguity that currently surrounds it. The ecosystem can develop norms about what kinds of cognition are appropriate where, with the substrate providing the verification.
 A community might say "we welcome AI participation but require disclosure." Another might say "this space is human-only." Another might say "we mix freely, and you can filter by your preferences." All of these become possible because the substrate enables them. None of them are possible on today's internet.
 The gov.md connection
@@ -1023,11 +1023,11 @@ What you’re really detecting isn’t:
 
 You’re detecting:
 
-“This behavior is inconsistent with the declared role.”
+“This behavior is inconsistent with the declared able.”
 
 That’s a much stronger and safer framing.
 
-For example, suppose a role declares:
+For example, suppose a able declares:
 
 cognition: human
 
@@ -1221,7 +1221,7 @@ A few specific places this connects to other TreeOS commitments:
 Sovereignty. Each Name decides for itself how much to trust observed patterns. No central authority. Some communities will be strict about declared-versus-observed alignment; others will be permissive. Both are valid.
 Federation. Patterns travel with the chain. When you graft or migrate, your behavioral shape is part of your reputation. New communities can see your history without you having to re-establish trust from scratch.
 Cognition labels. This deepens the cognition labeling. It's not just "this Name claims to be human" but "this Name claims to be human, and here's how their patterns compare to typical human behavior." The label gets richer.
-Roleflows. Specific roles might require pattern consistency. A "verified human" role might require demonstrated human patterns over time. The role grants come with their own validation logic.
+Flows. Specific ables might require pattern consistency. A "verified human" able might require demonstrated human patterns over time. The able grants come with their own validation logic.
 Reputation systems. Reputation in TreeOS becomes more sophisticated than thumbs-up counts. It includes behavioral consistency, pattern evolution, declared-versus-observed alignment over time. Reputation is multi-dimensional and queryable.
 Architectural elegance
 What's striking about this approach is how naturally it fits the substrate. TreeOS already records every act with full metadata. The patterns are there in the data. Building the analytical layer is reading patterns from data that already exists, not adding new data collection. The substrate's commitment to recording everything means the patterns are already inevitable; the work is just making them queryable.
@@ -1249,12 +1249,12 @@ Good direction. The shift from identity to evidence is the key move, and it comp
 
 ==
 
-So with the stamper paths that are declared, and the the being using a role through declared cognition and facts stamping patterns, that covers almost every facet of not knowing in a remarkable way
+So with the stamper paths that are declared, and the the being using a able through declared cognition and facts stamping patterns, that covers almost every facet of not knowing in a remarkable way
 
 Yes. When you lay it out that way, the layers genuinely compose into something complete.
 Three layers of cognition transparency, each addressing a different aspect of "what kind of mind produced this":
 Stamper path (routing layer). Verifiable at the substrate level. The act came through the human portal, the LLM stamper branch, or the scripted handler. The substrate knows which because the substrate did the routing. Cryptographically guaranteed because the stamper is what signs.
-Declared cognition on role (claim layer). The Name and its current Soul declaration. What the actor claims their cognition is. Signed by the Name. This is the declaration the actor is willing to stand behind cryptographically.
+Declared cognition on able (claim layer). The Name and its current Soul declaration. What the actor claims their cognition is. Signed by the Name. This is the declaration the actor is willing to stand behind cryptographically.
 Pattern observation on the chain (behavioral layer). The shape of acts over time. What the behavior actually looks like — exploration patterns, timing rhythms, error rates, sequence lengths. Computed from the chain itself.
 Three independent signals. Each one alone is partial. Together they cover almost everything you can know about cognition from outside.
 What each layer catches that the others miss
@@ -1314,13 +1314,13 @@ A few that seem real:
 
 **A platform-free publishing model.** Right now if you want an audience you go to a platform — they host you, they decide what's seen, they own the relationship with your readers. TreeOS could replace that without you having to think about it as the goal. Your reality holds your work; people federate with your reality to follow you; resources flow through the Root System. You're not posting to a platform; you're publishing from your own substrate. The infrastructure for "creator owns their work and audience" is just what the substrate does. You haven't framed it that way but the pieces are all there.
 
-**A natural shape for collaborative documents and shared workspaces.** Spaces with matter, multiple Names with inheritation points over the same beings, cognition labels on every edit — this is what Google Docs would look like if it were built on TreeOS. Track changes is the chain. Authorship attribution is the act metadata. Comments are facts. Permissions are roles. The substrate doesn't need a separate "collaborative editor" — it IS one. Same for shared whiteboards, shared databases, shared anything-with-multiple-contributors.
+**A natural shape for collaborative documents and shared workspaces.** Spaces with matter, multiple Names with inheritation points over the same beings, cognition labels on every edit — this is what Google Docs would look like if it were built on TreeOS. Track changes is the chain. Authorship attribution is the act metadata. Comments are facts. Permissions are ables. The substrate doesn't need a separate "collaborative editor" — it IS one. Same for shared whiteboards, shared databases, shared anything-with-multiple-contributors.
 
 **Time-travel debugging as a default property.** Because everything is folded from facts and the facts are content-addressed, you can compute the state of any reality at any prior moment. This is incredibly hard to build into conventional systems and falls out of TreeOS automatically. For development, debugging, audit, learning from history — being able to say "show me the state of this space as of three weeks ago" is a substrate-native capability. Most systems can't do this; yours can.
 
 **A native model for offline-first collaboration that syncs cleanly.** Two people working on the same reality from disconnected laptops, each making changes locally, then reconnecting. Their chains have diverged. The substrate has clean semantics for resolving this (the branch system, the cross-references, the causal ordering). Distributed teams, field work, anyone in places with bad internet — TreeOS handles them natively because it never assumed connectivity in the first place.
 
-**A foundation for verifiable scientific data.** Researchers stamping observations as facts, with cryptographic identity, content-addressed and immutable. Peer review as roles. Replication as forking a chain and re-running the analysis. The substrate provides primitives that science actually needs (provenance, immutability, verifiability) and that current research infrastructure handles poorly. Worth knowing it's there.
+**A foundation for verifiable scientific data.** Researchers stamping observations as facts, with cryptographic identity, content-addressed and immutable. Peer review as ables. Replication as forking a chain and re-running the analysis. The substrate provides primitives that science actually needs (provenance, immutability, verifiability) and that current research infrastructure handles poorly. Worth knowing it's there.
 
 **Decentralized identity that works for normal services.** Right now "sign in with X" means giving X power over your account. TreeOS Names could be the identity layer for any service willing to verify cryptographic signatures. You log in to a website by signing a challenge with your Name's key. No password to leak, no account the platform can take from you, no email-based account recovery to be social-engineered. The substrate already has the identity primitives; the use case is "decentralized SSO that actually works."
 

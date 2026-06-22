@@ -77,7 +77,7 @@ Organizations typically take the commercial license to:
 ## Scope, stated plainly
 
 Only the seed is dual licensed. If you build an extension, author a
-roleFlow, make a graft, write a portal, or share it into Ours, that is
+flow, make a graft, write a portal, or share it into Ours, that is
 your own work under your own terms. The seed is the sovereign core;
 the licensing here is about the seed and nothing more.
 

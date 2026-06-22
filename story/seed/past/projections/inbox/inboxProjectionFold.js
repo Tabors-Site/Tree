@@ -65,7 +65,7 @@ async function handleCall(fact /*, type, id*/) {
         summoner:        fact.through ? String(fact.through) : null,
         sender:          params.sender || null,
         content:         params.content ?? null,
-        activeRole:      params.activeRole || null,
+        activeAble:      params.activeAble || null,
         attachments:     params.attachments || undefined,
         intent:          params.intent || null,
         priority:        params.priority || "INTERACTIVE",

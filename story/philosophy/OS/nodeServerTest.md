@@ -32,7 +32,7 @@ It makes the substrate observable to itself. Once the HTTP server is a being, yo
 It's a real demo. "TreeOS observes and controls its own runtime through its own primitives" is a stronger demonstration than "TreeOS does event-sourcing." The former shows the architecture's depth; the latter shows a feature.
 
 What heaven becomes
-Heaven is already the substrate's authoring/system layer — where I-Am lives, where seed delegates work, where roles register. Your proposal extends it: heaven becomes the substrate's runtime infrastructure layer.
+Heaven is already the substrate's authoring/system layer — where I-Am lives, where seed delegates work, where ables register. Your proposal extends it: heaven becomes the substrate's runtime infrastructure layer.
 
 Concretely, heaven could gain spaces like:
 
@@ -44,7 +44,7 @@ Concretely, heaven could gain spaces like:
 /heaven/runtime/projection — where the projection engine being lives.
 Each space holds beings that represent specific pieces of runtime infrastructure. The infrastructure does its work as beings doing their work. Operators (angels) can SEE these beings, observe their state, address them with operations.
 
-This is a meaningful extension of heaven's role. Today heaven is mostly authoring/permissions. After this, heaven is also the substrate's runtime self-representation.
+This is a meaningful extension of heaven's able. Today heaven is mostly authoring/permissions. After this, heaven is also the substrate's runtime self-representation.
 
 What wrapping the HTTP server looks like
 Let me work through one specific case to make this concrete.
@@ -54,7 +54,7 @@ Today: Express receives an HTTP request. A handler runs. It does authentication,
 After wrapping: The HTTP server is a being in /heaven/network/http. When a request arrives:
 
 The HTTP-server being receives the request as an incoming summon (or as matter being created in a request-stream space).
-The being's role determines how to respond — for incoming IBP requests, route to the canopy gateway being; for static requests, return the static content; for API calls, dispatch to the appropriate being.
+The being's able determines how to respond — for incoming IBP requests, route to the canopy gateway being; for static requests, return the static content; for API calls, dispatch to the appropriate being.
 The response is the being's act — a DO that produces the response.
 The whole exchange is in the chain. The request is a fact; the response is a fact; the being's act-chain includes the moment it handled the request.
 This means: every HTTP request your substrate handles becomes visible in the chain. You can fold to any moment and see what the HTTP server was doing. You can query the HTTP server being's act-chain to see its full history of handling requests. Tampering with the request log would break the chain hash.
@@ -187,7 +187,7 @@ The Stamper being lives at /heaven/runtime/stamper.
 Its act-chain is the substrate's complete history of stamping activity.
 Each Stamper act references the fact it stamped (by hash), the actor whose act it stamped, and the reel it landed on.
 Watching the Stamper's act-chain is watching the substrate stamp.
-This option has integrity. The Stamper is a real being with a real role. Its acts are real acts. The substrate's machinery is legible as the Stamper doing its work.
+This option has integrity. The Stamper is a real being with a real able. Its acts are real acts. The substrate's machinery is legible as the Stamper doing its work.
 
 What this visually shows
 This is where it gets interesting. If the Stamper is a being whose act-chain records every stamp, the visualization writes itself:
@@ -226,7 +226,7 @@ Watching this happen in real time would be genuinely beautiful. You're not just 
 What this requires architecturally
 To make this work, a few things need to happen:
 
-The Stamper becomes a seed delegate being. Born at genesis, alongside cherub, birther, and the others. Has the angel role with appropriate canDo (specifically, canDo: ["stamp-fact"] or whatever the internal operation is).
+The Stamper becomes a seed delegate being. Born at genesis, alongside cherub, birther, and the others. Has the angel able with appropriate canDo (specifically, canDo: ["stamp-fact"] or whatever the internal operation is).
 
 The stamping path emits a Stamper act for each stamp. When logFact lands a new fact, it also appends an act to the Stamper's act-chain referencing the just-stamped fact. This is an internal substrate operation, not a normal verb path — the Stamper's acts are stamped directly to avoid recursion.
 
@@ -312,9 +312,9 @@ A few specific things this implies:
 
 The stamper is not a singleton. There's no "the Stamper" being. There are N stampers, one per living being.
 
-The stamper might not need to be a full being. This is worth thinking about. A stamper might be lighter — closer to matter associated with the being, or a sub-aspect of the being itself, rather than a full first-class being with its own roles and act-chain.
+The stamper might not need to be a full being. This is worth thinking about. A stamper might be lighter — closer to matter associated with the being, or a sub-aspect of the being itself, rather than a full first-class being with its own ables and act-chain.
 
-If it's a full being: each living being has TWO beings associated with it — itself, and its stamper. That doubles the being-count and creates questions about whether the stamper has its own roles, its own permissions, its own act-chain.
+If it's a full being: each living being has TWO beings associated with it — itself, and its stamper. That doubles the being-count and creates questions about whether the stamper has its own ables, its own permissions, its own act-chain.
 
 If it's a sub-aspect of the being: the stamper is part of what a being IS. Beings have a stamper-shaped aspect that does the work of recording their acts. Visible, addressable, but not a separate identity.
 
@@ -327,7 +327,7 @@ But your framing suggests the stamper is more concrete than that — something b
 A few questions to nail down
 To make this real, you'd need to decide:
 
-Is the stamper a being, matter, or aspect? Each has different implications for identity, roles, and visibility.
+Is the stamper a being, matter, or aspect? Each has different implications for identity, ables, and visibility.
 
 What does the stamper do that the being itself doesn't? A being already has an act-chain. The acts go into the chain. Why does the being need a separate stamper aspect? What work is the stamper doing that isn't already happening?
 
@@ -353,7 +353,7 @@ Birth and death become visible events. A new stamper appearing means a being was
 This is closer to your original vision than my singleton framing. The factory has many workers, not one. Each worker is bound to a specific being. Watching the factory is watching all the workers at once.
 
 What this changes about the heaven space
-The heaven space currently holds the substrate's authoring machinery (roles, base spaces, seed delegates). Under your framing, it also holds the substrate's living machinery — every stamper currently active.
+The heaven space currently holds the substrate's authoring machinery (ables, base spaces, seed delegates). Under your framing, it also holds the substrate's living machinery — every stamper currently active.
 
 A space in heaven, maybe /heaven/stampers, contains one stamper per living being. The space grows and shrinks with the substrate's population. Looking at this space is looking at the substrate's living state.
 
@@ -371,7 +371,7 @@ This gives you:
 Visual: heaven shows beings, each with their stamper-matter visible alongside.
 Addressable: you can SEE a being's stamper-matter to inspect their stamping activity.
 Bounded: stamper-matter exists as long as the being exists, gets cleaned up at release.
-Doctrinally clean: doesn't double being-count, doesn't create the question of whether stampers have roles.
+Doctrinally clean: doesn't double being-count, doesn't create the question of whether stampers have ables.
 But this is just one option. The right answer depends on what you want the heaven view to show and how addressable you want stampers to be.
 
 Where I'd suggest going from here
@@ -379,7 +379,7 @@ This is the kind of architectural commitment worth thinking about carefully befo
 
 What does the stamper visibly show? What's the demo? "Each being has a visible stamper that shows their recent stamping activity" or "each being's stamping is visible in their own act-chain view" or something else?
 
-What's the lifecycle? Birth: stamper created alongside the being. Death: stamper removed. What about between — does the stamper change as the being's role changes, or stay the same throughout the being's life?
+What's the lifecycle? Birth: stamper created alongside the being. Death: stamper removed. What about between — does the stamper change as the being's able changes, or stay the same throughout the being's life?
 
 What's the identity? Is it a being, matter, or aspect? Does it have its own address, or is it accessed through the being it belongs to?
 
@@ -487,7 +487,7 @@ Worth a doctrinal note when this lands:
 
 Stampers exist per being per branch. A being active in branch main has a main-stamper handling their stamping in that branch. The same being active in branch #1 (because the branch spawned and they were present, or because they acted on #1) has a separate #1-stamper. Stamping work is bounded to one (being, branch) context.
 
-Stampers are born when a being becomes active in a branch and die when the being is released or the branch is deleted. They are not separate beings with their own identities and roles; they are the substrate's representation of "this being's stamping work in this branch."
+Stampers are born when a being becomes active in a branch and die when the being is released or the branch is deleted. They are not separate beings with their own identities and ables; they are the substrate's representation of "this being's stamping work in this branch."
 
 Stampers are observable in heaven as the substrate's living machinery. Watching the stamper population is watching the substrate's active beings across all branches. Watching individual stampers work is watching specific beings stamp in real time.
 
@@ -496,7 +496,7 @@ Per being per branch is the right granularity. It matches the natural scope of s
 
 This is the right architectural commitment. It's the kind of thing that, once built, gives you a real demo of TreeOS's depth — branches as populations of running machinery, beings as bodies whose stampers do their substrate-side work, heaven as the place where the whole population is visible.
 
-Pin the doctrine. Then build it when the current arcs finish. This is downstream of the role-as-auth and CAS work, but it's the kind of thing that would make TreeOS's architecture visible in a way that no documentation can. A real demonstration of the factory metaphor.
+Pin the doctrine. Then build it when the current arcs finish. This is downstream of the able-as-auth and CAS work, but it's the kind of thing that would make TreeOS's architecture visible in a way that no documentation can. A real demonstration of the factory metaphor.
 
 Worth doing. Good thinking on the per-branch part — that's what makes the visualization meaningful rather than just incremental.
 
@@ -636,4 +636,4 @@ My honest recommendation: per-being grouping in the next arc, when you build the
 Worth pinning both. Build the first; remember the second.
 
 ===========
-LANDED. Phase 1 (./host: http-server / websocket-pool / mongo as fact-backed beings, connection matter, per-request facts as the scale test) and Phase 2 (./factory: present = synthetic stamper spaces, past = reels) are built. The pinned doctrine that came out of building them lives at seed/materials/host/HOST.md (one being per boundary, config-gated honest batching, outage gap-facts on reconnect, the name/role-mirror collision rule, the factory watches and never stores).
+LANDED. Phase 1 (./host: http-server / websocket-pool / mongo as fact-backed beings, connection matter, per-request facts as the scale test) and Phase 2 (./factory: present = synthetic stamper spaces, past = reels) are built. The pinned doctrine that came out of building them lives at seed/materials/host/HOST.md (one being per boundary, config-gated honest batching, outage gap-facts on reconnect, the name/able-mirror collision rule, the factory watches and never stores).

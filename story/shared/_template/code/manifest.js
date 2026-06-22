@@ -2,7 +2,7 @@
 //
 // A code piece runs init(story) at boot. The typical surface it
 // registers is DO ops, SEE ops, hooks, and cognition handlers for
-// role pieces. Anything more substantial (mongoose models, express
+// able pieces. Anything more substantial (mongoose models, express
 // routes, mcp tools, background jobs) is rare and lives behind
 // optional fields the substrate still supports for legacy reasons,
 // not the standard shape — keep this manifest tight.
@@ -19,7 +19,7 @@ export default {
   description:
     "Substrate code for my-pack: <one-line summary of what the ops + sees do>.",
 
-  // Inter-piece deps (this code needs the pack's roles) live in the
+  // Inter-piece deps (this code needs the pack's ables) live in the
   // pack manifest's requires; the code piece's own requires only
   // names EXTERNAL resources it draws from other packs.
   requires: [],

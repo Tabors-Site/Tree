@@ -33,7 +33,7 @@ process.env.SOURCE_TREE_ROOT = SRC;
 await import(`${R}/begin.js`);
 
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
-const { disableWord, resolveRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
+const { disableWord, resolveAbleWord } = await import(`${R}/seed/present/word/ableWordRegistry.js`);
 const { createBranch } = await import(`${R}/seed/materials/history/historyCreation.js`);
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
 
@@ -50,7 +50,7 @@ try {
   const notIAm = String(cherub.id); // cherub is a real being, NOT I_AM
 
   // move:move is a genesis word (I_AM declared it on heaven "0") — sanity: it resolves on "0"
-  resolveRoleWord("move", "move", "0") ? ok(`move:move is a live genesis word on heaven`) : bad(`move:move not resolving`, "expected IR on 0");
+  resolveAbleWord("move", "move", "0") ? ok(`move:move is a live genesis word on heaven`) : bad(`move:move not resolving`, "expected IR on 0");
 
   // 1. a non-I_AM actor disabling a genesis word ON HEAVEN → DENIED
   let denied = null;
@@ -58,7 +58,7 @@ try {
   catch (e) { denied = e.message; }
   denied && /bedrock/.test(denied) ? ok(`non-I_AM disabling a genesis word on heaven → DENIED ("${denied.slice(0, 48)}…")`)
                                    : bad(`should have denied`, denied || "no throw");
-  resolveRoleWord("move", "move", "0") ? ok(`the bedrock held — move:move still live on heaven after the refused disable`) : bad(`bedrock changed`, "move:move went null on 0");
+  resolveAbleWord("move", "move", "0") ? ok(`the bedrock held — move:move still live on heaven after the refused disable`) : bad(`bedrock changed`, "move:move went null on 0");
 
   // 2. the SAME non-I_AM actor SHADOWING on a real branch → ALLOWED (V2 per-branch overlay)
   const made = await createBranch({ parent: "0", anchor: { atSeq: 1 }, createdBy: String(I_AM) });
@@ -67,9 +67,9 @@ try {
   try { await disableWord("move", "move", { actorBeingId: notIAm, history: BR }); }
   catch (e) { shadowErr = e.message; }
   !shadowErr ? ok(`non-I_AM shadowing the word on branch "${BR}" → allowed (V2 preserved)`) : bad(`shadow should be allowed`, shadowErr);
-  (!resolveRoleWord("move", "move", BR) && resolveRoleWord("move", "move", "0"))
+  (!resolveAbleWord("move", "move", BR) && resolveAbleWord("move", "move", "0"))
     ? ok(`off on "${BR}", still live on heaven — a local view, the root untouched`)
-    : bad(`shadow scope wrong`, { onBranch: !!resolveRoleWord("move", "move", BR), heaven: !!resolveRoleWord("move", "move", "0") });
+    : bad(`shadow scope wrong`, { onBranch: !!resolveAbleWord("move", "move", BR), heaven: !!resolveAbleWord("move", "move", "0") });
 
   // 3. I_AM disabling its own genesis word on heaven → ALLOWED (no actorBeingId → I_AM)
   let iamErr = null;

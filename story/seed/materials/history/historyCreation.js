@@ -66,7 +66,7 @@ export async function createBranch({ parent = MAIN, anchor, label = null, create
   //     disjoint (lives outside parent's subtree entirely) OR explicitly
   //     null/undefined on a scoped parent with the special `clearScope: true`
   //     flag, the operation is widening. Widening requires story-root
-  //     permission (heaven owner OR angel role); otherwise refused.
+  //     permission (heaven owner OR angel able); otherwise refused.
   //
   // The scope is locked at creation: re-pointing the path later doesn't
   // widen or narrow the gate. Writes outside the resolved subtree refuse
@@ -274,7 +274,7 @@ async function _resolveHistoryScope({ passed, parentScope, parentHistoryPath, cr
     throw new Error(
       `createBranch: scope "${passed.path}" is not within parent history's scope "${parentScope.path}". ` +
       `Widening or moving to a disjoint scope requires story-root permission ` +
-      `(heaven owner or angel role). ` +
+      `(heaven owner or angel able). ` +
       `Sub-branches inherit parent's scope by default; declare a narrower scope to fork within.`,
     );
   }
@@ -300,14 +300,14 @@ async function _isSpaceWithinScope(targetSpaceId, scopeSpaceId, historyPath) {
 
 /**
  * Story-root permission = heaven authority (owner of heaven OR
- * angel role granted at heaven). I_AM owns heaven; other beings are
- * admitted via the angel role grant chain that traces back to I_AM
- * (per RolesAreAuth).
+ * angel able granted at heaven). I_AM owns heaven; other beings are
+ * admitted via the angel able grant chain that traces back to I_AM
+ * (per AblesAreAuth).
  *
  * Routes through `authorize()` against heaven so the substrate's
- * "one gate" doctrine holds: the same role-walk that gates any
+ * "one gate" doctrine holds: the same able-walk that gates any
  * heaven write also gates branch-scope widening here. Operators
- * who tighten heaven roles automatically tighten who can widen
+ * who tighten heaven ables automatically tighten who can widen
  * branch scope; one place to change, two semantics covered.
  *
  * Returns false when beingId is null (createdBy not threaded) so
@@ -322,9 +322,9 @@ async function _hasStoryRootPermission(beingId) {
     const heavenSlot = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, "0");
     if (!heavenSlot) return false;
     // The action name is "create-branch" for audit clarity. Under
-    // RolesAreAuth the role-walk admits whichever caller holds a role
-    // whose canDo covers this action at heaven — the angel role does;
-    // operators who tighten the angel role automatically tighten who
+    // AblesAreAuth the able-walk admits whichever caller holds a able
+    // whose canDo covers this action at heaven — the angel able does;
+    // operators who tighten the angel able automatically tighten who
     // can widen branch scope, satisfying the "one gate" doctrine.
     const decision = await authorize({
       identity: { beingId: String(beingId) },

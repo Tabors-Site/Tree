@@ -14,7 +14,7 @@
   "manifest": {
     "$comment": "Resources the seed expects to be present at plant time. Mirrors the requires field on the piece manifest; the substrate doublechecks here too.",
     "extensions": ["my-pack"],
-    "roles":      ["my-pack:example-role"]
+    "ables":      ["my-pack:example-able"]
   },
 
   "parameters": [

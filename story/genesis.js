@@ -50,7 +50,7 @@
 //      matter row, being, and Fact sits on.
 //   2. ensureSpaceRoot. The place root, the heaven space ("." . the
 //      I-Am's room), and the nine Tier-3 heaven spaces under heaven
-//      (identity, config, peers, extensions, tools, roles, operations,
+//      (identity, config, peers, extensions, tools, ables, operations,
 //      source, threads). My own Being row places inside this step so
 //      every Fact from t=0 has an actor.
 //   3. initStoryConfig. I read my own remembered settings.
@@ -62,12 +62,12 @@
 //      one being calling another; calling a not-yet-being into
 //      being is the same act. From here on, Facts start attributing
 //      to these beings as their own acts run.
-//   6. Role and operation registries, integrity check, seed config
+//   6. Able and operation registries, integrity check, seed config
 //      handoff. The capability surface the place now exposes.
 //   7. Extension load, MCP transport, scope wiring, and jobs. I open
 //      the place to operator installed beings and the periodic acts
 //      that keep the world tidy.
-//   8. Registry mirrors into ./tools, ./roles, ./operations, afterBoot.
+//   8. Registry mirrors into ./tools, ./ables, ./operations, afterBoot.
 //      The world becomes introspectable under the same SEE protocol
 //      as everything else. The place is now complete; begin opens
 //      the heavens and printReady fires.
@@ -249,8 +249,8 @@ export async function genesis(app, opts = {}) {
 
   // Scaffolding skip-list when plantedFromSeed:
   //   The seed already brought the I-Am, the place root, the nine
-  //   heaven spaces, every seed delegate, every quality, every role
-  //   hosted on qualities.roles, every grant in qualities.rolesGranted,
+  //   heaven spaces, every seed delegate, every quality, every able
+  //   hosted on qualities.ables, every grant in qualities.ablesGranted,
   //   and every prior migration. Re-running the scaffold here would
   //   emit redundant idempotent re-writes and inflate the chain
   //   unnecessarily. The seed is the genesis when plant mode is active.
@@ -373,10 +373,10 @@ export async function genesis(app, opts = {}) {
     await ensureSourceTree();
     log.info("Genesis", "I see my own body.");
 
-    // Stance-permissions seeding retired (seed/RolesAreAuth.md). The
-    // role registry is the gate; the I-Am's bootstrap grants below
-    // (after role registration + grantAngelToSeedDelegates) hand the
-    // angel role to each seed delegate. No qualities.permissions rows
+    // Stance-permissions seeding retired (seed/AblesAreAuth.md). The
+    // able registry is the gate; the I-Am's bootstrap grants below
+    // (after able registration + grantAngelToSeedDelegates) hand the
+    // angel able to each seed delegate. No qualities.permissions rows
     // are written; authorize.js no longer reads any such rows.
   } else {
     // Prime runtime caches that didn't get filled by the genesis
@@ -389,7 +389,7 @@ export async function genesis(app, opts = {}) {
 
   // Beings with heaven authority. The seed delegates (cherub, birther, llm-
   // assigner, story-manager, arrival, etc.) need hasAccess on
-  // heaven so they can act inside the Tier-3 heaven spaces (./roles,
+  // heaven so they can act inside the Tier-3 heaven spaces (./ables,
   // ./operations, ./tools, ...). Mechanism: add them as contributors
   // on heaven. I_AM is heaven's rootOwner already; the new
   // contributors list grows from boot scaffold (seed delegates) and
@@ -407,10 +407,10 @@ export async function genesis(app, opts = {}) {
   //
   // Skip when plantedFromSeed — the seed carries beings with heaven authority.
   if (!plantedFromSeed) {
-    // ensureSeedDelegatesOnHeaven retired with roles-are-auth — the
+    // ensureSeedDelegatesOnHeaven retired with ables-are-auth — the
     // members.angel class is no longer the heaven gate. Delegates get
-    // angel role granted at heaven below; the role-walk authorize
-    // finds heaven.qualities.roles.angel by walking the grant anchor.
+    // angel able granted at heaven below; the able-walk authorize
+    // finds heaven.qualities.ables.angel by walking the grant anchor.
 
     // Seed migrations. Each migration's writes ride one I-Am act.
     await withIAmAct("seed migrations", async (ctx) => {
@@ -452,100 +452,100 @@ export async function genesis(app, opts = {}) {
     );
   }
 
-  // Register seed-shipped role specs into the role registry. The
-  // registry is the in-process map of role name → spec (with code
-  // handlers attached); SUMMON / role-walk authorize / canStarResolver
-  // all read it. The authoritative storage is the qualities.roles
+  // Register seed-shipped able specs into the able registry. The
+  // registry is the in-process map of able name → spec (with code
+  // handlers attached); SUMMON / able-walk authorize / canStarResolver
+  // all read it. The authoritative storage is the qualities.ables
   // host below (data-only spec), but the registry is what holds the
   // handler functions and prompt closures since Mongo can't serialize
   // those.
-  const { registerRole } = await import("./seed/present/roles/registry.js");
-  const { storyManagerRole } =
-    await import("./seed/present/roles/story-manager/role.js");
-  registerRole("story-manager", storyManagerRole, "seed");
+  const { registerAble } = await import("./seed/present/ables/registry.js");
+  const { storyManagerAble } =
+    await import("./seed/present/ables/story-manager/able.js");
+  registerAble("story-manager", storyManagerAble, "seed");
 
   // No seed verb-tools, no JSON tool registry. The cognition speaks
-  // WORD (14.md §4.5): each role's vocabulary is rendered AS Word
+  // WORD (14.md §4.5): each able's vocabulary is rendered AS Word
   // (renderVocabularyAsWord) and the being's one Word is parsed +
-  // run via runRoleWord onto the moment's deltaF — there is no
-  // do/call/be/end-turn JSON tool. A role's capability is its can*
+  // run via runAbleWord onto the moment's deltaF — there is no
+  // do/call/be/end-turn JSON tool. A able's capability is its can*
   // lists (the words it may speak); the verb set is the WORD grammar.
 
-  // The receptive role every human being carries. Without it, SUMMONs
-  // to a human are rejected with ROLE_UNAVAILABLE. The role's summon
+  // The receptive able every human being carries. Without it, SUMMONs
+  // to a human are rejected with ABLE_UNAVAILABLE. The able's summon
   // is a no-op — humans respond out-of-band from their own transport,
   // not synchronously through the factory.
-  const { humanRole } = await import("./seed/present/roles/human/role.js");
-  registerRole("human", humanRole, "seed");
+  const { humanAble } = await import("./seed/present/ables/human/able.js");
+  registerAble("human", humanAble, "seed");
 
-  // The "birther" role. Carried by the @birther seed delegate at the
+  // The "birther" able. Carried by the @birther seed delegate at the
   // story root. Authenticated callers click @birther to mint a child
   // whose parent (being-tree) is the caller. Cherub is for arrival →
   // fresh identity; birther is for authenticated → child of self.
-  // See seed/present/roles/birther/role.js for the doctrine.
-  const { birtherRole } = await import("./seed/present/roles/birther/role.js");
-  registerRole("birther", birtherRole, "seed");
+  // See seed/present/ables/birther/able.js for the doctrine.
+  const { birtherAble } = await import("./seed/present/ables/birther/able.js");
+  registerAble("birther", birtherAble, "seed");
 
-  // role-manager: authors and edits live-defined roles. canDo:["set-role"].
-  // After this registration, the live-role boot loader (later in genesis)
-  // walks ./roles/* for origin:"live" entries and registers them too.
-  const { roleManagerRole } =
-    await import("./seed/present/roles/role-manager/role.js");
-  registerRole("role-manager", roleManagerRole, "seed");
+  // able-manager: authors and edits live-defined ables. canDo:["set-able"].
+  // After this registration, the live-able boot loader (later in genesis)
+  // walks ./ables/* for origin:"live" entries and registers them too.
+  const { ableManagerAble } =
+    await import("./seed/present/ables/able-manager/able.js");
+  registerAble("able-manager", ableManagerAble, "seed");
 
   // history-manager: creates histories (divergent worlds) from past
   // points of existing histories. canDo:["create-history"]. Substrate
   // helpers in seed/materials/history/ do the path arithmetic and
-  // historyPoint snapshotting; the role just routes the op.
-  const { historyManagerRole } =
-    await import("./seed/present/roles/history-manager/role.js");
-  registerRole("history-manager", historyManagerRole, "seed");
+  // historyPoint snapshotting; the able just routes the op.
+  const { historyManagerAble } =
+    await import("./seed/present/ables/history-manager/able.js");
+  registerAble("history-manager", historyManagerAble, "seed");
 
   // federation-manager: negotiates transfers (push / pull) with peer
   // realities. Operator triggers offer-template / offer-being (push) or
-  // request-template (pull); the role's summon handler classifies incoming
+  // request-template (pull); the able's summon handler classifies incoming
   // intents (offer-template, accept-template, deliver-template, deliver-being,
   // etc.) from peer federation-managers. Seed and graft are the data
-  // primitives (template = shape, being = entity); this role is the social
+  // primitives (template = shape, being = entity); this able is the social
   // protocol on top of them. See protocols/ibp/FEDERATION.md.
-  const { federationManagerRole } =
-    await import("./seed/present/roles/federation-manager/role.js");
-  registerRole("federation-manager", federationManagerRole, "seed");
+  const { federationManagerAble } =
+    await import("./seed/present/ables/federation-manager/able.js");
+  registerAble("federation-manager", federationManagerAble, "seed");
 
   // The host tier (nodeServerTest Phase 1): the HTTP listener, the
   // WebSocket pool, and the Mongo connection as beings. Scripted
   // cognition; their lifecycle code lives in seed/materials/host/.
-  const { httpServerRole } =
-    await import("./seed/present/roles/http-server/role.js");
-  registerRole("http-server", httpServerRole, "seed");
-  const { websocketPoolRole } =
-    await import("./seed/present/roles/websocket-pool/role.js");
-  registerRole("websocket-pool", websocketPoolRole, "seed");
-  const { mongoRole } = await import("./seed/present/roles/mongo/role.js");
-  registerRole("mongo-connection", mongoRole, "seed");
+  const { httpServerAble } =
+    await import("./seed/present/ables/http-server/able.js");
+  registerAble("http-server", httpServerAble, "seed");
+  const { websocketPoolAble } =
+    await import("./seed/present/ables/websocket-pool/able.js");
+  registerAble("websocket-pool", websocketPoolAble, "seed");
+  const { mongoAble } = await import("./seed/present/ables/mongo/able.js");
+  registerAble("mongo-connection", mongoAble, "seed");
 
-  // role-finder: LLM helper that authors live roles from English.
-  // Summon @role-finder, describe what a being should be able to do,
-  // it surfaces matches in ./roles or drafts a new role via set-role.
-  const { roleFinderRole } =
-    await import("./seed/present/roles/role-finder/role.js");
-  registerRole("role-finder", roleFinderRole, "seed");
+  // able-finder: LLM helper that authors live ables from English.
+  // Summon @able-finder, describe what a being should be able to do,
+  // it surfaces matches in ./ables or drafts a new able via set-able.
+  const { ableFinderAble } =
+    await import("./seed/present/ables/able-finder/able.js");
+  registerAble("able-finder", ableFinderAble, "seed");
 
-  // roleflow-composer: LLM helper that authors a being's roleFlow
-  // (the behavioral program that picks which role applies per moment).
-  // Summon @roleflow-composer, describe a being's behavior, it
-  // produces the structured roleFlow and writes via set-being-roleflow.
-  const { roleflowComposerRole } =
-    await import("./seed/present/roles/roleflow-composer/role.js");
-  registerRole("roleflow-composer", roleflowComposerRole, "seed");
+  // flow-composer: LLM helper that authors a being's flow
+  // (the behavioral program that picks which able applies per moment).
+  // Summon @flow-composer, describe a being's behavior, it
+  // produces the structured flow and writes via set-being-flow.
+  const { flowComposerAble } =
+    await import("./seed/present/ables/flow-composer/able.js");
+  registerAble("flow-composer", flowComposerAble, "seed");
 
   // merge-mediator: LLM helper that walks the operator through
   // resolving conflicts on a merged history. Created by the
   // merge-histories op; reconciliation facts stamp via normal state-
   // setting ops with params._merge metadata.
-  const { mergeMediatorRole } =
-    await import("./seed/present/roles/merge-mediator/role.js");
-  registerRole("merge-mediator", mergeMediatorRole, "seed");
+  const { mergeMediatorAble } =
+    await import("./seed/present/ables/merge-mediator/able.js");
+  registerAble("merge-mediator", mergeMediatorAble, "seed");
 
   // (The @history-registry delegate retired 2026-06-04 with the
   // "heaven never histories" landing. Named pointers now live on the
@@ -555,38 +555,38 @@ export async function genesis(app, opts = {}) {
   // The shared stance every unauthenticated visitor carries. SEE
   // bypasses the scheduler so many concurrent visitors share one
   // row without contention.
-  const { arrivalRole } = await import("./seed/present/roles/arrival/role.js");
-  registerRole("arrival", arrivalRole, "seed");
+  const { arrivalAble } = await import("./seed/present/ables/arrival/able.js");
+  registerAble("arrival", arrivalAble, "seed");
 
   // The commons delegate. public never acts; it holds members.owner
   // slots for spaces transferred to the public commons (the
   // owner-check in authorize admits any caller when public appears
-  // on the chain). See seed/RolesAreAuth.md "Public being".
-  const { publicRole } = await import("./seed/present/roles/public/role.js");
-  registerRole("public", publicRole, "seed");
+  // on the chain). See seed/AblesAreAuth.md "Public being".
+  const { publicAble } = await import("./seed/present/ables/public/able.js");
+  registerAble("public", publicAble, "seed");
 
-  // Cherub + llm-assigner. Registered HERE (before hostRoleAt
+  // Cherub + llm-assigner. Registered HERE (before hostAbleAt
   // and grantAngelToSeedDelegates) so the install loop has access to
-  // their specs and the self-role grants land cleanly. Real work
+  // their specs and the self-able grants land cleanly. Real work
   // happens through their verb handlers (cherub owns the BE_OPS table;
   // llm-assigner is registered before the host/grant loop); the
-  // registry entries are stubs that surface canX for the role-walk.
-  const { cherubRole } = await import("./seed/store/words/cherub/role.js");
-  const { llmAssignerRole } =
-    await import("./seed/present/roles/llm-assigner/role.js");
-  registerRole("cherub", cherubRole, "seed");
-  registerRole("llm-assigner", llmAssignerRole, "seed");
+  // registry entries are stubs that surface canX for the able-walk.
+  const { cherubAble } = await import("./seed/store/words/cherub/able.js");
+  const { llmAssignerAble } =
+    await import("./seed/present/ables/llm-assigner/able.js");
+  registerAble("cherub", cherubAble, "seed");
+  registerAble("llm-assigner", llmAssignerAble, "seed");
 
-  // (public-commons is no longer registered as a seed role. It's a
+  // (public-commons is no longer registered as a seed able. It's a
   // regular operator-installable template that lives in
-  // seed/present/roles/public-commons/role.js — operators install it
-  // on their public-owned spaces via set-role / hostRoleAt
+  // seed/present/ables/public-commons/able.js — operators install it
+  // on their public-owned spaces via set-able / hostAbleAt
   // when they want the open-commons surface with auto-grant on entry.)
 
-  // The foundational roles of the roles-are-auth doctrine
-  // (seed/RolesAreAuth.md):
+  // The foundational ables of the ables-are-auth doctrine
+  // (seed/AblesAreAuth.md):
   //   - angel: hosted at heaven, reach: ["/**"] (story-wide). Carries
-  //     canDo: grant-role:* + revoke-role:* so angels can promote
+  //     canDo: grant-able:* + revoke-able:* so angels can promote
   //     others recursively. Granted to every seed delegate at genesis
   //     and to the first human registrant. Also expresses IDENTITY:
   //     descendants of I-Am with heaven access.
@@ -594,24 +594,24 @@ export async function genesis(app, opts = {}) {
   //     descendants = whole story). The baseline every being holds —
   //     granted at birth via birth.js#_anointGlobal. canX defines what
   //     "every being can do here."
-  const { angelRole } = await import("./seed/present/roles/angel/role.js");
-  registerRole("angel", angelRole, "seed");
-  const { globalRole } = await import("./seed/present/roles/global/role.js");
-  registerRole("global", globalRole, "seed");
+  const { angelAble } = await import("./seed/present/ables/angel/able.js");
+  registerAble("angel", angelAble, "seed");
+  const { globalAble } = await import("./seed/present/ables/global/able.js");
+  registerAble("global", globalAble, "seed");
 
-  // Host role auth specs onto space qualities (seed/RolesAreAuth.md
-  // Final doctrine). Every role-in-effect lives on a space's
-  // qualities.roles[<name>]:
+  // Host able auth specs onto space qualities (seed/AblesAreAuth.md
+  // Final doctrine). Every able-in-effect lives on a space's
+  // qualities.ables[<name>]:
   //   - angel  → heaven (the system root)
   //   - everything else → the story root
   //
   // The REGISTRY above keeps the specs in code (with handlers) for
-  // cognition-frame use; these hostRoleAt calls write the AUTH SPEC
-  // (data only — functions stripped) into qualities.roles so the
-  // role-walk gate can look up specs at runtime by walking
+  // cognition-frame use; these hostAbleAt calls write the AUTH SPEC
+  // (data only — functions stripped) into qualities.ables so the
+  // able-walk gate can look up specs at runtime by walking
   // grant.anchorSpaceId up the qualities ancestor chain.
   if (!plantedFromSeed) {
-    const { hostRoleAt } = await import("./seed/present/roles/host.js");
+    const { hostAbleAt } = await import("./seed/present/ables/host.js");
     const { findByHeavenSpace } =
       await import("./seed/materials/projections.js");
     const { HEAVEN_SPACE } =
@@ -622,96 +622,96 @@ export async function genesis(app, opts = {}) {
 
     if (heaven) {
       await withIAmAct("I install angel on heaven", async (ctx) => {
-        await hostRoleAt(String(heaven.id), "angel", angelRole, I_AM, ctx);
+        await hostAbleAt(String(heaven.id), "angel", angelAble, I_AM, ctx);
       });
     }
     if (storyRootId) {
       await withIAmAct("I install global on the story root", async (ctx) => {
-        await hostRoleAt(String(storyRootId), "global", globalRole, I_AM, ctx);
+        await hostAbleAt(String(storyRootId), "global", globalAble, I_AM, ctx);
       });
       await withIAmAct("I install arrival on the story root", async (ctx) => {
-        await hostRoleAt(
+        await hostAbleAt(
           String(storyRootId),
           "arrival",
-          arrivalRole,
+          arrivalAble,
           I_AM,
           ctx,
         );
       });
-      // Host every other seed delegate role on the story root too.
-      // Per the single-gate doctrine, the role-walk authorize finds each
-      // delegate's canX through the qualities.roles host (not through a
+      // Host every other seed delegate able on the story root too.
+      // Per the single-gate doctrine, the able-walk authorize finds each
+      // delegate's canX through the qualities.ables host (not through a
       // registry-fallback hack). Each one-op-per-moment.
-      const { humanRole } = await import("./seed/present/roles/human/role.js");
-      const { cherubRole } = await import("./seed/store/words/cherub/role.js");
-      const { birtherRole } =
-        await import("./seed/present/roles/birther/role.js");
-      const { storyManagerRole } =
-        await import("./seed/present/roles/story-manager/role.js");
-      const { roleManagerRole } =
-        await import("./seed/present/roles/role-manager/role.js");
-      const { roleFinderRole } =
-        await import("./seed/present/roles/role-finder/role.js");
-      const { roleflowComposerRole } =
-        await import("./seed/present/roles/roleflow-composer/role.js");
-      const { historyManagerRole } =
-        await import("./seed/present/roles/history-manager/role.js");
-      const { mergeMediatorRole } =
-        await import("./seed/present/roles/merge-mediator/role.js");
-      const { llmAssignerRole } =
-        await import("./seed/present/roles/llm-assigner/role.js");
-      const { publicRole } =
-        await import("./seed/present/roles/public/role.js");
-      const { httpServerRole: httpServerRoleSpec } =
-        await import("./seed/present/roles/http-server/role.js");
-      const { websocketPoolRole: websocketPoolRoleSpec } =
-        await import("./seed/present/roles/websocket-pool/role.js");
-      const { mongoRole: mongoRoleSpec } =
-        await import("./seed/present/roles/mongo/role.js");
+      const { humanAble } = await import("./seed/present/ables/human/able.js");
+      const { cherubAble } = await import("./seed/store/words/cherub/able.js");
+      const { birtherAble } =
+        await import("./seed/present/ables/birther/able.js");
+      const { storyManagerAble } =
+        await import("./seed/present/ables/story-manager/able.js");
+      const { ableManagerAble } =
+        await import("./seed/present/ables/able-manager/able.js");
+      const { ableFinderAble } =
+        await import("./seed/present/ables/able-finder/able.js");
+      const { flowComposerAble } =
+        await import("./seed/present/ables/flow-composer/able.js");
+      const { historyManagerAble } =
+        await import("./seed/present/ables/history-manager/able.js");
+      const { mergeMediatorAble } =
+        await import("./seed/present/ables/merge-mediator/able.js");
+      const { llmAssignerAble } =
+        await import("./seed/present/ables/llm-assigner/able.js");
+      const { publicAble } =
+        await import("./seed/present/ables/public/able.js");
+      const { httpServerAble: httpServerAbleSpec } =
+        await import("./seed/present/ables/http-server/able.js");
+      const { websocketPoolAble: websocketPoolAbleSpec } =
+        await import("./seed/present/ables/websocket-pool/able.js");
+      const { mongoAble: mongoAbleSpec } =
+        await import("./seed/present/ables/mongo/able.js");
       const installs = [
-        ["human", humanRole],
-        ["cherub", cherubRole],
-        ["birther", birtherRole],
-        ["story-manager", storyManagerRole],
-        ["role-manager", roleManagerRole],
-        ["role-finder", roleFinderRole],
-        ["roleflow-composer", roleflowComposerRole],
-        ["history-manager", historyManagerRole],
-        ["merge-mediator", mergeMediatorRole],
-        ["llm-assigner", llmAssignerRole],
-        ["public", publicRole],
-        ["http-server", httpServerRoleSpec],
-        ["websocket-pool", websocketPoolRoleSpec],
-        ["mongo-connection", mongoRoleSpec],
+        ["human", humanAble],
+        ["cherub", cherubAble],
+        ["birther", birtherAble],
+        ["story-manager", storyManagerAble],
+        ["able-manager", ableManagerAble],
+        ["able-finder", ableFinderAble],
+        ["flow-composer", flowComposerAble],
+        ["history-manager", historyManagerAble],
+        ["merge-mediator", mergeMediatorAble],
+        ["llm-assigner", llmAssignerAble],
+        ["public", publicAble],
+        ["http-server", httpServerAbleSpec],
+        ["websocket-pool", websocketPoolAbleSpec],
+        ["mongo-connection", mongoAbleSpec],
       ];
       for (const [name, spec] of installs) {
         await withIAmAct(`I install ${name} on the story root`, async (ctx) => {
-          await hostRoleAt(String(storyRootId), name, spec, I_AM, ctx);
+          await hostAbleAt(String(storyRootId), name, spec, I_AM, ctx);
         });
       }
     }
     if (bootMode === "Beginning") {
-      log.info("Genesis", "I install foundational roles onto spaces.");
+      log.info("Genesis", "I install foundational ables onto spaces.");
     }
   }
 
-  // Roles-Are-Auth bootstrap (seed/RolesAreAuth.md). With every role
+  // Ables-Are-Auth bootstrap (seed/AblesAreAuth.md). With every able
   // now hosted on its space, the I-Am grants each seed delegate:
-  //   (a) the `angel` role anchored at heaven (identity + heaven
-  //       access; seed/RolesAreAuth.md "Why angel for delegates")
-  //   (b) their matching role anchored at the story root
+  //   (a) the `angel` able anchored at heaven (identity + heaven
+  //       access; seed/AblesAreAuth.md "Why angel for delegates")
+  //   (b) their matching able anchored at the story root
   //       (cherub→cherub, birther→birther, ...) — the day-to-day toolkit
   // @public and @arrival are special-cased inside the function:
   // @public gets no grants (never acts); @arrival gets arrival only
   // (anonymous visitors must not inherit angel's canSee:["*"]).
-  // The being reducer dedupes by (role, anchor, grantor) so a reboot
+  // The being reducer dedupes by (able, anchor, grantor) so a reboot
   // re-emit is a no-op.
   if (!plantedFromSeed) {
     const { grantAngelToSeedDelegates } =
       await import("./seed/materials/being/seedDelegates.js");
     await grantAngelToSeedDelegates();
     if (bootMode === "Beginning") {
-      log.info("Genesis", "I grant my delegates their roles.");
+      log.info("Genesis", "I grant my delegates their ables.");
     }
   }
 
@@ -742,29 +742,29 @@ export async function genesis(app, opts = {}) {
   // callable by any being with the appropriate canDo (or owner-check
   // on the target space) — no llm-assigner delegate routing required.
   const { registerLlmAssignerOps } =
-    await import("./seed/present/roles/llm-assigner/ops.js");
+    await import("./seed/present/ables/llm-assigner/ops.js");
   registerLlmAssignerOps();
 
-  // role-manager's set-role DO op. Registered alongside llm-assigner's
-  // ops so the role-manager delegate's canDo entry resolves at boot.
-  const { registerRoleManagerOps } =
-    await import("./seed/present/roles/role-manager/ops.js");
-  registerRoleManagerOps();
-  // set-world-signal was carved out of role-manager/ops.js into its own
+  // able-manager's set-able DO op. Registered alongside llm-assigner's
+  // ops so the able-manager delegate's canDo entry resolves at boot.
+  const { registerAbleManagerOps } =
+    await import("./seed/present/ables/able-manager/ops.js");
+  registerAbleManagerOps();
+  // set-world-signal was carved out of able-manager/ops.js into its own
   // store bundle (the word + its handler). The bundle registers its
   // operation + word at module load, so a side-effect import fires it.
   await import("./seed/store/words/set-world-signal/index.js");
 
-  // set-being-roleflow . the typed write that puts a roleFlow on a
-  // being's qualities. roleflow-composer (LLM helper) targets this op.
+  // set-being-flow . the typed write that puts a flow on a
+  // being's qualities. flow-composer (LLM helper) targets this op.
   // Loaded by side effect; module-load calls registerOperation.
-  await import("./seed/present/roles/role-manager/roleFlowOp.js");
+  await import("./seed/present/ables/able-manager/flowOp.js");
 
   // history-manager's create-history DO op. The substrate's history
   // helpers (seed/materials/history/) own the heavy lifting; the op
   // is a thin handler routing through createBranch.
   const { registerHistoryManagerOps } =
-    await import("./seed/present/roles/history-manager/ops.js");
+    await import("./seed/present/ables/history-manager/ops.js");
   registerHistoryManagerOps();
   // set-pointer + delete-pointer were carved out of history-manager/ops.js
   // into their own store bundle (the words + their shared host). The bundle
@@ -778,19 +778,19 @@ export async function genesis(app, opts = {}) {
   // handlers that thread negotiation state through the federation-manager
   // being's qualities.
   const { registerFederationManagerOps } =
-    await import("./seed/present/roles/federation-manager/ops.js");
+    await import("./seed/present/ables/federation-manager/ops.js");
   registerFederationManagerOps();
 
   // Host SEE ops: http-stats, connections, mongo-stats. Pure reads
-  // over the live process, gated by canSee on the infra roles + angel.
+  // over the live process, gated by canSee on the infra ables + angel.
   const { registerHttpServerOps } =
-    await import("./seed/present/roles/http-server/ops.js");
+    await import("./seed/present/ables/http-server/ops.js");
   registerHttpServerOps();
   const { registerWebsocketPoolOps } =
-    await import("./seed/present/roles/websocket-pool/ops.js");
+    await import("./seed/present/ables/websocket-pool/ops.js");
   registerWebsocketPoolOps();
   const { registerMongoOps } =
-    await import("./seed/present/roles/mongo/ops.js");
+    await import("./seed/present/ables/mongo/ops.js");
   registerMongoOps();
 
   // I hand my remembered settings (from ./config) down to the seed
@@ -894,17 +894,17 @@ export async function genesis(app, opts = {}) {
   // wrapper (per the one-DO-per-moment doctrine).
   await syncExtensionsToTree(getLoadedManifests());
 
-  // Load operator-authored live roles from ./roles. Runs after seed +
-  // extension role registration (so live entries can override either
-  // by name) and BEFORE syncRolesToSubstrate (so the round-trip
+  // Load operator-authored live ables from ./ables. Runs after seed +
+  // extension able registration (so live entries can override either
+  // by name) and BEFORE syncAblesToSubstrate (so the round-trip
   // preserves them — manifestItems would otherwise delete entries
   // not in the registry).
-  const { loadLiveRolesFromSubstrate } =
-    await import("./seed/present/roles/registry.js");
+  const { loadLiveAblesFromSubstrate } =
+    await import("./seed/present/ables/registry.js");
   try {
-    await loadLiveRolesFromSubstrate();
+    await loadLiveAblesFromSubstrate();
   } catch (err) {
-    log.warn("Genesis", `live-role loader failed: ${err.message}`);
+    log.warn("Genesis", `live-able loader failed: ${err.message}`);
   }
 
   // Confined extensions must be known before any scope resolution
@@ -965,7 +965,7 @@ export async function genesis(app, opts = {}) {
 
   log.info("Genesis", "I start my background jobs.");
 
-  // I mirror my live registries into the ./tools, ./roles, and
+  // I mirror my live registries into the ./tools, ./ables, and
   // ./operations heaven spaces. SEE on those addresses now reflects
   // the live registry through the standard descriptor pipeline.
   // Detached so a sync failure does not block boot. Errors are
@@ -973,7 +973,7 @@ export async function genesis(app, opts = {}) {
   //
   // Step 4 of the word cutover (philosophy/word/10.md §2): fold EVERY registered
   // op into the word-fold, not only the ~38 that registered before seedFold. The
-  // late seed ops (the role-dir + host-role ops, imported after the genesis fold)
+  // late seed ops (the able-dir + host-able ops, imported after the genesis fold)
   // and the just-loaded extension ops register after seedFold; declaring them
   // here, at boot-end, lets the dispatch resolve them from the fold, not the Map.
   // Idempotent (skipIfUnchanged): ops already folded at seedFold skip.
@@ -981,13 +981,13 @@ export async function genesis(app, opts = {}) {
     const {
       declareOpsToFold,
       declareTypesToFold,
-      declareRoleWordsToFold,
+      declareAbleWordsToFold,
       declareSeeOpsToFold,
       rehydrateWordProjection,
     } = await import("./seed/present/word/wordStore.js");
     let folded = 0,
       typesFolded = 0,
-      roleWordsFolded = 0,
+      ableWordsFolded = 0,
       seeOpsFolded = 0;
     await withIAmAct("I declare the rest of my ops", async (ctx) => {
       folded = await declareOpsToFold({ moment: ctx });
@@ -997,12 +997,12 @@ export async function genesis(app, opts = {}) {
     await withIAmAct("I declare my matter types", async (ctx) => {
       typesFolded = await declareTypesToFold({ moment: ctx });
     });
-    // The ROLE-WORDS too (the roleWordRegistry unification): a role-word is a word "role:op",
-    // kind:"roleword". This boot-end pass catches any bundle that registered after seedFold.
-    await withIAmAct("I declare my role-words", async (ctx) => {
-      roleWordsFolded = await declareRoleWordsToFold({ moment: ctx });
+    // The ABLE-WORDS too (the ableWordRegistry unification): a able-word is a word "able:op",
+    // kind:"ableword". This boot-end pass catches any bundle that registered after seedFold.
+    await withIAmAct("I declare my able-words", async (ctx) => {
+      ableWordsFolded = await declareAbleWordsToFold({ moment: ctx });
     });
-    // The SEE ops too: SEE is an OPEN registry, and the role-dir + host-role + extension see ops
+    // The SEE ops too: SEE is an OPEN registry, and the able-dir + host-able + extension see ops
     // (llm-connections, http-stats, connections, harmony:neighbors, ...) register AFTER seedFold.
     // This boot-end pass folds them so seeVerb resolves every see op from the fold (kind:"seeop").
     // (NAME/BE need no boot-end pass — closed seed sets, fully caught at seedFold.)
@@ -1012,7 +1012,7 @@ export async function genesis(app, opts = {}) {
     await rehydrateWordProjection("0");
     log.verbose(
       "Genesis",
-      `boot-end fold: ${folded} op(s) + ${typesFolded} type(s) + ${roleWordsFolded} role-word(s) + ${seeOpsFolded} see-op(s) reconciled into the word-fold`,
+      `boot-end fold: ${folded} op(s) + ${typesFolded} type(s) + ${ableWordsFolded} able-word(s) + ${seeOpsFolded} see-op(s) reconciled into the word-fold`,
     );
   } catch (err) {
     log.warn("Genesis", `boot-end op fold failed: ${err.message}`);
@@ -1026,20 +1026,20 @@ export async function genesis(app, opts = {}) {
   // §4.5 — so there is no tools sync.)
   (async () => {
     try {
-      const { syncRolesToSubstrate } =
-        await import("./seed/present/roles/registry.js");
+      const { syncAblesToSubstrate } =
+        await import("./seed/present/ables/registry.js");
       const { syncOperationsToSubstrate } =
         await import("./seed/ibp/operations.js");
       // Each sync function self-manages per-item moments now.
       // No outer withIAmAct wrappers — per the one-DO-per-moment
       // doctrine, each per-item create/refresh/delete is its own act.
       const [r, o] = await Promise.all([
-        syncRolesToSubstrate(),
+        syncAblesToSubstrate(),
         syncOperationsToSubstrate(),
       ]);
       log.verbose(
         "RegistryMirror",
-        `synced: roles(${r.created}+${r.kept}-${r.removed}) ` +
+        `synced: ables(${r.created}+${r.kept}-${r.removed}) ` +
           `operations(${o.created}+${o.kept}-${o.removed})`,
       );
     } catch (err) {

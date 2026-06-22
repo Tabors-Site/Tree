@@ -236,7 +236,7 @@ export function createView() {
     setStatus(`${matterName(mt)} (${mt.type || "generic"}) — opening matter is coming soon. For now, use the console (see/do) or the text view.${url ? " — or open it ↗" : ""}`,
       null, url);
   }
-  function roleOf(b) { return Array.isArray(b.roles) ? b.roles[0] : b.role; }
+  function ableOf(b) { return Array.isArray(b.ables) ? b.ables[0] : b.able; }
 
   // ── Grid tiles ──────────────────────────────────────────────────
 
@@ -258,7 +258,7 @@ export function createView() {
   }
 
   function beingTile(b) {
-    const el = tile(beingKey(b), "being", ICONS.being, `@${beingName(b)}`, roleOf(b) || "being");
+    const el = tile(beingKey(b), "being", ICONS.being, `@${beingName(b)}`, ableOf(b) || "being");
     el.addEventListener("click", () => pickBeing(b));
     wireContextMenu(el, () => buildBeingMenu(b));
     return el;
@@ -314,7 +314,7 @@ export function createView() {
   }
 
   function beingRow(b) {
-    const el = row(beingKey(b), "being", ICONS.being, `@${beingName(b)}`, roleOf(b) || "being");
+    const el = row(beingKey(b), "being", ICONS.being, `@${beingName(b)}`, ableOf(b) || "being");
     el.addEventListener("click", () => pickBeing(b));
     wireContextMenu(el, () => buildBeingMenu(b));
     return el;
@@ -605,7 +605,7 @@ export function createView() {
 
     const dialog = document.createElement("div");
     dialog.className = "ex-props";
-    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("able", "dialog");
     dialog.setAttribute("aria-label", `${kind} properties`);
 
     const head = document.createElement("div");
@@ -717,7 +717,7 @@ export function createView() {
       return [
         ["name",        beingName(data)],
         ["beingId",     data.beingId],
-        ["role",        roleOf(data)],
+        ["able",        ableOf(data)],
         ["cognition",   data.cognition || data.cognitionMode],
         ["mode",        data.respondMode],
         ["available",   data.available === false ? "busy" : "available"],

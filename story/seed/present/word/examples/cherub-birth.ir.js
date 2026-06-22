@@ -1,13 +1,13 @@
 // The cherub birth flow, hand-built as Word IR (Phase 2 slice).
 //
 // Mirrors the real subsequent-user birth path: _registerHumanWithFreshHome in
-// story/seed/present/roles/cherub/role.js (L856-987) and birthBeing in
+// story/seed/present/ables/cherub/able.js (L856-987) and birthBeing in
 // story/seed/materials/being/identity/birth.js (L177-686). It lays the same
 // five facts the JS handler does (the Phase 2 gate):
 //   1 do:create-space  (the home)
-//   2 be:birth         (via form-being -> birthBeing; +inherited-role +global grants)
+//   2 be:birth         (via form-being -> birthBeing; +inherited-able +global grants)
 //   3 do:set-space     (owner = the new being)
-//   4 do:grant-role    (human)
+//   4 do:grant-able    (human)
 //   5 do:set-being     (qualities.lineage)
 //
 // Idealized surface (4.md example 1), which this IR is the parse of:
@@ -15,7 +15,7 @@
 //     make a home space.
 //     form the being under a new Name.
 //     make the being the home's owner.
-//     grant the being the human role.
+//     grant the being the human able.
 //     record the being's lineage.
 //
 // IR shape: see philosophy/word/5.md. Each act carries `verb` (one of the five),
@@ -45,7 +45,7 @@ export const cherubBirth = {
       },
     },
     // 2. form the being under a new Name (birthBeing mints the Name and lays
-    //    be:birth + the inherited-role grants + the global grant: one act, many facts)
+    //    be:birth + the inherited-able grants + the global grant: one act, many facts)
     {
       kind: "act",
       verb: "be",
@@ -57,7 +57,7 @@ export const cherubBirth = {
         name: "$name",
         password: "$password",
         cognition: "human",
-        defaultRole: "human",
+        defaultAble: "human",
         parentBeingId: "Cherub",
         homeId: "$home",
       },
@@ -71,14 +71,14 @@ export const cherubBirth = {
       of: { kind: "space", ref: "home" },
       params: { field: "owner", value: "$child" },
     },
-    // 4. grant the being the human role
+    // 4. grant the being the human able
     {
       kind: "act",
       verb: "do",
-      op: "grant-role",
+      op: "grant-able",
       by: "Cherub",
       of: { kind: "being", ref: "child" },
-      params: { role: "human", anchorSpaceId: "$placeRoot" },
+      params: { able: "human", anchorSpaceId: "$placeRoot" },
     },
     // 5. record the being's lineage
     {
@@ -97,7 +97,7 @@ export const cherubBirth = {
 };
 
 // Deferred to later Phase 2 work (kept out of the first slice on purpose):
-// - the first-being path (parent = I_AM, post-seal grant-role:angel via afterSeal)
+// - the first-being path (parent = I_AM, post-seal grant-able:angel via afterSeal)
 // - the connect ops (credential bind, owned, inherit / father-priority)
 // See README.md.
 export default cherubBirth;

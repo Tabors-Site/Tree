@@ -390,7 +390,7 @@ export async function describeStamperSpace(
     name: `${name}#${l.history}`,
     beingId: null,
     synthetic: true,
-    role: "stamper",
+    able: "stamper",
     available: true,
     coord: { x: l.headX, y: l.lane * 2 },
     actions: [],

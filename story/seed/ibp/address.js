@@ -589,9 +589,9 @@ function parseBeing(s) {
   // The @qualifier accepts two shapes:
   //   1. A bare being name: lowercase kebab-case (e.g. @cherub, @tabor,
   //      @greeter-12345678).
-  //   2. A role-shorthand: `<ext>:<role>` form for namespaced roles
+  //   2. A able-shorthand: `<ext>:<able>` form for namespaced ables
   //      (e.g. @hello-world:greeter). The SUMMON resolver looks up
-  //      `qualities.beings.<role>.beingId` on the target space when the
+  //      `qualities.beings.<able>.beingId` on the target space when the
   //      bare-name lookup misses — the same shape extension DO ops and
   //      seeds use throughout the system.
   if (!/^[a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)?$/.test(id)) {
@@ -599,9 +599,9 @@ function parseBeing(s) {
       "invalid-being-chars",
       s,
       `Being qualifier "${id}" must be lowercase kebab-case (e.g. "@cherub", ` +
-        `"@tabor") or an extension role shorthand (e.g. "@hello-world:greeter"). ` +
-        `Roles may contain a single ":" separating the extension namespace from ` +
-        `the role name; bare being names cannot.`,
+        `"@tabor") or an extension able shorthand (e.g. "@hello-world:greeter"). ` +
+        `Ables may contain a single ":" separating the extension namespace from ` +
+        `the able name; bare being names cannot.`,
     );
   }
   return id;
@@ -827,16 +827,16 @@ export function isValidStory(place) {
 }
 
 // Optional leading "." for system-segments (`.threads`, `.reel`, `.acts`,
-// `.discovery`, `.extensions`, `.tools`, `.roles`, `.operations`,
+// `.discovery`, `.extensions`, `.tools`, `.ables`, `.operations`,
 // `.peers`, `.identity`, `.flow`, `.source`). Without this, the parser
 // rejected every dot-prefixed segment and only the pre-parse `.discovery`
 // short-circuit in see.js was reachable.
 //
 // `:` is allowed in the body of a segment so namespaced names —
 // `<extension>:<action>` for registered ops (`harmony:place-being`),
-// `<extension>:<role>` for role templates (`harmony:dancer-llm`) — are
+// `<extension>:<able>` for able templates (`harmony:dancer-llm`) — are
 // addressable through their sync'd seed-space children under
-// `<story>/./operations/<op>` / `./roles/<role>` etc. Cannot lead a
+// `<story>/./operations/<op>` / `./ables/<able>` etc. Cannot lead a
 // segment (must start with alphanumeric/underscore/tilde, optionally
 // dot-prefixed for system segments).
 const SEGMENT_RE = /^\.?[a-z0-9_~][a-z0-9_.:-]*$/i;

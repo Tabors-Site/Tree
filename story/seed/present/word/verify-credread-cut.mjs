@@ -42,7 +42,7 @@ const { withIAmAct } = await import(`${R}/seed/sprout.js`);
 const { birthBeing } = await import(`${R}/seed/materials/being/identity/birth.js`);
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { doVerb } = await import(`${R}/seed/ibp/verbs/do.js`);
-const { resolveRoleWord, runRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
+const { resolveAbleWord, runAbleWord } = await import(`${R}/seed/present/word/ableWordRegistry.js`);
 const { credentialHostEnv } = await import(`${R}/seed/store/words/credential/credentialHost.js`);
 
 let pass = 0, fail = 0;
@@ -55,7 +55,7 @@ const cherub = await poll(() => findByName("being", "cherub", "0"));
 const birth = async (name) => {
   let bid = null;
   await withIAmAct(`birth ${name}`, async (ctx) => {
-    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: ctx, history: "0" });
+    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultAble: "global" }, identity: I_AM, moment: ctx, history: "0" });
     bid = b.beingId;
   });
   return bid;
@@ -70,7 +70,7 @@ const drive = async (op, target) => {
 console.log(`\n  verify-credread-cut (REAL credential-read op via doVerb → the cut)\n  DB: ${SCRATCH_DB.split("/").pop()}\n`);
 try {
   if (!cherub) { console.log("  FATAL: genesis failed"); process.exit(1); }
-  const ir = resolveRoleWord("credential", "credential-read");
+  const ir = resolveAbleWord("credential", "credential-read");
   ir ? ok(`credential-read.word resolves through the bridge (self-registered)`) : bad(`resolves`, "null");
 
   const victim = await birth("victim");
@@ -96,7 +96,7 @@ try {
   const sc2 = { actId: randomUUID(), actorAct: { history: "0", by: noAuth }, identity: { beingId: noAuth }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   let refused = null;
   try {
-    await runRoleWord(ir, { moment: sc2, history: "0", trigger: { caller: noAuth, target: String(victim), branch: "0" }, env: { host: credentialHostEnv() } });
+    await runAbleWord(ir, { moment: sc2, history: "0", trigger: { caller: noAuth, target: String(victim), branch: "0" }, env: { host: credentialHostEnv() } });
   } catch (e) { refused = e; }
   refused && /no credential authority/i.test(refused.message)
     ? ok(`an asker with no credential authority → refuse "no credential authority" [code ${refused.code}], NO reveal`)

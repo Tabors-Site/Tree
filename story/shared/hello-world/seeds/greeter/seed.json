@@ -10,7 +10,7 @@
   },
   "manifest": {
     "extensions": ["hello-world"],
-    "roles": ["hello-world:greeter"]
+    "ables": ["hello-world:greeter"]
   },
   "parameters": [
     {
@@ -44,7 +44,7 @@
       {
         "sourceId": "greeter-being",
         "name": "$beingName",
-        "defaultRole": "hello-world:greeter",
+        "defaultAble": "hello-world:greeter",
         "parentBeingId": { "__ref": "graft-initiator" },
         "homeSpace": { "__ref": "space", "id": "greeter-root" },
         "position": { "__ref": "space", "id": "greeter-root" },

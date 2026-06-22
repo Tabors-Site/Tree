@@ -560,7 +560,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
       actId: String(inserted._id),
       beingOut: inserted.to ? String(inserted.to) : null,
       beingIn: inserted.through ? String(inserted.through) : null,
-      activeRole: inserted.activeRole || null,
+      activeAble: inserted.activeAble || null,
       endMessage: inserted.endMessage || null,
       stoppedAt: endTime,
     });

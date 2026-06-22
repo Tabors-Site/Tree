@@ -16,7 +16,7 @@
 // SEE is NOT a failure. It is a legitimate cognition outcome and gets
 // its own log line.
 //
-// Reply modes (declared on the role spec via `replyTo`):
+// Reply modes (declared on the able spec via `replyTo`):
 //
 //   undefined        no follow-up moment requested.
 //   "asker"          request the immediate sender have a follow-up moment.
@@ -33,21 +33,21 @@ import {
 } from "../replies.js";
 
 /**
- * The generic summon implementation. The role registry wires this
- * automatically when a role declares no custom `summon` function.
- * Roles needing custom dispatch attach their own `summon`.
+ * The generic summon implementation. The able registry wires this
+ * automatically when a able declares no custom `summon` function.
+ * Ables needing custom dispatch attach their own `summon`.
  *
  * @param {object} opts
  * @param {object} opts.message . the inbox SUMMON envelope
  * @param {object} opts.ctx . the summon ctx (toBeing, spaceId, signal, ...)
- * @param {object} opts.role . the role spec
+ * @param {object} opts.able . the able spec
  * @returns {Promise<CognitionResult>}
  */
-export async function defaultCall({ message, ctx, role }) {
+export async function defaultCall({ message, ctx, able }) {
   const startMs = Date.now();
   const scopeNodeId = ctx.spaceId || ctx.resolved?.spaceId;
-  const roleName = role?.name || ctx.activeRole || "(unknown role)";
-  const logTag = capitalize(roleName);
+  const ableName = able?.name || ctx.activeAble || "(unknown able)";
+  const logTag = capitalize(ableName);
 
   if (!scopeNodeId) {
     log.warn(logTag, "summon without scopeNodeId; cognition failed");
@@ -59,16 +59,16 @@ export async function defaultCall({ message, ctx, role }) {
   log.info(
     logTag,
     `summons at ${String(scopeNodeId).slice(0, 8)} ` +
-      `(role=${ctx.activeRole || roleName}, ` +
+      `(able=${ctx.activeAble || ableName}, ` +
       `${isReply ? `reply from ${senderHint}` : `from ${senderHint}`}, ` +
       `correlation=${message.correlation?.slice(0, 8) || "?"})`,
   );
 
-  // Reply-context shape. A role can declare `buildReplyContext(message)`
+  // Reply-context shape. A able can declare `buildReplyContext(message)`
   // to phrase the wakeup differently; default to buildReplyContextMessage.
   const messageBody = isReply
-    ? typeof role?.buildReplyContext === "function"
-      ? role.buildReplyContext(message)
+    ? typeof able?.buildReplyContext === "function"
+      ? able.buildReplyContext(message)
       : buildReplyContextMessage(message)
     : String(message.content || "");
 
@@ -81,7 +81,7 @@ export async function defaultCall({ message, ctx, role }) {
     result = await runLlmMoment({
       being: ctx.toBeing,
       envelope: { ...message, content: messageBody, actId: ctx?.actId || message.actId || null },
-      role,
+      able,
       signal: ctx.signal,
       // Thread the FULL moment ctx. `ctx` IS the object assign built and
       // the seal drains: it carries deltaF, foldedSeqs, afterSeal, the
@@ -135,13 +135,13 @@ export async function defaultCall({ message, ctx, role }) {
   // Reply emission only on acts. SEE and failure leave no reply; the
   // asker either times out or sees the empty seal, which is correct.
   await maybeEmitReply({
-    role,
+    able,
     isReply,
     message,
     text: result.content,
     ctx,
     scopeNodeId,
-    roleName,
+    ableName,
     logTag,
   });
 
@@ -153,26 +153,26 @@ export async function defaultCall({ message, ctx, role }) {
 // ────────────────────────────────────────────────────────────────────
 
 async function maybeEmitReply({
-  role,
+  able,
   isReply,
   message,
   text,
   ctx,
   scopeNodeId,
-  roleName,
+  ableName,
   logTag,
 }) {
-  const replyTo = role?.replyTo;
+  const replyTo = able?.replyTo;
   if (!replyTo) return;
 
   const fromBeing = ctx.toBeing;
-  const fromRoleName = ctx.toBeing?.name || roleName;
+  const fromAbleName = ctx.toBeing?.name || ableName;
 
   if (replyTo === "asker") {
     await emitReplyToAsker({
       fromNodeId: scopeNodeId,
       fromBeing,
-      fromRoleName,
+      fromAbleName,
       originalMessage: message,
       exitText: text,
     });
@@ -195,7 +195,7 @@ async function maybeEmitReply({
         askerStance,
         fromNodeId: scopeNodeId,
         fromBeing,
-        fromRoleName,
+        fromAbleName,
         exitText: text,
         rootCorrelation,
       });

@@ -29,7 +29,7 @@
 // IBP_ERR is the full code set — semantic codes (SPACE_NOT_FOUND,
 // UNAUTHORIZED, FORBIDDEN, RESOURCE_CONFLICT, ...) plus wire-specific
 // codes I can't express any other way (ADDRESS_PARSE_ERROR,
-// ROLE_UNAVAILABLE, VERB_NOT_SUPPORTED, ACTION_NOT_SUPPORTED,
+// ABLE_UNAVAILABLE, VERB_NOT_SUPPORTED, ACTION_NOT_SUPPORTED,
 // INVALID_INTENT). Callers reach for an existing code first; the
 // wire-specific ones exist only for things the substrate can't
 // otherwise name.
@@ -139,7 +139,7 @@ export const IBP_ERR = Object.freeze({
 
   // Wire-specific. Things the substrate cannot otherwise express.
   ADDRESS_PARSE_ERROR: "ADDRESS_PARSE_ERROR",
-  ROLE_UNAVAILABLE: "ROLE_UNAVAILABLE",
+  ABLE_UNAVAILABLE: "ABLE_UNAVAILABLE",
   VERB_NOT_SUPPORTED: "VERB_NOT_SUPPORTED",
   ACTION_NOT_SUPPORTED: "ACTION_NOT_SUPPORTED",
   INVALID_INTENT: "INVALID_INTENT",
@@ -231,7 +231,7 @@ const STATUS_FOR_CODE = Object.freeze({
   NAME_NOT_FOUND: 404,
   PEER_NOT_FOUND: 404,
   EXTENSION_NOT_FOUND: 404,
-  ROLE_UNAVAILABLE: 404,
+  ABLE_UNAVAILABLE: 404,
   VERB_NOT_SUPPORTED: 404,
   ACTION_NOT_SUPPORTED: 404,
 

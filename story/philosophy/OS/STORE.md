@@ -69,29 +69,29 @@ resolving, and delisting is an IBP verb. It never means binary blobs
 ride inside envelopes. The envelope names the bytes; the content door
 moves them; the hash proves them.
 
-## Who may publish is just roles
+## Who may publish is just ables
 
-Publishing happens by a being that holds the `store:publisher` role
-([reality/resources/store/roles/publisher/role.js](../../resources/store/roles/publisher/role.js))
+Publishing happens by a being that holds the `store:publisher` able
+([reality/resources/store/ables/publisher/able.js](../../resources/store/ables/publisher/able.js))
 summoning the registrar with intent `publish-listing` or
-`retire-listing`. The role declares the receiver names + arg shapes;
-the substrate's existing role-walk is the auth. Two configurations
-fall out of one knob, who may take the role:
+`retire-listing`. The able declares the receiver names + arg shapes;
+the substrate's existing able-walk is the auth. Two configurations
+fall out of one knob, who may take the able:
 
-- **Open Store.** The operator authors the role as self-grantable
+- **Open Store.** The operator authors the able as self-grantable
   (any identified being may take it). Anyone who registers can
   publish; the registrar trusts the publisher key carried on the
   signed envelope. Pointer claims are signed by THAT publisher's
   key, not the operator's.
-- **Curated Store.** The operator gates the role behind their own
-  grant (the role is held by zero beings by default; the operator
+- **Curated Store.** The operator gates the able behind their own
+  grant (the able is held by zero beings by default; the operator
   hands it to whoever they trust to publish). Same mechanism,
   different policy.
 
 The operator does not have to police every publish, because the
 catalog records who actually signed each pointer; a publisher who
 lies about themselves can be reasoned about by name. Open vs curated
-is one config on one role, not two separate codepaths.
+is one config on one able, not two separate codepaths.
 
 ## Resources: the catalog holds substance
 
@@ -154,7 +154,7 @@ and hidden work is unaltered work, visible elsewhere.
 ## Where store lives in the codebase
 
 The store pack lives at [reality/resources/store/](../../resources/store/).
-The registrar role holds the catalog in its own qualities;
+The registrar able holds the catalog in its own qualities;
 publish-listing and retire-listing are SUMMON intents; chained
 pointer claims live in
 [code/lib/claims.js](../../resources/store/code/lib/claims.js);
@@ -165,7 +165,7 @@ and writes a `.first-boot-actions.json` marker that
 [begin.js](../../begin.js) consumes once to plant the catalog at the
 reality root.
 
-Store extensions and seeds publish today; roleflow waits on its own
+Store extensions and seeds publish today; flow waits on its own
 design pass.
 
 ## Two open seams
@@ -176,24 +176,24 @@ implementation works around but that deserve a clean answer.
 - **No public-summon path for an extension being.** A
   canopy-verified foreign publisher reaches the registrar through
   the arrival floor (the cross-reality fallback in
-  [roleAuth.js](../../seed/ibp/roleAuth.js)), but the arrival role
+  [ableAuth.js](../../seed/ibp/ableAuth.js)), but the arrival able
   hardcodes `@cherub` and `@federation-manager` as the only publicly
   summonable delegates. An EXTENSION being has no clean way to opt
   into the same reachability: the arrival spec carries a `summon`
-  function, so it cannot be overridden through `qualities.roles`.
+  function, so it cannot be overridden through `qualities.ables`.
   The clean fix is to let extensions contribute public-summon
   entries that merge into the arrival floor.
 
-- **Extension roles cannot be granted bare seed ops.** The scoped
-  loader auto-namespaces a role's `canDo` entries to the extension
+- **Extension ables cannot be granted bare seed ops.** The scoped
+  loader auto-namespaces a able's `canDo` entries to the extension
   ([scopedReality.js](../../resources/scopedReality.js)), so
   `canDo: ["create-matter"]` becomes `store:create-matter`, which is
   not a real op. An extension being that maintains shared state
-  therefore cannot be granted seed write ops by role; it must either
+  therefore cannot be granted seed write ops by able; it must either
   OWN the subtree it writes (the registrar owns its catalog space)
   or wrap each seed op in one of its own. Ownership is the clean
   answer for the registrar; the general question (should an
-  extension role be able to name a bare seed op it may call) is
+  extension able be able to name a bare seed op it may call) is
   open.
 
 The wire all of this rides is already hardened: see

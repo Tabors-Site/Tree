@@ -32,10 +32,10 @@ import {
   isActionPanelOpen,
 } from "./actionRenderer.js";
 import {
-  showRoleManagerPanel,
-  hideRoleManagerPanel,
-  isRoleManagerPanelOpen,
-} from "./role-manager-panel.js";
+  showAbleManagerPanel,
+  hideAbleManagerPanel,
+  isAbleManagerPanelOpen,
+} from "./able-manager-panel.js";
 import {
   showBeingFlowPanel,
   hideBeingFlowPanel,
@@ -260,7 +260,7 @@ export function createView() {
     hideActionPanel();
     hideSummonPanel();
     resetSummonState();
-    hideRoleManagerPanel();
+    hideAbleManagerPanel();
     hideBeingFlowPanel();
     hideLlmAssignerPanel();
     if (isPlanterOpen()) closePrompt();
@@ -432,8 +432,8 @@ export function createView() {
   function onBeingActivate(b) {
     if (b.being === "cherub" || b.being === "birther") {
       openActionMenu(b);
-    } else if (b.being === "role-manager") {
-      openRoleManagerPanel(b);
+    } else if (b.being === "able-manager") {
+      openAbleManagerPanel(b);
     } else if (b.being === "llm-assigner") {
       openLlmAssignerPanel();
     } else {
@@ -460,7 +460,7 @@ export function createView() {
   function openBeingActionMenu(b) {
     const address = beingAddress(b);
     const fullBeing = state().descriptor?.beings?.find((bb) => bb.being === b.being) || b;
-    const roleActions = Array.isArray(fullBeing.actions) ? fullBeing.actions.slice() : [];
+    const ableActions = Array.isArray(fullBeing.actions) ? fullBeing.actions.slice() : [];
 
     const inhabitAction = {
       verb: "be",
@@ -481,13 +481,13 @@ export function createView() {
     const flowAction = {
       verb: "do",
       action: "set-being",
-      label: "Edit Role Flow",
-      description: "Author this being's roleFlow (conditional role stack evaluated per moment).",
+      label: "Edit Able Flow",
+      description: "Author this being's flow (conditional able stack evaluated per moment).",
       args: {},
       __synthetic: "edit-flow",
     };
 
-    const composed = [...roleActions, inhabitAction, flowAction, summonAction];
+    const composed = [...ableActions, inhabitAction, flowAction, summonAction];
     setSelectedBeing(fullBeing.beingId, fullBeing.being);
     showActionMenu({ ...fullBeing, actions: composed }, {
       onActionPicked: (action) => {
@@ -866,11 +866,11 @@ export function createView() {
     });
   }
 
-  function openRoleManagerPanel(b) {
+  function openAbleManagerPanel(b) {
     if (!isAuthed()) { bounceToAuth(); return; }
-    const rmEntry = (state().descriptor?.beings || []).find((bb) => bb.being === "role-manager") || b;
+    const rmEntry = (state().descriptor?.beings || []).find((bb) => bb.being === "able-manager") || b;
     setSelectedBeing(rmEntry.beingId, rmEntry.being);
-    showRoleManagerPanel({ state: panelState(), beingEntry: rmEntry, onClose: () => {} });
+    showAbleManagerPanel({ state: panelState(), beingEntry: rmEntry, onClose: () => {} });
   }
 
   function openLlmAssignerPanel() {
@@ -980,7 +980,7 @@ export function createView() {
   function isGameplayInputBlocked() {
     if (isAnyPanelOpen()) return true;
     if (isActionPanelOpen()) return true;
-    if (isRoleManagerPanelOpen()) return true;
+    if (isAbleManagerPanelOpen()) return true;
     if (isBeingFlowPanelOpen()) return true;
     if (isPlanterOpen()) return true;
     const el = document.activeElement;

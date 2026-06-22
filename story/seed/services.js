@@ -113,7 +113,7 @@ import {
 } from "./materials/space/spaceLocks.js";
 
 // The declarative primitives. Re-exposed through `story.declare` so
-// extensions register roles, subscribe to events, declare wake
+// extensions register ables, subscribe to events, declare wake
 // cadences, and aggregate fan-out replies without importing my
 // internals.
 import { aggregate as ibpAggregate } from "./present/replies.js";
@@ -130,11 +130,11 @@ import {
   resetEmitter as ibpResetScheduleEmitter,
 } from "./present/wakes/wakeSchedule.js";
 import {
-  registerRole as ibpRegisterRole,
-  unregisterRole as ibpUnregisterRole,
-  registerRoleHandler as ibpRegisterRoleHandler,
-  unregisterRoleHandler as ibpUnregisterRoleHandler,
-} from "./present/roles/registry.js";
+  registerAble as ibpRegisterAble,
+  unregisterAble as ibpUnregisterAble,
+  registerAbleHandler as ibpRegisterAbleHandler,
+  unregisterAbleHandler as ibpUnregisterAbleHandler,
+} from "./present/ables/registry.js";
 import {
   registerSeeOperation as ibpRegisterSeeOperation,
   unregisterSeeOperation as ibpUnregisterSeeOperation,
@@ -193,14 +193,14 @@ import "./store/words/model/index.js";
 // stance auth; see materials/portalOp.js + seed/CROSS-WORLD.md.
 import "./store/words/portal/portalOp.js";
 import "./materials/being/ops.js";
-// Side-effect import. grant-role was carved out of being/ops.js into its
+// Side-effect import. grant-able was carved out of being/ops.js into its
 // own store bundle (the word + its handler, portable). being/ops.js still
-// owns revoke-role / set-being / the LLM ops. See store/words/grant-role/.
-import "./store/words/grant-role/index.js";
+// owns revoke-able / set-being / the LLM ops. See store/words/grant-able/.
+import "./store/words/grant-able/index.js";
 import "./store/words/credential/credentialOps.js";
 // Side-effect import. cherub moved to a store bundle; this fires its
-// registerRoleWord at boot independent of the beOps import chain.
-import "./store/words/cherub/role.js";
+// registerAbleWord at boot independent of the beOps import chain.
+import "./store/words/cherub/able.js";
 // Side-effect import. Registers `do grant-inheritation` / `do
 // revoke-inheritation` — authority over a being-tree subtree, handed
 // between Names (delegation) or held by ownership. The being-tree's
@@ -210,21 +210,21 @@ import "./materials/being/inheritationOps.js";
 // ("back up your key / your exit"). Lives in name/ because the key is a
 // Name concern post-split (a being holds no key). See materials/name/keyOps.js.
 import "./store/words/key/keyOps.js";
-// Side-effect import. Registers the role-acquisition ops: ask-role
-// (host policy decides: auto, queue, or refuse) and take-role
-// (walk-in for grabbed:true roles). The acquisition module lives in
-// present/roles/ because that's where the policy schema and the
-// in-effect role-walk live; these ops just front the policy.
+// Side-effect import. Registers the able-acquisition ops: ask-able
+// (host policy decides: auto, queue, or refuse) and take-able
+// (walk-in for grabbed:true ables). The acquisition module lives in
+// present/ables/ because that's where the policy schema and the
+// in-effect able-walk live; these ops just front the policy.
 import "./store/words/acquisition/index.js";
 // Side-effect import. Registers the my-inbox SEE op. The 2D portal's
 // inbox panel reads my-inbox to surface pending summons; responses are
 // just SUMMON-BACK with `inReplyTo: <correlation>` (the substrate's
 // fold handler closes the row by that key), so no separate respond-
-// to-summon op exists. Side effects on approve (e.g. role-request →
-// grant-role) are dispatched by the panel as separate substrate calls.
+// to-summon op exists. Side effects on approve (e.g. able-request →
+// grant-able) are dispatched by the panel as separate substrate calls.
 import "./present/intake/inboxOps.js";
 // Side-effect import. Registers the seed-shipped inbox renderers
-// (currently "role-request"). The my-inbox SEE op above looks up the
+// (currently "able-request"). The my-inbox SEE op above looks up the
 // renderer keyed by envelope intent and attaches the render spec to
 // each entry — the panel is then a dumb renderer. Extensions can
 // register their own renderers via story.registerInboxRenderer.
@@ -251,10 +251,10 @@ import "./store/words/set-render/setRender.js";
 // storyConfig.js self-registers the set-config / delete-config DO
 // ops alongside the setters they wrap. Importing for the side effect.
 import "./storyConfig.js";
-// (reigning.js retired 2026-06-04 . heaven uses ownership + role
-// grants (per seed/RolesAreAuth.md). Promote a being into heaven by
-// granting them the `angel` role anchored at heaven:
-// `do(@<being>, "grant-role", { role: "angel", anchorSpaceId: <heavenId> })`.)
+// (reigning.js retired 2026-06-04 . heaven uses ownership + able
+// grants (per seed/AblesAreAuth.md). Promote a being into heaven by
+// granting them the `angel` able anchored at heaven:
+// `do(@<being>, "grant-able", { able: "angel", anchorSpaceId: <heavenId> })`.)
 // Side-effect import. Registers the InboxProjection cross-cutting
 // fold handlers (summon → upsert, be:sever → delete-by-root).
 // See seed/past/projections/inbox/inboxProjectionFold.js.
@@ -501,9 +501,9 @@ export function buildStoryServices({
     // declare: the setup voice. The four verbs above are how
     // extensions EMIT (act on space, mutate, summon a being, identify
     // themselves). Everything here is how extensions DECLARE the
-    // standing structure the verbs need: what roles exist, when
-    // beings wake, which events wake them, how a role handler
-    // coordinates its child replies. You cannot SUMMON into a role
+    // standing structure the verbs need: what ables exist, when
+    // beings wake, which events wake them, how a able handler
+    // coordinates its child replies. You cannot SUMMON into a able
     // that was never declared. You cannot have a verb wake a being
     // on an event nobody subscribed to. Declarations are prior.
     //
@@ -512,30 +512,30 @@ export function buildStoryServices({
     // bypass surface for poking the scheduler directly; the verb is
     // the only inbox-writer.
     declare: {
-      // Define a new kind of being. The spec carries the role's
+      // Define a new kind of being. The spec carries the able's
       // permissions, tools, system prompt, and `summon` handler.
-      // When SUMMON dispatches to a being in this role, the spec
+      // When SUMMON dispatches to a being in this able, the spec
       // is what runs.
-      registerRole: ibpRegisterRole,
-      unregisterRole: ibpUnregisterRole,
+      registerAble: ibpRegisterAble,
+      unregisterAble: ibpUnregisterAble,
 
       // RESOURCES.md: a code resource registers a code-cognition
-      // handler for a role resource by name. The role spec stays pure
+      // handler for a able resource by name. The able spec stays pure
       // data (canSee/canDo/canSummon/canBe/prompt); the handler is the
-      // function the substrate runs when the role is summoned and the
+      // function the substrate runs when the able is summoned and the
       // being's cognition is scripted. Without a registered handler, a
-      // scripted role falls through to whatever its inline `summon` is;
-      // an LLM role with no handler runs default LLM cognition. The
-      // scoped story auto-namespaces the role name to the registering
+      // scripted able falls through to whatever its inline `summon` is;
+      // an LLM able with no handler runs default LLM cognition. The
+      // scoped story auto-namespaces the able name to the registering
       // extension (scopedStory.js).
-      registerRoleHandler:   ibpRegisterRoleHandler,
-      unregisterRoleHandler: ibpUnregisterRoleHandler,
+      registerAbleHandler:   ibpRegisterAbleHandler,
+      unregisterAbleHandler: ibpUnregisterAbleHandler,
 
       // Register a named SEE operation. A SEE op is a named
       // perception — the substrate's read-side parallel to DO ops.
       // Two consumption paths:
-      //   1. canSee on roles: `canSee: ["place", "<ext>:<name>"]`
-      //      — the role frame preloads each name's result as a face
+      //   1. canSee on ables: `canSee: ["place", "<ext>:<name>"]`
+      //      — the able frame preloads each name's result as a face
       //      block in the LLM prompt.
       //   2. Direct call: `story.see("<ext>:<name>", args)` —
       //      any caller (portal, DO handler, extension code) gets
@@ -570,15 +570,15 @@ export function buildStoryServices({
       resetScheduleEmitter: ibpResetScheduleEmitter,
 
       // Wait for the replies from a fan-out of SUMMONs before
-      // continuing. Called inside a role's `summon()` handler when
-      // the role emits N child SUMMONs and needs to synthesize
+      // continuing. Called inside a able's `summon()` handler when
+      // the able emits N child SUMMONs and needs to synthesize
       // their answers. Foreman is the canonical user.
       aggregate: ibpAggregate,
 
       // Matter TYPES — the main extension point. A type declares
       // what a piece of matter IS (content kinds) and what may be
       // DONE with it (its DO ops, surfaced as the matter's actions
-      // and gated by the role-walk). Extensions absorb external
+      // and gated by the able-walk). Extensions absorb external
       // systems into the story by registering types; the verbs
       // stay uniform. Seed ships only the basics (generic, file,
       // web, model). See materials/matter/types.js +
@@ -593,7 +593,7 @@ export function buildStoryServices({
       // that returns a JSON-serializable render spec; the my-inbox
       // SEE op enriches each pending entry with the spec, and the
       // inbox panel renders the spec without knowing the intent.
-      // Seed ships renderers for its own intents (role-request);
+      // Seed ships renderers for its own intents (able-request);
       // extensions register renderers for their own intents the
       // same way. See seed/present/intake/inboxRenderers.js for the
       // spec shape.

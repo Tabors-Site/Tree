@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // verify-truename-word . be:truename is now authored by a .word (truename.word); the BE dispatcher
 // stamps the one fact from the word's factParams (rung-3 worked example: a verb-op IS a Word). Proves:
-//  (1) cherub:truename folds as kind:"roleword" + resolveRoleWord returns its IR (the word is the
+//  (1) cherub:truename folds as kind:"ableword" + resolveAbleWord returns its IR (the word is the
 //      live path, not the inert JS summary);
 //  (2) a being births with trueName = i-am;
 //  (3) be:truename via beVerb re-points its trueName + the _id survives (reel intact);
@@ -29,7 +29,7 @@ const { birthBeing } = await import(`${R}/seed/materials/being/identity/birth.js
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { getStoryDomain } = await import(`${R}/seed/ibp/address.js`);
 const { getWordSync } = await import(`${R}/seed/present/word/wordStore.js`);
-const { resolveRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
+const { resolveAbleWord } = await import(`${R}/seed/present/word/ableWordRegistry.js`);
 const { default: Fact } = await import(`${R}/seed/past/fact/fact.js`);
 const { IBP_ERR } = await import(`${R}/seed/ibp/protocol.js`);
 const pollFor = async (fn, pred, t = 16000, e = 250) => { const t0 = Date.now(); while (Date.now() - t0 < t) { const v = await fn(); if (pred(v)) return v; await new Promise((r) => setTimeout(r, e)); } return await fn(); };
@@ -45,9 +45,9 @@ try {
 
   // (1) the word is the live path
   const w = getWordSync("cherub:truename");
-  const ir = resolveRoleWord("cherub", "truename", "0");
-  (w?.kind === "roleword" && !!ir)
-    ? ok(`cherub:truename folds as kind:"roleword" + resolveRoleWord returns its IR (the word is the live path)`)
+  const ir = resolveAbleWord("cherub", "truename", "0");
+  (w?.kind === "ableword" && !!ir)
+    ? ok(`cherub:truename folds as kind:"ableword" + resolveAbleWord returns its IR (the word is the live path)`)
     : bad(`truename word folded`, { kind: w?.kind, hasIR: !!ir });
 
   // (2) declare a Name + birth a being (trueName = i-am)
@@ -59,7 +59,7 @@ try {
   await pollFor(() => loadProjection("name", nameId, "0"), (s) => !!s?.state?.privateKeyEnc);
   let beingId = null;
   await withIAmAct("birth tnbeing", async (ctx) => {
-    const r = await birthBeing({ spec: { name: "tnbeing", parentBeingId: cherub.id, homeId: cherub.state.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: ctx, branch: "0" });
+    const r = await birthBeing({ spec: { name: "tnbeing", parentBeingId: cherub.id, homeId: cherub.state.homeSpace, cognition: "scripted", defaultAble: "global" }, identity: I_AM, moment: ctx, branch: "0" });
     beingId = r.beingId;
   });
   const before = await pollFor(() => loadProjection("being", beingId, "0"), (s) => !!s?.state?.trueName);

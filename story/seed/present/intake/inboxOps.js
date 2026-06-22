@@ -12,9 +12,9 @@
 // renderer registry (seed/present/intake/inboxRenderers.js). The spec
 // is JSON-serializable; the panel renders it without knowing the intent
 // or having any intent-specific switches. Renderers are server-side and
-// keyed by envelope intent; seed ships one for "role-request", and
+// keyed by envelope intent; seed ships one for "able-request", and
 // extensions add their own through story.registerInboxRenderer.
-// Roles with no matching renderer get `render: null` and the panel
+// Ables with no matching renderer get `render: null` and the panel
 // falls back to a generic free-text reply surface.
 
 import { registerSeeOperation } from "../../ibp/seeOps.js";

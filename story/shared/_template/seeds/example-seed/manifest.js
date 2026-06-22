@@ -19,7 +19,7 @@ export default {
   // template registry uses these to refuse-plant early if a
   // dependency is missing.
   requires: [
-    // { type: "role", ref: "my-pack:example-role" },
+    // { type: "able", ref: "my-pack:example-able" },
     // { type: "code", ref: "my-pack"              },
   ],
 };

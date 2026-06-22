@@ -2,7 +2,7 @@
 // The FULL live diff for the cherub deletion (step 1): run ALL FIVE acts of
 // cherub.word through the evaluator LIVE against the real substrate, and assert
 // the world strand the cut must preserve (create-space, be:birth, set-space,
-// grant-role, set-being) under the resolved actor model (I_AM through Cherub,
+// grant-able, set-being) under the resolved actor model (I_AM through Cherub,
 // the being the new Name's own, mother Cherub / father Arrival).
 //
 // Builds on verify-word-cherub.mjs (which proved form-being live). The new piece
@@ -47,24 +47,24 @@ await import("../../materials/matter/ops.js");
 await import("../../materials/being/ops.js");
 
 // genesis-completeness shim for the isolated test DB: the real boot registers the
-// seed roles during genesis; here we register the one cherub.word grants (human)
-// so the explicit grant-role op (which checks the registry) resolves it.
-const { registerRole } = await import("../../present/roles/registry.js");
-const { humanRole } = await import("../../present/roles/human/role.js");
+// seed ables during genesis; here we register the one cherub.word grants (human)
+// so the explicit grant-able op (which checks the registry) resolves it.
+const { registerAble } = await import("../../present/ables/registry.js");
+const { humanAble } = await import("../../present/ables/human/able.js");
 try {
-  registerRole("human", humanRole);
+  registerAble("human", humanAble);
 } catch {
   /* already registered */
 }
-// The full boot imports cherub/role.js (via services.js / beOps.js), whose top-level
-// registerRoleWord("cherub","birth"|"connect") self-registers the cherub words. The
+// The full boot imports cherub/able.js (via services.js / beOps.js), whose top-level
+// registerAbleWord("cherub","birth"|"connect") self-registers the cherub words. The
 // isolated test DB skips that boot, so import the module here to populate the registry —
-// otherwise resolveRoleWord("cherub","birth") returns null. (Sibling cut harnesses import
+// otherwise resolveAbleWord("cherub","birth") returns null. (Sibling cut harnesses import
 // it for cherubBeOps; cherub-live needs only the registration side effect.)
-await import("../../store/words/cherub/role.js");
-// cherub.word's flow emits a do:grant-role; that op self-registers on import of its
+await import("../../store/words/cherub/able.js");
+// cherub.word's flow emits a do:grant-able; that op self-registers on import of its
 // word module (the full boot pulls it in). Import it so the dispatched act resolves.
-await import("../../store/words/grant-role/index.js");
+await import("../../store/words/grant-able/index.js");
 
 const { ensureSpaceRoot, ensureIAm } = await import("../../sprout.js");
 const { findByName } = await import("../../materials/projections.js");
@@ -73,7 +73,7 @@ const { ensureSeedDelegates } =
 const { sealFacts } = await import("../../past/fact/facts.js");
 const { nameVerb } = await import("../../ibp/verbs/name.js");
 const { evaluate } = await import("./evaluator.js");
-const { resolveRoleWord } = await import("./roleWordRegistry.js");
+const { resolveAbleWord } = await import("./ableWordRegistry.js");
 
 let pass = 0,
   fail = 0;
@@ -180,11 +180,11 @@ try {
   );
 
   // run cherub.word's full flow LIVE through the bridge's resolved IR
-  const ir = resolveRoleWord("cherub", "birth");
+  const ir = resolveAbleWord("cherub", "birth");
   const flow = ir[0];
   // The actor is I_AM (the story), acting THROUGH the Cherub being (bridge.md:
   // "by I_AM, through Cherub"). name = "i-am" short-circuits authorize (the
-  // bootstrap axiom), beingId = cherub is the being. _inOp mirrors runRoleWord
+  // bootstrap axiom), beingId = cherub is the being. _inOp mirrors runAbleWord
   // (the whole flow is one op; do-acts dispatch as nested sub-ops).
   const moment = {
     actId: randomUUID(),
@@ -230,7 +230,7 @@ try {
     "do:create-space",
     "be:birth",
     "do:set-space",
-    "do:grant-role",
+    "do:grant-able",
     "do:set-being",
   ];
   EXPECT.every((e) => shape.includes(e))
@@ -252,13 +252,13 @@ try {
     ? ok(`home owner set to the new being`)
     : bad(`home owner = new being`, JSON.stringify(setSpace?.params));
 
-  // the human role is granted (JS handler step 4, the explicit grant cherub.word reproduces)
+  // the human able is granted (JS handler step 4, the explicit grant cherub.word reproduces)
   const humanGrant = moment.deltaF.find(
-    (f) => f.act === "grant-role" && f.params?.role === "human",
+    (f) => f.act === "grant-able" && f.params?.able === "human",
   );
   humanGrant
-    ? ok(`human role granted on the new being`)
-    : bad(`human role granted`, "no human grant-role fact");
+    ? ok(`human able granted on the new being`)
+    : bad(`human able granted`, "no human grant-able fact");
 
   // lineage mother = Cherub, father = Arrival, resolved to being ids (JS handler step 5)
   const lv = moment.deltaF.find((f) => f.act === "set-being")?.params?.value;
@@ -278,7 +278,7 @@ try {
     : bad(`@tabor-prime materializes`, "no row");
 
   // double-push guard (engine's flag): a LIVE plain-verb emit() with a SHARED
-  // deltaF (as runRoleWord sets) must list the fact ONCE, not twice. cherub.word
+  // deltaF (as runAbleWord sets) must list the fact ONCE, not twice. cherub.word
   // never reaches emit() (all doVerb/form-being), but the rich slices will, so
   // probe emit() directly: a be-op != form-being falls through evalAct to emit().
   const probeSc = {
@@ -299,7 +299,7 @@ try {
     env: { iam: "i-am" },
     bindings: {},
     flows: [],
-    deltaF: probeSc.deltaF /* SHARED, as runRoleWord does */,
+    deltaF: probeSc.deltaF /* SHARED, as runAbleWord does */,
   };
   await evaluate(
     [{ kind: "act", verb: "be", act: "probe-emit", by: "I" }],

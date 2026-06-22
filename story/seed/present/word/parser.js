@@ -8,7 +8,7 @@
 // slices do.
 //
 // Forms covered:
-//   structure    A X is a space.            A X is a role for a Y.
+//   structure    A X is a space.            A X is a able for a Y.
 //   start        The X begins at Y.                          (names the state dimension + first value)
 //   single flow  When it is X, the R Vs, and it becomes Y.   (wheel phase — rule 12)
 //                When it is X, the R Vs the O.               (rider — rule 6)
@@ -34,16 +34,16 @@ const RULES = [
     (m) => ({ kind: "is", subject: m[1], isA: "space" }),
   ],
   [
-    /^A ([\w.-]+) is a role for a ([\w.-]+)\.$/i,
-    (m) => ({ kind: "is", subject: m[1], isA: "role", scope: m[2] }),
+    /^A ([\w.-]+) is a able for a ([\w.-]+)\.$/i,
+    (m) => ({ kind: "is", subject: m[1], isA: "able", scope: m[2] }),
   ],
 
   // capability grant / prohibition (rules 8, 14) — declarations the evaluator
-  // treats as LAW (the parser captures them; the engine's role/capability model
+  // treats as LAW (the parser captures them; the engine's able/capability model
   // enforces them, incl. prohibition precedence). "A member can back a proposal."
   [
     /^A (\w+) can (\w+)(?: (?:a |an |the )?(.+?))?\.$/i,
-    (m) => ({ kind: "can", role: m[1], verb: verb(m[2]), of: m[3] || null }),
+    (m) => ({ kind: "can", able: m[1], verb: verb(m[2]), of: m[3] || null }),
   ],
   [
     /^A (\w+) cannot (\w+)(?: (?:a |an |the )?(.+?))?\.$/i,
@@ -65,7 +65,7 @@ const RULES = [
     }),
   ],
 
-  // possession + structure relations (rule 2) + role inheritance. Declarations
+  // possession + structure relations (rule 2) + able inheritance. Declarations
   // the engine reads as law (state, not acts). "A commons contains proposals
   // and a roster." / "A steward extends member." / "I own the music room."
   [
@@ -80,7 +80,7 @@ const RULES = [
     /^A ([\w.-]+) extends ([\w.-]+)\.$/i,
     (m) => ({
       kind: "extends",
-      role: m[1].toLowerCase(),
+      able: m[1].toLowerCase(),
       parent: m[2].toLowerCase(),
     }),
   ],
@@ -148,7 +148,7 @@ const RULES = [
     }),
   ],
 
-  // generic kind declaration — LAST so the specific `is a space` / `is a role
+  // generic kind declaration — LAST so the specific `is a space` / `is a able
   // for a Y` rules win their shapes first. "A generic is a matter type."
   [
     /^A ([\w.-]+) is a (.+?)\.$/i,
@@ -172,7 +172,7 @@ const RULES = [
       by: "I",
       of: { kind: "being", id: m[1] },
       params: {
-        role: m[1].toLowerCase(),
+        able: m[1].toLowerCase(),
         ...(m[2] ? { description: m[2] } : {}),
       },
     }),
@@ -268,7 +268,7 @@ const EFFECT_RULES = [
         name: "$name",
         password: "$password",
         cognition: "human",
-        defaultRole: "human",
+        defaultAble: "human",
         parentBeingId: c.being,
         homeId: "$home",
         trueName: "$ownerName",
@@ -287,16 +287,16 @@ const EFFECT_RULES = [
         { field: "owner", value: "$child" },
       ),
   ],
-  // "grant the being the human role." -> do:grant-role
+  // "grant the being the human able." -> do:grant-able
   [
-    /^grant the being the (\w+) role\.$/i,
+    /^grant the being the (\w+) able\.$/i,
     (m, c) =>
       beingAct(
         c,
         "do",
-        "grant-role",
+        "grant-able",
         { kind: "being", ref: "child" },
-        { role: m[1], anchorSpaceId: "$placeRoot" },
+        { able: m[1], anchorSpaceId: "$placeRoot" },
       ),
   ],
   // "record the being's lineage." -> do:set-being qualities.lineage (mother Cherub, father Arrival)
@@ -519,7 +519,7 @@ const EFFECT_RULES = [
       ...(m[3] ? { bind: m[3] } : {}),
     }),
   ],
-  //   summon-to-act: "call the owner to role-request, with $found as queued." (with? optional)
+  //   summon-to-act: "call the owner to able-request, with $found as queued." (with? optional)
   [
     /^call\s+(.+?)\s+to\s+([\w-]+)(?:,\s*with\s+(.+?))?(?:\s+as\s+(\w+))?\.?$/i,
     (m) => ({
@@ -1330,8 +1330,8 @@ function stateFlow(stateVar, value, effect) {
   };
 }
 // an act under a state-watch; `sets` folds the next state (the wheel), absent for a rider.
-function stateAct(role, op, obj, sets, c) {
-  const a = { kind: "act", verb: "do", act: op, by: capitalize(role) };
+function stateAct(able, op, obj, sets, c) {
+  const a = { kind: "act", verb: "do", act: op, by: capitalize(able) };
   if (obj) a.of = objRef(obj, c);
   if (sets) a.sets = sets;
   return a;
@@ -1340,8 +1340,8 @@ function stateAct(role, op, obj, sets, c) {
 function eventFlow(event, effect) {
   return { kind: "flow", when: { on: event }, effects: [effect] };
 }
-function eventAct(role, op, obj, c) {
-  const a = { kind: "act", verb: "do", act: op, by: capitalize(role) };
+function eventAct(able, op, obj, c) {
+  const a = { kind: "act", verb: "do", act: op, by: capitalize(able) };
   if (obj) a.of = objRef(obj, c);
   if (c.events[op]) a.event = c.events[op]; // this verb counts as a derived event
   return a;

@@ -17,7 +17,7 @@
 //   SEE     { live?: boolean, ... }
 //   DO      { act: string, args?: object, ... }
 //   SUMMON  { message, from?, inReplyTo?, rootCorrelation?, priority?,
-//             activeRole?, correlation? }
+//             activeAble?, correlation? }
 //   BE      { act: "birth"|"connect"|"release", ...credentials }
 //
 // `identity` is the caller's auth token (when applicable). Verb handlers
@@ -28,9 +28,9 @@ import { IbpError, IBP_ERR } from "../../seed/ibp/protocol.js";
 // Matches the trailing `@<qualifier>` of a stance address. The
 // qualifier accepts two shapes (see parseBeing in seed/ibp/address.js):
 //   1. A bare being name (e.g. "@cherub", "@greeter-12345678")
-//   2. An extension role shorthand "<ext>:<role>" (e.g.
-//      "@hello-world:greeter") — namespaced roles use a colon to
-//      separate the extension namespace from the role name.
+//   2. An extension able shorthand "<ext>:<able>" (e.g.
+//      "@hello-world:greeter") — namespaced ables use a colon to
+//      separate the extension namespace from the able name.
 // Both shapes participate in classifyAddress / stripBeingQualifier.
 const EMBODIMENT_SUFFIX = /@[a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)?$/i;
 const VALID_VERBS = new Set(["see", "do", "call", "be", "type"]);
@@ -77,7 +77,7 @@ export function extractBeingQualifier(address) {
   if (typeof address !== "string") return null;
   const m = address.match(EMBODIMENT_SUFFIX);
   if (!m) return null;
-  // Strip leading "@" and any ":<role>" shorthand suffix.
+  // Strip leading "@" and any ":<able>" shorthand suffix.
   return m[0].slice(1).split(":")[0];
 }
 
@@ -189,7 +189,7 @@ export async function parseUnifiedEnvelope(msg) {
           IBP_ERR.INVALID_INPUT,
           `ibp SUMMON address must be a stance (position@being), e.g. ` +
           `"localhost/@cherub", "localhost/~tabor@greeter", or ` +
-          `"localhost/~tabor@hello-world:greeter" (role shorthand). ` +
+          `"localhost/~tabor@hello-world:greeter" (able shorthand). ` +
           `Got "${addressKind}" shape (address="${address}").`,
         );
       }

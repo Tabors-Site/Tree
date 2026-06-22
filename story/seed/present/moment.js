@@ -85,13 +85,13 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
       signal: controller.signal,
     });
     if (setup.skipped) {
-      // assign couldn't run this entry (being missing, role not
-      // carried, role not registered). Already logged inside assign.
+      // assign couldn't run this entry (being missing, able not
+      // carried, able not registered). Already logged inside assign.
       // No actId, no Act row, no inbox close.
       //
       // Fire onError so the wire's awaitResult fails fast instead of
       // waiting out the 60s timeout. Without this, a transport-act
-      // whose receiving being / role isn't resolvable on the moment's
+      // whose receiving being / able isn't resolvable on the moment's
       // history leaves the originating socket hanging until the
       // DEFAULT_TIMEOUT_MS in transportAct.js trips. The substrate has
       // already decided this entry can't run; tell the wire now.
@@ -194,13 +194,13 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
         afterSeal: setup.moment?.afterSeal || [],
       });
 
-      // Continuation is the role's call, not the seed's. A being that
+      // Continuation is the able's call, not the seed's. A being that
       // wants to step again emits SUMMON(self) as part of its act —
       // explicit, in deltaF, atomic with the seal, with whatever
       // orientation the next moment should fold at. The seed used to
-      // synthesize a post-seal forward self-summon for roles that
+      // synthesize a post-seal forward self-summon for ables that
       // declared `selfContinue:true`, but that hid the loop, hard-
-      // wired forward, and double-queued when the role also emitted
+      // wired forward, and double-queued when the able also emitted
       // its own self-summon. Doctrine: "only SUMMONs make SUMMONs"
       // means every wake-call traces to an explicit summon emission
       // by a being, not a post-seal side effect.
@@ -238,11 +238,11 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
       //                                 specific act; it failed with a
       //                                 specific reason. Evict.
       //
-      //   summon, shape:"garbage"     — deterministic. The role
+      //   summon, shape:"garbage"     — deterministic. The able
       //                                 returned null/undefined — it
       //                                 doesn't have a sync handler
       //                                 for this. Canonical case:
-      //                                 SUMMON to a human (human role
+      //                                 SUMMON to a human (human able
       //                                 returns null because humans
       //                                 respond from their transport).
       //                                 Retrying produces the same

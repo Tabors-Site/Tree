@@ -1,6 +1,6 @@
 // The SCRIBE's hands — ground + validate a Word draft against what's there, WITHOUT pressing.
 //
-// The scribe (present/roles/scribe) is an LLM being that proposes the Word from your intent;
+// The scribe (present/ables/scribe) is an LLM being that proposes the Word from your intent;
 // this is the code half it (and book view) leans on: the proofread/ground/refuse guard. It
 // READS, never writes. A draft is returned for YOU to press (typeIntoBook, signed by your
 // nameId). The scribe shapes the ink; you bring the stamp down. A draft that can't be pressed

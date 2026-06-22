@@ -18,12 +18,12 @@ import { registerOperation } from "../../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
 import { targetIdOf, loadTargetRow } from "../_targetShape.js";
 import { assertMatterCoordInBounds } from "./coordBounds.js";
-import { registerRoleWord } from "../../present/word/roleWordRegistry.js";
+import { registerAbleWord } from "../../present/word/ableWordRegistry.js";
 import { stampsFact, stampsWordFact } from "../../ibp/factResult.js";
 
-// Self-register the co-located world strand so resolveRoleWord("matter", "rename-matter") finds it
+// Self-register the co-located world strand so resolveAbleWord("matter", "rename-matter") finds it
 // (CONVERTING.md step 3). The cut prefers the bridge; the JS handler is the clean-miss fallback.
-registerRoleWord("matter", "rename-matter", new URL("./rename-matter.word", import.meta.url));
+registerAbleWord("matter", "rename-matter", new URL("./rename-matter.word", import.meta.url));
 
 const RESERVED_SET_META_NS = new Set([
   // none today; the set kept for symmetry with space/being
@@ -180,13 +180,13 @@ async function setOnMatterHandler({ target, params, moment }) {
 // matter via matterId). Behavior-preserving; no second fact (the auto-Fact path stamps once).
 async function _renameMatterViaWord({ target, params, moment }) {
   if (!moment) return null;
-  const { resolveRoleWord, runRoleWord } = await import("../../present/word/roleWordRegistry.js");
-  const ir = resolveRoleWord("matter", "rename-matter", moment?.actorAct?.history);
+  const { resolveAbleWord, runAbleWord } = await import("../../present/word/ableWordRegistry.js");
+  const ir = resolveAbleWord("matter", "rename-matter", moment?.actorAct?.history);
   if (!ir) return null;
   const { renameMatterHostEnv } = await import("./renameMatterHost.js");
   const history = moment?.actorAct?.history;
   try {
-    const { result } = await runRoleWord(ir, {
+    const { result } = await runAbleWord(ir, {
       moment, history,
       trigger: {
         target,
@@ -298,7 +298,7 @@ async function endMatterHandler({ target, identity, moment }) {
 // handler refuses when other live referents exist unless force=true —
 // explicit, never silent.
 //
-// Auth: the role-walk gates canDo "purge-content" (advertised on the
+// Auth: the able-walk gates canDo "purge-content" (advertised on the
 // file/model types); the handler additionally enforces
 // author-or-root-owner, same shape as endMatter.
 

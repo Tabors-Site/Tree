@@ -305,11 +305,11 @@ async function walkSpacePath({
 
   // Track whether we're currently inside the heaven region. Heaven (".",
   // HEAVEN_SPACE.HEAVEN) sits directly under the story root and parents
-  // every Tier-3 heaven space (identity, config, tools, roles,
+  // every Tier-3 heaven space (identity, config, tools, ables,
   // operations, extensions, source, peers, threads). Descending into
   // heaven or one of its Tier-3 children requires letting the
   // heavenSpace filter off. Once we pass through a Tier-3 child into
-  // a normal sub-row (e.g. `./roles/<role-name>`), seed-space children
+  // a normal sub-row (e.g. `./ables/<able-name>`), seed-space children
   // are no longer expected . the filter goes back on.
   let parentSeedSpace = null;
   for (let i = 0; i < segments.length; i++) {
@@ -325,12 +325,12 @@ async function walkSpacePath({
     // Heaven children: when the parent we just descended into is
     // ANY heaven-marked space, drop the heavenSpace:null filter so
     // its heaven-marked children resolve. Heaven itself parents the
-    // tier-3 spaces (config, tools, roles, ...); the region spaces
+    // tier-3 spaces (config, tools, ables, ...); the region spaces
     // (host, factory) parent their own marked children (http,
-    // websocket, mongo, present, past). Without this, `/./roles`
+    // websocket, mongo, present, past). Without this, `/./ables`
     // SPACE_NOT_FOUND at depth 1 and `/./host/http` at depth 2 —
     // marked rows get filtered out. Normal children under heaven
-    // spaces (e.g. `./roles/<name>`) carry heavenSpace: null and
+    // spaces (e.g. `./ables/<name>`) carry heavenSpace: null and
     // still match the unfiltered query, so relaxing is safe.
     const parentIsHeavenRegion = parentSeedSpace !== null;
     const allowSeedSpaceChildren = isHeavenDoor || parentIsHeavenRegion;

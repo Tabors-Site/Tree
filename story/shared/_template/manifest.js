@@ -12,14 +12,14 @@
 //   manifest.js            this file (kind: "pack")
 //   README.md              your pack's docs
 //   code/                  ONE code piece (init() registers ops, hooks,
-//                          cognition handlers for role pieces)
-//   roles/<each>/          MANY role pieces (one folder per role)
-//   roleflows/<each>/      MANY roleflow pieces (one folder per flow)
+//                          cognition handlers for able pieces)
+//   ables/<each>/          MANY able pieces (one folder per able)
+//   flows/<each>/      MANY flow pieces (one folder per flow)
 //   seeds/<each>/          MANY seed pieces (one folder per seed bundle)
 //   assets/<each>/         MANY asset pieces (one folder per asset bundle)
 //
-// Every kind is optional. A pack might be just-roles (like the
-// emotions pack), code + roles + a seed (like roots), or any other
+// Every kind is optional. A pack might be just-ables (like the
+// emotions pack), code + ables + a seed (like roots), or any other
 // combination. Drop the kind folders you don't need.
 
 export default {
@@ -34,8 +34,8 @@ export default {
   // disk), this documents what the pack covers.
   requires: [
     { type: "code",     ref: "my-pack"                  },
-    { type: "role",     ref: "my-pack:example-role"     },
-    { type: "roleflow", ref: "my-pack:example-flow"     },
+    { type: "able",     ref: "my-pack:example-able"     },
+    { type: "flow", ref: "my-pack:example-flow"     },
     { type: "seed",     ref: "my-pack:example-seed"     },
     { type: "asset",    ref: "my-pack:example-asset"    },
   ],

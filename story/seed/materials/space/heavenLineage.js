@@ -5,7 +5,7 @@
 // "Heaven never branches" (FACTORY.md). A space is in heaven if it
 // IS `.` (the HEAVEN heaven space) or its parent chain reaches `.`.
 // The Tier-3 heaven spaces (`.beings`, `.spaces`, `.matters`,
-// `.config`, `.histories`, `.roles`, `.tools`, `.operations`) sit
+// `.config`, `.histories`, `.ables`, `.tools`, `.operations`) sit
 // directly under `.`; their child spaces are heaven too because
 // their lineage walks through `.`.
 //
@@ -91,8 +91,8 @@ export function _resetHeavenCache() {
  *
  *   - `owner` of heaven — the bootstrap-axiom ownership field. I_AM
  *     owns heaven; rare other owners exist by transfer.
- *   - `rolesGranted` entry of `{role: "angel", anchorSpaceId: <heavenId>}`
- *     on the being — the delegated authority under RolesAreAuth.
+ *   - `ablesGranted` entry of `{able: "angel", anchorSpaceId: <heavenId>}`
+ *     on the being — the delegated authority under AblesAreAuth.
  *     Seed delegates and humans anointed by cherub.birth carry this.
  *
  * I_AM short-circuits true (universal authority on its own story —
@@ -116,15 +116,15 @@ export async function hasHeavenAuthority(beingId) {
   const heavenState = heaven.state || {};
   if (String(getSpaceOwner(heavenState) || "") === String(beingId)) return true;
 
-  // Role-grant check — angel role anchored at heaven (the RolesAreAuth
-  // delegated-authority path). Walks the being's rolesGranted for a
+  // Able-grant check — angel able anchored at heaven (the AblesAreAuth
+  // delegated-authority path). Walks the being's ablesGranted for a
   // matching entry. Cherub.birth grants this to the first human; the
   // I_AM grants it to every seed delegate at genesis.
   const beingSlot = await loadProjection("being", String(beingId), "0");
-  const grants = beingSlot?.state?.qualities?.rolesGranted;
+  const grants = beingSlot?.state?.qualities?.ablesGranted;
   if (Array.isArray(grants)) {
     for (const g of grants) {
-      if (g?.role === "angel" && String(g?.anchorSpaceId) === String(heavenId)) {
+      if (g?.able === "angel" && String(g?.anchorSpaceId) === String(heavenId)) {
         return true;
       }
     }

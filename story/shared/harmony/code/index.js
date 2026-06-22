@@ -1,6 +1,6 @@
 // harmony/code — pack code piece.
 //
-// Registers the three DO ops + the neighbors SEE op. Role specs and
+// Registers the three DO ops + the neighbors SEE op. Able specs and
 // the dance-floor seed register themselves through their pieces' kind
 // handlers (RESOURCES.md), before this init() runs. Position tracking
 // is owned by the seed (PositionProjection + set-being:coord); this
@@ -10,7 +10,7 @@
 import tickOp from "./ops/tick.js";
 import stepOp from "./ops/step.js";
 import walkOp from "./ops/walk.js";
-import { neighborsSeeResolver } from "../roles/dancer-llm/role.js";
+import { neighborsSeeResolver } from "../ables/dancer-llm/able.js";
 
 export async function init(story) {
   story.do.registerOperation("tick", tickOp);

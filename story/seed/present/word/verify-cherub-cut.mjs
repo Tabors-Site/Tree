@@ -5,8 +5,8 @@
 // born being is identical either way. Run on HEAD first (baseline, the JS path),
 // then after the cut (the .word path); both must be GREEN and IDENTICAL.
 //
-// Boots a FULL story via begin.js (the e2e pattern) so cherub holds its grant-role
-// authority (the piecemeal ensureSeedDelegates boot doesn't anoint the seed roles).
+// Boots a FULL story via begin.js (the e2e pattern) so cherub holds its grant-able
+// authority (the piecemeal ensureSeedDelegates boot doesn't anoint the seed ables).
 // Mirrors beVerb's moment setup (_inOp=true around the handler). Scratch DB, wiped.
 
 import fs from "fs";
@@ -37,12 +37,12 @@ const MONGOOSE = `${R}/node_modules/mongoose/index.js`;
   await conn.close();
 }
 
-await import(`${R}/begin.js`); // full genesis: I_AM, cherub (+ its roles), delegates
+await import(`${R}/begin.js`); // full genesis: I_AM, cherub (+ its ables), delegates
 
 const { findByName, loadProjection } = await import(`${R}/seed/materials/projections.js`);
 const { sealFacts } = await import(`${R}/seed/past/fact/facts.js`);
 const { nameVerb } = await import(`${R}/seed/ibp/verbs/name.js`);
-const { cherubBeOps } = await import(`${R}/seed/store/words/cherub/role.js`);
+const { cherubBeOps } = await import(`${R}/seed/store/words/cherub/able.js`);
 
 let pass = 0, fail = 0;
 const ok = (l) => { pass++; console.log(`  ✓ ${l}`); };

@@ -27,7 +27,7 @@
 //
 // I also produce the place's discovery payload (buildDiscovery) — the
 // bootstrap-time wire shape that names protocol version, descriptor
-// version, registered roles, and graftable clones. It lives here
+// version, registered ables, and graftable clones. It lives here
 // because both descriptor and discovery are wire payloads my SEE
 // verb returns, and they share types and version constants.
 
@@ -45,7 +45,7 @@ import {
   listSpaceChildren,
 } from "../materials/space/spaces.js";
 import { getInboxSummary } from "../present/intake/inbox.js";
-import { getRole, listRoles } from "../present/roles/registry.js";
+import { getAble, listAbles } from "../present/ables/registry.js";
 import { listTemplates } from "../store/book/templateRegistry.js";
 import { serializeTypeCatalog } from "../materials/matter/classify.js";
 import { listFoldedOps } from "../present/word/wordStore.js";
@@ -115,11 +115,11 @@ export const IBP_PROTOCOL_VERSION = "1.0";
 // ── Place discovery payload ──
 // Returned by `ibp:see <story>/.discovery` once a socket is open. The
 // pre-identity surface every client reads to learn what I speak:
-// protocol version, descriptor versions supported, WS URL, role
+// protocol version, descriptor versions supported, WS URL, able
 // names registered, verb set, graftable clones.
 
 // My BE-only beings — addressable through BE but not in the SUMMON
-// role registry, so they need an explicit listing for the discovery
+// able registry, so they need an explicit listing for the discovery
 // payload.
 const SYSTEM_BE_BEINGS = ["cherub", "llm-assigner"];
 
@@ -140,11 +140,11 @@ export async function buildDiscovery() {
     /* additive — discovery never blocks on the fingerprint */
   }
 
-  // Merge two sources: the live role registry (SUMMON-honoring roles
+  // Merge two sources: the live able registry (SUMMON-honoring ables
   // registered by the seed + extensions) and the canonical system
   // beings (BE-only). Dedupe + sort.
-  const roles = Array.from(
-    new Set([...listRoles(), ...SYSTEM_BE_BEINGS]),
+  const ables = Array.from(
+    new Set([...listAbles(), ...SYSTEM_BE_BEINGS]),
   ).sort();
 
   return {
@@ -154,7 +154,7 @@ export async function buildDiscovery() {
     descriptorVersionSupported: [DESCRIPTOR_VERSION],
     ws: wsUrl,
     auth: { method: "bearer" },
-    roles,
+    ables,
     // Graftable clone bundles registered by extensions. Surfaced in the
     // discovery payload (unauthenticated) so the portal's hotbar can
     // populate before the operator signs in. The list-clones DO op
@@ -355,7 +355,7 @@ async function callToActivity(summon, opts = {}) {
               kind: "being",
               beingId: recipientBeingId,
               name: recipientName,
-              role: lastFact.params?.activeRole || null,
+              able: lastFact.params?.activeAble || null,
             }
           : null,
         chainstepId: String(summon._id),
@@ -389,7 +389,7 @@ async function callToActivity(summon, opts = {}) {
 // Best-effort name lookup for a being id. Used by callToActivity to
 // pre-resolve the recipient name so the portal can render `→@<name>`
 // without a second roundtrip. Returns null on miss (the portal falls
-// back to role / beingId prefix).
+// back to able / beingId prefix).
 async function _lookupBeingName(beingId, history) {
   try {
     // loadOrFold (not loadProjection): the recipient being may live
@@ -408,7 +408,7 @@ async function _lookupBeingName(beingId, history) {
 // Infer what a Act is acting on. The Act schema doesn't carry an
 // explicit target field, but the reply linkage tells us: when inReplyTo
 // is set, the Act was spawned by another being. Treat the parent's
-// activeRole/position as the target so sub-beings animate walking toward
+// activeAble/position as the target so sub-beings animate walking toward
 // their spawner.
 async function inferActivityTarget(summon) {
   if (!summon?.inReplyTo) return null;
@@ -416,19 +416,19 @@ async function inferActivityTarget(summon) {
   try {
     const Act = (await import("../past/act/act.js")).default;
     parent = await Act.findById(summon.inReplyTo)
-      .select("activeRole to")
+      .select("activeAble to")
       .lean();
   } catch {
     return null;
   }
-  if (!parent || !parent.activeRole || !parent.to) return null;
-  // Without aiContext/treeContext we no longer have a (spaceId, role)
-  // tuple to hand the renderer. Surface the parent being + role so the
+  if (!parent || !parent.activeAble || !parent.to) return null;
+  // Without aiContext/treeContext we no longer have a (spaceId, able)
+  // tuple to hand the renderer. Surface the parent being + able so the
   // 3D portal can map "which mesh is this being" via its descriptor entry.
   return {
     kind: "being",
     beingId: String(parent.to),
-    role: parent.activeRole,
+    able: parent.activeAble,
   };
 }
 
@@ -508,14 +508,14 @@ export async function buildNameDescriptor(nameId) {
     "state.trueName": String(nameId),
     tombstoned: { $ne: true },
   })
-    .select("id state.name state.defaultRole state.homeSpace state.homeHistory")
+    .select("id state.name state.defaultAble state.homeSpace state.homeHistory")
     .sort({ id: 1 })
     .limit(NAME_BEING_CAP)
     .lean();
   const beings = rows.map((r) => ({
     beingId: String(r.id),
     name: r.state?.name || null,
-    defaultRole: r.state?.defaultRole || null,
+    defaultAble: r.state?.defaultAble || null,
     homeSpace: r.state?.homeSpace ? String(r.state.homeSpace) : null,
     homeHistory: r.state?.homeHistory || null,
   }));
@@ -597,7 +597,7 @@ export async function buildNameTree(nameId, history) {
     tombstoned: { $ne: true },
   })
     .select(
-      "id history state.name state.trueName state.parentBeingId state.homeHistory state.defaultRole",
+      "id history state.name state.trueName state.parentBeingId state.homeHistory state.defaultAble",
     )
     .limit(NAME_BEING_CAP)
     .lean();
@@ -625,7 +625,7 @@ export async function buildNameTree(nameId, history) {
         ? String(r.state.parentBeingId)
         : null,
       homeHistory: r.state?.homeHistory || null,
-      defaultRole: r.state?.defaultRole || null,
+      defaultAble: r.state?.defaultAble || null,
       points: [...points],
       children: [],
     });
@@ -729,7 +729,7 @@ async function placeAtSpaceRoot(
 ) {
   const storyDomain = getStoryDomain();
   const spaceRootId = getSpaceRootId();
-  const isRegistered = (beingName) => !!getRole(beingName);
+  const isRegistered = (beingName) => !!getAble(beingName);
 
   const spaceRoot = await foldRead("space", spaceRootId, until, history);
   let children = spaceRootId
@@ -770,22 +770,22 @@ async function placeAtSpaceRoot(
 
   // My place-root beings — ensureSeedDelegates plants them; this list
   // makes them addressable from the place descriptor without walking
-  // qualities.beings. `available` reflects whether the role's
+  // qualities.beings. `available` reflects whether the able's
   // backing extension is currently registered.
   //
   // The raw list runs through enrichBeings so each entry picks up the
-  // role's `actions[]` surface (from canBe + BE_OPS) plus identity,
+  // able's `actions[]` surface (from canBe + BE_OPS) plus identity,
   // permissions, inbox, activity, qualities, etc. Without this the
   // 3D portal sees the bare {being, invocableBy, available} triple
   // and renders cherub with "no actions" because the actions array
   // is undefined.
-  // Seed-delegate labels at the place root: the role + invocability
+  // Seed-delegate labels at the place root: the able + invocability
   // surface every fresh visitor sees on first SEE. The roster (name,
-  // role, cognition, invocableBy) lives in SEED_DELEGATES . single
+  // able, cognition, invocableBy) lives in SEED_DELEGATES . single
   // source of truth. We resolve each delegate's REAL Being row id by
   // name so occupantsByPosition's dedupe (keyed on _beingId)
   // recognizes them and doesn't surface the same being twice. Each
-  // entry carries the role-specific invocableBy + availability; if
+  // entry carries the able-specific invocableBy + availability; if
   // the delegate's row hasn't planted yet (early boot, or a
   // misconfigured place), the entry surfaces anyway with _beingId:
   // null so the label and action surface still render . it just
@@ -895,7 +895,7 @@ async function placeAtSpace(
 
   // .threads has no persisted children; the live forest is projected
   // on demand from Act records keyed by rootCorrelation. The SEE
-  // payload's filter fields (being, role, position, stance, priority)
+  // payload's filter fields (being, able, position, stance, priority)
   // push down to the projection's $match so the listing scales.
   // Each entry is shaped like a normal child so clients render it
   // through the same path as any other space listing.
@@ -932,9 +932,9 @@ async function placeAtSpace(
   // parent ran on every SEE and nothing ever read the result.)
 
   // Access for the asker. Used for descriptor enrichment only —
-  // role-walk gating runs in authorize() upstream and downstream,
+  // able-walk gating runs in authorize() upstream and downstream,
   // not here. `writeAllowed` is the conservative "this caller clearly
-  // owns this place" signal (post-RolesAreAuth there's no single
+  // owns this place" signal (post-AblesAreAuth there's no single
   // boolean for "can write anything"; specific writes pass through
   // authorize per-action). UIs that want a per-action signal should
   // ask "can I do X here?" rather than read this flag.
@@ -1046,7 +1046,7 @@ async function placeAtSpace(
     qualities: serializeQualities(space.qualities),
     // The structural owner at this position (null when unowned at this
     // node and the ancestor walk inherits). Operator surfaces like the
-    // portal's Roles panel use this to label "this is the owner."
+    // portal's Ables panel use this to label "this is the owner."
     owner: space.owner ? String(space.owner) : null,
     identity: await identityBlock(identity, { until, history }),
     ...(until ? { isHistorical: true, asOf: serializeAsOf(until) } : {}),
@@ -1127,7 +1127,7 @@ async function childrenOf(parentId, parentPath, opts = {}) {
 // Pure projection — no persistence.
 //
 // `payload` is the SEE request's payload (query params on HTTP, the
-// envelope's payload on WS). Recognized filter fields — being, role,
+// envelope's payload on WS). Recognized filter fields — being, able,
 // position, stance, priority, limit — push down to the projection's
 // $match, so filtering scales on busy systems.
 async function synthesizeThreadChildren(parentId, parentPath, payload) {
@@ -1136,7 +1136,7 @@ async function synthesizeThreadChildren(parentId, parentPath, payload) {
       ? {
           limit: payload.limit != null ? Number(payload.limit) : undefined,
           being: payload.being || null,
-          role: payload.role || null,
+          able: payload.able || null,
           position: payload.position || null,
           stance: payload.stance || null,
           priority: payload.priority || null,
@@ -1351,7 +1351,7 @@ async function mattersAt(
 // Being-tree children of a being. Used by the descriptor's
 // `beingLineage` field on stance addresses (<story>/<path>@<name>).
 // Each entry carries enough for the portal to render an "inhabit"
-// affordance: name, beingId, cognition, defaultRole. Cap at 200 to
+// affordance: name, beingId, cognition, defaultAble. Cap at 200 to
 // stay bounded for prolific parents; deeper inspection happens via
 // dedicated SEE on each child stance.
 async function listBeingChildren(
@@ -1362,7 +1362,7 @@ async function listBeingChildren(
   const { beingCognition } =
     await import("../materials/being/identity/lookups.js");
   const rows = await Being.find({ parentBeingId: String(parentBeingId) })
-    .select("_id name defaultRole homeSpace qualities createdAt")
+    .select("_id name defaultAble homeSpace qualities createdAt")
     .sort({ createdAt: 1 })
     .limit(200)
     .lean();
@@ -1372,7 +1372,7 @@ async function listBeingChildren(
     return rows.map((b) => ({
       beingId: String(b._id),
       name: b.name || null,
-      defaultRole: b.defaultRole || null,
+      defaultAble: b.defaultAble || null,
       cognition: beingCognition(b),
       homeSpace: b.homeSpace ? String(b.homeSpace) : null,
       createdAt: b.createdAt || null,
@@ -1392,7 +1392,7 @@ async function listBeingChildren(
     out.push({
       beingId: String(rows[i]._id),
       name: f.name || rows[i].name || null,
-      defaultRole: f.defaultRole || rows[i].defaultRole || null,
+      defaultAble: f.defaultAble || rows[i].defaultAble || null,
       cognition: beingCognition(f),
       homeSpace: f.homeSpace ? String(f.homeSpace) : null,
       createdAt: rows[i].createdAt || null,
@@ -1415,7 +1415,7 @@ function buildLineage(resolved) {
   return lineage;
 }
 
-// Build the `actions[]` block for one being. Reads the role's `canBe`
+// Build the `actions[]` block for one being. Reads the able's `canBe`
 // license, cross-references the seed's static BE_OPS table, and
 // returns `[{verb, action, label, description, args, bootstrap}, ...]`
 // . the wire shape the portal's actionRenderer consumes to render a
@@ -1426,7 +1426,7 @@ function buildLineage(resolved) {
 // callers don't see release. Portal stays state-blind.
 //
 // canDo / canSee / canSummon are not surfaced as actions today . they
-// describe what an LLM-driven role is licensed to dispatch via the
+// describe what an LLM-driven able is licensed to dispatch via the
 // four seed verb-tools, which is a separate concern from the
 // portal's "click a being and invoke an action" UI. When a real case
 // surfaces, the same `actions[]` field generalizes.
@@ -1468,12 +1468,12 @@ function buildActions(beingName, def, identity) {
       label = "Mint child";
       description =
         "Birth a new being from yourself. The child's parent is you.";
-      // Populate the role dropdown from the live registry so the
-      // operator sees every role currently available (seed, extension,
+      // Populate the able dropdown from the live registry so the
+      // operator sees every able currently available (seed, extension,
       // and operator-authored "live" entries). Non-human cognition
-      // requires a role — surfacing the list inline removes the
+      // requires a able — surfacing the list inline removes the
       // typo-prone free-text input.
-      const roleNames = listRoles().slice().sort();
+      const ableNames = listAbles().slice().sort();
       args = {
         name: { type: "text", label: "Child name", required: true },
         cognition: {
@@ -1483,23 +1483,23 @@ function buildActions(beingName, def, identity) {
           required: false,
           default: "llm",
         },
-        role: {
+        able: {
           type: "select",
-          label: "Default role (fallback when no roleFlow clause matches)",
-          enum: roleNames,
+          label: "Default able (fallback when no flow clause matches)",
+          enum: ableNames,
           required: true,
-          default: roleNames.includes("human") ? "human" : roleNames[0] || "",
+          default: ableNames.includes("human") ? "human" : ableNames[0] || "",
         },
-        // Optional birth-time roleFlow. Operators paste a JSON array
+        // Optional birth-time flow. Operators paste a JSON array
         // of clauses; be.js parses and the spec lands at
-        // qualities.roleFlow on the new being. Empty = use defaultRole
+        // qualities.flow on the new being. Empty = use defaultAble
         // unconditionally (no flow program).
-        roleFlow: {
+        flow: {
           type: "multiline",
-          label: "Initial role flow (JSON array of clauses, optional)",
+          label: "Initial able flow (JSON array of clauses, optional)",
           required: false,
           description:
-            '[{ "when": {...}, "role": "foo" }, { "stack": true, "when": {...}, "role": "bar" }]',
+            '[{ "when": {...}, "able": "foo" }, { "stack": true, "when": {...}, "able": "bar" }]',
         },
       };
     }
@@ -1515,7 +1515,7 @@ function buildActions(beingName, def, identity) {
   return out;
 }
 
-// Attach the registered role's wire fields, the per-being inbox, the
+// Attach the registered able's wire fields, the per-being inbox, the
 // active Act's activity, and the being's own qualities to each
 // entry produced by beingsAtSpace.
 async function enrichBeings(spaceId, entries, opts = {}) {
@@ -1598,7 +1598,7 @@ async function enrichBeings(spaceId, entries, opts = {}) {
   );
 
   return entries.map((entry, i) => {
-    const def = getRole(entry.being);
+    const def = getAble(entry.being);
     const inboxKey = entry._beingId ? String(entry._beingId) : null;
     const inb = (inboxKey && inboxByBeing[inboxKey]) || {
       total: 0,
@@ -1621,19 +1621,19 @@ async function enrichBeings(spaceId, entries, opts = {}) {
       // discriminate via `as: "actor"|"receiver"` (default "actor").
       // UI discovery filters `as:"receiver"` to render per-being
       // accept options (e.g. birther's "mate" button); auth filters
-      // `as:"actor"` on the caller's role. See seed/RolesAreAuth.md
+      // `as:"actor"` on the caller's able. See seed/AblesAreAuth.md
       // + protocols/ibp/FEDERATION.md.
       canSummon: def?.canSummon || null,
       // Per-being action surface. The portal renders this generically
-      // as a menu + arg-schema form; one entry per BE op the role is
+      // as a menu + arg-schema form; one entry per BE op the able is
       // licensed for, filtered by identity state (cherub-only today).
       actions: buildActions(entry.being, def, identity),
       // Delegate-as-catalog: a delegate publishes the registry-shaped
       // data it mediates as part of its own descriptor entry. Askers
       // who can SEE the delegate (which is liberal — beings list at the
       // place root) get the catalog through this surface without ever
-      // reading the heaven-gated mirror spaces directly. role-manager
-      // publishes roles/tools/operations/be-ops; future delegates that
+      // reading the heaven-gated mirror spaces directly. able-manager
+      // publishes ables/tools/operations/be-ops; future delegates that
       // gate other registries follow the same shape.
       catalogs: buildCatalogs(entry.being),
       inbox: inb,
@@ -1645,7 +1645,7 @@ async function enrichBeings(spaceId, entries, opts = {}) {
       coord: (inboxKey && coordByBeing.get(inboxKey)) || null,
       // The being's 3D body — a model matter block written by
       // set-model ({ matterId, hash, url, name }; bytes load from
-      // /api/v1/content/<hash>). Null = portal default for the role.
+      // /api/v1/content/<hash>). Null = portal default for the able.
       model:
         (inboxKey && qualitiesByBeing.get(inboxKey)?.render?.model) || null,
       qualities: (inboxKey && qualitiesByBeing.get(inboxKey)) || {},
@@ -1667,25 +1667,25 @@ async function enrichBeings(spaceId, entries, opts = {}) {
 // ─────────────────────────────────────────────────────────────────────
 
 function buildCatalogs(beingName) {
-  if (beingName === "role-manager") return buildRoleManagerCatalogs();
+  if (beingName === "able-manager") return buildAbleManagerCatalogs();
   return null;
 }
 
-function buildRoleManagerCatalogs() {
+function buildAbleManagerCatalogs() {
   return {
-    roles: catalogRoles(),
+    ables: catalogAbles(),
     addresses: catalogAddresses(),
     operations: catalogOperations(),
     beOps: catalogBeOps(),
   };
 }
 
-function catalogRoles() {
-  return listRoles()
+function catalogAbles() {
+  return listAbles()
     .slice()
     .sort()
     .map((name) => {
-      const r = getRole(name);
+      const r = getAble(name);
       return {
         name,
         origin: r?.origin || null,
@@ -1695,7 +1695,7 @@ function catalogRoles() {
     });
 }
 
-// canSee on a role names IBP addresses (paths the LLM may read via the
+// canSee on a able names IBP addresses (paths the LLM may read via the
 // generic `see` tool), NOT tool names. The runtime tool registry only
 // holds the four seed verb-tools (see/do/summon/be) — those are the
 // LLM's tool palette, not what canSee admits. We surface a curated
@@ -1709,7 +1709,7 @@ const SUGGESTED_ADDRESSES = [
   "./peers",
   "./extensions",
   "./tools",
-  "./roles",
+  "./ables",
   "./operations",
   "./source",
   "./threads",

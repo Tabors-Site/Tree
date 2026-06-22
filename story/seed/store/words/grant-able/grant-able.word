@@ -1,0 +1,25 @@
+# grant-able.word — grant a able to a being (materials/being/ops.js, the grant-able op).
+# The capability grant the acquisition ops emit internally. The verb-level authorize has
+# already gated the grantor's `grant-able:<able>` capability (authAction), so this strand
+# is the input validation + the grant record.
+#
+# The WORLD effect is the dispatcher's auto-emitted grant-able fact — the being reducer
+# reads {able, anchor, grantedBy, grantedAt} from fact.params and appends to
+# qualities.ablesGranted. So the .word VALIDATES + computes the record and RETURNS it; the
+# cut enriches the op params with grantedBy/grantedAt so the auto-fact carries them.
+#
+# THE WALL: the gates are CONTROL (.word). ableExists is a registry lookup (host) and
+# grantStamp is the grant's wall-clock instant — the one external-resource escape (the
+# story has no clock of its own; the timestamp rides a host fn, never the eval loop, per
+# the time-doctrine — same shape as credential-reset's resetAt). The bridge binds `caller`
+# (the grantor beingId), `target` (the grantee beingId), `able`, `anchorSpaceId`,
+# `anchorBeingId`.
+
+When a being grants a able to a being:
+  If no caller, refuse with "grant-able: identity required (the grantor's beingId)" as unauthorized.
+  If no able, refuse with "grant-able: able is required" as invalid-input.
+  If no anchorSpaceId, and no anchorBeingId, refuse with "grant-able: one of anchorSpaceId or anchorBeingId is required" as invalid-input.
+  If anchorSpaceId, and anchorBeingId, refuse with "grant-able: only one of anchorSpaceId or anchorBeingId may be set" as invalid-input.
+  If not able-exists(able), refuse with "grant-able: able is not registered" as invalid-input.
+  see grant-stamp() as grantedAt.
+  Return granted: true, able: $able, granteeBeingId: $target, anchorSpaceId: $anchorSpaceId, anchorBeingId: $anchorBeingId, grantedBy: $caller, grantedAt: $grantedAt.

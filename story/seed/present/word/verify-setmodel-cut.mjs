@@ -43,7 +43,7 @@ const { birthBeing } = await import(`${R}/seed/materials/being/identity/birth.js
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { getSpaceRootId } = await import(`${R}/seed/sprout.js`);
 const { doVerb } = await import(`${R}/seed/ibp/verbs/do.js`);
-const { resolveRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
+const { resolveAbleWord } = await import(`${R}/seed/present/word/ableWordRegistry.js`);
 const { putContent } = await import(`${R}/seed/materials/matter/contentStore.js`);
 const { ensureSkinsSpace } = await import(`${R}/seed/store/words/model/index.js`);
 
@@ -55,11 +55,11 @@ const ident = { beingId: I_AM, name: "i-am", nameId: "i-am" };
 
 const cherub = await poll(() => findByName("being", "cherub", "0"));
 
-// birth a being as a fresh body to dress (parented to cherub, like grantrole-cut)
+// birth a being as a fresh body to dress (parented to cherub, like grantable-cut)
 const birth = async (name) => {
   let bid = null;
   await withIAmAct(`birth ${name}`, async (ctx) => {
-    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: ctx, history: "0" });
+    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultAble: "global" }, identity: I_AM, moment: ctx, history: "0" });
     bid = b.beingId;
   });
   return bid;
@@ -78,7 +78,7 @@ const doOp = async (target, op, params, who = ident) => {
 console.log(`\n  verify-setmodel-cut (REAL set-model op via doVerb → the cut)\n  DB: ${SCRATCH_DB.split("/").pop()}\n`);
 try {
   if (!cherub) { console.log("  FATAL: genesis failed"); process.exit(1); }
-  resolveRoleWord("render", "set-model", "0") ? ok(`model.word resolves through the bridge (self-registered)`) : bad(`resolves`, "null");
+  resolveAbleWord("render", "set-model", "0") ? ok(`model.word resolves through the bridge (self-registered)`) : bad(`resolves`, "null");
 
   // ── the skins catalog space (ensureSkinsSpace ran at genesis; resolve/ensure it) ──
   const skins = await ensureSkinsSpace("0", null);

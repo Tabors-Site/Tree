@@ -559,24 +559,24 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
   // source tree like any other folder. See the header note + MIRROR.md.
 
   // Kind dispatcher. Code resources go through the existing extension
-  // flow below; role + seed pieces install via their kind handlers
-  // here, BEFORE code's init runs (so code can registerRoleHandler
-  // against role names that already exist in the registry). Pack
+  // flow below; able + seed pieces install via their kind handlers
+  // here, BEFORE code's init runs (so code can registerAbleHandler
+  // against able names that already exist in the registry). Pack
   // manifests carry no install path (they're glue metadata).
-  // Roleflow and asset kinds are discovered but install handlers
+  // Flow and asset kinds are discovered but install handlers
   // aren't built yet — flagged as pending.
   const codeManifests = manifests.filter((m) => (m.kind || "code") === "code");
-  const rolePieces    = manifests.filter((m) => m.kind === "role");
+  const ablePieces    = manifests.filter((m) => m.kind === "able");
   const seedPieces    = manifests.filter((m) => m.kind === "seed");
   const assetPieces   = manifests.filter((m) => m.kind === "asset");
   const packCount     = manifests.filter((m) => m.kind === "pack").length;
-  const otherPieces   = manifests.filter((m) => m.kind && !["code", "pack", "role", "seed", "asset"].includes(m.kind));
+  const otherPieces   = manifests.filter((m) => m.kind && !["code", "pack", "able", "seed", "asset"].includes(m.kind));
   log.info(
     "Loader",
-    `Discovered ${manifests.length} resources (${codeManifests.length} code; ${rolePieces.length} role; ${seedPieces.length} seed; ${assetPieces.length} asset; ${packCount} pack; ${otherPieces.length} other-kind)`,
+    `Discovered ${manifests.length} resources (${codeManifests.length} code; ${ablePieces.length} able; ${seedPieces.length} seed; ${assetPieces.length} asset; ${packCount} pack; ${otherPieces.length} other-kind)`,
   );
-  // Install role pieces first so code resources can reference them.
-  for (const piece of rolePieces)  await installRolePiece(piece);
+  // Install able pieces first so code resources can reference them.
+  for (const piece of ablePieces)  await installAblePiece(piece);
   // Install seed pieces next so plant-template-by-name finds them.
   for (const piece of seedPieces)  await installSeedPiece(piece);
   // Install asset pieces (needs the express app to mount the bundles).
@@ -942,15 +942,15 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
       }
 
       // The manifest's `provides.defaultPermissions` field retired with
-      // roles-are-auth (seed/RolesAreAuth.md). Extensions ship ROLES
+      // ables-are-auth (seed/AblesAreAuth.md). Extensions ship ABLES
       // whose canSee/canDo/canSummon/canBe lists ARE the gate, and
-      // grants flow through the grant-role DO op. If an old manifest
+      // grants flow through the grant-able DO op. If an old manifest
       // still declares this field, fail loud so we can audit.
       if (manifest.provides?.defaultPermissions) {
         const msg =
           `Extension "${manifest.name}" declares the retired ` +
-          `provides.defaultPermissions field. Author roles + grant ` +
-          `them via grant-role instead. See seed/RolesAreAuth.md.`;
+          `provides.defaultPermissions field. Author ables + grant ` +
+          `them via grant-able instead. See seed/AblesAreAuth.md.`;
         log.error("Extensions", msg);
         throw new Error(msg);
       }
@@ -1163,7 +1163,7 @@ function levenshtein(a, b) {
  * Validate a manifest object. Returns an array of error strings (empty = valid).
  */
 const VALID_KINDS = new Set([
-  "code", "role", "roleflow", "seed", "asset", "pack",
+  "code", "able", "flow", "seed", "asset", "pack",
 ]);
 
 function validateManifest(manifest, dirName) {
@@ -1174,7 +1174,7 @@ function validateManifest(manifest, dirName) {
   // RESOURCES.md: every manifest declares a kind. Defaults to "code"
   // when absent so older extension manifests still validate. The
   // legacy extension-only validator was code-kind-specific; non-code
-  // kinds (pack/role/seed/asset/roleflow) skip the code-only checks
+  // kinds (pack/able/seed/asset/flow) skip the code-only checks
   // (description-required, npm/provides shape, etc).
   const kind = manifest.kind || "code";
   if (!VALID_KINDS.has(kind)) {
@@ -1293,11 +1293,11 @@ function validateManifest(manifest, dirName) {
 //   - kind: "code"   → today's extension. Requires index.js. Goes
 //                      through the existing extension-load path.
 //   - kind: "pack"   → a meta-resource. The pack folder contains kind
-//                      subfolders (code/, roles/, roleflows/, seeds/,
+//                      subfolders (code/, ables/, flows/, seeds/,
 //                      assets/) each holding pieces. The loader recurses
 //                      into them to find pieces.
-//   - other kinds    → a standalone single-kind resource (role/seed/
-//                      asset/roleflow). Discovered but not yet loaded
+//   - other kinds    → a standalone single-kind resource (able/seed/
+//                      asset/flow). Discovered but not yet loaded
 //                      by this loader; kind handlers land in Phase 2b.
 //
 // Pieces inside a pack are also returned in the results list with their
@@ -1310,8 +1310,8 @@ function validateManifest(manifest, dirName) {
 // multiple pieces each in their own subfolder.
 const PACK_KIND_FOLDERS = [
   { folder: "code",      pieceKind: "code",     multiPiece: false },
-  { folder: "roles",     pieceKind: "role",     multiPiece: true  },
-  { folder: "roleflows", pieceKind: "roleflow", multiPiece: true  },
+  { folder: "ables",     pieceKind: "able",     multiPiece: true  },
+  { folder: "flows", pieceKind: "flow", multiPiece: true  },
   { folder: "seeds",     pieceKind: "seed",     multiPiece: true  },
   { folder: "assets",    pieceKind: "asset",    multiPiece: true  },
 ];
@@ -1421,7 +1421,7 @@ async function discoverManifests() {
           const pieces = await discoverPackPieces(resourceDir, entry.name);
           results.push(...pieces);
         } else {
-          // Standalone non-code/non-pack resource (role/seed/asset/roleflow).
+          // Standalone non-code/non-pack resource (able/seed/asset/flow).
           // Discovered but Phase 2b kind handlers haven't landed yet; the
           // load step below filters these out with a clear message.
           results.push({ manifest, dir: resourceDir, entryPath: null, kind });
@@ -1471,8 +1471,8 @@ async function discoverManifests() {
 // their own bare name (a future shape, no examples on disk today).
 // ---------------------------------------------------------------------------
 
-// Mirror of scopedStory.js's auto-prefix rule for role specs. A
-// pack-piece role spec writes bare action names (e.g. canDo: ["tick"]);
+// Mirror of scopedStory.js's auto-prefix rule for able specs. A
+// pack-piece able spec writes bare action names (e.g. canDo: ["tick"]);
 // the pack's namespace gets prefixed at registration so it matches the
 // ops the pack's code piece registered.
 function prefixSpecActions(spec, packName) {
@@ -1495,17 +1495,17 @@ function prefixSpecActions(spec, packName) {
   return out;
 }
 
-async function installRolePiece(entry) {
+async function installAblePiece(entry) {
   const { manifest, dir, pack } = entry;
-  const roleJsPath = path.join(dir, "role.js");
-  if (!fs.existsSync(roleJsPath)) {
-    log.warn("Loader", `Role piece "${manifest.name}" at ${dir}: missing role.js`);
+  const ableJsPath = path.join(dir, "able.js");
+  if (!fs.existsSync(ableJsPath)) {
+    log.warn("Loader", `Able piece "${manifest.name}" at ${dir}: missing able.js`);
     return;
   }
   try {
-    const mod = await import(toImportURL(roleJsPath));
-    // Find the role spec. Try default export first, then any named
-    // export whose value looks like a role spec (has a `name` field).
+    const mod = await import(toImportURL(ableJsPath));
+    // Find the able spec. Try default export first, then any named
+    // export whose value looks like a able spec (has a `name` field).
     let spec = mod.default;
     if (!spec || typeof spec !== "object") {
       const exports = Object.entries(mod).filter(([k]) => k !== "default");
@@ -1513,16 +1513,16 @@ async function installRolePiece(entry) {
       if (found) spec = found[1];
     }
     if (!spec || typeof spec !== "object") {
-      log.warn("Loader", `Role piece "${manifest.name}": role.js export shape not recognized`);
+      log.warn("Loader", `Able piece "${manifest.name}": able.js export shape not recognized`);
       return;
     }
     const fullName  = pack ? `${pack}:${manifest.name}` : manifest.name;
     const rewritten = prefixSpecActions({ ...spec, name: fullName }, pack);
-    const { registerRole } = await import("../seed/present/roles/registry.js");
-    registerRole(fullName, rewritten, pack || manifest.name);
-    log.info("Loader", `Registered role piece: ${fullName}`);
+    const { registerAble } = await import("../seed/present/ables/registry.js");
+    registerAble(fullName, rewritten, pack || manifest.name);
+    log.info("Loader", `Registered able piece: ${fullName}`);
   } catch (err) {
-    log.error("Loader", `Failed to load role piece "${manifest.name}": ${err.message}`);
+    log.error("Loader", `Failed to load able piece "${manifest.name}": ${err.message}`);
   }
 }
 
@@ -1930,13 +1930,13 @@ export async function uninstallExtension(name) {
         await import("../seed/ibp/seeOps.js");
       unregisterSeeOperationsFromExtension(name);
     } catch {}
-    // DELIBERATE asymmetry, not an omission: the extension's ROLES
+    // DELIBERATE asymmetry, not an omission: the extension's ABLES
     // stay registered on uninstall. Grants already given reference
     // them by name; yanking the def mid-flight would orphan granted
-    // rows. Ungranted roles are inert; operators retire them
-    // explicitly via unregisterRole / delete-role. (The old default-
-    // permissions registry itself retired with roles-are-auth —
-    // seed/RolesAreAuth.md.)
+    // rows. Ungranted ables are inert; operators retire them
+    // explicitly via unregisterAble / delete-able. (The old default-
+    // permissions registry itself retired with ables-are-auth —
+    // seed/AblesAreAuth.md.)
   }
 
   // Refresh confined extensions set. The removed extension might have been

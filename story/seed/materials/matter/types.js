@@ -8,7 +8,7 @@
 // extensions are how new types arrive. A type declares what the
 // matter IS (content kinds it may carry) and what may be DONE with it
 // (the DO ops that apply — the descriptor advertises them as the
-// matter's actions, the role-walk gates them per caller). The verbs
+// matter's actions, the able-walk gates them per caller). The verbs
 // stay uniform; the implementations vary by type.
 //
 // `type` is orthogonal to `origin`:
@@ -30,11 +30,11 @@
 //   op.matterTypes     — enforcement. An op registered with
 //                        `matterTypes: [...]` refuses to run against
 //                        matter of any other type (gate in doVerb).
-//   create-matter auth — refined per-type: the role-walk sees
+//   create-matter auth — refined per-type: the able-walk sees
 //                        `create-matter:<type>` so canDo entries can
-//                        scope which types a role may bring into the
+//                        scope which types a able may bring into the
 //                        world (bare `create-matter` still matches —
-//                        same namespace semantics as grant-role:<role>).
+//                        same namespace semantics as grant-able:<able>).
 
 import log from "../../seedStory/log.js";
 import { resolveTypeFromFold } from "../../present/word/wordStore.js";

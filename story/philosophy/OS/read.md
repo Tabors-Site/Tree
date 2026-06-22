@@ -1,10 +1,10 @@
 Right, you're catching a real distinction I was collapsing. Let me untangle it because the two operations serve different purposes and the architecture should support both cleanly.
 Two different operations
 Graft (the new shape we've been discussing): transport an actual entity with its identity preserved. The being who arrives IS that being — same key, same chain, same history. They're not a copy; they're the same person now in a new place. Federation, succession, migration all use this shape.
-Seed (the template/world-building operation): take the structure of something — a space layout, a role bundle, a configured environment — and plant a new instance of it in your reality. The instance is new (new ids, fresh chains) but shaped like the template. World templates, extension distributions, community blueprints all use this shape.
+Seed (the template/world-building operation): take the structure of something — a space layout, a able bundle, a configured environment — and plant a new instance of it in your reality. The instance is new (new ids, fresh chains) but shaped like the template. World templates, extension distributions, community blueprints all use this shape.
 These are fundamentally different. Graft preserves identity. Seed creates new instances from patterns. Conflating them was my error in the previous response.
 Why both are needed
-Extension authors need seed. Someone builds a community-reality template — spaces laid out a certain way, default roles configured, starter content in place. They want to publish this as something others can instantiate. Each instantiation is a new community, with its own identity, but shaped like the template. The template author shouldn't have their being's identity preserved across every instance — that would be weird and wrong. Each new community has its own founders, its own I_AM, its own beings.
+Extension authors need seed. Someone builds a community-reality template — spaces laid out a certain way, default ables configured, starter content in place. They want to publish this as something others can instantiate. Each instantiation is a new community, with its own identity, but shaped like the template. The template author shouldn't have their being's identity preserved across every instance — that would be weird and wrong. Each new community has its own founders, its own I_AM, its own beings.
 Beings and realities need graft. When alice migrates from substrate A to substrate B, she IS alice. Her identity is preserved cryptographically. Her chain travels with her. She's not "an alice-shaped being shaped like the original alice" — she's the original alice, now hosted somewhere else.
 You need both operations because they answer different questions:
 
@@ -13,11 +13,11 @@ Seed answers: how do patterns and structures get reused across realities?
 
 What seed becomes under the new architecture
 Seed under content addressing and crypto identity is interesting. Let me work through it.
-A seed is a template. It contains structure (spaces, roles, configurations) but its instantiation produces new identities in the target reality. The structure is the artifact; the identities are fresh.
+A seed is a template. It contains structure (spaces, ables, configurations) but its instantiation produces new identities in the target reality. The structure is the artifact; the identities are fresh.
 Concretely, a seed package contains:
 
 The structural layout (spaces and their relationships, but without their specific identifiers — these get fresh ones on plant).
-The role definitions (the patterns of what roles look like, with fresh role-being identities on plant).
+The able definitions (the patterns of what ables look like, with fresh able-being identities on plant).
 The default matter (matter content can be content-addressed and shared — same content, same hash, deduplicated naturally).
 The configuration values (settings, defaults, parameters).
 Optionally, scripts or behaviors that should run on planting.
@@ -31,7 +31,7 @@ The template author's identity bound to the instances (the template was authored
 When you plant a seed, the receiving reality:
 
 Creates new spaces with new opaque handles.
-Instantiates the role patterns with fresh role-being identities.
+Instantiates the able patterns with fresh able-being identities.
 Imports the default matter (content-addressed, so dedup is automatic).
 Applies the configuration.
 Records the planting as a fact: "at this moment, seed X was planted, here's the resulting structure."
@@ -51,7 +51,7 @@ How extension authors use this
 Extension authors publish templates as seeds. Their value proposition is:
 
 "Here's a community structure designed for X" → people plant the seed, get a new community shaped that way.
-"Here's a role pattern for Y" → people plant the seed, get those roles configured in their reality.
+"Here's a able pattern for Y" → people plant the seed, get those ables configured in their reality.
 "Here's a starter world for Z use case" → people plant the seed, get a populated world to begin from.
 
 The seed is content-addressed (the template has an identity). The instances are fresh (each has its own identity).
@@ -90,7 +90,7 @@ Refuse duplicates by public key; merge compatible additional history.
 
 Seed operations:
 
-Package a template with structure, role patterns, default matter, configuration.
+Package a template with structure, able patterns, default matter, configuration.
 Hash the template; the hash is its identity.
 Plant operations create fresh instances in the receiving reality.
 The template is content-addressed; instances have their own identities.
@@ -153,7 +153,7 @@ Each has tradeoffs. Merkle proofs are mathematically rigorous but require the pr
 In practice, the substrate probably wants to support multiple mechanisms — the partial graft tooling lets the exporter choose what kind of partial extract they're producing, and the bundle indicates what verification it supports.
 What gets lost in partial graft
 A few things to be honest about:
-Earlier authority might not be visible. If a being was granted a role at fact #200 and the partial graft starts at fact #500, the destination doesn't see the grant. The being might have legitimate authority that isn't proven in the partial extract.
+Earlier authority might not be visible. If a being was granted a able at fact #200 and the partial graft starts at fact #500, the destination doesn't see the grant. The being might have legitimate authority that isn't proven in the partial extract.
 The handling: the partial graft can include the grant fact explicitly (snapshotted) even if it's outside the main extract window. The bundle says "these are the contiguous facts I'm bringing, plus these specific anchors from before that establish my current state."
 Relationships might dangle. A being's acts reference other beings. If the partial graft includes facts that reference beings not in the destination's known-beings, those references are dangling. The handling: include the referenced beings' public keys (just identity, not full chains) as part of the bundle. The destination knows the references; it just doesn't have full information about the referenced beings.
 State derivation might be incomplete. The being's current state (their properties, their qualities) is derived from folding their full chain. With a partial chain, the destination can only fold what's there. The fold might produce a different (less complete) state than the full chain would produce.

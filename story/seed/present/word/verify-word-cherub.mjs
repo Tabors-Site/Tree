@@ -112,7 +112,7 @@ try {
     kind: "act", verb: "be", act: "form-being", by: "Cherub", bind: "child",
     params: {
       name: "worduser", password: "wordpass", cognition: "human",
-      defaultRole: "human", parentBeingId: String(cherub.id),
+      defaultAble: "human", parentBeingId: String(cherub.id),
       homeId: String(spaceRoot._id),
       // trueName omitted: a fresh Name must be NAME-declared first (its own slice);
       // birthBeing defaults to the (declared) mother Name, so the birth path runs.
@@ -133,12 +133,12 @@ try {
   String(birthFact?.params?.parentBeingId) === String(cherub.id)
     ? ok(`be:birth parents to cherub`) : bad(`be:birth parents to cherub`, `parent=${birthFact?.params?.parentBeingId}`);
 
-  // one act, many facts: birthBeing also lays the inherited + global role grants
+  // one act, many facts: birthBeing also lays the inherited + global able grants
   const grants = moment.deltaF.filter(
-    (f) => f.verb === "do" && f.act === "grant-role" && f.of?.id === birthFact?.of?.id,
+    (f) => f.verb === "do" && f.act === "grant-able" && f.of?.id === birthFact?.of?.id,
   );
   grants.length >= 1
-    ? ok(`birthBeing laid ${grants.length} role grant(s) on the new being`) : bad(`role grants laid`, "none");
+    ? ok(`birthBeing laid ${grants.length} able grant(s) on the new being`) : bad(`able grants laid`, "none");
 
   // seal the moment, then confirm the being materializes from the chain
   await sealFacts(moment.deltaF);

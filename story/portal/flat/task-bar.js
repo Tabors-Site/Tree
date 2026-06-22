@@ -9,10 +9,10 @@
 //   History  — the history lifecycle (fork, merge, pause, pointers)
 //              plus clone (download) and graft (paste-in).
 //   Place    — what acts on the space you're standing in (create
-//              space/matter, move, plant, roles, render, delete).
+//              space/matter, move, plant, ables, render, delete).
 //   @being   — appears when the IBPA's right stance carries a being
 //              (clicked in ANY view): chat, inspect, the being's
-//              summon intents, and its role's verb actions.
+//              summon intents, and its able's verb actions.
 //
 // The inbox (your work queue) rides the right edge of the bar.
 //
@@ -23,7 +23,7 @@
 import { flat, refreshInboxCount } from "./host.js";
 import { openChatFor } from "./chat.js";
 import { renderOpForm } from "../shared/op-form.js";
-import { renderRolesPanel } from "./roles-panel.js";
+import { renderAblesPanel } from "./ables-panel.js";
 import { renderLlmPanel } from "./llm-panel.js";
 import { renderInboxPanel } from "./inbox-panel.js";
 import { renderMatterComposer } from "./matter-composer.js";
@@ -235,8 +235,8 @@ function openAction(action, opByName) {
   if (action.special === "close-story") {
     return renderCloseStory(body, action, opByName);
   }
-  if (action.special === "roles") {
-    return renderRolesPanel(body, action, opByName, { refreshView });
+  if (action.special === "ables") {
+    return renderAblesPanel(body, action, opByName, { refreshView });
   }
   if (action.special === "llm") {
     return renderLlmPanel(body, action, opByName, { refreshView, mode: "place" });
@@ -577,7 +577,7 @@ function _renderHistoryInfoFields(container, path, graph, err) {
 // ── being actions (the @being menu) ────────────────────────────────
 //
 // World-driven, same rule as the 3D action menu: the portal doesn't
-// know what a being does — it renders the summon intents the role
+// know what a being does — it renders the summon intents the able
 // declares (canSummon as:"receiver") and the verb actions[] the
 // descriptor carries, plus the universal four: chat, inspect, facts,
 // acts. Dispatch is against the IBPA stance the bar shows.
@@ -616,7 +616,7 @@ function beingActions(entry, stance) {
 }
 
 // Intent-qualified summon: one content field, dispatched with the
-// envelope intent the receiver's role declared.
+// envelope intent the receiver's able declared.
 function renderIntentSummon(body, action) {
   const op = {
     name: `summon (${action.intent})`,
@@ -685,12 +685,12 @@ function placeActions(address, desc) {
     { label: "move something", op: "move", address },
     { label: "plant a seed", op: "plant", address },
     { label: "set render", op: "set-render", address },
-    { label: "delete role", op: "delete-role", address },
-    // Roles panel: roles in effect at this position (walk ancestor
-    // qualities.roles), the viewer's held grants that reach here,
-    // and an author-role form for owners. Replaces the retired
-    // qualities.permissions panel. See roles-panel.js.
-    { label: "roles", special: "roles", address, values: { descriptor: desc } },
+    { label: "delete able", op: "delete-able", address },
+    // Ables panel: ables in effect at this position (walk ancestor
+    // qualities.ables), the viewer's held grants that reach here,
+    // and an author-able form for owners. Replaces the retired
+    // qualities.permissions panel. See ables-panel.js.
+    { label: "ables", special: "ables", address, values: { descriptor: desc } },
     // LLM panel: the 7-step chain preview + connection management +
     // per-being / per-space slot assignments + force flags. Anyone can
     // configure their own being; the space + story writes are
@@ -725,15 +725,15 @@ function storyActions(address) {
     { label: "form seed of story", op: "capture-graft", address },
     { label: "set config", op: "set-config", address },
     { label: "delete config", op: "delete-config", address },
-    // Story-level roles. The story root hosts the foundational
-    // roles (global, human, arrival, cherub, ...) in qualities.roles.
-    // Same panel as the place-tab "roles" entry, just rooted at /.
+    // Story-level ables. The story root hosts the foundational
+    // ables (global, human, arrival, cherub, ...) in qualities.ables.
+    // Same panel as the place-tab "ables" entry, just rooted at /.
     // Owners of the story root (the I-Am + anointed angels) get the
-    // author-role form for system-wide roles.
-    { label: "roles (story-wide)", special: "roles", address },
+    // author-able form for system-wide ables.
+    { label: "ables (story-wide)", special: "ables", address },
     // Story-level LLM. Angels can configure the floor every chain
     // falls through to at step 4 (qualities.llm on the story root):
-    // default fallback list, per-role slots, force flags.
+    // default fallback list, per-able slots, force flags.
     { label: "llm (story defaults)", special: "llm-story", address },
     { label: "⚠ close story (exit server)", op: "close-story", special: "close-story", address, danger: true },
   ];

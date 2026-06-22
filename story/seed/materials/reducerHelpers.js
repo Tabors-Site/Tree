@@ -32,7 +32,7 @@ const QUALITIES_PREFIX = "qualities.";
 // verb separates the intent (an audit-trail "rename") from the bare
 // scalar write, but the fold is the same one-field update on the
 // matter row's name. See materials/matter/ops.js renameMatterHandler.
-const SET_ACTIONS = new Set(["set-space", "set-being", "set-matter", "set-model", "rename-matter", "set-render", "set-being-roleflow"]);
+const SET_ACTIONS = new Set(["set-space", "set-being", "set-matter", "set-model", "rename-matter", "set-render", "set-being-flow", "set-owner", "remove-owner"]);
 const CREATE_ACTIONS = new Set(["create-space", "create-matter"]);
 
 // Plain scalar/array fields the `do:set` op writes on a single
@@ -42,8 +42,8 @@ const CREATE_ACTIONS = new Set(["create-space", "create-matter"]);
 //
 // `owner` is the one authority-bearing structural field on a Space —
 // setSpaceOwner / removeSpaceOwner stamp through here just like any
-// other scalar. Every other authority shape lives in qualities.roles
-// + qualities.rolesGranted per seed/RolesAreAuth.md.
+// other scalar. Every other authority shape lives in qualities.ables
+// + qualities.ablesGranted per seed/AblesAreAuth.md.
 //
 // A parent reassignment is one write on one aggregate now; downward
 // walks query by parent / parentBeingId, no cross-aggregate update
@@ -61,7 +61,7 @@ const SCALAR_SET_FIELDS = new Set([
   // longer lives here as a schema field — it's at
   // qualities.cognition.defaultKind and writes through the qualities
   // path, not SCALAR_SET_FIELDS.
-  "defaultRole",
+  "defaultAble",
   "homeSpace",
   "homeHistory",
   // password: bcrypt hash. credential-reset (and any future flow that
@@ -162,8 +162,8 @@ export function applySetQualities(state, fact) {
       return state;
     }
     // Arrays-as-namespace are legal but only as a replacement (merge has
-    // no defined meaning for an array). roleFlow is the canonical case:
-    // an ordered list of clauses lives at qualities.roleFlow directly.
+    // no defined meaning for an array). flow is the canonical case:
+    // an ordered list of clauses lives at qualities.flow directly.
     // Callers writing an array must pass merge:false.
     if (Array.isArray(value)) {
       if (merge) return state;
@@ -295,7 +295,7 @@ export function applyConnectionState(state, fact) {
  *
  * Death is the being's final lifecycle act (seed/done/DualBeingParents).
  * One-way: once stamped, the being's act-chain is locked, no new BE
- * ops are accepted, summons refuse, role grants refuse. Past acts and
+ * ops are accepted, summons refuse, able grants refuse. Past acts and
  * past grants remain valid (facts at the time stand; later closure
  * doesn't retroactively invalidate them).
  *
@@ -317,7 +317,7 @@ export function applyConnectionState(state, fact) {
  * `coord`, and `qualities.connection.inhabitedBy`. The dead being
  * stops appearing in any place's beingsAtSpace lookup without a
  * per-call filter; SEE just doesn't see them anywhere. Identity-
- * level state (name, defaultRole, rolesGranted, homeSpace,
+ * level state (name, defaultAble, ablesGranted, homeSpace,
  * parentBeingId) stays — the being remains queryable as history.
  *
  * @param {object} state
@@ -378,21 +378,21 @@ export function applyTrueName(state, fact) {
 }
 
 /**
- * Apply do:grant-role / do:revoke-role facts to the being's
- * qualities.rolesGranted projection (seed/RolesAreAuth.md).
+ * Apply do:grant-able / do:revoke-able facts to the being's
+ * qualities.ablesGranted projection (seed/AblesAreAuth.md).
  *
  * Grant facts append a new entry; revoke facts remove the matching
- * tuple. Uniqueness is on (role, anchorSpaceId|anchorBeingId, grantedBy);
+ * tuple. Uniqueness is on (able, anchorSpaceId|anchorBeingId, grantedBy);
  * duplicate grants from different grantors live as separate entries
  * and survive each other's revocations independently.
  *
  * Fact shape for both:
  *   {
  *     verb:   "do",
- *     action: "grant-role" | "revoke-role",
+ *     action: "grant-able" | "revoke-able",
  *     target: { kind: "being", id: <granteeBeingId> },
  *     params: {
- *       role:          <roleName>,
+ *       able:          <ableName>,
  *       anchorSpaceId: <spaceId | null>,
  *       anchorBeingId: <beingId | null>,
  *       grantedBy:     <grantorBeingId>,
@@ -401,25 +401,25 @@ export function applyTrueName(state, fact) {
  *   }
  *
  * Grants: at most one anchor field populated; the other null.
- * Revocations match by (role, both-anchor-keys, grantedBy) — caller
+ * Revocations match by (able, both-anchor-keys, grantedBy) — caller
  * must identify the specific grant to revoke (mirrors subscriptions).
  */
-export function applyRoleGrants(state, fact) {
+export function applyAbleGrants(state, fact) {
   if (fact?.verb !== "do") return state;
-  // A role grant folds from WHICHEVER act granted it: an explicit do:grant-role, or a being
-  // TAKING (do:take-role) / being granted via ASK (do:ask-role). Take/ask ALWAYS stamp their
+  // A able grant folds from WHICHEVER act granted it: an explicit do:grant-able, or a being
+  // TAKING (do:take-able) / being granted via ASK (do:ask-able). Take/ask ALWAYS stamp their
   // act (every act makes a fact) but carry the grant record (grantedBy/grantedAt) ONLY when
   // they actually granted — the no-grant paths (an idempotent re-take, a queued ask) stamp
   // the act with no grantedBy, so the `!grantedBy` guard below stops them here (nothing folds).
   const isGrant  =
-    fact.act === "grant-role" || fact.act === "take-role" || fact.act === "ask-role";
-  const isRevoke = fact.act === "revoke-role";
+    fact.act === "grant-able" || fact.act === "take-able" || fact.act === "ask-able";
+  const isRevoke = fact.act === "revoke-able";
   if (!isGrant && !isRevoke) return state;
   if (fact?.of?.kind !== "being") return state;
   const params = fact?.params;
   if (!params || typeof params !== "object") return state;
-  const role = params.role;
-  if (typeof role !== "string" || !role.length) return state;
+  const able = params.able;
+  if (typeof able !== "string" || !able.length) return state;
   const anchorSpaceId = params.anchorSpaceId || null;
   const anchorBeingId = params.anchorBeingId || null;
   if (!anchorSpaceId && !anchorBeingId) return state;
@@ -427,15 +427,15 @@ export function applyRoleGrants(state, fact) {
   if (!grantedBy) return state;
 
   const existingQualities = state.qualities || {};
-  const existing = Array.isArray(existingQualities.rolesGranted)
-    ? existingQualities.rolesGranted
+  const existing = Array.isArray(existingQualities.ablesGranted)
+    ? existingQualities.ablesGranted
     : [];
 
   if (isGrant) {
     const grantedAt = params.grantedAt || fact.date?.toISOString?.() || null;
     // Dedupe by the uniqueness tuple — re-emit is idempotent.
     const alreadyHas = existing.some(
-      (e) => e.role === role
+      (e) => e.able === able
         && (e.anchorSpaceId || null) === anchorSpaceId
         && (e.anchorBeingId || null) === anchorBeingId
         && (e.grantedBy || null) === grantedBy,
@@ -444,7 +444,7 @@ export function applyRoleGrants(state, fact) {
     const next = [
       ...existing,
       {
-        role,
+        able,
         anchorSpaceId,
         anchorBeingId,
         grantedBy,
@@ -453,14 +453,14 @@ export function applyRoleGrants(state, fact) {
     ];
     return {
       ...state,
-      qualities: { ...existingQualities, rolesGranted: next },
+      qualities: { ...existingQualities, ablesGranted: next },
     };
   }
 
   // Revoke: drop the matching entry. If none matches, no-op.
   const filtered = existing.filter(
     (e) => !(
-      e.role === role
+      e.able === able
       && (e.anchorSpaceId || null) === anchorSpaceId
       && (e.anchorBeingId || null) === anchorBeingId
       && (e.grantedBy || null) === grantedBy
@@ -469,7 +469,7 @@ export function applyRoleGrants(state, fact) {
   if (filtered.length === existing.length) return state;
   return {
     ...state,
-    qualities: { ...existingQualities, rolesGranted: filtered },
+    qualities: { ...existingQualities, ablesGranted: filtered },
   };
 }
 
@@ -479,13 +479,13 @@ export function applyCreateBeing(state, fact) {
   const spec = fact?.params;
   if (!spec || typeof spec !== "object") return state;
 
-  const defaultRole = spec.defaultRole || spec.role || null;
+  const defaultAble = spec.defaultAble || spec.able || null;
 
   return {
     ...state,
     name:          spec.name,
     password:      spec.password,
-    defaultRole,
+    defaultAble,
     // The trueName this presence expresses (the mother's trueName at
     // birth; host-transferable later). Folds from the be:birth spec.
     trueName:      spec.trueName ?? null,

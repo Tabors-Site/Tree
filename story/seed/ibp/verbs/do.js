@@ -149,11 +149,11 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     const identity = opts.identity;
     // Auth target ≠ audit target. The Fact lands on whatever reel the
     // op declares (being's reel, matter's reel, space's reel — that's
-    // `resolveAuditTarget`). authorize() (the role-walk; see
-    // seed/RolesAreAuth.md) takes whatever target the caller passed.
+    // `resolveAuditTarget`). authorize() (the able-walk; see
+    // seed/AblesAreAuth.md) takes whatever target the caller passed.
     // For non-space targets we still resolve to the Space the entity
-    // lives at so the role-walk has a coherent path/spaceId to match
-    // against role.reach + role host coverage.
+    // lives at so the able-walk has a coherent path/spaceId to match
+    // against able.reach + able host coverage.
     const auditTarget = resolveAuditTarget(target, null, op);
     const spaceIdForAuth = await resolveAuthSpaceId(
       target,
@@ -176,11 +176,11 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     ) {
       namespace = params.field.slice("qualities.".length).split(".")[0];
     }
-    // The action the role-walk matches against canDo. By default the
+    // The action the able-walk matches against canDo. By default the
     // operation name; an op may declare `authAction(ctx)` to refine
-    // it with parameter context — grant-role authorizes as
-    // `grant-role:<roleName>` so a role's canDo can name WHICH roles
-    // it may grant (`grant-role:human`) instead of all-or-nothing.
+    // it with parameter context — grant-able authorizes as
+    // `grant-able:<ableName>` so a able's canDo can name WHICH ables
+    // it may grant (`grant-able:human`) instead of all-or-nothing.
     // Open to extension ops the same way.
     let authAction = operation;
     if (typeof op.authAction === "function") {
@@ -201,7 +201,7 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
       namespace,
       // The being this DO acts ON (when it's a being op). authorize uses
       // it for the inheritation-coverage fallback: a Name with authority
-      // over this being's tree-subtree may act on it even without a role
+      // over this being's tree-subtree may act on it even without a able
       // grant. Null for space/matter ops (no being-tree position).
       auditBeingId:
         auditTarget && auditTarget.kind === "being" && auditTarget.id
@@ -338,9 +338,9 @@ doVerb.listOperations = listOperations;
  *
  * Audit and auth are different targets. The audit fact lands on the
  * op's reel (Being / Matter / Space — whichever the op writes). The
- * role-walk authorize (seed/RolesAreAuth.md) reaches a target via
+ * able-walk authorize (seed/AblesAreAuth.md) reaches a target via
  * spaceId + path; for ops on Beings or Matter we map to the Space
- * the entity lives at so the role's reach can be evaluated against a
+ * the entity lives at so the able's reach can be evaluated against a
  * concrete position.
  *
  * Mapping:
@@ -350,7 +350,7 @@ doVerb.listOperations = listOperations;
  *   String id     → look up — first Space, then Being, then Matter
  *
  * Returns null when nothing resolves (rare; the auth chain falls
- * through to the story root via getSpaceRootId in the role-walk).
+ * through to the story root via getSpaceRootId in the able-walk).
  */
 async function resolveAuthSpaceId(target, auditTarget, history) {
   // The audit target's kind tells us what to look up. When the

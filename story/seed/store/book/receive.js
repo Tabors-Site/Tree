@@ -200,13 +200,13 @@ async function receiveWords(words, body, opts, landed) {
 
   let count = 0;
   for (const def of list) {
-    const name = def.name ?? (def.role && def.op ? `${def.role}:${def.op}` : null);
+    const name = def.name ?? (def.able && def.op ? `${def.able}:${def.op}` : null);
     if (!name) continue;
     // Build the serializable binding (handlers are refs {ref:'…'}, never inline fns — JSON drops them).
     const binding = {
       ...(def.binding || {}),
       ...(def.kind ? { kind: def.kind } : {}),
-      ...(def.role ? { role: def.role } : {}),
+      ...(def.able ? { able: def.able } : {}),
       ...(def.op ? { op: def.op } : {}),
       ...(def.source ? { source: String(def.source) } : {}),
       ownerExtension: def.ownerExtension || "received",

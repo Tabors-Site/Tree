@@ -157,7 +157,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     }
     const childCognition = payload?.cognition || "llm";
     const childPassword = payload?.password || null;
-    const childRoleField = payload?.role || payload?.defaultRole || null;
+    const childAbleField = payload?.able || payload?.defaultAble || null;
     let childHomeId = payload?.homeId || payload?.homeSpace || null;
     if (!childHomeId) {
       // Caller's own data reads from the caller's history; see the
@@ -186,7 +186,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       parentBeingId: String(identity.beingId), // mother is the caller
       homeId: String(childHomeId),
     };
-    if (childRoleField) childSpec.role = childRoleField;
+    if (childAbleField) childSpec.able = childAbleField;
     const result = await birthBeing({
       spec: childSpec,
       identity,
@@ -212,7 +212,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   // Birther serves authenticated callers: an existing being calls
   // BE:birth on @birther to mint a CHILD. The new being's being-tree
   // parent is the caller, not birther. Same BE op, different target,
-  // different parent semantics. See seed/present/roles/birther/role.js.
+  // different parent semantics. See seed/present/ables/birther/able.js.
   if (operation === "birth" && beingName === "birther") {
     assertVerbCaller("be", opts);
     if (!identity?.beingId) {
@@ -245,7 +245,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     }
 
     // Mint the child. Spec carries the caller-supplied name + optional
-    // cognition/role/password; parentBeingId is the caller's beingId.
+    // cognition/able/password; parentBeingId is the caller's beingId.
     //
     // Home policy: the child's homeSpace defaults to the CALLER's
     // homeSpace (move-in, no new space minted). Operators can move the
@@ -255,31 +255,31 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     const childName = payload?.name;
     const childCognition = payload?.cognition || "llm"; // substrate default
     const childPassword = payload?.password || null;
-    const childRoleField = payload?.role || payload?.defaultRole || null;
-    // Initial roleFlow: when the operator wants the child born with a
+    const childAbleField = payload?.able || payload?.defaultAble || null;
+    // Initial flow: when the operator wants the child born with a
     // configured behavioral program (the spec's Step 5 birther flow:
-    // "Set initial roleFlow. Set initial cognition."). Accepts either
+    // "Set initial flow. Set initial cognition."). Accepts either
     // a parsed array or a JSON string; createBeing's qualities
-    // pipeline lands it at qualities.roleFlow.
-    let childRoleFlow = null;
-    if (Array.isArray(payload?.roleFlow)) {
-      childRoleFlow = payload.roleFlow;
+    // pipeline lands it at qualities.flow.
+    let childFlow = null;
+    if (Array.isArray(payload?.flow)) {
+      childFlow = payload.flow;
     } else if (
-      typeof payload?.roleFlow === "string" &&
-      payload.roleFlow.trim()
+      typeof payload?.flow === "string" &&
+      payload.flow.trim()
     ) {
       try {
-        childRoleFlow = JSON.parse(payload.roleFlow);
+        childFlow = JSON.parse(payload.flow);
       } catch (e) {
         throw new IbpError(
           IBP_ERR.INVALID_INPUT,
-          `BE:birth: roleFlow must be a valid JSON array (parse error: ${e.message})`,
+          `BE:birth: flow must be a valid JSON array (parse error: ${e.message})`,
         );
       }
-      if (!Array.isArray(childRoleFlow)) {
+      if (!Array.isArray(childFlow)) {
         throw new IbpError(
           IBP_ERR.INVALID_INPUT,
-          "BE:birth: roleFlow must be an array of clauses",
+          "BE:birth: flow must be an array of clauses",
         );
       }
     }
@@ -371,8 +371,8 @@ export async function beVerb(operation, payload = {}, opts = {}) {
       parentBeingId: String(identity.beingId),
       homeId: String(childHomeId),
     };
-    if (childRoleField) childSpec.role = childRoleField;
-    if (childRoleFlow) childSpec.roleFlow = childRoleFlow;
+    if (childAbleField) childSpec.able = childAbleField;
+    if (childFlow) childSpec.flow = childFlow;
 
     const result = await birthBeing({
       spec: childSpec,
@@ -410,7 +410,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     assertVerbCaller("be", opts);
     // The .word owns the op gate (no-caller) + the be:release FACT (clears inhabitedBy); the cherub
     // handler keeps the HOST session effects (lockSigning the being-keyed latch + seatHistory for the
-    // transport's re-seat). authorize() is the verb-level role-walk, kept here like do.js. The
+    // transport's re-seat). authorize() is the verb-level able-walk, kept here like do.js. The
     // dispatcher stamps the one be:release fact from the word's _factParams. No inline op-validation.
     const decision = await authorize({
       identity,
@@ -460,7 +460,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   // ── Switch path. ────────────────────────────────────────────────
   // BE:switch is a per-session history change on the caller's own
   // being. Self-targeted (the actor is the target). Authorize
-  // trivially — a being switching their own session's history; no role
+  // trivially — a being switching their own session's history; no able
   // gate beyond assertVerbCaller. The handler validates the
   // destination (history exists, live, and the caller folds to a
   // birthed state there) and returns the from/to summary; it never
@@ -473,7 +473,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   if (operation === "switch") {
     assertVerbCaller("be", opts);
     // The .word owns the op gates (no-caller, no-history, destination-missing/paused, being-lives-on)
-    // + the cross-history fact. NO authorize() — switching your OWN session's history needs no role
+    // + the cross-history fact. NO authorize() — switching your OWN session's history needs no able
     // gate. The handler runs switch.word; the dispatcher stamps the one be:switch fact from the word's
     // _factParams ON THE DESTINATION HISTORY (result.toHistory). No inline op-validation.
     const switchOp = resolveBeOpFromFold("switch");
@@ -507,7 +507,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   }
 
   // BE:death targets the dying being directly (not cherub-on-itself).
-  // Authorize via the role-walk (I_AM bypass admits I_AM; no role
+  // Authorize via the able-walk (I_AM bypass admits I_AM; no able
   // today declares canBe:["death"], so every other actor refuses).
   // The handler returns a closing summary; writeBeFact stamps a
   // be:death fact on the target's reel. The reducer's applyDeath
@@ -515,7 +515,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   // refuses any further facts riding this being.
   if (operation === "death") {
     assertVerbCaller("be", opts);
-    // The kill AUTHORITY is the verb-level role-walk (the host's being-tree authority over the
+    // The kill AUTHORITY is the verb-level able-walk (the host's being-tree authority over the
     // target) — it stays here, like do.js's authorize, run BEFORE the op. death.word owns the op
     // gates (caller, target, target-exists) + builds the fact params; the BE dispatcher stamps the
     // one be:death fact from them. NO inline op-validation: the Word is the source.
@@ -563,7 +563,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
 
   // ── be:truename — hand a being to a (declared) Name. ────────────
   // Identity-level: re-point the target being's trueName at an EXISTING,
-  // non-banished Name. OPEN for now (assertVerbCaller only, NO role-walk —
+  // non-banished Name. OPEN for now (assertVerbCaller only, NO able-walk —
   // mirror the NAME verb); owner-only is a permission added later. The
   // be:truename fact lands on the TARGET being's reel; the new nameId rides
   // params.trueName (the fact target stays {kind:being}, satisfying
@@ -747,10 +747,10 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     // declareConnectFact declares the fact's params/target on the auth result, the keystone reads
     // verb+noun from the binding. birth stamps NOTHING here: cherub's birth handler delegates to
     // birthBeing, which ALREADY stamped the canonical be:birth on the new being's reel with the full
-    // spec (homeSpace, defaultRole, parentBeingId, qualities, …) — its single, direct stamp IS the
+    // spec (homeSpace, defaultAble, parentBeingId, qualities, …) — its single, direct stamp IS the
     // keystone-shaped be:birth (verb:be / act:birth / of:being / params:spec). A second stamp here
     // would duplicate it as { name, from } and the reducer would clobber the freshly-set state
-    // (homeSpace/defaultRole/parentBeingId → null), leaving the just-born being homeless. One stamp.
+    // (homeSpace/defaultAble/parentBeingId → null), leaving the just-born being homeless. One stamp.
     if (operation === "connect") {
       const { factResult, through } = declareConnectFact(result, { identity, payload });
       await emitWordFact(
@@ -766,7 +766,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   // No dispatch matched. BE is the closed birth/connect/release/
   // switch/death set; unknown ops throw ACTION_NOT_SUPPORTED. Known
   // ops against a being that's neither cherub nor birther (and so
-  // didn't hit the branches above) throw ROLE_UNAVAILABLE.
+  // didn't hit the branches above) throw ABLE_UNAVAILABLE.
   if (!beOp) {
     throw new IbpError(
       IBP_ERR.ACTION_NOT_SUPPORTED,
@@ -775,7 +775,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     );
   }
   throw new IbpError(
-    IBP_ERR.ROLE_UNAVAILABLE,
+    IBP_ERR.ABLE_UNAVAILABLE,
     `No being @${beingName} handles BE ${operation} on this story`,
     { beingName, operation },
   );
@@ -825,7 +825,7 @@ function declareConnectFact(result, { identity, payload }) {
 }
 
 // (runClaim retired . both modes (credentials, token re-claim) now
-//  live inside the `use` handler in cherub/role.js.)
+//  live inside the `use` handler in cherub/able.js.)
 
 // Pull the story prefix off an address, if any. Lets beVerb refuse
 // addresses pointing at a different story before any auth runs.

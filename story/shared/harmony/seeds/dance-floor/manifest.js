@@ -12,8 +12,8 @@ export default {
   description:
     "The dance-floor world: 10x10 grid, drum, drummer, five LLM dancers, drum-tick subscription wiring, drummer wake schedule. ~30 static facts.",
   requires: [
-    { type: "role", ref: "harmony:drummer"    },
-    { type: "role", ref: "harmony:dancer-llm" },
+    { type: "able", ref: "harmony:drummer"    },
+    { type: "able", ref: "harmony:dancer-llm" },
     { type: "code", ref: "harmony"            },
   ],
 };

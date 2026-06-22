@@ -2,7 +2,7 @@
 //
 // Validates the three engine capabilities the sun needs: a state/fold (ctx.state),
 // watches over state (when: { state: {...} }), and the driver (the wheel). The
-// rhythm is a choq: each phase is a role's law whose act advances the state, and
+// rhythm is a choq: each phase is a able's law whose act advances the state, and
 // the next phase's watch was waiting on that state. Coupling, not a clock:
 //   dawn -> Sun rises -> day -> Sun sets -> dusk -> Moon rises -> night -> Moon sets -> dawn ...
 // The gardener is a rider: it waters when it is day, acting on the state without
@@ -16,9 +16,9 @@ const phase = (sky, by, op, becomes) => ({
 
 export const sun = [
   { kind: "is", subject: "sky", isA: "space" },
-  { kind: "is", subject: "sun", isA: "role", scope: "sky" },
-  { kind: "is", subject: "moon", isA: "role", scope: "sky" },
-  { kind: "is", subject: "gardener", isA: "role", scope: "garden" },
+  { kind: "is", subject: "sun", isA: "able", scope: "sky" },
+  { kind: "is", subject: "moon", isA: "able", scope: "sky" },
+  { kind: "is", subject: "gardener", isA: "able", scope: "garden" },
 
   // the coupled wheel: each phase's act writes the state the next phase waits on
   phase("dawn", "Sun", "rise", "day"),

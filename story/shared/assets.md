@@ -46,7 +46,7 @@ Each extension can ship its own assets bundled with its code. The structure on d
 reality/extensions/<extension-name>/
 ├── manifest.js
 ├── ops/
-├── roles/
+├── ables/
 ├── seeds/
 └── assets/
     ├── models/
@@ -71,7 +71,7 @@ The extension's `manifest.js` declares which assets it provides:
 export default {
   name: "harmony",
   
-  // ... existing fields (ops, roles, seeds) ...
+  // ... existing fields (ops, ables, seeds) ...
 
   provides: {
     assets: {
@@ -143,7 +143,7 @@ The schema is closed — the substrate rejects unknown top-level keys to catch t
 
 ### Writing render blocks
 
-The only legitimate writer of `qualities.render` is the seed-level `set-render` DO operation. Roles authorized to use it declare `canDo: ["set-render"]`. The operation takes the full schema as args:
+The only legitimate writer of `qualities.render` is the seed-level `set-render` DO operation. Ables authorized to use it declare `canDo: ["set-render"]`. The operation takes the full schema as args:
 
 ```js
 do(targetId, "set-render", {

@@ -4,7 +4,7 @@
 # of this being records the switch-in at T); the BE dispatcher passes result.toHistory as the fact's
 # history. The SESSION EFFECT is HOST: the transport seats socket.currentHistory from seatHistory
 # AFTER the moment seals (stamp-then-seat) — never in the word. The word authors only the fact + the
-# seat inputs. No authorize() (switching your OWN session's history needs no role gate beyond a caller).
+# seat inputs. No authorize() (switching your OWN session's history needs no able gate beyond a caller).
 #
 # Simplified from the handler's six checks to FOUR gates: destination-missing folds found+deleted
 # into one (both invalid-input); destination-paused stays distinct (story-paused — frozen, not bogus);

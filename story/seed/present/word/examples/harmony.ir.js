@@ -2,23 +2,23 @@
 //
 // Surface (4.md example 2):
 //   A music room contains a drum.
-//   A drummer is a role for a music room.
+//   A drummer is a able for a music room.
 //   The drummer strikes the drum, again and again.
 //   When the drummer strikes the drum, that is a beat.
-//   A dancer is a role for a music room.
+//   A dancer is a able for a music room.
 //   When a beat happens, the dancer steps.
 //
 // This tests rule 6 (flows as standing watches) and rule 12 (the pulse is a
-// being), built on the choq mechanism: the rhythm is a role's law, and the reel
+// being), built on the choq mechanism: the rhythm is a able's law, and the reel
 // advances by COMPLETION, each beat begets the next (the drummer self-coupled),
 // and the dancer is coupled to the drummer's beats. No clock; ctx.maxBeats bounds
 // the observation of an in-principle-endless rhythm.
 
 export const harmony = [
-  // structure + roles (the law)
+  // structure + ables (the law)
   { kind: "is", subject: "music room", isA: "space" },
-  { kind: "is", subject: "drummer", isA: "role", scope: "music room" },
-  { kind: "is", subject: "dancer", isA: "role", scope: "music room" },
+  { kind: "is", subject: "drummer", isA: "able", scope: "music room" },
+  { kind: "is", subject: "dancer", isA: "able", scope: "music room" },
 
   // the dancer is coupled to the drummer: on each beat, it steps (no event, so a
   // step does not itself beat; the dancer follows, it does not drive).

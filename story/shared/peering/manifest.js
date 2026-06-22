@@ -11,7 +11,7 @@
 //   code/                  — substrate code for register-peer /
 //                            forget-peer DO ops; SEE-ping liveness
 //                            handler; peer-record signature verifier
-//   roles/peer-registrar/  — the peer directory's writer. Handles
+//   ables/peer-registrar/  — the peer directory's writer. Handles
 //                            register-peer SUMMONs from peer realities;
 //                            stores the directory in its own qualities.
 //   seeds/peer-directory/  — plants the peer-directory space + the
@@ -33,7 +33,7 @@ export default {
     "The discovery directory layer for The Root System. Lets a story be found on the network and find others through a peer registry. Independent of the store pack: a story can peer without hosting a store, or host a store without peering.",
 
   // No pieces yet — this is the doctrine scaffold. When peer-record
-  // machinery lands, this list grows to [code, peer-registrar role,
+  // machinery lands, this list grows to [code, peer-registrar able,
   // peer-directory seed].
   requires: [],
 };

@@ -11,23 +11,23 @@
 //
 //   {
 //     orientation: "forward" | "half" | "inward",
-//     role:        <role name string>,
+//     able:        <able name string>,
 //     position:    { id, name } | null,
 //     capabilities: { canDo, canSummon, canBe },
 //     blocks:      [{ key, source, label, payload }, ...],
 //     origin:      "local" | "foreign",
 //   }
 //
-// `blocks` is the resolved role.canSee output. Each entry stores its
+// `blocks` is the resolved able.canSee output. Each entry stores its
 // source tag ("address" for IBP-address entries, "see" for registered
 // SEE-name entries), its label, and the structured payload that was
-// admitted by canSee. An empty role.canSee yields blocks: [] and the
-// face is still substantive (orientation + role + position + caps).
+// admitted by canSee. An empty able.canSee yields blocks: [] and the
+// face is still substantive (orientation + able + position + caps).
 //
 // The face is built ONCE per moment, at the 2-fold beat
 // (foldBeat.runFoldBeat), and rides on moment.innerFace. The LLM
 // mouth formats blocks into prompt prose via innerFaceFormat.js; the
-// scripted role reads ctx.innerFace as data; the human portal reads
+// scripted able reads ctx.innerFace as data; the human portal reads
 // the live face via the my-inner-face SEE op (and the stored face off
 // Act.innerFace for chain display). Cross-world overrides supersede
 // the local face post-seal via normalizeForeignDescriptor.
@@ -47,7 +47,7 @@
 //   changing what storage holds.
 
 import { validateOrientation } from "./orientation.js";
-import { resolveBareCapabilities } from "../../roles/capabilities.js";
+import { resolveBareCapabilities } from "../../ables/capabilities.js";
 import { resolveCanSee } from "./canSeeResolver.js";
 import { emptyWeave, addReel, mergeWeaves } from "./weave.js";
 import { streamRasterFace, hasRasterSubscribers } from "./rasterStream.js";
@@ -120,8 +120,8 @@ function extractPosition(foldedFace) {
 
 /**
  * Clamp one canSee block for storage. payload is opaque; we cap its
- * label and pass the payload through (canSee is the role's declared
- * perception; if a role asked for a 50KB payload, the runaway gate
+ * label and pass the payload through (canSee is the able's declared
+ * perception; if a able asked for a 50KB payload, the runaway gate
  * lives at the resolver, not here).
  */
 function clampBlock(block, fieldMax) {
@@ -138,33 +138,33 @@ function clampBlock(block, fieldMax) {
  * Build the canonical inner face for one moment.
  *
  * Called from the 2-fold beat (foldBeat.runFoldBeat) AFTER foldPlace
- * has produced the forward face. Resolves capabilities and the role's
+ * has produced the forward face. Resolves capabilities and the able's
  * canSee list ONCE, here, and returns the unified face object.
  *
  * Inputs:
- *   role . the active role spec
+ *   able . the active able spec
  *   ctx  . { being, beingId, currentSpace, rootId, name, history,
  *           orientation, foldedFace } . the moment ctx; foldedFace is
  *           the result of foldPlace at this orientation
  */
-export async function buildInnerFace(role, ctx = {}) {
+export async function buildInnerFace(able, ctx = {}) {
   const orientation = validateOrientation(ctx.orientation);
   const foldedFace = ctx.foldedFace || null;
 
   // Capabilities . cognition-agnostic. The same canDo/canSummon/canBe
   // resolver path the LLM prompt assembly uses, returning bare-name
   // string lists.
-  const capabilities = await resolveBareCapabilities(role, ctx);
+  const capabilities = await resolveBareCapabilities(able, ctx);
 
-  // canSee . the role's declared perception this moment. Resolved
+  // canSee . the able's declared perception this moment. Resolved
   // once, here. Each block is { key, source, label, payload }. An
   // inward orientation drops the world: canSee is the world; we
   // skip the resolution and let the inward past-face stand alone.
   let blocks = [];
   let canSeeWeave = emptyWeave();
-  if (orientation !== "inward" && Array.isArray(role?.canSee) && role.canSee.length > 0) {
+  if (orientation !== "inward" && Array.isArray(able?.canSee) && able.canSee.length > 0) {
     try {
-      const resolved = await resolveCanSee(role.canSee, ctx);
+      const resolved = await resolveCanSee(able.canSee, ctx);
       blocks = Array.isArray(resolved?.blocks) ? resolved.blocks : [];
       if (Array.isArray(resolved?.weave)) canSeeWeave = resolved.weave;
     } catch {
@@ -184,10 +184,10 @@ export async function buildInnerFace(role, ctx = {}) {
 
   // Empty-canSee invariant. Even when canSee admitted nothing, the
   // weave must contain at least the self being reel so a self-fact
-  // wakes the subscriber. Roles are not reel-backed today (the role
-  // registry is an in-memory Map, not a fact-chain), so role flips
-  // manifest as facts on the being's reel (via qualities.roleFlow);
-  // the self entry already covers the role-flip wakeup. If the role
+  // wakes the subscriber. Ables are not reel-backed today (the able
+  // registry is an in-memory Map, not a fact-chain), so able flips
+  // manifest as facts on the being's reel (via qualities.flow);
+  // the self entry already covers the able-flip wakeup. If the able
   // primitive ever becomes reel-backed, append it here.
   const history = typeof ctx?.history === "string" && ctx.history.length ? ctx.history : "0";
   if (weave.length === 0 && ctx?.beingId) {
@@ -196,7 +196,7 @@ export async function buildInnerFace(role, ctx = {}) {
 
   const face = {
     orientation,
-    role:         clampString(role?.name || null, STORAGE_FIELD_MAX),
+    able:         clampString(able?.name || null, STORAGE_FIELD_MAX),
     position:     position
       ? {
           id:   clampString(position.id,   STORAGE_FIELD_MAX),
@@ -220,7 +220,7 @@ export async function buildInnerFace(role, ctx = {}) {
   const rasterKey = ctx?.beingId != null ? String(ctx.beingId) : null;
   if (hasRasterSubscribers(rasterKey)) {
     streamRasterFace(rasterKey, {
-      role:         face.role,
+      able:         face.able,
       position:     face.position,
       capabilities: face.capabilities,
       blocks:       face.blocks,
@@ -242,7 +242,7 @@ export async function buildInnerFace(role, ctx = {}) {
  * to know which layer did the truncation.
  *
  * Returns null when the input face is null. Renderers MUST handle null
- * by omitting role / at / could lines and keeping only timestamp + in
+ * by omitting able / at / could lines and keeping only timestamp + in
  * / out . and ideally precede mixed-fidelity sections with a
  * "(older acts; less context available)" banner.
  */
@@ -264,7 +264,7 @@ export function clampForRender(face) {
 
   return {
     orientation:  face.orientation,
-    role:         clampString(face.role, RENDER_FIELD_MAX),
+    able:         clampString(face.able, RENDER_FIELD_MAX),
     position,
     capabilities: clampCapabilities(face.capabilities, RENDER_FIELD_MAX, RENDER_LIST_MAX),
     blocks:       blocksClamped,
@@ -285,7 +285,7 @@ export function clampForRender(face) {
  * SEE pipeline. We map best-effort:
  *   . descriptor.space / .position / .address . position {id, name}
  *   . descriptor.orientation . orientation (default "forward")
- *   . descriptor.role . role name
+ *   . descriptor.able . able name
  *   . descriptor.capabilities / .canDo / .canSummon / .canBe . caps
  *   . anything else . one "place" block carrying the raw descriptor
  *     as its payload (so consumers see the whole foreign view).
@@ -297,7 +297,7 @@ export function normalizeForeignDescriptor(descriptor) {
   if (!descriptor || typeof descriptor !== "object") {
     return {
       orientation:  "forward",
-      role:         null,
+      able:         null,
       position:     null,
       capabilities: { canDo: [], canSummon: [], canBe: [] },
       blocks:       [],
@@ -329,9 +329,9 @@ export function normalizeForeignDescriptor(descriptor) {
     ? descriptor.orientation
     : "forward";
 
-  const role = (typeof descriptor.role === "string" && descriptor.role)
-    ? descriptor.role
-    : (typeof descriptor.activeRole === "string" ? descriptor.activeRole : null);
+  const able = (typeof descriptor.able === "string" && descriptor.able)
+    ? descriptor.able
+    : (typeof descriptor.activeAble === "string" ? descriptor.activeAble : null);
 
   const rawCaps = (descriptor.capabilities && typeof descriptor.capabilities === "object")
     ? descriptor.capabilities
@@ -368,7 +368,7 @@ export function normalizeForeignDescriptor(descriptor) {
 
   return {
     orientation,
-    role:         clampString(role, STORAGE_FIELD_MAX),
+    able:         clampString(able, STORAGE_FIELD_MAX),
     position:     position
       ? {
           id:   clampString(position.id,   STORAGE_FIELD_MAX),

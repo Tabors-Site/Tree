@@ -521,7 +521,7 @@ export async function createSpace({
  * Normal space (createSpace) is made BY beings FOR beings to live
  * in — addressable by stance, gated by auth. Place heaven space (this
  * function) is made by I_AM at boot: the fixed (.identity, .config,
- * .peers, .extensions, .tools, .roles, .operations, .source,
+ * .peers, .extensions, .tools, .ables, .operations, .source,
  * .threads) that hold I_AM's own working memory, surfaced as spaces
  * so SEE reads them through the same protocol everything else does.
  * See point 5 of THE PHILOSOPHY OF THE SEED in seed/materials/space/heavenSpaces.js.
@@ -903,8 +903,8 @@ export async function listSpaceChildren(parentId, { exclude = null, limit = 500,
   if (!parentId) return [];
   // Heaven routing: children of a heaven parent are themselves
   // heaven; the parent-children query lives on MAIN regardless of
-  // caller's history. Without this, a SEE from #1 on `.roles` would
-  // find no children even though heaven roles live on MAIN.
+  // caller's history. Without this, a SEE from #1 on `.ables` would
+  // find no children even though heaven ables live on MAIN.
   if (history !== "0") {
     const { isHeavenSpace } = await import("./heavenLineage.js");
     if (await isHeavenSpace(parentId)) history = "0";

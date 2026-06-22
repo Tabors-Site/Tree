@@ -8,8 +8,8 @@ export default {
   name:    "greeter",
   version: "1.0.0",
   description:
-    "Plants one greeter being at the target position. The greeter's role is hello-world:greeter (scripted).",
+    "Plants one greeter being at the target position. The greeter's able is hello-world:greeter (scripted).",
   requires: [
-    { type: "role", ref: "hello-world:greeter" },
+    { type: "able", ref: "hello-world:greeter" },
   ],
 };

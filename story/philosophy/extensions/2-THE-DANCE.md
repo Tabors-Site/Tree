@@ -47,7 +47,7 @@ Do NOT implement it as a nested `do:set` that commits the dancer write, then sep
 
 ## 3. What's reusable (most of it) and the one new seam
 
-Reusable: scripted-being summon dispatch (register dancer roles with `triggerOn:["message"]`, scripted `summon()` returning `{ok:true, content}`); `findByPosition(spaceId)` for a dancer to read the board; scheduled wakes (`place.declare.schedule(beingId, {intervalMs, content, id})`) for the drummer's beat; `do:set` on matter for the drum's tick; `place.summon(stance, message)` for the drummer fanning bare SUMMONs; seed planting for scaffolding the floor in one act; per-reel facts as the replay source (the grid reel IS the timelapse); the 3D portal already renders beings at `b.position?.coords`.
+Reusable: scripted-being summon dispatch (register dancer ables with `triggerOn:["message"]`, scripted `summon()` returning `{ok:true, content}`); `findByPosition(spaceId)` for a dancer to read the board; scheduled wakes (`place.declare.schedule(beingId, {intervalMs, content, id})`) for the drummer's beat; `do:set` on matter for the drum's tick; `place.summon(stance, message)` for the drummer fanning bare SUMMONs; seed planting for scaffolding the floor in one act; per-reel facts as the replay source (the grid reel IS the timelapse); the 3D portal already renders beings at `b.position?.coords`.
 
 **The one new seam (seed, ~5–10 lines):** the 3D portal reads `b.position?.coords` but the descriptor's `enrichBeings` doesn't surface it. Reserve a **seed-known** quality namespace `qualities.position` for spatial position (separate from extension qualities), and have `enrichBeings` lift `being.qualities.position.coords` onto the descriptor entry as `b.position.coords`. Seed-known (not extension-owned) because any future spatial extension reads the same field and the portal already expects this shape — extensions shouldn't have to coordinate on whose namespace owns coords. Everything else is extension code.
 
@@ -55,7 +55,7 @@ Reusable: scripted-being summon dispatch (register dancer roles with `triggerOn:
 
 ## 4. Build order (rungs)
 
-**Rung 1 — Drummer alone.** Plant just drum + drummer. Drummer scheduled to tick (~1.5s). Each tick stamps a tick fact on the drum matter. Watch with `place.see(<reality>/dance-floor)` — confirm the drum's tick count grows. No dancers, no movement, no portal. Proves: scripted role + `triggerOn:["message"]` + scheduled wake + `do:set` on matter all work end-to-end. Single-reel only — safe.
+**Rung 1 — Drummer alone.** Plant just drum + drummer. Drummer scheduled to tick (~1.5s). Each tick stamps a tick fact on the drum matter. Watch with `place.see(<reality>/dance-floor)` — confirm the drum's tick count grows. No dancers, no movement, no portal. Proves: scripted able + `triggerOn:["message"]` + scheduled wake + `do:set` on matter all work end-to-end. Single-reel only — safe.
 
 **Rung 2 — One dancer, lockstep, polled portal.** Add one dancer (e.g. step-toward) alone with the drummer. Add the descriptor seam (§3). Add a temporary portal poll (a 1s `navigate(gridAddr)` timer — trivial, ugly, fine for first sight). The dancer folds the grid, applies its rule, moves. Proves: descriptor.coords wiring + portal placement + `harmony:move` op + drummer→dancer bare-SUMMON path + dancer-folds-grid-itself. Single-reel-ish; verify the move op here (§2, §5).
 

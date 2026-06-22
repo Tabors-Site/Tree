@@ -45,7 +45,7 @@ export function contentOfAct(act) {
     through:        act.through,
     to:             act.to ?? null,
     ibpAddress:     act.ibpAddress ?? null,
-    activeRole:     act.activeRole ?? null,
+    activeAble:     act.activeAble ?? null,
     inboxMessageId: act.inboxMessageId ?? null,
     inReplyTo:      act.inReplyTo ?? null,
     parentThread:   act.parentThread ?? null,

@@ -3,7 +3,7 @@
 // The line orchestrator. I am not alive. I am the dumb mechanism
 // that drives the assembly line: when a request for a moment is
 // queued on a being's inbox, I pick it by priority and hand it
-// down the line to the role's summon() — which will assemble and
+// down the line to the able's summon() — which will assemble and
 // run the frame the being becomes. I do not think. I sequence.
 //
 // Three rules that hold:
@@ -23,7 +23,7 @@
 // Backpressure (per-being inbox depth, summons-per-second) reads
 // from each being's qualities, falling back to place defaults.
 // When tripped, I log and drop the lowest-priority pending
-// requests; role templates can override that policy by inspecting
+// requests; able templates can override that policy by inspecting
 // their own inbox before allowing append.
 //
 // State. Per-being runtime state lives in memory. On crash the
@@ -141,7 +141,7 @@ function _noteDbDownOnce() {
  * abort was actually fired (something was running and not already
  * aborted), false otherwise.
  *
- * Role templates use this when they decide to cascade a cancellation
+ * Able templates use this when they decide to cascade a cancellation
  * downstream — typically alongside cancelIntakeByRoot on the being's
  * intake to also drop queued entries.
  *
@@ -162,7 +162,7 @@ export function abortCurrent(beingId, reason = "cancelled") {
 
 /**
  * Inspect a being's currently-running Act root correlation. Used by
- * role templates to decide whether an incoming cancel SUMMON applies
+ * able templates to decide whether an incoming cancel SUMMON applies
  * to the work in flight. Returns null when idle.
  */
 export function getCurrentRootCorrelation(beingId) {
@@ -400,7 +400,7 @@ async function processEntry(beingId, spaceId, picked) {
   // The conductor takes over. runMoment walks the four beats
   // (assign / fold / momentum / stamped) and routes the moment's
   // outcome through the handoff. The scheduler stays out of
-  // voice, role, ctx-building, and seal concerns — it only manages
+  // voice, able, ctx-building, and seal concerns — it only manages
   // the line: per-being serial, abort lifecycle, handoff slot
   // cleanup.
   const handoff = state.handoffs?.get(entry.correlation);

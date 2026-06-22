@@ -24,20 +24,20 @@ import {
   isPointerName,
 } from "../../../materials/history/historyRegistry.js";
 import { doVerb } from "../../../ibp/verbs/do.js";
-import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
+import { registerAbleWord } from "../../../present/word/ableWordRegistry.js";
 import log from "../../../seedStory/log.js";
 
 // Self-register this bundle's co-located `.word` slices (CONVERTING.md): importing
-// this module (at seed boot, or in a DRY harness) registers them so resolveRoleWord(
+// this module (at seed boot, or in a DRY harness) registers them so resolveAbleWord(
 // "history-manager", "set-pointer") finds it. The cut wires the bridge into the
-// set-pointer handler (run the .word's CONTROL strand through runRoleWord with
+// set-pointer handler (run the .word's CONTROL strand through runAbleWord with
 // historyManagerHostEnv; JS handler stays as the clean-miss fallback).
-registerRoleWord(
+registerAbleWord(
   "history-manager",
   "set-pointer",
   new URL("./history-manager.word", import.meta.url),
 );
-registerRoleWord(
+registerAbleWord(
   "history-manager",
   "delete-pointer",
   new URL("./delete-pointer.word", import.meta.url),
@@ -53,9 +53,9 @@ const CANONICAL_PATH_RE = /^(?:0|\d+(?:[a-z]+\d+)*(?:[a-z]+)?)$/;
 // null on a clean miss so the JS body below runs.
 async function _setPointerViaWord({ caller, name, canonical, moment }) {
   if (!moment) return null;
-  const { resolveRoleWord, runRoleWord } =
-    await import("../../../present/word/roleWordRegistry.js");
-  const ir = resolveRoleWord(
+  const { resolveAbleWord, runAbleWord } =
+    await import("../../../present/word/ableWordRegistry.js");
+  const ir = resolveAbleWord(
     "history-manager",
     "set-pointer",
     moment?.actorAct?.history,
@@ -64,7 +64,7 @@ async function _setPointerViaWord({ caller, name, canonical, moment }) {
   const { historyManagerHostEnv } = await import("./historyManagerHost.js");
   const history = moment?.actorAct?.history || "0";
   try {
-    const { result } = await runRoleWord(ir, {
+    const { result } = await runAbleWord(ir, {
       moment,
       history,
       trigger: {
@@ -166,9 +166,9 @@ registerOperation("set-pointer", {
 // Returns {name, deleted, alreadyAbsent} or null on a clean miss so the JS body runs.
 async function _deletePointerViaWord({ caller, name, moment }) {
   if (!moment) return null;
-  const { resolveRoleWord, runRoleWord } =
-    await import("../../../present/word/roleWordRegistry.js");
-  const ir = resolveRoleWord(
+  const { resolveAbleWord, runAbleWord } =
+    await import("../../../present/word/ableWordRegistry.js");
+  const ir = resolveAbleWord(
     "history-manager",
     "delete-pointer",
     moment?.actorAct?.history,
@@ -177,7 +177,7 @@ async function _deletePointerViaWord({ caller, name, moment }) {
   const { historyManagerHostEnv } = await import("./historyManagerHost.js");
   const history = moment?.actorAct?.history;
   try {
-    const { result } = await runRoleWord(ir, {
+    const { result } = await runAbleWord(ir, {
       moment,
       history,
       trigger: { caller: caller ? String(caller) : null, name, history },

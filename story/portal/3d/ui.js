@@ -590,7 +590,7 @@ export function showLlmAssignerPanel({ client, place, currentSpaceId, onClose })
     if (typeof onClose === "function") onClose();
   });
 
-  // Initial mount. The panel is back to its CRUD-only role.
+  // Initial mount. The panel is back to its CRUD-only able.
   (async () => {
     await refreshConnections();
     // Restore last-active tab; fall back to "being" if node was active

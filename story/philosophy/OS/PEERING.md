@@ -63,7 +63,7 @@ clutter a directory; it cannot counterfeit one.
 Every reality already has the substrate federation half: peering,
 the canopy wire, the cross-reality verbs. The peering pack adds the
 DIRECTORY half: serve a registry, refresh records, prune dead ones.
-Any existing reality can switch the role on and become a peering
+Any existing reality can switch the able on and become a peering
 node. Serving is opt-in (a directory is a public service with
 storage and bandwidth costs); querying is universal (every reality
 is a peering CLIENT, able to ask any peering node and register
@@ -124,16 +124,16 @@ peering/
 │   ├── index.js              registers register-peer / forget-peer DO ops,
 │   │                         SEE-ping liveness handler, peer-record verifier
 │   └── handlers.js           peer-record signature checks; registry writes
-├── roles/peer-registrar/     the directory's writer
+├── ables/peer-registrar/     the directory's writer
 │   ├── manifest.js
-│   └── role.js               scripted; handles register-peer SUMMON intent;
+│   └── able.js               scripted; handles register-peer SUMMON intent;
 │                             stores directory in its own qualities
 └── seeds/peer-directory/     the plantable directory space
     ├── manifest.js
     └── seed.json             plants peer-directory space + the registrar
 ```
 
-The pack's name is `peering`; the registrar's role registers as
+The pack's name is `peering`; the registrar's able registers as
 `peering:peer-registrar`; the directory seed registers as
 `peering:peer-directory`. The publish/retire SUMMON intents (when
 built) follow the same shape as Store's

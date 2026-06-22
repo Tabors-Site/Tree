@@ -10,7 +10,7 @@
   },
   "manifest": {
     "extensions": ["harmony"],
-    "roles": ["harmony:drummer", "harmony:dancer-llm"]
+    "ables": ["harmony:drummer", "harmony:dancer-llm"]
   },
   "parameters": [
     { "name": "spaceName", "type": "string", "default": "dance-floor", "description": "Name of the wrapper space." },
@@ -36,7 +36,7 @@
       {
         "sourceId": "drummer-being",
         "name": "drummer",
-        "defaultRole": "harmony:drummer",
+        "defaultAble": "harmony:drummer",
         "parentBeingId": { "__ref": "graft-initiator" },
         "homeSpace": { "__ref": "space", "id": "dance-floor-root" },
         "position": { "__ref": "space", "id": "dance-floor-root" },
@@ -46,7 +46,7 @@
       {
         "sourceId": "wanderer-being",
         "name": "wanderer",
-        "defaultRole": "harmony:dancer-llm",
+        "defaultAble": "harmony:dancer-llm",
         "parentBeingId": { "__ref": "graft-initiator" },
         "homeSpace": { "__ref": "space", "id": "dance-floor-root" },
         "position": { "__ref": "space", "id": "dance-floor-root" },
@@ -56,7 +56,7 @@
       {
         "sourceId": "follower-being",
         "name": "follower",
-        "defaultRole": "harmony:dancer-llm",
+        "defaultAble": "harmony:dancer-llm",
         "parentBeingId": { "__ref": "graft-initiator" },
         "homeSpace": { "__ref": "space", "id": "dance-floor-root" },
         "position": { "__ref": "space", "id": "dance-floor-root" },
@@ -66,7 +66,7 @@
       {
         "sourceId": "mirror-being",
         "name": "mirror",
-        "defaultRole": "harmony:dancer-llm",
+        "defaultAble": "harmony:dancer-llm",
         "parentBeingId": { "__ref": "graft-initiator" },
         "homeSpace": { "__ref": "space", "id": "dance-floor-root" },
         "position": { "__ref": "space", "id": "dance-floor-root" },
@@ -76,7 +76,7 @@
       {
         "sourceId": "hunter-being",
         "name": "hunter",
-        "defaultRole": "harmony:dancer-llm",
+        "defaultAble": "harmony:dancer-llm",
         "parentBeingId": { "__ref": "graft-initiator" },
         "homeSpace": { "__ref": "space", "id": "dance-floor-root" },
         "position": { "__ref": "space", "id": "dance-floor-root" },
@@ -86,7 +86,7 @@
       {
         "sourceId": "wallflower-being",
         "name": "wallflower",
-        "defaultRole": "harmony:dancer-llm",
+        "defaultAble": "harmony:dancer-llm",
         "parentBeingId": { "__ref": "graft-initiator" },
         "homeSpace": { "__ref": "space", "id": "dance-floor-root" },
         "position": { "__ref": "space", "id": "dance-floor-root" },
@@ -134,7 +134,7 @@
         "verb": "do", "act": "set-being",
         "of": { "kind": "being", "id": { "__ref": "being", "id": "drummer-being" } },
         "params": {
-          "field": "qualities.harmony.role",
+          "field": "qualities.harmony.able",
           "value": {
             "drumMatterId": { "__ref": "matter", "id": "drum-matter" },
             "gridSpaceId":  { "__ref": "space",  "id": "dance-floor-root" },
@@ -169,7 +169,7 @@
           "value": {
             "drummer": {
               "beingId": { "__ref": "being", "id": "drummer-being" },
-              "role":    "harmony:drummer",
+              "able":    "harmony:drummer",
               "installedBy": "harmony:dance-floor"
             }
           },
@@ -196,7 +196,7 @@
         "of": { "kind": "space", "id": { "__ref": "space", "id": "dance-floor-root" } },
         "params": { "field": "qualities.beings",
                     "value": { "wanderer": { "beingId": { "__ref": "being", "id": "wanderer-being" },
-                                             "role": "harmony:dancer-llm",
+                                             "able": "harmony:dancer-llm",
                                              "installedBy": "harmony:dance-floor" } },
                     "merge": true } },
       { "verb": "do", "act": "subscription-registered",
@@ -230,7 +230,7 @@
         "of": { "kind": "space", "id": { "__ref": "space", "id": "dance-floor-root" } },
         "params": { "field": "qualities.beings",
                     "value": { "follower": { "beingId": { "__ref": "being", "id": "follower-being" },
-                                             "role": "harmony:dancer-llm",
+                                             "able": "harmony:dancer-llm",
                                              "installedBy": "harmony:dance-floor" } },
                     "merge": true } },
       { "verb": "do", "act": "subscription-registered",
@@ -264,7 +264,7 @@
         "of": { "kind": "space", "id": { "__ref": "space", "id": "dance-floor-root" } },
         "params": { "field": "qualities.beings",
                     "value": { "mirror": { "beingId": { "__ref": "being", "id": "mirror-being" },
-                                           "role": "harmony:dancer-llm",
+                                           "able": "harmony:dancer-llm",
                                            "installedBy": "harmony:dance-floor" } },
                     "merge": true } },
       { "verb": "do", "act": "subscription-registered",
@@ -298,7 +298,7 @@
         "of": { "kind": "space", "id": { "__ref": "space", "id": "dance-floor-root" } },
         "params": { "field": "qualities.beings",
                     "value": { "hunter": { "beingId": { "__ref": "being", "id": "hunter-being" },
-                                           "role": "harmony:dancer-llm",
+                                           "able": "harmony:dancer-llm",
                                            "installedBy": "harmony:dance-floor" } },
                     "merge": true } },
       { "verb": "do", "act": "subscription-registered",
@@ -332,7 +332,7 @@
         "of": { "kind": "space", "id": { "__ref": "space", "id": "dance-floor-root" } },
         "params": { "field": "qualities.beings",
                     "value": { "wallflower": { "beingId": { "__ref": "being", "id": "wallflower-being" },
-                                               "role": "harmony:dancer-llm",
+                                               "able": "harmony:dancer-llm",
                                                "installedBy": "harmony:dance-floor" } },
                     "merge": true } },
       { "verb": "do", "act": "subscription-registered",

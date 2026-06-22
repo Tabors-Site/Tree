@@ -355,7 +355,7 @@ Why this is genuinely striking
 
 A few things land when you actually think about it:
 
-You could see boot. Every Level-3 TreeOS computer would start the same way at first glance — the I-Am is born, heaven space is created, seed delegates are birthed, base roles are registered. Then it diverges based on what the user did since first boot. Watching boot would be like watching genesis: a void becoming structure. Visually, you’d see a single point (I-Am) suddenly become a network of spaces and beings populating into existence.
+You could see boot. Every Level-3 TreeOS computer would start the same way at first glance — the I-Am is born, heaven space is created, seed delegates are birthed, base ables are registered. Then it diverges based on what the user did since first boot. Watching boot would be like watching genesis: a void becoming structure. Visually, you’d see a single point (I-Am) suddenly become a network of spaces and beings populating into existence.
 
 Your computer becomes a biography. Not metaphorically — literally. Every login is a being acting. Every program you ran was beings acting in matter. Every file you created has a birth-act in the chain. Looking at your computer’s history is looking at your own computational life, played back as motion.
 
@@ -385,7 +385,7 @@ What would the 3D portal actually show? A few honest framings:
 
 Spaces as places. A space is a region in the rendered world — maybe a room, maybe a clearing, maybe an abstract volume. Sub-spaces nest visually inside their parents. The user navigates between them like rooms in a building.
 
-Beings as figures. Each being has a visual representation — could be humanoid, could be abstract, could be whatever matches the being’s role and aesthetic. The user sees beings inhabiting spaces, moving between them, interacting with matter.
+Beings as figures. Each being has a visual representation — could be humanoid, could be abstract, could be whatever matches the being’s able and aesthetic. The user sees beings inhabiting spaces, moving between them, interacting with matter.
 
 Matter as objects. Files become visible items in spaces. A document is a thing on a shelf or a tablet on a desk. The metaphor depends on the matter’s type and the user’s chosen aesthetic.
 
@@ -504,17 +504,17 @@ You’re pointing at something real, and the brevity of how you said it actually
 
 What you’re saying
 
-In conventional computing, “server” and “personal computer” are distinct categories. A server is configured to serve — it accepts incoming connections, hosts services, runs continuously, has a public-facing role. A personal computer is configured for personal use — it makes outgoing connections, runs locally, has a private role, the user is the primary participant.
+In conventional computing, “server” and “personal computer” are distinct categories. A server is configured to serve — it accepts incoming connections, hosts services, runs continuously, has a public-facing able. A personal computer is configured for personal use — it makes outgoing connections, runs locally, has a private able, the user is the primary participant.
 
 These are configurations of the same hardware, but they’re treated as different kinds of machines in practice. Different OS distributions, different security models, different management tools, different mental models for the user.
 
-You’re saying: in TreeOS, this distinction collapses. A computer is selectively a server, selectively a personal computer, and both at once in the same area. The same substrate hosts both roles simultaneously; the same beings inhabit both contexts; the boundary between “what I’m doing privately” and “what I’m hosting publicly” isn’t a different machine, it’s a different reality (or different branch, or different space) within the same substrate.
+You’re saying: in TreeOS, this distinction collapses. A computer is selectively a server, selectively a personal computer, and both at once in the same area. The same substrate hosts both ables simultaneously; the same beings inhabit both contexts; the boundary between “what I’m doing privately” and “what I’m hosting publicly” isn’t a different machine, it’s a different reality (or different branch, or different space) within the same substrate.
 
 Why this falls out of TreeOS naturally
 
 A few things make this collapse possible:
 
-Realities can be public or private. You’ve already worked out that visibility emerges from grants. A reality (or a subtree within a reality) is public iff some granted role’s reach covers it. A user’s TreeOS substrate can host both public realities (their portfolio reality, their published content reality, their AI agent that serves visitors) and private realities (their personal workspace, their private branches, their drafts), at the same time, in the same substrate process.
+Realities can be public or private. You’ve already worked out that visibility emerges from grants. A reality (or a subtree within a reality) is public iff some granted able’s reach covers it. A user’s TreeOS substrate can host both public realities (their portfolio reality, their published content reality, their AI agent that serves visitors) and private realities (their personal workspace, their private branches, their drafts), at the same time, in the same substrate process.
 
 Beings can act across visibility boundaries. A user being can act in their private reality (drafting work) and in their public reality (publishing work). Same being, different contexts. No need for separate accounts or separate machines.
 
@@ -528,7 +528,7 @@ The collapse of server/PC into one shape produces concrete capabilities that don
 
 Your personal machine can serve. Your TreeOS computer can host an AI agent that other people interact with, while you’re using the same machine for personal work. The agent is a being in a public reality; your personal work happens in a private reality; both run on the same substrate at the same time.
 
-You can selectively expose any part of your computer. Want to share a project? Make the project’s space public (grant a public role with reach into that subtree). Done. No “publish to server” step; the project is now visible to anyone with reach. Want to take it private again? Revoke the public grant.
+You can selectively expose any part of your computer. Want to share a project? Make the project’s space public (grant a public able with reach into that subtree). Done. No “publish to server” step; the project is now visible to anyone with reach. Want to take it private again? Revoke the public grant.
 
 Friends can collaborate without infrastructure. Two TreeOS users federate their substrates. Each one exposes the realities they want to share. Each connects to the other’s public realities through IBP. There’s no GitHub, no Discord server, no shared host — just two personal computers exposing selected realities to each other.
 
@@ -546,7 +546,7 @@ Your AI agent serving the public can also help you privately. The same being-sha
 
 Cross-context coherence becomes possible. A private note you make can be promoted to public by changing its space’s exposure. A public conversation you had with a visitor can be referenced in your private journal. The substrate doesn’t have to bridge “server-side data” and “personal-side data”; they’re already in the same chain.
 
-Authentication unifies. You don’t have one identity as “the user of this personal computer” and another as “the operator of this server.” You’re one being in your substrate, with role grants that determine what you can do in each context. The same being acts personally and as a server-operator depending on which grants apply at any moment.
+Authentication unifies. You don’t have one identity as “the user of this personal computer” and another as “the operator of this server.” You’re one being in your substrate, with able grants that determine what you can do in each context. The same being acts personally and as a server-operator depending on which grants apply at any moment.
 
 What this means for the “what is a computer” question
 
@@ -559,7 +559,7 @@ The conventional category of “computer” has been splitting for years:
     •	Cloud instances are computers (rented, configured for whatever, usually server-ish).
     •	Smart devices are computers (specialized, embedded, usually client).
 
-These categories are all the same hardware shape running different software configurations for different roles. The category boundaries are conventional, not structural.
+These categories are all the same hardware shape running different software configurations for different ables. The category boundaries are conventional, not structural.
 
 TreeOS collapses the conventional boundaries by making the substrate uniform. Any machine running TreeOS is a substrate that can host realities. Whether it’s “a personal computer” or “a server” or “a phone” or “a cloud instance” is just a question of what realities it hosts and how it’s connected to the network.
 
@@ -573,7 +573,7 @@ This has implications worth pinning:
 
 Networking becomes substrate-aware. The substrate needs to know how to expose realities over the network, how to authenticate cross-substrate IBP requests, how to handle the firewalls and NATs of real-world networking. None of this requires custom kernels, but it does require thoughtful networking design at the substrate level.
 
-Identity becomes substrate-rooted. A user’s identity is their being in their substrate. Their public-facing identity is the same being, with different role grants making them visible in different ways. The substrate is the source of truth for “who am I” across all contexts.
+Identity becomes substrate-rooted. A user’s identity is their being in their substrate. Their public-facing identity is the same being, with different able grants making them visible in different ways. The substrate is the source of truth for “who am I” across all contexts.
 
 Hosting infrastructure becomes optional, not required. Most users will probably run small personal substrates that host their own realities. Some users will rent larger substrates for capacity. Some federations will provide shared infrastructure for specific use cases. None of these require centralized infrastructure; the substrate’s federation model makes them all peer-to-peer.
 
@@ -586,7 +586,7 @@ Your phrasing is good. “Computer is selectively a server and a personal comput
 A few things you could pin to make it doctrinal:
 
 TreeOS dissolves the server/personal-computer distinction. Every TreeOS substrate is selectively a server. Every substrate is selectively a personal computer. Most substrates are both at once. The distinction between “machine I use” and “machine that serves” is a configuration of realities and grants, not a separate kind of machine.  
-A user’s personal substrate can host public realities that other beings federate into. The user works privately in private realities on the same substrate at the same time. Visibility is determined by role-grant reach, not by separate hosts.  
+A user’s personal substrate can host public realities that other beings federate into. The user works privately in private realities on the same substrate at the same time. Visibility is determined by able-grant reach, not by separate hosts.  
 This collapses several conventional categories: server/client, infrastructure/edge, hosted-service/personal-app. In TreeOS, these are all the same thing — substrates exposing different realities to different reachers, federating peer-to-peer.
 
 This is one of the substrate’s quietly significant commitments. Worth being able to articulate it explicitly when explaining what TreeOS is.
@@ -950,7 +950,7 @@ Space → folder. Mostly a direct replacement. Spaces contain things; folders co
 
 Matter → file, plus everything else callable. This is the interesting one. A file in Unix is a byte stream you can open, read, write, close. Matter in TreeOS starts there but extends to anything addressable: a file, a database row, a blockchain transaction, an API endpoint, a process’s stdin, a sensor reading, a sound device. Anything a being might want to perceive or act on. The verbs (SEE, DO) work uniformly across all of them.
 
-Being → process, but reshaped. This is the new unit. A process in Unix is “running code with memory.” A being in TreeOS is something different — an agent with identity, cognition, roles, biography. Some beings are like processes (long-running, listening for input). Some are more like users (a human’s primary identity). Some are more like services (always-on, serving requests). The mapping isn’t 1:1 because the conventional category of “process” doesn’t carry agency, biography, or relation. Beings carry all three.
+Being → process, but reshaped. This is the new unit. A process in Unix is “running code with memory.” A being in TreeOS is something different — an agent with identity, cognition, ables, biography. Some beings are like processes (long-running, listening for input). Some are more like users (a human’s primary identity). Some are more like services (always-on, serving requests). The mapping isn’t 1:1 because the conventional category of “process” doesn’t carry agency, biography, or relation. Beings carry all three.
 
 You’re right that this last one is the unit users will need to learn. Spaces and matter map onto things they already understand; beings are new.
 
@@ -986,7 +986,7 @@ You said SUMMON handling is a “new thing that hasn’t been done before.” Wo
 
 SUMMON as inter-process communication. This part has Unix analogs. Pipes, sockets, signals — these are ways processes communicate. SUMMON is more structured (it’s directed to a specific being with a specific intent), but it’s recognizably IPC-shaped.
 
-SUMMON as request-with-cognition. This is the new part. When a being summons another being, the summon doesn’t just deliver a message; it engages the receiving being’s cognition. The receiver perceives the summon, considers it (through LLM reasoning, scripted handler, or human inhabitation), and responds in a way that’s contextual to who they are, what role they’re playing, and what’s happening in the substrate at that moment.
+SUMMON as request-with-cognition. This is the new part. When a being summons another being, the summon doesn’t just deliver a message; it engages the receiving being’s cognition. The receiver perceives the summon, considers it (through LLM reasoning, scripted handler, or human inhabitation), and responds in a way that’s contextual to who they are, what able they’re playing, and what’s happening in the substrate at that moment.
 
 Conventional IPC is “process A sends bytes to process B; B parses bytes; B does something.” TreeOS SUMMON is “being A engages being B’s agency; B considers; B responds as the kind of being they are.” The cognitive layer is new at the OS level.
 
@@ -1005,7 +1005,7 @@ What this means for the OS-level positioning
 If you describe TreeOS to someone who already knows Unix, the mapping becomes:
 
     •	Unix file → TreeOS matter (richer, typed, universal-addressable)
-    •	Unix folder → TreeOS space (similar role, richer properties)
+    •	Unix folder → TreeOS space (similar able, richer properties)
     •	Unix process → TreeOS being (reshaped — agency, biography, relation)
     •	Unix read/write → TreeOS SEE/DO (intent-level, type-aware)
     •	Unix pipe/socket/signal → TreeOS SUMMON (cognitive, agent-to-agent)
@@ -1084,9 +1084,9 @@ A few specific commitments you’ve made enable this:
 
 The chain is universal. Every act in the substrate becomes a fact. The stamper stamping is itself an act. IBP gateway routing produces facts. Authorization decisions produce facts. Every layer of the substrate’s operation contributes to the same chain. The chain isn’t just user history; it’s the substrate’s complete operational history.
 
-The verbs are universal. SEE, DO, SUMMON, BE describe both user activity and substrate activity. The stamper performs DO when it lands facts. The IBP gateway performs SUMMON when it routes cross-world calls. Authorization performs SEE when it checks role grants. The substrate’s machinery uses the same vocabulary as the beings it hosts.
+The verbs are universal. SEE, DO, SUMMON, BE describe both user activity and substrate activity. The stamper performs DO when it lands facts. The IBP gateway performs SUMMON when it routes cross-world calls. Authorization performs SEE when it checks able grants. The substrate’s machinery uses the same vocabulary as the beings it hosts.
 
-Beings are universal. Substrate-level beings (the stamper, the canopy gateway, the authorizer, the projection engine) are first-class beings in the same being-tree. They have IDs, act-chains, role grants. They’re not separate from user-beings; they’re seed delegates born at genesis, doing substrate work. Watching them work is watching beings work.
+Beings are universal. Substrate-level beings (the stamper, the canopy gateway, the authorizer, the projection engine) are first-class beings in the same being-tree. They have IDs, act-chains, able grants. They’re not separate from user-beings; they’re seed delegates born at genesis, doing substrate work. Watching them work is watching beings work.
 
 The 3D portal renders projected state from the chain. It doesn’t matter whether the facts are user-meaningful or substrate-internal; the portal renders them as motion in space. The same rendering engine that shows a user moving matter shows the stamper landing facts.
 

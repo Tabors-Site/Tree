@@ -13,7 +13,7 @@
 // pointer map and the .histories heaven-space id are HEAVEN reads (MAIN-pinned, routed
 // through loadHeavenProjection / findHeavenSpace by the HISTORY enum), which no `see`
 // QUERY/READ form can shape today (see blockers); (c) the lone WORLD write, kept host
-// like take-role.word's grantInternal so it calls the SAME doVerb(set-space) the JS
+// like take-able.word's grantInternal so it calls the SAME doVerb(set-space) the JS
 // handler calls, reading ctx.moment to lay its fact into the live moment.
 //
 // callHost invokes each builtin as `fn({ args: [...] }, ctx)`. NONE lay a fact now: the

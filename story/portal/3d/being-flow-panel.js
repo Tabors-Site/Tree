@@ -1,5 +1,5 @@
 // being-flow-panel.js — 3D portal frame around the shared per-being
-// roleFlow editor. Mirrors role-manager-panel.js (the modal chrome,
+// flow editor. Mirrors able-manager-panel.js (the modal chrome,
 // Esc/× close, ctx adapter); the inner body is the shared
 // renderBeingFlowPanel.
 

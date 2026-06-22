@@ -41,10 +41,10 @@ const SpaceSchema = new mongoose.Schema({
 
   // The position's structural owner — the ONE base-axiom authority
   // class. Owner of a space implicitly has authority over it +
-  // descendants without any role grant. Every other authority shape
-  // (editor, auditor, ...) is an operator-authored ROLE under
-  // RolesAreAuth — defined in qualities.roles and granted via
-  // do:grant-role.
+  // descendants without any able grant. Every other authority shape
+  // (editor, auditor, ...) is an operator-authored ABLE under
+  // AblesAreAuth — defined in qualities.ables and granted via
+  // do:grant-able.
   owner: { type: String, ref: "Being", default: null },
 
   // Non-null marks one of the spaces I plant at boot. The enum

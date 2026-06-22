@@ -17,12 +17,12 @@ import "../styles/llm-panel.css";
 //   "llm-story"  story tab — the story root's defaults (angels only)
 //
 // The 7-step chain (seed/present/cognition/llm/chain.js):
-//   0  receiver being  · role-slot
+//   0  receiver being  · able-slot
 //   1  receiver being  · default
-//   2  receiver space  · role-slot (walks ancestors)
+//   2  receiver space  · able-slot (walks ancestors)
 //   3  receiver space  · default   (walks ancestors)
 //   4  receiver story
-//   5  actor being     · role-slot + default
+//   5  actor being     · able-slot + default
 //   6  actor space + actor story
 //
 // Forced flags shift the chain:
@@ -160,7 +160,7 @@ async function paintChain(holder, { story, receiverBeingId, actorBeingId, positi
         receiverBeingId,
         actorBeingId,
         receiverSpaceId: positionSpaceId,
-        role: "main",
+        able: "main",
       },
     });
   } catch (err) {
@@ -408,7 +408,7 @@ function renderSpaceOrStoryForm(body, { isStory, address, afterChange }) {
   form.className = "compact-form";
 
   const defaultF  = textInput("default", "Default fallback connectionIds (comma-separated)");
-  const slotsF    = textInput("slots", "Per-role slots as JSON: {\"coder\":[\"<id1>\",\"<id2>\"]}");
+  const slotsF    = textInput("slots", "Per-able slots as JSON: {\"coder\":[\"<id1>\",\"<id2>\"]}");
   const preferOwnF = checkbox("preferOwn", "preferOwn (this container's connections jump to front within its step)");
   const forceActorF = checkbox("forceActor", "forceActor (chain skips remaining receiver-side, jumps to actor side)");
   const forceReceiverF = checkbox("forceReceiver", "forceReceiver (chain caps at this container's step; actor side never runs)");
@@ -434,7 +434,7 @@ function renderSpaceOrStoryForm(body, { isStory, address, afterChange }) {
       try { slots = JSON.parse(slotsRaw); }
       catch {
         result.className = "action-result action-err";
-        result.textContent = "Slots must be valid JSON: {\"role\":[\"id\",…]}";
+        result.textContent = "Slots must be valid JSON: {\"able\":[\"id\",…]}";
         submit.disabled = false;
         return;
       }
@@ -470,7 +470,7 @@ function renderSpaceOrStoryForm(body, { isStory, address, afterChange }) {
 }
 
 // ──────────────────────────────────────────────────────────────────
-// Render primitives (matched style with roles-panel)
+// Render primitives (matched style with ables-panel)
 // ──────────────────────────────────────────────────────────────────
 
 function section(parent, title) {

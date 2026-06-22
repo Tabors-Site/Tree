@@ -69,7 +69,7 @@ This is where cryptographic identity really earns its place. Before crypto ident
 
 The being being grafted signs the graft request. Their private key is the authorization. No one can move them without their consent.
 
-The destination's receiving authority signs the acceptance. A being in B with appropriate role grants signs the graft acceptance. The destination's policy decides who can accept grafts.
+The destination's receiving authority signs the acceptance. A being in B with appropriate able grants signs the graft acceptance. The destination's policy decides who can accept grafts.
 
 The graft itself is recorded as signed facts. Both signatures appear in the resulting facts. Anyone reading the chain can verify the graft was consensual and authorized.
 
@@ -183,7 +183,7 @@ Federation doesn't require pre-established relationships. Any substrate can inte
 The substrate gains capabilities that conventional federation has been trying to get for years without quite achieving. Cryptographic identity is the missing piece that makes federation actually work without trust.
 
 Is this more powerful than what existed before in TreeOS itself
-This is the most interesting comparison. TreeOS before these changes was already novel — event-sourced state, beings as agents, histories as live timelines, role-based auth. The substrate had architectural commitments most systems don't have.
+This is the most interesting comparison. TreeOS before these changes was already novel — event-sourced state, beings as agents, histories as live timelines, able-based auth. The substrate had architectural commitments most systems don't have.
 
 But the substrate was still trust-bound. You trusted your TreeOS deployment to record your activity correctly. You trusted the federation gateway to route messages honestly. You trusted other operators to not tamper with their chains.
 
@@ -244,7 +244,7 @@ They cannot make their forged reality have your real history. Your home reality'
 
 They cannot graft into other realities as you and have it accepted unconditionally. Grafts require the receiving reality's authority to sign acceptance. Other realities deciding whether to accept "you" arriving from this fresh suspicious reality is a policy decision, not an automatic operation. They have to convince someone that this is the real you.
 
-They cannot claim your relationships. Your mother, your grants, your role history are all in your home reality's chain. A fresh reality with you in it has none of that. The other beings you've interacted with don't recognize the new reality's version of you because the relationships aren't there.
+They cannot claim your relationships. Your mother, your grants, your able history are all in your home reality's chain. A fresh reality with you in it has none of that. The other beings you've interacted with don't recognize the new reality's version of you because the relationships aren't there.
 
 They cannot fake the lineage. Your real being's lineage traces through your mother back to your home reality's I_AM. The forged version has no such chain — it's a being that just appeared without history. Anyone looking at the new "you" sees a being with no past, which is a red flag.
 

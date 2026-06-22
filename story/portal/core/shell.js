@@ -58,7 +58,7 @@ const SHELL_DOM = `
   </main>
   <footer id="statement-bar">
     <input id="statement-input" type="text" autocomplete="off" spellcheck="false"
-           placeholder="Say the Word — I make a space, I give tabor the role…" disabled />
+           placeholder="Say the Word — I make a space, I give tabor the able…" disabled />
     <div id="statement-hint"></div>
   </footer>
   <div id="overlays"></div>
@@ -145,7 +145,7 @@ export function mountShell({ rootEl, primaryCtx, defaultView = "3d" }) {
       const hasBeing = !!(m.session?.beingId || m.session?.token);
       els.statement.disabled = !hasBeing;
       els.statement.placeholder = hasBeing
-        ? "Say the Word — I make a space, I give tabor the role…"
+        ? "Say the Word — I make a space, I give tabor the able…"
         : "connect a Name to speak the Word…";
     }
     updateStanceBar({

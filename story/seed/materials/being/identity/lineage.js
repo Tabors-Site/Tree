@@ -2,7 +2,7 @@
 //
 // lineage.js — fold answers about who birthed whom.
 //
-// "Being parent" here is the specific role of HAVING PERFORMED THE
+// "Being parent" here is the specific able of HAVING PERFORMED THE
 // BIRTH ACT for a being. It is NOT the generic SUMMON sense (anyone
 // calling anyone). It is NOT the live parentBeingId on the being row
 // (which can drift later through reparenting). The being parent is

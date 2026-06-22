@@ -203,7 +203,7 @@ export async function captureGraft(opts = {}) {
 
   // ── 6. Record the loaded extensions ──
   // The story's behavior depends on which extensions are awake
-  // (their roles, ops, schedules, collections). The receiving
+  // (their ables, ops, schedules, collections). The receiving
   // deployer needs the same set for the planted story to BE the
   // same story; plant warns loudly about any that are missing.
   let extensions = [];
@@ -496,7 +496,7 @@ export async function plantGraft(bundle) {
 
   // ── 7. Extension presence check ──
   // The bundle names the extensions the source story ran with. The
-  // planted story needs the same set to behave the same (roles, ops,
+  // planted story needs the same set to behave the same (ables, ops,
   // schedules, collection consumers). Warn LOUDLY for any not present
   // on this substrate's disk — the operator fixes the extension folder
   // or the .treeos-profile before beings start acting.
@@ -515,7 +515,7 @@ export async function plantGraft(bundle) {
         log.warn(
           "Seed",
           `planted story expects extension "${name}"${ext?.version ? ` (v${ext.version})` : ""} ` +
-          `but it is not present in extensions/. Its beings, roles, ops, and data ` +
+          `but it is not present in extensions/. Its beings, ables, ops, and data ` +
           `will be inert until it's installed.`,
         );
       }

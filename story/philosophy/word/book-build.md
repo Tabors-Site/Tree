@@ -8,7 +8,7 @@ them, we don't invent.
 
 | form                                                                                    | is a              | where                                                                                                          | colophon today                                                                                    | receive today                                                                                   |
 | --------------------------------------------------------------------------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| **store word-bundle** — `store/words/<dir>/` (.word + handler), or a flat `<name>.word` | **language book** | `seed/store/words/*` (`WORDS.md`: "a portable unit — lift the bundle into another factory and it boots there") | — (self-registers via `registerRoleWord`; words = `coin` facts)                                   | side-effect import → `declareOpsToFold`/`registerRoleWord` → `coin` facts                       |
+| **store word-bundle** — `store/words/<dir>/` (.word + handler), or a flat `<name>.word` | **language book** | `seed/store/words/*` (`WORDS.md`: "a portable unit — lift the bundle into another factory and it boots there") | — (self-registers via `registerAbleWord`; words = `coin` facts)                                   | side-effect import → `declareOpsToFold`/`registerAbleWord` → `coin` facts                       |
 | **graft bundle** — facts/acts/histories/matter                                          | **history book**  | `seed/materials/publish/graft.js` (bundle), `seedTemplate.js`, `templateRegistry.js`                           | `bundle.meta` = `{ storyRoot/graftRoot, storySig/graftSig {signerId,value}, lineage, counts, … }` | `plantTemplate` (fresh-shell, seal-checked) / `plantGraft` / `applyGraft` (identity-preserving) |
 
 Both are "a named, content-addressed, signed bundle you carry into another factory and it
@@ -160,7 +160,7 @@ is the one commitment.
 2. **`book/book.js`** — the shape + `kindOf(book)` (derive from which `body` keys are present;
    no tag). Thin; the contract is the shape.
 3. **`book/receive.js`** — the one verb (above). Its per-part handlers WRAP the existing code:
-   words → `declareOpsToFold`/`registerRoleWord`; facts → `plantGraft`/`plantTemplate`;
+   words → `declareOpsToFold`/`registerAbleWord`; facts → `plantGraft`/`plantTemplate`;
    matter → the CAS land. One seal-check + one colophon-append around them.
    _Verify: receive a tiny language book (one coined word) + a tiny history book (one fact);
    both land, seal verified, colophon appended._

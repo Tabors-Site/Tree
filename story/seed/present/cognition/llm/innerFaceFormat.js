@@ -6,7 +6,7 @@
 //
 // Per philosophy/names/innerFace.md: per-soul reformatting is allowed
 // at the presentation layer. The 2-fold beat builds the canonical face
-// once (orientation + role + position + capabilities + blocks); this
+// once (orientation + able + position + capabilities + blocks); this
 // file turns the blocks into WORD (present tense). The cognition speaks
 // Word; there is no JSON-block shape.
 //
@@ -20,11 +20,11 @@
 // ────────────────────────────────────────────────────────────────────
 //
 // The being's face — the canSee blocks folded from the being/space/matter reels at its position
-// (Tabor: "the words loaded = its role + whatever's in the reels at where it is") — rendered as
+// (Tabor: "the words loaded = its able + whatever's in the reels at where it is") — rendered as
 // WORD, present tense, not the [label]\n{JSON} shape. String payloads pass through verbatim (a SEE
 // resolver that already framed its own Word); object payloads render as readable present-tense
 // lines. The richer book-weave (assembleStory's past-tense recall) is the follow-on; this is the
-// forward-SEE face as Word — the half that pairs with renderVocabularyAsWord (the role's words).
+// forward-SEE face as Word — the half that pairs with renderVocabularyAsWord (the able's words).
 
 export function formatInnerFaceBlocksAsWord(innerFace) {
   if (!innerFace || !Array.isArray(innerFace.blocks) || innerFace.blocks.length === 0) return "";

@@ -1,0 +1,339 @@
+// The bridge registry (host): (able, be-op) -> a parsed `.word` program.
+//
+// Where a BE op would dispatch to its JS able handler, the stamper first consults
+// this registry; if a `.word` program is present it runs via the evaluator in
+// LIVE mode with the moment's moment, else it falls through to the JS handler
+// (2.md Phase 4, the dual registry, preferring `.word`). This is the only new
+// host code the conversion needs; the rest is deletion. See bridge.md.
+//
+// Standalone for now: built and validated here, wired into cherub's birthHandler
+// and the world-sequencing JS deleted only once the diff gate is green.
+
+import { readFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { parse } from "./parser.js";
+import { evaluate } from "./evaluator.js";
+import { resolveAbleWordSource } from "./wordStore.js";
+
+const k = (able, op) => `${able}:${op}`;
+
+// (able, op) -> the `.word` file that replaces its JS handler.
+// The engine now holds ZERO built-in words: every word self-registers via
+// registerAbleWord from its own bundle's module-load (the credentialOps pattern).
+// Cherub was the LAST built-in entry here; it moved to seed/store/words/cherub/ and
+// now self-registers (its able.js calls registerAbleWord at load). The map starts
+// EMPTY and is filled by those registrations + rehydrateWordsFromFacts at boot.
+// The PROJECTION (same shape as wakes' _registry): (able:op) -> { fileUrl, disabled }.
+// Populated in-memory at module-load for the SYNCHRONOUS hot path (resolveAbleWord), and
+// reconciled with the chain at boot (rehydrateWordsFromFacts). The chain — coin /
+// retire facts — is the source of truth; this map is its live fold. A word, once
+// declared, is a fact forever: you DISABLE (a new fact), never delete. (No part-of-speech
+// tag: the part of speech is the ANGLE — do=verb, see=noun, `a X is a able`=able-noun,
+// seed=instantiable-noun — intrinsic to how the word is declared/used. A separate `shape`
+// field would be a redundant copy of that truth, and a redundant copy drifts.)
+const REGISTRY = new Map();
+
+// The per-history DISABLED overlay: history -> Set<"able:op"> turned off ON that history. A
+// word's EXISTENCE (declared + backed, in REGISTRY) is history-INDEPENDENT; its ENABLED state
+// is per-HISTORY, folded from disable/enable facts (each laid on its own history). This is what
+// lets an extension's words be ON in one history and OFF in another of the SAME story.
+// V2 is per-EXACT-history; lineage inheritance (a disable on an ancestor dimming descendants,
+// mirroring wakes' _isInHistoryLineage) is the V2.1 refinement.
+const _historyDisabled = new Map();
+const _disabledOn = (key, history) =>
+  !!_historyDisabled.get(String(history))?.has(key);
+
+// The root story (heaven), where the base/seed vocabulary lives. It is the fallback for a
+// HISTORYLESS resolve — an existence query with no act context (a verifier, a global check).
+// This is NOT an act-default drifting to "0": a real act always threads its own history.
+const ROOT = "0";
+// The resolved #main history, cached at boot (declareAbleWordsToFold / rehydrate resolve the
+// pointer via getDefaultHistory). resolveAbleWord is SYNC and can't await the pointer, so it
+// PREFERS the cached #main over the root when an act gave no history.
+let _mainHistory = null;
+
+const irCache = new Map();
+function wordOf(file) {
+  if (!irCache.has(file)) {
+    // a able registers a URL (new URL("./x.word", import.meta.url)); the built-in map
+    // holds paths relative to THIS engine file. Resolve both.
+    const url =
+      file instanceof URL
+        ? file
+        : typeof file === "string" && file.startsWith("file:")
+          ? new URL(file) // a source string from the fold
+          : typeof file === "string" && file.startsWith("/")
+            ? file
+            : new URL(`./${file}`, import.meta.url);
+    irCache.set(file, parse(readFileSync(url, "utf8")));
+  }
+  return irCache.get(file);
+}
+
+// A able co-locates its `.word` and registers it (CONVERTING.md): from the able file,
+// `registerAbleWord("cherub", "birth", new URL("./cherub.word", import.meta.url))`. Called
+// at able-load (pre-genesis, BEFORE the chain is writable), so it just populates the
+// in-memory projection (the sync resolveAbleWord works immediately). genesis later walks
+// the projection, and declareAbleWordsToFold declares each into the unified wordStore fold.
+export function registerAbleWord(able, op, fileUrl) {
+  REGISTRY.set(k(able, op), { able, op, fileUrl });
+}
+
+// The registered able-words (the pre-genesis buffer) — declareAbleWordsToFold reads these to declare
+// each into the unified wordStore fold (ABLES-UNIFICATION.md WP-2). Each: { able, op, fileUrl }.
+export function listRegistered() {
+  return [...REGISTRY.values()];
+}
+
+// Resolve a able's op to its `.word` IR for a HISTORY, or null to fall through to the JS
+// handler. Resolves iff DECLARED + BACKED (existence — the `.word` file present; a gone
+// extension leaves the declaration but no code) AND NOT disabled ON this history (the
+// per-history overlay). A missing history falls back to #main (the cached default pointer),
+// NEVER the literal "0" — resolve the pointer, don't assume the id (never-default-history-zero).
+// Stays SYNCHRONOUS (never reads the chain).
+export function resolveAbleWord(able, op, history) {
+  // PHASE 2 cutover: the runtime read is the UNIFIED wordStore fold + the per-history overlay, via
+  // resolveAbleWordViaFold. The REGISTRY Map is now ONLY the pre-genesis registration buffer
+  // (declareAbleWordsToFold flushes it into the fold); resolveAbleWord no longer reads it. Parity
+  // proven by verify-ablewordfold (phase 1) before this cutover. Stays SYNCHRONOUS.
+  return resolveAbleWordViaFold(able, op, history);
+}
+
+// ABLES-UNIFICATION phase-1 parity path: resolve a able-word's IR by reading the UNIFIED wordStore
+// fold (existence + source, sync) + the per-history overlay (enabled). verify-ablewordfold compares
+// this to resolveAbleWord (the REGISTRY path) to prove the read cutover is a no-op before REGISTRY is
+// deleted in phase 2. Same SYNC contract as resolveAbleWord (the overlay is an in-memory index).
+export function resolveAbleWordViaFold(able, op, history) {
+  const b = history ?? _mainHistory ?? ROOT;
+  if (_disabledOn(k(able, op), b)) return null;
+  const source = resolveAbleWordSource(able, op); // sync read of the unified fold
+  if (!source) return null;
+  try {
+    return wordOf(source);
+  } catch {
+    return null;
+  } // declared but unbacked
+}
+
+// ── the chain backing: coin / retire facts (the vocabulary's durable truth) ──
+//
+// The word vocabulary is a FOLD of the chain (the wakes pattern): the REGISTRY above is the
+// projection; these facts are the source. Declaring a word lays a permanent `do:coin`
+// fact; you never delete a word, you DISABLE it (a `do:retire` fact). At boot,
+// rehydrateWordsFromFacts replays them into the map. EVERY fact needs an ACTOR — the being
+// who declares/disables the word (its authority): I_AM for the seed vocabulary, the installer
+// for an extension's words, the operator for a disable. Only the DECLARATION is a fact; the
+// parsed IR is read lazily from the file (like wakes never persists the runtime cursor).
+
+const WORD_COIN = "coin";
+const WORD_RETIRE = "retire";
+
+// I_AM bedrock (the genesis vocabulary on "0" is immutable by anyone but I_AM) now lives in
+// wordStore.bindWord/disableWord as ONE guard over every word kind — op, type, reducer, concept,
+// ableword — not just able-words. ableWordRegistry no longer carries its own bedrock set or guard.
+
+// Resolve #main (the pointer), never the literal "0", and cache it for the sync
+// resolveAbleWord. Used wherever a history isn't given.
+async function _ensureMainHistory() {
+  const { getDefaultHistory } =
+    await import("../../materials/history/historyRegistry.js");
+  _mainHistory = await getDefaultHistory();
+  return _mainHistory;
+}
+
+// (declareWordsToChain removed with the unification: able-words are declared into the unified
+// wordStore fold by declareAbleWordsToFold — in seedFold + the boot-end pass — as "able:op" words
+// with kind:"ableword", not by a separate {able,op} fact path. The IR-laying act runs there.)
+
+// Disable a word: append a `do:retire` fact (permanent) + flip the projection, so
+// resolveAbleWord returns null and acts using it fall through / refuse. The declaration
+// stays on the chain forever; this is itself the "new word that says it can't be used".
+export async function disableWord(
+  able,
+  op,
+  { moment = null, history = null, actorBeingId = null } = {},
+) {
+  const { disableWord: disableWordInFold } = await import("./wordStore.js");
+  const br = history != null ? String(history) : await _ensureMainHistory();
+  await disableWordInFold(`${able}:${op}`, {
+    moment,
+    history: br,
+    actorBeingId,
+  }); // the unified fold (bedrock-guarded there)
+  let s = _historyDisabled.get(br);
+  if (!s) {
+    s = new Set();
+    _historyDisabled.set(br, s);
+  }
+  s.add(k(able, op)); // disabled ON this history only (the sync overlay)
+}
+
+// Re-enable a disabled word: a fresh `do:coin` fact (the fold's last action wins).
+export async function enableWord(
+  able,
+  op,
+  { moment = null, history = null, actorBeingId = null } = {},
+) {
+  const { bindWord } = await import("./wordStore.js");
+  const br = history != null ? String(history) : await _ensureMainHistory();
+  const entry0 = REGISTRY.get(k(able, op)); // the registration buffer holds the IR source
+  await bindWord(
+    `${able}:${op}`,
+    {
+      kind: "ableword",
+      able,
+      op,
+      source: String(entry0?.fileUrl ?? ""),
+    },
+    { moment, history: br, actorBeingId },
+  ); // a fresh coin re-enables (bedrock-guarded in wordStore)
+  _historyDisabled.get(br)?.delete(k(able, op)); // re-enabled ON this history (the sync overlay)
+}
+
+// Rehydrate the projection from the chain (boot/recovery): replay coin / retire
+// facts in date/seq order (declare = enable + ensure present, disable = mark off; last action
+// wins), grouped by the fact's history into the per-history overlay. Mirrors wakes
+// rehydrateFromFacts. Per-EXACT-history (V2); lineage inheritance (a disable on an ancestor
+// dimming descendants, mirroring wakes' _isInHistoryLineage) is the V2.1 refinement. Also
+// caches #main so the sync resolveAbleWord can fall back to it (never the literal "0").
+export async function rehydrateWordsFromFacts() {
+  const { default: Fact } = await import("../../past/fact/fact.js");
+  await _ensureMainHistory();
+  // The able-words now live in the UNIFIED wordStore fold: a coin fact carries
+  // params.word ("able:op") + params.binding.kind === "ableword"; a retire carries params.word.
+  // Rebuild the per-history disabled overlay + the I_AM bedrock set from them. resolveAbleWord reads
+  // the fold for EXISTENCE, so REGISTRY is no longer populated here (it is the pre-genesis buffer).
+  const facts = await Fact.find({
+    verb: "do",
+    act: { $in: [WORD_COIN, WORD_RETIRE] },
+  })
+    .sort({ date: 1, seq: 1 })
+    .lean();
+  _historyDisabled.clear();
+  const ablewordKeys = new Set(); // params.word of words whose declare marked them kind:"ableword"
+  for (const f of facts) {
+    const word = f.params?.word;
+    if (!word) continue;
+    if (f.act === WORD_COIN && f.params?.binding?.kind === "ableword")
+      ablewordKeys.add(word);
+    if (!ablewordKeys.has(word)) continue; // only able-words feed the per-history overlay
+    // ENABLED state (per EXACT history): last action on the fact's history wins (disable adds,
+    // declare/enable removes). Facts always carry a history; fall back to #main, never "0".
+    const br = String(f.history ?? _mainHistory);
+    let s = _historyDisabled.get(br);
+    if (f.act === WORD_RETIRE) {
+      if (!s) {
+        s = new Set();
+        _historyDisabled.set(br, s);
+      }
+      s.add(word);
+    } else if (s) s.delete(word);
+  }
+  return facts.length;
+}
+
+// Run a resolved `.word` program LIVE in the moment, reproducing the exact ctx the
+// green diff proved (verify-cherub-live.mjs, 7/7). The program's acts emit into the
+// moment's moment.deltaF via the evaluator's live path (do-acts -> doVerb, the
+// form-being -> the real birthBeing). Returns the deltaF the program laid (the WORLD
+// strand; the token/session strand stays host, reading via bornBeingFrom).
+//
+// The caller supplies the able's actor model and the flow's context:
+//   trigger    the summon payload the flow binds (e.g. { name, password })
+//   bindings   the rest of the flow's named context, NOT in the summon payload
+//              (cherub:birth's ownerName = the arriving Name, placeRoot = the
+//              story root the home is made under). Merged over trigger.
+//   beings     proper-name -> being id (cherub:birth's { Cherub, Arrival }); the
+//              evaluator resolves a proper noun to its id through this (7.md bridge).
+//   through    the being being the acts run THROUGH (identity.beingId): cherub:birth
+//              acts "by I_AM through Cherub", so through = the cherub being id.
+//   iam        the bootstrap actor name; name === "i-am" short-circuits authorize
+//              (the privileged birth acts are denied for an ordinary summoned name).
+//
+// ATTRIBUTION (two modes; `through` presence is the signal):
+//   being mode (through != null) — the `.word` acts are I_AM's, acting THROUGH a being
+//     (cherub:birth: I_AM through Cherub). The privileged seed acts go through doVerb's
+//     authorize, which short-circuits on name === "i-am" (the bootstrap axiom); an
+//     ordinary summoned name would be denied. So we run under a DERIVED identity (i-am,
+//     beingId = the being) and override actorAct.by to i-am, so the facts attribute
+//     to I_AM.
+//   CALLER mode (through == null, THE DEFAULT) — the acts are the CALLER's: a DO-op cut
+//     (take-able) or connect, where the being itself acts. We run under the REAL moment's
+//     identity + actorAct, so the facts attribute to the being that did them (no per-cut
+//     attribution workaround). Most slices want this.
+// Either mode SHARES the real moment's deltaF / foldedSeqs / afterSeal by reference, so
+// facts land on the real chain with seq continuity; only being mode overrides the actor.
+export async function runAbleWord(
+  ir,
+  {
+    moment,
+    history,
+    trigger = {},
+    bindings = {},
+    beings = {},
+    through = null,
+    iam = "i-am",
+    env = {},
+    identity: identityOverride = null,
+  },
+) {
+  moment.deltaF ??= [];
+  const being = through != null;
+  // identity override (opt-in): a being acting AS ITSELF — e.g. a word-native LLM cognition emitting
+  // its own Word (14.md) — passes its own {beingId, name} so the acts attribute to the being (through
+  // = beingId) and sign by its OWN Name (by = moment.actorAct.by), NOT I_AM. Without it: through-mode
+  // = I_AM through the being (seed-internal), caller-mode = moment.identity (the session caller).
+  const identity = identityOverride
+    || (being
+      ? { beingId: String(through), name: iam, nameId: iam } // I_AM through the being
+      : moment.identity || { beingId: null }); // the caller (default)
+  const wordCtx = {
+    ...moment,
+    identity,
+    ...(being ? { actorAct: { ...(moment.actorAct || {}), by: iam } } : {}), // caller keeps its actorAct
+    deltaF: moment.deltaF, // SAME array: facts land on the real moment
+    _inOp: true, // the whole program is ONE op (see below)
+  };
+  const ctx = {
+    dryRun: false,
+    moment: wordCtx,
+    identity,
+    history,
+    // default id-minter for `bind` sites (the home space): create-space honors the
+    // target id, so a minted uuid becomes the home's id and later acts reference it.
+    // A caller can override via env.mintId.
+    env: { iam, mintId: () => randomUUID(), ...env },
+    deltaF: moment.deltaF,
+    bindings: { ...trigger, ...bindings },
+    beings,
+    trigger: { ...trigger },
+    flows: [],
+  };
+  // The whole `.word` program is ONE op (e.g. the birth): `_inOp` stays set across
+  // the run so its do-acts dispatch through doVerb as NESTED sub-ops and don't each
+  // re-increment `_opCount` and trip sealAct's one-op-per-moment guard (do.js
+  // L214-226). The derived wordCtx carries _inOp; the real moment is untouched.
+  await evaluate(ir, ctx); // declarations register; the flow's effects run; §7 return sets ctx.result
+  // Return BOTH strands (8.md Q3): the WORLD strand (deltaF, already on the real moment;
+  // the birth cut reads it via bornBeingFrom) AND the §7 `return` result the transport
+  // reads (token/seat for a connect-style flow, reveal, etc.). A WordRefusal propagates
+  // out of evaluate() to the verb layer (no fact, the moment rolls back).
+  return { deltaF: moment.deltaF, result: ctx.result };
+}
+
+// Reconstruct the just-born being from the `be:birth` fact a `.word` birth laid,
+// so the host SESSION strand (`generateToken` / `unlockSigning`) can read it
+// without waiting for the projection fold. The cut in birthHandler uses this:
+// run cherub.word via the bridge, then `bornBeingFrom(moment.deltaF)` stands
+// in for the being that `_registerHumanWithFreshHome` used to return.
+export function bornBeingFrom(deltaF) {
+  const f = (deltaF || []).find((x) => x.verb === "be" && x.act === "birth");
+  if (!f) return null;
+  const p = f.params || {};
+  return {
+    _id: f.of?.id ?? f.through,
+    name: p.name,
+    trueName: p.trueName,
+    homeSpace: p.homeId ?? p.homeSpace ?? null,
+  };
+}

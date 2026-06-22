@@ -45,7 +45,7 @@ import { registerOperation } from "../../../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { detectTargetKind, targetIdOf } from "../../../materials/_targetShape.js";
 import { I_AM } from "../../../materials/being/seedBeings.js";
-import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
+import { registerAbleWord } from "../../../present/word/ableWordRegistry.js";
 // The auth gate + the model-matter resolve moved to modelHost.js (the host-escape glue);
 // import them back for the JS fallback below (the bodies are verbatim).
 import { resolveModelMatter, assertMaySetModel } from "./modelHost.js";
@@ -54,7 +54,7 @@ import { resolveModelMatter, assertMaySetModel } from "./modelHost.js";
 // ("render", "set-model") to model.word, its host escapes wired by modelHost.js. WIRED:
 // _setModelViaWord runs the `.word` through the bridge (CALLER mode); the JS
 // setModelHandler below is the clean-miss fallback.
-registerRoleWord("render", "set-model", new URL("./model.word", import.meta.url));
+registerAbleWord("render", "set-model", new URL("./model.word", import.meta.url));
 
 const SKINS_SPACE_NAME = "skins";
 
@@ -109,13 +109,13 @@ export async function ensureSkinsSpace(history = "0", moment = null) {
 // (field/value/merge), or null on a clean miss so the JS body runs. WordRefusal → IbpError.
 async function _setModelViaWord({ target, params, caller, moment }) {
   if (!moment) return null;
-  const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
-  const ir = resolveRoleWord("render", "set-model", moment?.actorAct?.history);
+  const { resolveAbleWord, runAbleWord } = await import("../../../present/word/ableWordRegistry.js");
+  const ir = resolveAbleWord("render", "set-model", moment?.actorAct?.history);
   if (!ir) return null;
   const { modelHostEnv } = await import("./modelHost.js");
   const history = moment?.actorAct?.history;
   try {
-    const { result } = await runRoleWord(ir, {
+    const { result } = await runAbleWord(ir, {
       moment, history,
       trigger: {
         target,
@@ -183,7 +183,7 @@ async function setModelHandler({ target, params, identity, moment }) {
   // set-being:render etc. wherever they stand (you wear a model from
   // /skins while standing in /skins). The fact carries the same
   // {field, value, merge} shape the set-<kind> trio uses — params are
-  // enriched in place (the grant-role pattern) and the qualities
+  // enriched in place (the grant-able pattern) and the qualities
   // reducer applies it as one more deep write.
 
   // ── Clear path ──

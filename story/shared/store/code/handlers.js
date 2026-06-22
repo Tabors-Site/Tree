@@ -37,12 +37,12 @@ import log from "../../../seed/seedStory/log.js";
 import { buildClaim, listingHashOf } from "./lib/claims.js";
 
 // Listing types ARE the resource kinds (RESOURCES.md). Six total:
-// code, role, roleflow, seed, asset, pack. A whole-story publish is
+// code, able, flow, seed, asset, pack. A whole-story publish is
 // a "pack" listing whose tree happens to span the entire repo,  no
-// separate type; same primitive at a larger scope. The roleflow
+// separate type; same primitive at a larger scope. The flow
 // listing path is soft-rejected below pending its design pass.
 const LISTING_TYPES = new Set([
-  "code", "role", "roleflow", "seed", "asset", "pack",
+  "code", "able", "flow", "seed", "asset", "pack",
 ]);
 const NAME_RE = /^[a-z][a-z0-9-]*$/;
 const VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9.+-]*$/;
@@ -73,7 +73,7 @@ function frameOf(ctx) {
 /**
  * The publisher's identity: the BEING that summoned the registrar, by
  * its key. Publishing requires an identified being holding the
- * store:publisher role (ROOTS.md). That being may be NATIVE (born
+ * store:publisher able (ROOTS.md). That being may be NATIVE (born
  * here, or grafted in) or FOREIGN (reaching across in its left stance
  * over cross-story IBP); the key is the publisher either way, so names
  * scope to a key, never to an anonymous domain string. `homeStory`
@@ -121,9 +121,9 @@ export async function publishListing(fed, ctx) {
   const manifest = fed?.manifest;
   const listingType = fed?.listingType || manifest?.listingType || null;
 
-  if (listingType === "roleflow") {
+  if (listingType === "flow") {
     return failure(
-      "roleflow listings await their design pass (ROOTS.md build order); publish extensions and seeds today",
+      "flow listings await their design pass (ROOTS.md build order); publish extensions and seeds today",
       "unsupported",
     );
   }

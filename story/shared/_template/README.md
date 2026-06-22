@@ -19,13 +19,13 @@ Then walk through each piece and edit:
    the DO ops, SEE ops, hooks, and cognition handlers your pack needs.
    If your pack has no substrate code, delete this folder.
 
-3. **`roles/<each>/`** — MANY role pieces. Each subfolder is one role
-   (the folder name becomes the bare role name). Rename
-   `example-role/` to your role's name; same in the pack manifest's
+3. **`ables/<each>/`** — MANY able pieces. Each subfolder is one able
+   (the folder name becomes the bare able name). Rename
+   `example-able/` to your able's name; same in the pack manifest's
    `requires`.
 
-4. **`roleflows/<each>/`** — MANY roleflow pieces. Each is composition
-   data for stacking roles per moment. If you don't need composition,
+4. **`flows/<each>/`** — MANY flow pieces. Each is composition
+   data for stacking ables per moment. If you don't need composition,
    delete this folder.
 
 5. **`seeds/<each>/`** — MANY seed pieces. Each plants a structure
@@ -55,8 +55,8 @@ collision.
 
 ## Status
 
-The role-kind and seed-kind handlers in the loader are built. The
-roleflow-kind and asset-kind handlers are still pending — their
+The able-kind and seed-kind handlers in the loader are built. The
+flow-kind and asset-kind handlers are still pending — their
 pieces are discovered (and logged as "pending kind handlers") but not
 yet loaded. Adding them is bounded work; see
 [RESOURCES.md](../RESOURCES.md) for the design.

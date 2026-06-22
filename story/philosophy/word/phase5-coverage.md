@@ -1,6 +1,6 @@
 # Word coverage map (Phase 3/5 backlog)
 
-A representative spread of in-world slices, drafted as `.word` prose, with every surface form classified as `have` (the current parser plus evaluator already run it), `parser-gap` (a new surface template the parser must learn), or `engine-gap` (an evaluator capability the slice needs that does not yet exist). Eight slices were drafted across the heaviest cases in the canon: cherub birth, BE connect, the governance commons, grant-role, inheritation, the subscription and schedule wake flows, the matter-type and space-template registry, and NAME declare. The point is leverage: count how many slices each missing form or capability blocks, so parser growth is queued by how much corpus it unlocks and the evaluator handoff is queued by which capabilities the most slices wait on. This map changes no code; it is the shared backlog for the two lanes.
+A representative spread of in-world slices, drafted as `.word` prose, with every surface form classified as `have` (the current parser plus evaluator already run it), `parser-gap` (a new surface template the parser must learn), or `engine-gap` (an evaluator capability the slice needs that does not yet exist). Eight slices were drafted across the heaviest cases in the canon: cherub birth, BE connect, the governance commons, grant-able, inheritation, the subscription and schedule wake flows, the matter-type and space-template registry, and NAME declare. The point is leverage: count how many slices each missing form or capability blocks, so parser growth is queued by how much corpus it unlocks and the evaluator handoff is queued by which capabilities the most slices wait on. This map changes no code; it is the shared backlog for the two lanes.
 
 ## Parser grammar backlog (MY lane — forms to add, by leverage)
 
@@ -8,17 +8,17 @@ The new SURFACE templates the parser must learn, sorted by how many slices need 
 
 | Form                                                                                                                                                        | #slices | note                                                                                                                                             | example slices                                                                                         |
 | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| `When X: <multi-line indented body of effects>`                                                                                                             | 7       | Multi-effect flow body: a `When` trigger followed by an indented sequence of acts that fire together. The parser handles single-line flows only. | cherub-birth, cherub-connect, governance-commons, grant-role, inheritation, matter-types, NAME-declare |
-| `the X Vs the Y a Z of the W` / `the X sets the Y as Z of the W` (DO act with complex relation/property assignment)                                         | 5       | Imperative DO acts setting parent/owner/relation structure; complex object or multi-target, beyond simple `V the O`.                             | cherub-birth, governance-commons, grant-role, inheritation, matter-types                               |
-| `A X can V a Y` (capability grant: can/cannot)                                                                                                              | 3       | Capability declarations as structures (raise, back, admit, close, coalesce, skip). Parser does not yet parse `can` declarations.                 | governance-commons, subscription-schedule, grant-role                                                  |
-| `X carries a Y` / `A X has a Y` (property/attribute declaration on a kind)                                                                                  | 3       | Attach a property (filter, priority, interval, size, owner, content shape) to a kind, distinct from containment or ownership.                    | subscription-schedule, matter-types, (grant-role record fields)                                        |
+| `When X: <multi-line indented body of effects>`                                                                                                             | 7       | Multi-effect flow body: a `When` trigger followed by an indented sequence of acts that fire together. The parser handles single-line flows only. | cherub-birth, cherub-connect, governance-commons, grant-able, inheritation, matter-types, NAME-declare |
+| `the X Vs the Y a Z of the W` / `the X sets the Y as Z of the W` (DO act with complex relation/property assignment)                                         | 5       | Imperative DO acts setting parent/owner/relation structure; complex object or multi-target, beyond simple `V the O`.                             | cherub-birth, governance-commons, grant-able, inheritation, matter-types                               |
+| `A X can V a Y` (capability grant: can/cannot)                                                                                                              | 3       | Capability declarations as structures (raise, back, admit, close, coalesce, skip). Parser does not yet parse `can` declarations.                 | governance-commons, subscription-schedule, grant-able                                                  |
+| `X carries a Y` / `A X has a Y` (property/attribute declaration on a kind)                                                                                  | 3       | Attach a property (filter, priority, interval, size, owner, content shape) to a kind, distinct from containment or ownership.                    | subscription-schedule, matter-types, (grant-able record fields)                                        |
 | `make a new X, Y as bind` (imperative DO with a binding clause)                                                                                             | 2       | Capture an id for later reference within the flow (`homeId as bind`). No binding syntax yet.                                                     | cherub-birth, cherub-connect (loop bindings)                                                           |
 | `becomes a fact: X:Y` (derivation form)                                                                                                                     | 2       | Rule-8 derivation: an act `becomes a fact` of type `verb:op`. Not in the current forms.                                                          | cherub-birth, (inheritation fact-landing)                                                              |
-| `When a X Vs to Z` / `When I V a role to another being` (event-flow with receiver / indirect object)                                                        | 2       | Rule-17 receiver on the trigger and on DO acts (`to another being`).                                                                             | grant-role, governance-commons                                                                         |
-| `A X extends Y` (role inheritance)                                                                                                                          | 1       | Child role inherits parent capabilities and scope.                                                                                               | governance-commons                                                                                     |
+| `When a X Vs to Z` / `When I V a able to another being` (event-flow with receiver / indirect object)                                                        | 2       | Rule-17 receiver on the trigger and on DO acts (`to another being`).                                                                             | grant-able, governance-commons                                                                         |
+| `A X extends Y` (able inheritance)                                                                                                                          | 1       | Child able inherits parent capabilities and scope.                                                                                               | governance-commons                                                                                     |
 | `A X contains Y and Z` (containment with conjunction)                                                                                                       | 1       | `contains` is not yet a parser verb; conjoined contained items.                                                                                  | governance-commons                                                                                     |
 | `A X can V every/most/no Y` (capability/condition with quantifier)                                                                                          | 1       | Quantifiers `every`, `most`, `no` over a collection; counting predicate.                                                                         | governance-commons                                                                                     |
-| `notify the Y` (broadcast act, recipients by role)                                                                                                          | 1       | Reach all beings in a collection without explicit object enumeration.                                                                            | governance-commons                                                                                     |
+| `notify the Y` (broadcast act, recipients by able)                                                                                                          | 1       | Reach all beings in a collection without explicit object enumeration.                                                                            | governance-commons                                                                                     |
 | `the X Vs` (reflexive/passive act, no explicit object)                                                                                                      | 1       | Self-directed state transition (`the proposal passes`, `the being wakes`).                                                                       | governance-commons, (subscription-schedule has-form)                                                   |
 | `When a X Vs a Y` (event-flow without `happens`)                                                                                                            | 1       | Naked act-as-event watch; current parser requires `When a E happens`.                                                                            | governance-commons                                                                                     |
 | `host: <builtin> does X` (host escape hatch inline in prose surface)                                                                                        | 1       | A prose grammar for host calls; today they live only in `act.host` IR.                                                                           | NAME-declare (also strained in cherub-connect, matter-types)                                           |
@@ -28,14 +28,14 @@ The new SURFACE templates the parser must learn, sorted by how many slices need 
 | `A X can V the Y [adjective]` (capability over an adjective-filtered plural)                                                                                | 1       | Filter a plural by state (`the open proposals`).                                                                                                 | governance-commons                                                                                     |
 | `X runs Y (with purpose Z)` (act with a purpose/reason clause)                                                                                              | 1       | Accept a `with` clause describing intent (constant-time dummy hash).                                                                             | cherub-connect                                                                                         |
 | `X unlocks the Y keyed by Z` (act with a keyed/parametric resource)                                                                                         | 1       | Prepositional/parametric object qualifier (`keyed by` the trueName).                                                                             | cherub-connect                                                                                         |
-| `When the being holds the role at an anchor` (state condition on a collection's membership)                                                                 | 1       | Express "being holds a role [at anchor]" as a standing condition over `rolesGranted`.                                                            | grant-role                                                                                             |
-| `A grant lasts until revoked` / `No wall-clock expiry` / `time comes with moments, not ISO` (durational + temporal-exclusion + relational-time constraints) | 1       | Lifecycle statements and prohibitions on time-based expiry (law-layer).                                                                          | grant-role                                                                                             |
+| `When the being holds the able at an anchor` (state condition on a collection's membership)                                                                 | 1       | Express "being holds a able [at anchor]" as a standing condition over `ablesGranted`.                                                            | grant-able                                                                                             |
+| `A grant lasts until revoked` / `No wall-clock expiry` / `time comes with moments, not ISO` (durational + temporal-exclusion + relational-time constraints) | 1       | Lifecycle statements and prohibitions on time-based expiry (law-layer).                                                                          | grant-able                                                                                             |
 | `X is stored / X is not stored / no X is stored for Y` (storage and negative/absence facts)                                                                 | 1       | Express "no inheritation point stored," distinguish stored from computed facts.                                                                  | inheritation                                                                                           |
 | `X accepts content-kind` / `X carries operation` / `X claims a mime or extension or scheme` (matter-type declarations)                                      | 1       | Type registry surface: what a type accepts, the ops it carries, its classification claims.                                                       | matter-types                                                                                           |
 | `An extension can bring a typed X by registering "ext:type"` (extensibility via summon + host)                                                              | 1       | Extension summons `registerMatterType` to birth a type into the registry.                                                                        | matter-types                                                                                           |
 | `When a being Vs X without naming its Y, I ...` (absence-conditional flow)                                                                                  | 1       | A flow that fires on an omission, not on presence; auto-classification.                                                                          | matter-types                                                                                           |
 | `When X is in Y, Y contains X` (symmetric/relational derivation)                                                                                            | 1       | Rule-8 closure inferring the inverse relation (containment).                                                                                     | matter-types                                                                                           |
-| `A X is a space.` / `A X is a Y.` / `A X is a role for a Y.` (declaration of kind)                                                                          | (have)  | Already in the parser; listed for completeness.                                                                                                  | cherub-birth, governance-commons, inheritation, NAME-declare, subscription-schedule, matter-types      |
+| `A X is a space.` / `A X is a Y.` / `A X is a able for a Y.` (declaration of kind)                                                                          | (have)  | Already in the parser; listed for completeness.                                                                                                  | cherub-birth, governance-commons, inheritation, NAME-declare, subscription-schedule, matter-types      |
 
 ## Engine-capability queue (the other agent's lane)
 
@@ -43,19 +43,19 @@ The evaluator capabilities the slices need that do not exist. This is the handof
 
 | Capability                                                                                                                            | #slices | slices                                                                                                 |
 | ------------------------------------------------------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------ |
-| multi-effect flow bodies (sequence of acts, possibly nested, under one `When` trigger)                                                | 7       | cherub-birth, cherub-connect, governance-commons, grant-role, inheritation, matter-types, NAME-declare |
+| multi-effect flow bodies (sequence of acts, possibly nested, under one `When` trigger)                                                | 7       | cherub-birth, cherub-connect, governance-commons, grant-able, inheritation, matter-types, NAME-declare |
 | branching / if-then-else conditional within a flow (not just standing watches)                                                        | 4       | cherub-connect, governance-commons, inheritation, matter-types                                         |
-| role / capability model: track who can do what, prohibition precedence (rule 14), `extends` resolution, per-role visibility           | 4       | governance-commons, grant-role, inheritation, subscription-schedule                                    |
-| negation / NOT in conditions (equality negation, existence/absence checks)                                                            | 4       | cherub-connect, governance-commons, grant-role, inheritation                                           |
-| collection resolution and operations: resolve plural references to dynamic sets; append-to-collection (`rolesGranted` gains a record) | 3       | governance-commons, grant-role, subscription-schedule                                                  |
+| able / capability model: track who can do what, prohibition precedence (rule 14), `extends` resolution, per-able visibility           | 4       | governance-commons, grant-able, inheritation, subscription-schedule                                    |
+| negation / NOT in conditions (equality negation, existence/absence checks)                                                            | 4       | cherub-connect, governance-commons, grant-able, inheritation                                           |
+| collection resolution and operations: resolve plural references to dynamic sets; append-to-collection (`ablesGranted` gains a record) | 3       | governance-commons, grant-able, subscription-schedule                                                  |
 | in-moment / relational query bound mid-flow (isAncestorOf graph walk; tree traversal with a predicate yielding anchors)               | 3       | cherub-connect, inheritation, (matter-types classification scoring)                                    |
 | state-read of a being's nested field used in a condition (`qualities.father`, foreign vs local)                                       | 3       | cherub-connect, inheritation, matter-types                                                             |
-| role inheritance (auto-inherit roles from parents on birth; `extends` merges parent capability and scope)                             | 3       | cherub-birth, governance-commons, subscription-schedule                                                |
+| able inheritance (auto-inherit ables from parents on birth; `extends` merges parent capability and scope)                             | 3       | cherub-birth, governance-commons, subscription-schedule                                                |
 | history-lineage inheritance and per-history cancel (subscriptions/schedules inherit then cancel on the child)                           | 2       | subscription-schedule, (cherub-connect seatBranch)                                                     |
 | collection-iteration: loop over a set, bind each element, break on a condition                                                        | 2       | cherub-connect, governance-commons                                                                     |
 | failure / refusal flow: emit a refusal or exception fact, halt the effect chain                                                       | 2       | cherub-connect, governance-commons                                                                     |
 | quantifier evaluation: `every`, `most`, `all`, `no` as counting predicates over collections                                           | 1       | governance-commons                                                                                     |
-| broadcast notification: `notify the X` reaching all beings of a role/collection                                                       | 1       | governance-commons                                                                                     |
+| broadcast notification: `notify the X` reaching all beings of a able/collection                                                       | 1       | governance-commons                                                                                     |
 | reflexive acts and self-wake marks: act with no explicit object (`the proposal passes`); asker and receiver the same being            | 2       | governance-commons, subscription-schedule                                                              |
 | acts-as-events: an act triggers a flow without an explicit `happens` wrapper                                                          | 1       | governance-commons                                                                                     |
 | disjunctive condition (OR) binding a flag (`asFather` true if any path succeeds)                                                      | 1       | cherub-connect                                                                                         |
@@ -67,9 +67,9 @@ The evaluator capabilities the slices need that do not exist. This is the handof
 | negative / absence facts: express "no point stored," distinguish stored from derived facts                                            | 1       | inheritation                                                                                           |
 | query dispatch to host bound into a flow (`be:see` calling `hasAuthorityOver`, binding the result)                                    | 1       | inheritation                                                                                           |
 | multiple anchor types folded into one decision (ownership trueName OR live inheritation point)                                        | 1       | inheritation                                                                                           |
-| object assembly: build a complex record (role record) from multiple fields with disjunctive fields (anchor space OR anchor being)     | 1       | grant-role                                                                                             |
-| validation gate: pre-seal check that fails the act if a predicate is false (role exists in registry)                                  | 1       | grant-role                                                                                             |
-| relational-time assertion: grants use moments, not wall-clock timestamps                                                              | 1       | grant-role                                                                                             |
+| object assembly: build a complex record (able record) from multiple fields with disjunctive fields (anchor space OR anchor being)     | 1       | grant-able                                                                                             |
+| validation gate: pre-seal check that fails the act if a predicate is false (able exists in registry)                                  | 1       | grant-able                                                                                             |
+| relational-time assertion: grants use moments, not wall-clock timestamps                                                              | 1       | grant-able                                                                                             |
 | coalesce batching: collect events into a window, fire one summon with the batch                                                       | 1       | subscription-schedule                                                                                  |
 | skipIfBacklog logic: skip waking if the being already has an unconsumed summon                                                        | 1       | subscription-schedule                                                                                  |
 | cleanup cascades: on release, drop every subscription and schedule for the being                                                      | 1       | subscription-schedule                                                                                  |
@@ -80,12 +80,12 @@ The evaluator capabilities the slices need that do not exist. This is the handof
 | extensibility-hook declaration: mark `qualities` as extension-writable, outside the core model                                        | 1       | matter-types                                                                                           |
 | classification as a primitive: eager inline auto-classify when matter is brought without a type (eager rule, not a standing watch)    | 1       | matter-types                                                                                           |
 | relational being binding / facet creation: a new being wired as a facet/child of a parent (state-fold or inheritance)                 | 1       | NAME-declare                                                                                           |
-| enumerated role options with null fallback (`soulType: human \| llm \| scripted, null`)                                               | 1       | NAME-declare                                                                                           |
+| enumerated able options with null fallback (`soulType: human \| llm \| scripted, null`)                                               | 1       | NAME-declare                                                                                           |
 | conditional guard with host call: `When X, the registry is queried (host: Y) and <guard>`                                             | 1       | NAME-declare                                                                                           |
 
 ## Runnable now
 
-None of the eight slices is runnable on the current parser-plus-evaluator. Honestly: zero. Every slice carries at least one `parser-gap` or `engine-gap` form, and most carry both. The closest are the slices that lean hardest on the existing `have` forms (`A X is a space.`, `A X is a role for a Y.`, the `When a E happens` event-flow, and the `host:` escape hatch) — `governance-commons` and `subscription-schedule` open with several `have` lines, and the matter-type registry's `A X is a matter type.` declarations parse today — but each still trips on its first real act (capability grants, `contains`, multi-effect bodies, history-lineage inheritance). The four `have`-only forms are real and reused (six slices use the kind-declaration forms; two use the unparameterized event-flow), but no whole slice clears the bar. The single most universal blocker is the multi-effect flow body: seven of eight slices need it before any of their interesting behavior can run.
+None of the eight slices is runnable on the current parser-plus-evaluator. Honestly: zero. Every slice carries at least one `parser-gap` or `engine-gap` form, and most carry both. The closest are the slices that lean hardest on the existing `have` forms (`A X is a space.`, `A X is a able for a Y.`, the `When a E happens` event-flow, and the `host:` escape hatch) — `governance-commons` and `subscription-schedule` open with several `have` lines, and the matter-type registry's `A X is a matter type.` declarations parse today — but each still trips on its first real act (capability grants, `contains`, multi-effect bodies, history-lineage inheritance). The four `have`-only forms are real and reused (six slices use the kind-declaration forms; two use the unparameterized event-flow), but no whole slice clears the bar. The single most universal blocker is the multi-effect flow body: seven of eight slices need it before any of their interesting behavior can run.
 
 ## Draft .word corpus
 
@@ -101,20 +101,20 @@ When Arrival summons Cherub to birth a being:
   the Cherub makes the home a territory of the place root.
   form a being named the being, with the being's name and password, with homeId as the being's home, with I_AM as the being's parent, and with the being's owner Name.
   the Cherub sets the being as owner of homeId.
-  the Cherub grants the being the human role at the place root.
-  the Cherub grants the being the global role at the place root.
+  the Cherub grants the being the human able at the place root.
+  the Cherub grants the being the global able at the place root.
   record the being's lineage: mother is Cherub, father is Arrival.
 
 The being's form-being act:
   host: birthBeing(spec, identity, summonCtx)
-  sets the being's id, name, cognition, defaultRole, trueName, homeId, parentBeingId, homeBranch, position.
-  auto-inherits roles from mother and father.
+  sets the being's id, name, cognition, defaultAble, trueName, homeId, parentBeingId, homeBranch, position.
+  auto-inherits ables from mother and father.
   becomes a fact: be:birth.
 
 That birth invokes the being's arrival into the world.
 ```
 
-- parser-gaps: `A X is Y in size`, `X births through Y`, multi-effect `When ... summons ... to ...` body, `make a new X, Y as bind`, `the X makes the Y a Z of the W`, `form a being named X, with <params>`, `the X sets the Y as Z of the W`, `the X grants the Y the Z role at the W`, `record the X's lineage: ...`, `becomes a fact: X:Y`. engine-gaps: multi-effect summon flows, `be:form-being` multi-fact atomic act, multi-property state fold (`sets the X's Y, Z, W`), role inheritance from parents, fact derivation, the `That X invokes Y into Z` consequence form.
+- parser-gaps: `A X is Y in size`, `X births through Y`, multi-effect `When ... summons ... to ...` body, `make a new X, Y as bind`, `the X makes the Y a Z of the W`, `form a being named X, with <params>`, `the X sets the Y as Z of the W`, `the X grants the Y the Z able at the W`, `record the X's lineage: ...`, `becomes a fact: X:Y`. engine-gaps: multi-effect summon flows, `be:form-being` multi-fact atomic act, multi-property state fold (`sets the X's Y, Z, W`), able inheritance from parents, fact derivation, the `That X invokes Y into Z` consequence form.
 
 ### cherub-connect (BE connect)
 
@@ -197,18 +197,18 @@ When an authenticated being (the caller) connects to inherit a descendant being:
 A commons is a space.
 A commons contains proposals and a roster of members.
 
-A member is a role for a commons.
+A member is a able for a commons.
 A member can see every proposal and the roster.
 A member can raise a proposal.
 A member can back a proposal.
 A member can summon a steward with a concern.
 
-A steward is a role for a commons.
+A steward is a able for a commons.
 A steward extends member.
 A steward can admit a being to the roster.
 A steward can close a proposal.
 
-A visitor is a role for a commons.
+A visitor is a able for a commons.
 A visitor can see the open proposals.
 A visitor can summon a steward to ask to join.
 
@@ -224,34 +224,34 @@ When a steward closes a proposal:
   no member can back it.
 ```
 
-- parser-gaps: `A X contains Y and Z`, `A X can V every Y and Z`, `A X can V a Y`, `A X can summon a Y with a Z`, `A X extends Y`, `A X can V a Y to a Z`, `A X can V the Y [adjective]`, `A X can summon a Y to V to Z`, multi-line `When a X Vs to Z` body, `notify the Y`, nested `when a X Vs the Y, the Y Vs a Z`, quantifier `When most X Vs Y`, reflexive `the X Vs`, event-flow without `happens` (`When a steward closes a proposal`). engine-gaps: capability model, quantifier evaluation, prohibition precedence (rule 14, `no member can back it`), role inheritance (`extends`), collection resolution, multi-effect flow bodies, broadcast notification, reflexive acts, acts-as-events.
+- parser-gaps: `A X contains Y and Z`, `A X can V every Y and Z`, `A X can V a Y`, `A X can summon a Y with a Z`, `A X extends Y`, `A X can V a Y to a Z`, `A X can V the Y [adjective]`, `A X can summon a Y to V to Z`, multi-line `When a X Vs to Z` body, `notify the Y`, nested `when a X Vs the Y, the Y Vs a Z`, quantifier `When most X Vs Y`, reflexive `the X Vs`, event-flow without `happens` (`When a steward closes a proposal`). engine-gaps: capability model, quantifier evaluation, prohibition precedence (rule 14, `no member can back it`), able inheritance (`extends`), collection resolution, multi-effect flow bodies, broadcast notification, reflexive acts, acts-as-events.
 
-### grant-role (DO op + auth)
+### grant-able (DO op + auth)
 
 ```
-A being can be granted a role.
+A being can be granted a able.
 
-When I grant a role to another being:
-  the being accepts a role record.
-  the role record holds the role name, the anchor space or anchor being, I as the grantor, and the grant time.
-  the being's rolesGranted gains the role record.
+When I grant a able to another being:
+  the being accepts a able record.
+  the able record holds the able name, the anchor space or anchor being, I as the grantor, and the grant time.
+  the being's ablesGranted gains the able record.
 
-When the being holds the role at an anchor:
-  the role is live for that being at that anchor place.
+When the being holds the able at an anchor:
+  the able is live for that being at that anchor place.
 
-I can grant role X only when my own role has canDo entry for grant-role:X.
-A role with canDo for grant-role:* can grant any role.
-A role with bare canDo for grant-role matches grant-role:* (the super-grantor shape).
+I can grant able X only when my own able has canDo entry for grant-able:X.
+A able with canDo for grant-able:* can grant any able.
+A able with bare canDo for grant-able matches grant-able:* (the super-grantor shape).
 
-The role exists in the registry before the grant seals.
-host: role validation (getRole from the registry).
+The able exists in the registry before the grant seals.
+host: able validation (getAble from the registry).
 
 A grant lasts until revoked.
 No wall-clock expiry.
 Time-bound grants come with reality-time (moments), not ISO timestamps.
 ```
 
-- parser-gaps: passive capability (`A being can be granted a role`), event-flow with indirect object (`When I grant a role to another being`), compound-object DO (`the being accepts a role record`), state condition on a collection (`When the being holds the role at an anchor`), durational/temporal-exclusion constraints (`A grant lasts until revoked`, `No wall-clock expiry`, reality-time vs ISO). engine-gaps: role-capability check with namespace/wildcard matching, collection append, object assembly with disjunctive fields, state-condition-on-collection, validation gate, receiver-in-act (rule 17), prohibition statement with precedence, relational-time assertion.
+- parser-gaps: passive capability (`A being can be granted a able`), event-flow with indirect object (`When I grant a able to another being`), compound-object DO (`the being accepts a able record`), state condition on a collection (`When the being holds the able at an anchor`), durational/temporal-exclusion constraints (`A grant lasts until revoked`, `No wall-clock expiry`, reality-time vs ISO). engine-gaps: able-capability check with namespace/wildcard matching, collection append, object assembly with disjunctive fields, state-condition-on-collection, validation gate, receiver-in-act (rule 17), prohibition statement with precedence, relational-time assertion.
 
 ### inheritation (DO ops: grant-inheritation, revoke-inheritation)
 
@@ -334,7 +334,7 @@ When a being is released, every subscription for the being is dropped.
 When a being is released, every schedule for the being is dropped.
 ```
 
-- parser-gaps: `X carries a Y` (property declaration), `When the X happens, Y` (external/timer watch), `The X is the Y's own Z` (reflexive ownership), `When a X is Y, every Z for the X is dropped` (cleanup cascade). engine-gaps: capability grants (rule 14), history-lineage inheritance, external/timer event watches, reflexive relationship marks (self-wake), cleanup cascades, coalesce batching, skipIfBacklog logic. (`A X is a space`, `A X is a role for a Y`, the two `When a E happens` event-flow forms, the event-derivation form, and `host: X` are `have`.)
+- parser-gaps: `X carries a Y` (property declaration), `When the X happens, Y` (external/timer watch), `The X is the Y's own Z` (reflexive ownership), `When a X is Y, every Z for the X is dropped` (cleanup cascade). engine-gaps: capability grants (rule 14), history-lineage inheritance, external/timer event watches, reflexive relationship marks (self-wake), cleanup cascades, coalesce batching, skipIfBacklog logic. (`A X is a space`, `A X is a able for a Y`, the two `When a E happens` event-flow forms, the event-derivation form, and `host: X` are `have`.)
 
 ### matter/types and space templates — type registry declarations
 
@@ -389,7 +389,7 @@ When a real-name is given, the registry is queried (host: findByName) and the re
 When a keypair is imported, the registry is queried (host: loadProjection) and the imported nameId must not already exist on this reality.
 ```
 
-- parser-gaps: bare `is` (`I_AM is the root`), multi-effect `When a E happens` body, host escape hatch inline in prose (`host: generateNameKeypair builds ...`), enumerated kind with null fallback (`soulType: human | llm | scripted, null`). engine-gaps: relational being binding / facet creation, multi-effect flow bodies, conditional host guard with side-effect-and-assert (`When X, the registry is queried (host: Y) and X must not exist`), enumerated role options with null fallback. (`A X is a space` is `have`.)
+- parser-gaps: bare `is` (`I_AM is the root`), multi-effect `When a E happens` body, host escape hatch inline in prose (`host: generateNameKeypair builds ...`), enumerated kind with null fallback (`soulType: human | llm | scripted, null`). engine-gaps: relational being binding / facet creation, multi-effect flow bodies, conditional host guard with side-effect-and-assert (`When X, the registry is queried (host: Y) and X must not exist`), enumerated able options with null fallback. (`A X is a space` is `have`.)
 
 ---
 

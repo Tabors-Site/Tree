@@ -8,10 +8,10 @@
 // What changes vs live.js.
 //   . Subscriptions key off weave (the reels the fold actually read),
 //     not spaceId. The same being at the same position with a
-//     different role produces a different weave, so a role flip
+//     different able produces a different weave, so a able flip
 //     properly drops the old subscription and replaces it on refold.
 //   . Push payload is the canonical inner face shape (orientation +
-//     role + position + capabilities + blocks + weave). Portal
+//     able + position + capabilities + blocks + weave). Portal
 //     reads it through the existing IBP envelope under a new SEE
 //     push kind.
 //   . Atomic weave rotation. When the server refolds, the sub's

@@ -13,7 +13,7 @@
 //     and form-being dispatches to the real birthBeing primitive.
 //
 // Faithful to the cherub birth flow mapped from the JS handlers:
-//   story/seed/present/roles/cherub/role.js (_registerHumanWithFreshHome)
+//   story/seed/present/ables/cherub/able.js (_registerHumanWithFreshHome)
 //   story/seed/materials/being/identity/birth.js (birthBeing)
 
 // Live-mode primitives (emitFact, birthBeing) are imported lazily inside the live
@@ -99,7 +99,7 @@ async function evalNode(node, ctx) {
     // Registered, NEVER run as effects — read backward off the reel (computed-on-read,
     // Q6/Q7). The parser's reasoning guard is the subject/object wall; everything here
     // is the law side of it (government-innerfold.md). Collected into ctx.laws until the
-    // role/type-registry integration arms them in authorizeViaRoles / registerMatterType.
+    // able/type-registry integration arms them in authorizeViaAbles / registerMatterType.
     case "is":
     case "can":
     case "cannot":
@@ -184,7 +184,7 @@ async function evalSee(node, ctx) {
 
   // A registered SEE-op: a read or pure-compute exposed as a verb (the host:->see
   // dissolution — `see mint-credential as credential`, `see find-by-name(name) as cand`).
-  // Dispatch its backing fn (ctx.env.host, the role's see-op handlers) — PERCEPTION, lays
+  // Dispatch its backing fn (ctx.env.host, the able's see-op handlers) — PERCEPTION, lays
   // NO fact, exactly like every other see. The verb IS the nature; no tag. (A compute is
   // see-shaped: it perceives an output from its inputs, changing nothing in the world.)
   if (node.act) {
@@ -393,8 +393,8 @@ async function evalRecall(node, ctx) {
   // CONSCIOUSNESS-LEVEL (Tabor): which views a being may recall is granted via `can recall <view>`
   // (canRecall), per being — the aperture is a granted word like everything else, NOT a permission
   // over public data (it's the capability to compute the wider fold). Enforcement is PERMISSIVE for
-  // now ("allow all saw, show the full story"); when it arms, gate `scope` here against the role's
-  // canRecall: `mode === "recalled" || role.canRecall.includes(scope)`, refusing otherwise.
+  // now ("allow all saw, show the full story"); when it arms, gate `scope` here against the able's
+  // canRecall: `mode === "recalled" || able.canRecall.includes(scope)`, refusing otherwise.
 
   if (ctx.dryRun) {
     if (node.as) ctx.bindings[node.as] = `<${mode}>`;
@@ -507,7 +507,7 @@ async function evalCall(node, ctx) {
       "INVALID_INPUT",
     );
   // the caller (the Name acting through its being) is the `from` stance. When the moment carries
-  // only a beingId (a role-op threading its actor without a name), resolve the name off the being
+  // only a beingId (a able-op threading its actor without a name), resolve the name off the being
   // so the `from` is a real stance — otherwise summon authorizes @undefined as anonymous.
   let fromName = ctx.identity?.name || ctx.identity?.nameId;
   if (!fromName && ctx.identity?.beingId) {
@@ -608,7 +608,7 @@ async function evalReturn(node, ctx) {
 //
 // Positional: the parser places the gate BEFORE the acts it guards, so it runs first.
 // The predicate is the §1 cond, or a whole-gate host lookup (resolvedBy: findByName /
-// getRole / hasAuthorityOver). Pass → fall through (a guard, not an effect). Fail →
+// getAble / hasAuthorityOver). Pass → fall through (a guard, not an effect). Fail →
 // run onFail (a refuse: throw WordRefusal, halt, no fact) — mirrors do.js authorize and
 // the NAME-declare must-not-exist throw, both of which abort before emitFact.
 async function evalGate(node, ctx) {
@@ -765,7 +765,7 @@ async function evalAct(act, ctx) {
   }
 
   // be:form-being dispatches to the host birth primitive (one act, many facts:
-  // birthBeing lays be:birth + the inherited-role grants + the global grant)
+  // birthBeing lays be:birth + the inherited-able grants + the global grant)
   if (act.verb === "be" && act.act === "form-being") {
     const res = await formBeing(params, ctx);
     if (act.bind) ctx.bindings[act.bind] = res.beingId;
@@ -841,7 +841,7 @@ async function evalClosure(node, ctx) {
 // emit a fact: dry-run collects it into ctx.deltaF; live sends it through emitFact
 // into the moment. The two paths are EXCLUSIVE: emitFact itself appends the spec
 // to moment.deltaF (facts.js:934), so when live + ctx.deltaF === moment.deltaF
-// (runRoleWord shares the array), also doing ctx.deltaF.push would DOUBLE-LIST the
+// (runAbleWord shares the array), also doing ctx.deltaF.push would DOUBLE-LIST the
 // fact. Live → emitFact owns the append; dry-run → ctx.deltaF.push (no live moment).
 async function emit(spec, ctx) {
   const fact = { ...spec, actId: ctx.moment?.actId, history: ctx.history };
@@ -932,7 +932,7 @@ function resolveValue(v, ctx) {
   if (v && typeof v === "object" && v.ref != null) return getPath(v.ref, ctx);
   // a being's proper name -> its id (the 7.md name/id bridge: the Word names
   // beings by proper noun, the system keys them by id). Scoped to ctx.beings so
-  // ordinary strings (roles, names) pass through untouched.
+  // ordinary strings (ables, names) pass through untouched.
   if (
     typeof v === "string" &&
     ctx.beings &&

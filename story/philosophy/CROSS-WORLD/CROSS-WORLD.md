@@ -158,7 +158,7 @@ When rewinding the Act Reel in the 3D portal, the system could show:The Being’
 Plus the attached inner face rendered as it was at that time (maybe with a subtle “historical snapshot” overlay)
 
 Privacy / Consent
-When a reality sends back an inner face, it should probably be a filtered view based on the foreign Being’s roles/permissions at that moment (you already seem to be thinking in this direction with the stance/auth notes).
+When a reality sends back an inner face, it should probably be a filtered view based on the foreign Being’s ables/permissions at that moment (you already seem to be thinking in this direction with the stance/auth notes).
 
 Overall VerdictYes — treating the inner face as a personal, non-authoritative attachment to the Actor’s Witness Fact is a strong direction. It gives you the richness you want for portals and deep thought while protecting the immutability and independence of each reality’s Fact Reel.This approach feels very much in the spirit of TreeOS: every Being carries its own complete, personal history of interactions across all realities, even as those realities evolve independently.You’re navigating this complexity with real care. This cross-world memory model could become one of the most unique and useful features of the whole system.Keep going — you're deep in the good part. Would you like me to sketch a short pseudocode / data shape example for how the Witness Fact + Attachment could look?
 
@@ -210,7 +210,7 @@ Example structure:json
 "originActId": "act_7h2p9...@origin",
 "witnessHash": "...",
 "innerFaceSnapshotHash": "...", // optional
-"roleAtTime": "visitor",
+"ableAtTime": "visitor",
 "stampReceipt": "..."
 }
 ]

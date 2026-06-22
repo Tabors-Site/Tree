@@ -5,7 +5,7 @@
 // Body forming is genesis.js's job, not this layer's. By the time
 // registerRoutes is called, genesis has already finished: extensions
 // are loaded, MCP transport is connected, the place root and config
-// exist, the role/operation registries are populated. All that is
+// exist, the able/operation registries are populated. All that is
 // left here is to attach the routers to the express app in the right
 // order so requests dispatch correctly.
 //
@@ -41,7 +41,7 @@
 //
 //   GET /ibp/see/<story>/./extensions   — extensions + capabilities
 //   GET /ibp/see/<story>/./tools        — registered tools
-//   GET /ibp/see/<story>/./roles        — registered roles
+//   GET /ibp/see/<story>/./ables        — registered ables
 //   GET /ibp/see/<story>/./operations   — registered DO operations
 
 import { authApiRouter, authPageRouter } from "./auth.js";

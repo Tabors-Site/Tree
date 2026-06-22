@@ -362,7 +362,7 @@ function wireKeyboardShortcuts(ctx) {
       if      (ev.key === "h") { ev.preventDefault(); flat.navigate(`${story}${bq}/`); }
       else if (ev.key === "b") { ev.preventDefault(); flat.navigate(`${story}${bq}/./beings`); }
       else if (ev.key === "o") { ev.preventDefault(); flat.navigate(`${story}${bq}/./operations`); }
-      else if (ev.key === "r") { ev.preventDefault(); flat.navigate(`${story}${bq}/./roles`); }
+      else if (ev.key === "r") { ev.preventDefault(); flat.navigate(`${story}${bq}/./ables`); }
       else if (ev.key === "t") { ev.preventDefault(); flat.navigate(`${story}${bq}/./threads`); }
       else if (ev.key === "i" && _state.session?.username) {
         ev.preventDefault();

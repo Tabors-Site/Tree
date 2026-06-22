@@ -64,7 +64,7 @@ const DEFAULT_RECALL_CAP = 16;
  *     orientation: "inward",
  *     self:      <being state, folded>,
  *     actChain:  [<{actId, through, to, stampedAt, startMessage,
- *                   endMessage, rootCorrelation, activeRole}>, ...],
+ *                   endMessage, rootCorrelation, activeAble}>, ...],
  *   }
  *
  * Half shape (forward + recalled):
@@ -78,10 +78,10 @@ const DEFAULT_RECALL_CAP = 16;
  * @param {string} [orientation="forward"]  one of forward|half|inward
  * @param {object} [opts]
  * @param {number} [opts.recallCap=16]      half-fold recall cap
- * @param {object} [opts.role]              the active role spec; when
- *   present, occupant folds are pre-gated against role.canSee so the
- *   fold only reads reels the role would admit. Legacy callers (no
- *   role) get the unfiltered forward face they have today.
+ * @param {object} [opts.able]              the active able spec; when
+ *   present, occupant folds are pre-gated against able.canSee so the
+ *   fold only reads reels the able would admit. Legacy callers (no
+ *   able) get the unfiltered forward face they have today.
  * @returns {Promise<object>}
  *   foldedFace augmented with `_weave` (the reels the fold actually
  *   read). buildInnerFace merges this with the canSee-side weave.
@@ -122,9 +122,9 @@ export async function foldPlace(beingId, orientation = ORIENTATION.FORWARD, opts
   const weave = emptyWeave();
   addReel(weave, { reelKind: "being", reelId: String(beingId), history });
 
-  // Role spec, when present, gates occupant folds. Legacy callers (no
-  // role) get unfiltered behavior.
-  const role = opts.role || null;
+  // Able spec, when present, gates occupant folds. Legacy callers (no
+  // able) get unfiltered behavior.
+  const able = opts.able || null;
 
   // The being itself is always folded — every orientation shows
   // the being to itself (the self is the carrier of orientation).
@@ -138,7 +138,7 @@ export async function foldPlace(beingId, orientation = ORIENTATION.FORWARD, opts
   }
 
   // Forward AND half need the forward face built first.
-  const forwardFace = await buildForwardFace(beingId, self, stash, history, role, weave);
+  const forwardFace = await buildForwardFace(beingId, self, stash, history, able, weave);
 
   if (ω === ORIENTATION.FORWARD) {
     return { orientation: ω, ...forwardFace, _weave: weave };
@@ -161,10 +161,10 @@ export async function foldPlace(beingId, orientation = ORIENTATION.FORWARD, opts
  * of what the FACE actually uses, and occupants only land in the face
  * through the canSee resolver (which records its own reel reads from
  * the descriptor it returns). Folding occupants here for the forward-
- * face return value is a legacy-caller convenience; the role-scoped
- * filter still trims that work when a role is on hand.
+ * face return value is a legacy-caller convenience; the able-scoped
+ * filter still trims that work when a able is on hand.
  */
-async function buildForwardFace(beingId, self, stash, history = "0", role = null, weave = null) {
+async function buildForwardFace(beingId, self, stash, history = "0", able = null, weave = null) {
   const spaceId = self?.position || null;
   if (!spaceId) {
     return { self, space: null, occupants: [] };
@@ -181,11 +181,11 @@ async function buildForwardFace(beingId, self, stash, history = "0", role = null
     (o) => !(o.type === "being" && o.id === String(beingId)),
   );
 
-  // Optional role-scoped fold filter. Trims work for legacy callers
+  // Optional able-scoped fold filter. Trims work for legacy callers
   // that still consume the occupants[] return value. The weave is
   // unaffected either way; the canSee resolver is the weave authority.
-  const admitted = role
-    ? others.filter((o) => canSeeAdmitsReel(role.canSee, o))
+  const admitted = able
+    ? others.filter((o) => canSeeAdmitsReel(able.canSee, o))
     : others;
 
   // Fold each occupant. Folds run in parallel . different reels, no
@@ -223,14 +223,14 @@ async function loadActChain(beingId) {
     severedAt: null,
   })
     .sort({ stampedAt: 1 })
-    .select("_id through to activeRole stampedAt startMessage endMessage rootCorrelation inReplyTo answers parentThread innerFace")
+    .select("_id through to activeAble stampedAt startMessage endMessage rootCorrelation inReplyTo answers parentThread innerFace")
     .lean();
 
   return rows.map(r => ({
     actId:           String(r._id),
     through:         r.through,
     to:              r.to,
-    activeRole:      r.activeRole,
+    activeAble:      r.activeAble,
     stampedAt:       r.stampedAt,
     startMessage:    r.startMessage,
     endMessage:      r.endMessage,
@@ -239,7 +239,7 @@ async function loadActChain(beingId) {
     answers:         r.answers,
     parentThread:    r.parentThread,
     // The canonical inner face this act was committed under
-    // (orientation, role, position, capabilities, canSee blocks,
+    // (orientation, able, position, capabilities, canSee blocks,
     // origin). Null on legacy Acts that pre-date the field. Renderers
     // apply render-time clamps and fall back to timestamp/in/out only
     // when null.
@@ -303,7 +303,7 @@ async function recallByBraid(beingId, forwardFace, { cap }) {
   // from one act (a single act stitches multiple entities).
   const actIds = [...new Set(stitchFacts.map(f => f.actId))];
   const acts = await Act.find({ _id: { $in: actIds }, severedAt: null })
-    .select("_id through to activeRole stampedAt startMessage endMessage rootCorrelation innerFace")
+    .select("_id through to activeAble stampedAt startMessage endMessage rootCorrelation innerFace")
     .lean();
 
   // Order acts to match the stitch-fact order so braid-distance
@@ -321,7 +321,7 @@ async function recallByBraid(beingId, forwardFace, { cap }) {
       actId:           String(act._id),
       through:         act.through,
       to:              act.to,
-      activeRole:      act.activeRole,
+      activeAble:      act.activeAble,
       stampedAt:       act.stampedAt,
       startMessage:    act.startMessage,
       endMessage:      act.endMessage,

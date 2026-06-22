@@ -136,7 +136,7 @@ The architecture carries the extra fields that go beyond the tree shape:
 
 - **Space** carries `qualities` (the of-what-sort answers for this position, see below), `contributors[]` and `rootOwner` (whose authority lives here), and `heavenSpace` (set only on the seed-planted spaces: heaven plus the nine Tier-3 rooms below it).
 - **Matter** has an `origin` naming where the underlying content actually lives (`ibp`, `filesystem`, `web`, `cross-place`) and a `content` payload shaped by that origin. The `origin` field is how the world bridges to other realms.
-- **Being** has `name`, `roles[]`, `operatingMode` (`human` | `llm` | `script` | `mixed`), `homeSpace` (where it lives by default), `currentSpace` (where it stands right now), `defaultRole`, and `llmDefault`. Beings act through the four verbs (SEE, DO, SUMMON, BE) and every act they emit attributes back to them.
+- **Being** has `name`, `ables[]`, `operatingMode` (`human` | `llm` | `script` | `mixed`), `homeSpace` (where it lives by default), `currentSpace` (where it stands right now), `defaultAble`, and `llmDefault`. Beings act through the four verbs (SEE, DO, SUMMON, BE) and every act they emit attributes back to them.
 
 ## What lives in this directory
 
@@ -149,7 +149,7 @@ The architecture carries the extra fields that go beyond the tree shape:
 
 Two siblings at the root:
 
-- **`manifest.js`**: makes the I-Am's runtime collections (tools, roles, operations) manifest as Space children under `./tools`, `./roles`, `./operations` (Tier-3 spaces beneath heaven) so SEE can introspect them through the standard pipeline. It writes Space rows, so it belongs here alongside the world it shapes.
+- **`manifest.js`**: makes the I-Am's runtime collections (tools, ables, operations) manifest as Space children under `./tools`, `./ables`, `./operations` (Tier-3 spaces beneath heaven) so SEE can introspect them through the standard pipeline. It writes Space rows, so it belongs here alongside the world it shapes.
 - **`space/threads.js`**: the `./threads` projection and the seed cut handler. A thread is a live tree of coordinated SUMMONs sharing one `rootCorrelation`. Made addressable at `<place>/./threads/<id>` so SEE returns its descriptor (participants, depth, state) and SUMMON severs it. Pure derived view: no new persistence; the descriptor is computed from Summon + inbox rows. Same verb, same envelope; the address tells the seed whether the operation is a call (to a being) or a cut (of a line). A cut is just SUMMONing the line itself.
 
 The schemas for each primitive live colocated with the code that owns it: Being at `seed/materials/being/being.js`, Space at `seed/materials/space/space.js`, Matter at `seed/materials/matter/matter.js`, Branch at `seed/materials/branch/branch.js`, Fact at `seed/past/fact/fact.js`, Act at `seed/past/act/act.js`, the inbox projection at `seed/past/projections/inbox/inboxProjection.js`, SubscriptionRecord at `seed/present/wakes/subscriptionRecord.js`. Schema and behavior travel together; there is no separate `models/` folder.
@@ -157,7 +157,7 @@ The schemas for each primitive live colocated with the code that owns it: Being 
 ## What does NOT live here
 
 - The IBP protocol grammar (SEE, DO, SUMMON, BE) lives at `seed/ibp/`. The protocol speaks ABOUT the world; it is not part of the world.
-- The runtime that drives LLM-cognition beings (the scheduler, the inbox, the LLM client, the prompt builder, the tool registry, the role specs) lives at `seed/present/`. **`factory/` is for LLM beings only.** Humans cognize in their own heads and route through portals; scripted beings ARE their code and need no apparatus. The runtime serves a specific kind of being; it is not part of the world.
+- The runtime that drives LLM-cognition beings (the scheduler, the inbox, the LLM client, the prompt builder, the tool registry, the able specs) lives at `seed/present/`. **`factory/` is for LLM beings only.** Humans cognize in their own heads and route through portals; scripted beings ARE their code and need no apparatus. The runtime serves a specific kind of being; it is not part of the world.
 - The seed machinery (DB connection, indexes, hooks, logging, retention, version) lives at `seed/system/`. The machinery is the floor everything stands on; it is not part of the world.
 
-The place is the world the I-Am formed. The protocol is how the I-Am addresses that world. The cognition is how beings in the world think. The system is the host-realm floor under all of it. Four folders, four roles, one seed.
+The place is the world the I-Am formed. The protocol is how the I-Am addresses that world. The cognition is how beings in the world think. The system is the host-realm floor under all of it. Four folders, four ables, one seed.

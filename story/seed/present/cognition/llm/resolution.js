@@ -14,28 +14,28 @@
 //
 // Walks right-to-left across the IBPA `actor :: receiver`:
 //
-//   0  receiver being   role-slot list
+//   0  receiver being   able-slot list
 //   1  receiver being   default list
-//   2  receiver space   role-slot + default, walking ancestors
-//   3  receiver story role-slot + default
+//   2  receiver space   able-slot + default, walking ancestors
+//   3  receiver story able-slot + default
 //   3.5 cross-boundary  opens only if forceActor fired upstream
-//   4  actor being      role-slot + default
-//   5  actor space      role-slot + default, walking ancestors
-//   6  actor story    role-slot + default
+//   4  actor being      able-slot + default
+//   5  actor space      able-slot + default, walking ancestors
+//   6  actor story    able-slot + default
 //
 // Each container's `qualities.llm` shape (unified across being, space,
 // story):
 //
 //   qualities.llm = {
 //     default:       string[],    // independent ordered list
-//     slots:         { role: string[] },  // each role's own list
+//     slots:         { able: string[] },  // each able's own list
 //     preferOwn:     bool,
 //     forceActor:    bool,        // skip remaining receiver-side
 //     forceReceiver: bool,        // cap chain at this container's step
 //   }
 //
 // Independent lists: a being with 5 connections under slots["coder"]
-// and 3 under default produces 5+3=8 candidates for role=coder. Each
+// and 3 under default produces 5+3=8 candidates for able=coder. Each
 // list exhausts independently.
 //
 // Force flags: closest-to-step-0 wins. forceReceiver caps the chain;
@@ -44,7 +44,7 @@
 import { buildLlmChain } from "./chain.js";
 
 /**
- * Build the LLM connection chain for a receiver+actor+role triple.
+ * Build the LLM connection chain for a receiver+actor+able triple.
  * Returns the ordered candidate list; the stamper's failover loop
  * drains it.
  *
@@ -52,16 +52,16 @@ import { buildLlmChain } from "./chain.js";
  * @param {object} opts.receiver  { beingId, spaceId, storyDomain }
  * @param {object} [opts.actor]   { beingId, spaceId, storyDomain }
  *                                (null/missing — no actor side walked)
- * @param {string} [opts.role]    role name for per-role slot lookups
+ * @param {string} [opts.able]    able name for per-able slot lookups
  * @param {string} [opts.history]  history id (default "0")
  * @returns {Promise<{ chain, tried, reason }>}
  */
 export async function resolveLlmConnectionChain({
   actor = null,
   receiver = null,
-  role = null,
+  able = null,
   history = "0",
 } = {}) {
-  return buildLlmChain({ actor, receiver, role, history });
+  return buildLlmChain({ actor, receiver, able, history });
 }
 

@@ -44,9 +44,9 @@ const { findByName, loadProjection } = await import(
 );
 const { sealFacts } = await import(`${R}/seed/past/fact/facts.js`);
 const { nameVerb } = await import(`${R}/seed/ibp/verbs/name.js`);
-const { cherubBeOps } = await import(`${R}/seed/store/words/cherub/role.js`);
-const { resolveRoleWord, runRoleWord } = await import(
-  `${R}/seed/present/word/roleWordRegistry.js`
+const { cherubBeOps } = await import(`${R}/seed/store/words/cherub/able.js`);
+const { resolveAbleWord, runAbleWord } = await import(
+  `${R}/seed/present/word/ableWordRegistry.js`
 );
 const { connectHostEnv, selectConnectFlow } = await import(
   `${R}/seed/store/words/cherub/connectHost.js`
@@ -130,8 +130,8 @@ async function connectOwned(name, caller) {
     foldedSeqs: new Map(),
     afterSeal: [],
   };
-  const flow = selectConnectFlow(resolveRoleWord("cherub", "connect"), "owned");
-  const { result } = await runRoleWord([flow], {
+  const flow = selectConnectFlow(resolveAbleWord("cherub", "connect"), "owned");
+  const { result } = await runAbleWord([flow], {
     moment,
     branch,
     trigger: { name, caller },
@@ -152,11 +152,11 @@ try {
 
   // the owned flow is distinct from the credential flow
   const ownedFlow = selectConnectFlow(
-    resolveRoleWord("cherub", "connect"),
+    resolveAbleWord("cherub", "connect"),
     "owned",
   );
   const credFlow = selectConnectFlow(
-    resolveRoleWord("cherub", "connect"),
+    resolveAbleWord("cherub", "connect"),
     "credential",
   );
   ownedFlow && credFlow && ownedFlow !== credFlow

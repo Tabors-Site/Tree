@@ -90,7 +90,7 @@ When you see “tabor” as a Being in some space, you’re seeing a formed pres
 Why this matters for building
 • Operations on identity (lineage, key rotation, succession, authority) work on Names.
 • Operations on presence (matter, position, scope of action) work on Beings.
-• Operations on cognition (what’s deciding) work on Souls (via role-declared type).
+• Operations on cognition (what’s deciding) work on Souls (via able-declared type).
 • Operations on the substrate’s content (facts, chains, projections) work on the World.
 
 When you’re writing code, ask: am I operating on the identity, the presence, the cognition, or the world? The answer tells you which primitive to use.
@@ -436,14 +436,14 @@ The founder gives birth to the reality and then permanently gives up the right t
 
 # From a system-design perspective, that’s one of the strongest arguments for Name sovereignty you’ve raised recently, because it solves the “hidden superuser” problem that many decentralized systems struggle with.
 
-If every reality did that from the start, and names were all equal (one scope down from I am, no deeper) and names only had authority over their own creations, then it would work. Every allowed name created has equal acting power. What comes down to its ability to act are the roles it has
+If every reality did that from the start, and names were all equal (one scope down from I am, no deeper) and names only had authority over their own creations, then it would work. Every allowed name created has equal acting power. What comes down to its ability to act are the ables it has
 Ah, that’s a very different model.
 
 Then the hierarchy is not:
 
 Names
 ↓
-Roles
+Ables
 
 and not:
 
@@ -472,11 +472,11 @@ Bob
 ├─ @home
 └─ @merchant
 
-And roles belong to beings, not Names:
+And ables belong to beings, not Names:
 
-@builder -> Builder role
-@archivist -> Archivist role
-@merchant -> Merchant role
+@builder -> Builder able
+@archivist -> Archivist able
+@merchant -> Merchant able
 
 So a Name is really just:
 
@@ -490,7 +490,7 @@ Nothing more.
 The being is the thing that:
 
 occupies a position,
-holds a role,
+holds a able,
 receives SUMMONs,
 performs work,
 exists in the world hierarchy.
@@ -507,7 +507,7 @@ Being
 ↓
 holds
 ↓
-Role
+Able
 ↓
 grants
 ↓
@@ -517,7 +517,7 @@ Not:
 
 Name
 ↓
-Role
+Able
 
 ⸻
 
@@ -551,7 +551,7 @@ has position
 
 ⸻
 
-Role
+Able
 
 Answers:
 
@@ -610,18 +610,18 @@ Sovereignty
 Presence
 = Beings
 Capability
-= Roles
+= Ables
 
 with all Names equal, all sovereignty flat, and all hierarchy pushed down into the world layer where beings and spaces live. That’s a pretty clean separation of concerns.
 Tabor — 2:22 AM
-Yeah and say you are the first name and you make it so people can’t create names at your realities but you have beings who grant roles so they can still come and act
+Yeah and say you are the first name and you make it so people can’t create names at your realities but you have beings who grant ables so they can still come and act
 Yes, and that’s where the model becomes surprisingly powerful.
 
 You’re essentially separating:
 
 Name = sovereignty
 Being = presence
-Role = capability
+Able = capability
 
 So a reality could say:
 
@@ -646,7 +646,7 @@ But Tabor creates beings:
 @archivist
 @visitor
 
-with various roles and permissions.
+with various ables and permissions.
 
 Then Bob from another reality arrives:
 
@@ -728,11 +728,11 @@ Then realities decide what beings Bob may operate there.
 
 ⸻
 
-The really novel thing is that roles become diplomatic instruments.
+The really novel thing is that ables become diplomatic instruments.
 
 A reality doesn’t need authority over Bob.
 
-It only controls the beings and roles available within its world.
+It only controls the beings and ables available within its world.
 
 So:
 
@@ -754,6 +754,6 @@ Warrior
 Mage
 Governor
 
-The same sovereign Name can manifest different beings with different roles in different realities.
+The same sovereign Name can manifest different beings with different ables in different realities.
 
 That’s something most identity systems don’t model well: one identity, many world-specific manifestations, without requiring local accounts or surrendering sovereignty.

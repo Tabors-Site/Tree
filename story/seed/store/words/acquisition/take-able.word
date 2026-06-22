@@ -1,0 +1,25 @@
+# take-able.word — walk-in able acquisition (acquisitionOps.js, the take-able op).
+#
+# A being takes an installed, take-acquirable able at a space. The CONTROL strand
+# (the gate chain + the idempotency check + the §7 return) is .word; the acquisition
+# lookups and the grant-record BUILD are `see` escapes wired by acquisitionHost.js (the
+# SAME getAbleSpecForGrant / normalizeAcquisition / loadOrFold+alreadyHoldsAble /
+# buildInternalGrant the JS handler calls — no reimplementation).
+#
+# NO host: emit — the word lays no fact of its own. `grant-internal` is a `see` (a pure
+# compute: it BUILDS the grant record, NO fact). EVERY take stamps its own do:take-able fact
+# (every act makes a fact): the word returns factParams + the grantee, the cut promotes them,
+# and the dispatcher's ONE auto-Fact lays the caller-attributed do:take-able. On the GRANT
+# path factParams carries the full grant record (able/anchor/grantedBy/grantedAt) and the
+# being reducer folds the able grant from it. On the idempotent already-held path factParams
+# carries just {able, anchor, outcome:"already"} — NO grantedBy, so the reducer folds nothing
+# (the able is already there), but the take is still recorded in the being's history. The
+# bridge binds `caller` (the acting being), `able`, `space`, `branch`.
+
+When a being takes a able at a space:
+  see able-spec-for-grant(able, space) as found.
+  If no found, refuse with "able is not installed on this space or any ancestor".
+  If not is-grabbable(found), refuse with "able is not take-acquirable; try ask-able".
+  If already-holds(caller, able, found), Return able, anchorSpaceId: $found.anchor, already: true, granteeBeingId: $caller, factParams: { able: $able, anchorSpaceId: $found.anchor, outcome: "already" }.
+  see grant-internal(caller, able, found) as granted.
+  Return able, anchorSpaceId: $found.anchor, granted: true, granteeBeingId: $caller, factParams: { able: $granted.able, anchorSpaceId: $granted.anchorSpaceId, anchorBeingId: $granted.anchorBeingId, grantedBy: $granted.grantedBy, grantedAt: $granted.grantedAt }.

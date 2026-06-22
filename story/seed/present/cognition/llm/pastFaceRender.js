@@ -2,7 +2,7 @@
 //
 // pastFaceRender.js — turn an act-chain (inward) or a recalled set
 // (half) into the past-face block the LLM reads alongside identity
-// + capabilities + role-intent.
+// + capabilities + able-intent.
 //
 // INNER-FOLD §2:
 //   inward — A_b alone, world drops out. Past-face shows every act
@@ -15,7 +15,7 @@
 // clampForRender so the LLM-budget caps land here, not at storage.
 // Acts that pre-date the field render reduced (timestamp + in / out
 // only) and the section is preceded by a banner so the LLM doesn't
-// read the absence of role / at / capabilities as significance.
+// read the absence of able / at / capabilities as significance.
 //
 // This is the room a being walks into when it turns. Not just
 // memory — a reasoning surface. An inward moment can seal inner
@@ -88,7 +88,7 @@ function renderEntry(index, row) {
     ].filter(Boolean).join("\n");
   }
 
-  const headerSuffix = snap.role ? `  role: ${snap.role}` : "";
+  const headerSuffix = snap.able ? `  able: ${snap.able}` : "";
   const where = snap.position?.name
     ? `at ${snap.position.name}`
     : null;
@@ -114,7 +114,7 @@ function renderEntry(index, row) {
  * Render the inward past-face block. INNER-FOLD §2: the face is the
  * being's own line of deeds. The world drops out — this block is the
  * being's whole perceptual frame this moment, alongside identity +
- * capabilities + role-intent. The forward world block (preloaded
+ * capabilities + able-intent. The forward world block (preloaded
  * canSee descriptors) is omitted by llmMoment when ω=inward; this
  * block stands in its place.
  *

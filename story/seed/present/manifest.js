@@ -2,9 +2,9 @@
 //
 // I make my live state manifest in the world I formed.
 //
-// My in-memory collections (tools, roles, DO operations) are the
+// My in-memory collections (tools, ables, DO operations) are the
 // runtime source of truth. I also make them manifest as spaces
-// under .tools, .roles, and .operations so SEE can introspect
+// under .tools, .ables, and .operations so SEE can introspect
 // them through the same protocol as everything else; each
 // registered item becomes a child space. The sync is one-way:
 // memory leads; the manifest follows. A manifest miss is
@@ -25,7 +25,7 @@ import { assertHistoryOrThrow } from "../materials/projections.js";
 // Normalize a qualities container (Map or plain object) into a
 // recursively-key-sorted JSON string for stable equality comparison.
 // Used by manifestItems to skip redundant set-space facts on reboot.
-// Recursive sort handles nested namespaces (qualities.role.permissions etc.).
+// Recursive sort handles nested namespaces (qualities.able.permissions etc.).
 function canonJson(v) {
   if (v === null || typeof v !== "object") return v;
   if (v instanceof Map) v = Object.fromEntries(v);
@@ -169,7 +169,7 @@ export async function manifestItems({
       // Idempotent skip: if the existing qualities already match the
       // desired ones, don't emit a redundant set-space fact. Without
       // this guard, every reboot re-stamped the full sync state for
-      // every tool/role/operation, inflating the chain by ~one fact
+      // every tool/able/operation, inflating the chain by ~one fact
       // per registered item per boot.
       //
       // The valid emission cases stay covered: an extension was added

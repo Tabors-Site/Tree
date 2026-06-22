@@ -6,15 +6,15 @@ Self-contained instructions for an agent to produce the Word build's cut list. T
 
 For every in-world code site, tag it `word` or `host` by one question: **would two different realities differ here?**
 
-- Reality-specific behavior an agent or community could write or federate (a role's can-see / can-do / can-summon, a DO operation, a roleflow, a flow rule, a matter / space / being type, a seed, a Name's identity ops, I_AM's own genesis and signing acts) is **WORLD**, it becomes `.word`.
+- Reality-specific behavior an agent or community could write or federate (a able's can-see / can-do / can-summon, a DO operation, a flow, a flow rule, a matter / space / being type, a seed, a Name's identity ops, I_AM's own genesis and signing acts) is **WORLD**, it becomes `.word`.
 - The same engine for every reality (the stamper: intake / assign / fold / momentum / stamped; the fact chain, hashing, signing, projection / fold, storage, transports, rate limiters, session channels, and the Word parser and evaluator themselves) is **HOST**, it stays the host language.
 
 Edges decompose: a NAME declare is word (its meaning and rules), but its socket channel, rate limiter, session binding, and key crypto are host. The WHAT is word; the HOW is host.
 
 ## Walk these (the in-world targets, from 2.md)
 
-- `reality/seed/present/roles/*` — every role's can-see / can-do / can-summon and roleFlow (cherub, harmony, federation-manager, birther, auth, and the rest).
-- `reality/seed/ibp/` — the DO operation registry (`registerOperation` and handlers); the other verbs' ops (BE's birth / connect / release / switch / death; NAME's declare / banish in `nameOps.js`, `verbs/name.js`); permission logic in `roleAuth.js` and `authorize.js`; see-op shaping in `descriptor.js`.
+- `reality/seed/present/ables/*` — every able's can-see / can-do / can-summon and flow (cherub, harmony, federation-manager, birther, auth, and the rest).
+- `reality/seed/ibp/` — the DO operation registry (`registerOperation` and handlers); the other verbs' ops (BE's birth / connect / release / switch / death; NAME's declare / banish in `nameOps.js`, `verbs/name.js`); permission logic in `ableAuth.js` and `authorize.js`; see-op shaping in `descriptor.js`.
 - I_AM's own root acts (genesis, declaring names, signing roots).
 - `reality/seed/present/wakes/` — flows (`subscriptions.js`, `wakeSchedule.js`) and the `core.declare.*` surface (subscribe, schedule, aggregate).
 - `reality/seed/materials/` — matter / space / being type declarations.

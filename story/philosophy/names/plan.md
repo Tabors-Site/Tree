@@ -1,6 +1,6 @@
 Speicif thing to note that thi splan may drift on:
 
-Names all come from a realitys I am, that way everyting stys crytpo-linked. Names are always 1 layer below I_am. Never a hierarchy with names. That is with beings, spaces, matter, roles, etc.
+Names all come from a realitys I am, that way everyting stys crytpo-linked. Names are always 1 layer below I_am. Never a hierarchy with names. That is with beings, spaces, matter, ables, etc.
 Imagine a reality can have just 2 names, the I am and another name, like Tabor.
 all beings act through tabor , and say he has beings that are matable so names from other elaities can still have beings born under their name on that reality (note be verbs are stlil beings. the name is just identity) with them as the actor but fact landing on relaity
 
@@ -28,7 +28,7 @@ Beings occupy positions in spaces, hold matter, execute the four world-layer ver
 Soul
 A Soul is what's actually making decisions. It's the cognition behind the Name's acts.
 Souls come in types: human (a person typing or clicking), llm (an LLM evaluating context and generating actions), scripted (rules-based logic), or hybrid combinations.
-The Soul is declared at the Name level through role metadata. When you create a Name with role human:tabor, the Soul type is human. When you create a Name with role llm:music-curator, the Soul type is LLM-driven.
+The Soul is declared at the Name level through able metadata. When you create a Name with able human:tabor, the Soul type is human. When you create a Name with able llm:music-curator, the Soul type is LLM-driven.
 The substrate doesn't represent Souls as their own primary entities. It records what Soul type animates a Name, but the Soul itself is private — only its consequences (the signed acts) are visible.
 The action flow
 Under the old model:
@@ -199,7 +199,7 @@ What this enables
 This model supports several patterns cleanly:
 Cross-name collaboration. Two Names can have inheritation points covering shared parts of the being tree. They can both act on the shared region; their actions interleave naturally because they're in the same structure.
 Delegated authority. A Name with broad authority can grant narrower authority to other Names. Tabor (with authority over Tabor-and-below) can grant Bob authority over Coder-and-below. The grant is bounded by the granter's own authority.
-Public spaces. A "public" inheritation point at a high level of the tree means many Names have access to public beings. Specific roles or filters can be applied to narrow what public access means.
+Public spaces. A "public" inheritation point at a high level of the tree means many Names have access to public beings. Specific ables or filters can be applied to narrow what public access means.
 Hierarchical organization. Communities, organizations, projects can be modeled as positions in the being tree. The community's "manager" Name has a high inheritation point; sub-team Names have lower inheritation points within the community's scope.
 Clean revocation. Removing an inheritation point cleanly revokes authority over that sub-tree. The Name no longer has access; everything else stays intact.
 The mental model

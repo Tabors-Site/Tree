@@ -71,7 +71,7 @@ function deliver(key, item) {
  * Stream the inner face in rasterization order to whoever watches this
  * being. Items, in order, each with a monotonic `seq`:
  *   { seq, kind:"position", value }   . where the being stands
- *   { seq, kind:"role",     value }   . who it is (the role name)
+ *   { seq, kind:"able",     value }   . who it is (the able name)
  *   { seq, kind:"can", verb, words }  . one per non-empty capability verb
  *   { seq, kind:"see", block }        . one per canSee block (a world read)
  *   { seq, kind:"complete", face }    . the assembled face, frame loaded
@@ -81,11 +81,11 @@ export function streamRasterFace(key, parts) {
   // Guard BEFORE touching `parts` so an unwatched call does literally
   // nothing (no destructure, no allocation) — true zero cost.
   if (!hasRasterSubscribers(key)) return;
-  const { role, position, capabilities, blocks, face } = parts || {};
+  const { able, position, capabilities, blocks, face } = parts || {};
   let seq = 0;
   const emit = (item) => deliver(key, { seq: seq++, ...item });
   emit({ kind: "position", value: position ?? null });
-  emit({ kind: "role", value: role ?? null });
+  emit({ kind: "able", value: able ?? null });
   for (const verb of ["canDo", "canSummon", "canBe"]) {
     const words = Array.isArray(capabilities?.[verb]) ? capabilities[verb] : [];
     if (words.length) emit({ kind: "can", verb, words });
@@ -98,7 +98,7 @@ export function streamRasterFace(key, parts) {
  * Replay a COMPLETED face as the same ordered item stream streamRasterFace
  * emits live -- for a consumer that gets the face AFTER the fold rather than
  * during it (e.g. the scripted reactor reading moment.innerFace in beat 3).
- * Order is identical to the live stream: position, role, caps, blocks,
+ * Order is identical to the live stream: position, able, caps, blocks,
  * complete. Each item carries a monotonic seq.
  */
 export function faceItems(face) {
@@ -107,7 +107,7 @@ export function faceItems(face) {
   let seq = 0;
   const push = (it) => items.push({ seq: seq++, ...it });
   push({ kind: "position", value: face.position ?? null });
-  push({ kind: "role", value: face.role ?? null });
+  push({ kind: "able", value: face.able ?? null });
   for (const verb of ["canDo", "canSummon", "canBe"]) {
     const words = Array.isArray(face.capabilities?.[verb]) ? face.capabilities[verb] : [];
     if (words.length) push({ kind: "can", verb, words });

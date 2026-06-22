@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // verify-rasterstream — the live-rasterization core (25.md Pillar D).
 // Boot-free at runtime: pure module logic + one buildInnerFace integration
-// with a trivial role (explicit string caps, empty canSee, a folded face
+// with a trivial able (explicit string caps, empty canSee, a folded face
 // supplied = no Mongo query). The innerFace import chain wants JWT_SECRET
 // at load, so we read .env and dynamic-import it after.
 import fs from "fs"; import path from "path"; import { fileURLToPath } from "url";
@@ -34,15 +34,15 @@ try {
   const got = [];
   const un = onRaster("b1", (it) => got.push(it));
   streamRasterFace("b1", {
-    role: "coder",
+    able: "coder",
     position: { id: "s1", name: "home" },
     capabilities: { canDo: ["move", "look"], canSummon: [], canBe: ["birth"] },
     blocks: [{ key: "k1", source: "see", label: "L1", payload: 1 }, { key: "k2", source: "address", label: "L2", payload: 2 }],
     face: { tag: "FACE" },
   });
   const kinds = got.map((i) => i.kind);
-  eq(kinds, ["position", "role", "can", "can", "see", "see", "complete"])
-    ? ok(`order: position -> role -> can(canDo) -> can(canBe) -> see -> see -> complete`)
+  eq(kinds, ["position", "able", "can", "can", "see", "see", "complete"])
+    ? ok(`order: position -> able -> can(canDo) -> can(canBe) -> see -> see -> complete`)
     : bad(`order`, kinds.join(","));
   got.every((it, i) => it.seq === i)
     ? ok(`seq is monotonic 0..${got.length - 1}`)
@@ -60,14 +60,14 @@ try {
   // 2. unsubscribe stops delivery.
   un();
   const before = got.length;
-  streamRasterFace("b1", { role: "x", position: null, capabilities: {}, blocks: [], face: {} });
+  streamRasterFace("b1", { able: "x", position: null, capabilities: {}, blocks: [], face: {} });
   got.length === before ? ok(`unsubscribe stops delivery`) : bad(`unsubscribe`, `${got.length} vs ${before}`);
 
   // 3. zero-cost when nobody watches.
   _resetRaster();
   !hasRasterSubscribers("bX") ? ok(`hasRasterSubscribers false when nobody watches`) : bad(`hasSubs`, "expected false");
   let touched = false;
-  streamRasterFace("bX", { get role() { touched = true; return "x"; }, position: null, capabilities: {}, blocks: [], face: {} });
+  streamRasterFace("bX", { get able() { touched = true; return "x"; }, position: null, capabilities: {}, blocks: [], face: {} });
   !touched ? ok(`streamRasterFace is a no-op with no subscribers (zero work)`) : bad(`zero-cost`, "accessed parts with no subs");
 
   // 4. watch-all "*" receives every being's items, tagged with beingId.
@@ -75,14 +75,14 @@ try {
   const all = [];
   onRaster("*", (it) => all.push(it));
   hasRasterSubscribers("bZ") ? ok(`"*" makes hasRasterSubscribers true for any being`) : bad(`watch-all hasSubs`, "expected true");
-  streamRasterFace("bZ", { role: "r", position: null, capabilities: {}, blocks: [], face: { f: 1 } });
+  streamRasterFace("bZ", { able: "r", position: null, capabilities: {}, blocks: [], face: { f: 1 } });
   all.length === 3 && all.every((i) => i.beingId === "bZ")
-    ? ok(`watch-all sees position/role/complete tagged beingId=bZ`)
+    ? ok(`watch-all sees position/able/complete tagged beingId=bZ`)
     : bad(`watch-all`, JSON.stringify(all.map((i) => [i.kind, i.beingId])));
 
   // 5. INTEGRATION: buildInnerFace streams the same face it returns.
   _resetRaster();
-  const role = { name: "tester", canDo: ["move", "look"], canSummon: [], canBe: [], canSee: [] };
+  const able = { name: "tester", canDo: ["move", "look"], canSummon: [], canBe: [], canSee: [] };
   const ctx = {
     orientation: "forward",
     beingId: "b1",
@@ -93,10 +93,10 @@ try {
   const baseline = [];
   // subscribe THEN build.
   onRaster("b1", (it) => baseline.push(it));
-  const face = await buildInnerFace(role, ctx);
+  const face = await buildInnerFace(able, ctx);
   const streamedKinds = baseline.map((i) => i.kind);
-  eq(streamedKinds, ["position", "role", "can", "complete"])
-    ? ok(`buildInnerFace streamed: position, role, can(canDo), complete`)
+  eq(streamedKinds, ["position", "able", "can", "complete"])
+    ? ok(`buildInnerFace streamed: position, able, can(canDo), complete`)
     : bad(`integration order`, streamedKinds.join(","));
   const pos = baseline.find((i) => i.kind === "position");
   pos && pos.value && pos.value.name === "home" ? ok(`streamed position = the folded space (home)`) : bad(`position`, JSON.stringify(pos));
@@ -111,7 +111,7 @@ try {
   _resetRaster();
   const noSub = [];
   // (no onRaster call)
-  const face2 = await buildInnerFace(role, ctx);
+  const face2 = await buildInnerFace(able, ctx);
   eq(face2, face) && noSub.length === 0
     ? ok(`unwatched buildInnerFace returns the same face, streams nothing (behavior unchanged)`)
     : bad(`unwatched`, "face differs or streamed");

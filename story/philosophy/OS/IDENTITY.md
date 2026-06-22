@@ -99,7 +99,7 @@ The reality is a wallet too, and its key is not a separate thing floating free o
 
 On first boot one keypair is generated, the genesis fact commits its public key, and I_AM signs the genesis. A foreign reality, given only that public key, walks: reality pubkey, signed reality root, genesis committing and signed by the same key. It concludes "this is the world that key founded," self certifying all the way down. The random `realityId` uuid retires; the public key is the identity, the signed Merkle root is the provenance, and the old one time onboarding token is at most a local operator convenience.
 
-The human operator (the founder) is NOT the cryptographic root and is NOT required at first boot. When a human is created they get their own independent keypair like any being, and they can be granted high privilege through facts and roles, but the reality's identity never depends on them. This is the disconnect avoided: there is no random reality key, only I_AM's, so "every agent is named by its key" holds with no hole.
+The human operator (the founder) is NOT the cryptographic root and is NOT required at first boot. When a human is created they get their own independent keypair like any being, and they can be granted high privilege through facts and ables, but the reality's identity never depends on them. This is the disconnect avoided: there is no random reality key, only I_AM's, so "every agent is named by its key" holds with no hole.
 
 ## I_AM, the reality from above
 
@@ -128,7 +128,7 @@ What it does NOT close:
 
 - **Custodial signing (the one true red flag, for HOSTED beings only).** When a reality holds a being's private key, it CAN technically forge any act by that being. The signature proves "this reality vouches for this being's act," not "this being personally pressed the button." This bites ONLY when you let someone else's reality hold your key. Running your own reality dissolves it entirely (see "Sovereign self hosting" above): the custodian becomes you, and no edge signing is needed. For genuinely hosted beings the mitigations are the secondary unlock and the full Merkle audit trail, which raise the bar and make tampering attributable. Acceptable because a user who wants the guarantee can always self host, and most others either do that or only join realities they trust.
 - No client side (edge) signing as a separate feature, because self hosting already provides it: your own reality is your edge.
-- Role and rule content addressing is deferred (authority retroactivity: a content addressed role is immutable per hash, which fights in place role editing).
+- Able and rule content addressing is deferred (authority retroactivity: a content addressed able is immutable per hash, which fights in place able editing).
 - No key rotation by design (see "No rotation, only succession" above): a key cannot be revoked globally, so recovery is succession to a new being, not rotation of an existing one.
 
 Net: identity, content, and reality provenance become mathematically provable, and every id unifies around hash or key. It does not make a malicious HOST honest about the beings it custodially signs for, but a sovereign self hoster has no such host. That is the whole shape of the remaining boundary.

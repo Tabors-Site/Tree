@@ -1,6 +1,6 @@
 localStore= where your own private resources are located
 
-(Any unpublished models, code, roles, etc. all basically in a localStore as cas). This is the store of the whole tree. Every tree has one no matter what
+(Any unpublished models, code, ables, etc. all basically in a localStore as cas). This is the store of the whole tree. Every tree has one no matter what
 
 Store = this is the global store, where you reference things from local store to put in. Accessible for others to reach as resources and use(copy over ibp).
 

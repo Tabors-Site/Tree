@@ -15,7 +15,7 @@
 //   reads:
 //
 //     Act.innerFace = {
-//       orientation, role, position, capabilities, blocks,
+//       orientation, able, position, capabilities, blocks,
 //       origin: "foreign",
 //       hash,
 //     }

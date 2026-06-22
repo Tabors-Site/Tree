@@ -1,7 +1,7 @@
 # GENESIS-FOLD — wiring the boot to fold the seed's self-description
 
 The twenty `.word`s in `seed/words/` now declare the whole seed (word, iam, base, chain, branch,
-reality, fold, weave, see, do, be, name, call, recall, being, space, matter, can, role, roleflow).
+reality, fold, weave, see, do, be, name, call, recall, being, space, matter, can, able, flow).
 This plan wires the boot to read them and lay them as I_AM `declare-word` facts on branch 0, so a
 boot opened to the story view reads the seed declaring itself, line by line. It is the seam where
 the `.word`s (this half) meet `wordStore.js` (the registry half), so it is written to hand to the sync.
@@ -20,7 +20,7 @@ the `.word`s (this half) meet `wordStore.js` (the registry half), so it is writt
 ## The wiring
 
 1. **Fold list, in descent order** (declare before use): word, iam, base, chain, branch, reality,
-   fold, weave, see, do, name, being, space, matter, be, call, can, recall, role, roleflow. The verb
+   fold, weave, see, do, name, being, space, matter, be, call, can, recall, able, flow. The verb
    instances (`verbs.word`) keep their own pass for `declarePast`, unchanged.
 
 2. **Fold step.** For each `.word`: the word name is the filename (`chain.word` is `chain`); the body
@@ -48,9 +48,9 @@ the `.word`s (this half) meet `wordStore.js` (the registry half), so it is writt
   that would be a second truth-system, the exact thing we removed. The wordStore half adds the `kind`
   tag to `declareOpsToFold` so ops and concepts read uniformly.
 - **Render (theirs):** read `params.word` for the name, `params.binding.says` for the body.
-  roleWordRegistry's legacy `params.role`/`op` shape is handled until it folds into wordStore.
+  ableWordRegistry's legacy `params.able`/`op` shape is handled until it folds into wordStore.
 - **Idempotency:** dedup by word, skip a declare whose latest binding already matches (the
-  roleWordRegistry on-chain pattern), on both the concept declaration and `declareOpsToFold`.
+  ableWordRegistry on-chain pattern), on both the concept declaration and `declareOpsToFold`.
 - **Ownership:** they own `wordStore.js` (`bindWord`, `getWord`, `declareOpsToFold`, the dedup, the
   render); this half owns the `.word`s and the descent order; the boot call is the shared seam.
 
@@ -79,5 +79,5 @@ So the story reads the seed in full: the concepts as their bodies, the ops decla
 ## The result
 
 Boot, open the story view, and read: `I_AM spoke the word word` / `a word is a word` / `I am that I
-am` / down through `roleflow`. The seed, declaring itself, as facts on the chain — language no longer
+am` / down through `flow`. The seed, declaring itself, as facts on the chain — language no longer
 the one exception to fact, fold, reality.

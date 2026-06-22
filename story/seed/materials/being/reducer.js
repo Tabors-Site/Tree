@@ -10,7 +10,7 @@
 // more (verb, action) cases. Today it handles:
 //   - `do:set` with field=`qualities.<ns>...` → derive qualities state
 //   - any fact carrying params.toPosition → derive position
-// Other Being fields (name, password, roles, etc.) still come from
+// Other Being fields (name, password, ables, etc.) still come from
 // direct-mutation paths; their reducer cases land when their write
 // sites convert.
 //
@@ -26,7 +26,7 @@ import {
   applyConnectionState,
   applyDeath,
   applyTrueName,
-  applyRoleGrants,
+  applyAbleGrants,
 } from "../reducerHelpers.js";
 
 /**
@@ -80,10 +80,10 @@ export function reduce(state, fact) {
   next = applySetField(next, fact);
   next = applySetQualities(next, fact);
 
-  // do:grant-role / do:revoke-role — append/remove entries on
-  // qualities.rolesGranted. Per seed/RolesAreAuth.md, grants are
+  // do:grant-able / do:revoke-able — append/remove entries on
+  // qualities.ablesGranted. Per seed/AblesAreAuth.md, grants are
   // facts; revocations are facts; the projection is the fold.
-  next = applyRoleGrants(next, fact);
+  next = applyAbleGrants(next, fact);
 
   // Position change. Writes `position` — the universal projection-
   // index field. Legacy `currentSpace` retired 2026-05-29; readers

@@ -37,8 +37,8 @@ await import(`${R}/begin.js`); // full genesis
 
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const { sealFacts } = await import(`${R}/seed/past/fact/facts.js`);
-const { cherubBeOps } = await import(`${R}/seed/store/words/cherub/role.js`);
-const { resolveRoleWord, runRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
+const { cherubBeOps } = await import(`${R}/seed/store/words/cherub/able.js`);
+const { resolveAbleWord, runAbleWord } = await import(`${R}/seed/present/word/ableWordRegistry.js`);
 const { connectHostEnv } = await import(`${R}/seed/store/words/cherub/connectHost.js`);
 const { decodeToken } = await import(`${R}/seed/materials/being/identity/credentials.js`);
 
@@ -60,9 +60,9 @@ async function register({ name, password }) {
 async function connect(name, password) {
   const branch = "0";
   const moment = { actId: randomUUID(), actorAct: { branch }, identity: { beingId: "arrival", name: "arrival" }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
-  const ir = resolveRoleWord("cherub", "connect");
+  const ir = resolveAbleWord("cherub", "connect");
   try {
-    const { deltaF, result } = await runRoleWord(ir, { moment, branch, trigger: { name, password }, env: { host: connectHostEnv() } });
+    const { deltaF, result } = await runAbleWord(ir, { moment, branch, trigger: { name, password }, env: { host: connectHostEnv() } });
     return { result, deltaF, refused: null };
   } catch (e) {
     if (e && e.__wordRefusal) return { result: null, deltaF: moment.deltaF, refused: e };
@@ -77,7 +77,7 @@ try {
   if (!cherub) { console.log("  FATAL: genesis failed"); process.exit(1); }
 
   // ir present + parses (the other agent's parse gate, now resolved through the bridge)
-  const ir = resolveRoleWord("cherub", "connect");
+  const ir = resolveAbleWord("cherub", "connect");
   ir ? ok(`cherub-connect.word resolves + parses through the bridge`) : bad(`cherub-connect.word resolves`, "null IR");
 
   // register a real being WITH a password (Mode 1 = a shared being you password-connect to)

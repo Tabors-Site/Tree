@@ -28,7 +28,7 @@ try {
   await new Promise((r) => setTimeout(r, 1200));
 
   // a known being op exists in the Map (the source we mirror from)
-  const probe = "grant-role";
+  const probe = "grant-able";
   (getOperation(probe)?.handler) ? ok(`"${probe}" is a registered being op in the Map (the source)`) : bad(`Map has ${probe}`, "missing");
 
   // declare being's ops (target: being) into the fold

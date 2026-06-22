@@ -22,7 +22,7 @@ module ([seed/materials/publish/](../../seed/materials/publish/)).
   backup-restore, "bring my work to this reality" all want graft.
 
 - **SEED brings the shape of the thing.** A structural shell: spaces laid
-  out a certain way, role patterns, default matter, configuration. Plant
+  out a certain way, able patterns, default matter, configuration. Plant
   it and you get a NEW instance shaped like the template, with fresh ids
   and a fresh chain. Each instance is sovereign; the template author has
   no authority over what people plant. Community blueprints, extension

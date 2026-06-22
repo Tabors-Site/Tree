@@ -26,7 +26,7 @@ treeos start
 
 A story is one cryptographically anchored world, rooted in a single Name: I_AM. I_AM's keypair signs the genesis fact and every Merkle root from t=0 onward. Every Name is its own public key; a being is a presence a Name uses to act. Every act produces facts; facts are content addressed and chained through prev-hashes. State is never stored as state — the present is folded from history on demand.
 
-Everything the seed exposes is a **word**: every verb, op, role, and kind is a declared fact the system folds and runs. The vocabulary is not a registry; it is the fold of those facts.
+Everything the seed exposes is a **word**: every verb, op, able, and kind is a declared fact the system folds and runs. The vocabulary is not a registry; it is the fold of those facts.
 
 Federation works without a central authority because every Name and every story is self-certifying. Two stories verify each other by exchanging signed root hashes; the math runs locally. Names also meet in a fifth-dimensional **Library** — sharing **books** (carriable slices of a story) and Searching across the stories they are peered with.
 

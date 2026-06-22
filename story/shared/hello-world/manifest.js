@@ -6,10 +6,10 @@
 // the world it just saw.
 //
 // PACK CONTENTS:
-//   roles/greeter/  — the greeter role spec (scripted; inline summon)
+//   ables/greeter/  — the greeter able spec (scripted; inline summon)
 //   seeds/greeter/  — plants one greeter being at a position
 //
-// No code piece. The role's summon does the substrate work via ctx
+// No code piece. The able's summon does the substrate work via ctx
 // (ctx.read, ctx.act) plus a dynamic import for the children
 // projection. Nothing requires substrate-side init.
 //
@@ -27,7 +27,7 @@ export default {
   description:
     "The canonical hello-world. A scripted greeter that greets both you and the world around it.",
   requires: [
-    { type: "role", ref: "hello-world:greeter" },
+    { type: "able", ref: "hello-world:greeter" },
     { type: "seed", ref: "hello-world:greeter" },
   ],
 };

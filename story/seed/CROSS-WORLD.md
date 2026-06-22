@@ -10,7 +10,7 @@ If you're implementing federation, building a portal extension, or wondering how
 
 **Related doctrine:**
 
-- [RolesAreAuth.md](RolesAreAuth.md) — roles ARE auth. Cross-world citizenship and federation policy are expressed entirely through the role registry. The `canSummon` field is one field with two surfaces (`as: "actor"` for caller-side, `as: "receiver"` for receive-side accept); receive-side entries are what UI discovery reads to render per-being call options (e.g. birther's "mate" button).
+- [AblesAreAuth.md](AblesAreAuth.md) — ables ARE auth. Cross-world citizenship and federation policy are expressed entirely through the able registry. The `canSummon` field is one field with two surfaces (`as: "actor"` for caller-side, `as: "receiver"` for receive-side accept); receive-side entries are what UI discovery reads to render per-being call options (e.g. birther's "mate" button).
 - [protocols/ibp/FEDERATION.md](../protocols/ibp/FEDERATION.md) — federation protocol layer. The mate + being pattern for cross-world citizenship; canopy envelope contract; receive-side dispatch.
 
 ## Terminology
@@ -68,7 +68,7 @@ Every verb call opens a Stamp on the actor's home act-chain. The Stamp records:
 
 - The acting being (`beingIn`)
 - The cross-world ibpAddress (left and right stance)
-- The verb and params (`startMessage`, `activeRole`)
+- The verb and params (`startMessage`, `activeAble`)
 - The deltaF of facts the Act produced on the actor's home reels (empty for pure cross-world acts)
 - The inner face attachment (descriptor returned by the receiving substrate)
 - Outcome status (`sealed` / `denied` / `timeout` / `error`)
@@ -179,10 +179,10 @@ When a foreign being replies to a cross-world call, the reply is its own cross-w
 
 ## Portal and window
 
-Portal and window are not separate primitives. They are stance-access perspectives on the same cross-world mechanism — what role(s) the foreign-actor stance holds at the receiving side under RolesAreAuth (see `seed/RolesAreAuth.md`):
+Portal and window are not separate primitives. They are stance-access perspectives on the same cross-world mechanism — what able(s) the foreign-actor stance holds at the receiving side under AblesAreAuth (see `seed/AblesAreAuth.md`):
 
-- **Window** — the role grant admits only SEE (`canSee` includes the position; `canDo` / `canSummon` / `canBe` don't). The actor observes; nothing changes state; only the inner face returns.
-- **Portal** — the role grant admits the verbs the foreign operator chose to open: typically SEE + DO + CALL, optionally BE. Authored via the role's canX lists.
+- **Window** — the able grant admits only SEE (`canSee` includes the position; `canDo` / `canSummon` / `canBe` don't). The actor observes; nothing changes state; only the inner face returns.
+- **Portal** — the able grant admits the verbs the foreign operator chose to open: typically SEE + DO + CALL, optionally BE. Authored via the able's canX lists.
 - **Full access** — every verb admitted, including BE for walking through.
 
 **Acting through a portal does not require walking through it.** Only BE moves the being's position. SEE / DO / CALL across a portal happen with the being's current position unchanged — they reach into the foreign world from wherever the actor is standing. The bridge pattern (stay home, manipulate matter or call beings in another world) is exactly this case: portal access without BE.
@@ -196,7 +196,7 @@ The descriptor returned from the receiving substrate (the cansee / cando / cansu
 ```js
 Act.innerFace = {
   orientation,
-  role,
+  able,
   position,
   capabilities,
   blocks,
@@ -257,7 +257,7 @@ This is the build target. The full three-way separation — identity local, posi
 1. Address: `tabors.site#0/home@tabor :: tabors.site#4/factory` (verb=be, position-changing op).
 2. Cross-world detected.
 3. Tabor's Act opens on #0's act-chain.
-4. Authorize against #4's substrate via the role-walk (`authorizeViaRoles`), with the canopy-verified actor identity tuple riding through.
+4. Authorize against #4's substrate via the able-walk (`authorizeViaAbles`), with the canopy-verified actor identity tuple riding through.
 5. If admitted:
    - Fact `set-being:position` on tabor's being-reel under #0 with new value `tabors.site#4/factory`. Records the departure.
    - Fact on #4's being-reel for tabor (arrival) with `crossOrigin: { branch: "0", beingId: "tabor", actId }`.
@@ -295,14 +295,14 @@ All eight prereq + build-order items below shipped. The doctrine is now structur
 | 3   | Position accepts foreign address                      | LANDED | `seed/materials/being/positionAddress.js` (`parsePositionAddress`, `formatPositionAddress`, `isPositionCrossWorld`)                                                                  |
 | 4   | Address-resolver cross-world flag                     | LANDED | `seed/ibp/address.js` + `seed/ibp/resolver.js`; cross-branch + cross-story detection in parseBoth                                                                                    |
 | 5   | Cross-branch + cross-story dispatch in DO/SEE/CALL/BE | LANDED | `seed/past/act/crossWorldResponse.js` + `runVerbAsForeignActor`                                                                                                                      |
-| 6   | Inner-face attachment on the Act                      | LANDED | `seed/past/act/innerFace.js` . `Act.innerFace = { orientation, role, position, capabilities, blocks, origin: "foreign", hash }` (same unified canonical field the local fold writes) |
+| 6   | Inner-face attachment on the Act                      | LANDED | `seed/past/act/innerFace.js` . `Act.innerFace = { orientation, able, position, capabilities, blocks, origin: "foreign", hash }` (same unified canonical field the local fold writes) |
 | 7   | Pull-back safety (boot scan)                          | LANDED | `seed/materials/being/pullBack.js` + wired into `genesis.js` startup                                                                                                                 |
 | 8   | Canopy transport (cross-story)                        | LANDED | `protocols/ibp/canopy.js` (verifyIncoming + forwardToPeer + signedAt freshness window)                                                                                               |
 
 Two prereq items from the original draft were subsumed by later doctrine:
 
-- **`crossOrigin` in the stance bag via `deriveStanceProperties`** — RETIRED. The stance-bag derivation retired with PERMISSIONS.md (replaced by RolesAreAuth.md). The role-walk's `authorizeViaRoles` reads identity tuples from the moment's `actorAct` and the canopy's verified sender, not from a derived property bag. Same information, surfaced through the role-walk instead of the bag.
-- **"qualities.permissions admit what verbs" for portal vs window** — RETIRED. The same per-position permission is now expressed as the role's `canSee` / `canDo` / `canSummon` / `canBe` lists with optional `reach` filters. The portal-vs-window distinction is what role grants the foreign visitor holds, not a `qualities.permissions` rule. See RolesAreAuth.md.
+- **`crossOrigin` in the stance bag via `deriveStanceProperties`** — RETIRED. The stance-bag derivation retired with PERMISSIONS.md (replaced by AblesAreAuth.md). The able-walk's `authorizeViaAbles` reads identity tuples from the moment's `actorAct` and the canopy's verified sender, not from a derived property bag. Same information, surfaced through the able-walk instead of the bag.
+- **"qualities.permissions admit what verbs" for portal vs window** — RETIRED. The same per-position permission is now expressed as the able's `canSee` / `canDo` / `canSummon` / `canBe` lists with optional `reach` filters. The portal-vs-window distinction is what able grants the foreign visitor holds, not a `qualities.permissions` rule. See AblesAreAuth.md.
 
 Test coverage: `verify-federation.js` exercises 18 properties of the mate-being + canopy + father-admit flow.
 
@@ -315,7 +315,7 @@ Test coverage: `verify-federation.js` exercises 18 properties of the mate-being 
 
 ## See also
 
-- `seed/RolesAreAuth.md` — how the foreign-actor stance is gated at the receiving side (canSee / canDo / canSummon / canBe + reach)
+- `seed/AblesAreAuth.md` — how the foreign-actor stance is gated at the receiving side (canSee / canDo / canSummon / canBe + reach)
 - `protocols/ibp/FEDERATION.md` — canopy verifyIncoming, signedAt freshness, mate-being pattern
 - `seed/done/DualBeingParents.md` — father-as-being doctrine; BE:connect father-admit
 - `seed/FACTORY.md` — Stamper / Act doctrine and per-aggregate reels

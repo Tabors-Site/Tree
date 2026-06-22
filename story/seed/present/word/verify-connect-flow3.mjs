@@ -47,8 +47,8 @@ const { birthBeing } = await import(
 );
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { getStoryDomain } = await import(`${R}/seed/ibp/address.js`);
-const { resolveRoleWord, runRoleWord } = await import(
-  `${R}/seed/present/word/roleWordRegistry.js`
+const { resolveAbleWord, runAbleWord } = await import(
+  `${R}/seed/present/word/ableWordRegistry.js`
 );
 const { connectHostEnv, selectConnectFlow } = await import(
   `${R}/seed/store/words/cherub/connectHost.js`
@@ -87,7 +87,7 @@ const birth = async (name, extraSpec = {}) => {
         parentBeingId: cherub.id,
         homeId: cherub.state?.homeSpace,
         cognition: "scripted",
-        defaultRole: "global",
+        defaultAble: "global",
         ...extraSpec,
       },
       identity: I_AM,
@@ -111,11 +111,11 @@ async function inherit(targetName, caller) {
     afterSeal: [],
   };
   const flow = selectConnectFlow(
-    resolveRoleWord("cherub", "connect"),
+    resolveAbleWord("cherub", "connect"),
     "inherit",
   );
   try {
-    const { result, deltaF } = await runRoleWord([flow], {
+    const { result, deltaF } = await runAbleWord([flow], {
       moment,
       branch,
       trigger: { address: `${localDomain}/@${targetName}`, caller },
@@ -138,7 +138,7 @@ try {
     process.exit(1);
   }
   const inheritFlow = selectConnectFlow(
-    resolveRoleWord("cherub", "connect"),
+    resolveAbleWord("cherub", "connect"),
     "inherit",
   );
   inheritFlow

@@ -9,6 +9,6 @@
 // services facade.
 
 import { registerInboxRenderer } from "../inboxRenderers.js";
-import { roleRequestRenderer } from "./roleRequest.js";
+import { ableRequestRenderer } from "./ableRequest.js";
 
-registerInboxRenderer("role-request", roleRequestRenderer, { ownerExtension: "seed" });
+registerInboxRenderer("able-request", ableRequestRenderer, { ownerExtension: "seed" });

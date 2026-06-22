@@ -114,7 +114,7 @@ function publicDirectoryTargetFromPath(path) {
 // `.histories/<historyPath>/conflicts` — merge conflict catalog. Only
 // meaningful when <historyPath> was created by merge-histories (has
 // mergeSources set). Returns the per-reel conflict descriptors the
-// merge-mediator role walks the operator through.
+// merge-mediator able walks the operator through.
 function historiesTargetFromPath(path) {
   if (typeof path !== "string") return null;
   const mConflicts = path.match(/^\/?\.histories\/([^/]+)\/conflicts\/?$/);
@@ -137,7 +137,7 @@ function historiesTargetFromPath(path) {
  * pre-parsed `{ kind, value }` envelope.
  *
  * opts:
- *   identity         { beingId, name } | null — for role-walk gating
+ *   identity         { beingId, name } | null — for able-walk gating
  *   addressKind      explicit "stance" | "position" | "place" (else inferred)
  *   currentUser      name for pronoun resolution (default identity.name)
  *   currentStory   place domain for relative addresses (default ours)
@@ -214,10 +214,10 @@ export async function seeVerb(target, opts = {}) {
       await import("../../present/word/wordStore.js");
     const op = resolveSeeOpFromFold(addrString);
     if (op) {
-      // Authorize the SEE op via the role-walk. Anonymous callers hit
+      // Authorize the SEE op via the able-walk. Anonymous callers hit
       // the arrival floor (canSee: ["arrival-view"] only); authenticated
-      // callers walk their granted roles. Op-handlers don't re-authorize
-      // — the role-walk here is the gate. See seed/RolesAreAuth.md.
+      // callers walk their granted ables. Op-handlers don't re-authorize
+      // — the able-walk here is the gate. See seed/AblesAreAuth.md.
       const decision = await authorize({
         identity: opts.identity || null,
         verb: "see",
@@ -261,7 +261,7 @@ export async function seeVerb(target, opts = {}) {
 
   // Raw-position SEE. Authorize is run downstream by buildPlaceDescriptor
   // (or the historical/follow-being/etc. histories below) which all
-  // call authorize() before reading. For anonymous callers, the role-
+  // call authorize() before reading. For anonymous callers, the able-
   // walk's arrival floor (canSee: ["arrival-view"]) refuses raw-position
   // SEE because it lacks "*". No assertVerbCaller perimeter gate —
   // authorize is the single source of truth.
@@ -646,7 +646,7 @@ export async function seeVerb(target, opts = {}) {
   const resolved = await resolveStance(expanded.right, { identity });
 
   // Stance auth. History threads via target.history so authorize.js's
-  // role-walk can fold the target's qualities at the right point. For
+  // able-walk can fold the target's qualities at the right point. For
   // the wire-level SEE, history comes from the parsed address or the
   // socket's tracked currentHistory.
   // resolveHistoryPointers above canonicalizes expanded.right.history
@@ -671,7 +671,7 @@ export async function seeVerb(target, opts = {}) {
     actorHistory: currentHistory || null,
   });
   if (!decision.ok) {
-    // Anonymous redirect (seed/RolesAreAuth.md "canSee semantics").
+    // Anonymous redirect (seed/AblesAreAuth.md "canSee semantics").
     // Arrival's canSee is ["arrival-view"] — raw position SEE refuses.
     // Rather than throwing UNAUTHORIZED (which would lock anonymous
     // visitors out of any landing surface), dispatch the arrival-view
@@ -714,11 +714,11 @@ export async function seeVerb(target, opts = {}) {
     );
   }
 
-  // (Auto-on-entry role grants USED to fire here — a silent grant emitted INSIDE this render.
+  // (Auto-on-entry able grants USED to fire here — a silent grant emitted INSIDE this render.
   // REMOVED 2026-06-21: a space is a NOUN and cannot act on a being. A space granting a being was
   // the bug, not just the render-coupling. SEE is a pure read; it stamps nothing. The space still
-  // HAS its acquisition policy as a fact (qualities.roles[role].acquisition.autoOnEntry); a being
-  // that wants the role reads that policy (a see) and takes it ITSELF via its own word + do:take-role
+  // HAS its acquisition policy as a fact (qualities.ables[able].acquisition.autoOnEntry); a being
+  // that wants the able reads that policy (a see) and takes it ITSELF via its own word + do:take-able
   // — an act BY the being, ON the being, dispatched cleanly. Acts come from beings, not nouns. 17.md.)
 
   return buildPlaceDescriptor(resolved, { identity, payload });
@@ -726,7 +726,7 @@ export async function seeVerb(target, opts = {}) {
 
 /**
  * Infer the address shape when the caller doesn't say. `@` → stance;
- * `/` → position; otherwise → place. The verb's role-walk gate
+ * `/` → position; otherwise → place. The verb's able-walk gate
  * relies on this to choose between stance-targeted and position-
  * targeted authorization rules.
  */

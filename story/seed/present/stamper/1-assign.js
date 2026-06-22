@@ -4,11 +4,11 @@
 // opens its frame.
 //
 // Scheduler picks an intake entry off a being's line and hands it
-// here. assign loads the receiver Being, resolves the active role,
-// checks role-carry, mints the actId, computes the act's derived
+// here. assign loads the receiver Being, resolves the active able,
+// checks able-carry, mints the actId, computes the act's derived
 // fields (ibpAddress, rootCorrelation, parentThread), and builds the
 // summon context the moment's dispatch needs. It returns
-// { actId, plannedAct, role, moment } for moment to dispatch, or
+// { actId, plannedAct, able, moment } for moment to dispatch, or
 // { skipped } when the entry can't run.
 //
 // **assign no longer writes the Act row to Mongo** (Round 5).
@@ -27,13 +27,13 @@
 //
 //   kind: "call"
 //     A SUMMON the being received. moment carries the message
-//     shape; moment.js calls role.call(message, ctx).
+//     shape; moment.js calls able.call(message, ctx).
 //
 //   kind: "transport-act"
 //     The being acted from their own transport (portal/browser/CLI).
 //     moment carries the act payload { verb, target, action, args };
 //     moment.js dispatches it directly through doVerb/beVerb. No
-//     role.summon handler runs — the act was already decided
+//     able.summon handler runs — the act was already decided
 //     externally.
 //
 // Opening the row IS part of beat one. presentism: a being only
@@ -65,9 +65,9 @@ import Act from "../../past/act/act.js";
 import { getStoryConfigValue } from "../../storyConfig.js";
 import {
   resolveActiveStack,
-  computeAvailableRoles,
-} from "../roles/roleFlow.js";
-import { composeStack } from "../roles/roleComposer.js";
+  computeAvailableAbles,
+} from "../ables/flow.js";
+import { composeStack } from "../ables/ableComposer.js";
 import Space from "../../materials/space/space.js";
 import { computeIbpStampAddress } from "../../ibp/address.js";
 import {
@@ -83,10 +83,10 @@ import { getSpaceRootId } from "../../sprout.js";
 
 /**
  * Set up one moment for stamping. Loads the being, resolves the
- * active role, opens the Act row, and builds the summon ctx.
+ * active able, opens the Act row, and builds the summon ctx.
  *
  * Dispatches by entry.kind:
- *   "summon"        — message-shaped ctx; moment calls role.summon
+ *   "summon"        — message-shaped ctx; moment calls able.summon
  *   "transport-act" — act-shaped ctx ({ verb, target, action, args });
  *                     moment dispatches the wrapped verb directly
  *
@@ -97,12 +97,12 @@ import { getSpaceRootId } from "../../sprout.js";
  * @param {object} [opts.handoff]     — runtime context stashed by SUMMON (identity, resolved, ...)
  * @param {AbortSignal} [opts.signal] — abort propagating from the scheduler's controller
  *
- * @returns {Promise<{ actId?, role?, moment?, skipped? }>}
+ * @returns {Promise<{ actId?, able?, moment?, skipped? }>}
  *   actId    — the Act row this moment opened (always present on success)
- *   role       — resolved role spec
+ *   able       — resolved able spec
  *   moment  — the prepared context moment.js dispatches on (carries actId + kind)
  *   skipped    — reason string when the entry can't run
- *                ("being-not-found" | "role-not-carried" | "role-unavailable")
+ *                ("being-not-found" | "able-not-carried" | "able-unavailable")
  */
 export async function assign({
   beingId,
@@ -153,18 +153,18 @@ export async function assign({
     ...slot.state,
   };
 
-  // ── assign: resolve the active role ──────────────────────────────
-  // Resolution order (see seed/present/roles/roleFlow.js for the doctrine):
-  //   1. entry.activeRole — caller specifically requested this voice;
+  // ── assign: resolve the active able ──────────────────────────────
+  // Resolution order (see seed/present/ables/flow.js for the doctrine):
+  //   1. entry.activeAble — caller specifically requested this voice;
   //      honor without running flow.
-  //   2. Being.qualities.roleFlow — per-being conditional program; first
-  //      clause whose `when` matches AND whose role's requiredCognition
+  //   2. Being.qualities.flow — per-being conditional program; first
+  //      clause whose `when` matches AND whose able's requiredCognition
   //      matches the being's effective cognition wins.
-  //   3. toBeing.defaultRole — terminal fallback.
+  //   3. toBeing.defaultAble — terminal fallback.
   //
-  // resolveActiveStack returns an ordered [primary, ...modifiers] role-name
+  // resolveActiveStack returns an ordered [primary, ...modifiers] able-name
   // list (empty when nothing resolves). composeStack folds it into one
-  // role-shaped spec the rest of the moment runner reads uniformly.
+  // able-shaped spec the rest of the moment runner reads uniformly.
   let spaceRow = null;
   if (spaceId) {
     // loadOrFold: same lineage-cold-fold rationale as the being load
@@ -186,13 +186,13 @@ export async function assign({
     history,
   });
 
-  // Previous moment lookup for `me.previousRole` and
+  // Previous moment lookup for `me.previousAble` and
   // `time.sinceLastMoment`. Best-effort; a being with no prior moment
-  // gets a null `previousRole` and a null `sinceLastMoment`.
+  // gets a null `previousAble` and a null `sinceLastMoment`.
   const lastSealed = await findLastSealedForBeing(String(toBeing._id));
   const previousMoment = lastSealed
     ? {
-        activeRole: lastSealed.activeRole || null,
+        activeAble: lastSealed.activeAble || null,
         stampedAt: lastSealed.stampedAt || null,
       }
     : null;
@@ -203,11 +203,11 @@ export async function assign({
   // set-world-signal writes propagate at the next moment.
   const worldSignals = await loadWorldSignals();
 
-  // Pre-compute the roles this being can CURRENTLY play (held +
-  // reaching this position). Per seed/RolesAreAuth.md, every roleFlow
-  // clause filters through this map; a clause whose role isn't here
+  // Pre-compute the ables this being can CURRENTLY play (held +
+  // reaching this position). Per seed/AblesAreAuth.md, every flow
+  // clause filters through this map; a clause whose able isn't here
   // is skipped same as a failed when-condition.
-  const availableRoles = await computeAvailableRoles({
+  const availableAbles = await computeAvailableAbles({
     toBeing,
     positionSpaceId: toBeing?.position || null,
     history,
@@ -222,39 +222,39 @@ export async function assign({
     previousMoment,
     now: entry?.receivedAt ? new Date(entry.receivedAt) : null,
     worldSignals,
-    availableRoles,
+    availableAbles,
   });
 
   if (!stack || stack.length === 0) {
     log.warn(
       "Assign",
-      `no active role resolves for being ${String(beingId).slice(0, 8)} ` +
-        `(no entry.activeRole, no roleFlow match, no defaultRole)`,
+      `no active able resolves for being ${String(beingId).slice(0, 8)} ` +
+        `(no entry.activeAble, no flow match, no defaultAble)`,
     );
-    return { skipped: "role-unresolved" };
+    return { skipped: "able-unresolved" };
   }
 
-  // Compose [primary, ...modifiers] into a single role-shaped spec.
+  // Compose [primary, ...modifiers] into a single able-shaped spec.
   // Past this boundary nothing else in the moment runner knows about
-  // stacking — buildPrompt, momentum, llmMoment all see one role with
+  // stacking — buildPrompt, momentum, llmMoment all see one able with
   // unioned can*-arrays and a prompt that joins each stack member's
   // body with a divider. composeStack returns null only when the
-  // primary role is unregistered or its requiredCognition can't be met.
+  // primary able is unregistered or its requiredCognition can't be met.
   //
-  // The carry list (toBeing.roles[]) check that used to live here is
-  // gone with the one-role-per-being world. RoleFlow is the source of
-  // truth: if a clause names a role, that's authorization. The flow's
+  // The carry list (toBeing.ables[]) check that used to live here is
+  // gone with the one-able-per-being world. Flow is the source of
+  // truth: if a clause names a able, that's authorization. The flow's
   // author already had set-being permission on the being to write it.
-  const role = composeStack({ stack, toBeing });
-  if (!role) {
+  const able = composeStack({ stack, toBeing });
+  if (!able) {
     log.warn(
       "Assign",
-      `no role registered (or cognition mismatch) for primary "${stack[0]}" ` +
+      `no able registered (or cognition mismatch) for primary "${stack[0]}" ` +
         `of being ${String(beingId).slice(0, 8)}`,
     );
-    return { skipped: "role-unavailable" };
+    return { skipped: "able-unavailable" };
   }
-  const activeRole = role.primaryName;
+  const activeAble = able.primaryName;
 
   // ── assign: open the Act row for this moment ───────────────────
   // For kind="summon" the asker is the SUMMON's sender (from handoff
@@ -302,7 +302,7 @@ export async function assign({
     askerPosition: handoff?.resolved?.spaceId || null,
     message: actMessage,
     source: actSource,
-    activeRole,
+    activeAble,
     inboxMessageId: entry.correlation,
     inReplyTo: entry.inReplyTo || null,
     rootCorrelation: entry.rootCorrelation || entry.correlation || null,
@@ -347,7 +347,7 @@ export async function assign({
   // For same-world calls this equals actorAct.history; for cross-world
   // it differs. resolveHistoryForFact consults it as the second
   // precedence (after opts.currentHistory). See CROSS-WORLD.md.
-  // Asker's identity — exposed on the ctx so the receiver's role
+  // Asker's identity — exposed on the ctx so the receiver's able
   // handler can attribute the summoner without digging through
   // handoff plumbing. For cross-world summons via canopy,
   // crossWorld.js's runVerbAsForeignActor stamps identity.story
@@ -362,8 +362,8 @@ export async function assign({
   const baseCtx = {
     kind,
     spaceId,
-    being: activeRole, // legacy field name; carries the active role
-    activeRole,
+    being: activeAble, // legacy field name; carries the active able
+    activeAble,
     orientation,
     toBeing,
     actId,
@@ -373,7 +373,7 @@ export async function assign({
     askerName,
     askerStory,
     askerNameId,
-    // History-aware aggregate reader. Extensions and roles call
+    // History-aware aggregate reader. Extensions and ables call
     // `await ctx.read("being"|"space"|"matter", id)` and get the
     // row-shaped object back (or null). Internally walks lineage via
     // loadOrFold using this moment's history — extension authors don't
@@ -383,7 +383,7 @@ export async function assign({
     read: async (kind, id) => {
       if (!id) return null;
       // "positions" reads the per-space position projection (who
-      // stands where) — the public surface for code-cognition roles
+      // stands where) — the public surface for code-cognition ables
       // that used to reach into seed/past/projections directly.
       // Projections are caches of the fold; this is a READ, never a
       // write path.
@@ -397,7 +397,7 @@ export async function assign({
       if (!slot) return null;
       return { _id: slot.id, position: slot.position, ...(slot.state || {}) };
     },
-    // Cognition-result builders. Role.summon handlers return one of
+    // Cognition-result builders. Able.summon handlers return one of
     // these three discriminated shapes; extensions don't need to know
     // about CognitionResult internals or import from seed/cognition/.
     // Bare strings, plain objects, and legacy { ok, content } shapes
@@ -406,7 +406,7 @@ export async function assign({
     //
     //   ctx.act(text)               — seal an Act with `text` as the
     //                                 closing utterance. The common
-    //                                 case for any role that DOES.
+    //                                 case for any able that DOES.
     //   ctx.idle()                  — looked, chose not to act.
     //                                 Legitimate completion: inbox
     //                                 closes, no Act, no retry. Use
@@ -473,8 +473,8 @@ export async function assign({
       });
     },
     resolved: handoff?.resolved || {
-      being: activeRole,
-      activeRole,
+      being: activeAble,
+      activeAble,
       spaceId,
     },
     identity: handoff?.identity || entry?.identity || null,
@@ -515,10 +515,10 @@ export async function assign({
         content: entry.content,
         correlation: entry.correlation,
         rootCorrelation: entry.rootCorrelation || entry.correlation,
-        activeRole,
+        activeAble,
         orientation,
         // Envelope intent — what the auth walk gated on. Without it
-        // the role handler can't dispatch on the caller's purpose
+        // the able handler can't dispatch on the caller's purpose
         // (federation handshakes read this; see seed/SUMMON.md).
         intent: entry.intent || null,
         inReplyTo: entry.inReplyTo,
@@ -535,7 +535,7 @@ export async function assign({
   // actId (so DO/BE Facts stamped during the moment reference
   // this Act); plannedAct stays separate because the cognition
   // shouldn't see or care about the Act's structural fields.
-  return { actId, plannedAct, role, moment };
+  return { actId, plannedAct, able, moment };
 }
 
 // Render a one-line description of a transport-act for the Act's
@@ -622,7 +622,7 @@ async function planActRow(opts = {}) {
     addresseePosition = null,
     message,
     source = "user",
-    activeRole = null,
+    activeAble = null,
     inboxMessageId = null,
     inReplyTo = null,
     rootCorrelation = null,
@@ -741,7 +741,7 @@ async function planActRow(opts = {}) {
     through,
     to: to || null,
     ibpAddress,
-    activeRole,
+    activeAble,
     inboxMessageId,
     inReplyTo,
     parentThread: resolvedParentThread,
@@ -761,7 +761,7 @@ async function planActRow(opts = {}) {
     through,
     to: to || null,
     ibpAddress,
-    activeRole,
+    activeAble,
     inboxMessageId,
     inReplyTo,
     rootCorrelation: resolvedRoot,
@@ -778,7 +778,7 @@ async function planActRow(opts = {}) {
   };
 }
 
-// Precompute the caller-side data the roleFlow evaluator's
+// Precompute the caller-side data the flow evaluator's
 // `caller.cognition / isAncestor / isDescendant` paths need. The
 // evaluator is sync; doing these lookups here lets us serve those
 // vocabulary additions without giving the evaluator DB access.
@@ -806,7 +806,7 @@ async function enrichCallerForFlow({ toBeing, handoff, entry, history = "0" }) {
     await Promise.all([
       // loadOrFold: the caller might be a being inherited from main on a
       // sub-history. Bare loadProjection would return null, callerRow
-      // stays null, the enriched-caller fields drop out of role
+      // stays null, the enriched-caller fields drop out of able
       // evaluation — a non-obvious behavioral change on non-main
       // histories.
       loadOrFold("being", callerBeingId, history),

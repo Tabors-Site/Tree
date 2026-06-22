@@ -4,8 +4,8 @@
 //   - store:delist   DO op (the operator's editorial lever; marks one
 //                     version delisted, never deletes)
 //
-// The registrar and publisher roles register through the loader's
-// role-kind handler (RESOURCES.md). The registrar's role.js imports
+// The registrar and publisher ables register through the loader's
+// able-kind handler (RESOURCES.md). The registrar's able.js imports
 // handlers.js from this code piece when its summon needs to fire
 // (the registrar's intent dispatcher pulls publishListing /
 // retireListing from here). The catalog seed registers through the

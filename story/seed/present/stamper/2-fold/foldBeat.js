@@ -17,8 +17,8 @@
 //                 forward and half orientations (space + occupants);
 //                 the act-chain for inward; the recalled set for half.
 //
-//   innerFace . the canonical face the role's canSee declares this
-//                 moment. Orientation + role + position + capabilities
+//   innerFace . the canonical face the able's canSee declares this
+//                 moment. Orientation + able + position + capabilities
 //                 + canSee-resolved blocks. origin: "local" (cross-
 //                 world overrides supersede post-seal via the responder).
 //
@@ -32,12 +32,12 @@ import { buildInnerFace } from "./innerFace.js";
  * Run the 2-fold beat. Mounts the face on moment.
  *
  * @param {object} setup . the result of assign(...)
- *   setup.role          . active role spec
+ *   setup.able          . active able spec
  *   setup.moment     . the moment ctx assign built
  * @returns {Promise<{foldedFace, innerFace}>}
  */
 export async function runFoldBeat(setup = {}) {
-  const { role, moment } = setup;
+  const { able, moment } = setup;
   if (!moment) return { foldedFace: null, innerFace: null };
 
   // Inputs the fold needs: who is acting, where, on what history, at
@@ -51,21 +51,21 @@ export async function runFoldBeat(setup = {}) {
 
   // foldPlace runs the spatial weave. moment is threaded through so
   // foldPlace can stash foldedSeqs (PARALLEL FACTS §1.3) and read the
-  // moment's history from moment.actorAct. Role rides through so
-  // occupant folds are gated pre-fold by role.canSee . the dep set
+  // moment's history from moment.actorAct. Able rides through so
+  // occupant folds are gated pre-fold by able.canSee . the dep set
   // then matches what we actually read.
   let foldedFace = null;
   if (beingId && history) {
     try {
       // SEAM: foldPlace opts key is `history` (shared with non-moment
       // callers like myInnerFace.js); the value is the history slot.
-      foldedFace = await foldPlace(beingId, orientation, { moment, history, role });
+      foldedFace = await foldPlace(beingId, orientation, { moment, history, able });
     } catch {
       foldedFace = null;
     }
   }
 
-  // buildInnerFace resolves role.canSee against the live position and
+  // buildInnerFace resolves able.canSee against the live position and
   // packages the canonical inner face shape. The forward/half folded
   // face's space + occupants ride through as the `place` block when
   // canSee declares one; the position {id, name} stands on its own as
@@ -79,7 +79,7 @@ export async function runFoldBeat(setup = {}) {
     const buildCtx = {
       being:        beingState,
       beingId,
-      role,
+      able,
       orientation,
       history,
       currentSpace: moment.spaceId || null,
@@ -87,7 +87,7 @@ export async function runFoldBeat(setup = {}) {
       name:         moment.toBeing?.name || null,
       foldedFace,
     };
-    innerFace = await buildInnerFace(role, buildCtx);
+    innerFace = await buildInnerFace(able, buildCtx);
   } catch {
     innerFace = null;
   }

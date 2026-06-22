@@ -2,8 +2,8 @@
 //
 // The gate. Every SEE, DO, SUMMON, BE passes through authorize().
 //
-// Per seed/RolesAreAuth.md — roles ARE auth. The role-walk in
-// roleAuth.js is the gate. This file is the thin verb-dispatch entry
+// Per seed/AblesAreAuth.md — ables ARE auth. The able-walk in
+// ableAuth.js is the gate. This file is the thin verb-dispatch entry
 // point that handles the three code-level short-circuits and delegates
 // the substantive permission decision.
 //
@@ -14,36 +14,36 @@
 //   3. Extension scope gate            (orthogonal — refuses ext:op
 //                                       at a position where the
 //                                       extension is blocked)
-//   4. authorizeViaRoles               (the role-walk gate)
+//   4. authorizeViaAbles               (the able-walk gate)
 //
-// The role-walk:
-//   - Anonymous callers run under the implicit arrival role.
-//   - Authenticated callers walk their qualities.rolesGranted.
-//   - For each grant: reach gate (anchor for anchored roles;
-//     role.reach for global roles) + canX gate (the role's
+// The able-walk:
+//   - Anonymous callers run under the implicit arrival able.
+//   - Authenticated callers walk their qualities.ablesGranted.
+//   - For each grant: reach gate (anchor for anchored ables;
+//     able.reach for global ables) + canX gate (the able's
 //     canSee/canDo/canSummon/canBe lists are the permission rules).
 //
 // The verb dispatch passes args.action / args.intent / args.operation
-// through; the role-walk evaluates them against the matching canX.
+// through; the able-walk evaluates them against the matching canX.
 //
 // What this file NO LONGER does (retired with the hard cut):
 //   - qualities.permissions.<verb>.<keyParts> rule lookups
 //   - stance properties as gates (memberClasses can still be derived
 //     for descriptor enrichment but they no longer gate authorize —
-//     granted roles do; the contributor class is fully retired)
+//     granted ables do; the contributor class is fully retired)
 //   - registerDefaultPermissions extension contributions
 //   - STORY_ROOT_DEFAULT_PERMISSIONS / HEAVEN_DEFAULT_PERMISSIONS seeding
 //
-// Migration path for old surface: extensions author roles via
-// story.declare.registerRole and grants are emitted at the relevant
-// boot/lifecycle moment. See seed/RolesAreAuth.md.
+// Migration path for old surface: extensions author ables via
+// story.declare.registerAble and grants are emitted at the relevant
+// boot/lifecycle moment. See seed/AblesAreAuth.md.
 
 import log from "../seedStory/log.js";
 import { IBP_ERR } from "./protocol.js";
 import { I_AM } from "../materials/being/seedBeings.js";
 import { getWordSync } from "../present/word/wordStore.js";
 import { isExtensionBlockedAtSpace } from "../materials/space/extensionScope.js";
-import { authorizeViaRoles } from "./roleAuth.js";
+import { authorizeViaAbles } from "./ableAuth.js";
 import { getSpaceRootId } from "../sprout.js";
 import { getStoryDomain } from "./address.js";
 import { resolveTargetHistory } from "./historyResolve.js";
@@ -77,7 +77,7 @@ export async function authorize(args) {
   }
 
   // 3. Extension scope gate. Refuses `ext:op` if the owning extension
-  // is blocked at the target's ancestor chain. Orthogonal to roles.
+  // is blocked at the target's ancestor chain. Orthogonal to ables.
   if (
     verb === "do" &&
     target?.spaceId &&
@@ -105,12 +105,12 @@ export async function authorize(args) {
     }
   }
 
-  // 4. The role-walk. Anonymous callers → implicit arrival floor.
-  // Authenticated callers → walk qualities.rolesGranted.
+  // 4. The able-walk. Anonymous callers → implicit arrival floor.
+  // Authenticated callers → walk qualities.ablesGranted.
   //
   // Two histories surface here:
   //
-  //   • targetHistory — where the target lives. Used to look up role
+  //   • targetHistory — where the target lives. Used to look up able
   //     specs on the target's qualities chain, and to evaluate reach
   //     (which space's projection should the reach pattern walk).
   //     Precedence: the parsed target's own history is the most
@@ -168,7 +168,7 @@ export async function authorize(args) {
   // THEIR home history — a path in another substrate's namespace.
   // Looking their grants up on that path locally is meaningless at
   // best (no such history row → noisy cold-fold failure) and wrong at
-  // worst (a coincidentally same-named local history). Any roles a
+  // worst (a coincidentally same-named local history). Any ables a
   // foreign actor holds HERE were granted here, on local histories, so
   // their grants read from the target's history instead.
   const actorActIsLocal =
@@ -177,7 +177,7 @@ export async function authorize(args) {
     args.actorHistory ||
     (actorActIsLocal ? moment?.actorAct?.history : null) ||
     targetHistory;
-  const result = await authorizeViaRoles({
+  const result = await authorizeViaAbles({
     identity,
     verb,
     target,
@@ -189,22 +189,22 @@ export async function authorize(args) {
     actorHistory,
   });
 
-  // Adapt to the verb-dispatch return shape. roleAuth returns
-  // {ok, role?, anchor?, reason?}; verb dispatchers expect {ok, actor, reason?}.
+  // Adapt to the verb-dispatch return shape. ableAuth returns
+  // {ok, able?, anchor?, reason?}; verb dispatchers expect {ok, actor, reason?}.
   if (result.ok) {
     return {
       ok: true,
-      actor: result.role || "permitted",
+      actor: result.able || "permitted",
       reason: result.reason || null,
     };
   }
 
-  // 5. Inheritation coverage (fallback, DO-on-being only). The role-walk
+  // 5. Inheritation coverage (fallback, DO-on-being only). The able-walk
   // is the CAPABILITY axis; the being-tree is the orthogonal DOWNWARD-
   // AUTHORITY axis. A Name that owns the target being (or any ancestor),
   // or holds an inheritation point covering it, has authority over it
-  // even with no role grant — the same authority that lets it grant/
-  // revoke points there. Consulted ONLY after a role denial, so role-
+  // even with no able grant — the same authority that lets it grant/
+  // revoke points there. Consulted ONLY after a able denial, so able-
   // authorized acts (the hot path) never pay for the tree walk. Purely
   // additive: it can GRANT but never deny.
   if (verb === "do" && identity?.nameId && args.auditBeingId) {
@@ -229,7 +229,7 @@ export async function authorize(args) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Auth config flags (birth/connect enabled) — orthogonal to roles
+// Auth config flags (birth/connect enabled) — orthogonal to ables
 // ─────────────────────────────────────────────────────────────────────
 
 /**

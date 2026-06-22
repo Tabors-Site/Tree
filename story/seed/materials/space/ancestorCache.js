@@ -223,10 +223,10 @@ async function walkFromDb(spaceId, ttl, history) {
     // Continue past any intermediate heaven space. The loop ends
     // naturally when we reach the place root (parent === null) so
     // every chain walk reaches the place root's qualities. The
-    // role-walk authorize (seed/RolesAreAuth.md) uses this chain to
-    // find role specs (qualities.roles[name]) by walking up from a
+    // able-walk authorize (seed/AblesAreAuth.md) uses this chain to
+    // find able specs (qualities.ables[name]) by walking up from a
     // grant's anchor; stopping the walk at a heaven space would
-    // silently strip foundational roles hosted on the place root
+    // silently strip foundational ables hosted on the place root
     // whenever a write targets `.config`, `.tools`, etc.
     //
     // Consumers that DO want a per-domain boundary (e.g.
@@ -315,11 +315,11 @@ export function resolveExtensionScopeFromChain(ancestors, confinedExtensions) {
 /**
  * Resolve tree access from a cached ancestor chain.
  *
- * Reads each space's `owner` field. Under RolesAreAuth the role-walk
+ * Reads each space's `owner` field. Under AblesAreAuth the able-walk
  * gates verb calls; this helper surfaces only the baseline ownership
  * signal that descriptor enrichment and circuit-breaker code consult
  * directly. authorize() itself does NOT consume this — it walks
- * `qualities.rolesGranted` against `qualities.roles[<name>]` instead.
+ * `qualities.ablesGranted` against `qualities.ables[<name>]` instead.
  *
  * Returns:
  *
@@ -347,9 +347,9 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
   // ── Heaven path ────────────────────────────────────────────────
   // Any space whose chain passes through heaven (heaven itself or any
   // Tier-3 heaven space beneath it) uses heaven's owner: I_AM. Heaven
-  // authority for any other being now flows through the angel ROLE
-  // grant (per RolesAreAuth), which the role-walk reads directly from
-  // qualities.rolesGranted — not from this chain helper.
+  // authority for any other being now flows through the angel ABLE
+  // grant (per AblesAreAuth), which the able-walk reads directly from
+  // qualities.ablesGranted — not from this chain helper.
   const heavenSpace = ancestors.find((s) => s.heavenSpace === "heaven");
   if (heavenSpace) {
     const isHeavenOwner = !!(idStr && heavenSpace.owner && String(heavenSpace.owner) === idStr);

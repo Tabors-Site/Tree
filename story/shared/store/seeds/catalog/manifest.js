@@ -12,7 +12,7 @@ export default {
   description:
     "The store catalog: plants the catalog space, mints the registrar being, sets ownership so the registrar's self-qualities writes authorize.",
   requires: [
-    { type: "role", ref: "store:registrar" },
+    { type: "able", ref: "store:registrar" },
     { type: "code", ref: "store"           },
   ],
 };

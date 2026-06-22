@@ -1,7 +1,7 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
 // summon.js — the SUMMON verb. Deliver a message to the being at
-// `stance` and wake their scheduler so their role runs.
+// `stance` and wake their scheduler so their able runs.
 //
 // SUMMON is its own verb namespace, peer to DO and BE. The summon
 // Fact has target=recipient (right stance, matching DO's target
@@ -52,13 +52,13 @@ import {
 } from "../address.js";
 import { resolveStance } from "../resolver.js";
 import { authorize } from "../authorize.js";
-import { permitsReceiverSummon } from "../roleAuth.js";
+import { permitsReceiverSummon } from "../ableAuth.js";
 import {
   threadIdFromPath,
   cutThread,
   getThreadsSpaceId,
 } from "../../materials/space/threads.js";
-import { getRole } from "../../present/roles/registry.js";
+import { getAble } from "../../present/ables/registry.js";
 import { attachHandoff, wake } from "../../present/intake/scheduler.js";
 import {
   assertVerbCaller,
@@ -82,14 +82,14 @@ const _PRIORITY_NUM_TO_ENUM = {
 
 /**
  * SUMMON. Deliver a message to the being at `stance` and wake their
- * scheduler so their role runs.
+ * scheduler so their able runs.
  *
  * `stance` is a stance string with @qualifier
  * ("<story>/<path>@<being>"). `message` is
  * { from, content, correlation?, inReplyTo?, attachments?,
- *   sentAt?, activeRole?, orientation? }.
+ *   sentAt?, activeAble?, orientation? }.
  *
- * Return shape depends on the receiving role's respondMode:
+ * Return shape depends on the receiving able's respondMode:
  *   sync   — { messageId, status: "accepted" } or the full response
  *   async  — { messageId, status: "accepted" }; reply later via onResponse
  *   none   — { messageId, status: "accepted" }
@@ -115,7 +115,7 @@ export async function callVerb(stance, message, opts = {}) {
   // sealAct reads opCount + batched from moment). Each summon is
   // one unit of intent — the actor decides to call another being.
   // Unlike DO's set-render → set-being recursion, recursive summons
-  // (a role handler that summons another role) are genuinely distinct
+  // (a able handler that summons another able) are genuinely distinct
   // intents and should count, so no `_inOp` gate here.
   if (moment) {
     moment._opCount = (moment._opCount || 0) + 1;
@@ -200,7 +200,7 @@ export async function callVerb(stance, message, opts = {}) {
   const qualifier = resolved.being;
   if (!qualifier) {
     throw new IbpError(
-      IBP_ERR.ROLE_UNAVAILABLE,
+      IBP_ERR.ABLE_UNAVAILABLE,
       "SUMMON requires a stance with an @qualifier",
     );
   }
@@ -212,11 +212,11 @@ export async function callVerb(stance, message, opts = {}) {
   }
 
   // Resolve the qualifier to a Being: direct name first (the canonical
-  // shape, @ruler435 / @cherub), then role shorthand by scanning the
-  // target space's qualities.beings for an entry whose value.role
-  // matches. Entries are keyed by being-name (multi-being-per-role
-  // support); the role-shorthand search walks values to find a match.
-  // When multiple beings share the role, the first hit wins; addressing
+  // shape, @ruler435 / @cherub), then able shorthand by scanning the
+  // target space's qualities.beings for an entry whose value.able
+  // matches. Entries are keyed by being-name (multi-being-per-able
+  // support); the able-shorthand search walks values to find a match.
+  // When multiple beings share the able, the first hit wins; addressing
   // a specific instance uses its name.
   const { findByName, loadOrFold } =
     await import("../../materials/projections.js");
@@ -241,7 +241,7 @@ export async function callVerb(stance, message, opts = {}) {
         beings instanceof Map
           ? Array.from(beings.values())
           : Object.values(beings);
-      const hit = entries.find((e) => e && e.role === qualifier);
+      const hit = entries.find((e) => e && e.able === qualifier);
       homeBeingId = hit?.beingId || null;
     }
     if (homeBeingId) {
@@ -255,26 +255,26 @@ export async function callVerb(stance, message, opts = {}) {
     // materials/being/identity/birth.js). An unresolvable
     // @qualifier is simply unavailable.
     throw new IbpError(
-      IBP_ERR.ROLE_UNAVAILABLE,
+      IBP_ERR.ABLE_UNAVAILABLE,
       `No being addressable as "@${qualifier}" at this position`,
     );
   }
 
-  // Resolve activeRole: envelope > toBeing.defaultRole > qualifier.
-  // With the carry list retired (RoleFlow build, 2026-06-01), an
-  // envelope-named role is honored as long as the registry knows it;
+  // Resolve activeAble: envelope > toBeing.defaultAble > qualifier.
+  // With the carry list retired (Flow build, 2026-06-01), an
+  // envelope-named able is honored as long as the registry knows it;
   // the flow's author is the authorization (anyone with set-being
-  // permission writes the flow that gates which roles wake the being).
-  // We still want to fail loudly if the role itself doesn't exist —
+  // permission writes the flow that gates which ables wake the being).
+  // We still want to fail loudly if the able itself doesn't exist —
   // that catches typos before they reach the moment runner.
-  const activeRole =
-    validatedMessage.activeRole || toBeing.defaultRole || qualifier;
+  const activeAble =
+    validatedMessage.activeAble || toBeing.defaultAble || qualifier;
 
-  const role = getRole(activeRole);
-  if (!role) {
+  const able = getAble(activeAble);
+  if (!able) {
     throw new IbpError(
-      IBP_ERR.ROLE_UNAVAILABLE,
-      `Role template "${activeRole}" for being @${toBeing.name} is not registered`,
+      IBP_ERR.ABLE_UNAVAILABLE,
+      `Able template "${activeAble}" for being @${toBeing.name} is not registered`,
     );
   }
 
@@ -284,8 +284,8 @@ export async function callVerb(stance, message, opts = {}) {
   return _dispatchCall({
     resolved,
     toBeing,
-    activeRole,
-    role,
+    activeAble,
+    able,
     validatedMessage,
     identity,
     onResponse,
@@ -324,7 +324,7 @@ export async function callVerb(stance, message, opts = {}) {
  * @param {string} args.toBeingId     receiver Being _id
  * @param {string} args.inboxSpaceId  space the inbox lives at
  * @param {object} args.message       SUMMON envelope
- * @param {string} [args.activeRole]  overrides toBeing.defaultRole
+ * @param {string} [args.activeAble]  overrides toBeing.defaultAble
  * @param {object} args.identity      asker identity (typically I_AM)
  * @param {string} [args.history]      explicit history for non-moment callers
  * @param {object} [args.moment]   moment ctx for inside-moment callers
@@ -334,7 +334,7 @@ export async function callByResolved(args) {
     toBeingId,
     inboxSpaceId,
     message,
-    activeRole: roleOverride,
+    activeAble: ableOverride,
     identity: rawIdentity,
     onResponse,
     onError,
@@ -372,16 +372,16 @@ export async function callByResolved(args) {
     ...toSlot.state,
   };
 
-  const activeRole =
-    roleOverride ||
-    validatedMessage.activeRole ||
-    toBeing.defaultRole ||
+  const activeAble =
+    ableOverride ||
+    validatedMessage.activeAble ||
+    toBeing.defaultAble ||
     toBeing.name;
-  const role = getRole(activeRole);
-  if (!role) {
+  const able = getAble(activeAble);
+  if (!able) {
     throw new IbpError(
-      IBP_ERR.ROLE_UNAVAILABLE,
-      `Role template "${activeRole}" for being @${toBeing.name} is not registered`,
+      IBP_ERR.ABLE_UNAVAILABLE,
+      `Able template "${activeAble}" for being @${toBeing.name} is not registered`,
     );
   }
 
@@ -389,11 +389,11 @@ export async function callByResolved(args) {
     resolved: {
       spaceId: inboxSpaceId,
       leafId: inboxSpaceId,
-      being: activeRole,
+      being: activeAble,
     },
     toBeing,
-    activeRole,
-    role,
+    activeAble,
+    able,
     validatedMessage,
     identity,
     onResponse,
@@ -410,14 +410,14 @@ export async function callByResolved(args) {
 /**
  * Shared dispatch tail used by callVerb and callByResolved.
  * Runs auth, emits the call Fact (joins ctx.deltaF when in-
- * moment), and either runs the role's summon handler synchronously
+ * moment), and either runs the able's summon handler synchronously
  * or registers a handoff and nudges the scheduler.
  */
 async function _dispatchCall({
   resolved,
   toBeing,
-  activeRole,
-  role,
+  activeAble,
+  able,
   validatedMessage,
   identity,
   onResponse,
@@ -431,22 +431,22 @@ async function _dispatchCall({
     verb: "call",
     // `being` is the TARGET BEING'S NAME — canSummon patterns
     // ("@cherub", "@food-*") match being names, and beings are
-    // addressed individually even when several share a role. Passing
-    // activeRole here made the role-walk match patterns against the
-    // ROLE name: "@cherub" failed for any being whose name differs
-    // from their active role, and a pattern like "@human" admitted
-    // summoning EVERY human-roled being.
+    // addressed individually even when several share a able. Passing
+    // activeAble here made the able-walk match patterns against the
+    // ABLE name: "@cherub" failed for any being whose name differs
+    // from their active able, and a pattern like "@human" admitted
+    // summoning EVERY human-abled being.
     target: {
       kind: "stance",
       spaceId: resolved.spaceId,
-      being: toBeing?.name || activeRole,
-      activeRole,
+      being: toBeing?.name || activeAble,
+      activeAble,
       history,
     },
     // Envelope intent. Per seed/SUMMON.md, intent is the caller's
     // stated purpose AND an auth predicate: canSummon entries can
     // restrict by intent ({pattern: "@cherub", intent: "mate"}), and
-    // the role-walk in roleAuth.permitsSummon reads this to gate. Past
+    // the able-walk in ableAuth.permitsSummon reads this to gate. Past
     // omission of this line was the structural drift the SUMMON cleanup
     // (2026-06-11) closed: intent declarations on canSummon entries
     // were silent no-ops because the verb never plumbed it through.
@@ -471,12 +471,12 @@ async function _dispatchCall({
 
   // Receiver-side acceptance. The other half of the post office check
   // per seed/SUMMON.md: authorize() above gated the OUTGOING side
-  // (actor's role permits sending); this gates the INCOMING side
-  // (receiver's role accepts this intent). Progressive enhancement —
-  // roles with no `as: receiver` canSummon entries accept anything
-  // (current behavior); roles that declared receiver entries are
+  // (actor's able permits sending); this gates the INCOMING side
+  // (receiver's able accepts this intent). Progressive enhancement —
+  // ables with no `as: receiver` canSummon entries accept anything
+  // (current behavior); ables that declared receiver entries are
   // strict-matched.
-  const accept = permitsReceiverSummon(role, validatedMessage.intent || null);
+  const accept = permitsReceiverSummon(able, validatedMessage.intent || null);
   if (!accept.ok) {
     throw new IbpError(IBP_ERR.FORBIDDEN, `SUMMON refused: ${accept.reason}`);
   }
@@ -558,11 +558,11 @@ async function _dispatchCall({
         // Fact so the audit chain records WHAT THE CALLER SAID THEY WERE
         // DOING, separately from the payload (content) and from what the
         // receiver chose to do (later facts on the receiver's reel). Null
-        // when no intent was set; the receiver's role decides on the basis
+        // when no intent was set; the receiver's able decides on the basis
         // of (intent, content) together.
         intent: validatedMessage.intent || null,
         priority: validatedMessage.priority || "INTERACTIVE",
-        activeRole,
+        activeAble,
         orientation,
         attachments: validatedMessage.attachments,
         inboxSpaceId: inboxNodeId,
@@ -596,29 +596,29 @@ async function _dispatchCall({
 
   const innerCtx = {
     spaceId: inboxNodeId,
-    being: activeRole,
-    activeRole,
+    being: activeAble,
+    activeAble,
     toBeing,
     message: {
       ...validatedMessage,
       correlation: messageId,
       sentAt,
-      activeRole,
+      activeAble,
     },
     resolved,
     identity,
   };
 
-  if (role.respondMode === "sync") {
+  if (able.respondMode === "sync") {
     let responseEntry = null;
-    if (role.triggerOn.includes("message")) {
-      responseEntry = await runCalling(role, innerCtx);
+    if (able.triggerOn.includes("message")) {
+      responseEntry = await runCalling(able, innerCtx);
     }
     if (!responseEntry) return { status: "accepted", messageId };
     return responseEntry;
   }
 
-  if (role.respondMode === "async") {
+  if (able.respondMode === "async") {
     const responseFromStance = `${pathOfResolved(resolved)}@${toBeing.name}`;
     attachHandoff(recipientBeingId, messageId, {
       identity,
@@ -649,7 +649,7 @@ async function _dispatchCall({
     // nudge the scheduler at an empty projection. Outside a moment
     // (moment==null), emitFact committed immediately above and the
     // fold has already run — wake fires inline here.
-    if (role.triggerOn?.includes("message")) {
+    if (able.triggerOn?.includes("message")) {
       const fireWake = () => wake(recipientBeingId, inboxNodeId);
       if (moment && Array.isArray(moment.afterSeal)) {
         moment.afterSeal.push(fireWake);
@@ -669,15 +669,15 @@ async function _dispatchCall({
  *
  * Envelope shape per seed/SUMMON.md:
  *   from        REQUIRED stance (position@being) the caller is acting from
- *   content     REQUIRED payload the receiver's role handler reads
+ *   content     REQUIRED payload the receiver's able handler reads
  *   intent      OPTIONAL kebab-case label naming the caller's stated purpose;
- *               read by the role-walk auth check (canSummon's intent gate)
+ *               read by the able-walk auth check (canSummon's intent gate)
  *               and surfaced to the receiver's handler as an addressing hint.
  *               Intent is auth and routing first, hint second; the receiver's
- *               role decides what to do regardless.
+ *               able decides what to do regardless.
  *   priority    OPTIONAL enum (HUMAN | GATEWAY | INTERACTIVE | BACKGROUND)
  *   orientation OPTIONAL enum (forward | half | inward) for self-summons
- *   activeRole  OPTIONAL hint at which of the receiver's roles to wake
+ *   activeAble  OPTIONAL hint at which of the receiver's ables to wake
  *   attachments OPTIONAL caller-side metadata; opaque to seed
  */
 function validateCallMessage(message) {
@@ -700,7 +700,7 @@ function validateCallMessage(message) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "`message.content` is required");
   }
   // Intent: optional, but when present must be a non-empty kebab-case
-  // label. The auth gate (roleAuth.permitsSummon) matches it literally
+  // label. The auth gate (ableAuth.permitsSummon) matches it literally
   // against canSummon entries' intent restrictions, so loose shapes
   // (whitespace, capital letters, punctuation) would silently fail to
   // match declared entries. Reject them at the perimeter.
@@ -740,15 +740,15 @@ function validateCallMessage(message) {
 }
 
 /**
- * Run a role's summon handler in-process (the sync-respondMode path)
- * and shape the return into a reply envelope. The role's return value
+ * Run a able's summon handler in-process (the sync-respondMode path)
+ * and shape the return into a reply envelope. The able's return value
  * is consulted for text/content; an empty return means "no reply"
- * (the role chose not to speak back).
+ * (the able chose not to speak back).
  */
-async function runCalling(role, ctx) {
+async function runCalling(able, ctx) {
   let result;
   try {
-    result = await role.call(ctx.message, ctx);
+    result = await able.call(ctx.message, ctx);
   } catch (err) {
     log.error(
       "Verbs",
@@ -757,7 +757,7 @@ async function runCalling(role, ctx) {
     throw new IbpError(IBP_ERR.LLM_FAILED, `Summoning failed: ${err.message}`);
   }
   if (!result || typeof result !== "object") {
-    return null; // no-response (role chose not to reply)
+    return null; // no-response (able chose not to reply)
   }
   return {
     from: `${pathOfResolved(ctx.resolved)}@${ctx.toBeing.name}`,

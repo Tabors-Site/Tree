@@ -2,7 +2,7 @@
 
 Sibling to [innerFace.md](innerFace.md) (which defines the canonical
 face all souls share) and [stamperUpgrade.md](stamperUpgrade.md)
-(which named role-scoped fold as the mechanism).
+(which named able-scoped fold as the mechanism).
 
 This doc covers the reactive per-stance inner-face subscription
 system: how humans get live updates through the portal, why LLMs and
@@ -201,7 +201,7 @@ call, parked until anyone needs live push for a specific view.
 
 - [innerFace.md](innerFace.md) for the face shape itself and the
   weave that lives on it.
-- [stamperUpgrade.md](stamperUpgrade.md) for the role-scoped fold
+- [stamperUpgrade.md](stamperUpgrade.md) for the able-scoped fold
   doctrine that this rests on.
 - [names.md](names.md) for the Name/Soul/Being separation that
   explains why humans (a soul type) get live updates while LLMs

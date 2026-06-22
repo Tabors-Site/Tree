@@ -62,11 +62,11 @@ const InboxProjectionSchema = new mongoose.Schema({
   // scheduler reads these to decide pick order + build the moment.
   sender:          { type: String, default: null },
   content:         { type: mongoose.Schema.Types.Mixed, default: null },
-  activeRole:      { type: String, default: null },
+  activeAble:      { type: String, default: null },
   attachments:     { type: [mongoose.Schema.Types.Mixed], default: undefined },
 
   // Caller's stated purpose (envelope intent). Persisted so the
-  // scheduler, the receiver's role handler, and the human-inhabited
+  // scheduler, the receiver's able handler, and the human-inhabited
   // inbox panel all see the same value the auth walk gated on. Null
   // when the summon carried no intent. See seed/SUMMON.md.
   intent:          { type: String, default: null },

@@ -167,14 +167,14 @@ export function openChatFor(beingEntry, { refresh = false } = {}) {
   // the signed-in user. SEE op — no Fact stamped, no chain pollution.
   // `client.see("llm-chain", { args })` dispatches through the unified
   // SEE ops registry; the wire returns the handler's value verbatim.
-  const role = beingEntry.defaultRole || "main";
+  const able = beingEntry.defaultAble || "main";
   Promise.resolve(fl.client.see("llm-chain", {
     args: {
       receiverBeingId: beingEntry.beingId || null,
       receiverBeingName: beingEntry.beingId ? null : beingEntry.being,
       receiverSpaceId: fl.descriptor?.position?.spaceId || null,
       actorBeingName: fl.session?.username || null,
-      role,
+      able,
     },
   })).then((res) => {
     chainCache = (res && res.result) || res || { chain: [], reason: null, chosen: null };

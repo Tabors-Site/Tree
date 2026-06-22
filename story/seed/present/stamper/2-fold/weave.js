@@ -17,11 +17,11 @@
 //     reelId:   string,
 //     history:  string }
 //
-// Roles are not reel-backed today (the role registry is an in-memory
-// Map populated by registerRole, not a fact-chain). Role flips
-// manifest as facts on the being's reel via qualities.roleFlow, so
-// the self being-reel entry already covers role-change wakeups. If a
-// Role primitive ever becomes reel-backed, the shape accepts a "role"
+// Ables are not reel-backed today (the able registry is an in-memory
+// Map populated by registerAble, not a fact-chain). Able flips
+// manifest as facts on the being's reel via qualities.flow, so
+// the self being-reel entry already covers able-change wakeups. If a
+// Able primitive ever becomes reel-backed, the shape accepts a "able"
 // reelKind without code change.
 //
 // Ordering (stable for deterministic hashing).

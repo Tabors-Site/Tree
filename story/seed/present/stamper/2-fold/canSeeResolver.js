@@ -1,6 +1,6 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// canSeeResolver.js . resolve a role's canSee list into the structured
+// canSeeResolver.js . resolve a able's canSee list into the structured
 // blocks the inner face carries this moment.
 //
 // canSee is the unified declaration of a being's perception this
@@ -16,7 +16,7 @@
 // Either shape produces a structured block of the form
 //   { key, source: "address"|"see", label, payload }
 // where payload is the raw structured return (object or string). Per-
-// soul reformatting (LLM prompt prose, scripted-role data dispatch,
+// soul reformatting (LLM prompt prose, scripted-able data dispatch,
 // human portal panels) happens at the presentation layer, not here.
 //
 // Address classification. Anything starting with ".", "/", or "<"
@@ -51,7 +51,7 @@ import { emptyWeave, addReel } from "./weave.js";
  * Resolve canSee entries into structured face blocks and the weave
  * the resolver touched.
  *
- * @param {Array<string>} entries . role.canSee values
+ * @param {Array<string>} entries . able.canSee values
  * @param {object} ctx             . moment ctx (carries being, position, history, ...)
  * @returns {Promise<{ blocks: Array<{key:string, source:string, label:string, payload:any}>, weave: Array }>}
  */
@@ -71,8 +71,8 @@ async function resolveOne(entry, ctx, weave) {
   if (typeof entry !== "string" || entry.length === 0) {
     return null;
   }
-  // "*" is the see-all wildcard — a role's `{ verb: "see", word: "*" }` grant (angel, human). It is NOT a named see-op: foldPlace already gates occupant folds against
-  // role.canSee and shows the whole position for "*", so there is no separate block to resolve
+  // "*" is the see-all wildcard — a able's `{ verb: "see", word: "*" }` grant (angel, human). It is NOT a named see-op: foldPlace already gates occupant folds against
+  // able.canSee and shows the whole position for "*", so there is no separate block to resolve
   // here. Recognize it so it does not fall through to resolveNamedSee and warn "unknown see *".
   if (entry === "*") {
     return null;
@@ -245,7 +245,7 @@ function labelForSeeName(name) {
 }
 
 /**
- * Test whether a role's canSee declaration would admit a given reel
+ * Test whether a able's canSee declaration would admit a given reel
  * target. Used by foldPlace to gate occupant folds BEFORE folding so
  * the weave stays the residue of canSee (we never read reels we are
  * going to drop). The predicate matches the same shape the resolver
@@ -257,26 +257,26 @@ function labelForSeeName(name) {
  *     resolution time; pre-fold we cannot resolve names cheaply, so a
  *     non-empty named-see entry conservatively admits everything (the
  *     gate is the resolver's reel-list when it runs).
- *   . empty canSee admits nothing (caller still folds self + role
+ *   . empty canSee admits nothing (caller still folds self + able
  *     reel for the empty-canSee invariant; that's a buildInnerFace
  *     concern, not a gate concern).
  *
  * Permissive on uncertainty: when in doubt, ADMIT. The fold is the
  * source of truth; over-folding wastes work but never makes the face
- * lie. Under-folding (false-deny) would hide story from a role that
+ * lie. Under-folding (false-deny) would hide story from a able that
  * declared it could see.
  *
- * @param {Array<string>} roleCanSee . role.canSee declaration
+ * @param {Array<string>} ableCanSee . able.canSee declaration
  * @param {{ type?: string, kind?: string, id: string|number, name?: string }} target
  * @returns {boolean}
  */
-export function canSeeAdmitsReel(roleCanSee, target) {
+export function canSeeAdmitsReel(ableCanSee, target) {
   if (!target) return false;
   const kind = target.kind || target.type || null;
   const id   = target.id != null ? String(target.id) : null;
   if (!kind || !id) return false;
-  if (!Array.isArray(roleCanSee) || roleCanSee.length === 0) return false;
-  for (const entry of roleCanSee) {
+  if (!Array.isArray(ableCanSee) || ableCanSee.length === 0) return false;
+  for (const entry of ableCanSee) {
     if (typeof entry !== "string" || entry.length === 0) continue;
     if (!isAddressShape(entry)) {
       // Named see. Conservative admit. The resolver will record the
@@ -287,7 +287,7 @@ export function canSeeAdmitsReel(roleCanSee, target) {
     // Address-shape entry. A bare "." (heaven place) admits the
     // current place's reels; richer matching would require resolving
     // the address here, which is expensive. Permissive: admit any
-    // address-shape entry. If a role declares an address it cannot
+    // address-shape entry. If a able declares an address it cannot
     // see (a deny upstream), the SEE call's authorize layer will
     // refuse and the resolver drops the block.
     return true;

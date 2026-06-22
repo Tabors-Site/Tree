@@ -1,4 +1,4 @@
-# cherub-connect.word — BE connect, the anonymous-arrival flow (cherub/role.js
+# cherub-connect.word — BE connect, the anonymous-arrival flow (cherub/able.js
 # connectHandler, the unauthenticated path).
 #
 # The split the cut already draws: the CONTROL strand (foreach / if / mark /

@@ -204,10 +204,10 @@ function pastPhrase(f, names) {
       return `${pastOf("make")} the space ${p.name || targetName(target, names)}`;
     case "create-matter":
       return `${pastOf("make")} ${targetName(target, names) || p.name || "something"}`;
-    case "grant-role":
-      return `${pastOf("grant")}${target?.id ? ` ${displayName(target.id, names)}` : ""} the ${p.role || "?"} role`;
-    case "revoke-role":
-      return `${pastOf("take")} the ${p.role || "?"} role${target?.id ? ` from ${displayName(target.id, names)}` : ""}`;
+    case "grant-able":
+      return `${pastOf("grant")}${target?.id ? ` ${displayName(target.id, names)}` : ""} the ${p.able || "?"} able`;
+    case "revoke-able":
+      return `${pastOf("take")} the ${p.able || "?"} able${target?.id ? ` from ${displayName(target.id, names)}` : ""}`;
     case "coin": {
       // The unified word shape: params.word + binding. A concept word carries its declaration in
       // binding.says; show it, so the story reads the seed.
@@ -271,7 +271,7 @@ function pastPhrase(f, names) {
 function fieldGloss(field) {
   if (!field) return "a quality";
   const f = String(field).replace(/^qualities\./, "");
-  if (f.startsWith("roles.")) return `the ${f.slice(6)} role`;
+  if (f.startsWith("ables.")) return `the ${f.slice(6)} able`;
   if (f.startsWith("world.")) return `the ${f.split(".").pop()} signal`;
   if (f === "pointers") return "the pointers";
   if (f === "owner") return "the owner";

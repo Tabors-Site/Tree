@@ -5,7 +5,7 @@ Duplicate presence. Someone tries to import a being whose public key matches a b
 Identity collision with cryptographic noise. Even more subtle — someone tries to import a being whose claimed key collides with another being's key. Cryptographically near-impossible with proper ed25519, but the check is cheap and the failure mode is total if it ever happened.
 Branch confusion. A being imported on branch #1 leaks into main, or vice versa. The import touches the wrong branch's records, corrupting the chain integrity for either or both.
 Recursive nesting. A graft package contains a being that contains a chain that references another graft. If the substrate doesn't carefully bound the import, it could try to recursively pull in beings that aren't really being grafted, or fail in confusing ways when references can't resolve.
-Authority bypass. A being arrives with roles claimed in their imported chain. The substrate either grants these blindly (security hole) or rejects them entirely (functional loss). Without explicit policy, the result is ambiguous.
+Authority bypass. A being arrives with ables claimed in their imported chain. The substrate either grants these blindly (security hole) or rejects them entirely (functional loss). Without explicit policy, the result is ambiguous.
 Mother-line orphan. An imported being's mother-line references beings that don't exist in this reality. The lineage chain ends in a dangling reference. The substrate doesn't know what to do with the being's authority.
 Replay of past acts. A graft package contains the being's old acts. If the substrate accepts those as currently-actionable rather than as historical record, the being could "replay" old actions in the new context.
 Each of these is a specific failure mode that needs an explicit guard. The substrate's safety depends on being explicit about each.
@@ -36,9 +36,9 @@ Or they exist as known foreign references with verifiable origin.
 Or the import explicitly imports them as well (recursive but bounded).
 
 If none of these resolve, the substrate has a policy choice: accept the being with a dangling mother-line, accept with the mother re-anchored to a local placeholder, or refuse. Each has tradeoffs; the choice should be explicit, not accidental.
-Authority isolation. Imported beings arrive with no automatic authority in the receiving reality. Their imported chain might show they had roles in their source reality; this is biographical fact, not transferable power. They start with whatever default role new arrivals get (probably just the open petitioner role), and can be granted local roles through normal means.
+Authority isolation. Imported beings arrive with no automatic authority in the receiving reality. Their imported chain might show they had ables in their source reality; this is biographical fact, not transferable power. They start with whatever default able new arrivals get (probably just the open petitioner able), and can be granted local ables through normal means.
 This is the cleanest doctrine: chain travels as history, authority is renegotiated. Worth enforcing explicitly so imports can't smuggle in authority.
-Acts as historical record, not actionable. Imported acts are facts in the chain showing the being's history. They are not events that "happen" in the receiving reality — they happened in their source. The substrate stamps them as imports with foreign provenance, not as current actions. They don't trigger downstream effects, don't fire role-walks, don't update projection state as if they were live.
+Acts as historical record, not actionable. Imported acts are facts in the chain showing the being's history. They are not events that "happen" in the receiving reality — they happened in their source. The substrate stamps them as imports with foreign provenance, not as current actions. They don't trigger downstream effects, don't fire able-walks, don't update projection state as if they were live.
 This prevents replay attacks where someone reuses old acts in a new context.
 Quota and rate limits. Imports should be bounded. A single import can't be unlimited size (preventing storage exhaustion attacks). The rate of imports per peer should be bounded (preventing flooding). These aren't security primitives so much as operational ones, but they prevent denial-of-service.
 Provenance recording. Every import should produce its own fact in the receiving reality's chain: "at this moment, this content was imported from this source by this authority." This means the import itself has a record. If something goes wrong later, you can trace exactly when this content arrived and who authorized it.
@@ -78,7 +78,7 @@ verifyAllContentBoundToBranch(package, targetBranch)
 stampImportedFactsAsHistorical(package.facts, targetBranch)
 
 // 7. Strip claimed authority
-setBeingRoles(package.being, defaultArrivalRoles)
+setBeingAbles(package.being, defaultArrivalAbles)
 
 // 8. Record the import
 stampImportFact(authority, package.source, package.contentRoots, targetBranch)
@@ -94,7 +94,7 @@ Reversible if needed. Because imports are bounded and recorded, you can identify
 What to pin doctrinally
 Worth being explicit about the import contract:
 
-Bringing a being into a reality (via graft, succession arrival, federation cache, or any other key-import path) requires explicit safety checks: cryptographic verification of all content, existence check against known beings (refusing duplicates with conflicting chains), branch scoping (the import targets one branch only), mother-line resolution (with policy for unresolvable lineage), authority isolation (imported authority does not transfer; new arrivals start with default roles), and treatment of imported acts as historical record (not as current actions triggering downstream effects).
+Bringing a being into a reality (via graft, succession arrival, federation cache, or any other key-import path) requires explicit safety checks: cryptographic verification of all content, existence check against known beings (refusing duplicates with conflicting chains), branch scoping (the import targets one branch only), mother-line resolution (with policy for unresolvable lineage), authority isolation (imported authority does not transfer; new arrivals start with default ables), and treatment of imported acts as historical record (not as current actions triggering downstream effects).
 The import itself is recorded as a fact in the receiving reality, providing provenance for later audit. Imports either succeed atomically or fail without partial state. Recursive references in imported content are accepted as opaque foreign references; the substrate does not recursively chase them.
 Branch confinement is mandatory: every import operation targets one branch, and imported content cannot leak across branches. The receiving authority's signature on the import acceptance binds the import to the specific branch context.
 

@@ -107,7 +107,7 @@ console.log("Manifest to summon @store-registrar with:");
 console.log("");
 console.log(JSON.stringify({ listingType: "pack", manifest }, null, 2));
 console.log("");
-console.log("Next step (manual): summon @store-registrar from a being holding the store:publisher role");
+console.log("Next step (manual): summon @store-registrar from a being holding the store:publisher able");
 console.log("with intent 'publish-listing' and the payload above.");
 
 await mongoose.disconnect();

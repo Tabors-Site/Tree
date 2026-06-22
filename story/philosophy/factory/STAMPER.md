@@ -114,7 +114,7 @@ because every act lives in a moment (see [FACTORY.md](../seed/FACTORY.md) "Genes
   `actId`, references `prevStampId`, knows `beingIn` and (if known)
   `beingOut`. No facts yet.
 - **fold** builds the face. Read-only.
-- **momentum** runs the role's `summon(message, ctx)`. The act executes
+- **momentum** runs the able's `summon(message, ctx)`. The act executes
   verbs; each verb that mutates calls `emitFact`. Facts append to their
   target reels as they fire.
 - **stamped** (in a finally) seals the stamp: `sealed: true, sealedAt:
@@ -123,13 +123,13 @@ because every act lives in a moment (see [FACTORY.md](../seed/FACTORY.md) "Genes
 
 A stamp can carry zero facts. Two distinct cases — keep them separate:
 
-- **No stamp opens.** A SUMMON arrives at a being whose role declares
+- **No stamp opens.** A SUMMON arrives at a being whose able declares
   `triggerOn: []` (the human case). The verb writes the inbox entry;
   no moment runs; no stamp exists. The human's eventual response
   arrives later through their transport as its own intake entry,
   which opens its own stamp at that time.
-- **Act opens, role declines.** A SUMMON triggers a moment; assign
-  opens the stamp; momentum runs `role.summon` which returns null (the
+- **Act opens, able declines.** A SUMMON triggers a moment; assign
+  opens the stamp; momentum runs `able.summon` which returns null (the
   being chose not to act). The stamp seals empty — it has actId,
   prevStampId, sealed marker, just no facts inside.
 

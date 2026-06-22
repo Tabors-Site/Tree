@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // verify-death-word . be:death is authored by a .word (death.word); the BE dispatcher stamps the one
 // be:death fact from the word's factParams (rung-3 verb-op #2 — a pure fact-lay). The kill AUTHORITY
-// is be.js's verb-level authorize() (NOT in the word). Proves: (1) cherub:death folds as roleword +
-// resolveRoleWord returns IR (the word is the live path); (2) be:death via beVerb closes a being
+// is be.js's verb-level authorize() (NOT in the word). Proves: (1) cherub:death folds as ableword +
+// resolveAbleWord returns IR (the word is the live path); (2) be:death via beVerb closes a being
 // (applyDeath folds qualities.death); (3) THE PROOF — the emitted fact carries verb:"be" act:"death"
 // of:{kind:"being"}, params.byActor === the caller, result.closed (the word's sentinel) — the WORD
 // authored the params, the dispatcher stamped; (4) gate-equivalence: a missing target being →
@@ -25,7 +25,7 @@ const { birthBeing } = await import(`${R}/seed/materials/being/identity/birth.js
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { getStoryDomain } = await import(`${R}/seed/ibp/address.js`);
 const { getWordSync } = await import(`${R}/seed/present/word/wordStore.js`);
-const { resolveRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
+const { resolveAbleWord } = await import(`${R}/seed/present/word/ableWordRegistry.js`);
 const { default: Fact } = await import(`${R}/seed/past/fact/fact.js`);
 const { IBP_ERR } = await import(`${R}/seed/ibp/protocol.js`);
 const pollFor = async (fn, pred, t = 16000, e = 250) => { const t0 = Date.now(); while (Date.now() - t0 < t) { const v = await fn(); if (pred(v)) return v; await new Promise((r) => setTimeout(r, e)); } return await fn(); };
@@ -41,15 +41,15 @@ try {
 
   // (1) the word is the live path
   const w = getWordSync("cherub:death");
-  const ir = resolveRoleWord("cherub", "death", "0");
-  (w?.kind === "roleword" && !!ir)
-    ? ok(`cherub:death folds as kind:"roleword" + resolveRoleWord returns its IR (the word is the live path)`)
+  const ir = resolveAbleWord("cherub", "death", "0");
+  (w?.kind === "ableword" && !!ir)
+    ? ok(`cherub:death folds as kind:"ableword" + resolveAbleWord returns its IR (the word is the live path)`)
     : bad(`death word folded`, { kind: w?.kind, hasIR: !!ir });
 
   // (2) birth a being to death
   let beingId = null;
   await withIAmAct("birth dyingbeing", async (ctx) => {
-    const r = await birthBeing({ spec: { name: "dyingbeing", parentBeingId: cherub.id, homeId: cherub.state.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: ctx, branch: "0" });
+    const r = await birthBeing({ spec: { name: "dyingbeing", parentBeingId: cherub.id, homeId: cherub.state.homeSpace, cognition: "scripted", defaultAble: "global" }, identity: I_AM, moment: ctx, branch: "0" });
     beingId = r.beingId;
   });
   const before = await pollFor(() => loadProjection("being", beingId, "0"), (s) => !!s?.state);

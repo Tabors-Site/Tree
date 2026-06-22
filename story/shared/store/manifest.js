@@ -10,11 +10,11 @@
 // PACK CONTENTS:
 //   code/                  — the substrate code (delist op + intent
 //                            handlers for the registrar's summon)
-//   roles/registrar/       — the catalog's writer (scripted; holds the
+//   ables/registrar/       — the catalog's writer (scripted; holds the
 //                            catalog in its own qualities; publishers
 //                            reach it through publish-listing /
 //                            retire-listing SUMMON intents)
-//   roles/publisher/       — the public role a being picks up to
+//   ables/publisher/       — the public able a being picks up to
 //                            publish (auth via key, signed claims)
 //   seeds/catalog/         — plants the catalog space and the
 //                            registrar being at a position of the
@@ -29,8 +29,8 @@ export default {
 
   requires: [
     { type: "code", ref: "store"             },
-    { type: "role", ref: "store:registrar"   },
-    { type: "role", ref: "store:publisher"   },
+    { type: "able", ref: "store:registrar"   },
+    { type: "able", ref: "store:publisher"   },
     { type: "seed", ref: "store:catalog"     },
   ],
 };

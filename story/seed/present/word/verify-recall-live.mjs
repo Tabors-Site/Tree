@@ -56,7 +56,7 @@ try {
   // a FRESH being — its chain is idle, so its verdict won't fork I_AM's busy genesis chain
   let sageId = null, sageName = null;
   await withIAmAct("birth sage", async (m) => {
-    const b = await birthBeing({ spec: { name: "sage", parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: m, history: "0" });
+    const b = await birthBeing({ spec: { name: "sage", parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultAble: "global" }, identity: I_AM, moment: m, history: "0" });
     sageId = b.beingId; sageName = b.name;
   });
   await new Promise((r) => setTimeout(r, 1500)); // let sage's birth + grants settle

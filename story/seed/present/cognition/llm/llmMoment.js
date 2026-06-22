@@ -35,7 +35,7 @@
 //   1. Snapshot ancestors (pinned for every resolution chain).
 //   2. Resolve the LLM client at this position.
 //   3. Build the prompt FRESH from the forward fold. The world face
-//      lives in the system prompt (via role see-resolvers); the wake's
+//      lives in the system prompt (via able see-resolvers); the wake's
 //      content lives in the user message. No past-messages array.
 //   4. One provider call. Single shot. No buffer, no loop.
 //   5. Parse the response into one of three outcomes (the cognition
@@ -62,19 +62,19 @@
 //     moment builds its own message array and throws it away.
 //
 //   . The multi-step loop. Multi-step cognition happens through
-//     multiple MOMENTS, not multiple LLM calls in one moment. A role
+//     multiple MOMENTS, not multiple LLM calls in one moment. A able
 //     that wants to keep stepping does so EXPLICITLY: its act emits
 //     SUMMON(self) (with whatever orientation the next moment should
 //     fold at) and the next moment fires from that summon. No hidden
-//     selfContinue field; the role's act IS the loop signal. The
+//     selfContinue field; the able's act IS the loop signal. The
 //     no-act release (a Word that lays no fact) is the natural exit:
 //     the being signals "I have seen this moment's face and I am done."
 //
 // What is preserved:
 //
-//   . assemble.buildSystemPromptForRole         . prompt rendering
+//   . assemble.buildSystemPromptForAble         . prompt rendering
 //   . connect.getClientForBeing + failover      . provider plumbing
-//   . runWordNativeOutput (parse + runRoleWord)  . the Word path
+//   . runWordNativeOutput (parse + runAbleWord)  . the Word path
 //   . hooks (beforeLLMCall, afterLLMCall, enrichContext, beforeResponse)
 
 import crypto from "crypto";
@@ -95,7 +95,7 @@ import {
   cognitionFailure,
   isCognitionFailure,
 } from "../cognitionResult.js";
-import { buildSystemPromptForRole } from "./assemble.js";
+import { buildSystemPromptForAble } from "./assemble.js";
 import { renderInwardPastFace, renderHalfPastFace } from "./pastFaceRender.js";
 import {
   getClientForBeing,
@@ -136,38 +136,38 @@ export function getActiveRunTurnCount() {
  * @param {object} opts.being     . the acting Being row
  * @param {object} opts.envelope  . the SUMMON envelope (carries content,
  *                                  ibpAddress, actId, sessionId, ...)
- * @param {object} opts.role      . the active role spec
+ * @param {object} opts.able      . the active able spec
  * @param {AbortSignal} [opts.signal] . cancellation
  * @param {object} [opts.moment]   . ambient moment ctx (actId/sessionId)
  * @returns {Promise<CognitionResult>}
  */
-// 14.md / oneWordMode — EVERY role is word-native, unconditionally: the cognition speaking Word IS
+// 14.md / oneWordMode — EVERY able is word-native, unconditionally: the cognition speaking Word IS
 // the system (Tabor). The JSON envelope (executeTool / the seed tools) is DELETED (14.md §4.5); the
 // transition flag died with it. There is no other response path — every being receives Word
 // (vocabulary + inner face rendered as Word) and emits ONE Word.
 //
 // 14.md §4 step 2 — the word OUTPUT path. The being emitted WORD (its content); parse it to IR and
-// run it through runRoleWord (the SAME executor cherub.word uses) onto THIS moment's deltaF, sealed
+// run it through runAbleWord (the SAME executor cherub.word uses) onto THIS moment's deltaF, sealed
 // like any act. The act signs BY a Name (moment.actorAct.by, the trueName) THROUGH a being (the
 // vessel — beingId): the explicit `identity` makes through = beingId and by = the Name. env is
 // minimal — do/be/call dispatch on identity+moment; host predicates (see-conditions) are a later
 // wiring. Parse miss → see; run error → failure. One act → one stamp: facts laid = an act sealed;
 // none = an inert read.
-async function runWordNativeOutput(prose, { role, moment, history, beingId, username }) {
+async function runWordNativeOutput(prose, { able, moment, history, beingId, username }) {
   if (!prose) return cognitionSee();
   let ir;
   try {
     const { parse } = await import("../../word/parser.js");
     ir = parse(prose);
   } catch (err) {
-    log.info("Word", `${role?.name}: emitted Word did not parse (${err.message}); no act this moment`);
+    log.info("Word", `${able?.name}: emitted Word did not parse (${err.message}); no act this moment`);
     return cognitionSee();
   }
   if (!ir || (Array.isArray(ir) && ir.length === 0)) return cognitionSee();
   const before = Array.isArray(moment?.deltaF) ? moment.deltaF.length : 0;
   try {
-    const { runRoleWord } = await import("../../word/roleWordRegistry.js");
-    await runRoleWord(ir, {
+    const { runAbleWord } = await import("../../word/ableWordRegistry.js");
+    await runAbleWord(ir, {
       moment,
       history,
       env: {},
@@ -175,16 +175,16 @@ async function runWordNativeOutput(prose, { role, moment, history, beingId, user
     });
   } catch (err) {
     if (err?.__wordRefusal) return cognitionFailure(err.code || "refused", err.message);
-    log.error("Word", `${role?.name}: runRoleWord failed: ${err.message}`);
+    log.error("Word", `${able?.name}: runAbleWord failed: ${err.message}`);
     return cognitionFailure("internal", `word run failed: ${err.message}`);
   }
   const laid = (Array.isArray(moment?.deltaF) ? moment.deltaF.length : 0) > before;
   return laid ? cognitionSuccess(prose) : cognitionSee();
 }
 
-export async function runLlmMoment({ being, envelope, role, signal, moment } = {}) {
-  if (!being || !role || !envelope) {
-    return cognitionFailure("internal", "runLlmMoment requires being, role, envelope");
+export async function runLlmMoment({ being, envelope, able, signal, moment } = {}) {
+  if (!being || !able || !envelope) {
+    return cognitionFailure("internal", "runLlmMoment requires being, able, envelope");
   }
   if (_activeRunTurns >= MAX_RUN_TURNS) {
     return cognitionFailure("internal", `too many concurrent moments (cap=${MAX_RUN_TURNS})`);
@@ -192,13 +192,13 @@ export async function runLlmMoment({ being, envelope, role, signal, moment } = {
 
   _activeRunTurns++;
   try {
-    return await runLlmMomentInner({ being, envelope, role, signal, moment });
+    return await runLlmMomentInner({ being, envelope, able, signal, moment });
   } finally {
     _activeRunTurns--;
   }
 }
 
-async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
+async function runLlmMomentInner({ being, envelope, able, signal, moment }) {
   const beingId = String(being._id);
   const username = being.name || null;
 
@@ -216,7 +216,7 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
   // prompt's "presenceKey" lookup writes through it. History-scoped:
   // the same pair on a different history is a different lane.
   const beingOut = envelope.beingOut || envelope.toBeingId || null;
-  const isPresentist = role?.presentist === true;
+  const isPresentist = able?.presentist === true;
   const _ibpAddress = (isPresentist || !beingOut)
     ? null
     : await computeIbpStampAddress({
@@ -257,8 +257,8 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
   // 3. LLM client resolution — the 7-step chain (auth.jpg).
   //
   // Receiver = this being. Actor = the being who summoned this moment
-  // (from the planned act). The role name carried by `activeRole`
-  // drives per-role slot lookups at every level (steps 0/1/2/3/4/5/6).
+  // (from the planned act). The able name carried by `activeAble`
+  // drives per-able slot lookups at every level (steps 0/1/2/3/4/5/6).
   //
   // The chain returns an ordered list; chain[0].connectionId is the
   // primary, the rest feed the failover loop in call.js. Empty chain
@@ -277,13 +277,13 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
     actor: askerBeingId
       ? { beingId: askerBeingId, spaceId: askerSpaceId, storyDomain: null }
       : null,
-    role: role?.llmSlot || role?.name || "main",
+    able: able?.llmSlot || able?.name || "main",
     history,
   });
-  const roleConnectionId = chainResult.chain.length > 0
+  const ableConnectionId = chainResult.chain.length > 0
     ? chainResult.chain[0].connectionId
     : null;
-  const clientEntry = await getClientForBeing(beingId, null, roleConnectionId, history);
+  const clientEntry = await getClientForBeing(beingId, null, ableConnectionId, history);
   if (clientEntry.noLlm) {
     return cognitionSuccess(
       "No LLM connection configured. Set one up at /setup to use AI features.",
@@ -294,7 +294,7 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
   // 4. Build the prompt FRESH for this moment. Forward fold (the
   // default and the only mode honored today):
   //   . enrichContext gathers per-position extension contributions
-  //   . buildSystemPromptForRole renders the role's body + position
+  //   . buildSystemPromptForAble renders the able's body + position
   //     block + see-resolver content (the world face)
   //   . the user message is the wake's content . the moment's "what
   //     just landed in front of you" signal
@@ -308,7 +308,7 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
   //
   // ORIENTATION (INNER-FOLD §2). The three turns honored here:
   //   forward — world only. The forward face (preloaded canSee
-  //             blocks via the role) carries the perception. The
+  //             blocks via the able) carries the perception. The
   //             past-face block is empty.
   //   inward  — A_b alone. foldPlace(beingId, "inward") returns the
   //             act-chain in act-order; renderInwardPastFace turns
@@ -323,8 +323,8 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
   // Orientation rides on the summon (INNER-FOLD §4). A being only
   // turns by self-summoning with a new ω; external callers always
   // arrive forward. The pickOrientation helper enforces the
-  // precedence chain envelope > moment > role default > forward.
-  const orientation = pickOrientation(envelope, role, moment);
+  // precedence chain envelope > moment > able default > forward.
+  const orientation = pickOrientation(envelope, able, moment);
 
   // Beat 2 (runFoldBeat in moment.js) already ran foldPlace at this
   // orientation and stashed both the spatial fold and the canonical
@@ -359,9 +359,9 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
         message: envelope.content,
       });
 
-  // promptCtx flows into buildSystemPromptForRole + resolveBare-
+  // promptCtx flows into buildSystemPromptForAble + resolveBare-
   // Capabilities. The pastFaceBlock rides through into buildPrompt's
-  // assembly; suppressCanSee tells the assembler to skip the role's
+  // assembly; suppressCanSee tells the assembler to skip the able's
   // preloaded canSee blocks on inward (world drops out).
   // History-aware aggregate reader for see-resolvers and prompt builders.
   // Same shape as ctx.read on moment (see 1-assign.js baseCtx): hides
@@ -394,7 +394,7 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
       return { _id: slot.id, position: slot.position, ...(slot.state || {}) };
     },
   };
-  const systemPrompt = await buildSystemPromptForRole(role, promptCtx);
+  const systemPrompt = await buildSystemPromptForAble(able, promptCtx);
 
   // The canonical inner face was built once at beat 2 (runFoldBeat)
   // and lives on moment.innerFace. The seal carries it onto the
@@ -410,20 +410,25 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
   // No new conflict-check machinery here . the doctrine is snapshot
   // at fold, retry via existing refold path if seal fails.
   const userTurn = {
-    role: "user",
+    able: "user",
     content:
       typeof envelope.content === "string"
         ? envelope.content
         : JSON.stringify(envelope.content),
   };
+  // The SYSTEM message is the being's stable state (identity + ables +
+  // face); the USER message is the per-moment wake. Keeping the system
+  // message byte-deterministic for a given fold lets the endpoint's prefix
+  // cache carry it across moments (26.md) — the fold rides the KV cache;
+  // per-moment volatile stays in the user turn.
   const messages = [
-    { role: "system", content: systemPrompt },
+    { able: "system", content: systemPrompt },
     userTurn,
   ];
 
   // 5. The single provider call.
   // The cognition speaks WORD (14.md): it emits its one Word as message
-  // content, parsed below via the word parser → runRoleWord. There are
+  // content, parsed below via the word parser → runAbleWord. There are
   // NO tool schemas — the JSON envelope retired (§4.5). reqParams is
   // exactly { model, messages }; nothing else.
   const reqParams = { model, messages };
@@ -431,7 +436,7 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
   // Conduit-boundary deadline. Owned here so a hung provider releases
   // the moment on time regardless of SDK behavior.
   const deadlineMs =
-    (Number.isFinite(role?.timeoutMs) && role.timeoutMs) || getLlmTimeout();
+    (Number.isFinite(able?.timeoutMs) && able.timeoutMs) || getLlmTimeout();
   const deadlineCtrl = new AbortController();
   if (signal) {
     if (signal.aborted) deadlineCtrl.abort();
@@ -442,7 +447,7 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
   const llmHookData = {
     beingId,
     rootId,
-    role: role.name,
+    able: able.name,
     model,
     messageCount: messages.length,
     hasTools: false,
@@ -470,7 +475,7 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
       beingId,
       rootId,
       // Pass the 7-step chain so failover walks our resolver's
-      // candidates (with force flags + per-role slots already
+      // candidates (with force flags + per-able slots already
       // applied) instead of falling back to the legacy resolver.
       // History threads through so failover reads see the moment's
       // effective view (sub-branch deletions, etc.).
@@ -502,7 +507,7 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
     .run("afterLLMCall", {
       beingId,
       rootId,
-      role: role.name,
+      able: able.name,
       model,
       usage: response?.usage || null,
       hasToolCalls: false,
@@ -513,7 +518,7 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
     .catch(() => {});
 
   // 6. Parse the response. The cognition spoke WORD — its content IS
-  // one Word. Run it through the word path (parse → runRoleWord) onto
+  // one Word. Run it through the word path (parse → runAbleWord) onto
   // this moment's deltaF, sealed like any act. The act signs BY a Name
   // (moment.actorAct.by, the trueName) THROUGH a being (the vessel —
   // beingId). A Word that lays a fact → act; one that parses to nothing
@@ -526,7 +531,7 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
   const proseRaw = typeof assistant.content === "string" ? assistant.content : "";
   const prose = proseRaw.trim();
 
-  return await runWordNativeOutput(prose, { role, moment, history, beingId, username });
+  return await runWordNativeOutput(prose, { able, moment, history, beingId, username });
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -538,7 +543,7 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
  *   1. envelope.orientation . the summon that opened this moment
  *      explicitly named one (the canonical channel per INNER-FOLD §4)
  *   2. moment.orientation . threaded by the caller
- *   3. role.defaultOrientation . the role's standing posture
+ *   3. able.defaultOrientation . the able's standing posture
  *   4. "forward" . the substrate's default
  *
  * All three (forward / half / inward) are honored. Per INNER-FOLD §2
@@ -549,11 +554,11 @@ async function runLlmMomentInner({ being, envelope, role, signal, moment }) {
  * Unknown values fall back to forward with a warn log so an
  * envelope-shape regression can never silently inject the past.
  */
-function pickOrientation(envelope, role, moment) {
+function pickOrientation(envelope, able, moment) {
   const raw =
     envelope?.orientation ||
     moment?.orientation ||
-    role?.defaultOrientation ||
+    able?.defaultOrientation ||
     "forward";
   if (!ORIENTATIONS.has(raw)) {
     log.warn("LLM", `unknown orientation "${raw}"; treating as forward`);
@@ -564,7 +569,7 @@ function pickOrientation(envelope, role, moment) {
 
 /**
  * Gather extension context via the enrichContext hook. Returns a
- * dictionary the role's prompt builder can read; an empty object on
+ * dictionary the able's prompt builder can read; an empty object on
  * miss. Skips silently when no space context resolves.
  */
 async function gatherEnrichedContext({ beingId, currentSpace, rootId, presenceKey, message }) {

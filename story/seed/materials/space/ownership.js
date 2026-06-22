@@ -4,13 +4,13 @@
 //
 // Doctrine. Owner is the ONE base-axiom membership class — it grants
 // implicit authority over the space + descendants without needing any
-// role grant. Every OTHER form of delegated authority lives in the
-// role registry: operators author roles and grant them via grant-role
-// (per seed/RolesAreAuth.md).
+// able grant. Every OTHER form of delegated authority lives in the
+// able registry: operators author ables and grant them via grant-able
+// (per seed/AblesAreAuth.md).
 //
 // `addContributor` / `removeContributor` retired 2026-06-09 — the
-// contributor concept is now just a role like any other. Replace
-// with grant-role / revoke-role against an operator-authored role
+// contributor concept is now just a able like any other. Replace
+// with grant-able / revoke-able against an operator-authored able
 // whose canDo covers the editing actions. See space/ops.js retirement
 // note for the migration shape.
 
@@ -34,7 +34,7 @@ export async function setOwner(spaceId, newOwnerId, beingId, history, moment = n
  * parent's owner authorizes; the walker inherits ownership from above
  * after the clear.
  */
-export async function removeOwner(spaceId, beingId, history) {
-  return removeSpaceOwner(spaceId, beingId, history, null);
+export async function removeOwner(spaceId, beingId, history, moment = null) {
+  return removeSpaceOwner(spaceId, beingId, history, moment);
 }
 

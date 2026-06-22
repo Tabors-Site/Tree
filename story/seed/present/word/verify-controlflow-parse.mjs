@@ -29,13 +29,13 @@ console.log("\n  verify-controlflow-parse (.word -> parse -> evaluate)\n");
 
 // 1. if / else (§2) over a lifted test skeleton
 {
-  const src = `When a guest enters:\n  If the role equals dj:\n    queue the guest.\n  Otherwise:\n    deny the guest.`;
-  const dj = await run(src, { role: "dj" });
-  const mc = await run(src, { role: "mc" });
+  const src = `When a guest enters:\n  If the able equals dj:\n    queue the guest.\n  Otherwise:\n    deny the guest.`;
+  const dj = await run(src, { able: "dj" });
+  const mc = await run(src, { able: "mc" });
   // show the parsed IR once, so the cap-shape match is visible
   console.log("    if-node:", JSON.stringify(dj.flow.effects[0]).slice(0, 120), "…");
   (JSON.stringify(dj.laid) === '["do:queue"]' && JSON.stringify(mc.laid) === '["do:deny"]')
-    ? ok("if/else over `the role equals dj` → dj queues, mc denies") : bad("if/else", { dj: dj.laid, mc: mc.laid });
+    ? ok("if/else over `the able equals dj` → dj queues, mc denies") : bad("if/else", { dj: dj.laid, mc: mc.laid });
 }
 
 // 2. mark + if (§5): reflexive state-mark, sibling `if no X was found` reads the same flag

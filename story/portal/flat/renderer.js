@@ -13,7 +13,7 @@
 
 import { flat } from "./host.js";
 import { openChatFor, isChatOpen, getChatBeing } from "./chat.js";
-import { renderRoleManagerPanel } from "../shared/role-manager-panel.js";
+import { renderAbleManagerPanel } from "../shared/able-manager-panel.js";
 import { renderBeingFlowPanel } from "../shared/being-flow-panel.js";
 import { renderTimelineSection } from "./being-timeline.js";
 import { setPortalStatus } from "../shared/portal-status.js";
@@ -57,9 +57,9 @@ export function renderDescriptor(desc, { session, discovery }) {
     renderExplorer(desc, { discovery });
     return;
   }
-  // System catalog dispatch — .operations / .roles / .threads / .extensions
+  // System catalog dispatch — .operations / .ables / .threads / .extensions
   // are normal positions whose children ARE the data (one space per
-  // operation, role, thread, or extension). Without a catalog view they
+  // operation, able, thread, or extension). Without a catalog view they
   // just show "no beings here" with the items as nav chips in the bottom
   // bar — useless for browsing. Render the children as catalog rows
   // with their qualities surfaced inline.
@@ -69,7 +69,7 @@ export function renderDescriptor(desc, { session, discovery }) {
     return;
   }
   // Catalog-item dispatch — one level deeper: .operations/<op>,
-  // .roles/<role>, .extensions/<ext>. Each is a regular space whose
+  // .ables/<able>, .extensions/<ext>. Each is a regular space whose
   // qualities namespace carries the item's data. Without a detail view
   // they render as an empty position (no beings, no matter, no children).
   const catalogItem = detectCatalogItemPath(desc.address?.pathByNames);
@@ -257,14 +257,14 @@ function renderBeings(desc, { session, discovery }) {
     };
     actions.appendChild(chatBtn);
 
-    // Per-intent summon buttons. Driven by the receiver's role
+    // Per-intent summon buttons. Driven by the receiver's able
     // canSummon entries where as === "receiver". A "mate" button
-    // appears next to chat for any being whose role declares
+    // appears next to chat for any being whose able declares
     // { intent: "mate", as: "receiver" } in canSummon (birther
     // ships this by default). Caller-side authorization happens at
-    // dispatch — the substrate checks the caller's role's canSummon
+    // dispatch — the substrate checks the caller's able's canSummon
     // entries with as === "actor" against this target. See
-    // seed/RolesAreAuth.md ("canSummon is one field, two surfaces,
+    // seed/AblesAreAuth.md ("canSummon is one field, two surfaces,
     // discriminated by as") + FEDERATION.md "mate + being".
     if (Array.isArray(b.canSummon) && session?.token) {
       for (const offer of b.canSummon) {
@@ -292,11 +292,11 @@ function renderBeings(desc, { session, discovery }) {
 
 // Open a focused summon prompt against a being with a specific intent.
 // Today: a minimal prompt for any user-supplied params + dispatches
-// the summon. The substrate-side role handler dispatches by
+// the summon. The substrate-side able handler dispatches by
 // message.intent and interprets the rest of the message accordingly.
 //
 // For "mate" specifically: the message can include optional name,
-// homeSpaceId, password, cognition, defaultRole — all defaulted by
+// homeSpaceId, password, cognition, defaultAble — all defaulted by
 // the birther's handler. The summoner (you) becomes the father of
 // the being-child; the target being becomes the mother.
 function openIntentSummon(beingEntry, offer) {
@@ -385,8 +385,8 @@ function renderLineage(desc, { session, discovery }) {
     meta.appendChild(name);
 
     if (child.cognition) meta.appendChild(badge(child.cognition, "mode"));
-    if (child.defaultRole)
-      meta.appendChild(badge(child.defaultRole, "activity"));
+    if (child.defaultAble)
+      meta.appendChild(badge(child.defaultAble, "activity"));
 
     li.appendChild(meta);
 
@@ -529,14 +529,14 @@ function renderMatter(desc, { discovery } = {}) {
 // ────────────────────────────────────────────────────────────────
 
 // ────────────────────────────────────────────────────────────────
-// System catalogs — .operations / .roles / .threads / .extensions
+// System catalogs — .operations / .ables / .threads / .extensions
 // ────────────────────────────────────────────────────────────────
 
 function detectCatalogPath(path) {
   if (typeof path !== "string") return null;
   // Match both the new "./X" canonical form and the legacy "/.X" form
   // some bookmarks may still carry.
-  const m = path.match(/^\/(?:\.\/)?(operations|roles|threads|extensions)\/?$/);
+  const m = path.match(/^\/(?:\.\/)?(operations|ables|threads|extensions)\/?$/);
   return m ? m[1] : null;
 }
 
@@ -545,14 +545,14 @@ function detectCatalogItemPath(path) {
   // Item names can contain colons (`harmony:dancer-llm`), hyphens, dots.
   // Catch the catalog kind and the rest of the path (anything after).
   const m = path.match(
-    /^\/(?:\.\/)?(operations|roles|extensions)\/([^/]+)\/?$/,
+    /^\/(?:\.\/)?(operations|ables|extensions)\/([^/]+)\/?$/,
   );
   return m ? { kind: m[1], name: m[2] } : null;
 }
 
 const CATALOG_META = {
   operations: { icon: "⚙", title: "operations", sub: "registered DO actions" },
-  roles: { icon: "◎", title: "roles", sub: "summonable role templates" },
+  ables: { icon: "◎", title: "ables", sub: "summonable able templates" },
   threads: {
     icon: "⧖",
     title: "threads",
@@ -617,7 +617,7 @@ function renderCatalogRow(kind, item, discovery) {
   main.appendChild(name);
 
   if (kind === "operations") renderOperationRowBody(main, item);
-  else if (kind === "roles") renderRoleRowBody(main, item);
+  else if (kind === "ables") renderAbleRowBody(main, item);
   else if (kind === "threads") renderThreadRowBody(main, item);
   else if (kind === "extensions") renderExtensionRowBody(main, item);
 
@@ -659,7 +659,7 @@ function renderCatalogRow(kind, item, discovery) {
   return li;
 }
 
-// One-item detail view: SEE on `.operations/<op>` / `.roles/<role>` /
+// One-item detail view: SEE on `.operations/<op>` / `.ables/<able>` /
 // `.extensions/<ext>`. The descriptor is a normal position descriptor;
 // the item's data lives on `qualities.<kind>`. Take over the explorer
 // pane and surface the data in a way that's actually useful.
@@ -702,7 +702,7 @@ function renderCatalogItemDetail(desc, { kind, name }, { discovery }) {
   const q = desc.qualities || {};
   if (kind === "operations")
     renderOperationDetail(pane, q.operation || {}, name);
-  else if (kind === "roles") renderRoleDetail(pane, q.role || {}, name);
+  else if (kind === "ables") renderAbleDetail(pane, q.able || {}, name);
   else if (kind === "extensions")
     renderExtensionDetail(pane, q.extension || q, name);
 }
@@ -729,27 +729,27 @@ function renderOperationDetail(pane, op, name) {
   }
 }
 
-function renderRoleDetail(pane, role, name) {
-  const top = section("role");
+function renderAbleDetail(pane, able, name) {
+  const top = section("able");
   top.appendChild(kvBlock("name", name, { mono: true }));
-  if (role.respondMode)
-    top.appendChild(kvBlock("respondMode", role.respondMode));
-  if (Array.isArray(role.triggerOn) && role.triggerOn.length) {
-    top.appendChild(kvBlock("triggerOn", role.triggerOn.join(", ")));
+  if (able.respondMode)
+    top.appendChild(kvBlock("respondMode", able.respondMode));
+  if (Array.isArray(able.triggerOn) && able.triggerOn.length) {
+    top.appendChild(kvBlock("triggerOn", able.triggerOn.join(", ")));
   }
-  if (role.replyTo) top.appendChild(kvBlock("replyTo", role.replyTo));
+  if (able.replyTo) top.appendChild(kvBlock("replyTo", able.replyTo));
   pane.appendChild(top);
 
   // Capabilities — one section per verb. canSee is preloaded face
   // content (named sees + IBP addresses, rendered at moment-open);
   // do/summon/be are menus the LLM picks via tool calls. The legacy
-  // `role.see` field collapsed into canSee on 2026-06-03.
-  // Split canSummon by side so the role inspector reads cleanly:
-  // outbound entries (what this role CAN send) vs inbound entries
-  // (what this role ACCEPTS). Default `as: "actor"` preserves the
-  // legacy display. See seed/RolesAreAuth.md "canSummon: one field,
+  // `able.see` field collapsed into canSee on 2026-06-03.
+  // Split canSummon by side so the able inspector reads cleanly:
+  // outbound entries (what this able CAN send) vs inbound entries
+  // (what this able ACCEPTS). Default `as: "actor"` preserves the
+  // legacy display. See seed/AblesAreAuth.md "canSummon: one field,
   // two surfaces."
-  const summonAll = Array.isArray(role.canSummon) ? role.canSummon : [];
+  const summonAll = Array.isArray(able.canSummon) ? able.canSummon : [];
   const summonActor = summonAll.filter(
     (e) => typeof e !== "object" || (e?.as ?? "actor") === "actor",
   );
@@ -757,11 +757,11 @@ function renderRoleDetail(pane, role, name) {
     (e) => typeof e === "object" && e?.as === "receiver",
   );
   const caps = [
-    ["canSee", role.canSee],
-    ["canDo", role.canDo],
+    ["canSee", able.canSee],
+    ["canDo", able.canDo],
     ["canSummon (initiates)", summonActor],
     ["canSummon (accepts as receiver)", summonReceiver],
-    ["canBe", role.canBe],
+    ["canBe", able.canBe],
   ];
   for (const [label, list] of caps) {
     if (!Array.isArray(list) || list.length === 0) continue;
@@ -783,9 +783,9 @@ function renderRoleDetail(pane, role, name) {
     pane.appendChild(sec);
   }
 
-  if (Array.isArray(role.permissions) && role.permissions.length) {
+  if (Array.isArray(able.permissions) && able.permissions.length) {
     const sec = section("permissions");
-    sec.appendChild(jsonBlock(role.permissions));
+    sec.appendChild(jsonBlock(able.permissions));
     pane.appendChild(sec);
   }
 }
@@ -805,7 +805,7 @@ function renderExtensionDetail(pane, ext, name) {
   // Provides — list whatever capability arrays it advertises.
   const provideKeys = [
     "operations",
-    "roles",
+    "ables",
     "tools",
     "hooks",
     "seeds",
@@ -870,23 +870,23 @@ function renderOperationRowBody(main, item) {
   if (op.skipAudit) main.appendChild(badge("no-audit", "busy"));
 }
 
-function renderRoleRowBody(main, item) {
-  const role = item.qualities?.role || {};
-  if (role.respondMode) main.appendChild(badge(role.respondMode, "mode"));
-  if (Array.isArray(role.triggerOn) && role.triggerOn.length) {
-    main.appendChild(badge(`on:${role.triggerOn.join(",")}`, "activity"));
+function renderAbleRowBody(main, item) {
+  const able = item.qualities?.able || {};
+  if (able.respondMode) main.appendChild(badge(able.respondMode, "mode"));
+  if (Array.isArray(able.triggerOn) && able.triggerOn.length) {
+    main.appendChild(badge(`on:${able.triggerOn.join(",")}`, "activity"));
   }
   // Compact capability summary: counts of canDo/canSee/canSummon/canBe.
   const caps = [];
-  if (role.canDo?.length) caps.push(`do:${role.canDo.length}`);
-  if (role.canSee?.length) caps.push(`see:${role.canSee.length}`);
-  if (role.canSummon?.length) caps.push(`sum:${role.canSummon.length}`);
-  if (role.canBe?.length) caps.push(`be:${role.canBe.length}`);
+  if (able.canDo?.length) caps.push(`do:${able.canDo.length}`);
+  if (able.canSee?.length) caps.push(`see:${able.canSee.length}`);
+  if (able.canSummon?.length) caps.push(`sum:${able.canSummon.length}`);
+  if (able.canBe?.length) caps.push(`be:${able.canBe.length}`);
   if (caps.length) {
     const c = document.createElement("span");
     c.className = "dim catalog-ts";
     c.textContent = caps.join(" · ");
-    c.title = `canDo: ${(role.canDo || []).join(", ") || "—"}\ncanSee: ${(role.canSee || []).join(", ") || "—"}\ncanSummon: ${(role.canSummon || []).join(", ") || "—"}\ncanBe: ${(role.canBe || []).join(", ") || "—"}`;
+    c.title = `canDo: ${(able.canDo || []).join(", ") || "—"}\ncanSee: ${(able.canSee || []).join(", ") || "—"}\ncanSummon: ${(able.canSummon || []).join(", ") || "—"}\ncanBe: ${(able.canBe || []).join(", ") || "—"}`;
     main.appendChild(c);
   }
 }
@@ -1094,11 +1094,11 @@ function renderBeingCatalogRow(b, discovery) {
   main.appendChild(name);
 
   if (b.cognition) main.appendChild(badge(b.cognition, "mode"));
-  if (b.defaultRole) {
-    const role = badge(b.defaultRole, "activity");
-    role.title =
-      b.roles?.length > 1 ? `roles: ${b.roles.join(", ")}` : `default role`;
-    main.appendChild(role);
+  if (b.defaultAble) {
+    const able = badge(b.defaultAble, "activity");
+    able.title =
+      b.ables?.length > 1 ? `ables: ${b.ables.join(", ")}` : `default able`;
+    main.appendChild(able);
   }
   if (b.createdAt) {
     const ts = document.createElement("span");
@@ -1426,7 +1426,7 @@ function renderActBlock(a, discovery) {
   li.className = "block block-act";
 
   // Two-row layout for acts: row 1 (compact summary) shows the headline
-  // content the user actually wants to read; row 2 (sub) shows role +
+  // content the user actually wants to read; row 2 (sub) shows able +
   // address + correlation. Everything else expands behind the toggle.
   const head = document.createElement("div");
   head.className = "block-head";
@@ -1439,7 +1439,7 @@ function renderActBlock(a, discovery) {
 
   // Headline strategy: an act-chain shows what the being DID. For LLM
   // beings, "did" = the words they returned (endMessage.content). For
-  // transport-acts and other roles, endMessage may be empty and the
+  // transport-acts and other ables, endMessage may be empty and the
   // startMessage carries the meaning. Prefer the response when it's a
   // non-empty string; otherwise format the inbound (which may itself
   // be an object — subscription wakes carry { event, spaceId, ... }).
@@ -1499,10 +1499,10 @@ function renderActBlock(a, discovery) {
   const sub = document.createElement("div");
   sub.className = "block-sub";
 
-  const role = document.createElement("span");
-  role.className = "block-role";
-  role.textContent = a.activeRole || "(no role)";
-  sub.appendChild(role);
+  const able = document.createElement("span");
+  able.className = "block-able";
+  able.textContent = a.activeAble || "(no able)";
+  sub.appendChild(able);
 
   if (a.ibpAddress) {
     const addr = document.createElement("span");
@@ -1547,7 +1547,7 @@ function renderActBlock(a, discovery) {
   detail.appendChild(kvBlock("act id", a._id, { mono: true }));
   if (a.ibpAddress)
     detail.appendChild(kvBlock("ibp address", a.ibpAddress, { mono: true }));
-  if (a.activeRole) detail.appendChild(kvBlock("role", a.activeRole));
+  if (a.activeAble) detail.appendChild(kvBlock("able", a.activeAble));
   if (a.priority) detail.appendChild(kvBlock("priority", a.priority));
   if (a.to && discovery?.story) {
     detail.appendChild(
@@ -1796,8 +1796,8 @@ function joinFaceList(list) {
 }
 
 // Render an act's "face" . the canonical inner face the being had on
-// hand when this moment stamped. Carries orientation, role, position,
-// capabilities, the role.canSee-resolved blocks, and origin
+// hand when this moment stamped. Carries orientation, able, position,
+// capabilities, the able.canSee-resolved blocks, and origin
 // ("local" or "foreign"). Stamped on every act regardless of cognition;
 // null on legacy acts predating the field (render a faint marker
 // rather than breaking the block). Returns a stacked kv container.
@@ -1822,7 +1822,7 @@ function renderFace(face, discovery) {
 
   if (face.orientation)
     body.appendChild(kvBlock("orientation", face.orientation));
-  if (face.role) body.appendChild(kvBlock("role", face.role));
+  if (face.able) body.appendChild(kvBlock("able", face.able));
   if (face.origin && face.origin !== "local") {
     body.appendChild(kvBlock("origin", face.origin));
   }
@@ -1850,7 +1850,7 @@ function renderFace(face, discovery) {
   // canSee-resolved blocks: one row per block, labeled by the block's
   // label, with a compact preview of the payload. The full payload is
   // available to anyone hitting the act-chain SEE directly; here we
-  // surface enough to badge what the role admitted into perception.
+  // surface enough to badge what the able admitted into perception.
   if (Array.isArray(face.blocks) && face.blocks.length) {
     for (const b of face.blocks) {
       if (!b || b.kind === "truncated") {
@@ -1900,11 +1900,11 @@ export function showInspector({ kind, entry }) {
   insp.innerHTML = "";
 
   if (kind === "being") {
-    // @role-manager opens a dedicated authoring panel instead of the
+    // @able-manager opens a dedicated authoring panel instead of the
     // generic being inspector. The being itself is scripted (no chat),
     // and the panel is the whole point of the being's existence.
-    if (entry?.being === "role-manager") {
-      renderRoleManagerPanel(insp, entry, {
+    if (entry?.being === "able-manager") {
+      renderAbleManagerPanel(insp, entry, {
         story: flat.state.discovery?.story,
         username: flat.state.session?.username || null,
         descriptor: flat.state.descriptor,
@@ -2045,9 +2045,9 @@ function renderBeingInspector(insp, b) {
   }
   insp.appendChild(be);
 
-  // ─── Role Flow editor (when signed in — server gates the save)
-  // The mad-libs editor authors the being's `qualities.roleFlow`. Per
-  // RoleFlow doctrine, the flow is the source of truth for which roles
+  // ─── Able Flow editor (when signed in — server gates the save)
+  // The mad-libs editor authors the being's `qualities.flow`. Per
+  // Flow doctrine, the flow is the source of truth for which ables
   // wake the being and how they compose. Reading the existing flow is
   // public (rides on the descriptor's beings[]); saving goes through
   // set-being which authorize gates per-stance.
@@ -2072,7 +2072,7 @@ function renderBeingInspector(insp, b) {
   // would be picked if this being were summoned RIGHT NOW from this
   // position. The session user is the actor; this being is the
   // receiver. Below the chain, the user's own qualities.llm config
-  // surfaces (default list, slots per role, force flags) with
+  // surfaces (default list, slots per able, force flags) with
   // affordances to edit via the set-being-llm form.
   renderLlmSection(insp, b, { story, stance });
 
@@ -2264,7 +2264,7 @@ function doInlineForm(op, address, baseArgs = {}) {
 //
 //   1. CHAIN PREVIEW — calls llm-assigner:preview-llm-chain to fetch
 //      the 7-step ordered candidate list for (receiver=this being,
-//      actor=session user, role=main). Renders as a vertical flow:
+//      actor=session user, able=main). Renders as a vertical flow:
 //        ✓ step 1  receiver-being:default  gpt-4o-mini  (CHOSEN)
 //          step 3  receiver-story:slot   claude-3-5-sonnet
 //          ...
@@ -2272,7 +2272,7 @@ function doInlineForm(op, address, baseArgs = {}) {
 //      stopped (cap, no candidates, etc.).
 //
 //   2. PER-BEING CONFIG — shows the being's current qualities.llm
-//      (default fallback list count, slots per role, force flags).
+//      (default fallback list count, slots per able, force flags).
 //      Affordances expand to the set-being-llm DO form.
 //
 // Self-only edit: the form fields show for every viewer but
@@ -2324,7 +2324,7 @@ function renderLlmSection(insp, b, { story, stance } = {}) {
       );
     }
   } else {
-    configDiv.appendChild(kv("role slots", "(none)"));
+    configDiv.appendChild(kv("able slots", "(none)"));
   }
   if (cfg.forceReceiver === true)
     configDiv.appendChild(kv("forceReceiver", "yes — chain caps here"));
@@ -2343,11 +2343,11 @@ function renderLlmSection(insp, b, { story, stance } = {}) {
 
   // Fire the preview op. The receiver is this being's beingId (from
   // the descriptor). The actor is the signed-in user (by name; the op
-  // resolves names). Role defaults to "main" — a future enhancement
-  // can let the user pick a different role here.
+  // resolves names). Able defaults to "main" — a future enhancement
+  // can let the user pick a different able here.
   const receiverBeingId = b.beingId || null;
   const actorBeingName = fl.session?.username || null;
-  const role = b.defaultRole || "main";
+  const able = b.defaultAble || "main";
 
   if (!receiverBeingId) {
     flowDiv.textContent = "(receiver beingId unavailable — descriptor missing)";
@@ -2363,7 +2363,7 @@ function renderLlmSection(insp, b, { story, stance } = {}) {
         receiverBeingId,
         receiverSpaceId: fl.descriptor?.position?.spaceId || null,
         actorBeingName,
-        role,
+        able,
       },
     }),
   )
@@ -2384,7 +2384,7 @@ function renderLlmSection(insp, b, { story, stance } = {}) {
 
       const head = document.createElement("div");
       head.className = "kv-label";
-      head.textContent = `chain preview — role: ${role}`;
+      head.textContent = `chain preview — able: ${able}`;
       flowDiv.appendChild(head);
 
       const ul = document.createElement("ul");

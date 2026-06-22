@@ -7,7 +7,7 @@ Everything below LANDED and is verified. The three OPEN FORKS at the end need a 
 ## Landed — Tier 0 (wiring breaks)
 
 - **Priority pick order.** The inbox sorted on the `priority` STRING enum, which sorts lexically to BACKGROUND-first — the exact inverse of intent. Added a numeric `priorityRank` (HUMAN 1, GATEWAY 2, INTERACTIVE 3, BACKGROUND 4); the fold writes it, the pick sorts on it, the index matches. Verified: mixed rows pick HUMAN first, FIFO within class.
-- **Federation intent** was dropped at the assign message build (the auth walk gated on it, the role handler never saw it). Threaded through.
+- **Federation intent** was dropped at the assign message build (the auth walk gated on it, the able handler never saw it). Threaded through.
 - **Dead `summonCreateBeing` branch** deleted from summon.js (the file's own doctrine says birth is a BE op); broken `../../intake/scheduler.js` import path fixed.
 - **3D portal** referenced retired `openAuthPanel`/`hideAuth*` (ReferenceErrors) — repointed to `openFlatPanel`; portal-walk sent a bogus `set-being:position` op name — fixed to `set-being`; `debugLiveEvents` defaulted true — now false.
 - **SIGTERM double-handler** in dbConfig.js raced begin.js's shutdown (closing Mongo under in-flight lanes) — removed; begin.js is sole shutdown owner.
@@ -62,7 +62,7 @@ A summon row closes when the answering ACT seals (a being can answer by doing th
 
 - **`npm test` ran nothing.** The glob was `test/*.test.js` but the dir is `.test/` — a silent no-op that looked green. Repointed `npm test` at the current dependency-free verifiers (canon vectors + branch resolution, 66 checks) and added `npm run test:e2e` for the self-booting suite. The six legacy `.test/*.test.js` unit suites (scheduler, subscriptions, replies, …) all import the pre-`present/` `seed/factory/` tree and mock the old inbox model — they predate the materials/present/past reorganization and need a port, not a glob fix. The 12 e2e harnesses now carry the scheduling/inbox/act-chain regression coverage they aimed at.
 
-- **Boot manifest reconciliation races `isHostReady`.** genesis fires the tools/roles/operations manifest sync as a fire-and-forget `(async () => …)()` (genesis.js ~942), so its per-item `withIAmAct` acts drain in the background after boot-ready. Harmless in production (the manifest is self-healing) but it means a deterministic genome capture can race it. The act-chain lock (T1e) serializes the I-Am chain, which lengthened the drain and turned a latent race in publish-test (wipe-then-replant) into a deterministic failure — fixed by waiting for fact-count quiescence before the wipe. If boot-ready should ever GUARANTEE the manifest is built (it doesn't today, by design), that's a product decision, not a test bug.
+- **Boot manifest reconciliation races `isHostReady`.** genesis fires the tools/ables/operations manifest sync as a fire-and-forget `(async () => …)()` (genesis.js ~942), so its per-item `withIAmAct` acts drain in the background after boot-ready. Harmless in production (the manifest is self-healing) but it means a deterministic genome capture can race it. The act-chain lock (T1e) serializes the I-Am chain, which lengthened the drain and turned a latent race in publish-test (wipe-then-replant) into a deterministic failure — fixed by waiting for fact-count quiescence before the wipe. If boot-ready should ever GUARANTEE the manifest is built (it doesn't today, by design), that's a product decision, not a test bug.
 
 ## Test inventory added this sweep
 

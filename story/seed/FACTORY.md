@@ -319,7 +319,7 @@ beats live grouped in `stamper/`, numbered so `ls` tells the order;
 present/
 ├── moment.js            the conductor; walks the four beats in order
 ├── stamper/             the four-beat sequence, visibly ordered
-│   ├── 1-assign.js         mint actId, plan Act, resolve role + summonCtx
+│   ├── 1-assign.js         mint actId, plan Act, resolve able + summonCtx
 │   ├── 2-fold/             the read side; one cross-reel weave per moment
 │   │   ├── foldEngine.js      generic per-aggregate fold + cross-cutting registry
 │   │   ├── foldPlace.js       cross-reel weave (handles orientation: forward|half|inward)
@@ -347,16 +347,16 @@ present/
 │   ├── call.js             provider call surround (failover, model quirks)
 │   ├── assemble.js         system prompt + tool surface builder
 │   ├── compress.js         history compression for long conversations
-│   ├── defaultSummon.js    default scripted-role call handler
-│   ├── seedSeeOps.js       foundational seed SEE ops (place, roles, ...)
-│   └── canSeeResolver.js   resolves a role's canSee list into face blocks
-├── roles/               callable being templates, each co-located
-│   ├── arrival/role.js     unauthenticated visitor stance
-│   ├── cherub/role.js      BE-honoring identity-binding handler (register/claim/release/switch)
-│   ├── human/role.js       receptive role every human carries
-│   ├── llm-assigner/{role,ops}.js  LLM connection management being + DO ops
-│   ├── story-manager/{role,tools}.js  the operator's autonomous assistant
-│   └── registry.js         the role registry
+│   ├── defaultSummon.js    default scripted-able call handler
+│   ├── seedSeeOps.js       foundational seed SEE ops (place, ables, ...)
+│   └── canSeeResolver.js   resolves a able's canSee list into face blocks
+├── ables/               callable being templates, each co-located
+│   ├── arrival/able.js     unauthenticated visitor stance
+│   ├── cherub/able.js      BE-honoring identity-binding handler (register/claim/release/switch)
+│   ├── human/able.js       receptive able every human carries
+│   ├── llm-assigner/{able,ops}.js  LLM connection management being + DO ops
+│   ├── story-manager/{able,tools}.js  the operator's autonomous assistant
+│   └── registry.js         the able registry
 ├── orientation.js       INNER-FOLD ω parameter + inner/outer classifier
 ├── cognitionResult.js   CognitionResult discriminated type contract
 └── knobs.js             internalConfig router (fans values to subsystem setters)
@@ -445,7 +445,7 @@ top-level peer to present/past/materials, not a sidecar of any one of them.
 **ibp/** carries the six verbs, the universal currency every act
 speaks. SEE, RECALL, DO, BE, NAME, CALL on IBP addresses (`<story>/<path>@<being>`).
 Every operation in the system maps to one of these. Small protocol;
-expressiveness lives in role templates, registered operations, and the
+expressiveness lives in able templates, registered operations, and the
 materials I stamp.
 
 ```
@@ -458,8 +458,8 @@ ibp/
 │   └── _shared.js           assertVerbCaller + caller-frame walker
 ├── address.js            parse/expand/canonicalize IBP Addresses
 ├── resolver.js           resolve a stance to a Space
-├── authorize.js          verb-dispatch gate; delegates to roleAuth
-├── roleAuth.js           the role-walk: ownership → role-walk → public-commons
+├── authorize.js          verb-dispatch gate; delegates to ableAuth
+├── ableAuth.js           the able-walk: ownership → able-walk → public-commons
 ├── seeOps.js             registered SEE op surface (parallel to DO ops)
 ├── descriptor.js         buildPlaceDescriptor (the SEE face)
 ├── discovery.js          buildDiscovery (pre-identity surface)
@@ -736,7 +736,7 @@ audit; the canonical lineage walk still consults only `parent`.
 **Reconciliation facts are normal facts.** Merging stamps `set-*`,
 `wake-scheduled`, `be:release`, etc. on the merged history with a
 `params._merge` block for provenance. No new fact action vocabulary;
-the chain stays honest about what happened. The merge-mediator role
+the chain stays honest about what happened. The merge-mediator able
 (LLM cognition) is the UX layer; it walks the operator through the
 conflict catalog at `<story>#<merged>/.histories/<merged>/conflicts`
 and stamps the chosen facts.
@@ -784,20 +784,20 @@ pointer the registry resolves, not a path that itself moves.
 
 Heaven spaces are story-scoped, not history-scoped. The Tier-3 seed
 spaces under heaven (`.beings`, `.spaces`, `.matters`, `.config`,
-`.histories`, `.roles`, `.tools`, `.operations`) hold story-level
-qualities about the story itself . which beings exist, what roles
+`.histories`, `.ables`, `.tools`, `.operations`) hold story-level
+qualities about the story itself . which beings exist, what ables
 are available, how histories are structured, what tools and operations
 the story supports. Their content is identical across every history
 within the story.
 
 History-scoped state lives on the aggregates underneath (beings,
-spaces, matter, their facts, their qualities, their roleFlows). Their
+spaces, matter, their facts, their qualities, their flows). Their
 projections diverge per history via the reel-lineage walk. Heaven
 projections do not diverge . there is one projection per heaven
 entry, regardless of which history is querying.
 
 The distinction worth pinning: **branched state is content; heaven
-is structure.** A being's position is content (branched). A role's
+is structure.** A being's position is content (branched). A able's
 definition is structure (heaven). A space's world signals are
 content (branched). A branch pointer mapping is structure (heaven).
 
@@ -818,18 +818,18 @@ Implementation implications:
   whatever per-position rules apply to their aggregate.
 
 **What's heaven today (correctly):** the heaven spaces themselves
-(`.beings`, `.spaces`, `.matters`, `.config`, `.histories`, `.roles`,
+(`.beings`, `.spaces`, `.matters`, `.config`, `.histories`, `.ables`,
 `.tools`, `.operations`).
 
-**What needs to migrate to heaven:** the role registry (currently
-on `@role-manager`'s qualities; should be a heaven-scoped projection
-under `.roles/`). The pointer registry (currently on
+**What needs to migrate to heaven:** the able registry (currently
+on `@able-manager`'s qualities; should be a heaven-scoped projection
+under `.ables/`). The pointer registry (currently on
 `@history-registry`'s qualities, with reads hard-coded to main . that's
 heaven-semantic but not heaven-shaped storage). The federation peer
 list. The future public-directory id→name slices.
 
 **What stays branch-scoped:** every aggregate's state (position,
-qualities, roleFlow per being, world signals per space, content per
+qualities, flow per being, world signals per space, content per
 matter), inhabit relationships, wake schedules per being, every
 per-position fact stream.
 
@@ -1122,7 +1122,7 @@ every aggregate (being / space / matter) at that position.
 `_id` (a content id derived from the being's birth, not a key and not a
 uuid), `name`, `trueName` (the Name that signs this being, by the Name's
 public-key id), `password` (scrypt-hashed; optional, only humans
-authenticate by it), `defaultRole`, `parentBeingId`, `homeSpace`,
+authenticate by it), `defaultAble`, `parentBeingId`, `homeSpace`,
 `homeBranch`, `coord`, `llmDefault`, `isRemote`, `homeStory`,
 `qualities` (Map), `foldedSeq`, `position`.
 
@@ -1132,11 +1132,11 @@ stamps is signed at seal time by that Name's key and verifies against
 it. Cognition is read from
 `qualities.cognition.defaultKind` (`"human" | "llm" | "scripted"`)
 and overridden per-moment by the inhabit projection at
-`qualities.connection.inhabitedBy`. `defaultRole` is which template
+`qualities.connection.inhabitedBy`. `defaultAble` is which template
 I use when CALL does not specify. `parentBeingId` points to the
-being that planted this one; mine is `null`. Wearable roles are
-the union of every role the being's `qualities.roleFlow` can reach
-plus its `defaultRole`. Downward walks query by `parentBeingId`.
+being that planted this one; mine is `null`. Wearable ables are
+the union of every able the being's `qualities.flow` can reach
+plus its `defaultAble`. Downward walks query by `parentBeingId`.
 
 ### Matter
 
@@ -1199,7 +1199,7 @@ minted under the per-being act-chain lock so the act and its address
 land together), `beingIn` (the asker / caller),
 `beingOut` (the responder; equal to beingIn for self-calls and
 transport-acts), `ibpAddress` (canonical stance pair the moment
-crossed), `activeRole`, `inboxMessageId` (the InboxProjection
+crossed), `activeAble`, `inboxMessageId` (the InboxProjection
 correlation the moment pulled from), `inReplyTo` (parent Act's \_id,
 threading conversations), `rootCorrelation` (the conversation root;
 equals \_id for fresh roots), `answers` (the InboxProjection
@@ -1247,7 +1247,7 @@ determines capability. All chains walk the ancestor cache from the
 current position up to the story root, sharing one snapshot per
 message.
 
-1. **Role-walk authorization** — the gate the verb dispatcher passes
+1. **Able-walk authorization** — the gate the verb dispatcher passes
    through. Layered evaluation (first match wins):
      - **I-Am bypass** — the bootstrap axiom.
      - **Anonymous arrival floor** — stateless callers run under
@@ -1259,22 +1259,22 @@ message.
        → public-commons branch fires (visitor floor; canX-gated).
        Private sub-spaces inside a public-owned commons take
        precedence over the inherited commons — nearest-claim-wins.
-     - **Role-walk** — for each entry in the caller's
-       `qualities.rolesGranted`, look up the spec at the grant's
-       anchor (walking up `qualities.roles[name]`), check reach,
-       then check the role's canSee/canDo/canSummon/canBe.
+     - **Able-walk** — for each entry in the caller's
+       `qualities.ablesGranted`, look up the spec at the grant's
+       anchor (walking up `qualities.ables[name]`), check reach,
+       then check the able's canSee/canDo/canSummon/canBe.
      - **Public-commons** — fires only when nearest-claim is @public.
-       Applies the seed-shipped `public-commons` role canX as the
+       Applies the seed-shipped `public-commons` able canX as the
        visitor floor.
      - **Default deny.**
-   The role's canX is the gate; there's no parallel `qualities.permissions`
+   The able's canX is the gate; there's no parallel `qualities.permissions`
    namespace. Authority chains back to I-Am via the grant chain on
    each being's reel.
 2. **Extension scope**, `qualities.extensions.blocked[]` /
    `restricted[]` / `allowed[]` accumulate up the parent chain. Blocked
-   extensions get no tools, hooks, roles, or quality writes at that
+   extensions get no tools, hooks, ables, or quality writes at that
    position.
-3. **Tool scope**, role base tools plus extension tools minus blocked
+3. **Tool scope**, able base tools plus extension tools minus blocked
    extensions plus per-position `qualities.tools.allowed`/`blocked`
    overrides.
 4. **LLM resolution**, space-tree lockout, then space-tree enforcement,
@@ -1346,24 +1346,24 @@ is ever un-struck.
 | Registry       | What it registers                                                                                                                            | Lookup                                                 |
 | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | **Operations** | DO actions, keyed `<ext>:<action>`. Bare names reserved for me.                                                                              | [ibp/operations.js](ibp/operations.js)                 |
-| **Roles**      | CALL-honoring being templates. Each declares permissions, respondMode, `call(message, ctx)`, optional `buildSystemPrompt` / `toolNames`. | [present/roles/registry.js](present/roles/registry.js) |
+| **Ables**      | CALL-honoring being templates. Each declares permissions, respondMode, `call(message, ctx)`, optional `buildSystemPrompt` / `toolNames`. | [present/ables/registry.js](present/ables/registry.js) |
 | **Seeds**      | Plantable scaffolds. Recipes that bootstrap a domain. Operators plant via the `plant` DO.                                                    | [materials/seeds.js](materials/seeds.js)               |
 
 Auto-namespacing. Extensions write bare names; I record the qualified
 form (`governing:hire-planner`). Same prefixing applies to
 `story.websocket.emitToBeing(...)` events.
 
-## Roles
+## Ables
 
-A role is the unit of callable behavior. A being declares which
-roles it can wear; a CALL arrives with an `activeRole`; my
-dispatcher routes the call to that role's `call(message, ctx)`.
+A able is the unit of callable behavior. A being declares which
+ables it can wear; a CALL arrives with an `activeAble`; my
+dispatcher routes the call to that able's `call(message, ctx)`.
 
-### RoleFlow — the role STACK is the moment's voice
+### Flow — the able STACK is the moment's voice
 
-A being doesn't wear one role at a moment — it wears a STACK. The
+A being doesn't wear one able at a moment — it wears a STACK. The
 stack is computed at moment-assign from the being's
-`qualities.roleFlow`: an ordered list of `{ when, role, stack? }`
+`qualities.flow`: an ordered list of `{ when, able, stack? }`
 clauses. The first non-stacked clause whose `when` matches becomes the
 **primary**; every stacked clause (`stack: true`) whose `when` matches
 becomes a **modifier**. The composed stack is what the moment runs:
@@ -1371,9 +1371,9 @@ permissions union across the stack, system prompts concatenate with
 `\n\n---\n\n` between frames.
 
 The flow's condition vocabulary reads the moment's open-context: the
-asker (`caller.role / caller.cognition / caller.isAncestor / …`), the
+asker (`caller.able / caller.cognition / caller.isAncestor / …`), the
 verb (`verb / action / operation / intent`), the place (`space.* /
-coords.* / inHomeSpace`), the being (`me.* / me.previousRole /
+coords.* / inHomeSpace`), the being (`me.* / me.previousAble /
 me.quality.<ns>.<k>`), the wall-clock (`time.hour / dayOfWeek /
 sinceLastMoment`), and **world signals** (`world.<ns>.<key>` — values
 published on story root's `qualities.world` namespace, the shared
@@ -1382,114 +1382,114 @@ slate beings coordinate through without messaging). Operators include
 `and / or / not`. The evaluator is a pure function of its inputs —
 same chain replays to the same stack.
 
-Live authoring rides on the role-manager delegate:
+Live authoring rides on the able-manager delegate:
 
-- `do(role-manager, "set-role", {...})` creates or replaces a role.
-  Hot-registers into the in-memory registry; persists via a `./roles`
+- `do(able-manager, "set-able", {...})` creates or replaces a able.
+  Hot-registers into the in-memory registry; persists via a `./ables`
   mirror entry tagged `origin: "live"` so boot rebuilds it.
-- `do(role-manager, "delete-role", { name })` removes a live role.
-  Refuses by default when any being's roleFlow references it.
-- `do(role-manager, "set-world-signal", { namespace, key, value })`
+- `do(able-manager, "delete-able", { name })` removes a live able.
+  Refuses by default when any being's flow references it.
+- `do(able-manager, "set-world-signal", { namespace, key, value })`
   publishes a world signal at `<story-root>.qualities.world.<ns>.<key>`.
   Beings whose flows read `world.<ns>.<key>` see it at their next
   moment-open.
-- `do(<any-being>, "set-being-roleflow", { beingId, roleFlow })`
-  writes a validated roleFlow onto a being's qualities. Typed front
-  for `set-being: qualities.roleFlow` with schema-aware clause
-  validation and unknown-role warnings.
+- `do(<any-being>, "set-being-flow", { beingId, flow })`
+  writes a validated flow onto a being's qualities. Typed front
+  for `set-being: qualities.flow` with schema-aware clause
+  validation and unknown-able warnings.
 
 The doctrinal landing — what a Being IS, WEARS, IS-DRIVEN-BY — and
 the build plan that brought it in live in
-[role-manager.md](role-manager.md). Read that when in doubt about
+[able-manager.md](able-manager.md). Read that when in doubt about
 how behavior composes from chain to act.
 
 ### Composition is stacking, not inheritance
 
-A role does not extend another role. There is no `extends:` field.
-Shared behavior across roles composes through **stacking inside a
-roleFlow**: each `stack: true` clause whose `when` matches contributes
+A able does not extend another able. There is no `extends:` field.
+Shared behavior across ables composes through **stacking inside a
+flow**: each `stack: true` clause whose `when` matches contributes
 its capabilities and prompt body on top of the primary. A "court
-officer base" is a role; a "judge" is a roleFlow that stacks
-court-officer-base + a phase-specific judge role:
+officer base" is a able; a "judge" is a flow that stacks
+court-officer-base + a phase-specific judge able:
 
 ```js
-roleFlow: [
-  { stack: true, role: "court-officer-base" }, // always-on shared base
-  { stack: true, role: "judge-base" }, // always-on judge-specific base
-  { when: { "space.quality.case.phase": "opening" }, role: "judge-opening" },
-  { when: { "space.quality.case.phase": "evidence" }, role: "judge-evidence" },
-  { when: { "space.quality.case.phase": "ruling" }, role: "judge-ruling" },
-  { role: "judge-idle" }, // fallback primary
+flow: [
+  { stack: true, able: "court-officer-base" }, // always-on shared base
+  { stack: true, able: "judge-base" }, // always-on judge-specific base
+  { when: { "space.quality.case.phase": "opening" }, able: "judge-opening" },
+  { when: { "space.quality.case.phase": "evidence" }, able: "judge-evidence" },
+  { when: { "space.quality.case.phase": "ruling" }, able: "judge-ruling" },
+  { able: "judge-idle" }, // fallback primary
 ];
 ```
 
 Why stacking over inheritance:
 
-- **Visible at the consumption point.** Reading the roleFlow tells
+- **Visible at the consumption point.** Reading the flow tells
   you everything that composes. Inheritance hides composition behind
   a hierarchy you have to trace.
 - **Per-moment, not static.** A stack assembles for THIS moment from
   whatever clauses match. Inheritance forces the base in every time
-  the role appears, even when it shouldn't.
+  the able appears, even when it shouldn't.
 - **Bounded reasoning.** "What can this being do right now?" is the
-  union of currently-stacked roles. With inheritance it's a walk up
+  union of currently-stacked ables. With inheritance it's a walk up
   an unbounded tree.
 
-### Sequence comes from world state, not from previous-role tracking
+### Sequence comes from world state, not from previous-able tracking
 
-`me.previousRole` exists in the vocabulary but is for **inertia**
+`me.previousAble` exists in the vocabulary but is for **inertia**
 patterns ("if I was bored last moment, lean toward staying bored
 unless something interesting happened"), not for sequencing. A judge
 walking through opening → evidence → ruling does not chain on
-previousRole; it reads a `case.phase` quality from the courtroom
+previousAble; it reads a `case.phase` quality from the courtroom
 space, and the judge's act in the opening phase advances the phase
-via a DO. Next moment, world state has changed, the roleFlow naturally
-picks the new role. Sequencing in role names is what state machines
+via a DO. Next moment, world state has changed, the flow naturally
+picks the new able. Sequencing in able names is what state machines
 were invented to be the wrong answer for; the world IS the state
 machine.
 
-### Decompose monolithic roles
+### Decompose monolithic ables
 
 LLM tool-calling accuracy drops noticeably past ~10-15 tools per
-call and sharply past 30. A `judge` role with 50 canDo entries and a
+call and sharply past 30. A `judge` able with 50 canDo entries and a
 3000-token prompt underperforms three `judge-opening` / `judge-evidence`
-/ `judge-ruling` roles with 5-10 canDo each and tight phase-specific
-prompts. The seed is neutral — write monolithic roles if your
+/ `judge-ruling` ables with 5-10 canDo each and tight phase-specific
+prompts. The seed is neutral — write monolithic ables if your
 world is simple — but the natural decomposition for complex behavior
-is a roleFlow that stacks shared bases + selects a phase-specific
+is a flow that stacks shared bases + selects a phase-specific
 primary by world state.
 
 ### Authoring helpers (LLM-cognition delegates)
 
-Forms-based set-role / set-being-roleflow stay available; for
+Forms-based set-able / set-being-flow stay available; for
 behavioral programs at any real complexity, two helper beings ship
 as seed delegates:
 
-- **`@role-finder`** — describes the user's intent, searches `./roles`
-  for matches, drafts new role bodies, saves via `set-role` on
-  approval. The "I want a being that does X" → "here is the role
+- **`@able-finder`** — describes the user's intent, searches `./ables`
+  for matches, drafts new able bodies, saves via `set-able` on
+  approval. The "I want a being that does X" → "here is the able
   body" path.
-- **`@roleflow-composer`** — translates English ("when court session
+- **`@flow-composer`** — translates English ("when court session
   opens and I'm in the courtroom, become a judge; opening phase does
-  X, evidence does Y, ruling does Z") into a structured roleFlow,
-  iterates with the user, writes via `set-being-roleflow` on approval.
+  X, evidence does Y, ruling does Z") into a structured flow,
+  iterates with the user, writes via `set-being-flow` on approval.
   The "describe the behavior, get a program" path.
 
 Both live at the story root, llm-cognition, reigning-gated for now
 (seed delegates auto-anointed at boot). The pattern generalizes: once
-LLM helpers work for role authoring, the same shape works for any
+LLM helpers work for able authoring, the same shape works for any
 authorable surface — space design, world-signal setup, anything the
 seed exposes through structured ops. The user describes; the
 helper materializes.
 
-### The complete LLM role spec
+### The complete LLM able spec
 
-Every LLM role's complete declaration is its four `can*` lists plus
+Every LLM able's complete declaration is its four `can*` lists plus
 orientation, continuation flag, and the prompt body. Everything else
 — permissions, respondMode, triggerOn, the wrapped `call`
 dispatcher, the system-prompt assembler — is derived by
-[registry.js](present/roles/registry.js) at registration. Authors
-write what the role IS; I fill in everything derivable.
+[registry.js](present/ables/registry.js) at registration. Authors
+write what the able IS; I fill in everything derivable.
 
 ```js
 {
@@ -1499,43 +1499,43 @@ write what the role IS; I fill in everything derivable.
   canSummon: [...],            // optional, populates the call tool
   canBe:     [...],            // optional, populates the be tool
   defaultOrientation: "...",   // optional, forward by default
-  prompt(ctx) { ... },         // role-intent only; no verb syntax explanation
+  prompt(ctx) { ... },         // able-intent only; no verb syntax explanation
 }
 ```
 
 | Field                | Optional? | What it does                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | -------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `name`               | required  | Kebab-case identifier (`harmony:dancer-llm`). The activeRole on a CALL resolves through it.                                                                                                                                                                                                                                                                                                                                        |
+| `name`               | required  | Kebab-case identifier (`harmony:dancer-llm`). The activeAble on a CALL resolves through it.                                                                                                                                                                                                                                                                                                                                        |
 | `canSee`             | optional  | Preloaded perceptions. Each entry is either an IBP address (preloaded via `seeVerb` — the position descriptor becomes a face block) or a registered SEE op name (preloaded via the seeOps registry — the structured return becomes a face block). Both render as `[<label>]\n<JSON>` in the system prompt. NOT a tool; the being does not pick from a menu. Non-empty → permission `see` is added (verb-layer auth still applies). |
 | `canDo`              | optional  | DO action entries the LLM may invoke via the seed's generic `do` tool. Non-empty → `do` tool exposed, permission `do` added.                                                                                                                                                                                                                                                                                                         |
 | `canSummon`          | optional  | Stance/being targets the LLM may call. Non-empty → `call` tool exposed. Entries may be literal stances OR relationship tokens (`{rel:"parent"}`, `{pattern:"fitness/@coach"}`).                                                                                                                                                                                                                                                  |
 | `canBe`              | optional  | BE operations the LLM may perform on its own identity (`claim`, `release`, `switch`). Non-empty → `be` tool exposed.                                                                                                                                                                                                                                                                                                                 |
-| `defaultOrientation` | optional  | `"forward"` (default), `"half"`, or `"inward"`. Controls what the fold reads. Multi-moment loops are explicit: a role that wants to keep stepping calls `call(target=self)` from inside its act (with whatever orientation the next moment should fold at). No `selfContinue` field — every continuation traces to an explicit CALL emission by the being, not a post-seal side effect.                                                                                                                                                                                                                                                                      |
-| `prompt(ctx)`        | required  | Returns role-intent text. Describes WHO the role is and WHAT it does, in role-language. Does NOT explain verb syntax — that's auto-assembled from `can*` lists.                                                                                                                                                                                                                                                                      |
+| `defaultOrientation` | optional  | `"forward"` (default), `"half"`, or `"inward"`. Controls what the fold reads. Multi-moment loops are explicit: a able that wants to keep stepping calls `call(target=self)` from inside its act (with whatever orientation the next moment should fold at). No `selfContinue` field — every continuation traces to an explicit CALL emission by the being, not a post-seal side effect.                                                                                                                                                                                                                                                                      |
+| `prompt(ctx)`        | required  | Returns able-intent text. Describes WHO the able is and WHAT it does, in able-language. Does NOT explain verb syntax — that's auto-assembled from `can*` lists.                                                                                                                                                                                                                                                                      |
 
 What seed derives:
 
 - `permissions` — union of verbs implied by `can*`.
 - `respondMode` — `"async"` by default; only override for sync replies.
-- `triggerOn` — `["message"]` by default; override for scheduled or hook-fired roles.
-- `call(message, ctx)` — auto-wrapped with [defaultSummon](present/cognition/defaultSummon.js) when not provided. Scripted roles attach their own `call` and seed leaves it alone — that flips `_cognitionMode` to `"scripted"` and bypasses the LLM apparatus entirely.
-- `buildSystemPrompt` — auto-assembled by [assemble.js](present/cognition/llm/assemble.js): identity + do/call/be capability menus rendered from `can*` + role's `prompt(ctx)` body + preloaded canSee face blocks + current time. Order is "question first, data last" — identity/capabilities/role-intent state who you are and what you can do; the canSee blocks dump the fresh perception just before the time stamp so the LLM attends to it most strongly when forming the act. Roles override this only for unusual prompt shapes.
+- `triggerOn` — `["message"]` by default; override for scheduled or hook-fired ables.
+- `call(message, ctx)` — auto-wrapped with [defaultSummon](present/cognition/defaultSummon.js) when not provided. Scripted ables attach their own `call` and seed leaves it alone — that flips `_cognitionMode` to `"scripted"` and bypasses the LLM apparatus entirely.
+- `buildSystemPrompt` — auto-assembled by [assemble.js](present/cognition/llm/assemble.js): identity + do/call/be capability menus rendered from `can*` + able's `prompt(ctx)` body + preloaded canSee face blocks + current time. Order is "question first, data last" — identity/capabilities/able-intent state who you are and what you can do; the canSee blocks dump the fresh perception just before the time stamp so the LLM attends to it most strongly when forming the act. Ables override this only for unusual prompt shapes.
 
 ### canSee is the moment's face, not a menu
 
 The LLM tool surface is `do / call / be`. The reads — SEE and RECALL —
 are not exposed as tools. canSee is preloaded into the face at
-moment-open: every entry in the role's `canSee` list is rendered into
+moment-open: every entry in the able's `canSee` list is rendered into
 the system prompt as a structured block BEFORE the LLM inferences. The
 being does not call `see({address})` and pick from a list; the face IS
 the perception.
 
 Two entry shapes, both legal:
 
-- **IBP address.** `"./roles"`, `"<story>/<spaceId>"`, etc. The
+- **IBP address.** `"./ables"`, `"<story>/<spaceId>"`, etc. The
   assembler calls `seeVerb` on that address and renders the position
   descriptor as a JSON block under a header derived from the address
-  (`./roles` → `[roles]`).
+  (`./ables` → `[ables]`).
 - **Registered see name.** `"place"`, `"library-books"`,
   `"harmony:dance-floor"`. The assembler calls the registered
   resolver and renders its structured return as a JSON block under a
@@ -1543,20 +1543,20 @@ Two entry shapes, both legal:
   may compose any number of aggregates or compute a derived
   projection. The slice author decides what the perception means.
 
-To see more, the being moves (DO), changes role (BE / roleFlow), or
-the role spec is edited. Perception is per-role, recomputed per
+To see more, the being moves (DO), changes able (BE / flow), or
+the able spec is edited. Perception is per-able, recomputed per
 moment.
 
 #### Foundational seed sees
 
 The seed registers a small set of sees at boot so common heaven-
-child perceptions have a bare name. Roles can declare `canSee:
-["roles"]` instead of `["./roles"]`.
+child perceptions have a bare name. Ables can declare `canSee:
+["ables"]` instead of `["./ables"]`.
 
 | See name     | What it returns                                               |
 | ------------ | ------------------------------------------------------------- |
 | `place`      | The descriptor for the being's current position.              |
-| `roles`      | The role registry mirror at `<story>/./roles`.              |
+| `ables`      | The able registry mirror at `<story>/./ables`.              |
 | `tools`      | The tool registry mirror at `<story>/./tools`.              |
 | `operations` | The DO operation registry mirror at `<story>/./operations`. |
 | `identity`   | The I-Am identity bundle at `<story>/./identity`.           |
@@ -1566,7 +1566,7 @@ child perceptions have a bare name. Roles can declare `canSee:
 
 Each foundational see wraps `seeVerb` on the corresponding heaven
 address. The content is identical to the `./X` address form; the
-name swap is doctrinal . roles declare perceptions by name, not by
+name swap is doctrinal . ables declare perceptions by name, not by
 walking the address grammar.
 
 #### Authoring a see (registerSeeOperation)
@@ -1590,22 +1590,22 @@ story.declare.registerSeeOperation("library", {
 
 - The handler receives `{ identity, args, ctx, branch }`:
   - `identity` — the caller's identity (or null when anonymous).
-  - `args` — validated against the optional `args` schema. Used by parameterized SEE ops (e.g. `llm-chain` takes `{ receiverBeingId, role }`).
+  - `args` — validated against the optional `args` schema. Used by parameterized SEE ops (e.g. `llm-chain` takes `{ receiverBeingId, able }`).
   - `ctx` — when called from inside a cognition frame, the moment ctx (carries `being`, `currentSpace`, `rootId`, `summonCtx`). Null otherwise.
   - `branch` — the branch the SEE runs on.
 - Return any JSON-serializable shape. The cognition consumption path JSON-stringifies it under a `[<label>]` header; direct callers receive it verbatim.
-- Bare names are auto-namespaced `<ext>:<name>`; roles inside the same extension can reference the bare suffix (`canSee: ["library"]` resolves to `harmony:library` when no seed name collides).
+- Bare names are auto-namespaced `<ext>:<name>`; ables inside the same extension can reference the bare suffix (`canSee: ["library"]` resolves to `harmony:library` when no seed name collides).
 - Pure function of (chain, branch, ctx). No random, no wall-clock. Replay safety.
 
 Two consumption paths:
 
 ```js
-// 1. Listed in a role's canSee — preloaded as a face block at moment-open.
+// 1. Listed in a able's canSee — preloaded as a face block at moment-open.
 canSee: ["place", "library", "llm-connections"]
 
 // 2. Called directly from anywhere (DO handlers, portal, extensions).
 const conns = await story.see("llm-connections");
-const chain = await story.see("llm-chain", { args: { receiverBeingId, role } });
+const chain = await story.see("llm-chain", { args: { receiverBeingId, able } });
 ```
 
 Same registry, same handlers — only the consumption site differs.
@@ -1613,7 +1613,7 @@ Same registry, same handlers — only the consumption site differs.
 The four `can*` lists ARE the body. Adding a capability is editing
 one list. Tool exposure follows from the body; there is no second
 declaration to keep in sync. Off-list calls that pass prompt
-discipline still refuse at the verb's role-walk gate — the prompt
+discipline still refuse at the verb's able-walk gate — the prompt
 list is what the LLM SEES, the verb is the truth.
 
 ## My extension APIs (the `story` services bundle)
@@ -1678,8 +1678,8 @@ code; throw sites pass only the code.
 
 ### Conversation entry (`story.llm`)
 
-`runTurn({ beingId, role, message, ... })` for one LLM call in one
-role. Returns `{ answer }`. Handles session, Act, `beforeResponse`
+`runTurn({ beingId, able, message, ... })` for one LLM call in one
+able. Returns `{ answer }`. Handles session, Act, `beforeResponse`
 hook, abort.
 
 ## Heaven and the nine Tier-3 heaven spaces I plant
@@ -1705,7 +1705,7 @@ is me; they are unclaimable.
 | `peers`           | `<story>/./peers`      | Canopy federation peer list.                                                                                                                                                 |
 | `extensions`      | `<story>/./extensions` | Extension registry. Each loaded extension is a child space here.                                                                                                             |
 | `tools`           | `<story>/./tools`      | Mirror of the runtime tool registry.                                                                                                                                         |
-| `roles`           | `<story>/./roles`      | Mirror of the runtime role registry.                                                                                                                                         |
+| `ables`           | `<story>/./ables`      | Mirror of the runtime able registry.                                                                                                                                         |
 | `operations`      | `<story>/./operations` | Mirror of the runtime DO operation registry.                                                                                                                                 |
 | `source`          | `<story>/./source`     | Mirror of my own host-realm body (the files on disk).                                                                                                                        |
 | `threads`         | `<story>/./threads`    | Live coordination chains. Each open thread surfaces as a synthetic child at `./threads/<id>`. SEE returns the ThreadsProjection descriptor; CALL to that address is a cut. |
@@ -1719,9 +1719,9 @@ on heaven and every Tier-3 space below.
 
 The heaven gate is real: SEE on heaven and every Tier-3 heaven space
 requires the reigning stance. Beings of the land cannot read
-`<story>/./roles`, `<story>/./tools`, `<story>/./operations`
+`<story>/./ables`, `<story>/./tools`, `<story>/./operations`
 directly. Yet they routinely need to **act on** what those rooms
-hold — humans authoring roleFlows on themselves need the role catalog
+hold — humans authoring flows on themselves need the able catalog
 to pick from, extensions registering tools need the namespace of names
 already taken, and any UI offering "pick an op to invoke" needs the
 list.
@@ -1733,26 +1733,26 @@ correctly.
 **The delegate that mediates a registry publishes the registry on its
 own descriptor entry.** When I (descriptor.js#enrichBeings) shape a
 being's entry, if the being is a publisher I fold the catalog it
-gates into `entry.catalogs`. The role-manager — a Tier-1 delegate I
+gates into `entry.catalogs`. The able-manager — a Tier-1 delegate I
 spawn at boot, parented under me, reigning by construction — carries
-`catalogs: { roles, tools, operations, beOps }`. Each catalog is a
+`catalogs: { ables, tools, operations, beOps }`. Each catalog is a
 lightweight projection (names + the surface qualities a UI needs to
 render pickers); the rich heaven mirror keeps the full specs.
 
 Three IBP-native properties fall out:
 
-- **Asker stays asker.** A user reading the role catalog through
-  `descriptor.beings[role-manager].catalogs` is performing a SEE on
+- **Asker stays asker.** A user reading the able catalog through
+  `descriptor.beings[able-manager].catalogs` is performing a SEE on
   the place they're already standing in. They never SEE
-  `/./roles` — the heaven gate is honored. The data reaches them
+  `/./ables` — the heaven gate is honored. The data reaches them
   through the publishing delegate's descriptor, not by a
   gate-circumvention.
 - **The reigning view is inherent.** I render the descriptor
   server-side. I have full read of my own registries. Folding their
   contents into the delegate's entry doesn't elevate the asker —
   it elevates the projection that's shown to them.
-- **Writes still go through DO on the delegate.** The role-manager
-  exposes `do:set-role`; the asker invokes it; the delegate's handler
+- **Writes still go through DO on the delegate.** The able-manager
+  exposes `do:set-able`; the asker invokes it; the delegate's handler
   (reigning, with full registry access) does the write. Same four
   verbs, same authorize chain, no new concepts.
 
@@ -1843,7 +1843,7 @@ keypair lives in [storyIdentity.js](storyIdentity.js).
 
 Every other being descends from me. The being-tree (via
 `parentBeingId`) records who created whom. Humans register through
-cherub and become my grandchildren. Roles I plant beneath me are
+cherub and become my grandchildren. Ables I plant beneath me are
 direct children.
 
 ## Config
@@ -2006,7 +2006,7 @@ I do not render HTML, manage share tokens, or serve login pages. I do
 not know what a billing tier is, what a leaderboard is, what a Discord
 channel is, what an email looks like. I do not define a single MCP
 tool. I do not run any AI conversation that is not initiated through
-a role's `call()`.
+a able's `call()`.
 
 I provide structure. Extensions provide meaning.
 

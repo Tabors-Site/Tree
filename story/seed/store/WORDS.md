@@ -3,7 +3,7 @@
 Every word the seed declares, paired with its code (its connecter) if it has any.
 A word plus its logic is a portable unit: lift the bundle into another factory and it boots there.
 The factory itself is word-agnostic machinery (parser, fold, chain, dispatch, stamper, the
-operations Map in `ibp/operations.js`, the roleWordRegistry bridge, the BE_OPS table) and holds no
+operations Map in `ibp/operations.js`, the ableWordRegistry bridge, the BE_OPS table) and holds no
 words — **the engine now holds zero built-in words** (cherub was the last hardcoded one; it
 self-registers). Delete this store and the factory still boots; it just starts nothing.
 
@@ -30,11 +30,11 @@ Two physical shapes in `store/words/`:
 | space | a place where things stand | materials/space/ |
 | matter | a thing in a space, of a type | materials/matter/matter.js (schema) |
 | can | the grant of a word to a being | wordStore.js (getWord) |
-| role | a composite word (a can of words) | present/roles/ |
-| roleflow | a conditional being-quality folding to a role | present/roles/roleFlow.js |
+| able | a composite word (a can of words) | present/ables/ |
+| flow | a conditional being-quality folding to a able | present/ables/flow.js |
 | see | read-only perception of the present fold | ibp/verbs/see.js |
 | do | change the world (make/give/take/set/move/grant/drop) | ibp/verbs/do.js + stamper |
-| be | the closed six-op set | ibp/verbs/be.js, beOps.js, store/words/cherub/role.js |
+| be | the closed six-op set | ibp/verbs/be.js, beOps.js, store/words/cherub/able.js |
 | call | a do that wakes a being | ibp/verbs/call.js |
 | recall | read the past as see reads the present | the fold/reel engine |
 | (verbs) | the verb schema + irregular pasts | folded by wordFold.js |
@@ -51,18 +51,18 @@ up, zero errors).
 | set-render/ | render:set-render | setRender.js + setRenderHost.js | services.js |
 | portal/ | portal:form-portal | portalOp.js + portalHost.js | services.js |
 | move/ | move:move | moveOp.js + moveHost.js | services.js |
-| grant-role/ | being:grant-role | index.js + grantHost.js (carved from being/ops.js) | services.js |
+| grant-able/ | being:grant-able | index.js + grantHost.js (carved from being/ops.js) | services.js |
 | credential/ | credential:attach/detach/read/reset | credentialOps.js + credentialHost.js | services.js |
 | history-pointers/ | history-manager:set-pointer + delete-pointer | index.js + historyManagerHost.js (carved from history-manager/ops.js) | genesis.js |
-| set-world-signal/ | role-manager:set-world-signal | index.js (carved from role-manager/ops.js) | genesis.js |
+| set-world-signal/ | able-manager:set-world-signal | index.js (carved from able-manager/ops.js) | genesis.js |
 | model/ | render:set-model *(inert)* | index.js [moved modelOp.js] + model.word | services.js |
 | create-matter/ | matter:create-matter | index.js + matterHost.js (carved from matter/ops.js) | services.js |
-| acquisition/ | acquisition:ask-role + take-role | index.js + acquisitionHost.js (carved from acquisitionOps.js) | services.js |
-| cherub/ | cherub:birth + connect (BE ops) | role.js + connectHost.js (whole dir; cherubBeOps feeds BE_OPS) | services.js + beOps.js |
+| acquisition/ | acquisition:ask-able + take-able | index.js + acquisitionHost.js (carved from acquisitionOps.js) | services.js |
+| cherub/ | cherub:birth + connect (BE ops) | able.js + connectHost.js (whole dir; cherubBeOps feeds BE_OPS) | services.js + beOps.js |
 
 *(inert)* = the .word is registered + declared + resolvable, but the JS handler still drives (the
 cut was never wired). **Wired** words run the .word through the bridge with the JS body as a
-clean-miss fallback: key, grant-role, credential, history-pointers, set-world-signal, acquisition,
+clean-miss fallback: key, grant-able, credential, history-pointers, set-world-signal, acquisition,
 cherub, and **create-matter** (wired + harness-verified 2026-06-19, verify-creatematter-cut 6/0).
 **Still inert:** set-model (wiring needs a from-scratch modelHost) and move/portal/set-render (the
 older inert moves).
@@ -70,11 +70,11 @@ older inert moves).
 ## Shared-module lifts (the untangles that unblocked the carves)
 
 - **materials/matter/coordBounds.js** — `COORD_AXES` + `assertMatterCoordInBounds`, the single canonical body (it had been verbatim-duplicated in matter/ops.js AND matterHost.js). Imported by the kept matter/ops.js (set-matter) and the create-matter bundle. Killed the duplicate.
-- **present/roles/internalGrant.js** — `emitInternalGrant`, the pure grant-emit primitive lifted out of acquisitionOps.js. Imported by the **core SEE verb** (see.js, auto-on-entry grant) and the acquisition bundle. This lift is what let SEE stop reaching into a word bundle — the whole reason acquisition could move.
+- **present/ables/internalGrant.js** — `emitInternalGrant`, the pure grant-emit primitive lifted out of acquisitionOps.js. Imported by the **core SEE verb** (see.js, auto-on-entry grant) and the acquisition bundle. This lift is what let SEE stop reaching into a word bundle — the whole reason acquisition could move.
 
 ## Stay co-located — NONE
 
-All implementation words have been extracted. The roleWordRegistry engine holds zero built-in words.
+All implementation words have been extracted. The ableWordRegistry engine holds zero built-in words.
 Remaining flagged follow-ups (not extractions): wiring the two inert cuts (set-model, create-matter)
 live would each need a from-scratch host design (model.word references host fns that don't exist;
 create-matter's matterHost exists but the bridge was never wired) — a separate CONVERTING pass.

@@ -2,12 +2,12 @@
 //
 // The loader calls init(story) once at boot, after validating
 // manifest deps, building a scoped `story` services bundle (per the
-// `needs`), and registering all the pack's role / seed / asset
+// `needs`), and registering all the pack's able / seed / asset
 // pieces. So at the moment init() runs:
-//   - This pack's roles are already in the role registry.
+//   - This pack's ables are already in the able registry.
 //   - This pack's seeds are already in the template registry.
-//   - story.declare.registerRoleHandler(roleName, fn) can attach
-//     code-cognition handlers to role pieces published as pure data.
+//   - story.declare.registerAbleHandler(ableName, fn) can attach
+//     code-cognition handlers to able pieces published as pure data.
 //
 // Logging via `log.info / verbose / debug / warn / error`. Never
 // console.log. The first arg is the namespace; use the pack's name.
@@ -35,7 +35,7 @@ export async function init(story) {
 
   // ─────────────────────────────────────────────────────────────────
   // SEE operations. The read-side parallel of DO ops. Same shape; the
-  // handler returns the value the caller (or a role's preloaded face)
+  // handler returns the value the caller (or a able's preloaded face)
   // receives. Auto-prefixed to <pack>:<name>.
   // ─────────────────────────────────────────────────────────────────
   //
@@ -47,16 +47,16 @@ export async function init(story) {
   // });
 
   // ─────────────────────────────────────────────────────────────────
-  // Role handlers. Role PIECES (in ../roles/<name>/role.js) ship the
-  // pure-data spec. If a role needs code cognition (scripted handler)
+  // Able handlers. Able PIECES (in ../ables/<name>/able.js) ship the
+  // pure-data spec. If a able needs code cognition (scripted handler)
   // rather than default LLM cognition, register the handler here. The
-  // role name is the bare local name; scopedStory auto-prefixes it
-  // to <pack>:<name> to match how the role-kind handler registered the
+  // able name is the bare local name; scopedStory auto-prefixes it
+  // to <pack>:<name> to match how the able-kind handler registered the
   // spec.
   // ─────────────────────────────────────────────────────────────────
   //
-  // import { exampleRoleHandler } from "./handlers/example-role.js";
-  // story.declare.registerRoleHandler("example-role", exampleRoleHandler);
+  // import { exampleAbleHandler } from "./handlers/example-able.js";
+  // story.declare.registerAbleHandler("example-able", exampleAbleHandler);
 
   // ─────────────────────────────────────────────────────────────────
   // Hooks. React to substrate events. See seed/system/hooks.js for

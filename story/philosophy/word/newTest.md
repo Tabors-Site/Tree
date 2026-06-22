@@ -185,7 +185,7 @@ Moon rises → sky is night
 Moon sets → sky is dawn
 Sun rises → sky is day
 
-is a closed role-flow.
+is a closed able-flow.
 
 A wheel.
 

@@ -24,9 +24,9 @@ peering/
 │   ├── index.js              registers register-peer / forget-peer DO ops,
 │   │                         SEE-ping liveness handler, peer-record verifier
 │   └── handlers.js           peer-record signature checks; registry write
-├── roles/peer-registrar/     the directory's writer
+├── ables/peer-registrar/     the directory's writer
 │   ├── manifest.js
-│   └── role.js               scripted; handles register-peer SUMMON intent;
+│   └── able.js               scripted; handles register-peer SUMMON intent;
 │                             stores directory in its own qualities
 └── seeds/peer-directory/     the plantable directory space
     ├── manifest.js

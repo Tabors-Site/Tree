@@ -111,7 +111,7 @@ export async function findOpenForBeing(to) {
       "endMessage.time": null,
     })
       .select(
-        "_id startMessage activeRole inReplyTo rootCorrelation through to ibpAddress stampedAt",
+        "_id startMessage activeAble inReplyTo rootCorrelation through to ibpAddress stampedAt",
       )
       .sort({ stampedAt: -1 })
       .lean();
@@ -137,7 +137,7 @@ export async function findLastSealedForBeing(to) {
       to,
       "endMessage.time": { $ne: null },
     })
-      .select("_id endMessage activeRole stampedAt")
+      .select("_id endMessage activeAble stampedAt")
       .sort({ "endMessage.time": -1 })
       .lean();
   } catch {

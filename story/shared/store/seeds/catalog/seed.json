@@ -10,7 +10,7 @@
   },
   "manifest": {
     "extensions": ["store"],
-    "roles": ["store:registrar"]
+    "ables": ["store:registrar"]
   },
   "parameters": [
     {
@@ -45,7 +45,7 @@
       {
         "sourceId": "registrar-being",
         "name": "$beingName",
-        "defaultRole": "store:registrar",
+        "defaultAble": "store:registrar",
         "parentBeingId": { "__ref": "graft-initiator" },
         "homeSpace": { "__ref": "space", "id": "catalog-root" },
         "position": { "__ref": "space", "id": "catalog-root" },

@@ -2,7 +2,7 @@
 
 > *"The inbox IS the call queue. Every wake starts here. Nothing else writes."*
 
-This file pins the intake model. It sits beside SUMMON.md, FACTORY.md, and RolesAreAuth.md. Read SUMMON.md first; intake is what happens to a CALL between landing and the receiver's role running.
+This file pins the intake model. It sits beside SUMMON.md, FACTORY.md, and AblesAreAuth.md. Read SUMMON.md first; intake is what happens to a CALL between landing and the receiver's able running.
 
 ## One sentence
 
@@ -13,7 +13,7 @@ This file pins the intake model. It sits beside SUMMON.md, FACTORY.md, and Roles
 The inbox is a derived row. It is not durable storage; it is not the source of truth. The fact chain is. The InboxProjection is the cache of "what wakes are still open" derived from the chain.
 
 - **Not stored on `qualities.inbox`.** The old `qualities.inbox = {...}` map is retired (2026-05-23, Bucket 3 Option D). All inbox state lives in the `InboxProjection` collection.
-- **Not a queue with workers.** It's a record of open wakes. The being's role handler is what processes the entry, not a generic worker pool.
+- **Not a queue with workers.** It's a record of open wakes. The being's able handler is what processes the entry, not a generic worker pool.
 - **Not a message bus.** Each call names ONE recipient. There is no broadcast.
 - **Not transactional outside the chain.** Materialization is a fold side effect. The audit truth is the `call` fact; the row is convenience.
 
@@ -23,8 +23,8 @@ Every row is the output of one cross cutting fold handler running on one fact.
 
 ```
 CALL verb (seed/ibp/verbs/call.js)
-  ├─ authorize() — actor's role permits sending
-  ├─ permitsReceiverSummon() — receiver's role accepts intent
+  ├─ authorize() — actor's able permits sending
+  ├─ permitsReceiverSummon() — receiver's able accepts intent
   └─ emitFact({verb: "call", target: <recipient>, params: {correlation, content, intent, ...}})
        └─ cross cutting fold (seed/past/projections/inbox/inboxProjectionFold.js)
             └─ InboxProjection.updateOne({_id: correlation}, ...)  ← the row appears
@@ -43,7 +43,7 @@ Stored in `seed/past/projections/inbox/inboxProjection.js`. Authoritative schema
 | `summoner` | `fact.beingId` | Who sent it (I-Am for seed internal flows) |
 | `sender` | `params.sender` | Envelope `from` stance |
 | `content` | `params.content` | Opaque payload |
-| `intent` | `params.intent` | Envelope intent; the receiver's role handler reads this |
+| `intent` | `params.intent` | Envelope intent; the receiver's able handler reads this |
 | `priority` | `params.priority` | Enum label; pick order comes from `priorityRank`, not this string |
 | `priorityRank` | fold (`priorityRankOf`) | Numeric pick order: 1 `HUMAN`, 2 `GATEWAY`, 3 `INTERACTIVE`, 4 `BACKGROUND` |
 | `orientation` | `params.orientation` | `forward` (default), `half`, `inward` (self calls only) |
@@ -51,7 +51,7 @@ Stored in `seed/past/projections/inbox/inboxProjection.js`. Authoritative schema
 | `inReplyTo` | `params.inReplyTo` | Which earlier call this replies to |
 | `inboxSpaceId` | `params.inboxSpaceId` | Where the call was addressed |
 | `sentAt` | `params.sentAt` | FIFO tiebreaker within a priority class |
-| `activeRole` | `params.activeRole` | Which role the moment runs under |
+| `activeAble` | `params.activeAble` | Which able the moment runs under |
 | `history` | `fact.history` | The history the row's moment runs on; sever sweep deletes per history |
 | `attachments` | `params.attachments` | Caller side metadata, opaque to seed |
 
@@ -74,10 +74,10 @@ Priority order: `HUMAN`, `GATEWAY`, `INTERACTIVE`, `BACKGROUND`. The pick sorts 
 
 ## Rows close on answer, not on processing
 
-A row stays open until the receiver's role produces an answering Act. The closing happens via `closeInboxOnAnswer` (`seed/past/projections/inbox/inboxProjectionFold.js`), called from `stamped.js` after the Act commits with `answers: <correlation>`.
+A row stays open until the receiver's able produces an answering Act. The closing happens via `closeInboxOnAnswer` (`seed/past/projections/inbox/inboxProjectionFold.js`), called from `stamped.js` after the Act commits with `answers: <correlation>`.
 
 ```
-receiver's role.call() runs
+receiver's able.call() runs
   └─ stamps facts in the moment's ΔF
        └─ sealAct commits the Act with answers: <correlation>
             └─ closeInboxOnAnswer(correlation) → InboxProjection.deleteOne({_id})
@@ -107,7 +107,7 @@ Each entry on the SEE response carries:
 
 ## The renderer registry
 
-For human inhabited receivers, the inbox panel is the cognition surface. Per SUMMON.md, the panel is a **dumb renderer**: it does not switch on intent. The receiver's role decides what UI to show; the panel renders whatever spec comes back.
+For human inhabited receivers, the inbox panel is the cognition surface. Per SUMMON.md, the panel is a **dumb renderer**: it does not switch on intent. The receiver's able decides what UI to show; the panel renders whatever spec comes back.
 
 The mechanism: an inbox renderer registry keyed by envelope intent. Server side. For each pending entry, `my-inbox` calls `buildInboxRenderSpec(entry, ctx)` and attaches the spec to the entry. The panel reads `entry.render?.shape` and dispatches.
 
@@ -145,7 +145,7 @@ Extensions register their own renderers through `story.declare.registerInboxRend
 }
 ```
 
-The spec is JSON. No functions on the wire. The role decides server side what the spec contains; the panel runs the actions client side. Sovereignty: the role chose every button and every action; the user picks which one to click.
+The spec is JSON. No functions on the wire. The able decides server side what the spec contains; the panel runs the actions client side. Sovereignty: the able chose every button and every action; the user picks which one to click.
 
 ### Action execution
 
@@ -162,7 +162,7 @@ For free-text shape: the panel renders an input + reply button + optional dismis
 
 | Intent | Renderer | What it does |
 |---|---|---|
-| `role-request` | `roleRequest.js` | Approve/deny buttons. Approve dispatches `grant-role` on the asker's stance with the requested role + anchor, then replies `{result: "approved"}`. Deny just replies `{result: "denied"}`. Approve disables with reason when the asker stance can't be resolved. |
+| `able-request` | `ableRequest.js` | Approve/deny buttons. Approve dispatches `grant-able` on the asker's stance with the requested able + anchor, then replies `{result: "approved"}`. Deny just replies `{result: "denied"}`. Approve disables with reason when the asker stance can't be resolved. |
 
 Extensions add entries here through their own registration calls.
 
@@ -170,7 +170,7 @@ Extensions add entries here through their own registration calls.
 
 Responding to a call is a normal CALL back at the caller with `inReplyTo: <correlation>`. The `closeInboxOnAnswer` hook closes the row when the reply's Act seals. No separate verb; no separate op. The call machinery is the close machinery.
 
-When the response also needs a side effect (approve a role request → grant-role on the asker), the caller dispatches the side effect AND the reply. The inbox renderer registry expresses this declaratively (`ops: [...]` followed by `reply: {...}`); for cognition that issues acts directly (LLM driven roles, scripted handlers), the role's own handler issues each act in order.
+When the response also needs a side effect (approve a able request → grant-able on the asker), the caller dispatches the side effect AND the reply. The inbox renderer registry expresses this declaratively (`ops: [...]` followed by `reply: {...}`); for cognition that issues acts directly (LLM driven ables, scripted handlers), the able's own handler issues each act in order.
 
 ## Inbox is NOT the same as threads
 
@@ -180,5 +180,5 @@ Threads are conversation roots. Inbox rows are open invitations to wake. A threa
 
 - **Every row is a fold of a fact. Drop the projection and re fold; nothing is lost.**
 - **A row closes only when the answer is sealed.**
-- **No envelope field, no panel switch, no convention compels the receiver. The role decides.**
+- **No envelope field, no panel switch, no convention compels the receiver. The able decides.**
 - **The inbox is the wake queue. The chain is the record.**

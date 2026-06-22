@@ -10,21 +10,21 @@
 //
 // One registry. Two consumption paths:
 //
-//   1. canSee on roles
+//   1. canSee on ables
 //        canSee: ["place", "llm-connections", "library"]
-//      The role's frame builder looks each name up here, runs the
+//      The able's frame builder looks each name up here, runs the
 //      handler under the being's identity, embeds the result as a
 //      face block in the LLM prompt.
 //
 //   2. Direct call from anywhere
 //        const conns = await story.see("llm-connections");
-//        const chain = await story.see("llm-chain", { receiverBeingId, role });
+//        const chain = await story.see("llm-chain", { receiverBeingId, able });
 //      Portal, DO handlers, extension code — all reach for named
 //      perceptions through the same surface.
 //
 // Naming. Bare names ("place", "config", "llm-connections") are
 // reserved for the seed. Extensions register under "<extName>:<name>"
-// (e.g. "food:meal-log"). Same convention as DO ops and roles.
+// (e.g. "food:meal-log"). Same convention as DO ops and ables.
 //
 // Address vs name. The SEE verb (seeVerb) accepts either:
 //   - an IBP address string ("treeos.example/./tools@arrival")
@@ -36,7 +36,7 @@
 // bare-name regex is a registry lookup.
 //
 // The seed's own SEE ops register at module load through
-// seed/present/cognition/llm/seedSeeOps.js (place, roles, tools,
+// seed/present/cognition/llm/seedSeeOps.js (place, ables, tools,
 // operations, identity, config, peers, extensions). Extensions
 // register theirs through the loader reading manifest provides +
 // init() return. Both go through registerSeeOperation here; there is

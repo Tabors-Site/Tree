@@ -1,12 +1,12 @@
 # innerFace: the one face all souls see
 
 Sibling doctrine to [stamperUpgrade.md](stamperUpgrade.md) (which named
-the orientation: roles do the architectural work, soul is just the
+the orientation: ables do the architectural work, soul is just the
 cognition label) and [innerFaceLive.md](innerFaceLive.md) (which covers
 the reactive per-stance subscription system the human portal uses).
 
 This doc pins the concrete invariant: one inner face per moment, shared
-across all souls, and that shared face is what makes `role.canSee`
+across all souls, and that shared face is what makes `able.canSee`
 actually mean something.
 
 ## The concept
@@ -18,9 +18,9 @@ prompt context, human renders it through the portal, scripted reads it
 as a data object) and how the decision flows back into an act. The
 face itself is identical for all three.
 
-`role.canSee` is the load-bearing filter. The role declares what gets
+`able.canSee` is the load-bearing filter. The able declares what gets
 into the inner face. Whichever soul is animating the Name, they see
-what the role permits, and nothing else.
+what the able permits, and nothing else.
 
 ## The canonical shape
 
@@ -29,23 +29,23 @@ The inner face that landed:
 ```
 innerFace = {
   orientation,            // "forward" | "half" | "inward"
-  role,                   // the active role name at this moment
+  able,                   // the active able name at this moment
   position: { id, name }, // where the being stands
-  capabilities,           // { canDo, canSummon, canBe } from the role
+  capabilities,           // { canDo, canSummon, canBe } from the able
   blocks,                 // canSee-resolved face blocks, see below
   origin,                 // "local" (fold-built) | "foreign" (cross-world)
   weave,                 // the reels this face actually read, see below
 }
 ```
 
-Built once per moment by `buildInnerFace(role, ctx)` at
+Built once per moment by `buildInnerFace(able, ctx)` at
 [reality/seed/present/stamper/2-fold/innerFace.js](../../seed/present/stamper/2-fold/innerFace.js).
 Lives on `summonCtx.innerFace` during the moment, sealed onto
 `Act.innerFace` at moment seal.
 
 ### blocks
 
-`role.canSee` is a list of entries. Each entry is either an IBP address
+`able.canSee` is a list of entries. Each entry is either an IBP address
 (`"./inbox"`, `"/foo/bar"`, `"<other-reality>/..."`) or a registered
 named-see name (`"my-inbox"`, `"federation-status"`, etc.). The 2-fold
 beat's resolver
@@ -62,7 +62,7 @@ block = {
 ```
 
 `blocks` is the ordered list of these. Empty canSee yields `blocks: []`;
-the face is still substantive (orientation + role + position +
+the face is still substantive (orientation + able + position +
 capabilities), just with no perception payload.
 
 ### weave
@@ -109,11 +109,11 @@ This residue is the spine of three things:
   hold a static snapshot retry through the existing refold-and-retry
   path when seal fails.
 
-A note on what's NOT in the weave today: roles are not reel-backed
-(the role registry is an in-memory Map populated by `registerRole`).
-Role flips manifest as facts on the being's reel (via
-`qualities.roleFlow`), so the being-reel entry already covers role
-change wakeups. If a Role primitive ever becomes reel-backed, the
+A note on what's NOT in the weave today: ables are not reel-backed
+(the able registry is an in-memory Map populated by `registerAble`).
+Able flips manifest as facts on the being's reel (via
+`qualities.flow`), so the being-reel entry already covers able
+change wakeups. If a Able primitive ever becomes reel-backed, the
 weave shape accepts it without change.
 
 ### origin
@@ -135,12 +135,12 @@ on `ctx.innerFace.blocks` to produce prompt prose. The LLM's
 reformatting for its consumer is correct and expected; only the
 resolution itself (per-block) is single-pass.
 
-**Scripted.** `role.summon(message, ctx)` receives `ctx.innerFace` as
-a data object. The role's logic can dispatch on
+**Scripted.** `able.summon(message, ctx)` receives `ctx.innerFace` as
+a data object. The able's logic can dispatch on
 `ctx.innerFace.blocks` for perception-aware decisions. Mechanism is
-wired (the face lands on ctx the same as for LLM); no scripted role in
+wired (the face lands on ctx the same as for LLM); no scripted able in
 the repo today demonstrates the consumer, though. When a scripted
-role wants perception-aware behavior, it reads `ctx.innerFace.blocks`
+able wants perception-aware behavior, it reads `ctx.innerFace.blocks`
 the same way the LLM's formatter does.
 
 **Human.** The portal calls `client.see("my-inner-face", {live: true})`
@@ -163,9 +163,9 @@ foreign-side changes.
 
 ## What this gets us
 
-**canSee actually means something for every soul.** The same role used
+**canSee actually means something for every soul.** The same able used
 by an LLM, a script, and a human produces the same perception for all
-three. Switching a role's canSee changes every cognition's view. No
+three. Switching a able's canSee changes every cognition's view. No
 soul gets a different view because of a code-path that didn't consult
 canSee.
 
@@ -189,15 +189,15 @@ LLMs and scripts work on their moment-start snapshot.
 
 ## Open
 
-**Scripted demonstrator (landed 2026-06-15).** The [birther role](../../seed/present/roles/birther/role.js)
-is the first scripted role that consumes `ctx.innerFace.blocks` for a
+**Scripted demonstrator (landed 2026-06-15).** The [birther able](../../seed/present/ables/birther/able.js)
+is the first scripted able that consumes `ctx.innerFace.blocks` for a
 real perception-aware decision. It declares `canSee: ["place"]`; on a
 `summon:mate` request, its summon handler reads the resolved `place`
 block's `payload.beings[]` / `payload.residents[]` and refuses with
 `kind: "failure", shape: "refused"` when an occupant already carries
 the prospective being name. The refusal is honest: birthBeing would
 throw on uniqueness anyway, but answering at the perception layer
-makes the gate visible (the audit shows the role saw and declined)
+makes the gate visible (the audit shows the able saw and declined)
 and distinct from infra failure (`shape: "refused"` vs the infra
 shapes). The "all three souls see the same canSee" doctrine is now
 demonstrably true across LLM, scripted, and human.
@@ -231,7 +231,7 @@ relaying its weave-keyed events. Real but explicit deferred work.
 - [reality/seed/present/stamper/2-fold/foldPlace.js](../../seed/present/stamper/2-fold/foldPlace.js)
   folds the forward face and contributes the space reel to the weave.
 - [reality/seed/present/stamper/2-fold/foldBeat.js](../../seed/present/stamper/2-fold/foldBeat.js)
-  is the conductor that threads role into the fold.
+  is the conductor that threads able into the fold.
 - [reality/seed/past/act/act.js](../../seed/past/act/act.js) carries
   `Act.innerFace` as the storage field.
 - [reality/seed/past/act/innerFace.js](../../seed/past/act/innerFace.js)
@@ -243,7 +243,7 @@ relaying its weave-keyed events. Real but explicit deferred work.
 
 ## See also
 
-- [stamperUpgrade.md](stamperUpgrade.md) on roles as the architectural
+- [stamperUpgrade.md](stamperUpgrade.md) on ables as the architectural
   work, soul as the cognition routing label.
 - [innerFaceLive.md](innerFaceLive.md) on the reactive per-stance
   subscription system that uses the weave to drive humans live.

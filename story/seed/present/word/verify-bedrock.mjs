@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // verify-bedrock — the I_AM bedrock guard, now general in wordStore (every word kind, not just
-// role-words): an I_AM word declared on heaven ("0") cannot be re-declared or disabled on "0" by a
+// able-words): an I_AM word declared on heaven ("0") cannot be re-declared or disabled on "0" by a
 // non-I_AM actor; per-branch shadowing (a non-"0" branch) is allowed; I_AM may always change its own.
 import fs from "fs"; import os from "os"; import path from "path"; import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));

@@ -70,11 +70,11 @@ export default {
         "gateway:beforeDispatch",        // Another extension's hook
       ],
     },
-    // Roles-are-auth (seed/FACTORY.md "Resolution chains"). Ship roles
+    // Ables-are-auth (seed/FACTORY.md "Resolution chains"). Ship ables
     // whose canSee/canDo/canSummon/canBe IS the permission contract.
-    // Grant them to beings via the grant-role DO op; gates are enforced
-    // by roleAuth.js's role-walk, not by a separate defaultPermissions
-    // namespace. Roles can be reach-restricted (path filters with !
+    // Grant them to beings via the grant-able DO op; gates are enforced
+    // by ableAuth.js's able-walk, not by a separate defaultPermissions
+    // namespace. Ables can be reach-restricted (path filters with !
     // carve-outs) and host on space qualities for inheritance.
 
     assets: {                            // Sensory-asset registry.
@@ -188,7 +188,7 @@ The four verbs (`reality.see`, `reality.do`, `reality.summon`, `reality.be`) are
 | `facts` | Audit-row stamping. | `logFact` |
 | `auth` | Identity primitives. | `resolveSpaceAccess`, `createBeing`, `verifyPassword`, `generateToken`, `findBeingByName`, `registerStrategy` |
 | `session` | Per-reach session lifecycle. | `createSession`, `endSession`, `getSession`, `SESSION_TYPES`, `registerSessionType` |
-| `llm` | LLM voice apparatus. | `runTurn`, `stepTurn`, `getClientForBeing`, `switchRole`, `registerBeingLlmSlot`, `registerFailoverResolver` |
+| `llm` | LLM voice apparatus. | `runTurn`, `stepTurn`, `getClientForBeing`, `switchAble`, `registerBeingLlmSlot`, `registerFailoverResolver` |
 | `websocket` | Push channel (transport-agnostic). | `emitToBeing`, `emitNavigate`, `registerSocketHandler`, `getIO` |
 | `models` | Mongoose models. | `Being`, `Space`, `Fact`, `Matter` |
 | `hooks` | Lifecycle event bus. | `register`, `run` |
@@ -198,7 +198,7 @@ The four verbs (`reality.see`, `reality.do`, `reality.summon`, `reality.be`) are
 | `spaceLocks` | Structural mutation locks. | `acquireSpaceLock`, `releaseSpaceLock`, `acquireMultiple` |
 | `qualities` | Per-primitive qualities Map. Three sub-namespaces: `reality.qualities.being`, `reality.qualities.space`, `reality.qualities.matter`. Each carries the same nine atomic primitives. Namespace ownership is enforced for space and matter writes. | `getQuality`, `setQuality`, `mergeQuality`, `incQuality`, `pushQuality`, `addToQualitySet`, `batchSetQuality`, `unsetQuality`, `readQualityNamespace` |
 | `scope` | Extension-scope checks. | `isExtensionBlockedAtSpace`, `getBlockedExtensionsAtSpace`, `getExtensionAtScope`, `getToolOwner` |
-| `declare` | Setup voice — what extensions declare so the verbs have something to act on. | `registerRole`, `unregisterRole`, `subscribe`, `unsubscribe`, `schedule`, `unschedule`, `aggregate`, `setScheduleEmitter` |
+| `declare` | Setup voice — what extensions declare so the verbs have something to act on. | `registerAble`, `unregisterAble`, `subscribe`, `unsubscribe`, `schedule`, `unschedule`, `aggregate`, `setScheduleEmitter` |
 | `protocol` | Response shapes + error codes. | `ok`, `error`, `sendOk`, `sendError`, `IBP_ERR` |
 
 ### Dependency chains
@@ -217,7 +217,7 @@ The three sub-namespaces of `reality.qualities` mirror each other. Every namespa
 
 ### Reading aggregates inside a handler (`ctx.read`)
 
-Role.summon handlers, DO op handlers, and SEE-resolvers all receive a context with one branch-aware reader. Use it for direct row reads:
+Able.summon handlers, DO op handlers, and SEE-resolvers all receive a context with one branch-aware reader. Use it for direct row reads:
 
 ```js
 const me    = await ctx.read("being",  beingId);
@@ -231,7 +231,7 @@ Same shape in every handler context:
 
 | Handler | How you call it |
 |---------|-----------------|
-| `role.summon(message, ctx)` | `await ctx.read("being", id)` |
+| `able.summon(message, ctx)` | `await ctx.read("being", id)` |
 | DO op `handler({ summonCtx, ... })` | `await summonCtx.read("being", id)` |
 | SEE op `handler({ ctx, ... })` (registered via `registerSeeOperation`) | `await ctx.read("being", id)` |
 
@@ -243,8 +243,8 @@ Extensions interact with the substrate at two distinct lifecycles, and there's o
 
 | When | Namespace | What you do here |
 |------|-----------|------------------|
-| **Load time** (inside `init(reality)`, before any moment is running) | `reality.declare.*` | Register your role definitions, SEE-resolvers, schedules, hooks, etc. — anything that needs to exist in the in-memory registries by the time the first moment fires. |
-| **Moment time** (inside a `role.summon`, DO/BE op handler, or seed-plant scaffold) | `ctx.*` | Act on the substrate during a running moment: read aggregates, emit verbs, build cognition results. Identity + summonCtx + branch are already pre-bound. |
+| **Load time** (inside `init(reality)`, before any moment is running) | `reality.declare.*` | Register your able definitions, SEE-resolvers, schedules, hooks, etc. — anything that needs to exist in the in-memory registries by the time the first moment fires. |
+| **Moment time** (inside a `able.summon`, DO/BE op handler, or seed-plant scaffold) | `ctx.*` | Act on the substrate during a running moment: read aggregates, emit verbs, build cognition results. Identity + summonCtx + branch are already pre-bound. |
 
 Anything you register at load time goes through `reality.declare`. Anything you do at moment time goes through `ctx`. Two namespaces, two purposes, two lifecycles — keep them straight and you'll never need to import from `seed/` directly.
 
@@ -254,14 +254,14 @@ When you register something inside `init(reality)`, the substrate auto-prefixes 
 
 ```js
 // Both work — the second form is preferred.
-reality.declare.registerRole("harmony:drummer", drummerRole);
-reality.declare.registerRole("drummer", drummerRole);          // ← auto-prefixed to "harmony:drummer"
+reality.declare.registerAble("harmony:drummer", drummerAble);
+reality.declare.registerAble("drummer", drummerAble);          // ← auto-prefixed to "harmony:drummer"
 ```
 
-Same rule applies inside a role definition's own self-name and its can* lists:
+Same rule applies inside a able definition's own self-name and its can* lists:
 
 ```js
-export const drummerRole = Object.freeze({
+export const drummerAble = Object.freeze({
   name: "drummer",          // ← auto-prefixed to "harmony:drummer" at register time
   canDo: ["tick"],          // ← auto-prefixed to "harmony:tick"
   canSummon: [],
@@ -272,7 +272,7 @@ export const drummerRole = Object.freeze({
 
 The auto-prefix only triggers for bare names (no `:` in them). Already-prefixed entries (`"harmony:tick"`, `"other-ext:foo"`, `"set-being"`) pass through untouched, so you can still reference other extensions' actions or seed actions explicitly.
 
-**Important:** auto-prefixing only applies at registration time inside your own `init()`. Runtime references — e.g. `await ctx.do(target, "harmony:tick", ...)` from inside a role handler — still need the full prefixed name, since the substrate doesn't know which extension owns the calling code at runtime.
+**Important:** auto-prefixing only applies at registration time inside your own `init()`. Runtime references — e.g. `await ctx.do(target, "harmony:tick", ...)` from inside a able handler — still need the full prefixed name, since the substrate doesn't know which extension owns the calling code at runtime.
 
 ### The four verbs from a handler (`ctx.do` / `ctx.see` / `ctx.summon` / `ctx.be`)
 
@@ -313,7 +313,7 @@ export const danceFloorSeed = {
     const drummer = await ctx.be("birth", {
       name: `drummer-${plantedSeedId.slice(0, 6)}`,
       cognition: "scripted",
-      defaultRole: "harmony:drummer",
+      defaultAble: "harmony:drummer",
       homeId: rootSpaceId,
     });
 
@@ -327,9 +327,9 @@ export const danceFloorSeed = {
 
 No `birthBeing` import. No `{ identity, summonCtx }` threading. The planter is the parent of every birthed being, the actor of every DO, the asker of every SUMMON — all by virtue of being the moment that owns this scaffold's facts.
 
-### Returning from a role.summon handler (`ctx.act` / `ctx.idle` / `ctx.failure`)
+### Returning from a able.summon handler (`ctx.act` / `ctx.idle` / `ctx.failure`)
 
-A role's `summon(message, ctx)` handler returns one of three discriminated shapes. The ctx exposes a builder for each so handlers don't import from `seed/present/cognition/`:
+A able's `summon(message, ctx)` handler returns one of three discriminated shapes. The ctx exposes a builder for each so handlers don't import from `seed/present/cognition/`:
 
 ```js
 return ctx.act("the closing utterance");      // seal an Act
@@ -343,11 +343,11 @@ Each shape has its own downstream effect:
 
 | Shape | What seals | When you use it |
 |-------|------------|-----------------|
-| **`ctx.act(text)`** | Stamps an Act row with `text` as the closing utterance (`Act.endMessage`). The being DID. Inbox row closes, ΔF commits with the seal, replies fire to anyone awaiting. | Any role that takes an action. Drummer hits the drum → `ctx.act("Tick.")`. Dancer steps → `ctx.act("Stepped to (3,4).")`. The common case. |
-| **`ctx.idle()`** | No Act row. The being looked and chose not to act. Inbox row closes — the moment ran to completion. Not a failure. | A wake fires but there's nothing to do this turn: gating / debouncing / polling roles that only act when conditions are met. A drummer that wakes at a half-beat: `ctx.idle()`. A vote-counter that wakes after each vote and only stamps a tally when the threshold is met: `ctx.idle()` between thresholds. |
+| **`ctx.act(text)`** | Stamps an Act row with `text` as the closing utterance (`Act.endMessage`). The being DID. Inbox row closes, ΔF commits with the seal, replies fire to anyone awaiting. | Any able that takes an action. Drummer hits the drum → `ctx.act("Tick.")`. Dancer steps → `ctx.act("Stepped to (3,4).")`. The common case. |
+| **`ctx.idle()`** | No Act row. The being looked and chose not to act. Inbox row closes — the moment ran to completion. Not a failure. | A wake fires but there's nothing to do this turn: gating / debouncing / polling ables that only act when conditions are met. A drummer that wakes at a half-beat: `ctx.idle()`. A vote-counter that wakes after each vote and only stamps a tally when the threshold is met: `ctx.idle()` between thresholds. |
 | **`ctx.failure(shape, reason)`** | No Act. Inbox eviction depends on the shape — deterministic shapes evict, transient ones may stay for retry. Wire-side awaiters get a structured error fast. | Cognition broke. Shapes: `"timeout"` (call took too long), `"http-error"` (external HTTP failed), `"garbage"` (malformed input/output), `"aborted"` (explicit abort / user cut), `"internal"` (anything else). |
 
-`ctx.idle()` vs `ctx.failure("internal", "...")` is the most often-confused pair. **`idle` is a successful nothing; `failure` is a broken cognition.** A polling role that finds nothing to do should always `idle`. A polling role that crashed talking to an API should `failure("http-error", "...")`. A being that always `idle`s is quietly contemplative; a being that always `failure`s is broken and should be inspected.
+`ctx.idle()` vs `ctx.failure("internal", "...")` is the most often-confused pair. **`idle` is a successful nothing; `failure` is a broken cognition.** A polling able that finds nothing to do should always `idle`. A polling able that crashed talking to an API should `failure("http-error", "...")`. A being that always `idle`s is quietly contemplative; a being that always `failure`s is broken and should be inspected.
 
 Legacy shapes still work at the normalization boundary — `{ ok: true, content: "..." }` and bare `{ content: "..." }` and `"text"` all normalize into `kind:"act"` — but the `ctx.*` builders are the discoverable, explicit form. Use them.
 
@@ -1058,7 +1058,7 @@ await reality.beingMetadata.batchSetBeingMeta(userId, "my-extension", { theme: "
 
 Both paths are valid. The scoped place path prevents accidental cross-namespace writes. The direct import path is for seed code, migrations, and utilities that need to write to arbitrary namespaces.
 
-Four core namespaces (`tools`, `roles`, `extensions`, `llm`) are always writable regardless of caller. These are seed-owned shared configuration.
+Four core namespaces (`tools`, `ables`, `extensions`, `llm`) are always writable regardless of caller. These are seed-owned shared configuration.
 
 Convention:
 - Namespace key MUST match your manifest `name`
@@ -1067,30 +1067,30 @@ Convention:
 - Reading metadata from core code (e.g. treeData) should use:
   `(space.qualities instanceof Map ? space.qualities.get("name") : space.qualities?.name)`
 
-### Scaffolding Spaces (the `role` convention)
+### Scaffolding Spaces (the `able` convention)
 
-Extensions that create a tree structure on install (food, fitness, recovery, kb, etc.) MUST set a `role` field in their metadata namespace on every scaffolded space:
+Extensions that create a tree structure on install (food, fitness, recovery, kb, etc.) MUST set a `able` field in their metadata namespace on every scaffolded space:
 
 ```js
-await reality.qualities.qualities.space.setQuality(logSpace, "food", { role: "log" });
-await reality.qualities.qualities.space.setQuality(mealsSpace, "food", { role: "meals" });
-await reality.qualities.qualities.space.setQuality(profileSpace, "food", { role: "profile" });
+await reality.qualities.qualities.space.setQuality(logSpace, "food", { able: "log" });
+await reality.qualities.qualities.space.setQuality(mealsSpace, "food", { able: "meals" });
+await reality.qualities.qualities.space.setQuality(profileSpace, "food", { able: "profile" });
 ```
 
-The `role` field is the structural marker. It means "this space is load-bearing for my extension." TreeOS base registers a generic `beforeSpaceDelete` hook that checks every space being deleted. If any extension namespace in the space's metadata contains a `role` field, the delete is cancelled with a message naming the extension and role.
+The `able` field is the structural marker. It means "this space is load-bearing for my extension." TreeOS base registers a generic `beforeSpaceDelete` hook that checks every space being deleted. If any extension namespace in the space's metadata contains a `able` field, the delete is cancelled with a message naming the extension and able.
 
-The handler does not know what food is. It does not know what fitness is. It sees `qualities.food.role = "log"` and knows that space is structural to something. Any extension that scaffolds spaces and sets `role` on them gets delete protection automatically.
+The handler does not know what food is. It does not know what fitness is. It sees `qualities.food.able = "log"` and knows that space is structural to something. Any extension that scaffolds spaces and sets `able` on them gets delete protection automatically.
 
-When looking up scaffolded spaces at runtime, query by role, not by name or stored ID:
+When looking up scaffolded spaces at runtime, query by able, not by name or stored ID:
 
 ```js
 const children = await Space.find({ parent: rootId }).select("_id name metadata").lean();
 const spaces = {};
 for (const child of children) {
   const meta = child.qualities?.get?.("food") || child.qualities?.food;
-  if (meta?.role) spaces[meta.role] = { id: String(child._id), name: child.name };
+  if (meta?.able) spaces[meta.able] = { id: String(child._id), name: child.name };
 }
-// spaces.log, spaces.meals, spaces.profile — found by role, not name
+// spaces.log, spaces.meals, spaces.profile — found by able, not name
 ```
 
 This makes scaffolded trees resilient to renames (users can rename spaces freely) while protecting against accidental deletion. Users who truly want to delete a structural space can use `--force` to bypass the hook.
@@ -1494,12 +1494,12 @@ setRunChat(async (opts) => {
 
 **Missing LLM_PRIORITY on background calls.** Every LLM call needs a priority. BACKGROUND for hooks and jobs. INTERACTIVE for user-triggered tools. GATEWAY for external channels. Without priority, background extensions compete with human chat.
 
-## Authorization — Roles ARE the Gate
+## Authorization — Ables ARE the Gate
 
 The seed gates every verb (`see` / `do` / `summon` / `be`) through a
-role-walk. There is **no `qualities.permissions` namespace** and **no
-`defaultPermissions` extension surface** — roles are the only auth
-mechanism. Extensions ship roles; operators grant them. Full doctrine
+able-walk. There is **no `qualities.permissions` namespace** and **no
+`defaultPermissions` extension surface** — ables are the only auth
+mechanism. Extensions ship ables; operators grant them. Full doctrine
 is in [seed/FACTORY.md](../seed/FACTORY.md) under "Resolution chains";
 the brief:
 
@@ -1508,14 +1508,14 @@ the brief:
 | 1. I-Am bypass | Bootstrap axiom — I-Am always passes |
 | 2. Anonymous arrival floor | Stateless callers run under arrival's canX (canSee: `["arrival-view"]`, canBe: `["birth","connect","release"]`) |
 | 3. Nearest-claim ownership | First non-empty `members.owner` on the target's ancestor chain. Actor in the claim's owner list → ALLOW. `@public` in the list → public-commons branch fires below. |
-| 4. Role-walk | For each entry in caller's `qualities.rolesGranted`, look up the role spec by walking the grant's anchor up `qualities.roles[name]`, check reach, then check the role's canSee/canDo/canSummon/canBe. |
-| 5. Public-commons | Fires only when step 3 found `@public` as the nearest claim. Seed-shipped `public-commons` role's canX is the visitor floor at public-owned spaces. |
+| 4. Able-walk | For each entry in caller's `qualities.ablesGranted`, look up the able spec by walking the grant's anchor up `qualities.ables[name]`, check reach, then check the able's canSee/canDo/canSummon/canBe. |
+| 5. Public-commons | Fires only when step 3 found `@public` as the nearest claim. Seed-shipped `public-commons` able's canX is the visitor floor at public-owned spaces. |
 | 6. Default deny | |
 
 ### How extensions contribute to authorization
 
-Ship **roles** through your manifest's `provides.roles` (see the role
-authoring section above). Each role declares:
+Ship **ables** through your manifest's `provides.ables` (see the able
+authoring section above). Each able declares:
 
 ```js
 {
@@ -1529,29 +1529,29 @@ authoring section above). Each role declares:
 }
 ```
 
-The role's canX entries are the permission contract — match the role
-walker's verb against them. Grant the role to specific beings via the
-`grant-role` DO op; the grant is anchored at a space and recorded
-on the grantee's `qualities.rolesGranted`. Beings without the relevant
+The able's canX entries are the permission contract — match the able
+walker's verb against them. Grant the able to specific beings via the
+`grant-able` DO op; the grant is anchored at a space and recorded
+on the grantee's `qualities.ablesGranted`. Beings without the relevant
 grant get a `FORBIDDEN` at the verb gate.
 
-**Reach** is a path filter that adjusts the role's natural coverage
+**Reach** is a path filter that adjusts the able's natural coverage
 (host space + descendants). Bash-style `!`-prefix carves out subtrees;
 bare patterns add lateral extensions. Examples:
 - `["!/coders/legacy/**"]` — exclude the legacy team
 - `["/docs/coding/**"]` — also apply in the docs subtree
 - `["!**", "/specific/space"]` — strict whitelist (strip default descent, then add specific)
 
-### The role registry is a template shelf
+### The able registry is a template shelf
 
-Extensions register roles into the in-memory registry as TEMPLATES. The
-actual gate is the role spec on a Space's `qualities.roles` — install
-the template onto a space (genesis does this for the seed roles like
-`angel` on heaven; operators do it via the `set-role` DO op for custom
-roles). The role-walk authorize reads from space qualities, falling
-back to the registry for code-cognition roles not yet installed.
+Extensions register ables into the in-memory registry as TEMPLATES. The
+actual gate is the able spec on a Space's `qualities.ables` — install
+the template onto a space (genesis does this for the seed ables like
+`angel` on heaven; operators do it via the `set-able` DO op for custom
+ables). The able-walk authorize reads from space qualities, falling
+back to the registry for code-cognition ables not yet installed.
 
-This means: extension-shipped roles are available reality-wide as
+This means: extension-shipped ables are available reality-wide as
 templates; operators decide WHICH spaces to install them at, which
 beings to grant them to, and what their reach should be.
 

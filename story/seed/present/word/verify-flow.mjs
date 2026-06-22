@@ -27,20 +27,20 @@ console.log(`\n  verify-flow (if + mark through evaluate)\n`);
 // ── 1. if-TRUE runs `then`, skips `else` ──
 {
   const flow = { kind: "flow", binds: [], body: [
-    { kind: "if", cond: { test: { op: "equals", path: "role", value: "dj" } },
+    { kind: "if", cond: { test: { op: "equals", path: "able", value: "dj" } },
       then: [act("queue")], else: [act("deny")] },
   ] };
-  const { laid } = await run(flow, {}, { role: "dj" });
+  const { laid } = await run(flow, {}, { able: "dj" });
   laid.length === 1 && laid[0] === "do:queue" ? ok("if TRUE → only `then` ran") : bad("if true", laid);
 }
 
 // ── 2. if-FALSE runs `else` ──
 {
   const flow = { kind: "flow", binds: [], body: [
-    { kind: "if", cond: { test: { op: "equals", path: "role", value: "dj" } },
+    { kind: "if", cond: { test: { op: "equals", path: "able", value: "dj" } },
       then: [act("queue")], else: [act("deny")] },
   ] };
-  const { laid } = await run(flow, {}, { role: "guest" });
+  const { laid } = await run(flow, {}, { able: "guest" });
   laid.length === 1 && laid[0] === "do:deny" ? ok("if FALSE → only `else` ran") : bad("if false", laid);
 }
 
@@ -170,10 +170,10 @@ console.log(`\n  verify-flow (if + mark through evaluate)\n`);
 // ── 13. gate PASS → falls through to the guarded act ──
 {
   const flow = { kind: "flow", binds: [], body: [
-    { kind: "gate", cond: { test: { op: "reads", path: "role" } }, onFail: { kind: "refuse", message: "no role" } },
+    { kind: "gate", cond: { test: { op: "reads", path: "able" } }, onFail: { kind: "refuse", message: "no able" } },
     act("grant"),
   ] };
-  const { laid, refused } = await run(flow, {}, { role: "human" });
+  const { laid, refused } = await run(flow, {}, { able: "human" });
   !refused && laid[0] === "do:grant" ? ok("gate PASS → guarded act runs") : bad("gate pass", { laid, refused });
 }
 
@@ -237,7 +237,7 @@ console.log(`\n  verify-flow (if + mark through evaluate)\n`);
 // ── 18. the LAW family registers (no fact), the OBJECTIVE register ──
 {
   const flow = { kind: "flow", binds: [], body: [
-    { kind: "capability", role: "dj", polarity: "can", verb: "do", op: "queue" },
+    { kind: "capability", able: "dj", polarity: "can", verb: "do", op: "queue" },
     { kind: "prohibition", clause: "no one can back it", negated: true },
     { kind: "property", subject: "matter", prop: "owner" },
     act("real-deed"),

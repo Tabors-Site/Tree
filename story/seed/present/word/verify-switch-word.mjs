@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // verify-switch-word . be:switch is authored by a .word (switch.word); the BE dispatcher stamps the
 // CROSS-HISTORY be:switch fact (on result.toHistory) from the word's factParams {fromHistory,toHistory}.
-// No authorize() (changing your OWN session's history needs no role gate). The SESSION seat
+// No authorize() (changing your OWN session's history needs no able gate). The SESSION seat
 // (socket.currentHistory) is the transport's job (stamp-then-seat) — the word/handler only hand back
 // seatHistory. The handler's six checks simplified to FOUR gates (no-caller, no-history,
 // destination-missing[found+deleted], destination-paused, being-lives-on[born+alive]). Proves: (1)
-// cherub:switch folds as roleword + IR; (2) be:switch via beVerb stamps the fact with params
+// cherub:switch folds as ableword + IR; (2) be:switch via beVerb stamps the fact with params
 // {fromHistory,toHistory} + result.switched + seatHistory (the .word authored it; dispatcher stamped on
 // toHistory); (3) gate: no history → INVALID_INPUT; (4) gate: missing destination history →
 // INVALID_INPUT (the destination-missing floor read), no fact. A birthed being self-switches to main —
@@ -27,7 +27,7 @@ const { birthBeing } = await import(`${R}/seed/materials/being/identity/birth.js
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { getStoryDomain } = await import(`${R}/seed/ibp/address.js`);
 const { getWordSync } = await import(`${R}/seed/present/word/wordStore.js`);
-const { resolveRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
+const { resolveAbleWord } = await import(`${R}/seed/present/word/ableWordRegistry.js`);
 const { default: Fact } = await import(`${R}/seed/past/fact/fact.js`);
 const { IBP_ERR } = await import(`${R}/seed/ibp/protocol.js`);
 const pollFor = async (fn, pred, t = 16000, e = 250) => { const t0 = Date.now(); while (Date.now() - t0 < t) { const v = await fn(); if (pred(v)) return v; await new Promise((r) => setTimeout(r, e)); } return await fn(); };
@@ -44,15 +44,15 @@ try {
 
   // (1) the word is the live path
   const w = getWordSync("cherub:switch");
-  const ir = resolveRoleWord("cherub", "switch", "0");
-  (w?.kind === "roleword" && !!ir)
-    ? ok(`cherub:switch folds as kind:"roleword" + resolveRoleWord returns its IR (the word is the live path)`)
+  const ir = resolveAbleWord("cherub", "switch", "0");
+  (w?.kind === "ableword" && !!ir)
+    ? ok(`cherub:switch folds as kind:"ableword" + resolveAbleWord returns its IR (the word is the live path)`)
     : bad(`switch word folded`, { kind: w?.kind, hasIR: !!ir });
 
   // birth a being to switch (guaranteed state.name)
   let beingId = null, beingName = null;
   await withIAmAct("birth switcher", async (ctx) => {
-    const r = await birthBeing({ spec: { name: "switcher", parentBeingId: cherub.id, homeId: cherub.state.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: ctx, branch: "0" });
+    const r = await birthBeing({ spec: { name: "switcher", parentBeingId: cherub.id, homeId: cherub.state.homeSpace, cognition: "scripted", defaultAble: "global" }, identity: I_AM, moment: ctx, branch: "0" });
     beingId = r.beingId; beingName = r.name;
   });
   await pollFor(() => findByName("being", "switcher", "0"), (v) => !!v?.state?.name);

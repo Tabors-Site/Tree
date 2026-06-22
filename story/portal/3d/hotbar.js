@@ -26,7 +26,7 @@ let _onChange  = () => {};
 // Caller-provided predicate. main.js wires this to
 // isGameplayInputBlocked so the hotbar's keyboard / wheel
 // handlers stay quiet whenever any panel is open (flat panel,
-// action menu, role manager, summon dialog, etc.). Without it
+// action menu, able manager, summon dialog, etc.). Without it
 // the wheel rotated the selected slot in the background even
 // while the user was scrolling content in an overlay.
 let _isInputBlocked = () => false;
@@ -238,7 +238,7 @@ function _onWheel(e) {
 function _isTypingInUI() {
   // Main.js's isGameplayInputBlocked is the authoritative check —
   // it covers every panel and overlay (flat panel, action menu,
-  // role manager, summon, planter, etc.) so any new overlay
+  // able manager, summon, planter, etc.) so any new overlay
   // automatically silences hotbar input without touching this file.
   if (_isInputBlocked()) return true;
   const el = document.activeElement;

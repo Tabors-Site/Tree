@@ -40,7 +40,7 @@ const { sealFacts } = await import(`${R}/seed/past/fact/facts.js`);
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { getSpaceRootId } = await import(`${R}/seed/sprout.js`);
 const { doVerb } = await import(`${R}/seed/ibp/verbs/do.js`);
-const { resolveRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
+const { resolveAbleWord } = await import(`${R}/seed/present/word/ableWordRegistry.js`);
 
 let pass = 0, fail = 0;
 const ok = (l) => { pass++; console.log(`  ✓ ${l}`); };
@@ -61,7 +61,7 @@ const create = async (target, params, who = ident) => {
 console.log(`\n  verify-creatematter-cut (REAL create-matter op via doVerb → the cut)\n  DB: ${SCRATCH_DB.split("/").pop()}\n`);
 try {
   if (!cherub) { console.log("  FATAL: genesis failed"); process.exit(1); }
-  resolveRoleWord("matter", "create-matter") ? ok(`create-matter.word resolves through the bridge (self-registered)`) : bad(`resolves`, "null");
+  resolveAbleWord("matter", "create-matter") ? ok(`create-matter.word resolves through the bridge (self-registered)`) : bad(`resolves`, "null");
 
   const rootSpace = String(getSpaceRootId());
 

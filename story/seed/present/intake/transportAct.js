@@ -39,7 +39,7 @@
 //
 // ── transportAct: true is a semantic mode, not a structural carve-out
 //
-// Most summons drive cognition: the role's summon(message, ctx)
+// Most summons drive cognition: the able's summon(message, ctx)
 // handler deliberates on the message and decides what (if anything)
 // to do. Transport-summons drive execution: the being already chose
 // before the keystroke fired; the wake-call's payload is a

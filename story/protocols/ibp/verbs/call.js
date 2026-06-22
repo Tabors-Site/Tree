@@ -8,8 +8,8 @@
 // doctrine.
 //
 // `payload.message` is the inbox payload: `{ from, content,
-// correlation?, inReplyTo?, attachments?, sentAt?, activeRole? }`.
-// `activeRole` may live on `message` OR at the top level of payload.
+// correlation?, inReplyTo?, attachments?, sentAt?, activeAble? }`.
+// `activeAble` may live on `message` OR at the top level of payload.
 // The wire normalizes it onto message before delegating.
 //
 // Thin wire adapter: extracts envelope fields, composes the async-reply
@@ -67,18 +67,18 @@ export async function handleCall(socket, env, ack) {
       );
     }
 
-    // Normalize threading: activeRole may live at payload.activeRole or
-    // inside message.activeRole. callVerb reads from message.
+    // Normalize threading: activeAble may live at payload.activeAble or
+    // inside message.activeAble. callVerb reads from message.
     const message = {
       ...payload.message,
-      activeRole: payload.message.activeRole || payload.activeRole || null,
+      activeAble: payload.message.activeAble || payload.activeAble || null,
     };
 
     // A socket DRIVING a being acts as it (signed by socket.nameId). A socket
     // that has a NAME but NO being yet (a fresh name at the arrival floor) acts
     // THROUGH the shared @arrival being — the being it uses to reach cherub —
     // SIGNED BY ITS NAME. So the actor is a real being (@arrival, which carries
-    // the arrival role that permits SUMMON @cherub:mate), and the nameId rides
+    // the arrival able that permits SUMMON @cherub:mate), and the nameId rides
     // as the signer so cherub's mate handler sees askerNameId = the connected
     // name and births the name's first being. Nothing bodiless: a name always
     // acts through a being.

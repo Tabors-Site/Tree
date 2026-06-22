@@ -156,19 +156,19 @@ export function buildScopedStory(manifest, fullStory, availableServices) {
     scoped.do = scopedDo;
   }
 
-  // Declare bindings: inject the extension name into registerRole so the
-  // registered role's `origin` reflects the registering extension rather
-  // than the default "role-registry" → "seed" tag. Without this wrap
-  // every extension role appears as a seed role in the role-manager
+  // Declare bindings: inject the extension name into registerAble so the
+  // registered able's `origin` reflects the registering extension rather
+  // than the default "able-registry" → "seed" tag. Without this wrap
+  // every extension able appears as a seed able in the able-manager
   // catalog and the operator can't tell where it came from.
-  if (scoped.declare?.registerRole) {
+  if (scoped.declare?.registerAble) {
     const extName = manifest.name;
     const origDeclare = scoped.declare;
 
-    // Auto-prefix bare action/role/op names in a role's can* lists
+    // Auto-prefix bare action/able/op names in a able's can* lists
     // with the registering extension's namespace. Inside an extension,
     // canDo: [{ action: "step" }] becomes [{ action: "<ext>:step" }]
-    // before the role-registry sees it. Already-prefixed entries
+    // before the able-registry sees it. Already-prefixed entries
     // (any string containing `:`) pass through untouched so an
     // extension can still reference another extension's actions or
     // bare seed actions explicitly.
@@ -186,10 +186,10 @@ export function buildScopedStory(manifest, fullStory, availableServices) {
       }
       return entry;
     };
-    const rewriteRoleDef = (def) => {
+    const rewriteAbleDef = (def) => {
       if (!def || typeof def !== "object") return def;
       const out = { ...def };
-      // role.name field: same auto-prefix rule. So a role file can
+      // able.name field: same auto-prefix rule. So a able file can
       // write { name: "drummer", ... } and the registered spec carries
       // name: "<ext>:drummer". Already-prefixed names pass through.
       if (typeof def.name === "string" && !def.name.includes(":")) {
@@ -202,19 +202,19 @@ export function buildScopedStory(manifest, fullStory, availableServices) {
     };
 
     // Same rule for the `name` first-argument: bare names auto-prefix.
-    const prefixRoleName = (name) => {
+    const prefixAbleName = (name) => {
       if (typeof name !== "string") return name;
       return name.includes(":") ? name : `${extName}:${name}`;
     };
 
     scoped.declare = {
       ...origDeclare,
-      registerRole: (name, def) => origDeclare.registerRole(prefixRoleName(name), rewriteRoleDef(def), extName),
+      registerAble: (name, def) => origDeclare.registerAble(prefixAbleName(name), rewriteAbleDef(def), extName),
       // SEE operations auto-namespace under the registering extension —
-      // same shape as registerRole's wrap. An extension calling
+      // same shape as registerAble's wrap. An extension calling
       //   story.declare.registerSeeOperation("neighbors", {handler})
       // is rewritten to register under "<ext>:neighbors" with
-      // ownerExtension set, so roles can refer to it as either
+      // ownerExtension set, so ables can refer to it as either
       // "<ext>:neighbors" or the bare suffix "neighbors".
       registerSeeOperation: origDeclare.registerSeeOperation
         ? (name, spec) => origDeclare.registerSeeOperation(
@@ -223,15 +223,15 @@ export function buildScopedStory(manifest, fullStory, availableServices) {
           )
         : undefined,
       // RESOURCES.md: a code resource registers code-cognition handlers
-      // for role resources by name. Same auto-namespace rule as
-      // registerRole — bare role names pick up the extension prefix
+      // for able resources by name. Same auto-namespace rule as
+      // registerAble — bare able names pick up the extension prefix
       // so an extension calling
-      //   story.declare.registerRoleHandler("registrar", handlerFn)
+      //   story.declare.registerAbleHandler("registrar", handlerFn)
       // registers the handler under "<ext>:registrar", matching where
-      // the role's spec was registered. Cross-extension references
+      // the able's spec was registered. Cross-extension references
       // (already-prefixed names) pass through.
-      registerRoleHandler: origDeclare.registerRoleHandler
-        ? (name, handler) => origDeclare.registerRoleHandler(prefixRoleName(name), handler, extName)
+      registerAbleHandler: origDeclare.registerAbleHandler
+        ? (name, handler) => origDeclare.registerAbleHandler(prefixAbleName(name), handler, extName)
         : undefined,
     };
   }

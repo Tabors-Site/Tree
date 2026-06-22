@@ -24,7 +24,7 @@ import { getStoryDomain } from "../../ibp/address.js";
 import { IbpError, IBP_ERR, mapPatternsToIbpError } from "../../ibp/protocol.js";
 import { I_AM } from "../being/seedBeings.js";
 import { detectTargetKind, targetIdOf, loadTargetRow } from "../_targetShape.js";
-import { targetsFact } from "../../ibp/factResult.js";
+import { targetsFact, stampsFact } from "../../ibp/factResult.js";
 import {
   setOwner,
   removeOwner,
@@ -83,8 +83,8 @@ async function setOnSpaceHandler({ target, params, identity, moment }) {
   const kind = detectTargetKind(target);
 
   // Invalidate the ancestor-chain cache for this space: set-space changes qualities /
-  // owner / name, all of which getAncestorChain serves to readers like getRoleSpecForGrant.
-  // Without this, a freshly written quality (e.g. an installed role) stays invisible until
+  // owner / name, all of which getAncestorChain serves to readers like getAbleSpecForGrant.
+  // Without this, a freshly written quality (e.g. an installed able) stays invisible until
   // the cache TTL expires — a read-after-write race (the ancestorCache.js header says
   // setQuality/setOwner SHOULD invalidate; the op was the missing caller). The cache empties
   // now; the fold writes the new state next; the next read re-fetches fresh (no in-moment
@@ -123,10 +123,10 @@ async function setOnSpaceHandler({ target, params, identity, moment }) {
           "Resolved address has no spaceId",
         );
       }
-      // Authorization is handled by the verb dispatcher's role-walk
-      // before reaching this handler (RolesAreAuth). The earlier
+      // Authorization is handled by the verb dispatcher's able-walk
+      // before reaching this handler (AblesAreAuth). The earlier
       // belt-and-suspenders hasAccess check via resolveSpaceAccess
-      // retired with the contributor class — the role's canDo +
+      // retired with the contributor class — the able's canDo +
       // reach is the single source of truth.
       return targetsFact({
         written: true,
@@ -171,9 +171,9 @@ async function setOnSpaceHandler({ target, params, identity, moment }) {
       if (!spaceId) {
         throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Resolved address has no spaceId");
       }
-      // Authorization runs in the verb dispatcher's role-walk; this
+      // Authorization runs in the verb dispatcher's able-walk; this
       // handler trusts that. The hasAccess gate via resolveSpaceAccess
-      // retired with the contributor class (RolesAreAuth).
+      // retired with the contributor class (AblesAreAuth).
       const { loadOrFold } = await import("../projections.js");
       const _slot1 = await loadOrFold("space", spaceId, moment?.actorAct?.history || "0");
       const row = _slot1 ? { _id: _slot1.id, ...(_slot1.state || {}) } : null;
@@ -399,9 +399,9 @@ registerOperation("end-space", {
 // space target's id, or a stance's spaceId).
 //
 // Owner is the ONE base-axiom membership class — implicit authority
-// over the space + descendants without any role grant. All other
-// authority shapes (including what was contributor) are roles
-// delegated via grant-role per seed/RolesAreAuth.md.
+// over the space + descendants without any able grant. All other
+// authority shapes (including what was contributor) are ables
+// delegated via grant-able per seed/AblesAreAuth.md.
 
 // Resolve the space id from a DO target that may be a space row/envelope
 // or a resolved stance (which carries `.spaceId`).
@@ -435,27 +435,26 @@ const PERMISSION_ERROR_PATTERNS = [
 ];
 
 // add-contributor / remove-contributor RETIRED 2026-06-09. Under
-// RolesAreAuth, "contributor" is just a role like any other. Granting
-// editing authority over a space is: grant-role to a being whose role
+// AblesAreAuth, "contributor" is just a able like any other. Granting
+// editing authority over a space is: grant-able to a being whose able
 // has the relevant canDo at this space.
 //
 // Migration:
 //   OLD: do(<space>, "add-contributor",    { contributorId })
-//   NEW: do(<being>, "grant-role",         { role: "contributor",
+//   NEW: do(<being>, "grant-able",         { able: "contributor",
 //                                            anchorSpaceId: <space> })
 //
 //   OLD: do(<space>, "remove-contributor", { contributorId })
-//   NEW: do(<being>, "revoke-role",        { role: "contributor",
+//   NEW: do(<being>, "revoke-able",        { able: "contributor",
 //                                            anchorSpaceId: <space>,
 //                                            grantedBy: <originalGrantor> })
 //
-// Operators define their own contributor role via the role-manager UI
-// (set-role) with whatever canDo entries fit their story.
+// Operators define their own contributor able via the able-manager UI
+// (set-able) with whatever canDo entries fit their story.
 
 registerOperation("set-owner", {
   targets: ["space", "stance"],
   ownerExtension: "seed",
-  skipAudit: true,
   args: {
     newOwnerId: { type: "text", label: "New owner being id", required: true },
   },
@@ -464,29 +463,35 @@ registerOperation("set-owner", {
     const actor = requireActor(identity);
     const newOwnerId = String(params?.newOwnerId || "").trim();
     if (!newOwnerId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`newOwnerId` is required");
+    let factParams;
     try {
-      await setOwner(spaceId, newOwnerId, actor, moment?.actorAct?.history || "0", moment);
+      // setOwner does the auth + lock + CAS, hands the lock to afterSeal, and
+      // returns the {field:"owner", value} for the ONE do:set-owner fact the
+      // dispatcher stamps (applySetField folds it). No skipAudit (23.md).
+      factParams = await setOwner(spaceId, newOwnerId, actor, moment?.actorAct?.history || "0", moment);
     } catch (err) {
       throw mapPatternsToIbpError(err, PERMISSION_ERROR_PATTERNS);
     }
-    return { ownerSet: true, spaceId, newOwnerId };
+    return stampsFact({ ownerSet: true, spaceId, newOwnerId }, factParams, { kind: "space", id: String(spaceId) });
   },
 });
 
 registerOperation("remove-owner", {
   targets: ["space", "stance"],
   ownerExtension: "seed",
-  skipAudit: true,
   args: {},
   handler: async ({ target, identity, moment }) => {
     const spaceId = spaceIdFromTarget(target);
     const actor = requireActor(identity);
+    let factParams;
     try {
-      await removeOwner(spaceId, actor, moment?.actorAct?.history || "0");
+      // Threads the moment now (was dropped) so the dispatcher stamps the ONE
+      // do:remove-owner fact (owner=null, folded by applySetField). No skipAudit.
+      factParams = await removeOwner(spaceId, actor, moment?.actorAct?.history || "0", moment);
     } catch (err) {
       throw mapPatternsToIbpError(err, PERMISSION_ERROR_PATTERNS);
     }
-    return { ownerRemoved: true, spaceId };
+    return stampsFact({ ownerRemoved: true, spaceId }, factParams, { kind: "space", id: String(spaceId) });
   },
 });
 

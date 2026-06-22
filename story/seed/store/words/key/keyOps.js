@@ -32,13 +32,13 @@
 import { registerOperation } from "../../../ibp/operations.js";
 import { stampsFact } from "../../../ibp/factResult.js";
 import { IBP_ERR, IbpError } from "../../../ibp/protocol.js";
-import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
+import { registerAbleWord } from "../../../present/word/ableWordRegistry.js";
 
 // Self-register this slice's co-located WORLD strand (CONVERTING.md): the bridge
 // resolves ("name", "key-export") to key.word, its host escapes wired by keyHost.js.
 // Registered at module load (services.js imports this file), so the `.word` is
 // available wherever a booted story exists; the cut reads it via the bridge.
-registerRoleWord("name", "key-export", new URL("./key.word", import.meta.url));
+registerAbleWord("name", "key-export", new URL("./key.word", import.meta.url));
 
 // Resolve the NAME id this op acts on, from the being target's trueName.
 async function resolveTargetNameId(target, moment) {
@@ -66,14 +66,14 @@ async function resolveTargetNameId(target, moment) {
 // strict boolean — the .word's mark yields true|undefined), or null on a clean miss.
 async function _keyExportViaWord({ target, caller, asker, moment }) {
   if (!moment) return null;
-  const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
-  const ir = resolveRoleWord("name", "key-export", moment?.actorAct?.history);
+  const { resolveAbleWord, runAbleWord } = await import("../../../present/word/ableWordRegistry.js");
+  const ir = resolveAbleWord("name", "key-export", moment?.actorAct?.history);
   if (!ir) return null;
   const { keyHostEnv } = await import("./keyHost.js");
   const { targetIdOf } = await import("../../../materials/_targetShape.js");
   const history = moment?.actorAct?.history || "0";
   try {
-    const { result } = await runRoleWord(ir, {
+    const { result } = await runAbleWord(ir, {
       moment, history,
       // `target` is bound as an entity object (kind + id) so the .word's `see the
       // target's trueName` can loadProjection — seeRead needs ._id/.id, not a bare string.

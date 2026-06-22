@@ -56,7 +56,7 @@ import { findByName, loadProjection } from "../projections.js";
 
 // `invocableBy` is a display label the portal shows next to the
 // delegate ("who is this for?"). It is NOT the auth gate . that's
-// role-walk downstream. The only behavior the descriptor
+// able-walk downstream. The only behavior the descriptor
 // derives from this field today is `available`: "anyone" maps to
 // authorizedHere (the caller can SEE here at all), every other value
 // maps to writeAllowed (the caller can write here). The label values
@@ -68,7 +68,7 @@ import { findByName, loadProjection } from "../projections.js";
 export const SEED_DELEGATES = [
   {
     name: "arrival",
-    role: "arrival",
+    able: "arrival",
     cognition: "scripted",
     invocableBy: "anyone",
     description:
@@ -76,15 +76,15 @@ export const SEED_DELEGATES = [
   },
   {
     name: "public",
-    role: "public",
+    able: "public",
     cognition: "scripted",
     invocableBy: "no-one",
     description:
-      "The commons delegate (seed/RolesAreAuth.md). Holds the owner slot on spaces transferred to the public commons. Visitors acquire the commons role by self-taking it on entry (the space's autoOnEntry policy), picked up by the regular role-walk. Never acts; never accepts SUMMONs. The silence IS the lock — Public-owned spaces can't be re-privatized except by I-Am (public's own owner) or by branching the timeline.",
+      "The commons delegate (seed/AblesAreAuth.md). Holds the owner slot on spaces transferred to the public commons. Visitors acquire the commons able by self-taking it on entry (the space's autoOnEntry policy), picked up by the regular able-walk. Never acts; never accepts SUMMONs. The silence IS the lock — Public-owned spaces can't be re-privatized except by I-Am (public's own owner) or by branching the timeline.",
   },
   {
     name: "cherub",
-    role: "cherub",
+    able: "cherub",
     cognition: "scripted",
     invocableBy: "anyone",
     description:
@@ -92,39 +92,39 @@ export const SEED_DELEGATES = [
   },
   {
     name: "birther",
-    role: "birther",
+    able: "birther",
     cognition: "scripted",
     invocableBy: "authenticated",
     description:
       "Sibling delegate to cherub. Cherub serves unauthenticated arrival (mint a fresh identity on this story). Birther serves authenticated callers (mint a child being whose parent is you).",
   },
   {
-    name: "role-manager",
-    role: "role-manager",
+    name: "able-manager",
+    able: "able-manager",
     cognition: "scripted",
     invocableBy: "authenticated",
     description:
-      "Authors and edits live-defined roles. Click @role-manager at the story root to add or replace a role with origin:'live'. Restart picks up live changes; the in-memory registry rebuilds from ./roles on boot.",
+      "Authors and edits live-defined ables. Click @able-manager at the story root to add or replace a able with origin:'live'. Restart picks up live changes; the in-memory registry rebuilds from ./ables on boot.",
   },
   {
-    name: "role-finder",
-    role: "role-finder",
+    name: "able-finder",
+    able: "able-finder",
     cognition: "llm",
     invocableBy: "authenticated",
     description:
-      "LLM-cognition helper. Summon @role-finder and describe what a being should do; it searches ./roles for matches, drafts new role definitions, and saves via set-role on user approval. Pairs with @roleflow-composer for end-to-end role authoring.",
+      "LLM-cognition helper. Summon @able-finder and describe what a being should do; it searches ./ables for matches, drafts new able definitions, and saves via set-able on user approval. Pairs with @flow-composer for end-to-end able authoring.",
   },
   {
-    name: "roleflow-composer",
-    role: "roleflow-composer",
+    name: "flow-composer",
+    able: "flow-composer",
     cognition: "llm",
     invocableBy: "authenticated",
     description:
-      "LLM-cognition helper. Summon @roleflow-composer and describe a being's behavior; it composes a structured roleFlow (the per-moment role-selection program) and writes it onto the target being's qualities via set-being-roleflow.",
+      "LLM-cognition helper. Summon @flow-composer and describe a being's behavior; it composes a structured flow (the per-moment able-selection program) and writes it onto the target being's qualities via set-being-flow.",
   },
   {
     name: "llm-assigner",
-    role: "llm-assigner",
+    able: "llm-assigner",
     cognition: "scripted",
     invocableBy: "authenticated",
     description:
@@ -132,15 +132,15 @@ export const SEED_DELEGATES = [
   },
   {
     name: "story-manager",
-    role: "story-manager",
+    able: "story-manager",
     cognition: "llm",
     invocableBy: "owner",
     description:
-      "Conversational interface for place-level administration (extensions, config, peers). Carries the story-manager role with canDo for set-config, install-extension, etc. — granted at the story root with story-wide reach.",
+      "Conversational interface for place-level administration (extensions, config, peers). Carries the story-manager able with canDo for set-config, install-extension, etc. — granted at the story root with story-wide reach.",
   },
   {
     name: "history-manager",
-    role: "history-manager",
+    able: "history-manager",
     cognition: "scripted",
     invocableBy: "authenticated",
     description:
@@ -148,11 +148,11 @@ export const SEED_DELEGATES = [
   },
   {
     name: "federation-manager",
-    role: "federation-manager",
+    able: "federation-manager",
     cognition: "scripted",
     invocableBy: "owner",
     description:
-      "Negotiates transfers with peer realities. Operator triggers offer-template / offer-being (push a template or a being to a peer) or request-template (ask a peer for one of theirs); the role handles incoming offer-template / request-template / deliver-template / deliver-being SUMMONs from peers. Seed (the shape, fresh ids) and graft (the entity, verbatim) are the data primitives; push and pull are the social verbs on top.",
+      "Negotiates transfers with peer realities. Operator triggers offer-template / offer-being (push a template or a being to a peer) or request-template (ask a peer for one of theirs); the able handles incoming offer-template / request-template / deliver-template / deliver-being SUMMONs from peers. Seed (the shape, fresh ids) and graft (the entity, verbatim) are the data primitives; push and pull are the social verbs on top.",
   },
   // The host tier (nodeServerTest Phase 1): the running machine as
   // beings. Each is homed at its ./host child space via
@@ -160,7 +160,7 @@ export const SEED_DELEGATES = [
   // lives in seed/materials/host/.
   {
     name: "http-server",
-    role: "http-server",
+    able: "http-server",
     cognition: "scripted",
     invocableBy: "owner",
     homeHeavenSpace: "host-http",
@@ -169,7 +169,7 @@ export const SEED_DELEGATES = [
   },
   {
     name: "websocket-pool",
-    role: "websocket-pool",
+    able: "websocket-pool",
     cognition: "scripted",
     invocableBy: "owner",
     homeHeavenSpace: "host-websocket",
@@ -178,7 +178,7 @@ export const SEED_DELEGATES = [
   },
   {
     name: "mongo",
-    role: "mongo-connection",
+    able: "mongo-connection",
     cognition: "scripted",
     invocableBy: "owner",
     homeHeavenSpace: "host-mongo",
@@ -310,11 +310,11 @@ export async function ensureSeedDelegates(spaceRootId) {
             { defaultKind: spec.cognition },
           );
         }
-        if (st.defaultRole !== spec.role) {
+        if (st.defaultAble !== spec.able) {
           await setFieldInOwnMoment(
-            `I correct ${spec.name}'s role`,
-            "defaultRole",
-            spec.role,
+            `I correct ${spec.name}'s able`,
+            "defaultAble",
+            spec.able,
           );
         }
         if (st.homeSpace !== homeId) {
@@ -347,7 +347,7 @@ export async function ensureSeedDelegates(spaceRootId) {
         // identical state).
         rosterUpdate[spec.name] = {
           beingId: String(existingSlot.id),
-          role: spec.role,
+          able: spec.able,
           installedAt: new Date().toISOString(),
           installedBy: "seedDelegates",
         };
@@ -365,7 +365,7 @@ export async function ensureSeedDelegates(spaceRootId) {
         result = await birthBeing({
           spec: {
             name: spec.name,
-            role: spec.role,
+            able: spec.able,
             cognition: spec.cognition,
             homeId,
             parentBeingId: String(rootBeingId),
@@ -388,7 +388,7 @@ export async function ensureSeedDelegates(spaceRootId) {
       // entries).
       rosterUpdate[spec.name] = {
         beingId: String(result.beingId),
-        role: spec.role,
+        able: spec.able,
         installedAt: new Date().toISOString(),
         installedBy: "seedDelegates",
       };
@@ -397,7 +397,7 @@ export async function ensureSeedDelegates(spaceRootId) {
     } catch (err) {
       log.error(
         "SeedDelegates",
-        `failed to ensure ${spec.role} delegate: ${err.message}`,
+        `failed to ensure ${spec.able} delegate: ${err.message}`,
       );
     }
   }
@@ -422,25 +422,25 @@ export async function ensureSeedDelegates(spaceRootId) {
 //
 // The retired `ensureSeedDelegatesOnHeaven` added each delegate to
 // heaven's `members.angel` class — that was the gate under the old
-// stance-auth layered model. Under roles-are-auth (seed/RolesAreAuth.md),
+// stance-auth layered model. Under ables-are-auth (seed/AblesAreAuth.md),
 // the gate is `grantAngelToSeedDelegates` below: each delegate gets
-// the angel ROLE granted anchored at heaven, the role's spec lives in
-// heaven.qualities.roles.angel, and the role-walk authorize finds it
+// the angel ABLE granted anchored at heaven, the able's spec lives in
+// heaven.qualities.ables.angel, and the able-walk authorize finds it
 // by walking the grant's anchor up the qualities chain. No member-class
 // dance needed.
 
 /**
- * Roles-Are-Auth bootstrap (seed/RolesAreAuth.md). For each seed
- * delegate, the I-Am emits a `do:grant-role` fact giving them the
- * `angel` role anchored at heaven. The being reducer
- * (applyRoleGrants in reducerHelpers.js) folds these facts into the
- * delegate's `qualities.rolesGranted`.
+ * Ables-Are-Auth bootstrap (seed/AblesAreAuth.md). For each seed
+ * delegate, the I-Am emits a `do:grant-able` fact giving them the
+ * `angel` able anchored at heaven. The being reducer
+ * (applyAbleGrants in reducerHelpers.js) folds these facts into the
+ * delegate's `qualities.ablesGranted`.
  *
  * Doctrine: angel is about IDENTITY, not just canDo. Seed delegates
  * ARE angels by birth — descendants of I-Am, with heaven access by
  * structural right. The grant codifies that identity: "this being
  * belongs to the heavenly hierarchy and the chain back to I-Am IS
- * their authority." Each delegate's matching role (cherub holds
+ * their authority." Each delegate's matching able (cherub holds
  * cherub, birther holds birther, etc., granted separately) carries
  * the specific canX they need for day-to-day work; angel is the
  * identity layer, the membership badge, and the access path to
@@ -449,10 +449,10 @@ export async function ensureSeedDelegates(spaceRootId) {
  * Exceptions: @public (never acts, no grants) and @arrival (shared
  * anonymous-visitor stance — granting angel to arrival would give
  * every anon visitor angel's canSee:["*"], leaking everything; arrival
- * gets its own arrival role only).
+ * gets its own arrival able only).
  *
  * One moment per delegate (per the one-DO-per-moment doctrine).
- * Idempotent: the reducer dedupes by (role, anchor, grantor) so a
+ * Idempotent: the reducer dedupes by (able, anchor, grantor) so a
  * re-emit on reboot is a no-op.
  */
 export async function grantAngelToSeedDelegates() {
@@ -461,11 +461,11 @@ export async function grantAngelToSeedDelegates() {
   const { withIAmAct } = await import("../../sprout.js");
   const { doVerb } = await import("../../ibp/verbs/do.js");
 
-  // angel is hosted on heaven (seed/RolesAreAuth.md). Anchor every
-  // delegate's grant there so the role-walk authorize finds the spec
+  // angel is hosted on heaven (seed/AblesAreAuth.md). Anchor every
+  // delegate's grant there so the able-walk authorize finds the spec
   // by walking the grant's anchor up the qualities chain. Reach via
   // angel's qualities is the heaven subtree by default; the angel
-  // role's reach field can extend it story-wide if seed needs it
+  // able's reach field can extend it story-wide if seed needs it
   // (default angel canX includes "*" so the gate passes once reach
   // is met).
   const heaven = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, "0");
@@ -487,7 +487,7 @@ export async function grantAngelToSeedDelegates() {
     // socket binds to its identity. Granting it angel would give every
     // visitor angel's canSee:["*"] — raw SEE on everything — which
     // breaks the filtered arrival-view doctrine. Arrival gets ONLY its
-    // own role granted below (canSee:["arrival-view"] + canBe:
+    // own able granted below (canSee:["arrival-view"] + canBe:
     // ["birth","connect","release"] + canSummon:@cherub:mate).
     if (spec.name === "arrival") continue;
     const slot = await findByName("being", spec.name, "0");
@@ -496,9 +496,9 @@ export async function grantAngelToSeedDelegates() {
       await withIAmAct(`I grant angel to @${spec.name}`, async (ctx) => {
         await doVerb(
           { kind: "being", id: String(slot.id) },
-          "grant-role",
+          "grant-able",
           {
-            role:          "angel",
+            able:          "angel",
             anchorSpaceId: String(heaven.id),
             anchorBeingId: null,
           },
@@ -514,17 +514,17 @@ export async function grantAngelToSeedDelegates() {
     }
   }
 
-  // Every seed delegate gets its OWN matching role granted at the
+  // Every seed delegate gets its OWN matching able granted at the
   // story root (in addition to angel @ heaven). This means:
-  //   @cherub holds cherub role, @birther holds birther role,
-  //   @role-manager holds role-manager role, etc.
-  // The role-walk authorize finds each delegate's canX through their
-  // OWN role's grant (instead of the registry-fallback hack in
-  // roleFlow.js). Reach is story-wide via host + descendants from
+  //   @cherub holds cherub able, @birther holds birther able,
+  //   @able-manager holds able-manager able, etc.
+  // The able-walk authorize finds each delegate's canX through their
+  // OWN able's grant (instead of the registry-fallback hack in
+  // flow.js). Reach is story-wide via host + descendants from
   // the story root.
   //
-  // @public still gets no role grant (it never acts).
-  // @arrival's match: arrival role granted at root (covers anon visitors).
+  // @public still gets no able grant (it never acts).
+  // @arrival's match: arrival able granted at root (covers anon visitors).
   const { getSpaceRootId } = await import("../../sprout.js");
   const rootId = getSpaceRootId();
   if (!rootId) return { granted };
@@ -534,12 +534,12 @@ export async function grantAngelToSeedDelegates() {
     const slot = await findByName("being", spec.name, "0");
     if (!slot) continue;
     try {
-      await withIAmAct(`I grant ${spec.role} to @${spec.name}`, async (ctx) => {
+      await withIAmAct(`I grant ${spec.able} to @${spec.name}`, async (ctx) => {
         await doVerb(
           { kind: "being", id: String(slot.id) },
-          "grant-role",
+          "grant-able",
           {
-            role:          spec.role,
+            able:          spec.able,
             anchorSpaceId: String(rootId),
             anchorBeingId: null,
           },
@@ -550,7 +550,7 @@ export async function grantAngelToSeedDelegates() {
     } catch (err) {
       log.warn(
         "SeedDelegates",
-        `failed to grant ${spec.role} to @${spec.name}: ${err?.message || err}`,
+        `failed to grant ${spec.able} to @${spec.name}: ${err?.message || err}`,
       );
     }
   }

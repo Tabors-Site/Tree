@@ -63,7 +63,7 @@ Bundles carry blobs inline (capped, with an honest omission ledger). The pull-wh
 
 ## 13. Capability-URL content serving
 
-`GET /content/:hash` is public-by-unguessable-URL. Fine for dev; the port needs SEE-gated serving (the role-walk deciding byte access) once realities hold private content. Tied to #2.
+`GET /content/:hash` is public-by-unguessable-URL. Fine for dev; the port needs SEE-gated serving (the able-walk deciding byte access) once realities hold private content. Tied to #2.
 
 ## 14. Branch deletion is a flag; purge is undefined
 
@@ -87,4 +87,4 @@ Standing style rule (Tabor): TreeOS prose should say spaces/matter/beings (the p
 
 ---
 
-_Everything not listed here passed audit: four verbs one execution each, wire as thin adapter, SEE never stamps, only SUMMONs make SUMMONs, one fact stamper, reducers pure, no decision-bearing wall-clock outside the host furniture, append-only with compensating rollback, registry symmetry (after the loader unload fix), beings stateless across summons, roles as the single auth gate._
+_Everything not listed here passed audit: four verbs one execution each, wire as thin adapter, SEE never stamps, only SUMMONs make SUMMONs, one fact stamper, reducers pure, no decision-bearing wall-clock outside the host furniture, append-only with compensating rollback, registry symmetry (after the loader unload fix), beings stateless across summons, ables as the single auth gate._

@@ -307,8 +307,8 @@ The wrinkle: kernel code runs from what Node imported at boot, not from the chai
 So the distinction:
 
 Content matter (docs, scratch files, configs, beings' authored data): updates are live in every sense. Edit, fold, perceive. Done.
-Code matter (kernel modules, role handlers, see-op handlers): the byte change is live in the chain but the running interpreter is stale until reload.
-Closing that gap is the "hot OS" payoff. The pieces: a Node loader hook that resolves treeos://hash/<sha> to bytes streamed from CAS, plus a fact-arrival subscription on the role/code matter that triggers import.meta invalidation when the matter content hash changes. The kernel would then perceive its own source change (via the same dep-set / weave subscription humans use), reload the affected modules, and proceed with new code. Smalltalk / Emacs / Lisp Machine style: the running system reads its own source from the chain and edits land live.
+Code matter (kernel modules, able handlers, see-op handlers): the byte change is live in the chain but the running interpreter is stale until reload.
+Closing that gap is the "hot OS" payoff. The pieces: a Node loader hook that resolves treeos://hash/<sha> to bytes streamed from CAS, plus a fact-arrival subscription on the able/code matter that triggers import.meta invalidation when the matter content hash changes. The kernel would then perceive its own source change (via the same dep-set / weave subscription humans use), reload the affected modules, and proceed with new code. Smalltalk / Emacs / Lisp Machine style: the running system reads its own source from the chain and edits land live.
 
 The deepest version is what level-3 TreeOS becomes: the kernel IS the substrate, edits to any matter (including the kernel's own modules) take effect immediately because there's no separate "compiled binary" layer in front of the chain. The OS is what the chain says it is, right now, no restart between the edit and the effect.
 

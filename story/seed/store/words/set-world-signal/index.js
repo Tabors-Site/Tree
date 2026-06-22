@@ -14,7 +14,7 @@
 //
 // World signals live in the story root space's qualities under a
 // `world` top-level namespace, then by publisher namespace and key
-// path. Reading: `world.<namespace>.<key>` in a roleFlow `when`
+// path. Reading: `world.<namespace>.<key>` in a flow `when`
 // resolves to `<story-root>.qualities.world.<namespace>.<key>`.
 //
 // Writing: this op is a thin wrapper around set-space that always
@@ -27,22 +27,22 @@ import { registerOperation } from "../../../ibp/operations.js";
 import { stampsFact, stampsWordFact } from "../../../ibp/factResult.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { getSpaceRootId } from "../../../sprout.js";
-import { registerRoleWord, resolveRoleWord, runRoleWord } from "../../../present/word/roleWordRegistry.js";
+import { registerAbleWord, resolveAbleWord, runAbleWord } from "../../../present/word/ableWordRegistry.js";
 
 // Self-register this bundle's co-located `.word` slice (CONVERTING.md): importing
 // index.js (at seed boot, or in a DRY harness) registers it so
-// resolveRoleWord("role-manager", "set-world-signal") finds it. The role:op key
-// STAYS role-manager/set-world-signal.
-registerRoleWord("role-manager", "set-world-signal", new URL("./set-world-signal.word", import.meta.url));
+// resolveAbleWord("able-manager", "set-world-signal") finds it. The able:op key
+// STAYS able-manager/set-world-signal.
+registerAbleWord("able-manager", "set-world-signal", new URL("./set-world-signal.word", import.meta.url));
 
 // World-signal namespaces (extension-style). Keys can be nested dot-paths; we
 // constrain each segment to the kebab-case convention so authoring stays
-// predictable. The `.word` host glue (roleManagerHostEnv) validates against the
+// predictable. The `.word` host glue (ableManagerHostEnv) validates against the
 // SAME regex.
 const NS_SEGMENT_RE = /^[a-z][a-z0-9-]*$/;
 
 // ──────────────────────────────────────────────────────────────────
-// .word host glue (formerly role-managerHost.js)
+// .word host glue (formerly able-managerHost.js)
 // ──────────────────────────────────────────────────────────────────
 //
 // Host-escape glue for the set-world-signal `.word` slice. Wires the SAME
@@ -53,7 +53,7 @@ const NS_SEGMENT_RE = /^[a-z][a-z0-9-]*$/;
 // kebab validators, the value coercion, the dynamic field-path, and the
 // story-root id. The WORLD write is the `.word`'s targeted
 // `set the space root's $field to $value` (the one do:set-space).
-export function roleManagerHostEnv() {
+export function ableManagerHostEnv() {
   return {
     // namespace gate: a single kebab-case segment (the SAME NS_SEGMENT_RE the JS uses).
     "valid-namespace": ({ args: [namespace] }) => {
@@ -106,14 +106,14 @@ export function roleManagerHostEnv() {
 // / no moment) so the JS body runs.
 async function _setWorldSignalViaWord({ namespace, key, value, moment }) {
   if (!moment) return null;
-  const ir = resolveRoleWord("role-manager", "set-world-signal", moment?.actorAct?.history);
+  const ir = resolveAbleWord("able-manager", "set-world-signal", moment?.actorAct?.history);
   if (!ir) return null;
   const history = moment?.actorAct?.history || "0";
   try {
-    const { result } = await runRoleWord(ir, {
+    const { result } = await runAbleWord(ir, {
       moment, history,
       trigger: { namespace, key, value, branch: history },
-      env: { host: roleManagerHostEnv() },
+      env: { host: ableManagerHostEnv() },
     });
     if (!result) return null;
     // The .word authored { field, value } as `factParams`; land it as the one

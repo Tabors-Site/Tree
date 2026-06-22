@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// verify-word-vocab — 14.md §4 step 1: a word-native role renders its vocabulary as WORD GRAMMAR
+// verify-word-vocab — 14.md §4 step 1: a word-native able renders its vocabulary as WORD GRAMMAR
 // (the words it may speak), not JSON tool schemas. Boot-free: drives renderVocabularyAsWord directly.
 import os from "os"; import path from "path"; import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -17,13 +17,13 @@ const { formatInnerFaceBlocksAsWord } = await import(`${R}/seed/present/cognitio
 let pass = 0, fail = 0; const ok = (l) => { pass++; console.log("  ✓ " + l); }; const bad = (l, d) => { fail++; console.log("  ✗ " + l); if (d !== undefined) console.log("      " + JSON.stringify(d).slice(0, 300)); };
 console.log("\n  verify-word-vocab (14.md §4.1: the vocabulary renders as Word, not JSON)\n");
 try {
-  const role = {
+  const able = {
     name: "test",
     canDo: [{ name: "create-space", description: "make a space" }, "move"],
     canSummon: ["tabor", { name: "coach", as: "receiver" }], // receiver entry must be filtered out
     canBe: ["birth"],
   };
-  const out = await renderVocabularyAsWord(role, {});
+  const out = await renderVocabularyAsWord(able, {});
 
   /do create-space <target>\./.test(out)
     ? ok("a granted do-word renders as Word grammar: `do create-space <target>.`")
@@ -55,11 +55,11 @@ try {
 
   // The FACE half: the canSee blocks (facts folded from the reels at position) render as WORD, not JSON.
   const innerFace = { blocks: [
-    { label: "here", payload: { space: "grid", beings: [{ name: "tabor", role: "coder" }], full: false } },
+    { label: "here", payload: { space: "grid", beings: [{ name: "tabor", able: "coder" }], full: false } },
     { payload: "the grid is open." }, // a string block: already Word, passes through
   ] };
   const face = formatInnerFaceBlocksAsWord(innerFace);
-  (/space: grid/.test(face) && /name tabor, role coder/.test(face) && /the grid is open\./.test(face) && !/[{}]/.test(face))
+  (/space: grid/.test(face) && /name tabor, able coder/.test(face) && /the grid is open\./.test(face) && !/[{}]/.test(face))
     ? ok("the face renders as Word — present-tense lines + string pass-through, NO JSON braces")
     : bad("face-as-Word wrong", face);
 

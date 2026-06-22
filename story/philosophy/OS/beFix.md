@@ -36,7 +36,7 @@ When a fresh socket arrives unauthenticated, the substrate's model
 isn't "there's no actor here." It's "the actor is arrival." Arrival
 is a real being row: one shared singleton, scripted cognition, used
 as the default left being for every unauthenticated visitor. The
-role-walk evaluates arrival's grants like any other being's grants;
+able-walk evaluates arrival's grants like any other being's grants;
 the SEE/DO/SUMMON/BE machinery doesn't branch on "is the caller
 identified" because the answer is always yes.
 
@@ -173,9 +173,9 @@ until the call site flips.
 What's wired (substrate side):
 
 - Envelope `intent` is a first-class SUMMON field (per seed/SUMMON.md).
-  `validateSummonMessage` accepts it, the role-walk gates on it
-  (`roleAuth.permitsSummon`), the receiver-side gate enforces it
-  (`roleAuth.permitsReceiverSummon`), the summon Fact records it, and
+  `validateSummonMessage` accepts it, the able-walk gates on it
+  (`ableAuth.permitsSummon`), the receiver-side gate enforces it
+  (`ableAuth.permitsReceiverSummon`), the summon Fact records it, and
   the InboxProjection persists it. The wire shape `SUMMON @cherub,
 intent: "mate"` cleanly carries through to cherub's `summon` handler.
 - `canSummon` receiver entries are enforced. cherub and birther both
@@ -184,7 +184,7 @@ intent: "mate"` cleanly carries through to cherub's `summon` handler.
   the handler runs.
 - The 2D portal's inbox panel reads `entry.render` (built server-side
   by the inbox renderer registry, keyed by envelope intent) and is
-  intent-blind. The role's handler decides what UI the human inhabitant
+  intent-blind. The able's handler decides what UI the human inhabitant
   sees; the panel renders it. Same sovereignty principle that governs
   the rest of SUMMON.
 
@@ -192,7 +192,7 @@ What's still pending (handler side):
 
 - `cherub.summon` for `intent: "mate"` is currently `return null;`.
   Today's registration goes through BE:birth via cherub's BE handlers
-  (the wire surface arrival/role.js notes as "Legacy direct-BE
+  (the wire surface arrival/able.js notes as "Legacy direct-BE
   registration. Retires when cherub's summon:mate handler is wired").
   Authoring the handler means: read `message.content` for the visitor's
   chosen credentials, call `birthBeing` with arrival recorded as

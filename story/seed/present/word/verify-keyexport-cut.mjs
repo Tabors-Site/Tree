@@ -46,7 +46,7 @@ const { findByName, loadOrFold } = await import(`${R}/seed/materials/projections
 const { withIAmAct } = await import(`${R}/seed/sprout.js`);
 const { birthBeing } = await import(`${R}/seed/materials/being/identity/birth.js`);
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
-const { resolveRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
+const { resolveAbleWord } = await import(`${R}/seed/present/word/ableWordRegistry.js`);
 const { doVerb } = await import(`${R}/seed/ibp/verbs/do.js`);
 const { sealFacts, emitFact } = await import(`${R}/seed/past/fact/facts.js`);
 const { generateNameKeypair } = await import(`${R}/seed/materials/name/keys.js`);
@@ -63,7 +63,7 @@ const cherub = await poll(() => findByName("being", "cherub", "0"));
 const birth = async (name, trueName) => {
   let bid = null;
   await withIAmAct(`birth ${name}`, async (ctx) => {
-    const spec = { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" };
+    const spec = { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultAble: "global" };
     if (trueName) spec.trueName = trueName;
     const b = await birthBeing({ spec, identity: I_AM, moment: ctx, history: "0" });
     bid = b.beingId;
@@ -101,7 +101,7 @@ const exportKey = async (beingId, identity) => {
 console.log(`\n  verify-keyexport-cut (REAL key-export op via doVerb → the cut)\n  DB: ${SCRATCH_DB.split("/").pop()}\n`);
 try {
   if (!cherub) { console.log("  FATAL: genesis failed"); process.exit(1); }
-  resolveRoleWord("name", "key-export") ? ok(`key.word resolves through the bridge (self-registered)`) : bad(`resolves`, "null");
+  resolveAbleWord("name", "key-export") ? ok(`key.word resolves through the bridge (self-registered)`) : bad(`resolves`, "null");
 
   // ── 1. I_AM hard-refusal: a being whose trueName resolves to i-am is NOT a door to the
   //       story key. Gate 1 refuses; the dispatcher lays NO fact. ──

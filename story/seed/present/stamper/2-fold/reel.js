@@ -98,10 +98,10 @@ export async function foldMessagesFromReel(presenceKey, opts = {}) {
     const startContent = act?.startMessage?.content;
     const endContent = act?.endMessage?.content;
     if (typeof startContent === "string" && startContent.length > 0) {
-      messages.push({ role: "user", content: startContent });
+      messages.push({ able: "user", content: startContent });
     }
     if (typeof endContent === "string" && endContent.length > 0) {
-      messages.push({ role: "assistant", content: endContent });
+      messages.push({ able: "assistant", content: endContent });
     }
   }
   return messages;

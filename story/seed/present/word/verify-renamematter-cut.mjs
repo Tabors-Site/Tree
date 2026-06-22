@@ -22,7 +22,7 @@ const { sealFacts } = await import(`${R}/seed/past/fact/facts.js`);
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { getSpaceRootId } = await import(`${R}/seed/sprout.js`);
 const { doVerb } = await import(`${R}/seed/ibp/verbs/do.js`);
-const { resolveRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
+const { resolveAbleWord } = await import(`${R}/seed/present/word/ableWordRegistry.js`);
 let pass = 0, fail = 0;
 const ok = (l) => { pass++; console.log(`  ✓ ${l}`); };
 const bad = (l, d) => { fail++; console.log(`  ✗ ${l}`); if (d !== undefined) console.log(`      ${typeof d === "string" ? d : JSON.stringify(d)}`); };
@@ -41,7 +41,7 @@ console.log(`\n  verify-renamematter-cut (REAL rename-matter op via doVerb → t
 try {
   const cherub = await poll(() => findByName("being", "cherub", "0"));
   if (!cherub) { console.log("  FATAL: genesis failed"); process.exit(1); }
-  resolveRoleWord("matter", "rename-matter") ? ok(`rename-matter.word resolves through the bridge (self-registered)`) : bad(`resolves`, "null");
+  resolveAbleWord("matter", "rename-matter") ? ok(`rename-matter.word resolves through the bridge (self-registered)`) : bad(`resolves`, "null");
   const rootSpace = String(getSpaceRootId());
 
   // seed two matters in the root folder

@@ -1,5 +1,5 @@
-# role-manager.word — set-world-signal: publish a world signal to the story root
-# (role-manager/ops.js, the set-world-signal op).
+# able-manager.word — set-world-signal: publish a world signal to the story root
+# (able-manager/ops.js, the set-world-signal op).
 #
 # The WORLD effect is a do:set-space on the story root at the field path
 # `qualities.world.<namespace>.<key>` = value. The CONTROL strand (the two

@@ -9,7 +9,7 @@
 // bundled-handler key), never an inline function -- a fact is data. A composite word carries no
 // handler at all, only a `can[]` grant-set pointing at words that already answer; words stack.
 //
-// Generalizes roleWordRegistry's (role:op) coin fold to any word + a full descriptor:
+// Generalizes ableWordRegistry's (able:op) coin fold to any word + a full descriptor:
 // same act names, same I_AM-is-the-seed-vocabulary actor, same "disable is a new fact" rule.
 // (9.md §2/§6; the words-stack doctrine; the wakes pattern of an in-memory projection over facts.)
 
@@ -17,7 +17,7 @@ const COIN = "coin";
 const RETIRE = "retire";
 
 // Every word-fact needs an actor (the being whose authority declares it). I_AM declares the seed
-// vocabulary; an extension installer or a being in world declares its own. Mirrors roleWordRegistry.
+// vocabulary; an extension installer or a being in world declares its own. Mirrors ableWordRegistry.
 async function _actor(actorBeingId) {
   if (actorBeingId) return String(actorBeingId);
   const { I_AM } = await import("../../materials/being/seedBeings.js");
@@ -32,7 +32,7 @@ async function _iAm() {
 
 // BEDROCK (project_iam_genesis_immutable): is `name`'s current heaven ("0") declaration I_AM's? Then
 // it is genesis bedrock — immutable on "0" by anyone but I_AM (per-history shadowing is still allowed).
-// Covers EVERY word kind (op/type/reducer/concept/roleword), since all are I_AM's words on "0". Reads
+// Covers EVERY word kind (op/type/reducer/concept/ableword), since all are I_AM's words on "0". Reads
 // the latest "0" coin fact's author. Only consulted on a non-I_AM write to "0" (rare).
 async function _isIAmBedrock(name) {
   const { default: Fact } = await import("../../past/fact/fact.js");
@@ -42,7 +42,7 @@ async function _isIAmBedrock(name) {
 }
 
 // Lay facts THROUGH a proper act (assign opens it, the stamper seals it), never a bare emit.
-// Ride the caller's moment if given, else open I_AM's own act. Same shape as roleWordRegistry.
+// Ride the caller's moment if given, else open I_AM's own act. Same shape as ableWordRegistry.
 async function _inAct(moment, label, fn) {
   if (moment) return fn(moment);
   const { withIAmAct } = await import("../../sprout.js");
@@ -226,7 +226,7 @@ export function resolveWordFromFold(name) {
     _fromFold: true,
   };
   // authAction is a function (the auth-key refinement) carried as a host ref. Resolve it so a fold op
-  // refines its auth (e.g. grant-role -> grant-role:<role>) exactly as a Map op does.
+  // refines its auth (e.g. grant-able -> grant-able:<able>) exactly as a Map op does.
   if (w.authAction?.ref) {
     const fn = resolveHostHandler(w.authAction.ref);
     if (typeof fn === "function") spec.authAction = fn;
@@ -356,29 +356,29 @@ export function listFoldedTypes() {
   return out;
 }
 
-// ── role-words as words (the roleWordRegistry unification; ROLES-UNIFICATION.md) ──
+// ── able-words as words (the ableWordRegistry unification; ABLES-UNIFICATION.md) ──
 //
-// A role-word is a word named "role:op", kind:"roleword", carrying its IR SOURCE (the .word file).
-// The parsed IR stays HOST (roleWordRegistry's irCache); the fold carries only role:op -> source, the
-// same shape as an op's do.ref. declareRoleWordsToFold mirrors declareOpsToFold (reads the registered
-// role-words); resolveRoleWordSource is the sync source-read roleWordRegistry's resolveRoleWord uses.
-export async function declareRoleWordsToFold({ moment = null, history = "0" } = {}) {
-  const { listRegistered } = await import("./roleWordRegistry.js");
+// A able-word is a word named "able:op", kind:"ableword", carrying its IR SOURCE (the .word file).
+// The parsed IR stays HOST (ableWordRegistry's irCache); the fold carries only able:op -> source, the
+// same shape as an op's do.ref. declareAbleWordsToFold mirrors declareOpsToFold (reads the registered
+// able-words); resolveAbleWordSource is the sync source-read ableWordRegistry's resolveAbleWord uses.
+export async function declareAbleWordsToFold({ moment = null, history = "0" } = {}) {
+  const { listRegistered } = await import("./ableWordRegistry.js");
   let n = 0;
   for (const w of listRegistered()) {
-    await bindWord(`${w.role}:${w.op}`, {
-      kind: "roleword", role: w.role, op: w.op, source: String(w.fileUrl),
+    await bindWord(`${w.able}:${w.op}`, {
+      kind: "ableword", able: w.able, op: w.op, source: String(w.fileUrl),
     }, { moment, history, skipIfUnchanged: true });
     n++;
   }
   return n;
 }
 
-// Resolve a role-word's IR SOURCE from the fold (sync). Null when unbound or not a roleword. The
+// Resolve a able-word's IR SOURCE from the fold (sync). Null when unbound or not a ableword. The
 // caller turns the source into the parsed IR via the host irCache (wordOf).
-export function resolveRoleWordSource(role, op) {
-  const w = getWordSync(`${role}:${op}`);
-  if (!w || w.kind !== "roleword") return null;
+export function resolveAbleWordSource(able, op) {
+  const w = getWordSync(`${able}:${op}`);
+  if (!w || w.kind !== "ableword") return null;
   return w.source || null;
 }
 
@@ -434,8 +434,8 @@ export function resolveReducerFromFold(kind) {
 //
 // A NAME op (declare/connect/release/set-password/banish) is a word named "name:<op>",
 // kind:"nameop", carrying its handler by host ref (the handler stays bottom-turtle JS in
-// ibp/nameOps.js, a function, never serialized into the fact). Verb-NAMESPACED like role-words
-// ("role:op") and reducers ("<kind>-reducer"), NOT bare: the live projection is one shared map keyed
+// ibp/nameOps.js, a function, never serialized into the fact). Verb-NAMESPACED like able-words
+// ("able:op") and reducers ("<kind>-reducer"), NOT bare: the live projection is one shared map keyed
 // by word name, so a bare "connect"/"release" would collide with a do-op/type of the same name and,
 // once BE folds the same way, with be:connect/be:release. The "name:" prefix isolates them and lets
 // the BE/SEE verb-op cutovers coexist. declareNameOpsToFold mirrors declareOpsToFold; the NAME_OPS
@@ -483,7 +483,7 @@ export function resolveNameOpFromFold(opName) {
 // ── BE ops as words (the BE_OPS-Map migration; the twin of the NAME ops above) ──
 //
 // A BE op (birth/connect/release/switch/death/truename) is a word named "be:<op>", kind:"beop",
-// carrying its handler by host ref (the handler lives with cherub's role, a function, never
+// carrying its handler by host ref (the handler lives with cherub's able, a function, never
 // serialized). Verb-namespaced "be:<op>" so be:connect/be:release never collide with name:connect/
 // name:release in the shared projection. Unlike NAME, a BE op also carries `bootstrap` (birth/connect
 // skip assertVerbCaller — the caller has no identity yet); it's a serializable boolean, so it rides
@@ -551,7 +551,7 @@ export function resolveBeOpFromFold(opName) {
 // description. seeVerb dispatches resolveSeeOpFromFold; the seeOps REGISTRY stays as the registration
 // buffer + the routing check (isSeeOpName) + the metadata reads (listSeeOperations). The op name may
 // itself contain a colon (the "<ext>:<name>" extension form) — the "see:" prefix nests cleanly into
-// the word key ("see:food:meals"), no collision with name:/be:/role:op words.
+// the word key ("see:food:meals"), no collision with name:/be:/able:op words.
 export async function declareSeeOpsToFold({ moment = null, history = "0" } = {}) {
   const { listSeeOperations, getSeeOperation } = await import("../../ibp/seeOps.js");
   let n = 0;

@@ -23,7 +23,7 @@
 //                                           //   the original stays OPEN at its head). open = the live head.
 //                                           // thin  = deps carried by ADDRESS (small; receiver must reach them).
 //                                           //   fat  = imported words INLINED (self-contained, large).
-//     covers: {                             // front + back — each a renderable FACE + its interface role
+//     covers: {                             // front + back — each a renderable FACE + its interface able
 //       front: { face, imports:[{word,root}] },   // imports = what it stands on; face = the front cover art
 //       back:  { face, exports:[{word,root}] },    // exports = what planting gives you; face = the back cover
 //     },                                    // a FACE is ANY matter — a word (title), an image, a model… or an

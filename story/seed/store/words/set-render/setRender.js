@@ -42,12 +42,12 @@ import { registerOperation } from "../../../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { detectTargetKind, targetIdOf } from "../../../materials/_targetShape.js";
 import { stampsFact } from "../../../ibp/factResult.js";
-import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
+import { registerAbleWord } from "../../../present/word/ableWordRegistry.js";
 
-// Self-register the co-located world strand so resolveRoleWord("render",
+// Self-register the co-located world strand so resolveAbleWord("render",
 // "set-render") finds it (CONVERTING.md step 3). The cut prefers the bridge and
 // falls back to the JS handler on a clean miss.
-registerRoleWord("render", "set-render", new URL("./set-render.word", import.meta.url));
+registerAbleWord("render", "set-render", new URL("./set-render.word", import.meta.url));
 
 const VALID_KEYS = new Set([
   "model",

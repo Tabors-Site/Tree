@@ -265,7 +265,7 @@ function serializeAct(a) {
   return {
     _id:             String(a._id),
     ibpAddress:      a.ibpAddress || null,
-    activeRole:      a.activeRole || null,
+    activeAble:      a.activeAble || null,
     through:         a.through ? String(a.through) : null,
     to:              a.to ? String(a.to) : null,
     rootCorrelation: a.rootCorrelation || null,
@@ -281,8 +281,8 @@ function serializeAct(a) {
     // History this Act was stamped on. Null on legacy acts predating
     // the field; clients should treat that as main.
     history:          a.history || null,
-    // The canonical inner face this act ran under . orientation + role
-    // + position + capabilities + role.canSee-resolved blocks, stamped
+    // The canonical inner face this act ran under . orientation + able
+    // + position + capabilities + able.canSee-resolved blocks, stamped
     // on every act regardless of the being's cognition. origin is
     // "local" for fold-built faces; cross-world overrides supersede
     // the local face post-seal with origin "foreign". Null on legacy

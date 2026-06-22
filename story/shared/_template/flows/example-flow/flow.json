@@ -1,0 +1,22 @@
+{
+  "$comment": "Flow composition data. The substrate evaluates each clause's `when` against the open-context (asker, verb, place, being, time, world signals) at moment-assign. The first non-stacked clause whose `when` matches becomes the primary able; every stacked clause (`stack: true`) whose `when` matches contributes its capabilities and prompt body on top.",
+
+  "clauses": [
+    {
+      "$comment": "Always-on base. `stack: true` means this able's prompt + capabilities union into the composition regardless of which primary able matches.",
+      "stack": true,
+      "able": "my-pack:example-able"
+    },
+
+    {
+      "$comment": "A context-conditional clause. `when` is a small expression language: equality / membership / present / and / or / not over open-context keys. Without `stack`, the first matching clause becomes the primary.",
+      "when": { "space.quality.case.phase": "opening" },
+      "able": "my-pack:example-able"
+    },
+
+    {
+      "$comment": "Fallback primary when nothing else matches. No `when` means always-matches.",
+      "able": "my-pack:example-able"
+    }
+  ]
+}

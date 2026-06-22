@@ -1,17 +1,17 @@
 # The bridge: running `.word` instead of a JS handler (the cherub deletion test)
 
 The step that turns `.word` from a proof-of-parse into a real conversion: the
-stamper runs a role's `.word` program in place of its JS handler, and the
+stamper runs a able's `.word` program in place of its JS handler, and the
 handler is **deleted**. First target is **cherub birth** (clean world-strand
 handler; the live gate already births via the evaluator).
 
 ## The contract
 
-1. **Registry** (host): a map `(role, be-op) -> wordProgram`. Seed it with
+1. **Registry** (host): a map `(able, be-op) -> wordProgram`. Seed it with
    `cherub : birth -> cherub.word`. This is the dual registry of 2.md Phase 4,
    handler-or-`.word`, preferring `.word`.
 
-2. **Stamper lookup** (host, the bridge): where a BE op dispatches to its role
+2. **Stamper lookup** (host, the bridge): where a BE op dispatches to its able
    handler today (cherub's `birth` -> `_registerHumanWithFreshHome`), first
    consult the registry. If a `.word` program is present, run it via the
    evaluator in LIVE mode with the moment's `summonCtx` (the binds `name` /
@@ -25,7 +25,7 @@ handler; the live gate already births via the evaluator).
 
 4. **Diff gate** (extends the live gate): run the JS handler and the `.word`
    path on the SAME input, diff the sealed `deltaF` (the 5 facts: create-space,
-   be:birth, set-space, grant-role, set-being) + the fold. Match (or a reviewed,
+   be:birth, set-space, grant-able, set-being) + the fold. Match (or a reviewed,
    intended difference) -> deletion is justified. The actor model is now RESOLVED
    in `cherub.word` (Tabor): all five acts are **by I_AM, through Cherub** (the
    implicit-actor rule); **Cherub is the mother, Arrival the father** (the new
@@ -39,7 +39,7 @@ handler; the live gate already births via the evaluator).
    mixes two strands; the deletion separates them:
    - **WORLD (→ cherub.word, deleted from the handler):** the act sequencing —
      create the home, form the being (→ birthBeing), set the owner, grant the
-     human role, record the lineage. This is exactly cherub.word's five acts.
+     human able, record the lineage. This is exactly cherub.word's five acts.
      birthBeing itself stays (host: the key-mint + the inherited/global grants
      it lays internally are the escape hatch).
    - **HOST (stays, extracted to a small helper):** the session plumbing —

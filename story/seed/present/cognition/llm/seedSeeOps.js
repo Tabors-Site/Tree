@@ -1,7 +1,7 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
 // Foundational seed SEE ops. The named perceptions every story
-// ships so roles can declare canSee: ["place"], canSee: ["roles"],
+// ships so ables can declare canSee: ["place"], canSee: ["ables"],
 // etc. and get a focused view of the matter the heaven space already
 // curates.
 //
@@ -9,7 +9,7 @@
 // — same surface as extension-supplied SEE ops, no privileged path.
 //
 // Two flavors here:
-//   - heaven catalogs (roles / tools / operations / identity / config
+//   - heaven catalogs (ables / tools / operations / identity / config
 //     / peers / extensions) — each wraps seeVerb on the corresponding
 //     heaven address. Returns the descriptor that address would render.
 //   - "place" — the position projection. Returns the descriptor for
@@ -25,7 +25,7 @@ import { seeVerb } from "../../../ibp/verbs/see.js";
 import { getStoryDomain } from "../../../ibp/address.js";
 import log from "../../../seedStory/log.js";
 // Side-effect import: registers the my-inner-face SEE op (the live
-// canonical inner face for the caller's active stance). Roles can
+// canonical inner face for the caller's active stance). Ables can
 // declare `canSee: ["my-inner-face"]` to preload their own face; the
 // human portal calls client.see("my-inner-face") to render it.
 import "../human/myInnerFace.js";
@@ -33,7 +33,7 @@ import "../human/myInnerFace.js";
 import "../../book/storyOp.js";
 
 const HEAVEN_SEES = [
-  "roles",
+  "ables",
   "tools",
   "operations",
   "identity",
@@ -99,7 +99,7 @@ registerSeeOperation("place", {
 // `see("arrival-view")` to render the public face that lets a visitor
 // find and address cherub to register.
 //
-// Per seed/RolesAreAuth.md, arrival's canSee is ["arrival-view"] only
+// Per seed/AblesAreAuth.md, arrival's canSee is ["arrival-view"] only
 // — anonymous callers cannot see raw positions or any other SEE op.
 // This op is the one window an anonymous caller has into the world.
 registerSeeOperation("arrival-view", {
@@ -115,7 +115,7 @@ registerSeeOperation("arrival-view", {
     // We read the full place descriptor under I_AM identity (which has
     // universal SEE) and then filter to cherub-only. The wire-level
     // authorize already admitted the CALLER for the arrival-view op
-    // itself via the role-walk; this inner SEE is a server-internal
+    // itself via the able-walk; this inner SEE is a server-internal
     // descriptor fetch, not a delegation of the caller's authority.
     const { I_AM } = await import("../../../materials/being/seedBeings.js");
     const iAmIdentity = { beingId: I_AM, name: "I-Am" };
@@ -201,7 +201,7 @@ registerSeeOperation("arrival-view", {
         matter:   [],
         children: [],
         // qualities intentionally dropped — anonymous callers don't see
-        // operator-side state. The arrival role's reach is the public
+        // operator-side state. The arrival able's reach is the public
         // surface; everything else is private until they register.
       };
     } catch (err) {

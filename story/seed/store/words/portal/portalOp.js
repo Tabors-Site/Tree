@@ -41,15 +41,15 @@ import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { emitFact } from "../../../past/fact/facts.js";
 import { detectTargetKind, targetIdOf } from "../../../materials/_targetShape.js";
 import { matterContentId } from "../../../materials/matter/matterId.js";
-import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
+import { registerAbleWord } from "../../../present/word/ableWordRegistry.js";
 import { targetsFact } from "../../../ibp/factResult.js";
 
 // Self-register this module's co-located `.word` slice (CONVERTING.md): importing
 // portalOp.js (at seed boot, or in a DRY harness) registers it so
-// resolveRoleWord("portal", "form-portal") finds the world strand. The cut in the
+// resolveAbleWord("portal", "form-portal") finds the world strand. The cut in the
 // handler runs it through the bridge with portalHostEnv(); the JS body is the
 // clean-miss fallback.
-registerRoleWord("portal", "form-portal", new URL("./portal.word", import.meta.url));
+registerAbleWord("portal", "form-portal", new URL("./portal.word", import.meta.url));
 
 // Matches the IBPA shapes a portal can point at. A portal opens onto
 // a different WORLD (different story OR different branch); same
@@ -77,12 +77,12 @@ export const IBPA_RE =
 // no host: emit. Returns the result, or null on a clean miss so the JS body below runs.
 async function _formPortalViaWord({ target, params, identity, moment }) {
   if (!moment) return null;
-  const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
-  const ir = resolveRoleWord("portal", "form-portal", moment?.actorAct?.history);
+  const { resolveAbleWord, runAbleWord } = await import("../../../present/word/ableWordRegistry.js");
+  const ir = resolveAbleWord("portal", "form-portal", moment?.actorAct?.history);
   if (!ir) return null;
   const { portalHostEnv } = await import("./portalHost.js");
   try {
-    const { result } = await runRoleWord(ir, {
+    const { result } = await runAbleWord(ir, {
       moment,
       history: moment?.actorAct?.history,
       trigger: {

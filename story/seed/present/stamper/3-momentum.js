@@ -13,7 +13,7 @@
 // moment). The difference is what the wake-call's payload means:
 //
 //   kind: "call"  — DELIBERATION mode.
-//     The wake-call carries a message; the role's summon() handler
+//     The wake-call carries a message; the able's summon() handler
 //     reads it, thinks, decides what (if anything) to do. Most
 //     summons. Return value is normalized into CognitionResult:
 //     legacy `{ content: string }` → `{ ok: true, content }`; null/
@@ -54,12 +54,12 @@ import { normalizeCognitionResult, cognitionFailure } from "../cognition/cogniti
  * result.ok without a try/catch wrapper at the conductor level.
  *
  * @param {object} setup       — the result of assign(...)
- * @param {object} setup.role  — the active role spec
- * @param {object} setup.moment — the summon context the role expects
+ * @param {object} setup.able  — the active able spec
+ * @param {object} setup.moment — the summon context the able expects
  * @returns {Promise<CognitionResult>}
  */
 export async function momentum(setup = {}) {
-  const { role, moment } = setup;
+  const { able, moment } = setup;
   const kind = moment?.kind || "call";
 
   if (kind === "transport-act") {
@@ -85,9 +85,9 @@ export async function momentum(setup = {}) {
     }
   }
 
-  // Default: summon-kind. Role's summon handler dispatches.
+  // Default: summon-kind. Able's summon handler dispatches.
   //
-  // Snapshot doctrine: the scripted role reads moment.innerFace
+  // Snapshot doctrine: the scripted able reads moment.innerFace
   // (built at beat 2) ONCE and never re-reads. No reactive
   // subscription. Reels referenced by the face's weave may change
   // mid-moment; the seal path trusts the existing chain CAS + reel-
@@ -100,14 +100,14 @@ export async function momentum(setup = {}) {
   // on the human portal only (see protocols/ibp/innerFaceLive).
   let raw;
   try {
-    raw = await role.call(moment.message, moment);
+    raw = await able.call(moment.message, moment);
   } catch (err) {
     // Cognition threw. Per MODEL.md, this is a SEE — no act
     // produced. moment.js will not seal.
     if (moment?.signal?.aborted) {
       return cognitionFailure("aborted", err.message);
     }
-    log.warn("Momentum", `role.call threw: ${err.message}`);
+    log.warn("Momentum", `able.call threw: ${err.message}`);
     return cognitionFailure("internal", err.message);
   }
 

@@ -28,7 +28,7 @@ The substrate that makes this work has already been built and verified. TreeOS a
 - Acts producing facts that seal atomically on hash-chained reels.
 - Projections derived from facts via deterministic reducers.
 - Single-writer doctrine preventing concurrent corruption.
-- Role-flow conditional behavior reading the world state.
+- Able-flow conditional behavior reading the world state.
 - Replay-from-genesis as a first-class capability.
 
 These properties don't just enable a clean application substrate. They are _exactly the properties an operating system needs_ in order to do what current operating systems struggle with. The architecture wasn't designed for this — but it falls out for free because the substrate was designed honestly to begin with.
@@ -45,13 +45,13 @@ This is the deepest commitment of the full vision. When TreeOS is PID 1, every u
 
 When a process starts, the supervisor stamps a `process:born` fact on a system reel. The new process gets its own reel — a chain of every event that happens to it. The process's state (open file descriptors, memory mapping, working directory, signal mask, scheduling priority) projects onto its being row's qualities. The process is no longer an opaque kernel structure — it is an addressable being in the TreeOS world, with a name, a lineage, and a complete recorded history.
 
-A web server starting up: a being. A user's terminal session: a being. A background daemon: a being. Each has its own reel, its own role, its own connections to other beings. When the web server forks worker processes, those workers are beings minted by the web server being — they inherit lineage from their parent in the same minting tree that already exists for TreeOS beings today.
+A web server starting up: a being. A user's terminal session: a being. A background daemon: a being. Each has its own reel, its own able, its own connections to other beings. When the web server forks worker processes, those workers are beings minted by the web server being — they inherit lineage from their parent in the same minting tree that already exists for TreeOS beings today.
 
 This means:
 
 - **Every process can be SEE'd**: you ask the world for the state of process 1247 the way you'd ask about any being.
 - **Every process can be addressed in IBP**: you can DO actions on it (send signals as DO acts, change its priority, kill it).
-- **Every process has a role**: the role determines what it's allowed to access (which files, which network resources, which other processes), encoded as canSee/canDo/canSummon permissions.
+- **Every process has a able**: the able determines what it's allowed to access (which files, which network resources, which other processes), encoded as canSee/canDo/canSummon permissions.
 - **Every process is replayable**: you can walk the chain and reconstruct what any process did at any point.
 - **Every process has identity that persists**: when a process restarts after a crash, the substrate can either give it a fresh being (clean slate) or continue the previous being (state-resuming behavior).
 
@@ -65,7 +65,7 @@ Every file operation generates a fact. Opening a file: `file:opened`. Writing by
 
 This means:
 
-- **Every file change has provenance**: not "this file was modified at 14:32" but "process 1247 (running as user tabor in role docker-build) wrote 4096 bytes to /etc/nginx.conf at 14:32:17.423 with this content hash."
+- **Every file change has provenance**: not "this file was modified at 14:32" but "process 1247 (running as user tabor in able docker-build) wrote 4096 bytes to /etc/nginx.conf at 14:32:17.423 with this content hash."
 - **File history is intrinsic**: you don't need git for files because the chain remembers every version. SEE the file at any past timestamp; replay reconstructs the content from the write facts.
 - **Permission violations are facts**: when a process tries to access a file it can't, the substrate stamps `file:access-denied` with the full context. Security investigations have perfect logs by default.
 - **Deduplication is automatic**: file content is stored by hash. Writing the same file content from a hundred different places stores it once. Saving an existing file unchanged doesn't write any content — just a fact saying "saved." Storage is efficient by default.
@@ -81,7 +81,7 @@ When a process opens a socket: a connection being is born. When the connection c
 This means:
 
 - **Every connection has full traceability**: which process opened it, which remote peer it talked to, how much data flowed, when it closed.
-- **Network firewall rules become role-based**: a process's role determines which IPs and ports it can canSummon (open connections to). No iptables; just role permissions.
+- **Network firewall rules become able-based**: a process's able determines which IPs and ports it can canSummon (open connections to). No iptables; just able permissions.
 - **Intrusion detection is intrinsic**: an unauthorized connection attempt is a fact. Aggregating "process X tried to connect to Y but was denied 50 times in 30 seconds" is just a fold query against the chain.
 - **Network replay is possible**: in security incidents, walk the chain and see every connection that existed during the breach window. No need for separate packet capture infrastructure.
 
@@ -96,9 +96,9 @@ Hot-plug events produce facts. A USB drive plugged in: `device:created` with its
 This means:
 
 - **Hardware inventory is automatic and historical**: "which monitor did I have plugged in last March?" is answerable by folding. "When did this drive start showing read errors?" is answerable by folding.
-- **Hardware policy is role-encoded**: a process's role specifies which devices it can access. The webcam being can only be canSee'd by processes whose role permits it. No /dev permission tangles; just role gates.
+- **Hardware policy is able-encoded**: a process's able specifies which devices it can access. The webcam being can only be canSee'd by processes whose able permits it. No /dev permission tangles; just able gates.
 - **Diagnostics are queries**: "show me every device that had a fault in the last week" is a fact query, not a log scrape.
-- **Hot-plug behavior is in-world**: when a new disk is plugged in, a roleFlow on some system being can trigger automatic actions (mount it, scan for filesystem, alert the user). The substrate's existing reactive machinery handles it.
+- **Hot-plug behavior is in-world**: when a new disk is plugged in, a flow on some system being can trigger automatic actions (mount it, scan for filesystem, alert the user). The substrate's existing reactive machinery handles it.
 
 ### Every User Action Is an Act
 
@@ -152,19 +152,19 @@ For organizations under heavy regulatory burden, this is transformative. Complia
 
 Linux's permission model accumulated over decades. Users, groups, capabilities, namespaces, cgroups, SELinux, AppArmor, seccomp — each layer solving a specific issue, none giving a coherent permission model. The result is that "what is process 1247 allowed to do?" has no simple answer.
 
-TreeOS-as-OS replaces this with the role model. Every process has a role; the role declares canSee/canDo/canSummon/canBe permissions. Permission questions become "what does this process's role permit?" — answerable in one lookup.
+TreeOS-as-OS replaces this with the able model. Every process has a able; the able declares canSee/canDo/canSummon/canBe permissions. Permission questions become "what does this process's able permit?" — answerable in one lookup.
 
-When a process forks, the child inherits its parent's role by default but can be configured (via the parent's roleFlow logic) to take on a different role. A web server worker has a tightly scoped role; a system maintenance process has a broad role; a user shell has whatever role the user authorized for that session.
+When a process forks, the child inherits its parent's able by default but can be configured (via the parent's flow logic) to take on a different able. A web server worker has a tightly scoped able; a system maintenance process has a broad able; a user shell has whatever able the user authorized for that session.
 
-When a process tries to do something its role doesn't permit, it gets denied AND a fact is stamped. Security visibility is intrinsic. Misconfigurations produce visible failure modes (acts that get denied with explanations) rather than silent permission failures.
+When a process tries to do something its able doesn't permit, it gets denied AND a fact is stamped. Security visibility is intrinsic. Misconfigurations produce visible failure modes (acts that get denied with explanations) rather than silent permission failures.
 
 ### Self-Programmable Behavior
 
-The roleFlow system already lets beings declaratively define their behavior conditional on world state. Applied to OS-level processes, this becomes a deeply powerful capability:
+The flow system already lets beings declaratively define their behavior conditional on world state. Applied to OS-level processes, this becomes a deeply powerful capability:
 
-- A backup process's roleFlow says "when disk usage exceeds 80%, switch to aggressive-cleanup role." No cron job, no monitoring daemon — the role-flow conditionally activates aggressive behavior based on world signals.
-- A web server's roleFlow says "when request rate exceeds threshold, stack rate-limited modifier." Behavior adapts to load without external configuration changes.
-- A monitoring process's roleFlow says "when error rate on service X exceeds threshold for 5 minutes, summon alert-being to notify operator." Alerting logic is in-world data, not in external systems.
+- A backup process's flow says "when disk usage exceeds 80%, switch to aggressive-cleanup able." No cron job, no monitoring daemon — the able-flow conditionally activates aggressive behavior based on world signals.
+- A web server's flow says "when request rate exceeds threshold, stack rate-limited modifier." Behavior adapts to load without external configuration changes.
+- A monitoring process's flow says "when error rate on service X exceeds threshold for 5 minutes, summon alert-being to notify operator." Alerting logic is in-world data, not in external systems.
 
 The OS becomes self-aware in a meaningful sense: processes can adapt their behavior based on observed system state. And critically, this adaptation is _declarative and replayable_ — the same world conditions always produce the same behavioral response.
 
@@ -220,7 +220,7 @@ A debugging session on a customer's machine: get their chain segment, replay loc
 
 The full implementation has these primary components:
 
-**The Rust Substrate.** A reimplementation of the current TreeOS substrate (currently in JavaScript) in Rust. The fold engine, the role-flow evaluator, the role composer, the projection layer, the seal mechanism. Translation, not reinvention.
+**The Rust Substrate.** A reimplementation of the current TreeOS substrate (currently in JavaScript) in Rust. The fold engine, the able-flow evaluator, the able composer, the projection layer, the seal mechanism. Translation, not reinvention.
 
 **The Reel Storage Layer.** Append-only hash-chained logs on disk. Per-being reels, atomic multi-reel seals via a coordinator pattern. Built either on existing tools (SQLite WAL, RocksDB, sled) or custom for tighter control. Crash recovery is the hard part; everything else is straightforward.
 
@@ -271,9 +271,9 @@ Several places where performance matters and the architecture addresses:
 Security in TreeOS-as-OS is fundamentally different from current systems:
 
 - **Identity is first-class.** Every actor has an identity that traces through the chain. No anonymous actions.
-- **Permissions are role-based and declarative.** Roles describe what their bearers can do. Permission checks happen at every act dispatch.
+- **Permissions are able-based and declarative.** Ables describe what their bearers can do. Permission checks happen at every act dispatch.
 - **All security-relevant events are facts.** Failed auth attempts, denied permissions, unusual access patterns — all visible in the chain.
-- **No privileged-vs-unprivileged divide in the substrate.** Privileged operations exist (writing to system spaces, modifying other beings' qualities) but they require explicit role permission. No setuid magic.
+- **No privileged-vs-unprivileged divide in the substrate.** Privileged operations exist (writing to system spaces, modifying other beings' qualities) but they require explicit able permission. No setuid magic.
 - **Replay enables exact post-incident analysis.** When an intrusion happens, you reconstruct exactly what occurred from the chain. No "we think the attacker did X" — exact answer.
 
 Threat model considerations: physical access to the disk is still a vulnerability (encryption at rest is standard practice). Kernel-level compromise (rootkit) still bypasses substrate-level guarantees because the chain depends on the kernel for honest event delivery. These limits are fundamental — TreeOS-as-OS doesn't claim to solve them, just to make every layer above the kernel transparent and accountable.
@@ -288,7 +288,7 @@ The work breaks into phases with clear deliverables at each stage:
 
 Take the current JavaScript TreeOS substrate and reimplement in Rust. Module-by-module translation. Each module's tests must pass in Rust before moving to the next. End state: a Rust binary that can host the current TreeOS world identically to the JS version.
 
-Scope: the substrate proper. Fold engine, role-flow evaluator, role composer, projection layer, seal mechanism, BE-op handlers, DO-op dispatch, fact storage interface (not yet implementing storage itself, just the interface).
+Scope: the substrate proper. Fold engine, able-flow evaluator, able composer, projection layer, seal mechanism, BE-op handlers, DO-op dispatch, fact storage interface (not yet implementing storage itself, just the interface).
 
 Estimated effort: 2-3 months with focused work and AI-assisted translation. Most of the time is in careful translation; the architecture is already locked.
 
@@ -336,7 +336,7 @@ Estimated effort: 3-4 months for v1; an ongoing area of refinement.
 
 Walk `/sys` at boot; project hardware into matter rows. Handle hot-plug. Stamp reconciliation facts on changes between boots.
 
-End state: every piece of hardware on the machine is addressable in the TreeOS world. Devices have qualities, roles can permit/deny access by device, hot-plug produces facts.
+End state: every piece of hardware on the machine is addressable in the TreeOS world. Devices have qualities, ables can permit/deny access by device, hot-plug produces facts.
 
 Estimated effort: 2-3 months.
 
@@ -404,9 +404,9 @@ The first contribution that matters: a wire protocol spec for binary IBP. Anyone
 
 If you've read this far and want to engage:
 
-**As a contributor:** start by understanding the current substrate. Read FACTORY.md, MOMENT.md, role-manager.md. Run the JavaScript implementation locally. Build a small extension. Once you understand the model, you'll see where you can contribute. The OS work has clear phases; pick one.
+**As a contributor:** start by understanding the current substrate. Read FACTORY.md, MOMENT.md, able-manager.md. Run the JavaScript implementation locally. Build a small extension. Once you understand the model, you'll see where you can contribute. The OS work has clear phases; pick one.
 
-**As a researcher or academic:** there are interesting research questions in the substrate itself (replay correctness under partial failures, optimal storage layouts for event-sourced systems, role composition algebras). The OS layer adds more (kernel integration patterns, process isolation strategies, performance characteristics of fact-driven schedulers).
+**As a researcher or academic:** there are interesting research questions in the substrate itself (replay correctness under partial failures, optimal storage layouts for event-sourced systems, able composition algebras). The OS layer adds more (kernel integration patterns, process isolation strategies, performance characteristics of fact-driven schedulers).
 
 **As a potential user:** the substrate is real and usable today. The OS layer is future. If you have a specific use case that would benefit from TreeOS-as-OS, talk to the project — your use case might be the one that justifies the work.
 

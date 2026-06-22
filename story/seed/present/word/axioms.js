@@ -29,7 +29,7 @@ const STORY = path.resolve(SEED, ".."); // story/ (host refs are written "seed/�
 // root leaves as irreducible syntax (is/a/an/has/can/of, before/after/in/over) are not concepts.
 export const CONCEPT_WORDS = [
   "word", "iam", "base", "chain", "history", "story", "fold", "weave",
-  "see", "do", "name", "being", "space", "matter", "be", "call", "can", "recall", "role", "roleflow",
+  "see", "do", "name", "being", "space", "matter", "be", "call", "can", "recall", "able", "flow",
 ];
 
 // Classify one concept word from its `#` axiom header.
@@ -37,7 +37,7 @@ function classify(name, axiomHeader) {
   const axiom = String(axiomHeader || "");
   // A word is an AXIOM when its header CLAIMS host-grounding — the canonical "bottoms out in the
   // host", or "the host … delivers/implements it" (call's phrasing). Merely NAMING a host file for
-  // reference ("the host registry is …", as role/roleflow do) is not a grounding claim → theorem.
+  // reference ("the host registry is …", as able/flow do) is not a grounding claim → theorem.
   const isAxiom =
     /bottoms?\s+out\s+in\s+the\s+host/i.test(axiom) ||
     /\bthe\s+host\b[\s\S]{0,80}?\b(delivers|implements)\b/i.test(axiom);

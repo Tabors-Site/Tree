@@ -130,7 +130,7 @@ implementation (math.md ATTRIBUTION):
    own name, always.
 3. _Figure influence is gated and calls are inert._ Every fact
    that mutates `figure_B` either is by `ν_B` (the being's own name)
-   or passed the role-walk (the single auth gate) as an authorized DO
+   or passed the able-walk (the single auth gate) as an authorized DO
    on `B`. Call facts land on the recipient's reel (target =
    recipient, doer = the caller's name) and the reducer folds NO
    call action — a call records the request and can never change
@@ -161,7 +161,7 @@ serialization.)
 **A10 (Declarative closure — the Word).** Every meaning the system
 acts on is a **word**: introduced by a `declare` fact authored by a
 name, and read only as the fold of its declare-facts (math.md WORD).
-The verbs (SEE, RECALL, DO, BE, NAME, CALL), ops, roles, and types are
+The verbs (SEE, RECALL, DO, BE, NAME, CALL), ops, ables, and types are
 words, not privileged primitives — the executor consults the fold,
 never a meaning kept off the chain. The descent of declarations
 terminates at two self-grounding roots: `word.word` ("a word is a
@@ -255,8 +255,8 @@ expressing names `ν_A ≠ ν_V`. Then:
    itself — impersonation is impossible; in particular nothing acting
    through `A` can sign as `V`'s name.
 2. Every change to `figure_V^w` traces to `V`'s own name's acts or to
-   role-authorized acts on `V` — never to anything `A` does outside
-   the role-walk's grants.
+   able-authorized acts on `V` — never to anything `A` does outside
+   the able-walk's grants.
 3. No call `A` sends can change `figure_V^w` at all, even though
    it lands on `V`'s reel.
 
@@ -270,9 +270,9 @@ the being does not confer. ∎
 
 (2) `figure_V^w = fold(σ_0, R_V^w)` (A4). By A6.2 and A6.3, the
 facts in `R_V^w` that the reducer folds into the figure are exactly:
-`V`'s own name's BE-acts, and DO facts on `V` that passed the role-walk.
+`V`'s own name's BE-acts, and DO facts on `V` that passed the able-walk.
 Any influence `A` has on `figure_V` therefore flowed through a
-grant `V`'s history explicitly extended (a role whose canDo reaches
+grant `V`'s history explicitly extended (a able whose canDo reaches
 `V`) — gated influence, not theft. ∎
 
 (3) By A6.3, call facts are figure-inert: the being reducer folds
@@ -282,7 +282,7 @@ to the fold. `V`'s figure is unchanged unless `V`'s name chooses to
 act. Callers express; receivers decide. ∎
 
 **Corollary 2.1.** A being's BECOMING is its own: every figure
-change is either the being's own act or an act the history's roles
+change is either the being's own act or an act the history's ables
 authorized — and the chain records which, by unforgeable
 attribution. Audit is reading, not forensics.
 
@@ -294,7 +294,7 @@ consequence of the reducer's shape rather than a policy.
 **What this captures.** Identity theft is structurally impossible —
 not because reels are private (they are not; calls and authorized
 DOs land on them) but because attribution is a **signature, not a
-label**: it cannot be forged, influence is role-gated, and requests
+label**: it cannot be forged, influence is able-gated, and requests
 are inert until the receiver acts. The lock is on WHICH NAME ACTED
 and WHAT FOLDS, not on where facts may sit.
 
@@ -774,7 +774,7 @@ extension uses. The chain holds what a thing IS; the host makes it
 RUN (math.md WORD).
 
 **What this captures.** The language has no outside. Every verb,
-role, and type is a signed declaration folded from the chain, the
+able, and type is a signed declaration folded from the chain, the
 descent grounding at a word that declares itself and a name that
 exists by saying so. Meaning cannot drift because meaning IS the
 record, append-only and content-addressed; and the system can name
@@ -1292,7 +1292,7 @@ Theorem 4 (`produces` is non-injective) the interior face
 under-determines the acts, so from another's facts the cognition is
 unrecoverable — you recall acts, not minds. Hence inward recall is
 first-person, outward recall is "saw". ∎ (3) `canRecall` is the set of
-recall-views a role grants; the fold a cognition can pull is exactly
+recall-views a able grants; the fold a cognition can pull is exactly
 this set. Define a being's consciousness as that reach. A larger
 `canRecall` strictly enlarges the past foldable into the present moment
 (Theorem 6 — the present is the fold), so consciousness orders by reach,
@@ -1407,7 +1407,7 @@ Theorem 1 says the chain's head is a faithful commitment to its
 contents.
 
 Theorem 2 says attribution cannot be forged, influence is
-role-gated, and calls cannot compel — identity theft is
+able-gated, and calls cannot compel — identity theft is
 structurally impossible.
 
 Theorem 3 says time is local to each chain, not universal — and

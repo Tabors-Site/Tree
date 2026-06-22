@@ -46,7 +46,7 @@ const { birthBeing } = await import(
 );
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { nameVerb } = await import(`${R}/seed/ibp/verbs/name.js`);
-const { cherubBeOps } = await import(`${R}/seed/store/words/cherub/role.js`);
+const { cherubBeOps } = await import(`${R}/seed/store/words/cherub/able.js`);
 const { getStoryDomain } = await import(`${R}/seed/ibp/address.js`);
 const D = getStoryDomain();
 
@@ -82,7 +82,7 @@ const birth = async (name, extraSpec = {}) => {
         parentBeingId: cherub.id,
         homeId: cherub.state?.homeSpace,
         cognition: "scripted",
-        defaultRole: "global",
+        defaultAble: "global",
         ...extraSpec,
       },
       identity: I_AM,

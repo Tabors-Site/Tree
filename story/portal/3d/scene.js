@@ -385,7 +385,7 @@ export class Scene {
       // Walk-through attempt. When the player's body is inside the
       // doorway volume (within the width, within the height, within a
       // thin slab of the portal plane), fire a DO to set their position
-      // to the portal's foreign target IBPA. The substrate's role-walk
+      // to the portal's foreign target IBPA. The substrate's able-walk
       // decides if the walk-through is permitted; FORBIDDEN just no-ops
       // (soft barrier — no physical wall, the player just doesn't
       // transit). Per-portal cooldown prevents firing every frame while
@@ -424,7 +424,7 @@ export class Scene {
   // with the player's offset in the portal's local frame. When the
   // player's body is inside the doorway volume, fire a DO to set
   // their position to the portal's foreign target IBPA. The substrate
-  // role-walk decides if the walk-through is permitted; FORBIDDEN
+  // able-walk decides if the walk-through is permitted; FORBIDDEN
   // just no-ops (soft barrier).
   //
   // Cooldown: 3s per portal so we don't fire repeatedly while the
@@ -3922,7 +3922,7 @@ function _renderActivity(el, activity) {
   el.innerHTML = "";
 
   const target = activity?.target;
-  const targetName = target?.name || target?.role
+  const targetName = target?.name || target?.able
     || (target?.beingId ? `${target.beingId.slice(0, 6)}` : null);
 
   if (kind === "summoning") {

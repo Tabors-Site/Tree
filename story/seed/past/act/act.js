@@ -66,7 +66,7 @@ const ActSchema = new mongoose.Schema({
   to:      { type: String, ref: "Being", default: null, index: true },
 
   ibpAddress: { type: String, default: null, index: true },
-  activeRole: { type: String, default: null, index: true },
+  activeAble: { type: String, default: null, index: true },
 
   inboxMessageId: { type: String, default: null, index: true },
 
@@ -103,7 +103,7 @@ const ActSchema = new mongoose.Schema({
   stampedAt:  { type: Date, default: null },
 
   startMessage: {
-    // Mixed because SUMMON content is whatever the receiving role
+    // Mixed because SUMMON content is whatever the receiving able
     // expects. Humans send text strings. Scripted beings receive
     // structured payloads (e.g. drummer tick: `{ event, drumMatterId,
     // gridSpaceId }`). The Act records what was said in whichever
@@ -122,7 +122,7 @@ const ActSchema = new mongoose.Schema({
 
   // Set by the cut handler when a thread (this Act's rootCorrelation)
   // is severed via SUMMON to ./threads/<id>. Distinct from
-  // endMessage.stopped (which means the role halted its loop):
+  // endMessage.stopped (which means the able halted its loop):
   // severedAt records that the line was cut from outside. The
   // scheduler skips intake entries whose rootCorrelation appears
   // severed and the run loop drops out.
@@ -139,7 +139,7 @@ const ActSchema = new mongoose.Schema({
   },
 
   // The canonical inner face the act was committed under: orientation,
-  // role, position (id/name), capabilities, the role.canSee-resolved
+  // able, position (id/name), capabilities, the able.canSee-resolved
   // blocks, and weave (the reels the fold actually read). Captured
   // uniformly across LLM, scripted, and human-inhabited cognitions so
   // the act-chain never carries half-records. Origin is "local" for
@@ -153,7 +153,7 @@ const ActSchema = new mongoose.Schema({
   // reconstruction goes through the chain, not here.
   //
   // Shape:
-  //   { orientation, role, position, capabilities, blocks, weave, origin }
+  //   { orientation, able, position, capabilities, blocks, weave, origin }
   //
   // weave: [{reelKind, reelId, history}] . the reels the fold actually
   // read (residue of canSee + foldPlace gating), captured at fold
@@ -234,8 +234,8 @@ ActSchema.index({ by: 1, history: 1, stampedAt: -1 }, { sparse: true });
 ActSchema.index({ to: 1, history: 1, stampedAt: -1 });
 // Conversation between two Beings.
 ActSchema.index({ through: 1, to: 1, stampedAt: -1 }, { sparse: true });
-// "Every time to acted in activeRole" — audit query.
-ActSchema.index({ to: 1, activeRole: 1, stampedAt: -1 }, { sparse: true });
+// "Every time to acted in activeAble" — audit query.
+ActSchema.index({ to: 1, activeAble: 1, stampedAt: -1 }, { sparse: true });
 // All Acts at one IBPA (the thread).
 ActSchema.index({ ibpAddress: 1, stampedAt: -1 }, { sparse: true });
 // Retention sweep cursor.

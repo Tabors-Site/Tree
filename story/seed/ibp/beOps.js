@@ -17,18 +17,18 @@
 //                   birth/connect . the caller has no identity yet)
 //
 // The handlers live with their owning being's code (cherub's birth/
-// connect/release implementations are in seed/present/roles/cherub/
-// role.js); this file just imports them into the canonical table. The
+// connect/release implementations are in seed/present/ables/cherub/
+// able.js); this file just imports them into the canonical table. The
 // BE verb in ibp/verbs/be.js dispatches `BE_OPS[operation]?.handler(...)`.
 //
 // Cherub is currently the only being that handles BE. The five ops
 // are universal identity surface, not per-being behavior . if a
 // future story wanted a different welcome-character, that being's
-// role would still license
+// able would still license
 // `canBe: ["birth", "connect", "release", "switch", "death"]`
 // and rely on the same static table.
 
-import { cherubBeOps } from "../store/words/cherub/role.js";
+import { cherubBeOps } from "../store/words/cherub/able.js";
 
 export const BE_OPS = Object.freeze({
   birth:    cherubBeOps.birth,
@@ -51,8 +51,8 @@ export function getBeOp(name) {
 }
 
 /**
- * List BE op names. Used by descriptor.enrichBeings to filter a role's
- * `canBe` license against the static set (drop any names the role
+ * List BE op names. Used by descriptor.enrichBeings to filter a able's
+ * `canBe` license against the static set (drop any names the able
  * declared that aren't real ops).
  */
 export function listBeOpNames() {

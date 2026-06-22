@@ -28,13 +28,13 @@ What this enables that’s genuinely interesting
 
 A few capabilities fall out:
 
-Cross-protocol composition becomes natural. A being could write a script (or have a roleflow) that does: “see this Notion page, extract the action items, summarize them as a markdown document, post the document to a Discord channel, then send a small Bitcoin tip to whoever completed the most items.” Five different external systems, one being’s act-chain, all expressed in the substrate’s native verbs. The being doesn’t think about API differences; they think about what they want to do.
+Cross-protocol composition becomes natural. A being could write a script (or have a flow) that does: “see this Notion page, extract the action items, summarize them as a markdown document, post the document to a Discord channel, then send a small Bitcoin tip to whoever completed the most items.” Five different external systems, one being’s act-chain, all expressed in the substrate’s native verbs. The being doesn’t think about API differences; they think about what they want to do.
 
 Agents become portable across services. An LLM-being authored to “manage my morning routine” works the same way whether the data sources are Google Calendar, iCloud, Notion, or local files. The matter types differ but the being’s actions and reasoning don’t. Switch the underlying service; the being keeps working.
 
 Audit becomes uniform. A being who acts on five different external systems leaves one coherent act-chain documenting what they did. You can ask “what did this agent do today” and get a substrate-level answer that spans all the external systems they touched. No need to correlate logs across services; the being’s chain is the unified record.
 
-Permissions become uniform. A being’s role determines what they can do — including what matter types they can read or modify. You can grant a being “canDo:read on calendar matter, canDo:read+write on document matter, canDo:read-only on bitcoin-tx matter” all in the same role grant. The role system gates uniformly across protocols.
+Permissions become uniform. A being’s able determines what they can do — including what matter types they can read or modify. You can grant a being “canDo:read on calendar matter, canDo:read+write on document matter, canDo:read-only on bitcoin-tx matter” all in the same able grant. The able system gates uniformly across protocols.
 
 Failure modes become legible. If a being tries to act on Bitcoin matter and the network is unreachable, the failure is expressed in TreeOS’s vocabulary (a witness fact with status:unreachable, just like cross-world action failures). The being’s chain records the attempt; the substrate handles the protocol-level retry logic; the being’s experience is consistent regardless of which external protocol failed.
 
@@ -97,7 +97,7 @@ This is the kind of positioning that compounds. Worth being aware of as you deci
 
 What this is, honestly
 
-You started with a substrate for beings to act in shared worlds. You committed to event-sourced state, role-based auth, sovereign realities, federated peers. You added matter as a substrate primitive that beings act on.
+You started with a substrate for beings to act in shared worlds. You committed to event-sourced state, able-based auth, sovereign realities, federated peers. You added matter as a substrate primitive that beings act on.
 
 What you’ve built, almost as a side effect, is a substrate where the question “how do I integrate this external system with my AI agent?” has a uniform answer: author a matter type. The substrate handles the rest.
 

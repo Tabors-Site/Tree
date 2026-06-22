@@ -9,7 +9,7 @@
 // Per seed/SUMMON.md, this panel is a DUMB RENDERER. It does not
 // switch on intent. For each entry, the server-side `my-inbox` SEE op
 // attaches an `entry.render` spec (built by the inbox renderer registry
-// keyed by envelope intent). The panel renders the spec; the role —
+// keyed by envelope intent). The panel renders the spec; the able —
 // through its registered renderer — decided what the spec contains.
 //
 // Spec shape (see seed/present/intake/inboxRenderers.js for full doc):

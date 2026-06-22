@@ -68,7 +68,7 @@ const MatterSchema = new mongoose.Schema({
   // What this matter IS — its registered matter type (types.js).
   // The type decides the content shape, where the bytes live, and
   // which DO ops apply (the descriptor's actions menu, the
-  // role-walk's create-matter:<type> refinement). Seed basics:
+  // able-walk's create-matter:<type> refinement). Seed basics:
   // generic | file | model | http | ibpa | source; extensions
   // register "<ext>:<type>".
   type: { type: String, default: "generic", index: true },

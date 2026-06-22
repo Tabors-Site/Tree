@@ -50,7 +50,7 @@ try {
   await new Promise((r) => setTimeout(r, 1500));
   let sageId = null;
   await withIAmAct("birth sage", async (m) => {
-    const b = await birthBeing({ spec: { name: "sage", parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: m, branch: "0" });
+    const b = await birthBeing({ spec: { name: "sage", parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultAble: "global" }, identity: I_AM, moment: m, branch: "0" });
     sageId = b.beingId;
   });
   await new Promise((r) => setTimeout(r, 1000));
@@ -67,7 +67,7 @@ try {
     mk(2, S, S, C, { inReplyTo: "callrender-1", params: { content: "thank you" } }),            // reply + message
     mk(3, C, C, S, { params: { intent: "stand-watch" } }),                                     // intent only → "called sage to stand watch"
     mk(4, C, C, S, { params: {} }),                                                            // bare reach → "called sage"
-    mk(5, C, C, S, { params: { content: { role: "warrior", anchorSpaceId: "x" } } }),          // OBJECT payload, no message field → call form, NEVER "[object Object]"
+    mk(5, C, C, S, { params: { content: { able: "warrior", anchorSpaceId: "x" } } }),          // OBJECT payload, no message field → call form, NEVER "[object Object]"
     mk(6, C, C, S, { params: { content: { content: "hi there" } } }),                          // nested envelope object → extract the message
   ]);
 

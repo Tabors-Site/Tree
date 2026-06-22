@@ -3,7 +3,7 @@
 //
 // This proves the evaluator walks the IR and produces the fact sequence. The
 // Phase 2 gate is then to diff this sequence against the JS handler's deltaF for
-// the same input (the real beingId hashes and the inherited-role / global grants
+// the same input (the real beingId hashes and the inherited-able / global grants
 // that birthBeing lays internally fill in once form-being runs live).
 
 import { evaluate } from "../evaluator.js";

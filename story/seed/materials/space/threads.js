@@ -186,7 +186,7 @@ export async function getThreadsSpaceId() {
 export async function describeThread(rootCorrelation) {
   if (!rootCorrelation) return null;
   const summons = await Act.find({ rootCorrelation })
-    .select("_id through to activeRole ibpAddress inReplyTo parentThread stampedAt receivedAt endMessage severedAt priority")
+    .select("_id through to activeAble ibpAddress inReplyTo parentThread stampedAt receivedAt endMessage severedAt priority")
     .lean();
   if (!summons.length) {
     // A thread can exist in the ThreadsProjection (the cross-cutting
@@ -272,7 +272,7 @@ function serializeThreadAct(s) {
     _id:             String(s._id),
     through:         s.through ? String(s.through) : null,
     to:              s.to ? String(s.to) : null,
-    activeRole:      s.activeRole || null,
+    activeAble:      s.activeAble || null,
     ibpAddress:      s.ibpAddress || null,
     inReplyTo:       s.inReplyTo || null,
     parentThread:    s.parentThread || null,
@@ -295,7 +295,7 @@ function serializeThreadAct(s) {
  *
  *   being     — beingId of a participant (matches through OR to).
  *               Pass with or without leading "@".
- *   role      — activeRole the participant wore on the Act.
+ *   able      — activeAble the participant wore on the Act.
  *   position  — spaceId fragment; matches threads whose ibpAddress
  *               includes this position (substring match).
  *   stance    — full stance string (place/path@being); exact match.
@@ -303,17 +303,17 @@ function serializeThreadAct(s) {
  *
  * Filters are row-level. A thread "matches" if any of its Act rows
  * match the filter; the projection groups by rootCorrelation after
- * filtering. So `being=@me&role=planner` returns "threads where I had
+ * filtering. So `being=@me&able=planner` returns "threads where I had
  * at least one Act as planner."
  */
 export async function listLiveThreads({
   limit = 100,
   being = null,
-  role = null,            // intentionally unused; ThreadsProjection
+  able = null,            // intentionally unused; ThreadsProjection
   position = null,        //   carries no per-Act-row metadata.
   stance = null,          //   Cross-cutting projection is recipient-
   priority = null,        //   participant-keyed only. (Future: extend
-} = {}) {                 //   if filtering by role/stance/priority is needed.)
+} = {}) {                 //   if filtering by able/stance/priority is needed.)
   // Route through the ThreadsProjection (Bucket 3 Option D, 2026-05-23).
   // The legacy per-SEE Act aggregation retired; the cross-cutting fold
   // maintains this projection from call Facts + Act seals.
@@ -322,7 +322,7 @@ export async function listLiveThreads({
   if (being) {
     match.participants = String(being).replace(/^@/, "");
   }
-  void role; void position; void stance; void priority;
+  void able; void position; void stance; void priority;
 
   const rows = await ThreadsProjection.find(match)
     .sort({ lastAct: -1 })

@@ -14,7 +14,7 @@
 //
 // Heaven writes bypass scope entirely: facts that route to heaven
 // (via heavenLineage's isHeavenSpace) get re-stamped on MAIN before
-// the scope check runs. Subtree histories can still author roles,
+// the scope check runs. Subtree histories can still author ables,
 // edit story config, etc. through normal heaven routing.
 
 import { loadHistory } from "./histories.js";

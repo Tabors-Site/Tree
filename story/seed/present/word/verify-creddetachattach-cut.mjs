@@ -39,7 +39,7 @@ const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const { withIAmAct } = await import(`${R}/seed/sprout.js`);
 const { birthBeing } = await import(`${R}/seed/materials/being/identity/birth.js`);
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
-const { resolveRoleWord, runRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
+const { resolveAbleWord, runAbleWord } = await import(`${R}/seed/present/word/ableWordRegistry.js`);
 const { credentialHostEnv } = await import(`${R}/seed/store/words/credential/credentialHost.js`);
 
 let pass = 0, fail = 0;
@@ -51,7 +51,7 @@ const cherub = await poll(() => findByName("being", "cherub", "0"));
 const birth = async (name) => {
   let bid = null;
   await withIAmAct(`birth ${name}`, async (ctx) => {
-    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultRole: "global" }, identity: I_AM, moment: ctx, history: "0" });
+    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultAble: "global" }, identity: I_AM, moment: ctx, history: "0" });
     bid = b.beingId;
   });
   return bid;
@@ -59,8 +59,8 @@ const birth = async (name) => {
 const run = async (op, caller, target) => {
   const sc = { actId: randomUUID(), actorAct: { history: "0", by: "i-am" }, identity: { beingId: String(caller) }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
   try {
-    const ir = resolveRoleWord("credential", op);
-    const { result } = await runRoleWord(ir, { moment: sc, history: "0", trigger: { caller: String(caller), target: String(target), branch: "0" }, env: { host: credentialHostEnv() } });
+    const ir = resolveAbleWord("credential", op);
+    const { result } = await runAbleWord(ir, { moment: sc, history: "0", trigger: { caller: String(caller), target: String(target), branch: "0" }, env: { host: credentialHostEnv() } });
     return { result, refused: null };
   } catch (e) { return { result: null, refused: e }; }
 };
@@ -68,8 +68,8 @@ const run = async (op, caller, target) => {
 console.log(`\n  verify-creddetachattach-cut (detach + attach gates via the bridge)\n  DB: ${SCRATCH_DB.split("/").pop()}\n`);
 try {
   if (!cherub) { console.log("  FATAL: genesis failed"); process.exit(1); }
-  resolveRoleWord("credential", "credential-detach") ? ok(`credential-detach.word resolves`) : bad(`detach resolves`);
-  resolveRoleWord("credential", "credential-attach") ? ok(`credential-attach.word resolves`) : bad(`attach resolves`);
+  resolveAbleWord("credential", "credential-detach") ? ok(`credential-detach.word resolves`) : bad(`detach resolves`);
+  resolveAbleWord("credential", "credential-attach") ? ok(`credential-attach.word resolves`) : bad(`attach resolves`);
 
   const victim = await birth("victim");      // parentBeingId = cherub
   const stranger = await birth("stranger");

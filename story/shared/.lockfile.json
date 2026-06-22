@@ -15,97 +15,97 @@
           "mimeType": "application/javascript"
         },
         {
-          "path": "roles/bored/manifest.js",
+          "path": "ables/bored/manifest.js",
           "hash": "32b287037c076295b260b44d3a4bff2603c62a4f6e7b332c9019e875bdb0f1f1",
           "size": 232,
           "mimeType": "application/javascript"
         },
         {
-          "path": "roles/bored/role.js",
+          "path": "ables/bored/able.js",
           "hash": "4500a3eb0cdd11543d45e2f43910c78e8721ebaa4829dd2473c68da4b565e1e4",
           "size": 1010,
           "mimeType": "application/javascript"
         },
         {
-          "path": "roles/cautious/manifest.js",
+          "path": "ables/cautious/manifest.js",
           "hash": "44323c2e40755be2b45c4202ffbf88e710ddbcfd7e4d82a12541cdbda0ee718b",
           "size": 241,
           "mimeType": "application/javascript"
         },
         {
-          "path": "roles/cautious/role.js",
+          "path": "ables/cautious/able.js",
           "hash": "2e86cf163c5ca81ed194368a87c71b7b59befe3ac867527433f1ff6b95c40b81",
           "size": 959,
           "mimeType": "application/javascript"
         },
         {
-          "path": "roles/curious/manifest.js",
+          "path": "ables/curious/manifest.js",
           "hash": "5d808d50eefef3ea567ebca3609945ad30f488b3db5d3a46e2e8a41b2f98995d",
           "size": 238,
           "mimeType": "application/javascript"
         },
         {
-          "path": "roles/curious/role.js",
+          "path": "ables/curious/able.js",
           "hash": "8d3c853a5609b84b3a0d84d20199267ba55a0fba3d8640d49cdb66916504acc8",
           "size": 965,
           "mimeType": "application/javascript"
         },
         {
-          "path": "roles/focused/manifest.js",
+          "path": "ables/focused/manifest.js",
           "hash": "3b30a5cebb1fd8aa692384239dc327e0c29e604ada3048a8132abf451c7dba02",
           "size": 238,
           "mimeType": "application/javascript"
         },
         {
-          "path": "roles/focused/role.js",
+          "path": "ables/focused/able.js",
           "hash": "e4c3fc78290f35f7bbb397b12fadbb2dc58bf48850e7e319ad8bd95e4e42cc54",
           "size": 948,
           "mimeType": "application/javascript"
         },
         {
-          "path": "roles/formal/manifest.js",
+          "path": "ables/formal/manifest.js",
           "hash": "d0c5dd2547e4f9fb6ff023dcbfc40b45cafea4a5c587de0f3636ed805a32e019",
           "size": 235,
           "mimeType": "application/javascript"
         },
         {
-          "path": "roles/formal/role.js",
+          "path": "ables/formal/able.js",
           "hash": "15e6c3d9951ac8031f25255e105fd99ff505d2e1f8ca235baed3ac463097ce95",
           "size": 959,
           "mimeType": "application/javascript"
         },
         {
-          "path": "roles/playful/manifest.js",
+          "path": "ables/playful/manifest.js",
           "hash": "7053bc31959d0de5a0ae0ffbc9e796db039bfaa9e7f8449da591fd23bab8ccb0",
           "size": 238,
           "mimeType": "application/javascript"
         },
         {
-          "path": "roles/playful/role.js",
+          "path": "ables/playful/able.js",
           "hash": "a5ae319c8f8a702e7baafc79f0edf47400265124e20ae82dd1f88b792cd58c0f",
           "size": 956,
           "mimeType": "application/javascript"
         },
         {
-          "path": "roles/tired/manifest.js",
+          "path": "ables/tired/manifest.js",
           "hash": "2dddfdbb63996fcc259d0e54efd6fd52b3776ed0694b3ac67bd4b85446826265",
           "size": 232,
           "mimeType": "application/javascript"
         },
         {
-          "path": "roles/tired/role.js",
+          "path": "ables/tired/able.js",
           "hash": "f45eb8772a86afa22a5dbc3dbde3ab7a181e7896fdb27e6e4b7d07f053b945cf",
           "size": 994,
           "mimeType": "application/javascript"
         },
         {
-          "path": "roles/urgent/manifest.js",
+          "path": "ables/urgent/manifest.js",
           "hash": "f1daa393d4d5511654ad2db25f1aa3908832eabb0c60a5e55d2758806647e38c",
           "size": 235,
           "mimeType": "application/javascript"
         },
         {
-          "path": "roles/urgent/role.js",
+          "path": "ables/urgent/able.js",
           "hash": "a3482d12b737e79e9dcb76916800090a8d0fd567ab5e24920d6e7bbb02763595",
           "size": 965,
           "mimeType": "application/javascript"
@@ -113,7 +113,7 @@
       ]
     },
     "bored": {
-      "kind": "role",
+      "kind": "able",
       "pack": "emotions",
       "version": "1.0.0",
       "rootHash": "8056912a3d1ec892424589bc3cb1008acac2268bd3f4299176bb43614390b0fc",
@@ -125,7 +125,7 @@
           "mimeType": "application/javascript"
         },
         {
-          "path": "role.js",
+          "path": "able.js",
           "hash": "4500a3eb0cdd11543d45e2f43910c78e8721ebaa4829dd2473c68da4b565e1e4",
           "size": 1010,
           "mimeType": "application/javascript"
@@ -133,7 +133,7 @@
       ]
     },
     "cautious": {
-      "kind": "role",
+      "kind": "able",
       "pack": "emotions",
       "version": "1.0.0",
       "rootHash": "7a60da7cd4321f9de5388293603de08f87a6a01d8a1a4761d4cbd94af7ab521e",
@@ -145,7 +145,7 @@
           "mimeType": "application/javascript"
         },
         {
-          "path": "role.js",
+          "path": "able.js",
           "hash": "2e86cf163c5ca81ed194368a87c71b7b59befe3ac867527433f1ff6b95c40b81",
           "size": 959,
           "mimeType": "application/javascript"
@@ -153,7 +153,7 @@
       ]
     },
     "curious": {
-      "kind": "role",
+      "kind": "able",
       "pack": "emotions",
       "version": "1.0.0",
       "rootHash": "36ec8adc28d89b5497079f9777d254833faa1926edbce802fd4315842dab1cf8",
@@ -165,7 +165,7 @@
           "mimeType": "application/javascript"
         },
         {
-          "path": "role.js",
+          "path": "able.js",
           "hash": "8d3c853a5609b84b3a0d84d20199267ba55a0fba3d8640d49cdb66916504acc8",
           "size": 965,
           "mimeType": "application/javascript"
@@ -173,7 +173,7 @@
       ]
     },
     "focused": {
-      "kind": "role",
+      "kind": "able",
       "pack": "emotions",
       "version": "1.0.0",
       "rootHash": "bcda3ca76c85c5ce28e318bf3073be1649df7e5b3493ac81f34a361edc2f1467",
@@ -185,7 +185,7 @@
           "mimeType": "application/javascript"
         },
         {
-          "path": "role.js",
+          "path": "able.js",
           "hash": "e4c3fc78290f35f7bbb397b12fadbb2dc58bf48850e7e319ad8bd95e4e42cc54",
           "size": 948,
           "mimeType": "application/javascript"
@@ -193,7 +193,7 @@
       ]
     },
     "formal": {
-      "kind": "role",
+      "kind": "able",
       "pack": "emotions",
       "version": "1.0.0",
       "rootHash": "b183f41594cdc6e461f1f90e77b60742d027c49ea4b15d6381dcd46b500da072",
@@ -205,7 +205,7 @@
           "mimeType": "application/javascript"
         },
         {
-          "path": "role.js",
+          "path": "able.js",
           "hash": "15e6c3d9951ac8031f25255e105fd99ff505d2e1f8ca235baed3ac463097ce95",
           "size": 959,
           "mimeType": "application/javascript"
@@ -213,7 +213,7 @@
       ]
     },
     "playful": {
-      "kind": "role",
+      "kind": "able",
       "pack": "emotions",
       "version": "1.0.0",
       "rootHash": "d0f5958b3644c6e27a1f03bd9cfd3ccf2a719ebd2a342221d07cbf4561fda577",
@@ -225,7 +225,7 @@
           "mimeType": "application/javascript"
         },
         {
-          "path": "role.js",
+          "path": "able.js",
           "hash": "a5ae319c8f8a702e7baafc79f0edf47400265124e20ae82dd1f88b792cd58c0f",
           "size": 956,
           "mimeType": "application/javascript"
@@ -233,7 +233,7 @@
       ]
     },
     "tired": {
-      "kind": "role",
+      "kind": "able",
       "pack": "emotions",
       "version": "1.0.0",
       "rootHash": "27451957aecebf5a4285756418b5ada207a1956a4f10fad6003a30795b145af5",
@@ -245,7 +245,7 @@
           "mimeType": "application/javascript"
         },
         {
-          "path": "role.js",
+          "path": "able.js",
           "hash": "f45eb8772a86afa22a5dbc3dbde3ab7a181e7896fdb27e6e4b7d07f053b945cf",
           "size": 994,
           "mimeType": "application/javascript"
@@ -253,7 +253,7 @@
       ]
     },
     "urgent": {
-      "kind": "role",
+      "kind": "able",
       "pack": "emotions",
       "version": "1.0.0",
       "rootHash": "d320bdb385de85d9d5fbfa538e77db974dd6331004ef27af8c7b4c95581a447f",
@@ -265,7 +265,7 @@
           "mimeType": "application/javascript"
         },
         {
-          "path": "role.js",
+          "path": "able.js",
           "hash": "a3482d12b737e79e9dcb76916800090a8d0fd567ab5e24920d6e7bbb02763595",
           "size": 965,
           "mimeType": "application/javascript"
@@ -311,7 +311,7 @@
       ]
     },
     "dancer-llm": {
-      "kind": "role",
+      "kind": "able",
       "pack": "harmony",
       "version": "0.1.0",
       "rootHash": "0ba7cb0693adc37e8afa3420402f63d93e56996e35d1ccaef393f62a9e099425",
@@ -323,7 +323,7 @@
           "mimeType": "application/javascript"
         },
         {
-          "path": "role.js",
+          "path": "able.js",
           "hash": "b16feb9e5d8f3e4176e03187dc57de4c009e7114c75c795dbe10064d6d14afe8",
           "size": 7090,
           "mimeType": "application/javascript"
@@ -331,7 +331,7 @@
       ]
     },
     "dancer-toward": {
-      "kind": "role",
+      "kind": "able",
       "pack": "harmony",
       "version": "0.1.0",
       "rootHash": "189e691af277b087f1b147168b1776e6dfe7f57e067369fa4f1951541dc4a80f",
@@ -343,7 +343,7 @@
           "mimeType": "application/javascript"
         },
         {
-          "path": "role.js",
+          "path": "able.js",
           "hash": "f508b9be5f5f0816019d28ac818ac015770adcefbfae3bb786f0066cf623c802",
           "size": 3677,
           "mimeType": "application/javascript"
@@ -351,7 +351,7 @@
       ]
     },
     "drummer": {
-      "kind": "role",
+      "kind": "able",
       "pack": "harmony",
       "version": "0.1.0",
       "rootHash": "ac6e5e0801929123622fc113f94786f8564c0cc14e3ffc0b08ea53e5735562ef",
@@ -363,7 +363,7 @@
           "mimeType": "application/javascript"
         },
         {
-          "path": "role.js",
+          "path": "able.js",
           "hash": "44b29f581d0b5d3e29de8607759c2a38db8223f303ef7e401196c6d40f185726",
           "size": 5544,
           "mimeType": "application/javascript"
@@ -467,13 +467,13 @@
           "mimeType": "text/markdown; charset=utf-8"
         },
         {
-          "path": "roles/greeter/manifest.js",
+          "path": "ables/greeter/manifest.js",
           "hash": "2b95ba3c76327abaf4d4973f5017f3e253c255e8f401a9fb3f3b451df2788be6",
           "size": 476,
           "mimeType": "application/javascript"
         },
         {
-          "path": "roles/greeter/role.js",
+          "path": "ables/greeter/able.js",
           "hash": "b47198f25f24cc6653b1de48fa15a0b9e21feaa3aa00e5e5512e2385e7ac60de",
           "size": 2143,
           "mimeType": "application/javascript"
@@ -571,7 +571,7 @@
       ]
     },
     "publisher": {
-      "kind": "role",
+      "kind": "able",
       "pack": "store",
       "version": "0.1.0",
       "rootHash": "5c1de4290945408c9de5af4aace29eb62f690477f0e496d5d8ae8b9b1c541d53",
@@ -583,7 +583,7 @@
           "mimeType": "application/javascript"
         },
         {
-          "path": "role.js",
+          "path": "able.js",
           "hash": "d2e20f6df28214a487af693de1bcbad599377013cfed3fc6e477468e17b349e0",
           "size": 2339,
           "mimeType": "application/javascript"
@@ -591,7 +591,7 @@
       ]
     },
     "registrar": {
-      "kind": "role",
+      "kind": "able",
       "pack": "store",
       "version": "0.1.0",
       "rootHash": "39c1bec1b97469ad53c5ac69b826d28a2ed64a4d98d6fe33899d9a39243dedc0",
@@ -603,7 +603,7 @@
           "mimeType": "application/javascript"
         },
         {
-          "path": "role.js",
+          "path": "able.js",
           "hash": "ed1f88274e0252d53c399ed9bb4e61169f98604daa7e1874f4638582a31cca18",
           "size": 3671,
           "mimeType": "application/javascript"

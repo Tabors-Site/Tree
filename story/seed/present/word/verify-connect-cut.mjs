@@ -38,7 +38,7 @@ await import(`${R}/begin.js`);
 
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const { sealFacts } = await import(`${R}/seed/past/fact/facts.js`);
-const { cherubBeOps } = await import(`${R}/seed/store/words/cherub/role.js`);
+const { cherubBeOps } = await import(`${R}/seed/store/words/cherub/able.js`);
 const { getStoryDomain } = await import(`${R}/seed/ibp/address.js`);
 const storyDomain = getStoryDomain();
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // verify-release-word . be:release is authored by a .word (release.word) for its FACT; the SESSION
 // effects (lockSigning + seatHistory) stay in the JS handler — the FIRST verb-op with a fact-vs-
-// session split. Proves: (1) cherub:release folds as roleword + resolveRoleWord returns IR (the word
+// session split. Proves: (1) cherub:release folds as ableword + resolveAbleWord returns IR (the word
 // is the live path); (2) be:release via beVerb returns released + seatHistory (the handler's session
 // effect ran — the .word can't author it); (3) THE PROOF — the emitted fact carries verb:"be"
 // act:"release" of:{kind:"being"}, params.byActor === the caller, result.released (the word's
@@ -24,7 +24,7 @@ const { beVerb } = await import(`${R}/seed/ibp/verbs/be.js`);
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { getStoryDomain } = await import(`${R}/seed/ibp/address.js`);
 const { getWordSync } = await import(`${R}/seed/present/word/wordStore.js`);
-const { resolveRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
+const { resolveAbleWord } = await import(`${R}/seed/present/word/ableWordRegistry.js`);
 const { default: Fact } = await import(`${R}/seed/past/fact/fact.js`);
 const pollFor = async (fn, pred, t = 16000, e = 250) => { const t0 = Date.now(); while (Date.now() - t0 < t) { const v = await fn(); if (pred(v)) return v; await new Promise((r) => setTimeout(r, e)); } return await fn(); };
 let pass = 0, fail = 0;
@@ -39,9 +39,9 @@ try {
 
   // (1) the word is the live path
   const w = getWordSync("cherub:release");
-  const ir = resolveRoleWord("cherub", "release", "0");
-  (w?.kind === "roleword" && !!ir)
-    ? ok(`cherub:release folds as kind:"roleword" + resolveRoleWord returns its IR (the word is the live path)`)
+  const ir = resolveAbleWord("cherub", "release", "0");
+  (w?.kind === "ableword" && !!ir)
+    ? ok(`cherub:release folds as kind:"ableword" + resolveAbleWord returns its IR (the word is the live path)`)
     : bad(`release word folded`, { kind: w?.kind, hasIR: !!ir });
 
   // (2) be:release via beVerb — the .word lays the fact, the handler returns the session effect

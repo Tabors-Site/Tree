@@ -71,7 +71,7 @@ export function foldWords() {
 // truth-system. The descent order is declare-before-use, so the story reads the seed build on itself.
 const CONCEPT_WORDS = [
   "word", "iam", "base", "chain", "history", "story", "fold", "weave",
-  "see", "do", "name", "being", "space", "matter", "be", "call", "can", "recall", "role", "roleflow",
+  "see", "do", "name", "being", "space", "matter", "be", "call", "can", "recall", "able", "flow",
 ];
 
 // Split a .word into its declaration body (the `says`) and its # header (the axiom + host pointer).
@@ -108,13 +108,13 @@ export async function declareConcepts({ moment = null, history = "0" } = {}) {
 // (1) the verb pasts → declarePast (the runtime tense, sync); (2) the concept .words → bindWord
 // ({kind:"concept"}); (3) the do-ops → wordStore.declareOpsToFold ({kind:"op"}); (4) the matter
 // types → wordStore.declareTypesToFold ({kind:"type"}); (5) the reducers → declareReducersToFold
-// ({kind:"reducer"}, the per-kind fold logic); (6) the role-words → declareRoleWordsToFold
-// ({kind:"roleword"}, role:op -> .word source); (7) the NAME verb ops → declareNameOpsToFold
+// ({kind:"reducer"}, the per-kind fold logic); (6) the able-words → declareAbleWordsToFold
+// ({kind:"ableword"}, able:op -> .word source); (7) the NAME verb ops → declareNameOpsToFold
 // ({kind:"nameop"}, name:<op> -> handler ref); (8) the BE verb ops → declareBeOpsToFold
 // ({kind:"beop"}, be:<op> -> handler ref); (9) the SEE verb ops → declareSeeOpsToFold
 // ({kind:"seeop"}, see:<op> -> handler ref). All land as coin facts, folded together,
 // read by kind. After this the story reads the seed in full: the concepts as their bodies, the ops,
-// types, reducers, and role-words declared beside them. This is the shared seam, the one boot call
+// types, reducers, and able-words declared beside them. This is the shared seam, the one boot call
 // both halves meet at; wire it after the story is established, before the surface renders.
 export async function seedFold({ moment = null, history = "0" } = {}) {
   foldWords();                                 // verb pasts, sync, the tense lookup
@@ -129,8 +129,8 @@ export async function seedFold({ moment = null, history = "0" } = {}) {
   if (typeof store.declareReducersToFold === "function") {
     await store.declareReducersToFold({ moment, history }); // the per-kind reducers (kind:"reducer")
   }
-  if (typeof store.declareRoleWordsToFold === "function") {
-    await store.declareRoleWordsToFold({ moment, history }); // the role-words (kind:"roleword")
+  if (typeof store.declareAbleWordsToFold === "function") {
+    await store.declareAbleWordsToFold({ moment, history }); // the able-words (kind:"ableword")
   }
   if (typeof store.declareNameOpsToFold === "function") {
     await store.declareNameOpsToFold({ moment, history }); // the NAME verb ops (kind:"nameop", name:<op>)

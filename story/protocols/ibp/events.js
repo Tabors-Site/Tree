@@ -60,7 +60,7 @@ export const SEE_PUSH = Object.freeze({
   //   { kind: "inner-face", face }
   // Fired by the innerFaceLive registry after a reel that the
   // subscription's weave indexes received a fact. The face is the
-  // freshly-folded canonical inner face (orientation, role, position,
+  // freshly-folded canonical inner face (orientation, able, position,
   // capabilities, blocks, weave, origin). Reuses the existing SEE
   // envelope so the portal client routes through its standard
   // SEE-event path. See protocols/ibp/innerFaceLive.js.

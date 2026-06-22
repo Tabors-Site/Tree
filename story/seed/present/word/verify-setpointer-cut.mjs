@@ -45,8 +45,8 @@ const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const { sealFacts } = await import(`${R}/seed/past/fact/facts.js`);
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { doVerb } = await import(`${R}/seed/ibp/verbs/do.js`);
-const { resolveRoleWord } = await import(
-  `${R}/seed/present/word/roleWordRegistry.js`
+const { resolveAbleWord } = await import(
+  `${R}/seed/present/word/ableWordRegistry.js`
 );
 const { readPointers } = await import(
   `${R}/seed/materials/history/historyRegistry.js`
@@ -111,7 +111,7 @@ try {
     console.log("  FATAL: genesis failed");
     process.exit(1);
   }
-  const ir = resolveRoleWord("history-manager", "set-pointer");
+  const ir = resolveAbleWord("history-manager", "set-pointer");
   ir
     ? ok(`history-manager.word resolves through the bridge (self-registered)`)
     : bad(`resolves`, "null");

@@ -47,7 +47,7 @@ const COORD_AXES = ["x", "y", "z"];
  * Validate a coord write against the being's containing space size.
  * Throws IbpError(INVALID_INPUT) if any axis is out of bounds — the
  * fact never seals. Cognition catches the rejection and refaces or
- * retries; the substrate stays the floor for what's legal, the role
+ * retries; the substrate stays the floor for what's legal, the able
  * stays decoupled from the rules.
  *
  * Doctrine: silent clamping was a quiet lie. The reel showed "moved
@@ -100,7 +100,7 @@ async function assertCoordInBounds(beingDoc, raw, history = "0") {
 //
 // params: { field, value, merge=true }
 // field paths:
-//   "name" / "roles" / "defaultRole" / "homeSpace" /
+//   "name" / "ables" / "defaultAble" / "homeSpace" /
 //   "parentBeingId"                                  → schema-field writes
 //   "qualities.<namespace>"                          → set/merge that namespace
 //   "qualities.<namespace>.<innerKey>"               → merge one inner key
@@ -172,14 +172,14 @@ async function setOnBeingHandler({ target, params, moment }) {
     return { beingId: String(target._id), parentBeingId: value };
   }
 
-  if (field === "defaultRole") {
+  if (field === "defaultAble") {
     if (
       value !== null && value !== undefined &&
       typeof value !== "string"
     ) {
-      throw new Error(`set-being: \`defaultRole\` value must be a string or null`);
+      throw new Error(`set-being: \`defaultAble\` value must be a string or null`);
     }
-    return { beingId: String(target._id), defaultRole: value };
+    return { beingId: String(target._id), defaultAble: value };
   }
 
   if (field === "homeSpace") {
@@ -244,7 +244,7 @@ async function setOnBeingHandler({ target, params, moment }) {
   }
 
   throw new Error(
-    `set-being: unknown field "${field}". Supported: name, defaultRole, homeSpace, parentBeingId, password, position, coord, qualities.<namespace>[.<innerKey>]`,
+    `set-being: unknown field "${field}". Supported: name, defaultAble, homeSpace, parentBeingId, password, position, coord, qualities.<namespace>[.<innerKey>]`,
   );
 }
 
@@ -380,58 +380,58 @@ registerOperation("set-being", {
 
 
 // ────────────────────────────────────────────────────────────────────
-// grant-role / revoke-role
+// grant-able / revoke-able
 // ────────────────────────────────────────────────────────────────────
 //
-// Roles are auth (seed/RolesAreAuth.md). A being holds a role by
-// being granted it; authorize walks rolesGranted and matches the
-// role's canX against the verb+action.
+// Ables are auth (seed/AblesAreAuth.md). A being holds a able by
+// being granted it; authorize walks ablesGranted and matches the
+// able's canX against the verb+action.
 //
 // Both ops emit one Fact each on the target being's reel. The being
-// reducer (applyRoleGrants in reducerHelpers.js) folds them into
-// qualities.rolesGranted:
-//   grant-role  → append { role, anchorSpaceId|anchorBeingId, grantedBy, grantedAt }
-//   revoke-role → remove the matching tuple (role, anchor*, grantedBy)
+// reducer (applyAbleGrants in reducerHelpers.js) folds them into
+// qualities.ablesGranted:
+//   grant-able  → append { able, anchorSpaceId|anchorBeingId, grantedBy, grantedAt }
+//   revoke-able → remove the matching tuple (able, anchor*, grantedBy)
 //
 // Duplicate grants from different grantors live as separate entries,
-// each separately revocable. The being holds the role until ALL
-// grants of (role, anchor) are revoked.
+// each separately revocable. The being holds the able until ALL
+// grants of (able, anchor) are revoked.
 //
-// Auth: the caller's right to grant role X is encoded in their own
-// granted roles' canDo: a role with canDo entry `grant-role:X` (or
-// `grant-role:*` for super-grantors like angel) permits granting X.
-// Same shape for revoke-role:X. This means anyone who has been
+// Auth: the caller's right to grant able X is encoded in their own
+// granted ables' canDo: a able with canDo entry `grant-able:X` (or
+// `grant-able:*` for super-grantors like angel) permits granting X.
+// Same shape for revoke-able:X. This means anyone who has been
 // authored as a grantor for X via the canDo declaration on their
-// role can hand X out. The chain back to I-Am is structural.
+// able can hand X out. The chain back to I-Am is structural.
 
-async function revokeRoleHandler({ target, params, identity, moment }) {
+async function revokeAbleHandler({ target, params, identity, moment }) {
   if (!identity?.beingId) {
     throw new IbpError(
       IBP_ERR.UNAUTHORIZED,
-      "revoke-role: identity required (the revoker's beingId)",
+      "revoke-able: identity required (the revoker's beingId)",
     );
   }
   if (!params || typeof params !== "object") {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "revoke-role: params required");
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "revoke-able: params required");
   }
-  const { role, anchorSpaceId = null, anchorBeingId = null, grantedBy = null } = params;
-  if (typeof role !== "string" || !role.length) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "revoke-role: `role` is required");
+  const { able, anchorSpaceId = null, anchorBeingId = null, grantedBy = null } = params;
+  if (typeof able !== "string" || !able.length) {
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "revoke-able: `able` is required");
   }
   if (!anchorSpaceId && !anchorBeingId) {
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
-      "revoke-role: one of `anchorSpaceId` or `anchorBeingId` is required",
+      "revoke-able: one of `anchorSpaceId` or `anchorBeingId` is required",
     );
   }
   // Enrich grantedBy in-place. grantedBy identifies the SPECIFIC grant
   // to revoke (defaults to the caller's own beingId — revoking my own
-  // grant). The being reducer matches on (role, anchor, grantedBy).
+  // grant). The being reducer matches on (able, anchor, grantedBy).
   const targetGrantedBy = grantedBy ? String(grantedBy) : String(identity.beingId);
   params.grantedBy = targetGrantedBy;
   return {
     revoked: true,
-    role,
+    able,
     granteeBeingId: String(targetIdOf(target)),
     anchorSpaceId,
     anchorBeingId,
@@ -439,22 +439,22 @@ async function revokeRoleHandler({ target, params, identity, moment }) {
   };
 }
 
-registerOperation("revoke-role", {
+registerOperation("revoke-able", {
   targets: ["being"],
   ownerExtension: "seed",
-  factAction: "revoke-role",
+  factAction: "revoke-able",
   args: {
-    role:          { type: "text", label: "Role to revoke",       required: true },
+    able:          { type: "text", label: "Able to revoke",       required: true },
     anchorSpaceId: { type: "text", label: "Anchor space id",      required: false },
     anchorBeingId: { type: "text", label: "Anchor being id",      required: false },
     grantedBy:     { type: "text", label: "Grantor whose grant to revoke (defaults to self)", required: false },
   },
-  // Same per-role scoping as grant-role.
+  // Same per-able scoping as grant-able.
   authAction: ({ params }) =>
-    typeof params?.role === "string" && params.role.length
-      ? `revoke-role:${params.role}`
-      : "revoke-role",
-  handler: revokeRoleHandler,
+    typeof params?.able === "string" && params.able.length
+      ? `revoke-able:${params.able}`
+      : "revoke-able",
+  handler: revokeAbleHandler,
 });
 
 registerOperation("add-llm-connection", {

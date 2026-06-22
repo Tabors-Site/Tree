@@ -1,7 +1,7 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
 // Seed (capture the template). Capture a subtree's STRUCTURE — beings,
-// roles, qualities, configurations, current shape — into a portable
+// ables, qualities, configurations, current shape — into a portable
 // artifact that another story (or another part of this one) can plant.
 //
 // **A seed is a shell by design.** It's structure-transfer: "here's the
@@ -150,7 +150,7 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   //     onto another story is a security smell. They stay home.
   //
   //   - Seed delegates — cherub, arrival, llm-assigner, history-manager,
-  //     role-{manager,finder}, roleflow-composer, story-manager,
+  //     able-{manager,finder}, flow-composer, story-manager,
   //     birther. Every story already plants these at boot
   //     (seed/materials/being/seedDelegates.js); replicating them
   //     would duplicate-mint the receiver's existing delegates.
@@ -307,7 +307,7 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
     bundle.content.beings.push({
       sourceId:      beingId,
       name:          state.name || null,
-      defaultRole:   state.defaultRole || null,
+      defaultAble:   state.defaultAble || null,
       parentBeingId: tagId("being", state.parentBeingId, { uncapturedSentinel: REF_GRAFT_INITIATOR }),
       homeSpace:     tagId("space", state.homeSpace, { uncapturedSentinel: REF_INSERTION_POINT }),
       position:      tagId("space", state.position, { uncapturedSentinel: REF_INSERTION_POINT }),
@@ -399,40 +399,40 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   // ── 8. Manifest — what the receiver must have for this clone to
   // function. Two derivations:
   //
-  //   roles      — every role the captured beings reference
-  //                (defaultRole, roleFlow clauses, granted roles).
+  //   ables      — every able the captured beings reference
+  //                (defaultAble, flow clauses, granted ables).
   //                The graft side verifies they resolve.
-  //   extensions — the owning extension of each referenced role
+  //   extensions — the owning extension of each referenced able
   //                (registry `origin`), plus any qualities namespace
   //                on captured aggregates that matches a loaded
   //                extension's name (extension-owned data riding the
   //                aggregates). Grafting without these loaded leaves
   //                beings that can't wake and data nothing consumes,
   //                so graft refuses when they're missing.
-  const roleNames = new Set();
+  const ableNames = new Set();
   for (const b of bundle.content.beings) {
-    if (b.defaultRole) roleNames.add(String(b.defaultRole));
-    const flow = b.qualities?.roleFlow;
+    if (b.defaultAble) ableNames.add(String(b.defaultAble));
+    const flow = b.qualities?.flow;
     if (Array.isArray(flow)) {
       for (const clause of flow) {
-        if (clause?.role) roleNames.add(String(clause.role));
+        if (clause?.able) ableNames.add(String(clause.able));
       }
     }
-    const granted = b.qualities?.rolesGranted;
+    const granted = b.qualities?.ablesGranted;
     if (Array.isArray(granted)) {
       for (const g of granted) {
-        if (g?.role) roleNames.add(String(g.role));
+        if (g?.able) ableNames.add(String(g.able));
       }
     }
   }
   const extNames = new Set();
   try {
-    const { getRole } = await import("../../present/roles/registry.js");
-    for (const name of roleNames) {
-      const origin = getRole(name)?.origin;
+    const { getAble } = await import("../../present/ables/registry.js");
+    for (const name of ableNames) {
+      const origin = getAble(name)?.origin;
       if (origin && origin !== "seed" && origin !== "live") extNames.add(origin);
     }
-  } catch { /* registry unavailable in standalone tools; roles list still travels */ }
+  } catch { /* registry unavailable in standalone tools; ables list still travels */ }
   try {
     const { getLoadedExtensionNames } = await import("../../../shared/loader.js");
     const loadedExt = new Set(getLoadedExtensionNames());
@@ -445,8 +445,8 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
     for (const s of bundle.content.spaces) sweep(s.qualities);
     for (const b of bundle.content.beings) sweep(b.qualities);
     for (const m of bundle.content.matter) sweep(m.qualities);
-  } catch { /* loader absent (headless capture); role-origin derivation above still ran */ }
-  bundle.manifest.roles = [...roleNames].sort();
+  } catch { /* loader absent (headless capture); able-origin derivation above still ran */ }
+  bundle.manifest.ables = [...ableNames].sort();
   bundle.manifest.extensions = [...extNames].sort();
 
   // ── 9. Stamp completion meta + the bundle's own identity ──

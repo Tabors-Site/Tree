@@ -11,10 +11,10 @@
 // PACK CONTENTS:
 //   code/                — the substrate code (ops, init, the SEE op
 //                          for dancer-llm's preloaded neighborhood face)
-//   roles/drummer/       — the beat-keeper (scripted cognition; walks
+//   ables/drummer/       — the beat-keeper (scripted cognition; walks
 //                          to the drum, strikes when adjacent)
-//   roles/dancer-toward/ — nearest-neighbor stepper (scripted)
-//   roles/dancer-llm/    — LLM cognition dancer reading the structured
+//   ables/dancer-toward/ — nearest-neighbor stepper (scripted)
+//   ables/dancer-llm/    — LLM cognition dancer reading the structured
 //                          neighborhood face
 //   seeds/dance-floor/   — the plantable world (grid + drum + drummer
 //                          + LLM dancers + per-dancer subscription)
@@ -26,7 +26,7 @@ export default {
   name:    "harmony",
   version: "0.1.0",
   description:
-    "Scripted-being dance on a 2D grid. The substrate's hello-world for many-beings synchronization. Glues together the harmony code, three roles (drummer + dancer-toward + dancer-llm), and the dance-floor seed.",
+    "Scripted-being dance on a 2D grid. The substrate's hello-world for many-beings synchronization. Glues together the harmony code, three ables (drummer + dancer-toward + dancer-llm), and the dance-floor seed.",
 
   // The pack's requires lists every piece it bundles. When the resource
   // graph's draw/install lands, drawing harmony pulls every member of
@@ -34,9 +34,9 @@ export default {
   // also documents what the pack covers.
   requires: [
     { type: "code",  ref: "harmony"               },
-    { type: "role",  ref: "harmony:drummer"       },
-    { type: "role",  ref: "harmony:dancer-toward" },
-    { type: "role",  ref: "harmony:dancer-llm"    },
+    { type: "able",  ref: "harmony:drummer"       },
+    { type: "able",  ref: "harmony:dancer-toward" },
+    { type: "able",  ref: "harmony:dancer-llm"    },
     { type: "seed",  ref: "harmony:dance-floor"   },
     { type: "asset", ref: "harmony:models"        },
     { type: "asset", ref: "harmony:sounds"        },

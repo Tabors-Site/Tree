@@ -71,7 +71,7 @@ Imagine:
 
 Find all realities where visitors can create content.
 
-The engine checks role declarations.
+The engine checks able declarations.
 
 A visitor can create posts.
 
@@ -118,7 +118,7 @@ Search becomes graph traversal
 A reality is really a graph.
 
 Space
-├─ Roles
+├─ Ables
 ├─ Acts
 ├─ Flows
 ├─ Matter
@@ -127,7 +127,7 @@ Space
 Search becomes:
 
 Find realities with:
-role = teacher
+able = teacher
 and
 act = grade assignment
 and
@@ -248,7 +248,7 @@ The deeper realization
 
 Once everything is declared in The Word:
 
-- roles
+- ables
 - permissions
 - spaces
 - acts
@@ -270,15 +270,15 @@ A TreeOS search engine answers:
 
 That’s a much richer object than a webpage.
 
-In TreeOS terms, Google indexes text. A TreeOS search engine indexes names, words, acts, roles, spaces, and reels. It isn’t a search engine sitting on top of reality. It’s an index of reality itself.
+In TreeOS terms, Google indexes text. A TreeOS search engine indexes names, words, acts, ables, spaces, and reels. It isn’t a search engine sitting on top of reality. It’s an index of reality itself.
 
 This is a strong write-up. The core insight lands: when content is structured declarations rather than text-needing-extraction, search becomes querying rather than inferring. Most of what's here is right and well-framed.
 A few observations on what to keep, what to refine, and what's worth being careful about.
 What this gets right
 The fundamental contrast between Google's "extract meaning from text" and TreeOS's "meaning is already declared" is the key insight. The document captures this cleanly. Search isn't trying to understand what pages are about — the substrate already says what it is.
-The shift from "text indexing" to "structure indexing" is the right framing. Roles, permissions, acts, and flows are first-class queryable properties. You don't need NLP to extract them; they're there in the declarations.
+The shift from "text indexing" to "structure indexing" is the right framing. Ables, permissions, acts, and flows are first-class queryable properties. You don't need NLP to extract them; they're there in the declarations.
 The reel search section is genuinely powerful and worth keeping. The ability to query historical changes to declarations — "show realities whose voting rules became more restrictive over time" — is something that's essentially impossible on today's web. Reels make temporal queries first-class.
-The graph traversal framing is accurate. A reality is a graph of structural relationships. Search becomes graph queries with role and capability filters. This is what GraphQL was trying to provide for the web but couldn't because the web isn't actually a graph at the protocol level.
+The graph traversal framing is accurate. A reality is a graph of structural relationships. Search becomes graph queries with able and capability filters. This is what GraphQL was trying to provide for the web but couldn't because the web isn't actually a graph at the protocol level.
 The query-language-equals-declaration-language point is good and consistent with what The Word is trying to be. Searching is just writing a different kind of Word statement. The substrate parses and routes accordingly.
 What to refine
 A few places where I'd be more careful about claims.
@@ -332,7 +332,7 @@ If you don't want to commit fully, you can stay in the search-like view, browsin
 The www analogy
 You said "a reality which is just like www." This is sharp.
 The web's www was conceptually the global space — anyone could be there, looking around, before committing to a specific site. The web browser's address bar was the search-and-navigate interface. You'd search Google or type a URL, see results, click into a site, browse it, leave to search again.
-The search view in TreeOS plays the same role. It's the global navigation space. You're outside any specific reality, looking around. You can dive into one when something interests you. You can leave it when you're done.
+The search view in TreeOS plays the same able. It's the global navigation space. You're outside any specific reality, looking around. You can dive into one when something interests you. You can leave it when you're done.
 But unlike www, you're not anonymous in this space. Your Name is with you. The search view is at the Name layer, which means it's still you doing the searching. The substrate knows who's searching; your acts in the search view (what you searched for, what you visited) can be private to you but they're still yours.
 This is "the personal computer is your website" extended naturally. Your search activity is also yours. Not Google's logs, not a platform's profile. Your Name's chain.
 The unified portal model
@@ -349,7 +349,7 @@ By reality: all realities you know, your own only, specific federation circles, 
 By cognition: human-authored, LLM-authored, scripted, any, with cognition shown as metadata
 By time: any time, recent (last week/month), historical, specific date range
 By Name: authored by specific Name, by Names you trust, by Names in your federation
-By role: content you'd be able to act on if you visited, content you can only observe
+By able: content you'd be able to act on if you visited, content you can only observe
 By relationship: content from realities you've federated with, content from strangers, content from friends of friends
 By status: publicly available, available to you specifically, restricted, archived
 By language: declarations in English, Spanish, etc., with cross-language translation possible

@@ -30,7 +30,7 @@ export default {
     const next = { n: prevN + 1, at: new Date().toISOString() };
 
     // Defer the actual emit to the seed do.set-matter op (single
-    // canonical write surface for matter qualities). The drummer role
+    // canonical write surface for matter qualities). The drummer able
     // calls this op via story.do(drumMatterId, "harmony:tick", ...);
     // the wire shape stays uniform with other state changes by routing
     // through do.set-matter explicitly. The handler runs inside doVerb

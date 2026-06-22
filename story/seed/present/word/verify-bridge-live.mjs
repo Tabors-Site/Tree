@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // The bridge's live entry point, end to end. Where verify-cherub-live.mjs hand-built
 // the I_AM-through-Cherub ctx and called evaluate() directly, THIS drives the SAME
-// five-act diff through `runRoleWord` from a REALISTIC summoner moment (the arrival's
-// attribution, `_inOp` NOT preset) — proving runRoleWord derives the actor model the
+// five-act diff through `runAbleWord` from a REALISTIC summoner moment (the arrival's
+// attribution, `_inOp` NOT preset) — proving runAbleWord derives the actor model the
 // green diff proved (overrides identity + actorAct.by to i-am, shares the chain),
 // so the birthHandler cut is a trivial call into this one tested entry point.
 //
@@ -46,15 +46,15 @@ if (mongoose.connection.name !== "story-word-bridge-live") {
 await import("../../materials/space/ops.js");
 await import("../../materials/matter/ops.js");
 await import("../../materials/being/ops.js");
-// grant-role + cherub were carved into store-word bundles; import them so do:grant-role
-// dispatches and resolveRoleWord("cherub","birth") resolves (the engine built-in map is retired).
-await import("../../store/words/grant-role/index.js");
-await import("../../store/words/cherub/role.js");
+// grant-able + cherub were carved into store-word bundles; import them so do:grant-able
+// dispatches and resolveAbleWord("cherub","birth") resolves (the engine built-in map is retired).
+await import("../../store/words/grant-able/index.js");
+await import("../../store/words/cherub/able.js");
 
-const { registerRole } = await import("../../present/roles/registry.js");
-const { humanRole } = await import("../../present/roles/human/role.js");
+const { registerAble } = await import("../../present/ables/registry.js");
+const { humanAble } = await import("../../present/ables/human/able.js");
 try {
-  registerRole("human", humanRole);
+  registerAble("human", humanAble);
 } catch {
   /* already registered */
 }
@@ -65,8 +65,8 @@ const { ensureSeedDelegates } =
   await import("../../materials/being/seedDelegates.js");
 const { sealFacts } = await import("../../past/fact/facts.js");
 const { nameVerb } = await import("../../ibp/verbs/name.js");
-const { resolveRoleWord, runRoleWord, bornBeingFrom } =
-  await import("./roleWordRegistry.js");
+const { resolveAbleWord, runAbleWord, bornBeingFrom } =
+  await import("./ableWordRegistry.js");
 
 let pass = 0,
   fail = 0;
@@ -100,7 +100,7 @@ async function withRetry(fn, tries = 6) {
 }
 
 console.log(
-  `\n  verify-bridge-live (runRoleWord drives the full 5-act diff)\n  DB: ${mongoose.connection.name}\n`,
+  `\n  verify-bridge-live (runAbleWord drives the full 5-act diff)\n  DB: ${mongoose.connection.name}\n`,
 );
 try {
   await mongoose.connection.db.dropDatabase();
@@ -172,10 +172,10 @@ try {
     `  arriving Name (father) = ${String(ownerName).slice(0, 14)}…\n`,
   );
 
-  const ir = resolveRoleWord("cherub", "birth");
+  const ir = resolveAbleWord("cherub", "birth");
 
   // A REALISTIC summoner moment: attribution is the arriving NAME (NOT i-am), and
-  // `_inOp` is NOT preset — exactly what birthHandler hands the bridge. runRoleWord
+  // `_inOp` is NOT preset — exactly what birthHandler hands the bridge. runAbleWord
   // must derive the i-am-through-Cherub actor model itself.
   const moment = {
     actId: randomUUID(),
@@ -192,7 +192,7 @@ try {
   const sealedActorAct = JSON.stringify(moment.actorAct);
 
   await withRetry(() =>
-    runRoleWord(ir, {
+    runAbleWord(ir, {
       moment,
       history,
       trigger: { name: "tabor-prime", password: "wordpass" },
@@ -209,7 +209,7 @@ try {
     }),
   );
 
-  console.log(`  runRoleWord laid ${moment.deltaF.length} fact(s):`);
+  console.log(`  runAbleWord laid ${moment.deltaF.length} fact(s):`);
   for (const f of moment.deltaF)
     console.log(
       `    ${f.verb}:${f.act} (by ${String(f.by).slice(0, 8)}) -> ${f.of?.kind}:${String(f.of?.id ?? "").slice(0, 10)}`,
@@ -222,7 +222,7 @@ try {
     "do:create-space",
     "be:birth",
     "do:set-space",
-    "do:grant-role",
+    "do:grant-able",
     "do:set-being",
   ];
   EXPECT.every((e) => shape.includes(e))
@@ -244,11 +244,11 @@ try {
     : bad(`home owner = new being`, JSON.stringify(setSpace?.params));
 
   const humanGrant = moment.deltaF.find(
-    (f) => f.act === "grant-role" && f.params?.role === "human",
+    (f) => f.act === "grant-able" && f.params?.able === "human",
   );
   humanGrant
-    ? ok(`human role granted on the new being`)
-    : bad(`human role granted`, "no human grant-role fact");
+    ? ok(`human able granted on the new being`)
+    : bad(`human able granted`, "no human grant-able fact");
 
   const lv = moment.deltaF.find((f) => f.act === "set-being")?.params?.value;
   String(lv?.mother) === String(cherub.id) &&

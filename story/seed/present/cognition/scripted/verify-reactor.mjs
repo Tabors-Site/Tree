@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 // verify-reactor — the live reactive script being core (25.md Pillar D).
-// Unit tests on createReactor (pure, synthetic items) + one integration
-// over a real trivial face. .env loaded so the innerFace import chain
-// resolves; no Mongo at runtime (foldedFace supplied, empty canSee).
+// The being WATCHES the face form but ACTS only on the FINISHED face:
+// triggers are state-based (when(state)/then(state)), evaluated once on the
+// `complete` item, over the whole accumulated state. Unit tests on
+// createReactor (pure, synthetic items) + integration over a real trivial
+// face. .env loaded so the innerFace import chain resolves; no Mongo at
+// runtime (foldedFace supplied, empty canSee).
 import fs from "fs"; import path from "path"; import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -15,119 +18,159 @@ try {
     if (v && !process.env[k]) process.env[k] = v;
   }
 } catch {}
-const { createReactor, runReactorOverFace } = await import("./reactor.js");
+const { createReactor, runReactorOverFace, runReactorMoment } = await import("./reactor.js");
+const { faceItems } = await import("../../stamper/2-fold/rasterStream.js");
+const { reactorCall } = await import("./reactorCall.js");
 
 let pass = 0, fail = 0;
 const ok = (l) => { pass++; console.log(`  ✓ ${l}`); };
 const bad = (l, d) => { fail++; console.log(`  ✗ ${l}`); if (d) console.log(`      ${d}`); };
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-
-// helper: drive a reactor through a list of synthetic items
 const drive = (reactor, items) => { for (const it of items) reactor.consume(it); return reactor; };
 
 console.log("\n  verify-reactor (live reactive script being core)\n");
 try {
-  // 1. a "see"-block trigger fires the instant the block lands, decides the do.
+  // 1. on the FINISHED face, a trigger reading the seen blocks decides the do.
   {
     const r = createReactor([
-      { when: (it) => it.kind === "see" && it.block?.label === "food",
-        then: (it) => ({ op: "eat", target: it.block.key }) },
+      { when: (st) => st.seen.some((b) => b.label === "food"),
+        then: (st) => ({ op: "eat", target: st.seen.find((b) => b.label === "food").key }) },
     ]);
     drive(r, [
-      { seq: 0, kind: "position", value: { name: "field" } },
-      { seq: 1, kind: "role", value: "forager" },
-      { seq: 2, kind: "can", verb: "canDo", words: ["eat", "move"] },
-      { seq: 3, kind: "see", block: { key: "m7", label: "food" } },
-      { seq: 4, kind: "complete", face: {} },
+      { kind: "position", value: { name: "field" } },
+      { kind: "able", value: "forager" },
+      { kind: "can", verb: "canDo", words: ["eat", "move"] },
+      { kind: "see", block: { key: "m7", label: "food" } },
+      { kind: "complete", face: {} },
     ]);
     r.acted && eq(r.decided, { op: "eat", target: "m7" })
-      ? ok(`fires on the matching see-block -> { op:eat, target:m7 }`)
+      ? ok(`finished face -> trigger over seen blocks decides { op:eat, target:m7 }`)
       : bad(`see trigger`, JSON.stringify(r.decided));
   }
 
-  // 2. ONE do per moment: two matchable triggers, the FIRST wins.
+  // 2. the being acts ONLY on complete -- no decision before the face finishes.
   {
-    const r = createReactor([
-      { when: (it) => it.kind === "can", then: () => ({ op: "first" }) },
-      { when: (it) => it.kind === "can", then: () => ({ op: "second" }) },
-    ]);
-    drive(r, [
-      { seq: 0, kind: "can", verb: "canDo", words: ["x"] },
-      { seq: 1, kind: "can", verb: "canBe", words: ["y"] },
-      { seq: 2, kind: "complete" },
-    ]);
-    eq(r.decided, { op: "first" }) ? ok(`one do per moment — first trigger wins, later items ignored`) : bad(`one-do`, JSON.stringify(r.decided));
+    const r = createReactor([{ when: (st) => st.able === "x", then: () => ({ op: "go" }) }]);
+    r.consume({ kind: "able", value: "x" });
+    const beforeComplete = r.acted;
+    r.consume({ kind: "complete" });
+    const afterComplete = r.acted;
+    !beforeComplete && afterComplete
+      ? ok(`decides ONLY on complete — no act before the rasterization finishes`)
+      : bad(`act-on-complete`, `before=${beforeComplete} after=${afterComplete}`);
   }
 
-  // 3. state accumulates: a later trigger reads what earlier items established.
+  // 3. ONE do per moment: two matchable triggers, the FIRST wins.
   {
     const r = createReactor([
-      { when: (it, st) => it.kind === "see" && st.can.canDo.includes("greet"),
-        then: (it, st) => ({ op: "greet", target: it.block.key, at: st.position?.name }) },
+      { when: () => true, then: () => ({ op: "first" }) },
+      { when: () => true, then: () => ({ op: "second" }) },
+    ]);
+    drive(r, [{ kind: "can", verb: "canDo", words: ["x"] }, { kind: "complete" }]);
+    eq(r.decided, { op: "first" }) ? ok(`one do per moment — first matching trigger wins`) : bad(`one-do`, JSON.stringify(r.decided));
+  }
+
+  // 4. whole-face state: a trigger reads can + see + position together.
+  {
+    const r = createReactor([
+      { when: (st) => st.can.canDo.includes("greet") && st.seen.some((b) => b.label === "a being"),
+        then: (st) => ({ op: "greet", target: st.seen.find((b) => b.label === "a being").key, at: st.position?.name }) },
     ]);
     drive(r, [
-      { seq: 0, kind: "position", value: { name: "plaza" } },
-      { seq: 1, kind: "can", verb: "canDo", words: ["greet"] },
-      { seq: 2, kind: "see", block: { key: "b9", label: "a being" } },
-      { seq: 3, kind: "complete" },
+      { kind: "position", value: { name: "plaza" } },
+      { kind: "can", verb: "canDo", words: ["greet"] },
+      { kind: "see", block: { key: "b9", label: "a being" } },
+      { kind: "complete" },
     ]);
     r.acted && eq(r.decided, { op: "greet", target: "b9", at: "plaza" })
-      ? ok(`state accumulates — trigger reads earlier can + position`)
+      ? ok(`whole-face state — trigger reads can + see + position at once`)
       : bad(`state`, JSON.stringify(r.decided));
   }
 
-  // 4. nothing matches -> no act (a see-moment), and `complete` never fires.
+  // 5. nothing matches the finished face -> no act (a see-moment).
   {
     const r = createReactor([
-      { when: (it) => it.kind === "see" && it.block?.label === "danger", then: () => ({ op: "flee" }) },
-      { when: (it) => it.kind === "complete", then: () => ({ op: "should-never-fire" }) },
+      { when: (st) => st.seen.some((b) => b.label === "danger"), then: () => ({ op: "flee" }) },
     ]);
-    drive(r, [
-      { seq: 0, kind: "role", value: "calm" },
-      { seq: 1, kind: "see", block: { key: "m1", label: "flower" } },
-      { seq: 2, kind: "complete" },
-    ]);
-    !r.acted && r.decided == null ? ok(`no match -> see-moment (no act); complete never fires a trigger`) : bad(`no-act`, JSON.stringify(r.decided));
+    drive(r, [{ kind: "able", value: "calm" }, { kind: "see", block: { key: "m1", label: "flower" } }, { kind: "complete" }]);
+    !r.acted && r.decided == null ? ok(`no trigger matches the finished face -> see-moment (no act)`) : bad(`no-act`, JSON.stringify(r.decided));
   }
 
-  // 5. a throwing trigger is a no-match (a script can't crash its own moment).
+  // 6. a throwing trigger is a no-match (a script can't crash its own moment).
   {
     const r = createReactor([
       { when: () => { throw new Error("boom"); }, then: () => ({ op: "x" }) },
-      { when: (it) => it.kind === "role", then: () => ({ op: "safe" }) },
+      { when: (st) => st.able === "r", then: () => ({ op: "safe" }) },
     ]);
-    drive(r, [{ seq: 0, kind: "role", value: "r" }, { seq: 1, kind: "complete" }]);
+    drive(r, [{ kind: "able", value: "r" }, { kind: "complete" }]);
     eq(r.decided, { op: "safe" }) ? ok(`a throwing trigger is treated as no-match (fault-isolated)`) : bad(`throw`, JSON.stringify(r.decided));
   }
 
-  // 6. INTEGRATION: react over a REAL forming face from buildInnerFace.
+  // 7. INTEGRATION: react over a REAL face from buildInnerFace (decides on its complete).
   {
-    const role = { name: "walker", canDo: ["move"], canSummon: [], canBe: [], canSee: [] };
+    const able = { name: "walker", canDo: ["move"], canSummon: [], canBe: [], canSee: [] };
     const ctx = { orientation: "forward", beingId: "b1", history: "0",
                   foldedFace: { space: { _id: "s1", name: "home" }, _weave: [] } };
     const res = await runReactorOverFace(
-      [{ when: (it) => it.kind === "can" && it.verb === "canDo" && it.words.includes("move"),
-         then: (it, st) => ({ op: "move", from: st.position?.name }) }],
-      role, ctx,
+      [{ when: (st) => st.can.canDo.includes("move"), then: (st) => ({ op: "move", from: st.position?.name }) }],
+      able, ctx,
     );
     res.acted && res.act?.op === "move" && res.act?.from === "home"
-      ? ok(`runReactorOverFace fires "move" over the live face (saw canDo:move, position:home)`)
+      ? ok(`runReactorOverFace decides "move" over the finished face (canDo:move, position:home)`)
       : bad(`integration fire`, JSON.stringify(res.act));
-    res.face && res.face.role === "walker" && res.state.can.canDo.includes("move")
+    res.face && res.face.able === "walker" && res.state.can.canDo.includes("move")
       ? ok(`returns the completed face + accumulated state`)
-      : bad(`integration state/face`, JSON.stringify({ role: res.face?.role, can: res.state?.can }));
+      : bad(`integration state/face`, JSON.stringify({ able: res.face?.able, can: res.state?.can }));
   }
 
-  // 7. INTEGRATION negative: a trigger that doesn't match -> see-moment.
+  // 8. INTEGRATION negative: a trigger that doesn't match the face -> see-moment.
   {
-    const role = { name: "waiter", canDo: ["wait"], canSummon: [], canBe: [], canSee: [] };
+    const able = { name: "waiter", canDo: ["wait"], canSummon: [], canBe: [], canSee: [] };
     const ctx = { orientation: "forward", beingId: "b2", history: "0",
                   foldedFace: { space: { _id: "s2", name: "hall" }, _weave: [] } };
     const res = await runReactorOverFace(
-      [{ when: (it) => it.kind === "can" && it.words?.includes("move"), then: () => ({ op: "move" }) }],
-      role, ctx,
+      [{ when: (st) => st.can.canDo?.includes("move"), then: () => ({ op: "move" }) }],
+      able, ctx,
     );
     !res.acted && res.act == null ? ok(`no trigger matches the live face -> see-moment`) : bad(`integration no-act`, JSON.stringify(res.act));
+  }
+
+  // 9. faceItems replays a completed face in the SAME order the live stream emits.
+  {
+    const items = faceItems({
+      position: { name: "home" }, able: "r",
+      capabilities: { canDo: ["move"], canSummon: [], canBe: ["x"] },
+      blocks: [{ key: "k1", label: "L" }],
+    });
+    eq(items.map((i) => i.kind), ["position", "able", "can", "can", "see", "complete"])
+      ? ok(`faceItems order = position, able, can(canDo), can(canBe), see, complete (canSummon dropped)`)
+      : bad(`faceItems order`, items.map((i) => i.kind).join(","));
+    items.every((it, i) => it.seq === i) ? ok(`faceItems seq monotonic`) : bad(`faceItems seq`, items.map((i) => i.seq).join(","));
+  }
+
+  // 10. runReactorMoment over moment.innerFace: non-firing trigger -> see (boot-free, no dispatch).
+  {
+    const moment = {
+      innerFace: { position: { name: "hall" }, able: "waiter", capabilities: { canDo: ["wait"] }, blocks: [] },
+      deltaF: [],
+    };
+    const out = await runReactorMoment(
+      [{ when: (st) => st.can.canDo?.includes("move"), then: () => "do move." }],
+      { able: { name: "waiter" }, moment, beingId: "b1", username: "waiter" },
+    );
+    out?.kind === "see" ? ok(`runReactorMoment: no trigger matches the face -> see (no dispatch)`) : bad(`runReactorMoment see`, JSON.stringify(out));
+  }
+
+  // 11. reactorCall routes a reactor able's no-fire moment to a see (the dispatch path is wired).
+  {
+    const ctx = {
+      toBeing: { _id: "b1", name: "waiter" },
+      innerFace: { position: { name: "hall" }, able: "waiter", capabilities: { canDo: ["wait"] }, blocks: [] },
+      deltaF: [], actorAct: { history: "0" },
+    };
+    const able = { name: "waiter", triggers: [{ when: (st) => st.can.canDo?.includes("move"), then: () => "do move." }] };
+    const out = await reactorCall({ message: {}, ctx, able });
+    out?.kind === "see" ? ok(`reactorCall: reactor able called, no trigger -> see (dispatch wired)`) : bad(`reactorCall`, JSON.stringify(out));
   }
 
   console.log(`\n  ${pass} passed, ${fail} failed\n`);

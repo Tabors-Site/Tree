@@ -10,7 +10,7 @@
 // Two ops, a closed set (ibp/nameOps.js): declare, banish.
 //
 // PERMISSIONS (for now): anyone can call NAME. The verb only requires a
-// caller identity (so the fact has an actor); there is no role-walk yet.
+// caller identity (so the fact has an actor); there is no able-walk yet.
 // declare's actor resolves to I_AM today (every being's trueName is i-am),
 // so I_AM mints the new name as its facet, and the name:declare fact lands
 // on the NEW name's reel — making it. "declare is open, banish is self-only,

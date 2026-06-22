@@ -280,12 +280,12 @@ high resolution intervals during a session.
 ### What TreeOS has instead
 
 There is no global time stamp reel because there is no global time. Several reel
-structures play time stamp adjacent roles:
+structures play time stamp adjacent ables:
 
 - **Per Name act chains.** Every Name has a chain of acts it signed, each act
   positioned by sequence number, prev hash, and hash. This is the Name's local
   time: persistent, advancing when activity happens, giving the canonical
-  ordering of that Name's history. It plays the RTC's role for that Name.
+  ordering of that Name's history. It plays the RTC's able for that Name.
 - **Per being reels.** Each being's state facts (position, properties, holdings)
   accumulate in a reel keyed by the being. More granular than the Name's chain;
   the sequence of how this formed presence changed over time.
@@ -608,7 +608,7 @@ beings (what is acted on), and acts are the events that connect them.
   matter. Geographic structure, not just causal. Lamport has nowhere to put it.
 - **Position based queries.** "What is in this space?" needs structure Lamport
   does not model; TreeOS folds the relevant reels to produce the space's state.
-- **Authority and roles.** Names with roles, inheritation points, and sovereignty
+- **Authority and ables.** Names with ables, inheritation points, and sovereignty
   give a structured, verifiable authority model, not just behavior.
 - **Identity persistence.** Lamport processes are usually session scoped. Names
   persist across sessions, branches, and even realities via beings.
@@ -810,8 +810,8 @@ NTP and time synchronization. Network Time Protocol daemons periodically check e
 So a normal computer doesn't have time-stamp reels — it has a constellation of time-tracking mechanisms, some persistent (RTC, file system timestamps, logs), some volatile (TSC, system clock, per-process counters), some derived (monotonic clock from TSC). They're glued together by convention and by code that knows which to read for which purpose.
 The "core" timekeeping is really the RTC + TSC pair: the RTC for absolute time across reboots, the TSC for high-resolution intervals during a session. Everything else builds on these.
 What TreeOS would have instead
-TreeOS doesn't have a single global time-stamp reel because there's no global time in TreeOS. But there are several reel structures that play time-stamp-adjacent roles. Let me lay them out.
-Per-Name act-chains. Every Name has a chain of acts they've signed. Each act has a position in the chain (sequence number, prev-hash, hash). This is the Name's local time — the sequence of moments where this Name acted. The chain serves the role of the RTC for that Name: it's persistent, it advances when activity happens, it provides the canonical ordering of that Name's history.
+TreeOS doesn't have a single global time-stamp reel because there's no global time in TreeOS. But there are several reel structures that play time-stamp-adjacent ables. Let me lay them out.
+Per-Name act-chains. Every Name has a chain of acts they've signed. Each act has a position in the chain (sequence number, prev-hash, hash). This is the Name's local time — the sequence of moments where this Name acted. The chain serves the able of the RTC for that Name: it's persistent, it advances when activity happens, it provides the canonical ordering of that Name's history.
 Per-being matter and presence facts. Each being has facts about their state (position, properties, holdings). These facts accumulate in reels keyed by the being. When the being changes, new facts get appended. The being's history is its reel. This is more granular than the Name's chain — it's the sequence of how this specific formed presence has changed over time.
 Per-space space facts. Each space has a reel of facts about its structure (sub-spaces, contents, properties). The space's evolution is captured in its reel.
 Per-reality I_AM acts. The I_AM's chain is the reality's master timeline in some sense — the foundational acts that shaped the reality's identity layer. Not a global time for everything in the reality, but the reality's identity history.
@@ -986,7 +986,7 @@ Spatial relationships. Beings exist in spaces. Spaces contain beings and matter.
 
 Position-based queries. "What's in this space?" requires structure that Lamport doesn't model. TreeOS folds the relevant reels and produces the space's current state.
 
-Authority and roles. Lamport processes don't have authority concepts beyond "this process can do this thing." TreeOS has Names with roles, inheritation points, sovereignty over chains. The authority model is structured and verifiable, not just behavioral.
+Authority and ables. Lamport processes don't have authority concepts beyond "this process can do this thing." TreeOS has Names with ables, inheritation points, sovereignty over chains. The authority model is structured and verifiable, not just behavioral.
 
 Identity persistence. Lamport processes are typically scoped to a session. TreeOS Names persist across sessions, branches, even realities (via beings). Identity is durable, cryptographic, sovereign.
 

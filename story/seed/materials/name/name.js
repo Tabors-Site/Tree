@@ -121,7 +121,7 @@ const NameSchema = new mongoose.Schema({
 
   // Open characterizing layer, story-wide and LEAN. A Name is identity,
   // not presence: its keypair, lineage, and soul are fields above; the
-  // rich stateful layer (position, matter, roles, the being's open
+  // rich stateful layer (position, matter, ables, the being's open
   // qualities) belongs to the BEING. This holds only name-level metadata
   // an extension might attach (a display profile, peering prefs). Default
   // empty Map.

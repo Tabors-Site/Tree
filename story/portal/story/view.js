@@ -2,7 +2,7 @@
 //
 // The book made a surface: the SAME `assembleStory` fold the kernel weaves for the LLM's RECALL,
 // painted instead of read. Facts woven into past-tense WORD — "I_AM gave birth to cherub and
-// granted cherub the global role." — never JSON, never verb:op. One coordinate system, who × when
+// granted cherub the global able." — never JSON, never verb:op. One coordinate system, who × when
 // × where; the scope switcher picks the view:
 //
 //   world      the whole history's story         (SEE story {scope:world})

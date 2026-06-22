@@ -96,8 +96,8 @@ function transcriptHash({ from, to, ephA, ephB, challengeA, challengeB }) {
   return crypto.createHash("sha256").update(material, "utf8").digest("hex");
 }
 
-// Direction labels are handshake ROLES, not domains: the transcript hash
-// in the salt already binds both domains, and role labels keep the two
+// Direction labels are handshake ABLES, not domains: the transcript hash
+// in the salt already binds both domains, and able labels keep the two
 // direction keys distinct even when a story loops back to itself.
 const DIR_INIT_TO_RESP = "init>resp";
 const DIR_RESP_TO_INIT = "resp>init";

@@ -174,7 +174,7 @@ export function wireLiveHooks() {
   // through the subscription registry: any being subscribed to one of
   // these events whose scope covers the affected position gets a
   // SUMMON in its inbox with intent="do-trigger". The receiving
-  // being's role template interprets the trigger content and decides
+  // being's able template interprets the trigger content and decides
   // whether to act. This is the universal bridge between Mode 2
   // (anonymous code emitting DOs) and Mode 1 (beings reacting to
   // substrate changes through summons).
@@ -280,13 +280,13 @@ export function initIBPWS(io) {
           import("../../seed/present/wakes/wakeSchedule.js"),
         ]);
       await Promise.all([rehydrateSubs(), rehydrateSchedules()]);
-      // The role-words are declared into the unified wordStore fold at genesis
-      // (declareRoleWordsToFold, in seedFold + the boot-end pass). Here, after genesis, REHYDRATE
+      // The able-words are declared into the unified wordStore fold at genesis
+      // (declareAbleWordsToFold, in seedFold + the boot-end pass). Here, after genesis, REHYDRATE
       // rebuilds the per-history disabled overlay + the I_AM bedrock set from those fold facts, so a
-      // restart re-applies any disables. resolveRoleWord reads the fold for existence; the chain is
+      // restart re-applies any disables. resolveAbleWord reads the fold for existence; the chain is
       // the durable truth.
       const { rehydrateWordsFromFacts } =
-        await import("../../seed/present/word/roleWordRegistry.js");
+        await import("../../seed/present/word/ableWordRegistry.js");
       await rehydrateWordsFromFacts();
     } catch (err) {
       log.warn("IBP", `rehydrate at boot failed: ${err.message}`);

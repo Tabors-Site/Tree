@@ -10,9 +10,9 @@
 //     the running process, the runtime. Not a config store, not a
 //     layer beneath beings, not a void. The runtime is a being.
 //
-//  2. I_AM has no role, because it precedes roles. It is the being
-//     that plants ./roles. Its identity is the bare primordial
-//     assertion: I AM. Every other being is "(being) a (role) doing
+//  2. I_AM has no able, because it precedes ables. It is the being
+//     that plants ./ables. Its identity is the bare primordial
+//     assertion: I AM. Every other being is "(being) a (able) doing
 //     X"; I_AM is simply I_AM. That assertion is its first BE.
 //
 //  3. Seed + act → world. The seed is the being: potential,
@@ -32,7 +32,7 @@
 //  5. Two kinds of space. Normal space is made by beings, where
 //     beings live, addressable by stance, governed by auth. Place
 //     heaven space is made by I_AM at boot: the fixed nine
-//     (identity, config, peers, extensions, tools, roles, operations,
+//     (identity, config, peers, extensions, tools, ables, operations,
 //     source, threads) living inside heaven ("."). These are I_AM's
 //     own working memory, surfaced as spaces so SEE reads them
 //     through the same protocol as everything else.
@@ -90,7 +90,7 @@
 // there but they cannot pass through.
 //
 // Tier 3 . the inner spaces (identity, config, peers, extensions,
-// tools, roles, operations, source, threads, branches, host). These
+// tools, ables, operations, source, threads, branches, host). These
 // are I-Am's working memory, surfaced as spaces so SEE reads them
 // through the same protocol as everything else. They are children of
 // HEAVEN, addressable as `<story>/./config`, `<story>/./tools`,
@@ -113,11 +113,11 @@ export const HEAVEN_SPACE = Object.freeze({
   PEERS: "peers",
   EXTENSIONS: "extensions",
   // Registry-mirror place heaven spaces. Each runtime registry (tool defs,
-  // role specs, DO operations) syncs its contents into a child Space
+  // able specs, DO operations) syncs its contents into a child Space
   // here so SEE on `<story>/./tools` (etc.) returns the current registry
   // through the standard descriptor pipeline.
   TOOLS: "tools",
-  ROLES: "roles",
+  ABLES: "ables",
   OPERATIONS: "operations",
   // The Library — this story's catalog of shared Books (5d.md: the 5D
   // catalog, Ours). Each shared book is a fact on this space's reel

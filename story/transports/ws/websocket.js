@@ -220,12 +220,12 @@ export function initWebSocketServer(httpServer, originPolicy) {
         log.debug("WS", `Invalid/revoked token from ${ip}`);
       }
     }
-    // Anonymous binding (seed/RolesAreAuth.md "Anonymous arrival floor").
+    // Anonymous binding (seed/AblesAreAuth.md "Anonymous arrival floor").
     // Connections without a valid token bind to the @arrival seed
-    // delegate's identity. Arrival's role.canSee = ["arrival-view"]
+    // delegate's identity. Arrival's able.canSee = ["arrival-view"]
     // gates raw SEE; canBe = ["birth","connect","release"] permits the
     // registration flow on @cherub. Verbs need identity to dispatch;
-    // routing through arrival's beingId means the role-walk authorize
+    // routing through arrival's beingId means the able-walk authorize
     // fires the same way for anon as for authenticated callers — same
     // gate, same shape.
     if (!socket.beingId) {

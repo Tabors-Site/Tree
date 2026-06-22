@@ -35,7 +35,7 @@ const EXPECT = [
   "do:create-space",
   "be:form-being",
   "do:set-space",
-  "do:grant-role",
+  "do:grant-able",
   "do:set-being",
 ];
 const got = (flow.effects || []).map((e) => `${e.verb}:${e.act}`);
@@ -90,7 +90,7 @@ check(
       "do:create-space",
       "be:birth",
       "do:set-space",
-      "do:grant-role",
+      "do:grant-able",
       "do:set-being",
     ]),
   factShape.join(", "),

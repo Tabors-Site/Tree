@@ -59,10 +59,10 @@ $$\mathrm{by}(f) = \text{the name whose key sealed } f \quad\text{(unforgeable)}
 What may land on a being's reel $R_b^w$, and what it does there:
 
 - **BE facts** (self-acts: birth, connect, release, switch, death) — the acting name is $b$'s own. Identity transformations come only from the left stance — a name in its own being.
-- **DO facts targeting $b$** — the acting name is whoever's, and the act passed the role-walk (the single auth gate). Another name CAN change your figure, exactly as far as roles permit (a grant, a set), never further.
+- **DO facts targeting $b$** — the acting name is whoever's, and the act passed the able-walk (the single auth gate). Another name CAN change your figure, exactly as far as ables permit (a grant, a set), never further.
 - **CALL facts naming $b$ as recipient** — the acting name is the caller's; the fact is the knock on the door, recorded on your reel. **Call facts are figure-inert**: the reducer folds no call action, so a call can never mutate what you are. Callers express; receivers decide (SUMMON.md sovereignty, made structural).
 
-Space/matter reels are the commons: written through whichever being a name acts with, every write role-gated. The law is not "only you touch your reel" — it is **no name can sign as yours, and nothing changes your figure except your own name's acts and role-authorized acts.**
+Space/matter reels are the commons: written through whichever being a name acts with, every write able-gated. The law is not "only you touch your reel" — it is **no name can sign as yours, and nothing changes your figure except your own name's acts and able-authorized acts.**
 
 ### MOMENT
 
@@ -187,7 +187,7 @@ $\mu_0$ is the one moment with no concurrency — before it the braid has not fo
 
 ### WORD
 
-The system is said in **words**. A **word** is a declared meaning — a name (I-AM, at the root) saying _this is so_ — and the things the model is built from are themselves words: a fact is a word, a verb is a word, an act is a verb in the present, a being is a word. Each verb (SEE, RECALL, DO, BE, NAME, CALL), each op, each role is a word **declared** by a name and thereafter standing as a fact on the chain.
+The system is said in **words**. A **word** is a declared meaning — a name (I-AM, at the root) saying _this is so_ — and the things the model is built from are themselves words: a fact is a word, a verb is a word, an act is a verb in the present, a being is a word. Each verb (SEE, RECALL, DO, BE, NAME, CALL), each op, each able is a word **declared** by a name and thereafter standing as a fact on the chain.
 
 $$\mathrm{declare} : \mathcal{N} \times \mathcal{D} \to \mathcal{F}, \qquad \mathrm{word}(d) \;=\; \mathrm{fold}\,\{\, f \in \mathcal{W} : f \text{ declares } d \,\}$$
 

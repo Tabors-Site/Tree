@@ -53,7 +53,7 @@ function arm() {
 function buildMenuEl(items, opts = {}) {
   const ul = document.createElement("ul");
   ul.className = "ctx-menu" + (opts.isSubmenu ? " ctx-submenu" : "");
-  ul.setAttribute("role", "menu");
+  ul.setAttribute("able", "menu");
 
   let lastWasSeparator = true; // skip leading separators
 
@@ -73,7 +73,7 @@ function buildMenuEl(items, opts = {}) {
     const li = document.createElement("li");
     li.className = "ctx-item" + (item.disabled ? " ctx-item--disabled" : "")
       + (item.submenu ? " ctx-item--has-submenu" : "");
-    li.setAttribute("role", "menuitem");
+    li.setAttribute("able", "menuitem");
 
     const labelEl = document.createElement("span");
     labelEl.className = "ctx-label";

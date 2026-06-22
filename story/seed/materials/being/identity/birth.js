@@ -10,8 +10,8 @@
 //                            new being's id + name (and a pending
 //                            view) when inside a moment; the fully
 //                            materialized row when standalone.
-//   generateUniqueName     — `<role><suffix>` retry pattern scaffolds
-//                            use to auto-name AI beings whose role
+//   generateUniqueName     — `<able><suffix>` retry pattern scaffolds
+//                            use to auto-name AI beings whose able
 //                            spec doesn't fix one.
 //
 // HOME SEPARATION (locked 2026-06-04): birthBeing requires `homeId`
@@ -131,21 +131,21 @@ function validatePassword(password) {
  *                       Explicit → bcrypt-hashed only; the chooser
  *                       carries the plaintext.
  *   spec.cognition      "llm" (default) | "human" | "scripted".
- *   spec.role           Birth role. Alias for spec.defaultRole; either
- *                       lands on Being.defaultRole. Non-human beings
+ *   spec.able           Birth able. Alias for spec.defaultAble; either
+ *                       lands on Being.defaultAble. Non-human beings
  *                       MUST declare one (no LLM/scripted being can
  *                       wake without a fallback voice).
- *   spec.defaultRole    Same as spec.role.
+ *   spec.defaultAble    Same as spec.able.
  *   spec.coord          { x, y, z? } explicit grid coord. When absent,
  *                       birth picks a random in-bounds coord inside
  *                       the position space's size (falls through to
  *                       no coord when the space has no size — the
  *                       portal's hash-ring fallback handles that).
- *   spec.roleFlow       Initial roleFlow clauses; land at
- *                       qualities.roleFlow so the very first moment-
+ *   spec.flow       Initial flow clauses; land at
+ *                       qualities.flow so the very first moment-
  *                       assign honors them.
  *   spec.qualities      Additional initial qualities. Deep-merged
- *                       with the auth + cognition + roleFlow seeds.
+ *                       with the auth + cognition + flow seeds.
  *   spec.isRemote       For mirror-only beings (default false).
  *   spec.homeStory    URL of the story where this being's
  *                       authoritative row lives (default null).
@@ -242,16 +242,16 @@ export async function birthBeing({
     );
   }
 
-  // Non-human beings must declare a role at birth (their cognition
-  // wakes through a role's fallback voice; humans cognize out-of-band).
-  let defaultRole = spec.defaultRole || spec.role || null;
-  if (!defaultRole && Array.isArray(spec.roles) && spec.roles.length > 0) {
-    defaultRole = spec.roles[0];
+  // Non-human beings must declare a able at birth (their cognition
+  // wakes through a able's fallback voice; humans cognize out-of-band).
+  let defaultAble = spec.defaultAble || spec.able || null;
+  if (!defaultAble && Array.isArray(spec.ables) && spec.ables.length > 0) {
+    defaultAble = spec.ables[0];
   }
-  if (cognition !== "human" && !defaultRole) {
+  if (cognition !== "human" && !defaultAble) {
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
-      `birthBeing("${name}"): non-human beings require spec.role or spec.defaultRole`,
+      `birthBeing("${name}"): non-human beings require spec.able or spec.defaultAble`,
     );
   }
 
@@ -269,7 +269,7 @@ export async function birthBeing({
   //   - The wire BE handler (verbs/be.js) gates `be:birth` at the wire
   //     and enforces the cherub-arrival vs birther-authenticated split
   //     inline before reaching this function.
-  //   - Cherub's role.js calls this from within its authorized flow.
+  //   - Cherub's able.js calls this from within its authorized flow.
   //   - seedDelegates calls this at boot under the I_AM identity (the
   //     I_AM short-circuit covers it).
   // Re-authorizing here with a synthetic `be:create-being` operation
@@ -277,7 +277,7 @@ export async function birthBeing({
   // with a non-protocol operation (BE dispatches only birth / connect /
   // release). The protections come from the authorized callers; this
   // primitive enforces state-consistency invariants below, not auth.
-  // See seed/RolesAreAuth.md "Permissions vs invariants."
+  // See seed/AblesAreAuth.md "Permissions vs invariants."
 
   // ── Parent exists (or is pending in this moment) ──
   // The being-tree's chain of causation needs every link to resolve.
@@ -326,7 +326,7 @@ export async function birthBeing({
   // inherently allowed and skip the walk:
   //   • root admission   (parent = I_AM) — how new top-level beings enter;
   //                       WHO may do this is gated at the SUMMON/BE layer
-  //                       (cherub's arrival role), not by the being-tree.
+  //                       (cherub's arrival able), not by the being-tree.
   //   • self-birth       (parent = the minter) — a being births its own
   //                       children; self-authority is implicit.
   //   • pending parent   (mother born earlier in this same ΔF) — an atomic
@@ -533,7 +533,7 @@ export async function birthBeing({
 
   // ── Qualities ──
   // Caller-provided initial qualities deep-merge with the seeds
-  // (auth.credentialPlain, cognition.defaultKind, optional roleFlow). No
+  // (auth.credentialPlain, cognition.defaultKind, optional flow). No
   // signing key here — the key lives on the Name (trueName), not the being.
   const qualities =
     spec.qualities && typeof spec.qualities === "object"
@@ -549,8 +549,8 @@ export async function birthBeing({
     ...(qualities.cognition || {}),
     defaultKind: cognition,
   };
-  if (Array.isArray(spec.roleFlow)) {
-    qualities.roleFlow = spec.roleFlow;
+  if (Array.isArray(spec.flow)) {
+    qualities.flow = spec.flow;
   }
 
   // Cross-world citizenship: father tuple. Only when present (mate-
@@ -592,7 +592,7 @@ export async function birthBeing({
   const factSpec = {
     name,
     password: credential.hash,
-    defaultRole,
+    defaultAble,
     // The trueName this being expresses: the MOTHER's trueName by default
     // (the name that births it), OR an explicit sovereign override (the being
     // is the named's own — e.g. a name's first being through cherub). Beings
@@ -661,7 +661,7 @@ export async function birthBeing({
     throw err;
   }
 
-  // ── Inherit role grants from both parents (dual-parent doctrine) ──
+  // ── Inherit able grants from both parents (dual-parent doctrine) ──
   //
   // The child auto-inherits every grant on the mother (parentBeingId
   // = the actor of be:birth) AND every grant on a same-story father
@@ -670,15 +670,15 @@ export async function birthBeing({
   // anchorSpaceId / anchorBeingId as the parent's grant, with the
   // parent recorded as the grantor.
   //
-  // Cross-story fathers do NOT contribute role inheritance — we
+  // Cross-story fathers do NOT contribute able inheritance — we
   // can't read the foreign story's projection synchronously. They
   // still get the connect-eligibility marker via qualities.father
-  // (above). Same-story fathers contribute roles AND get the marker.
+  // (above). Same-story fathers contribute ables AND get the marker.
   //
   // Self-birth (mother = self) and bootstrap births where the parent
   // has no grants yet are no-ops on this pass — no grants to inherit.
   // See seed/done/DualBeingParents for the doctrine.
-  await _inheritParentRoles({
+  await _inheritParentAbles({
     childId: id,
     motherBeingId: parentBeingId,
     fatherBeingId:
@@ -687,11 +687,11 @@ export async function birthBeing({
     history,
   });
 
-  // ── Anoint with the global role ──
+  // ── Anoint with the global able ──
   //
-  // Per seed/RolesAreAuth.md "Single gate doctrine": the role-walk is
+  // Per seed/AblesAreAuth.md "Single gate doctrine": the able-walk is
   // the only gate. For a being to do ANYTHING — including petition for
-  // additional roles via ask-role / take-role — they must hold a role
+  // additional ables via ask-able / take-able — they must hold a able
   // that permits it. `global` is the universal baseline: every being
   // born into this story gets it at the story root with default
   // reach (host + descendants = story-wide). Parent-inheritance above
@@ -701,7 +701,7 @@ export async function birthBeing({
   //
   // Idempotent at the reducer: a second global grant with the same
   // anchor + grantor folds as a duplicate and doesn't bloat
-  // rolesGranted. Cherub's explicit registration-time grant of global
+  // ablesGranted. Cherub's explicit registration-time grant of global
   // becomes the redundant-but-harmless case after this line.
   // @public is the structural placeholder being that never acts. Grants
   // on it are noise; skip the anoint. Every other being (including
@@ -739,27 +739,27 @@ export async function birthBeing({
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// PARENT ROLE INHERITANCE
+// PARENT ABLE INHERITANCE
 // ─────────────────────────────────────────────────────────────────────
 
 /**
  * Stamp grant facts on a newly-born child that mirror both parents'
- * granted roles. Each inherited grant rides the SAME moment as the
+ * granted ables. Each inherited grant rides the SAME moment as the
  * be:birth (via moment.deltaF) so birth + inheritance seal
  * atomically — the child either exists with both their birth and
  * their inheritance or neither.
  *
  * Same-story only. Cross-story fathers contribute the connect-
- * eligibility marker (qualities.father) but not role grants — the
+ * eligibility marker (qualities.father) but not able grants — the
  * foreign story's projection isn't readable here.
  *
  * Dedup: when both parents have an identical grant
- * (same role + same anchor), only one grant fact is stamped.
+ * (same able + same anchor), only one grant fact is stamped.
  * Mother wins as grantor on ties.
  *
  * No-op when neither parent has any grants (the bootstrap case;
  * I-Am's grants are implicit via the I_AM bypass and not stored on
- * qualities.rolesGranted).
+ * qualities.ablesGranted).
  *
  * @param {object} args
  * @param {string} args.childId
@@ -768,7 +768,7 @@ export async function birthBeing({
  * @param {object} args.moment           in-flight moment ctx (required)
  * @param {string} args.history
  */
-async function _inheritParentRoles({
+async function _inheritParentAbles({
   childId,
   motherBeingId,
   fatherBeingId,
@@ -793,7 +793,7 @@ async function _inheritParentRoles({
   const fatherGrants = _grantsFromSlot(fatherSlot);
   if (motherGrants.length === 0 && fatherGrants.length === 0) return;
 
-  // Compose with mother-wins-on-tie. The dedup key includes role +
+  // Compose with mother-wins-on-tie. The dedup key includes able +
   // anchorSpaceId + anchorBeingId so a grant anchored at the same
   // place from both parents only stamps once.
   const seen = new Set();
@@ -811,18 +811,18 @@ async function _inheritParentRoles({
     composed.push({ grant: g, grantor: String(fatherBeingId) });
   }
 
-  // Stamp one do:grant-role fact per composed entry, all riding the
+  // Stamp one do:grant-able fact per composed entry, all riding the
   // child's reel within this same moment (no separate Acts; the
   // birth's actor stamps them in the birth's moment).
   for (const { grant, grantor } of composed) {
     await emitFact(
       {
         verb: "do",
-        act: "grant-role",
+        act: "grant-able",
         through: grantor,
         of: { kind: "being", id: String(childId) },
         params: {
-          role: grant.role,
+          able: grant.able,
           anchorSpaceId: grant.anchorSpaceId || null,
           anchorBeingId: grant.anchorBeingId || null,
           grantedBy: grantor,
@@ -837,26 +837,26 @@ async function _inheritParentRoles({
 }
 
 function _grantsFromSlot(slot) {
-  const grants = slot?.state?.qualities?.rolesGranted;
+  const grants = slot?.state?.qualities?.ablesGranted;
   return Array.isArray(grants) ? grants : [];
 }
 
 function _grantKey(grant) {
   return [
-    grant?.role || "",
+    grant?.able || "",
     grant?.anchorSpaceId || "",
     grant?.anchorBeingId || "",
   ].join("|");
 }
 
 /**
- * Anoint a freshly-birthed being with the `global` role anchored at
+ * Anoint a freshly-birthed being with the `global` able anchored at
  * the story root. Every being gets this so the petition surface
- * (ask-role + take-role + the rest of global.canDo) is reachable
+ * (ask-able + take-able + the rest of global.canDo) is reachable
  * without parent-inheritance dependencies.
  *
- * Single-gate doctrine (seed/RolesAreAuth.md): the role-walk is the
- * only gate, so universal capabilities MUST live on a role every
+ * Single-gate doctrine (seed/AblesAreAuth.md): the able-walk is the
+ * only gate, so universal capabilities MUST live on a able every
  * being holds.
  */
 async function _anointGlobal({ childId, history, moment }) {
@@ -867,11 +867,11 @@ async function _anointGlobal({ childId, history, moment }) {
   await emitFact(
     {
       verb: "do",
-      act: "grant-role",
+      act: "grant-able",
       through: I_AM,
       of: { kind: "being", id: String(childId) },
       params: {
-        role: "global",
+        able: "global",
         anchorSpaceId: String(rootId),
         anchorBeingId: null,
         grantedBy: I_AM,
@@ -889,43 +889,43 @@ async function _anointGlobal({ childId, history, moment }) {
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * Generate an unused `<role><suffix>` name. Used by scaffolds (seed
+ * Generate an unused `<able><suffix>` name. Used by scaffolds (seed
  * delegates, harmony's dancer roster) that auto-name AI beings whose
  * spec doesn't fix one.
  *
  * Strategy: try sequential numeric suffixes starting at the count of
- * existing same-role beings; bump until a free slot is found. Cheap
+ * existing same-able beings; bump until a free slot is found. Cheap
  * because the projection collection has a name index; bounded by
  * MAX_RETRIES so a pathological state can't loop forever.
  *
- * @param {string} role          base name (e.g. "dancer")
+ * @param {string} able          base name (e.g. "dancer")
  * @param {object} [opts]
  * @param {string} [opts.history] history to check against (default "0")
  * @returns {Promise<string>}    e.g. "dancer3"
  */
-export async function generateUniqueName(role, opts = {}) {
-  if (!role || typeof role !== "string") {
+export async function generateUniqueName(able, opts = {}) {
+  if (!able || typeof able !== "string") {
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
-      "generateUniqueName requires a role string",
+      "generateUniqueName requires a able string",
     );
   }
-  const safeRole = role.replace(/[^a-zA-Z0-9_-]/g, "");
-  if (!safeRole) {
+  const safeAble = able.replace(/[^a-zA-Z0-9_-]/g, "");
+  if (!safeAble) {
     throw new IbpError(
       IBP_ERR.INVALID_INPUT,
-      `Role "${role}" produces no safe-name prefix`,
+      `Able "${able}" produces no safe-name prefix`,
     );
   }
   const history = opts.history || "0";
   const { findByNamePattern } = await import("../../projections.js");
 
-  const sameRolePrefix = new RegExp(`^${escapeRegex(safeRole)}[0-9]*$`, "i");
-  const existing = await findByNamePattern("being", sameRolePrefix, history);
+  const sameAblePrefix = new RegExp(`^${escapeRegex(safeAble)}[0-9]*$`, "i");
+  const existing = await findByNamePattern("being", sameAblePrefix, history);
   let n = existing.length;
   const MAX_RETRIES = 10000;
   for (let i = 0; i < MAX_RETRIES; i++) {
-    const candidate = `${safeRole}${n}`;
+    const candidate = `${safeAble}${n}`;
     const collision = await findByNamePattern(
       "being",
       new RegExp(`^${escapeRegex(candidate)}$`, "i"),
@@ -936,6 +936,6 @@ export async function generateUniqueName(role, opts = {}) {
   }
   throw new IbpError(
     IBP_ERR.INTERNAL,
-    `generateUniqueName exhausted ${MAX_RETRIES} retries for role "${role}"`,
+    `generateUniqueName exhausted ${MAX_RETRIES} retries for able "${able}"`,
   );
 }

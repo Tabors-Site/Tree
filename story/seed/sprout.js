@@ -152,7 +152,7 @@ export async function withIAmAct(sourceLabel, fn) {
       through: I_AM,
       to: I_AM,
       ibpAddress: null,
-      activeRole: null,
+      activeAble: null,
       inboxMessageId: null,
       inReplyTo: null,
       parentThread: null,
@@ -170,7 +170,7 @@ export async function withIAmAct(sourceLabel, fn) {
       through: I_AM,
       to: I_AM,
       ibpAddress: null,
-      activeRole: null,
+      activeAble: null,
       inboxMessageId: null,
       inReplyTo: null,
       rootCorrelation: actId,
@@ -257,7 +257,7 @@ export async function withBeingAct(beingId, sourceLabel, history, fn) {
       through: beingId,
       to: beingId,
       ibpAddress: null,
-      activeRole: null,
+      activeAble: null,
       inboxMessageId: null,
       inReplyTo: null,
       parentThread: null,
@@ -285,7 +285,7 @@ export async function withBeingAct(beingId, sourceLabel, history, fn) {
       through: beingId,
       to: beingId,
       ibpAddress: null,
-      activeRole: null,
+      activeAble: null,
       inboxMessageId: null,
       inReplyTo: null,
       rootCorrelation: actId,
@@ -350,7 +350,7 @@ export async function withNameAct(nameId, sourceLabel, fn) {
       through: null, // 5D: the being stays home
       to: null,
       ibpAddress: null,
-      activeRole: null,
+      activeAble: null,
       inboxMessageId: null,
       inReplyTo: null,
       parentThread: null,
@@ -367,7 +367,7 @@ export async function withNameAct(nameId, sourceLabel, fn) {
       through: null, // no body
       to: null,
       ibpAddress: null,
-      activeRole: null,
+      activeAble: null,
       inboxMessageId: null,
       inReplyTo: null,
       rootCorrelation: actId,
@@ -422,13 +422,13 @@ const STORY_HEAVEN_SPACE = {
 // (storyConfig.js), books = share-book facts, peers = peer-add/remove facts. identity's domain is
 // read from process.env.STORY_DOMAIN (the space's quality had zero readers). The defaults that the
 // old ./config space pre-seeded (STORY_NAME, storyUrl) are covered by CONFIG_DEFAULTS + the env
-// fallback in getStoryConfigValue — no genesis seed needed. The KEEP-list (extensions/tools/roles/
+// fallback in getStoryConfigValue — no genesis seed needed. The KEEP-list (extensions/tools/ables/
 // operations/source/threads/histories/host/factory) are registry-mirrors / structural containers,
 // not data storage.
 const STORY_HEAVEN_SPACES = [
   { name: "extensions", heavenSpace: HEAVEN_SPACE.EXTENSIONS },
   { name: "tools", heavenSpace: HEAVEN_SPACE.TOOLS },
-  { name: "roles", heavenSpace: HEAVEN_SPACE.ROLES },
+  { name: "ables", heavenSpace: HEAVEN_SPACE.ABLES },
   { name: "operations", heavenSpace: HEAVEN_SPACE.OPERATIONS },
   // source mirrors story/. Populated by seed/materials/space/
   // source.js (the disk-fold populator) at boot. After MIRROR.md
@@ -763,7 +763,7 @@ export async function ensureSpaceRoot() {
 }
 
 // My Being row. parentBeingId null (root of the being-tree); no
-// roles (I precede the role registry); cognition scripted (code
+// ables (I precede the able registry); cognition scripted (code
 // cognition only). The random password is never used; I cannot be
 // claimed or summoned interactively.
 //
@@ -837,8 +837,8 @@ export async function ensureIAm() {
         of: { kind: "being", id },
         params: {
           name: I_AM,
-          roles: [],
-          defaultRole: null,
+          ables: [],
+          defaultAble: null,
           // The being expresses the i-am Name (the root identity). Every
           // being birthed under i-am inherits this trueName.
           trueName: I_AM,

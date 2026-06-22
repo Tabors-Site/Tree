@@ -28,7 +28,7 @@ const REGISTRY = new Map();
 // Naming. Bare names ("create-child", "set-qualities") are reserved for the
 // seed. Extensions register under "<extName>:<action>" (e.g.,
 // "food:log-meal"). Same convention as modes (tree:fallback,
-// tree:food-log) and roles (governing:ruler).
+// tree:food-log) and ables (governing:ruler).
 const SEED_NAME_RE = /^[a-z][a-z0-9-]*$/;
 const EXT_NAME_RE = /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/;
 
@@ -159,9 +159,9 @@ export function registerOperation(name, spec) {
     useNamespaceKey: spec.useNamespaceKey === true,
     // Optional auth-action refinement. doVerb calls
     // `authAction({ params, target })` to derive the action string the
-    // role-walk matches against canDo — grant-role authorizes as
-    // `grant-role:<roleName>` so canDo entries can scope grantors
-    // per-role. Open to extension ops the same way. Falls back to the
+    // able-walk matches against canDo — grant-able authorizes as
+    // `grant-able:<ableName>` so canDo entries can scope grantors
+    // per-able. Open to extension ops the same way. Falls back to the
     // op name when absent or when the function returns nothing.
     authAction: typeof spec.authAction === "function" ? spec.authAction : null,
     // Optional matter-type gate. An op declaring matterTypes refuses

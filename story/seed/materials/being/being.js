@@ -5,7 +5,7 @@
 // I am the first being on this story — the row whose parentBeingId
 // is null. Every other being chains back to me through this same
 // schema. When a human registers, when an extension scaffolds an
-// LLM-driven being, when a code-cognition role like auth or
+// LLM-driven being, when a code-cognition able like auth or
 // llm-assigner comes alive, the row I create looks like this one.
 // One shape, every kind: human, llm, scripted, future composite. I
 // do not branch on the kind. The verbs treat them all alike;
@@ -48,7 +48,7 @@
 // for that fourth slot ever appears, that wanting is the smell.
 //
 // Fields declared below the three-slot categories (name, password,
-// roles, homeSpace, etc.) are declared for Mongoose
+// ables, homeSpace, etc.) are declared for Mongoose
 // strict-mode mechanics, not as figure authority. The reducer is the
 // authority for what figure(b) looks like; the schema only declares
 // these so strict mode doesn't drop the reducer's output and so
@@ -104,11 +104,11 @@ const BeingSchema = new mongoose.Schema({
   // `operatingMode`. It has moved to qualities.cognition.defaultKind
   // — cognition is a being concept, not a schema field, and the
   // closed-set vocabulary ("llm" | "human" | "scripted") is policed
-  // by the role registry's VALID_COGNITION and the birth handler's
+  // by the able registry's VALID_COGNITION and the birth handler's
   // validator. Effective cognition at moment-assign is read via
   // identity/lookups.js#beingCognition, which checks the inhabit
   // projection (qualities.connection.inhabitedBy) first and falls
-  // back to defaultKind. See seed/present/roles/registry.js header
+  // back to defaultKind. See seed/present/ables/registry.js header
   // for the doctrine.
 
   // Bcrypt-hashed. Pre-hashed by the verb handler before the
@@ -117,16 +117,16 @@ const BeingSchema = new mongoose.Schema({
   // truth is the fact chain.
   password: { type: String, select: false },
 
-  // The being's unconditional fallback role. `qualities.roleFlow` is
-  // the authoring surface for context-sensitive role selection
+  // The being's unconditional fallback able. `qualities.flow` is
+  // the authoring surface for context-sensitive able selection
   // (primary + stacked modifiers, evaluated per moment from world
-  // state); `defaultRole` is the floor every being has when no flow
-  // clause matches and no explicit `entry.activeRole` was requested.
-  // The carry list (`roles: [String]`) that lived here before retired
-  // 2026-06-01 with the RoleFlow build: a being's wearable roles are
-  // the union of every role its flow can reference plus its
-  // defaultRole. The flow's author is the authorization.
-  defaultRole: { type: String, default: null },
+  // state); `defaultAble` is the floor every being has when no flow
+  // clause matches and no explicit `entry.activeAble` was requested.
+  // The carry list (`ables: [String]`) that lived here before retired
+  // 2026-06-01 with the Flow build: a being's wearable ables are
+  // the union of every able its flow can reference plus its
+  // defaultAble. The flow's author is the authorization.
+  defaultAble: { type: String, default: null },
 
   // The being tree. Beings form a recursive lineage parallel to the
   // space tree. The place has exactly one root being — me — with
@@ -223,7 +223,7 @@ const BeingSchema = new mongoose.Schema({
 
 // homeSpace index declared inline on the field above (index: true).
 BeingSchema.index({ parentBeingId: 1, _id: 1 });
-BeingSchema.index({ defaultRole: 1 });
+BeingSchema.index({ defaultAble: 1 });
 BeingSchema.index({ homeStory: 1, isRemote: 1 });
 
 // Position index — what beings are at a given space. Used by foldPlace

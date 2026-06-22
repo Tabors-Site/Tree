@@ -170,12 +170,12 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
 
   // ── Manifest gate ──
   // The bundle declares what it needs to FUNCTION here: the
-  // extensions whose roles/ops/data the captured content references,
-  // and the role names its beings wear (captureTemplate derives both at
+  // extensions whose ables/ops/data the captured content references,
+  // and the able names its beings wear (captureTemplate derives both at
   // capture). Grafting without the extensions produces beings that
-  // can't wake and qualities nothing consumes — refuse loud. Roles
-  // are softer: a missing role may arrive via the bundle's own
-  // content.facts (set-role) or be authored after, so they warn.
+  // can't wake and qualities nothing consumes — refuse loud. Ables
+  // are softer: a missing able may arrive via the bundle's own
+  // content.facts (set-able) or be authored after, so they warn.
   {
     const required = Array.isArray(bundle.manifest?.extensions)
       ? bundle.manifest.extensions
@@ -196,20 +196,20 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
         );
       }
     }
-    const requiredRoles = Array.isArray(bundle.manifest?.roles)
-      ? bundle.manifest.roles
+    const requiredAbles = Array.isArray(bundle.manifest?.ables)
+      ? bundle.manifest.ables
       : [];
-    if (requiredRoles.length > 0) {
+    if (requiredAbles.length > 0) {
       try {
-        const { getRole } = await import("../../present/roles/registry.js");
-        const missingRoles = requiredRoles.filter((name) => !getRole(name));
-        if (missingRoles.length > 0) {
+        const { getAble } = await import("../../present/ables/registry.js");
+        const missingAbles = requiredAbles.filter((name) => !getAble(name));
+        if (missingAbles.length > 0) {
           log.warn(
             "Graft",
-            `bundle references role(s) not registered here: ` +
-            `${missingRoles.join(", ")}. Beings wearing them won't wake ` +
-            `until the roles exist (the bundle's facts may install them, ` +
-            `or author via set-role).`,
+            `bundle references able(s) not registered here: ` +
+            `${missingAbles.join(", ")}. Beings wearing them won't wake ` +
+            `until the ables exist (the bundle's facts may install them, ` +
+            `or author via set-able).`,
           );
         }
       } catch { /* registry unavailable; the warn is best-effort */ }
@@ -499,7 +499,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
       // reducer path; we plant an empty hash since these beings can't
       // be auth-driven by humans anyway.
       password:      "",
-      defaultRole:   remapInBundleField(b.defaultRole || null),
+      defaultAble:   remapInBundleField(b.defaultAble || null),
       cognition:     "scripted",  // v1 default; future revisions can carry cognition in bundle
       parentBeingId: remapInBundleField(b.parentBeingId),
       homeSpace:     remapInBundleField(b.homeSpace),

@@ -4,7 +4,7 @@
 // (which history's grants gate the act) and the verb layer's
 // resolveHistoryForFact (which history a fact stamps on) each had their
 // own precedence chain. They agreed in practice, but nothing forced
-// them to — a divergence would gate an act by history A's roles while
+// them to — a divergence would gate an act by history A's ables while
 // stamping its facts into history B. This is the single primitive both
 // call, so the two questions can never resolve to different worlds.
 //

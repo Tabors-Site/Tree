@@ -116,7 +116,7 @@ function _actToMark(a) {
       a?.facts?.[0]?.act ||
       (a?.endMessage?.content
         ? String(a.endMessage.content).slice(0, 40)
-        : a?.activeRole || null),
+        : a?.activeAble || null),
   };
 }
 
@@ -2126,7 +2126,7 @@ function _closeNewHistoryDialog() {
 // One modal overlay over the history tree panel. Two source pickers,
 // the three afterAction choices, an optional comma-separated list of
 // named pointers to re-point at the merged history, and a checkbox to
-// also summon the @merge-mediator role at the result for the LLM
+// also summon the @merge-mediator able at the result for the LLM
 // walkthrough. All resolved in one `merge-histories` substrate call.
 //
 // The dialog is a thin wrapper; substrate carries the doctrine. Every

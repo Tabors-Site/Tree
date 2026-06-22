@@ -188,7 +188,7 @@ export async function callWithFailover(callFn, primaryClient, beingId, rootId, o
   }
 
   // Source the fallback stack. Prefer the pre-built chain when present
-  // (the receiver/actor/role context lives there and the 7-step walker
+  // (the receiver/actor/able context lives there and the 7-step walker
   // already de-duplicated). Fall back to the legacy resolver for
   // extensions that wired their own.
   let stack = null;

@@ -235,7 +235,7 @@ export async function handleDo(socket, env, ack) {
     // ops) rides the containing space's address with the matter id on
     // the reserved `matterId` payload key. The auth space still
     // resolves from the matter's position downstream
-    // (resolveAuthSpaceId), so the role-walk gates at the right place.
+    // (resolveAuthSpaceId), so the able-walk gates at the right place.
     if (typeof payload.matterId === "string" && payload.matterId.length > 0) {
       target = { kind: "matter", id: payload.matterId };
     }

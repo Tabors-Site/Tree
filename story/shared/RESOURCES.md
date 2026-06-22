@@ -7,7 +7,7 @@
 A reality grows by drawing in resources. The substrate exposes one
 primitive (`resource`) with several typed kinds, each shipping a specific
 manifest shape and registering itself with a kind-specific registry at
-install time. The six kinds today are **code**, **role**, **roleflow**,
+install time. The six kinds today are **code**, **able**, **flow**,
 **seed**, **asset**, and **pack** (the meta-kind that glues a group of
 resources together). New kinds can be added without changing the catalog
 or the wire; the registry is open.
@@ -21,7 +21,7 @@ they ARE on a single reality.
 > **Status.** Phase 1 (the folder rename `extensions/` → `resources/`)
 > landed. Phase 2 (kind tagging on existing manifests, supporting files
 > lifted to `resources/`) is in progress. Phase 3 (graph-aware loader,
-> lockfile, role-handler split, per-extension splits into packs) is
+> lockfile, able-handler split, per-extension splits into packs) is
 > queued next. See "Migration order" below.
 
 ---
@@ -123,37 +123,37 @@ field plus kind-specific shape.
 ### `resource:code`
 
 Substrate code that gives the reality new abilities. Loads at boot,
-runs `init(reality)`, registers DO ops, cognition handlers for roles,
+runs `init(reality)`, registers DO ops, cognition handlers for ables,
 hooks, routes, jobs. This is what today's "extension" is. A code
 resource may declare that other resources must be installed for it to
-work (roles it expects to find, seeds it expects to be plantable).
+work (ables it expects to find, seeds it expects to be plantable).
 
 Entry: `index.js` exporting `init(reality)`. Manifest carries the
 existing extension fields (`needs`, `optional`, `provides.*`).
 
-### `resource:role`
+### `resource:able`
 
-A standalone role definition: `canSee`, `canDo`, `canSummon`, `canBe`,
+A standalone able definition: `canSee`, `canDo`, `canSummon`, `canBe`,
 `prompt(ctx)`, `defaultOrientation`. Pure data, no inline `summon`
-function. Registers into the reality's role registry as a spec.
+function. Registers into the reality's able registry as a spec.
 
-The substrate's default LLM cognition runs when a role is summoned and
+The substrate's default LLM cognition runs when a able is summoned and
 no code-cognition handler is registered. Code resources can register
-code-cognition handlers against a role by name via
-`reality.declare.registerRoleHandler("<role-name>", handlerFn)`.
+code-cognition handlers against a able by name via
+`reality.declare.registerAbleHandler("<able-name>", handlerFn)`.
 
-A role's `requires` typically names the code resource that implements
+A able's `requires` typically names the code resource that implements
 its handler (when not LLM).
 
-Entry: `role.js` exporting the role spec.
+Entry: `able.js` exporting the able spec.
 
-### `resource:roleflow`
+### `resource:flow`
 
-Composition data: an ordered list of `{ when, role, stack? }` clauses
-that compose roles per moment from world state. References
-`resource:role` entries by name in its `requires` manifest.
+Composition data: an ordered list of `{ when, able, stack? }` clauses
+that compose ables per moment from world state. References
+`resource:able` entries by name in its `requires` manifest.
 
-Entry: `roleflow.json` carrying the clause list.
+Entry: `flow.json` carrying the clause list.
 
 ### `resource:seed`
 
@@ -166,7 +166,7 @@ of resources together. A seed actually materializes spaces; a pack
 just brings dependencies along.
 
 `requires` names every resource the seed expects to be present at plant
-time (code that hosts roles the seed references, those roles
+time (code that hosts ables the seed references, those ables
 themselves, any other seed templates the bundle composes).
 
 Entry: `seed.json` carrying the bundle. Optional `params` declarations
@@ -195,11 +195,11 @@ package.json sits at the root of an npm package).
 
 Entry: the pack's own `manifest.js` (kind: "pack") plus kind subfolders
 containing each piece. The kind subfolder names are plural by convention
-(`code/`, `roles/`, `roleflows/`, `seeds/`, `assets/`) except `code/`
+(`code/`, `ables/`, `flows/`, `seeds/`, `assets/`) except `code/`
 which holds a single code piece per pack.
 
 Use a pack when several resources are designed to travel together. A
-single role authored on its own does not need a pack wrapper.
+single able authored on its own does not need a pack wrapper.
 
 **Future kinds.** `resource:os` (a pack with default-config and
 orchestrator declarations) lands when an OS distribution wants to ship.
@@ -213,14 +213,14 @@ Every resource manifest carries the same five common fields:
 
 ```js
 export default {
-  kind:        "code" | "role" | "roleflow" | "seed" | "asset" | "pack",
+  kind:        "code" | "able" | "flow" | "seed" | "asset" | "pack",
   name:        "roots-registrar",       // local name within this reality
   version:     "0.1.0",
   description: "...",
   publisher:   null | "<realityId>",    // null for substrate-shipped; set when authored elsewhere
   requires:    [
     { type: "code",  ref: "<hash> | <publisher>/<name>@<range>" },
-    { type: "role",  ref: "..." },
+    { type: "able",  ref: "..." },
     { type: "asset", ref: "..." },
   ],
 };
@@ -250,7 +250,7 @@ package-lock-hash split, same reason.
 The shape is resource-first: each top-level folder under `resources/` is
 one resource (one space). A standalone single-kind resource has its
 manifest at the top of that folder. A pack has its own pack-manifest at
-the top and kind subfolders (plural: code, roles, roleflows, seeds, assets; one piece per code, multiple in each other) inside for each piece.
+the top and kind subfolders (plural: code, ables, flows, seeds, assets; one piece per code, multiple in each other) inside for each piece.
 
 ```
 reality/resources/                      ← heaven-style space (mirrors a future tree)
@@ -263,8 +263,8 @@ reality/resources/                      ← heaven-style space (mirrors a future
 ├── _templates/                         ← one template per kind
 │   ├── pack/
 │   ├── code/
-│   ├── role/
-│   ├── roleflow/
+│   ├── able/
+│   ├── flow/
 │   ├── seed/
 │   └── asset/
 │   (singular here because _templates/ holds one template per kind, not pieces)
@@ -278,24 +278,24 @@ reality/resources/                      ← heaven-style space (mirrors a future
 │   │   ├── handlers.js
 │   │   └── lib/
 │   │       └── claims.js
-│   ├── roles/                          ← role pieces, each in a subfolder
+│   ├── ables/                          ← able pieces, each in a subfolder
 │   │   ├── registrar/
-│   │   │   ├── manifest.js               (kind: "role")
-│   │   │   └── role.js
+│   │   │   ├── manifest.js               (kind: "able")
+│   │   │   └── able.js
 │   │   └── publisher/
 │   │       ├── manifest.js
-│   │       └── role.js
+│   │       └── able.js
 │   └── seeds/
 │       └── catalog/                    ← seed piece
 │           ├── manifest.js               (kind: "seed")
 │           └── seed.json
 │
-├── emotions/                           ← a PACK of roles
+├── emotions/                           ← a PACK of ables
 │   ├── manifest.js                       (kind: "pack")
-│   └── roles/
+│   └── ables/
 │       ├── bored/
 │       │   ├── manifest.js
-│       │   └── role.js
+│       │   └── able.js
 │       ├── tired/
 │       └── ... (six more)
 │
@@ -312,7 +312,7 @@ reality/resources/                      ← heaven-style space (mirrors a future
 ```
 
 **Loader walk.** Read every top-level folder's manifest. If its kind is
-`"pack"`, recurse into the pack's kind subfolders (plural: code, roles, roleflows, seeds, assets; one piece per code, multiple in each other) to find the pieces.
+`"pack"`, recurse into the pack's kind subfolders (plural: code, ables, flows, seeds, assets; one piece per code, multiple in each other) to find the pieces.
 Otherwise the folder IS a single-kind resource.
 
 **Naming inside packs.** Each piece declares its own `name` field
@@ -328,7 +328,7 @@ folder name is documentation; the manifest name is authority.
 Resources don't live in isolation; they reference each other through
 their `requires` manifest. Those edges form a graph. Grouping isn't a
 manual folder structure but the transitive closure of that graph: draw
-a roleflow, you pull its roles, which pull their code, which pull their
+a flow, you pull its ables, which pull their code, which pull their
 assets. A pack is a named root whose closure is the whole pack's
 content; an OS pack is a named root that pulls many packs.
 
@@ -361,16 +361,16 @@ Same availability concern from the Roots trust model.
 - **At draw/install.** When a reality draws a resource, it resolves the
   full closure, fetches every member by hash from the content door,
   verifies each, installs in topological order (assets first, then code,
-  then roles, then roleflows that compose them). Any missing or failing
+  then ables, then flows that compose them). Any missing or failing
   dep refuses the entire install atomically.
 
 ### Granularity is a judgment call
 
 A monolithic code resource has zero external deps and can't have a
-dependency fail. Shattering it into code + three roles + an asset makes
+dependency fail. Shattering it into code + three ables + an asset makes
 each piece reusable but adds edges, and every edge is a way for "deps
 to not hold." **Split where reuse is real, not reflexively into atoms.**
-A code resource that ships ten internal roles only used by its own
+A code resource that ships ten internal ables only used by its own
 handlers is fine staying monolithic; splitting them out adds edges with
 no reuse benefit. The graph is a cost as well as a capability.
 
@@ -410,8 +410,8 @@ Per-kind install handlers:
 
 - `code`: existing extension loader path. Run `init(reality)`, register
   provides, attach routes/tools/hooks.
-- `role`: read `role.js`, `reality.declare.registerRole(name, spec, ownerExtension)`.
-- `roleflow`: read `roleflow.json`, register with the (new) roleflow registry.
+- `able`: read `able.js`, `reality.declare.registerAble(name, spec, ownerExtension)`.
+- `flow`: read `flow.json`, register with the (new) flow registry.
 - `seed`: read `seed.json`, `templateRegistry.registerTemplate(name, bundle, owner)`.
 - `asset`: read manifest, CAS-store each asset, register `(resourceName, assetPath) → hash` reference table.
 - `pack`: nothing to install directly; the pack's pieces (named in
@@ -449,7 +449,7 @@ qualities.roots.catalog = {
       pointer: <signed claim>,    // current version pointer
       versions: {
         "0.1.0": {
-          kind:        "code" | "role" | "roleflow" | "seed" | "asset" | "pack",
+          kind:        "code" | "able" | "flow" | "seed" | "asset" | "pack",
           listingHash: "<sha256>",
           requires:    [{ type, ref }, ...],
           publishedAt: <date>,
@@ -499,19 +499,19 @@ pick up steps 9-13 in parallel once steps 1-8 land.
 7. Implement the lockfile (`reality/resources/.lockfile.json`,
    gitignored). Loader writes on first boot; reads on subsequent boots;
    refuses if any locked hash no longer verifies.
-8. Add the `registerRoleHandler` API in
-   `reality/seed/present/roles/registry.js`. Role registry stores the
-   spec; handler registry stores `(roleName, handlerFn)` separately.
+8. Add the `registerAbleHandler` API in
+   `reality/seed/present/ables/registry.js`. Able registry stores the
+   spec; handler registry stores `(ableName, handlerFn)` separately.
 9. **Convert `roots/` to a pack.** Split into `roots/code/`,
-   `roots/roles/registrar/`, `roots/roles/publisher/`,
+   `roots/ables/registrar/`, `roots/ables/publisher/`,
    `roots/seeds/catalog/`. The pack manifest at `roots/manifest.js`
    names every piece in `requires`. The code resource registers
-   handlers for the two roles via `registerRoleHandler`. End-to-end
+   handlers for the two ables via `registerAbleHandler`. End-to-end
    verify: publish a listing via SUMMON; the registrar handler runs.
-10. **Convert `emotions/` to a pack of roles.** Eight role pieces
-    under `emotions/roles/<name>/`, no code piece. Pack manifest
+10. **Convert `emotions/` to a pack of ables.** Eight able pieces
+    under `emotions/ables/<name>/`, no code piece. Pack manifest
     requires each.
-11. **Convert `harmony/` to a pack.** Code + roles + any seeds.
+11. **Convert `harmony/` to a pack.** Code + ables + any seeds.
 12. **Keep `hello-world/` as a standalone code resource** (single-kind,
     no pack needed). Just `kind: "code"` at `hello-world/manifest.js`.
 13. **Asset migration.** Scan packs for asset files. Either move into
@@ -544,56 +544,56 @@ This is the canonical multi-kind example. Do it first; it exercises
 every piece of the new model.
 
 - `roots/manifest.js` — pack manifest. `kind: "pack"`,
-  `requires: [{ type: "code", ref: "roots-code" }, { type: "role", ref: "roots-registrar" }, { type: "role", ref: "roots-publisher" }, { type: "seed", ref: "roots-catalog" }]`.
+  `requires: [{ type: "code", ref: "roots-code" }, { type: "able", ref: "roots-registrar" }, { type: "able", ref: "roots-publisher" }, { type: "seed", ref: "roots-catalog" }]`.
 - `roots/code/manifest.js` + `index.js` + `handlers.js` + `lib/claims.js` +
-  `ops/delist.js`. `index.js` no longer registers roles inline; it
-  registers code-cognition handlers for the roles via
-  `reality.declare.registerRoleHandler` (instead of registering the
-  roles inline). `kind: "code"`, `name: "roots-code"`,
-  `requires: [{ type: "role", ref: "roots-registrar" }, { type: "role", ref: "roots-publisher" }, { type: "seed", ref: "roots-catalog" }]`.
-- `roots/roles/registrar/manifest.js` + `role.js` — the spec from
-  today's `code/roots/roles/registrar.js`, minus the `summon` function
+  `ops/delist.js`. `index.js` no longer registers ables inline; it
+  registers code-cognition handlers for the ables via
+  `reality.declare.registerAbleHandler` (instead of registering the
+  ables inline). `kind: "code"`, `name: "roots-code"`,
+  `requires: [{ type: "able", ref: "roots-registrar" }, { type: "able", ref: "roots-publisher" }, { type: "seed", ref: "roots-catalog" }]`.
+- `roots/ables/registrar/manifest.js` + `able.js` — the spec from
+  today's `code/roots/ables/registrar.js`, minus the `summon` function
   (the function moves to `roots/code/handlers.js` and gets registered
-  by the code resource's init). `kind: "role"`,
+  by the code resource's init). `kind: "able"`,
   `name: "roots-registrar"`, `requires: [{ type: "code", ref: "roots-code" }]`.
-- `roots/roles/publisher/manifest.js` + `role.js` — pure-data role,
-  LLM cognition. `kind: "role"`, `name: "roots-publisher"`,
+- `roots/ables/publisher/manifest.js` + `able.js` — pure-data able,
+  LLM cognition. `kind: "able"`, `name: "roots-publisher"`,
   `requires: []`.
 - `roots/seeds/catalog/manifest.js` + `seed.json` — the bundle.
   `kind: "seed"`, `name: "roots-catalog"`,
-  `requires: [{ type: "role", ref: "roots-registrar" }]`.
+  `requires: [{ type: "able", ref: "roots-registrar" }]`.
 
-### `emotions/` → pack of 8 roles
+### `emotions/` → pack of 8 ables
 
-The eight modifier-role files (`bored.js`, `tired.js`, `focused.js`,
+The eight modifier-able files (`bored.js`, `tired.js`, `focused.js`,
 `curious.js`, `cautious.js`, `urgent.js`, `playful.js`, `formal.js`)
-become eight role pieces under a pack:
+become eight able pieces under a pack:
 
 - `emotions/manifest.js` — pack manifest. `kind: "pack"`,
-  `requires: [{ type: "role", ref: "emotions-bored" }, ... seven more]`.
-- `emotions/roles/bored/manifest.js` + `role.js`. `kind: "role"`,
+  `requires: [{ type: "able", ref: "emotions-bored" }, ... seven more]`.
+- `emotions/ables/bored/manifest.js` + `able.js`. `kind: "able"`,
   `name: "emotions-bored"`, `requires: []`.
 - ...seven more, same shape.
 
 Today they're registered by `emotions/index.js`'s `init()`. After
-migration: each role registers on its own. `emotions/index.js`
+migration: each able registers on its own. `emotions/index.js`
 retires; there's no `emotions/code/` piece because nothing in the
 current `emotions/` was substrate code.
 
-### `harmony/` → pack with code + multiple roles
+### `harmony/` → pack with code + multiple ables
 
 `harmony/` ships substrate code (`index.js`, handlers) plus
-dancer/musician/listener/etc. roles. Split:
+dancer/musician/listener/etc. ables. Split:
 
 - `harmony/manifest.js` — pack manifest.
 - `harmony/code/` — the substrate code. Registers cognition handlers
-  for the role names via `registerRoleHandler`.
-- `harmony/roles/dancer-llm/`, `harmony/roles/musician-llm/`, etc. — one
-  per role currently in `harmony/roles/`.
+  for the able names via `registerAbleHandler`.
+- `harmony/ables/dancer-llm/`, `harmony/ables/musician-llm/`, etc. — one
+  per able currently in `harmony/ables/`.
 - Any seeds harmony ships go to `harmony/seeds/<name>/`.
 
 `harmony/code/manifest.js` declares
-`requires: [{ type: "role", ref: "harmony-dancer-llm" }, ...]` so
+`requires: [{ type: "able", ref: "harmony-dancer-llm" }, ...]` so
 install order is enforced.
 
 ### `hello-world/` → standalone code resource
@@ -607,19 +607,19 @@ Single-kind extension. No pack wrapper needed. Just:
 
 Worth pinning so the migration doesn't quietly close any of these.
 
-- **Roleflow registry implementation.** Roleflow waits on its own
-  design pass. Until that lands, roleflow stays unimplemented at the
-  registry level. The first roleflow resource forces the design.
+- **Flow registry implementation.** Flow waits on its own
+  design pass. Until that lands, flow stays unimplemented at the
+  registry level. The first flow resource forces the design.
 - **Asset resource boundaries.** Should every binary asset be its own
   resource, or do they cluster (one asset resource = a collection of
   bytes shipped together)? Probably the latter: a `treeos-characters`
   asset resource ships ten `.glb` files, declared in the manifest.
   Individual hashes available for reference.
-- **Code-registered roles vs published roles.** A code resource can
-  register an "inline" role at init time (not a separate published
+- **Code-registered ables vs published ables.** A code resource can
+  register an "inline" able at init time (not a separate published
   resource). The clean answer is "allowed, but discouraged" — for
-  one-off internal roles, inline is fine; for anything publishable or
-  composable across resources, make it a role piece in a pack.
+  one-off internal ables, inline is fine; for anything publishable or
+  composable across resources, make it a able piece in a pack.
 - **`publisher` field on substrate-shipped resources.** The substrate
   ships its own roots/harmony/hello-world. Is their publisher the
   reality running them at first plant, or `null` (substrate-canonical)?
@@ -656,10 +656,10 @@ End-to-end test scenario after migration (drop DB, fresh boot):
 3. `npm start` — boot resolves the closure of the selected profile,
    verifies every hash, writes `.lockfile.json`, installs in
    topological order. The roots pack's code piece installs after its
-   required role and seed pieces are in place.
+   required able and seed pieces are in place.
 4. SEE on the catalog address — confirm the registrar being is birthed
    and owns the catalog space.
-5. SEE on `<reality>/./roles` — confirm `roots-registrar` and
+5. SEE on `<reality>/./ables` — confirm `roots-registrar` and
    `roots-publisher` are registered.
 6. SUMMON the registrar with
    `intent: "publish-listing", kind: "code", publisher: "<some-id>",
@@ -670,10 +670,10 @@ End-to-end test scenario after migration (drop DB, fresh boot):
 7. Run the existing e2e at
    `reality/.test/e2e/roots-catalog-e2e.mjs`. Update the listing shape
    for kind + requires + status. Should still pass.
-8. Confirm `emotions-bored` role is registered after boot.
-9. Confirm `harmony` pack loaded its required role pieces first, then
+8. Confirm `emotions-bored` able is registered after boot.
+9. Confirm `harmony` pack loaded its required able pieces first, then
    the code piece wired the cognition handlers.
-10. **Negative.** Add a `requires` ref to a non-existent role in
+10. **Negative.** Add a `requires` ref to a non-existent able in
     `roots/code/manifest.js`. Boot refuses-load with "missing dep" and
     names the broken edge. No partial state. Restore the ref, boot
     again — clean.

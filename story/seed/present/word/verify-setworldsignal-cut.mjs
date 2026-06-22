@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// set-world-signal (role-manager.word), LIVE through the bridge with ZERO stubs. The
+// set-world-signal (able-manager.word), LIVE through the bridge with ZERO stubs. The
 // CONTROL strand (the two kebab gates + the not-initialized guard) is .word; the
 // validators + the value coercion + the story-root set-space emit are host: escapes
-// wired by role-managerHost.js. Proves: a signal publishes to the story root
+// wired by able-managerHost.js. Proves: a signal publishes to the story root
 // (qualities.world.<ns>.<key>, one do:set-space fact, value coerced) and the kebab
 // refusal. CALLER mode (no `through`) — the publish attributes to the actor. Full
 // begin.js boot. Scratch DB, wiped.
@@ -41,7 +41,7 @@ const { sealFacts } = await import(`${R}/seed/past/fact/facts.js`);
 const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { getSpaceRootId } = await import(`${R}/seed/sprout.js`);
 const { doVerb } = await import(`${R}/seed/ibp/verbs/do.js`);
-const { resolveRoleWord } = await import(`${R}/seed/present/word/roleWordRegistry.js`);
+const { resolveAbleWord } = await import(`${R}/seed/present/word/ableWordRegistry.js`);
 
 let pass = 0, fail = 0;
 const ok = (l) => { pass++; console.log(`  ✓ ${l}`); };
@@ -50,7 +50,7 @@ const poll = async (fn, t = 60000, e = 250) => { const t0 = Date.now(); while (D
 const getPath = (o, p) => p.split(".").reduce((x, k) => (x == null ? x : x[k]), o);
 const ident = { beingId: I_AM, name: "i-am", nameId: "i-am" };
 
-// drive the REAL set-world-signal op via doVerb → the cut handler → role-manager.word
+// drive the REAL set-world-signal op via doVerb → the cut handler → able-manager.word
 async function publish(namespace, key, value) {
   const branch = "0";
   const sc = { actId: randomUUID(), actorAct: { branch, history: branch, by: "i-am" }, identity: ident, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
@@ -64,8 +64,8 @@ async function publish(namespace, key, value) {
 console.log(`\n  verify-setworldsignal-cut (REAL set-world-signal op via doVerb → the cut)\n  DB: ${SCRATCH_DB.split("/").pop()}\n`);
 try {
   await poll(() => findByName("being", "cherub", "0")); // genesis settled
-  const ir = resolveRoleWord("role-manager", "set-world-signal");
-  ir ? ok(`role-manager.word resolves through the bridge (self-registered)`) : bad(`resolves`, "null");
+  const ir = resolveAbleWord("able-manager", "set-world-signal");
+  ir ? ok(`able-manager.word resolves through the bridge (self-registered)`) : bad(`resolves`, "null");
 
   // ── 1. publish a signal → published, value coerced ──
   const p = await publish("harmony", "tick.alive", "true");

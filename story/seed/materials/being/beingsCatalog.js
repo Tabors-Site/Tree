@@ -42,7 +42,7 @@ export async function describeBeingsCatalog(opts = {}) {
       beingId:       String(slotRef.id),
       name:          state.name || null,
       cognition:     beingCognition(state),
-      defaultRole:   state.defaultRole || null,
+      defaultAble:   state.defaultAble || null,
       homeSpace:     state.homeSpace || null,
       parentBeingId: state.parentBeingId || null,
       createdAt:     state.createdAt || null,

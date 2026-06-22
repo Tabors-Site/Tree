@@ -453,7 +453,7 @@ registerOperation("close-story", {
     if (!(await hasHeavenAuthority(identity.beingId))) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
-        "Only beings with heaven authority (owner or angel role) can close the story.",
+        "Only beings with heaven authority (owner or angel able) can close the story.",
       );
     }
     log.warn(

@@ -135,7 +135,7 @@ export async function enqueueIntake(spaceId, beingId, entry) {
       sender:          entry.from || "transport",
       content:         entry,           // the whole entry rides as content
       priority:        entry.priority || "INTERACTIVE",
-      activeRole:      entry.activeRole || null,
+      activeAble:      entry.activeAble || null,
       attachments:     entry.attachments,
       inboxSpaceId:    String(spaceId),
       sentAt,
@@ -225,13 +225,13 @@ export async function pickNextIntake(spaceId, beingId, opts = {}) {
       rootCorrelation: row.rootCorrelation,
       from:            row.sender,
       content,
-      // Envelope intent. Surfaced here so the receiver's role handler
+      // Envelope intent. Surfaced here so the receiver's able handler
       // (LLM cognition, scripted summon(), or the human inbox panel)
       // can dispatch on the caller's stated purpose without re-reading
       // the projection row. See seed/SUMMON.md.
       intent:          row.intent || null,
       priority:        row.priority,
-      activeRole:      row.activeRole,
+      activeAble:      row.activeAble,
       orientation:     row.orientation || "forward",
       inReplyTo:       row.inReplyTo,
       attachments:     row.attachments,

@@ -3,9 +3,9 @@
 // `do create-matter` — bring a new Matter into existence under target
 // (target may be a space or another matter parent).
 //
-// WIRED bundle (mirrors store/words/grant-role/index.js): create-matter's
+// WIRED bundle (mirrors store/words/grant-able/index.js): create-matter's
 // world strand is create-matter.word — the handler runs it through the bridge
-// (resolveRoleWord -> runRoleWord, CALLER mode, host escapes wired by
+// (resolveAbleWord -> runAbleWord, CALLER mode, host escapes wired by
 // matterHost.js) with the JS createMatterHandler body as the clean-miss
 // fallback. The .word is the live path; the JS body runs only on a clean miss.
 //
@@ -25,7 +25,7 @@
 import { registerOperation } from "../../../ibp/operations.js";
 import { stampsFact, stampsWordFact } from "../../../ibp/factResult.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
-import { registerRoleWord } from "../../../present/word/roleWordRegistry.js";
+import { registerAbleWord } from "../../../present/word/ableWordRegistry.js";
 import { detectTargetKind, targetIdOf } from "../../../materials/_targetShape.js";
 import { assertMatterCoordInBounds } from "../../../materials/matter/coordBounds.js";
 import { resolveMatterName } from "../../../materials/matter/matters.js";
@@ -37,7 +37,7 @@ import { matterContentId } from "../../../materials/matter/matterId.js";
 // imports this file at seed boot, and a DRY harness importing it triggers it
 // too). WIRED: _createMatterViaWord runs the `.word` through the bridge; the JS
 // createMatterHandler below is the clean-miss fallback.
-registerRoleWord("matter", "create-matter", new URL("./create-matter.word", import.meta.url));
+registerAbleWord("matter", "create-matter", new URL("./create-matter.word", import.meta.url));
 
 // create-matter's world strand is create-matter.word: the actor gate, the
 // resolve-birth-spec compute (via the host), the content-addressed birth-fact
@@ -46,13 +46,13 @@ registerRoleWord("matter", "create-matter", new URL("./create-matter.word", impo
 // on a clean miss so the JS body runs.
 async function _createMatterViaWord({ target, params, caller, moment }) {
   if (!moment) return null;
-  const { resolveRoleWord, runRoleWord } = await import("../../../present/word/roleWordRegistry.js");
-  const ir = resolveRoleWord("matter", "create-matter", moment?.actorAct?.history);
+  const { resolveAbleWord, runAbleWord } = await import("../../../present/word/ableWordRegistry.js");
+  const ir = resolveAbleWord("matter", "create-matter", moment?.actorAct?.history);
   if (!ir) return null;
   const { matterHostEnv } = await import("./matterHost.js");
   const history = moment?.actorAct?.history;
   try {
-    const { result } = await runRoleWord(ir, {
+    const { result } = await runAbleWord(ir, {
       moment, history,
       trigger: {
         target,
@@ -255,10 +255,10 @@ registerOperation("create-matter", {
     content: { type: "multiline", label: "Content (text, a cas ref from upload, or a reference object like {url}; optional)", required: false },
     coord: { type: "json", label: "Position {x,y,z?} inside the space (optional)", required: false },
   },
-  // The role-walk sees `create-matter:<type>` so roles can scope
+  // The able-walk sees `create-matter:<type>` so ables can scope
   // which matter types they may bring into the world — bare
   // `create-matter` entries keep matching (namespace semantics, same
-  // shape as grant-role:<role>).
+  // shape as grant-able:<able>).
   authAction: ({ params }) =>
     typeof params?.type === "string" && params.type.length
       ? `create-matter:${params.type}`

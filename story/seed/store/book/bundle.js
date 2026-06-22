@@ -18,7 +18,7 @@
 //     },
 //     manifest: {
 //       extensions,           array of extension names the receiver must have loaded
-//       roles,                array of role names the receiver must have registered
+//       ables,                array of able names the receiver must have registered
 //     },
 //     parameters: [           // declared parameter holes (may be empty)
 //       { name, type, default?, description? }
@@ -90,8 +90,8 @@ export function assertValidBundle(bundle) {
   if (!Array.isArray(bundle.manifest.extensions)) {
     throw new Error("bundle.manifest.extensions: required array");
   }
-  if (!Array.isArray(bundle.manifest.roles)) {
-    throw new Error("bundle.manifest.roles: required array");
+  if (!Array.isArray(bundle.manifest.ables)) {
+    throw new Error("bundle.manifest.ables: required array");
   }
   if (!bundle.content || typeof bundle.content !== "object") {
     throw new Error("bundle.content: required object");
@@ -162,7 +162,7 @@ export function emptyBundle({ sourceStory, sourceHistory, sourceScopeName, sourc
     },
     manifest: {
       extensions: [],
-      roles:      [],
+      ables:      [],
     },
     // Captured clones don't author parameters — operators add them by
     // hand if they want to turn a captured snapshot into a template.

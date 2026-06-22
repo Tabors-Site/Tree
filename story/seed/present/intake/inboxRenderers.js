@@ -6,12 +6,12 @@
 // That spec is built server-side here, keyed by the envelope intent,
 // and bundled into the my-inbox SEE op's response.
 //
-// Sovereignty: the receiver's role decides what to do with summons,
+// Sovereignty: the receiver's able decides what to do with summons,
 // including what UI to show when a human inhabits the receiver. This
-// registry is HOW the role's choice reaches the browser. Roles that
+// registry is HOW the able's choice reaches the browser. Ables that
 // declare receiver entries can opt in by registering a renderer for
 // their accepted intent(s); the seed ships renderers for the well-
-// known intents it defines (role-request).
+// known intents it defines (able-request).
 //
 // Render spec shape (JSON-serializable; no functions on the wire):
 //

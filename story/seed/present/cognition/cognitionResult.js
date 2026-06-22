@@ -36,7 +36,7 @@
 // timeout / http-error / garbage / aborted / internal are infra
 // failures: the cognition tried to act and the rails failed. "refused"
 // is a domain failure: the cognition perceived the situation and
-// deliberately declined. Scripted roles use this to surface
+// deliberately declined. Scripted ables use this to surface
 // perception-aware refusals (e.g. birther sees a name collision in
 // ctx.innerFace.blocks and refuses the mate request without going
 // through the in-place uniqueness throw).
@@ -51,7 +51,7 @@ const FAILURE_SHAPES = new Set([
 
 /**
  * Coerce a legacy or external return value into a CognitionResult.
- * 3-momentum.js calls this at the boundary where role.summon's return
+ * 3-momentum.js calls this at the boundary where able.summon's return
  * shape becomes the discriminated form.
  *
  * Rules:

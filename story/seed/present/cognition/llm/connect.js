@@ -178,7 +178,7 @@ const MAX_SLOTS = 50;
 // Assignment data carries two kinds of fields:
 //   Connection fields (which LLM):
 //     `default` / `main`  — the primary connection
-//     `[slotName]`        — role-specific overrides (e.g. "scout")
+//     `[slotName]`        — able-specific overrides (e.g. "scout")
 //
 //   Authority flags (who decides):
 //     `enforced`   lock IN this assignment for descendants. Space
@@ -860,7 +860,7 @@ export async function resolveConnection(beingId, connectionId, cacheKey, { momen
 
 /**
  * Resolve the LLM client for a being on a specific history. Chain:
- *   1. overrideConnectionId (from a tree's role-slot resolution)
+ *   1. overrideConnectionId (from a tree's able-slot resolution)
  *   2. being slot assignment (qualities.beingLlm.slots[slot])
  *   3. being main slot (qualities.beingLlm.slots.main), if slot
  *      wasn't already "main"
@@ -892,7 +892,7 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId, his
 
   slot = slot || "main";
 
-  // 1. Override (e.g. from a root's role-slot resolution). Highest priority.
+  // 1. Override (e.g. from a root's able-slot resolution). Highest priority.
   if (overrideConnectionId) {
     const overrideCacheKey = "conn:" + overrideConnectionId + ":" + history;
     const overrideCached = beingClientCache.get(overrideCacheKey);
