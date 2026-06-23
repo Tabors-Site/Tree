@@ -104,10 +104,6 @@ The when condition vocabulary:
     space.name            the position space's name
     space.quality.<ns>.<k> read a quality on the position space
     world.<ns>.<k>        read a world signal at story root
-    time.hour             0..23 server local
-    time.dayOfWeek        0=Sun .. 6=Sat
-    time.iso              ISO timestamp
-    time.sinceLastMoment  seconds since this being's last sealed moment
     inHomeSpace           true when space.id === me.homeSpace
     connectedFrom         the caller's beingId on this summon
     verb                  the verb that woke this moment ("summon" etc)

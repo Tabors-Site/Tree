@@ -26,7 +26,10 @@ async function _actor(actorBeingId) {
 
 let _iAmId = null;
 async function _iAm() {
-  if (_iAmId == null) { const { I_AM } = await import("../../materials/being/seedBeings.js"); _iAmId = String(I_AM); }
+  if (_iAmId == null) {
+    const { I_AM } = await import("../../materials/being/seedBeings.js");
+    _iAmId = String(I_AM);
+  }
   return _iAmId;
 }
 
@@ -36,8 +39,15 @@ async function _iAm() {
 // the latest "0" coin fact's author. Only consulted on a non-I_AM write to "0" (rare).
 async function _isIAmBedrock(name) {
   const { default: Fact } = await import("../../past/fact/fact.js");
-  const decl = await Fact.find({ verb: "do", act: COIN, "params.word": String(name), history: "0" })
-    .sort({ date: -1, seq: -1 }).limit(1).lean();
+  const decl = await Fact.find({
+    verb: "do",
+    act: COIN,
+    "params.word": String(name),
+    history: "0",
+  })
+    .sort({ date: -1, seq: -1 })
+    .limit(1)
+    .lean();
   return decl.length > 0 && String(decl[0].through) === (await _iAm());
 }
 
@@ -53,8 +63,18 @@ async function _inAct(moment, label, fn) {
 // is SERIALIZABLE -- handlers are refs to code matter, not inline functions, because a fact is data.
 // Re-binding lays a fresh coin fact; the fold's last declaration wins (the words-stack rule).
 // Returns { word, history }.
-export async function bindWord(name, descriptor = {}, { moment = null, history = "0", actorBeingId = null, skipIfUnchanged = false } = {}) {
-  if (!name || typeof name !== "string") throw new Error("bindWord: a non-empty word name is required");
+export async function bindWord(
+  name,
+  descriptor = {},
+  {
+    moment = null,
+    history = "0",
+    actorBeingId = null,
+    skipIfUnchanged = false,
+  } = {},
+) {
+  if (!name || typeof name !== "string")
+    throw new Error("bindWord: a non-empty word name is required");
   const { emitFact } = await import("../../past/fact/facts.js");
   const actor = await _actor(actorBeingId);
   const { ownerExtension = "seed", ...rest } = descriptor;
@@ -71,37 +91,73 @@ export async function bindWord(name, descriptor = {}, { moment = null, history =
       // for the binding compare and check it separately, else the dedup never matches and a
       // reboot re-declares every op (chain growth).
       const { word: _w, ownerExtension: curOwner, ...curBinding } = current;
-      if (JSON.stringify(curBinding) === JSON.stringify(binding) && curOwner === ownerExtension) return { word: name, history: String(history), skipped: true };
+      if (
+        JSON.stringify(curBinding) === JSON.stringify(binding) &&
+        curOwner === ownerExtension
+      )
+        return { word: name, history: String(history), skipped: true };
     }
   }
   // BEDROCK guard — AFTER the dedup, so I_AM's idempotent genesis re-declares skip above and only a
   // real override by ANOTHER reaches here. A non-I_AM cannot re-declare an I_AM "0" word on "0".
-  if (String(history) === "0" && String(actor) !== (await _iAm()) && await _isIAmBedrock(name)) {
-    throw new Error(`the I_AM genesis word "${name}" is bedrock on heaven and cannot be re-declared by another — only I_AM may, or shadow it on your own history`);
+  if (
+    String(history) === "0" &&
+    String(actor) !== (await _iAm()) &&
+    (await _isIAmBedrock(name))
+  ) {
+    throw new Error(
+      `the I_AM genesis word "${name}" is bedrock on heaven and cannot be re-declared by another — only I_AM may, or shadow it on your own history`,
+    );
   }
-  await _inAct(moment, `I coin the word ${name}`, (ctx) => emitFact({
-    through: actor, history: String(history), verb: "do", act: COIN,
-    of: { kind: "being", id: actor },
-    params: { word: name, ownerExtension, binding },
-  }, ctx));
-  if (String(history) === "0") _projection.set(name, { ...binding, ownerExtension }); // live projection: binding + provenance
+  await _inAct(moment, `I coin the word ${name}`, (ctx) =>
+    emitFact(
+      {
+        through: actor,
+        history: String(history),
+        verb: "do",
+        act: COIN,
+        of: { kind: "being", id: actor },
+        params: { word: name, ownerExtension, binding },
+      },
+      ctx,
+    ),
+  );
+  if (String(history) === "0")
+    _projection.set(name, { ...binding, ownerExtension }); // live projection: binding + provenance
   return { word: name, history: String(history) };
 }
 
 // Disable a word: lay a retire fact. The declaration stays on the chain forever; this is
 // the "new word that says it can't be used". A later re-bind (a fresh declare) re-enables it.
-export async function disableWord(name, { moment = null, history = "0", actorBeingId = null } = {}) {
+export async function disableWord(
+  name,
+  { moment = null, history = "0", actorBeingId = null } = {},
+) {
   const { emitFact } = await import("../../past/fact/facts.js");
   const actor = await _actor(actorBeingId);
   // BEDROCK: same guard as bindWord — a non-I_AM cannot disable an I_AM "0" word (shadow on a history).
-  if (String(history) === "0" && String(actor) !== (await _iAm()) && await _isIAmBedrock(name)) {
-    throw new Error(`the I_AM genesis word "${name}" is bedrock on heaven and cannot be disabled by another — only I_AM may, or shadow it on your own history`);
+  if (
+    String(history) === "0" &&
+    String(actor) !== (await _iAm()) &&
+    (await _isIAmBedrock(name))
+  ) {
+    throw new Error(
+      `the I_AM genesis word "${name}" is bedrock on heaven and cannot be disabled by another — only I_AM may, or shadow it on your own history`,
+    );
   }
-  await _inAct(moment, `I retire the word ${name}`, (ctx) => emitFact({
-    through: actor, history: String(history), verb: "do", act: RETIRE,
-    of: { kind: "being", id: actor },
-    params: { word: name },
-  }, ctx));
+  await _inAct(moment, `I retire the word ${name}`, (ctx) =>
+    emitFact(
+      {
+        through: actor,
+        history: String(history),
+        verb: "do",
+        act: RETIRE,
+        of: { kind: "being", id: actor },
+        params: { word: name },
+      },
+      ctx,
+    ),
+  );
   if (String(history) === "0") _projection.delete(String(name));
 }
 
@@ -113,15 +169,27 @@ export async function getWord(name, history = "0") {
   const { default: Fact } = await import("../../past/fact/fact.js");
   const histories = String(history) === "0" ? ["0"] : ["0", String(history)];
   const facts = await Fact.find({
-    verb: "do", act: { $in: [COIN, RETIRE] }, "params.word": String(name),
+    verb: "do",
+    act: { $in: [COIN, RETIRE] },
+    "params.word": String(name),
     history: { $in: histories },
-  }).sort({ date: 1, seq: 1 }).lean();
-  let binding = null, owner = null;
+  })
+    .sort({ date: 1, seq: 1 })
+    .lean();
+  let binding = null,
+    owner = null;
   for (const f of facts) {
-    if (f.act === COIN) { binding = f.params?.binding ?? {}; owner = f.params?.ownerExtension ?? null; }
-    else { binding = null; owner = null; } // disable wins until a later re-declare
+    if (f.act === COIN) {
+      binding = f.params?.binding ?? {};
+      owner = f.params?.ownerExtension ?? null;
+    } else {
+      binding = null;
+      owner = null;
+    } // disable wins until a later re-declare
   }
-  return binding ? { word: String(name), ...binding, ownerExtension: owner } : null;
+  return binding
+    ? { word: String(name), ...binding, ownerExtension: owner }
+    : null;
 }
 
 // ── the live projection: an in-memory fold of the vocabulary, for sync reads ──
@@ -135,13 +203,23 @@ const _projection = new Map(); // word name -> binding
 
 export async function rehydrateWordProjection(history = "0") {
   const { default: Fact } = await import("../../past/fact/fact.js");
-  const facts = await Fact.find({ verb: "do", act: { $in: [COIN, RETIRE] }, history: String(history), "params.word": { $exists: true } })
-    .sort({ date: 1, seq: 1 }).lean();
+  const facts = await Fact.find({
+    verb: "do",
+    act: { $in: [COIN, RETIRE] },
+    history: String(history),
+    "params.word": { $exists: true },
+  })
+    .sort({ date: 1, seq: 1 })
+    .lean();
   _projection.clear();
   for (const f of facts) {
     const name = f.params?.word;
     if (!name) continue;
-    if (f.act === COIN) _projection.set(String(name), { ...(f.params.binding ?? {}), ownerExtension: f.params.ownerExtension });
+    if (f.act === COIN)
+      _projection.set(String(name), {
+        ...(f.params.binding ?? {}),
+        ownerExtension: f.params.ownerExtension,
+      });
     else _projection.delete(String(name)); // disable; a later declare re-adds
   }
   return _projection.size;
@@ -163,8 +241,10 @@ export function getWordSync(name) {
 const _hostHandlers = new Map();
 
 export function registerHostHandler(ref, fn) {
-  if (typeof ref !== "string" || !ref) throw new Error("registerHostHandler: a non-empty ref is required");
-  if (typeof fn !== "function") throw new Error("registerHostHandler: fn must be a function");
+  if (typeof ref !== "string" || !ref)
+    throw new Error("registerHostHandler: a non-empty ref is required");
+  if (typeof fn !== "function")
+    throw new Error("registerHostHandler: fn must be a function");
   _hostHandlers.set(ref, fn);
 }
 
@@ -208,16 +288,22 @@ export function resolveWordFromFold(name) {
     kind: w.kind || null,
     handler,
     matter,
-    factAction: typeof w.factAction === "string" && w.factAction ? w.factAction : null,
+    factAction:
+      typeof w.factAction === "string" && w.factAction ? w.factAction : null,
     factVerb: typeof w.factVerb === "string" && w.factVerb ? w.factVerb : null,
     noun: typeof w.noun === "string" && w.noun ? w.noun : null,
     // resultPolicy.keep: the fail-closed allowlist the keystone (emitWordFact) curates the stamped
     // fact's result to. Carried through so the dispatcher's resolved binding reaches the policy.
     resultPolicy:
-      w.resultPolicy && Array.isArray(w.resultPolicy.keep) ? w.resultPolicy : null,
+      w.resultPolicy && Array.isArray(w.resultPolicy.keep)
+        ? w.resultPolicy
+        : null,
     bootstrap: !!w.bootstrap,
     targets: Array.isArray(w.targets) && w.targets.length ? w.targets : null,
-    matterTypes: Array.isArray(w.matterTypes) && w.matterTypes.length ? w.matterTypes : null,
+    matterTypes:
+      Array.isArray(w.matterTypes) && w.matterTypes.length
+        ? w.matterTypes
+        : null,
     args: w.args,
     label: w.label,
     description: w.description,
@@ -258,8 +344,13 @@ export function resolveDoOpFromFold(name) {
 // well as the Map, until the Map is retired. NOTE: authAction is a function (not serializable), so an
 // op that refines its auth key keeps that refinement on the Map path until the host-ref form lands.
 // Returns the count declared. filter: { target } or { ownerExtension } (see operations.listOperations).
-export async function declareOpsToFold({ moment = null, history = "0", filter = {} } = {}) {
-  const { listOperations, getOperation } = await import("../../ibp/operations.js");
+export async function declareOpsToFold({
+  moment = null,
+  history = "0",
+  filter = {},
+} = {}) {
+  const { listOperations, getOperation } =
+    await import("../../ibp/operations.js");
   const names = listOperations(filter).map((o) => o.name);
   let n = 0;
   for (const name of names) {
@@ -267,21 +358,32 @@ export async function declareOpsToFold({ moment = null, history = "0", filter = 
     if (!op?.handler) continue;
     registerHostHandler(name, op.handler);
     // authAction is a function (the auth-key refinement); carry it as a host ref so the fold op keeps it.
-    const authRef = typeof op.authAction === "function" ? `${name}:authAction` : null;
+    const authRef =
+      typeof op.authAction === "function" ? `${name}:authAction` : null;
     if (authRef) registerHostHandler(authRef, op.authAction);
-    await bindWord(name, {
-      ownerExtension: op.ownerExtension || "seed",
-      kind: "op",
-      do: { ref: name },
-      authAction: authRef ? { ref: authRef } : undefined,
-      targets: Array.isArray(op.targets) ? [...op.targets] : ["being"],
-      matterTypes: Array.isArray(op.matterTypes) && op.matterTypes.length ? [...op.matterTypes] : undefined,
-      factAction: typeof op.factAction === "string" && op.factAction ? op.factAction : name,
-      // args (the op's field schema) rides the fold so descriptor.js builds forms from the fold,
-      // not the Map (10.md step 6). Serializable, so a fact holds it.
-      args: op.args ? JSON.parse(JSON.stringify(op.args)) : undefined,
-      useNamespaceKey: op.useNamespaceKey ? true : undefined,
-    }, { moment, history, skipIfUnchanged: true });
+    await bindWord(
+      name,
+      {
+        ownerExtension: op.ownerExtension || "seed",
+        kind: "op",
+        do: { ref: name },
+        authAction: authRef ? { ref: authRef } : undefined,
+        targets: Array.isArray(op.targets) ? [...op.targets] : ["being"],
+        matterTypes:
+          Array.isArray(op.matterTypes) && op.matterTypes.length
+            ? [...op.matterTypes]
+            : undefined,
+        factAction:
+          typeof op.factAction === "string" && op.factAction
+            ? op.factAction
+            : name,
+        // args (the op's field schema) rides the fold so descriptor.js builds forms from the fold,
+        // not the Map (10.md step 6). Serializable, so a fact holds it.
+        args: op.args ? JSON.parse(JSON.stringify(op.args)) : undefined,
+        useNamespaceKey: op.useNamespaceKey ? true : undefined,
+      },
+      { moment, history, skipIfUnchanged: true },
+    );
     n++;
   }
   return n;
@@ -305,21 +407,37 @@ export function listFoldedOps() {
 // resolves a type from the fold (resolveTypeFromFold) as well as the Map, until the Map retires.
 // (Like the do-ops, the types Map stays as the bootstrap buffer: seed types register at module load,
 // before seedFold can declare them, and getMatterType is read during the bootstrap that builds them.)
-export async function declareTypesToFold({ moment = null, history = "0" } = {}) {
+export async function declareTypesToFold({
+  moment = null,
+  history = "0",
+} = {}) {
   const { listMatterTypes } = await import("../../materials/matter/types.js");
   let n = 0;
   for (const t of listMatterTypes()) {
-    await bindWord(t.name, {
-      ownerExtension: t.ownerExtension || "seed",
-      kind: "type",
-      description: t.description ?? null,
-      contentKinds: Array.isArray(t.contentKinds) ? [...t.contentKinds] : ["text", "none"],
-      mimeTypes: Array.isArray(t.mimeTypes) ? [...t.mimeTypes] : null,
-      ops: Array.isArray(t.ops) ? [...t.ops] : [],
-      render: t.render && typeof t.render === "object" ? { ...t.render } : null,
-      claims: t.claims && typeof t.claims === "object" ? JSON.parse(JSON.stringify(t.claims)) : null,
-      executable: t.executable && typeof t.executable === "object" ? { ...t.executable } : null, // 21.md P5: the run-op + effect-class ride the fold
-    }, { moment, history, skipIfUnchanged: true });
+    await bindWord(
+      t.name,
+      {
+        ownerExtension: t.ownerExtension || "seed",
+        kind: "type",
+        description: t.description ?? null,
+        contentKinds: Array.isArray(t.contentKinds)
+          ? [...t.contentKinds]
+          : ["text", "none"],
+        mimeTypes: Array.isArray(t.mimeTypes) ? [...t.mimeTypes] : null,
+        ops: Array.isArray(t.ops) ? [...t.ops] : [],
+        render:
+          t.render && typeof t.render === "object" ? { ...t.render } : null,
+        claims:
+          t.claims && typeof t.claims === "object"
+            ? JSON.parse(JSON.stringify(t.claims))
+            : null,
+        executable:
+          t.executable && typeof t.executable === "object"
+            ? { ...t.executable }
+            : null, // 21.md P5: the run-op + effect-class ride the fold
+      },
+      { moment, history, skipIfUnchanged: true },
+    );
     n++;
   }
   return n;
@@ -334,12 +452,18 @@ export function resolveTypeFromFold(name) {
   return {
     name: String(name),
     description: w.description ?? null,
-    contentKinds: Array.isArray(w.contentKinds) && w.contentKinds.length ? [...w.contentKinds] : ["text", "none"],
+    contentKinds:
+      Array.isArray(w.contentKinds) && w.contentKinds.length
+        ? [...w.contentKinds]
+        : ["text", "none"],
     mimeTypes: Array.isArray(w.mimeTypes) ? [...w.mimeTypes] : null,
     ops: Array.isArray(w.ops) ? [...w.ops] : [],
     render: w.render && typeof w.render === "object" ? { ...w.render } : null,
     claims: w.claims && typeof w.claims === "object" ? w.claims : null,
-    executable: w.executable && typeof w.executable === "object" ? { ...w.executable } : null, // 21.md P5
+    executable:
+      w.executable && typeof w.executable === "object"
+        ? { ...w.executable }
+        : null, // 21.md P5
     ownerExtension: w.ownerExtension || "seed",
   };
 }
@@ -359,13 +483,23 @@ export function listFoldedTypes() {
 // The parsed IR stays HOST (ableWordRegistry's irCache); the fold carries only able:op -> source, the
 // same shape as an op's do.ref. declareAbleWordsToFold mirrors declareOpsToFold (reads the registered
 // able-words); resolveAbleWordSource is the sync source-read ableWordRegistry's resolveAbleWord uses.
-export async function declareAbleWordsToFold({ moment = null, history = "0" } = {}) {
+export async function declareAbleWordsToFold({
+  moment = null,
+  history = "0",
+} = {}) {
   const { listRegistered } = await import("./ableWordRegistry.js");
   let n = 0;
   for (const w of listRegistered()) {
-    await bindWord(`${w.able}:${w.op}`, {
-      kind: "ableword", able: w.able, op: w.op, source: String(w.fileUrl),
-    }, { moment, history, skipIfUnchanged: true });
+    await bindWord(
+      `${w.able}:${w.op}`,
+      {
+        kind: "ableword",
+        able: w.able,
+        op: w.op,
+        source: String(w.fileUrl),
+      },
+      { moment, history, skipIfUnchanged: true },
+    );
     n++;
   }
   return n;
@@ -388,7 +522,10 @@ export function resolveAbleWordSource(able, op) {
 // static registry as the bootstrap / non-boot backstop. Named "<kind>-reducer" so it never collides
 // with the concept word of the same kind (10.md's "reducer is a field on the kind word" is the
 // eventual unification; a distinct word keeps this isolated from declareConcepts for now).
-export async function declareReducersToFold({ moment = null, history = "0" } = {}) {
+export async function declareReducersToFold({
+  moment = null,
+  history = "0",
+} = {}) {
   const reducers = await import("../../materials/reducers.js");
   let n = 0;
   for (const kind of reducers.types()) {
@@ -401,11 +538,16 @@ export async function declareReducersToFold({ moment = null, history = "0" } = {
       initial: { ref: `reducer:${kind}:initial` },
       reduce: { ref: `reducer:${kind}:reduce` },
     };
-    if (typeof r.isGone === "function") { // optional (only matter tombstones today)
+    if (typeof r.isGone === "function") {
+      // optional (only matter tombstones today)
       registerHostHandler(`reducer:${kind}:isGone`, r.isGone);
       binding.isGone = { ref: `reducer:${kind}:isGone` };
     }
-    await bindWord(`${kind}-reducer`, binding, { moment, history, skipIfUnchanged: true });
+    await bindWord(`${kind}-reducer`, binding, {
+      moment,
+      history,
+      skipIfUnchanged: true,
+    });
     n++;
   }
   return n;
@@ -418,7 +560,8 @@ export function resolveReducerFromFold(kind) {
   if (!w || w.kind !== "reducer") return null;
   const initial = w.initial?.ref ? resolveHostHandler(w.initial.ref) : null;
   const reduce = w.reduce?.ref ? resolveHostHandler(w.reduce.ref) : null;
-  if (typeof initial !== "function" || typeof reduce !== "function") return null;
+  if (typeof initial !== "function" || typeof reduce !== "function")
+    return null;
   const out = { initial, reduce };
   if (w.isGone?.ref) {
     const isGone = resolveHostHandler(w.isGone.ref);
@@ -437,7 +580,10 @@ export function resolveReducerFromFold(kind) {
 // once BE folds the same way, with be:connect/be:release. The "name:" prefix isolates them and lets
 // the BE/SEE verb-op cutovers coexist. declareNameOpsToFold mirrors declareOpsToFold; the NAME_OPS
 // object stays only as the load-time registration buffer this reads (like the operations Map).
-export async function declareNameOpsToFold({ moment = null, history = "0" } = {}) {
+export async function declareNameOpsToFold({
+  moment = null,
+  history = "0",
+} = {}) {
   const { listNameOpNames, getNameOp } = await import("../../ibp/nameOps.js");
   let n = 0;
   for (const opName of listNameOpNames()) {
@@ -445,23 +591,27 @@ export async function declareNameOpsToFold({ moment = null, history = "0" } = {}
     if (!op?.handler) continue;
     const ref = `name-op:${opName}`;
     registerHostHandler(ref, op.handler);
-    await bindWord(`name:${opName}`, {
-      ownerExtension: "seed",
-      kind: "nameop",
-      do: { ref }, // the runnable answer (the handler), resolved host-side from its ref
-      // factAction/factVerb/noun let nameVerb stamp the one name:<op> fact through the keystone
-      // (emitWordFact), the twin of the be ops — instead of a hardcoded writeNameFact. The fact's
-      // VERB (name) + target NOUN (name) ride the word explicitly (the hash-continuity anchor). The
-      // keystone's per-kind result policy OMITS the result field for a nameop, so name:declare's
-      // freshly minted `reveal` (private key + mnemonic) can never reach the chain — it rides the
-      // handler RETURN to the asker only, as it always has (the no-result invariant, now enforced).
-      factAction: op.factAction || opName,
-      factVerb: "name",
-      noun: "name",
-      args: op.args ? JSON.parse(JSON.stringify(op.args)) : undefined,
-      label: op.label,
-      description: op.description,
-    }, { moment, history, skipIfUnchanged: true });
+    await bindWord(
+      `name:${opName}`,
+      {
+        ownerExtension: "seed",
+        kind: "nameop",
+        do: { ref }, // the runnable answer (the handler), resolved host-side from its ref
+        // factAction/factVerb/noun let nameVerb stamp the one name:<op> fact through the keystone
+        // (emitWordFact), the twin of the be ops — instead of a hardcoded writeNameFact. The fact's
+        // VERB (name) + target NOUN (name) ride the word explicitly (the hash-continuity anchor). The
+        // keystone's per-kind result policy OMITS the result field for a nameop, so name:declare's
+        // freshly minted `reveal` (private key + mnemonic) can never reach the chain — it rides the
+        // handler RETURN to the asker only, as it always has (the no-result invariant, now enforced).
+        factAction: op.factAction || opName,
+        factVerb: "name",
+        noun: "name",
+        args: op.args ? JSON.parse(JSON.stringify(op.args)) : undefined,
+        label: op.label,
+        description: op.description,
+      },
+      { moment, history, skipIfUnchanged: true },
+    );
     n++;
   }
   return n;
@@ -474,7 +624,17 @@ export async function declareNameOpsToFold({ moment = null, history = "0" } = {}
 export function resolveNameOpFromFold(opName) {
   const w = resolveWordFromFold(`name:${opName}`);
   if (!w || w.kind !== "nameop") return null;
-  return { handler: w.handler, factAction: w.factAction || opName, factVerb: w.factVerb || "name", noun: w.noun || "name", args: w.args, label: w.label, description: w.description, ownerExtension: w.ownerExtension, _fromFold: true };
+  return {
+    handler: w.handler,
+    factAction: w.factAction || opName,
+    factVerb: w.factVerb || "name",
+    noun: w.noun || "name",
+    args: w.args,
+    label: w.label,
+    description: w.description,
+    ownerExtension: w.ownerExtension,
+    _fromFold: true,
+  };
 }
 
 // ── BE ops as words (the BE_OPS-Map migration; the twin of the NAME ops above) ──
@@ -497,7 +657,10 @@ export function resolveNameOpFromFold(opName) {
 // identityToken is in REVEAL_KEYS — this keeps the surface fail-closed against future drift).
 const BE_RESULT_POLICY = { connect: { keep: ["beingAddress", "note"] } };
 
-export async function declareBeOpsToFold({ moment = null, history = "0" } = {}) {
+export async function declareBeOpsToFold({
+  moment = null,
+  history = "0",
+} = {}) {
   const { listBeOpNames, getBeOp } = await import("../../ibp/beOps.js");
   let n = 0;
   for (const opName of listBeOpNames()) {
@@ -505,27 +668,31 @@ export async function declareBeOpsToFold({ moment = null, history = "0" } = {}) 
     if (!op?.handler) continue;
     const ref = `be-op:${opName}`;
     registerHostHandler(ref, op.handler);
-    await bindWord(`be:${opName}`, {
-      ownerExtension: "seed",
-      kind: "beop",
-      do: { ref },
-      bootstrap: op.bootstrap ? true : undefined, // birth/connect skip the caller assertion
-      // factAction lets a .word-authored BE op return factParams and have the BE dispatcher stamp the
-      // one auto-Fact (mirroring the do-op fold) instead of a hardcoded writeBeFact. The act defaults
-      // to the op name (be:truename). EVERY ACT MAKES A FACT — the dispatcher stamps unconditionally,
-      // so there is no skipAudit (an op can't opt out; birth's no-stamp is its own operation check).
-      factAction: op.factAction || opName,
-      // resultPolicy.keep is the fail-closed allowlist the keystone curates the stamped result to
-      // (BE_RESULT_POLICY); undefined for ops that keep the stripForAudit default.
-      resultPolicy: BE_RESULT_POLICY[opName],
-      // The fact's VERB (be) + target NOUN (being) ride the word explicitly — the hash-continuity
-      // anchor (17.md STEP 2); emitWordFact reads them instead of be.js hardcoding verb/of per site.
-      factVerb: "be",
-      noun: "being",
-      args: op.args ? JSON.parse(JSON.stringify(op.args)) : undefined,
-      label: op.label,
-      description: op.description,
-    }, { moment, history, skipIfUnchanged: true });
+    await bindWord(
+      `be:${opName}`,
+      {
+        ownerExtension: "seed",
+        kind: "beop",
+        do: { ref },
+        bootstrap: op.bootstrap ? true : undefined, // birth/connect skip the caller assertion
+        // factAction lets a .word-authored BE op return factParams and have the BE dispatcher stamp the
+        // one auto-Fact (mirroring the do-op fold) instead of a hardcoded writeBeFact. The act defaults
+        // to the op name (be:truename). EVERY ACT MAKES A FACT — the dispatcher stamps unconditionally,
+        // so there is no skipAudit (an op can't opt out; birth's no-stamp is its own operation check).
+        factAction: op.factAction || opName,
+        // resultPolicy.keep is the fail-closed allowlist the keystone curates the stamped result to
+        // (BE_RESULT_POLICY); undefined for ops that keep the stripForAudit default.
+        resultPolicy: BE_RESULT_POLICY[opName],
+        // The fact's VERB (be) + target NOUN (being) ride the word explicitly — the hash-continuity
+        // anchor (17.md STEP 2); emitWordFact reads them instead of be.js hardcoding verb/of per site.
+        factVerb: "be",
+        noun: "being",
+        args: op.args ? JSON.parse(JSON.stringify(op.args)) : undefined,
+        label: op.label,
+        description: op.description,
+      },
+      { moment, history, skipIfUnchanged: true },
+    );
     n++;
   }
   return n;
@@ -538,7 +705,19 @@ export async function declareBeOpsToFold({ moment = null, history = "0" } = {}) 
 export function resolveBeOpFromFold(opName) {
   const w = resolveWordFromFold(`be:${opName}`);
   if (!w || w.kind !== "beop") return null;
-  return { handler: w.handler, bootstrap: w.bootstrap, factAction: w.factAction || opName, factVerb: w.factVerb || "be", noun: w.noun || "being", resultPolicy: w.resultPolicy || null, args: w.args, label: w.label, description: w.description, ownerExtension: w.ownerExtension, _fromFold: true };
+  return {
+    handler: w.handler,
+    bootstrap: w.bootstrap,
+    factAction: w.factAction || opName,
+    factVerb: w.factVerb || "be",
+    noun: w.noun || "being",
+    resultPolicy: w.resultPolicy || null,
+    args: w.args,
+    label: w.label,
+    description: w.description,
+    ownerExtension: w.ownerExtension,
+    _fromFold: true,
+  };
 }
 
 // ── SEE ops as words (the seeOps-REGISTRY migration; the third verb-op set) ──
@@ -549,21 +728,29 @@ export function resolveBeOpFromFold(opName) {
 // buffer + the routing check (isSeeOpName) + the metadata reads (listSeeOperations). The op name may
 // itself contain a colon (the "<ext>:<name>" extension form) — the "see:" prefix nests cleanly into
 // the word key ("see:food:meals"), no collision with name:/be:/able:op words.
-export async function declareSeeOpsToFold({ moment = null, history = "0" } = {}) {
-  const { listSeeOperations, getSeeOperation } = await import("../../ibp/seeOps.js");
+export async function declareSeeOpsToFold({
+  moment = null,
+  history = "0",
+} = {}) {
+  const { listSeeOperations, getSeeOperation } =
+    await import("../../ibp/seeOps.js");
   let n = 0;
   for (const { name } of listSeeOperations()) {
     const op = getSeeOperation(name);
     if (!op?.handler) continue;
     const ref = `see-op:${name}`;
     registerHostHandler(ref, op.handler);
-    await bindWord(`see:${name}`, {
-      ownerExtension: op.ownerExtension || "seed",
-      kind: "seeop",
-      do: { ref },
-      args: op.args ? JSON.parse(JSON.stringify(op.args)) : undefined,
-      description: op.description || undefined,
-    }, { moment, history, skipIfUnchanged: true });
+    await bindWord(
+      `see:${name}`,
+      {
+        ownerExtension: op.ownerExtension || "seed",
+        kind: "seeop",
+        do: { ref },
+        args: op.args ? JSON.parse(JSON.stringify(op.args)) : undefined,
+        description: op.description || undefined,
+      },
+      { moment, history, skipIfUnchanged: true },
+    );
     n++;
   }
   return n;
@@ -576,5 +763,12 @@ export async function declareSeeOpsToFold({ moment = null, history = "0" } = {})
 export function resolveSeeOpFromFold(name) {
   const w = resolveWordFromFold(`see:${name}`);
   if (!w || w.kind !== "seeop") return null;
-  return { name, handler: w.handler, args: w.args, description: w.description, ownerExtension: w.ownerExtension, _fromFold: true };
+  return {
+    name,
+    handler: w.handler,
+    args: w.args,
+    description: w.description,
+    ownerExtension: w.ownerExtension,
+    _fromFold: true,
+  };
 }

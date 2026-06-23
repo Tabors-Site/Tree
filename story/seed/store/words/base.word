@@ -5,7 +5,7 @@
 # the irreducible syntax, not words. Every word here was checked against the declared verbs,
 # ops, and concepts for collision: `set` was dropped (it is the verb); these five are clean.
 
-One is a single, not many.
+One is a single, not many. One act makes one fact.
 
 An order is words, each before or after another.
 
@@ -13,4 +13,4 @@ A head is the last in an order.
 
 Content is a word's body.
 
-A hash is a seal over content and all before it. One content after one history makes one hash, and no other content or history makes it.
+A hash is the seal over content and all before it. One content, after one history, makes one hash, and no other content or history makes it. As a sign marks who made a word, a hash marks what a word is.

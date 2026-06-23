@@ -89,8 +89,11 @@ async function readSpanFacts({ history, scope = "world", since = null, until = n
   }
   if (scope === "being" && being) q.$or = [{ through: String(being) }, { by: String(being) }];
   else if (scope === "space" && space) q["of.id"] = String(space);
-  // scope "world" → the whole story (no extra filter): all reel-kinds, all authors, in chain order
-  return Fact.find(q).sort({ date: 1, seq: 1 }).lean();
+  // A single-reel scope (a being's act-chain, a space's reel) is ordered by the CHAIN — seq, never
+  // the clock. "world" spans concurrent reels with no single seq, so date presents the concurrent
+  // facts (time as content, for presentation; not as truth-order).
+  const sort = scope === "world" ? { date: 1, seq: 1 } : { seq: 1, date: 1 };
+  return Fact.find(q).sort(sort).lean();
 }
 
 // id -> a readable name, resolved once per read from the live slots (being/space/matter). Falls back

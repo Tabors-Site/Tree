@@ -220,7 +220,6 @@ export async function assign({
     space: spaceRow,
     callerEnrichment,
     previousMoment,
-    now: entry?.receivedAt ? new Date(entry.receivedAt) : null,
     worldSignals,
     availableAbles,
   });

@@ -212,6 +212,9 @@ export async function rehydrateWordsFromFacts() {
     verb: "do",
     act: { $in: [WORD_COIN, WORD_RETIRE] },
   })
+    // FLAG (wordstamp): this reads ALL histories (no filter) to build the per-branch overlay, so
+    // parallel branch-seqs are incomparable and seq alone interleaves them. Date orders across
+    // branches here as a stopgap. Proper fix = fold per-history (group by history, then seq).
     .sort({ date: 1, seq: 1 })
     .lean();
   _historyDisabled.clear();

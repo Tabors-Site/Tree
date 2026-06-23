@@ -66,11 +66,9 @@
 //   me.position          — the being's current position spaceId
 //   me.homeSpace         — the being's home space id
 //   me.quality.<ns>.<k>  — read a quality on the being row
-//   time.hour            — moment-open hour (0–23, local server time)
-//   time.dayOfWeek       — moment-open weekday (0=Sun … 6=Sat)
-//   time.iso             — moment-open ISO timestamp
-//   time.sinceLastMoment — seconds since this being's previous sealed moment (null on first)
 //   world.<ns>.<key>     — read a world signal published on story root
+// NO time.* — a `when` tests order and content, never the clock (623/12: the fold, not a clock-read;
+// a being that needs a wall-clock takes it as content via an `in`, never branches on it in a `when`).
 //                          (set-world-signal writes to story-root.qualities.world.<ns>.<key>;
 //                          coordination + environmental patterns ride on this surface)
 //
@@ -142,7 +140,6 @@ export function resolveActiveStack({
   space = null,
   callerEnrichment = null,
   previousMoment = null,
-  now = null,
   worldSignals = null,
   availableAbles = null,
 }) {
@@ -193,7 +190,6 @@ export function resolveActiveStack({
     space,
     callerEnrichment,
     previousMoment,
-    now,
     worldSignals,
   });
 
@@ -296,7 +292,6 @@ function buildCtx({
   space,
   callerEnrichment,
   previousMoment,
-  now,
   worldSignals,
 }) {
   const quals = toBeing.qualities;
@@ -348,26 +343,9 @@ function buildCtx({
 
   const inHomeSpace = !!(spaceId && meHomeSpace && spaceId === meHomeSpace);
 
-  // Time anchors. The caller passes `now` (the moment's open
-  // wall-clock); if absent we fall back to entry.receivedAt or null
-  // (conditions on time.* then evaluate to undefined and short-circuit
-  // false, leaving the clause to fall through).
-  const nowDate = now instanceof Date
-    ? now
-    : (entry?.receivedAt ? new Date(entry.receivedAt) : null);
-  const lastDate = previousMoment?.stampedAt
-    ? new Date(previousMoment.stampedAt)
-    : null;
-  const timeCtx = nowDate
-    ? Object.freeze({
-        hour:             nowDate.getHours(),
-        dayOfWeek:        nowDate.getDay(),
-        iso:              nowDate.toISOString(),
-        sinceLastMoment:  lastDate
-          ? Math.max(0, Math.floor((nowDate.getTime() - lastDate.getTime()) / 1000))
-          : null,
-      })
-    : Object.freeze({ hour: null, dayOfWeek: null, iso: null, sinceLastMoment: null });
+  // NO time anchors. A `when` tests order + content, never the clock (623/12; 20.md: the fold of
+  // facts, not a variable mutating over steps). The wall-clock was a logical dependency that broke
+  // replay; it is gone from the moment ctx so no flow can branch on it.
 
   return Object.freeze({
     connectedFrom: callerBeingId,
@@ -400,7 +378,6 @@ function buildCtx({
       // me.quality.<ns>.<key> reads through a serialized snapshot.
       quality:      serializeQualitiesShallow(toBeing.qualities),
     }),
-    time: timeCtx,
     // world.<namespace>.<key> reads from story root's qualities.world
     // namespace, which set-world-signal writes to. Passed in by assign.js
     // (a single space-row lookup per moment-open).
