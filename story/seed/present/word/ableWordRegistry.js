@@ -212,10 +212,11 @@ export async function rehydrateWordsFromFacts() {
     verb: "do",
     act: { $in: [WORD_COIN, WORD_RETIRE] },
   })
-    // FLAG (wordstamp): this reads ALL histories (no filter) to build the per-branch overlay, so
-    // parallel branch-seqs are incomparable and seq alone interleaves them. Date orders across
-    // branches here as a stopgap. Proper fix = fold per-history (group by history, then seq).
-    .sort({ date: 1, seq: 1 })
+    // Group by history, then seq (623/12: ORDER, never the clock). Reads ALL histories (no filter)
+    // to build the per-branch overlay; parallel branch-seqs are incomparable ACROSS histories, so
+    // group by history ("0" first — heaven the base) and order by seq WITHIN each; the per-branch
+    // consumer composes by lineage (a branch sees heaven + its own). Replaces the date stopgap.
+    .sort({ history: 1, seq: 1 })
     .lean();
   _historyDisabled.clear();
   const ablewordKeys = new Set(); // params.word of words whose declare marked them kind:"ableword"

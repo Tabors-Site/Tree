@@ -33,15 +33,44 @@ const VERBS = new Set("do act make give take set move grant drop lay see fold na
 // page; the gate passes. A new word enters ONLY by being added here, on purpose.
 const ALLOW = new Set("abl addres alone already among answer back banish behind bind birth born branch byt children claus com come conditional connect connection consciousnes copi cross death decid declar declaration default di did die disable dropp end equal export facet father file forge fork form generic giv given glb gltf go gone half hand handle heaven histori home http ibpa identity inhabitor inner intent kept kind know leav level made manner mark mine model mother mov my nam nature need noth once open owner parent pas pass path play portal position purg qualiti quality quot releas release renam repli room root scope secret seen send sent session shown signer size source spac speak stand switch tak target test text tim top true truename truth twice type unique verb voice wak web whose without yield".split(/\s+/));
 
+// the terms a single body DEFINES — a subject ("a X is/has", "to X is", "X is/are") or a
+// predicate-noun ("is a X"). Defining a word is how the book (or a being) grounds it.
+function bodyDefined(body) {
+  const defined = new Set();
+  const b = String(body).toLowerCase();
+  for (const m of b.matchAll(/\b(?:a|an|the|to)\s+([a-z'’]+)\s+(?:is|are|has|have|may|can|makes?|wakes?|grants?|folds?|takes?|does|do|needs?|tests?|reads?|sees?|stamps?|marks?|crosses?|sends?|holds?|wins?)\b/g)) defined.add(stem(m[1]));
+  for (const m of b.matchAll(/\bis\s+(?:a|an|the)\s+([a-z'’]+)/g)) defined.add(stem(m[1]));
+  for (const m of b.matchAll(/\b([a-z'’]+)\s+(?:is|are)\b/g)) defined.add(stem(m[1]));
+  return defined;
+}
+
 function definedWords() {
   const defined = new Set();
   for (const w of CONCEPT_WORDS) {
-    const body = fs.readFileSync(path.join(STORE, w + ".word"), "utf8").split("\n").filter((l) => l.trim() && !l.startsWith("#")).join(" ").toLowerCase();
-    for (const m of body.matchAll(/\b(?:a|an|the|to)\s+([a-z'’]+)\s+(?:is|are|has|have|may|can|makes?|wakes?|grants?|folds?|takes?|does|do|needs?|tests?|reads?|sees?|stamps?|marks?|crosses?|sends?|holds?|wins?)\b/g)) defined.add(stem(m[1]));
-    for (const m of body.matchAll(/\bis\s+(?:a|an|the)\s+([a-z'’]+)/g)) defined.add(stem(m[1]));
-    for (const m of body.matchAll(/\b([a-z'’]+)\s+(?:is|are)\b/g)) defined.add(stem(m[1]));
+    const body = fs.readFileSync(path.join(STORE, w + ".word"), "utf8").split("\n").filter((l) => l.trim() && !l.startsWith("#")).join(" ");
+    for (const s of bodyDefined(body)) defined.add(s);
   }
   return defined;
+}
+
+// declarationDrift — the RUNTIME gate, for a word PEOPLE make (the FUSE mirror, or a do:coin).
+// Unlike the kernel's FROZEN ALLOW (boot-hard, so the seed cannot drift), a being's word checks the
+// LIVE, growing vocabulary: its body may lean on the grammar, the host floor, a verb-primitive, any
+// KERNEL word, any word ALREADY DECLARED (declaredStems — pass the fold's current word names), or a
+// term it DEFINES itself. So a being is free to coin new DEFINED words; only an ungrounded synonym
+// for a word that already exists is drift — the same "rouses" smell, caught live. Returns the
+// ungrounded tokens. Advisory by design: warn the maker, do not block a being's word on it.
+export function declarationDrift(body, declaredStems = new Set()) {
+  if (!body || typeof body !== "string") return [];
+  const defined = bodyDefined(body);
+  const conceptStems = new Set(CONCEPT_WORDS.map(stem));
+  const drift = new Set();
+  for (const t of (body.toLowerCase().match(/[a-z][a-z'’]*/g) || [])) {
+    const s = stem(t);
+    if (GRAMMAR.has(s) || GRAMMAR.has(t) || HOST.has(s) || VERBS.has(s) || conceptStems.has(s) || defined.has(s) || declaredStems.has(s) || declaredStems.has(t)) continue;
+    drift.add(t);
+  }
+  return [...drift];
 }
 
 // Read every concept-word body. Returns { drift: {word: Set<token>}, fwdRefs: {word: Set<concept>} }.

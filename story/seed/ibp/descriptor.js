@@ -671,27 +671,31 @@ export async function buildNameTree(nameId, history) {
 export async function lastOpenBeingForName(nameId, history = "0") {
   if (!nameId || String(nameId) === "i-am") return null;
   const { default: Fact } = await import("../past/fact/fact.js");
-  // The name's own be:connect / be:release facts, oldest-first. nameId is the
-  // signer (the name acting); target is the being connected/released.
+  // The name's own be:connect / be:release facts. nameId is the signer (the name acting); target is
+  // the being connected/released. ORDER, never the clock (623/12): connect+release for ONE being
+  // land on THAT being's reel, so grouping by of.id then seq totally orders each being's actions —
+  // the last per being (highest seq) is its current state. ACROSS beings the seqs are incomparable
+  // (genuinely concurrent reels); "which being to resume" is a convenience, so the tiebreak is
+  // deterministic by being-id, never the clock.
   const facts = await Fact.find({
     by: String(nameId),
     verb: "be",
     act: { $in: ["connect", "release"] },
   })
-    .sort({ date: 1 })
-    .select("act of date")
+    .sort({ "of.id": 1, seq: 1 })
+    .select("act of seq")
     .lean();
 
-  const latest = new Map(); // beingId -> { act, date } (its most recent be-action)
+  const latest = new Map(); // beingId -> act (its current be-state: connect or release, last by seq)
   for (const f of facts) {
     const bid = f.of?.id ? String(f.of.id) : null;
     if (!bid) continue;
-    latest.set(bid, { act: f.act, date: f.date });
+    latest.set(bid, f.act); // grouped by of.id, ascending seq → last write per being wins
   }
   let best = null;
-  for (const [bid, la] of latest) {
-    if (la.act === "connect" && (!best || la.date > best.date))
-      best = { beingId: bid, date: la.date };
+  for (const [bid, act] of latest) {
+    if (act === "connect" && (!best || bid > best.beingId))
+      best = { beingId: bid };
   }
   if (!best) return null;
 

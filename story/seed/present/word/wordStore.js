@@ -162,9 +162,11 @@ export async function disableWord(
 }
 
 // Ask for a word: fold its coin / retire facts into the current descriptor. Heaven
-// ("0", the seed vocabulary) is inherited by every history; a history's own facts layer on top, in
-// date/seq order, last action wins. A word whose last action is a disable folds to null (it is not
-// deleted, it is off). This is the read path the verb dispatch will use instead of a registry get.
+// ("0", the seed vocabulary) is inherited by every history; a history's own facts layer on top by
+// HISTORY PRECEDENCE — heaven "0" folds first, the branch's own facts override it (last action wins
+// within each, by seq). ORDER, never the clock (623/12): "0" < any branch id, so {history, seq}
+// folds heaven then the branch. A word whose last action is a disable folds to null (off, not
+// deleted). This is the read path the verb dispatch uses instead of a registry get.
 export async function getWord(name, history = "0") {
   const { default: Fact } = await import("../../past/fact/fact.js");
   const histories = String(history) === "0" ? ["0"] : ["0", String(history)];
@@ -174,7 +176,7 @@ export async function getWord(name, history = "0") {
     "params.word": String(name),
     history: { $in: histories },
   })
-    .sort({ date: 1, seq: 1 })
+    .sort({ history: 1, seq: 1 })
     .lean();
   let binding = null,
     owner = null;

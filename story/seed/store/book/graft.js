@@ -97,18 +97,19 @@ export async function captureGraft(opts = {}) {
   log.info("Graft", "capturing story genome...");
 
   // ── 1. Collect every Fact ──
-  // The substantive change chain. Each fact has its hash chain (p/h)
-  // and per-reel seq. Plant replays these verbatim so the destination
-  // chain matches the source's exactly (modulo wall-clock dates which
-  // stay as-stamped).
-  const facts = await Fact.find({}).sort({ seq: 1, date: 1 }).lean();
+  // The substantive change chain. Each fact has its hash chain (p/h) and per-reel seq. Plant replays
+  // these verbatim so the destination chain matches the source's exactly. ORDER, never the clock
+  // (623/12): seq leads, `_id` (the content hash) breaks cross-reel ties deterministically — plant
+  // re-links by hash, so the order need only be deterministic, not wall-clock. Dates stay as-stamped.
+  const facts = await Fact.find({}).sort({ seq: 1, _id: 1 }).lean();
   log.info("Graft", `captured ${facts.length} facts`);
 
   // ── 2. Collect every Act ──
   // The experiential chain. Each act carries the cognition transcript
   // (startMessage, endMessage, innerFace) . the biography that
-  // makes the story more than a state snapshot.
-  const acts = await Act.find({}).sort({ stampedAt: 1 }).lean();
+  // makes the story more than a state snapshot. Acts carry no seq; replay order is deterministic by
+  // `_id` (the act hash), never the clock — plant re-links the act-chain by its p/hash refs.
+  const acts = await Act.find({}).sort({ _id: 1 }).lean();
   log.info("Graft", `captured ${acts.length} acts`);
 
   // ── 3. Collect every History ──
