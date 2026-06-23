@@ -218,7 +218,6 @@ export function resolveWordFromFold(name) {
     bootstrap: !!w.bootstrap,
     targets: Array.isArray(w.targets) && w.targets.length ? w.targets : null,
     matterTypes: Array.isArray(w.matterTypes) && w.matterTypes.length ? w.matterTypes : null,
-    skipAudit: !!w.skipAudit,
     args: w.args,
     label: w.label,
     description: w.description,
@@ -246,7 +245,6 @@ export function resolveDoOpFromFold(name) {
     targets: w.targets || ["being", "space", "matter"],
     matterTypes: w.matterTypes,
     factAction: w.factAction || String(name),
-    skipAudit: w.skipAudit,
     ownerExtension: w.ownerExtension,
     _fromFold: true,
   };
@@ -279,7 +277,6 @@ export async function declareOpsToFold({ moment = null, history = "0", filter = 
       targets: Array.isArray(op.targets) ? [...op.targets] : ["being"],
       matterTypes: Array.isArray(op.matterTypes) && op.matterTypes.length ? [...op.matterTypes] : undefined,
       factAction: typeof op.factAction === "string" && op.factAction ? op.factAction : name,
-      skipAudit: !!op.skipAudit,
       // args (the op's field schema) rides the fold so descriptor.js builds forms from the fold,
       // not the Map (10.md step 6). Serializable, so a fact holds it.
       args: op.args ? JSON.parse(JSON.stringify(op.args)) : undefined,

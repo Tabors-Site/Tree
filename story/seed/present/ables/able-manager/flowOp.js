@@ -41,7 +41,6 @@ import { stampsFact } from "../../../ibp/factResult.js";
 registerOperation("set-being-flow", {
   targets: ["being", "stance"],
   ownerExtension: "seed",
-  skipAudit: false,
   args: {
     beingId: {
       type:     "text",

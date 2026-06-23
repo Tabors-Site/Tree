@@ -45,7 +45,6 @@ export function registerHistoryManagerOps() {
 registerOperation("create-branch", {
   targets: ["being", "space", "stance"],
   ownerExtension: "seed",
-  skipAudit: false,
   args: {
     parent: {
       type: "text",
@@ -309,7 +308,6 @@ registerOperation("create-branch", {
 registerOperation("pause-history", {
   targets: ["being", "stance"],
   ownerExtension: "seed",
-  skipAudit: false,
   args: {
     history: {
       type: "text",
@@ -382,7 +380,6 @@ registerOperation("pause-history", {
 registerOperation("unpause-history", {
   targets: ["being", "stance"],
   ownerExtension: "seed",
-  skipAudit: false,
   args: {
     history: {
       type: "text",
@@ -443,7 +440,6 @@ registerOperation("unpause-history", {
 registerOperation("delete-history", {
   targets: ["being", "stance"],
   ownerExtension: "seed",
-  skipAudit: false,
   args: {
     history: {
       type: "text",
@@ -507,7 +503,6 @@ registerOperation("delete-history", {
 registerOperation("undelete-history", {
   targets: ["being", "stance"],
   ownerExtension: "seed",
-  skipAudit: false,
   args: {
     history: {
       type: "text",
@@ -567,7 +562,6 @@ registerOperation("undelete-history", {
 registerOperation("merge-histories", {
   targets: ["being", "stance"],
   ownerExtension: "seed",
-  skipAudit: false,
   args: {
     sourceA: {
       type: "text",

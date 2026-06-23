@@ -55,12 +55,15 @@ import { stripForAudit } from "../../materials/redact.js";
  *                                   pass `identity: I_AM_IDENTITY`;
  *                                   authorize() short-circuits on I_AM.
  * @param {object} [opts.moment]  for summon correlation on the Fact
- * @param {boolean}[opts.skipAudit]  skip the Fact stamp (seed-internal only)
  * @returns the handler's return value
  */
 export async function doVerb(target, operation, params = {}, opts = {}) {
   assertVerbCaller("do", opts);
   refuseHistoricalWrite("do", target, opts);
+  // close-story dispatch gate: once a story is closed, every world-changing act refuses
+  // (the one-way, story-wide stop, read from the close-story name-act on the library reel).
+  // The closing act itself passes — the fact isn't laid yet when its own doVerb is gated.
+  await (await import("../../storyLifecycle.js")).assertStoryOpen();
   if (typeof operation !== "string" || operation.length === 0) {
     throw new Error(
       "story.do(target, operation, params): operation must be a non-empty string",
@@ -272,26 +275,22 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     if (_ctx && !_wasInOp) _ctx._inOp = false;
   }
 
-  // Auto-Fact. Operations opt out via spec.skipAudit; callers via
-  // opts.skipAudit (seed-trusted batches only).
+  // Auto-Fact: the dispatcher stamps ONE fact for the act — UNLESS the op ran as moments.
   //
-  // Presentism: every act lives in a moment. assign opens the Act;
-  // momentum threads actId through moment. The entry-point guard
-  // above already required moment.actId, so by the time we get
-  // here the act has a frame.
-  // Every act makes a fact: the dispatcher stamps unconditionally. An op that "did nothing"
-  // (an idempotent re-take, a queued ask) still RECORDS the act — it returns its outcome as
-  // _factParams WITHOUT a grant record, so the fact lands in the being's history but the
-  // reducer folds no world-change. (`skipAudit` is the only opt-out, for seed-trusted
-  // batches that genuinely lay their own facts.)
-  // Composite-launcher (the spacebar / moments.md): an op whose body is a composite `.word` runs
-  // its DEEDS through runWordToStore — each its own moment/fact — and returns `ranAsMoments(result)`.
-  // Then the op lays NO auto-Fact of its own (the deeds already stamped N facts as N moments). This
-  // is the zero-skipAudit way to say "this word's facts ARE its deeds"; `_ranAsMoments` is a positive
-  // result marker, not the `skipAudit` opt-out (factResult.js ranAsMoments).
+  // Presentism: every act lives in a moment. assign opens the Act; momentum threads actId through
+  // moment. The entry-point guard above already required moment.actId, so the act has a frame.
+  // Every act makes a fact: an op that "did nothing" (an idempotent re-take, a queued ask) still
+  // RECORDS the act — it returns its outcome as _factParams WITHOUT a grant record, so the fact
+  // lands in the being's history but the reducer folds no world-change.
+  //
+  // The ONE opt-out is `ranAsMoments` (factResult.js) — a POSITIVE result marker an op returns when
+  // its DEEDS already laid the facts as their own moments: a composite `.word` whose deeds ran
+  // through runWordToStore (the spacebar / moments.md), or a name-act that laid its own library-reel
+  // fact (config / share / close-story). The `skipAudit` flag is RETIRED — every former user is now
+  // a ranAsMoments composite/name-act or a plain one-fact word, so the dispatch no longer reads it.
   const ranAsMoments =
     result && typeof result === "object" && result._ranAsMoments === true;
-  const shouldAudit = !op.skipAudit && !opts.skipAudit && !ranAsMoments;
+  const shouldAudit = !ranAsMoments;
   if (shouldAudit) {
     const actId = opts.moment.actId;
     const actorBeingId = opts.identity.beingId;

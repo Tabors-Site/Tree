@@ -102,7 +102,6 @@ registerSeeOperation("federation-status", {
 registerOperation("offer-template", {
   targets:        ["being", "stance"],
   ownerExtension: "seed",
-  skipAudit:      false,
   args: {
     peer: {
       type:        "text",
@@ -215,7 +214,6 @@ registerOperation("offer-template", {
 registerOperation("offer-being", {
   targets:        ["being", "stance"],
   ownerExtension: "seed",
-  skipAudit:      false,
   args: {
     peer:    { type: "text", label: "Peer story domain (e.g. \"beta.test\")", required: true },
     beingId: { type: "text", label: "Being id (pubkey) to graft to the peer", required: true },
@@ -266,7 +264,6 @@ registerOperation("offer-being", {
 registerOperation("request-template", {
   targets:        ["being", "stance"],
   ownerExtension: "seed",
-  skipAudit:      false,
   args: {
     peer: {
       type:        "text",
@@ -330,7 +327,6 @@ registerOperation("request-template", {
 registerOperation("accept-template", {
   targets:        ["being", "stance"],
   ownerExtension: "seed",
-  skipAudit:      false,
   args: {
     negotiationId: { type: "text", label: "Negotiation id", required: true },
   },
@@ -368,7 +364,6 @@ registerOperation("accept-template", {
 registerOperation("reject-template", {
   targets:        ["being", "stance"],
   ownerExtension: "seed",
-  skipAudit:      false,
   args: {
     negotiationId: { type: "text", label: "Negotiation id", required: true },
     reason:        { type: "text", label: "Optional reason", required: false },
@@ -409,7 +404,6 @@ registerOperation("reject-template", {
 registerOperation("fulfill-request", {
   targets:        ["being", "stance"],
   ownerExtension: "seed",
-  skipAudit:      false,
   args: {
     negotiationId: { type: "text", label: "Negotiation id", required: true },
   },
@@ -486,7 +480,6 @@ registerOperation("fulfill-request", {
 registerOperation("refuse-request", {
   targets:        ["being", "stance"],
   ownerExtension: "seed",
-  skipAudit:      false,
   args: {
     negotiationId: { type: "text", label: "Negotiation id", required: true },
     reason:        { type: "text", label: "Optional reason", required: false },

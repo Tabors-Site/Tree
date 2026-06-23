@@ -86,7 +86,6 @@ async function _setPointerViaWord({ caller, name, canonical, moment }) {
 registerOperation("set-pointer", {
   targets: ["being", "stance"],
   ownerExtension: "seed",
-  skipAudit: false,
   args: {
     name: {
       type: "text",
@@ -194,7 +193,6 @@ async function _deletePointerViaWord({ caller, name, moment }) {
 registerOperation("delete-pointer", {
   targets: ["being", "stance"],
   ownerExtension: "seed",
-  skipAudit: false,
   args: {
     name: {
       type: "text",

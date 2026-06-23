@@ -186,3 +186,34 @@ then the *same* wiring drops every op in that shape. One wired `.word` unblocks 
   Worth a look on your side (you own the run-model); for now assign rides runWordToStore and everything's green.
   **FINAL llm + composite state (all verified):** createspace 8/8, updatellm 7/7, deletellm 9/9, addllm 6/6, assignllm
   5/5, portal-compose 5/5, config-5d 6/6, library 7/7. Every skipAudit dropped except deferred close-story.
+
+- **HANDOFF→ENGINE (VERB, 2026-06-22): close-story name-act LANDED (3/3) — wire the dispatch-gate, then it's DONE.**
+  close-story now lays a 5D NAME-ACT on the LIBRARY reel (verb:name, act:"close-story", bodiless, by the Name,
+  params.closedBy) BEFORE the graceful shutdown — `ranAsMoments`, skipAudit DROPPED. Mirrors nameActConfig.
+  `verify-closestory-cut.mjs` **3/3**: the name-act lands (verb:name, through:null, by, closedBy=actor), ZERO
+  do-facts in the op moment, no-actor refuses (heaven authority required). Verifier neutralizes the 250ms
+  self-SIGTERM. **→ YOUR dispatch-gate:** refuse acts once a story is closed, reading the close-story fact off
+  the library-reel fold (`Fact { of.kind:"library", act:"close-story", verb:"name" }`).
+  **`grep "skipAudit: true"` across seed is now ZERO** — every op converted. Once your gate lands: delete the
+  do.js / operations.js skipAudit plumbing (CAUTION: do.js still exposes a CALLER-level `opts.skipAudit` for
+  seed-internal batches — confirm no caller uses it before removing that path) → flip 23.md to COMPLETE.
+  **The whole skipAudit→spacebar section is verb-lane DONE; only your gate + the coordinated plumbing-delete remain.**
+  Separately: I did NOT touch `verify-call-render` / `book/assemble.js` this session — that's pre-existing in-flight
+  book-view work (book past-tense render), unrelated to the skipAudit cuts. Acknowledged, leaving it to that lane.
+
+- **HANDOFF→ENGINE (VERB, 2026-06-22): close-story GATE + skipAudit PLUMBING RETIRED + 23.md COMPLETE.**
+  Tabor asked me to finish your remaining side (you were busy). Done:
+  - **Dispatch gate** — `storyLifecycle.js` (`isStoryClosed`/`markStoryClosed`/`assertStoryOpen`): a one-way
+    latch, lazy fact-read (boot-safe — genesis on a fresh story reads no close-story fact → open), wired into
+    **doVerb + nameVerb**. `verify-closestory-cut` **5/5**: post-close acts refuse via the in-process latch AND
+    via the library-reel fact read (the restart path). **beVerb LEFT UNGATED** — gating connect/release would
+    block connecting to a closed story to READ it; that's your design call (exempt connect, or gate birth/move).
+  - **skipAudit plumbing retired** — `do.js` collapses to `shouldAudit = !ranAsMoments` (both skipAudit terms
+    were always falsy: zero ops declare it, no caller passes it). `operations.js` field + its
+    descriptor/listOperations exposure removed. Stale `@param skipAudit` docs gone. NO functional reader of
+    skipAudit remains.
+  - **23.md flipped to COMPLETE.** Full regression green (9/9): createspace 8/8, updatellm 7/7, deletellm 9/9,
+    addllm 6/6, assignllm 5/5, portal 5/5, config 6/6, library 7/7, closestory 5/5.
+  - **Residual (cosmetic, harmless):** `skipAudit: false` op declarations + wordStore's dead `skipAudit` fold
+    field — nothing reads them; a trivial sweep whenever. **The only shared item LEFT is yours: retiring
+    `opCount`/`_inOp`**, still load-bearing for genesis/cherub:birth until those last run-on callers come off.

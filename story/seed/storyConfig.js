@@ -431,20 +431,17 @@ registerOperation("delete-config", {
 // process.exit. skipAudit: there's nothing to fold once the world stops,
 // and the act-chain can't observe its own server's death.
 //
-// TODO (23.md — library-reel batch): close-story is a STORY-LEVEL lifecycle
-// act. Closing the whole story halts EVERY future act across ALL its reels
-// (being, matter, fact) — it is NOT close-history (which ends one branch).
-// So its fact belongs on the LIBRARY reel (the out-of-history story reel,
-// like config), paired with a dispatch gate that refuses acts once the
-// story is closed — NOT a space-reel do-op. Grouped with config/history in
-// the library-reel batch; until that lands it stays a host-control shutdown
-// (the skipAudit is honest here precisely because the story-level fact has
-// no home yet — a space reel is the wrong reel).
+// close-story is a STORY-LEVEL lifecycle act: closing the whole story halts EVERY
+// future act across ALL its reels (being, matter, fact) — NOT close-history (which
+// ends one branch). Its fact lives on the LIBRARY reel (the out-of-history story reel,
+// like config) as a 5D NAME-ACT, paired with a dispatch gate (ENGINE) that refuses
+// acts once the story is closed. The handler lays that name-act below (ranAsMoments,
+// no skipAudit — the name-act IS the op's fact), then triggers the graceful shutdown;
+// the engine's gate reads the close-story fact on fold of the library reel.
 
 registerOperation("close-story", {
   targets: ["space"],
   ownerExtension: "seed",
-  skipAudit: true,
   args: {},
   handler: async ({ identity }) => {
     const { IbpError, IBP_ERR } = await import("./ibp/protocol.js");
@@ -462,6 +459,36 @@ registerOperation("close-story", {
         "Only beings with heaven authority (owner or angel able) can close the story.",
       );
     }
+    // Lay the STORY-CLOSED fact: a 5D NAME-ACT on the library reel (verb:"name",
+    // act:"close-story", bodiless), mirroring nameActConfig. withNameAct SEALS it BEFORE
+    // the shutdown, so the close-story fact is on the chain when the engine's dispatch
+    // gate next folds the library reel. The name-act IS the op's fact → ranAsMoments.
+    const nameId = (identity?.nameId ?? identity?.beingId) || I_AM;
+    {
+      const { withNameAct } = await import("./sprout.js");
+      const { emitFact } = await import("./past/fact/facts.js");
+      const { getStoryDomain } = await import("./ibp/address.js");
+      const libraryId = getStoryDomain();
+      await withNameAct(nameId, "close-story", async (m) => {
+        await emitFact(
+          {
+            verb: "name",
+            act: "close-story",
+            through: null,
+            by: nameId,
+            of: { kind: "library", id: libraryId },
+            params: { closedBy: String(identity.beingId) },
+            actId: m.actId,
+            history: "0",
+          },
+          m,
+        );
+      });
+    }
+    // Latch the dispatch gate in-process: every subsequent act refuses immediately. (The fact is
+    // also on the library reel, so a server restarted on this closed story latches on its first act.)
+    const { markStoryClosed } = await import("./storyLifecycle.js");
+    markStoryClosed();
     log.warn(
       "Seed",
       `close-story requested by ${identity.beingId} (heaven authority). Shutting down.`,
@@ -475,6 +502,7 @@ registerOperation("close-story", {
         process.exit(0);
       }
     }, 250);
-    return { closing: true };
+    const { ranAsMoments } = await import("./ibp/factResult.js");
+    return ranAsMoments({ closing: true });
   },
 });

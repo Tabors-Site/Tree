@@ -65,7 +65,6 @@ function parseLines(value) {
 registerOperation("set-able", {
   targets: ["being", "space", "stance"],
   ownerExtension: "seed",
-  skipAudit: false,
   args: {
     name: { type: "text", label: "Able name (kebab-case)", required: true },
     requiredCognition: {
@@ -177,7 +176,6 @@ registerOperation("set-able", {
 registerOperation("delete-able", {
   targets: ["being", "space", "stance"],
   ownerExtension: "seed",
-  skipAudit: false,
   args: {
     name: { type: "text", label: "Able name to delete", required: true },
     force: {

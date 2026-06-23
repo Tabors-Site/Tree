@@ -62,6 +62,12 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "story.be requires an operation");
   }
   refuseHistoricalWrite("be", payload, opts);
+  // close-story gate: a closed story refuses the world-changing BE ops (birth, death), but EXEMPTS
+  // connect / release / switch — the session/frame ops a reader needs to attach to a closed story
+  // and look around (SEE stays open; only NEW acts stop). Genesis births on a FRESH story → open.
+  if (operation !== "connect" && operation !== "release" && operation !== "switch") {
+    await (await import("../../storyLifecycle.js")).assertStoryOpen();
+  }
 
   const {
     address = null,

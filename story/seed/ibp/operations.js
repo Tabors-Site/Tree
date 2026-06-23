@@ -53,7 +53,6 @@ const VALID_TARGETS = new Set([
  * @param {Function} spec.handler - async ({ target, params, identity, moment }) => result
  * @param {object} [spec.schema] - payload validation (JSON schema). Currently stored only; enforcement is on the roadmap.
  * @param {string} [spec.factAction] - name written into the Fact. Defaults to operation name.
- * @param {boolean} [spec.skipAudit] - if true, no Fact is stamped. Reserve for ops where audit adds nothing.
  * @param {string} [spec.ownerExtension] - registering extension name (default "seed")
  * @returns {boolean} true on success
  */
@@ -150,7 +149,6 @@ export function registerOperation(name, spec) {
       typeof spec.factAction === "string" && spec.factAction.length > 0
         ? spec.factAction
         : name,
-    skipAudit: spec.skipAudit === true,
     // True when the op's authorize key includes a `namespace` part —
     // e.g. `do:set-space:my-extension`. The seed's set-<kind> ops use
     // this so operators can author per-namespace rules at qualities.
@@ -253,7 +251,6 @@ export function listOperations(filter = {}) {
     name: op.name,
     targets: [...op.targets],
     factAction: op.factAction,
-    skipAudit: op.skipAudit,
     ownerExtension: op.ownerExtension,
     args: op.args || null,
   }));
@@ -278,7 +275,6 @@ export async function syncOperationsToSubstrate() {
           {
             targets: [...op.targets],
             factAction: op.factAction,
-            skipAudit: op.skipAudit,
             ownerExtension: op.ownerExtension,
             // The field schema rides along so portal clients can build
             // directed forms from `.operations` without a second fetch.

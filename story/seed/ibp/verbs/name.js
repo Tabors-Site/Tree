@@ -69,6 +69,9 @@ export async function nameVerb(operation, payload = {}, opts = {}) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "story.name requires an operation");
   }
   refuseHistoricalWrite("name", payload, opts);
+  // close-story dispatch gate: no name-acts once the story is closed (the one-way, story-wide
+  // stop). Genesis's name:declare is a raw emitFact (not a nameVerb call), so boot is unaffected.
+  await (await import("../../storyLifecycle.js")).assertStoryOpen();
 
   const {
     address        = null,
