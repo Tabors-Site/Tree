@@ -69,10 +69,9 @@ export function foldWords() {
 // folds the twenty concept .words onto the chain, one bindWord each, carrying {kind:"concept", says,
 // axiom}. Same path as the do-ops (wordStore.declareOpsToFold) and the verb pasts: no separate
 // truth-system. The descent order is declare-before-use, so the story reads the seed build on itself.
-const CONCEPT_WORDS = [
-  "word", "iam", "base", "chain", "history", "story", "fold", "weave",
-  "see", "do", "name", "being", "space", "matter", "be", "call", "can", "recall", "able", "flow",
-];
+// The concept-word load order lives in ONE place (conceptWords.js) so axioms.js's descent
+// checker classifies the SAME list this declarer folds — no mirror to drift.
+import { CONCEPT_WORDS } from "./conceptWords.js";
 
 // Split a .word into its declaration body (the `says`) and its # header (the axiom + host pointer).
 function readConceptWord(name) {

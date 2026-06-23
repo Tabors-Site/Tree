@@ -39,7 +39,7 @@ try {
 
   // 2. The concept words are folded WITH their axiom headers (self-description landed on the chain).
   const see = getWordSync("see"), doW = getWordSync("do"), word = getWordSync("word");
-  (see?.axiom && /bottoms out in the host/i.test(see.axiom) && doW?.says && /To do is to make the world after/.test(doW.says) && word?.says && /A word is a word/.test(word.says))
+  (see?.axiom && /bottoms out in the host/i.test(see.axiom) && doW?.says && /To do is to stamp/.test(doW.says) && word?.says && /A word is a word/.test(word.says))
     ? ok(`concept words folded with axiom + says (see.axiom names its host-bottom; do.says + word.says present)`)
     : bad("concept words not folded with headers", { seeAxiom: !!see?.axiom, doSays: !!doW?.says });
 

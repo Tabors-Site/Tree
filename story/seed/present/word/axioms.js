@@ -24,13 +24,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SEED = path.resolve(__dirname, "../.."); // seed/
 const STORY = path.resolve(SEED, ".."); // story/ (host refs are written "seed/…", rooted at story/)
 
-// The concept words, in descent order (the set the anchor classifies). Mirror of
-// wordFold.CONCEPT_WORDS; the FOLD is the source of their content. The grammar/relation words the
-// root leaves as irreducible syntax (is/a/an/has/can/of, before/after/in/over) are not concepts.
-export const CONCEPT_WORDS = [
-  "word", "iam", "base", "chain", "history", "story", "fold", "weave",
-  "see", "do", "name", "being", "space", "matter", "be", "call", "can", "recall", "able", "flow",
-];
+// The concept words, in descent order (the set the anchor classifies). ONE source —
+// conceptWords.js — shared with wordFold.js's declarer, so the checker and the declarer can never
+// drift. The grammar/relation words the root leaves as irreducible syntax
+// (is/a/an/has/can/of, before/after/in/over) are not concepts.
+export { CONCEPT_WORDS } from "./conceptWords.js";
+import { CONCEPT_WORDS } from "./conceptWords.js";
 
 // Classify one concept word from its `#` axiom header.
 function classify(name, axiomHeader) {

@@ -463,6 +463,21 @@ async function evalRecall(node, ctx) {
 // named `call` at the surface now; the full rename comes later. (RECALL — reaching across
 // TIME into a chain — is the private twin; it lays no fact by itself.)
 async function evalCall(node, ctx) {
+  // 623/12: CALL is the ONE verb; the TARGET decides. `of` absent/null ⇒ the SIGNER (self) ⇒ fold
+  // your own chain (recall = call-to-self); `of`=="world" ⇒ the whole story (self-side fold). A real
+  // OTHER ⇒ the await path below. The mode is never declared — it falls out of who the target is.
+  const selfBeing =
+    ctx.identity?.beingId != null ? String(ctx.identity.beingId) : null;
+  const selfName =
+    ctx.identity?.nameId != null
+      ? String(ctx.identity.nameId)
+      : ctx.identity?.name != null
+        ? String(ctx.identity.name)
+        : null;
+  if (node.of == null && node.being == null)
+    return foldSelf(node, ctx, { scope: "being", being: selfBeing });
+  if (node.of === "world")
+    return foldSelf(node, ctx, { scope: "world", being: null });
   const entity = (v) =>
     v && typeof v === "object" && v.ref != null
       ? getPath(v.ref, ctx)
@@ -493,6 +508,13 @@ async function evalCall(node, ctx) {
   // the being to reach -> its stance (story/@name). The being may arrive as a row
   // (name at top), a projection slot (name under .state), or a bare id (loadOrFold it).
   const target = entity(node.of ?? node.being);
+  // 623/12: if the named target resolves to the SIGNER, this is a call-to-self ⇒ fold (recall), not
+  // an await. (The common self case — a bare quote, `of` null — already returned above.)
+  const tid = String(
+    target?._id ?? target?.id ?? (typeof target === "string" ? target : "") ?? "",
+  );
+  if (tid && (tid === selfBeing || tid === selfName))
+    return foldSelf(node, ctx, { scope: "being", being: selfBeing });
   let toName = target?.name ?? target?.state?.name;
   if (!toName) {
     const id =
@@ -538,6 +560,27 @@ async function evalCall(node, ctx) {
   });
   if (node.bind) ctx.bindings[node.bind] = result;
   return result;
+}
+
+// fold YOUR OWN chain through the lens — a SEE of the past, lays NO fact. The seam to read-trail.js
+// (recall.word's lensed engine). The branch is the reader's own (ctx.history), never defaulted —
+// readTrail throws if it is missing (the never-default-branch-zero rule).
+async function foldSelf(node, ctx, { scope, being }) {
+  if (ctx.dryRun) {
+    const r = "<recall>";
+    if (node.bind) ctx.bindings[node.bind] = r;
+    return r;
+  }
+  const { readTrail } = await import("../book/read-trail.js");
+  const r = await readTrail({
+    history: ctx.history,
+    scope,
+    being,
+    lens: node.lens ?? null,
+  });
+  const view = r.kind === "lens" ? r.facets : r.book;
+  if (node.bind) ctx.bindings[node.bind] = view;
+  return view; // no fact — folding the past is a see
 }
 
 // ── foreach (§3): iterate a source; body per item; break halts THIS loop only ──────

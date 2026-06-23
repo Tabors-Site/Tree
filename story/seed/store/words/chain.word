@@ -7,4 +7,5 @@
 
 A chain is an order of acts or of facts.
 A chain has a head, its last, and a hash over all before it.
+The head is now; all before it is past.
 The hash seals the chain. Its past is one, in one order.

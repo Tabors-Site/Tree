@@ -217,3 +217,40 @@ then the *same* wiring drops every op in that shape. One wired `.word` unblocks 
   - **Residual (cosmetic, harmless):** `skipAudit: false` op declarations + wordStore's dead `skipAudit` fold
     field — nothing reads them; a trivial sweep whenever. **The only shared item LEFT is yours: retiring
     `opCount`/`_inOp`**, still load-bearing for genesis/cherub:birth until those last run-on callers come off.
+
+- **HANDOFF→ENGINE (VERB, 2026-06-22): cosmetic sweep DONE + beVerb gated. ONLY opCount/_inOp left (yours, gated).**
+  Tabor asked me to finish the rest cleanly. Done:
+  - **Cosmetic sweep:** the 18 dead `skipAudit: false` op declarations (federation/able/history managers,
+    history-pointers) are removed, and wordStore's 3 dead `skipAudit` fold fields are gone. `grep skipAudit`
+    across seed is now COMMENTS ONLY. Zero functional trace remains.
+  - **beVerb gating decision (made + landed):** beVerb is now gated like do/name, but EXEMPTS
+    `connect`/`release`/`switch` — a closed story can still be connected-to and viewed for reading; only new
+    world-changing BE ops (birth, death) refuse. Boot-safe (genesis births on a fresh story → open).
+  - **Regression green** after all of it: createspace 8/8, closestory 5/5, addllm 6/6, config 6/6.
+  - **opCount/_inOp — I did NOT touch it; it's genuinely yours + gated.** 4-stamped.js throws on opCount>1;
+    `_inOp` is what keeps a `.word` program's deeds (cherub:birth, genesis) in ONE moment without tripping
+    that gate. Retiring it needs those run-on callers moved to runWordToStore FIRST (each deed its own
+    moment) — a coordinated boot/birth-layer cutover I won't rush solo. When genesis/cherub:birth are off the
+    run-on, the `_inOp`/`_opCount` lines (do.js 247-250/275, be.js 719-742, call.js 121) and the
+    4-stamped.js opCount>1 gate all become moot and delete together. **Everything else in the section is done.**
+
+- **HANDOFF→VERB (ENGINE, 2026-06-23): the call/recall→target collapse LANDED on the ENGINE (623/12.md). The `.word` ONTOLOGY is yours.**
+  623/12's cut: there is no `call` verb and no `recall` verb — the QUOTES are the do, the ADDRESS (target) is the only
+  modifier (me ⇒ fold, not-me ⇒ await). CALL is the one verb; recall = call-to-self. I landed the ENGINE half:
+  - **parser.js** — a new rule parses `[address] "quoted word"` → ONE `call` node `{of, saying, lens?, bind?}`. `of` =
+    `parseAddress`: `null` (bare ⇒ the SIGNER/self), `"world"` (the whole story), or `{ref}` (a named being). The leading
+    interrogative in the quote = `lens` (where/who/when/how/why; **`what` = the whole word ⇒ no lens**, the narrative).
+    Placed BELOW the keyword rules (set/see/`call X,`/do…) and ABOVE the SVO catch-all — `set X to "v"` and `call X to …`
+    still win first (verify-utter-cut 7/7 proves no false-match + the ask-able `call … to` alias preserved byte-for-byte).
+  - **evaluator.js** — `evalCall` now ROUTES off the target: `of` null / resolves-to-signer ⇒ `foldSelf` → `readTrail`
+    (fold your own chain, a see, NO fact); a named OTHER ⇒ the await path (`callVerb`, UNTOUCHED). `evalRecall` untouched
+    (the hand-built scoped time-reads still work — verify-recall-live 7/7).
+  - **read-trail.js (mine)** — the self-target fold engine; lens = the fact column (623/7): where=position, who=through/by,
+    when=seq, how=act, **why=`f.p` (the on-link, DISTINCT from how)**, what=the narrative.
+  - **call.js UNTOUCHED** — the cross-boundary await/transport survives verbatim; only the "call verb" framing dissolved.
+  - GREEN: verify-utter-cut 7/7, verify-call-live 3/3, verify-recall-live 7/7. (verify-call-render 2/7 is YOUR
+    pre-existing book-render baseline — my change touches neither the call fact shape nor `pastPhrase`.)
+  - **THE CONTRACT between lanes:** the `call` node shape `{of, saying, lens?, bind?}` + target-decides-the-mode + the 5
+    lens column-names. As long as the lean `.word` ontology (call.word/recall.word/see.word) agrees on that, we don't
+    collide. **Half B — declaring the 6 lens VIEWS as words (gated by `can`, resolved via wordStore, NOT the hardcoded
+    LENSES map) — is the ontology lane's; coordinate when your lean `.word` rebuild lands.** I touched NO `.word` file.

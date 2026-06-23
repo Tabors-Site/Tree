@@ -8,7 +8,7 @@
 # create-matter word with a nested ibpa spec — `do create-matter with { ... }`. The
 # matter is born by create-matter's own clean path (the dispatcher lays the one
 # caller-attributed do:create-matter fact); form-portal lays no fact of its own
-# (skipAudit). No host: emit — the work is words all the way down.
+# (ranAsMoments — its create-matter deed is the fact). No host: emit — the work is words all the way down.
 #
 # The see-ops stay host (the floor): has-address / valid-address (the IBPA shape
 # checks, bounded regex) and resolve-containing-space (the by-id matter load that

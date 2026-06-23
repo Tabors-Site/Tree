@@ -542,6 +542,27 @@ const EFFECT_RULES = [
     (m, c) => doOpAct(m[1], (m[2] || "").trim(), c),
   ],
 
+  // ── CALL via quote (623/12.md): `[address] "quoted word"`. The quotes ARE the do; the ADDRESS is
+  // the only modifier — absent/self ⇒ FOLD your own chain (recall = CALL-to-self); a named other ⇒
+  // AWAIT across the boundary. CALL is the ONE verb; the mode falls out of the target, never declared.
+  // `saying` is the FULL quote (the message / the recall query); `lens` is the peeled interrogative
+  // (the self-fold facet). Below every keyword rule (set/see/`call X,`/do…), ABOVE the SVO catch-all,
+  // so only a bare `[address] "quote"` reaches it. evalCall routes self↔other off `of`.
+  [
+    /^(?:(.+?)\s+)?"([^"]*)"(?:\s+as\s+(\w+))?\.?$/i,
+    (m) => {
+      const saying = m[2];
+      const { lens } = parseLens(saying);
+      return {
+        kind: "call",
+        of: parseAddress(m[1]),
+        saying,
+        ...(lens ? { lens } : {}),
+        ...(m[3] ? { bind: m[3] } : {}),
+      };
+    },
+  ],
+
   // generic acts (LAST, the catch-all): "<Subject> <verbs> the <obj>." (SVO) and
   // "<verb> the <obj>." (imperative, the flow's actor). Specific rules above win first.
   [
@@ -1066,6 +1087,28 @@ function refKey(s) {
     .replace(/^(the|a|an)\s+/i, "")
     .replace(/'s\s+/g, ".")
     .replace(/\s+/g, "-");
+}
+
+// ── 623/12.md utterance helpers: the quotes are the do; the address is the only modifier ──────
+// The leading interrogative inside a quote is the LENS (recall.word's "view"). Five name ONE fact
+// column (623/7): where/who/when/how/why. `what` is the WHOLE word — the narrative (8.pdf "What
+// From" renders the full chain) — so it maps to no lens. Anything else: no lens (a plain message).
+const LENS_WORDS = new Set(["where", "who", "when", "how", "why"]);
+function parseLens(quoteBody) {
+  const x = String(quoteBody || "").trim();
+  const m = x.match(/^(what|where|who|when|how|why)\b\s*(?:from\b)?\s*\??\s*(.*)$/i);
+  if (!m) return { lens: null, body: x };
+  const w = m[1].toLowerCase();
+  return { lens: LENS_WORDS.has(w) ? w : null, body: m[2].trim() };
+}
+// the address before a quote -> the TARGET. Absent ⇒ the SIGNER (self, null). "world" ⇒ the whole
+// story (self-side). A name ⇒ a being {ref} (self if it resolves to you, else other ⇒ await).
+function parseAddress(g1) {
+  if (g1 == null) return null;
+  const s = g1.trim().replace(/[,]+$/, "");
+  if (!s) return null;
+  if (/^(the\s+)?world$/i.test(s)) return "world";
+  return { ref: refKey(s) };
 }
 
 // Split top-level commas, respecting nested {}, [] and "..." (unlike splitTop, which only
