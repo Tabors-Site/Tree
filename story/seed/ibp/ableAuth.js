@@ -296,7 +296,7 @@ function permits(
 ) {
   if (verb === "see") return permitsSee(spec, seeOp);
   if (verb === "do") return permitsDo(spec, action);
-  if (verb === "call") return permitsSummon(spec, targetBeing, intent);
+  if (verb === "call") return permitsCall(spec, targetBeing, intent);
   if (verb === "be") return permitsBe(spec, operation);
   return false;
 }
@@ -341,7 +341,7 @@ function permitsDo(spec, action) {
   return false;
 }
 
-// canSummon's auth path. A able declares its summon participation —
+// canCall's auth path. A able declares its summon participation —
 // some entries are caller-side ("I can summon these"), some are
 // receiver-side ("I accept these"). The discriminator is `as`:
 //   "actor"     — caller side; this able can SEND this summon (default)
@@ -352,9 +352,9 @@ function permitsDo(spec, action) {
 // Receiver-side acceptance is checked separately at the summon verb
 // via `permitsReceiverSummon` below (the "other half of the post
 // office check" per seed/SUMMON.md).
-function permitsSummon(spec, targetBeing, intent) {
-  if (!Array.isArray(spec.canSummon)) return false;
-  for (const entry of spec.canSummon) {
+function permitsCall(spec, targetBeing, intent) {
+  if (!Array.isArray(spec.canCall)) return false;
+  for (const entry of spec.canCall) {
     if (typeof entry === "object" && entry?.as === "receiver") continue;
     const pattern = typeof entry === "string" ? entry : entry?.pattern;
     if (!pattern) continue;
@@ -379,7 +379,7 @@ function permitsSummon(spec, targetBeing, intent) {
  * authorize() gates the OUTGOING side; this gates the INCOMING side.
  *
  * Progressive enhancement (the safe shape): a able with NO `as: receiver`
- * canSummon entries is unrestricted and accepts any incoming summon.
+ * canCall entries is unrestricted and accepts any incoming summon.
  * A able with at least one `as: receiver` entry has DECLARED its
  * accepted intents; the receiver check then becomes strict — the
  * envelope intent must match an entry's intent (or wildcard "*"), or
@@ -393,8 +393,8 @@ export function permitsReceiverSummon(able, intent) {
   if (!able || typeof able !== "object") {
     return { ok: false, reason: "receiver able missing" };
   }
-  const receiverEntries = Array.isArray(able.canSummon)
-    ? able.canSummon.filter(
+  const receiverEntries = Array.isArray(able.canCall)
+    ? able.canCall.filter(
         (e) => typeof e === "object" && e?.as === "receiver",
       )
     : [];

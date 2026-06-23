@@ -3,7 +3,7 @@
 // canStarResolver.js . expand can* entries from descriptors into
 // concrete options.
 //
-// The able's four can* lists (canSee / canDo / canSummon / canBe)
+// The able's four can* lists (canSee / canDo / canCall / canBe)
 // describe what the being is licensed to dispatch through each verb.
 // Most entries are concrete strings ("@operator", "set-config") or
 // self-describing objects ({name, description}). Both pass through.

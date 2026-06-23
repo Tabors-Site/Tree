@@ -21,7 +21,7 @@
 //   - Authenticated callers walk their qualities.ablesGranted.
 //   - For each grant: reach gate (anchor for anchored ables;
 //     able.reach for global ables) + canX gate (the able's
-//     canSee/canDo/canSummon/canBe lists are the permission rules).
+//     canSee/canDo/canCall/canBe lists are the permission rules).
 //
 // The verb dispatch passes args.action / args.intent / args.operation
 // through; the able-walk evaluates them against the matching canX.

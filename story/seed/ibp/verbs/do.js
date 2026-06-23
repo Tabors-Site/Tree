@@ -284,7 +284,14 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
   // _factParams WITHOUT a grant record, so the fact lands in the being's history but the
   // reducer folds no world-change. (`skipAudit` is the only opt-out, for seed-trusted
   // batches that genuinely lay their own facts.)
-  const shouldAudit = !op.skipAudit && !opts.skipAudit;
+  // Composite-launcher (the spacebar / moments.md): an op whose body is a composite `.word` runs
+  // its DEEDS through runWordToStore — each its own moment/fact — and returns `ranAsMoments(result)`.
+  // Then the op lays NO auto-Fact of its own (the deeds already stamped N facts as N moments). This
+  // is the zero-skipAudit way to say "this word's facts ARE its deeds"; `_ranAsMoments` is a positive
+  // result marker, not the `skipAudit` opt-out (factResult.js ranAsMoments).
+  const ranAsMoments =
+    result && typeof result === "object" && result._ranAsMoments === true;
+  const shouldAudit = !op.skipAudit && !opts.skipAudit && !ranAsMoments;
   if (shouldAudit) {
     const actId = opts.moment.actId;
     const actorBeingId = opts.identity.beingId;

@@ -13,7 +13,7 @@
 //     orientation: "forward" | "half" | "inward",
 //     able:        <able name string>,
 //     position:    { id, name } | null,
-//     capabilities: { canDo, canSummon, canBe },
+//     capabilities: { canDo, canCall, canBe },
 //     blocks:      [{ key, source, label, payload }, ...],
 //     origin:      "local" | "foreign",
 //   }
@@ -93,7 +93,7 @@ function clampList(list, max) {
  */
 function clampCapabilities(caps, fieldMax, listMax) {
   const out = {};
-  for (const key of ["canDo", "canSummon", "canBe"]) {
+  for (const key of ["canDo", "canCall", "canBe"]) {
     const list = Array.isArray(caps?.[key]) ? caps[key] : [];
     const trimmed = clampList(
       list.map(v => clampString(v, fieldMax)),
@@ -186,7 +186,7 @@ function renderPastEntry(index, row) {
   }
   const ableSuffix = snap.able ? `  able: ${snap.able}` : "";
   const where = snap.position?.name ? `at ${snap.position.name}` : null;
-  const could = `do=${formatPastCapList(snap.capabilities?.canDo)}, summon=${formatPastCapList(snap.capabilities?.canSummon)}, be=${formatPastCapList(snap.capabilities?.canBe)}`;
+  const could = `do=${formatPastCapList(snap.capabilities?.canDo)}, summon=${formatPastCapList(snap.capabilities?.canCall)}, be=${formatPastCapList(snap.capabilities?.canBe)}`;
   const blockKeys = Array.isArray(snap.blocks)
     ? snap.blocks.filter(b => b && b.kind !== "truncated").map(b => b?.label || b?.key || null).filter(Boolean)
     : [];
@@ -255,7 +255,7 @@ export async function buildInnerFace(able, ctx = {}) {
   const orientation = validateOrientation(ctx.orientation);
   const foldedFace = ctx.foldedFace || null;
 
-  // Capabilities . cognition-agnostic. The same canDo/canSummon/canBe
+  // Capabilities . cognition-agnostic. The same canDo/canCall/canBe
   // resolver path the LLM prompt assembly uses, returning bare-name
   // string lists.
   const capabilities = await resolveBareCapabilities(able, ctx);
@@ -399,7 +399,7 @@ export function clampForRender(face) {
  *   . descriptor.space / .position / .address . position {id, name}
  *   . descriptor.orientation . orientation (default "forward")
  *   . descriptor.able . able name
- *   . descriptor.capabilities / .canDo / .canSummon / .canBe . caps
+ *   . descriptor.capabilities / .canDo / .canCall / .canBe . caps
  *   . anything else . one "place" block carrying the raw descriptor
  *     as its payload (so consumers see the whole foreign view).
  *
@@ -412,7 +412,7 @@ export function normalizeForeignDescriptor(descriptor) {
       orientation:  "forward",
       able:         null,
       position:     null,
-      capabilities: { canDo: [], canSummon: [], canBe: [] },
+      capabilities: { canDo: [], canCall: [], canBe: [] },
       blocks:       [],
       weave:        [],
       origin:       "foreign",
@@ -450,7 +450,7 @@ export function normalizeForeignDescriptor(descriptor) {
     ? descriptor.capabilities
     : {
         canDo:     descriptor.canDo,
-        canSummon: descriptor.canSummon,
+        canCall: descriptor.canCall,
         canBe:     descriptor.canBe,
       };
 

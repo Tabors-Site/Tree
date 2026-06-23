@@ -49,7 +49,8 @@ registerOperation("share-book", {
   targets: ["space"],
   ownerExtension: "seed",
   factAction: "share-book",
-  skipAudit: true, // the op lays its OWN 5D name-act fact on the library reel (not a do-fact)
+  // No skipAudit: layBookOnLibrary lays the op's OWN 5D name-act on the library reel; ranAsMoments
+  // (returned below) tells the dispatcher to stamp none of its own (the zero-skipAudit marker).
   handler: async ({ params, identity }) => {
     const book = params?.book;
     if (!book || typeof book !== "object") {
@@ -66,7 +67,8 @@ registerOperation("share-book", {
     const result = await withNameAct(nameId, "share-book", async (moment) =>
       layBookOnLibrary(book, { moment, by: nameId, kind: kindOf(book) }),
     );
-    return { root: v.root, bodyRef: result.bodyRef, signers: v.signers ?? [], unsigned: !!v.unsigned, _skipAudit: true };
+    const { ranAsMoments } = await import("../../ibp/factResult.js");
+    return ranAsMoments({ root: v.root, bodyRef: result.bodyRef, signers: v.signers ?? [], unsigned: !!v.unsigned });
   },
 });
 
@@ -91,7 +93,8 @@ registerOperation("share-story", {
   targets: ["space"],
   ownerExtension: "seed",
   factAction: "share-story",
-  skipAudit: true,
+  // No skipAudit: captureGraft lays the whole-story name-act on the library reel; ranAsMoments
+  // (returned below) tells the dispatcher to stamp none of its own.
   args: { storyName: { type: "text", label: "Story name (optional)", required: false } },
   handler: async ({ identity, params }) => {
     if (!identity?.beingId) {
@@ -103,6 +106,7 @@ registerOperation("share-story", {
     }
     const { captureGraft } = await import("./graft.js");
     const result = await captureGraft({ capturedBy: String(identity.beingId), storyName: params?.storyName || null });
-    return { savedTo: result.savedTo, counts: result.bundle.meta.counts, _skipAudit: true };
+    const { ranAsMoments } = await import("../../ibp/factResult.js");
+    return ranAsMoments({ savedTo: result.savedTo, counts: result.bundle.meta.counts });
   },
 });

@@ -12,7 +12,7 @@
 //     when the user approves.
 //
 // Conversational. The user iterates by talking; able-finder shows
-// candidate able bodies (name, canSee/canDo/canSummon/canBe lines,
+// candidate able bodies (name, canSee/canDo/canCall/canBe lines,
 // system prompt), takes feedback, refines, saves.
 //
 // Companion helper: flow-composer authors the BEHAVIORAL PROGRAM
@@ -59,7 +59,7 @@ export const ableFinderAble = Object.freeze({
 You are able-finder, an authoring assistant for TreeOS ables.
 
 A able is a template for what a being CAN BE: a name, declared
-capabilities (canSee / canDo / canSummon / canBe), and a system prompt
+capabilities (canSee / canDo / canCall / canBe), and a system prompt
 that frames the LLM's voice when a being acts in that able. Ables do
 not carry their own cognition . the being does. A able may declare
 requiredCognition ("llm" | "human" | "scripted") to gate when it applies.

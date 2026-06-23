@@ -168,6 +168,10 @@ import "./materials/space/ops.js";
 import "./materials/matter/ops.js";
 // create-matter carved out; matter/ops.js still owns set/rename/end/purge.
 import "./store/words/create-matter/index.js";
+// create-space carved out; space/ops.js still owns set/end/make-heaven/add-reigning.
+import "./store/words/create-space/index.js";
+// llm-connection cluster carved out of being/ops.js (update first; add→engine, delete/assign next).
+import "./store/words/llm-connection/index.js";
 // Side-effect import. Registers the `classify-matter` SEE op — the
 // registry-driven "what matter type would this become?" read the
 // place flow previews with. See materials/matter/classify.js.
@@ -521,7 +525,7 @@ export function buildStoryServices({
 
       // RESOURCES.md: a code resource registers a code-cognition
       // handler for a able resource by name. The able spec stays pure
-      // data (canSee/canDo/canSummon/canBe/prompt); the handler is the
+      // data (canSee/canDo/canCall/canBe/prompt); the handler is the
       // function the substrate runs when the able is summoned and the
       // being's cognition is scripted. Without a registered handler, a
       // scripted able falls through to whatever its inline `summon` is;

@@ -3,7 +3,7 @@
 // capabilities.js . cognition-agnostic capability resolution.
 //
 // A able declares what it is licensed to dispatch across the three
-// act-capable verbs via canDo / canSummon / canBe. Some entries are
+// act-capable verbs via canDo / canCall / canBe. Some entries are
 // concrete strings; some are descriptor objects ({name, description});
 // some are relationship tokens ({rel: "parent"}, {pattern: "<glob>"},
 // {resolver: "<key>"}) that expand per-moment-per-being through the
@@ -30,7 +30,7 @@ import { resolveCanStar } from "./canStarResolver.js";
  * cognition-agnostic introspection of "what was the being licensed
  * to dispatch this moment?"
  *
- * Returns { canDo, canSummon, canBe } — three string arrays. Empty
+ * Returns { canDo, canCall, canBe } — three string arrays. Empty
  * arrays for an empty / missing list, never null.
  *
  * @param {object} able  the able spec (from registry, possibly composed)
@@ -38,7 +38,7 @@ import { resolveCanStar } from "./canStarResolver.js";
  *                       canStar resolvers need to expand relationship tokens
  */
 export async function resolveBareCapabilities(able, ctx) {
-  if (!able) return { canDo: [], canSummon: [], canBe: [] };
+  if (!able) return { canDo: [], canCall: [], canBe: [] };
   const beingCtx = {
     being: ctx?.being || null,
     able,
@@ -46,17 +46,17 @@ export async function resolveBareCapabilities(able, ctx) {
     rootId: ctx?.rootId || null,
     name: ctx?.name || null,
   };
-  // canSummon entries are two-sided: `as: "actor"` (default) is
+  // canCall entries are two-sided: `as: "actor"` (default) is
   // caller-side (what this able can SEND); `as: "receiver"` is
   // receive-side (what this able accepts when TARGETED). The
   // resolved capabilities here drive the LLM frame's tool palette,
   // act-chain face snapshots, and any other "what this able can
   // INITIATE" surface — so only actor entries belong. Receiver
   // entries surface elsewhere (UI discovery, the receiver's own
-  // cognition). See seed/AblesAreAuth.md "canSummon: one field, two
+  // cognition). See seed/AblesAreAuth.md "canCall: one field, two
   // surfaces."
-  const actorSummonEntries = Array.isArray(able.canSummon)
-    ? able.canSummon.filter(
+  const actorSummonEntries = Array.isArray(able.canCall)
+    ? able.canCall.filter(
         (e) => typeof e !== "object" || (e?.as ?? "actor") === "actor",
       )
     : null;
@@ -69,7 +69,7 @@ export async function resolveBareCapabilities(able, ctx) {
     list.map(e => (typeof e === "string" ? e : e?.name || null)).filter(Boolean);
   return {
     canDo:     toNames(doEntries),
-    canSummon: toNames(summonEntries),
+    canCall: toNames(summonEntries),
     canBe:     toNames(beEntries),
   };
 }

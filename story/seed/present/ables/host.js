@@ -13,7 +13,7 @@
 // folds into qualities.ables.<name>.
 //
 // What gets hosted (data only — no function references):
-//   - canSee, canDo, canSummon, canBe
+//   - canSee, canDo, canCall, canBe
 //   - reach (optional path filter)
 //   - description, requiredCognition, respondMode, triggerOn
 //   - prompt — ONLY when it's a string (live-able authoring).

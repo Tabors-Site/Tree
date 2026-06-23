@@ -1,0 +1,19 @@
+# assign-llm-slot.word — bind a connection to a slot (materials/being/ops.js assign-llm-slot
+# DO op). POLYMORPHIC across being and space targets: a being slot writes set-being at
+# qualities.beingLlm.slots.<slot>; a space slot writes set-space at qualities.llm.slots.<slot>.
+#
+# ONE fact (one deed fires) — but the branch picks the OP, so it's a CONDITIONAL DEED, not a
+# Return-factParams atomic word (whose factAction would be fixed at one of set-being/set-space).
+# The host see resolve-slot-assignment is the floor (validate the slot, confirm the connection
+# exists, bake the field/value + the branch flags) — lays NO fact; the chosen deed lays it (its
+# own moment via runWordToStore). connectionId omitted/null clears the slot. The handler busts
+# the client cache post-fact (being case).
+#
+# The bridge binds `target` (the being or space), `params` (slot, connectionId), `caller`, `branch`.
+
+When a being assigns a connection to a slot:
+  If no caller, refuse with "assign-llm-slot requires an identified actor".
+  see resolve-slot-assignment(target, params, caller, branch) as a.
+  If $a.isBeing, do set-being on the being $a.id with { field: $a.field, value: $a.value } as assigned.
+  If $a.isSpace, do set-space on the space $a.id with { field: $a.field, value: $a.value } as assigned.
+  Return slot: $a.slot, connectionId: $a.connectionId.

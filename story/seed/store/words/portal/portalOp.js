@@ -42,7 +42,7 @@ import { emitFact } from "../../../past/fact/facts.js";
 import { detectTargetKind, targetIdOf } from "../../../materials/_targetShape.js";
 import { matterContentId } from "../../../materials/matter/matterId.js";
 import { registerAbleWord } from "../../../present/word/ableWordRegistry.js";
-import { targetsFact } from "../../../ibp/factResult.js";
+import { targetsFact, ranAsMoments } from "../../../ibp/factResult.js";
 
 // Self-register this module's co-located `.word` slice (CONVERTING.md): importing
 // portalOp.js (at seed boot, or in a DRY harness) registers it so
@@ -77,23 +77,29 @@ export const IBPA_RE =
 // no host: emit. Returns the result, or null on a clean miss so the JS body below runs.
 async function _formPortalViaWord({ target, params, identity, moment }) {
   if (!moment) return null;
-  const { resolveAbleWord, runAbleWord } = await import("../../../present/word/ableWordRegistry.js");
-  const ir = resolveAbleWord("portal", "form-portal", moment?.actorAct?.history);
+  const caller = identity?.beingId;
+  if (!caller) throw new IbpError(IBP_ERR.UNAUTHORIZED, "form-portal requires an identified actor");
+  const { resolveAbleWord, runWordToStore } = await import("../../../present/word/ableWordRegistry.js");
+  const history = moment?.actorAct?.history;
+  const ir = resolveAbleWord("portal", "form-portal", history);
   if (!ir) return null;
   const { portalHostEnv } = await import("./portalHost.js");
   try {
-    const { result } = await runAbleWord(ir, {
-      moment,
-      history: moment?.actorAct?.history,
+    // portal.word composes a `do create-matter` deed → its OWN moment via runWordToStore;
+    // ranAsMoments tells the dispatcher the op stamps none of its own (the zero-skipAudit marker).
+    const { result } = await runWordToStore(ir, {
+      beingId: String(caller),
+      name: null,
+      history,
+      env: { host: portalHostEnv() },
       trigger: {
         target,
         foreignAddress: params?.target ?? null,
         name: params?.name ?? null,
-        caller: identity?.beingId ? String(identity.beingId) : null,
+        caller: String(caller),
       },
-      env: { host: portalHostEnv() },
     });
-    return result || null;
+    return result ? ranAsMoments(result) : null;
   } catch (e) {
     if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
     throw e;
@@ -101,10 +107,14 @@ async function _formPortalViaWord({ target, params, identity, moment }) {
 }
 
 async function formPortalHandler({ target, params, moment, identity }) {
-  // THE CONVERSION: form-portal's world strand is portal.word (composes create-matter).
-  // The JS body below is the clean-miss fallback.
+  // form-portal's world strand is portal.word (composes do:create-matter via runWordToStore).
+  // NO JS fallback (Tabor): the .word IS the op. On a clean miss, refuse.
   const viaWord = await _formPortalViaWord({ target, params, identity, moment });
-  if (viaWord) return viaWord;
+  if (!viaWord) {
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "form-portal: portal.word is not available on this history");
+  }
+  return viaWord;
+  // ── (dead) the old JS compose fallback follows — unreachable now, cleanup follow-up ──
 
   const { target: foreignAddress, name } = params || {};
 
@@ -212,11 +222,9 @@ async function formPortalHandler({ target, params, moment, identity }) {
 registerOperation("form-portal", {
   targets: ["space", "matter"],
   ownerExtension: "seed",
-  factAction: "form-portal",
-  // form-portal lays NO fact of its own: portal.word composes do:create-matter,
-  // which lays the one caller-attributed fact. (The clean-miss JS fallback self-
-  // emits that same create-matter fact.) No redundant do:form-portal audit.
-  skipAudit: true,
+  // form-portal lays NO fact of its own: portal.word composes a do:create-matter deed
+  // (its own moment via runWordToStore), and ranAsMoments tells the dispatcher this op
+  // stamps none of its own — the zero-skipAudit marker, NOT skipAudit.
   args: {
     target: {
       type: "text",

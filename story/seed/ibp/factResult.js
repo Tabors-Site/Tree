@@ -38,6 +38,24 @@ export function targetsFact(result, target) {
   return { ...result, _factTarget: { kind: target.kind ?? null, id: String(target.id) } };
 }
 
+// ranAsMoments — the "I-laid-my-own-fact(s)" marker (the spacebar / philosophy/word/moments.md). An
+// op that stamps its fact(s) ITSELF — not through the do-dispatcher's auto-Fact — returns
+// `ranAsMoments(result)` so the dispatcher stamps NONE of its own. Two shapes, one signal (confirmed
+// general — the verb lane uses it for both, the engine endorses it; no separate marker needed):
+//   (1) a composite `.word` whose DEEDS run as N moments via runWordToStore — add-llm-connection
+//       (`do set-being` then `If first, do assign-llm-slot`), form-portal;
+//   (2) a NAME-ACT via withNameAct — config, share: the name-act IS the op's fact (on the library
+//       reel), not a do-fact, so the do-dispatcher must not double-stamp.
+// "Moments" covers both: ONE (a name-act's own moment) or N (a composite's deeds). The meaning is
+// "I laid my fact(s) as moment(s) — stamp none of your own." This is the ZERO-skipAudit way to say
+// it: a POSITIVE marker, NOT `skipAudit` (which opted a run-on / buried-verb out of the one stamp —
+// the drift 23.md retires).
+export function ranAsMoments(result) {
+  const out = { ...(result && typeof result === "object" ? result : {}) };
+  out._ranAsMoments = true;
+  return out;
+}
+
 // Land a `.word`-authored fact (Option B — the word builds its own fact params). The word
 // returned `factParams` (the fact's params) and optionally `factTarget` (the target id);
 // promote them to the dispatcher's declaration. `idFrom` names a result field to read the

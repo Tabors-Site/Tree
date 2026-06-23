@@ -196,7 +196,7 @@ export function buildScopedStory(manifest, fullStory, availableServices) {
         out.name = `${extName}:${def.name}`;
       }
       if (Array.isArray(def.canDo))     out.canDo     = def.canDo.map(prefixOwn);
-      if (Array.isArray(def.canSummon)) out.canSummon = def.canSummon.map(prefixOwn);
+      if (Array.isArray(def.canCall)) out.canCall = def.canCall.map(prefixOwn);
       if (Array.isArray(def.canBe))     out.canBe     = def.canBe.map(prefixOwn);
       return out;
     };

@@ -764,10 +764,13 @@ async function evalAct(act, ctx) {
     return result;
   }
 
-  // be:form-being dispatches to the host birth primitive (one act, many facts:
-  // birthBeing lays be:birth + the inherited-able grants + the global grant)
+  // be:form-being dispatches to the host birth primitive. (NOTE: birthBeing still lays
+  // be:birth + the inherited-able grants + the global grant as several facts in this one
+  // moment — a residual run-on inside the host primitive. The spacebar says those grants
+  // are separate words; splitting birthBeing into a sequence of moments is the downstream
+  // birth-split. For now form-being is ONE moment, opened here like any other act.)
   if (act.verb === "be" && act.act === "form-being") {
-    const res = await formBeing(params, ctx);
+    const res = await stampOneAct(ctx, "be:form-being", () => formBeing(params, ctx));
     if (act.bind) ctx.bindings[act.bind] = res.beingId;
     return res;
   }
@@ -777,7 +780,6 @@ async function evalAct(act, ctx) {
   // raw-emits the fact shape instead. resolveTarget mints + binds a fresh id at a
   // `bind` site (e.g. the home space) so later acts can reference it.
   if (act.verb === "do" && !ctx.dryRun) {
-    const { doVerb } = await import("../../ibp/verbs/do.js");
     let target = resolveTarget(act.of, ctx);
     let p = params;
     if (act.act === "create-space") {
@@ -788,10 +790,16 @@ async function evalAct(act, ctx) {
         p = { ...(p || {}), name: act.of.id };
       if (ctx.position) target = { kind: "space", id: String(ctx.position) };
     }
-    const res = await doVerb(target, act.act, p, {
-      identity: ctx.identity,
-      moment: ctx.moment,
-      currentHistory: ctx.history,
+    // One act, one moment, one commit (the spacebar). In per-act-moment mode this do opens its
+    // OWN moment (a withBeingAct cycle) and seals exactly one fact to store; in legacy mode it
+    // runs on the shared ctx.moment that the caller seals.
+    const res = await stampOneAct(ctx, `do:${act.act}`, async (m) => {
+      const { doVerb } = await import("../../ibp/verbs/do.js");
+      return doVerb(target, act.act, p, {
+        identity: ctx.identity,
+        moment: m ?? ctx.moment,
+        currentHistory: ctx.history,
+      });
     });
     // bind the id the op actually created (the home space), so later acts
     // (form-being's homeId, set-space's owner target) reference the real id and
@@ -838,22 +846,52 @@ async function evalClosure(node, ctx) {
 
 // ── primitive dispatch ────────────────────────────────────────────────────────
 
-// emit a fact: dry-run collects it into ctx.deltaF; live sends it through emitFact
-// into the moment. The two paths are EXCLUSIVE: emitFact itself appends the spec
-// to moment.deltaF (facts.js:934), so when live + ctx.deltaF === moment.deltaF
-// (runAbleWord shares the array), also doing ctx.deltaF.push would DOUBLE-LIST the
-// fact. Live → emitFact owns the append; dry-run → ctx.deltaF.push (no live moment).
+// stampOneAct — the spacebar at the act level. In per-act-moment mode (ctx.perActMoment.open
+// set), every fact-laying deed opens its OWN moment: a withBeingAct cycle that opens the act,
+// runs THIS one deed onto a fresh moment, and seals it to store (advancing the chain). So a Word
+// of N acts lays N acts/facts on the chain — one fact each — not N facts crammed into one moment
+// (the _inOp/opCount run-on). ctx.moment is swapped to the fresh moment for the duration so
+// emit/doVerb write into it; bindings/laws stay on ctx across the moments. Without an opener
+// (legacy in-moment accumulation, e.g. runAbleWord) the deed runs on the shared ctx.moment and
+// the caller seals the whole batch — byte-identical to before.
+async function stampOneAct(ctx, label, runFn) {
+  const opener = ctx.perActMoment?.open;
+  if (typeof opener !== "function") return runFn(ctx.moment);
+  let out;
+  await opener(label, async (freshMoment) => {
+    const saved = ctx.moment;
+    ctx.moment = freshMoment;
+    try {
+      out = await runFn(freshMoment);
+    } finally {
+      ctx.moment = saved;
+    }
+  });
+  return out;
+}
+
+// emit a fact. In per-act-moment mode the fact is its OWN word — stampOneAct opens a fresh
+// moment for it and seals it to store; the fact lands in that moment's deltaF (live) carrying
+// its own moment's actId. In legacy mode the fact joins the shared ctx.moment. dry-run collects
+// into the (fresh or shared) moment's deltaF, or ctx.deltaF when momentless. The two live paths
+// are EXCLUSIVE: emitFact itself appends the spec to moment.deltaF (facts.js), so in legacy
+// shared-moment mode doing ctx.deltaF.push too would DOUBLE-LIST — live → emitFact owns it.
 async function emit(spec, ctx) {
-  const fact = { ...spec, actId: ctx.moment?.actId, history: ctx.history };
-  if (spec._sets) Object.assign((ctx.state ??= {}), spec._sets); // the fold: a fact updates state
-  if (ctx.dryRun) {
-    ctx.deltaF.push(fact);
-  } else {
-    const { emitFact } = await import("../../past/fact/facts.js");
-    await emitFact(fact, ctx.moment); // appends to moment.deltaF itself
-  }
-  (ctx._queue ??= []).push(fact); // a sealed fact may fire standing watches (the choq)
-  return fact;
+  const stamp = async (m) => {
+    const fact = { ...spec, actId: m?.actId ?? ctx.moment?.actId, history: ctx.history };
+    if (spec._sets) Object.assign((ctx.state ??= {}), spec._sets); // the fold: a fact updates state
+    if (ctx.dryRun) {
+      (m?.deltaF ?? ctx.deltaF).push(fact);
+    } else {
+      const { emitFact } = await import("../../past/fact/facts.js");
+      await emitFact(fact, m ?? ctx.moment); // appends to the moment's deltaF itself
+    }
+    (ctx._queue ??= []).push(fact); // a sealed fact may fire standing watches (the choq)
+    return fact;
+  };
+  // The spacebar: a fact is a word, a word is a space, a space is its own commit.
+  if (ctx.perActMoment) return stampOneAct(ctx, `${spec.verb}:${spec.act}`, stamp);
+  return stamp(ctx.moment);
 }
 
 // form a being: dry-run models the be:birth fact; live calls the real primitive.
@@ -914,7 +952,16 @@ function resolveTarget(of, ctx) {
     ctx.bindings[of.bind] = id;
     return { kind: of.kind, id };
   }
-  return { kind: of.kind, id: of.ref ? ctx.bindings[of.ref] : of.id };
+  // A `ref` deed-target resolves through getPath (dotted-aware, strips a leading `$`), so a
+  // nested binding works as the target id — `do set-being on the being $conn.beingId` reads
+  // ctx.bindings.conn.beingId. A bare binding (`on the space spaceId`, portal.word) still works
+  // (getPath("spaceId") → ctx.bindings.spaceId). Falls back to the literal key, then of.id.
+  if (of.ref) {
+    const key = of.ref.startsWith("$") ? of.ref.slice(1) : of.ref;
+    const got = getPath(key, ctx);
+    return { kind: of.kind, id: got !== undefined ? got : ctx.bindings[of.ref] };
+  }
+  return { kind: of.kind, id: of.id };
 }
 
 // resolve "$name" placeholders against ctx.bindings, recursively

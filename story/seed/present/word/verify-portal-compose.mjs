@@ -61,21 +61,20 @@ try {
     ? ok(`form-portal returned formed:true + matterId ${String(result.matterId).slice(0, 10)}…`)
     : bad(`form-portal return`, result);
 
-  // 2. exactly ONE fact, and it is do:create-matter (NOT do:form-portal) — composition + skipAudit
+  // 2. the create-matter deed ran as its OWN moment (runWordToStore) — it is NOT in the
+  //    form-portal op's moment (deltaF), and there is no do:form-portal audit (ranAsMoments,
+  //    the zero-skipAudit marker). The deed sealed to store; the fold below is the proof.
   const acts = sc.deltaF.map((f) => `${f.verb}:${f.act}`);
-  const createFacts = sc.deltaF.filter((f) => f.verb === "do" && f.act === "create-matter");
-  (createFacts.length === 1 && !sc.deltaF.some((f) => f.act === "form-portal"))
-    ? ok(`one do:create-matter fact, no do:form-portal audit (composition + skipAudit) — [${acts.join(", ")}]`)
-    : bad(`fact shape`, acts);
+  const inOpMoment = sc.deltaF.filter((f) => f.verb === "do" && f.act === "create-matter");
+  (inOpMoment.length === 0 && !sc.deltaF.some((f) => f.act === "form-portal"))
+    ? ok(`create-matter ran as its OWN moment via runWordToStore (not in the op moment), no do:form-portal audit (ranAsMoments) — op deltaF [${acts.join(", ") || "empty"}]`)
+    : bad(`moment model`, acts);
 
-  // 3. the create-matter fact carries the NESTED ibpa spec the grammar shaped + is caller-attributed
-  const cf = createFacts[0];
-  (cf?.params?.type === "ibpa" &&
-    cf?.params?.content?.target === FOREIGN &&
-    cf?.params?.qualities?.portal?.createdBy === String(I_AM) &&
-    String(cf?.through) === String(I_AM))
-    ? ok(`fact params carry the nested spec {type:ibpa, content:{target}, qualities:{portal:{createdBy}}}, attributed to the caller`)
-    : bad(`nested fact params`, cf?.params);
+  // 3. the folded portal matter is caller-attributed (qualities.portal.createdBy = the caller)
+  const pm = await poll(() => loadOrFold("matter", String(result.matterId), "0"));
+  (pm?.state?.qualities?.portal?.createdBy === String(I_AM))
+    ? ok(`portal matter attributed to the caller (qualities.portal.createdBy = I_AM)`)
+    : bad(`attribution`, pm?.state?.qualities?.portal);
 
   // 4. after seal, the ibpa matter materializes with the folded nested content + qualities
   await sealFacts(sc.deltaF);

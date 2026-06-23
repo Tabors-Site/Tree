@@ -47,7 +47,7 @@
 //   see              - preloaded resolver names (resolved into prompt at build)
 //   canSee           - SEE tool names the LLM may call
 //   canDo            - DO tool names the LLM may call
-//   canSummon        - SUMMON tool names (beings the able may wake)
+//   canCall        - SUMMON tool names (beings the able may wake)
 //   canBe            - BE tool names (being shapes the able may create)
 //   prompt           - () => prompt body (used when effective cognition = "llm")
 //   summon           - custom dispatch (used when effective cognition = "scripted")
@@ -58,7 +58,7 @@
 //   replyTo          - optional: "asker" | "chain-initial" reply mode
 //
 // What seed derives at registration:
-//   permissions      - union of verbs implied by canSee / canDo / canSummon / canBe
+//   permissions      - union of verbs implied by canSee / canDo / canCall / canBe
 //   respondMode      - "async" by default
 //   triggerOn        - ["message"] by default
 //   summon           - auto-wrapped with defaultCall when able has no
@@ -192,7 +192,7 @@ export function registerAble(name, def, extName = "able-registry") {
     );
   }
 
-  // Unify capabilities: `can` is the canonical granted-word-set; canSee/canDo/canSummon/canBe
+  // Unify capabilities: `can` is the canonical granted-word-set; canSee/canDo/canCall/canBe
   // are its group-by-verb VIEWS. A able declares EITHER `can` (the collapsed form) OR the four;
   // the registry keeps both consistent. The verb permissions fall out of `can`. Authors never
   // write permissions[] directly — the registry computes it.
@@ -266,7 +266,7 @@ export function registerAble(name, def, extName = "able-registry") {
     can: unified.can,            // the canonical granted-word-set
     canSee: unified.canSee,      // group-by-verb VIEWS over `can`, for the rest of the system
     canDo: unified.canDo,
-    canSummon: unified.canSummon,
+    canCall: unified.canCall,
     canBe: unified.canBe,
     permissions,
     respondMode,
@@ -307,13 +307,13 @@ export function unregisterAble(name) {
 
 // `can` is THE way a able declares capability: a granted-word-set, one entry per word the being
 // may speak — [{verb, word, description?}]. The verb is intrinsic to each word (see/do/summon/be);
-// canSee/canDo/canSummon/canBe are its group-by-verb VIEWS, derived here so the rest of the system
+// canSee/canDo/canCall/canBe are its group-by-verb VIEWS, derived here so the rest of the system
 // reads them unchanged. A able NEVER declares the four directly — that's the collapse. (See
 // project: able-is-a-composite-word; "can X" is the one grant.)
 function unifyCan(def, name) {
-  if (def.canSee || def.canDo || def.canSummon || def.canBe) {
+  if (def.canSee || def.canDo || def.canCall || def.canBe) {
     throw new Error(
-      `registerAble("${name}"): canSee/canDo/canSummon/canBe are retired — declare \`can\` instead, ` +
+      `registerAble("${name}"): canSee/canDo/canCall/canBe are retired — declare \`can\` instead, ` +
       `a list of { verb, word } (e.g. { verb: "see", word: "ables" }, { verb: "do", word: "set-able" }).`,
     );
   }
@@ -323,7 +323,7 @@ function unifyCan(def, name) {
   return { can, ...canViews(can) };
 }
 
-// The group-by-verb VIEWS over `can` (canSee/canDo/canSummon/canBe). Exported because a able spec
+// The group-by-verb VIEWS over `can` (canSee/canDo/canCall/canBe). Exported because a able spec
 // SYNCED to a space stores the canonical `can`; the auth derives the views here when a stored spec
 // carries `can` but not the four, so the able-walk reads consistent capabilities either way.
 export function canViews(can) {
@@ -332,7 +332,7 @@ export function canViews(can) {
   return {
     canSee:    byVerb("see").map((e) => e.word),
     canDo:     byVerb("do").map((e) => (e.description ? { action: e.word, description: e.description } : { action: e.word })),
-    canSummon: byVerb("call").map((e) => { const { verb, ...rest } = e; return (Object.keys(rest).length === 1 && rest.word !== undefined) ? rest.word : rest; }),
+    canCall: byVerb("call").map((e) => { const { verb, ...rest } = e; return (Object.keys(rest).length === 1 && rest.word !== undefined) ? rest.word : rest; }),
     canBe:     byVerb("be").map((e) => e.word),
     canRecall: byVerb("recall").map((e) => e.word), // the granted recall-VIEWS — a being's consciousness-level (which folds it may pull)
   };
@@ -410,7 +410,7 @@ export async function syncAblesToSubstrate() {
           triggerOn:   able.triggerOn    || [],
           canSee:      able.canSee       || [],
           canDo:       able.canDo        || [],
-          canSummon:   able.canSummon    || [],
+          canCall:   able.canCall    || [],
           canBe:       able.canBe        || [],
           replyTo:     able.replyTo      || null,
           origin:      able.origin       || "seed",

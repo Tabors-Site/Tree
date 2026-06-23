@@ -163,22 +163,31 @@ async function runWordNativeOutput(prose, { able, moment, history, beingId, user
     return cognitionSee();
   }
   if (!ir || (Array.isArray(ir) && ir.length === 0)) return cognitionSee();
-  const before = Array.isArray(moment?.deltaF) ? moment.deltaF.length : 0;
+  // The spacebar (moments.md): a Word with no deed (pure declaration/read) is a SEE — the being
+  // looked and laid nothing.
+  const { wordHasDeeds, runWordToStore } = await import("../../word/ableWordRegistry.js");
+  if (!wordHasDeeds(ir)) return cognitionSee();
+  // The being SPOKE a Word. Its deeds (do/be/name + calls/recalls/quotes — the inner word is the
+  // MESSAGE inside a call/recall/quote, never a separate "answer" act) each stamp their OWN moment
+  // to store via runWordToStore — one word = one commit = one fact. The being RESPONDS by calling
+  // the asker (`call <asker> <message>`); that call IS a deed, so the response rides the chain like
+  // any other word. This cognition-moment is the DECISION, not an act — it seals nothing of its own
+  // (returns see; moment.js closes the inbox cleanly). The deeds are the acts; among them, the
+  // being's own call re-invokes the next moment (the generative loop). Signed BY the being's Name
+  // THROUGH the being (runWordToStore → withBeingAct). A refusal mid-deeds → failure.
   try {
-    const { runAbleWord } = await import("../../word/ableWordRegistry.js");
-    await runAbleWord(ir, {
-      moment,
+    await runWordToStore(ir, {
+      beingId: String(beingId),
+      name: username || null,
       history,
-      env: {},
-      identity: { beingId: String(beingId), name: username || null },
+      position: getCurrentSpace(beingId) || null,
     });
   } catch (err) {
     if (err?.__wordRefusal) return cognitionFailure(err.code || "refused", err.message);
-    log.error("Word", `${able?.name}: runAbleWord failed: ${err.message}`);
+    log.error("Word", `${able?.name}: runWordToStore failed: ${err.message}`);
     return cognitionFailure("internal", `word run failed: ${err.message}`);
   }
-  const laid = (Array.isArray(moment?.deltaF) ? moment.deltaF.length : 0) > before;
-  return laid ? cognitionSuccess(prose) : cognitionSee();
+  return cognitionSee();
 }
 
 export async function runLlmMoment({ being, envelope, able, signal, moment } = {}) {

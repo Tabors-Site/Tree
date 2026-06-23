@@ -541,20 +541,18 @@ export function applyCreateSpace(state, fact) {
   const spec = fact?.params;
   if (!spec || typeof spec !== "object") return state;
 
-  // Owner + heavenSpace are DECOMPOSED OUT of the birth: create-space.word lays
-  // them as their OWN do's (a set-space owner + a make-heaven). In the create-
-  // matter birth-as-auto-fact shape those inner do's seal in the SAME moment but
-  // BEFORE this birth fact (the op's auto-Fact lands last in deltaF). So PRESERVE
-  // an already-set owner/heavenSpace here — never null it from the slim .word
-  // birth spec — making the fold order-independent for these two. The fat
-  // direct-emit birth facts (graft replay + any pre-cutover caller) still carry
-  // owner/heaven in spec and win via the spec.* branch; the slim .word birth
-  // omits them and the before-facts win via state.*.
+  // Owner of the new space. Genesis spaces (heaven + heaven children)
+  // seed owner to I-Am; user trees seed owner to their creator. The
+  // spec carries owner directly; ownerId is accepted as a shorthand
+  // alias. (Decomposed shape: a slim birth omits owner/heaven and a
+  // SEPARATE set-owner / make-heaven moment follows — genesis is a
+  // sequence of moments, one word each. The fat spec is the run-on
+  // we're untangling, but it still folds via the spec.* branch here.)
   const initialOwner = spec.owner
     ? String(spec.owner)
     : spec.ownerId
       ? String(spec.ownerId)
-      : (state.owner ?? null);
+      : null;
 
   return {
     ...state,
@@ -562,7 +560,7 @@ export function applyCreateSpace(state, fact) {
     type:         spec.type ?? null,
     parent:       spec.parent ?? spec.parentId ?? null,
     owner:        initialOwner,
-    heavenSpace:  spec.heavenSpace ?? state.heavenSpace ?? null,
+    heavenSpace:    spec.heavenSpace ?? null,
     size:         spec.size ?? null,
     // Space's own coord within its parent. The createSpace handler
     // assigns a random coord inside the parent's size when none was

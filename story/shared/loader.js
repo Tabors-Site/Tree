@@ -943,7 +943,7 @@ export async function loadExtensions(app, mcpServer, opts = {}) {
 
       // The manifest's `provides.defaultPermissions` field retired with
       // ables-are-auth (seed/AblesAreAuth.md). Extensions ship ABLES
-      // whose canSee/canDo/canSummon/canBe lists ARE the gate, and
+      // whose canSee/canDo/canCall/canBe lists ARE the gate, and
       // grants flow through the grant-able DO op. If an old manifest
       // still declares this field, fail loud so we can audit.
       if (manifest.provides?.defaultPermissions) {
@@ -1490,7 +1490,7 @@ function prefixSpecActions(spec, packName) {
   };
   const out = { ...spec };
   if (Array.isArray(spec.canDo))     out.canDo     = spec.canDo.map(prefixIfNeeded);
-  if (Array.isArray(spec.canSummon)) out.canSummon = spec.canSummon.map(prefixIfNeeded);
+  if (Array.isArray(spec.canCall)) out.canCall = spec.canCall.map(prefixIfNeeded);
   if (Array.isArray(spec.canBe))     out.canBe     = spec.canBe.map(prefixIfNeeded);
   return out;
 }

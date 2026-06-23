@@ -14,7 +14,7 @@
 // `composeStack` takes that ordered list of able names and returns
 // one able-shaped object whose:
 //
-//   - canSee / canDo / canSummon / canBe — UNION of every stack
+//   - canSee / canDo / canCall / canBe — UNION of every stack
 //     member's entry list. Stacking can only ADD capabilities
 //     (Flow.md, Section 9: "No subtractive permissions").
 //   - permissions — UNION of every stack member's verb permissions.
@@ -98,7 +98,7 @@ export function composeStack({ stack, toBeing }) {
   // frame's capabilities first when the renderer iterates.
   const canSee    = unionEntries(resolved.map((r) => r.canSee));
   const canDo     = unionEntries(resolved.map((r) => r.canDo));
-  const canSummon = unionEntries(resolved.map((r) => r.canSummon));
+  const canCall = unionEntries(resolved.map((r) => r.canCall));
   const canBe     = unionEntries(resolved.map((r) => r.canBe));
 
   const permissions = unionStrings(resolved.map((r) => r.permissions));
@@ -130,7 +130,7 @@ export function composeStack({ stack, toBeing }) {
     name:              primary.name,
     primaryName:       primary.name,           // explicit accessor for clarity
     stackedNames:      resolved.map((r) => r.name),
-    canSee, canDo, canSummon, canBe,
+    canSee, canDo, canCall, canBe,
     permissions,
     prompt:            composedPrompt,
     call:            primary.call,        // scripted dispatch, primary only

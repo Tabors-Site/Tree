@@ -233,7 +233,6 @@ function pastPhrase(f, names) {
       return `${pastOf("give")} birth to ${targetName(target, names) || p.name || "a being"}`;
     case "declare":
       return `${pastOf("declare")} ${p.name || targetName(target, names) || displayName(beingOf(f), names)}`.trimEnd();
-    case "summon":
     case "call": {
       // Rendered in the Word (book only — NOT a change to the call fact). The reach verb shows
       // only when it carries weight: a REPLY shows "replied to Y"; an intent-only reach shows

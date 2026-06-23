@@ -190,7 +190,7 @@ registerOperation("ask-able", {
         {
           from: askerStance,
           // Envelope intent: the caller's stated purpose. Read by the
-          // auth gate (canSummon entries with intent: "able-request"),
+          // auth gate (canCall entries with intent: "able-request"),
           // routed by multi-able receivers, and surfaced by the inbox
           // panel as the dispatch key for its render surface.
           // See seed/SUMMON.md.

@@ -1,0 +1,22 @@
+# add-llm-connection.word — a being adds an llm connection (materials/being/ops.js
+# add-llm-connection DO op). THE MULTI-MOMENT composite — TWO words = TWO moments via
+# runWordToStore (the genuine run-model proof; create/update are atomic one-fact words).
+#
+# A connection is ONE fact however rich (name/url/model/key = the word's content; the
+# spacebar, create-matter is the proof) — that is the FIRST deed: `do set-being`, the whole
+# connection at qualities.llmConnections.<id>. The auto-assign-to-main is a SECOND, distinct
+# word — the buried verb pulled out and given its OWN moment: `do assign-llm-slot`, fired
+# only when the being has no main slot yet ($conn.isFirst). Two deeds → two moments.
+#
+# The host see resolve-connection is the floor (validate / SSRF-gate / encrypt the key / mint
+# the id / read isFirst) — lays NO fact; the deeds lay the facts. encryptedApiKey rides the
+# first fact as ciphertext (redact strips it). Mirrors portal.word (a composite issuing a
+# `do` deed). The bridge binds `target` (the being), the create `params` (name, baseUrl,
+# apiKey, model), `caller`, and `branch`.
+
+When a being adds an llm connection:
+  If no caller, refuse with "add-llm-connection requires an identified actor".
+  see resolve-connection(target, params, caller, branch) as conn.
+  do set-being on the being $conn.beingId with { field: $conn.field, value: $conn.value } as added.
+  If $conn.isFirst, do assign-llm-slot on the being $conn.beingId with { slot: "main", connectionId: $conn.connectionId } as assigned.
+  Return connectionId: $conn.connectionId.

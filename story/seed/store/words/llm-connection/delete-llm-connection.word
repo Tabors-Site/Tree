@@ -1,0 +1,17 @@
+# delete-llm-connection.word — remove a being's llm connection (materials/being/ops.js
+# delete-llm-connection DO op). ONE fact — unset qualities.llmConnections.<id> (value:null
+# → the reducer's setDeepPath deletes the leaf). The spacebar: delete is one word.
+#
+# The old slot-clears are DROPPED (a run-on cleaned proper): a slot (incl. "main") pointing
+# at the gone connection is a dangling ref that FOLDS to absent — the resolution chain falls
+# through gracefully, and resolveConnectionSpec's isFirst treats a dangling main as empty so
+# a re-add auto-assigns. The host see resolve-connection-removal is the floor (confirm the
+# connection exists, bake the unset params) — lays NO fact; the dispatcher lays the one
+# do:set-being. The handler busts the client cache post-fact (a side-effect, not a fact).
+#
+# The bridge binds `target` (the being), `params` (connectionId), `caller`, and `branch`.
+
+When a being deletes an llm connection:
+  If no caller, refuse with "delete-llm-connection requires an identified actor".
+  see resolve-connection-removal(target, params, caller, branch) as removal.
+  Return connectionId: $removal.connectionId, factParams: $removal.setBeingParams.

@@ -488,7 +488,7 @@ export async function grantAngelToSeedDelegates() {
     // visitor angel's canSee:["*"] — raw SEE on everything — which
     // breaks the filtered arrival-view doctrine. Arrival gets ONLY its
     // own able granted below (canSee:["arrival-view"] + canBe:
-    // ["birth","connect","release"] + canSummon:@cherub:mate).
+    // ["birth","connect","release"] + canCall:@cherub:mate).
     if (spec.name === "arrival") continue;
     const slot = await findByName("being", spec.name, "0");
     if (!slot) continue;

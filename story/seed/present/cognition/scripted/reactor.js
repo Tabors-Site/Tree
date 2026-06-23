@@ -17,7 +17,7 @@
 //
 // A trigger: { when(state) -> bool, then(state) -> do | null }
 //   state . the COMPLETE face, accumulated:
-//           { position, able, can:{canDo,canSummon,canBe}, seen:[], items:[] }
+//           { position, able, can:{canDo,canCall,canBe}, seen:[], items:[] }
 //   do    . the decided do, a WORD string (e.g. "do move north."), or null
 // Evaluated once, on completion. ONE do per moment: the FIRST trigger whose
 // `when(state)` holds wins. None match -> no act (a see-moment).
@@ -34,7 +34,7 @@ function freshState() {
   return {
     position: null,
     able: null,
-    can: { canDo: [], canSummon: [], canBe: [] },
+    can: { canDo: [], canCall: [], canBe: [] },
     seen: [],
     items: [],
   };
@@ -173,28 +173,35 @@ export async function runReactorMoment(
   const word = res.act;
   if (!res.acted || word == null || word === "") return cognitionSee();
 
-  // 3. Run the decided Word exactly like the llm path: parse -> runAbleWord.
+  // 3. The being ACTED (a trigger decided a Word). Defer the deeds exactly like the llm path
+  //    (moments.md): this moment seals the ANSWER (the decided Word as the inner word), and
+  //    moment.js stamps the DEEDS via runWordToStore — each act its own moment to store (the
+  //    spacebar). A Word with no deed → a SEE. A refusal surfaces when the deeds run (post-seal).
+  let ir;
   try {
     const { parse } = await import("../../word/parser.js");
-    const ir = parse(String(word));
-    if (!ir || (Array.isArray(ir) && ir.length === 0)) return cognitionSee();
-    const { runAbleWord } = await import("../../word/ableWordRegistry.js");
-    const before = Array.isArray(moment?.deltaF) ? moment.deltaF.length : 0;
-    await runAbleWord(ir, {
-      moment,
-      history: history,
-      env: {},
-      identity: { beingId: String(beingId), name: username || null },
-    });
-    const laid =
-      (Array.isArray(moment?.deltaF) ? moment.deltaF.length : 0) > before;
-    return laid ? cognitionSuccess(String(word)) : cognitionSee();
+    ir = parse(String(word));
   } catch (err) {
-    if (err?.__wordRefusal)
-      return cognitionFailure(err.code || "refused", err.message);
-    return cognitionFailure(
-      "internal",
-      `reactor word run failed: ${err.message}`,
-    );
+    return cognitionSee();
   }
+  if (!ir || (Array.isArray(ir) && ir.length === 0)) return cognitionSee();
+  const { wordHasDeeds, runWordToStore } = await import("../../word/ableWordRegistry.js");
+  if (!wordHasDeeds(ir)) return cognitionSee();
+  const { getCurrentSpace } = await import("../../../materials/being/position.js");
+  // The script being SPOKE a Word: its deeds (incl. any `call <asker> <inner word>`) each stamp
+  // their OWN moment to store via runWordToStore — one word = one commit = one fact. This moment
+  // is the DECISION (returns see; moment.js closes the inbox); the deeds are the acts, the response
+  // rides a call-deed. Exactly the llm path's shape.
+  try {
+    await runWordToStore(ir, {
+      beingId: String(beingId),
+      name: username || null,
+      history,
+      position: getCurrentSpace(String(beingId)) || null,
+    });
+  } catch (err) {
+    if (err?.__wordRefusal) return cognitionFailure(err.code || "refused", err.message);
+    return cognitionFailure("internal", `reactor word run failed: ${err.message}`);
+  }
+  return cognitionSee();
 }

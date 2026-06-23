@@ -496,29 +496,41 @@ export async function ensureSpaceRoot() {
   if (!spaceRoot) {
     const storyName = process.env.STORY_NAME || "My Place";
     const rootId = uuidv4();
-    // "I create the place root" — its own moment on the I-Am's reel.
+    // THE SPACEBAR LAW (23.md): the place root is born as a SEQUENCE of words, one
+    // stamp each — the fat birth (owner + heaven crammed in) was a run-on. Genesis
+    // is a sequence of moments (4-stamped.js): I create the root, then own it, then
+    // make it the space-root heaven — three words, three stamps, three moments,
+    // folding to the same row. (This is the very first space — parent:null, the
+    // I-Am-as-actor chicken-and-egg handled by withIAmAct above.)
     await withIAmAct("I create the place root", async (ctx) => {
-      await emitFact(
-        {
-          verb: "do",
-          act: "create-space",
-          through: I_AM,
-          of: { kind: "space", id: rootId },
-          params: {
-            name: storyName,
-            type: null,
-            parent: null,
-            // The I-Am is the structural owner of the story.
-            owner: I_AM,
-            heavenSpace: HEAVEN_SPACE.SPACE_ROOT,
-            size: assertValidSpaceSize(null, { applyDefault: true }),
-            qualities: {},
-          },
-          actId: ctx.actId,
-          history: "0",
+      await emitFact({
+        verb: "do", act: "create-space", through: I_AM,
+        of: { kind: "space", id: rootId },
+        // No null terms: the root has no parent, so `parent` is simply not said
+        // (absent ⇒ root). A fact declares its content — its letters — not its
+        // silences. The fold derives type null + empty qualities from their absence.
+        params: {
+          name: storyName,
+          size: assertValidSpaceSize(null, { applyDefault: true }),
         },
-        ctx,
-      );
+        actId: ctx.actId, history: "0",
+      }, ctx);
+    });
+    await withIAmAct("I own the place root", async (ctx) => {
+      await emitFact({
+        verb: "do", act: "set-owner", through: I_AM,
+        of: { kind: "space", id: rootId },
+        params: { field: "owner", value: I_AM },
+        actId: ctx.actId, history: "0",
+      }, ctx);
+    });
+    await withIAmAct("I make the place root the space-root heaven", async (ctx) => {
+      await emitFact({
+        verb: "do", act: "make-heaven", through: I_AM,
+        of: { kind: "space", id: rootId },
+        params: { heavenSpace: HEAVEN_SPACE.SPACE_ROOT },
+        actId: ctx.actId, history: "0",
+      }, ctx);
     });
     spaceRoot = { _id: rootId };
     log.verbose("Story", `Created place root: ${rootId.slice(0, 8)}`);

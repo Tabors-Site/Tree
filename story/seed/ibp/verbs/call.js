@@ -429,7 +429,7 @@ async function _dispatchCall({
   const decision = await authorize({
     identity,
     verb: "call",
-    // `being` is the TARGET BEING'S NAME — canSummon patterns
+    // `being` is the TARGET BEING'S NAME — canCall patterns
     // ("@cherub", "@food-*") match being names, and beings are
     // addressed individually even when several share a able. Passing
     // activeAble here made the able-walk match patterns against the
@@ -444,11 +444,11 @@ async function _dispatchCall({
       history,
     },
     // Envelope intent. Per seed/SUMMON.md, intent is the caller's
-    // stated purpose AND an auth predicate: canSummon entries can
+    // stated purpose AND an auth predicate: canCall entries can
     // restrict by intent ({pattern: "@cherub", intent: "mate"}), and
-    // the able-walk in ableAuth.permitsSummon reads this to gate. Past
+    // the able-walk in ableAuth.permitsCall reads this to gate. Past
     // omission of this line was the structural drift the SUMMON cleanup
-    // (2026-06-11) closed: intent declarations on canSummon entries
+    // (2026-06-11) closed: intent declarations on canCall entries
     // were silent no-ops because the verb never plumbed it through.
     intent: validatedMessage.intent || null,
     moment,
@@ -473,7 +473,7 @@ async function _dispatchCall({
   // per seed/SUMMON.md: authorize() above gated the OUTGOING side
   // (actor's able permits sending); this gates the INCOMING side
   // (receiver's able accepts this intent). Progressive enhancement —
-  // ables with no `as: receiver` canSummon entries accept anything
+  // ables with no `as: receiver` canCall entries accept anything
   // (current behavior); ables that declared receiver entries are
   // strict-matched.
   const accept = permitsReceiverSummon(able, validatedMessage.intent || null);
@@ -671,7 +671,7 @@ async function _dispatchCall({
  *   from        REQUIRED stance (position@being) the caller is acting from
  *   content     REQUIRED payload the receiver's able handler reads
  *   intent      OPTIONAL kebab-case label naming the caller's stated purpose;
- *               read by the able-walk auth check (canSummon's intent gate)
+ *               read by the able-walk auth check (canCall's intent gate)
  *               and surfaced to the receiver's handler as an addressing hint.
  *               Intent is auth and routing first, hint second; the receiver's
  *               able decides what to do regardless.
@@ -700,8 +700,8 @@ function validateCallMessage(message) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "`message.content` is required");
   }
   // Intent: optional, but when present must be a non-empty kebab-case
-  // label. The auth gate (ableAuth.permitsSummon) matches it literally
-  // against canSummon entries' intent restrictions, so loose shapes
+  // label. The auth gate (ableAuth.permitsCall) matches it literally
+  // against canCall entries' intent restrictions, so loose shapes
   // (whitespace, capital letters, punctuation) would silently fail to
   // match declared entries. Reject them at the perimeter.
   if (message.intent !== undefined && message.intent !== null) {

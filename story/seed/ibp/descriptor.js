@@ -1425,7 +1425,7 @@ function buildLineage(resolved) {
 // authenticated callers don't see birth/connect; unauthenticated
 // callers don't see release. Portal stays state-blind.
 //
-// canDo / canSee / canSummon are not surfaced as actions today . they
+// canDo / canSee / canCall are not surfaced as actions today . they
 // describe what an LLM-driven able is licensed to dispatch via the
 // four seed verb-tools, which is a separate concern from the
 // portal's "click a being and invoke an action" UI. When a real case
@@ -1617,13 +1617,13 @@ async function enrichBeings(spaceId, entries, opts = {}) {
       permissions: def ? def.permissions : null,
       respondMode: def ? def.respondMode : null,
       triggerOn: def ? def.triggerOn : null,
-      // canSummon entries — both sides of the summon edge. Entries
+      // canCall entries — both sides of the summon edge. Entries
       // discriminate via `as: "actor"|"receiver"` (default "actor").
       // UI discovery filters `as:"receiver"` to render per-being
       // accept options (e.g. birther's "mate" button); auth filters
       // `as:"actor"` on the caller's able. See seed/AblesAreAuth.md
       // + protocols/ibp/FEDERATION.md.
-      canSummon: def?.canSummon || null,
+      canCall: def?.canCall || null,
       // Per-being action surface. The portal renders this generically
       // as a menu + arg-schema form; one entry per BE op the able is
       // licensed for, filtered by identity state (cherub-only today).

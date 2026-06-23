@@ -264,43 +264,14 @@ async function setOnBeingHandler({ target, params, moment }) {
 // the seed/present/cognition/llm/connect.js helpers behind the IBP
 // grammar so operators / CLI clients have a single dispatch surface.
 //
-// `skipAudit: true` on every op because the helpers route their
-// writes through `do.set-being`, and the inner set IS the canonical
-// audit Fact. Without skipAudit the outer op would double-stamp.
+// These llm-connection ops are now `.word`s in store/words/llm-connection/ — NO skipAudit. Each
+// lays its own fact cleanly: the atomic ones (update/delete) via the dispatcher's one stamp, add
+// via runWordToStore's deeds (ranAsMoments). The update/delete handlers BELOW are dead (shadowed
+// by the bundle's registrations); cleanup follows with the rest of the cluster.
 
-async function addLlmConnectionHandler({ target, params, identity, moment }) {
-  const { name, baseUrl, apiKey, model } = params || {};
-  if (!name || !baseUrl || !model) {
-    throw new Error(
-      "add-llm-connection: `name`, `baseUrl`, and `model` are required",
-    );
-  }
-  // Load the row to read the current main slot for the
-  // auto-assign-on-first-connection branch.
-  const beingRow = await loadTargetRow(target, "being", { moment });
-  const { addLlmConnection, assignConnection } = await import(
-    "../../present/cognition/llm/connect.js"
-  );
-  const beingId = String(beingRow._id);
-  const connection = await addLlmConnection(
-    beingId,
-    { name, baseUrl, apiKey: apiKey || "none", model },
-    { identity, moment },
-  );
-  try {
-    const beingLlm =
-      beingRow.qualities instanceof Map
-        ? beingRow.qualities.get("beingLlm")
-        : beingRow.qualities?.beingLlm;
-    const currentMain = beingLlm?.slots?.main;
-    if (!currentMain) {
-      await assignConnection(beingId, "main", connection._id, {
-        identity, moment,
-      });
-    }
-  } catch {}
-  return { connection };
-}
+// add-llm-connection moved to store/words/llm-connection/ (add-llm-connection.word, the
+// multi-moment composite run via runWordToStore — two deeds, two moments, no skipAudit).
+// This JS handler + its registration are retired.
 
 async function updateLlmConnectionHandler({ target, params, identity, moment }) {
   const { connectionId, name, baseUrl, apiKey, model } = params || {};
@@ -457,30 +428,21 @@ registerOperation("revoke-able", {
   handler: revokeAbleHandler,
 });
 
-registerOperation("add-llm-connection", {
-  targets: ["being"],
-  ownerExtension: "seed",
-  skipAudit: true,
-  handler: addLlmConnectionHandler,
-});
+// add-llm-connection CARVED OUT → store/words/llm-connection/ (add-llm-connection.word — the
+// MULTI-MOMENT composite run via runWordToStore: `do set-being` then `If first, do assign-llm-slot`,
+// two deeds = two moments, no skipAudit). The JS handler is retired (the bundle owns the op).
 
-registerOperation("update-llm-connection", {
-  targets: ["being"],
-  ownerExtension: "seed",
-  skipAudit: true,
-  handler: updateLlmConnectionHandler,
-});
+// update-llm-connection CARVED OUT → store/words/llm-connection/ (update-llm-connection.word
+// + llmHost.js). Lays its ONE do:set-being fact through the dispatcher (no skipAudit, no
+// self-emit) via resolve-connection-update. updateLlmConnectionHandler above is now dead
+// (the bundle owns the op); cleanup is a follow-up with the rest of the cluster.
 
-registerOperation("delete-llm-connection", {
-  targets: ["being"],
-  ownerExtension: "seed",
-  skipAudit: true,
-  handler: deleteLlmConnectionHandler,
-});
+// delete-llm-connection CARVED OUT → store/words/llm-connection/ (delete-llm-connection.word
+// + llmHost.js). Lays its ONE do:set-being fact (unset, value:null) through the dispatcher
+// (no skipAudit, no self-emit); the slot-clears run-on is dropped (the dangling ref folds).
+// deleteLlmConnectionHandler above is now dead (the bundle owns the op).
 
-registerOperation("assign-llm-slot", {
-  targets: ["being", "space"],
-  ownerExtension: "seed",
-  skipAudit: true,
-  handler: assignLlmSlotHandler,
-});
+// assign-llm-slot CARVED OUT → store/words/llm-connection/ (assign-llm-slot.word + llmHost.js).
+// Polymorphic (being=set-being / space=set-space) via a conditional deed; runs through
+// runWordToStore + ranAsMoments (no skipAudit, no self-emit). assignLlmSlotHandler above is now
+// dead (the bundle owns the op).

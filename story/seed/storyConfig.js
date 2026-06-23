@@ -357,9 +357,10 @@ export async function reloadStoryConfig() {
 // deleteStoryConfigValue. The helpers themselves lay the canonical Fact — a 5D NAME-ACT
 // (config-set / config-delete, verb:"name", bodiless) on the library reel — and handle cache
 // invalidation, validation, and the PROTECTED_KEYS gate (seedVersion / disabledExtensions are
-// scaffold-only). `skipAudit: true` so the outer DO dispatch does NOT double-stamp; the helper's
-// name-act IS the audit Fact. The op `targets:["space"]` is just the dispatch vehicle — config is
-// no longer a space (the target is ignored; the write lands on the library reel).
+// scaffold-only). The helper's name-act IS the op's fact, so each handler returns `ranAsMoments(...)`
+// — the zero-skipAudit marker telling the dispatcher to stamp none of its own (NOT `skipAudit`). The
+// op `targets:["space"]` is just the dispatch vehicle — config is no longer a space (the target is
+// ignored; the write lands on the library reel).
 //
 // Self-register at module load — `seed/services.js` imports storyConfig.js as a side effect so the
 // registry is populated before any caller dispatches.
@@ -367,7 +368,9 @@ export async function reloadStoryConfig() {
 registerOperation("set-config", {
   targets: ["space"],
   ownerExtension: "seed",
-  skipAudit: true,
+  // No skipAudit: setStoryConfigValue lays the canonical 5D NAME-ACT (verb:"name") on the library
+  // reel — the op's OWN fact. ranAsMoments (returned below) tells the dispatcher to stamp none of
+  // its own (the zero-skipAudit marker — the name-act IS the act, not a side-channel a flag hides).
   args: {
     key: { type: "text", label: "Config key", required: true },
     value: { type: "json", label: "Value (JSON)", required: true },
@@ -389,14 +392,16 @@ registerOperation("set-config", {
       internal: identity?.beingId === I_AM,
       identity,
     });
-    return { key, value };
+    const { ranAsMoments } = await import("./ibp/factResult.js");
+    return ranAsMoments({ key, value });
   },
 });
 
 registerOperation("delete-config", {
   targets: ["space"],
   ownerExtension: "seed",
-  skipAudit: true,
+  // No skipAudit: deleteStoryConfigValue lays the 5D NAME-ACT (config-delete) on the library reel —
+  // the op's own fact. ranAsMoments → the dispatcher stamps none of its own.
   args: {
     key: { type: "text", label: "Config key", required: true },
   },
@@ -409,7 +414,8 @@ registerOperation("delete-config", {
       internal: identity?.beingId === I_AM,
       identity,
     });
-    return { deleted: true, key };
+    const { ranAsMoments } = await import("./ibp/factResult.js");
+    return ranAsMoments({ deleted: true, key });
   },
 });
 

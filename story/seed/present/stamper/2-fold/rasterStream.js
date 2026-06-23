@@ -86,7 +86,7 @@ export function streamRasterFace(key, parts) {
   const emit = (item) => deliver(key, { seq: seq++, ...item });
   emit({ kind: "position", value: position ?? null });
   emit({ kind: "able", value: able ?? null });
-  for (const verb of ["canDo", "canSummon", "canBe"]) {
+  for (const verb of ["canDo", "canCall", "canBe"]) {
     const words = Array.isArray(capabilities?.[verb]) ? capabilities[verb] : [];
     if (words.length) emit({ kind: "can", verb, words });
   }
@@ -108,7 +108,7 @@ export function faceItems(face) {
   const push = (it) => items.push({ seq: seq++, ...it });
   push({ kind: "position", value: face.position ?? null });
   push({ kind: "able", value: face.able ?? null });
-  for (const verb of ["canDo", "canSummon", "canBe"]) {
+  for (const verb of ["canDo", "canCall", "canBe"]) {
     const words = Array.isArray(face.capabilities?.[verb]) ? face.capabilities[verb] : [];
     if (words.length) push({ kind: "can", verb, words });
   }

@@ -351,18 +351,12 @@ async function endSpaceHandler({ target, identity, moment }) {
 // Registration
 // ─────────────────────────────────────────────────────────────────────
 
-registerOperation("create-space", {
-  targets: ["space", "stance"],
-  ownerExtension: "seed",
-  factAction: "create-space",
-  skipAudit: true,
-  args: {
-    name: { type: "text", label: "Name (kebab-case)", required: true },
-    type: { type: "text", label: "Type (optional, e.g. 2d / 3d)", required: false },
-    size: { type: "json", label: "Size (optional)", required: false, placeholder: '{"x":50,"y":50}' },
-  },
-  handler: createSpaceHandler,
-});
+// create-space CARVED OUT → store/words/create-space/ (create.word + spaceHost.js +
+// index.js). The op now lays its ONE do:create-space fact through the dispatcher (no
+// skipAudit, no self-emit): resolve-birth-space runs the non-emitting createSpace floor
+// (resolveBirthSpace) and the dispatcher stamps the birth — the spacebar lift. owner/
+// heaven are separate words (next moments). createSpaceHandler/createSpaceChild/
+// shapeNewSpace below are now dead (the bundle owns the op); cleanup is a follow-up.
 
 // ─────────────────────────────────────────────────────────────────────
 // make-heaven — THE HEAVEN WORD

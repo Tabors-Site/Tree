@@ -443,22 +443,28 @@ export function clearBeingClientCache(beingId) {
 
 // Helper signature pattern: (beingId, spec, { identity } = {})
 //
-// All three CRUD helpers below generate the uuid (add only), validate
-// the spec, and route the write through `do.set` so a single Fact
-// stamps. The outer add/update/delete-llm-connection DO ops carry
-// `skipAudit: true` to avoid double-Facting; the inner set IS the
-// canonical audit. Identity threads through so the Fact attributes
-// to the operator (defaults to scaffold/I_AM if absent).
+// These CRUD helpers (resolveConnectionSpec / resolveConnectionUpdate / resolveConnectionRemoval)
+// are now the host FLOOR the llm-connection `.word`s call (store/words/llm-connection/llmHost.js):
+// validate the spec, mint the uuid (add), encrypt the key, bake the set-being params — laying NO
+// fact. The `.word` lays the fact (the dispatcher's one stamp for update/delete; add's deeds via
+// runWordToStore). NO skipAudit anymore. Identity threads through for attribution.
 
-export async function addLlmConnection(
+// resolveConnectionSpec — the NON-EMITTING floor of add-llm-connection: load the
+// being, enforce the cap, validate name/model/key, SSRF-gate the base URL, encrypt
+// the key, mint the id, and bake the set-being params. Lays NO fact. ONE kernel,
+// TWO callers (the "no reimplementation" rule, E6): the legacy addLlmConnection
+// below calls it then self-emits via doVerb; add-llm-connection.word's host `see`
+// resolve-connection calls it and returns setBeingParams as factParams so the
+// DISPATCHER lays the one do:set-being. The chain holds ciphertext only (encrypt()
+// here); redact.js strips qualities.llmConnections from every wire surface.
+export async function resolveConnectionSpec(
   beingId,
   { name, baseUrl, apiKey, model },
-  { identity, moment } = {},
+  { moment } = {},
 ) {
-  // loadOrFold: a being inherited from main onto a sub-branch
-  // resolves via lineage cold-fold. Bare loadProjection returned null
-  // and threw "Being not found" for LLM-config writes against
-  // inherited beings.
+  // loadOrFold: a being inherited from main onto a sub-branch resolves via
+  // lineage cold-fold. Bare loadProjection returned null and threw "Being not
+  // found" for LLM-config writes against inherited beings.
   const { loadOrFold } = await import("../../../materials/projections.js");
   const slot = await loadOrFold("being", beingId, actorHistoryFrom(moment));
   if (!slot) throw new Error("Being not found");
@@ -494,17 +500,38 @@ export async function addLlmConnection(
     lastUsedAt:      null,
   };
 
-  // This set-being fact carries the connection object — encrypted key
-  // included — BY DESIGN. Qualities are a fold of facts: if the value
-  // didn't ride the fact, rebuild-from-reel couldn't reproduce
-  // qualities.llmConnections. The chain holds ciphertext only
-  // (encrypt() above), and redact.js strips llmConnections from every
-  // wire surface, so nothing readable ever leaves the reel.
+  // isFirst: the being has no LIVE `main` slot yet → add.word's conditional assign-to-main
+  // fires (the auto-assign as its OWN word/moment, not a buried second verb). LIVE matters:
+  // a main pointing at a DELETED connection counts as empty — which is exactly why delete
+  // can drop its slot-clears run-on (the dangling slot ref FOLDS to absent right here).
+  const beingLlmMeta = being.qualities instanceof Map
+    ? being.qualities.get("beingLlm")
+    : being.qualities?.beingLlm;
+  const mainSlot = beingLlmMeta?.slots?.main;
+  const isFirst = !mainSlot || !existing[mainSlot];
+
+  return {
+    connectionId,
+    conn,
+    beingId: String(being._id),
+    isFirst,
+    setBeingParams: { field: `qualities.llmConnections.${connectionId}`, value: conn },
+  };
+}
+
+export async function addLlmConnection(
+  beingId,
+  { name, baseUrl, apiKey, model },
+  { identity, moment } = {},
+) {
+  const { connectionId, conn, beingId: bid, setBeingParams } =
+    await resolveConnectionSpec(beingId, { name, baseUrl, apiKey, model }, { moment });
+
   const { doVerb } = await import("../../../ibp/verbs/do.js");
   await doVerb(
-    { kind: "being", id: String(being._id) },
+    { kind: "being", id: bid },
     "set-being",
-    { field: `qualities.llmConnections.${connectionId}`, value: conn },
+    setBeingParams,
     identity ? { identity, moment } : { identity: I_AM, moment },
   );
 
@@ -516,16 +543,20 @@ export async function addLlmConnection(
   };
 }
 
-export async function updateLlmConnection(
+// resolveConnectionUpdate — the NON-EMITTING floor of update-llm-connection: load the
+// being, find the connection, validate + SSRF-gate + re-encrypt only the CHANGED fields,
+// and bake the merged set-being params. Lays NO fact. ONE kernel, TWO callers (E6): the
+// legacy updateLlmConnection below self-emits via doVerb; update-llm-connection.word's
+// host see resolve-connection-update returns setBeingParams as factParams so the
+// DISPATCHER lays the one do:set-being. `noChange` (no field given) is for non-op callers
+// — the op path always sends baseUrl+model, so from the op it always changes. `wasAssigned`
+// flags the post-fact client-cache bust.
+export async function resolveConnectionUpdate(
   beingId,
   connectionId,
   { name, baseUrl, apiKey, model },
-  { identity, moment } = {},
+  { moment } = {},
 ) {
-  // loadOrFold: a being inherited from main onto a sub-branch
-  // resolves via lineage cold-fold. Bare loadProjection returned null
-  // and threw "Being not found" for LLM-config writes against
-  // inherited beings.
   const { loadOrFold } = await import("../../../materials/projections.js");
   const slot = await loadOrFold("being", beingId, actorHistoryFrom(moment));
   if (!slot) throw new Error("Being not found");
@@ -536,7 +567,6 @@ export async function updateLlmConnection(
   if (!existing) throw new Error("Connection not found");
 
   const update = {};
-
   if (baseUrl !== undefined) {
     const safeBaseUrl = validateBaseUrl(baseUrl);
     const hostname = new URL(safeBaseUrl).hostname;
@@ -545,66 +575,57 @@ export async function updateLlmConnection(
     }
     update.baseUrl = safeBaseUrl;
   }
-
-  if (model !== undefined) {
-    update.model = validateModel(model);
-  }
-
-  if (name !== undefined && name !== null) {
-    update.name = validateName(name);
-  }
-
+  if (model !== undefined) update.model = validateModel(model);
+  if (name !== undefined && name !== null) update.name = validateName(name);
   if (apiKey) {
     validateApiKey(apiKey, false);
     update.encryptedApiKey = encrypt(apiKey);
   }
 
-  if (Object.keys(update).length === 0) {
-    return {
-      _id:     safeConnId,
-      name:    existing.name,
-      baseUrl: existing.baseUrl,
-      model:   existing.model,
-    };
-  }
-
-  // Merge update into the existing entry and write the whole entry back
-  // via do.set. One Fact captures the new entry shape; the previous
-  // shape is recoverable from the chain by walking earlier set Facts
-  // on this same field path.
   const merged = { ...existing, ...update };
-  const { doVerb } = await import("../../../ibp/verbs/do.js");
-  await doVerb(
-    { kind: "being", id: String(being._id) },
-    "set-being",
-    { field: `qualities.llmConnections.${safeConnId}`, value: merged },
-    identity ? { identity, moment } : { identity: I_AM, moment },
-  );
-
-  // Bust cache if this connection is currently assigned
   const beingLlmMeta =
     being.qualities instanceof Map
       ? being.qualities.get("beingLlm")
       : being.qualities?.beingLlm;
   const beingSlots = beingLlmMeta?.slots || {};
-  if (Object.values(beingSlots).includes(connectionId)) {
-    clearBeingClientCache(beingId);
-  }
-
   return {
-    _id:     safeConnId,
-    name:    merged.name,
-    baseUrl: merged.baseUrl,
-    model:   merged.model,
+    connectionId: safeConnId,
+    merged,
+    beingId: String(being._id),
+    noChange: Object.keys(update).length === 0,
+    wasAssigned: Object.values(beingSlots).includes(connectionId),
+    setBeingParams: { field: `qualities.llmConnections.${safeConnId}`, value: merged },
   };
 }
 
-export async function deleteLlmConnection(beingId, connectionId, { identity, moment } = {}) {
+export async function updateLlmConnection(
+  beingId,
+  connectionId,
+  { name, baseUrl, apiKey, model },
+  { identity, moment } = {},
+) {
+  const r = await resolveConnectionUpdate(beingId, connectionId, { name, baseUrl, apiKey, model }, { moment });
+  if (r.noChange) {
+    return { _id: r.connectionId, name: r.merged.name, baseUrl: r.merged.baseUrl, model: r.merged.model };
+  }
+  const { doVerb } = await import("../../../ibp/verbs/do.js");
+  await doVerb(
+    { kind: "being", id: r.beingId },
+    "set-being",
+    r.setBeingParams,
+    identity ? { identity, moment } : { identity: I_AM, moment },
+  );
+  if (r.wasAssigned) clearBeingClientCache(beingId);
+  return { _id: r.connectionId, name: r.merged.name, baseUrl: r.merged.baseUrl, model: r.merged.model };
+}
+
+// resolveConnectionRemoval — the NON-EMITTING floor of delete-llm-connection: load the
+// being, confirm the connection exists, and bake the set-being params that UNSET it
+// (value:null → setDeepPath delete). ONE fact (the spacebar lift). ONE kernel, TWO callers
+// (E6): the legacy deleteLlmConnection below self-emits via doVerb; delete-llm-connection.word's
+// host see returns setBeingParams as factParams so the DISPATCHER lays the one do:set-being.
+export async function resolveConnectionRemoval(beingId, connectionId, { moment } = {}) {
   const safeConnId = validateConnectionId(connectionId);
-  // loadOrFold: a being inherited from main onto a sub-branch
-  // resolves via lineage cold-fold. Bare loadProjection returned null
-  // and threw "Being not found" for LLM-config writes against
-  // inherited beings.
   const { loadOrFold } = await import("../../../materials/projections.js");
   const slot = await loadOrFold("being", beingId, actorHistoryFrom(moment));
   if (!slot) throw new Error("Being not found");
@@ -613,51 +634,29 @@ export async function deleteLlmConnection(beingId, connectionId, { identity, mom
   const conn = readConnectionsFrom(being)[safeConnId];
   if (!conn) throw new Error("Connection not found");
 
+  return {
+    connectionId: safeConnId,
+    beingId: String(being._id),
+    setBeingParams: { field: `qualities.llmConnections.${safeConnId}`, value: null },
+  };
+}
+
+export async function deleteLlmConnection(beingId, connectionId, { identity, moment } = {}) {
+  const r = await resolveConnectionRemoval(beingId, connectionId, { moment });
   const { doVerb } = await import("../../../ibp/verbs/do.js");
-  const opts = identity
-    ? { identity, moment }
-    : { identity: I_AM, moment };
-
-  // Unset the connection entry on this being's qualities (do.set with
-  // value=null on a 2-deep path unsets via Mongo $unset).
   await doVerb(
-    { kind: "being", id: String(being._id) },
+    { kind: "being", id: r.beingId },
     "set-being",
-    { field: `qualities.llmConnections.${safeConnId}`, value: null },
-    opts,
+    r.setBeingParams,
+    identity ? { identity, moment } : { identity: I_AM, moment },
   );
-
-  // Clear any being slots (including "main") that pointed here.
-  const beingLlmMeta =
-    being.qualities instanceof Map
-      ? being.qualities.get("beingLlm")
-      : being.qualities?.beingLlm;
-  const beingSlots = beingLlmMeta?.slots || {};
-  for (const [s, val] of Object.entries(beingSlots)) {
-    if (val === connectionId) {
-      await doVerb(
-    { kind: "being", id: String(being._id) },
-        "set-being",
-        { field: `qualities.beingLlm.slots.${s}`, value: null },
-        opts,
-      );
-    }
-  }
-
   clearBeingClientCache(beingId);
 
-  // No reference cascade. The deletion places one fact on this
-  // being's chain; the LLM-resolution chain (chain.js) walks beings
-  // + spaces + slots on every read and falls through gracefully when
-  // a connectionId no longer resolves. Eager cleanup of every
-  // reference would: (a) duplicate state the chain already handles,
-  // (b) write a flurry of facts on the wrong history and the wrong
-  // moment, and (c) miss inherited references on sub-branches that
-  // never diverged. The right pattern is what we already have for
-  // everything else in TreeOS — facts are the truth, readers fold
-  // on demand. See seed/CLAUDE.md "LLM connection lives on Being.
-  // qualities.llmConnections."
-
+  // ONE fact — the slot-clears run-on is DROPPED (cleaned proper, the spacebar). A slot
+  // (incl. "main") pointing at the deleted connection is a dangling ref: the LLM-resolution
+  // chain (chain.js) falls through gracefully when a connectionId no longer resolves, and
+  // resolveConnectionSpec's `isFirst` treats a dangling main as empty (so a re-add
+  // auto-assigns). Facts are the truth, readers fold on demand — no eager cascade.
   return { removed: true };
 }
 
@@ -751,6 +750,47 @@ export async function assignSpaceConnection(
   );
 
   return { spaceId: String(spaceId), slot, connectionId: safeConnId };
+}
+
+// resolveSlotAssignment — the NON-EMITTING floor of assign-llm-slot. Validates the slot and
+// (for a real connectionId) that the connection exists, loads the target, and bakes the set
+// params + the branch flags (being → qualities.beingLlm.slots.<slot>; space/stance →
+// qualities.llm.slots.<slot>). Lays NO fact. assign-llm-slot.word's host see uses it and the
+// `.word` issues the ONE deed the branch selects (do set-being / do set-space). connectionId:null
+// clears the slot. ADDITIVE — the legacy assignConnection/assignSpaceConnection keep self-emitting
+// for any direct callers; a dedup is a follow-up.
+export async function resolveSlotAssignment(targetId, kind, slot, connectionId, { caller, moment } = {}) {
+  if (!isValidUserSlot(slot)) throw new Error("Invalid assignment slot: " + slot);
+  const safeConnId = validateConnectionId(connectionId);
+  const history = actorHistoryFrom(moment, "resolveSlotAssignment");
+  const id = String(targetId);
+
+  if (kind === "being") {
+    if (safeConnId) {
+      const conn = await readConnection(id, safeConnId, history);
+      if (!conn) throw new Error("Connection not found");
+    }
+    const { loadOrFold } = await import("../../../materials/projections.js");
+    const beingSlot = await loadOrFold("being", id, history);
+    if (!beingSlot) throw new Error("Being not found");
+    return {
+      isBeing: true, isSpace: false, id: String(beingSlot.id), slot, connectionId: safeConnId,
+      field: `qualities.beingLlm.slots.${slot}`, value: safeConnId,
+    };
+  }
+
+  // space / stance — the connection is owned by a being, so the caller supplies ownership.
+  if (safeConnId && caller) {
+    const conn = await readConnection(String(caller), safeConnId, history);
+    if (!conn) throw new Error("Connection not found");
+  }
+  const { loadProjection } = await import("../../../materials/projections.js");
+  const sSlot = await loadProjection("space", id, "0");
+  if (!sSlot) throw new Error("Space not found");
+  return {
+    isBeing: false, isSpace: true, id: String(sSlot.id), slot, connectionId: safeConnId,
+    field: `qualities.llm.slots.${slot}`, value: safeConnId,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────

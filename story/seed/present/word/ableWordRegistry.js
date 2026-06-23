@@ -1,13 +1,16 @@
-// The bridge registry (host): (able, be-op) -> a parsed `.word` program.
+// The word registry (host): (able, op) -> a parsed `.word` program (a THEOREM word's body).
 //
-// Where a BE op would dispatch to its JS able handler, the stamper first consults
-// this registry; if a `.word` program is present it runs via the evaluator in
-// LIVE mode with the moment's moment, else it falls through to the JS handler
-// (2.md Phase 4, the dual registry, preferring `.word`). This is the only new
-// host code the conversion needs; the rest is deletion. See bridge.md.
+// DOCTRINE (Tabor): every word is a `.word` — a theorem, run by the evaluator — UNLESS it is an
+// AXIOM, a word that bottoms out in the host (its body is a do.ref handler or native matter,
+// resolved by wordStore.resolveWordFromFold / resolveDoOpFromFold and run by doVerb). There is NO
+// `.js` handler backup for a theorem: a word either IS a `.word`, or it is an axiom — never a
+// `.word` with a JS fallback. (The earlier 2.md Phase-4 "dual registry, prefer `.word` else fall
+// through to the JS handler" was the conversion TRANSITION; the JS able-handlers are deleted as
+// each `.word` lands. This is now the resolver for theorem words, not a bridge with a fallback.)
 //
-// Standalone for now: built and validated here, wired into cherub's birthHandler
-// and the world-sequencing JS deleted only once the diff gate is green.
+// runAbleWord runs a `.word` in ONE moment (legacy in-moment accumulation); runWordToStore runs it
+// as a SEQUENCE OF MOMENTS (the spacebar — one act, one moment, one commit; see moments.md). The
+// REGISTRY (the per-history overlay below) is the live fold of the chain's coin/retire facts.
 
 import { readFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -85,8 +88,9 @@ export function listRegistered() {
   return [...REGISTRY.values()];
 }
 
-// Resolve a able's op to its `.word` IR for a HISTORY, or null to fall through to the JS
-// handler. Resolves iff DECLARED + BACKED (existence — the `.word` file present; a gone
+// Resolve a able's op to its `.word` IR for a HISTORY, or null when no theorem `.word` is bound
+// (no JS fallback — an axiom resolves via wordStore.resolveDoOpFromFold; an unbound/disabled
+// theorem refuses). Resolves iff DECLARED + BACKED (existence — the `.word` file present; a gone
 // extension leaves the declaration but no code) AND NOT disabled ON this history (the
 // per-history overlay). A missing history falls back to #main (the cached default pointer),
 // NEVER the literal "0" — resolve the pointer, don't assume the id (never-default-history-zero).
@@ -146,8 +150,9 @@ async function _ensureMainHistory() {
 // with kind:"ableword", not by a separate {able,op} fact path. The IR-laying act runs there.)
 
 // Disable a word: append a `do:retire` fact (permanent) + flip the projection, so
-// resolveAbleWord returns null and acts using it fall through / refuse. The declaration
-// stays on the chain forever; this is itself the "new word that says it can't be used".
+// resolveAbleWord returns null and acts using it REFUSE (no JS backup — a disabled theorem just
+// can't run). The declaration stays on the chain forever; this is itself the "new word that says
+// it can't be used".
 export async function disableWord(
   able,
   op,
@@ -319,6 +324,92 @@ export async function runAbleWord(
   // reads (token/seat for a connect-style flow, reveal, etc.). A WordRefusal propagates
   // out of evaluate() to the verb layer (no fact, the moment rolls back).
   return { deltaF: moment.deltaF, result: ctx.result };
+}
+
+// runWordToStore — the SPACEBAR word-runner (the do-op N-moments path, the run-on cure).
+//
+// runAbleWord (above) runs a `.word` as ONE moment: _inOp stays set so all its acts pool into
+// one deltaF and the caller seals them as a single act (cherub:birth = 5 facts, one moment). The
+// spacebar says that is a run-on — N words crammed into one moment with the spaces deleted.
+//
+// runWordToStore runs the same Word as a SEQUENCE OF MOMENTS instead. It opens NO shared moment;
+// it sets ctx.perActMoment.open = a withBeingAct cycle, so the evaluator opens a fresh moment for
+// EACH fact-laying act (do / be / name / call), lays that act's ONE fact, and seals it to store,
+// advancing the being's chain — then the next act is the next moment. A Word of N acts lays N
+// acts/facts on the chain, one fact each. Declarations (is / can / law / ...) fold IS-side into
+// ctx.laws (letters — they lay nothing); reads (see / recall) lay nothing; control flow (if /
+// foreach) walks into nested acts, each its own moment. Bindings + laws + world-state thread
+// across the moments on ctx, exactly as a story's words carry meaning forward.
+//
+// The being acts as ITSELF: every moment's act is signed BY its Name (withBeingAct resolves the
+// being's trueName), THROUGH the being. `name` is the auth identity doVerb checks. Returns the
+// §7 `return` result (if any), the folded `laws`, and the final `bindings`.
+//
+// Called OUTSIDE any open moment (the chain head it reads must be settled): the top-level word-run
+// for the generative loop and the do-op store. Legacy callers stay on runAbleWord until cut over.
+export async function runWordToStore(
+  ir,
+  { beingId, name = null, history, position = null, env = {}, bindings = {}, beings = {}, trigger = {} } = {},
+) {
+  if (typeof beingId !== "string" || !beingId.length)
+    throw new Error("runWordToStore: beingId is required (the being that acts)");
+  if (typeof history !== "string" || !history.length)
+    throw new Error('runWordToStore: history is required (pass "0" for main)');
+  const { withBeingAct } = await import("../../sprout.js");
+  // How many acts opened a moment this run. >0 means the being ACTED (deeds reached store);
+  // 0 means a pure SEE (only declarations/reads — nothing to commit). This is the signal the
+  // re-invocation hook reads: acted → call the being's next moment (the generative chain);
+  // saw → rest (nothing to re-invoke from). See moments.md "the moments re-invoke each other."
+  let stamped = 0;
+  const ctx = {
+    dryRun: false,
+    // A read-ambient moment (history only): the floor `see`s / host computes that read the actor's
+    // history (actorHistoryFrom) run BEFORE/BETWEEN the deeds, when there is no real moment yet. They
+    // lay nothing, so this never seals. The DEEDS open their own moments via perActMoment.open
+    // (stampOneAct swaps ctx.moment to the fresh withBeingAct moment for each, then restores this).
+    moment: { actorAct: { history } },
+    identity: { beingId: String(beingId), name },
+    history,
+    // where the being STANDS — create-space raises the new space under it (evalAct), and ops
+    // that read the actor's position fold off it. Threaded from the being's presence.
+    position: position ? String(position) : null,
+    env: { mintId: () => randomUUID(), ...env },
+    bindings: { ...trigger, ...bindings },
+    beings,
+    trigger: { ...trigger },
+    flows: [],
+    // The spacebar: each fact-laying act is its own word → its own moment → its own commit.
+    // The opener is one withBeingAct cycle (open the act, lay its fact, seal to store).
+    perActMoment: {
+      open: (label, fn) => {
+        stamped++; // a fact-laying act dispatched this moment — the being acted
+        return withBeingAct(String(beingId), label, history, fn);
+      },
+    },
+  };
+  await evaluate(ir, ctx);
+  // `acted` is the re-invocation signal: true → the chain continues (call the next moment),
+  // false → a SEE-rest (nothing committed, nothing to re-invoke from).
+  return { result: ctx.result, laws: ctx.laws || [], bindings: ctx.bindings, stamped, acted: stamped > 0 };
+}
+
+// wordHasDeeds — does this parsed Word lay anything? True if it has a fact-laying node
+// (act = do/be/name, call, closure, derive), scanning into control-flow bodies (flow/if/foreach/
+// match). The cognition uses it as the act-vs-SEE cut: a Word with deeds → the being ACTED (seal
+// the answer + stamp the deeds via runWordToStore); a Word with none (pure declaration/read) → a
+// SEE (looked, laid nothing). Inclusive by design — err toward "has deeds" so a real act is never
+// mistaken for a SEE (a false positive only costs an answer with zero deeds).
+export function wordHasDeeds(node) {
+  if (!node) return false;
+  if (Array.isArray(node)) return node.some(wordHasDeeds);
+  if (typeof node !== "object") return false;
+  const k = node.kind;
+  if (k === "act" || k === "call" || k === "closure" || k === "derive") return true;
+  if (wordHasDeeds(node.body) || wordHasDeeds(node.effects)) return true;
+  if (wordHasDeeds(node.then) || wordHasDeeds(node.else)) return true;
+  if (Array.isArray(node.cases))
+    return node.cases.some((c) => wordHasDeeds(c?.body) || wordHasDeeds(c?.effects));
+  return false;
 }
 
 // Reconstruct the just-born being from the `be:birth` fact a `.word` birth laid,

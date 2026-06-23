@@ -47,7 +47,7 @@ const ABLE_NAME_RE = /^[a-z][a-z0-9-]*(:[a-z][a-z0-9-]+)?$/;
 const VALID_COGNITION = new Set(["llm", "human", "scripted"]);
 
 // Parse a textarea list — one entry per line, trim, drop blanks.
-// Used for canSee/canDo/canSummon/canBe inputs.
+// Used for canSee/canDo/canCall/canBe inputs.
 function parseLines(value) {
   if (!value) return [];
   if (Array.isArray(value)) return value.map(String).filter(Boolean);
@@ -77,7 +77,7 @@ registerOperation("set-able", {
     },
     canSee:    { type: "multiline", label: "canSee — IBP addresses, one per line",   required: false },
     canDo:     { type: "multiline", label: "canDo — DO action names, one per line",  required: false },
-    canSummon: { type: "multiline", label: "canSummon — being shorthands",            required: false },
+    canCall: { type: "multiline", label: "canCall — being shorthands",            required: false },
     canBe:     { type: "multiline", label: "canBe — BE op names",                     required: false },
     prompt:    { type: "multiline", label: "Prompt (system prompt body, LLM cognition)", required: false },
   },
@@ -100,22 +100,22 @@ registerOperation("set-able", {
 
     const canSee    = parseLines(params?.canSee);
     const canDo     = parseLines(params?.canDo);
-    // canSummon now accepts a pre-structured array (the able-manager
+    // canCall now accepts a pre-structured array (the able-manager
     // panel sends one entry per picker selection with an `as` tag),
     // OR a multiline string for legacy callers (parsed as strings,
     // which default to `as: "actor"` semantics at consumption).
-    const canSummon = Array.isArray(params?.canSummon)
-      ? params.canSummon
-      : parseLines(params?.canSummon);
+    const canCall = Array.isArray(params?.canCall)
+      ? params.canCall
+      : parseLines(params?.canCall);
     const canBe     = parseLines(params?.canBe);
     const prompt    = typeof params?.prompt === "string" ? params.prompt : "";
 
     // Collapse the picker inputs into the canonical granted-word-set `can` — each picked word
-    // carries its verb. The registry derives the canSee/canDo/canSummon/canBe views + permissions.
+    // carries its verb. The registry derives the canSee/canDo/canCall/canBe views + permissions.
     const can = [
       ...canSee.map((w) => ({ verb: "see", word: w })),
       ...canDo.map((w) => ({ verb: "do", word: w })),
-      ...canSummon.map((w) => (typeof w === "string" ? { verb: "call", word: w } : { verb: "call", ...w })),
+      ...canCall.map((w) => (typeof w === "string" ? { verb: "call", word: w } : { verb: "call", ...w })),
       ...canBe.map((w) => ({ verb: "be", word: w })),
     ];
 
@@ -230,7 +230,11 @@ registerOperation("delete-able", {
     });
     unregisterAble(name);
 
-    return { deleted: true, name };
+    // Cross-reel re-target (23.md [C]): the able's lifecycle facts live on its OWN reel —
+    // set-able wrote the .ables/<name> space reel; delete-able's tombstone lands there too,
+    // not on the caller's target. Same `targetsFact({kind:"space", id:name})` shape as set-able,
+    // so the able's reel reads set→delete in order and the registry fold derives "gone."
+    return targetsFact({ deleted: true, name }, { kind: "space", id: name });
   },
 });
 

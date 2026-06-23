@@ -120,6 +120,13 @@ export async function resolveCond(cond, ctx) {
     // array/string reads as absent (plain `!!` makes `[]` truthy, which `if no X` must not).
     const f = getPath(cond.flag, ctx);
     v = Array.isArray(f) ? f.length > 0 : (typeof f === "string" ? f.length > 0 : !!f);
+  } else if (typeof cond.clause === "string" && cond.clause.startsWith("$")) {
+    // a clause lifted as a bare $-binding ref (`If $conn.isFirst`): a boolean binding read.
+    // Resolve via getPath (dotted-aware, strips the `$`, mirrors the evaluator's resolveValue);
+    // its truthiness IS the condition (empty array/string reads absent, like a flag). A genuine
+    // unrecognized clause (no `$`) still falls to fail-closed below.
+    const got = getPath(cond.clause.slice(1), ctx);
+    v = Array.isArray(got) ? got.length > 0 : (typeof got === "string" ? got.length > 0 : !!got);
   } else {
     // a clause with no lifted structure: the parser couldn't recognize it. Resolve
     // conservatively false (the gate/refuse fail-closed default) rather than guess.

@@ -57,7 +57,7 @@ export const birtherAble = Object.freeze({
   //   "actor"     — caller-side; this able can send (default if absent)
   //   "receiver"  — receiver-side; this able accepts when targeted
   //
-  // Auth (authorizeViaAbles → permitsSummon) consults `as:"actor"`
+  // Auth (authorizeViaAbles → permitsCall) consults `as:"actor"`
   // entries on the CALLER'S able. UI discovery + receive-side checks
   // consult `as:"receiver"` entries on the TARGET'S able. One field,
   // two surfaces — same shape as left-stance/right-stance everywhere

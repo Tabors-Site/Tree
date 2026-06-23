@@ -96,7 +96,7 @@
 //     - <canDo tool name>: <description>
 //
 //   summon:
-//     - <canSummon entry>
+//     - <canCall entry>
 //
 //   be: (for creating new beings)
 //     - <canBe entry>
@@ -106,7 +106,7 @@
 //   <preloaded canSee face blocks . one per canSee entry,
 //    rendered as Word under a <label> header>
 //
-// Sections collapse when empty. A able with no `canSummon` simply
+// Sections collapse when empty. A able with no `canCall` simply
 // omits the summon: block; a able with no `canBe` omits the be:
 // block. The capability rows are the structural lock; the contents
 // vary by what each able declares.
@@ -129,7 +129,7 @@
 // being's "now" is its chain position, not a wall-clock.
 //
 // Ables wired through this assembler write `prompt: () => BODY` and
-// the declarative fields (canSee, canDo, canSummon, canBe). That is the
+// the declarative fields (canSee, canDo, canCall, canBe). That is the
 // only shape — the legacy `buildSystemPrompt` hand-assembly (a
 // [Position] block + the able's hand-rolled body) was removed once the
 // last able (story-manager) migrated. The assembler produces only the
@@ -276,7 +276,7 @@ function renderCanSeeBlocks(_able, ctx) {
 // envelope — `do create-space .config.`, not a JSON.stringify'd arguments blob.
 //
 // canSee is preloaded into the face by renderCanSeeBlocks; it is not a capability menu. The three
-// act-capable verbs (do / call / be) are the speakable vocabulary. canSummon's `as: "receiver"`
+// act-capable verbs (do / call / be) are the speakable vocabulary. canCall's `as: "receiver"`
 // entries are receiver-side declarations (what this able accepts when targeted), not speakable
 // words — only actor-side entries (default `as: "actor"`) belong here. Relationship tokens
 // ({rel:"parent"}, {pattern:"<glob>"}) expand to concrete entries via the canStar resolver layer.
@@ -288,9 +288,9 @@ export async function renderVocabularyAsWord(able, ctx) {
     rootId: ctx?.rootId || null,
     name: ctx?.name || null,
   };
-  // canSummon receiver-side declarations are not speakable words.
-  const actorSummonEntries = Array.isArray(able.canSummon)
-    ? able.canSummon.filter((e) => typeof e !== "object" || (e?.as ?? "actor") === "actor")
+  // canCall receiver-side declarations are not speakable words.
+  const actorSummonEntries = Array.isArray(able.canCall)
+    ? able.canCall.filter((e) => typeof e !== "object" || (e?.as ?? "actor") === "actor")
     : null;
   const [doEntries, summonEntries, beEntries] = await Promise.all([
     resolveCanStar(able.canDo, beingCtx),

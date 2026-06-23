@@ -508,7 +508,7 @@ const EFFECT_RULES = [
   // dispatches the summon machinery, and lays the reach as a fact through the stamper,
   // attributed to the caller. Surface verb `call`; the backing stays `summon` until the
   // rename. IR keys are the hinge words: `of` (target), `saying` (talk content, intent
-  // defaults "message"), `to` (kebab intent, matched against canSummon) + `with` (payload).
+  // defaults "message"), `to` (kebab intent, matched against canCall) + `with` (payload).
   //   talk (the quotative hinge): "call the owner, saying $request as queued."
   [
     /^call\s+(.+?),\s*saying\s+(.+?)(?:\s+as\s+(\w+))?\.?$/i,

@@ -243,6 +243,157 @@ export async function assertNameAvailableAt(
  * is awaited only for root creation so navigation can update its index
  * before the response returns.
  */
+// resolveBirthSpace — the NON-EMITTING floor of the create-space OP (the host `see`
+// behind create-space.word). It mirrors createSpace's compute EXACTLY (validate, coord
+// auto-assign, spaceRoot→isRoot promotion, beforeSpaceCreate hook, sibling-uniqueness,
+// the heaven-parent gate, and the max-children check) and ACQUIRES the parent-lock —
+// but lays NO fact and does NOT release the lock on success. The caller (create.word,
+// through the dispatcher) releases it in moment.afterSeal so the max-children invariant
+// brackets the dispatcher's stamp (the lock spans check→seal, exactly as createSpace's
+// own try/finally spans check→emit). createSpace (the kernel below) is UNTOUCHED and
+// keeps self-emitting for its other callers (manifest, services, sub-tree creates); the
+// duplication here is the create-matter precedent (the op handler owns its compute) and
+// a dedup is a clean follow-up. Returns the enriched birth params (NO NULL TERMS — only
+// the fields that ARE; the reducer derives absent⇒default), the id, and the lock handle.
+// THROWS on any gate (releasing the lock first).
+export async function resolveBirthSpace({
+  name,
+  parentId = null,
+  isRoot = false,
+  beingId,
+  type = null,
+  qualities = null,
+  size = null,
+  coord = null,
+  validatedBeing = null,
+  sessionId = null,
+  moment = null,
+} = {}) {
+  name = assertValidSpaceName(name);
+  type = assertValidSpaceType(type);
+  size = assertValidSpaceSize(size, { applyDefault: true });
+  if (!isRoot && !parentId)
+    throw new Error("Non-root spaces require a parentId");
+
+  const history = moment?.actorAct?.history || "0";
+
+  if (coord === null || coord === undefined) {
+    if (!isRoot && parentId) {
+      try {
+        const { loadOrFold: _lP } = await import("../projections.js");
+        const _pSlot = await _lP("space", parentId, history);
+        const parentSize = _pSlot?.state?.size || null;
+        if (parentSize && Number.isFinite(parentSize.x) && Number.isFinite(parentSize.y) &&
+            parentSize.x > 0 && parentSize.y > 0) {
+          coord = {
+            x: Math.floor(Math.random() * parentSize.x),
+            y: Math.floor(Math.random() * parentSize.y),
+          };
+        }
+      } catch { /* defensive: any lookup failure leaves coord null */ }
+    }
+  }
+
+  const spaceRootId = getSpaceRootId();
+  if (!isRoot && parentId && spaceRootId && String(parentId) === String(spaceRootId)) {
+    isRoot = true;
+  }
+
+  const being = validatedBeing ?? (await getBeingOrThrow(beingId, history));
+
+  let parentType = null;
+  if (parentId) {
+    const { loadOrFold: _lP2 } = await import("../projections.js");
+    const _pDoc = await _lP2("space", parentId, history);
+    parentType = _pDoc?.state?.type || null;
+  }
+  const hookData = {
+    name, type, parentId, parentType, isRoot,
+    beingId: being._id,
+    qualities: qualities || new Map(),
+  };
+  const hookResult = await hooks.run("beforeSpaceCreate", hookData);
+  if (hookResult.cancelled) {
+    const code = hookResult.timedOut ? IBP_ERR.HOOK_TIMEOUT : IBP_ERR.HOOK_CANCELLED;
+    throw new IbpError(code, hookResult.reason || "Space creation blocked");
+  }
+  name = assertValidSpaceName(hookData.name);
+  type = assertValidSpaceType(hookData.type);
+
+  const siblingParentId = isRoot ? getSpaceRootId() : parentId;
+  await assertNameAvailableAt(siblingParentId, name, { history });
+
+  const resolvedParentId = isRoot ? getSpaceRootId() : (parentId || null);
+  const lockTarget = resolvedParentId;
+  if (lockTarget) {
+    const locked = await acquireSpaceLock(lockTarget, sessionId);
+    if (!locked)
+      throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Parent space is being modified");
+  }
+
+  let id;
+  try {
+    id = uuidv4();
+    const maxChildren = parseInt(
+      getInternalConfigValue("maxChildrenPerSpace") || "1000",
+      10,
+    );
+    const { default: _Proj } = await import("../history/projection.js");
+    if (isRoot) {
+      if (resolvedParentId) {
+        const childCount = await _Proj.countDocuments({
+          history, type: "space", "state.parent": resolvedParentId,
+          tombstoned: { $ne: true },
+        });
+        if (childCount >= maxChildren)
+          throw new IbpError(IBP_ERR.INVALID_INPUT,
+            `Place root has reached the maximum of ${maxChildren} children`);
+      }
+    } else if (parentId) {
+      const { loadOrFold: _lP3 } = await import("../projections.js");
+      const _pSlot3 = await _lP3("space", parentId, history);
+      const parentSpace = _pSlot3 ? { heavenSpace: _pSlot3.state?.heavenSpace } : null;
+      if (!parentSpace) {
+        const pendingInBatch = moment?.deltaF?.find(
+          (f) => f?.verb === "do" && f?.act === "create-space" &&
+            f?.of?.kind === "space" && String(f?.of?.id) === String(parentId),
+        );
+        if (!pendingInBatch) throw new Error("Parent space not found");
+      } else if (parentSpace.heavenSpace &&
+                 parentSpace.heavenSpace !== HEAVEN_SPACE.SPACE_ROOT &&
+                 beingId !== I_AM) {
+        throw new Error("Cannot create spaces under heaven spaces");
+      }
+      const childCount = await _Proj.countDocuments({
+        history, type: "space", "state.parent": parentId,
+        tombstoned: { $ne: true },
+      });
+      if (childCount >= maxChildren)
+        throw new IbpError(IBP_ERR.INVALID_INPUT,
+          `Parent space has reached the maximum of ${maxChildren} children`);
+    }
+  } catch (e) {
+    if (lockTarget) releaseSpaceLock(lockTarget, sessionId);
+    throw e;
+  }
+
+  const specQualities = hookData.qualities instanceof Map
+    ? Object.fromEntries(hookData.qualities)
+    : (hookData.qualities || {});
+  // NO NULL TERMS — only the fields that ARE. The reducer derives absent⇒default
+  // (parent/type/owner/size/coord); empty qualities is omitted, not stamped as {}.
+  const enrichedSpec = {
+    name,
+    ...(type ? { type } : {}),
+    ...(resolvedParentId ? { parent: String(resolvedParentId) } : {}),
+    ...(isRoot ? { owner: String(being._id) } : {}),
+    ...(Object.keys(specQualities).length ? { qualities: specQualities } : {}),
+    ...(size ? { size } : {}),
+    ...(coord ? { coord } : {}),
+  };
+  return { enrichedSpec, id, spaceId: id, beingId: String(being._id), lockTarget, sessionId };
+}
+
 export async function createSpace({
   name,
   parentId = null,
@@ -257,13 +408,6 @@ export async function createSpace({
   actId = null,
   sessionId = null,
   moment = null,
-  // mintOnly: the create-space.word path. Run the full birth COMPUTE (validate,
-  // resolve parent, hook, sibling-uniqueness, max-children, mint the id) but DON'T
-  // emit the birth fact — return the finalized slim spec + the minted id + a
-  // `releaseLock` the caller hands to afterSeal (so the parent-lock spans the
-  // dispatcher's birth seal). owner/heaven are decomposed out (the .word lays
-  // them). The kernel/direct path (mintOnly:false) is unchanged: emit-fat + tail.
-  mintOnly = false,
 } = {}) {
   name = assertValidSpaceName(name);
   type = assertValidSpaceType(type);
@@ -560,26 +704,51 @@ export async function createStoryHeavenSpace({
   const validatedSize = size ? assertValidSpaceSize(size) : null;
 
   const { withIAmAct } = await import("../../sprout.js");
-  await withIAmAct(`I create the ${name} heaven space`, async (ctx) => {
+
+  // THE SPACEBAR LAW (23.md): one word = one commit = one fact. The fat birth
+  // (owner + heaven crammed into the create) was a RUN-ON — words with the spaces
+  // deleted. Genesis is a SEQUENCE of moments; I say the words one at a time:
+  //   create the space  → its own stamp (name + parent + size + qualities — the space's content)
+  //   set its owner     → the next word, the next moment (applySetField folds owner)
+  //   make it heaven    → the next word, the next moment (applyMakeHeaven folds heavenSpace)
+  // Three words, three stamps, three moments — folding to the SAME row the one fat
+  // fact used to. (Heaven spaces keep the direct-emit: I-Am owns the dot-namespace,
+  // bypassing the name validator + beforeSpaceCreate hook, same as before.)
+  await withIAmAct(`I create the ${name} space`, async (ctx) => {
     await emitFact({
-      verb:    "do",
-      act:     "create-space",
-      through: I_AM,
-      of:      { kind: "space", id },
-      params:  {
+      verb: "do", act: "create-space", through: I_AM,
+      of: { kind: "space", id },
+      // No null terms: a fact declares the fields that ARE — its content — never its
+      // absences. No type here ⇒ the fold derives type null; same for an empty
+      // qualities. You write the word's letters, not its silences.
+      params: {
         name,
-        type:      null,
-        parent:    parentId ? String(parentId) : null,
-        owner: I_AM,
-        heavenSpace: heavenSpace || null,
+        parent: String(parentId),
         ...(validatedSize ? { size: validatedSize } : {}),
-        qualities: specQualities,
+        ...(Object.keys(specQualities).length ? { qualities: specQualities } : {}),
       },
-      actId: ctx.actId,
-      history: "0",
+      actId: ctx.actId, history: "0",
     }, ctx);
   });
-  // Row materializes at the per-moment seal (returned by now).
+  await withIAmAct(`I own the ${name} space`, async (ctx) => {
+    await emitFact({
+      verb: "do", act: "set-owner", through: I_AM,
+      of: { kind: "space", id },
+      params: { field: "owner", value: I_AM },
+      actId: ctx.actId, history: "0",
+    }, ctx);
+  });
+  if (heavenSpace) {
+    await withIAmAct(`I make ${name} a heaven space`, async (ctx) => {
+      await emitFact({
+        verb: "do", act: "make-heaven", through: I_AM,
+        of: { kind: "space", id },
+        params: { heavenSpace },
+        actId: ctx.actId, history: "0",
+      }, ctx);
+    });
+  }
+  // Rows materialize at each per-moment seal (all three folded by now).
   return { _id: id, name, parent: parentId, heavenSpace };
 }
 
