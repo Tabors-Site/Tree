@@ -77,7 +77,7 @@ export async function livePointsAt(beingId, history) {
       ...historyClause,
     })
       .sort({ seq: 1, date: 1 })
-      .select("params date")
+      .select("params seq")
       .lean(),
     Fact.find({
       "of.kind": "being",
@@ -87,27 +87,27 @@ export async function livePointsAt(beingId, history) {
       ...historyClause,
     })
       .sort({ seq: 1, date: 1 })
-      .select("params date")
+      .select("params seq")
       .lean(),
   ]);
 
-  // Latest grant / latest revoke per granted Name. Sorted ascending, so
-  // the last write for each name wins.
+  // Latest grant / latest revoke per granted Name, by chain ORDER (seq), never the clock (623/12).
+  // Both land on ONE reel (of.id:position), so seq totally orders them; sorted ascending, last wins.
   const latestGrant = new Map();
   for (const g of grants) {
     const n = g?.params?.name ? String(g.params.name) : null;
-    if (n) latestGrant.set(n, g.date);
+    if (n) latestGrant.set(n, g.seq);
   }
   const latestRevoke = new Map();
   for (const r of revokes) {
     const n = r?.params?.name ? String(r.params.name) : null;
-    if (n) latestRevoke.set(n, r.date);
+    if (n) latestRevoke.set(n, r.seq);
   }
 
   const live = new Set();
-  for (const [name, gDate] of latestGrant) {
-    const rDate = latestRevoke.get(name);
-    if (!rDate || gDate > rDate) live.add(name);
+  for (const [name, gSeq] of latestGrant) {
+    const rSeq = latestRevoke.get(name);
+    if (rSeq == null || gSeq > rSeq) live.add(name);
   }
   return live;
 }

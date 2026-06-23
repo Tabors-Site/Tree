@@ -80,7 +80,11 @@ export async function assembleStory(
   }
   // scope "world" → WHO, all authors: the whole history (no extra filter)
 
-  let cursor = Fact.find(q).sort({ date: 1, seq: 1 }).lean();
+  // ORDER is the truth, never the clock (623/12, 20.md). A single chain (being/lineage/space/moment)
+  // leads with seq (its chain order); only "world" spans concurrent reels with no single seq, so date
+  // PRESENTS the concurrent facts (time as content, not truth-order) — mirrors read-trail.js.
+  const sort = scope === "world" ? { date: 1, seq: 1 } : { seq: 1, date: 1 };
+  let cursor = Fact.find(q).sort(sort).lean();
   if (limit) cursor = cursor.limit(limit);
   const facts = await cursor;
   const names = await resolveNames(facts, String(history));

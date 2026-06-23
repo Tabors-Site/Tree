@@ -140,5 +140,11 @@ export async function seedFold({ moment = null, history = "0" } = {}) {
   if (typeof store.declareSeeOpsToFold === "function") {
     await store.declareSeeOpsToFold({ moment, history }); // the SEE verb ops (kind:"seeop", see:<op>)
   }
+  // (10) the lens VIEWS (kind:"view", view:<name>) — recall's 6 column-pullers, host-handler refs.
+  // read-trail.js owns the projectors (the LENSES source); lazy-import it (book layer) to declare.
+  const readTrail = await import("../book/read-trail.js");
+  if (typeof readTrail.declareViewsToFold === "function") {
+    await readTrail.declareViewsToFold({ moment, history });
+  }
   return true;
 }

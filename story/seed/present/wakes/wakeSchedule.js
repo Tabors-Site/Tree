@@ -330,13 +330,13 @@ export async function rehydrateFromFacts() {
     log.warn("Schedule", `rehydrate history enumeration failed: ${err.message}`);
   }
 
-  // One query pulls every wake fact across every history. Sorted by
-  // (date, seq) so cancellations applied within a history's lineage
-  // take effect after the matching scheduling.
+  // One query pulls every wake fact across every history. Ordered by (history, seq) — within a
+  // history, schedule + cancel share the being's reel, so seq totally orders them (cancel after its
+  // schedule); the per-history lineage walk below composes branches. ORDER, never the clock (623/12).
   const wakeFacts = await Fact.find({
     verb: "do",
     action: { $in: ["wake-scheduled", "wake-cancelled"] },
-  }).sort({ date: 1, seq: 1 }).lean();
+  }).sort({ history: 1, seq: 1 }).lean();
 
   const now = Date.now();
   let restored = 0;

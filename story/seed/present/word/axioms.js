@@ -19,6 +19,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import log from "../../seedStory/log.js";
+import { assertNoDrift } from "./driftCheck.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SEED = path.resolve(__dirname, "../.."); // seed/
@@ -93,13 +94,17 @@ export function assertDescentSymmetry(getWordSync, { strict = false } = {}) {
 
   const axioms = anchor.filter((a) => a.isAxiom).map((a) => a.word);
   const theorems = anchor.filter((a) => !a.isAxiom).map((a) => a.word);
+  // The kernel cannot DRIFT: every concept-word body must stack on the vocabulary (driftCheck.js).
+  // Drift is a hard error regardless of `strict` — an ungrounded word has no page in the kernel.
+  let drifted = false;
+  try { assertNoDrift(); } catch (e) { issues.push(e.message); drifted = true; }
   const ok = issues.length === 0;
 
   if (ok) {
-    log.verbose("Axioms", `kernel == word.word: ${axioms.length} axioms bottom out in the host, ${theorems.length} theorems compose; descent closes.`);
+    log.verbose("Axioms", `kernel == word.word: ${axioms.length} axioms bottom out in the host, ${theorems.length} theorems compose; descent closes, no drift.`);
   } else {
     log.warn("Axioms", `kernel/word.word symmetry — ${issues.length} issue(s): ${issues.slice(0, 5).join("; ")}${issues.length > 5 ? "; …" : ""}`);
-    if (strict) throw new Error(`assertDescentSymmetry (strict): ${issues.join("; ")}`);
+    if (strict || drifted) throw new Error(`assertDescentSymmetry${drifted ? " (drift)" : " (strict)"}: ${issues.join("; ")}`);
   }
   return { axioms, theorems, issues, ok, anchor };
 }

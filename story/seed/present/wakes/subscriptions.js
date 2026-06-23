@@ -353,13 +353,13 @@ export async function rehydrateFromFacts() {
     log.warn("Subscriptions", `rehydrate history enumeration failed: ${err.message}`);
   }
 
-  // One query pulls every subscription fact across every history.
-  // Sorted by (date, seq) so cancellations within a history's lineage
-  // take effect after the matching registration.
+  // One query pulls every subscription fact across every history. Ordered by (history, seq) — within
+  // a history, register + cancel share the being's reel, so seq totally orders them (cancel after its
+  // registration); the per-history lineage walk below composes branches. ORDER, never the clock (623/12).
   const subFacts = await Fact.find({
     verb: "do",
     action: { $in: ["subscription-registered", "subscription-cancelled"] },
-  }).sort({ date: 1, seq: 1 }).lean();
+  }).sort({ history: 1, seq: 1 }).lean();
 
   // Lazy-load lineage walker only when we actually have facts.
   let isInLineage = null;

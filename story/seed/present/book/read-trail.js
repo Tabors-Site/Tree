@@ -75,6 +75,41 @@ function placeOf(f, n) {
   return "?";
 }
 
+// ── Half B: the lens views as WORDS (623/12 / all-rules-fold — no in-code registry) ────────────────
+// A lens is a recall VIEW (recall.word: "a view is a granted word"). Retire the hardcoded LENSES map
+// by folding each view as a word — kind:"view", carrying its column-puller by a HOST-HANDLER ref (the
+// puller is JS that can't serialize as a fact, the bottom turtle — the SAME proven shape as reducers,
+// declareReducersToFold). The LENSES map above stays as the SOURCE + the boot buffer; once declared,
+// readTrail reads the puller from the fold first. (`can recall <view>` gating = B2, a separate step.)
+
+// declareViewsToFold — coin the 6 views onto the fold at genesis (called from wordFold.seedFold).
+// `history="0"` is the heaven seed-vocabulary pin (deliberate, like the sibling declarers); seedFold
+// passes the boot history explicitly.
+export async function declareViewsToFold({ moment = null, history = "0" } = {}) {
+  const { registerHostHandler, bindWord } = await import("../word/wordStore.js");
+  let n = 0;
+  for (const name of LENS_NAMES) {
+    registerHostHandler(`view:${name}`, LENSES[name]);
+    await bindWord(
+      name,
+      { kind: "view", recall: true, render: { ref: `view:${name}` } },
+      { moment, history, skipIfUnchanged: true },
+    );
+    n++;
+  }
+  return n;
+}
+
+// resolveViewFromFold — the lens column-puller FROM the fold. Null when unbound or not a view; the
+// caller falls back to the LENSES map (the boot buffer) until the fold is declared.
+export async function resolveViewFromFold(name) {
+  const { getWordSync, resolveHostHandler } = await import("../word/wordStore.js");
+  const w = typeof getWordSync === "function" ? getWordSync(name) : null;
+  if (!w || w.kind !== "view" || !w.render?.ref) return null;
+  const fn = resolveHostHandler(w.render.ref);
+  return typeof fn === "function" ? fn : null;
+}
+
 // ── reading the facts of a span (a lens × a window), in chain order ────────────────────────────────
 // Self-contained so the lens path does not depend on assembleStory's internals; the narrative path
 // (no lens) still delegates to assembleStory so its weave/pastPhrase stay the one source of glossing.
@@ -143,7 +178,8 @@ export async function readTrail({
     const end = until instanceof Date ? until : new Date(until);
     return { kind: "story", lens: null, book: book.filter((a) => a.date && new Date(a.date) <= end) };
   }
-  const pick = LENSES[lens];
+  // fold-first: the view-word's puller from the fold (Half B), else the LENSES map (the boot buffer)
+  const pick = (await resolveViewFromFold(lens)) || LENSES[lens];
   if (!pick) throw new Error(`read-trail: unknown lens "${lens}" — one of ${LENS_NAMES.join(" / ")}`);
   const facts = await readSpanFacts({ history: h, scope, since, until, being, space });
   const name = await resolveNamesLite(facts, h);

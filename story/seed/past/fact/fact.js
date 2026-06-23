@@ -48,6 +48,14 @@ const FactSchema = new mongoose.Schema({
   // The fact's content hash — supplied by the stamper, never
   // defaulted. 64 hex chars.
   _id: { type: String },
+  // `date` is a WITNESSED SEAL TIMESTAMP — recorded CONTENT, for display and time-travel anchors
+  // (resolveUntil resolves `date ≤ D` INTO a seq before any fold). TIME IS NEVER A LOGICAL
+  // DEPENDENCY (623/12, 20.md): no world-state decision — order, branch, fold, "which won", "what is
+  // live", "what runs next" — is ever made by comparing the clock. Order/decide on: per-reel `seq`
+  // (one reel); per-history fold composed by history lineage (forked); the causal act-link / on-links
+  // (linked); a deterministic fact-hash `_id` tiebreak (genuinely concurrent). The clock is only a
+  // query knob or recorded content. (Host plumbing — timeouts, caches, circuit-breakers — may use a
+  // wall-clock; that is the substrate, outside the world's dimensions.)
   date: { type: Date, default: Date.now },
 
   // The being the name acted THROUGH (the presence). NULL for a 5D NAME-fact: a name acting in

@@ -7,7 +7,7 @@
 
 A history is where a chain branches.
 A history branches from a fact on the history before it, the fork.
-Up to the fork the facts are shared. After the fork the history has its own.
+Up to the fork, both histories have the same facts. After the fork, each history has its own.
 At the fork, every chain branches at once, each at the head it had.
-Up to a fork the order is one; after it, each history has its own. Order runs along a chain, never across the story at once.
+Up to a fork the order is one; after it, each history has its own. An order is of one chain, not of a story.
 The first history is the main. It branches from none.

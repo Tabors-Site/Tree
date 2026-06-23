@@ -45,7 +45,7 @@ async function _isIAmBedrock(name) {
     "params.word": String(name),
     history: "0",
   })
-    .sort({ date: -1, seq: -1 })
+    .sort({ seq: -1, date: -1 }) // ORDER, not the clock: one '0' word-reel → seq is truth (623/12)
     .limit(1)
     .lean();
   return decl.length > 0 && String(decl[0].through) === (await _iAm());
