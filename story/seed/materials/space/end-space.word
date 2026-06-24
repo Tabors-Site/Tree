@@ -1,0 +1,23 @@
+# end-space.word — end-space: end / tombstone a space (space/ops.js, the end-space DO op).
+#
+# A being ends a space: one do:end-space fact on the space's reel, and the space reducer DERIVES the
+# two consequences — parent=DELETED (the sentinel that hides it from parent-query readers, mirrored
+# onto position) and members.owner=the deleter (revival audit), from the fact's act + `through` (the
+# actor IS the deleter). ONE act, ONE fact (23.md). WORD-SOLE (handler-less): end-space.word is the
+# ONLY path (do.js runOpWord runs it). The CONTROL strand is .word: the return. The genuine substrate
+# READS + read-after-write hygiene — the owner/not-root authority check (resolveSpaceAccess walks the
+# ancestor chain), the already-deleted refusal, the beforeSpaceDelete hook, the per-reel lock, and the
+# cache invalidation — are one host see-op, `resolve-end-space-spec` (endSpaceHost.js), reusing
+# deleteSpaceHistory. It reimplements nothing and lays no fact; a host throw is this word's refusal.
+# Mirrors set-space.word's resolve-set-space-spec.
+#
+# The word lays NO factParams: the reducer derives the whole fold from the fact's act + through. It
+# returns deathSpaceId + factParams: {} + a {kind,id} factTarget at the space; do.js's runOpWord
+# (stampsWordFact) lays the ONE do:end-space fact — verb:do, act:end-space, of:{space,id},
+# through:deleter, EMPTY params — byte-identical to the pre-conversion handler's auto-Fact.
+#
+# The STANDARD trigger binds `target` (the space {kind,id} / id) and `branch`.
+
+When a being ends a space:
+  see resolve-end-space-spec(target, branch) as spec.
+  Return deathSpaceId: $spec.spaceId, factParams: {}, factTarget: { kind: "space", id: $spec.spaceId }.

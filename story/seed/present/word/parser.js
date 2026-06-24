@@ -81,6 +81,8 @@ const SEE_FLOOR = new Set([
   "resolve-source",
   "resolve-birth-space",
   "resolve-birth-spec",
+  "delegate-spec",
+  "findByName",
   "resolve-connection",
   "resolve-connection-removal",
   "resolve-connection-update",
@@ -89,19 +91,28 @@ const SEE_FLOOR = new Set([
   "resolve-name-id",
   "resolve-rename-spec",
   "resolve-set-being-spec",
+  "resolve-set-being-flow-spec",
   "resolve-set-space-spec",
+  "resolve-set-matter-spec",
+  "resolve-end-space-spec",
+  "resolve-inheritation",
   "resolve-slot-assignment",
+  "resolve-llm-config",
+  "resolve-share-book-spec",
   "resolve-target-being",
   "owner-of",
   "space-id-of",
-  "set-owner-block",
-  "remove-owner-block",
   "find-being-parent",
   "find-pointers-space-id",
   "read-pointers",
   "story-root",
   "asked-policy",
   "parse-signal-value",
+  "resolve-config-set",
+  "resolve-config-delete",
+  "resolve-purge",
+  "author-live-able",
+  "remove-live-able",
   // able / authority reads (the grant gates' perceptions, NOT the grant itself)
   "able-spec-for-grant",
   "able-request",
@@ -125,8 +136,11 @@ const SEE_FLOOR = new Set([
   "destination-missing",
   "destination-paused",
   "has-address",
+  "has-heaven-authority",
   "is-grabbable",
   "is-reserved-pointer",
+  "may-remove-owner",
+  "may-set-owner",
   "name-banished",
   "name-exists",
 ]);
@@ -432,6 +446,29 @@ const EFFECT_RULES = [
         homeId: "$home",
         trueName: "$ownerName",
       },
+    }),
+  ],
+  // GENERIC FORM-BEING (self-stamped — NOT through a mother): "form a being with { <spec> }." /
+  // "form a being with $spec." -> be:form-being. The being SELF-STAMPS its be:birth (through = the
+  // new being, set inside birthBeing); the node's `through:"self"` is a TRUTHFUL marker, inert at the
+  // fact (evalAct's form-being branch ignores `through`). DISTINCT from the cherub literal above
+  // (article `a` + the required `with`, no "as the new Name's own" tail — the two regexes cannot both
+  // match). The seed-delegate births in genesis.word speak this: the I makes its delegates directly,
+  // parented to the I. Cherub's mate-flow + birther's child-flow WRAP this primitive.
+  // (PARSER SELF-HOSTING LANE — additive EFFECT_RULE, invisible to the metacircular foldRules; meant
+  // to SUBSUME the cherub literal once that flow moves to call:mate. Flag for the grammar-fold owner.)
+  [
+    /^form a being with (\{.*\}|\$[\w.-]+)(?:\s+as\s+([\w-]+))?\.$/i,
+    (m) => ({
+      kind: "act",
+      verb: "be",
+      act: "form-being",
+      by: "I",
+      through: "self",
+      bind: m[2] || "child",
+      params: m[1].startsWith("{")
+        ? parseObjectLiteral(m[1])
+        : { ref: refKey(m[1].slice(1)) },
     }),
   ],
   // "make the being the home's owner." -> do:set-space owner = the new being

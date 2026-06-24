@@ -1,0 +1,20 @@
+# set-able.word — set-able: create or replace a live able at `<story>/./ables/<name>` (able-manager,
+# the live able-authoring DO op).
+#
+# WORD-SOLE (handler-less): set-able.word is the ONLY path (do.js runOpWord runs it). set-able is
+# MANIFEST-ORCHESTRATION — it writes the .ables/<name> manifest child AND hot-registers the able into
+# the live registry (so the next moment-open sees it without a restart). That genuine EFFECT is the
+# host see-op author-live-able (ableManagerHost.js), reusing the SAME addManifestChild + registerAble
+# the JS handler called — zero reimplementation. The .word is the thin control strand + the audit
+# return; a host throw (bad name, bad cognition) is this word's refusal.
+#
+# The do:set-able AUDIT fact lands on the able's pseudo-reel {space, name}: the see returns `name`, and
+# this word surfaces it as `spaceId` so the dispatcher's resolveAuditTarget targets {space, name} (the
+# shape the handler's targetsFact produced); the fact's params stay the caller's input.
+#
+# The STANDARD trigger binds `params` (the whole input: name / requiredCognition / canSee / canDo /
+# canCall / canBe / prompt) and `branch`.
+
+When a being authors a live able:
+  see author-live-able(params) as result.
+  Return written: $result.written, name: $result.name, origin: $result.origin, hotRegistered: $result.hotRegistered, spaceId: $result.name.

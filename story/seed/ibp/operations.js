@@ -170,7 +170,10 @@ export function registerOperation(name, spec) {
     // moment). Implies ranAsMoments (the deeds are the facts). The execution-model declaration.
     // through: a HOST-FACILITATED op (ask-able) whose .word runs THROUGH the caller in being-mode
     // (identity name = i-am), so its internal acts — the queue summon to the owner — authorize as I.
-    word: isWordSourced ? { noun: spec.word.noun, able: spec.word.able || null, idFrom: spec.word.idFrom || null, through: spec.word.through === true, ranAsMoments: spec.word.ranAsMoments === true, runAsStore: spec.word.runAsStore === true } : null,
+    // factVerb "name": the op's fact is a 5D NAME-ACT on the library reel (config-set, close-story),
+    // not a world do-fact. do.js's runOpWord routes it to runOpNameAct (the .word validates + authors
+    // the params; the dispatcher lays the name-act on the acting Name's reel).
+    word: isWordSourced ? { noun: spec.word.noun, able: spec.word.able || null, idFrom: spec.word.idFrom || null, through: spec.word.through === true, factVerb: spec.word.factVerb === "name" ? "name" : null, ranAsMoments: spec.word.ranAsMoments === true, runAsStore: spec.word.runAsStore === true } : null,
     hostEnv: typeof spec.hostEnv === "function" ? spec.hostEnv : null,
     schema: spec.schema || null,
     // Field schema for the op's params (type + label per field). Drives

@@ -677,14 +677,24 @@ export async function birthBeing({
   // Self-birth (mother = self) and bootstrap births where the parent
   // has no grants yet are no-ops on this pass — no grants to inherit.
   // See seed/done/DualBeingParents for the doctrine.
-  await _inheritParentAbles({
-    childId: id,
-    motherBeingId: parentBeingId,
-    fatherBeingId:
-      spec.father?.story === getStoryDomain() ? spec.father?.beingId : null,
-    moment,
-    history,
-  });
+  // One word = one moment (philosophy/word/623): a being's grants are SEPARATE words from its birth.
+  // Lay them as their OWN moments AFTER the be:birth commits — queued onto moment.afterSeal so the
+  // child exists on-chain before it's granted to (laying them inline, before the caller's be:birth
+  // seals, would order a grant ahead of the birth on the child's reel). Standalone (no moment): the
+  // birth already committed via the singleton path, so lay them inline now.
+  const _layBirthGrants = async () => {
+    await _inheritParentAbles({
+      childId: id,
+      motherBeingId: parentBeingId,
+      fatherBeingId:
+        spec.father?.story === getStoryDomain() ? spec.father?.beingId : null,
+      history,
+    });
+    // `global` is the universal baseline; @public never acts, so it gets none.
+    if (name !== "public") await _anointGlobal({ childId: id, history });
+  };
+  if (moment && Array.isArray(moment.afterSeal)) moment.afterSeal.push(_layBirthGrants);
+  else await _layBirthGrants();
 
   // ── Anoint with the global able ──
   //
@@ -705,13 +715,8 @@ export async function birthBeing({
   // @public is the structural placeholder being that never acts. Grants
   // on it are noise; skip the anoint. Every other being (including
   // seed delegates) gets global as their universal baseline.
-  if (name !== "public") {
-    await _anointGlobal({
-      childId: id,
-      history,
-      moment,
-    });
-  }
+  // (the global anoint + parent-inherited grants now run inside _layBirthGrants above — each its
+  // own moment, sealed AFTER the be:birth via afterSeal. One word = one moment.)
 
   // In-moment: the row materializes at seal. Return the pending view
   // so callers can use the id + spec fields immediately.
@@ -771,7 +776,6 @@ async function _inheritParentAbles({
   childId,
   motherBeingId,
   fatherBeingId,
-  moment,
   history,
 }) {
   // Read each parent's projection on the child's history (loadOrFold
@@ -810,27 +814,35 @@ async function _inheritParentAbles({
     composed.push({ grant: g, grantor: String(fatherBeingId) });
   }
 
-  // Stamp one do:grant-able fact per composed entry, all riding the
-  // child's reel within this same moment (no separate Acts; the
-  // birth's actor stamps them in the birth's moment).
+  // One word = one moment (philosophy/word/623): each inherited grant is its OWN word — its own
+  // moment / act / fact, signed THROUGH the grantor (the parent who held it). Not pooled with the
+  // birth (a run-on the stamper now refuses); a SENTENCE of grants run one at a time on the child's
+  // reel. (Called from birthBeing's afterSeal, so the child already exists on-chain.)
+  const { withBeingAct } = await import("../../../sprout.js");
   for (const { grant, grantor } of composed) {
-    await emitFact(
-      {
-        verb: "do",
-        act: "grant-able",
-        through: grantor,
-        of: { kind: "being", id: String(childId) },
-        params: {
-          able: grant.able,
-          anchorSpaceId: grant.anchorSpaceId || null,
-          anchorBeingId: grant.anchorBeingId || null,
-          grantedBy: grantor,
-          inheritedFrom: grantor, // forensic marker — this came from parent inheritance
-        },
-        actId: moment?.actId || null,
-        history: history,
-      },
-      moment,
+    await withBeingAct(
+      String(grantor),
+      `grant ${grant.able} to ${String(childId).slice(0, 8)}`,
+      history,
+      (ctx) =>
+        emitFact(
+          {
+            verb: "do",
+            act: "grant-able",
+            through: grantor,
+            of: { kind: "being", id: String(childId) },
+            params: {
+              able: grant.able,
+              anchorSpaceId: grant.anchorSpaceId || null,
+              anchorBeingId: grant.anchorBeingId || null,
+              grantedBy: grantor,
+              inheritedFrom: grantor, // forensic marker — this came from parent inheritance
+            },
+            actId: ctx.actId,
+            history,
+          },
+          ctx,
+        ),
     );
   }
 }
@@ -858,27 +870,30 @@ function _grantKey(grant) {
  * only gate, so universal capabilities MUST live on a able every
  * being holds.
  */
-async function _anointGlobal({ childId, history, moment }) {
-  const { getSpaceRootId } = await import("../../../sprout.js");
+async function _anointGlobal({ childId, history }) {
+  const { getSpaceRootId, withIAmAct } = await import("../../../sprout.js");
   const { I } = await import("../seedBeings.js");
   const rootId = getSpaceRootId();
   if (!rootId) return; // boot-window edge; the I-Am birth itself runs before root materializes
-  await emitFact(
-    {
-      verb: "do",
-      act: "grant-able",
-      through: I,
-      of: { kind: "being", id: String(childId) },
-      params: {
-        able: "global",
-        anchorSpaceId: String(rootId),
-        anchorBeingId: null,
-        grantedBy: I,
+  // One word = one moment: the global anoint is its OWN act (I grants), not pooled with the birth.
+  await withIAmAct(`anoint ${String(childId).slice(0, 8)} with global`, (ctx) =>
+    emitFact(
+      {
+        verb: "do",
+        act: "grant-able",
+        through: I,
+        of: { kind: "being", id: String(childId) },
+        params: {
+          able: "global",
+          anchorSpaceId: String(rootId),
+          anchorBeingId: null,
+          grantedBy: I,
+        },
+        actId: ctx.actId,
+        history,
       },
-      actId: moment?.actId || null,
-      history: history,
-    },
-    moment,
+      ctx,
+    ),
   );
 }
 

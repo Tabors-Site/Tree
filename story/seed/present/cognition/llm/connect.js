@@ -854,6 +854,134 @@ export async function resolveSlotAssignment(
   };
 }
 
+// resolveLlmConfigSpec — the NON-EMITTING floor of set-being-llm / set-space-llm / set-story-llm.
+// It is the carved-out body of the old writeLlmFields handler helper: legacy-normalize
+// (connectionId → connections), force-flag MUTEX (forceActor/forceReceiver cannot both be true,
+// setting one clears the other), slot-name validate, and BUILD the dotted-path write list
+// (qualities.llm.slots.<slot> | qualities.llm.default, the force flags, preferOwn). It resolves the
+// TARGET per mode and runs that mode's reads/gates — and lays NO fact: it RETURNS
+// { targetKind, targetId, writes: [{ field, value }] }, and the set-*-llm `.word` fans each write
+// out as its OWN do:set-being / do:set-space deed (its own moment via runWordToStore). One floor
+// read covers all three; the deeds carry the identical per-field facts the handler's doVerb loop
+// produced.
+//
+//   mode "being" — target is the CALLER's own being; no extra read.
+//   mode "space" — target is params.spaceId; reads Space.exists (SPACE_NOT_FOUND on absence).
+//   mode "story" — target is the story place ROOT (findRoot); gated on hasHeavenAuthority(caller)
+//                  (FORBIDDEN otherwise). Legacy default slot is "default".
+//
+// Throws the SAME IbpErrors the handlers threw (INVALID_INPUT / SPACE_NOT_FOUND / FORBIDDEN /
+// INTERNAL) — a host throw becomes the `.word`'s refusal.
+const LLM_VALID_SLOT_RE = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
+
+function normalizeLlmConnectionList(raw) {
+  if (raw === null || raw === undefined) return null;
+  const arr = Array.isArray(raw) ? raw : [raw];
+  const out = [];
+  for (const item of arr) {
+    if (typeof item !== "string" || !item.length || item.length > 100) continue;
+    out.push(item);
+  }
+  return out;
+}
+
+export async function resolveLlmConfigSpec(mode, params, caller) {
+  const { IbpError, IBP_ERR } = await import("../../../ibp/protocol.js");
+  const p = params || {};
+
+  // Force-flag mutex (assertFlagMutex): both-true is rejected; setting one clears the other.
+  if (p.forceActor === true && p.forceReceiver === true) {
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "forceActor and forceReceiver cannot both be true on the same container. " +
+        "Pick one — the chain caps at this container (forceReceiver) or jumps to the actor side (forceActor).",
+    );
+  }
+
+  // Resolve the target + run the per-mode read/gate.
+  let kind = null;
+  let id = null;
+  let defaultSlot = null;
+  if (mode === "story") {
+    if (!caller) {
+      throw new IbpError(IBP_ERR.UNAUTHORIZED, "set-story-llm requires an authenticated being.");
+    }
+    const { hasHeavenAuthority } = await import("../../../materials/space/heavenLineage.js");
+    if (!(await hasHeavenAuthority(caller))) {
+      throw new IbpError(
+        IBP_ERR.FORBIDDEN,
+        "Only beings with heaven authority (owner or angel able) can change story-level LLM configuration.",
+      );
+    }
+    const { findRoot } = await import("../../../materials/projections.js");
+    const roots = await findRoot("space", "0");
+    const rootRow = roots && roots[0] ? roots[0] : null;
+    if (!rootRow) {
+      throw new IbpError(IBP_ERR.INTERNAL, "Story place root not found");
+    }
+    kind = "space";
+    id = String(rootRow.id);
+    defaultSlot = "default";
+  } else if (mode === "space") {
+    const spaceId = p.spaceId;
+    if (!spaceId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`spaceId` is required");
+    const exists = await Space.exists({ _id: spaceId });
+    if (!exists) throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, `Space ${spaceId} not found`);
+    kind = "space";
+    id = String(spaceId);
+    defaultSlot = "default";
+  } else {
+    // mode "being" — the caller's own being.
+    if (!caller) {
+      throw new IbpError(IBP_ERR.UNAUTHORIZED, "set-being-llm requires an authenticated being.");
+    }
+    kind = "being";
+    id = String(caller);
+  }
+
+  // Legacy scalar → list conversion (the old normalized-block shape).
+  const norm = { ...p };
+  if (norm.connections === undefined && norm.connectionId !== undefined) {
+    norm.connections = norm.connectionId === null ? [] : [norm.connectionId];
+    norm.slot = norm.slot || defaultSlot || "default";
+    delete norm.connectionId;
+  }
+
+  // Build the write list (the writeLlmFields body, but RETURNING the writes instead of dispatching).
+  const writes = [];
+
+  const slot = norm.slot || null;
+  const connections = normalizeLlmConnectionList(norm.connections);
+  if (slot && connections !== null) {
+    if (!LLM_VALID_SLOT_RE.test(slot)) {
+      const { IbpError: _E, IBP_ERR: _C } = await import("../../../ibp/protocol.js");
+      throw new _E(_C.INVALID_INPUT, `invalid slot name "${slot}"`);
+    }
+    const field =
+      slot === "main" || slot === "default"
+        ? "qualities.llm.default"
+        : `qualities.llm.slots.${slot}`;
+    writes.push({ field, value: connections });
+  }
+
+  if (norm.forceReceiver === true) {
+    writes.push({ field: "qualities.llm.forceReceiver", value: true });
+    writes.push({ field: "qualities.llm.forceActor", value: false });
+  } else if (norm.forceActor === true) {
+    writes.push({ field: "qualities.llm.forceActor", value: true });
+    writes.push({ field: "qualities.llm.forceReceiver", value: false });
+  } else if (norm.forceActor === false) {
+    writes.push({ field: "qualities.llm.forceActor", value: false });
+  } else if (norm.forceReceiver === false) {
+    writes.push({ field: "qualities.llm.forceReceiver", value: false });
+  }
+  if (typeof norm.preferOwn === "boolean") {
+    writes.push({ field: "qualities.llm.preferOwn", value: norm.preferOwn });
+  }
+
+  return { targetKind: kind, targetId: id, writes };
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // CONNECTION → CLIENT
 // ─────────────────────────────────────────────────────────────────────────

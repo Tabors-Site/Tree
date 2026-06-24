@@ -36,6 +36,7 @@ var cachedStoryUrl = null;
 import log from "./seedStory/log.js";
 import { I } from "./materials/being/seedBeings.js";
 import { registerOperation } from "./ibp/operations.js";
+import { registerAbleWord } from "./present/word/ableWordRegistry.js";
 // NOTE: protocol.js + identity.js are pulled in lazily inside the
 // close-story handler (dynamic import), not at the top level — this
 // module loads very early (see the circular-import note above) and a
@@ -374,58 +375,90 @@ export async function reloadStoryConfig() {
 // Self-register at module load — `seed/services.js` imports storyConfig.js as a side effect so the
 // registry is populated before any caller dispatches.
 
+// configHostEnv — the floor see-ops for set-config.word / delete-config.word (the validation +
+// PROTECTED_KEYS gate) plus the post-seal `after-name-act` cache refresh. WORD-SOLE: the .word is the
+// CONTROL strand; these are the genuine computes (reusing the SAME validateKey / validateValue /
+// PROTECTED_KEYS the JS handler used) + the read-after-write cache hook do.js's runOpNameAct calls
+// AFTER the name-act seals. A host throw is the .word's refusal.
+export function configHostEnv() {
+  return {
+    // resolve-config-set(key, value, caller) → validate + author the config-set name-act params.
+    // Throws the SAME Errors the handler threw (validateKey, value-required, PROTECTED_KEYS,
+    // validateValue). The I-Am (internal — caller is the I being, falling back to ctx.identity when the
+    // .word omits the arg) may write protected keys (seedVersion / disabledExtensions); others refused.
+    "resolve-config-set": ({ args: [key, value, caller] }, ctx) => {
+      validateKey(key);
+      if (value === undefined || value === null) {
+        throw new Error(
+          "set-config: `value` is required (use delete-config to remove)",
+        );
+      }
+      const internal = (caller ?? ctx?.identity?.beingId) === I;
+      if (PROTECTED_KEYS.has(key) && !internal) {
+        throw new Error(
+          `Config key "${key}" is protected and cannot be modified manually`,
+        );
+      }
+      validateValue(value);
+      return { key, value, factParams: { key, value } };
+    },
+    // resolve-config-delete(key, caller) → validate + author the config-delete name-act params. The
+    // I-Am may delete protected keys; others are refused. factParams carries just { key } (bodiless).
+    "resolve-config-delete": ({ args: [key, caller] }, ctx) => {
+      validateKey(key);
+      const internal = (caller ?? ctx?.identity?.beingId) === I;
+      if (PROTECTED_KEYS.has(key) && !internal) {
+        throw new Error(
+          `Config key "${key}" is protected and cannot be deleted manually`,
+        );
+      }
+      return { key, factParams: { key } };
+    },
+    // after-name-act — the post-seal cache refresh (read-after-write). do.js's runOpNameAct calls this
+    // AFTER the config name-act seals. config-set's factParams carries { key, value } → cache[key] =
+    // value; config-delete carries { key } only → drop cache[key]. The library reel is the truth; this
+    // keeps the in-memory read cache fresh until the next fold (initStoryConfig).
+    "after-name-act": ({ args: [factParams] }) => {
+      if (!factParams || typeof factParams.key !== "string") return;
+      if (!configCache) configCache = {};
+      if ("value" in factParams) configCache[factParams.key] = factParams.value;
+      else delete configCache[factParams.key];
+    },
+  };
+}
+
+// Self-register the co-located world strands so resolveAbleWord("config", <op>) finds them.
+registerAbleWord("config", "set-config", new URL("./set-config.word", import.meta.url));
+registerAbleWord("config", "delete-config", new URL("./delete-config.word", import.meta.url));
+
+// set-config — WORD-SOURCED, no handler. do.js's runOpWord routes it via word.factVerb:"name" to
+// runOpNameAct: set-config.word validates + authors factParams {key,value}; the dispatcher lays the
+// 5D config-set NAME-ACT (verb:"name") on the library reel, then runs configHostEnv's after-name-act
+// cache refresh. factAction:"config-set" is the name-act's act (matching nameActConfig). The
+// PROTECTED_KEYS gate + the I-internal carve-out live in resolve-config-set (host), unchanged.
 registerOperation("set-config", {
   targets: ["space"],
   ownerExtension: "seed",
-  // No skipAudit: setStoryConfigValue lays the canonical 5D NAME-ACT (verb:"name") on the library
-  // reel — the op's OWN fact. ranAsMoments (returned below) tells the dispatcher to stamp none of
-  // its own (the zero-skipAudit marker — the name-act IS the act, not a side-channel a flag hides).
+  factAction: "config-set",
   args: {
     key: { type: "text", label: "Config key", required: true },
     value: { type: "json", label: "Value (JSON)", required: true },
   },
-  handler: async ({ params, identity }) => {
-    const { key, value } = params || {};
-    if (!key || typeof key !== "string") {
-      throw new Error("set-config: `key` is required");
-    }
-    if (value === undefined) {
-      throw new Error(
-        "set-config: `value` is required (use delete-config to remove)",
-      );
-    }
-    // I-internal flows (migrations, first-boot bootstrap, manifest sync) may write
-    // PROTECTED_KEYS (seedVersion, disabledExtensions). Other beings stay subject to the
-    // protected-key gate inside setStoryConfigValue.
-    await setStoryConfigValue(key, value, {
-      internal: identity?.beingId === I,
-      identity,
-    });
-    const { ranAsMoments } = await import("./ibp/factResult.js");
-    return ranAsMoments({ key, value });
-  },
+  word: { noun: "library", able: "config", factVerb: "name" },
+  hostEnv: configHostEnv,
 });
 
+// delete-config — WORD-SOURCED, no handler. Same name-act path; the config-delete NAME-ACT carries
+// just { key }. The dropped-key cache refresh is configHostEnv's after-name-act.
 registerOperation("delete-config", {
   targets: ["space"],
   ownerExtension: "seed",
-  // No skipAudit: deleteStoryConfigValue lays the 5D NAME-ACT (config-delete) on the library reel —
-  // the op's own fact. ranAsMoments → the dispatcher stamps none of its own.
+  factAction: "config-delete",
   args: {
     key: { type: "text", label: "Config key", required: true },
   },
-  handler: async ({ params, identity }) => {
-    const { key } = params || {};
-    if (!key || typeof key !== "string") {
-      throw new Error("delete-config: `key` is required");
-    }
-    await deleteStoryConfigValue(key, {
-      internal: identity?.beingId === I,
-      identity,
-    });
-    const { ranAsMoments } = await import("./ibp/factResult.js");
-    return ranAsMoments({ deleted: true, key });
-  },
+  word: { noun: "library", able: "config", factVerb: "name" },
+  hostEnv: configHostEnv,
 });
 
 // ─────────────────────────────────────────────────────────────────────
@@ -444,74 +477,60 @@ registerOperation("delete-config", {
 // future act across ALL its reels (being, matter, fact) — NOT close-history (which
 // ends one branch). Its fact lives on the LIBRARY reel (the out-of-history story reel,
 // like config) as a 5D NAME-ACT, paired with a dispatch gate (ENGINE) that refuses
-// acts once the story is closed. The handler lays that name-act below (ranAsMoments,
-// no skipAudit — the name-act IS the op's fact), then triggers the graceful shutdown;
-// the engine's gate reads the close-story fact on fold of the library reel.
+// acts once the story is closed.
+//
+// WORD-SOLE (Tabor's no-mirror law): NO JS handler. close-story.word VALIDATES (the heaven-authority
+// gate, the floor read has-heaven-authority) + authors the name-act's `factParams` ({ closedBy });
+// do.js's runOpNameAct (word.factVerb:"name") lays the 5D close-story NAME-ACT (verb:"name", bodiless)
+// on the library reel — the EXACT shape the old withNameAct laid — then runs closeStoryHostEnv's
+// `after-name-act`: the in-process latch (markStoryClosed) + the 250ms self-SIGTERM. The shutdown runs
+// ONLY after the name-act SEALS, so a refused/unauthorized act never shuts the story down (strictly
+// safer than the old handler, which gated first but still ran the shutdown inline in the same call).
+
+// closeStoryHostEnv — the floor read (has-heaven-authority) + the post-seal shutdown (after-name-act)
+// for close-story.word. has-heaven-authority wraps the SAME hasHeavenAuthority(beingId) the JS handler
+// called (heaven owner OR angel able). after-name-act latches the dispatch gate + triggers the graceful
+// SIGTERM, run by do.js's runOpNameAct AFTER the close-story name-act seals.
+export function closeStoryHostEnv() {
+  return {
+    // has-heaven-authority(caller) → does the caller hold heaven authority (owner or angel able)?
+    // The SAME gate the JS handler used; a `.word` `If not has-heaven-authority(caller)` refuses on false.
+    "has-heaven-authority": async ({ args: [caller] }) => {
+      if (!caller) return false;
+      const { hasHeavenAuthority } =
+        await import("./materials/space/heavenLineage.js");
+      return await hasHeavenAuthority(String(caller));
+    },
+    // after-name-act — the post-seal shutdown. Runs ONLY after the close-story name-act seals (do.js's
+    // runOpNameAct), so a refused act never reaches here. Mirrors the old handler's tail: latch the
+    // dispatch gate in-process (every subsequent act refuses immediately; the library-reel fact also
+    // latches a restarted server on its first act), then let the ack flush and self-SIGTERM — begin.js's
+    // SIGTERM handler closes senses + process.exit. Timing/behavior identical to the old inline shutdown.
+    "after-name-act": async ({ args: [factParams] }) => {
+      const { markStoryClosed } = await import("./storyLifecycle.js");
+      markStoryClosed();
+      log.warn(
+        "Seed",
+        `close-story requested by ${factParams?.closedBy} (heaven authority). Shutting down.`,
+      );
+      setTimeout(() => {
+        try {
+          process.kill(process.pid, "SIGTERM");
+        } catch {
+          process.exit(0);
+        }
+      }, 250);
+    },
+  };
+}
+
+registerAbleWord("config", "close-story", new URL("./close-story.word", import.meta.url));
 
 registerOperation("close-story", {
   targets: ["space"],
   ownerExtension: "seed",
+  factAction: "close-story",
   args: {},
-  handler: async ({ identity }) => {
-    const { IbpError, IBP_ERR } = await import("./ibp/protocol.js");
-    const { hasHeavenAuthority } =
-      await import("./materials/space/heavenLineage.js");
-    if (!identity?.beingId) {
-      throw new IbpError(
-        IBP_ERR.UNAUTHORIZED,
-        "close-story requires an authenticated being.",
-      );
-    }
-    if (!(await hasHeavenAuthority(identity.beingId))) {
-      throw new IbpError(
-        IBP_ERR.FORBIDDEN,
-        "Only beings with heaven authority (owner or angel able) can close the story.",
-      );
-    }
-    // Lay the STORY-CLOSED fact: a 5D NAME-ACT on the library reel (verb:"name",
-    // act:"close-story", bodiless), mirroring nameActConfig. withNameAct SEALS it BEFORE
-    // the shutdown, so the close-story fact is on the chain when the engine's dispatch
-    // gate next folds the library reel. The name-act IS the op's fact → ranAsMoments.
-    const nameId = (identity?.nameId ?? identity?.beingId) || I;
-    {
-      const { withNameAct } = await import("./sprout.js");
-      const { emitFact } = await import("./past/fact/facts.js");
-      const { getStoryDomain } = await import("./ibp/address.js");
-      const libraryId = getStoryDomain();
-      await withNameAct(nameId, "close-story", async (m) => {
-        await emitFact(
-          {
-            verb: "name",
-            act: "close-story",
-            through: null,
-            by: nameId,
-            of: { kind: "library", id: libraryId },
-            params: { closedBy: String(identity.beingId) },
-            actId: m.actId,
-            history: "0",
-          },
-          m,
-        );
-      });
-    }
-    // Latch the dispatch gate in-process: every subsequent act refuses immediately. (The fact is
-    // also on the library reel, so a server restarted on this closed story latches on its first act.)
-    const { markStoryClosed } = await import("./storyLifecycle.js");
-    markStoryClosed();
-    log.warn(
-      "Seed",
-      `close-story requested by ${identity.beingId} (heaven authority). Shutting down.`,
-    );
-    // Let the ack return first; then trigger the graceful shutdown wired
-    // in begin.js (SIGTERM handler closes senses + process.exit).
-    setTimeout(() => {
-      try {
-        process.kill(process.pid, "SIGTERM");
-      } catch {
-        process.exit(0);
-      }
-    }, 250);
-    const { ranAsMoments } = await import("./ibp/factResult.js");
-    return ranAsMoments({ closing: true });
-  },
+  word: { noun: "library", able: "config", factVerb: "name" },
+  hostEnv: closeStoryHostEnv,
 });

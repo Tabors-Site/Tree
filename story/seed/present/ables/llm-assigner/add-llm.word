@@ -1,0 +1,17 @@
+# add-llm.word — a being adds an llm connection to its OWN being (llm-assigner/ops.js add-llm
+# DO op). PURE-COMPOSITION / delegation: the whole effect is ONE entailed deed,
+# `do add-llm-connection` on the caller's own being, carrying { name, baseUrl, model, apiKey }.
+# That seed op is itself WORD-SOLE (store/words/llm-connection), so this is words all the way
+# down — the connection (and any auto-assign-to-main) folds through the entailed deed's own path.
+#
+# WORD-SOLE (handler-less, Tabor's no-mirror law): this `.word` is the ONLY path. It lays NO fact
+# of its own (registered ranAsMoments) — the entailed do:add-llm-connection deed IS the record.
+# No host read: a delegator lays a deed, it reads nothing of the floor.
+#
+# The bridge binds `caller` (the actor's beingId — the being the connection lands on) and the op
+# `params` (name, baseUrl, model, apiKey), spread top-level too.
+
+When a being adds an llm connection of its own:
+  If no caller, refuse with "add-llm requires an authenticated being. Claim or register through @cherub first." as unauthorized.
+  do add-llm-connection on the being $caller with { name: $params.name, baseUrl: $params.baseUrl, model: $params.model, apiKey: $params.apiKey } as added.
+  Return added: $added.

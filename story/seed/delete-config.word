@@ -1,0 +1,20 @@
+# delete-config.word — delete-config: remove a story-config value (storyConfig.js, the delete-config
+# DO op). The set-config sibling.
+#
+# A config delete is a 5D NAME-ACT on the library reel (config-delete, verb:"name", bodiless, signed
+# by the acting Name) — NOT a world do-fact. The `.word` VALIDATES + authors the params; do.js's
+# runOpWord (op.word.factVerb="name") lays the name-act on the library reel and runs the post-seal
+# cache refresh. WORD-SOLE (handler-less).
+#
+# The CONTROL strand is .word: the `key`-required gate + the return. The PROTECTED_KEYS gate (the
+# I-Am may delete protected keys, others are refused) + validateKey are the host see-op
+# resolve-config-delete (configHostEnv), reusing the SAME helpers the JS handler used. A host throw is
+# this word's refusal; the host's after-name-act drops the key from configCache after the seal.
+#
+# The STANDARD trigger binds the `key`, the `caller` (the actor, for the protected-key gate
+# — only the I-Am deletes seedVersion / disabledExtensions), and `branch`.
+
+When a being deletes a config value:
+  If no key, refuse with "delete-config: `key` is required" as invalid-input.
+  see resolve-config-delete(key, caller) as spec.
+  Return deleted: true, key: $spec.key, factParams: $spec.factParams.

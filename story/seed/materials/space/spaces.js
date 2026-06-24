@@ -1119,6 +1119,12 @@ export async function resolveRootSpace(spaceId) {
     if (!space) throw new Error("Broken tree");
     if (space.heavenSpace) {
       if (space.heavenSpace === "source") return space;
+      // The reality root `/` carries heavenSpace="space-root" but is NOT heaven (`/.`) — it's the
+      // top of every being's tree. A tree owned only by I up to the reality root resolves to the
+      // root itself, not a "heaven boundary" throw (that throw is for the actual heaven tree `/.`
+      // + its tier-3 regions). Mirrors the SPACE_ROOT carve-out the sibling heaven-boundary checks
+      // already make (the `heavenSpace !== HEAVEN_SPACE.SPACE_ROOT` guards in this file).
+      if (space.heavenSpace === HEAVEN_SPACE.SPACE_ROOT) return space;
       throw new Error("Invalid tree: reached heaven space boundary");
     }
     ownerId = getSpaceOwner(space);

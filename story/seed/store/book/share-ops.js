@@ -12,6 +12,7 @@
 
 import { registerOperation } from "../../ibp/operations.js";
 import { registerSeeOperation } from "../../ibp/seeOps.js";
+import { registerAbleWord } from "../../present/word/ableWordRegistry.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
 import { verifyColophon } from "./colophon.js";
 import { kindOf } from "./book.js";
@@ -55,47 +56,76 @@ registerSeeOperation("capture-book", {
   },
 });
 
-// share-book (DO) — lay a sealed Book on the Library reel as a 5D NAME-ACT. Refuse-before-share
-// (verifyColophon, mirroring receive's seal-check). Sharing a book is a NAME acting in the library
-// (5d.md: only names act there; the being stays home) — so the op opens its OWN withNameAct and
-// lays a bodiless verb:"name" fact on the library reel (kind="library"), NOT a do-fact. The outer
-// dispatch is the trigger (skipAudit); the library write is the name-act it spawns.
+// share-book (DO) — lay a sealed Book on the Library reel as a 5D NAME-ACT. Sharing a book is a NAME
+// acting in the library (5d.md: only names act there; the being stays home) — a bodiless verb:"name"
+// fact on the library reel (kind="library"), the catalog entry. NOT a do-fact.
+//
+// WORD-SOLE (Tabor's no-mirror law): NO JS handler. share-book.word VALIDATES + authors the name-act's
+// `factParams` (the catalog entry); do.js's runOpNameAct (word.factVerb:"name") lays the 5D library
+// name-act — the EXACT shape layBookOnLibrary laid. The genuine work is the floor read
+// resolve-share-book-spec (shareBookHostEnv): verify the colophon + CAS-store the body (idempotent,
+// content-addressed → SEE-shaped, like mint-credential) + build factParams. No after-name-act: the CAS
+// bytes are stored when the floor READ runs, BEFORE the name-act seals (IDENTICAL ordering to today).
+
+// shareBookHostEnv — the floor read for share-book.word. resolve-share-book-spec verifies the
+// colophon (refuse-before-share), CAS-stores the body via storeBookBody (putContent — content-
+// addressed, idempotent: the bytes land when this read runs, before the name-act seals, so a reader's
+// resolveBook fetches them back), and builds the library name-act factParams (bookFactParams). Throws
+// the SAME IbpErrors the JS handler threw. The acting Name (sharedBy / the fact's `by`) is the
+// caller's identity, falling back to the I — read from ctx.identity to match the old handler exactly.
+export function shareBookHostEnv() {
+  return {
+    "resolve-share-book-spec": async ({ args: [target, params] }, ctx) => {
+      const book = params?.book;
+      if (!book || typeof book !== "object") {
+        throw new IbpError(
+          IBP_ERR.INVALID_INPUT,
+          "share-book: params.book is required (the sealed book to share)",
+        );
+      }
+      const v = await verifyColophon(book);
+      if (!v.ok) {
+        throw new IbpError(
+          IBP_ERR.INVALID_INPUT,
+          `share-book: colophon verification failed — ${v.reason}`,
+        );
+      }
+      // The acting Name — the sharer's identity (falls back to the I for seed-internal shares),
+      // the SAME derivation the old handler used. `sharedBy` here matches the name-act's `by` (which
+      // do.js's runOpNameAct derives identically from ctx.identity).
+      const nameId =
+        ctx?.identity?.nameId ?? ctx?.identity?.beingId ?? "i-am";
+      // CAS-store the body (idempotent, content-addressed) → bodyRef, BEFORE the name-act seals —
+      // identical ordering to layBookOnLibrary (storeBookBody then emitFact).
+      const { storeBookBody, bookFactParams } = await import("./library.js");
+      const bodyRef = await storeBookBody(book);
+      const factParams = bookFactParams(book, bodyRef, {
+        sharedBy: nameId,
+        kind: kindOf(book),
+      });
+      return {
+        root: v.root,
+        bodyRef,
+        signers: v.signers ?? [],
+        unsigned: !!v.unsigned,
+        factParams,
+      };
+    },
+  };
+}
+
+registerAbleWord(
+  "book",
+  "share-book",
+  new URL("./share-book.word", import.meta.url),
+);
+
 registerOperation("share-book", {
   targets: ["space"],
   ownerExtension: "seed",
   factAction: "share-book",
-  // No skipAudit: layBookOnLibrary lays the op's OWN 5D name-act on the library reel; ranAsMoments
-  // (returned below) tells the dispatcher to stamp none of its own (the zero-skipAudit marker).
-  handler: async ({ params, identity }) => {
-    const book = params?.book;
-    if (!book || typeof book !== "object") {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        "share-book: params.book is required (the sealed book to share)",
-      );
-    }
-    const v = await verifyColophon(book);
-    if (!v.ok) {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        `share-book: colophon verification failed — ${v.reason}`,
-      );
-    }
-    // The acting Name — the sharer's identity (falls back to the I for seed-internal shares).
-    const nameId = identity?.nameId ?? identity?.beingId ?? "i-am";
-    const { withNameAct } = await import("../../sprout.js");
-    const { layBookOnLibrary } = await import("./library.js");
-    const result = await withNameAct(nameId, "share-book", async (moment) =>
-      layBookOnLibrary(book, { moment, by: nameId, kind: kindOf(book) }),
-    );
-    const { ranAsMoments } = await import("../../ibp/factResult.js");
-    return ranAsMoments({
-      root: v.root,
-      bodyRef: result.bodyRef,
-      signers: v.signers ?? [],
-      unsigned: !!v.unsigned,
-    });
-  },
+  word: { noun: "library", able: "book", factVerb: "name" },
+  hostEnv: shareBookHostEnv,
 });
 
 // library (SEE) — the catalog: the Books shared into this story's Library (the reel IS the

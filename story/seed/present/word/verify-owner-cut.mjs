@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 // set-owner / remove-owner (store/words/owner/, WORD-SOLE), LIVE via doVerb. The auth + per-space
 // lock + CAS stay the floor (ownership.js setOwner / removeOwner) reached as `see` escapes; the
-// `.word` carries the input gates + authors the ONE do:set-owner / do:remove-owner fact. Proves:
-// an authorized set-owner lays the fact (field:owner, value) and the space's owner folds;
-// remove-owner folds it to empty; the no-newOwnerId gate refuses. CALLER mode (I). Full begin.js
-// boot. Scratch DB, wiped.
+// `.word` carries the input gates + authors the ONE do:set-owner / do:remove-owner fact.
+//
+// Ownership shape (members.js): claiming/revoking a child's owner is authorized by the PARENT's
+// owner. So the test nests: a being B granted angel ("do *") brings a TREE ROOT P (resolveBirthSpace
+// makes the creator its owner), then a sub-space C under P; as P's owner, B set-owners C to newOwner
+// (the fact carries {field:owner,value} and C's owner folds) and remove-owners C (folds to empty);
+// the no-newOwnerId gate refuses. Full begin.js boot. Scratch DB, wiped.
 
 import fs from "fs";
 import os from "os";
@@ -98,6 +101,11 @@ const did = async (target, op, params, who = ident) => {
   }
 };
 
+const spaceIdOf = (mk) =>
+  mk.result?.spaceId ??
+  (mk.deltaF || []).find((f) => f.act === "create-space")?.of?.id ??
+  null;
+
 const birth = async (name) => {
   let bid = null;
   await withIAmAct(`birth ${name}`, async (ctx) => {
@@ -118,6 +126,12 @@ const birth = async (name) => {
   return bid;
 };
 
+const grantAngel = (beingId, anchorSpaceId) =>
+  did({ kind: "being", id: String(beingId) }, "grant-able", {
+    able: "angel",
+    anchorSpaceId: String(anchorSpaceId),
+  });
+
 console.log(
   `\n  verify-owner-cut (REAL set-owner / remove-owner via doVerb → the word)\n  DB: ${SCRATCH_DB.split("/").pop()}\n`,
 );
@@ -132,54 +146,76 @@ try {
     ? ok(`set-owner.word + remove-owner.word resolve through the bridge`)
     : bad(`resolve`);
 
-  // a child space under the root (I creates it → I controls it)
   const rootId = String(getSpaceRootId());
-  const mk = await did({ kind: "space", id: rootId }, "create-space", {
-    name: "ownertest-" + randomUUID().slice(0, 6),
-  });
-  const mkFact = (mk.deltaF || []).find((f) => f.act === "create-space");
-  const childId =
-    mk.result?.spaceId ??
-    mk.result?.id ??
-    mk.result?._id ??
-    mkFact?.of?.id ??
-    null;
-  childId
-    ? ok(`child space created under root: ${String(childId).slice(0, 8)}…`)
-    : bad(`create-space`, mk.refused?.message || mk.result);
-
+  const B = await birth("ownerB");
   const newOwner = await birth("newowner");
+  const B_id = { beingId: String(B), name: "ownerB" };
 
-  // ── 1. set-owner → the do:set-owner fact + the space's owner folds ──
-  const so = await did({ kind: "space", id: String(childId) }, "set-owner", {
-    newOwnerId: String(newOwner),
-  });
-  const sof = (so.deltaF || []).find((f) => f.act === "set-owner");
-  so.result?.ownerSet === true &&
-  sof?.params?.field === "owner" &&
-  String(sof?.params?.value) === String(newOwner)
-    ? ok(`set-owner → do:set-owner fact {field:"owner", value:newOwner}`)
-    : bad(`set-owner`, so.refused?.message || { result: so.result, fact: sof?.params });
+  // B brings a TREE ROOT P (creator becomes owner), then a sub-space C under P. B needs angel
+  // reaching root (to plant P) and reaching P (a tree root isn't under the story root).
+  await grantAngel(B, rootId);
+  const mkP = await did(
+    { kind: "space", id: rootId },
+    "create-space",
+    { name: "owner-P-" + randomUUID().slice(0, 6) },
+    B_id,
+  );
+  const P = spaceIdOf(mkP);
+  if (!P) bad(`create P`, mkP.refused?.message || mkP.result);
+  await grantAngel(B, P);
+  const mkC = await did(
+    { kind: "space", id: String(P) },
+    "create-space",
+    { name: "owner-C-" + randomUUID().slice(0, 6) },
+    B_id,
+  );
+  const C = spaceIdOf(mkC);
+  P && C
+    ? ok(
+        `B owns tree root P=${String(P).slice(0, 8)}…; brings sub-space C=${String(C).slice(0, 8)}… under it`,
+      )
+    : bad(`setup`, { P, C, mkC: mkC.refused?.message || mkC.result });
 
-  const afterSet = await loadOrFold("space", String(childId), "0");
+  // ── 1. B set-owner(C → newOwner): P's owner (B) authorizes claiming the child ──
+  const so = await did(
+    { kind: "space", id: String(C) },
+    "set-owner",
+    { newOwnerId: String(newOwner) },
+    B_id,
+  );
+  // set-owner is now a COMPOSITE: its do:set-space deed seals in its OWN moment (not so.deltaF),
+  // so assert the result here and the fold below (the deed's fact landed iff the owner folded).
+  so.result?.ownerSet === true && String(so.result?.newOwnerId) === String(newOwner)
+    ? ok(
+        `set-owner → ownerSet (composite: gate + do set-space leaf-call; the deed seals its own moment)`,
+      )
+    : bad(`set-owner`, so.refused?.message || so.result);
+
+  const afterSet = await loadOrFold("space", String(C), "0");
   String(afterSet?.state?.owner) === String(newOwner)
-    ? ok(`@space owner folds to newOwner (applySetField applied)`)
+    ? ok(`@C owner folds to newOwner (applySetField applied)`)
     : bad(`owner fold`, afterSet?.state?.owner);
 
-  // ── 2. remove-owner → owner folds to empty ──
-  const ro = await did({ kind: "space", id: String(childId) }, "remove-owner", {});
-  const rof = (ro.deltaF || []).find((f) => f.act === "remove-owner");
-  ro.result?.ownerRemoved === true && rof?.params?.field === "owner"
-    ? ok(`remove-owner → do:remove-owner fact {field:"owner", value:null}`)
-    : bad(`remove-owner`, ro.refused?.message || { result: ro.result, fact: rof?.params });
+  // ── 2. B remove-owner(C): P's owner (B) authorizes the revoke → folds to empty ──
+  const ro = await did(
+    { kind: "space", id: String(C) },
+    "remove-owner",
+    {},
+    B_id,
+  );
+  // remove-owner is now a COMPOSITE too: its do:set-space deed seals in its OWN moment, so assert the
+  // result here and the fold below (the deed's fact landed iff the owner folded to empty).
+  ro.result?.ownerRemoved === true
+    ? ok(`remove-owner → ownerRemoved (composite: gate + do set-space {value:null} leaf-call)`)
+    : bad(`remove-owner`, ro.refused?.message || ro.result);
 
-  const afterRemove = await loadOrFold("space", String(childId), "0");
+  const afterRemove = await loadOrFold("space", String(C), "0");
   !afterRemove?.state?.owner
-    ? ok(`@space owner folds to empty (the leaf cleared)`)
+    ? ok(`@C owner folds to empty (the leaf cleared)`)
     : bad(`owner-remove fold`, afterRemove?.state?.owner);
 
-  // ── 3. gate: no newOwnerId → refuse ──
-  const n1 = await did({ kind: "space", id: String(childId) }, "set-owner", {});
+  // ── 3. gate: no newOwnerId → refuse (the word's input gate, before the floor) ──
+  const n1 = await did({ kind: "space", id: String(C) }, "set-owner", {}, B_id);
   n1.refused && /newOwnerId is required/i.test(n1.refused.message)
     ? ok(`no newOwnerId → refuse "newOwnerId is required"`)
     : bad(`gate`, n1.refused?.message || n1.result);

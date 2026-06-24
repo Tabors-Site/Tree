@@ -19,110 +19,46 @@
 // able name so the registry tracks who shipped them.
 
 import log from "../../../seedStory/log.js";
-import Space from "../../../materials/space/space.js";
 import { registerOperation } from "../../../ibp/operations.js";
 import { registerSeeOperation } from "../../../ibp/seeOps.js";
-import { doVerb } from "../../../ibp/verbs/do.js";
+import { registerAbleWord } from "../../../present/word/ableWordRegistry.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { findBeingByName } from "../../../materials/being/identity.js";
+import { llmConfigHostEnv } from "./llmAssignerHost.js";
 
 const OWNER = "llm-assigner";
+
+// Self-register the co-located world strands so resolveAbleWord(noun, <op>) finds them. The three
+// set-*-llm ops are WORD-SOLE: each `.word` is the ONLY path (do.js runOpWordToStore runs it via
+// runWordToStore — runAsStore — so each set-being/set-space field write seals its own moment). The
+// lone host floor resolve-llm-config (llmAssignerHostEnv) does the genuine read + (story) heaven-
+// authority gate + the writeLlmFields field-building, and returns the { field, value } write list;
+// the deeds lay the per-field facts. No JS handler.
+registerAbleWord("being", "set-being-llm", new URL("./set-being-llm.word", import.meta.url));
+registerAbleWord("space", "set-space-llm", new URL("./set-space-llm.word", import.meta.url));
+registerAbleWord("space", "set-story-llm", new URL("./set-story-llm.word", import.meta.url));
+
+// The three connection-management ops are WORD-SOLE delegators (CONVERTING.md): each `.word`
+// lays ONE entailed deed on the caller's own being — `do add-llm-connection` / `do assign-llm-slot`
+// / `do delete-llm-connection`, the seed ops that are themselves word-SOLE. Pure composition, words
+// all the way down: no handler, no host read (a delegator reads nothing of the floor), ranAsMoments
+// so the op stamps none of its own — the entailed deed's fact IS the record. dispatch noun "being".
+registerAbleWord("being", "add-llm",     new URL("./add-llm.word", import.meta.url));
+registerAbleWord("being", "assign-slot", new URL("./assign-slot.word", import.meta.url));
+registerAbleWord("being", "delete-llm",  new URL("./delete-llm.word", import.meta.url));
 
 // ────────────────────────────────────────────────────────────────────
 // 7-step chain helpers (auth.jpg)
 // ────────────────────────────────────────────────────────────────────
 //
-// The new ops accept `{slot, connections, forceActor, forceReceiver,
-// preferOwn}` in addition to the legacy `{slot, connectionId}` shape.
-// `connections` may be a string or string[] — both normalize to an
-// ordered list under `qualities.llm.slots[slot]` (per able) or
-// `qualities.llm.default` (when slot is "main" or absent).
-//
-// Mutual exclusion on the force flags is enforced here: any op write
-// that asserts both `forceActor=true` and `forceReceiver=true` is
-// rejected with `INVALID_INPUT`. Setting one true automatically clears
-// the other on the same container.
-
-const VALID_SLOT_RE = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
-
-function normalizeConnectionList(raw) {
-  if (raw === null || raw === undefined) return null;
-  const arr = Array.isArray(raw) ? raw : [raw];
-  const out = [];
-  for (const item of arr) {
-    if (typeof item !== "string" || !item.length || item.length > 100) continue;
-    out.push(item);
-  }
-  return out;
-}
-
-function assertFlagMutex(params) {
-  if (params.forceActor === true && params.forceReceiver === true) {
-    throw new IbpError(
-      IBP_ERR.INVALID_INPUT,
-      "forceActor and forceReceiver cannot both be true on the same container. " +
-      "Pick one — the chain caps at this container (forceReceiver) or jumps to the actor side (forceActor).",
-    );
-  }
-}
-
-// Write the 7-step chain fields onto a container (being or space) by
-// dispatching set-being / set-space DOs through doVerb. Each field
-// write is its own DO call so the one-moment-one-act doctrine holds.
-// Returns a summary of what was written.
-async function writeLlmFields(targetKind, targetId, params, identity, moment) {
-  const verb = targetKind === "being" ? "set-being" : "set-space";
-  const written = {};
-
-  // Slot list write — qualities.llm.slots[slot] or qualities.llm.default.
-  const slot = params.slot || null;
-  const connections = normalizeConnectionList(params.connections);
-  if (slot && connections !== null) {
-    if (!VALID_SLOT_RE.test(slot)) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, `invalid slot name "${slot}"`);
-    }
-    const field = slot === "main" || slot === "default"
-      ? "qualities.llm.default"
-      : `qualities.llm.slots.${slot}`;
-    await doVerb(
-      { kind: targetKind, id: String(targetId) },
-      verb,
-      { field, value: connections, merge: false },
-      { identity, moment },
-    );
-    written[field] = connections;
-  }
-
-  // Mutex on force flags. If one flag is being set true, clear the
-  // other implicitly so the container is always in a valid posture.
-  const flagWrites = [];
-  if (params.forceReceiver === true) {
-    flagWrites.push(["qualities.llm.forceReceiver", true]);
-    flagWrites.push(["qualities.llm.forceActor", false]);
-  } else if (params.forceActor === true) {
-    flagWrites.push(["qualities.llm.forceActor", true]);
-    flagWrites.push(["qualities.llm.forceReceiver", false]);
-  } else if (params.forceActor === false) {
-    flagWrites.push(["qualities.llm.forceActor", false]);
-  } else if (params.forceReceiver === false) {
-    flagWrites.push(["qualities.llm.forceReceiver", false]);
-  }
-  if (typeof params.preferOwn === "boolean") {
-    flagWrites.push(["qualities.llm.preferOwn", params.preferOwn]);
-  }
-  for (const [field, value] of flagWrites) {
-    await doVerb(
-      { kind: targetKind, id: String(targetId) },
-      verb,
-      { field, value, merge: false },
-      { identity, moment },
-    );
-    written[field] = value;
-  }
-
-  return written;
-}
-
+// The set-*-llm ops accept `{slot, connections, forceActor, forceReceiver,
+// preferOwn}` plus the legacy `{slot, connectionId}` shape. The whole
+// field-building (legacy-normalize, force-flag mutex, slot validate, the
+// dotted-path { field, value } write list) is now the host floor
+// resolveLlmConfigSpec (present/cognition/llm/connect.js), reached through
+// resolve-llm-config (llmAssignerHost.js). The set-*-llm `.word`s fan each
+// write out as its own do:set-being / do:set-space deed (one moment per
+// field via runWordToStore), exactly as the old writeLlmFields doVerb loop.
 
 // ────────────────────────────────────────────────────────────────────
 // Registration
@@ -141,58 +77,28 @@ export function registerLlmAssignerOps() {
   // applies to; the space target is only meaningful for set-space-llm.
   // ────────────────────────────────────────────────────────────────
 
-  // Add an LLM connection to the caller's own being. Auto-binds to
-  // "main" if this is the being's first connection (handled by the
-  // seed add-llm-connection DO op).
+  // Add an LLM connection to the caller's own being. WORD-SOLE: add-llm.word is the only path
+  // (do.js runOpWordToStore via runWordToStore — runAsStore — so the entailed deed seals its own
+  // moment). The `.word` is a PURE-COMPOSITION delegator: it lays ONE deed `do add-llm-connection`
+  // on the caller's own being with { name, baseUrl, model, apiKey } — itself a word-SOLE seed op
+  // that validates / SSRF-gates / encrypts / mints and auto-binds "main" on the being's first
+  // connection. No handler, no hostEnv (a delegator reads nothing of the floor); ranAsMoments, so
+  // the op lays NO fact of its own — the entailed do:add-llm-connection deed IS the record.
   registerOperation("add-llm", {
     targets: ["space"],
     ownerExtension: "seed",
-    handler: async ({ params, identity, moment }) => {
-      if (!identity?.beingId) {
-        throw new IbpError(
-          IBP_ERR.UNAUTHORIZED,
-          "add-llm requires an authenticated being. Claim or register through @cherub first.",
-        );
-      }
-      const { name = null, baseUrl, model, apiKey = null } = params || {};
-      if (!baseUrl) throw new IbpError(IBP_ERR.INVALID_INPUT, "`baseUrl` is required");
-      if (!model)   throw new IbpError(IBP_ERR.INVALID_INPUT, "`model` is required");
-      const { addLlmConnection } = await import("../../cognition/llm/connect.js");
-      const connection = await addLlmConnection(
-        String(identity.beingId),
-        { name, baseUrl, model, apiKey },
-        { identity, moment },
-      );
-      return {
-        connectionId: String(connection._id),
-        name:         connection.name,
-        baseUrl:      connection.baseUrl,
-        model:        connection.model,
-      };
-    },
+    word: { noun: "being", able: "add-llm", ranAsMoments: true },
   });
 
-  // Bind one of the caller's connections to a slot on their own being.
-  // All slots (including "main") write into Being.qualities.beingLlm.slots.
+  // Bind one of the caller's connections to a slot on their own being. WORD-SOLE: assign-slot.word
+  // is the only path (runOpWordToStore / runAsStore). The `.word` lays ONE deed `do assign-llm-slot`
+  // on the caller's own being with { slot, connectionId } — the word-SOLE seed op that writes
+  // Being.qualities.beingLlm.slots.<slot> (connectionId omitted/null clears the slot). No handler,
+  // no hostEnv; ranAsMoments, so the op lays NO fact of its own — the deed's fact IS the record.
   registerOperation("assign-slot", {
     targets: ["space"],
     ownerExtension: "seed",
-    handler: async ({ params, identity, moment }) => {
-      if (!identity?.beingId) {
-        throw new IbpError(
-          IBP_ERR.UNAUTHORIZED,
-          "assign-slot requires an authenticated being.",
-        );
-      }
-      const { slot, connectionId } = params || {};
-      if (!slot) throw new IbpError(IBP_ERR.INVALID_INPUT, "`slot` is required");
-      return await doVerb(
-        { kind: "being", id: String(identity.beingId) },
-        "assign-llm-slot",
-        { slot, connectionId: connectionId || null },
-        { identity, moment },
-      );
-    },
+    word: { noun: "being", able: "assign-slot", ranAsMoments: true },
   });
 
   // List the caller's connections + current slot assignments.
@@ -200,137 +106,52 @@ export function registerLlmAssignerOps() {
   // read-only perception → registered below as `llm-connections` SEE
   // op (see registerSeeOperation block at the bottom of this file).
 
-  // Delete one of the caller's connections. The seed cascades the
-  // removal across qualities.beingLlm slots and qualities.llm.slots
-  // references.
+  // Delete one of the caller's connections. WORD-SOLE: delete-llm.word is the only path
+  // (runOpWordToStore / runAsStore). The `.word` lays ONE deed `do delete-llm-connection` on the
+  // caller's own being with { connectionId } — the word-SOLE seed op that unsets
+  // qualities.llmConnections.<id> (the dangling slot refs fold to absent). No handler, no hostEnv;
+  // ranAsMoments, so the op lays NO fact of its own — the deed's fact IS the record.
   registerOperation("delete-llm", {
     targets: ["space"],
     ownerExtension: "seed",
-    handler: async ({ params, identity, moment }) => {
-      if (!identity?.beingId) {
-        throw new IbpError(
-          IBP_ERR.UNAUTHORIZED,
-          "delete-llm requires an authenticated being.",
-        );
-      }
-      const { connectionId } = params || {};
-      if (!connectionId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`connectionId` is required");
-      const { deleteLlmConnection } = await import("../../cognition/llm/connect.js");
-      await deleteLlmConnection(
-        String(identity.beingId),
-        connectionId,
-        { identity, moment },
-      );
-      return { removed: true, connectionId };
-    },
+    word: { noun: "being", able: "delete-llm", ranAsMoments: true },
   });
 
   // Set the story-level LLM configuration on the place root's
-  // `qualities.llm`. Writes the 7-step chain fields (slot list, force
-  // flags, preferOwn). Restricted to beings with heaven authority
-  // (owner or angel able on heaven).
-  //
-  // Back-compat: when `connectionId` (legacy scalar) is the only
-  // payload field, it is converted to a single-element `connections`
-  // list under `qualities.llm.default` (so existing UIs keep working).
+  // `qualities.llm`. WORD-SOLE: set-story-llm.word is the only path (do.js runOpWordToStore via
+  // runWordToStore — runAsStore). The host floor resolve-llm-config (mode "story") runs the
+  // heaven-authority gate (hasHeavenAuthority — owner or angel able), resolves the place root
+  // (findRoot), legacy-normalizes (default slot "default"), runs the force-flag mutex, validates
+  // the slot, and builds the { field, value } write list; the `.word` fans each out as its own
+  // do:set-space deed (one moment per field). No JS handler.
   registerOperation("set-story-llm", {
     targets: ["space"],
     ownerExtension: "seed",
-    handler: async ({ params, identity, moment }) => {
-      if (!identity?.beingId) {
-        throw new IbpError(
-          IBP_ERR.UNAUTHORIZED,
-          "set-story-llm requires an authenticated being.",
-        );
-      }
-      const { hasHeavenAuthority } = await import("../../../materials/space/heavenLineage.js");
-      if (!(await hasHeavenAuthority(identity.beingId))) {
-        throw new IbpError(
-          IBP_ERR.FORBIDDEN,
-          "Only beings with heaven authority (owner or angel able) can change story-level LLM configuration.",
-        );
-      }
-      assertFlagMutex(params || {});
-      const { findRoot } = await import("../../../materials/projections.js");
-      const roots = await findRoot("space", "0");
-      const rootRow = roots && roots[0] ? roots[0] : null;
-      if (!rootRow) {
-        throw new IbpError(IBP_ERR.INTERNAL, "Story place root not found");
-      }
-      // Legacy scalar → list conversion. If the caller passed only
-      // `connectionId` (the pre-rewire shape), map it onto `connections`
-      // under the default slot.
-      const normalized = { ...(params || {}) };
-      if (normalized.connections === undefined && normalized.connectionId !== undefined) {
-        normalized.connections = normalized.connectionId === null ? [] : [normalized.connectionId];
-        normalized.slot = normalized.slot || "default";
-        delete normalized.connectionId;
-      }
-      const written = await writeLlmFields("space", rootRow.id, normalized, identity, moment);
-      log.verbose("llm-assigner",
-        `story root LLM updated by ${identity.beingId}: ${Object.keys(written).join(", ") || "(no fields)"}`);
-      return { spaceId: String(rootRow.id), written };
-    },
+    word: { noun: "space", able: "space", runAsStore: true },
+    hostEnv: llmConfigHostEnv("story"),
   });
 
-  // Set an LLM configuration on a space the caller owns. Writes the
-  // 7-step chain fields (slot list, force flags, preferOwn) to
-  // `<space>.qualities.llm`. Back-compat: legacy `{slot, connectionId}`
-  // payload is mapped to `{slot, connections: [connectionId]}`.
+  // Set an LLM configuration on a space the caller owns. WORD-SOLE: set-space-llm.word is the only
+  // path (runOpWordToStore / runAsStore). resolve-llm-config (mode "space") reads Space.exists on
+  // params.spaceId (SPACE_NOT_FOUND on absence), legacy-normalizes (default slot "default"), runs
+  // the mutex, validates the slot, and builds the write list; the `.word` fans each out as its own
+  // do:set-space deed. No JS handler.
   registerOperation("set-space-llm", {
     targets: ["space"],
     ownerExtension: "seed",
-    handler: async ({ params, identity, moment }) => {
-      if (!identity?.beingId) {
-        throw new IbpError(
-          IBP_ERR.UNAUTHORIZED,
-          "set-space-llm requires an authenticated being.",
-        );
-      }
-      const { spaceId } = params || {};
-      if (!spaceId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`spaceId` is required");
-      const exists = await Space.exists({ _id: spaceId });
-      if (!exists) throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, `Space ${spaceId} not found`);
-      assertFlagMutex(params);
-      // Legacy scalar → list conversion.
-      const normalized = { ...params };
-      if (normalized.connections === undefined && normalized.connectionId !== undefined) {
-        normalized.connections = normalized.connectionId === null ? [] : [normalized.connectionId];
-        normalized.slot = normalized.slot || "default";
-        delete normalized.connectionId;
-      }
-      const written = await writeLlmFields("space", spaceId, normalized, identity, moment);
-      log.verbose("llm-assigner",
-        `space ${spaceId} LLM updated by ${identity.beingId}: ${Object.keys(written).join(", ") || "(no fields)"}`);
-      return { spaceId: String(spaceId), written };
-    },
+    word: { noun: "space", able: "space", runAsStore: true },
+    hostEnv: llmConfigHostEnv("space"),
   });
 
-  // Set the calling being's own LLM configuration. Writes the 7-step
-  // chain fields to `<being>.qualities.llm`. The caller can configure
-  // per-able slots, fallback list, and force flags for their being.
+  // Set the calling being's own LLM configuration. WORD-SOLE: set-being-llm.word is the only path
+  // (runOpWordToStore / runAsStore). resolve-llm-config (mode "being") targets the caller's own
+  // being, legacy-normalizes, runs the mutex, validates the slot, and builds the write list; the
+  // `.word` fans each out as its own do:set-being deed (one moment per field). No JS handler.
   registerOperation("set-being-llm", {
     targets: ["space"],
     ownerExtension: "seed",
-    handler: async ({ params, identity, moment }) => {
-      if (!identity?.beingId) {
-        throw new IbpError(
-          IBP_ERR.UNAUTHORIZED,
-          "set-being-llm requires an authenticated being.",
-        );
-      }
-      assertFlagMutex(params || {});
-      const normalized = { ...(params || {}) };
-      if (normalized.connections === undefined && normalized.connectionId !== undefined) {
-        normalized.connections = normalized.connectionId === null ? [] : [normalized.connectionId];
-        normalized.slot = normalized.slot || "default";
-        delete normalized.connectionId;
-      }
-      const written = await writeLlmFields("being", String(identity.beingId), normalized, identity, moment);
-      log.verbose("llm-assigner",
-        `being ${identity.beingId} LLM updated: ${Object.keys(written).join(", ") || "(no fields)"}`);
-      return { beingId: String(identity.beingId), written };
-    },
+    word: { noun: "being", able: "being", runAsStore: true },
+    hostEnv: llmConfigHostEnv("being"),
   });
 
   // preview-llm-chain retired as a DO op — it's a pure read of the

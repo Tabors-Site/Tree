@@ -805,6 +805,14 @@ export async function genesis(app, opts = {}) {
     await import("./seed/present/ables/llm-assigner/ops.js");
   registerLlmAssignerOps();
 
+  // The per-being LLM client-cache fold-hook. The WORD-SOLE llm-connection ops
+  // (add / assign-llm-slot / update / delete) dropped their old post-fact
+  // clearBeingClientCache; this re-homes it as an afterReelArrival hook that clears the
+  // client cache when a being's reel changes, so the next LLM call reads the fresh config.
+  const { registerLlmCacheHook } =
+    await import("./seed/present/cognition/llm/cacheHook.js");
+  registerLlmCacheHook();
+
   // able-manager's set-able DO op. Registered alongside llm-assigner's
   // ops so the able-manager delegate's canDo entry resolves at boot.
   const { registerAbleManagerOps } =

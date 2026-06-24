@@ -295,6 +295,8 @@ export function resolveWordFromFold(name) {
           // through: run the .word THROUGH the caller (being-mode) for a HOST-FACILITATED op whose
           // internal acts must authorize as I (ask-able's owner summon). do.js's runOpWord reads it.
           through: w.word.through === true,
+          // factVerb "name": the op's fact is a 5D name-act on the library reel (runOpNameAct).
+          factVerb: w.word.factVerb === "name" ? "name" : null,
           ranAsMoments: w.word.ranAsMoments === true,
           runAsStore: w.word.runAsStore === true,
         }
@@ -412,6 +414,7 @@ export async function declareOpsToFold({
                 able: op.word.able || undefined,
                 idFrom: op.word.idFrom || null,
                 through: op.word.through === true ? true : undefined,
+                factVerb: op.word.factVerb === "name" ? "name" : undefined,
                 ranAsMoments: op.word.ranAsMoments === true ? true : undefined,
                 runAsStore: op.word.runAsStore === true ? true : undefined,
               },

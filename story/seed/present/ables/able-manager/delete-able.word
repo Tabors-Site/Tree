@@ -1,0 +1,18 @@
+# delete-able.word — delete-able: remove a live able (able-manager, the live able-authoring DO op).
+#
+# WORD-SOLE (handler-less): delete-able.word is the ONLY path. delete-able is MANIFEST-ORCHESTRATION —
+# it removes the .ables/<name> manifest child AND unregisters the able from the live registry. That
+# EFFECT is the host see-op remove-live-able (ableManagerHost.js), reusing the SAME removeManifestChild
+# + unregisterAble + the reference-safety walk the JS handler used. A host throw (not registered, not
+# live-owned, or referenced-without-force) is this word's refusal.
+#
+# The do:delete-able AUDIT fact lands on the able's pseudo-reel {space, name} (the same reel set-able
+# wrote, so set→delete reads in order and the registry fold derives "gone"): the see returns `name`,
+# and this word surfaces it as `spaceId` so resolveAuditTarget targets {space, name}.
+#
+# The STANDARD trigger binds the `name`, the `force` flag, and `branch`.
+
+When a being deletes a live able:
+  If no name, refuse with "delete-able: `name` is required" as invalid-input.
+  see remove-live-able(name, force) as result.
+  Return deleted: $result.deleted, name: $result.name, spaceId: $result.name.

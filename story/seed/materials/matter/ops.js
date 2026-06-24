@@ -16,150 +16,39 @@
 
 import { registerOperation } from "../../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
-import { targetIdOf, loadTargetRow } from "../_targetShape.js";
-import { assertMatterCoordInBounds } from "./coordBounds.js";
+import { targetIdOf } from "../_targetShape.js";
 import { registerAbleWord } from "../../present/word/ableWordRegistry.js";
 import { stampsFact } from "../../ibp/factResult.js";
 import { renameMatterHostEnv } from "./renameMatterHost.js";
+import { setMatterHostEnv } from "./setMatterHost.js";
+import { purgeContentHostEnv } from "./purgeContentHost.js";
 
 // Self-register the co-located world strand so resolveAbleWord("matter", "rename-matter") finds it
 // (CONVERTING.md step 3). rename-matter is WORD-SOLE: rename-matter.word is the ONLY path (do.js
 // runOpWord runs it); there is no JS handler to fall back to.
 registerAbleWord("matter", "rename-matter", new URL("./rename-matter.word", import.meta.url));
 
-const RESERVED_SET_META_NS = new Set([
-  // none today; the set kept for symmetry with space/being
-]);
+// set-matter is WORD-SOLE: set-matter.word is the ONLY path (do.js runOpWord runs it); there is no
+// JS handler. The genuine substrate reads (CAS-content existence, DELETED sentinel, coord-bounds)
+// bottom out in resolve-set-matter-spec (setMatterHost.js), reusing loadTargetRow + isCasRef/
+// hasContent + assertMatterCoordInBounds — the SAME helpers the old handler called.
+registerAbleWord("matter", "set-matter", new URL("./set-matter.word", import.meta.url));
+registerAbleWord("matter", "purge-content", new URL("./purge-content.word", import.meta.url));
 
 // ─────────────────────────────────────────────────────────────────────
-// set-matter
+// set-matter — WORD-SOLE (registered below). No JS handler.
 // ─────────────────────────────────────────────────────────────────────
 //
-// params: { field, value, merge=true }
-// field paths:
-//   "name" / "content"                              → schema-field writes
-//   "qualities.<namespace>"                          → set/merge that namespace
-//   "qualities.<namespace>.<innerKey>"               → merge one inner key
-//   value=null on a qualities path                   → unset
-
-async function setOnMatterHandler({ target, params, moment }) {
-  const { field, value, merge = true } = params || {};
-  if (!field || typeof field !== "string") {
-    throw new Error("set-matter: `field` is required");
-  }
-  // Load the row at the top — set-matter needs spaceId for coord
-  // clamping plus the doc for id-emitting return shapes. Passes
-  // moment so an in-moment chain (create-matter → set-matter
-  // before seal) reads the in-flight spec from deltaF when the row
-  // hasn't materialized yet.
-  target = await loadTargetRow(target, "matter", { moment });
-
-  // ── qualities paths ────────────────────────────────────
-  if (field.startsWith("qualities.")) {
-    const rest = field.slice("qualities.".length);
-    const parts = rest.split(".");
-    const namespace = parts[0];
-    if (RESERVED_SET_META_NS.has(namespace)) {
-      throw new Error(
-        `set-matter: qualities namespace "${namespace}" is not writable through set-matter; it has a dedicated verb.`,
-      );
-    }
-    if (parts.length === 1 && value !== null) {
-      if (typeof value !== "object") {
-        throw new Error("set-matter: qualities-namespace value must be an object");
-      }
-    }
-    return {
-      written: true,
-      matterId: String(target._id),
-      ...(parts.length === 1 ? { namespace } : { field }),
-      ...(value === null ? { unset: true } : {}),
-    };
-  }
-
-  // ── schema-field writes ────────────────────────────────
-
-  if (field === "name") {
-    if (!value || typeof value !== "string") {
-      throw new Error("set-matter: `value` must be a string for field=name");
-    }
-    return { matterId: String(target._id), name: value };
-  }
-
-  // content: the matter's bytes. Accepts a CAS ref ({kind:"cas",
-  // hash, ...}) the caller has already put into the content store
-  // (mirror-mount writes flow through here; vim splices, FUSE
-  // truncate, etc.), or null to clear. The handler verifies the
-  // hash actually lives in the store so a fact never references
-  // missing bytes.
-  if (field === "content") {
-    if (value === null) {
-      return { matterId: String(target._id), content: null };
-    }
-    const { isCasRef, hasContent } = await import("./contentStore.js");
-    if (!isCasRef(value)) {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        "set-matter: content value must be a CAS ref ({kind:\"cas\", hash, ...}) or null",
-      );
-    }
-    if (!(await hasContent(value.hash))) {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        `set-matter: unknown content hash "${String(value.hash).slice(0, 12)}..." (bytes not in store)`,
-      );
-    }
-    return { matterId: String(target._id), content: value };
-  }
-
-  // spaceId: where the matter sits. Two valid value shapes:
-  //   - bare space-id (transfer to a new space)
-  //   - DELETED sentinel ("deleted") (soft-delete marker)
-  if (field === "spaceId") {
-    const { DELETED } = await import("../space/heavenSpaces.js");
-    if (value === DELETED) {
-      return { matterId: String(target._id), spaceId: DELETED };
-    }
-    if (typeof value !== "string" || !value.length) {
-      throw new Error(
-        `set-matter: spaceId must be a space id string or the DELETED sentinel . got ${typeof value}`,
-      );
-    }
-    return { matterId: String(target._id), spaceId: value };
-  }
-
-  // beingId: who created the matter. Set-matter uses this only at
-  // delete time to record DELETED. Live writes during create-matter
-  // ride on the create-matter handler, not here.
-  if (field === "beingId") {
-    const { DELETED } = await import("../space/heavenSpaces.js");
-    if (value === DELETED) {
-      return { matterId: String(target._id), beingId: DELETED };
-    }
-    throw new Error(
-      `set-matter: beingId only accepts the DELETED sentinel through set-matter; the creator is fixed at birth`,
-    );
-  }
-
-  // coord: the matter's position inside spaceId. Same shape and
-  // semantics as Being.coord — `{ x, y, z? }` clamped to Space.size.
-  // A being moving matter inside a space writes here through the
-  // standard set-matter path.
-  if (field === "coord") {
-    if (value === null || value === undefined) {
-      return { matterId: String(target._id), coord: null };
-    }
-    if (typeof value !== "object" || Array.isArray(value)) {
-      throw new Error("set-matter: `coord` value must be an object {x,y,z?} or null");
-    }
-    const clamped = await assertMatterCoordInBounds(target, value, moment?.actorAct?.history || "0");
-    return { matterId: String(target._id), coord: clamped };
-  }
-
-  throw new Error(
-    `set-matter: unknown field "${field}". Supported: name, content, spaceId, beingId, coord, qualities.<namespace>[.<innerKey>]`,
-  );
-}
+// Write one Matter field — a schema scalar (name / content / spaceId / beingId / coord) or a
+// qualities path (qualities.<ns>[.<inner>]). set-matter.word is the SOLE path. The CONTROL strand
+// (the `field`-required gate + the return) is the .word; the genuine substrate READS — load the
+// matter row, the CAS-content existence check (isCasRef + hasContent), the DELETED-sentinel
+// comparisons, and the COORD-BOUNDS check (assertMatterCoordInBounds reads Space.size and THROWS) —
+// are the host see-op resolve-set-matter-spec (setMatterHost.js), reaching the SAME helpers the old
+// handler called. The .word returns { matterId, factParams }; do.js's runOpWord promotes factParams +
+// the matter target (idFrom:"matterId") via stampsWordFact, so the lone do:set-matter fact lands on
+// the matter's reel and applySetField / applySetQualities fold it exactly as before — the same
+// { field, value[, merge] } the dispatcher stamped (from ctx.params) when a JS handler stood here.
 
 // ─────────────────────────────────────────────────────────────────────
 // rename-matter — WORD-SOLE (registered below). No JS handler.
@@ -310,6 +199,10 @@ async function purgeContentHandler({ target, params, identity, moment }) {
 // Registration
 // ─────────────────────────────────────────────────────────────────────
 
+// WORD-SOLE: set-matter.word is the only path (do.js runOpWord). idFrom:"matterId" targets the
+// fact at the matter and promotes the word's factParams ({field, value[, merge]}); resolve-set-matter-
+// spec (setMatterHostEnv) is the lone host READ (load + CAS existence + DELETED + coord-bounds). No
+// handler.
 registerOperation("set-matter", {
   targets: ["matter"],
   ownerExtension: "seed",
@@ -322,7 +215,8 @@ registerOperation("set-matter", {
     value: { type: "json", label: "Value (JSON; null to clear)", required: false },
     merge: { type: "bool", label: "Merge (for qualities objects)", default: true, required: false },
   },
-  handler: setOnMatterHandler,
+  word: { noun: "matter", able: "matter", idFrom: "matterId" },
+  hostEnv: setMatterHostEnv,
 });
 
 // WORD-SOLE: rename-matter.word is the only path (do.js runOpWord). idFrom:"matterId" targets
@@ -347,16 +241,19 @@ registerOperation("end-matter", {
   handler: endMatterHandler,
 });
 
+// WORD-SOLE: purge-content.word is the only path (do.js runOpWord). idFrom:"matterId" targets the
+// do:purge-content fact at the matter and promotes the word's factParams ({hash, force, referents});
+// resolve-purge (purgeContentHostEnv) is the lone host READ (load + hash resolve + author/owner gate
+// + shared-fate refcount gate + the FACT-FIRST afterSeal content delete). No handler. applyPurgeContent
+// folds the fact (marking the ref purged); the physical delete runs post-seal.
 registerOperation("purge-content", {
   targets: ["matter"],
   ownerExtension: "seed",
   factAction: "purge-content",
-  // ONE act, ONE fact: the handler returns stampsFact and the dispatcher stamps the do:purge-content
-  // fact (applyPurgeContent folds it); the physical delete runs on afterSeal, so fact-first holds.
-  // No skipAudit (23.md: every act its own dispatcher-stamped fact).
   args: {
     hash:  { type: "text", label: "Content hash (defaults to the matter's current content)", required: false },
     force: { type: "bool", label: "Purge even when other matter shares these bytes", default: false, required: false },
   },
-  handler: purgeContentHandler,
+  word: { noun: "matter", able: "matter", idFrom: "matterId" },
+  hostEnv: purgeContentHostEnv,
 });

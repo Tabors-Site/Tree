@@ -29,6 +29,13 @@ import { setBeingHostEnv } from "./setBeingHost.js";
 // resolve-set-being-spec (setBeingHost.js), reusing assertCoordInBounds (exported below) + findByName.
 registerAbleWord("being", "set-being", new URL("./set-being.word", import.meta.url));
 
+// revoke-able is WORD-SOLE: revoke-able.word is the ONLY path (do.js runOpWord runs it). A PURE own-
+// fact op — NO substrate read (revoke removes regardless, like revoke-inheritation). The word gates
+// the inputs and authors no factParams; the auto-Fact falls back to ctx.params (able + anchor +
+// explicit grantedBy), and applyAbleGrants drops the matching grant (grantedBy = params.grantedBy ||
+// fact.through). Mirrors grant-able.
+registerAbleWord("being", "revoke-able", new URL("./revoke-able.word", import.meta.url));
+
 // SPATIAL axes the clamp considers. Two-dimensional by default; z is
 // allowed when both the being's coord write and the space's size
 // carry it.
@@ -247,41 +254,12 @@ registerOperation("set-being", {
 // authored as a grantor for X via the canDo declaration on their
 // able can hand X out. The chain back to I-Am is structural.
 
-async function revokeAbleHandler({ target, params, identity, moment }) {
-  if (!identity?.beingId) {
-    throw new IbpError(
-      IBP_ERR.UNAUTHORIZED,
-      "revoke-able: identity required (the revoker's beingId)",
-    );
-  }
-  if (!params || typeof params !== "object") {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "revoke-able: params required");
-  }
-  const { able, anchorSpaceId = null, anchorBeingId = null, grantedBy = null } = params;
-  if (typeof able !== "string" || !able.length) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "revoke-able: `able` is required");
-  }
-  if (!anchorSpaceId && !anchorBeingId) {
-    throw new IbpError(
-      IBP_ERR.INVALID_INPUT,
-      "revoke-able: one of `anchorSpaceId` or `anchorBeingId` is required",
-    );
-  }
-  // Enrich grantedBy in-place. grantedBy identifies the SPECIFIC grant
-  // to revoke (defaults to the caller's own beingId — revoking my own
-  // grant). The being reducer matches on (able, anchor, grantedBy).
-  const targetGrantedBy = grantedBy ? String(grantedBy) : String(identity.beingId);
-  params.grantedBy = targetGrantedBy;
-  return {
-    revoked: true,
-    able,
-    granteeBeingId: String(targetIdOf(target)),
-    anchorSpaceId,
-    anchorBeingId,
-    grantedBy: targetGrantedBy,
-  };
-}
-
+// WORD-SOLE: revoke-able.word is the only path (do.js runOpWord). A PURE own-fact op — NO host
+// read. The word authors no factParams; the auto-Fact falls back to ctx.params (able + anchor +
+// the explicit grantedBy when the caller named one), and applyAbleGrants drops the matching grant
+// (grantedBy = params.grantedBy || fact.through — an omitted grantedBy revokes the CALLER's own
+// grant, byte-equal to the old handler defaulting grantedBy to identity.beingId). No handler,
+// no hostEnv. authAction keeps the per-able scoping (`revoke-able:<able>`), unchanged.
 registerOperation("revoke-able", {
   targets: ["being"],
   ownerExtension: "seed",
@@ -297,7 +275,7 @@ registerOperation("revoke-able", {
     typeof params?.able === "string" && params.able.length
       ? `revoke-able:${params.able}`
       : "revoke-able",
-  handler: revokeAbleHandler,
+  word: { noun: "being" },
 });
 
 // add-llm-connection CARVED OUT → store/words/llm-connection/ (add-llm-connection.word — the

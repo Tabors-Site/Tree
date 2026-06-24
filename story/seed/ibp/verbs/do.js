@@ -116,6 +116,81 @@ async function runOpWordToStore(op, ctx, ir, history) {
   }
 }
 
+// runOpNameAct — the NAME-ACT runtime for a word-sourced op whose fact is a 5D NAME-ACT on the
+// library reel (config-set / config-delete, close-story), NOT a world do-fact. A name-act signs on
+// the acting Name's own reel, out of any history — the Name layer can't be reached from a WORLD
+// `.word` (a world word lays world facts on being/space/matter reels), so the `.word` only VALIDATES
+// + authors the fact's `factParams`; the dispatcher lays the name-act here. We run the `.word` (it
+// lays no world fact — pure validation, returns { factParams, ...answer }), open a withNameAct on the
+// acting Name, emit verb:"name" on the library reel (the EXACT shape nameActConfig produced), then run
+// the op's OPTIONAL post-seal host hook (`after-name-act` — config's cache refresh, close-story's
+// shutdown; runs only AFTER the name-act seals, so a failed act never triggers it), and return
+// ranAsMoments so the do-dispatcher stamps no world fact of its own.
+async function runOpNameAct(op, ctx, ir, history) {
+  const { runAbleWord } = await import("../../present/word/ableWordRegistry.js");
+  const { ranAsMoments } = await import("../factResult.js");
+  const { detectTargetKind, targetIdOf } = await import("../../materials/_targetShape.js");
+  const host = op.hostEnv ? op.hostEnv() : {};
+  let result;
+  try {
+    ({ result } = await runAbleWord(ir, {
+      moment: ctx.moment,
+      history,
+      trigger: {
+        ...Object.fromEntries(Object.keys(op.args || {}).map((k) => [k, null])),
+        ...(ctx.params || {}),
+        target: ctx.target,
+        targetId: ctx.target != null ? targetIdOf(ctx.target) : null,
+        targetKind: detectTargetKind(ctx.target),
+        params: ctx.params || {},
+        caller: ctx.identity?.beingId ? String(ctx.identity.beingId) : null,
+        branch: history,
+      },
+      env: { host },
+    }));
+  } catch (e) {
+    if (e && e.__wordRefusal)
+      throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
+    throw e;
+  }
+  if (!result) {
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      `${op.name}: ${op.name}.word produced no result`,
+    );
+  }
+  const { factParams, ...answer } = result;
+  // The 5D name-act: signed by the acting Name (identity.nameId, else the being, else I), on the
+  // library reel (out of any history). Mirrors nameActConfig / close-story's withNameAct + emitFact.
+  const { I } = await import("../../materials/being/seedBeings.js");
+  const nameId = (ctx.identity?.nameId ?? ctx.identity?.beingId) || I;
+  const { withNameAct } = await import("../../sprout.js");
+  const { getStoryDomain } = await import("../address.js");
+  const libraryId = getStoryDomain();
+  const act = op.factAction || op.name;
+  await withNameAct(nameId, `${act}:${factParams?.key ?? ""}`, async (m) => {
+    await emitFact(
+      {
+        verb: "name",
+        act,
+        through: null,
+        by: nameId,
+        of: { kind: op.word.noun || "library", id: libraryId },
+        params: factParams || {},
+        actId: m.actId,
+        history: "0",
+      },
+      m,
+    );
+  });
+  // Optional post-seal host side-effect (read-after-write hygiene: config cache, close-story
+  // shutdown). The `.word` never calls this — it is not in SEE_FLOOR; the dispatcher invokes it.
+  if (typeof host["after-name-act"] === "function") {
+    await host["after-name-act"]({ args: [factParams] }, ctx);
+  }
+  return ranAsMoments(answer);
+}
+
 // runOpWord — run a THEOREM word body (a co-located `.word`). The op declares `word: { noun, idFrom }`
 // + carries its `hostEnv` factory; its `.word` is the only implementation. We resolve the word, run it
 // through the bridge with the STANDARD trigger `{ target, targetKind, params, caller, branch }`
@@ -145,6 +220,11 @@ async function runOpWord(op, ctx) {
   // MULTI-MOMENT composite (op.word.runAsStore): its deeds must each seal as their OWN moment, so
   // route to runWordToStore and return — a self-contained path that never reaches runAbleWord below.
   if (op.word.runAsStore) return runOpWordToStore(op, ctx, ir, history);
+  // NAME-ACT (op.word.factVerb === "name"): the op's fact is a 5D name-act on the library reel, not a
+  // world do-fact. Route to runOpNameAct — the .word validates + authors the params, the dispatcher
+  // lays the name-act on the Name's reel and returns ranAsMoments. Self-contained (never reaches the
+  // world runAbleWord/stampsWordFact path below).
+  if (op.word.factVerb === "name") return runOpNameAct(op, ctx, ir, history);
   try {
     const { result } = await runAbleWord(ir, {
       moment: ctx.moment,
@@ -158,7 +238,12 @@ async function runOpWord(op, ctx) {
       // internal acts run privileged. Default (no through) = caller mode, the acts are the caller's.
       ...(op.word.through
         ? { through: ctx.identity?.beingId ? String(ctx.identity.beingId) : null }
-        : {}),
+        : // CALLER mode: run the `.word` as the VERB'S actual caller (ctx.identity = opts.identity).
+          // runAbleWord's default caller-mode reads `moment.identity`, but a verb invoked on a moment
+          // opened elsewhere (a nested withIAmAct — e.g. deleteChildByFact's I-Am act) carries the
+          // caller on opts.identity, NOT on that moment. Threading ctx.identity here makes a word-sole
+          // op see the real caller (so I-internal flows bypass owner gates) instead of a null caller.
+          { identity: ctx.identity || null }),
       trigger: {
         // Declared args null-filled FIRST: an op param that's ABSENT resolves to null
         // (not the literal "$arg"), matching what the per-op bridges passed explicitly.

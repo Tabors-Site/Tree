@@ -1,21 +1,29 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// The llm-connection word cluster — each op lays its set-being fact through the dispatcher
-// (skipAudit gone, no self-emit). A connection is ONE fact however rich (the spacebar). The
-// host floor (llmHost.js → connect.js E6 kernels) computes + bakes the set-being params; the
-// `.word` returns them; the dispatcher stamps. Carved from materials/being/ops.js.
+// The llm-connection word cluster — registration only (handler-less, Tabor's no-mirror law).
+// Each op's `.word` IS the op; the host floor (llmHost.js → connect.js E6 kernels) computes +
+// bakes the set-being params; the dispatcher stamps. A connection is ONE fact however rich (the
+// spacebar). Carved from materials/being/ops.js.
 //
-// WORD-SOURCED, all four (Tabor's no-mirror law — NO JS handler on any). Two execution models,
-// both driven by do.js straight from the op's `word` descriptor:
-//   update + delete — ATOMIC: one set-being fact. runOpWord runs the `.word` via runAbleWord
-//     (the caller's one moment) and promotes its factParams + the being target (idFrom) via
-//     stampsWordFact. One word, one fact.
-//   add + assign-llm-slot — MULTI-MOMENT composites (the "apple is: do, do, do" shape). Each deed
-//     must RE-FACT as its OWN act→fact at the head, so do.js routes word.runAsStore through
-//     runWordToStore (each deed its own moment, the trail hardening behind — never a multi-mark
-//     stamp) and the op lays no own fact (ranAsMoments). No _xViaWord adapter, no JS body.
-// (The old post-fact LLM client-cache bust is dropped on all four — a cache invalidation is not a
-// fact; a fold-hook on the llmConnection fact is its proper home. Flagged for that follow-up.)
+// FOUR WORD-SOLE ops, two shapes:
+//
+//   • update / delete — ATOMIC one-fact words. The `.word` returns the merged/unset set-being
+//     params as `factParams` + the target `beingId`; runOpWord (do.js) runs it in the caller's
+//     ONE moment and promotes factParams + the being target (read from result.beingId via idFrom)
+//     via stampsWordFact. Registered `word: { noun:"being", idFrom:"beingId" }`.
+//
+//   • add / assign-llm-slot — MULTI-MOMENT composites. add.word does `do set-being` (record the
+//     connection) then `If first, do assign-llm-slot` (make it main); assign-llm-slot.word does a
+//     conditional `do` (set-being for a being slot / set-space for a space slot). Each deed must
+//     seal as its OWN moment / fact / commit, so they register `word: { ..., runAsStore:true }`:
+//     do.js's runOpWordToStore runs the `.word` through runWordToStore (per-act moments) and wraps
+//     the result in ranAsMoments — the op lays NO fact of its own; its deeds lay theirs.
+//
+// All compute the words can't do inline goes through EXISTING SEE floor reads in llmHost.js
+// (resolve-connection / resolve-connection-update / resolve-connection-removal / resolve-slot-
+// assignment — the closed set). No new floor names. (The legacy post-fact client-cache bust the
+// handlers did was a cache invalidation, not a fact — a fold-hook is its proper home; the
+// handler-less path drops it, as create-space / create-matter carry none.)
 
 import { registerOperation } from "../../../ibp/operations.js";
 import { registerAbleWord } from "../../../present/word/ableWordRegistry.js";
@@ -27,10 +35,9 @@ registerAbleWord("being", "add-llm-connection", new URL("./add-llm-connection.wo
 registerAbleWord("being", "assign-llm-slot", new URL("./assign-llm-slot.word", import.meta.url));
 registerAbleWord("space", "assign-llm-slot", new URL("./assign-llm-slot.word", import.meta.url));
 
-// update-llm-connection — WORD-SOURCED. update-llm-connection.word returns the merged
-// set-being params as `factParams` plus the target `beingId`; runOpWord promotes both
-// (stampsWordFact reads result.beingId via idFrom → the fact lands on the being, identical to
-// the old stampsFact(result, factParams) which resolved the being from the call-target).
+// update-llm-connection — WORD-SOURCED, atomic. update-llm-connection.word returns the merged
+// set-being params as `factParams` + the target `beingId`; runOpWord promotes both (the fact
+// lands on the being, identical to the old stampsFact(result, factParams) on the call-target).
 registerOperation("update-llm-connection", {
   targets: ["being"],
   ownerExtension: "seed",
@@ -39,9 +46,8 @@ registerOperation("update-llm-connection", {
   hostEnv: llmHostEnv,
 });
 
-// delete-llm-connection — WORD-SOURCED. delete-llm-connection.word returns the unset
-// set-being params (value:null) as `factParams` plus the target `beingId`. The old
-// slot-clears run-on is already dropped (the dangling ref folds); one fact.
+// delete-llm-connection — WORD-SOURCED, atomic. Returns the unset set-being params (value:null)
+// as `factParams` + the target `beingId`. The slot-clears run-on is dropped (the dangling ref folds).
 registerOperation("delete-llm-connection", {
   targets: ["being"],
   ownerExtension: "seed",
@@ -50,14 +56,11 @@ registerOperation("delete-llm-connection", {
   hostEnv: llmHostEnv,
 });
 
-// add-llm-connection — WORD-SOURCED (the MULTI-MOMENT proof; the "apple is: do, do, do, do"
-// shape). add.word's deeds — `do set-being` (the connection) then `If $conn.isFirst, do
-// assign-llm-slot` (auto-assign-to-main) — each RE-FACT as their OWN act→fact at the head:
-// do.js routes op.word.runAsStore through runWordToStore (runOpWordToStore) so each deed seals
-// its own moment, the trail hardening behind, never a multi-mark stamp. The op lays NO own fact
-// (ranAsMoments; the deeds ARE the facts). No JS handler, no _addViaWord adapter — the .word IS
-// the op. (The old post-fact LLM client-cache bust is dropped, as update/delete already did — a
-// fold-hook on the llmConnection fact is its proper home; flagged for that follow-up.)
+// add-llm-connection — WORD-SOURCED, MULTI-MOMENT composite (runAsStore). add.word lays TWO deeds:
+// `do set-being` (the connection) then `If $conn.isFirst, do assign-llm-slot` (auto-assign-to-main)
+// — each its OWN moment / fact via runWordToStore. The op lays NO own fact (runOpWordToStore wraps
+// the result in ranAsMoments). Host floor: resolve-connection (validate / SSRF / encrypt / mint /
+// isFirst). No factAction — the deeds carry their own (set-being, assign-llm-slot).
 registerOperation("add-llm-connection", {
   targets: ["being"],
   ownerExtension: "seed",
@@ -65,14 +68,10 @@ registerOperation("add-llm-connection", {
   hostEnv: llmHostEnv,
 });
 
-// assign-llm-slot — WORD-SOURCED, MULTI-MOMENT + POLYMORPHIC (being / space). The `.word` issues
-// ONE CONDITIONAL DEED (only the matching branch fires: set-being or set-space), and runAsStore
-// routes it through runWordToStore so that chosen deed seals as its OWN moment. `noun: "being"`
-// is purely the resolution key — assign-llm-slot.word is registered under BOTH the being and
-// space ablewords (above), pointing at the same file, so the one descriptor resolves for either
-// target and the `.word` self-branches on targetKind. The op lays no own fact (ranAsMoments).
-// When add.word's `do assign-llm-slot` deed calls this, the nesting is runWordToStore inside
-// runWordToStore — each deed still its own moment, the model consistent across the chain.
+// assign-llm-slot — WORD-SOURCED, MULTI-MOMENT composite (runAsStore), POLYMORPHIC (being / space).
+// assign-llm-slot.word issues ONE CONDITIONAL DEED ($a.isBeing → do set-being / $a.isSpace → do
+// set-space), the chosen deed its own moment via runWordToStore. The branch flags come from the host
+// floor resolve-slot-assignment (which reads the target kind). The op lays NO own fact (ranAsMoments).
 registerOperation("assign-llm-slot", {
   targets: ["being", "space"],
   ownerExtension: "seed",

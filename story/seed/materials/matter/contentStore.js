@@ -51,10 +51,12 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// localStore root: env override, else story/localStore.
+// localStore root: env override, else story/store — the ONE data folder. All durable data lives
+// under it after boot: the CAS blobs at store/cas, and the chain-of-truth (reels/journal/acts/heads)
+// at store/past (fileStore.js). One folder, all data + CAS together.
 const localStoreFolder = process.env.LOCALSTORE_DIR
   ? path.resolve(process.env.LOCALSTORE_DIR)
-  : path.resolve(__dirname, "../../../localStore");
+  : path.resolve(__dirname, "../../../store");
 const CAS_ROOT = path.join(localStoreFolder, "cas");
 
 const HASH_RE = /^[0-9a-f]{64}$/;

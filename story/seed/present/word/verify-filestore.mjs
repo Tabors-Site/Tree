@@ -1,0 +1,204 @@
+// verify-filestore.mjs — boot-free proof of the append-only-file storage core (the Mongo rip
+// foundation, plan elegant-cooking-teapot Phase 1). NO mongod: runs against a temp dir.
+//
+// Proves: (1) a moment's facts append to per-reel files with a valid hash-chain (byte-compatible
+// with the Mongo fact shape, via the shared hash.js); (2) readReel reads them back in seq order;
+// (3) the journal makes commits crash-recoverable — replay is idempotent (re-applying a committed
+// record is a no-op) and a torn trailing WAL record is discarded with zero trace.
+
+import { mkdtempSync, rmSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  configureStore,
+  storeRoot,
+  storeBase,
+  commitMoment,
+  readReel,
+  readReelHead,
+  readReelLineage,
+  verifyReelFile,
+  verifyReelLineage,
+  forkReel,
+  loadSnapshot,
+  saveSnapshot,
+  replayJournal,
+} from "../../past/store/fileStore.js";
+
+let pass = 0,
+  fail = 0;
+const ok = (m) => {
+  console.log(`  ✓ ${m}`);
+  pass++;
+};
+const bad = (m, extra) => {
+  console.log(`  ✗ ${m}${extra !== undefined ? `\n      ${JSON.stringify(extra)}` : ""}`);
+  fail++;
+};
+
+const root = mkdtempSync(join(tmpdir(), "treeos-filestore-"));
+configureStore({ root });
+
+try {
+  // A being birth + two follow-on words (set-being name, set-being coord), each its OWN moment —
+  // the one-word shape. Each commitMoment = one fact on the being's reel.
+  const B = "being-abc123def456";
+  const H = "0";
+  const mk = (act, params) => ({
+    recId: `${act}-${params.field || "birth"}`,
+    act: { _id: `act-${act}-${params.field || "birth"}` },
+    facts: [
+      {
+        history: H,
+        kind: "being",
+        id: B,
+        spec: {
+          through: B,
+          by: "i-am",
+          verb: act === "birth" ? "be" : "do",
+          act,
+          of: { kind: "being", id: B },
+          params,
+          history: H,
+        },
+      },
+    ],
+  });
+
+  const r1 = await commitMoment(mk("birth", { name: "alice", parentBeingId: "i-am" }));
+  const r2 = await commitMoment(mk("set-being", { field: "name", value: "Alice" }));
+  const r3 = await commitMoment(mk("set-being", { field: "coord", value: { x: 1, y: 2 } }));
+
+  // 1. the reel has 3 facts in seq order
+  const reel = readReel(H, "being", B);
+  reel.length === 3 && reel[0].seq === 1 && reel[1].seq === 2 && reel[2].seq === 3
+    ? ok("3 one-word moments → 3 facts on the reel, seq 1..3")
+    : bad("reel seq", reel.map((f) => f.seq));
+
+  // 2. the hash-chain is valid (p-links + recomputed _id match) — the integrity proof
+  const v = verifyReelFile(H, "being", B);
+  v.ok && v.length === 3 ? ok("hash-chain verifies (p-links + content hashes)") : bad("verifyReelFile", v);
+
+  // 3. p of fact N == _id of fact N-1; first p == GENESIS
+  reel[0].p === "0".repeat(64) && reel[1].p === reel[0]._id && reel[2].p === reel[1]._id
+    ? ok("p-links chain each fact to its predecessor (first = GENESIS_PREV)")
+    : bad("p-chain", reel.map((f) => ({ seq: f.seq, p: f.p.slice(0, 8), id: f._id.slice(0, 8) })));
+
+  // 4. the head points at the last fact
+  const head = readReelHead(H, "being", B);
+  head.head === 3 && head.headHash === reel[2]._id
+    ? ok(".head = {head:3, headHash: last fact's _id}")
+    : bad("head", head);
+
+  // 5. REBOOT-SURVIVAL: a fresh process (new store instance over the SAME dir) replays the journal.
+  //    Re-applying the 3 committed records is a pure no-op (idempotent by _id) — the reel stays 3.
+  configureStore({ root });
+  const rep = replayJournal();
+  const reel2 = readReel(H, "being", B);
+  reel2.length === 3 && verifyReelFile(H, "being", B).ok
+    ? ok(`reboot replay is idempotent — reel still 3, chain intact (replayed ${rep.replayed} records)`)
+    : bad("idempotent replay", { len: reel2.length });
+
+  // 6. TORN TRAILING WRITE: append a half-written (no newline, bad crc) record to the WAL, replay,
+  //    and assert it's discarded — the never-committed moment leaves ZERO trace on the reel.
+  const wal = join(storeRoot(), "journal", "moment.wal");
+  const before = readReel(H, "being", B).length;
+  // A half-written record: bad crc + no terminating newline = the shape a crash mid-append leaves.
+  // Replay resumes from the natural ack (end of the 3 committed records) and meets only this.
+  writeFileSync(wal, readFileSync(wal, "utf8") + 'deadbeef\t{"recId":"torn","facts":[{');
+  const rep2 = replayJournal();
+  const after = readReel(H, "being", B).length;
+  rep2.torn && after === before
+    ? ok("torn trailing WAL record detected + discarded — zero trace on the reel")
+    : bad("torn-write", { torn: rep2.torn, before, after });
+
+  // 8. BRANCHING (Tabor: "past splits by branches, they branch from each other at points"): a branch
+  //    stores only its divergent tail; a read UNIONS parent-prefix + branch-tail, and the branch's
+  //    first fact chains across the fork to the parent's fact at the branchPoint.
+  const M = "matter-branch-test-01";
+  const mkM = (h, n) => ({
+    recId: `${h}-set-${n}`,
+    facts: [
+      {
+        history: h,
+        kind: "matter",
+        id: M,
+        spec: { through: "i-am", verb: "do", act: "set-matter", of: { kind: "matter", id: M }, params: { n }, history: h },
+      },
+    ],
+  });
+  await commitMoment(mkM("0", 1));
+  await commitMoment(mkM("0", 2));
+  await commitMoment(mkM("0", 3)); // main reel: seq 1,2,3
+  forkReel("1", "0", "matter", M, 2); // branch "1" forks at branchPoint 2 (seeds its head from main@2)
+  await commitMoment(mkM("1", 4)); // branch: seq 3, p → main's fact at seq 2 (the cross-fork link)
+  await commitMoment(mkM("1", 5)); // branch: seq 4
+  const mainReel = readReel("0", "matter", M);
+  const union = readReelLineage(["0", "1"], { "0": 0, "1": 2 }, "matter", M);
+  const vLin = verifyReelLineage(["0", "1"], { "0": 0, "1": 2 }, "matter", M);
+  union.length === 4 &&
+  union.map((f) => f.seq).join(",") === "1,2,3,4" &&
+  union[2].p === mainReel[1]._id && // branch's first fact (seq 3) chains to main's fact at branchPoint 2
+  vLin.ok &&
+  mainReel.length === 3 // main never sees the branch's divergent facts
+    ? ok("branch unions parent-prefix + own-tail; first divergent fact chains across the fork; chain verifies")
+    : bad("branching", { seqs: union.map((f) => f.seq), crossLink: union[2]?.p === mainReel[1]?._id, vLin, mainLen: mainReel.length });
+
+  // 9. FOLD EQUIVALENCE (the doc's "prove the fold matches"): file-stored facts fold through the
+  //    EXISTING being reducer to the SAME projection state Mongo would produce. Read→fold on files.
+  const { initial, reduce } = await import("../../materials/being/reducer.js");
+  const FB = "being-fold-test-01";
+  const mkF = (field, value) => ({
+    recId: `fold-${field}`,
+    facts: [
+      {
+        history: "0",
+        kind: "being",
+        id: FB,
+        spec: { through: "i-am", verb: "do", act: "set-being", of: { kind: "being", id: FB }, params: { field, value }, history: "0" },
+      },
+    ],
+  });
+  await commitMoment(mkF("qualities.profile.mood", "calm"));
+  await commitMoment(mkF("qualities.profile.level", 7));
+  let st = initial();
+  for (const f of readReel("0", "being", FB)) st = reduce(st, f);
+  st?.qualities?.profile?.mood === "calm" && st?.qualities?.profile?.level === 7
+    ? ok("file-stored facts fold through the REAL being reducer to the correct projection state")
+    : bad("fold-equivalence", st);
+
+  // 10. SNAPSHOTS (the .proj projection cache backing projections.js): fold a reel, save the slot,
+  //     load it back; CAS guard rejects a stale write. The read→fold result is cached, rebuildable.
+  let fst = initial();
+  const ffacts = readReel("0", "being", FB);
+  for (const f of ffacts) fst = reduce(f === ffacts[0] ? initial() : fst, f);
+  const slot = { state: fst, foldedSeq: ffacts.length, position: null, tombstoned: false };
+  saveSnapshot("0", "being", FB, slot);
+  const loaded = loadSnapshot("0", "being", FB);
+  const staleRejected = saveSnapshot("0", "being", FB, { ...slot, foldedSeq: 99 }, 999) === false;
+  loaded?.foldedSeq === ffacts.length &&
+  loaded?.state?.qualities?.profile?.mood === "calm" &&
+  staleRejected
+    ? ok("projection snapshot (.proj) round-trips; CAS guard rejects a stale fold")
+    : bad("snapshot", { loaded, staleRejected });
+
+  // 7. STORIES (the file equivalent of Mongo's per-DB isolation): a named story maps to its own
+  //    sibling folder under the store base; "main"/"past"/absent → the default store/past.
+  const base = storeBase();
+  const rPast = configureStore({ story: "past" });
+  const rMain = configureStore({ story: "main" });
+  const rAlpha = configureStore({ story: "_verify_iso_" });
+  rPast === join(base, "past") &&
+  rMain === join(base, "past") &&
+  rAlpha === join(base, "_verify_iso_") &&
+  rAlpha !== rPast
+    ? ok("stories are sibling folders (main/past → store/past; named → store/<name>) — no renaming")
+    : bad("story mapping", { rPast, rMain, rAlpha, base });
+  configureStore({ root }); // restore the test root
+} finally {
+  rmSync(root, { recursive: true, force: true });
+  rmSync(join(storeBase(), "_verify_iso_"), { recursive: true, force: true });
+}
+
+console.log(`\n  ${pass} passed, ${fail} failed`);
+process.exit(fail === 0 ? 0 : 1);

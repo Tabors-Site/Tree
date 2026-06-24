@@ -219,11 +219,13 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
   // The ONE sanctioned fusion: the self-grounding root birth (the I-Am genesis axiom).
   // "I is implied as the signer of each word" (Tabor) — and at the very root, identity and
   // existence are co-primitive: the not-yet-existing being declares its own name AND births
-  // itself in one irreducible "I am." A be:birth whose actor IS its target (through === of.id)
-  // is, by construction, a being birthing ITSELF — only a self-grounding root can do that
-  // (every other birth has a distinct parent actor, so this cannot be forged into a loophole).
-  // This is the lone place name:declare + be:birth fuse in one atomic moment, kept atomic so the
-  // bootstrap stays zero-trace-on-crash. Everything else is strictly one word = one fact.
+  // itself in one irreducible "I am." The root is the being-tree's ONLY parentless birth:
+  // its be:birth carries params.parentBeingId == null (nothing above it). birthBeing REQUIRES
+  // a non-null parent (it throws otherwise — birth.js), so every other birth has a real parent
+  // and is NOT exempt. (NB: `through === of.id` is true for ALL births — birth.js self-stamps
+  // the be:birth `through` to the new being — so it does NOT distinguish the root; parentless
+  // does.) This is the lone place name:declare + be:birth fuse in one atomic moment, kept atomic
+  // so the bootstrap stays zero-trace-on-crash. Everything else is strictly one word = one fact.
   const isGenesisRootBirth =
     hasFacts &&
     deltaF.some(
@@ -231,7 +233,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
         f?.verb === "be" &&
         f?.act === "birth" &&
         f?.of?.id != null &&
-        String(f.through) === String(f.of.id),
+        f?.params?.parentBeingId == null,
     );
   if (hasFacts && deltaF.length > 1 && !isGenesisRootBirth) {
     const facts = deltaF

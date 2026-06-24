@@ -32,11 +32,25 @@
 // re-validate `when` here . the moment-assign evaluator handles unknown
 // operators and missing context paths by failing the clause closed
 // (silent skip). Future tightening can move validation up to write-time.
+//
+// WORD-SOLE (handler-less, Tabor's no-mirror law): set-being-flow.word is the ONLY op path (do.js
+// runOpWord runs it). The CONTROL strand (the `flow`-required gate + the return) is the .word; the
+// genuine compute + the able-registry READ — resolve the target being (params.beingId else the being
+// target), validate the clause-array SHAPE, and the getAble unknown-able warning — are the host
+// see-op resolve-set-being-flow-spec (setBeingFlowHost.js), reaching the SAME getAble the old handler
+// called. The .word AUTHORS its fact: it returns { beingId, factParams } where factParams is the EXACT
+// shape the retired handler returned via stampsFact — { field: "qualities.flow", value: <validated>,
+// merge: false }. do.js's runOpWord (stampsWordFact, idFrom:"beingId") lays the ONE do:set-being-flow
+// fact on the being's reel; applySetQualities folds it (set-being-flow is in SET_ACTIONS), exactly as
+// the inner write did. (Was: an inline handler validating + returning stampsFact = the same one fact;
+// the validation now lives behind the floor read, byte-identical.)
 
 import { registerOperation } from "../../../ibp/operations.js";
-import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
-import { getAble } from "../registry.js";
-import { stampsFact } from "../../../ibp/factResult.js";
+import { registerAbleWord } from "../../../present/word/ableWordRegistry.js";
+import { setBeingFlowHostEnv } from "./setBeingFlowHost.js";
+
+// Self-register the co-located world strand so resolveAbleWord("being", "set-being-flow") finds it.
+registerAbleWord("being", "set-being-flow", new URL("./set-being-flow.word", import.meta.url));
 
 registerOperation("set-being-flow", {
   targets: ["being", "stance"],
@@ -58,73 +72,6 @@ registerOperation("set-being-flow", {
       required: false,
     },
   },
-  handler: async ({ target, params, identity, moment }) => {
-    // Resolve the target being. Explicit beingId in params wins (the
-    // flow-composer helper passes it when authoring against a
-    // being it's not standing as). Otherwise the verb's target is the
-    // being — typed { kind: "being", id } envelope.
-    const explicitBeingId = params?.beingId ? String(params.beingId).trim() : null;
-    const beingId =
-      explicitBeingId ||
-      (target && typeof target === "object" && target.kind === "being" && target.id
-        ? String(target.id)
-        : null);
-    if (!beingId) {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        "set-being-flow: could not resolve target being (pass params.beingId or address a being stance).",
-      );
-    }
-
-    const flow = params?.flow;
-    if (!Array.isArray(flow)) {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        "set-being-flow: `flow` must be an array of clauses.",
-      );
-    }
-
-    const validated = [];
-    const unknownAbles = [];
-    for (let i = 0; i < flow.length; i++) {
-      const clause = flow[i];
-      if (!clause || typeof clause !== "object" || Array.isArray(clause)) {
-        throw new IbpError(
-          IBP_ERR.INVALID_INPUT,
-          `set-being-flow: clause[${i}] must be an object.`,
-        );
-      }
-      const able = clause.able;
-      if (typeof able !== "string" || !able) {
-        throw new IbpError(
-          IBP_ERR.INVALID_INPUT,
-          `set-being-flow: clause[${i}].able must be a non-empty string.`,
-        );
-      }
-      // Surface unknown-able warnings . don't fail. The able may be
-      // added moments later (live authoring is iterative).
-      if (!getAble(able)) unknownAbles.push(able);
-
-      const out = { able };
-      if (clause.when !== undefined && clause.when !== null) out.when = clause.when;
-      if (clause.stack === true) out.stack = true;
-      // Ignore unknown keys silently. Tightening later: reject unknown
-      // top-level fields the way set-render does. For now lenience
-      // helps the LLM helper iterate without spurious rejections.
-      validated.push(out);
-    }
-
-    // ONE act, ONE fact (23.md): set-being-flow returns its OWN fact — do:set-being-flow
-    // carrying the flow as a qualities.flow set — and the dispatcher stamps it on the target
-    // being's reel. The being reducer folds it via applySetQualities (set-being-flow is in
-    // SET_ACTIONS), exactly as the inner doVerb(set-being) used to. No inner doVerb, one fact, the fold
-    // materializes. (Was: an inner set-being write + a re-targeted audit fact = two facts for one act.)
-    return stampsFact({
-      written:       true,
-      beingId,
-      clauseCount:   validated.length,
-      unknownAbles:  unknownAbles.length ? unknownAbles : undefined,
-      notes:         params?.notes || undefined,
-    }, { field: "qualities.flow", value: validated, merge: false }, { kind: "being", id: beingId });
-  },
+  word: { noun: "being", able: "being", idFrom: "beingId" },
+  hostEnv: setBeingFlowHostEnv,
 });
