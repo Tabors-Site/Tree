@@ -22,7 +22,7 @@ The new SURFACE templates the parser must learn, sorted by how many slices need 
 | `the X Vs` (reflexive/passive act, no explicit object)                                                                                                      | 1       | Self-directed state transition (`the proposal passes`, `the being wakes`).                                                                       | governance-commons, (subscription-schedule has-form)                                                   |
 | `When a X Vs a Y` (event-flow without `happens`)                                                                                                            | 1       | Naked act-as-event watch; current parser requires `When a E happens`.                                                                            | governance-commons                                                                                     |
 | `host: <builtin> does X` (host escape hatch inline in prose surface)                                                                                        | 1       | A prose grammar for host calls; today they live only in `act.host` IR.                                                                           | NAME-declare (also strained in cherub-connect, matter-types)                                           |
-| `X is a Y` (bare `is`, no article — a being's intrinsic property)                                                                                           | 1       | `I_AM is the root`; immutable property without article (strains rule 10).                                                                        | NAME-declare                                                                                           |
+| `X is a Y` (bare `is`, no article — a being's intrinsic property)                                                                                           | 1       | `I is the root`; immutable property without article (strains rule 10).                                                                           | NAME-declare                                                                                           |
 | `X is a Y (opt1 \| opt2, null if unspecified)` (enumerated kind with null fallback)                                                                         | 1       | Disjunctive option set with explicit null fallback (`soulType`).                                                                                 | NAME-declare                                                                                           |
 | `A X can V a Y to a Z` / `... with a Z` / `... to V to Z` (capability with two objects, parameter clause, or nested infinitive intent)                      | 1       | Multi-object and nested-intent capability grants (admit-to-roster, summon-with-concern, summon-to-ask-to-join).                                  | governance-commons                                                                                     |
 | `A X can V the Y [adjective]` (capability over an adjective-filtered plural)                                                                                | 1       | Filter a plural by state (`the open proposals`).                                                                                                 | governance-commons                                                                                     |
@@ -51,7 +51,7 @@ The evaluator capabilities the slices need that do not exist. This is the handof
 | in-moment / relational query bound mid-flow (isAncestorOf graph walk; tree traversal with a predicate yielding anchors)               | 3       | cherub-connect, inheritation, (matter-types classification scoring)                                    |
 | state-read of a being's nested field used in a condition (`qualities.father`, foreign vs local)                                       | 3       | cherub-connect, inheritation, matter-types                                                             |
 | able inheritance (auto-inherit ables from parents on birth; `extends` merges parent capability and scope)                             | 3       | cherub-birth, governance-commons, subscription-schedule                                                |
-| history-lineage inheritance and per-history cancel (subscriptions/schedules inherit then cancel on the child)                           | 2       | subscription-schedule, (cherub-connect seatBranch)                                                     |
+| history-lineage inheritance and per-history cancel (subscriptions/schedules inherit then cancel on the child)                         | 2       | subscription-schedule, (cherub-connect seatBranch)                                                     |
 | collection-iteration: loop over a set, bind each element, break on a condition                                                        | 2       | cherub-connect, governance-commons                                                                     |
 | failure / refusal flow: emit a refusal or exception fact, halt the effect chain                                                       | 2       | cherub-connect, governance-commons                                                                     |
 | quantifier evaluation: `every`, `most`, `all`, `no` as counting predicates over collections                                           | 1       | governance-commons                                                                                     |
@@ -94,12 +94,12 @@ None of the eight slices is runnable on the current parser-plus-evaluator. Hones
 ```
 A home is a space.
 A home is 100 by 100 in size.
-I_AM births through Cherub.
+I births through Cherub.
 
 When Arrival summons Cherub to birth a being:
   make a new home, homeId as bind.
   the Cherub makes the home a territory of the place root.
-  form a being named the being, with the being's name and password, with homeId as the being's home, with I_AM as the being's parent, and with the being's owner Name.
+  form a being named the being, with the being's name and password, with homeId as the being's home, with I as the being's parent, and with the being's owner Name.
   the Cherub sets the being as owner of homeId.
   the Cherub grants the being the human able at the place root.
   the Cherub grants the being the global able at the place root.
@@ -278,7 +278,7 @@ When I ask whether a Name has authority over a being:
   at each node on the walk, check for an ownership anchor (the node's trueName) or a live inheritation point at that node for the Name.
   if any anchor matches the Name, the Name has authority over the being.
   if no anchor is found, the Name does not have authority over the being.
-  I_AM always has authority over every being on its own reality.
+  I always has authority over every being on its own reality.
 
 New beings inherit coverage automatically:
   when a being is born under a covered position, the child walks up and passes through the ancestor's anchor, so the child is covered.
@@ -372,11 +372,11 @@ When I bring matter into the world, I classify it: host: classifyMatter(input) r
 
 ```
 A Name is a space.
-I_AM is the root.
+I is the root.
 
 When a Name is declared:
   host: generateNameKeypair builds a new keypair, or importKey rebuilds one from seed.
-  the new Name is a facet of I_AM.
+  the new Name is a facet of I.
   the declaration mints the public key as the Name's id.
   the private key is encrypted (either with password via KDF, or system-encrypted), and the spec records it.
   the spec names the soulType (human | llm | scripted, null if unspecified).
@@ -389,7 +389,7 @@ When a real-name is given, the registry is queried (host: findByName) and the re
 When a keypair is imported, the registry is queried (host: loadProjection) and the imported nameId must not already exist on this reality.
 ```
 
-- parser-gaps: bare `is` (`I_AM is the root`), multi-effect `When a E happens` body, host escape hatch inline in prose (`host: generateNameKeypair builds ...`), enumerated kind with null fallback (`soulType: human | llm | scripted, null`). engine-gaps: relational being binding / facet creation, multi-effect flow bodies, conditional host guard with side-effect-and-assert (`When X, the registry is queried (host: Y) and X must not exist`), enumerated able options with null fallback. (`A X is a space` is `have`.)
+- parser-gaps: bare `is` (`I is the root`), multi-effect `When a E happens` body, host escape hatch inline in prose (`host: generateNameKeypair builds ...`), enumerated kind with null fallback (`soulType: human | llm | scripted, null`). engine-gaps: relational being binding / facet creation, multi-effect flow bodies, conditional host guard with side-effect-and-assert (`When X, the registry is queried (host: Y) and X must not exist`), enumerated able options with null fallback. (`A X is a space` is `have`.)
 
 ---
 

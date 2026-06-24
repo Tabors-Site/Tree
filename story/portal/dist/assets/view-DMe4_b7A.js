@@ -1,11 +1,6048 @@
-import{_ as pt,s as Bt}from"./boot-BDjtA95u.js";import{a as Ot,r as Tt,b as Mt}from"./being-flow-panel-CG2eAhmf.js";import{renderIdentityPanel as mt}from"./identity-panel-BpP_VTCN.js";const R={open:!1,being:null,stance:null,messages:[],byCorr:new Map,byMessage:new Map};function jt(){return R.open}function qt(){return R.being}function $e(e,{refresh:t=!1}={}){var L,S,q,O,M,x,A,H;if(!e)return;const a=b.state,o=(L=a.discovery)==null?void 0:L.story;if(!o)return;const n=((q=(S=a.descriptor)==null?void 0:S.address)==null?void 0:q.pathByNames)||"/",s=((M=(O=a.descriptor)==null?void 0:O.address)==null?void 0:M.history)||"0",i=s==="0"?"":`#${s}`,c=`${o}${i}${n}@${e.being}`.replace(/\/+@/,"/@");if(t&&R.open&&R.being===e.being){Ve(e);return}R.open=!0,R.being=e.being,R.stance=c,R.messages=[],R.byCorr.clear(),R.byMessage.clear();const l=document.getElementById("empty-detail"),p=document.getElementById("inspector"),r=document.getElementById("chat-panel");l.classList.add("hidden"),p.classList.add("hidden"),r.classList.remove("hidden"),r.innerHTML="";const d=document.createElement("div");d.className="chat-header";const m=document.createElement("h3");m.className="pane-title",m.textContent=`chat @${e.being}`,d.appendChild(m);const u=document.createElement("button");u.className="btn-sm",u.textContent="close",u.onclick=()=>ge(),d.appendChild(u),r.appendChild(d);const g=document.createElement("div");g.className="chat-llm-bar",g.textContent="LLM: (loading…)",g.style.cursor="pointer",g.title="click to see full chain",r.appendChild(g);let h=null,f=!1;function C(){g.innerHTML="";const F=h&&Array.isArray(h.chain)?h.chain:[],D=(h==null?void 0:h.chosen)||null;if(D){const I=document.createElement("span");I.textContent="LLM: ",I.className="muted";const j=document.createElement("strong");j.textContent=D.model||D.name||D.connectionId.slice(0,12);const z=document.createElement("span");z.className="muted",z.textContent=` ← step ${D.step} · ${D.source}`,g.appendChild(I),g.appendChild(j),g.appendChild(z)}else F.length===0&&(h!=null&&h.reason)?g.textContent=`LLM: (none — ${h.reason})`:g.textContent="LLM: (no candidate resolved)";const P=document.createElement("span");P.className="muted",P.style.marginLeft="0.5em",P.textContent=f?" ▾":" ▸",g.appendChild(P)}function E(){C();const F=h&&Array.isArray(h.chain)?h.chain:[];if(F.length===0)return;const D=document.createElement("ul");D.className="llm-chain";for(const P of F){const I=document.createElement("li");I.className="llm-chain-entry";const j=(h==null?void 0:h.chosen)&&P.connectionId===h.chosen.connectionId&&P.step===h.chosen.step&&P.source===h.chosen.source,z=document.createElement("span");z.className="llm-chain-marker",z.textContent=j?"✓":" ";const W=document.createElement("span");W.className="llm-chain-step",W.textContent=`step ${P.step}`;const Y=document.createElement("span");Y.className="llm-chain-source",Y.textContent=P.source;const J=document.createElement("span");J.className="llm-chain-model",J.textContent=P.model||P.name||P.connectionId.slice(0,8),j&&(I.style.fontWeight="bold"),I.appendChild(z),I.appendChild(W),I.appendChild(Y),I.appendChild(J),D.appendChild(I)}if(g.appendChild(D),h!=null&&h.reason){const P=document.createElement("div");P.className="sub muted",P.textContent=`reason: ${h.reason}`,g.appendChild(P)}}g.onclick=()=>{f=!f,f?E():C()};const y=e.defaultAble||"main";Promise.resolve(a.client.see("llm-chain",{args:{receiverBeingId:e.beingId||null,receiverBeingName:e.beingId?null:e.being,receiverSpaceId:((A=(x=a.descriptor)==null?void 0:x.position)==null?void 0:A.spaceId)||null,actorBeingName:((H=a.session)==null?void 0:H.username)||null,able:y}})).then(F=>{h=F&&F.result||F||{chain:[],reason:null,chosen:null},f?E():C()}).catch(F=>{g.textContent=`LLM: (preview failed — ${(F==null?void 0:F.message)||F})`});const w=document.createElement("div");w.id="chat-inbox",w.className="chat-inbox",r.appendChild(w),Ve(e);const N=document.createElement("div");N.id="chat-log",N.className="chat-log",r.appendChild(N);const k=document.createElement("form");k.className="chat-composer";const v=document.createElement("input");v.type="text",v.placeholder=`summon @${e.being}…`,v.autocomplete="off";const $=document.createElement("button");$.type="submit",$.className="btn-primary",$.textContent="send",k.appendChild(v),k.appendChild($),k.onsubmit=async F=>{F.preventDefault();const D=v.value.trim();D&&(v.value="",await Ht(D))},r.appendChild(k),setTimeout(()=>v.focus(),10)}function ge(){var e,t,a;R.open=!1,R.being=null,R.stance=null,R.messages=[],R.byCorr.clear(),R.byMessage.clear(),(e=document.getElementById("chat-panel"))==null||e.classList.add("hidden"),(t=document.getElementById("inspector"))==null||t.classList.add("hidden"),(a=document.getElementById("empty-detail"))==null||a.classList.remove("hidden")}async function Ht(e){var a;const t=je({who:((a=b.state.session)==null?void 0:a.username)||"arrival",content:e,kind:"outgoing",ts:new Date().toISOString()});try{const{correlation:o,reply:n}=await b.sendSummon(R.stance,e);R.byCorr.set(o,t);const s=R.messages.find(i=>i.id===t);s&&(s.rootCorrelation=o),n&&n.content&&je({who:R.being,content:n.content,kind:"reply",parent:t,ts:new Date().toISOString()})}catch(o){je({who:"system",content:`[${o.code||"error"}] ${o.message||"summon failed"}`,kind:"error",parent:t,ts:new Date().toISOString()})}}let Ft=0;function je(e){const t=`m-${++Ft}`,a={id:t,...e};return R.messages.push(a),e.rootCorrelation&&R.byMessage.set(e.rootCorrelation,a),Rt(),t}function Rt(){const e=document.getElementById("chat-log");if(e){e.innerHTML="";for(const t of R.messages)t.parent||e.appendChild(ut(t));e.scrollTop=e.scrollHeight}}function ut(e){const t=document.createElement("div");t.className=`chat-msg chat-${e.kind}`;const a=document.createElement("div");a.className="msg-who",a.textContent=e.who;const o=document.createElement("div");if(o.className="msg-content",o.textContent=e.content,t.appendChild(a),t.appendChild(o),e.kind==="outgoing"&&e.rootCorrelation){const s=document.createElement("button");s.className="btn-sm btn-cancel",s.textContent="stop",s.title="sever this thread (rootCorrelation cut)",s.onclick=()=>b.cancelByRootCorrelation(e.rootCorrelation),t.appendChild(s)}const n=R.messages.filter(s=>s.parent===e.id);if(n.length>0){const s=document.createElement("div");s.className="chat-children";for(const i of n)s.appendChild(ut(i));t.appendChild(s)}return t}function Ve(e){var s;const t=document.getElementById("chat-inbox");if(!t)return;t.innerHTML="";const a=(s=e==null?void 0:e.inbox)==null?void 0:s.recent;if(!a||a.length===0){const i=document.createElement("div");i.className="dim",i.textContent="(no past summons in inbox)",t.appendChild(i);return}const o=document.createElement("h4");o.textContent=`inbox (${e.inbox.total??a.length})`,t.appendChild(o);const n=document.createElement("ul");n.className="inbox-list";for(const i of a.slice(0,10)){const c=document.createElement("li"),l=document.createElement("span");l.className="msg-who",l.textContent=i.from||"?";const p=document.createElement("span");p.className="msg-content",p.textContent=" "+(i.content||"(no content)").slice(0,80),c.appendChild(l),c.appendChild(p),n.appendChild(c)}t.appendChild(n)}const _t=100;async function Dt(e,t,a){var r;const o=document.createElement("section");o.className="panel-section";const n=document.createElement("h4");if(n.textContent="Timeline",o.appendChild(n),!(t!=null&&t.beingId)){o.appendChild(Wt("(no beingId surfaced on this entry)")),e.appendChild(o);return}const s=document.createElement("div");s.className="sub",s.textContent="loading acts…",o.appendChild(s);const i=document.createElement("ol");i.className="tl-list",o.appendChild(i);const c=document.createElement("div");c.className="tl-past hidden",o.appendChild(c),e.appendChild(o);const l=a.story||((r=b.state.discovery)==null?void 0:r.story),p=await Pt(l,t.beingId).catch(d=>(s.textContent=`failed to load acts: ${(d==null?void 0:d.message)||d}`,null));if(p){if(!p.length){s.textContent="no acts on this being's reel yet.";return}s.textContent=`${p.length} act${p.length===1?"":"s"} · newest first · click to view state at that point`;for(const d of p)i.appendChild(zt(d,t,c,l))}}async function Pt(e,t){var a,o;if(!e)return[];try{const n=((o=(a=b.state.descriptor)==null?void 0:a.address)==null?void 0:o.history)||"0",s=n==="0"?"":`#${n}`,i=await b.state.client.see(`${e}${s}/.acts/${t}`),c=i==null?void 0:i.actChain;return Array.isArray(c==null?void 0:c.acts)?c.acts.slice(0,_t):[]}catch{return[]}}function zt(e,t,a,o){const n=document.createElement("li");n.className="tl-row";const s=e.lastFactSeq,i=e.stampedAt||e.receivedAt,c=document.createElement("div");c.className="tl-row-head";const l=document.createElement("span");l.className="tl-row-when",l.textContent=ht(e.stampedAt||e.receivedAt),c.appendChild(l);const p=document.createElement("span");if(p.className="tl-row-able",p.textContent=e.activeAble||"(no able)",c.appendChild(p),s!=null){const d=document.createElement("span");d.className="tl-row-seq",d.textContent=`seq ${s}`,c.appendChild(d)}n.appendChild(c);const r=document.createElement("div");return r.className="tl-row-summary",r.textContent=Gt(e),n.appendChild(r),i?(n.classList.add("tl-row-clickable"),n.onclick=async()=>{[...n.parentElement.children].forEach(d=>d.classList.remove("tl-row-active")),n.classList.add("tl-row-active"),await Ut({story:o,being:t,whenISO:i,pastContainer:a})}):(n.classList.add("tl-row-inert"),r.title="no timestamp on this act — cannot anchor a historical fold"),n}async function Ut({story:e,being:t,whenISO:a,pastContainer:o}){var m,u,g;o.classList.remove("hidden"),o.innerHTML="";const n=document.createElement("div");n.className="tl-past-banner",n.textContent=`AS OF  ·  ${ht(a)}`,o.appendChild(n);const s=document.createElement("div");s.className="sub",s.textContent="folding the place…",o.appendChild(s);let i;try{const h=((u=(m=b.state.descriptor)==null?void 0:m.address)==null?void 0:u.history)||"0",f=h==="0"?"":`#${h}`;i=await b.state.client.see(`${e}${f}/@${t.being}`,{at:{atTimestamp:a}})}catch(h){s.textContent=`fold failed: ${(h==null?void 0:h.code)||""} ${(h==null?void 0:h.message)||h}`;return}if(!(i!=null&&i.isHistorical)){s.textContent="(server returned a non-historical descriptor)";return}s.remove();const c=(i.beings||[]).find(h=>h.being===t.being)||((g=i.beings)==null?void 0:g[0])||null;if(c){const h=document.createElement("div");h.className="tl-past-section-head",h.textContent=`@${t.being}`,o.appendChild(h);const f=document.createElement("div");f.className="tl-past-state",Jt(f,c),o.appendChild(f)}const l=(i.beings||[]).filter(h=>h.being!==t.being);if(l.length){const h=document.createElement("div");h.className="tl-past-section-head",h.textContent=`also here · ${l.length}`,o.appendChild(h);const f=document.createElement("ul");f.className="tl-past-others";for(const C of l){const E=document.createElement("li"),y=document.createElement("span");if(y.className="tl-other-name",y.textContent=`@${C.being}`,E.appendChild(y),C.coord){const w=document.createElement("span");w.className="tl-other-coord",w.textContent=`(${C.coord.x??"?"}, ${C.coord.y??"?"})`,E.appendChild(w)}f.appendChild(E)}o.appendChild(f)}const p=i.matters||[];if(p.length){const h=document.createElement("div");h.className="tl-past-section-head",h.textContent=`matter · ${p.length}`,o.appendChild(h);const f=document.createElement("ul");f.className="tl-past-others";for(const C of p){const E=document.createElement("li");E.textContent=`${C.name||"(unnamed)"} · ${C.origin||"?"}`,f.appendChild(E)}o.appendChild(f)}const r=i.qualities||{};if(Object.keys(r).length){const h=document.createElement("div");h.className="tl-past-section-head",h.textContent="space qualities",o.appendChild(h);const f=document.createElement("pre");f.className="tl-past-json",f.textContent=JSON.stringify(r,null,2),o.appendChild(f)}const d=document.createElement("button");d.type="button",d.className="btn-sm",d.textContent="← Back to live",d.onclick=()=>{o.classList.add("hidden"),o.innerHTML="",b.navigate(b.state.currentAddress)},o.appendChild(d)}function Jt(e,t){const a=document.createElement("div");a.className="tl-state-grid";const o=[["beingId",t.beingId],["coord",t.coord],["permissions",t.permissions],["respondMode",t.respondMode]];for(const[n,s]of o)s!=null&&a.appendChild(Ze(n,s));t.qualities&&Object.keys(t.qualities).length&&a.appendChild(Ze("qualities",t.qualities)),e.appendChild(a)}function Ze(e,t){const a=document.createElement("div");a.className="tl-state-row";const o=document.createElement("span");o.className="tl-state-key",o.textContent=e;const n=document.createElement("span");return n.className="tl-state-value",t==null||typeof t=="string"||typeof t=="number"||typeof t=="boolean"?n.textContent=t==null?"(none)":String(t):n.textContent=JSON.stringify(t,null,2),a.appendChild(o),a.appendChild(n),a}function Gt(e){var t;if((t=e.endMessage)!=null&&t.content){const a=String(e.endMessage.content);return a.length>160?a.slice(0,157)+"…":a}if(Array.isArray(e.facts)&&e.facts.length){const a=e.facts.slice(0,3).map(o=>`${o.verb}:${o.act}`).filter(Boolean);if(a.length){const o=e.facts.length>a.length?` (+${e.facts.length-a.length})`:"";return a.join(", ")+o}}return"(see — no acted change)"}function ht(e){if(!e)return"";const t=new Date(e);return Number.isNaN(t.getTime())?String(e):t.toLocaleString()}function Wt(e){const t=document.createElement("div");return t.className="sub",t.textContent=e,t}function Q(e,{op:t,values:a={},address:o,doOp:n,onResult:s,submitLabel:i}={}){if(!e)throw new Error("renderOpForm: container is required");if(!t||!t.name)throw new Error("renderOpForm: op with a name is required");e.innerHTML="";const c=t.args&&typeof t.args=="object"?t.args:null,l=c?Object.keys(c):[],p=document.createElement("form");p.className="op-form";const r=document.createElement("div");r.className="op-form-head";const d=document.createElement("code");d.className="op-form-name",d.textContent=t.name,d.title=`targets: ${(t.targets||[]).join(", ")||"?"} • from ${t.ownerExtension||"seed"}`,r.appendChild(d),p.appendChild(r);const m={};let u=null;if(c)if(l.length===0){const C=document.createElement("p");C.className="op-form-note dim",C.textContent="No inputs — run this action?",p.appendChild(C)}else for(const C of l){const E=c[C]||{},{wrap:y,input:w}=Kt(C,E,Vt(a,C));m[C]={input:w,descriptor:E},p.appendChild(y)}else{const C=document.createElement("div");C.className="op-field";const E=document.createElement("label");E.textContent="args (JSON)";const y=document.createElement("textarea");y.className="op-input op-input-json",y.rows=4,y.placeholder="{ }",a&&Object.keys(a).length&&(y.value=Oe(a)),C.appendChild(E),C.appendChild(y),p.appendChild(C),u=y}const g=document.createElement("div");g.className="op-form-actions";const h=document.createElement("button");h.type="submit",h.className="btn-sm btn-primary",h.textContent=i||"run",g.appendChild(h),p.appendChild(g);const f=document.createElement("div");return f.className="action-result hidden",p.appendChild(f),p.onsubmit=async C=>{C.preventDefault();let E;try{E=u?Xt(u):Yt(c,m)}catch(y){xe(f,y.message,"err");return}xe(f,"…","pending"),h.disabled=!0;try{const y=await n(o,t.name,E);xe(f,Oe(y),"ok"),typeof s=="function"&&s(null,y,E)}catch(y){xe(f,`${(y==null?void 0:y.code)||"error"}: ${(y==null?void 0:y.message)||String(y)}`,"err"),typeof s=="function"&&s(y,null,E)}finally{h.disabled=!1}},e.appendChild(p),p}function Kt(e,t,a){const o=document.createElement("div");o.className="op-field";const n=document.createElement("label");if(n.textContent=t.label||e,t.required){const c=document.createElement("span");c.className="op-required",c.textContent=" *",n.appendChild(c)}o.appendChild(n);const s=t.type||"text";let i;if(s==="select"){i=document.createElement("select"),i.className="op-input";for(const l of Array.isArray(t.enum)?t.enum:[]){const p=document.createElement("option");p.value=String(l),p.textContent=l===""?"(none)":String(l),i.appendChild(p)}const c=a??t.default;c!=null&&(i.value=String(c))}else if(s==="multiline")i=document.createElement("textarea"),i.className="op-input",i.rows=3,a!=null?i.value=Ne(a):t.default!=null&&(i.value=Ne(t.default));else if(s==="json")i=document.createElement("textarea"),i.className="op-input op-input-json",i.rows=3,a!=null?i.value=Oe(a):t.default!=null&&(i.value=Oe(t.default));else if(s==="bool"){i=document.createElement("input"),i.type="checkbox",i.className="op-input op-input-bool";const c=a!=null?!!a:!!t.default;i.checked=c}else i=document.createElement("input"),i.type=s==="password"?"password":s==="number"?"number":"text",i.className="op-input",a!=null?i.value=Ne(a):t.default!=null&&(i.value=Ne(t.default));if(t.placeholder&&i.tagName!=="SELECT"&&s!=="bool"&&(i.placeholder=t.placeholder),o.appendChild(i),t.description){const c=document.createElement("div");c.className="op-field-hint dim",c.textContent=t.description,o.appendChild(c)}return{wrap:o,input:i}}function Xt(e){const t=e.value.trim();if(!t)return{};try{return JSON.parse(t)}catch(a){throw new Error(`args JSON parse error: ${a.message}`)}}function Yt(e,t){const a={};for(const o of Object.keys(e)){const n=e[o]||{},s=t[o];if(!s)continue;const i=n.type||"text",c=s.input;if(i==="bool"){a[o]=!!c.checked;continue}const l=c.value!=null?String(c.value):"",p=l.trim();if(p===""){if(n.required)throw new Error(`${n.label||o} is required`);continue}if(i==="number"){const r=Number(p);if(Number.isNaN(r))throw new Error(`${n.label||o} must be a number`);a[o]=r}else if(i==="json")try{a[o]=JSON.parse(p)}catch(r){throw new Error(`${n.label||o}: invalid JSON (${r.message})`)}else a[o]=l}return a}function Vt(e,t){if(!(!e||typeof e!="object"))return e[t]}function Ne(e){return typeof e=="string"?e:String(e)}function Oe(e){try{return JSON.stringify(e,null,2)}catch{return String(e)}}function xe(e,t,a){e.className=`action-result action-${a}`,e.classList.remove("hidden"),e.textContent=t}async function Zt(e,t,a,{refreshView:o}={}){var E,y,w,N,k,v,$,L,S,q,O;e.innerHTML="";const n=((E=t.values)==null?void 0:E.descriptor)||((y=b.state)==null?void 0:y.descriptor)||{},s=((N=(w=b.state)==null?void 0:w.discovery)==null?void 0:N.story)||((k=n.address)==null?void 0:k.story)||((v=n.address)==null?void 0:v.place)||"",i=(($=n.address)==null?void 0:$.pathByNames)||"/",c=`${s}${i==="/"?"/":i}`,l=((L=n.address)==null?void 0:L.spaceId)||((S=n.position)==null?void 0:S.spaceId)||((q=n.space)==null?void 0:q._id)||null,p=((O=b.state)==null?void 0:O.session)||{},r=(p.username||p.name||"").trim(),d=!r||r==="arrival";await en(e,{desc:n,story:s,positionSpaceId:l,path:i});let m=[],u=null,g={grants:[],lineage:null};try{m=await pn(n,s)}catch{}try{u=await ft(n,s)}catch{}if(!d)try{g=await mn(r,s,l)}catch{}const h=await un(g.grants,m,l,s),f=h.filter(M=>M.reachesHere),C=Qt(f,u,r);tn(e,{effective:C,claim:u,viewerName:r,isAnonymous:d}),nn(e,{annotated:h,viewerName:r,isAnonymous:d,lineage:g.lineage,story:s}),on(e,{hostedHere:m}),cn(e,{positionAddress:c,effective:C,hostedHere:m,onResult:M=>{!M&&typeof o=="function"&&o()}}),f.length>0&&rn(e,{heldAbles:f,story:s,onResult:M=>{!M&&typeof o=="function"&&o()}})}function Qt(e,t,a){var n,s,i,c;const o={see:new Map,do:new Map,summon:new Map,be:new Map,ownerAll:!1};t&&t.ownerNames.some(l=>l===a)&&(o.ownerAll=!0);for(const l of e)ke(o.see,(n=l.spec)==null?void 0:n.canSee,"name",l.grant.able),ke(o.do,(s=l.spec)==null?void 0:s.canDo,"action",l.grant.able),ke(o.summon,(i=l.spec)==null?void 0:i.canSummon,"pattern",l.grant.able),ke(o.be,(c=l.spec)==null?void 0:c.canBe,"operation",l.grant.able);return o}async function en(e,{desc:t,story:a,positionSpaceId:o,path:n}){var l,p;const s=ze(e,"Where you are"),i=((l=t.space)==null?void 0:l.name)||((p=t.address)==null?void 0:p.spaceName)||(n==="/"?"story root":n);s.appendChild(se("position",n==="/"?"/ (story root)":n)),s.appendChild(se("space",i)),o&&s.appendChild(se("spaceId",ve(o)));const c=await ft(t,a);if(!c)s.appendChild(se("ownership","(unclaimed)"));else if(c.publicCommons)s.appendChild(se("ownership",`public commons (anchor: ${c.hostName})`));else if(c.ownerNames.length>0){const r=c.ownerNames.map(m=>`@${m}`).join(", "),d=c.spaceId===o?"this space":`inherited from ${c.hostName}`;s.appendChild(se("ownership",`${r} (${d})`))}}function tn(e,{effective:t,claim:a,viewerName:o,isAnonymous:n}){const s=ze(e,n?"What you can do here":`What @${o} can do here`);if(n){s.appendChild(le("Sign in to see your effective permissions."));return}if(t.ownerAll){const l=document.createElement("div");l.className="perm-owner",l.textContent=`● Owner of ${a.hostName} — you can do anything in this subtree.`,s.appendChild(l);return}if(t.see.size+t.do.size+t.summon.size+t.be.size===0){s.appendChild(le("No granted able reaches this position."));return}const c=[{label:"SEE",map:t.see,empty:"(no SEE ops)"},{label:"DO",map:t.do,empty:"(no DO actions)"},{label:"SUMMON",map:t.summon,empty:"(no SUMMON targets)"},{label:"BE",map:t.be,empty:"(no BE ops)"}];for(const l of c){const p=document.createElement("div");p.className="perm-row";const r=document.createElement("span");r.className="perm-verb",r.textContent=l.label,p.appendChild(r);const d=document.createElement("span");if(d.className="perm-body",l.map.size===0)d.classList.add("dim"),d.textContent=l.empty;else{const m=Array.from(l.map.entries()).sort((u,g)=>u[0].localeCompare(g[0]));for(let u=0;u<m.length;u++){const[g,h]=m[u],f=document.createElement("span");f.className="perm-token",f.textContent=g,f.title=`via ${Array.from(h).join(", ")}`,d.appendChild(f),u<m.length-1&&d.appendChild(document.createTextNode(" · "))}}p.appendChild(d),s.appendChild(p)}}function ke(e,t,a,o){if(Array.isArray(t))for(const n of t){let s=null;typeof n=="string"?s=n:n&&typeof n=="object"&&(s=n[a]||n.name||n.action||n.operation||n.pattern||null,s&&n.namespace&&(s=`${s}:${n.namespace}`),s&&n.intent&&(s=`${s}:${n.intent}`)),s&&(e.has(s)||e.set(s,new Set),e.get(s).add(o))}}function nn(e,{annotated:t,viewerName:a,isAnonymous:o,lineage:n,story:s}){const i=ze(e,o?"Your grants":`Your grants (as @${a})`);if(o){i.appendChild(le("Sign in to see your held ables."));return}if(t.length===0)i.appendChild(le("(you hold no granted ables)"));else for(const c of t)i.appendChild(an(c,a,s));if(n&&(n.mother||n.father)){const c=n.mother?ve(n.mother):null,l=n.father?ve(n.father):null;i.appendChild(se("lineage",[c&&`mother: ${c}`,l&&`father: ${l}`].filter(Boolean).join(" · ")))}}function an(e,t,a){var p;const o=document.createElement("div");o.className="grant-card";const n=document.createElement("div");n.className="grant-head";const s=document.createElement("strong");s.textContent=e.grant.able,n.appendChild(s);const i=document.createElement("span");i.className=e.reachesHere?"grant-status active":"grant-status dim",i.textContent=e.reachesHere?" ● reaches here":" ○ inert here",n.appendChild(i),o.appendChild(n);const c=document.createElement("div");c.className="grant-meta dim";const l=(p=e.host)!=null&&p.name?`host: ${e.host.name}`:`anchor: ${ve(e.grant.anchorSpaceId)}`;if(c.textContent=[l,e.grant.grantedBy?`granted by ${bn(e.grant.grantedBy)}`:null,e.grant.grantedAt?e.grant.grantedAt.slice(0,10):null].filter(Boolean).join(" · "),o.appendChild(c),t&&e.grant.grantedBy&&e.grant.grantedBy.toLowerCase()===t.toLowerCase()){const r=document.createElement("button");r.type="button",r.className="btn-warn btn-compact",r.textContent="revoke",r.addEventListener("click",async()=>{r.disabled=!0;try{await b.doOp(`${a}/@${t}`,"revoke-able",{able:e.grant.able,anchorSpaceId:e.grant.anchorSpaceId||null,anchorBeingId:e.grant.anchorBeingId||null,grantedBy:t}),r.textContent="revoked"}catch(d){r.textContent=`failed: ${(d==null?void 0:d.message)||d}`.slice(0,60),r.disabled=!1}}),o.appendChild(r)}return o}function on(e,{hostedHere:t}){const a=Ue(e,`Ables hosted here & inherited (${t.length})`);if(t.length===0){a.body.appendChild(le("(no ables hosted on this position or any ancestor)"));return}const o=document.createElement("input");o.type="text",o.placeholder="filter by name…",o.className="able-filter",a.body.appendChild(o);const n=document.createElement("div");n.className="hosted-list",a.body.appendChild(n);const s=t.map(i=>sn(i));for(const i of s)n.appendChild(i);o.addEventListener("input",()=>{const i=o.value.trim().toLowerCase();for(let c=0;c<t.length;c++){const l=t[c],p=!i||l.name.toLowerCase().includes(i);s[c].style.display=p?"":"none"}})}function sn(e){var i,c;const t=document.createElement("div");t.className="hosted-card";const a=document.createElement("div");a.className="hosted-head";const o=document.createElement("strong");o.textContent=e.name,a.appendChild(o);const n=document.createElement("span");if(n.className="hosted-where dim",n.textContent=e.viaInheritance?` · inherited from ${e.hostSpaceName}`:" · hosted here",a.appendChild(n),t.appendChild(a),(i=e.spec)!=null&&i.description){const l=document.createElement("div");l.className="hosted-desc dim",l.textContent=e.spec.description,t.appendChild(l)}const s=yn(e.spec);if(s){const l=document.createElement("div");l.className="hosted-can",l.textContent=s,t.appendChild(l)}if(Array.isArray((c=e.spec)==null?void 0:c.reach)&&e.spec.reach.length>0){const l=document.createElement("div");l.className="hosted-reach dim",l.textContent=`reach: ${e.spec.reach.join(", ")}`,t.appendChild(l)}return t}function cn(e,{positionAddress:t,effective:a,hostedHere:o,onResult:n}){const s=Ue(e,"Author / edit a able here");s.body.appendChild(le("Pickers below show ONLY canX you currently hold (so you can't author a able with abilities you can't grant). Owner of this space? You can pick from any of your held tokens regardless of source able."));const i=document.createElement("div");i.className="compact-form";const c=Ce("name","Able name (kebab-case)");if(i.appendChild(c.wrapper),o&&o.length>0){const u=document.createElement("div");u.className="field-row";const g=document.createElement("label");g.textContent="Load existing able to edit (optional)";const h=document.createElement("select");h.className="op-input";const f=document.createElement("option");f.value="",f.textContent="— start fresh —",h.appendChild(f);for(const C of o){const E=document.createElement("option");E.value=C.name,E.textContent=`${C.name} (${C.viaInheritance?"inherited":"here"})`,h.appendChild(E)}u.appendChild(g),u.appendChild(h),i.appendChild(u),h.addEventListener("change",()=>{const C=o.find(E=>E.name===h.value);C&&(c.input.value=C.name,ln(C.spec,l,p,r))})}const l={see:Se("canSee — pick from your held SEE ops",a.see),do:Se("canDo — pick from your held DO actions",a.do),summon:Se("canSummon — pick from your held targets",a.summon),be:Se("canBe — pick from your held BE ops",a.be)};for(const u of Object.keys(l))i.appendChild(l[u].wrapper);const p=Ce("reach","Reach (optional, comma-separated; e.g. /docs/**,!/legacy/**)"),r=Ce("description","Description (optional)");i.appendChild(p.wrapper),i.appendChild(r.wrapper);const d=document.createElement("div"),m=document.createElement("button");m.type="button",m.className="btn-primary",m.textContent="Install / replace able at this space",m.addEventListener("click",async()=>{m.disabled=!0,d.textContent="";const u=c.input.value.trim();if(!u){d.className="action-result action-err",d.textContent="Able name is required.",m.disabled=!1;return}const g={name:u,canSee:l.see.collect().map(C=>C),canDo:l.do.collect().map(C=>({action:C})),canSummon:l.summon.collect().map(C=>({pattern:C})),canBe:l.be.collect().map(C=>({operation:C}))},h=gn(p.input.value);h.length>0&&(g.reach=h);const f=r.input.value.trim();f&&(g.description=f);try{await b.doOp(t,"set-able",{name:u,spec:g}),d.className="action-result action-ok",d.textContent=`installed "${u}" at this space`,n==null||n(null)}catch(C){d.className="action-result action-err",d.textContent=(C==null?void 0:C.message)||String(C),m.disabled=!1,n==null||n(C)}}),i.appendChild(m),i.appendChild(d),s.body.appendChild(i)}function Se(e,t,a){const o=document.createElement("div");o.className="field-row picker-group";const n=document.createElement("label");n.textContent=e,o.appendChild(n);const s=document.createElement("div");s.className="picker-box",o.appendChild(s);const i=Array.from(t.keys()).sort();if(i.length===0){const r=document.createElement("div");r.className="dim picker-empty",r.textContent="(no available tokens to grant from this verb)",s.appendChild(r)}const c=new Map;for(const r of i){const d=`pick-${e.replace(/[^a-z]/gi,"")}-${r.replace(/[^a-z0-9]/gi,"")}`,m=document.createElement("label");m.className="picker-item",m.htmlFor=d;const u=document.createElement("input");u.type="checkbox",u.id=d,u.value=r,m.appendChild(u);const g=document.createElement("span");g.textContent=` ${r}`;const h=t.get(r);h&&h.size>0&&(g.title=`via ${Array.from(h).join(", ")}`),m.appendChild(g),s.appendChild(m),c.set(r,u)}function l(){const r=[];for(const[d,m]of c.entries())m.checked&&r.push(d);return r}function p(r){for(const[d,m]of c.entries())m.checked=r.has(d)}return{wrapper:o,collect:l,setSelection:p}}function ln(e,t,a,o){const n=(s,i)=>Array.isArray(s)?new Set(s.map(c=>typeof c=="string"?c:(c==null?void 0:c[i])||(c==null?void 0:c.name)||null).filter(Boolean)):new Set;t.see.setSelection(n(e==null?void 0:e.canSee,"name")),t.do.setSelection(n(e==null?void 0:e.canDo,"action")),t.summon.setSelection(n(e==null?void 0:e.canSummon,"pattern")),t.be.setSelection(n(e==null?void 0:e.canBe,"operation")),a.input.value=Array.isArray(e==null?void 0:e.reach)?e.reach.join(", "):"",o.input.value=typeof(e==null?void 0:e.description)=="string"?e.description:""}function rn(e,{heldAbles:t,story:a,onResult:o}){const n=Ue(e,"Grant a able to a being");n.body.appendChild(le('The substrate admits if any of your held ables has canDo:["grant-able:<able>"] (or grant-able:*) reaching the anchor.'));const s=document.createElement("div");s.className="compact-form";const i=document.createElement("div");i.className="field-row";const c=document.createElement("label");c.textContent="Able to grant";const l=document.createElement("select");l.className="op-input";for(const u of t){const g=document.createElement("option");g.value=u.grant.able,g.textContent=u.grant.able,l.appendChild(g)}i.appendChild(c),i.appendChild(l),s.appendChild(i);const p=Ce("grantee","Grantee (name, beingId, or full IBPA — e.g. alice, <uuid>, bing.com/@tabor)"),r=Ce("anchor","Anchor space id (defaults to current position)");s.appendChild(p.wrapper),s.appendChild(r.wrapper);const d=document.createElement("div"),m=document.createElement("button");m.type="button",m.className="btn-primary",m.textContent="Grant able",m.addEventListener("click",async()=>{var C,E,y,w,N,k;m.disabled=!0,d.textContent="";const u=l.value,g=p.input.value.trim();if(!g){d.className="action-result action-err",d.textContent="Grantee is required.",m.disabled=!1;return}let h=r.input.value.trim()||null;if(h||(h=((y=(E=(C=b.state)==null?void 0:C.descriptor)==null?void 0:E.address)==null?void 0:y.spaceId)||((k=(N=(w=b.state)==null?void 0:w.descriptor)==null?void 0:N.position)==null?void 0:k.spaceId)||null),!h){d.className="action-result action-err",d.textContent="Could not resolve an anchor space.",m.disabled=!1;return}const f=Cn(g,a);try{await b.doOp(f,"grant-able",{able:u,anchorSpaceId:h,anchorBeingId:null}),d.className="action-result action-ok",d.textContent=`granted "${u}" to ${f}`,o==null||o(null)}catch(v){d.className="action-result action-err",d.textContent=(v==null?void 0:v.message)||String(v),m.disabled=!1,o==null||o(v)}}),s.appendChild(m),s.appendChild(d),n.body.appendChild(s)}async function ft(e,t){var s,i,c,l,p,r;const a=(s=b.state)==null?void 0:s.client;if(!a)return null;const n=(((i=e.address)==null?void 0:i.pathByNames)||"/").replace(/^\/+|\/+$/g,"").split("/").filter(Boolean);for(let d=n.length;d>=0;d--){const m="/"+n.slice(0,d).join("/");let u=null;try{u=await a.see(`${t}${m==="/"?"/":m}`)}catch{continue}const g=dn(u);if(!g)continue;const h=((c=u==null?void 0:u.space)==null?void 0:c.name)||((l=u==null?void 0:u.address)==null?void 0:l.spaceName)||(m==="/"?"story root":m),f=((p=u==null?void 0:u.space)==null?void 0:p._id)||((r=u==null?void 0:u.address)==null?void 0:r.spaceId)||null,E=(Array.isArray(u.beings)?u.beings:[]).find(k=>String((k==null?void 0:k._id)||(k==null?void 0:k.id))===String(g)),y=(E==null?void 0:E.being)||(E==null?void 0:E.name)||null,w=y==="public";return{spaceId:f,hostName:h,ownerNames:w?[]:y?[y]:[],publicCommons:w}}return null}function dn(e){var t;return((t=e==null?void 0:e.space)==null?void 0:t.owner)||(e==null?void 0:e.owner)||null}async function pn(e,t){var c,l;const a=(c=b.state)==null?void 0:c.client;if(!a)return[];const o=new Set,n=[],s=((l=e.address)==null?void 0:l.pathByNames)||"/";await Qe(a,t,s,o,n,!1);const i=s.replace(/^\/+|\/+$/g,"").split("/").filter(Boolean);for(let p=i.length-1;p>=0;p--){const r="/"+i.slice(0,p).join("/");await Qe(a,t,r||"/",o,n,!0)}return n}async function Qe(e,t,a,o,n,s){var r,d,m,u,g,h,f;let i=null;try{i=await e.see(`${t}${a==="/"?"/":a}`)}catch{return}const c=((d=(r=i==null?void 0:i.space)==null?void 0:r.qualities)==null?void 0:d.ables)||((m=i==null?void 0:i.qualities)==null?void 0:m.ables)||null;if(!c||typeof c!="object")return;const l=((u=i==null?void 0:i.space)==null?void 0:u.name)||((g=i==null?void 0:i.address)==null?void 0:g.spaceName)||(a==="/"?"story root":a),p=((h=i==null?void 0:i.space)==null?void 0:h._id)||((f=i==null?void 0:i.address)==null?void 0:f.spaceId)||null;for(const[C,E]of Object.entries(c))o.has(C)||(o.add(C),n.push({name:C,spec:E,hostSpaceName:l,hostSpaceId:p,viaInheritance:s}))}async function mn(e,t,a){var r;const o=(r=b.state)==null?void 0:r.client;if(!o)return{grants:[],lineage:null};let n=null;try{n=await o.see(`${t}/@${e}`)}catch{return{grants:[],lineage:null}}const i=(Array.isArray(n==null?void 0:n.beings)?n.beings:[]).find(d=>String(d==null?void 0:d.being).toLowerCase()===e.toLowerCase()||String(d==null?void 0:d.name).toLowerCase()===e.toLowerCase()),c=(i==null?void 0:i.qualities)||{},l=Array.isArray(c==null?void 0:c.ablesGranted)?c.ablesGranted:[],p=(c==null?void 0:c.lineage)||null;return{grants:l,lineage:p}}async function un(e,t,a,o){const n=new Map;for(const i of t)n.has(i.name)||n.set(i.name,i);const s=[];for(const i of e){let c=null,l=null;const p=n.get(i.able);if(p)l=p.spec,c={spaceId:p.hostSpaceId,name:p.hostSpaceName};else if(i.anchorSpaceId){const d=await hn(i.anchorSpaceId,i.able,o);l=d.spec,c=d.host}const r=!!(l&&c&&await fn(a,c.spaceId,l,o));s.push({grant:i,spec:l,host:c,reachesHere:r})}return s}async function hn(e,t,a){var i,c,l,p,r,d,m,u,g,h;const o=(i=b.state)==null?void 0:i.client;if(!o)return{spec:null,host:null};let n=e,s=0;for(;n&&s<12;){s++;let f=null;try{f=await o.see(`${a}/${n}`)}catch{return{spec:null,host:null}}const C=((l=(c=f==null?void 0:f.space)==null?void 0:c.qualities)==null?void 0:l.ables)||((p=f==null?void 0:f.qualities)==null?void 0:p.ables)||{},E=C==null?void 0:C[t];if(E)return{spec:E,host:{spaceId:((r=f==null?void 0:f.space)==null?void 0:r._id)||((d=f==null?void 0:f.address)==null?void 0:d.spaceId)||n,name:((m=f==null?void 0:f.space)==null?void 0:m.name)||((u=f==null?void 0:f.address)==null?void 0:u.spaceName)||"(unknown)"}};n=((g=f==null?void 0:f.space)==null?void 0:g.parent)||((h=f==null?void 0:f.address)==null?void 0:h.parent)||null}return{spec:null,host:null}}async function fn(e,t,a,o){var c,l,p;if(!e||!t)return!1;if(String(e)===String(t))return!0;const n=(c=b.state)==null?void 0:c.client;if(!n)return!1;let s=e,i=0;for(;s&&i<12;){if(i++,String(s)===String(t))return!0;let r=null;try{r=await n.see(`${o}/${s}`)}catch{return!1}s=((l=r==null?void 0:r.space)==null?void 0:l.parent)||((p=r==null?void 0:r.address)==null?void 0:p.parent)||null}return!1}function ze(e,t){const a=document.createElement("section");a.className="rp-section";const o=document.createElement("h3");return o.className="rp-title",o.textContent=t,a.appendChild(o),e.appendChild(a),a}function Ue(e,t){const a=document.createElement("section");a.className="rp-section rp-collapsible";const o=document.createElement("h3");o.className="rp-title rp-clickable",o.textContent=`▸ ${t}`,a.appendChild(o);const n=document.createElement("div");n.className="rp-body",n.style.display="none",a.appendChild(n);let s=!1;return o.addEventListener("click",()=>{s=!s,o.textContent=(s?"▾ ":"▸ ")+t,n.style.display=s?"":"none"}),e.appendChild(a),{sec:a,body:n}}function se(e,t){const a=document.createElement("div");a.className="kv-row";const o=document.createElement("span");o.className="kv-key dim",o.textContent=`${e}: `;const n=document.createElement("span");return n.textContent=t,a.appendChild(o),a.appendChild(n),a}function le(e){const t=document.createElement("div");return t.className="rp-note dim",t.textContent=e,t}function Ce(e,t){const a=document.createElement("div");a.className="field-row";const o=document.createElement("label");o.textContent=t;const n=document.createElement("input");return n.type="text",n.name=e,n.className="op-input",a.appendChild(o),a.appendChild(n),{wrapper:a,input:n}}function gn(e){return typeof e!="string"?[]:e.split(",").map(t=>t.trim()).filter(Boolean)}function Cn(e,t){const a=e.trim();if(a.includes("/"))return a;const o=a.startsWith("@")?a.slice(1):a;return`${t}/@${o}`}function ve(e){if(!e)return"";const t=String(e);return t.length>12?`${t.slice(0,8)}…`:t}function bn(e){return e==="i-am"?"I-Am":e==="auto-on-entry"?"auto-on-entry":ve(e)}function yn(e){if(!e)return null;const t=[],a=(o,n,s)=>{if(!Array.isArray(o)||o.length===0)return;const i=o.map(c=>typeof c=="string"?c:(c==null?void 0:c[s])||(c==null?void 0:c.name)||"").filter(Boolean);i.length!==0&&t.push(`${n}: ${i.join(", ")}`)};return a(e.canSee,"see","name"),a(e.canDo,"do","action"),a(e.canSummon,"summon","pattern"),a(e.canBe,"be","operation"),t.length>0?t.join(" · "):null}async function et(e,t,a,{refreshView:o,mode:n}={}){var N,k,v,$,L,S,q,O,M,x,A;e.innerHTML="";const s=((N=t.values)==null?void 0:N.descriptor)||((k=b.state)==null?void 0:k.descriptor)||{},i=(($=(v=b.state)==null?void 0:v.discovery)==null?void 0:$.story)||((L=s.address)==null?void 0:L.story)||((S=s.address)==null?void 0:S.place)||"",c=((q=s.address)==null?void 0:q.pathByNames)||"/",l=`${i}${c==="/"?"/":c}`,p=((O=s.address)==null?void 0:O.spaceId)||((M=s.position)==null?void 0:M.spaceId)||((x=s.space)==null?void 0:x._id)||null,r=`${i}/`,d=((A=b.state)==null?void 0:A.session)||{},m=(d.username||d.name||"").trim(),u=d.beingId||null,g=!m||m==="arrival",h=n==="story";if(await En(e,{story:i,viewerBeingId:u,viewerName:m,positionSpaceId:p,isAnonymous:g}),g){e.appendChild(te("Sign in to manage LLM connections."));return}const f=Ct(e,"Your connections"),C=document.createElement("div");f.appendChild(C),await qe(C,{refreshSelf:()=>{C.innerHTML="",qe(C,{refreshSelf:()=>{},refreshChain:()=>he(e,i,u,p)})}});const E=Ae(e,"Add a connection");vn(E.body,{onResult:H=>{H||(C.innerHTML="",qe(C,{refreshSelf:()=>{},refreshChain:()=>he(e,i,u,p)}))}});const y=Ae(e,`@${m}'s LLM (your being)`);if($n(y.body,{label:"your being",onAssign:async({slot:H,connectionId:F})=>{await b.doOp(l,"assign-slot",{slot:H,connectionId:F})},afterChange:()=>he(e,i,u,p)}),!h){const H=Ae(e,"This space's LLM defaults");H.body.appendChild(te("Owner-gated. Sets qualities.llm on this space — beings standing here pick this up via step 2/3 of the chain.")),tt(H.body,{isStory:!1,address:l,afterChange:()=>he(e,i,u,p)})}const w=Ae(e,h?"Story LLM defaults":"Story LLM defaults (angel-only)");w.body.appendChild(te("Angel-gated. Sets qualities.llm on the story root — the floor everyone falls through to at step 4 of the chain.")),tt(w.body,{isStory:!0,address:r,afterChange:()=>he(e,i,u,p)})}async function En(e,{story:t,viewerBeingId:a,viewerName:o,positionSpaceId:n,isAnonymous:s}){const i=Ct(e,"What LLM will be used");if(i.id="llm-chain-section",s){i.appendChild(te("Anonymous visitors get no LLM resolution (no acting identity to chain back from)."));return}const c=a,l=document.createElement("div");i.appendChild(l),await gt(l,{story:t,receiverBeingId:c,actorBeingId:a,positionSpaceId:n})}async function he(e,t,a,o){const n=e.querySelector("#llm-chain-section");if(!n)return;const s=n.querySelector(".rp-title");n.innerHTML="",s&&n.appendChild(s);const i=document.createElement("div");n.appendChild(i),await gt(i,{story:t,receiverBeingId:a,actorBeingId:a,positionSpaceId:o})}async function gt(e,{story:t,receiverBeingId:a,actorBeingId:o,positionSpaceId:n}){e.appendChild(te("Loading chain…"));let s;try{s=await b.state.client.see("llm-chain",{args:{receiverBeingId:a,actorBeingId:o,receiverSpaceId:n,able:"main"}})}catch(l){e.innerHTML="",e.appendChild(bt(`chain fetch failed: ${(l==null?void 0:l.message)||l}`));return}e.innerHTML="";const i=(s==null?void 0:s.chosen)||null;if(i){const l=document.createElement("div");l.className="llm-chosen",l.innerHTML=`<strong>${be(i.model||i.name||i.connectionId.slice(0,12))}</strong> <span class="dim">via step ${i.step} · ${i.source}</span>`,e.appendChild(l)}else{const l=document.createElement("div");l.className="llm-chosen dim",l.textContent=`(no LLM resolves — ${(s==null?void 0:s.reason)||"no connections found"})`,e.appendChild(l)}const c=Array.isArray(s==null?void 0:s.chain)?s.chain:[];if(c.length>0){const l=document.createElement("ul");l.className="llm-chain-list";for(const p of c){const r=document.createElement("li"),d=i&&p.connectionId===i.connectionId&&p.step===i.step&&p.source===i.source;r.innerHTML=`<span class="dim">step ${p.step}</span> <span class="llm-source">${be(p.source)}</span> <span>${be(p.model||p.name||p.connectionId.slice(0,10))}</span>`,d&&r.classList.add("llm-chosen-row"),l.appendChild(r)}e.appendChild(l)}}async function qe(e,{refreshSelf:t,refreshChain:a}={}){e.appendChild(te("Loading connections…"));let o;try{o=await b.state.client.see("llm-connections")}catch(i){e.innerHTML="",e.appendChild(bt(`connections fetch failed: ${(i==null?void 0:i.message)||i}`));return}e.innerHTML="";const n=Array.isArray(o==null?void 0:o.connections)?o.connections:[];if(n.length===0){e.appendChild(te("(no connections — add one below)"));return}const s=(o==null?void 0:o.slots)||{};for(const i of n){const c=document.createElement("div");c.className="llm-conn-card";const l=document.createElement("div");l.className="llm-conn-head",l.innerHTML=`<strong>${be(i.model||i.name)}</strong> <span class="dim">${be(i.name||"")}</span>`,c.appendChild(l);const p=document.createElement("div");p.className="llm-conn-meta dim",p.textContent=`${i.baseUrl||"(no base url)"} · id: ${i.connectionId.slice(0,10)}…`,c.appendChild(p);const r=Object.entries(s).filter(([,m])=>String(m)===String(i.connectionId)).map(([m])=>m);if(r.length>0){const m=document.createElement("div");m.className="llm-conn-slots",m.textContent=`bound to slot: ${r.join(", ")}`,c.appendChild(m)}const d=document.createElement("button");d.type="button",d.className="btn-warn btn-compact",d.textContent="delete",d.addEventListener("click",async()=>{var m,u;if(confirm(`Delete connection "${i.model||i.name}"?`)){d.disabled=!0;try{await b.doOp(((u=(m=b.state)==null?void 0:m.discovery)==null?void 0:u.story)+"/","delete-llm",{connectionId:i.connectionId}),t==null||t(),a==null||a()}catch(g){d.textContent=`failed: ${(g==null?void 0:g.message)||g}`.slice(0,60),d.disabled=!1}}}),c.appendChild(d),e.appendChild(c)}}function vn(e,{onResult:t}){const a=document.createElement("div");a.className="compact-form";const o=ce("name","Name (optional, e.g. 'my-claude')"),n=ce("baseUrl","Base URL (e.g. https://api.anthropic.com)"),s=ce("model","Model (e.g. claude-3-5-sonnet-20241022)"),i=ce("apiKey","API key (stored encrypted on your being)");i.input.type="password";for(const p of[o,n,s,i])a.appendChild(p.wrapper);const c=document.createElement("div"),l=document.createElement("button");l.type="button",l.className="btn-primary",l.textContent="Add connection",l.addEventListener("click",async()=>{var d,m;l.disabled=!0,c.textContent="";const p=n.input.value.trim(),r=s.input.value.trim();if(!p||!r){c.className="action-result action-err",c.textContent="baseUrl and model are required.",l.disabled=!1;return}try{await b.doOp(((m=(d=b.state)==null?void 0:d.discovery)==null?void 0:m.story)+"/","add-llm",{name:o.input.value.trim()||null,baseUrl:p,model:r,apiKey:i.input.value||null}),c.className="action-result action-ok",c.textContent="Added.",i.input.value="",t==null||t(null)}catch(u){c.className="action-result action-err",c.textContent=(u==null?void 0:u.message)||String(u),l.disabled=!1,t==null||t(u)}}),a.appendChild(l),a.appendChild(c),e.appendChild(a)}async function $n(e,{onAssign:t,afterChange:a}){let o=[];try{const m=await b.state.client.see("llm-connections");o=Array.isArray(m==null?void 0:m.connections)?m.connections:[]}catch{}if(o.length===0){e.appendChild(te("Add a connection first, then come back here to assign it to a slot."));return}const n=document.createElement("div");n.className="compact-form";const s=ce("slot","Slot name (default, main, coder, writer, …)");s.input.value="main";const i=document.createElement("div");i.className="field-row";const c=document.createElement("label");c.textContent="Connection";const l=document.createElement("select");l.className="op-input";const p=document.createElement("option");p.value="",p.textContent="(unset slot — clears it)",l.appendChild(p);for(const m of o){const u=document.createElement("option");u.value=m.connectionId,u.textContent=`${m.model||m.name||m.connectionId.slice(0,10)} (${m.connectionId.slice(0,8)})`,l.appendChild(u)}i.appendChild(c),i.appendChild(l),n.appendChild(s.wrapper),n.appendChild(i);const r=document.createElement("div"),d=document.createElement("button");d.type="button",d.className="btn-primary",d.textContent="Assign slot",d.addEventListener("click",async()=>{d.disabled=!0,r.textContent="";const m=s.input.value.trim(),u=l.value||null;if(!m){r.className="action-result action-err",r.textContent="Slot name is required.",d.disabled=!1;return}try{await t({slot:m,connectionId:u}),r.className="action-result action-ok",r.textContent=u?`Assigned ${m}.`:`Cleared ${m}.`,d.disabled=!1,a==null||a()}catch(g){r.className="action-result action-err",r.textContent=(g==null?void 0:g.message)||String(g),d.disabled=!1}}),n.appendChild(d),n.appendChild(r),e.appendChild(n)}function tt(e,{isStory:t,address:a,afterChange:o}){const n=document.createElement("div");n.className="compact-form";const s=ce("default","Default fallback connectionIds (comma-separated)"),i=ce("slots",'Per-able slots as JSON: {"coder":["<id1>","<id2>"]}'),c=He("preferOwn","preferOwn (this container's connections jump to front within its step)"),l=He("forceActor","forceActor (chain skips remaining receiver-side, jumps to actor side)"),p=He("forceReceiver","forceReceiver (chain caps at this container's step; actor side never runs)");n.appendChild(s.wrapper),n.appendChild(i.wrapper),n.appendChild(c.wrapper),n.appendChild(l.wrapper),n.appendChild(p.wrapper);const r=document.createElement("div"),d=document.createElement("button");d.type="button",d.className="btn-primary",d.textContent=t?"Save story defaults":"Save space defaults",d.addEventListener("click",async()=>{d.disabled=!0,r.textContent="";const m=s.input.value.split(",").map(f=>f.trim()).filter(Boolean);let u=null;const g=i.input.value.trim();if(g)try{u=JSON.parse(g)}catch{r.className="action-result action-err",r.textContent='Slots must be valid JSON: {"able":["id",…]}',d.disabled=!1;return}if(l.input.checked&&p.input.checked){r.className="action-result action-err",r.textContent="forceActor and forceReceiver are mutually exclusive.",d.disabled=!1;return}const h={};m.length>0&&(h.default=m),u&&(h.slots=u),c.input.checked&&(h.preferOwn=!0),l.input.checked&&(h.forceActor=!0),p.input.checked&&(h.forceReceiver=!0);try{const f=t?"set-story-llm":"set-space-llm";await b.doOp(a,f,h),r.className="action-result action-ok",r.textContent="Saved.",d.disabled=!1,o==null||o()}catch(f){r.className="action-result action-err",r.textContent=(f==null?void 0:f.message)||String(f),d.disabled=!1}}),n.appendChild(d),n.appendChild(r),e.appendChild(n)}function Ct(e,t){const a=document.createElement("section");a.className="rp-section";const o=document.createElement("h3");return o.className="rp-title",o.textContent=t,a.appendChild(o),e.appendChild(a),a}function Ae(e,t){const a=document.createElement("section");a.className="rp-section rp-collapsible";const o=document.createElement("h3");o.className="rp-title rp-clickable",o.textContent=`▸ ${t}`,a.appendChild(o);const n=document.createElement("div");n.className="rp-body",n.style.display="none",a.appendChild(n);let s=!1;return o.addEventListener("click",()=>{s=!s,o.textContent=(s?"▾ ":"▸ ")+t,n.style.display=s?"":"none"}),e.appendChild(a),{sec:a,body:n}}function te(e){const t=document.createElement("div");return t.className="rp-note dim",t.textContent=e,t}function bt(e){const t=document.createElement("div");return t.className="rp-note action-err",t.textContent=e,t}function ce(e,t){const a=document.createElement("div");a.className="field-row";const o=document.createElement("label");o.textContent=t;const n=document.createElement("input");return n.type="text",n.name=e,n.className="op-input",a.appendChild(o),a.appendChild(n),{wrapper:a,input:n}}function He(e,t){const a=document.createElement("div");a.className="field-row check-row";const o=document.createElement("label"),n=document.createElement("input");n.type="checkbox",n.name=e,o.appendChild(n);const s=document.createElement("span");return s.textContent=" "+t,o.appendChild(s),a.appendChild(o),{wrapper:a,input:n}}function be(e){return String(e||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}async function Je(e,t,a,{refreshView:o}={}){var u,g,h;e.innerHTML="";const n=((u=b.state)==null?void 0:u.session)||{},s=(n.username||n.name||"").trim(),i=!s||s==="arrival",c=An(e,"Your inbox");if(i){c.appendChild(nt("Sign in to see your inbox."));return}const l=((h=(g=b.state)==null?void 0:g.discovery)==null?void 0:h.story)||"",p=()=>Je(e,t,a,{refreshView:o});let r;try{r=await b.state.client.see("my-inbox")}catch(f){c.appendChild(Ln(`failed to load inbox: ${(f==null?void 0:f.message)||f}`));return}const d=Array.isArray(r==null?void 0:r.pending)?r.pending:[];if(d.length===0){c.appendChild(nt("(no pending summons)"));return}const m=document.createElement("div");m.className="rp-note dim",m.textContent=`${d.length} pending`,c.appendChild(m);for(const f of d)wn(c,f,{story:l,refresh:p})}function wn(e,t,{story:a,refresh:o}){const n=document.createElement("div");n.className="inbox-card";const s=document.createElement("div");s.className="inbox-head";const i=t.intent?`<strong>${Ie(t.intent)}</strong>`:'<span class="dim">generic summon</span>',c=t.summonerName?`@${Ie(t.summonerName)}`:t.summoner?`(${Ie(String(t.summoner).slice(0,8))})`:"(unknown)";s.innerHTML=`${i} <span class="dim">from ${c}</span>`,n.appendChild(s);const l=document.createElement("div");l.className="inbox-meta dim";const p=t.sentAt?new Date(t.sentAt).toLocaleString():"(no date)";l.textContent=`${p} · priority: ${t.priority||"?"} · history: ${t.history||"?"}`,n.appendChild(l),Nn(n,t),xn(n,t,{story:a,refresh:o}),e.appendChild(n)}function Nn(e,t){var s;const a=document.createElement("div");a.className="inbox-body";const o=((s=t.render)==null?void 0:s.body)||null;if(o&&typeof o.html=="string"){a.innerHTML=o.html,e.appendChild(a);return}if(o&&typeof o.text=="string"){a.textContent=o.text,e.appendChild(a);return}const n=t.content||{};typeof n=="string"&&n.length?a.textContent=n:n&&typeof n.message=="string"?a.textContent=n.message:n&&typeof n=="object"&&(a.innerHTML=`<pre class="dim inbox-json">${Ie(JSON.stringify(n,null,2))}</pre>`),e.appendChild(a)}function xn(e,t,{story:a,refresh:o}){const n=document.createElement("div");n.className="inbox-actions";const s=t.render;if((s==null?void 0:s.shape)==="action-buttons"&&Array.isArray(s.buttons)){for(const r of s.buttons){const d=In(r);r.disabled||d.addEventListener("click",()=>kn(t,r,{story:a,refresh:o,btn:d})),n.appendChild(d)}e.appendChild(n);return}const i=s&&typeof s.placeholder=="string"?s.placeholder:"type a reply…",c=!s||s.allowDismiss!==!1,l=document.createElement("input");l.type="text",l.className="inbox-reply",l.placeholder=i,n.appendChild(l);const p=De("reply","btn-ok");if(p.addEventListener("click",()=>{const r=l.value.trim();r&&_e(t,{message:r},{story:a,refresh:o,btn:p})}),n.appendChild(p),c){const r=De("dismiss","btn-warn");r.addEventListener("click",()=>_e(t,{result:"dismissed"},{story:a,refresh:o,btn:r})),n.appendChild(r)}e.appendChild(n)}async function kn(e,t,{story:a,refresh:o,btn:n}){n.disabled=!0;const s=Array.isArray(t.ops)?t.ops:[];for(const i of s){if(!i||typeof i!="object")continue;const{target:c,action:l,args:p}=i;if(!(!c||!l))try{await b.doOp(c,l,p||{})}catch(r){n.textContent=`${l} failed: ${(r==null?void 0:r.message)||r}`.slice(0,80),n.disabled=!1;return}}if(t.reply){await _e(e,t.reply.content||{},{story:a,refresh:o,btn:n});return}o()}async function _e(e,t,{story:a,refresh:o,btn:n}){n&&(n.disabled=!0);const s=await Sn(e,a);if(!s){n&&(n.textContent="no addressable summoner",n.disabled=!1);return}try{await b.state.client.call(s,{content:t,inReplyTo:e.correlation}),o()}catch(i){n&&(n.textContent=`reply failed: ${(i==null?void 0:i.message)||i}`.slice(0,80),n.disabled=!1)}}async function Sn(e,t){var a,o;if(e.summonerName)return`${t}/@${e.summonerName}`;if(!e.summoner)return null;try{const n=await b.state.client.see(`${t}/.beings/${e.summoner}`),s=((a=n==null?void 0:n.directoryEntry)==null?void 0:a.name)||(n==null?void 0:n.name)||((o=n==null?void 0:n.being)==null?void 0:o.name);if(s)return`${t}/@${s}`}catch(n){console.warn("[inbox-panel] summoner directory SEE failed:",(n==null?void 0:n.message)||n)}return null}function An(e,t){const a=document.createElement("section");a.className="rp-section";const o=document.createElement("h3");return o.className="rp-title",o.textContent=t,a.appendChild(o),e.appendChild(a),a}function nt(e){const t=document.createElement("div");return t.className="rp-note dim",t.textContent=e,t}function Ln(e){const t=document.createElement("div");return t.className="rp-note action-err",t.textContent=e,t}function De(e,t){const a=document.createElement("button");return a.type="button",a.className=`${t} btn-compact`,a.textContent=e,a}function In(e){const t=e.kind||"neutral",a=t==="ok"?"btn-ok":t==="warn"?"btn-warn":"btn-neutral",o=De(e.label||"?",a);return e.disabled&&(o.disabled=!0,o.title=e.disabled,o.classList.add("btn-disabled")),o}function Ie(e){return String(e||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;")}const V={MIME_EXACT:100,EXTENSION:90,MIME_WILDCARD:80,URL_PATTERN:70,SCHEME:60,FLOOR:50,TEXT_BASE:20};function yt(e){return typeof e!="string"||!e.length?null:e.split(";")[0].trim().toLowerCase()||null}function Bn(e){if(typeof e!="string")return null;const t=e.lastIndexOf(".");return t<=0||t===e.length-1?null:e.slice(t).toLowerCase()}function On(e){if(typeof e!="string"||!e.length)return null;const t=e.match(/^([a-z][a-z0-9+.-]*):\/\/(.+)$/i);return t?{scheme:t[1].toLowerCase(),rest:t[2].toLowerCase()}:null}const Tn=/^(?:[a-zA-Z0-9.\-_]+(?:#[^/]+)?|#[^/]+)\/.*$/;function Et(e,t){return!e||!t?null:e===t?"exact":e==="*/*"||e.endsWith("/*")&&t.startsWith(e.slice(0,-1))?"wildcard":null}function Mn(e,t){const a=yt(t==null?void 0:t.mimeType),o=Bn(t==null?void 0:t.fileName),n=On(typeof(t==null?void 0:t.url)=="string"?t.url.trim():null),s=typeof(t==null?void 0:t.text)=="string"&&t.text.length>0,i=!!(a||o);if(!a&&!o&&!n&&!s)return[];const c=new Map,l=(m,u,g)=>{const h=c.get(m);(!h||u>h.score)&&c.set(m,{score:u,reason:g})};for(const m of e||[]){const u=m.claims,g=(u==null?void 0:u.priority)||0;if(u){if(a&&Array.isArray(u.mimeTypes))for(const h of u.mimeTypes){const f=Et(h,a);f==="exact"?l(m.name,V.MIME_EXACT+g,`mime ${a}`):f==="wildcard"&&l(m.name,V.MIME_WILDCARD+g,`mime ${h}`)}if(o&&Array.isArray(u.extensions)&&u.extensions.includes(o)&&l(m.name,V.EXTENSION+g,`extension ${o}`),n&&Array.isArray(u.urlPatterns))for(const h of u.urlPatterns)h&&n.rest.includes(h)&&l(m.name,V.URL_PATTERN+g,`url matches "${h}"`);n&&Array.isArray(u.schemes)&&u.schemes.includes(n.scheme)&&l(m.name,V.SCHEME+g,`scheme ${n.scheme}`)}s&&!i&&!n&&(m.contentKinds||[]).includes("text")&&l(m.name,V.TEXT_BASE+g,"accepts text")}const p=m=>(e||[]).some(u=>u.name===m),r=typeof(t==null?void 0:t.url)=="string"?t.url.trim():null,d=typeof(t==null?void 0:t.ibpa)=="string"?t.ibpa.trim():null;return r&&p("http")&&l("http",V.FLOOR,"an http link — website content"),d&&Tn.test(d)&&p("ibpa")&&l("ibpa",V.FLOOR,"an IBP address — a doorway to another world"),(o===".glb"||o===".gltf"||a==="model/gltf-binary"||a==="model/gltf+json")&&p("model")&&l("model",V.FLOOR,"a 3D model"),i&&!r&&!d&&p("file")&&l("file",V.FLOOR-1,"bytes of a file"),s&&!i&&!r&&!d&&p("generic")&&l("generic",V.FLOOR,"bare text — a context chunk"),[...c.entries()].map(([m,{score:u,reason:g}])=>({type:m,score:u,reason:g})).sort((m,u)=>u.score-m.score||m.type.localeCompare(u.type))}function Fe(e){return Number.isFinite(e)?e>=1024*1024?`${(e/1024/1024).toFixed(1)}MB`:e>=1024?`${(e/1024).toFixed(0)}KB`:`${e}B`:""}function jn(e,t){if(!Array.isArray(e)||e.length===0)return!0;const a=yt(t);return a?e.some(o=>Et(o.toLowerCase(),a)!==null):!1}function qn(e,t,{refreshView:a}={}){var H,F,D,P;const o=((F=(H=b.state)==null?void 0:H.discovery)==null?void 0:F.matterTypes)||[],n=((P=(D=b.state)==null?void 0:D.discovery)==null?void 0:P.upload)||{enabled:!0,maxUploadBytes:null,allowedMimeTypes:null},s=(I,j,z)=>{const W=document.createElement(I);return j&&(W.className=j),z!=null&&(W.textContent=z),W},i=s("div","op-form"),c=s("div","op-form-note dim","Pick what kind of matter to place — the form shows that type's inputs.");i.appendChild(c);const l=s("div","op-field");l.appendChild(s("label",null,"type"));const p=document.createElement("select");p.className="op-input",l.appendChild(p),i.appendChild(l);let r=null;const d=s("div","op-field");d.appendChild(s("label",null,"file"));const m=document.createElement("input");m.type="file",m.className="op-input",d.appendChild(m),i.appendChild(d);const u=s("div","op-field");u.appendChild(s("label",null,"url (www — an http link)"));const g=document.createElement("input");g.type="text",g.placeholder="https://example.com/page",g.className="op-input",u.appendChild(g),i.appendChild(u);const h=s("div","op-field");h.appendChild(s("label",null,"ibpa (a doorway — another story / history)"));const f=document.createElement("input");f.type="text",f.placeholder="other.world#0/library  or  #1a/<spaceId>",f.className="op-input",h.appendChild(f),i.appendChild(h);const C=s("div","op-field");C.appendChild(s("label",null,"text (a context chunk)"));const E=document.createElement("textarea");E.rows=4,E.className="op-input op-input-json",C.appendChild(E),i.appendChild(C);const y=s("div","op-field");y.appendChild(s("label",null,"name (optional)"));const w=document.createElement("input");w.type="text",w.className="op-input",y.appendChild(w),i.appendChild(y);const N=I=>{var W,Y;if(!I)return{file:!0,url:!0,ibpa:!0,text:!0};const j=o.find(J=>J.name===I);if(!j)return{file:!0,url:!0,ibpa:!0,text:!0};const z=j.contentKinds||[];return{file:z.includes("binary"),text:z.includes("text"),url:!!((Y=(W=j.claims)==null?void 0:W.schemes)!=null&&Y.length),ibpa:j.name==="ibpa"}},k=()=>{const I=N(p.value||null);d.style.display=I.file?"":"none",u.style.display=I.url?"":"none",h.style.display=I.ibpa?"":"none",C.style.display=I.text?"":"none",r&&(r.kind==="file"&&I.file||r.kind==="url"&&I.url||r.kind==="ibpa"&&I.ibpa||r.kind==="text"&&I.text||(r=null))},v=s("div","op-form-note");v.style.minHeight="1.2em",i.appendChild(v);const $=s("div","op-form-actions"),L=s("button","btn-sm btn-primary","place");L.type="button",$.appendChild(L),i.appendChild($);const S=s("div","action-result hidden");i.appendChild(S),e.appendChild(i);const q=()=>r?r.kind==="file"?{mimeType:r.file.type||null,fileName:r.file.name||null,size:r.file.size}:r.kind==="url"?{url:r.url}:r.kind==="ibpa"?{ibpa:r.ibpa}:{text:r.text}:null,O=document.createElement("option");O.value="",O.textContent="auto (classified from what you fill)",p.appendChild(O);for(const I of o){const j=document.createElement("option");j.value=I.name,j.textContent=I.name+(I.description?` — ${I.description.slice(0,48)}`:""),p.appendChild(j)}const M=()=>{var J;const I=q();if(!I){v.textContent=p.value?`placing: ${p.value} — fill its input above`:"",O.textContent="auto (classified from what you fill)";return}const j=Mn(o,I),z=p.value?{type:p.value,reason:"chosen explicitly"}:j[0]||null;if(O.textContent=(J=j[0])!=null&&J.type?`auto — ${j[0].type}`:"auto (classified from what you fill)",!z){v.textContent="will become: (unknown — pick a type)";return}const W=(r==null?void 0:r.kind)==="file"?`, ${Fe(r.file.size)}`:"",Y=(r==null?void 0:r.kind)==="file"?r.file.name:(r==null?void 0:r.kind)==="url"?r.url:(r==null?void 0:r.kind)==="ibpa"?r.ibpa:`${r.text.length} chars`;v.textContent=`will become: ${z.type} — ${Y}${W} (${z.reason})`};m.addEventListener("change",()=>{var j;const I=(j=m.files)==null?void 0:j[0];I&&(r={kind:"file",file:I},w.value||(w.value=I.name),M())}),g.addEventListener("input",()=>{g.value.trim()&&(r={kind:"url",url:g.value.trim()},M())}),f.addEventListener("input",()=>{f.value.trim()&&(r={kind:"ibpa",ibpa:f.value.trim()},M())}),E.addEventListener("input",()=>{E.value&&(r={kind:"text",text:E.value},M())}),p.addEventListener("change",()=>{k(),M()}),k();const x=I=>{S.className="action-result action-error",S.textContent=I},A=I=>{S.className="action-result",S.textContent=I};L.addEventListener("click",async()=>{var z,W,Y;if(!r)return x("nothing to place — pick a file, paste a url, or type text");const I=p.value||null,j=w.value.trim()||void 0;L.disabled=!0,A("placing…");try{let J;if(r.kind==="file"){const X=r.file;if(n.enabled===!1)throw new Error("uploads are disabled on this story");if(n.maxUploadBytes&&X.size>n.maxUploadBytes)throw new Error(`file is ${Fe(X.size)}; this story caps uploads at ${Fe(n.maxUploadBytes)}`);if(!jn(n.allowedMimeTypes,X.type))throw new Error(`mime "${X.type||"unknown"}" is not allowed on this story`);const Xe=new FormData;Xe.append("file",X);const Ye=(W=(z=b.state)==null?void 0:z.session)==null?void 0:W.token,Me=await fetch(Ot("/api/v1/content"),{method:"POST",headers:Ye?{Authorization:`Bearer ${Ye}`}:{},body:Xe}),ae=await Me.json().catch(()=>null);if(!Me.ok||!((Y=ae==null?void 0:ae.content)!=null&&Y.hash))throw new Error((ae==null?void 0:ae.error)||`upload failed (${Me.status})`);J={name:j,content:ae.content}}else if(r.kind==="ibpa"){const X=await b.doOp(t.address,"form-portal",{target:r.ibpa,name:j});A(`portal formed${X!=null&&X.matterId?` (${String(X.matterId).slice(0,8)}…)`:""} → ${r.ibpa}`),S.classList.remove("hidden"),typeof a=="function"&&a();return}else if(r.kind==="url"){const X=/^[a-z][a-z0-9+.-]*:\/\//i.test(r.url)?r.url:`https://${r.url}`;J={name:j,content:{url:X}}}else J={name:j,content:r.text};I&&(J.type=I);const we=await b.doOp(t.address,"create-matter",J);A(`placed${we!=null&&we.matterId?` (${String(we.matterId).slice(0,8)}…)`:""}`),S.classList.remove("hidden"),typeof a=="function"&&a()}catch(J){x(`${J.code||"error"}: ${J.message||"place failed"}`)}finally{L.disabled=!1,S.classList.remove("hidden")}})}const oe=e=>String(e??"").replace(/[&<>"]/g,t=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[t]);function vt(){var e,t;return(((t=(e=b.state)==null?void 0:e.discovery)==null?void 0:t.story)||"").replace(/\/+$/,"")}function Hn(){const e=vt();return e?`${e}/@federation-manager`:null}function Fn(e){if(!e)return"";const t=String(e);return t.length>19?t.slice(0,19).replace("T"," "):t}function Rn(){var a;const e=((a=b.state)==null?void 0:a.descriptor)||{},t=new Map;for(const o of[...e.beings||[],...e.residents||[]]){const n=o.beingId||o.id;n&&t.set(String(n),o.name||o.being||String(n).slice(0,12))}return[...t.entries()].map(([o,n])=>({id:o,name:n}))}function _n(e){const t=(e==null?void 0:e.peers)||(e==null?void 0:e.children)||(e==null?void 0:e.peerList)||(e==null?void 0:e.list)||[];return(Array.isArray(t)?t:[]).map(a=>{var o,n,s,i;return{domain:a.domain||a.name||a.story||a.id||"(unknown)",name:a.name||((n=(o=a.qualities)==null?void 0:o.peer)==null?void 0:n.name)||null,status:a.status||((i=(s=a.qualities)==null?void 0:s.peer)==null?void 0:i.status)||null,lastSeenAt:a.lastSeenAt||a.lastSeen||null}})}async function Dn(e,t,a,{refreshView:o}={}){const n=vt(),s=Hn();if(!n||!s){e.textContent="portal not ready (no story)";return}e.innerHTML="";const i=document.createElement("div");i.className="fed-intro dim",i.innerHTML="peer realities you can transfer with. <b>graft a being</b> moves the entity itself (same key, same chain, now living in two realities); a <b>template</b> sends or asks for a copy of a subtree's shape (fresh ids).",e.appendChild(i);const c=document.createElement("button");c.type="button",c.className="btn-sm",c.textContent="reload peers",c.style.marginBottom="8px",e.appendChild(c);const l=document.createElement("div");l.className="fed-list",e.appendChild(l);const p=document.createElement("div");p.className="fed-result-slot",e.appendChild(p);function r(C,E){p.innerHTML=`<div class="action-result ${C?"":"action-err"}">${oe(E)}</div>`}async function d(C,E,y){p.innerHTML=`<div class="action-result dim">running ${oe(C)}…</div>`;try{const w=await b.doOp(s,C,E);r(!0,typeof y=="function"?y(w):y),typeof o=="function"&&o()}catch(w){r(!1,`${C} failed: ${w!=null&&w.code?w.code+": ":""}${(w==null?void 0:w.message)||w}`)}}function m(C,E){const y=document.createElement("div");y.className="op-field";const w=document.createElement("label");return w.textContent=C,y.appendChild(w),y.appendChild(E),y}function u(C,E){C.innerHTML="";const y=Rn();let w=null;if(y.length){w=document.createElement("select"),w.className="op-input";for(const $ of y){const L=document.createElement("option");L.value=$.id,L.textContent=`${$.name} (${$.id.slice(0,12)}…)`,w.appendChild(L)}const v=document.createElement("option");v.value="",v.textContent="other (type an id below)",w.appendChild(v),C.appendChild(m("being (here)",w))}const N=document.createElement("input");N.className="op-input",N.placeholder="being id (pubkey), if not in the list above",C.appendChild(m("being id",N));const k=document.createElement("button");k.type="button",k.className="btn-sm fed-go",k.textContent=`graft to ${E.domain}`,k.onclick=()=>{const v=w&&w.value?w.value:N.value.trim();if(!v){r(!1,"pick a being or enter a being id");return}d("offer-being",{peer:E.domain,beingId:v},$=>`delivered being ${String(v).slice(0,12)}… to ${E.domain} (negotiation ${String(($==null?void 0:$.negotiationId)||"").slice(0,8)}). it lands verbatim, auto-accepted.`)},C.appendChild(k)}function g(C,E,y){var v,$,L;C.innerHTML="";const w=document.createElement("input");w.className="op-input",w.value=((L=($=(v=b.state)==null?void 0:v.descriptor)==null?void 0:$.address)==null?void 0:L.pathByNames)||"/",C.appendChild(m("subtree path",w));const N=document.createElement("input");N.className="op-input",N.placeholder="optional label",C.appendChild(m("label",N));const k=document.createElement("button");k.type="button",k.className="btn-sm fed-go",k.textContent=y==="offer-template"?`offer to ${E.domain}`:`request from ${E.domain}`,k.onclick=()=>{const S=w.value.trim();if(!S){r(!1,"enter a subtree path");return}d(y,{peer:E.domain,subtreePath:S,label:N.value.trim()||null},q=>y==="offer-template"?`offered template "${S}" to ${E.domain} (negotiation ${String((q==null?void 0:q.negotiationId)||"").slice(0,8)}); awaiting their accept.`:`requested "${S}" from ${E.domain}; they decide whether to send it.`)},C.appendChild(k)}function h(C){const E=document.createElement("div");E.className="fed-row";const y=["healthy","active","up","ok"].includes(String(C.status))?"#5fd08a":C.status?"#e8b762":"#6b7d72",w=document.createElement("div");w.className="fed-row-head",w.innerHTML=`<span class="fed-dot" style="background:${y}"></span><span class="fed-domain">${oe(C.domain)}</span>`+(C.name?`<span class="dim"> ${oe(C.name)}</span>`:"")+(C.status?`<span class="dim"> · ${oe(C.status)}</span>`:"")+(C.lastSeenAt?`<span class="dim"> · seen ${oe(Fn(C.lastSeenAt))}</span>`:""),E.appendChild(w);const N=document.createElement("div");N.className="fed-row-form";const k=document.createElement("div");k.className="fed-row-actions";const v=($,L)=>{const S=document.createElement("button");S.type="button",S.className="btn-sm",S.textContent=$,S.onclick=()=>L(N,C),k.appendChild(S)};return v("graft a being",u),v("offer a template",($,L)=>g($,L,"offer-template")),v("request a template",($,L)=>g($,L,"request-template")),E.appendChild(k),E.appendChild(N),E}async function f(){l.innerHTML='<div class="dim fed-empty">loading peers…</div>';let C=[],E=null;try{C=_n(await b.see(`${n}/./peers`))}catch(y){E=y!=null&&y.code?`${y.code}: ${y.message||""}`:(y==null?void 0:y.message)||String(y)}if(l.innerHTML="",E){l.innerHTML=`<div class="action-result action-err">peers SEE failed: ${oe(E)}</div>`;return}if(!C.length){l.innerHTML='<div class="dim fed-empty">no peers registered yet. add one through the peer directory and it appears here.</div>';return}for(const y of C)l.appendChild(h(y))}c.onclick=f,await f()}const de=e=>String(e??"").replace(/[&<>"]/g,t=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[t]);function Pn(){var e,t;return(((t=(e=b.state)==null?void 0:e.discovery)==null?void 0:t.story)||"").replace(/\/+$/,"")}function zn(){const e=Pn();return e?`${e}/@federation-manager`:null}function ee(e,t=8){return String(e??"").slice(0,t)}async function Un(e,t,a,{refreshView:o}={}){const n=zn();if(!n){e.textContent="portal not ready (no story)";return}e.innerHTML="";const s=document.createElement("div");s.className="fed-intro dim",s.textContent="your federation queue. decide on incoming offers and requests, and watch outbound transfers complete.",e.appendChild(s);const i=document.createElement("button");i.type="button",i.className="btn-sm",i.textContent="reload",i.style.marginBottom="8px",e.appendChild(i);const c=document.createElement("div");e.appendChild(c);const l=document.createElement("div");l.className="fed-result-slot",e.appendChild(l);function p(f,C){l.innerHTML=`<div class="action-result ${f?"":"action-err"}">${de(C)}</div>`}async function r(f,C,E){l.innerHTML=`<div class="action-result dim">${de(f)}…</div>`;try{await b.doOp(n,f,{negotiationId:C}),p(!0,E),await h(),typeof o=="function"&&o()}catch(y){p(!1,`${f} failed: ${y!=null&&y.code?y.code+": ":""}${(y==null?void 0:y.message)||y}`)}}function d(f,C){const E=document.createElement("div");E.className="fed-section";const y=document.createElement("div");return y.className="fed-section-head",y.innerHTML=`${de(f)} <span class="dim">${C}</span>`,E.appendChild(y),E}function m(f,C,E){const y=document.createElement("div");y.className="fed-kv",y.innerHTML=`<span class="dim">${de(C)}</span> <span>${de(E)}</span>`,f.appendChild(y)}function u(f,C,E){const y=document.createElement("button");return y.type="button",y.className="btn-sm"+(C?" task-action-danger":""),y.textContent=f,y.onclick=E,y}function g(f){const C=document.createElement("div");return C.className="dim fed-empty",C.textContent=f,C}async function h(){var S,q,O,M;c.innerHTML='<div class="dim fed-empty">loading…</div>';let f=null,C=null;try{f=await b.see("federation-status")}catch(x){C=x!=null&&x.code?`${x.code}: ${x.message||""}`:(x==null?void 0:x.message)||String(x)}if(c.innerHTML="",C){c.innerHTML=`<div class="action-result action-err">federation-status failed: ${de(C)}</div>`;return}const E=f.pendingIncomingOffers||[],y=f.pendingIncomingRequests||[],w=f.pendingOutbound||[],N=f.completed||[],k=d("incoming offers",E.length);E.length||k.appendChild(g("no offers awaiting you"));for(const x of E){const A=document.createElement("div");A.className="fed-card",m(A,"negotiation",ee(x.id)),m(A,"from",((S=x.sender)==null?void 0:S.story)||((q=x.sender)==null?void 0:q.beingId)||"(unknown)"),x.label&&m(A,"label",x.label),x.sourceSubtreePath&&m(A,"subtree",x.sourceSubtreePath);const H=document.createElement("div");H.className="fed-card-actions",H.appendChild(u("accept",!1,()=>r("accept-template",x.id,`accepted ${ee(x.id)}; the sender will deliver the template.`))),H.appendChild(u("reject",!0,()=>r("reject-template",x.id,`rejected ${ee(x.id)}.`))),A.appendChild(H),k.appendChild(A)}c.appendChild(k);const v=d("incoming requests",y.length);y.length||v.appendChild(g("no requests awaiting you"));for(const x of y){const A=document.createElement("div");A.className="fed-card",m(A,"negotiation",ee(x.id)),m(A,"from",((O=x.puller)==null?void 0:O.story)||((M=x.puller)==null?void 0:M.beingId)||"(unknown)"),x.subtreePath&&m(A,"wants",x.subtreePath);const H=document.createElement("div");H.className="fed-card-actions",H.appendChild(u("fulfill (send it)",!1,()=>r("fulfill-request",x.id,`fulfilling ${ee(x.id)}; pushing the template back.`))),H.appendChild(u("refuse",!0,()=>r("refuse-request",x.id,`refused ${ee(x.id)}.`))),A.appendChild(H),v.appendChild(A)}c.appendChild(v);const $=d("outbound in flight",w.length);w.length||$.appendChild(g("nothing in flight"));for(const x of w){const A=document.createElement("div");A.className="fed-card",m(A,"negotiation",ee(x.id)),m(A,"direction",x.direction||"?"),m(A,"peer",x.peer||"?"),x.subtreePath&&m(A,"subtree",x.subtreePath),m(A,"step",x.lastStep||"?"),$.appendChild(A)}c.appendChild($);const L=d("completed",N.length);N.length||L.appendChild(g("nothing completed yet"));for(const x of N.slice(-12).reverse()){const A=document.createElement("div");A.className="fed-card fed-card-done",m(A,"negotiation",ee(x.id)),m(A,"direction",x.direction||"?"),x.peer&&m(A,"peer",x.peer),m(A,"outcome",x.success?"success":`failed${x.reason?": "+x.reason:""}`),L.appendChild(A)}c.appendChild(L)}i.onclick=h,await h()}let fe=null;function Jn(e,{descriptor:t,discovery:a,session:o}={}){var k,v,$,L,S,q,O,M;if(!e||(fe&&(document.removeEventListener("click",fe),fe=null),e.innerHTML="",!(o!=null&&o.username)&&!(o!=null&&o.beingId)))return;const n=t||{},s=(a==null?void 0:a.story)||((k=n.address)==null?void 0:k.story)||((v=n.address)==null?void 0:v.place)||"",i=(($=n.address)==null?void 0:$.pathByNames)||"/",c=`${s}${i==="/"?"/":i}`,l=`${s}/`,p=((L=b.state)==null?void 0:L.operations)||[],r=new Map(p.map(x=>[x.name,x])),d=p.length>0,m=[{id:"story",label:"Story",actions:la(l)},{id:"history",label:"History",actions:ca(c)},{id:"place",label:"Place",actions:ia(c,n)},{id:"federation",label:"Federation",actions:ra()}],u=((q=(S=b.state)==null?void 0:S.selectedBeing)==null?void 0:q.name)||((O=n.address)==null?void 0:O.being)||null,g=u?(n.beings||[]).find(x=>(x.being||x.name)===u)||(n.residents||[]).find(x=>(x.being||x.name)===u):null;if(g){const x=((M=n.address)==null?void 0:M.history)||"0",A=x==="0"?"":`#${x}`,H=`${s}${A}${i}@${u}`.replace(/\/+@/,"/@");m.push({id:"being",label:`@${u}`,actions:aa(g,H)})}const h=document.createElement("div");h.className="task-bar";const f=document.createElement("div");f.className="task-tabs",h.appendChild(f);const C=document.createElement("div");C.className="task-dropdown hidden",h.appendChild(C);let E=null;const y=()=>{C.classList.add("hidden"),E=null,at(f,null)};for(const x of m){const A=document.createElement("button");A.type="button",A.className="task-tab",A.textContent=x.label,A.addEventListener("click",()=>{if(E===x.id){y();return}E=x.id,at(f,A),Gn(C,x,r,d,y),C.style.left=`${A.offsetLeft}px`}),A.dataset.tab=x.id,f.appendChild(A)}const w=document.createElement("div");w.className="task-spacer",f.appendChild(w);const N=document.createElement("button");N.type="button",N.id="inbox-chip",N.className="task-tab task-inbox",N.title="your inbox — pending summons addressed to you",N.innerHTML='inbox <span id="inbox-count" class="dim">·</span>',N.addEventListener("click",x=>{x.stopPropagation(),y(),Kn()}),f.appendChild(N),ue==null||ue(),e.appendChild(h),fe=x=>{h.contains(x.target)||y()},document.addEventListener("click",fe)}function at(e,t){for(const a of e.querySelectorAll(".task-tab"))a.classList.toggle("active",a===t)}function Gn(e,t,a,o,n){e.innerHTML="",e.classList.remove("hidden");for(const s of t.actions){if(o&&s.op&&!s.special&&!a.has(s.op))continue;const i=document.createElement("button");i.type="button",i.className="task-action"+(s.danger?" task-action-danger":""),i.textContent=s.label,i.addEventListener("click",()=>{n(),Wn(s,a)}),e.appendChild(i)}if(!e.children.length){const s=document.createElement("div");s.className="task-empty dim",s.textContent="(no actions here)",e.appendChild(s)}}function Wn(e,t){var n,s,i,c,l,p;if(e.special==="being-chat")return $e(e.being);if(e.special==="being-inspect")return pt(()=>Promise.resolve().then(()=>Ka),void 0).then(r=>r.showInspector({kind:"being",entry:e.being}));if(e.special==="being-facts"||e.special==="being-acts"){const r=((s=(n=b.state)==null?void 0:n.discovery)==null?void 0:s.story)||"",d=((l=(c=(i=b.state)==null?void 0:i.descriptor)==null?void 0:c.address)==null?void 0:l.history)||"0",m=d==="0"?"":`#${d}`,u=(p=e.being)==null?void 0:p.beingId;if(!u)return;const g=e.special==="being-facts"?`/.reel/being/${u}`:`/.acts/${u}`;return b.navigate(`${r}${m}${g}`)}const a=Ge(e.label);if(e.special==="being-identity")return mt(a,{state:b.state,see:b.see,being:e.being});if(e.special==="being-intent")return oa(a,e);if(e.special==="being-verb")return sa(a,e,t);if(e.special==="edit-space")return Yn(a,e);if(e.special==="create-matter")return qn(a,e,{refreshView:Z});if(e.special==="clone")return Vn(a,e);if(e.special==="close-story")return Zn(a,e,t);if(e.special==="ables")return Zt(a,e,t,{refreshView:Z});if(e.special==="llm")return et(a,e,t,{refreshView:Z,mode:"place"});if(e.special==="llm-story")return et(a,e,t,{refreshView:Z,mode:"story"});if(e.special==="inbox")return Je(a,e,t,{refreshView:Z});if(e.special==="federation-peers")return Dn(a,e,t,{refreshView:Z});if(e.special==="federation-activity")return Un(a,e,t,{refreshView:Z});if(e.special==="history-info")return ea(a);if(e.special==="birth-self")return Qn(a,e);const o=t.get(e.op)||{name:e.op,args:null};Q(a,{op:o,address:e.address,values:e.values||{},submitLabel:e.submitLabel||"run",doOp:b.doOp,onResult:r=>{r||Z()}})}function Kn(){const e=Ge("your inbox");return Je(e,{},new Map,{refreshView:()=>{}})}function Xn(){const e=Ge("your identity");return mt(e,{state:b.state,doOp:b.doOp,see:b.see,beOp:b.beOp,signIn:b.signIn,signOut:b.signOut})}function Yn(e,t){var n;const a=((n=t.values)==null?void 0:n.name)||"";Q(e,{op:{name:"set-space",args:{name:{type:"text",label:"Name (kebab-case)",required:!1}}},address:t.address,values:t.values||{},submitLabel:"save changes",doOp:async(s,i,c)=>{const l=[];return c.name!=null&&c.name!==a&&(await b.doOp(s,"set-space",{field:"name",value:c.name}),l.push("name")),{changed:l.length?l:"(no changes)"}},onResult:s=>{s||Z()}})}function Vn(e,t,a){Q(e,{op:{name:"capture-template",args:{name:{type:"text",label:"Clone name (optional)",required:!1}}},address:t.address,submitLabel:"download clone",doOp:async(n,s,i)=>{var f,C,E,y,w,N,k,v;const c=((C=(f=b.state.descriptor)==null?void 0:f.address)==null?void 0:C.spaceId)||((y=(E=b.state.descriptor)==null?void 0:E.position)==null?void 0:y.spaceId)||null;if(!c)throw new Error("no spaceId on current descriptor to clone from");const l=await b.state.client.see("capture-template",{args:{spaceId:c,name:i.name||null}}),p=l==null?void 0:l.bundle;if(!p)throw new Error("clone returned no bundle");const r=i.name||"place",d=(((w=p.meta)==null?void 0:w.createdAt)||"").replace(/[:.]/g,"-").slice(0,19)||"snapshot",m=new Blob([JSON.stringify(p,null,2)],{type:"application/json"}),u=URL.createObjectURL(m),g=document.createElement("a");g.href=u,g.download=`${r}-${d}.seed.json`,document.body.appendChild(g),g.click(),document.body.removeChild(g),URL.revokeObjectURL(u);const h=p.content||{};return{downloaded:`${r}-${d}.seed.json`,spaces:((N=h.spaces)==null?void 0:N.length)||0,beings:((k=h.beings)==null?void 0:k.length)||0,matter:((v=h.matter)==null?void 0:v.length)||0}}})}function Zn(e,t,a){const o=a.get("close-story")||{name:"close-story",args:{}};Q(e,{op:o,address:t.address,submitLabel:"⚠ close story",doOp:async(n,s,i)=>{if(!window.confirm("Close the story? This stops the running server for everyone."))throw new Error("cancelled");return b.doOp(n,s,i)}})}function Qn(e,t){var i,c,l,p;const a={name:"be:birth",args:{name:{type:"text",label:"Name (kebab-case, unique on this story)",required:!0},password:{type:"text",label:"Password (placeholder; substitute future credential)",required:!0}}},o=(((c=(i=b.state)==null?void 0:i.discovery)==null?void 0:c.story)||"").replace(/\/+$/,""),n=((p=(l=b.state)==null?void 0:l.session)==null?void 0:p.username)||null;if(!n){e.textContent="sign in first to birth a being (your stance is the target — the caller becomes mother).";return}const s=`${o}/@${n}`;Q(e,{op:a,address:s,values:t.values||{},submitLabel:"birth",doOp:async(r,d,m)=>{if(typeof b.beOp!="function")throw new Error("flat.beOp not available; refresh and try again");return b.beOp("birth",s,m)},onResult:r=>{}})}async function ea(e){var r,d,m,u,g,h,f,C,E,y,w,N,k;const t=((d=(r=b.state)==null?void 0:r.discovery)==null?void 0:d.story)||((g=(u=(m=b.state)==null?void 0:m.descriptor)==null?void 0:u.address)==null?void 0:g.story)||((C=(f=(h=b.state)==null?void 0:h.descriptor)==null?void 0:f.address)==null?void 0:C.place)||"",a=(E=b.state)==null?void 0:E.client;if(!a){e.textContent="portal not ready";return}const o=((N=(w=(y=b.state)==null?void 0:y.descriptor)==null?void 0:w.address)==null?void 0:N.history)||"0",n=document.createElement("div");n.className="op-field";const s=document.createElement("label");s.textContent="history";const i=document.createElement("select");i.className="op-input",n.appendChild(s),n.appendChild(i),e.appendChild(n);const c=document.createElement("div");c.className="history-info-body",c.textContent="loading…",e.appendChild(c);const l=await ta(a,t);i.innerHTML="";for(const v of l){const $=document.createElement("option");$.value=v.path,$.textContent=v.path==="0"?"main (#0)":`#${v.path}${v.label?` — ${v.label}`:""}`,i.appendChild($)}i.value=l.some(v=>v.path===o)?o:((k=l[0])==null?void 0:k.path)||"0";const p=async v=>{c.innerHTML="",c.textContent="loading…";let $=null,L=null;try{const S=await a.see(`${t}/.histories/${v}`);$=(S==null?void 0:S.histories)||null}catch(S){L=S!=null&&S.code?`${S.code}: ${S.message||""}`:(S==null?void 0:S.message)||String(S)}c.innerHTML="",na(c,v,$,L)};i.addEventListener("change",()=>p(i.value)),await p(i.value)}async function ta(e,t){const a=new Map,o=new Set;async function n(s,i){if(!(i>6||o.has(s))){o.add(s);try{const c=await e.see(`${t}/.histories/${s}`),l=c==null?void 0:c.histories;if(!l)return;l.current&&a.set(l.current.path,l.current.label||null);for(const p of l.children||[])a.set(p.path,p.label||null);for(const p of l.children||[])await n(p.path,i+1)}catch{}}}return await n("0",0),a.has("0")||a.set("0","main"),[...a.entries()].map(([s,i])=>({path:s,label:i})).sort((s,i)=>s.path.localeCompare(i.path))}function K(e,t,a){const o=document.createElement("div");o.className="kv-block";const n=document.createElement("span");n.className="kv-block-label",n.textContent=t;const s=document.createElement("span");s.className="kv-block-value",s.textContent=a,o.appendChild(n),o.appendChild(s),e.appendChild(o)}function na(e,t,a,o){var u,g;const n=a==null?void 0:a.current;if(o||!n){const h=document.createElement("div");h.className="action-result action-err",h.textContent=o||`history "${t}" not found`,e.appendChild(h);return}const s=a.pointers||{},i=Object.keys(s).filter(h=>s[h]===t).sort(),c=Array.isArray(a.lineage)?a.lineage:[],l=Array.isArray(a.children)?a.children:[];K(e,"path",`#${n.path}`),n.label&&K(e,"label",n.label),K(e,"live",n.isLive?"yes":"no"),K(e,"parent",n.parent?`#${n.parent}`:"main (root)"),K(e,"lineage",c.map(h=>`#${h}`).join(" → ")||"—"),K(e,"children",l.length?l.map(h=>`#${h.path}`).join(", "):"—"),K(e,"pointers here",i.length?i.join(", "):"—");const p=n.anchor&&typeof n.anchor=="object"?n.anchor:{},r=Object.keys(p);K(e,"branch-point",r.length?r.map(h=>`${h} @ seq ${p[h]}`).join(", "):"(forked at genesis / no reels)"),K(e,"scope",(u=n.scope)!=null&&u.path?`subtree ${n.scope.path}`:"whole story"),K(e,"created",`${n.createdAt||"?"}${n.createdBy?` by ${String(n.createdBy).slice(0,8)}`:""}`),(g=n.mergeSources)!=null&&g.length&&K(e,"merged from",n.mergeSources.map(h=>`#${h}`).join(" + ")),n.paused&&K(e,"paused",`yes${n.pausedAt?` (${n.pausedAt})`:""}`),n.deleted&&K(e,"deleted",`yes${n.deletedAt?` (${n.deletedAt})`:""}`),n.archivedBecause&&K(e,"archived",n.archivedBecause);const d=document.createElement("button");d.type="button",d.className="btn-sm",d.textContent="show raw JSON",d.style.marginTop="8px";const m=document.createElement("pre");m.className="json",m.style.display="none",d.onclick=()=>{m.style.display==="none"?(m.textContent=JSON.stringify(a,null,2),m.style.display="block",d.textContent="hide raw JSON"):(m.style.display="none",d.textContent="show raw JSON")},e.appendChild(d),e.appendChild(m)}function aa(e,t){const a=[{label:"chat (summon)",special:"being-chat",being:e},{label:"inspect",special:"being-inspect",being:e}];for(const o of Array.isArray(e.canSummon)?e.canSummon:[])o&&o.as==="receiver"&&o.intent&&a.push({label:`summon: ${o.intent}`,special:"being-intent",being:e,intent:o.intent,address:t});for(const o of Array.isArray(e.actions)?e.actions:[])a.push({label:o.label||`${o.verb} ${o.action}`,special:"being-verb",being:e,beingAction:o,address:t});return e.beingId&&(a.push({label:"identity (key)",special:"being-identity",being:e}),a.push({label:"view facts (reel)",special:"being-facts",being:e}),a.push({label:"view acts (chain)",special:"being-acts",being:e})),a}function oa(e,t){const a={name:`summon (${t.intent})`,args:{content:{type:"multiline",label:"message",required:!0}}};Q(e,{op:a,address:t.address,submitLabel:`summon: ${t.intent}`,doOp:async(o,n,s)=>{const{correlation:i,reply:c}=await b.sendSummon(t.address,s.content||"",{intent:t.intent});return{sent:!0,correlation:i,reply:(c==null?void 0:c.status)||c||null}}})}function sa(e,t,a){const o=t.beingAction;if(o.verb==="call")return $e(t.being);if(o.verb==="be"){const s={name:`be:${o.action}`,args:o.args||{}};return Q(e,{op:s,address:t.address,submitLabel:o.label||o.action,doOp:(i,c,l)=>b.beOp(o.action,t.address,l)})}const n=a.get(o.action)||{name:o.action,args:o.args||null};Q(e,{op:n,address:t.address,submitLabel:o.label||"run",doOp:b.doOp,onResult:s=>{s||Z()}})}function ia(e,t){var a;return[{label:"+ create child space",op:"create-space",address:e},{label:"edit this space",special:"edit-space",address:e,values:{name:(((a=t.address)==null?void 0:a.pathByNames)||"").split("/").filter(Boolean).pop()||""}},{label:"+ create matter",special:"create-matter",op:"create-matter",address:e},{label:"+ birth a being (you become mother)",special:"birth-self",address:e},{label:"move something",op:"move",address:e},{label:"plant a seed",op:"plant",address:e},{label:"set render",op:"set-render",address:e},{label:"delete able",op:"delete-able",address:e},{label:"ables",special:"ables",address:e,values:{descriptor:t}},{label:"llm",special:"llm",address:e,values:{descriptor:t}},{label:"set owner",op:"set-owner",address:e},{label:"remove owner",op:"remove-owner",address:e},{label:"⚠ delete this space",op:"end-space",address:e,danger:!0}]}function ca(e){return[{label:"view history info",special:"history-info"},{label:"fork a branch",op:"create-branch",address:e},{label:"merge histories",op:"merge-histories",address:e},{label:"pause history",op:"pause-history",address:e},{label:"unpause history",op:"unpause-history",address:e},{label:"delete history",op:"delete-history",address:e,danger:!0},{label:"undelete history",op:"undelete-history",address:e},{label:"set pointer",op:"set-pointer",address:e},{label:"delete pointer",op:"delete-pointer",address:e},{label:"save clone (download)",op:"capture-template",special:"clone",address:e},{label:"graft a clone here",op:"plant-template",address:e}]}function la(e){return[{label:"form seed of story",op:"capture-graft",address:e},{label:"set config",op:"set-config",address:e},{label:"delete config",op:"delete-config",address:e},{label:"ables (story-wide)",special:"ables",address:e},{label:"llm (story defaults)",special:"llm-story",address:e},{label:"⚠ close story (exit server)",op:"close-story",special:"close-story",address:e,danger:!0}]}function ra(){return[{label:"peers (graft / send / request)",special:"federation-peers"},{label:"activity (incoming / in flight)",special:"federation-activity"}]}function Ge(e){var n,s;(n=document.getElementById("empty-detail"))==null||n.classList.add("hidden"),(s=document.getElementById("chat-panel"))==null||s.classList.add("hidden");const t=document.getElementById("inspector");t.classList.remove("hidden"),t.innerHTML="";const a=document.createElement("div");a.className="panel-header",a.textContent=e,t.appendChild(a);const o=document.createElement("div");return o.className="task-form-body",t.appendChild(o),o}function Z(){var t;const e=(t=b.state)==null?void 0:t.currentAddress;e&&typeof b.navigate=="function"&&b.navigate(e)}function ie(e){Bt(e);const t=document.getElementById("status-line");t&&(t.textContent=e||"")}function $t(){var e,t,a;(e=document.getElementById("inspector"))==null||e.classList.add("hidden"),(t=document.getElementById("chat-panel"))==null||t.classList.add("hidden"),(a=document.getElementById("empty-detail"))==null||a.classList.remove("hidden")}function Be(e,{session:t,discovery:a}){var s,i;if(!e)return;if(pa(e,{session:t,discovery:a}),Jn(document.getElementById("task-menubar"),{descriptor:e,session:t,discovery:a}),e.isReel||e.isActChain||e.isBeingsCatalog||e.isThread){Ba(e,{discovery:a});return}const o=ya((s=e.address)==null?void 0:s.pathByNames);if(o){va(e,o,{discovery:a});return}const n=Ea((i=e.address)==null?void 0:i.pathByNames);if(n){wa(e,n,{discovery:a});return}if(da(),ha(e,{session:t,discovery:a}),ba(e,{discovery:a}),ga(e,{session:t,discovery:a}),ua(e),jt()){const c=qt(),l=(e.beings||[]).find(p=>p.being===c);l&&$e(l,{refresh:!0})}}function da(){var t,a;const e=document.getElementById("explorer-pane");e&&e.remove(),(t=document.getElementById("position-pane"))==null||t.classList.remove("hidden"),(a=document.getElementById("detail-pane"))==null||a.classList.remove("hidden")}function pa(e,{session:t,discovery:a}){ma(t,a)}function ma(e,t){const a=document.getElementById("identity-chip");a.innerHTML="",t!=null&&t.story;const o=(e==null?void 0:e.username)||"arrival",n=document.createElement("button");n.className="chip"+(e!=null&&e.token?" chip-authed":""),n.textContent=e!=null&&e.token?`@${o}`:"@arrival",n.title=e!=null&&e.token?`signed in as @${o}
-being: ${e.beingAddress||"(unknown)"}
-id: ${e.beingId||"(not in session)"}
-click for identity (key, export, sign out)`:"click to sign in with your name",n.onclick=()=>{var s;e!=null&&e.token?Xn():(s=b.presentNameAuth)==null||s.call(b)},a.appendChild(n)}function ua(e){var o,n;const t=document.getElementById("beings-count"),a=document.getElementById("matter-count");t&&(t.textContent=(o=e.beings)!=null&&o.length?`${e.beings.length}`:""),a&&(a.textContent=(n=e.matters)!=null&&n.length?`${e.matters.length}`:"")}function wt(e,t=""){const a=document.getElementById("connection-pill");if(!a)return;const o=a.querySelector(".conn-dot"),n=a.querySelector(".conn-text");a.title=`socket: ${e}${t?" — "+t:""}`,o.className="conn-dot",e==="connected"?(o.classList.add("conn-ok"),n.textContent="live"):e==="disconnected"||e==="error"?(o.classList.add("conn-err"),n.textContent=e==="error"?"error":"offline"):(o.classList.add("conn-pending"),n.textContent=e||"connecting…")}function Nt(e){const t=document.getElementById("loading-bar");t&&t.classList.toggle("hidden",!e)}function ha(e,{session:t,discovery:a}){var s,i;const o=document.getElementById("beings-list");o.innerHTML="";const n=e.beings||[];if(n.length===0){o.appendChild(Ke("(no beings here)"));return}for(const c of n){const l=document.createElement("li");l.className="list-row";const p=document.createElement("div");p.className="row-meta";const r=document.createElement("span");r.className="row-name",r.textContent=`@${c.being}`,p.appendChild(r),c.respondMode&&p.appendChild(G(c.respondMode,"mode")),c.available===!1&&p.appendChild(G("busy","busy")),((s=c.inbox)==null?void 0:s.unconsumed)>0&&p.appendChild(G(`inbox ${c.inbox.unconsumed}`,"queue")),(i=c.activity)!=null&&i.kind&&p.appendChild(G(c.activity.kind,"activity")),l.appendChild(p);const d=document.createElement("div");d.className="row-actions";const m=c.beingId||null;if(m&&(a!=null&&a.story)){const h=document.createElement("a");h.className="btn-sm btn-explore",h.href=`#${a.story}/.reel/being/${m}`,h.textContent="facts",h.title="this being's fact reel",d.appendChild(h);const f=document.createElement("a");f.className="btn-sm btn-explore",f.href=`#${a.story}/.acts/${m}`,f.textContent="acts",f.title="this being's act-chain",d.appendChild(f)}const u=document.createElement("button");u.textContent="inspect",u.className="btn-sm",u.onclick=()=>{var h;(h=b.selectBeing)==null||h.call(b,c.beingId,c.being),We({kind:"being",entry:c})},d.appendChild(u);const g=document.createElement("button");if(g.textContent="chat",g.className="btn-sm btn-primary",g.disabled=!(t!=null&&t.token),g.title=t!=null&&t.token?"summon this being":"claim an identity first",g.onclick=()=>{var h;(h=b.selectBeing)==null||h.call(b,c.beingId,c.being),$e(c)},d.appendChild(g),Array.isArray(c.canSummon)&&(t!=null&&t.token))for(const h of c.canSummon){if((h==null?void 0:h.as)!=="receiver"||!(h!=null&&h.intent))continue;const f=document.createElement("button");f.textContent=h.intent==="mate"?c.being==="cherub"?"birth your first being":"birth a child":h.intent,f.className="btn-sm",f.title=h.description||`summon @${c.being} with intent="${h.intent}"`,f.onclick=()=>fa(c,h),d.appendChild(f)}l.appendChild(d),o.appendChild(l)}}function fa(e,t){const a=e.being==="cherub",o=t.intent==="mate"?a?"Birth your first being through your name. It will be a top-level being, owned by you (cherub is right below I_AM). Name it:":`Summon @${e.being} to mate. The new child has @${e.being} as mother and you as father. Optional: child name. (Leave blank for auto-generated.)`:`Summon @${e.being} with intent="${t.intent}". Optional message:`,n=window.prompt(o,"");if(n===null)return;const s=e.stance||`@${e.being}`,i=n.trim().length>0?{name:n.trim()}:{};b.sendSummon(s,i,{intent:t.intent}).then(c=>{var p,r;const l=(p=c==null?void 0:c.reply)!=null&&p.from?`summoned @${e.being} (${t.intent}); reply from ${c.reply.from}`:`summoned @${e.being} (${t.intent})`;try{(r=b.setStatus)==null||r.call(b,l)}catch{}}).catch(c=>{var l;try{(l=b.setStatus)==null||l.call(b,`summon failed: ${(c==null?void 0:c.message)||c}`)}catch{}})}function ga(e,{session:t,discovery:a}){const o=document.getElementById("lineage-section"),n=document.getElementById("lineage-list"),s=document.getElementById("lineage-count");if(!o||!n)return;const i=Array.isArray(e.beingLineage)?e.beingLineage:null;if(!i){o.classList.add("hidden"),n.innerHTML="",s&&(s.textContent="");return}if(o.classList.remove("hidden"),s&&(s.textContent=i.length?`${i.length}`:""),n.innerHTML="",i.length===0){n.appendChild(Ke("(no descendants yet — BE:birth from your own stance to mint one)"));return}const c=(a==null?void 0:a.story)||null,l=!!(t!=null&&t.token);for(const p of i){const r=document.createElement("li");r.className="list-row";const d=document.createElement("div");d.className="row-meta";const m=document.createElement("span");m.className="row-name",m.textContent=`@${p.name||p.beingId.slice(0,8)}`,d.appendChild(m),p.cognition&&d.appendChild(G(p.cognition,"mode")),p.defaultAble&&d.appendChild(G(p.defaultAble,"activity")),r.appendChild(d);const u=document.createElement("div");if(u.className="row-actions",c&&p.name){const h=document.createElement("a");h.className="btn-sm btn-explore",h.href=`#${c}/@${p.name}`,h.textContent="open",h.title="navigate to this being's stance",u.appendChild(h)}const g=document.createElement("button");g.textContent="inhabit",g.className="btn-sm btn-primary",g.disabled=!l,g.title=l?"open a new tab driving this being":"sign in first",g.onclick=()=>Ca(p,{story:c}),u.appendChild(g),r.appendChild(u),n.appendChild(r)}}async function Ca(e,{story:t}){var a,o,n,s,i;if(!(!t||!(e!=null&&e.name))){ie(`inheriting @${e.name}...`);try{const{flat:c}=await pt(async()=>{const{flat:g}=await Promise.resolve().then(()=>eo);return{flat:g}},void 0),l=`${t}/@${e.name}`,p=await c.beOp("connect",l,{});if(!p||p.status==="error"){const g=((a=p==null?void 0:p.error)==null?void 0:a.message)||"connect rejected";ie(`inhabit failed: ${g}`);return}const r=(o=p.data)==null?void 0:o.identityToken,d=((n=p.data)==null?void 0:n.name)||e.name;if(!r){ie("inhabit ok but no token returned (server bug?)");return}const m=encodeURIComponent(JSON.stringify({token:r,username:d,placeUrl:((s=c.state.session)==null?void 0:s.placeUrl)||window.location.origin,inherited:!0,spawnerName:((i=c.state.session)==null?void 0:i.username)||null})),u=`${window.location.pathname}#inhabit=${m}`;window.open(u,"_blank"),ie(`opened new tab for @${d}`)}catch(c){ie(`inhabit failed: ${(c==null?void 0:c.message)||String(c)}`)}}}function ba(e,{discovery:t}={}){const a=document.getElementById("matter-list");a.innerHTML="";const o=e.matters||[];if(o.length===0){a.appendChild(Ke("(no matter here)"));return}for(const n of o){const s=document.createElement("li");s.className="list-row";const i=document.createElement("div");i.className="row-meta";const c=document.createElement("span");if(c.className="row-name",c.textContent=n.name||"(unnamed)",i.appendChild(c),n.type&&i.appendChild(G(n.type,"type")),n.preview){const r=document.createElement("span");r.className="row-preview",r.textContent=n.preview.length>60?n.preview.slice(0,60)+"…":n.preview,i.appendChild(r)}s.appendChild(i);const l=document.createElement("div");if(l.className="row-actions",n.matterId&&(t!=null&&t.story)){const r=document.createElement("a");r.className="btn-sm btn-explore",r.href=`#${t.story}/.reel/matter/${n.matterId}`,r.textContent="facts",r.title="this matter's fact reel",l.appendChild(r)}const p=document.createElement("button");p.textContent="inspect",p.className="btn-sm",p.onclick=()=>We({kind:"matter",entry:n}),l.appendChild(p),s.appendChild(l),a.appendChild(s)}}function ya(e){if(typeof e!="string")return null;const t=e.match(/^\/(?:\.\/)?(operations|ables|threads|extensions)\/?$/);return t?t[1]:null}function Ea(e){if(typeof e!="string")return null;const t=e.match(/^\/(?:\.\/)?(operations|ables|extensions)\/([^/]+)\/?$/);return t?{kind:t[1],name:t[2]}:null}const xt={operations:{icon:"⚙",title:"operations",sub:"registered DO actions"},ables:{icon:"◎",title:"ables",sub:"summonable able templates"},threads:{icon:"⧖",title:"threads",sub:"live coordination chains (rootCorrelations)"},extensions:{icon:"⊕",title:"extensions",sub:"installed extensions"}};function va(e,t,{discovery:a}){var d,m;const o=document.getElementById("middle");(d=document.getElementById("position-pane"))==null||d.classList.add("hidden"),(m=document.getElementById("detail-pane"))==null||m.classList.add("hidden");let n=document.getElementById("explorer-pane");n&&n.remove(),n=document.createElement("section"),n.id="explorer-pane",o.appendChild(n);const s=xt[t],i=e.children||[],c=document.createElement("header");c.className="explorer-header";const l=document.createElement("h2");l.className="explorer-title",l.innerHTML=`${s.icon} <span class="dim">${s.title}</span>`,c.appendChild(l);const p=document.createElement("div");if(p.className="explorer-sub",p.textContent=`${i.length} item${i.length===1?"":"s"} · ${s.sub}`,c.appendChild(p),n.appendChild(c),i.length===0){const u=document.createElement("div");u.className="explorer-empty",u.textContent=`(no ${s.title} registered)`,n.appendChild(u);return}const r=document.createElement("ul");r.className="catalog-list";for(const u of i)r.appendChild($a(t,u,a));n.appendChild(r)}function $a(e,t,a){var c;const o=document.createElement("li");o.className="catalog-row";const n=document.createElement("div");n.className="catalog-main";const s=document.createElement("span");s.className="row-name",s.textContent=t.name||"(unnamed)",n.appendChild(s),e==="operations"?Sa(n,t):e==="ables"?Aa(n,t):e==="threads"?La(n,t):e==="extensions"&&Ia(n,t),o.appendChild(n);const i=document.createElement("div");if(i.className="catalog-sub",e==="threads"&&((c=t.thread)!=null&&c.id)&&(a!=null&&a.story)){const l=document.createElement("a");l.className="btn-explore",l.href=`#${a.story}/./threads/${t.thread.id}`,l.textContent="open thread",i.appendChild(l)}else if(t.path&&(a!=null&&a.story)){const l=document.createElement("a");l.className="btn-explore",l.href=`#${a.story}${t.path}`,l.textContent="open",i.appendChild(l)}if(t.spaceId&&!String(t.spaceId).startsWith("thread:")&&(a!=null&&a.story)){const l=document.createElement("a");l.className="btn-explore",l.href=`#${a.story}/.reel/space/${t.spaceId}`,l.textContent="facts",i.appendChild(l)}return i.children.length&&o.appendChild(i),o}function wa(e,{kind:t,name:a},{discovery:o}){var m,u,g;const n=document.getElementById("middle");(m=document.getElementById("position-pane"))==null||m.classList.add("hidden"),(u=document.getElementById("detail-pane"))==null||u.classList.add("hidden");let s=document.getElementById("explorer-pane");s&&s.remove(),s=document.createElement("section"),s.id="explorer-pane",n.appendChild(s);const i=xt[t]||{icon:"·",title:t},c=document.createElement("header");c.className="explorer-header";const l=document.createElement("h2");l.className="explorer-title",l.innerHTML=`${i.icon} <a class="dim" href="#${o.story}/.${t}">${i.title}</a> <span class="dim">/</span> ${a}`,c.appendChild(l);const p=document.createElement("div");p.className="explorer-sub";const r=(g=e.address)==null?void 0:g.spaceId;if(p.textContent=r?`space ${r}`:"(no spaceId)",c.appendChild(p),r&&(o!=null&&o.story)){const h=document.createElement("a");h.className="explorer-jump",h.href=`#${o.story}/.reel/space/${r}`,h.textContent="⛓ reel for this row",c.appendChild(h)}s.appendChild(c);const d=e.qualities||{};t==="operations"?Na(s,d.operation||{},a):t==="ables"?xa(s,d.able||{},a):t==="extensions"&&ka(s,d.extension||d,a)}function Na(e,t,a){const o=_("operation");if(o.appendChild(B("name",a,{mono:!0})),Array.isArray(t.targets)&&t.targets.length&&o.appendChild(B("targets",t.targets.join(", "))),t.factAction&&o.appendChild(B("stamps factAction",t.factAction,{mono:!0})),t.ownerExtension&&o.appendChild(B("from extension",t.ownerExtension)),o.appendChild(B("skipAudit",t.skipAudit?"true":"false")),e.appendChild(o),t&&Object.keys(t).length){const n=_("raw qualities.operation");n.appendChild(re(t)),e.appendChild(n)}}function xa(e,t,a){const o=_("able");o.appendChild(B("name",a,{mono:!0})),t.respondMode&&o.appendChild(B("respondMode",t.respondMode)),Array.isArray(t.triggerOn)&&t.triggerOn.length&&o.appendChild(B("triggerOn",t.triggerOn.join(", "))),t.replyTo&&o.appendChild(B("replyTo",t.replyTo)),e.appendChild(o);const n=Array.isArray(t.canSummon)?t.canSummon:[],s=n.filter(l=>typeof l!="object"||((l==null?void 0:l.as)??"actor")==="actor"),i=n.filter(l=>typeof l=="object"&&(l==null?void 0:l.as)==="receiver"),c=[["canSee",t.canSee],["canDo",t.canDo],["canSummon (initiates)",s],["canSummon (accepts as receiver)",i],["canBe",t.canBe]];for(const[l,p]of c){if(!Array.isArray(p)||p.length===0)continue;const r=_(l),d=document.createElement("ul");d.className="verb-list";for(const m of p){const u=document.createElement("li"),g=typeof m=="object"?m.intent?`intent="${m.intent}"${m.pattern?` target=${m.pattern}`:""}${m.description?` — ${m.description}`:""}`:m.pattern||JSON.stringify(m):String(m);u.innerHTML=`<code>${kt(g)}</code>`,d.appendChild(u)}r.appendChild(d),e.appendChild(r)}if(Array.isArray(t.permissions)&&t.permissions.length){const l=_("permissions");l.appendChild(re(t.permissions)),e.appendChild(l)}}function ka(e,t,a){const o=_("extension");o.appendChild(B("name",a,{mono:!0})),t.version&&o.appendChild(B("version",t.version)),t.description&&o.appendChild(B("description",t.description)),t.author&&o.appendChild(B("author",t.author)),t.installedAt&&o.appendChild(B("installed at",String(t.installedAt))),t.enabled!=null&&o.appendChild(B("enabled",String(t.enabled))),e.appendChild(o);const n=["operations","ables","tools","hooks","seeds","subscriptions","schedules","routes"];for(const i of n){const c=t[i];if(Array.isArray(c)&&c.length){const l=_(`provides ${i}`),p=document.createElement("ul");p.className="verb-list";for(const r of c){const d=document.createElement("li"),m=typeof r=="string"?r:JSON.stringify(r);d.innerHTML=`<code>${kt(m)}</code>`,p.appendChild(d)}l.appendChild(p),e.appendChild(l)}else if(c&&typeof c=="object"){const l=_(`provides ${i}`);l.appendChild(re(c)),e.appendChild(l)}}const s=_("raw qualities");s.appendChild(re(t)),e.appendChild(s)}function kt(e){return String(e).replace(/[&<>"']/g,t=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[t])}function Sa(e,t){var n;const a=((n=t.qualities)==null?void 0:n.operation)||{},o=Array.isArray(a.targets)?a.targets:[];if(o.length&&e.appendChild(G(`→ ${o.join("/")}`,"mode")),a.ownerExtension&&a.ownerExtension!=="seed"&&e.appendChild(G(a.ownerExtension,"activity")),a.factAction&&a.factAction!==t.name){const s=document.createElement("span");s.className="dim catalog-ts",s.textContent=`stamps ${a.factAction}`,e.appendChild(s)}a.skipAudit&&e.appendChild(G("no-audit","busy"))}function Aa(e,t){var n,s,i,c,l;const a=((n=t.qualities)==null?void 0:n.able)||{};a.respondMode&&e.appendChild(G(a.respondMode,"mode")),Array.isArray(a.triggerOn)&&a.triggerOn.length&&e.appendChild(G(`on:${a.triggerOn.join(",")}`,"activity"));const o=[];if((s=a.canDo)!=null&&s.length&&o.push(`do:${a.canDo.length}`),(i=a.canSee)!=null&&i.length&&o.push(`see:${a.canSee.length}`),(c=a.canSummon)!=null&&c.length&&o.push(`sum:${a.canSummon.length}`),(l=a.canBe)!=null&&l.length&&o.push(`be:${a.canBe.length}`),o.length){const p=document.createElement("span");p.className="dim catalog-ts",p.textContent=o.join(" · "),p.title=`canDo: ${(a.canDo||[]).join(", ")||"—"}
-canSee: ${(a.canSee||[]).join(", ")||"—"}
-canSummon: ${(a.canSummon||[]).join(", ")||"—"}
-canBe: ${(a.canBe||[]).join(", ")||"—"}`,e.appendChild(p)}}function La(e,t){const a=t.thread||{};if(a.lastAct){const o=document.createElement("span");o.className="dim catalog-ts",o.textContent=`last ${Te(a.lastAct)}`,o.title=a.lastAct,e.appendChild(o)}e.appendChild(G("live","queue"))}function Ia(e,t){var o;const a=((o=t.qualities)==null?void 0:o.extension)||t.qualities||{};if(a.version&&e.appendChild(G(`v${a.version}`,"mode")),a.description){const n=document.createElement("span");n.className="dim catalog-ts",n.textContent=String(a.description).slice(0,80),n.title=a.description,e.appendChild(n)}}function Ba(e,{discovery:t}){var n,s;const a=document.getElementById("middle");(n=document.getElementById("position-pane"))==null||n.classList.add("hidden"),(s=document.getElementById("detail-pane"))==null||s.classList.add("hidden");let o=document.getElementById("explorer-pane");o&&o.remove(),o=document.createElement("section"),o.id="explorer-pane",a.appendChild(o),e.isReel?ja(o,e.reel,t):e.isActChain?Ra(o,e.actChain,t):e.isBeingsCatalog?Ta(o,e.beingsCatalog,t):e.isThread&&Oa(o,e.thread,t)}function Oa(e,t,a){if(!t){const d=document.createElement("div");d.className="explorer-empty",d.textContent="(thread not found)",e.appendChild(d);return}const o=document.createElement("header");o.className="explorer-header";const n=document.createElement("h2");n.className="explorer-title",n.innerHTML=`⧖ <a class="dim" href="#${a.story}/./threads">thread</a> <span class="dim">/</span> ${ne(t.id,16)}`,n.title=t.id,o.appendChild(n);const s=document.createElement("div");s.className="explorer-sub";const i=[];i.push(`state: <span class="thread-state thread-state-${t.state}">${t.state}</span>`),i.push(`${t.depth} act${t.depth===1?"":"s"}`),t.liveCount&&i.push(`<span class="dim">${t.liveCount} live</span>`),t.completeCount&&i.push(`<span class="dim">${t.completeCount} complete</span>`),t.severedCount&&i.push(`<span class="chain-bad">${t.severedCount} severed</span>`),s.innerHTML=i.join(" · "),o.appendChild(s),e.appendChild(o);const c=_("thread");if(c.appendChild(B("rootCorrelation",t.id,{mono:!0})),c.appendChild(B("state",t.state)),t.rootStartedAt&&c.appendChild(B("started at",String(t.rootStartedAt))),t.lastAct&&c.appendChild(B("last act at",String(t.lastAct))),t.parentThread&&(a!=null&&a.story)&&c.appendChild(B("parent thread",t.parentThread,{mono:!0,link:`#${a.story}/./threads/${t.parentThread}`})),Array.isArray(t.participants)&&t.participants.length){const d=document.createElement("div");d.className="kv-block kv-block-stack";const m=document.createElement("span");m.className="kv-block-label",m.textContent="participants",d.appendChild(m);const u=document.createElement("div");u.className="verb-list";for(const g of t.participants){const h=document.createElement("a");h.className="btn-explore",h.href=`#${a.story}/.acts/${g}`,h.textContent=ne(g,14),h.title=`view acts by ${g}`,u.appendChild(h)}d.appendChild(u),c.appendChild(d)}if(t.pending){const d=document.createElement("div");d.className="kv-block",d.innerHTML='<span class="kv-block-label">note</span><span class="kv-block-value dim">summon emitted; no moment has sealed yet (projection ahead of acts).</span>',c.appendChild(d)}e.appendChild(c);const l=Array.isArray(t.acts)?t.acts:[];if(l.length===0){const d=document.createElement("div");d.className="explorer-empty",d.textContent=t.pending?"(pending — projection shows the summon but no Act has sealed yet)":"(no acts in this thread yet)",e.appendChild(d);return}const p=document.createElement("h4");p.className="pane-title",p.style.marginTop="16px",p.textContent="acts in this thread (oldest first)",e.appendChild(p);const r=document.createElement("ol");r.className="block-list";for(const d of l)r.appendChild(St(d,a));e.appendChild(r)}function Ta(e,t,a){const{beings:o,count:n}=t||{},s=document.createElement("header");s.className="explorer-header";const i=document.createElement("h2");i.className="explorer-title",i.innerHTML=`∴ <span class="dim">beings</span> <span class="dim">across</span> ${(a==null?void 0:a.story)||""}`,s.appendChild(i);const c=document.createElement("div");if(c.className="explorer-sub",c.textContent=`${n} being${n===1?"":"s"} · global catalog · ordered by birth`,s.appendChild(c),e.appendChild(s),!o||o.length===0){const p=document.createElement("div");p.className="explorer-empty",p.textContent="(no beings exist in this story yet)",e.appendChild(p);return}const l=document.createElement("ul");l.className="catalog-list";for(const p of o)l.appendChild(Ma(p,a));e.appendChild(l)}function Ma(e,t){var c;const a=document.createElement("li");a.className="catalog-row";const o=document.createElement("div");o.className="catalog-main";const n=document.createElement("span");if(n.className="row-name",n.textContent=`@${e.name||"(unnamed)"}`,o.appendChild(n),e.cognition&&o.appendChild(G(e.cognition,"mode")),e.defaultAble){const l=G(e.defaultAble,"activity");l.title=((c=e.ables)==null?void 0:c.length)>1?`ables: ${e.ables.join(", ")}`:"default able",o.appendChild(l)}if(e.createdAt){const l=document.createElement("span");l.className="dim catalog-ts",l.textContent=Te(e.createdAt),l.title=e.createdAt,o.appendChild(l)}a.appendChild(o);const s=document.createElement("div");s.className="catalog-sub";const i=document.createElement("code");if(i.className="catalog-id",i.textContent=ne(e.beingId,20),i.title=e.beingId,s.appendChild(i),t!=null&&t.story){const l=document.createElement("a");l.className="btn-explore",l.href=`#${t.story}/.reel/being/${e.beingId}`,l.textContent="facts",s.appendChild(l);const p=document.createElement("a");if(p.className="btn-explore",p.href=`#${t.story}/.acts/${e.beingId}`,p.textContent="acts",s.appendChild(p),e.homeSpace){const r=document.createElement("a");r.className="btn-explore",r.href=`#${t.story}/.reel/space/${e.homeSpace}`,r.textContent="home reel",r.title=`homed at space ${e.homeSpace}`,s.appendChild(r)}}return a.appendChild(s),a}function ja(e,t,a){const{target:o,facts:n,count:s}=t||{},i=qa(n||[]),c=document.createElement("header");c.className="explorer-header";const l=document.createElement("h2");l.className="explorer-title",l.innerHTML=`⛓ <span class="dim">reel</span> ${o.kind}<span class="dim">/</span>${o.name||o.id}`,c.appendChild(l);const p=document.createElement("div");if(p.className="explorer-sub",p.innerHTML=`${s} fact${s===1?"":"s"} · newest first · `+Ha(i),c.appendChild(p),o.kind==="being"&&(a!=null&&a.story)){const d=document.createElement("a");d.className="explorer-jump",d.href=`#${a.story}/.acts/${o.id}`,d.textContent="→ acts by this being",c.appendChild(d)}if(e.appendChild(c),!n||n.length===0){const d=document.createElement("div");d.className="explorer-empty",d.textContent=`(no facts on this ${o.kind}'s reel yet)`,e.appendChild(d);return}const r=document.createElement("ol");r.className="block-list";for(let d=0;d<n.length;d++)r.appendChild(Fa(n[d],a,i.perBlock[d]));e.appendChild(r)}function qa(e){const t={ok:!0,verified:0,broken:0,perBlock:[]};for(let a=0;a<e.length;a++){const o=e[a],n=e[a+1];if(n){const s=n._id||n.h;o.p&&s&&String(o.p)===String(s)?(t.verified++,t.perBlock.push("ok")):(t.broken++,t.ok=!1,t.perBlock.push("broken"))}else!o.p||/^0+$/.test(String(o.p))?t.perBlock.push("genesis"):t.perBlock.push("edge")}return t}function Ha(e){return e.broken>0?`<span class="chain-bad">✗ ${e.broken} broken link${e.broken===1?"":"s"}</span> · ${e.verified} verified`:e.verified===0?'<span class="chain-dim">— single-block window —</span>':`<span class="chain-ok">✓ ${e.verified} link${e.verified===1?"":"s"} verified</span>`}function Fa(e,t,a="edge"){var C,E,y,w;const o=document.createElement("li");o.className="block";const n=document.createElement("div");n.className="block-summary";const s=document.createElement("span");s.className=`block-chain chain-${a}`,s.textContent=a==="ok"?"✓":a==="genesis"?"◇":a==="broken"?"✗":"·",s.title=a==="ok"?"prev-hash matches predecessor block":a==="genesis"?"first fact on this reel (genesis)":a==="broken"?"prev-hash DOES NOT match predecessor — chain broken here":"predecessor outside visible window",n.appendChild(s);const i=document.createElement("span");i.className="block-seq",i.textContent=`#${e.seq??"?"}`,i.title="per-reel sequence (block height)",n.appendChild(i);const c=document.createElement("span");c.className="block-action",c.textContent=`${e.verb}:${e.act}`,n.appendChild(c);const l=document.createElement("span");l.className="block-target dim";const p=((C=e.of)==null?void 0:C.kind)||"?",r=(E=e.of)!=null&&E.id?ne(String(e.of.id)):"?";l.textContent=`→ ${p}/${r}`,n.appendChild(l);const d=document.createElement("span");d.className="block-doer",d.textContent=e.beingName?`@${e.beingName}`:e.through?ne(e.through):"?",d.title=e.through||"",n.appendChild(d);const m=document.createElement("span");m.className="block-ts dim",m.textContent=Te(e.date),m.title=e.date||"",n.appendChild(m);const u=document.createElement("code");u.className="block-hash",u.textContent=`#${ne(e._id,10)}`,u.title=e._id?`identity: ${e._id}
-prev: ${e.p||"(genesis)"}`:"(no identity)",n.appendChild(u);const g=document.createElement("button");g.className="block-toggle",g.textContent="▸",g.title="expand",n.appendChild(g),o.appendChild(n);const h=At(e);if(h){const N=document.createElement("div");N.className="block-sub block-content",N.textContent=h,N.title=h,o.appendChild(N)}const f=document.createElement("div");if(f.className="block-detail hidden",f.appendChild(B("identity (hash)",e._id||"(none)",{mono:!0})),f.appendChild(B("p (prev)",e.p||"(genesis)",{mono:!0})),e.actId&&f.appendChild(B("act id",e.actId,{mono:!0,link:t&&e.through?`#${t.story}/.acts/${e.through}`:null})),e.params!=null&&f.appendChild(ye("params",e.params)),e.result!=null&&f.appendChild(ye("result",e.result)),t!=null&&t.story&&((y=e.of)!=null&&y.kind)&&((w=e.of)!=null&&w.id)){const N=`${e.of.kind}/${e.of.id}`;f.appendChild(B("target",N,{mono:!0,link:`#${t.story}/.reel/${e.of.kind}/${e.of.id}`}))}return t!=null&&t.story&&e.through&&f.appendChild(B("doer",e.beingName||e.through,{mono:!0,link:`#${t.story}/.reel/being/${e.through}`})),o.appendChild(f),g.onclick=()=>{const N=f.classList.toggle("hidden");g.textContent=N?"▸":"▾"},n.onclick=N=>{N.target===g||N.target.tagName==="A"||g.click()},o}function Ra(e,t,a){const{being:o,acts:n,count:s}=t||{},i=document.createElement("header");i.className="explorer-header";const c=document.createElement("h2");c.className="explorer-title",c.innerHTML=`⧗ <span class="dim">act-chain</span> @${o.name||o.id}`,i.appendChild(c);const l=document.createElement("div");if(l.className="explorer-sub",l.textContent=`${s} act${s===1?"":"s"} • newest first • each act = one moment this being authored`,i.appendChild(l),a!=null&&a.story){const r=document.createElement("a");r.className="explorer-jump",r.href=`#${a.story}/.reel/being/${o.id}`,r.textContent="→ facts on this being's reel",i.appendChild(r)}if(e.appendChild(i),!n||n.length===0){const r=document.createElement("div");r.className="explorer-empty",r.textContent="(this being has no acts yet)",e.appendChild(r);return}const p=document.createElement("ol");p.className="block-list";for(const r of n)p.appendChild(St(r,a));e.appendChild(p)}function St(e,t){var E,y,w,N,k,v;const a=document.createElement("li");a.className="block block-act";const o=document.createElement("div");o.className="block-head";const n=document.createElement("span");n.className="block-ts",n.textContent=Te(e.stampedAt||e.receivedAt),n.title=e.stampedAt||e.receivedAt||"",o.appendChild(n);const s=typeof((E=e.endMessage)==null?void 0:E.content)=="string"&&e.endMessage.content.trim()?e.endMessage.content:null,i=Da((y=e.startMessage)==null?void 0:y.content),c=!s&&Array.isArray(e.facts)&&e.facts.length?e.facts.map(_a).filter(Boolean).join(", "):null,l=s||c||i,p=!!s,r=!s&&!!c,d=document.createElement("div");if(d.className="block-content",d.textContent=l,d.title=l,p||r){const $=document.createElement("span");$.className="content-tag dim",$.textContent=p?"↳":"⚙",$.title=p?"this being's response (end message)":"what this moment did (stamped facts)",d.prepend($)}if(o.appendChild(d),e.priority&&e.priority!=="INTERACTIVE"){const $=document.createElement("span");$.className=`block-pri pri-${e.priority.toLowerCase()}`,$.textContent=e.priority,o.appendChild($)}if(e.severedAt){const $=document.createElement("span");$.className="block-pri pri-severed",$.textContent="severed",o.appendChild($)}const m=document.createElement("button");m.className="block-toggle",m.textContent="▸",o.appendChild(m),a.appendChild(o);const u=document.createElement("div");u.className="block-sub";const g=document.createElement("span");if(g.className="block-able",g.textContent=e.activeAble||"(no able)",u.appendChild(g),e.ibpAddress){const $=document.createElement("span");$.className="block-target dim",$.textContent=ne(e.ibpAddress,40),$.title=e.ibpAddress,u.appendChild($)}const h=document.createElement("code");if(h.className="block-hash",h.textContent=e.rootCorrelation?`root:${ne(e.rootCorrelation,8)}`:"(no root)",h.title=e.rootCorrelation||"",u.appendChild(h),p||r){const $=document.createElement("span");$.className="block-trigger dim",$.textContent="from: "+ot(i,100),$.title=i,u.appendChild($)}else if(typeof((w=e.endMessage)==null?void 0:w.content)=="string"&&e.endMessage.content){const $=document.createElement("span");$.className="block-end dim",$.textContent="↳ "+ot(e.endMessage.content,120),$.title=e.endMessage.content,u.appendChild($)}a.appendChild(u);const f=document.createElement("div");f.className="block-detail hidden",f.appendChild(B("act id",e._id,{mono:!0})),e.ibpAddress&&f.appendChild(B("ibp address",e.ibpAddress,{mono:!0})),e.activeAble&&f.appendChild(B("able",e.activeAble)),e.priority&&f.appendChild(B("priority",e.priority)),e.to&&(t!=null&&t.story)&&f.appendChild(B("being out",e.to,{mono:!0,link:`#${t.story}/.reel/being/${e.to}`})),e.rootCorrelation&&f.appendChild(B("rootCorrelation",e.rootCorrelation,{mono:!0})),e.inReplyTo&&f.appendChild(B("inReplyTo",e.inReplyTo,{mono:!0})),e.parentThread&&f.appendChild(B("parentThread",e.parentThread,{mono:!0})),e.answers&&f.appendChild(B("answers (summon)",e.answers,{mono:!0})),(N=e.startMessage)!=null&&N.content&&f.appendChild(ye("in (start message)",e.startMessage)),((k=e.endMessage)!=null&&k.content||(v=e.endMessage)!=null&&v.stopped)&&f.appendChild(ye("out (end message)",e.endMessage)),Array.isArray(e.facts)&&e.facts.length&&f.appendChild(ye(`facts (${e.facts.length})`,e.facts)),f.appendChild(za(e.innerFace,t)),e.severedAt&&f.appendChild(B("severed at",String(e.severedAt))),e.receivedAt&&f.appendChild(B("received at",String(e.receivedAt))),e.stampedAt&&f.appendChild(B("stamped at",String(e.stampedAt))),a.appendChild(f),m.onclick=$=>{$.stopPropagation();const L=f.classList.toggle("hidden");m.textContent=L?"▸":"▾"};const C=$=>{$.target.tagName==="A"||$.target===m||m.click()};return o.onclick=C,u.onclick=C,a}function _a(e){if(!e||!e.act)return null;const t=At(e);return t?`${e.act} ${t}`:e.act}function At(e){var a,o;if(!e)return null;const t=e.params;if(e.verb==="call"){const n=t==null?void 0:t.content;if(typeof n=="string"&&n)return`"${n}"`;if(n&&typeof n=="object"&&typeof n.content=="string"&&n.content)return`"${n.content}"`}if(e.verb==="be"&&(e.act==="register"||e.act==="claim")&&t!=null&&t.name)return`@${t.name}`;if(e.verb==="be"&&e.act==="birth"&&((a=t==null?void 0:t.spec)!=null&&a.name))return`@${t.spec.name}`;if(/^create/.test(e.act)&&((o=t==null?void 0:t.spec)!=null&&o.name))return`name "${t.spec.name}"${t.spec.type?` (type ${t.spec.type})`:""}`;if(/^set/.test(e.act)&&(t!=null&&t.field)){const n=t.value;if(t.field==="coord"&&n&&typeof n.x=="number"&&typeof n.y=="number")return`→ (${n.x}, ${n.y})`;const s=typeof n=="string"?n:typeof n=="number"||typeof n=="boolean"?String(n):Pe(n,60);return`${t.field} = ${s}`}if(/place|move/.test(e.act)&&t){if(typeof t.x=="number"&&typeof t.y=="number")return`→ (${t.x}, ${t.y})`;if(t.path)return`→ ${t.path}`}if(t&&typeof t=="object"){const n=Pe(t,100);if(n&&n!=="{}")return n}return null}function Pe(e,t=80){try{const a=JSON.stringify(e);return a?a.length>t?a.slice(0,t)+"…":a:null}catch{return null}}function ot(e,t){const a=typeof e=="string"?e:String(e??"");return a.length>t?a.slice(0,t-1)+"…":a}function Da(e){if(e==null||e==="")return"(no content)";if(typeof e=="string")return e;if(typeof e!="object")return String(e);if(typeof e.text=="string"&&e.text.trim())return e.text;if(typeof e.content=="string"&&e.content.trim())return e.content;if(e.event){const a=[String(e.event)];return e.spaceId&&a.push(`at space/${Le(e.spaceId)}`),e.actorBeingId&&a.push(`by being/${Le(e.actorBeingId)}`),e.matterId&&a.push(`on matter/${Le(e.matterId)}`),e.drumMatterId&&a.push(`drum/${Le(e.drumMatterId)}`),a.join(" ")}return Pe(e,120)||"[object]"}function Le(e){const t=String(e);return t.length>12?t.slice(0,8)+"…":t}function ne(e,t=12){return typeof e!="string"||e.length<=t?e:e.slice(0,t)+"…"}function Te(e){if(!e)return"";try{const t=new Date(e);return isNaN(t.getTime())?"":t.toLocaleString(void 0,{hour12:!1})}catch{return""}}function B(e,t,{mono:a=!1,link:o=null}={}){const n=document.createElement("div");n.className="kv-block";const s=document.createElement("span");s.className="kv-block-label",s.textContent=e,n.appendChild(s);let i;return o?(i=document.createElement("a"),i.href=o):i=document.createElement("span"),i.className="kv-block-value"+(a?" mono":""),i.textContent=t==null?"(none)":String(t),n.appendChild(i),n}function ye(e,t){const a=document.createElement("div");a.className="kv-block kv-block-stack";const o=document.createElement("span");o.className="kv-block-label",o.textContent=e,a.appendChild(o);const n=document.createElement("pre");return n.className="json",n.textContent=JSON.stringify(t,null,2),a.appendChild(n),a}function Pa(e){const t=[];let a=0;for(const n of e||[]){if(n&&typeof n=="object"&&n.kind==="truncated"){a+=Number(n.count)||0;continue}t.push((n==null?void 0:n.name)||(n==null?void 0:n.id)||String(n))}let o=t.join(", ");return a&&(o+=(o?", ":"")+`+${a} more`),{text:o||"(none)",shown:t.length,more:a}}function za(e,t){const a=document.createElement("div");a.className="kv-block kv-block-stack block-face";const o=document.createElement("span");if(o.className="kv-block-label",o.textContent="face",a.appendChild(o),!e){const i=document.createElement("span");return i.className="kv-block-value dim",i.textContent="(no face recorded)",a.appendChild(i),a}const n=document.createElement("div");if(n.className="face-body",e.orientation&&n.appendChild(B("orientation",e.orientation)),e.able&&n.appendChild(B("able",e.able)),e.origin&&e.origin!=="local"&&n.appendChild(B("origin",e.origin)),e.position){const i=e.position.name||e.position.id||"(position)",c=e.position.id&&(t!=null&&t.story)?`#${t.story}/.reel/space/${e.position.id}`:null;n.appendChild(B("position",i,{link:c}))}const s=e.capabilities;if(s&&typeof s=="object")for(const i of Object.keys(s)){if(!Array.isArray(s[i])||!s[i].length)continue;const{text:c}=Pa(s[i]);n.appendChild(B(i,c))}if(Array.isArray(e.blocks)&&e.blocks.length)for(const i of e.blocks){if(!i||i.kind==="truncated"){i&&i.kind==="truncated"&&n.appendChild(B("blocks",`+${i.count} more`));continue}const c=i.label||i.key||"(block)";let l;if(typeof i.payload=="string")l=i.payload.length>80?i.payload.slice(0,80)+"...":i.payload;else if(i.payload!=null)try{const r=JSON.stringify(i.payload);l=r.length>80?r.slice(0,80)+"...":r}catch{l="(unrenderable)"}else l="(empty)";const p=i.source?` <${i.source}>`:"";n.appendChild(B(`saw ${c}${p}`,l))}return a.appendChild(n),a}function We({kind:e,entry:t}){var s,i;const a=document.getElementById("empty-detail"),o=document.getElementById("chat-panel"),n=document.getElementById("inspector");if(a.classList.add("hidden"),o.classList.add("hidden"),n.classList.remove("hidden"),n.innerHTML="",e==="being"){if((t==null?void 0:t.being)==="able-manager"){Tt(n,t,{story:(s=b.state.discovery)==null?void 0:s.story,username:((i=b.state.session)==null?void 0:i.username)||null,descriptor:b.state.descriptor,see:c=>b.state.client.see(c),doOp:b.doOp});return}Ua(n,t)}else Ja(n,t)}function Ua(e,t){var E,y,w,N,k;const a=b.state,o=(E=a.discovery)==null?void 0:E.story,n=((w=(y=a.descriptor)==null?void 0:y.address)==null?void 0:w.pathByNames)||"/",s=`${o}${n}@${t.being}`.replace(/\/+@/,"/@"),i=((N=a.session)==null?void 0:N.username)===t.being,c=document.createElement("h3");c.className="pane-title",c.textContent=`@${t.being}`,e.appendChild(c);const l=document.createElement("div");if(l.className="sub",l.textContent=s,e.appendChild(l),t.beingId){const v=_("identity");v.appendChild(U("id (public key)",String(t.beingId))),e.appendChild(v)}const p=_("state");if(p.appendChild(U("invocable by",t.invocableBy||"(unknown)")),t.respondMode&&p.appendChild(U("respondMode",t.respondMode)),Array.isArray(t.triggerOn)&&t.triggerOn.length&&p.appendChild(U("triggerOn",t.triggerOn.join(", "))),p.appendChild(U("available",t.available===!1?"no":"yes")),t.busy&&p.appendChild(U("busy",t.talkingTo?`talking to ${t.talkingTo}`:"yes")),t.activity){const v=`${t.activity.kind}${t.activity.content?` — ${t.activity.content}`:""}`;p.appendChild(U("activity",v))}e.appendChild(p);const r=t.inbox||{},d=_("inbox");if(d.appendChild(U("total / unconsumed",`${r.total??0} / ${r.unconsumed??0}`)),r.queueDepth&&d.appendChild(U("queue depth",r.queueDepth)),Array.isArray(r.pendingFrom)&&r.pendingFrom.length&&d.appendChild(U("pending from",r.pendingFrom.join(", "))),Array.isArray(r.recent)&&r.recent.length){const v=document.createElement("div");v.className="kv-label",v.textContent="recent",d.appendChild(v);const $=document.createElement("ul");$.className="inbox-list";for(const L of r.recent.slice(0,5)){const S=document.createElement("li"),q=document.createElement("span");q.className="msg-who",q.textContent=L.from||"?";const O=document.createElement("span");O.className="msg-content",O.textContent=" "+(L.content||"").slice(0,80),S.appendChild(q),S.appendChild(O),$.appendChild(S)}d.appendChild($)}e.appendChild(d);const m=_("navigation"),u=document.createElement("a");if(u.className="nav-link",u.href="#"+s,u.textContent=`→ see ${s.replace(o,"")}`,u.title="navigate to this being's stance and re-SEE from there",m.appendChild(u),e.appendChild(m),t.permissions&&typeof t.permissions=="object"&&Object.keys(t.permissions).length){const v=_("permissions");v.appendChild(re(t.permissions)),e.appendChild(v)}if(t.qualities&&typeof t.qualities=="object"&&Object.keys(t.qualities).length){const v=_("qualities");v.appendChild(re(t.qualities)),e.appendChild(v)}const g=_("BE actions");if(t.being==="cherub"?(g.appendChild(st("connect",s,["name","password"])),g.appendChild(st("birth",s,["name","password"]))):i&&g.appendChild(Ga("release",s,{})),e.appendChild(g),(k=a.session)!=null&&k.username){const v=document.createElement("section");v.className="panel-section",e.appendChild(v),Mt(v,t,{story:o,username:a.session.username,descriptor:a.descriptor,see:$=>a.client.see($),doOp:b.doOp})}Dt(e,t,{story:o}),Wa(e,t,{story:o,stance:s});const h=[...b.operationsForTarget("being"),...b.operationsForTarget("stance")],f=new Set,C=h.filter(v=>f.has(v.name)?!1:(f.add(v.name),!0));if(C.length){const v=_(`DO actions (${C.length})`);for(const $ of C)v.appendChild(Lt($,s));e.appendChild(v)}}function Ja(e,t){var r,d,m;const a=b.state,o=(r=a.discovery)==null?void 0:r.story,n=((m=(d=a.descriptor)==null?void 0:d.address)==null?void 0:m.pathByNames)||"/",s=`${o}${n}`.replace(/\/+$/,"")||o,i=document.createElement("h3");i.className="pane-title",i.textContent=t.name||"(matter)",e.appendChild(i);const c=document.createElement("div");c.className="sub",c.textContent=`matterId ${t.matterId||"?"}`,e.appendChild(c);const l=_("meta");if(t.type&&l.appendChild(U("type",t.type)),t.byBeingId&&l.appendChild(U("written by",t.byBeingId)),e.appendChild(l),t.preview){const u=_("preview"),g=document.createElement("pre");g.className="preview-block",g.textContent=t.preview,u.appendChild(g),e.appendChild(u)}if(t.qualities&&typeof t.qualities=="object"&&Object.keys(t.qualities).length){const u=_("qualities");u.appendChild(re(t.qualities)),e.appendChild(u)}const p=b.operationsForTarget("matter");if(p.length){const u=_(`DO actions (${p.length})`);for(const g of p)u.appendChild(Lt(g,s,{matterId:t.matterId}));e.appendChild(u)}}function st(e,t,a){const o=document.createElement("div");o.className="action-row";const n=document.createElement("code");n.className="op-label",n.textContent=`BE.${e}`,o.appendChild(n);const s=document.createElement("form");s.className="action-form";const i={};for(const p of a){const r=document.createElement("input");r.type=p==="password"?"password":"text",r.placeholder=p,r.className="action-input",i[p]=r,s.appendChild(r)}const c=document.createElement("button");c.type="submit",c.className="btn-sm btn-primary",c.textContent=e,s.appendChild(c);const l=document.createElement("div");return l.className="action-result hidden",s.onsubmit=async p=>{p.preventDefault();const r={};for(const d of a)r[d]=i[d].value;pe(l,"…","pending"),c.disabled=!0;try{const d=await b.beOp(e,t,r);pe(l,JSON.stringify(d,null,2),"ok")}catch(d){pe(l,`${d.code||"error"}: ${d.message||String(d)}`,"err")}finally{c.disabled=!1}},o.appendChild(s),o.appendChild(l),o}function Ga(e,t,a){const o=document.createElement("div");o.className="action-row";const n=document.createElement("code");n.className="op-label",n.textContent=`BE.${e}`,o.appendChild(n);const s=document.createElement("button");s.className="btn-sm",s.textContent=e,o.appendChild(s);const i=document.createElement("div");return i.className="action-result hidden",s.onclick=async()=>{pe(i,"…","pending"),s.disabled=!0;try{const c=await b.beOp(e,t,a||{});pe(i,JSON.stringify(c,null,2),"ok")}catch(c){pe(i,`${c.code||"error"}: ${c.message||String(c)}`,"err")}finally{s.disabled=!1}},o.appendChild(i),o}function Lt(e,t,a={}){const o=document.createElement("div");o.className="action-row";const n=Object.keys(a).length?(s,i,c)=>b.doOp(s,i,{...a,...c}):b.doOp;return Q(o,{op:e,address:t,doOp:n,submitLabel:"do"}),o}function Wa(e,t,{story:a,stance:o}={}){var C,E,y,w;const n=b.state,s=_("LLM at this space");e.appendChild(s);const i=document.createElement("div");i.className="llm-flow",i.textContent="(loading chain…)",s.appendChild(i);const c=((C=t.qualities)==null?void 0:C.llm)||{},l=document.createElement("div");l.className="llm-config";const p=document.createElement("div");p.className="kv-label",p.textContent=`${t.being}'s LLM config`,l.appendChild(p);const r=Array.isArray(c.default)?c.default.length:c.default?1:0;l.appendChild(U("default fallback",`${r} connection${r===1?"":"s"}`));const d=c.slots&&typeof c.slots=="object"?c.slots:{},m=Object.keys(d);if(m.length)for(const N of m){const k=Array.isArray(d[N])?d[N]:d[N]?[d[N]]:[];l.appendChild(U(`slot: ${N}`,`${k.length} connection${k.length===1?"":"s"}`))}else l.appendChild(U("able slots","(none)"));c.forceReceiver===!0&&l.appendChild(U("forceReceiver","yes — chain caps here")),c.forceActor===!0&&l.appendChild(U("forceActor","yes — chain jumps to actor side")),c.preferOwn===!0&&l.appendChild(U("preferOwn","yes")),s.appendChild(l);const u=document.createElement("div");u.className="sub muted",u.textContent="Edit via set-being-llm in DO actions below.",s.appendChild(u);const g=t.beingId||null,h=((E=n.session)==null?void 0:E.username)||null,f=t.defaultAble||"main";if(!g){i.textContent="(receiver beingId unavailable — descriptor missing)";return}Promise.resolve(n.client.see("llm-chain",{args:{receiverBeingId:g,receiverSpaceId:((w=(y=n.descriptor)==null?void 0:y.position)==null?void 0:w.spaceId)||null,actorBeingName:h,able:f}})).then(N=>{i.innerHTML="";const k=N&&N.result||N||{},v=Array.isArray(k.chain)?k.chain:[],$=k.reason||null,L=k.chosen||null;if(v.length===0){const O=document.createElement("div");O.className="sub",O.textContent=$||"(no candidates in chain)",i.appendChild(O);return}const S=document.createElement("div");S.className="kv-label",S.textContent=`chain preview — able: ${f}`,i.appendChild(S);const q=document.createElement("ul");q.className="llm-chain";for(const O of v){const M=document.createElement("li");M.className="llm-chain-entry";const x=L&&O.connectionId===L.connectionId&&O.step===L.step&&O.source===L.source,A=document.createElement("span");A.className="llm-chain-marker",A.textContent=x?"✓":" ";const H=document.createElement("span");H.className="llm-chain-step",H.textContent=`step ${O.step}`;const F=document.createElement("span");F.className="llm-chain-source",F.textContent=O.source;const D=document.createElement("span");D.className="llm-chain-model",D.textContent=O.model||O.name||O.connectionId.slice(0,8),x&&(M.style.fontWeight="bold"),M.appendChild(A),M.appendChild(H),M.appendChild(F),M.appendChild(D),q.appendChild(M)}if(i.appendChild(q),$){const O=document.createElement("div");O.className="sub muted",O.textContent=`reason: ${$}`,i.appendChild(O)}}).catch(N=>{i.innerHTML="";const k=document.createElement("div");k.className="sub muted",k.textContent=`(preview failed: ${(N==null?void 0:N.message)||N})`,i.appendChild(k)})}function pe(e,t,a){e.className=`action-result action-${a}`,e.classList.remove("hidden"),e.textContent=t}function _(e){const t=document.createElement("div");t.className="panel-section";const a=document.createElement("h4");return a.textContent=e,t.appendChild(a),t}function U(e,t){const a=document.createElement("div");a.className="kv";const o=document.createElement("span");o.className="kv-label",o.textContent=e;const n=document.createElement("span");return n.className="kv-value",n.textContent=t==null?"(none)":String(t),a.appendChild(o),a.appendChild(n),a}function re(e){const t=document.createElement("pre");return t.className="json",t.textContent=JSON.stringify(e,null,2),t}function G(e,t){const a=document.createElement("span");return a.className=`badge badge-${t}`,a.textContent=e,a}function Ke(e){const t=document.createElement("li");return t.className="dim",t.textContent=e,t}const Ka=Object.freeze(Object.defineProperty({__proto__:null,clearDetail:$t,renderDescriptor:Be,setConnectionStatus:wt,setLoading:Nt,setStatus:ie,showInspector:We},Symbol.toStringTag,{value:"Module"}));function Xa(e){const t=document.getElementById("auth-overlay");if(!t)return;t.classList.remove("hidden"),t.innerHTML="";const a=document.createElement("div");a.className="auth-card";const o=document.createElement("h2");o.textContent="claim an identity",a.appendChild(o);const n=document.createElement("div");n.className="sub",n.textContent=`on ${e}`,a.appendChild(n);const s=document.createElement("div");s.className="tabs";const i=it("claim",!0),c=it("register",!1);s.appendChild(i),s.appendChild(c),a.appendChild(s);const l=lt("name","input"),p=lt("password","input","password");a.appendChild(l.wrap),a.appendChild(p.wrap);const r=document.createElement("div");r.className="field hidden";const d=document.createElement("label");d.textContent="import key (optional)";const m=document.createElement("textarea");m.placeholder="24-word recovery phrase, or the exported key PEM — empty mints a fresh identity",m.rows=2,m.style.width="100%",m.style.boxSizing="border-box",r.appendChild(d),r.appendChild(m),a.appendChild(r);const u=document.createElement("button");u.className="btn-primary btn-block",u.textContent="claim",a.appendChild(u);const g=document.createElement("div");g.className="auth-err hidden",a.appendChild(g);const h=document.createElement("button");h.className="btn-link",h.textContent="claim as @cherub (no password)",h.title="ad-hoc test identity",a.appendChild(h);let f="connect";i.onclick=()=>{f="connect",ct(i,c),u.textContent="connect",r.classList.add("hidden")},c.onclick=()=>{f="birth",ct(c,i),u.textContent="register",r.classList.remove("hidden")},u.onclick=async()=>{g.classList.add("hidden");const C=l.input.value.trim(),E=p.input.value;if(!C){Re(g,"name required");return}try{u.disabled=!0,u.textContent=f==="connect"?"connecting...":"registering...";const y=f==="birth"?m.value.trim():"";await b.signIn(f,C,E,y?{importKey:y}:{})}catch(y){Re(g,`${y.code||"error"}: ${y.message||"sign-in failed"}`),u.disabled=!1,u.textContent=f==="connect"?"connect":"register"}},h.onclick=async()=>{g.classList.add("hidden");try{h.disabled=!0,await b.signIn("connect","cherub","")}catch(C){Re(g,`${C.code||"error"}: ${C.message||"cherub connect failed"}`),h.disabled=!1}},t.appendChild(a),t.onclick=C=>{C.target===t&&Ee()},setTimeout(()=>l.input.focus(),10)}function Ee(){const e=document.getElementById("auth-overlay");e&&(e.classList.add("hidden"),e.innerHTML="")}function it(e,t){const a=document.createElement("button");return a.className="tab"+(t?" active":""),a.textContent=e,a}function ct(e,t){e.classList.add("active"),t.classList.remove("active")}function lt(e,t,a="text"){const o=document.createElement("div");o.className="field";const n=document.createElement("label");n.textContent=e;const s=document.createElement(t);return s.type=a,o.appendChild(n),o.appendChild(s),{wrap:o,input:s}}function Re(e,t){e.textContent=t,e.classList.remove("hidden")}const T={client:null,discovery:null,descriptor:null,session:null,currentAddress:null,operations:[],selectedBeing:null},b={get state(){return T},navigate:()=>{},signIn:async()=>{},signOut:async()=>{},sendSummon:async()=>{},cancelByRootCorrelation:async()=>{},doOp:async()=>{},beOp:async()=>{},operationsForTarget:()=>[],selectBeing:()=>{}},Ya=`
+import { _ as pt, s as Bt } from "./boot-BDjtA95u.js";
+import { a as Ot, r as Tt, b as Mt } from "./being-flow-panel-CG2eAhmf.js";
+import { renderIdentityPanel as mt } from "./identity-panel-BpP_VTCN.js";
+const R = {
+  open: !1,
+  being: null,
+  stance: null,
+  messages: [],
+  byCorr: new Map(),
+  byMessage: new Map(),
+};
+function jt() {
+  return R.open;
+}
+function qt() {
+  return R.being;
+}
+function $e(e, { refresh: t = !1 } = {}) {
+  var L, S, q, O, M, x, A, H;
+  if (!e) return;
+  const a = b.state,
+    o = (L = a.discovery) == null ? void 0 : L.story;
+  if (!o) return;
+  const n =
+      ((q = (S = a.descriptor) == null ? void 0 : S.address) == null
+        ? void 0
+        : q.pathByNames) || "/",
+    s =
+      ((M = (O = a.descriptor) == null ? void 0 : O.address) == null
+        ? void 0
+        : M.history) || "0",
+    i = s === "0" ? "" : `#${s}`,
+    c = `${o}${i}${n}@${e.being}`.replace(/\/+@/, "/@");
+  if (t && R.open && R.being === e.being) {
+    Ve(e);
+    return;
+  }
+  ((R.open = !0),
+    (R.being = e.being),
+    (R.stance = c),
+    (R.messages = []),
+    R.byCorr.clear(),
+    R.byMessage.clear());
+  const l = document.getElementById("empty-detail"),
+    p = document.getElementById("inspector"),
+    r = document.getElementById("chat-panel");
+  (l.classList.add("hidden"),
+    p.classList.add("hidden"),
+    r.classList.remove("hidden"),
+    (r.innerHTML = ""));
+  const d = document.createElement("div");
+  d.className = "chat-header";
+  const m = document.createElement("h3");
+  ((m.className = "pane-title"),
+    (m.textContent = `chat @${e.being}`),
+    d.appendChild(m));
+  const u = document.createElement("button");
+  ((u.className = "btn-sm"),
+    (u.textContent = "close"),
+    (u.onclick = () => ge()),
+    d.appendChild(u),
+    r.appendChild(d));
+  const g = document.createElement("div");
+  ((g.className = "chat-llm-bar"),
+    (g.textContent = "LLM: (loading…)"),
+    (g.style.cursor = "pointer"),
+    (g.title = "click to see full chain"),
+    r.appendChild(g));
+  let h = null,
+    f = !1;
+  function C() {
+    g.innerHTML = "";
+    const F = h && Array.isArray(h.chain) ? h.chain : [],
+      D = (h == null ? void 0 : h.chosen) || null;
+    if (D) {
+      const I = document.createElement("span");
+      ((I.textContent = "LLM: "), (I.className = "muted"));
+      const j = document.createElement("strong");
+      j.textContent = D.model || D.name || D.connectionId.slice(0, 12);
+      const z = document.createElement("span");
+      ((z.className = "muted"),
+        (z.textContent = ` ← step ${D.step} · ${D.source}`),
+        g.appendChild(I),
+        g.appendChild(j),
+        g.appendChild(z));
+    } else
+      F.length === 0 && h != null && h.reason
+        ? (g.textContent = `LLM: (none — ${h.reason})`)
+        : (g.textContent = "LLM: (no candidate resolved)");
+    const P = document.createElement("span");
+    ((P.className = "muted"),
+      (P.style.marginLeft = "0.5em"),
+      (P.textContent = f ? " ▾" : " ▸"),
+      g.appendChild(P));
+  }
+  function E() {
+    C();
+    const F = h && Array.isArray(h.chain) ? h.chain : [];
+    if (F.length === 0) return;
+    const D = document.createElement("ul");
+    D.className = "llm-chain";
+    for (const P of F) {
+      const I = document.createElement("li");
+      I.className = "llm-chain-entry";
+      const j =
+          (h == null ? void 0 : h.chosen) &&
+          P.connectionId === h.chosen.connectionId &&
+          P.step === h.chosen.step &&
+          P.source === h.chosen.source,
+        z = document.createElement("span");
+      ((z.className = "llm-chain-marker"), (z.textContent = j ? "✓" : " "));
+      const W = document.createElement("span");
+      ((W.className = "llm-chain-step"), (W.textContent = `step ${P.step}`));
+      const Y = document.createElement("span");
+      ((Y.className = "llm-chain-source"), (Y.textContent = P.source));
+      const J = document.createElement("span");
+      ((J.className = "llm-chain-model"),
+        (J.textContent = P.model || P.name || P.connectionId.slice(0, 8)),
+        j && (I.style.fontWeight = "bold"),
+        I.appendChild(z),
+        I.appendChild(W),
+        I.appendChild(Y),
+        I.appendChild(J),
+        D.appendChild(I));
+    }
+    if ((g.appendChild(D), h != null && h.reason)) {
+      const P = document.createElement("div");
+      ((P.className = "sub muted"),
+        (P.textContent = `reason: ${h.reason}`),
+        g.appendChild(P));
+    }
+  }
+  g.onclick = () => {
+    ((f = !f), f ? E() : C());
+  };
+  const y = e.defaultAble || "main";
+  Promise.resolve(
+    a.client.see("llm-chain", {
+      args: {
+        receiverBeingId: e.beingId || null,
+        receiverBeingName: e.beingId ? null : e.being,
+        receiverSpaceId:
+          ((A = (x = a.descriptor) == null ? void 0 : x.position) == null
+            ? void 0
+            : A.spaceId) || null,
+        actorBeingName: ((H = a.session) == null ? void 0 : H.username) || null,
+        able: y,
+      },
+    }),
+  )
+    .then((F) => {
+      ((h = (F && F.result) || F || { chain: [], reason: null, chosen: null }),
+        f ? E() : C());
+    })
+    .catch((F) => {
+      g.textContent = `LLM: (preview failed — ${(F == null ? void 0 : F.message) || F})`;
+    });
+  const w = document.createElement("div");
+  ((w.id = "chat-inbox"),
+    (w.className = "chat-inbox"),
+    r.appendChild(w),
+    Ve(e));
+  const N = document.createElement("div");
+  ((N.id = "chat-log"), (N.className = "chat-log"), r.appendChild(N));
+  const k = document.createElement("form");
+  k.className = "chat-composer";
+  const v = document.createElement("input");
+  ((v.type = "text"),
+    (v.placeholder = `summon @${e.being}…`),
+    (v.autocomplete = "off"));
+  const $ = document.createElement("button");
+  (($.type = "submit"),
+    ($.className = "btn-primary"),
+    ($.textContent = "send"),
+    k.appendChild(v),
+    k.appendChild($),
+    (k.onsubmit = async (F) => {
+      F.preventDefault();
+      const D = v.value.trim();
+      D && ((v.value = ""), await Ht(D));
+    }),
+    r.appendChild(k),
+    setTimeout(() => v.focus(), 10));
+}
+function ge() {
+  var e, t, a;
+  ((R.open = !1),
+    (R.being = null),
+    (R.stance = null),
+    (R.messages = []),
+    R.byCorr.clear(),
+    R.byMessage.clear(),
+    (e = document.getElementById("chat-panel")) == null ||
+      e.classList.add("hidden"),
+    (t = document.getElementById("inspector")) == null ||
+      t.classList.add("hidden"),
+    (a = document.getElementById("empty-detail")) == null ||
+      a.classList.remove("hidden"));
+}
+async function Ht(e) {
+  var a;
+  const t = je({
+    who: ((a = b.state.session) == null ? void 0 : a.username) || "arrival",
+    content: e,
+    kind: "outgoing",
+    ts: new Date().toISOString(),
+  });
+  try {
+    const { correlation: o, reply: n } = await b.sendSummon(R.stance, e);
+    R.byCorr.set(o, t);
+    const s = R.messages.find((i) => i.id === t);
+    (s && (s.rootCorrelation = o),
+      n &&
+        n.content &&
+        je({
+          who: R.being,
+          content: n.content,
+          kind: "reply",
+          parent: t,
+          ts: new Date().toISOString(),
+        }));
+  } catch (o) {
+    je({
+      who: "system",
+      content: `[${o.code || "error"}] ${o.message || "summon failed"}`,
+      kind: "error",
+      parent: t,
+      ts: new Date().toISOString(),
+    });
+  }
+}
+let Ft = 0;
+function je(e) {
+  const t = `m-${++Ft}`,
+    a = { id: t, ...e };
+  return (
+    R.messages.push(a),
+    e.rootCorrelation && R.byMessage.set(e.rootCorrelation, a),
+    Rt(),
+    t
+  );
+}
+function Rt() {
+  const e = document.getElementById("chat-log");
+  if (e) {
+    e.innerHTML = "";
+    for (const t of R.messages) t.parent || e.appendChild(ut(t));
+    e.scrollTop = e.scrollHeight;
+  }
+}
+function ut(e) {
+  const t = document.createElement("div");
+  t.className = `chat-msg chat-${e.kind}`;
+  const a = document.createElement("div");
+  ((a.className = "msg-who"), (a.textContent = e.who));
+  const o = document.createElement("div");
+  if (
+    ((o.className = "msg-content"),
+    (o.textContent = e.content),
+    t.appendChild(a),
+    t.appendChild(o),
+    e.kind === "outgoing" && e.rootCorrelation)
+  ) {
+    const s = document.createElement("button");
+    ((s.className = "btn-sm btn-cancel"),
+      (s.textContent = "stop"),
+      (s.title = "sever this thread (rootCorrelation cut)"),
+      (s.onclick = () => b.cancelByRootCorrelation(e.rootCorrelation)),
+      t.appendChild(s));
+  }
+  const n = R.messages.filter((s) => s.parent === e.id);
+  if (n.length > 0) {
+    const s = document.createElement("div");
+    s.className = "chat-children";
+    for (const i of n) s.appendChild(ut(i));
+    t.appendChild(s);
+  }
+  return t;
+}
+function Ve(e) {
+  var s;
+  const t = document.getElementById("chat-inbox");
+  if (!t) return;
+  t.innerHTML = "";
+  const a = (s = e == null ? void 0 : e.inbox) == null ? void 0 : s.recent;
+  if (!a || a.length === 0) {
+    const i = document.createElement("div");
+    ((i.className = "dim"),
+      (i.textContent = "(no past summons in inbox)"),
+      t.appendChild(i));
+    return;
+  }
+  const o = document.createElement("h4");
+  ((o.textContent = `inbox (${e.inbox.total ?? a.length})`), t.appendChild(o));
+  const n = document.createElement("ul");
+  n.className = "inbox-list";
+  for (const i of a.slice(0, 10)) {
+    const c = document.createElement("li"),
+      l = document.createElement("span");
+    ((l.className = "msg-who"), (l.textContent = i.from || "?"));
+    const p = document.createElement("span");
+    ((p.className = "msg-content"),
+      (p.textContent = " " + (i.content || "(no content)").slice(0, 80)),
+      c.appendChild(l),
+      c.appendChild(p),
+      n.appendChild(c));
+  }
+  t.appendChild(n);
+}
+const _t = 100;
+async function Dt(e, t, a) {
+  var r;
+  const o = document.createElement("section");
+  o.className = "panel-section";
+  const n = document.createElement("h4");
+  if (
+    ((n.textContent = "Timeline"), o.appendChild(n), !(t != null && t.beingId))
+  ) {
+    (o.appendChild(Wt("(no beingId surfaced on this entry)")),
+      e.appendChild(o));
+    return;
+  }
+  const s = document.createElement("div");
+  ((s.className = "sub"), (s.textContent = "loading acts…"), o.appendChild(s));
+  const i = document.createElement("ol");
+  ((i.className = "tl-list"), o.appendChild(i));
+  const c = document.createElement("div");
+  ((c.className = "tl-past hidden"), o.appendChild(c), e.appendChild(o));
+  const l = a.story || ((r = b.state.discovery) == null ? void 0 : r.story),
+    p = await Pt(l, t.beingId).catch(
+      (d) => (
+        (s.textContent = `failed to load acts: ${(d == null ? void 0 : d.message) || d}`),
+        null
+      ),
+    );
+  if (p) {
+    if (!p.length) {
+      s.textContent = "no acts on this being's reel yet.";
+      return;
+    }
+    s.textContent = `${p.length} act${p.length === 1 ? "" : "s"} · newest first · click to view state at that point`;
+    for (const d of p) i.appendChild(zt(d, t, c, l));
+  }
+}
+async function Pt(e, t) {
+  var a, o;
+  if (!e) return [];
+  try {
+    const n =
+        ((o = (a = b.state.descriptor) == null ? void 0 : a.address) == null
+          ? void 0
+          : o.history) || "0",
+      s = n === "0" ? "" : `#${n}`,
+      i = await b.state.client.see(`${e}${s}/.acts/${t}`),
+      c = i == null ? void 0 : i.actChain;
+    return Array.isArray(c == null ? void 0 : c.acts)
+      ? c.acts.slice(0, _t)
+      : [];
+  } catch {
+    return [];
+  }
+}
+function zt(e, t, a, o) {
+  const n = document.createElement("li");
+  n.className = "tl-row";
+  const s = e.lastFactSeq,
+    i = e.stampedAt || e.receivedAt,
+    c = document.createElement("div");
+  c.className = "tl-row-head";
+  const l = document.createElement("span");
+  ((l.className = "tl-row-when"),
+    (l.textContent = ht(e.stampedAt || e.receivedAt)),
+    c.appendChild(l));
+  const p = document.createElement("span");
+  if (
+    ((p.className = "tl-row-able"),
+    (p.textContent = e.activeAble || "(no able)"),
+    c.appendChild(p),
+    s != null)
+  ) {
+    const d = document.createElement("span");
+    ((d.className = "tl-row-seq"),
+      (d.textContent = `seq ${s}`),
+      c.appendChild(d));
+  }
+  n.appendChild(c);
+  const r = document.createElement("div");
+  return (
+    (r.className = "tl-row-summary"),
+    (r.textContent = Gt(e)),
+    n.appendChild(r),
+    i
+      ? (n.classList.add("tl-row-clickable"),
+        (n.onclick = async () => {
+          ([...n.parentElement.children].forEach((d) =>
+            d.classList.remove("tl-row-active"),
+          ),
+            n.classList.add("tl-row-active"),
+            await Ut({ story: o, being: t, whenISO: i, pastContainer: a }));
+        }))
+      : (n.classList.add("tl-row-inert"),
+        (r.title =
+          "no timestamp on this act — cannot anchor a historical fold")),
+    n
+  );
+}
+async function Ut({ story: e, being: t, whenISO: a, pastContainer: o }) {
+  var m, u, g;
+  (o.classList.remove("hidden"), (o.innerHTML = ""));
+  const n = document.createElement("div");
+  ((n.className = "tl-past-banner"),
+    (n.textContent = `AS OF  ·  ${ht(a)}`),
+    o.appendChild(n));
+  const s = document.createElement("div");
+  ((s.className = "sub"),
+    (s.textContent = "folding the place…"),
+    o.appendChild(s));
+  let i;
+  try {
+    const h =
+        ((u = (m = b.state.descriptor) == null ? void 0 : m.address) == null
+          ? void 0
+          : u.history) || "0",
+      f = h === "0" ? "" : `#${h}`;
+    i = await b.state.client.see(`${e}${f}/@${t.being}`, {
+      at: { atTimestamp: a },
+    });
+  } catch (h) {
+    s.textContent = `fold failed: ${(h == null ? void 0 : h.code) || ""} ${(h == null ? void 0 : h.message) || h}`;
+    return;
+  }
+  if (!(i != null && i.isHistorical)) {
+    s.textContent = "(server returned a non-historical descriptor)";
+    return;
+  }
+  s.remove();
+  const c =
+    (i.beings || []).find((h) => h.being === t.being) ||
+    ((g = i.beings) == null ? void 0 : g[0]) ||
+    null;
+  if (c) {
+    const h = document.createElement("div");
+    ((h.className = "tl-past-section-head"),
+      (h.textContent = `@${t.being}`),
+      o.appendChild(h));
+    const f = document.createElement("div");
+    ((f.className = "tl-past-state"), Jt(f, c), o.appendChild(f));
+  }
+  const l = (i.beings || []).filter((h) => h.being !== t.being);
+  if (l.length) {
+    const h = document.createElement("div");
+    ((h.className = "tl-past-section-head"),
+      (h.textContent = `also here · ${l.length}`),
+      o.appendChild(h));
+    const f = document.createElement("ul");
+    f.className = "tl-past-others";
+    for (const C of l) {
+      const E = document.createElement("li"),
+        y = document.createElement("span");
+      if (
+        ((y.className = "tl-other-name"),
+        (y.textContent = `@${C.being}`),
+        E.appendChild(y),
+        C.coord)
+      ) {
+        const w = document.createElement("span");
+        ((w.className = "tl-other-coord"),
+          (w.textContent = `(${C.coord.x ?? "?"}, ${C.coord.y ?? "?"})`),
+          E.appendChild(w));
+      }
+      f.appendChild(E);
+    }
+    o.appendChild(f);
+  }
+  const p = i.matters || [];
+  if (p.length) {
+    const h = document.createElement("div");
+    ((h.className = "tl-past-section-head"),
+      (h.textContent = `matter · ${p.length}`),
+      o.appendChild(h));
+    const f = document.createElement("ul");
+    f.className = "tl-past-others";
+    for (const C of p) {
+      const E = document.createElement("li");
+      ((E.textContent = `${C.name || "(unnamed)"} · ${C.origin || "?"}`),
+        f.appendChild(E));
+    }
+    o.appendChild(f);
+  }
+  const r = i.qualities || {};
+  if (Object.keys(r).length) {
+    const h = document.createElement("div");
+    ((h.className = "tl-past-section-head"),
+      (h.textContent = "space qualities"),
+      o.appendChild(h));
+    const f = document.createElement("pre");
+    ((f.className = "tl-past-json"),
+      (f.textContent = JSON.stringify(r, null, 2)),
+      o.appendChild(f));
+  }
+  const d = document.createElement("button");
+  ((d.type = "button"),
+    (d.className = "btn-sm"),
+    (d.textContent = "← Back to live"),
+    (d.onclick = () => {
+      (o.classList.add("hidden"),
+        (o.innerHTML = ""),
+        b.navigate(b.state.currentAddress));
+    }),
+    o.appendChild(d));
+}
+function Jt(e, t) {
+  const a = document.createElement("div");
+  a.className = "tl-state-grid";
+  const o = [
+    ["beingId", t.beingId],
+    ["coord", t.coord],
+    ["permissions", t.permissions],
+    ["respondMode", t.respondMode],
+  ];
+  for (const [n, s] of o) s != null && a.appendChild(Ze(n, s));
+  (t.qualities &&
+    Object.keys(t.qualities).length &&
+    a.appendChild(Ze("qualities", t.qualities)),
+    e.appendChild(a));
+}
+function Ze(e, t) {
+  const a = document.createElement("div");
+  a.className = "tl-state-row";
+  const o = document.createElement("span");
+  ((o.className = "tl-state-key"), (o.textContent = e));
+  const n = document.createElement("span");
+  return (
+    (n.className = "tl-state-value"),
+    t == null ||
+    typeof t == "string" ||
+    typeof t == "number" ||
+    typeof t == "boolean"
+      ? (n.textContent = t == null ? "(none)" : String(t))
+      : (n.textContent = JSON.stringify(t, null, 2)),
+    a.appendChild(o),
+    a.appendChild(n),
+    a
+  );
+}
+function Gt(e) {
+  var t;
+  if ((t = e.endMessage) != null && t.content) {
+    const a = String(e.endMessage.content);
+    return a.length > 160 ? a.slice(0, 157) + "…" : a;
+  }
+  if (Array.isArray(e.facts) && e.facts.length) {
+    const a = e.facts
+      .slice(0, 3)
+      .map((o) => `${o.verb}:${o.act}`)
+      .filter(Boolean);
+    if (a.length) {
+      const o =
+        e.facts.length > a.length ? ` (+${e.facts.length - a.length})` : "";
+      return a.join(", ") + o;
+    }
+  }
+  return "(see — no acted change)";
+}
+function ht(e) {
+  if (!e) return "";
+  const t = new Date(e);
+  return Number.isNaN(t.getTime()) ? String(e) : t.toLocaleString();
+}
+function Wt(e) {
+  const t = document.createElement("div");
+  return ((t.className = "sub"), (t.textContent = e), t);
+}
+function Q(
+  e,
+  {
+    op: t,
+    values: a = {},
+    address: o,
+    doOp: n,
+    onResult: s,
+    submitLabel: i,
+  } = {},
+) {
+  if (!e) throw new Error("renderOpForm: container is required");
+  if (!t || !t.name)
+    throw new Error("renderOpForm: op with a name is required");
+  e.innerHTML = "";
+  const c = t.args && typeof t.args == "object" ? t.args : null,
+    l = c ? Object.keys(c) : [],
+    p = document.createElement("form");
+  p.className = "op-form";
+  const r = document.createElement("div");
+  r.className = "op-form-head";
+  const d = document.createElement("code");
+  ((d.className = "op-form-name"),
+    (d.textContent = t.name),
+    (d.title = `targets: ${(t.targets || []).join(", ") || "?"} • from ${t.ownerExtension || "seed"}`),
+    r.appendChild(d),
+    p.appendChild(r));
+  const m = {};
+  let u = null;
+  if (c)
+    if (l.length === 0) {
+      const C = document.createElement("p");
+      ((C.className = "op-form-note dim"),
+        (C.textContent = "No inputs — run this action?"),
+        p.appendChild(C));
+    } else
+      for (const C of l) {
+        const E = c[C] || {},
+          { wrap: y, input: w } = Kt(C, E, Vt(a, C));
+        ((m[C] = { input: w, descriptor: E }), p.appendChild(y));
+      }
+  else {
+    const C = document.createElement("div");
+    C.className = "op-field";
+    const E = document.createElement("label");
+    E.textContent = "args (JSON)";
+    const y = document.createElement("textarea");
+    ((y.className = "op-input op-input-json"),
+      (y.rows = 4),
+      (y.placeholder = "{ }"),
+      a && Object.keys(a).length && (y.value = Oe(a)),
+      C.appendChild(E),
+      C.appendChild(y),
+      p.appendChild(C),
+      (u = y));
+  }
+  const g = document.createElement("div");
+  g.className = "op-form-actions";
+  const h = document.createElement("button");
+  ((h.type = "submit"),
+    (h.className = "btn-sm btn-primary"),
+    (h.textContent = i || "run"),
+    g.appendChild(h),
+    p.appendChild(g));
+  const f = document.createElement("div");
+  return (
+    (f.className = "action-result hidden"),
+    p.appendChild(f),
+    (p.onsubmit = async (C) => {
+      C.preventDefault();
+      let E;
+      try {
+        E = u ? Xt(u) : Yt(c, m);
+      } catch (y) {
+        xe(f, y.message, "err");
+        return;
+      }
+      (xe(f, "…", "pending"), (h.disabled = !0));
+      try {
+        const y = await n(o, t.name, E);
+        (xe(f, Oe(y), "ok"), typeof s == "function" && s(null, y, E));
+      } catch (y) {
+        (xe(
+          f,
+          `${(y == null ? void 0 : y.code) || "error"}: ${(y == null ? void 0 : y.message) || String(y)}`,
+          "err",
+        ),
+          typeof s == "function" && s(y, null, E));
+      } finally {
+        h.disabled = !1;
+      }
+    }),
+    e.appendChild(p),
+    p
+  );
+}
+function Kt(e, t, a) {
+  const o = document.createElement("div");
+  o.className = "op-field";
+  const n = document.createElement("label");
+  if (((n.textContent = t.label || e), t.required)) {
+    const c = document.createElement("span");
+    ((c.className = "op-required"), (c.textContent = " *"), n.appendChild(c));
+  }
+  o.appendChild(n);
+  const s = t.type || "text";
+  let i;
+  if (s === "select") {
+    ((i = document.createElement("select")), (i.className = "op-input"));
+    for (const l of Array.isArray(t.enum) ? t.enum : []) {
+      const p = document.createElement("option");
+      ((p.value = String(l)),
+        (p.textContent = l === "" ? "(none)" : String(l)),
+        i.appendChild(p));
+    }
+    const c = a ?? t.default;
+    c != null && (i.value = String(c));
+  } else if (s === "multiline")
+    ((i = document.createElement("textarea")),
+      (i.className = "op-input"),
+      (i.rows = 3),
+      a != null
+        ? (i.value = Ne(a))
+        : t.default != null && (i.value = Ne(t.default)));
+  else if (s === "json")
+    ((i = document.createElement("textarea")),
+      (i.className = "op-input op-input-json"),
+      (i.rows = 3),
+      a != null
+        ? (i.value = Oe(a))
+        : t.default != null && (i.value = Oe(t.default)));
+  else if (s === "bool") {
+    ((i = document.createElement("input")),
+      (i.type = "checkbox"),
+      (i.className = "op-input op-input-bool"));
+    const c = a != null ? !!a : !!t.default;
+    i.checked = c;
+  } else
+    ((i = document.createElement("input")),
+      (i.type =
+        s === "password" ? "password" : s === "number" ? "number" : "text"),
+      (i.className = "op-input"),
+      a != null
+        ? (i.value = Ne(a))
+        : t.default != null && (i.value = Ne(t.default)));
+  if (
+    (t.placeholder &&
+      i.tagName !== "SELECT" &&
+      s !== "bool" &&
+      (i.placeholder = t.placeholder),
+    o.appendChild(i),
+    t.description)
+  ) {
+    const c = document.createElement("div");
+    ((c.className = "op-field-hint dim"),
+      (c.textContent = t.description),
+      o.appendChild(c));
+  }
+  return { wrap: o, input: i };
+}
+function Xt(e) {
+  const t = e.value.trim();
+  if (!t) return {};
+  try {
+    return JSON.parse(t);
+  } catch (a) {
+    throw new Error(`args JSON parse error: ${a.message}`);
+  }
+}
+function Yt(e, t) {
+  const a = {};
+  for (const o of Object.keys(e)) {
+    const n = e[o] || {},
+      s = t[o];
+    if (!s) continue;
+    const i = n.type || "text",
+      c = s.input;
+    if (i === "bool") {
+      a[o] = !!c.checked;
+      continue;
+    }
+    const l = c.value != null ? String(c.value) : "",
+      p = l.trim();
+    if (p === "") {
+      if (n.required) throw new Error(`${n.label || o} is required`);
+      continue;
+    }
+    if (i === "number") {
+      const r = Number(p);
+      if (Number.isNaN(r)) throw new Error(`${n.label || o} must be a number`);
+      a[o] = r;
+    } else if (i === "json")
+      try {
+        a[o] = JSON.parse(p);
+      } catch (r) {
+        throw new Error(`${n.label || o}: invalid JSON (${r.message})`);
+      }
+    else a[o] = l;
+  }
+  return a;
+}
+function Vt(e, t) {
+  if (!(!e || typeof e != "object")) return e[t];
+}
+function Ne(e) {
+  return typeof e == "string" ? e : String(e);
+}
+function Oe(e) {
+  try {
+    return JSON.stringify(e, null, 2);
+  } catch {
+    return String(e);
+  }
+}
+function xe(e, t, a) {
+  ((e.className = `action-result action-${a}`),
+    e.classList.remove("hidden"),
+    (e.textContent = t));
+}
+async function Zt(e, t, a, { refreshView: o } = {}) {
+  var E, y, w, N, k, v, $, L, S, q, O;
+  e.innerHTML = "";
+  const n =
+      ((E = t.values) == null ? void 0 : E.descriptor) ||
+      ((y = b.state) == null ? void 0 : y.descriptor) ||
+      {},
+    s =
+      ((N = (w = b.state) == null ? void 0 : w.discovery) == null
+        ? void 0
+        : N.story) ||
+      ((k = n.address) == null ? void 0 : k.story) ||
+      ((v = n.address) == null ? void 0 : v.place) ||
+      "",
+    i = (($ = n.address) == null ? void 0 : $.pathByNames) || "/",
+    c = `${s}${i === "/" ? "/" : i}`,
+    l =
+      ((L = n.address) == null ? void 0 : L.spaceId) ||
+      ((S = n.position) == null ? void 0 : S.spaceId) ||
+      ((q = n.space) == null ? void 0 : q._id) ||
+      null,
+    p = ((O = b.state) == null ? void 0 : O.session) || {},
+    r = (p.username || p.name || "").trim(),
+    d = !r || r === "arrival";
+  await en(e, { desc: n, story: s, positionSpaceId: l, path: i });
+  let m = [],
+    u = null,
+    g = { grants: [], lineage: null };
+  try {
+    m = await pn(n, s);
+  } catch {}
+  try {
+    u = await ft(n, s);
+  } catch {}
+  if (!d)
+    try {
+      g = await mn(r, s, l);
+    } catch {}
+  const h = await un(g.grants, m, l, s),
+    f = h.filter((M) => M.reachesHere),
+    C = Qt(f, u, r);
+  (tn(e, { effective: C, claim: u, viewerName: r, isAnonymous: d }),
+    nn(e, {
+      annotated: h,
+      viewerName: r,
+      isAnonymous: d,
+      lineage: g.lineage,
+      story: s,
+    }),
+    on(e, { hostedHere: m }),
+    cn(e, {
+      positionAddress: c,
+      effective: C,
+      hostedHere: m,
+      onResult: (M) => {
+        !M && typeof o == "function" && o();
+      },
+    }),
+    f.length > 0 &&
+      rn(e, {
+        heldAbles: f,
+        story: s,
+        onResult: (M) => {
+          !M && typeof o == "function" && o();
+        },
+      }));
+}
+function Qt(e, t, a) {
+  var n, s, i, c;
+  const o = {
+    see: new Map(),
+    do: new Map(),
+    summon: new Map(),
+    be: new Map(),
+    ownerAll: !1,
+  };
+  t && t.ownerNames.some((l) => l === a) && (o.ownerAll = !0);
+  for (const l of e)
+    (ke(o.see, (n = l.spec) == null ? void 0 : n.canSee, "name", l.grant.able),
+      ke(o.do, (s = l.spec) == null ? void 0 : s.canDo, "action", l.grant.able),
+      ke(
+        o.summon,
+        (i = l.spec) == null ? void 0 : i.canSummon,
+        "pattern",
+        l.grant.able,
+      ),
+      ke(
+        o.be,
+        (c = l.spec) == null ? void 0 : c.canBe,
+        "operation",
+        l.grant.able,
+      ));
+  return o;
+}
+async function en(e, { desc: t, story: a, positionSpaceId: o, path: n }) {
+  var l, p;
+  const s = ze(e, "Where you are"),
+    i =
+      ((l = t.space) == null ? void 0 : l.name) ||
+      ((p = t.address) == null ? void 0 : p.spaceName) ||
+      (n === "/" ? "story root" : n);
+  (s.appendChild(se("position", n === "/" ? "/ (story root)" : n)),
+    s.appendChild(se("space", i)),
+    o && s.appendChild(se("spaceId", ve(o))));
+  const c = await ft(t, a);
+  if (!c) s.appendChild(se("ownership", "(unclaimed)"));
+  else if (c.publicCommons)
+    s.appendChild(se("ownership", `public commons (anchor: ${c.hostName})`));
+  else if (c.ownerNames.length > 0) {
+    const r = c.ownerNames.map((m) => `@${m}`).join(", "),
+      d = c.spaceId === o ? "this space" : `inherited from ${c.hostName}`;
+    s.appendChild(se("ownership", `${r} (${d})`));
+  }
+}
+function tn(e, { effective: t, claim: a, viewerName: o, isAnonymous: n }) {
+  const s = ze(e, n ? "What you can do here" : `What @${o} can do here`);
+  if (n) {
+    s.appendChild(le("Sign in to see your effective permissions."));
+    return;
+  }
+  if (t.ownerAll) {
+    const l = document.createElement("div");
+    ((l.className = "perm-owner"),
+      (l.textContent = `● Owner of ${a.hostName} — you can do anything in this subtree.`),
+      s.appendChild(l));
+    return;
+  }
+  if (t.see.size + t.do.size + t.summon.size + t.be.size === 0) {
+    s.appendChild(le("No granted able reaches this position."));
+    return;
+  }
+  const c = [
+    { label: "SEE", map: t.see, empty: "(no SEE ops)" },
+    { label: "DO", map: t.do, empty: "(no DO actions)" },
+    { label: "SUMMON", map: t.summon, empty: "(no SUMMON targets)" },
+    { label: "BE", map: t.be, empty: "(no BE ops)" },
+  ];
+  for (const l of c) {
+    const p = document.createElement("div");
+    p.className = "perm-row";
+    const r = document.createElement("span");
+    ((r.className = "perm-verb"), (r.textContent = l.label), p.appendChild(r));
+    const d = document.createElement("span");
+    if (((d.className = "perm-body"), l.map.size === 0))
+      (d.classList.add("dim"), (d.textContent = l.empty));
+    else {
+      const m = Array.from(l.map.entries()).sort((u, g) =>
+        u[0].localeCompare(g[0]),
+      );
+      for (let u = 0; u < m.length; u++) {
+        const [g, h] = m[u],
+          f = document.createElement("span");
+        ((f.className = "perm-token"),
+          (f.textContent = g),
+          (f.title = `via ${Array.from(h).join(", ")}`),
+          d.appendChild(f),
+          u < m.length - 1 && d.appendChild(document.createTextNode(" · ")));
+      }
+    }
+    (p.appendChild(d), s.appendChild(p));
+  }
+}
+function ke(e, t, a, o) {
+  if (Array.isArray(t))
+    for (const n of t) {
+      let s = null;
+      (typeof n == "string"
+        ? (s = n)
+        : n &&
+          typeof n == "object" &&
+          ((s = n[a] || n.name || n.action || n.operation || n.pattern || null),
+          s && n.namespace && (s = `${s}:${n.namespace}`),
+          s && n.intent && (s = `${s}:${n.intent}`)),
+        s && (e.has(s) || e.set(s, new Set()), e.get(s).add(o)));
+    }
+}
+function nn(
+  e,
+  { annotated: t, viewerName: a, isAnonymous: o, lineage: n, story: s },
+) {
+  const i = ze(e, o ? "Your grants" : `Your grants (as @${a})`);
+  if (o) {
+    i.appendChild(le("Sign in to see your held ables."));
+    return;
+  }
+  if (t.length === 0) i.appendChild(le("(you hold no granted ables)"));
+  else for (const c of t) i.appendChild(an(c, a, s));
+  if (n && (n.mother || n.father)) {
+    const c = n.mother ? ve(n.mother) : null,
+      l = n.father ? ve(n.father) : null;
+    i.appendChild(
+      se(
+        "lineage",
+        [c && `mother: ${c}`, l && `father: ${l}`].filter(Boolean).join(" · "),
+      ),
+    );
+  }
+}
+function an(e, t, a) {
+  var p;
+  const o = document.createElement("div");
+  o.className = "grant-card";
+  const n = document.createElement("div");
+  n.className = "grant-head";
+  const s = document.createElement("strong");
+  ((s.textContent = e.grant.able), n.appendChild(s));
+  const i = document.createElement("span");
+  ((i.className = e.reachesHere ? "grant-status active" : "grant-status dim"),
+    (i.textContent = e.reachesHere ? " ● reaches here" : " ○ inert here"),
+    n.appendChild(i),
+    o.appendChild(n));
+  const c = document.createElement("div");
+  c.className = "grant-meta dim";
+  const l =
+    (p = e.host) != null && p.name
+      ? `host: ${e.host.name}`
+      : `anchor: ${ve(e.grant.anchorSpaceId)}`;
+  if (
+    ((c.textContent = [
+      l,
+      e.grant.grantedBy ? `granted by ${bn(e.grant.grantedBy)}` : null,
+      e.grant.grantedAt ? e.grant.grantedAt.slice(0, 10) : null,
+    ]
+      .filter(Boolean)
+      .join(" · ")),
+    o.appendChild(c),
+    t &&
+      e.grant.grantedBy &&
+      e.grant.grantedBy.toLowerCase() === t.toLowerCase())
+  ) {
+    const r = document.createElement("button");
+    ((r.type = "button"),
+      (r.className = "btn-warn btn-compact"),
+      (r.textContent = "revoke"),
+      r.addEventListener("click", async () => {
+        r.disabled = !0;
+        try {
+          (await b.doOp(`${a}/@${t}`, "revoke-able", {
+            able: e.grant.able,
+            anchorSpaceId: e.grant.anchorSpaceId || null,
+            anchorBeingId: e.grant.anchorBeingId || null,
+            grantedBy: t,
+          }),
+            (r.textContent = "revoked"));
+        } catch (d) {
+          ((r.textContent =
+            `failed: ${(d == null ? void 0 : d.message) || d}`.slice(0, 60)),
+            (r.disabled = !1));
+        }
+      }),
+      o.appendChild(r));
+  }
+  return o;
+}
+function on(e, { hostedHere: t }) {
+  const a = Ue(e, `Ables hosted here & inherited (${t.length})`);
+  if (t.length === 0) {
+    a.body.appendChild(
+      le("(no ables hosted on this position or any ancestor)"),
+    );
+    return;
+  }
+  const o = document.createElement("input");
+  ((o.type = "text"),
+    (o.placeholder = "filter by name…"),
+    (o.className = "able-filter"),
+    a.body.appendChild(o));
+  const n = document.createElement("div");
+  ((n.className = "hosted-list"), a.body.appendChild(n));
+  const s = t.map((i) => sn(i));
+  for (const i of s) n.appendChild(i);
+  o.addEventListener("input", () => {
+    const i = o.value.trim().toLowerCase();
+    for (let c = 0; c < t.length; c++) {
+      const l = t[c],
+        p = !i || l.name.toLowerCase().includes(i);
+      s[c].style.display = p ? "" : "none";
+    }
+  });
+}
+function sn(e) {
+  var i, c;
+  const t = document.createElement("div");
+  t.className = "hosted-card";
+  const a = document.createElement("div");
+  a.className = "hosted-head";
+  const o = document.createElement("strong");
+  ((o.textContent = e.name), a.appendChild(o));
+  const n = document.createElement("span");
+  if (
+    ((n.className = "hosted-where dim"),
+    (n.textContent = e.viaInheritance
+      ? ` · inherited from ${e.hostSpaceName}`
+      : " · hosted here"),
+    a.appendChild(n),
+    t.appendChild(a),
+    (i = e.spec) != null && i.description)
+  ) {
+    const l = document.createElement("div");
+    ((l.className = "hosted-desc dim"),
+      (l.textContent = e.spec.description),
+      t.appendChild(l));
+  }
+  const s = yn(e.spec);
+  if (s) {
+    const l = document.createElement("div");
+    ((l.className = "hosted-can"), (l.textContent = s), t.appendChild(l));
+  }
+  if (
+    Array.isArray((c = e.spec) == null ? void 0 : c.reach) &&
+    e.spec.reach.length > 0
+  ) {
+    const l = document.createElement("div");
+    ((l.className = "hosted-reach dim"),
+      (l.textContent = `reach: ${e.spec.reach.join(", ")}`),
+      t.appendChild(l));
+  }
+  return t;
+}
+function cn(
+  e,
+  { positionAddress: t, effective: a, hostedHere: o, onResult: n },
+) {
+  const s = Ue(e, "Author / edit a able here");
+  s.body.appendChild(
+    le(
+      "Pickers below show ONLY canX you currently hold (so you can't author a able with abilities you can't grant). Owner of this space? You can pick from any of your held tokens regardless of source able.",
+    ),
+  );
+  const i = document.createElement("div");
+  i.className = "compact-form";
+  const c = Ce("name", "Able name (kebab-case)");
+  if ((i.appendChild(c.wrapper), o && o.length > 0)) {
+    const u = document.createElement("div");
+    u.className = "field-row";
+    const g = document.createElement("label");
+    g.textContent = "Load existing able to edit (optional)";
+    const h = document.createElement("select");
+    h.className = "op-input";
+    const f = document.createElement("option");
+    ((f.value = ""), (f.textContent = "— start fresh —"), h.appendChild(f));
+    for (const C of o) {
+      const E = document.createElement("option");
+      ((E.value = C.name),
+        (E.textContent = `${C.name} (${C.viaInheritance ? "inherited" : "here"})`),
+        h.appendChild(E));
+    }
+    (u.appendChild(g),
+      u.appendChild(h),
+      i.appendChild(u),
+      h.addEventListener("change", () => {
+        const C = o.find((E) => E.name === h.value);
+        C && ((c.input.value = C.name), ln(C.spec, l, p, r));
+      }));
+  }
+  const l = {
+    see: Se("canSee — pick from your held SEE ops", a.see),
+    do: Se("canDo — pick from your held DO actions", a.do),
+    summon: Se("canSummon — pick from your held targets", a.summon),
+    be: Se("canBe — pick from your held BE ops", a.be),
+  };
+  for (const u of Object.keys(l)) i.appendChild(l[u].wrapper);
+  const p = Ce(
+      "reach",
+      "Reach (optional, comma-separated; e.g. /docs/**,!/legacy/**)",
+    ),
+    r = Ce("description", "Description (optional)");
+  (i.appendChild(p.wrapper), i.appendChild(r.wrapper));
+  const d = document.createElement("div"),
+    m = document.createElement("button");
+  ((m.type = "button"),
+    (m.className = "btn-primary"),
+    (m.textContent = "Install / replace able at this space"),
+    m.addEventListener("click", async () => {
+      ((m.disabled = !0), (d.textContent = ""));
+      const u = c.input.value.trim();
+      if (!u) {
+        ((d.className = "action-result action-err"),
+          (d.textContent = "Able name is required."),
+          (m.disabled = !1));
+        return;
+      }
+      const g = {
+          name: u,
+          canSee: l.see.collect().map((C) => C),
+          canDo: l.do.collect().map((C) => ({ action: C })),
+          canSummon: l.summon.collect().map((C) => ({ pattern: C })),
+          canBe: l.be.collect().map((C) => ({ operation: C })),
+        },
+        h = gn(p.input.value);
+      h.length > 0 && (g.reach = h);
+      const f = r.input.value.trim();
+      f && (g.description = f);
+      try {
+        (await b.doOp(t, "set-able", { name: u, spec: g }),
+          (d.className = "action-result action-ok"),
+          (d.textContent = `installed "${u}" at this space`),
+          n == null || n(null));
+      } catch (C) {
+        ((d.className = "action-result action-err"),
+          (d.textContent = (C == null ? void 0 : C.message) || String(C)),
+          (m.disabled = !1),
+          n == null || n(C));
+      }
+    }),
+    i.appendChild(m),
+    i.appendChild(d),
+    s.body.appendChild(i));
+}
+function Se(e, t, a) {
+  const o = document.createElement("div");
+  o.className = "field-row picker-group";
+  const n = document.createElement("label");
+  ((n.textContent = e), o.appendChild(n));
+  const s = document.createElement("div");
+  ((s.className = "picker-box"), o.appendChild(s));
+  const i = Array.from(t.keys()).sort();
+  if (i.length === 0) {
+    const r = document.createElement("div");
+    ((r.className = "dim picker-empty"),
+      (r.textContent = "(no available tokens to grant from this verb)"),
+      s.appendChild(r));
+  }
+  const c = new Map();
+  for (const r of i) {
+    const d = `pick-${e.replace(/[^a-z]/gi, "")}-${r.replace(/[^a-z0-9]/gi, "")}`,
+      m = document.createElement("label");
+    ((m.className = "picker-item"), (m.htmlFor = d));
+    const u = document.createElement("input");
+    ((u.type = "checkbox"), (u.id = d), (u.value = r), m.appendChild(u));
+    const g = document.createElement("span");
+    g.textContent = ` ${r}`;
+    const h = t.get(r);
+    (h && h.size > 0 && (g.title = `via ${Array.from(h).join(", ")}`),
+      m.appendChild(g),
+      s.appendChild(m),
+      c.set(r, u));
+  }
+  function l() {
+    const r = [];
+    for (const [d, m] of c.entries()) m.checked && r.push(d);
+    return r;
+  }
+  function p(r) {
+    for (const [d, m] of c.entries()) m.checked = r.has(d);
+  }
+  return { wrapper: o, collect: l, setSelection: p };
+}
+function ln(e, t, a, o) {
+  const n = (s, i) =>
+    Array.isArray(s)
+      ? new Set(
+          s
+            .map((c) =>
+              typeof c == "string"
+                ? c
+                : (c == null ? void 0 : c[i]) ||
+                  (c == null ? void 0 : c.name) ||
+                  null,
+            )
+            .filter(Boolean),
+        )
+      : new Set();
+  (t.see.setSelection(n(e == null ? void 0 : e.canSee, "name")),
+    t.do.setSelection(n(e == null ? void 0 : e.canDo, "action")),
+    t.summon.setSelection(n(e == null ? void 0 : e.canSummon, "pattern")),
+    t.be.setSelection(n(e == null ? void 0 : e.canBe, "operation")),
+    (a.input.value = Array.isArray(e == null ? void 0 : e.reach)
+      ? e.reach.join(", ")
+      : ""),
+    (o.input.value =
+      typeof (e == null ? void 0 : e.description) == "string"
+        ? e.description
+        : ""));
+}
+function rn(e, { heldAbles: t, story: a, onResult: o }) {
+  const n = Ue(e, "Grant a able to a being");
+  n.body.appendChild(
+    le(
+      'The substrate admits if any of your held ables has canDo:["grant-able:<able>"] (or grant-able:*) reaching the anchor.',
+    ),
+  );
+  const s = document.createElement("div");
+  s.className = "compact-form";
+  const i = document.createElement("div");
+  i.className = "field-row";
+  const c = document.createElement("label");
+  c.textContent = "Able to grant";
+  const l = document.createElement("select");
+  l.className = "op-input";
+  for (const u of t) {
+    const g = document.createElement("option");
+    ((g.value = u.grant.able),
+      (g.textContent = u.grant.able),
+      l.appendChild(g));
+  }
+  (i.appendChild(c), i.appendChild(l), s.appendChild(i));
+  const p = Ce(
+      "grantee",
+      "Grantee (name, beingId, or full IBPA — e.g. alice, <uuid>, bing.com/@tabor)",
+    ),
+    r = Ce("anchor", "Anchor space id (defaults to current position)");
+  (s.appendChild(p.wrapper), s.appendChild(r.wrapper));
+  const d = document.createElement("div"),
+    m = document.createElement("button");
+  ((m.type = "button"),
+    (m.className = "btn-primary"),
+    (m.textContent = "Grant able"),
+    m.addEventListener("click", async () => {
+      var C, E, y, w, N, k;
+      ((m.disabled = !0), (d.textContent = ""));
+      const u = l.value,
+        g = p.input.value.trim();
+      if (!g) {
+        ((d.className = "action-result action-err"),
+          (d.textContent = "Grantee is required."),
+          (m.disabled = !1));
+        return;
+      }
+      let h = r.input.value.trim() || null;
+      if (
+        (h ||
+          (h =
+            ((y =
+              (E = (C = b.state) == null ? void 0 : C.descriptor) == null
+                ? void 0
+                : E.address) == null
+              ? void 0
+              : y.spaceId) ||
+            ((k =
+              (N = (w = b.state) == null ? void 0 : w.descriptor) == null
+                ? void 0
+                : N.position) == null
+              ? void 0
+              : k.spaceId) ||
+            null),
+        !h)
+      ) {
+        ((d.className = "action-result action-err"),
+          (d.textContent = "Could not resolve an anchor space."),
+          (m.disabled = !1));
+        return;
+      }
+      const f = Cn(g, a);
+      try {
+        (await b.doOp(f, "grant-able", {
+          able: u,
+          anchorSpaceId: h,
+          anchorBeingId: null,
+        }),
+          (d.className = "action-result action-ok"),
+          (d.textContent = `granted "${u}" to ${f}`),
+          o == null || o(null));
+      } catch (v) {
+        ((d.className = "action-result action-err"),
+          (d.textContent = (v == null ? void 0 : v.message) || String(v)),
+          (m.disabled = !1),
+          o == null || o(v));
+      }
+    }),
+    s.appendChild(m),
+    s.appendChild(d),
+    n.body.appendChild(s));
+}
+async function ft(e, t) {
+  var s, i, c, l, p, r;
+  const a = (s = b.state) == null ? void 0 : s.client;
+  if (!a) return null;
+  const n = (((i = e.address) == null ? void 0 : i.pathByNames) || "/")
+    .replace(/^\/+|\/+$/g, "")
+    .split("/")
+    .filter(Boolean);
+  for (let d = n.length; d >= 0; d--) {
+    const m = "/" + n.slice(0, d).join("/");
+    let u = null;
+    try {
+      u = await a.see(`${t}${m === "/" ? "/" : m}`);
+    } catch {
+      continue;
+    }
+    const g = dn(u);
+    if (!g) continue;
+    const h =
+        ((c = u == null ? void 0 : u.space) == null ? void 0 : c.name) ||
+        ((l = u == null ? void 0 : u.address) == null ? void 0 : l.spaceName) ||
+        (m === "/" ? "story root" : m),
+      f =
+        ((p = u == null ? void 0 : u.space) == null ? void 0 : p._id) ||
+        ((r = u == null ? void 0 : u.address) == null ? void 0 : r.spaceId) ||
+        null,
+      E = (Array.isArray(u.beings) ? u.beings : []).find(
+        (k) =>
+          String(
+            (k == null ? void 0 : k._id) || (k == null ? void 0 : k.id),
+          ) === String(g),
+      ),
+      y =
+        (E == null ? void 0 : E.being) || (E == null ? void 0 : E.name) || null,
+      w = y === "public";
+    return {
+      spaceId: f,
+      hostName: h,
+      ownerNames: w ? [] : y ? [y] : [],
+      publicCommons: w,
+    };
+  }
+  return null;
+}
+function dn(e) {
+  var t;
+  return (
+    ((t = e == null ? void 0 : e.space) == null ? void 0 : t.owner) ||
+    (e == null ? void 0 : e.owner) ||
+    null
+  );
+}
+async function pn(e, t) {
+  var c, l;
+  const a = (c = b.state) == null ? void 0 : c.client;
+  if (!a) return [];
+  const o = new Set(),
+    n = [],
+    s = ((l = e.address) == null ? void 0 : l.pathByNames) || "/";
+  await Qe(a, t, s, o, n, !1);
+  const i = s
+    .replace(/^\/+|\/+$/g, "")
+    .split("/")
+    .filter(Boolean);
+  for (let p = i.length - 1; p >= 0; p--) {
+    const r = "/" + i.slice(0, p).join("/");
+    await Qe(a, t, r || "/", o, n, !0);
+  }
+  return n;
+}
+async function Qe(e, t, a, o, n, s) {
+  var r, d, m, u, g, h, f;
+  let i = null;
+  try {
+    i = await e.see(`${t}${a === "/" ? "/" : a}`);
+  } catch {
+    return;
+  }
+  const c =
+    ((d = (r = i == null ? void 0 : i.space) == null ? void 0 : r.qualities) ==
+    null
+      ? void 0
+      : d.ables) ||
+    ((m = i == null ? void 0 : i.qualities) == null ? void 0 : m.ables) ||
+    null;
+  if (!c || typeof c != "object") return;
+  const l =
+      ((u = i == null ? void 0 : i.space) == null ? void 0 : u.name) ||
+      ((g = i == null ? void 0 : i.address) == null ? void 0 : g.spaceName) ||
+      (a === "/" ? "story root" : a),
+    p =
+      ((h = i == null ? void 0 : i.space) == null ? void 0 : h._id) ||
+      ((f = i == null ? void 0 : i.address) == null ? void 0 : f.spaceId) ||
+      null;
+  for (const [C, E] of Object.entries(c))
+    o.has(C) ||
+      (o.add(C),
+      n.push({
+        name: C,
+        spec: E,
+        hostSpaceName: l,
+        hostSpaceId: p,
+        viaInheritance: s,
+      }));
+}
+async function mn(e, t, a) {
+  var r;
+  const o = (r = b.state) == null ? void 0 : r.client;
+  if (!o) return { grants: [], lineage: null };
+  let n = null;
+  try {
+    n = await o.see(`${t}/@${e}`);
+  } catch {
+    return { grants: [], lineage: null };
+  }
+  const i = (Array.isArray(n == null ? void 0 : n.beings) ? n.beings : []).find(
+      (d) =>
+        String(d == null ? void 0 : d.being).toLowerCase() ===
+          e.toLowerCase() ||
+        String(d == null ? void 0 : d.name).toLowerCase() === e.toLowerCase(),
+    ),
+    c = (i == null ? void 0 : i.qualities) || {},
+    l = Array.isArray(c == null ? void 0 : c.ablesGranted)
+      ? c.ablesGranted
+      : [],
+    p = (c == null ? void 0 : c.lineage) || null;
+  return { grants: l, lineage: p };
+}
+async function un(e, t, a, o) {
+  const n = new Map();
+  for (const i of t) n.has(i.name) || n.set(i.name, i);
+  const s = [];
+  for (const i of e) {
+    let c = null,
+      l = null;
+    const p = n.get(i.able);
+    if (p)
+      ((l = p.spec), (c = { spaceId: p.hostSpaceId, name: p.hostSpaceName }));
+    else if (i.anchorSpaceId) {
+      const d = await hn(i.anchorSpaceId, i.able, o);
+      ((l = d.spec), (c = d.host));
+    }
+    const r = !!(l && c && (await fn(a, c.spaceId, l, o)));
+    s.push({ grant: i, spec: l, host: c, reachesHere: r });
+  }
+  return s;
+}
+async function hn(e, t, a) {
+  var i, c, l, p, r, d, m, u, g, h;
+  const o = (i = b.state) == null ? void 0 : i.client;
+  if (!o) return { spec: null, host: null };
+  let n = e,
+    s = 0;
+  for (; n && s < 12; ) {
+    s++;
+    let f = null;
+    try {
+      f = await o.see(`${a}/${n}`);
+    } catch {
+      return { spec: null, host: null };
+    }
+    const C =
+        ((l =
+          (c = f == null ? void 0 : f.space) == null ? void 0 : c.qualities) ==
+        null
+          ? void 0
+          : l.ables) ||
+        ((p = f == null ? void 0 : f.qualities) == null ? void 0 : p.ables) ||
+        {},
+      E = C == null ? void 0 : C[t];
+    if (E)
+      return {
+        spec: E,
+        host: {
+          spaceId:
+            ((r = f == null ? void 0 : f.space) == null ? void 0 : r._id) ||
+            ((d = f == null ? void 0 : f.address) == null
+              ? void 0
+              : d.spaceId) ||
+            n,
+          name:
+            ((m = f == null ? void 0 : f.space) == null ? void 0 : m.name) ||
+            ((u = f == null ? void 0 : f.address) == null
+              ? void 0
+              : u.spaceName) ||
+            "(unknown)",
+        },
+      };
+    n =
+      ((g = f == null ? void 0 : f.space) == null ? void 0 : g.parent) ||
+      ((h = f == null ? void 0 : f.address) == null ? void 0 : h.parent) ||
+      null;
+  }
+  return { spec: null, host: null };
+}
+async function fn(e, t, a, o) {
+  var c, l, p;
+  if (!e || !t) return !1;
+  if (String(e) === String(t)) return !0;
+  const n = (c = b.state) == null ? void 0 : c.client;
+  if (!n) return !1;
+  let s = e,
+    i = 0;
+  for (; s && i < 12; ) {
+    if ((i++, String(s) === String(t))) return !0;
+    let r = null;
+    try {
+      r = await n.see(`${o}/${s}`);
+    } catch {
+      return !1;
+    }
+    s =
+      ((l = r == null ? void 0 : r.space) == null ? void 0 : l.parent) ||
+      ((p = r == null ? void 0 : r.address) == null ? void 0 : p.parent) ||
+      null;
+  }
+  return !1;
+}
+function ze(e, t) {
+  const a = document.createElement("section");
+  a.className = "rp-section";
+  const o = document.createElement("h3");
+  return (
+    (o.className = "rp-title"),
+    (o.textContent = t),
+    a.appendChild(o),
+    e.appendChild(a),
+    a
+  );
+}
+function Ue(e, t) {
+  const a = document.createElement("section");
+  a.className = "rp-section rp-collapsible";
+  const o = document.createElement("h3");
+  ((o.className = "rp-title rp-clickable"),
+    (o.textContent = `▸ ${t}`),
+    a.appendChild(o));
+  const n = document.createElement("div");
+  ((n.className = "rp-body"), (n.style.display = "none"), a.appendChild(n));
+  let s = !1;
+  return (
+    o.addEventListener("click", () => {
+      ((s = !s),
+        (o.textContent = (s ? "▾ " : "▸ ") + t),
+        (n.style.display = s ? "" : "none"));
+    }),
+    e.appendChild(a),
+    { sec: a, body: n }
+  );
+}
+function se(e, t) {
+  const a = document.createElement("div");
+  a.className = "kv-row";
+  const o = document.createElement("span");
+  ((o.className = "kv-key dim"), (o.textContent = `${e}: `));
+  const n = document.createElement("span");
+  return ((n.textContent = t), a.appendChild(o), a.appendChild(n), a);
+}
+function le(e) {
+  const t = document.createElement("div");
+  return ((t.className = "rp-note dim"), (t.textContent = e), t);
+}
+function Ce(e, t) {
+  const a = document.createElement("div");
+  a.className = "field-row";
+  const o = document.createElement("label");
+  o.textContent = t;
+  const n = document.createElement("input");
+  return (
+    (n.type = "text"),
+    (n.name = e),
+    (n.className = "op-input"),
+    a.appendChild(o),
+    a.appendChild(n),
+    { wrapper: a, input: n }
+  );
+}
+function gn(e) {
+  return typeof e != "string"
+    ? []
+    : e
+        .split(",")
+        .map((t) => t.trim())
+        .filter(Boolean);
+}
+function Cn(e, t) {
+  const a = e.trim();
+  if (a.includes("/")) return a;
+  const o = a.startsWith("@") ? a.slice(1) : a;
+  return `${t}/@${o}`;
+}
+function ve(e) {
+  if (!e) return "";
+  const t = String(e);
+  return t.length > 12 ? `${t.slice(0, 8)}…` : t;
+}
+function bn(e) {
+  return e === "i-am"
+    ? "I-Am"
+    : e === "auto-on-entry"
+      ? "auto-on-entry"
+      : ve(e);
+}
+function yn(e) {
+  if (!e) return null;
+  const t = [],
+    a = (o, n, s) => {
+      if (!Array.isArray(o) || o.length === 0) return;
+      const i = o
+        .map((c) =>
+          typeof c == "string"
+            ? c
+            : (c == null ? void 0 : c[s]) ||
+              (c == null ? void 0 : c.name) ||
+              "",
+        )
+        .filter(Boolean);
+      i.length !== 0 && t.push(`${n}: ${i.join(", ")}`);
+    };
+  return (
+    a(e.canSee, "see", "name"),
+    a(e.canDo, "do", "action"),
+    a(e.canSummon, "summon", "pattern"),
+    a(e.canBe, "be", "operation"),
+    t.length > 0 ? t.join(" · ") : null
+  );
+}
+async function et(e, t, a, { refreshView: o, mode: n } = {}) {
+  var N, k, v, $, L, S, q, O, M, x, A;
+  e.innerHTML = "";
+  const s =
+      ((N = t.values) == null ? void 0 : N.descriptor) ||
+      ((k = b.state) == null ? void 0 : k.descriptor) ||
+      {},
+    i =
+      (($ = (v = b.state) == null ? void 0 : v.discovery) == null
+        ? void 0
+        : $.story) ||
+      ((L = s.address) == null ? void 0 : L.story) ||
+      ((S = s.address) == null ? void 0 : S.place) ||
+      "",
+    c = ((q = s.address) == null ? void 0 : q.pathByNames) || "/",
+    l = `${i}${c === "/" ? "/" : c}`,
+    p =
+      ((O = s.address) == null ? void 0 : O.spaceId) ||
+      ((M = s.position) == null ? void 0 : M.spaceId) ||
+      ((x = s.space) == null ? void 0 : x._id) ||
+      null,
+    r = `${i}/`,
+    d = ((A = b.state) == null ? void 0 : A.session) || {},
+    m = (d.username || d.name || "").trim(),
+    u = d.beingId || null,
+    g = !m || m === "arrival",
+    h = n === "story";
+  if (
+    (await En(e, {
+      story: i,
+      viewerBeingId: u,
+      viewerName: m,
+      positionSpaceId: p,
+      isAnonymous: g,
+    }),
+    g)
+  ) {
+    e.appendChild(te("Sign in to manage LLM connections."));
+    return;
+  }
+  const f = Ct(e, "Your connections"),
+    C = document.createElement("div");
+  (f.appendChild(C),
+    await qe(C, {
+      refreshSelf: () => {
+        ((C.innerHTML = ""),
+          qe(C, { refreshSelf: () => {}, refreshChain: () => he(e, i, u, p) }));
+      },
+    }));
+  const E = Ae(e, "Add a connection");
+  vn(E.body, {
+    onResult: (H) => {
+      H ||
+        ((C.innerHTML = ""),
+        qe(C, { refreshSelf: () => {}, refreshChain: () => he(e, i, u, p) }));
+    },
+  });
+  const y = Ae(e, `@${m}'s LLM (your being)`);
+  if (
+    ($n(y.body, {
+      label: "your being",
+      onAssign: async ({ slot: H, connectionId: F }) => {
+        await b.doOp(l, "assign-slot", { slot: H, connectionId: F });
+      },
+      afterChange: () => he(e, i, u, p),
+    }),
+    !h)
+  ) {
+    const H = Ae(e, "This space's LLM defaults");
+    (H.body.appendChild(
+      te(
+        "Owner-gated. Sets qualities.llm on this space — beings standing here pick this up via step 2/3 of the chain.",
+      ),
+    ),
+      tt(H.body, {
+        isStory: !1,
+        address: l,
+        afterChange: () => he(e, i, u, p),
+      }));
+  }
+  const w = Ae(e, h ? "Story LLM defaults" : "Story LLM defaults (angel-only)");
+  (w.body.appendChild(
+    te(
+      "Angel-gated. Sets qualities.llm on the story root — the floor everyone falls through to at step 4 of the chain.",
+    ),
+  ),
+    tt(w.body, { isStory: !0, address: r, afterChange: () => he(e, i, u, p) }));
+}
+async function En(
+  e,
+  {
+    story: t,
+    viewerBeingId: a,
+    viewerName: o,
+    positionSpaceId: n,
+    isAnonymous: s,
+  },
+) {
+  const i = Ct(e, "What LLM will be used");
+  if (((i.id = "llm-chain-section"), s)) {
+    i.appendChild(
+      te(
+        "Anonymous visitors get no LLM resolution (no acting identity to chain back from).",
+      ),
+    );
+    return;
+  }
+  const c = a,
+    l = document.createElement("div");
+  (i.appendChild(l),
+    await gt(l, {
+      story: t,
+      receiverBeingId: c,
+      actorBeingId: a,
+      positionSpaceId: n,
+    }));
+}
+async function he(e, t, a, o) {
+  const n = e.querySelector("#llm-chain-section");
+  if (!n) return;
+  const s = n.querySelector(".rp-title");
+  ((n.innerHTML = ""), s && n.appendChild(s));
+  const i = document.createElement("div");
+  (n.appendChild(i),
+    await gt(i, {
+      story: t,
+      receiverBeingId: a,
+      actorBeingId: a,
+      positionSpaceId: o,
+    }));
+}
+async function gt(
+  e,
+  { story: t, receiverBeingId: a, actorBeingId: o, positionSpaceId: n },
+) {
+  e.appendChild(te("Loading chain…"));
+  let s;
+  try {
+    s = await b.state.client.see("llm-chain", {
+      args: {
+        receiverBeingId: a,
+        actorBeingId: o,
+        receiverSpaceId: n,
+        able: "main",
+      },
+    });
+  } catch (l) {
+    ((e.innerHTML = ""),
+      e.appendChild(
+        bt(`chain fetch failed: ${(l == null ? void 0 : l.message) || l}`),
+      ));
+    return;
+  }
+  e.innerHTML = "";
+  const i = (s == null ? void 0 : s.chosen) || null;
+  if (i) {
+    const l = document.createElement("div");
+    ((l.className = "llm-chosen"),
+      (l.innerHTML = `<strong>${be(i.model || i.name || i.connectionId.slice(0, 12))}</strong> <span class="dim">via step ${i.step} · ${i.source}</span>`),
+      e.appendChild(l));
+  } else {
+    const l = document.createElement("div");
+    ((l.className = "llm-chosen dim"),
+      (l.textContent = `(no LLM resolves — ${(s == null ? void 0 : s.reason) || "no connections found"})`),
+      e.appendChild(l));
+  }
+  const c = Array.isArray(s == null ? void 0 : s.chain) ? s.chain : [];
+  if (c.length > 0) {
+    const l = document.createElement("ul");
+    l.className = "llm-chain-list";
+    for (const p of c) {
+      const r = document.createElement("li"),
+        d =
+          i &&
+          p.connectionId === i.connectionId &&
+          p.step === i.step &&
+          p.source === i.source;
+      ((r.innerHTML = `<span class="dim">step ${p.step}</span> <span class="llm-source">${be(p.source)}</span> <span>${be(p.model || p.name || p.connectionId.slice(0, 10))}</span>`),
+        d && r.classList.add("llm-chosen-row"),
+        l.appendChild(r));
+    }
+    e.appendChild(l);
+  }
+}
+async function qe(e, { refreshSelf: t, refreshChain: a } = {}) {
+  e.appendChild(te("Loading connections…"));
+  let o;
+  try {
+    o = await b.state.client.see("llm-connections");
+  } catch (i) {
+    ((e.innerHTML = ""),
+      e.appendChild(
+        bt(
+          `connections fetch failed: ${(i == null ? void 0 : i.message) || i}`,
+        ),
+      ));
+    return;
+  }
+  e.innerHTML = "";
+  const n = Array.isArray(o == null ? void 0 : o.connections)
+    ? o.connections
+    : [];
+  if (n.length === 0) {
+    e.appendChild(te("(no connections — add one below)"));
+    return;
+  }
+  const s = (o == null ? void 0 : o.slots) || {};
+  for (const i of n) {
+    const c = document.createElement("div");
+    c.className = "llm-conn-card";
+    const l = document.createElement("div");
+    ((l.className = "llm-conn-head"),
+      (l.innerHTML = `<strong>${be(i.model || i.name)}</strong> <span class="dim">${be(i.name || "")}</span>`),
+      c.appendChild(l));
+    const p = document.createElement("div");
+    ((p.className = "llm-conn-meta dim"),
+      (p.textContent = `${i.baseUrl || "(no base url)"} · id: ${i.connectionId.slice(0, 10)}…`),
+      c.appendChild(p));
+    const r = Object.entries(s)
+      .filter(([, m]) => String(m) === String(i.connectionId))
+      .map(([m]) => m);
+    if (r.length > 0) {
+      const m = document.createElement("div");
+      ((m.className = "llm-conn-slots"),
+        (m.textContent = `bound to slot: ${r.join(", ")}`),
+        c.appendChild(m));
+    }
+    const d = document.createElement("button");
+    ((d.type = "button"),
+      (d.className = "btn-warn btn-compact"),
+      (d.textContent = "delete"),
+      d.addEventListener("click", async () => {
+        var m, u;
+        if (confirm(`Delete connection "${i.model || i.name}"?`)) {
+          d.disabled = !0;
+          try {
+            (await b.doOp(
+              ((u = (m = b.state) == null ? void 0 : m.discovery) == null
+                ? void 0
+                : u.story) + "/",
+              "delete-llm",
+              { connectionId: i.connectionId },
+            ),
+              t == null || t(),
+              a == null || a());
+          } catch (g) {
+            ((d.textContent =
+              `failed: ${(g == null ? void 0 : g.message) || g}`.slice(0, 60)),
+              (d.disabled = !1));
+          }
+        }
+      }),
+      c.appendChild(d),
+      e.appendChild(c));
+  }
+}
+function vn(e, { onResult: t }) {
+  const a = document.createElement("div");
+  a.className = "compact-form";
+  const o = ce("name", "Name (optional, e.g. 'my-claude')"),
+    n = ce("baseUrl", "Base URL (e.g. https://api.anthropic.com)"),
+    s = ce("model", "Model (e.g. claude-3-5-sonnet-20241022)"),
+    i = ce("apiKey", "API key (stored encrypted on your being)");
+  i.input.type = "password";
+  for (const p of [o, n, s, i]) a.appendChild(p.wrapper);
+  const c = document.createElement("div"),
+    l = document.createElement("button");
+  ((l.type = "button"),
+    (l.className = "btn-primary"),
+    (l.textContent = "Add connection"),
+    l.addEventListener("click", async () => {
+      var d, m;
+      ((l.disabled = !0), (c.textContent = ""));
+      const p = n.input.value.trim(),
+        r = s.input.value.trim();
+      if (!p || !r) {
+        ((c.className = "action-result action-err"),
+          (c.textContent = "baseUrl and model are required."),
+          (l.disabled = !1));
+        return;
+      }
+      try {
+        (await b.doOp(
+          ((m = (d = b.state) == null ? void 0 : d.discovery) == null
+            ? void 0
+            : m.story) + "/",
+          "add-llm",
+          {
+            name: o.input.value.trim() || null,
+            baseUrl: p,
+            model: r,
+            apiKey: i.input.value || null,
+          },
+        ),
+          (c.className = "action-result action-ok"),
+          (c.textContent = "Added."),
+          (i.input.value = ""),
+          t == null || t(null));
+      } catch (u) {
+        ((c.className = "action-result action-err"),
+          (c.textContent = (u == null ? void 0 : u.message) || String(u)),
+          (l.disabled = !1),
+          t == null || t(u));
+      }
+    }),
+    a.appendChild(l),
+    a.appendChild(c),
+    e.appendChild(a));
+}
+async function $n(e, { onAssign: t, afterChange: a }) {
+  let o = [];
+  try {
+    const m = await b.state.client.see("llm-connections");
+    o = Array.isArray(m == null ? void 0 : m.connections) ? m.connections : [];
+  } catch {}
+  if (o.length === 0) {
+    e.appendChild(
+      te("Add a connection first, then come back here to assign it to a slot."),
+    );
+    return;
+  }
+  const n = document.createElement("div");
+  n.className = "compact-form";
+  const s = ce("slot", "Slot name (default, main, coder, writer, …)");
+  s.input.value = "main";
+  const i = document.createElement("div");
+  i.className = "field-row";
+  const c = document.createElement("label");
+  c.textContent = "Connection";
+  const l = document.createElement("select");
+  l.className = "op-input";
+  const p = document.createElement("option");
+  ((p.value = ""),
+    (p.textContent = "(unset slot — clears it)"),
+    l.appendChild(p));
+  for (const m of o) {
+    const u = document.createElement("option");
+    ((u.value = m.connectionId),
+      (u.textContent = `${m.model || m.name || m.connectionId.slice(0, 10)} (${m.connectionId.slice(0, 8)})`),
+      l.appendChild(u));
+  }
+  (i.appendChild(c),
+    i.appendChild(l),
+    n.appendChild(s.wrapper),
+    n.appendChild(i));
+  const r = document.createElement("div"),
+    d = document.createElement("button");
+  ((d.type = "button"),
+    (d.className = "btn-primary"),
+    (d.textContent = "Assign slot"),
+    d.addEventListener("click", async () => {
+      ((d.disabled = !0), (r.textContent = ""));
+      const m = s.input.value.trim(),
+        u = l.value || null;
+      if (!m) {
+        ((r.className = "action-result action-err"),
+          (r.textContent = "Slot name is required."),
+          (d.disabled = !1));
+        return;
+      }
+      try {
+        (await t({ slot: m, connectionId: u }),
+          (r.className = "action-result action-ok"),
+          (r.textContent = u ? `Assigned ${m}.` : `Cleared ${m}.`),
+          (d.disabled = !1),
+          a == null || a());
+      } catch (g) {
+        ((r.className = "action-result action-err"),
+          (r.textContent = (g == null ? void 0 : g.message) || String(g)),
+          (d.disabled = !1));
+      }
+    }),
+    n.appendChild(d),
+    n.appendChild(r),
+    e.appendChild(n));
+}
+function tt(e, { isStory: t, address: a, afterChange: o }) {
+  const n = document.createElement("div");
+  n.className = "compact-form";
+  const s = ce("default", "Default fallback connectionIds (comma-separated)"),
+    i = ce("slots", 'Per-able slots as JSON: {"coder":["<id1>","<id2>"]}'),
+    c = He(
+      "preferOwn",
+      "preferOwn (this container's connections jump to front within its step)",
+    ),
+    l = He(
+      "forceActor",
+      "forceActor (chain skips remaining receiver-side, jumps to actor side)",
+    ),
+    p = He(
+      "forceReceiver",
+      "forceReceiver (chain caps at this container's step; actor side never runs)",
+    );
+  (n.appendChild(s.wrapper),
+    n.appendChild(i.wrapper),
+    n.appendChild(c.wrapper),
+    n.appendChild(l.wrapper),
+    n.appendChild(p.wrapper));
+  const r = document.createElement("div"),
+    d = document.createElement("button");
+  ((d.type = "button"),
+    (d.className = "btn-primary"),
+    (d.textContent = t ? "Save story defaults" : "Save space defaults"),
+    d.addEventListener("click", async () => {
+      ((d.disabled = !0), (r.textContent = ""));
+      const m = s.input.value
+        .split(",")
+        .map((f) => f.trim())
+        .filter(Boolean);
+      let u = null;
+      const g = i.input.value.trim();
+      if (g)
+        try {
+          u = JSON.parse(g);
+        } catch {
+          ((r.className = "action-result action-err"),
+            (r.textContent = 'Slots must be valid JSON: {"able":["id",…]}'),
+            (d.disabled = !1));
+          return;
+        }
+      if (l.input.checked && p.input.checked) {
+        ((r.className = "action-result action-err"),
+          (r.textContent =
+            "forceActor and forceReceiver are mutually exclusive."),
+          (d.disabled = !1));
+        return;
+      }
+      const h = {};
+      (m.length > 0 && (h.default = m),
+        u && (h.slots = u),
+        c.input.checked && (h.preferOwn = !0),
+        l.input.checked && (h.forceActor = !0),
+        p.input.checked && (h.forceReceiver = !0));
+      try {
+        const f = t ? "set-story-llm" : "set-space-llm";
+        (await b.doOp(a, f, h),
+          (r.className = "action-result action-ok"),
+          (r.textContent = "Saved."),
+          (d.disabled = !1),
+          o == null || o());
+      } catch (f) {
+        ((r.className = "action-result action-err"),
+          (r.textContent = (f == null ? void 0 : f.message) || String(f)),
+          (d.disabled = !1));
+      }
+    }),
+    n.appendChild(d),
+    n.appendChild(r),
+    e.appendChild(n));
+}
+function Ct(e, t) {
+  const a = document.createElement("section");
+  a.className = "rp-section";
+  const o = document.createElement("h3");
+  return (
+    (o.className = "rp-title"),
+    (o.textContent = t),
+    a.appendChild(o),
+    e.appendChild(a),
+    a
+  );
+}
+function Ae(e, t) {
+  const a = document.createElement("section");
+  a.className = "rp-section rp-collapsible";
+  const o = document.createElement("h3");
+  ((o.className = "rp-title rp-clickable"),
+    (o.textContent = `▸ ${t}`),
+    a.appendChild(o));
+  const n = document.createElement("div");
+  ((n.className = "rp-body"), (n.style.display = "none"), a.appendChild(n));
+  let s = !1;
+  return (
+    o.addEventListener("click", () => {
+      ((s = !s),
+        (o.textContent = (s ? "▾ " : "▸ ") + t),
+        (n.style.display = s ? "" : "none"));
+    }),
+    e.appendChild(a),
+    { sec: a, body: n }
+  );
+}
+function te(e) {
+  const t = document.createElement("div");
+  return ((t.className = "rp-note dim"), (t.textContent = e), t);
+}
+function bt(e) {
+  const t = document.createElement("div");
+  return ((t.className = "rp-note action-err"), (t.textContent = e), t);
+}
+function ce(e, t) {
+  const a = document.createElement("div");
+  a.className = "field-row";
+  const o = document.createElement("label");
+  o.textContent = t;
+  const n = document.createElement("input");
+  return (
+    (n.type = "text"),
+    (n.name = e),
+    (n.className = "op-input"),
+    a.appendChild(o),
+    a.appendChild(n),
+    { wrapper: a, input: n }
+  );
+}
+function He(e, t) {
+  const a = document.createElement("div");
+  a.className = "field-row check-row";
+  const o = document.createElement("label"),
+    n = document.createElement("input");
+  ((n.type = "checkbox"), (n.name = e), o.appendChild(n));
+  const s = document.createElement("span");
+  return (
+    (s.textContent = " " + t),
+    o.appendChild(s),
+    a.appendChild(o),
+    { wrapper: a, input: n }
+  );
+}
+function be(e) {
+  return String(e || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+async function Je(e, t, a, { refreshView: o } = {}) {
+  var u, g, h;
+  e.innerHTML = "";
+  const n = ((u = b.state) == null ? void 0 : u.session) || {},
+    s = (n.username || n.name || "").trim(),
+    i = !s || s === "arrival",
+    c = An(e, "Your inbox");
+  if (i) {
+    c.appendChild(nt("Sign in to see your inbox."));
+    return;
+  }
+  const l =
+      ((h = (g = b.state) == null ? void 0 : g.discovery) == null
+        ? void 0
+        : h.story) || "",
+    p = () => Je(e, t, a, { refreshView: o });
+  let r;
+  try {
+    r = await b.state.client.see("my-inbox");
+  } catch (f) {
+    c.appendChild(
+      Ln(`failed to load inbox: ${(f == null ? void 0 : f.message) || f}`),
+    );
+    return;
+  }
+  const d = Array.isArray(r == null ? void 0 : r.pending) ? r.pending : [];
+  if (d.length === 0) {
+    c.appendChild(nt("(no pending summons)"));
+    return;
+  }
+  const m = document.createElement("div");
+  ((m.className = "rp-note dim"),
+    (m.textContent = `${d.length} pending`),
+    c.appendChild(m));
+  for (const f of d) wn(c, f, { story: l, refresh: p });
+}
+function wn(e, t, { story: a, refresh: o }) {
+  const n = document.createElement("div");
+  n.className = "inbox-card";
+  const s = document.createElement("div");
+  s.className = "inbox-head";
+  const i = t.intent
+      ? `<strong>${Ie(t.intent)}</strong>`
+      : '<span class="dim">generic summon</span>',
+    c = t.summonerName
+      ? `@${Ie(t.summonerName)}`
+      : t.summoner
+        ? `(${Ie(String(t.summoner).slice(0, 8))})`
+        : "(unknown)";
+  ((s.innerHTML = `${i} <span class="dim">from ${c}</span>`), n.appendChild(s));
+  const l = document.createElement("div");
+  l.className = "inbox-meta dim";
+  const p = t.sentAt ? new Date(t.sentAt).toLocaleString() : "(no date)";
+  ((l.textContent = `${p} · priority: ${t.priority || "?"} · history: ${t.history || "?"}`),
+    n.appendChild(l),
+    Nn(n, t),
+    xn(n, t, { story: a, refresh: o }),
+    e.appendChild(n));
+}
+function Nn(e, t) {
+  var s;
+  const a = document.createElement("div");
+  a.className = "inbox-body";
+  const o = ((s = t.render) == null ? void 0 : s.body) || null;
+  if (o && typeof o.html == "string") {
+    ((a.innerHTML = o.html), e.appendChild(a));
+    return;
+  }
+  if (o && typeof o.text == "string") {
+    ((a.textContent = o.text), e.appendChild(a));
+    return;
+  }
+  const n = t.content || {};
+  (typeof n == "string" && n.length
+    ? (a.textContent = n)
+    : n && typeof n.message == "string"
+      ? (a.textContent = n.message)
+      : n &&
+        typeof n == "object" &&
+        (a.innerHTML = `<pre class="dim inbox-json">${Ie(JSON.stringify(n, null, 2))}</pre>`),
+    e.appendChild(a));
+}
+function xn(e, t, { story: a, refresh: o }) {
+  const n = document.createElement("div");
+  n.className = "inbox-actions";
+  const s = t.render;
+  if (
+    (s == null ? void 0 : s.shape) === "action-buttons" &&
+    Array.isArray(s.buttons)
+  ) {
+    for (const r of s.buttons) {
+      const d = In(r);
+      (r.disabled ||
+        d.addEventListener("click", () =>
+          kn(t, r, { story: a, refresh: o, btn: d }),
+        ),
+        n.appendChild(d));
+    }
+    e.appendChild(n);
+    return;
+  }
+  const i =
+      s && typeof s.placeholder == "string" ? s.placeholder : "type a reply…",
+    c = !s || s.allowDismiss !== !1,
+    l = document.createElement("input");
+  ((l.type = "text"),
+    (l.className = "inbox-reply"),
+    (l.placeholder = i),
+    n.appendChild(l));
+  const p = De("reply", "btn-ok");
+  if (
+    (p.addEventListener("click", () => {
+      const r = l.value.trim();
+      r && _e(t, { message: r }, { story: a, refresh: o, btn: p });
+    }),
+    n.appendChild(p),
+    c)
+  ) {
+    const r = De("dismiss", "btn-warn");
+    (r.addEventListener("click", () =>
+      _e(t, { result: "dismissed" }, { story: a, refresh: o, btn: r }),
+    ),
+      n.appendChild(r));
+  }
+  e.appendChild(n);
+}
+async function kn(e, t, { story: a, refresh: o, btn: n }) {
+  n.disabled = !0;
+  const s = Array.isArray(t.ops) ? t.ops : [];
+  for (const i of s) {
+    if (!i || typeof i != "object") continue;
+    const { target: c, action: l, args: p } = i;
+    if (!(!c || !l))
+      try {
+        await b.doOp(c, l, p || {});
+      } catch (r) {
+        ((n.textContent =
+          `${l} failed: ${(r == null ? void 0 : r.message) || r}`.slice(0, 80)),
+          (n.disabled = !1));
+        return;
+      }
+  }
+  if (t.reply) {
+    await _e(e, t.reply.content || {}, { story: a, refresh: o, btn: n });
+    return;
+  }
+  o();
+}
+async function _e(e, t, { story: a, refresh: o, btn: n }) {
+  n && (n.disabled = !0);
+  const s = await Sn(e, a);
+  if (!s) {
+    n && ((n.textContent = "no addressable summoner"), (n.disabled = !1));
+    return;
+  }
+  try {
+    (await b.state.client.call(s, { content: t, inReplyTo: e.correlation }),
+      o());
+  } catch (i) {
+    n &&
+      ((n.textContent =
+        `reply failed: ${(i == null ? void 0 : i.message) || i}`.slice(0, 80)),
+      (n.disabled = !1));
+  }
+}
+async function Sn(e, t) {
+  var a, o;
+  if (e.summonerName) return `${t}/@${e.summonerName}`;
+  if (!e.summoner) return null;
+  try {
+    const n = await b.state.client.see(`${t}/.beings/${e.summoner}`),
+      s =
+        ((a = n == null ? void 0 : n.directoryEntry) == null
+          ? void 0
+          : a.name) ||
+        (n == null ? void 0 : n.name) ||
+        ((o = n == null ? void 0 : n.being) == null ? void 0 : o.name);
+    if (s) return `${t}/@${s}`;
+  } catch (n) {
+    console.warn(
+      "[inbox-panel] summoner directory SEE failed:",
+      (n == null ? void 0 : n.message) || n,
+    );
+  }
+  return null;
+}
+function An(e, t) {
+  const a = document.createElement("section");
+  a.className = "rp-section";
+  const o = document.createElement("h3");
+  return (
+    (o.className = "rp-title"),
+    (o.textContent = t),
+    a.appendChild(o),
+    e.appendChild(a),
+    a
+  );
+}
+function nt(e) {
+  const t = document.createElement("div");
+  return ((t.className = "rp-note dim"), (t.textContent = e), t);
+}
+function Ln(e) {
+  const t = document.createElement("div");
+  return ((t.className = "rp-note action-err"), (t.textContent = e), t);
+}
+function De(e, t) {
+  const a = document.createElement("button");
+  return (
+    (a.type = "button"),
+    (a.className = `${t} btn-compact`),
+    (a.textContent = e),
+    a
+  );
+}
+function In(e) {
+  const t = e.kind || "neutral",
+    a = t === "ok" ? "btn-ok" : t === "warn" ? "btn-warn" : "btn-neutral",
+    o = De(e.label || "?", a);
+  return (
+    e.disabled &&
+      ((o.disabled = !0),
+      (o.title = e.disabled),
+      o.classList.add("btn-disabled")),
+    o
+  );
+}
+function Ie(e) {
+  return String(e || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+const V = {
+  MIME_EXACT: 100,
+  EXTENSION: 90,
+  MIME_WILDCARD: 80,
+  URL_PATTERN: 70,
+  SCHEME: 60,
+  FLOOR: 50,
+  TEXT_BASE: 20,
+};
+function yt(e) {
+  return typeof e != "string" || !e.length
+    ? null
+    : e.split(";")[0].trim().toLowerCase() || null;
+}
+function Bn(e) {
+  if (typeof e != "string") return null;
+  const t = e.lastIndexOf(".");
+  return t <= 0 || t === e.length - 1 ? null : e.slice(t).toLowerCase();
+}
+function On(e) {
+  if (typeof e != "string" || !e.length) return null;
+  const t = e.match(/^([a-z][a-z0-9+.-]*):\/\/(.+)$/i);
+  return t ? { scheme: t[1].toLowerCase(), rest: t[2].toLowerCase() } : null;
+}
+const Tn = /^(?:[a-zA-Z0-9.\-_]+(?:#[^/]+)?|#[^/]+)\/.*$/;
+function Et(e, t) {
+  return !e || !t
+    ? null
+    : e === t
+      ? "exact"
+      : e === "*/*" || (e.endsWith("/*") && t.startsWith(e.slice(0, -1)))
+        ? "wildcard"
+        : null;
+}
+function Mn(e, t) {
+  const a = yt(t == null ? void 0 : t.mimeType),
+    o = Bn(t == null ? void 0 : t.fileName),
+    n = On(
+      typeof (t == null ? void 0 : t.url) == "string" ? t.url.trim() : null,
+    ),
+    s = typeof (t == null ? void 0 : t.text) == "string" && t.text.length > 0,
+    i = !!(a || o);
+  if (!a && !o && !n && !s) return [];
+  const c = new Map(),
+    l = (m, u, g) => {
+      const h = c.get(m);
+      (!h || u > h.score) && c.set(m, { score: u, reason: g });
+    };
+  for (const m of e || []) {
+    const u = m.claims,
+      g = (u == null ? void 0 : u.priority) || 0;
+    if (u) {
+      if (a && Array.isArray(u.mimeTypes))
+        for (const h of u.mimeTypes) {
+          const f = Et(h, a);
+          f === "exact"
+            ? l(m.name, V.MIME_EXACT + g, `mime ${a}`)
+            : f === "wildcard" && l(m.name, V.MIME_WILDCARD + g, `mime ${h}`);
+        }
+      if (
+        (o &&
+          Array.isArray(u.extensions) &&
+          u.extensions.includes(o) &&
+          l(m.name, V.EXTENSION + g, `extension ${o}`),
+        n && Array.isArray(u.urlPatterns))
+      )
+        for (const h of u.urlPatterns)
+          h &&
+            n.rest.includes(h) &&
+            l(m.name, V.URL_PATTERN + g, `url matches "${h}"`);
+      n &&
+        Array.isArray(u.schemes) &&
+        u.schemes.includes(n.scheme) &&
+        l(m.name, V.SCHEME + g, `scheme ${n.scheme}`);
+    }
+    s &&
+      !i &&
+      !n &&
+      (m.contentKinds || []).includes("text") &&
+      l(m.name, V.TEXT_BASE + g, "accepts text");
+  }
+  const p = (m) => (e || []).some((u) => u.name === m),
+    r = typeof (t == null ? void 0 : t.url) == "string" ? t.url.trim() : null,
+    d = typeof (t == null ? void 0 : t.ibpa) == "string" ? t.ibpa.trim() : null;
+  return (
+    r && p("http") && l("http", V.FLOOR, "an http link — website content"),
+    d &&
+      Tn.test(d) &&
+      p("ibpa") &&
+      l("ibpa", V.FLOOR, "an IBP address — a doorway to another world"),
+    (o === ".glb" ||
+      o === ".gltf" ||
+      a === "model/gltf-binary" ||
+      a === "model/gltf+json") &&
+      p("model") &&
+      l("model", V.FLOOR, "a 3D model"),
+    i && !r && !d && p("file") && l("file", V.FLOOR - 1, "bytes of a file"),
+    s &&
+      !i &&
+      !r &&
+      !d &&
+      p("generic") &&
+      l("generic", V.FLOOR, "bare text — a context chunk"),
+    [...c.entries()]
+      .map(([m, { score: u, reason: g }]) => ({ type: m, score: u, reason: g }))
+      .sort((m, u) => u.score - m.score || m.type.localeCompare(u.type))
+  );
+}
+function Fe(e) {
+  return Number.isFinite(e)
+    ? e >= 1024 * 1024
+      ? `${(e / 1024 / 1024).toFixed(1)}MB`
+      : e >= 1024
+        ? `${(e / 1024).toFixed(0)}KB`
+        : `${e}B`
+    : "";
+}
+function jn(e, t) {
+  if (!Array.isArray(e) || e.length === 0) return !0;
+  const a = yt(t);
+  return a ? e.some((o) => Et(o.toLowerCase(), a) !== null) : !1;
+}
+function qn(e, t, { refreshView: a } = {}) {
+  var H, F, D, P;
+  const o =
+      ((F = (H = b.state) == null ? void 0 : H.discovery) == null
+        ? void 0
+        : F.matterTypes) || [],
+    n = ((P = (D = b.state) == null ? void 0 : D.discovery) == null
+      ? void 0
+      : P.upload) || {
+      enabled: !0,
+      maxUploadBytes: null,
+      allowedMimeTypes: null,
+    },
+    s = (I, j, z) => {
+      const W = document.createElement(I);
+      return (j && (W.className = j), z != null && (W.textContent = z), W);
+    },
+    i = s("div", "op-form"),
+    c = s(
+      "div",
+      "op-form-note dim",
+      "Pick what kind of matter to place — the form shows that type's inputs.",
+    );
+  i.appendChild(c);
+  const l = s("div", "op-field");
+  l.appendChild(s("label", null, "type"));
+  const p = document.createElement("select");
+  ((p.className = "op-input"), l.appendChild(p), i.appendChild(l));
+  let r = null;
+  const d = s("div", "op-field");
+  d.appendChild(s("label", null, "file"));
+  const m = document.createElement("input");
+  ((m.type = "file"),
+    (m.className = "op-input"),
+    d.appendChild(m),
+    i.appendChild(d));
+  const u = s("div", "op-field");
+  u.appendChild(s("label", null, "url (www — an http link)"));
+  const g = document.createElement("input");
+  ((g.type = "text"),
+    (g.placeholder = "https://example.com/page"),
+    (g.className = "op-input"),
+    u.appendChild(g),
+    i.appendChild(u));
+  const h = s("div", "op-field");
+  h.appendChild(s("label", null, "ibpa (a doorway — another story / history)"));
+  const f = document.createElement("input");
+  ((f.type = "text"),
+    (f.placeholder = "other.world#0/library  or  #1a/<spaceId>"),
+    (f.className = "op-input"),
+    h.appendChild(f),
+    i.appendChild(h));
+  const C = s("div", "op-field");
+  C.appendChild(s("label", null, "text (a context chunk)"));
+  const E = document.createElement("textarea");
+  ((E.rows = 4),
+    (E.className = "op-input op-input-json"),
+    C.appendChild(E),
+    i.appendChild(C));
+  const y = s("div", "op-field");
+  y.appendChild(s("label", null, "name (optional)"));
+  const w = document.createElement("input");
+  ((w.type = "text"),
+    (w.className = "op-input"),
+    y.appendChild(w),
+    i.appendChild(y));
+  const N = (I) => {
+      var W, Y;
+      if (!I) return { file: !0, url: !0, ibpa: !0, text: !0 };
+      const j = o.find((J) => J.name === I);
+      if (!j) return { file: !0, url: !0, ibpa: !0, text: !0 };
+      const z = j.contentKinds || [];
+      return {
+        file: z.includes("binary"),
+        text: z.includes("text"),
+        url: !!(
+          (Y = (W = j.claims) == null ? void 0 : W.schemes) != null && Y.length
+        ),
+        ibpa: j.name === "ibpa",
+      };
+    },
+    k = () => {
+      const I = N(p.value || null);
+      ((d.style.display = I.file ? "" : "none"),
+        (u.style.display = I.url ? "" : "none"),
+        (h.style.display = I.ibpa ? "" : "none"),
+        (C.style.display = I.text ? "" : "none"),
+        r &&
+          ((r.kind === "file" && I.file) ||
+            (r.kind === "url" && I.url) ||
+            (r.kind === "ibpa" && I.ibpa) ||
+            (r.kind === "text" && I.text) ||
+            (r = null)));
+    },
+    v = s("div", "op-form-note");
+  ((v.style.minHeight = "1.2em"), i.appendChild(v));
+  const $ = s("div", "op-form-actions"),
+    L = s("button", "btn-sm btn-primary", "place");
+  ((L.type = "button"), $.appendChild(L), i.appendChild($));
+  const S = s("div", "action-result hidden");
+  (i.appendChild(S), e.appendChild(i));
+  const q = () =>
+      r
+        ? r.kind === "file"
+          ? {
+              mimeType: r.file.type || null,
+              fileName: r.file.name || null,
+              size: r.file.size,
+            }
+          : r.kind === "url"
+            ? { url: r.url }
+            : r.kind === "ibpa"
+              ? { ibpa: r.ibpa }
+              : { text: r.text }
+        : null,
+    O = document.createElement("option");
+  ((O.value = ""),
+    (O.textContent = "auto (classified from what you fill)"),
+    p.appendChild(O));
+  for (const I of o) {
+    const j = document.createElement("option");
+    ((j.value = I.name),
+      (j.textContent =
+        I.name + (I.description ? ` — ${I.description.slice(0, 48)}` : "")),
+      p.appendChild(j));
+  }
+  const M = () => {
+    var J;
+    const I = q();
+    if (!I) {
+      ((v.textContent = p.value
+        ? `placing: ${p.value} — fill its input above`
+        : ""),
+        (O.textContent = "auto (classified from what you fill)"));
+      return;
+    }
+    const j = Mn(o, I),
+      z = p.value
+        ? { type: p.value, reason: "chosen explicitly" }
+        : j[0] || null;
+    if (
+      ((O.textContent =
+        (J = j[0]) != null && J.type
+          ? `auto — ${j[0].type}`
+          : "auto (classified from what you fill)"),
+      !z)
+    ) {
+      v.textContent = "will become: (unknown — pick a type)";
+      return;
+    }
+    const W =
+        (r == null ? void 0 : r.kind) === "file" ? `, ${Fe(r.file.size)}` : "",
+      Y =
+        (r == null ? void 0 : r.kind) === "file"
+          ? r.file.name
+          : (r == null ? void 0 : r.kind) === "url"
+            ? r.url
+            : (r == null ? void 0 : r.kind) === "ibpa"
+              ? r.ibpa
+              : `${r.text.length} chars`;
+    v.textContent = `will become: ${z.type} — ${Y}${W} (${z.reason})`;
+  };
+  (m.addEventListener("change", () => {
+    var j;
+    const I = (j = m.files) == null ? void 0 : j[0];
+    I && ((r = { kind: "file", file: I }), w.value || (w.value = I.name), M());
+  }),
+    g.addEventListener("input", () => {
+      g.value.trim() && ((r = { kind: "url", url: g.value.trim() }), M());
+    }),
+    f.addEventListener("input", () => {
+      f.value.trim() && ((r = { kind: "ibpa", ibpa: f.value.trim() }), M());
+    }),
+    E.addEventListener("input", () => {
+      E.value && ((r = { kind: "text", text: E.value }), M());
+    }),
+    p.addEventListener("change", () => {
+      (k(), M());
+    }),
+    k());
+  const x = (I) => {
+      ((S.className = "action-result action-error"), (S.textContent = I));
+    },
+    A = (I) => {
+      ((S.className = "action-result"), (S.textContent = I));
+    };
+  L.addEventListener("click", async () => {
+    var z, W, Y;
+    if (!r)
+      return x("nothing to place — pick a file, paste a url, or type text");
+    const I = p.value || null,
+      j = w.value.trim() || void 0;
+    ((L.disabled = !0), A("placing…"));
+    try {
+      let J;
+      if (r.kind === "file") {
+        const X = r.file;
+        if (n.enabled === !1)
+          throw new Error("uploads are disabled on this story");
+        if (n.maxUploadBytes && X.size > n.maxUploadBytes)
+          throw new Error(
+            `file is ${Fe(X.size)}; this story caps uploads at ${Fe(n.maxUploadBytes)}`,
+          );
+        if (!jn(n.allowedMimeTypes, X.type))
+          throw new Error(
+            `mime "${X.type || "unknown"}" is not allowed on this story`,
+          );
+        const Xe = new FormData();
+        Xe.append("file", X);
+        const Ye =
+            (W = (z = b.state) == null ? void 0 : z.session) == null
+              ? void 0
+              : W.token,
+          Me = await fetch(Ot("/api/v1/content"), {
+            method: "POST",
+            headers: Ye ? { Authorization: `Bearer ${Ye}` } : {},
+            body: Xe,
+          }),
+          ae = await Me.json().catch(() => null);
+        if (
+          !Me.ok ||
+          !((Y = ae == null ? void 0 : ae.content) != null && Y.hash)
+        )
+          throw new Error(
+            (ae == null ? void 0 : ae.error) || `upload failed (${Me.status})`,
+          );
+        J = { name: j, content: ae.content };
+      } else if (r.kind === "ibpa") {
+        const X = await b.doOp(t.address, "form-portal", {
+          target: r.ibpa,
+          name: j,
+        });
+        (A(
+          `portal formed${X != null && X.matterId ? ` (${String(X.matterId).slice(0, 8)}…)` : ""} → ${r.ibpa}`,
+        ),
+          S.classList.remove("hidden"),
+          typeof a == "function" && a());
+        return;
+      } else if (r.kind === "url") {
+        const X = /^[a-z][a-z0-9+.-]*:\/\//i.test(r.url)
+          ? r.url
+          : `https://${r.url}`;
+        J = { name: j, content: { url: X } };
+      } else J = { name: j, content: r.text };
+      I && (J.type = I);
+      const we = await b.doOp(t.address, "create-matter", J);
+      (A(
+        `placed${we != null && we.matterId ? ` (${String(we.matterId).slice(0, 8)}…)` : ""}`,
+      ),
+        S.classList.remove("hidden"),
+        typeof a == "function" && a());
+    } catch (J) {
+      x(`${J.code || "error"}: ${J.message || "place failed"}`);
+    } finally {
+      ((L.disabled = !1), S.classList.remove("hidden"));
+    }
+  });
+}
+const oe = (e) =>
+  String(e ?? "").replace(
+    /[&<>"]/g,
+    (t) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[t],
+  );
+function vt() {
+  var e, t;
+  return (
+    ((t = (e = b.state) == null ? void 0 : e.discovery) == null
+      ? void 0
+      : t.story) || ""
+  ).replace(/\/+$/, "");
+}
+function Hn() {
+  const e = vt();
+  return e ? `${e}/@federation-manager` : null;
+}
+function Fn(e) {
+  if (!e) return "";
+  const t = String(e);
+  return t.length > 19 ? t.slice(0, 19).replace("T", " ") : t;
+}
+function Rn() {
+  var a;
+  const e = ((a = b.state) == null ? void 0 : a.descriptor) || {},
+    t = new Map();
+  for (const o of [...(e.beings || []), ...(e.residents || [])]) {
+    const n = o.beingId || o.id;
+    n && t.set(String(n), o.name || o.being || String(n).slice(0, 12));
+  }
+  return [...t.entries()].map(([o, n]) => ({ id: o, name: n }));
+}
+function _n(e) {
+  const t =
+    (e == null ? void 0 : e.peers) ||
+    (e == null ? void 0 : e.children) ||
+    (e == null ? void 0 : e.peerList) ||
+    (e == null ? void 0 : e.list) ||
+    [];
+  return (Array.isArray(t) ? t : []).map((a) => {
+    var o, n, s, i;
+    return {
+      domain: a.domain || a.name || a.story || a.id || "(unknown)",
+      name:
+        a.name ||
+        ((n = (o = a.qualities) == null ? void 0 : o.peer) == null
+          ? void 0
+          : n.name) ||
+        null,
+      status:
+        a.status ||
+        ((i = (s = a.qualities) == null ? void 0 : s.peer) == null
+          ? void 0
+          : i.status) ||
+        null,
+      lastSeenAt: a.lastSeenAt || a.lastSeen || null,
+    };
+  });
+}
+async function Dn(e, t, a, { refreshView: o } = {}) {
+  const n = vt(),
+    s = Hn();
+  if (!n || !s) {
+    e.textContent = "portal not ready (no story)";
+    return;
+  }
+  e.innerHTML = "";
+  const i = document.createElement("div");
+  ((i.className = "fed-intro dim"),
+    (i.innerHTML =
+      "peer realities you can transfer with. <b>graft a being</b> moves the entity itself (same key, same chain, now living in two realities); a <b>template</b> sends or asks for a copy of a subtree's shape (fresh ids)."),
+    e.appendChild(i));
+  const c = document.createElement("button");
+  ((c.type = "button"),
+    (c.className = "btn-sm"),
+    (c.textContent = "reload peers"),
+    (c.style.marginBottom = "8px"),
+    e.appendChild(c));
+  const l = document.createElement("div");
+  ((l.className = "fed-list"), e.appendChild(l));
+  const p = document.createElement("div");
+  ((p.className = "fed-result-slot"), e.appendChild(p));
+  function r(C, E) {
+    p.innerHTML = `<div class="action-result ${C ? "" : "action-err"}">${oe(E)}</div>`;
+  }
+  async function d(C, E, y) {
+    p.innerHTML = `<div class="action-result dim">running ${oe(C)}…</div>`;
+    try {
+      const w = await b.doOp(s, C, E);
+      (r(!0, typeof y == "function" ? y(w) : y), typeof o == "function" && o());
+    } catch (w) {
+      r(
+        !1,
+        `${C} failed: ${w != null && w.code ? w.code + ": " : ""}${(w == null ? void 0 : w.message) || w}`,
+      );
+    }
+  }
+  function m(C, E) {
+    const y = document.createElement("div");
+    y.className = "op-field";
+    const w = document.createElement("label");
+    return ((w.textContent = C), y.appendChild(w), y.appendChild(E), y);
+  }
+  function u(C, E) {
+    C.innerHTML = "";
+    const y = Rn();
+    let w = null;
+    if (y.length) {
+      ((w = document.createElement("select")), (w.className = "op-input"));
+      for (const $ of y) {
+        const L = document.createElement("option");
+        ((L.value = $.id),
+          (L.textContent = `${$.name} (${$.id.slice(0, 12)}…)`),
+          w.appendChild(L));
+      }
+      const v = document.createElement("option");
+      ((v.value = ""),
+        (v.textContent = "other (type an id below)"),
+        w.appendChild(v),
+        C.appendChild(m("being (here)", w)));
+    }
+    const N = document.createElement("input");
+    ((N.className = "op-input"),
+      (N.placeholder = "being id (pubkey), if not in the list above"),
+      C.appendChild(m("being id", N)));
+    const k = document.createElement("button");
+    ((k.type = "button"),
+      (k.className = "btn-sm fed-go"),
+      (k.textContent = `graft to ${E.domain}`),
+      (k.onclick = () => {
+        const v = w && w.value ? w.value : N.value.trim();
+        if (!v) {
+          r(!1, "pick a being or enter a being id");
+          return;
+        }
+        d(
+          "offer-being",
+          { peer: E.domain, beingId: v },
+          ($) =>
+            `delivered being ${String(v).slice(0, 12)}… to ${E.domain} (negotiation ${String(($ == null ? void 0 : $.negotiationId) || "").slice(0, 8)}). it lands verbatim, auto-accepted.`,
+        );
+      }),
+      C.appendChild(k));
+  }
+  function g(C, E, y) {
+    var v, $, L;
+    C.innerHTML = "";
+    const w = document.createElement("input");
+    ((w.className = "op-input"),
+      (w.value =
+        ((L =
+          ($ = (v = b.state) == null ? void 0 : v.descriptor) == null
+            ? void 0
+            : $.address) == null
+          ? void 0
+          : L.pathByNames) || "/"),
+      C.appendChild(m("subtree path", w)));
+    const N = document.createElement("input");
+    ((N.className = "op-input"),
+      (N.placeholder = "optional label"),
+      C.appendChild(m("label", N)));
+    const k = document.createElement("button");
+    ((k.type = "button"),
+      (k.className = "btn-sm fed-go"),
+      (k.textContent =
+        y === "offer-template"
+          ? `offer to ${E.domain}`
+          : `request from ${E.domain}`),
+      (k.onclick = () => {
+        const S = w.value.trim();
+        if (!S) {
+          r(!1, "enter a subtree path");
+          return;
+        }
+        d(
+          y,
+          { peer: E.domain, subtreePath: S, label: N.value.trim() || null },
+          (q) =>
+            y === "offer-template"
+              ? `offered template "${S}" to ${E.domain} (negotiation ${String((q == null ? void 0 : q.negotiationId) || "").slice(0, 8)}); awaiting their accept.`
+              : `requested "${S}" from ${E.domain}; they decide whether to send it.`,
+        );
+      }),
+      C.appendChild(k));
+  }
+  function h(C) {
+    const E = document.createElement("div");
+    E.className = "fed-row";
+    const y = ["healthy", "active", "up", "ok"].includes(String(C.status))
+        ? "#5fd08a"
+        : C.status
+          ? "#e8b762"
+          : "#6b7d72",
+      w = document.createElement("div");
+    ((w.className = "fed-row-head"),
+      (w.innerHTML =
+        `<span class="fed-dot" style="background:${y}"></span><span class="fed-domain">${oe(C.domain)}</span>` +
+        (C.name ? `<span class="dim"> ${oe(C.name)}</span>` : "") +
+        (C.status ? `<span class="dim"> · ${oe(C.status)}</span>` : "") +
+        (C.lastSeenAt
+          ? `<span class="dim"> · seen ${oe(Fn(C.lastSeenAt))}</span>`
+          : "")),
+      E.appendChild(w));
+    const N = document.createElement("div");
+    N.className = "fed-row-form";
+    const k = document.createElement("div");
+    k.className = "fed-row-actions";
+    const v = ($, L) => {
+      const S = document.createElement("button");
+      ((S.type = "button"),
+        (S.className = "btn-sm"),
+        (S.textContent = $),
+        (S.onclick = () => L(N, C)),
+        k.appendChild(S));
+    };
+    return (
+      v("graft a being", u),
+      v("offer a template", ($, L) => g($, L, "offer-template")),
+      v("request a template", ($, L) => g($, L, "request-template")),
+      E.appendChild(k),
+      E.appendChild(N),
+      E
+    );
+  }
+  async function f() {
+    l.innerHTML = '<div class="dim fed-empty">loading peers…</div>';
+    let C = [],
+      E = null;
+    try {
+      C = _n(await b.see(`${n}/./peers`));
+    } catch (y) {
+      E =
+        y != null && y.code
+          ? `${y.code}: ${y.message || ""}`
+          : (y == null ? void 0 : y.message) || String(y);
+    }
+    if (((l.innerHTML = ""), E)) {
+      l.innerHTML = `<div class="action-result action-err">peers SEE failed: ${oe(E)}</div>`;
+      return;
+    }
+    if (!C.length) {
+      l.innerHTML =
+        '<div class="dim fed-empty">no peers registered yet. add one through the peer directory and it appears here.</div>';
+      return;
+    }
+    for (const y of C) l.appendChild(h(y));
+  }
+  ((c.onclick = f), await f());
+}
+const de = (e) =>
+  String(e ?? "").replace(
+    /[&<>"]/g,
+    (t) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[t],
+  );
+function Pn() {
+  var e, t;
+  return (
+    ((t = (e = b.state) == null ? void 0 : e.discovery) == null
+      ? void 0
+      : t.story) || ""
+  ).replace(/\/+$/, "");
+}
+function zn() {
+  const e = Pn();
+  return e ? `${e}/@federation-manager` : null;
+}
+function ee(e, t = 8) {
+  return String(e ?? "").slice(0, t);
+}
+async function Un(e, t, a, { refreshView: o } = {}) {
+  const n = zn();
+  if (!n) {
+    e.textContent = "portal not ready (no story)";
+    return;
+  }
+  e.innerHTML = "";
+  const s = document.createElement("div");
+  ((s.className = "fed-intro dim"),
+    (s.textContent =
+      "your federation queue. decide on incoming offers and requests, and watch outbound transfers complete."),
+    e.appendChild(s));
+  const i = document.createElement("button");
+  ((i.type = "button"),
+    (i.className = "btn-sm"),
+    (i.textContent = "reload"),
+    (i.style.marginBottom = "8px"),
+    e.appendChild(i));
+  const c = document.createElement("div");
+  e.appendChild(c);
+  const l = document.createElement("div");
+  ((l.className = "fed-result-slot"), e.appendChild(l));
+  function p(f, C) {
+    l.innerHTML = `<div class="action-result ${f ? "" : "action-err"}">${de(C)}</div>`;
+  }
+  async function r(f, C, E) {
+    l.innerHTML = `<div class="action-result dim">${de(f)}…</div>`;
+    try {
+      (await b.doOp(n, f, { negotiationId: C }),
+        p(!0, E),
+        await h(),
+        typeof o == "function" && o());
+    } catch (y) {
+      p(
+        !1,
+        `${f} failed: ${y != null && y.code ? y.code + ": " : ""}${(y == null ? void 0 : y.message) || y}`,
+      );
+    }
+  }
+  function d(f, C) {
+    const E = document.createElement("div");
+    E.className = "fed-section";
+    const y = document.createElement("div");
+    return (
+      (y.className = "fed-section-head"),
+      (y.innerHTML = `${de(f)} <span class="dim">${C}</span>`),
+      E.appendChild(y),
+      E
+    );
+  }
+  function m(f, C, E) {
+    const y = document.createElement("div");
+    ((y.className = "fed-kv"),
+      (y.innerHTML = `<span class="dim">${de(C)}</span> <span>${de(E)}</span>`),
+      f.appendChild(y));
+  }
+  function u(f, C, E) {
+    const y = document.createElement("button");
+    return (
+      (y.type = "button"),
+      (y.className = "btn-sm" + (C ? " task-action-danger" : "")),
+      (y.textContent = f),
+      (y.onclick = E),
+      y
+    );
+  }
+  function g(f) {
+    const C = document.createElement("div");
+    return ((C.className = "dim fed-empty"), (C.textContent = f), C);
+  }
+  async function h() {
+    var S, q, O, M;
+    c.innerHTML = '<div class="dim fed-empty">loading…</div>';
+    let f = null,
+      C = null;
+    try {
+      f = await b.see("federation-status");
+    } catch (x) {
+      C =
+        x != null && x.code
+          ? `${x.code}: ${x.message || ""}`
+          : (x == null ? void 0 : x.message) || String(x);
+    }
+    if (((c.innerHTML = ""), C)) {
+      c.innerHTML = `<div class="action-result action-err">federation-status failed: ${de(C)}</div>`;
+      return;
+    }
+    const E = f.pendingIncomingOffers || [],
+      y = f.pendingIncomingRequests || [],
+      w = f.pendingOutbound || [],
+      N = f.completed || [],
+      k = d("incoming offers", E.length);
+    E.length || k.appendChild(g("no offers awaiting you"));
+    for (const x of E) {
+      const A = document.createElement("div");
+      ((A.className = "fed-card"),
+        m(A, "negotiation", ee(x.id)),
+        m(
+          A,
+          "from",
+          ((S = x.sender) == null ? void 0 : S.story) ||
+            ((q = x.sender) == null ? void 0 : q.beingId) ||
+            "(unknown)",
+        ),
+        x.label && m(A, "label", x.label),
+        x.sourceSubtreePath && m(A, "subtree", x.sourceSubtreePath));
+      const H = document.createElement("div");
+      ((H.className = "fed-card-actions"),
+        H.appendChild(
+          u("accept", !1, () =>
+            r(
+              "accept-template",
+              x.id,
+              `accepted ${ee(x.id)}; the sender will deliver the template.`,
+            ),
+          ),
+        ),
+        H.appendChild(
+          u("reject", !0, () =>
+            r("reject-template", x.id, `rejected ${ee(x.id)}.`),
+          ),
+        ),
+        A.appendChild(H),
+        k.appendChild(A));
+    }
+    c.appendChild(k);
+    const v = d("incoming requests", y.length);
+    y.length || v.appendChild(g("no requests awaiting you"));
+    for (const x of y) {
+      const A = document.createElement("div");
+      ((A.className = "fed-card"),
+        m(A, "negotiation", ee(x.id)),
+        m(
+          A,
+          "from",
+          ((O = x.puller) == null ? void 0 : O.story) ||
+            ((M = x.puller) == null ? void 0 : M.beingId) ||
+            "(unknown)",
+        ),
+        x.subtreePath && m(A, "wants", x.subtreePath));
+      const H = document.createElement("div");
+      ((H.className = "fed-card-actions"),
+        H.appendChild(
+          u("fulfill (send it)", !1, () =>
+            r(
+              "fulfill-request",
+              x.id,
+              `fulfilling ${ee(x.id)}; pushing the template back.`,
+            ),
+          ),
+        ),
+        H.appendChild(
+          u("refuse", !0, () =>
+            r("refuse-request", x.id, `refused ${ee(x.id)}.`),
+          ),
+        ),
+        A.appendChild(H),
+        v.appendChild(A));
+    }
+    c.appendChild(v);
+    const $ = d("outbound in flight", w.length);
+    w.length || $.appendChild(g("nothing in flight"));
+    for (const x of w) {
+      const A = document.createElement("div");
+      ((A.className = "fed-card"),
+        m(A, "negotiation", ee(x.id)),
+        m(A, "direction", x.direction || "?"),
+        m(A, "peer", x.peer || "?"),
+        x.subtreePath && m(A, "subtree", x.subtreePath),
+        m(A, "step", x.lastStep || "?"),
+        $.appendChild(A));
+    }
+    c.appendChild($);
+    const L = d("completed", N.length);
+    N.length || L.appendChild(g("nothing completed yet"));
+    for (const x of N.slice(-12).reverse()) {
+      const A = document.createElement("div");
+      ((A.className = "fed-card fed-card-done"),
+        m(A, "negotiation", ee(x.id)),
+        m(A, "direction", x.direction || "?"),
+        x.peer && m(A, "peer", x.peer),
+        m(
+          A,
+          "outcome",
+          x.success ? "success" : `failed${x.reason ? ": " + x.reason : ""}`,
+        ),
+        L.appendChild(A));
+    }
+    c.appendChild(L);
+  }
+  ((i.onclick = h), await h());
+}
+let fe = null;
+function Jn(e, { descriptor: t, discovery: a, session: o } = {}) {
+  var k, v, $, L, S, q, O, M;
+  if (
+    !e ||
+    (fe && (document.removeEventListener("click", fe), (fe = null)),
+    (e.innerHTML = ""),
+    !(o != null && o.username) && !(o != null && o.beingId))
+  )
+    return;
+  const n = t || {},
+    s =
+      (a == null ? void 0 : a.story) ||
+      ((k = n.address) == null ? void 0 : k.story) ||
+      ((v = n.address) == null ? void 0 : v.place) ||
+      "",
+    i = (($ = n.address) == null ? void 0 : $.pathByNames) || "/",
+    c = `${s}${i === "/" ? "/" : i}`,
+    l = `${s}/`,
+    p = ((L = b.state) == null ? void 0 : L.operations) || [],
+    r = new Map(p.map((x) => [x.name, x])),
+    d = p.length > 0,
+    m = [
+      { id: "story", label: "Story", actions: la(l) },
+      { id: "history", label: "History", actions: ca(c) },
+      { id: "place", label: "Place", actions: ia(c, n) },
+      { id: "federation", label: "Federation", actions: ra() },
+    ],
+    u =
+      ((q = (S = b.state) == null ? void 0 : S.selectedBeing) == null
+        ? void 0
+        : q.name) ||
+      ((O = n.address) == null ? void 0 : O.being) ||
+      null,
+    g = u
+      ? (n.beings || []).find((x) => (x.being || x.name) === u) ||
+        (n.residents || []).find((x) => (x.being || x.name) === u)
+      : null;
+  if (g) {
+    const x = ((M = n.address) == null ? void 0 : M.history) || "0",
+      A = x === "0" ? "" : `#${x}`,
+      H = `${s}${A}${i}@${u}`.replace(/\/+@/, "/@");
+    m.push({ id: "being", label: `@${u}`, actions: aa(g, H) });
+  }
+  const h = document.createElement("div");
+  h.className = "task-bar";
+  const f = document.createElement("div");
+  ((f.className = "task-tabs"), h.appendChild(f));
+  const C = document.createElement("div");
+  ((C.className = "task-dropdown hidden"), h.appendChild(C));
+  let E = null;
+  const y = () => {
+    (C.classList.add("hidden"), (E = null), at(f, null));
+  };
+  for (const x of m) {
+    const A = document.createElement("button");
+    ((A.type = "button"),
+      (A.className = "task-tab"),
+      (A.textContent = x.label),
+      A.addEventListener("click", () => {
+        if (E === x.id) {
+          y();
+          return;
+        }
+        ((E = x.id),
+          at(f, A),
+          Gn(C, x, r, d, y),
+          (C.style.left = `${A.offsetLeft}px`));
+      }),
+      (A.dataset.tab = x.id),
+      f.appendChild(A));
+  }
+  const w = document.createElement("div");
+  ((w.className = "task-spacer"), f.appendChild(w));
+  const N = document.createElement("button");
+  ((N.type = "button"),
+    (N.id = "inbox-chip"),
+    (N.className = "task-tab task-inbox"),
+    (N.title = "your inbox — pending summons addressed to you"),
+    (N.innerHTML = 'inbox <span id="inbox-count" class="dim">·</span>'),
+    N.addEventListener("click", (x) => {
+      (x.stopPropagation(), y(), Kn());
+    }),
+    f.appendChild(N),
+    ue == null || ue(),
+    e.appendChild(h),
+    (fe = (x) => {
+      h.contains(x.target) || y();
+    }),
+    document.addEventListener("click", fe));
+}
+function at(e, t) {
+  for (const a of e.querySelectorAll(".task-tab"))
+    a.classList.toggle("active", a === t);
+}
+function Gn(e, t, a, o, n) {
+  ((e.innerHTML = ""), e.classList.remove("hidden"));
+  for (const s of t.actions) {
+    if (o && s.op && !s.special && !a.has(s.op)) continue;
+    const i = document.createElement("button");
+    ((i.type = "button"),
+      (i.className = "task-action" + (s.danger ? " task-action-danger" : "")),
+      (i.textContent = s.label),
+      i.addEventListener("click", () => {
+        (n(), Wn(s, a));
+      }),
+      e.appendChild(i));
+  }
+  if (!e.children.length) {
+    const s = document.createElement("div");
+    ((s.className = "task-empty dim"),
+      (s.textContent = "(no actions here)"),
+      e.appendChild(s));
+  }
+}
+function Wn(e, t) {
+  var n, s, i, c, l, p;
+  if (e.special === "being-chat") return $e(e.being);
+  if (e.special === "being-inspect")
+    return pt(() => Promise.resolve().then(() => Ka), void 0).then((r) =>
+      r.showInspector({ kind: "being", entry: e.being }),
+    );
+  if (e.special === "being-facts" || e.special === "being-acts") {
+    const r =
+        ((s = (n = b.state) == null ? void 0 : n.discovery) == null
+          ? void 0
+          : s.story) || "",
+      d =
+        ((l =
+          (c = (i = b.state) == null ? void 0 : i.descriptor) == null
+            ? void 0
+            : c.address) == null
+          ? void 0
+          : l.history) || "0",
+      m = d === "0" ? "" : `#${d}`,
+      u = (p = e.being) == null ? void 0 : p.beingId;
+    if (!u) return;
+    const g = e.special === "being-facts" ? `/.reel/being/${u}` : `/.acts/${u}`;
+    return b.navigate(`${r}${m}${g}`);
+  }
+  const a = Ge(e.label);
+  if (e.special === "being-identity")
+    return mt(a, { state: b.state, see: b.see, being: e.being });
+  if (e.special === "being-intent") return oa(a, e);
+  if (e.special === "being-verb") return sa(a, e, t);
+  if (e.special === "edit-space") return Yn(a, e);
+  if (e.special === "create-matter") return qn(a, e, { refreshView: Z });
+  if (e.special === "clone") return Vn(a, e);
+  if (e.special === "close-story") return Zn(a, e, t);
+  if (e.special === "ables") return Zt(a, e, t, { refreshView: Z });
+  if (e.special === "llm")
+    return et(a, e, t, { refreshView: Z, mode: "place" });
+  if (e.special === "llm-story")
+    return et(a, e, t, { refreshView: Z, mode: "story" });
+  if (e.special === "inbox") return Je(a, e, t, { refreshView: Z });
+  if (e.special === "federation-peers") return Dn(a, e, t, { refreshView: Z });
+  if (e.special === "federation-activity")
+    return Un(a, e, t, { refreshView: Z });
+  if (e.special === "history-info") return ea(a);
+  if (e.special === "birth-self") return Qn(a, e);
+  const o = t.get(e.op) || { name: e.op, args: null };
+  Q(a, {
+    op: o,
+    address: e.address,
+    values: e.values || {},
+    submitLabel: e.submitLabel || "run",
+    doOp: b.doOp,
+    onResult: (r) => {
+      r || Z();
+    },
+  });
+}
+function Kn() {
+  const e = Ge("your inbox");
+  return Je(e, {}, new Map(), { refreshView: () => {} });
+}
+function Xn() {
+  const e = Ge("your identity");
+  return mt(e, {
+    state: b.state,
+    doOp: b.doOp,
+    see: b.see,
+    beOp: b.beOp,
+    signIn: b.signIn,
+    signOut: b.signOut,
+  });
+}
+function Yn(e, t) {
+  var n;
+  const a = ((n = t.values) == null ? void 0 : n.name) || "";
+  Q(e, {
+    op: {
+      name: "set-space",
+      args: {
+        name: { type: "text", label: "Name (kebab-case)", required: !1 },
+      },
+    },
+    address: t.address,
+    values: t.values || {},
+    submitLabel: "save changes",
+    doOp: async (s, i, c) => {
+      const l = [];
+      return (
+        c.name != null &&
+          c.name !== a &&
+          (await b.doOp(s, "set-space", { field: "name", value: c.name }),
+          l.push("name")),
+        { changed: l.length ? l : "(no changes)" }
+      );
+    },
+    onResult: (s) => {
+      s || Z();
+    },
+  });
+}
+function Vn(e, t, a) {
+  Q(e, {
+    op: {
+      name: "capture-template",
+      args: {
+        name: { type: "text", label: "Clone name (optional)", required: !1 },
+      },
+    },
+    address: t.address,
+    submitLabel: "download clone",
+    doOp: async (n, s, i) => {
+      var f, C, E, y, w, N, k, v;
+      const c =
+        ((C = (f = b.state.descriptor) == null ? void 0 : f.address) == null
+          ? void 0
+          : C.spaceId) ||
+        ((y = (E = b.state.descriptor) == null ? void 0 : E.position) == null
+          ? void 0
+          : y.spaceId) ||
+        null;
+      if (!c) throw new Error("no spaceId on current descriptor to clone from");
+      const l = await b.state.client.see("capture-template", {
+          args: { spaceId: c, name: i.name || null },
+        }),
+        p = l == null ? void 0 : l.bundle;
+      if (!p) throw new Error("clone returned no bundle");
+      const r = i.name || "place",
+        d =
+          (((w = p.meta) == null ? void 0 : w.createdAt) || "")
+            .replace(/[:.]/g, "-")
+            .slice(0, 19) || "snapshot",
+        m = new Blob([JSON.stringify(p, null, 2)], {
+          type: "application/json",
+        }),
+        u = URL.createObjectURL(m),
+        g = document.createElement("a");
+      ((g.href = u),
+        (g.download = `${r}-${d}.seed.json`),
+        document.body.appendChild(g),
+        g.click(),
+        document.body.removeChild(g),
+        URL.revokeObjectURL(u));
+      const h = p.content || {};
+      return {
+        downloaded: `${r}-${d}.seed.json`,
+        spaces: ((N = h.spaces) == null ? void 0 : N.length) || 0,
+        beings: ((k = h.beings) == null ? void 0 : k.length) || 0,
+        matter: ((v = h.matter) == null ? void 0 : v.length) || 0,
+      };
+    },
+  });
+}
+function Zn(e, t, a) {
+  const o = a.get("close-story") || { name: "close-story", args: {} };
+  Q(e, {
+    op: o,
+    address: t.address,
+    submitLabel: "⚠ close story",
+    doOp: async (n, s, i) => {
+      if (
+        !window.confirm(
+          "Close the story? This stops the running server for everyone.",
+        )
+      )
+        throw new Error("cancelled");
+      return b.doOp(n, s, i);
+    },
+  });
+}
+function Qn(e, t) {
+  var i, c, l, p;
+  const a = {
+      name: "be:birth",
+      args: {
+        name: {
+          type: "text",
+          label: "Name (kebab-case, unique on this story)",
+          required: !0,
+        },
+        password: {
+          type: "text",
+          label: "Password (placeholder; substitute future credential)",
+          required: !0,
+        },
+      },
+    },
+    o = (
+      ((c = (i = b.state) == null ? void 0 : i.discovery) == null
+        ? void 0
+        : c.story) || ""
+    ).replace(/\/+$/, ""),
+    n =
+      ((p = (l = b.state) == null ? void 0 : l.session) == null
+        ? void 0
+        : p.username) || null;
+  if (!n) {
+    e.textContent =
+      "sign in first to birth a being (your stance is the target — the caller becomes mother).";
+    return;
+  }
+  const s = `${o}/@${n}`;
+  Q(e, {
+    op: a,
+    address: s,
+    values: t.values || {},
+    submitLabel: "birth",
+    doOp: async (r, d, m) => {
+      if (typeof b.beOp != "function")
+        throw new Error("flat.beOp not available; refresh and try again");
+      return b.beOp("birth", s, m);
+    },
+    onResult: (r) => {},
+  });
+}
+async function ea(e) {
+  var r, d, m, u, g, h, f, C, E, y, w, N, k;
+  const t =
+      ((d = (r = b.state) == null ? void 0 : r.discovery) == null
+        ? void 0
+        : d.story) ||
+      ((g =
+        (u = (m = b.state) == null ? void 0 : m.descriptor) == null
+          ? void 0
+          : u.address) == null
+        ? void 0
+        : g.story) ||
+      ((C =
+        (f = (h = b.state) == null ? void 0 : h.descriptor) == null
+          ? void 0
+          : f.address) == null
+        ? void 0
+        : C.place) ||
+      "",
+    a = (E = b.state) == null ? void 0 : E.client;
+  if (!a) {
+    e.textContent = "portal not ready";
+    return;
+  }
+  const o =
+      ((N =
+        (w = (y = b.state) == null ? void 0 : y.descriptor) == null
+          ? void 0
+          : w.address) == null
+        ? void 0
+        : N.history) || "0",
+    n = document.createElement("div");
+  n.className = "op-field";
+  const s = document.createElement("label");
+  s.textContent = "history";
+  const i = document.createElement("select");
+  ((i.className = "op-input"),
+    n.appendChild(s),
+    n.appendChild(i),
+    e.appendChild(n));
+  const c = document.createElement("div");
+  ((c.className = "history-info-body"),
+    (c.textContent = "loading…"),
+    e.appendChild(c));
+  const l = await ta(a, t);
+  i.innerHTML = "";
+  for (const v of l) {
+    const $ = document.createElement("option");
+    (($.value = v.path),
+      ($.textContent =
+        v.path === "0"
+          ? "main (#0)"
+          : `#${v.path}${v.label ? ` — ${v.label}` : ""}`),
+      i.appendChild($));
+  }
+  i.value = l.some((v) => v.path === o)
+    ? o
+    : ((k = l[0]) == null ? void 0 : k.path) || "0";
+  const p = async (v) => {
+    ((c.innerHTML = ""), (c.textContent = "loading…"));
+    let $ = null,
+      L = null;
+    try {
+      const S = await a.see(`${t}/.histories/${v}`);
+      $ = (S == null ? void 0 : S.histories) || null;
+    } catch (S) {
+      L =
+        S != null && S.code
+          ? `${S.code}: ${S.message || ""}`
+          : (S == null ? void 0 : S.message) || String(S);
+    }
+    ((c.innerHTML = ""), na(c, v, $, L));
+  };
+  (i.addEventListener("change", () => p(i.value)), await p(i.value));
+}
+async function ta(e, t) {
+  const a = new Map(),
+    o = new Set();
+  async function n(s, i) {
+    if (!(i > 6 || o.has(s))) {
+      o.add(s);
+      try {
+        const c = await e.see(`${t}/.histories/${s}`),
+          l = c == null ? void 0 : c.histories;
+        if (!l) return;
+        l.current && a.set(l.current.path, l.current.label || null);
+        for (const p of l.children || []) a.set(p.path, p.label || null);
+        for (const p of l.children || []) await n(p.path, i + 1);
+      } catch {}
+    }
+  }
+  return (
+    await n("0", 0),
+    a.has("0") || a.set("0", "main"),
+    [...a.entries()]
+      .map(([s, i]) => ({ path: s, label: i }))
+      .sort((s, i) => s.path.localeCompare(i.path))
+  );
+}
+function K(e, t, a) {
+  const o = document.createElement("div");
+  o.className = "kv-block";
+  const n = document.createElement("span");
+  ((n.className = "kv-block-label"), (n.textContent = t));
+  const s = document.createElement("span");
+  ((s.className = "kv-block-value"),
+    (s.textContent = a),
+    o.appendChild(n),
+    o.appendChild(s),
+    e.appendChild(o));
+}
+function na(e, t, a, o) {
+  var u, g;
+  const n = a == null ? void 0 : a.current;
+  if (o || !n) {
+    const h = document.createElement("div");
+    ((h.className = "action-result action-err"),
+      (h.textContent = o || `history "${t}" not found`),
+      e.appendChild(h));
+    return;
+  }
+  const s = a.pointers || {},
+    i = Object.keys(s)
+      .filter((h) => s[h] === t)
+      .sort(),
+    c = Array.isArray(a.lineage) ? a.lineage : [],
+    l = Array.isArray(a.children) ? a.children : [];
+  (K(e, "path", `#${n.path}`),
+    n.label && K(e, "label", n.label),
+    K(e, "live", n.isLive ? "yes" : "no"),
+    K(e, "parent", n.parent ? `#${n.parent}` : "main (root)"),
+    K(e, "lineage", c.map((h) => `#${h}`).join(" → ") || "—"),
+    K(e, "children", l.length ? l.map((h) => `#${h.path}`).join(", ") : "—"),
+    K(e, "pointers here", i.length ? i.join(", ") : "—"));
+  const p = n.anchor && typeof n.anchor == "object" ? n.anchor : {},
+    r = Object.keys(p);
+  (K(
+    e,
+    "branch-point",
+    r.length
+      ? r.map((h) => `${h} @ seq ${p[h]}`).join(", ")
+      : "(forked at genesis / no reels)",
+  ),
+    K(
+      e,
+      "scope",
+      (u = n.scope) != null && u.path
+        ? `subtree ${n.scope.path}`
+        : "whole story",
+    ),
+    K(
+      e,
+      "created",
+      `${n.createdAt || "?"}${n.createdBy ? ` by ${String(n.createdBy).slice(0, 8)}` : ""}`,
+    ),
+    (g = n.mergeSources) != null &&
+      g.length &&
+      K(e, "merged from", n.mergeSources.map((h) => `#${h}`).join(" + ")),
+    n.paused && K(e, "paused", `yes${n.pausedAt ? ` (${n.pausedAt})` : ""}`),
+    n.deleted &&
+      K(e, "deleted", `yes${n.deletedAt ? ` (${n.deletedAt})` : ""}`),
+    n.archivedBecause && K(e, "archived", n.archivedBecause));
+  const d = document.createElement("button");
+  ((d.type = "button"),
+    (d.className = "btn-sm"),
+    (d.textContent = "show raw JSON"),
+    (d.style.marginTop = "8px"));
+  const m = document.createElement("pre");
+  ((m.className = "json"),
+    (m.style.display = "none"),
+    (d.onclick = () => {
+      m.style.display === "none"
+        ? ((m.textContent = JSON.stringify(a, null, 2)),
+          (m.style.display = "block"),
+          (d.textContent = "hide raw JSON"))
+        : ((m.style.display = "none"), (d.textContent = "show raw JSON"));
+    }),
+    e.appendChild(d),
+    e.appendChild(m));
+}
+function aa(e, t) {
+  const a = [
+    { label: "chat (summon)", special: "being-chat", being: e },
+    { label: "inspect", special: "being-inspect", being: e },
+  ];
+  for (const o of Array.isArray(e.canSummon) ? e.canSummon : [])
+    o &&
+      o.as === "receiver" &&
+      o.intent &&
+      a.push({
+        label: `summon: ${o.intent}`,
+        special: "being-intent",
+        being: e,
+        intent: o.intent,
+        address: t,
+      });
+  for (const o of Array.isArray(e.actions) ? e.actions : [])
+    a.push({
+      label: o.label || `${o.verb} ${o.action}`,
+      special: "being-verb",
+      being: e,
+      beingAction: o,
+      address: t,
+    });
+  return (
+    e.beingId &&
+      (a.push({ label: "identity (key)", special: "being-identity", being: e }),
+      a.push({ label: "view facts (reel)", special: "being-facts", being: e }),
+      a.push({ label: "view acts (chain)", special: "being-acts", being: e })),
+    a
+  );
+}
+function oa(e, t) {
+  const a = {
+    name: `summon (${t.intent})`,
+    args: { content: { type: "multiline", label: "message", required: !0 } },
+  };
+  Q(e, {
+    op: a,
+    address: t.address,
+    submitLabel: `summon: ${t.intent}`,
+    doOp: async (o, n, s) => {
+      const { correlation: i, reply: c } = await b.sendSummon(
+        t.address,
+        s.content || "",
+        { intent: t.intent },
+      );
+      return {
+        sent: !0,
+        correlation: i,
+        reply: (c == null ? void 0 : c.status) || c || null,
+      };
+    },
+  });
+}
+function sa(e, t, a) {
+  const o = t.beingAction;
+  if (o.verb === "call") return $e(t.being);
+  if (o.verb === "be") {
+    const s = { name: `be:${o.action}`, args: o.args || {} };
+    return Q(e, {
+      op: s,
+      address: t.address,
+      submitLabel: o.label || o.action,
+      doOp: (i, c, l) => b.beOp(o.action, t.address, l),
+    });
+  }
+  const n = a.get(o.action) || { name: o.action, args: o.args || null };
+  Q(e, {
+    op: n,
+    address: t.address,
+    submitLabel: o.label || "run",
+    doOp: b.doOp,
+    onResult: (s) => {
+      s || Z();
+    },
+  });
+}
+function ia(e, t) {
+  var a;
+  return [
+    { label: "+ create child space", op: "create-space", address: e },
+    {
+      label: "edit this space",
+      special: "edit-space",
+      address: e,
+      values: {
+        name:
+          (((a = t.address) == null ? void 0 : a.pathByNames) || "")
+            .split("/")
+            .filter(Boolean)
+            .pop() || "",
+      },
+    },
+    {
+      label: "+ create matter",
+      special: "create-matter",
+      op: "create-matter",
+      address: e,
+    },
+    {
+      label: "+ birth a being (you become mother)",
+      special: "birth-self",
+      address: e,
+    },
+    { label: "move something", op: "move", address: e },
+    { label: "plant a seed", op: "plant", address: e },
+    { label: "set render", op: "set-render", address: e },
+    { label: "delete able", op: "delete-able", address: e },
+    { label: "ables", special: "ables", address: e, values: { descriptor: t } },
+    { label: "llm", special: "llm", address: e, values: { descriptor: t } },
+    { label: "set owner", op: "set-owner", address: e },
+    { label: "remove owner", op: "remove-owner", address: e },
+    { label: "⚠ delete this space", op: "end-space", address: e, danger: !0 },
+  ];
+}
+function ca(e) {
+  return [
+    { label: "view history info", special: "history-info" },
+    { label: "fork a branch", op: "create-branch", address: e },
+    { label: "merge histories", op: "merge-histories", address: e },
+    { label: "pause history", op: "pause-history", address: e },
+    { label: "unpause history", op: "unpause-history", address: e },
+    { label: "delete history", op: "delete-history", address: e, danger: !0 },
+    { label: "undelete history", op: "undelete-history", address: e },
+    { label: "set pointer", op: "set-pointer", address: e },
+    { label: "delete pointer", op: "delete-pointer", address: e },
+    {
+      label: "save clone (download)",
+      op: "capture-template",
+      special: "clone",
+      address: e,
+    },
+    { label: "graft a clone here", op: "plant-template", address: e },
+  ];
+}
+function la(e) {
+  return [
+    { label: "form seed of story", op: "capture-graft", address: e },
+    { label: "set config", op: "set-config", address: e },
+    { label: "delete config", op: "delete-config", address: e },
+    { label: "ables (story-wide)", special: "ables", address: e },
+    { label: "llm (story defaults)", special: "llm-story", address: e },
+    {
+      label: "⚠ close story (exit server)",
+      op: "close-story",
+      special: "close-story",
+      address: e,
+      danger: !0,
+    },
+  ];
+}
+function ra() {
+  return [
+    { label: "peers (graft / send / request)", special: "federation-peers" },
+    {
+      label: "activity (incoming / in flight)",
+      special: "federation-activity",
+    },
+  ];
+}
+function Ge(e) {
+  var n, s;
+  ((n = document.getElementById("empty-detail")) == null ||
+    n.classList.add("hidden"),
+    (s = document.getElementById("chat-panel")) == null ||
+      s.classList.add("hidden"));
+  const t = document.getElementById("inspector");
+  (t.classList.remove("hidden"), (t.innerHTML = ""));
+  const a = document.createElement("div");
+  ((a.className = "panel-header"), (a.textContent = e), t.appendChild(a));
+  const o = document.createElement("div");
+  return ((o.className = "task-form-body"), t.appendChild(o), o);
+}
+function Z() {
+  var t;
+  const e = (t = b.state) == null ? void 0 : t.currentAddress;
+  e && typeof b.navigate == "function" && b.navigate(e);
+}
+function ie(e) {
+  Bt(e);
+  const t = document.getElementById("status-line");
+  t && (t.textContent = e || "");
+}
+function $t() {
+  var e, t, a;
+  ((e = document.getElementById("inspector")) == null ||
+    e.classList.add("hidden"),
+    (t = document.getElementById("chat-panel")) == null ||
+      t.classList.add("hidden"),
+    (a = document.getElementById("empty-detail")) == null ||
+      a.classList.remove("hidden"));
+}
+function Be(e, { session: t, discovery: a }) {
+  var s, i;
+  if (!e) return;
+  if (
+    (pa(e, { session: t, discovery: a }),
+    Jn(document.getElementById("task-menubar"), {
+      descriptor: e,
+      session: t,
+      discovery: a,
+    }),
+    e.isReel || e.isActChain || e.isBeingsCatalog || e.isThread)
+  ) {
+    Ba(e, { discovery: a });
+    return;
+  }
+  const o = ya((s = e.address) == null ? void 0 : s.pathByNames);
+  if (o) {
+    va(e, o, { discovery: a });
+    return;
+  }
+  const n = Ea((i = e.address) == null ? void 0 : i.pathByNames);
+  if (n) {
+    wa(e, n, { discovery: a });
+    return;
+  }
+  if (
+    (da(),
+    ha(e, { session: t, discovery: a }),
+    ba(e, { discovery: a }),
+    ga(e, { session: t, discovery: a }),
+    ua(e),
+    jt())
+  ) {
+    const c = qt(),
+      l = (e.beings || []).find((p) => p.being === c);
+    l && $e(l, { refresh: !0 });
+  }
+}
+function da() {
+  var t, a;
+  const e = document.getElementById("explorer-pane");
+  (e && e.remove(),
+    (t = document.getElementById("position-pane")) == null ||
+      t.classList.remove("hidden"),
+    (a = document.getElementById("detail-pane")) == null ||
+      a.classList.remove("hidden"));
+}
+function pa(e, { session: t, discovery: a }) {
+  ma(t, a);
+}
+function ma(e, t) {
+  const a = document.getElementById("identity-chip");
+  ((a.innerHTML = ""), t != null && t.story);
+  const o = (e == null ? void 0 : e.username) || "arrival",
+    n = document.createElement("button");
+  ((n.className = "chip" + (e != null && e.token ? " chip-authed" : "")),
+    (n.textContent = e != null && e.token ? `@${o}` : "@arrival"),
+    (n.title =
+      e != null && e.token
+        ? `signed in as @${o}
+being: ${e.beingAddress || "(unknown)"}
+id: ${e.beingId || "(not in session)"}
+click for identity (key, export, sign out)`
+        : "click to sign in with your name"),
+    (n.onclick = () => {
+      var s;
+      e != null && e.token
+        ? Xn()
+        : (s = b.presentNameAuth) == null || s.call(b);
+    }),
+    a.appendChild(n));
+}
+function ua(e) {
+  var o, n;
+  const t = document.getElementById("beings-count"),
+    a = document.getElementById("matter-count");
+  (t &&
+    (t.textContent =
+      (o = e.beings) != null && o.length ? `${e.beings.length}` : ""),
+    a &&
+      (a.textContent =
+        (n = e.matters) != null && n.length ? `${e.matters.length}` : ""));
+}
+function wt(e, t = "") {
+  const a = document.getElementById("connection-pill");
+  if (!a) return;
+  const o = a.querySelector(".conn-dot"),
+    n = a.querySelector(".conn-text");
+  ((a.title = `socket: ${e}${t ? " — " + t : ""}`),
+    (o.className = "conn-dot"),
+    e === "connected"
+      ? (o.classList.add("conn-ok"), (n.textContent = "live"))
+      : e === "disconnected" || e === "error"
+        ? (o.classList.add("conn-err"),
+          (n.textContent = e === "error" ? "error" : "offline"))
+        : (o.classList.add("conn-pending"),
+          (n.textContent = e || "connecting…")));
+}
+function Nt(e) {
+  const t = document.getElementById("loading-bar");
+  t && t.classList.toggle("hidden", !e);
+}
+function ha(e, { session: t, discovery: a }) {
+  var s, i;
+  const o = document.getElementById("beings-list");
+  o.innerHTML = "";
+  const n = e.beings || [];
+  if (n.length === 0) {
+    o.appendChild(Ke("(no beings here)"));
+    return;
+  }
+  for (const c of n) {
+    const l = document.createElement("li");
+    l.className = "list-row";
+    const p = document.createElement("div");
+    p.className = "row-meta";
+    const r = document.createElement("span");
+    ((r.className = "row-name"),
+      (r.textContent = `@${c.being}`),
+      p.appendChild(r),
+      c.respondMode && p.appendChild(G(c.respondMode, "mode")),
+      c.available === !1 && p.appendChild(G("busy", "busy")),
+      ((s = c.inbox) == null ? void 0 : s.unconsumed) > 0 &&
+        p.appendChild(G(`inbox ${c.inbox.unconsumed}`, "queue")),
+      (i = c.activity) != null &&
+        i.kind &&
+        p.appendChild(G(c.activity.kind, "activity")),
+      l.appendChild(p));
+    const d = document.createElement("div");
+    d.className = "row-actions";
+    const m = c.beingId || null;
+    if (m && a != null && a.story) {
+      const h = document.createElement("a");
+      ((h.className = "btn-sm btn-explore"),
+        (h.href = `#${a.story}/.reel/being/${m}`),
+        (h.textContent = "facts"),
+        (h.title = "this being's fact reel"),
+        d.appendChild(h));
+      const f = document.createElement("a");
+      ((f.className = "btn-sm btn-explore"),
+        (f.href = `#${a.story}/.acts/${m}`),
+        (f.textContent = "acts"),
+        (f.title = "this being's act-chain"),
+        d.appendChild(f));
+    }
+    const u = document.createElement("button");
+    ((u.textContent = "inspect"),
+      (u.className = "btn-sm"),
+      (u.onclick = () => {
+        var h;
+        ((h = b.selectBeing) == null || h.call(b, c.beingId, c.being),
+          We({ kind: "being", entry: c }));
+      }),
+      d.appendChild(u));
+    const g = document.createElement("button");
+    if (
+      ((g.textContent = "chat"),
+      (g.className = "btn-sm btn-primary"),
+      (g.disabled = !(t != null && t.token)),
+      (g.title =
+        t != null && t.token ? "summon this being" : "claim an identity first"),
+      (g.onclick = () => {
+        var h;
+        ((h = b.selectBeing) == null || h.call(b, c.beingId, c.being), $e(c));
+      }),
+      d.appendChild(g),
+      Array.isArray(c.canSummon) && t != null && t.token)
+    )
+      for (const h of c.canSummon) {
+        if (
+          (h == null ? void 0 : h.as) !== "receiver" ||
+          !(h != null && h.intent)
+        )
+          continue;
+        const f = document.createElement("button");
+        ((f.textContent =
+          h.intent === "mate"
+            ? c.being === "cherub"
+              ? "birth your first being"
+              : "birth a child"
+            : h.intent),
+          (f.className = "btn-sm"),
+          (f.title =
+            h.description || `summon @${c.being} with intent="${h.intent}"`),
+          (f.onclick = () => fa(c, h)),
+          d.appendChild(f));
+      }
+    (l.appendChild(d), o.appendChild(l));
+  }
+}
+function fa(e, t) {
+  const a = e.being === "cherub",
+    o =
+      t.intent === "mate"
+        ? a
+          ? "Birth your first being through your name. It will be a top-level being, owned by you (cherub is right below I). Name it:"
+          : `Summon @${e.being} to mate. The new child has @${e.being} as mother and you as father. Optional: child name. (Leave blank for auto-generated.)`
+        : `Summon @${e.being} with intent="${t.intent}". Optional message:`,
+    n = window.prompt(o, "");
+  if (n === null) return;
+  const s = e.stance || `@${e.being}`,
+    i = n.trim().length > 0 ? { name: n.trim() } : {};
+  b.sendSummon(s, i, { intent: t.intent })
+    .then((c) => {
+      var p, r;
+      const l =
+        (p = c == null ? void 0 : c.reply) != null && p.from
+          ? `summoned @${e.being} (${t.intent}); reply from ${c.reply.from}`
+          : `summoned @${e.being} (${t.intent})`;
+      try {
+        (r = b.setStatus) == null || r.call(b, l);
+      } catch {}
+    })
+    .catch((c) => {
+      var l;
+      try {
+        (l = b.setStatus) == null ||
+          l.call(b, `summon failed: ${(c == null ? void 0 : c.message) || c}`);
+      } catch {}
+    });
+}
+function ga(e, { session: t, discovery: a }) {
+  const o = document.getElementById("lineage-section"),
+    n = document.getElementById("lineage-list"),
+    s = document.getElementById("lineage-count");
+  if (!o || !n) return;
+  const i = Array.isArray(e.beingLineage) ? e.beingLineage : null;
+  if (!i) {
+    (o.classList.add("hidden"), (n.innerHTML = ""), s && (s.textContent = ""));
+    return;
+  }
+  if (
+    (o.classList.remove("hidden"),
+    s && (s.textContent = i.length ? `${i.length}` : ""),
+    (n.innerHTML = ""),
+    i.length === 0)
+  ) {
+    n.appendChild(
+      Ke("(no descendants yet — BE:birth from your own stance to mint one)"),
+    );
+    return;
+  }
+  const c = (a == null ? void 0 : a.story) || null,
+    l = !!(t != null && t.token);
+  for (const p of i) {
+    const r = document.createElement("li");
+    r.className = "list-row";
+    const d = document.createElement("div");
+    d.className = "row-meta";
+    const m = document.createElement("span");
+    ((m.className = "row-name"),
+      (m.textContent = `@${p.name || p.beingId.slice(0, 8)}`),
+      d.appendChild(m),
+      p.cognition && d.appendChild(G(p.cognition, "mode")),
+      p.defaultAble && d.appendChild(G(p.defaultAble, "activity")),
+      r.appendChild(d));
+    const u = document.createElement("div");
+    if (((u.className = "row-actions"), c && p.name)) {
+      const h = document.createElement("a");
+      ((h.className = "btn-sm btn-explore"),
+        (h.href = `#${c}/@${p.name}`),
+        (h.textContent = "open"),
+        (h.title = "navigate to this being's stance"),
+        u.appendChild(h));
+    }
+    const g = document.createElement("button");
+    ((g.textContent = "inhabit"),
+      (g.className = "btn-sm btn-primary"),
+      (g.disabled = !l),
+      (g.title = l ? "open a new tab driving this being" : "sign in first"),
+      (g.onclick = () => Ca(p, { story: c })),
+      u.appendChild(g),
+      r.appendChild(u),
+      n.appendChild(r));
+  }
+}
+async function Ca(e, { story: t }) {
+  var a, o, n, s, i;
+  if (!(!t || !(e != null && e.name))) {
+    ie(`inheriting @${e.name}...`);
+    try {
+      const { flat: c } = await pt(
+          async () => {
+            const { flat: g } = await Promise.resolve().then(() => eo);
+            return { flat: g };
+          },
+          void 0,
+        ),
+        l = `${t}/@${e.name}`,
+        p = await c.beOp("connect", l, {});
+      if (!p || p.status === "error") {
+        const g =
+          ((a = p == null ? void 0 : p.error) == null ? void 0 : a.message) ||
+          "connect rejected";
+        ie(`inhabit failed: ${g}`);
+        return;
+      }
+      const r = (o = p.data) == null ? void 0 : o.identityToken,
+        d = ((n = p.data) == null ? void 0 : n.name) || e.name;
+      if (!r) {
+        ie("inhabit ok but no token returned (server bug?)");
+        return;
+      }
+      const m = encodeURIComponent(
+          JSON.stringify({
+            token: r,
+            username: d,
+            placeUrl:
+              ((s = c.state.session) == null ? void 0 : s.placeUrl) ||
+              window.location.origin,
+            inherited: !0,
+            spawnerName:
+              ((i = c.state.session) == null ? void 0 : i.username) || null,
+          }),
+        ),
+        u = `${window.location.pathname}#inhabit=${m}`;
+      (window.open(u, "_blank"), ie(`opened new tab for @${d}`));
+    } catch (c) {
+      ie(`inhabit failed: ${(c == null ? void 0 : c.message) || String(c)}`);
+    }
+  }
+}
+function ba(e, { discovery: t } = {}) {
+  const a = document.getElementById("matter-list");
+  a.innerHTML = "";
+  const o = e.matters || [];
+  if (o.length === 0) {
+    a.appendChild(Ke("(no matter here)"));
+    return;
+  }
+  for (const n of o) {
+    const s = document.createElement("li");
+    s.className = "list-row";
+    const i = document.createElement("div");
+    i.className = "row-meta";
+    const c = document.createElement("span");
+    if (
+      ((c.className = "row-name"),
+      (c.textContent = n.name || "(unnamed)"),
+      i.appendChild(c),
+      n.type && i.appendChild(G(n.type, "type")),
+      n.preview)
+    ) {
+      const r = document.createElement("span");
+      ((r.className = "row-preview"),
+        (r.textContent =
+          n.preview.length > 60 ? n.preview.slice(0, 60) + "…" : n.preview),
+        i.appendChild(r));
+    }
+    s.appendChild(i);
+    const l = document.createElement("div");
+    if (((l.className = "row-actions"), n.matterId && t != null && t.story)) {
+      const r = document.createElement("a");
+      ((r.className = "btn-sm btn-explore"),
+        (r.href = `#${t.story}/.reel/matter/${n.matterId}`),
+        (r.textContent = "facts"),
+        (r.title = "this matter's fact reel"),
+        l.appendChild(r));
+    }
+    const p = document.createElement("button");
+    ((p.textContent = "inspect"),
+      (p.className = "btn-sm"),
+      (p.onclick = () => We({ kind: "matter", entry: n })),
+      l.appendChild(p),
+      s.appendChild(l),
+      a.appendChild(s));
+  }
+}
+function ya(e) {
+  if (typeof e != "string") return null;
+  const t = e.match(/^\/(?:\.\/)?(operations|ables|threads|extensions)\/?$/);
+  return t ? t[1] : null;
+}
+function Ea(e) {
+  if (typeof e != "string") return null;
+  const t = e.match(/^\/(?:\.\/)?(operations|ables|extensions)\/([^/]+)\/?$/);
+  return t ? { kind: t[1], name: t[2] } : null;
+}
+const xt = {
+  operations: { icon: "⚙", title: "operations", sub: "registered DO actions" },
+  ables: { icon: "◎", title: "ables", sub: "summonable able templates" },
+  threads: {
+    icon: "⧖",
+    title: "threads",
+    sub: "live coordination chains (rootCorrelations)",
+  },
+  extensions: { icon: "⊕", title: "extensions", sub: "installed extensions" },
+};
+function va(e, t, { discovery: a }) {
+  var d, m;
+  const o = document.getElementById("middle");
+  ((d = document.getElementById("position-pane")) == null ||
+    d.classList.add("hidden"),
+    (m = document.getElementById("detail-pane")) == null ||
+      m.classList.add("hidden"));
+  let n = document.getElementById("explorer-pane");
+  (n && n.remove(),
+    (n = document.createElement("section")),
+    (n.id = "explorer-pane"),
+    o.appendChild(n));
+  const s = xt[t],
+    i = e.children || [],
+    c = document.createElement("header");
+  c.className = "explorer-header";
+  const l = document.createElement("h2");
+  ((l.className = "explorer-title"),
+    (l.innerHTML = `${s.icon} <span class="dim">${s.title}</span>`),
+    c.appendChild(l));
+  const p = document.createElement("div");
+  if (
+    ((p.className = "explorer-sub"),
+    (p.textContent = `${i.length} item${i.length === 1 ? "" : "s"} · ${s.sub}`),
+    c.appendChild(p),
+    n.appendChild(c),
+    i.length === 0)
+  ) {
+    const u = document.createElement("div");
+    ((u.className = "explorer-empty"),
+      (u.textContent = `(no ${s.title} registered)`),
+      n.appendChild(u));
+    return;
+  }
+  const r = document.createElement("ul");
+  r.className = "catalog-list";
+  for (const u of i) r.appendChild($a(t, u, a));
+  n.appendChild(r);
+}
+function $a(e, t, a) {
+  var c;
+  const o = document.createElement("li");
+  o.className = "catalog-row";
+  const n = document.createElement("div");
+  n.className = "catalog-main";
+  const s = document.createElement("span");
+  ((s.className = "row-name"),
+    (s.textContent = t.name || "(unnamed)"),
+    n.appendChild(s),
+    e === "operations"
+      ? Sa(n, t)
+      : e === "ables"
+        ? Aa(n, t)
+        : e === "threads"
+          ? La(n, t)
+          : e === "extensions" && Ia(n, t),
+    o.appendChild(n));
+  const i = document.createElement("div");
+  if (
+    ((i.className = "catalog-sub"),
+    e === "threads" && (c = t.thread) != null && c.id && a != null && a.story)
+  ) {
+    const l = document.createElement("a");
+    ((l.className = "btn-explore"),
+      (l.href = `#${a.story}/./threads/${t.thread.id}`),
+      (l.textContent = "open thread"),
+      i.appendChild(l));
+  } else if (t.path && a != null && a.story) {
+    const l = document.createElement("a");
+    ((l.className = "btn-explore"),
+      (l.href = `#${a.story}${t.path}`),
+      (l.textContent = "open"),
+      i.appendChild(l));
+  }
+  if (
+    t.spaceId &&
+    !String(t.spaceId).startsWith("thread:") &&
+    a != null &&
+    a.story
+  ) {
+    const l = document.createElement("a");
+    ((l.className = "btn-explore"),
+      (l.href = `#${a.story}/.reel/space/${t.spaceId}`),
+      (l.textContent = "facts"),
+      i.appendChild(l));
+  }
+  return (i.children.length && o.appendChild(i), o);
+}
+function wa(e, { kind: t, name: a }, { discovery: o }) {
+  var m, u, g;
+  const n = document.getElementById("middle");
+  ((m = document.getElementById("position-pane")) == null ||
+    m.classList.add("hidden"),
+    (u = document.getElementById("detail-pane")) == null ||
+      u.classList.add("hidden"));
+  let s = document.getElementById("explorer-pane");
+  (s && s.remove(),
+    (s = document.createElement("section")),
+    (s.id = "explorer-pane"),
+    n.appendChild(s));
+  const i = xt[t] || { icon: "·", title: t },
+    c = document.createElement("header");
+  c.className = "explorer-header";
+  const l = document.createElement("h2");
+  ((l.className = "explorer-title"),
+    (l.innerHTML = `${i.icon} <a class="dim" href="#${o.story}/.${t}">${i.title}</a> <span class="dim">/</span> ${a}`),
+    c.appendChild(l));
+  const p = document.createElement("div");
+  p.className = "explorer-sub";
+  const r = (g = e.address) == null ? void 0 : g.spaceId;
+  if (
+    ((p.textContent = r ? `space ${r}` : "(no spaceId)"),
+    c.appendChild(p),
+    r && o != null && o.story)
+  ) {
+    const h = document.createElement("a");
+    ((h.className = "explorer-jump"),
+      (h.href = `#${o.story}/.reel/space/${r}`),
+      (h.textContent = "⛓ reel for this row"),
+      c.appendChild(h));
+  }
+  s.appendChild(c);
+  const d = e.qualities || {};
+  t === "operations"
+    ? Na(s, d.operation || {}, a)
+    : t === "ables"
+      ? xa(s, d.able || {}, a)
+      : t === "extensions" && ka(s, d.extension || d, a);
+}
+function Na(e, t, a) {
+  const o = _("operation");
+  if (
+    (o.appendChild(B("name", a, { mono: !0 })),
+    Array.isArray(t.targets) &&
+      t.targets.length &&
+      o.appendChild(B("targets", t.targets.join(", "))),
+    t.factAction &&
+      o.appendChild(B("stamps factAction", t.factAction, { mono: !0 })),
+    t.ownerExtension && o.appendChild(B("from extension", t.ownerExtension)),
+    o.appendChild(B("skipAudit", t.skipAudit ? "true" : "false")),
+    e.appendChild(o),
+    t && Object.keys(t).length)
+  ) {
+    const n = _("raw qualities.operation");
+    (n.appendChild(re(t)), e.appendChild(n));
+  }
+}
+function xa(e, t, a) {
+  const o = _("able");
+  (o.appendChild(B("name", a, { mono: !0 })),
+    t.respondMode && o.appendChild(B("respondMode", t.respondMode)),
+    Array.isArray(t.triggerOn) &&
+      t.triggerOn.length &&
+      o.appendChild(B("triggerOn", t.triggerOn.join(", "))),
+    t.replyTo && o.appendChild(B("replyTo", t.replyTo)),
+    e.appendChild(o));
+  const n = Array.isArray(t.canSummon) ? t.canSummon : [],
+    s = n.filter(
+      (l) =>
+        typeof l != "object" ||
+        ((l == null ? void 0 : l.as) ?? "actor") === "actor",
+    ),
+    i = n.filter(
+      (l) => typeof l == "object" && (l == null ? void 0 : l.as) === "receiver",
+    ),
+    c = [
+      ["canSee", t.canSee],
+      ["canDo", t.canDo],
+      ["canSummon (initiates)", s],
+      ["canSummon (accepts as receiver)", i],
+      ["canBe", t.canBe],
+    ];
+  for (const [l, p] of c) {
+    if (!Array.isArray(p) || p.length === 0) continue;
+    const r = _(l),
+      d = document.createElement("ul");
+    d.className = "verb-list";
+    for (const m of p) {
+      const u = document.createElement("li"),
+        g =
+          typeof m == "object"
+            ? m.intent
+              ? `intent="${m.intent}"${m.pattern ? ` target=${m.pattern}` : ""}${m.description ? ` — ${m.description}` : ""}`
+              : m.pattern || JSON.stringify(m)
+            : String(m);
+      ((u.innerHTML = `<code>${kt(g)}</code>`), d.appendChild(u));
+    }
+    (r.appendChild(d), e.appendChild(r));
+  }
+  if (Array.isArray(t.permissions) && t.permissions.length) {
+    const l = _("permissions");
+    (l.appendChild(re(t.permissions)), e.appendChild(l));
+  }
+}
+function ka(e, t, a) {
+  const o = _("extension");
+  (o.appendChild(B("name", a, { mono: !0 })),
+    t.version && o.appendChild(B("version", t.version)),
+    t.description && o.appendChild(B("description", t.description)),
+    t.author && o.appendChild(B("author", t.author)),
+    t.installedAt && o.appendChild(B("installed at", String(t.installedAt))),
+    t.enabled != null && o.appendChild(B("enabled", String(t.enabled))),
+    e.appendChild(o));
+  const n = [
+    "operations",
+    "ables",
+    "tools",
+    "hooks",
+    "seeds",
+    "subscriptions",
+    "schedules",
+    "routes",
+  ];
+  for (const i of n) {
+    const c = t[i];
+    if (Array.isArray(c) && c.length) {
+      const l = _(`provides ${i}`),
+        p = document.createElement("ul");
+      p.className = "verb-list";
+      for (const r of c) {
+        const d = document.createElement("li"),
+          m = typeof r == "string" ? r : JSON.stringify(r);
+        ((d.innerHTML = `<code>${kt(m)}</code>`), p.appendChild(d));
+      }
+      (l.appendChild(p), e.appendChild(l));
+    } else if (c && typeof c == "object") {
+      const l = _(`provides ${i}`);
+      (l.appendChild(re(c)), e.appendChild(l));
+    }
+  }
+  const s = _("raw qualities");
+  (s.appendChild(re(t)), e.appendChild(s));
+}
+function kt(e) {
+  return String(e).replace(
+    /[&<>"']/g,
+    (t) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        t
+      ],
+  );
+}
+function Sa(e, t) {
+  var n;
+  const a = ((n = t.qualities) == null ? void 0 : n.operation) || {},
+    o = Array.isArray(a.targets) ? a.targets : [];
+  if (
+    (o.length && e.appendChild(G(`→ ${o.join("/")}`, "mode")),
+    a.ownerExtension &&
+      a.ownerExtension !== "seed" &&
+      e.appendChild(G(a.ownerExtension, "activity")),
+    a.factAction && a.factAction !== t.name)
+  ) {
+    const s = document.createElement("span");
+    ((s.className = "dim catalog-ts"),
+      (s.textContent = `stamps ${a.factAction}`),
+      e.appendChild(s));
+  }
+  a.skipAudit && e.appendChild(G("no-audit", "busy"));
+}
+function Aa(e, t) {
+  var n, s, i, c, l;
+  const a = ((n = t.qualities) == null ? void 0 : n.able) || {};
+  (a.respondMode && e.appendChild(G(a.respondMode, "mode")),
+    Array.isArray(a.triggerOn) &&
+      a.triggerOn.length &&
+      e.appendChild(G(`on:${a.triggerOn.join(",")}`, "activity")));
+  const o = [];
+  if (
+    ((s = a.canDo) != null && s.length && o.push(`do:${a.canDo.length}`),
+    (i = a.canSee) != null && i.length && o.push(`see:${a.canSee.length}`),
+    (c = a.canSummon) != null &&
+      c.length &&
+      o.push(`sum:${a.canSummon.length}`),
+    (l = a.canBe) != null && l.length && o.push(`be:${a.canBe.length}`),
+    o.length)
+  ) {
+    const p = document.createElement("span");
+    ((p.className = "dim catalog-ts"),
+      (p.textContent = o.join(" · ")),
+      (p.title = `canDo: ${(a.canDo || []).join(", ") || "—"}
+canSee: ${(a.canSee || []).join(", ") || "—"}
+canSummon: ${(a.canSummon || []).join(", ") || "—"}
+canBe: ${(a.canBe || []).join(", ") || "—"}`),
+      e.appendChild(p));
+  }
+}
+function La(e, t) {
+  const a = t.thread || {};
+  if (a.lastAct) {
+    const o = document.createElement("span");
+    ((o.className = "dim catalog-ts"),
+      (o.textContent = `last ${Te(a.lastAct)}`),
+      (o.title = a.lastAct),
+      e.appendChild(o));
+  }
+  e.appendChild(G("live", "queue"));
+}
+function Ia(e, t) {
+  var o;
+  const a =
+    ((o = t.qualities) == null ? void 0 : o.extension) || t.qualities || {};
+  if ((a.version && e.appendChild(G(`v${a.version}`, "mode")), a.description)) {
+    const n = document.createElement("span");
+    ((n.className = "dim catalog-ts"),
+      (n.textContent = String(a.description).slice(0, 80)),
+      (n.title = a.description),
+      e.appendChild(n));
+  }
+}
+function Ba(e, { discovery: t }) {
+  var n, s;
+  const a = document.getElementById("middle");
+  ((n = document.getElementById("position-pane")) == null ||
+    n.classList.add("hidden"),
+    (s = document.getElementById("detail-pane")) == null ||
+      s.classList.add("hidden"));
+  let o = document.getElementById("explorer-pane");
+  (o && o.remove(),
+    (o = document.createElement("section")),
+    (o.id = "explorer-pane"),
+    a.appendChild(o),
+    e.isReel
+      ? ja(o, e.reel, t)
+      : e.isActChain
+        ? Ra(o, e.actChain, t)
+        : e.isBeingsCatalog
+          ? Ta(o, e.beingsCatalog, t)
+          : e.isThread && Oa(o, e.thread, t));
+}
+function Oa(e, t, a) {
+  if (!t) {
+    const d = document.createElement("div");
+    ((d.className = "explorer-empty"),
+      (d.textContent = "(thread not found)"),
+      e.appendChild(d));
+    return;
+  }
+  const o = document.createElement("header");
+  o.className = "explorer-header";
+  const n = document.createElement("h2");
+  ((n.className = "explorer-title"),
+    (n.innerHTML = `⧖ <a class="dim" href="#${a.story}/./threads">thread</a> <span class="dim">/</span> ${ne(t.id, 16)}`),
+    (n.title = t.id),
+    o.appendChild(n));
+  const s = document.createElement("div");
+  s.className = "explorer-sub";
+  const i = [];
+  (i.push(
+    `state: <span class="thread-state thread-state-${t.state}">${t.state}</span>`,
+  ),
+    i.push(`${t.depth} act${t.depth === 1 ? "" : "s"}`),
+    t.liveCount && i.push(`<span class="dim">${t.liveCount} live</span>`),
+    t.completeCount &&
+      i.push(`<span class="dim">${t.completeCount} complete</span>`),
+    t.severedCount &&
+      i.push(`<span class="chain-bad">${t.severedCount} severed</span>`),
+    (s.innerHTML = i.join(" · ")),
+    o.appendChild(s),
+    e.appendChild(o));
+  const c = _("thread");
+  if (
+    (c.appendChild(B("rootCorrelation", t.id, { mono: !0 })),
+    c.appendChild(B("state", t.state)),
+    t.rootStartedAt && c.appendChild(B("started at", String(t.rootStartedAt))),
+    t.lastAct && c.appendChild(B("last act at", String(t.lastAct))),
+    t.parentThread &&
+      a != null &&
+      a.story &&
+      c.appendChild(
+        B("parent thread", t.parentThread, {
+          mono: !0,
+          link: `#${a.story}/./threads/${t.parentThread}`,
+        }),
+      ),
+    Array.isArray(t.participants) && t.participants.length)
+  ) {
+    const d = document.createElement("div");
+    d.className = "kv-block kv-block-stack";
+    const m = document.createElement("span");
+    ((m.className = "kv-block-label"),
+      (m.textContent = "participants"),
+      d.appendChild(m));
+    const u = document.createElement("div");
+    u.className = "verb-list";
+    for (const g of t.participants) {
+      const h = document.createElement("a");
+      ((h.className = "btn-explore"),
+        (h.href = `#${a.story}/.acts/${g}`),
+        (h.textContent = ne(g, 14)),
+        (h.title = `view acts by ${g}`),
+        u.appendChild(h));
+    }
+    (d.appendChild(u), c.appendChild(d));
+  }
+  if (t.pending) {
+    const d = document.createElement("div");
+    ((d.className = "kv-block"),
+      (d.innerHTML =
+        '<span class="kv-block-label">note</span><span class="kv-block-value dim">summon emitted; no moment has sealed yet (projection ahead of acts).</span>'),
+      c.appendChild(d));
+  }
+  e.appendChild(c);
+  const l = Array.isArray(t.acts) ? t.acts : [];
+  if (l.length === 0) {
+    const d = document.createElement("div");
+    ((d.className = "explorer-empty"),
+      (d.textContent = t.pending
+        ? "(pending — projection shows the summon but no Act has sealed yet)"
+        : "(no acts in this thread yet)"),
+      e.appendChild(d));
+    return;
+  }
+  const p = document.createElement("h4");
+  ((p.className = "pane-title"),
+    (p.style.marginTop = "16px"),
+    (p.textContent = "acts in this thread (oldest first)"),
+    e.appendChild(p));
+  const r = document.createElement("ol");
+  r.className = "block-list";
+  for (const d of l) r.appendChild(St(d, a));
+  e.appendChild(r);
+}
+function Ta(e, t, a) {
+  const { beings: o, count: n } = t || {},
+    s = document.createElement("header");
+  s.className = "explorer-header";
+  const i = document.createElement("h2");
+  ((i.className = "explorer-title"),
+    (i.innerHTML = `∴ <span class="dim">beings</span> <span class="dim">across</span> ${(a == null ? void 0 : a.story) || ""}`),
+    s.appendChild(i));
+  const c = document.createElement("div");
+  if (
+    ((c.className = "explorer-sub"),
+    (c.textContent = `${n} being${n === 1 ? "" : "s"} · global catalog · ordered by birth`),
+    s.appendChild(c),
+    e.appendChild(s),
+    !o || o.length === 0)
+  ) {
+    const p = document.createElement("div");
+    ((p.className = "explorer-empty"),
+      (p.textContent = "(no beings exist in this story yet)"),
+      e.appendChild(p));
+    return;
+  }
+  const l = document.createElement("ul");
+  l.className = "catalog-list";
+  for (const p of o) l.appendChild(Ma(p, a));
+  e.appendChild(l);
+}
+function Ma(e, t) {
+  var c;
+  const a = document.createElement("li");
+  a.className = "catalog-row";
+  const o = document.createElement("div");
+  o.className = "catalog-main";
+  const n = document.createElement("span");
+  if (
+    ((n.className = "row-name"),
+    (n.textContent = `@${e.name || "(unnamed)"}`),
+    o.appendChild(n),
+    e.cognition && o.appendChild(G(e.cognition, "mode")),
+    e.defaultAble)
+  ) {
+    const l = G(e.defaultAble, "activity");
+    ((l.title =
+      ((c = e.ables) == null ? void 0 : c.length) > 1
+        ? `ables: ${e.ables.join(", ")}`
+        : "default able"),
+      o.appendChild(l));
+  }
+  if (e.createdAt) {
+    const l = document.createElement("span");
+    ((l.className = "dim catalog-ts"),
+      (l.textContent = Te(e.createdAt)),
+      (l.title = e.createdAt),
+      o.appendChild(l));
+  }
+  a.appendChild(o);
+  const s = document.createElement("div");
+  s.className = "catalog-sub";
+  const i = document.createElement("code");
+  if (
+    ((i.className = "catalog-id"),
+    (i.textContent = ne(e.beingId, 20)),
+    (i.title = e.beingId),
+    s.appendChild(i),
+    t != null && t.story)
+  ) {
+    const l = document.createElement("a");
+    ((l.className = "btn-explore"),
+      (l.href = `#${t.story}/.reel/being/${e.beingId}`),
+      (l.textContent = "facts"),
+      s.appendChild(l));
+    const p = document.createElement("a");
+    if (
+      ((p.className = "btn-explore"),
+      (p.href = `#${t.story}/.acts/${e.beingId}`),
+      (p.textContent = "acts"),
+      s.appendChild(p),
+      e.homeSpace)
+    ) {
+      const r = document.createElement("a");
+      ((r.className = "btn-explore"),
+        (r.href = `#${t.story}/.reel/space/${e.homeSpace}`),
+        (r.textContent = "home reel"),
+        (r.title = `homed at space ${e.homeSpace}`),
+        s.appendChild(r));
+    }
+  }
+  return (a.appendChild(s), a);
+}
+function ja(e, t, a) {
+  const { target: o, facts: n, count: s } = t || {},
+    i = qa(n || []),
+    c = document.createElement("header");
+  c.className = "explorer-header";
+  const l = document.createElement("h2");
+  ((l.className = "explorer-title"),
+    (l.innerHTML = `⛓ <span class="dim">reel</span> ${o.kind}<span class="dim">/</span>${o.name || o.id}`),
+    c.appendChild(l));
+  const p = document.createElement("div");
+  if (
+    ((p.className = "explorer-sub"),
+    (p.innerHTML = `${s} fact${s === 1 ? "" : "s"} · newest first · ` + Ha(i)),
+    c.appendChild(p),
+    o.kind === "being" && a != null && a.story)
+  ) {
+    const d = document.createElement("a");
+    ((d.className = "explorer-jump"),
+      (d.href = `#${a.story}/.acts/${o.id}`),
+      (d.textContent = "→ acts by this being"),
+      c.appendChild(d));
+  }
+  if ((e.appendChild(c), !n || n.length === 0)) {
+    const d = document.createElement("div");
+    ((d.className = "explorer-empty"),
+      (d.textContent = `(no facts on this ${o.kind}'s reel yet)`),
+      e.appendChild(d));
+    return;
+  }
+  const r = document.createElement("ol");
+  r.className = "block-list";
+  for (let d = 0; d < n.length; d++) r.appendChild(Fa(n[d], a, i.perBlock[d]));
+  e.appendChild(r);
+}
+function qa(e) {
+  const t = { ok: !0, verified: 0, broken: 0, perBlock: [] };
+  for (let a = 0; a < e.length; a++) {
+    const o = e[a],
+      n = e[a + 1];
+    if (n) {
+      const s = n._id || n.h;
+      o.p && s && String(o.p) === String(s)
+        ? (t.verified++, t.perBlock.push("ok"))
+        : (t.broken++, (t.ok = !1), t.perBlock.push("broken"));
+    } else
+      !o.p || /^0+$/.test(String(o.p))
+        ? t.perBlock.push("genesis")
+        : t.perBlock.push("edge");
+  }
+  return t;
+}
+function Ha(e) {
+  return e.broken > 0
+    ? `<span class="chain-bad">✗ ${e.broken} broken link${e.broken === 1 ? "" : "s"}</span> · ${e.verified} verified`
+    : e.verified === 0
+      ? '<span class="chain-dim">— single-block window —</span>'
+      : `<span class="chain-ok">✓ ${e.verified} link${e.verified === 1 ? "" : "s"} verified</span>`;
+}
+function Fa(e, t, a = "edge") {
+  var C, E, y, w;
+  const o = document.createElement("li");
+  o.className = "block";
+  const n = document.createElement("div");
+  n.className = "block-summary";
+  const s = document.createElement("span");
+  ((s.className = `block-chain chain-${a}`),
+    (s.textContent =
+      a === "ok" ? "✓" : a === "genesis" ? "◇" : a === "broken" ? "✗" : "·"),
+    (s.title =
+      a === "ok"
+        ? "prev-hash matches predecessor block"
+        : a === "genesis"
+          ? "first fact on this reel (genesis)"
+          : a === "broken"
+            ? "prev-hash DOES NOT match predecessor — chain broken here"
+            : "predecessor outside visible window"),
+    n.appendChild(s));
+  const i = document.createElement("span");
+  ((i.className = "block-seq"),
+    (i.textContent = `#${e.seq ?? "?"}`),
+    (i.title = "per-reel sequence (block height)"),
+    n.appendChild(i));
+  const c = document.createElement("span");
+  ((c.className = "block-action"),
+    (c.textContent = `${e.verb}:${e.act}`),
+    n.appendChild(c));
+  const l = document.createElement("span");
+  l.className = "block-target dim";
+  const p = ((C = e.of) == null ? void 0 : C.kind) || "?",
+    r = (E = e.of) != null && E.id ? ne(String(e.of.id)) : "?";
+  ((l.textContent = `→ ${p}/${r}`), n.appendChild(l));
+  const d = document.createElement("span");
+  ((d.className = "block-doer"),
+    (d.textContent = e.beingName
+      ? `@${e.beingName}`
+      : e.through
+        ? ne(e.through)
+        : "?"),
+    (d.title = e.through || ""),
+    n.appendChild(d));
+  const m = document.createElement("span");
+  ((m.className = "block-ts dim"),
+    (m.textContent = Te(e.date)),
+    (m.title = e.date || ""),
+    n.appendChild(m));
+  const u = document.createElement("code");
+  ((u.className = "block-hash"),
+    (u.textContent = `#${ne(e._id, 10)}`),
+    (u.title = e._id
+      ? `identity: ${e._id}
+prev: ${e.p || "(genesis)"}`
+      : "(no identity)"),
+    n.appendChild(u));
+  const g = document.createElement("button");
+  ((g.className = "block-toggle"),
+    (g.textContent = "▸"),
+    (g.title = "expand"),
+    n.appendChild(g),
+    o.appendChild(n));
+  const h = At(e);
+  if (h) {
+    const N = document.createElement("div");
+    ((N.className = "block-sub block-content"),
+      (N.textContent = h),
+      (N.title = h),
+      o.appendChild(N));
+  }
+  const f = document.createElement("div");
+  if (
+    ((f.className = "block-detail hidden"),
+    f.appendChild(B("identity (hash)", e._id || "(none)", { mono: !0 })),
+    f.appendChild(B("p (prev)", e.p || "(genesis)", { mono: !0 })),
+    e.actId &&
+      f.appendChild(
+        B("act id", e.actId, {
+          mono: !0,
+          link: t && e.through ? `#${t.story}/.acts/${e.through}` : null,
+        }),
+      ),
+    e.params != null && f.appendChild(ye("params", e.params)),
+    e.result != null && f.appendChild(ye("result", e.result)),
+    t != null &&
+      t.story &&
+      (y = e.of) != null &&
+      y.kind &&
+      (w = e.of) != null &&
+      w.id)
+  ) {
+    const N = `${e.of.kind}/${e.of.id}`;
+    f.appendChild(
+      B("target", N, {
+        mono: !0,
+        link: `#${t.story}/.reel/${e.of.kind}/${e.of.id}`,
+      }),
+    );
+  }
+  return (
+    t != null &&
+      t.story &&
+      e.through &&
+      f.appendChild(
+        B("doer", e.beingName || e.through, {
+          mono: !0,
+          link: `#${t.story}/.reel/being/${e.through}`,
+        }),
+      ),
+    o.appendChild(f),
+    (g.onclick = () => {
+      const N = f.classList.toggle("hidden");
+      g.textContent = N ? "▸" : "▾";
+    }),
+    (n.onclick = (N) => {
+      N.target === g || N.target.tagName === "A" || g.click();
+    }),
+    o
+  );
+}
+function Ra(e, t, a) {
+  const { being: o, acts: n, count: s } = t || {},
+    i = document.createElement("header");
+  i.className = "explorer-header";
+  const c = document.createElement("h2");
+  ((c.className = "explorer-title"),
+    (c.innerHTML = `⧗ <span class="dim">act-chain</span> @${o.name || o.id}`),
+    i.appendChild(c));
+  const l = document.createElement("div");
+  if (
+    ((l.className = "explorer-sub"),
+    (l.textContent = `${s} act${s === 1 ? "" : "s"} • newest first • each act = one moment this being authored`),
+    i.appendChild(l),
+    a != null && a.story)
+  ) {
+    const r = document.createElement("a");
+    ((r.className = "explorer-jump"),
+      (r.href = `#${a.story}/.reel/being/${o.id}`),
+      (r.textContent = "→ facts on this being's reel"),
+      i.appendChild(r));
+  }
+  if ((e.appendChild(i), !n || n.length === 0)) {
+    const r = document.createElement("div");
+    ((r.className = "explorer-empty"),
+      (r.textContent = "(this being has no acts yet)"),
+      e.appendChild(r));
+    return;
+  }
+  const p = document.createElement("ol");
+  p.className = "block-list";
+  for (const r of n) p.appendChild(St(r, a));
+  e.appendChild(p);
+}
+function St(e, t) {
+  var E, y, w, N, k, v;
+  const a = document.createElement("li");
+  a.className = "block block-act";
+  const o = document.createElement("div");
+  o.className = "block-head";
+  const n = document.createElement("span");
+  ((n.className = "block-ts"),
+    (n.textContent = Te(e.stampedAt || e.receivedAt)),
+    (n.title = e.stampedAt || e.receivedAt || ""),
+    o.appendChild(n));
+  const s =
+      typeof ((E = e.endMessage) == null ? void 0 : E.content) == "string" &&
+      e.endMessage.content.trim()
+        ? e.endMessage.content
+        : null,
+    i = Da((y = e.startMessage) == null ? void 0 : y.content),
+    c =
+      !s && Array.isArray(e.facts) && e.facts.length
+        ? e.facts.map(_a).filter(Boolean).join(", ")
+        : null,
+    l = s || c || i,
+    p = !!s,
+    r = !s && !!c,
+    d = document.createElement("div");
+  if (
+    ((d.className = "block-content"),
+    (d.textContent = l),
+    (d.title = l),
+    p || r)
+  ) {
+    const $ = document.createElement("span");
+    (($.className = "content-tag dim"),
+      ($.textContent = p ? "↳" : "⚙"),
+      ($.title = p
+        ? "this being's response (end message)"
+        : "what this moment did (stamped facts)"),
+      d.prepend($));
+  }
+  if ((o.appendChild(d), e.priority && e.priority !== "INTERACTIVE")) {
+    const $ = document.createElement("span");
+    (($.className = `block-pri pri-${e.priority.toLowerCase()}`),
+      ($.textContent = e.priority),
+      o.appendChild($));
+  }
+  if (e.severedAt) {
+    const $ = document.createElement("span");
+    (($.className = "block-pri pri-severed"),
+      ($.textContent = "severed"),
+      o.appendChild($));
+  }
+  const m = document.createElement("button");
+  ((m.className = "block-toggle"),
+    (m.textContent = "▸"),
+    o.appendChild(m),
+    a.appendChild(o));
+  const u = document.createElement("div");
+  u.className = "block-sub";
+  const g = document.createElement("span");
+  if (
+    ((g.className = "block-able"),
+    (g.textContent = e.activeAble || "(no able)"),
+    u.appendChild(g),
+    e.ibpAddress)
+  ) {
+    const $ = document.createElement("span");
+    (($.className = "block-target dim"),
+      ($.textContent = ne(e.ibpAddress, 40)),
+      ($.title = e.ibpAddress),
+      u.appendChild($));
+  }
+  const h = document.createElement("code");
+  if (
+    ((h.className = "block-hash"),
+    (h.textContent = e.rootCorrelation
+      ? `root:${ne(e.rootCorrelation, 8)}`
+      : "(no root)"),
+    (h.title = e.rootCorrelation || ""),
+    u.appendChild(h),
+    p || r)
+  ) {
+    const $ = document.createElement("span");
+    (($.className = "block-trigger dim"),
+      ($.textContent = "from: " + ot(i, 100)),
+      ($.title = i),
+      u.appendChild($));
+  } else if (
+    typeof ((w = e.endMessage) == null ? void 0 : w.content) == "string" &&
+    e.endMessage.content
+  ) {
+    const $ = document.createElement("span");
+    (($.className = "block-end dim"),
+      ($.textContent = "↳ " + ot(e.endMessage.content, 120)),
+      ($.title = e.endMessage.content),
+      u.appendChild($));
+  }
+  a.appendChild(u);
+  const f = document.createElement("div");
+  ((f.className = "block-detail hidden"),
+    f.appendChild(B("act id", e._id, { mono: !0 })),
+    e.ibpAddress && f.appendChild(B("ibp address", e.ibpAddress, { mono: !0 })),
+    e.activeAble && f.appendChild(B("able", e.activeAble)),
+    e.priority && f.appendChild(B("priority", e.priority)),
+    e.to &&
+      t != null &&
+      t.story &&
+      f.appendChild(
+        B("being out", e.to, {
+          mono: !0,
+          link: `#${t.story}/.reel/being/${e.to}`,
+        }),
+      ),
+    e.rootCorrelation &&
+      f.appendChild(B("rootCorrelation", e.rootCorrelation, { mono: !0 })),
+    e.inReplyTo && f.appendChild(B("inReplyTo", e.inReplyTo, { mono: !0 })),
+    e.parentThread &&
+      f.appendChild(B("parentThread", e.parentThread, { mono: !0 })),
+    e.answers && f.appendChild(B("answers (summon)", e.answers, { mono: !0 })),
+    (N = e.startMessage) != null &&
+      N.content &&
+      f.appendChild(ye("in (start message)", e.startMessage)),
+    (((k = e.endMessage) != null && k.content) ||
+      ((v = e.endMessage) != null && v.stopped)) &&
+      f.appendChild(ye("out (end message)", e.endMessage)),
+    Array.isArray(e.facts) &&
+      e.facts.length &&
+      f.appendChild(ye(`facts (${e.facts.length})`, e.facts)),
+    f.appendChild(za(e.innerFace, t)),
+    e.severedAt && f.appendChild(B("severed at", String(e.severedAt))),
+    e.receivedAt && f.appendChild(B("received at", String(e.receivedAt))),
+    e.stampedAt && f.appendChild(B("stamped at", String(e.stampedAt))),
+    a.appendChild(f),
+    (m.onclick = ($) => {
+      $.stopPropagation();
+      const L = f.classList.toggle("hidden");
+      m.textContent = L ? "▸" : "▾";
+    }));
+  const C = ($) => {
+    $.target.tagName === "A" || $.target === m || m.click();
+  };
+  return ((o.onclick = C), (u.onclick = C), a);
+}
+function _a(e) {
+  if (!e || !e.act) return null;
+  const t = At(e);
+  return t ? `${e.act} ${t}` : e.act;
+}
+function At(e) {
+  var a, o;
+  if (!e) return null;
+  const t = e.params;
+  if (e.verb === "call") {
+    const n = t == null ? void 0 : t.content;
+    if (typeof n == "string" && n) return `"${n}"`;
+    if (n && typeof n == "object" && typeof n.content == "string" && n.content)
+      return `"${n.content}"`;
+  }
+  if (
+    e.verb === "be" &&
+    (e.act === "register" || e.act === "claim") &&
+    t != null &&
+    t.name
+  )
+    return `@${t.name}`;
+  if (
+    e.verb === "be" &&
+    e.act === "birth" &&
+    (a = t == null ? void 0 : t.spec) != null &&
+    a.name
+  )
+    return `@${t.spec.name}`;
+  if (
+    /^create/.test(e.act) &&
+    (o = t == null ? void 0 : t.spec) != null &&
+    o.name
+  )
+    return `name "${t.spec.name}"${t.spec.type ? ` (type ${t.spec.type})` : ""}`;
+  if (/^set/.test(e.act) && t != null && t.field) {
+    const n = t.value;
+    if (
+      t.field === "coord" &&
+      n &&
+      typeof n.x == "number" &&
+      typeof n.y == "number"
+    )
+      return `→ (${n.x}, ${n.y})`;
+    const s =
+      typeof n == "string"
+        ? n
+        : typeof n == "number" || typeof n == "boolean"
+          ? String(n)
+          : Pe(n, 60);
+    return `${t.field} = ${s}`;
+  }
+  if (/place|move/.test(e.act) && t) {
+    if (typeof t.x == "number" && typeof t.y == "number")
+      return `→ (${t.x}, ${t.y})`;
+    if (t.path) return `→ ${t.path}`;
+  }
+  if (t && typeof t == "object") {
+    const n = Pe(t, 100);
+    if (n && n !== "{}") return n;
+  }
+  return null;
+}
+function Pe(e, t = 80) {
+  try {
+    const a = JSON.stringify(e);
+    return a ? (a.length > t ? a.slice(0, t) + "…" : a) : null;
+  } catch {
+    return null;
+  }
+}
+function ot(e, t) {
+  const a = typeof e == "string" ? e : String(e ?? "");
+  return a.length > t ? a.slice(0, t - 1) + "…" : a;
+}
+function Da(e) {
+  if (e == null || e === "") return "(no content)";
+  if (typeof e == "string") return e;
+  if (typeof e != "object") return String(e);
+  if (typeof e.text == "string" && e.text.trim()) return e.text;
+  if (typeof e.content == "string" && e.content.trim()) return e.content;
+  if (e.event) {
+    const a = [String(e.event)];
+    return (
+      e.spaceId && a.push(`at space/${Le(e.spaceId)}`),
+      e.actorBeingId && a.push(`by being/${Le(e.actorBeingId)}`),
+      e.matterId && a.push(`on matter/${Le(e.matterId)}`),
+      e.drumMatterId && a.push(`drum/${Le(e.drumMatterId)}`),
+      a.join(" ")
+    );
+  }
+  return Pe(e, 120) || "[object]";
+}
+function Le(e) {
+  const t = String(e);
+  return t.length > 12 ? t.slice(0, 8) + "…" : t;
+}
+function ne(e, t = 12) {
+  return typeof e != "string" || e.length <= t ? e : e.slice(0, t) + "…";
+}
+function Te(e) {
+  if (!e) return "";
+  try {
+    const t = new Date(e);
+    return isNaN(t.getTime()) ? "" : t.toLocaleString(void 0, { hour12: !1 });
+  } catch {
+    return "";
+  }
+}
+function B(e, t, { mono: a = !1, link: o = null } = {}) {
+  const n = document.createElement("div");
+  n.className = "kv-block";
+  const s = document.createElement("span");
+  ((s.className = "kv-block-label"), (s.textContent = e), n.appendChild(s));
+  let i;
+  return (
+    o
+      ? ((i = document.createElement("a")), (i.href = o))
+      : (i = document.createElement("span")),
+    (i.className = "kv-block-value" + (a ? " mono" : "")),
+    (i.textContent = t == null ? "(none)" : String(t)),
+    n.appendChild(i),
+    n
+  );
+}
+function ye(e, t) {
+  const a = document.createElement("div");
+  a.className = "kv-block kv-block-stack";
+  const o = document.createElement("span");
+  ((o.className = "kv-block-label"), (o.textContent = e), a.appendChild(o));
+  const n = document.createElement("pre");
+  return (
+    (n.className = "json"),
+    (n.textContent = JSON.stringify(t, null, 2)),
+    a.appendChild(n),
+    a
+  );
+}
+function Pa(e) {
+  const t = [];
+  let a = 0;
+  for (const n of e || []) {
+    if (n && typeof n == "object" && n.kind === "truncated") {
+      a += Number(n.count) || 0;
+      continue;
+    }
+    t.push(
+      (n == null ? void 0 : n.name) || (n == null ? void 0 : n.id) || String(n),
+    );
+  }
+  let o = t.join(", ");
+  return (
+    a && (o += (o ? ", " : "") + `+${a} more`),
+    { text: o || "(none)", shown: t.length, more: a }
+  );
+}
+function za(e, t) {
+  const a = document.createElement("div");
+  a.className = "kv-block kv-block-stack block-face";
+  const o = document.createElement("span");
+  if (
+    ((o.className = "kv-block-label"),
+    (o.textContent = "face"),
+    a.appendChild(o),
+    !e)
+  ) {
+    const i = document.createElement("span");
+    return (
+      (i.className = "kv-block-value dim"),
+      (i.textContent = "(no face recorded)"),
+      a.appendChild(i),
+      a
+    );
+  }
+  const n = document.createElement("div");
+  if (
+    ((n.className = "face-body"),
+    e.orientation && n.appendChild(B("orientation", e.orientation)),
+    e.able && n.appendChild(B("able", e.able)),
+    e.origin && e.origin !== "local" && n.appendChild(B("origin", e.origin)),
+    e.position)
+  ) {
+    const i = e.position.name || e.position.id || "(position)",
+      c =
+        e.position.id && t != null && t.story
+          ? `#${t.story}/.reel/space/${e.position.id}`
+          : null;
+    n.appendChild(B("position", i, { link: c }));
+  }
+  const s = e.capabilities;
+  if (s && typeof s == "object")
+    for (const i of Object.keys(s)) {
+      if (!Array.isArray(s[i]) || !s[i].length) continue;
+      const { text: c } = Pa(s[i]);
+      n.appendChild(B(i, c));
+    }
+  if (Array.isArray(e.blocks) && e.blocks.length)
+    for (const i of e.blocks) {
+      if (!i || i.kind === "truncated") {
+        i &&
+          i.kind === "truncated" &&
+          n.appendChild(B("blocks", `+${i.count} more`));
+        continue;
+      }
+      const c = i.label || i.key || "(block)";
+      let l;
+      if (typeof i.payload == "string")
+        l = i.payload.length > 80 ? i.payload.slice(0, 80) + "..." : i.payload;
+      else if (i.payload != null)
+        try {
+          const r = JSON.stringify(i.payload);
+          l = r.length > 80 ? r.slice(0, 80) + "..." : r;
+        } catch {
+          l = "(unrenderable)";
+        }
+      else l = "(empty)";
+      const p = i.source ? ` <${i.source}>` : "";
+      n.appendChild(B(`saw ${c}${p}`, l));
+    }
+  return (a.appendChild(n), a);
+}
+function We({ kind: e, entry: t }) {
+  var s, i;
+  const a = document.getElementById("empty-detail"),
+    o = document.getElementById("chat-panel"),
+    n = document.getElementById("inspector");
+  if (
+    (a.classList.add("hidden"),
+    o.classList.add("hidden"),
+    n.classList.remove("hidden"),
+    (n.innerHTML = ""),
+    e === "being")
+  ) {
+    if ((t == null ? void 0 : t.being) === "able-manager") {
+      Tt(n, t, {
+        story: (s = b.state.discovery) == null ? void 0 : s.story,
+        username: ((i = b.state.session) == null ? void 0 : i.username) || null,
+        descriptor: b.state.descriptor,
+        see: (c) => b.state.client.see(c),
+        doOp: b.doOp,
+      });
+      return;
+    }
+    Ua(n, t);
+  } else Ja(n, t);
+}
+function Ua(e, t) {
+  var E, y, w, N, k;
+  const a = b.state,
+    o = (E = a.discovery) == null ? void 0 : E.story,
+    n =
+      ((w = (y = a.descriptor) == null ? void 0 : y.address) == null
+        ? void 0
+        : w.pathByNames) || "/",
+    s = `${o}${n}@${t.being}`.replace(/\/+@/, "/@"),
+    i = ((N = a.session) == null ? void 0 : N.username) === t.being,
+    c = document.createElement("h3");
+  ((c.className = "pane-title"),
+    (c.textContent = `@${t.being}`),
+    e.appendChild(c));
+  const l = document.createElement("div");
+  if (
+    ((l.className = "sub"), (l.textContent = s), e.appendChild(l), t.beingId)
+  ) {
+    const v = _("identity");
+    (v.appendChild(U("id (public key)", String(t.beingId))), e.appendChild(v));
+  }
+  const p = _("state");
+  if (
+    (p.appendChild(U("invocable by", t.invocableBy || "(unknown)")),
+    t.respondMode && p.appendChild(U("respondMode", t.respondMode)),
+    Array.isArray(t.triggerOn) &&
+      t.triggerOn.length &&
+      p.appendChild(U("triggerOn", t.triggerOn.join(", "))),
+    p.appendChild(U("available", t.available === !1 ? "no" : "yes")),
+    t.busy &&
+      p.appendChild(
+        U("busy", t.talkingTo ? `talking to ${t.talkingTo}` : "yes"),
+      ),
+    t.activity)
+  ) {
+    const v = `${t.activity.kind}${t.activity.content ? ` — ${t.activity.content}` : ""}`;
+    p.appendChild(U("activity", v));
+  }
+  e.appendChild(p);
+  const r = t.inbox || {},
+    d = _("inbox");
+  if (
+    (d.appendChild(
+      U("total / unconsumed", `${r.total ?? 0} / ${r.unconsumed ?? 0}`),
+    ),
+    r.queueDepth && d.appendChild(U("queue depth", r.queueDepth)),
+    Array.isArray(r.pendingFrom) &&
+      r.pendingFrom.length &&
+      d.appendChild(U("pending from", r.pendingFrom.join(", "))),
+    Array.isArray(r.recent) && r.recent.length)
+  ) {
+    const v = document.createElement("div");
+    ((v.className = "kv-label"), (v.textContent = "recent"), d.appendChild(v));
+    const $ = document.createElement("ul");
+    $.className = "inbox-list";
+    for (const L of r.recent.slice(0, 5)) {
+      const S = document.createElement("li"),
+        q = document.createElement("span");
+      ((q.className = "msg-who"), (q.textContent = L.from || "?"));
+      const O = document.createElement("span");
+      ((O.className = "msg-content"),
+        (O.textContent = " " + (L.content || "").slice(0, 80)),
+        S.appendChild(q),
+        S.appendChild(O),
+        $.appendChild(S));
+    }
+    d.appendChild($);
+  }
+  e.appendChild(d);
+  const m = _("navigation"),
+    u = document.createElement("a");
+  if (
+    ((u.className = "nav-link"),
+    (u.href = "#" + s),
+    (u.textContent = `→ see ${s.replace(o, "")}`),
+    (u.title = "navigate to this being's stance and re-SEE from there"),
+    m.appendChild(u),
+    e.appendChild(m),
+    t.permissions &&
+      typeof t.permissions == "object" &&
+      Object.keys(t.permissions).length)
+  ) {
+    const v = _("permissions");
+    (v.appendChild(re(t.permissions)), e.appendChild(v));
+  }
+  if (
+    t.qualities &&
+    typeof t.qualities == "object" &&
+    Object.keys(t.qualities).length
+  ) {
+    const v = _("qualities");
+    (v.appendChild(re(t.qualities)), e.appendChild(v));
+  }
+  const g = _("BE actions");
+  if (
+    (t.being === "cherub"
+      ? (g.appendChild(st("connect", s, ["name", "password"])),
+        g.appendChild(st("birth", s, ["name", "password"])))
+      : i && g.appendChild(Ga("release", s, {})),
+    e.appendChild(g),
+    (k = a.session) != null && k.username)
+  ) {
+    const v = document.createElement("section");
+    ((v.className = "panel-section"),
+      e.appendChild(v),
+      Mt(v, t, {
+        story: o,
+        username: a.session.username,
+        descriptor: a.descriptor,
+        see: ($) => a.client.see($),
+        doOp: b.doOp,
+      }));
+  }
+  (Dt(e, t, { story: o }), Wa(e, t, { story: o, stance: s }));
+  const h = [
+      ...b.operationsForTarget("being"),
+      ...b.operationsForTarget("stance"),
+    ],
+    f = new Set(),
+    C = h.filter((v) => (f.has(v.name) ? !1 : (f.add(v.name), !0)));
+  if (C.length) {
+    const v = _(`DO actions (${C.length})`);
+    for (const $ of C) v.appendChild(Lt($, s));
+    e.appendChild(v);
+  }
+}
+function Ja(e, t) {
+  var r, d, m;
+  const a = b.state,
+    o = (r = a.discovery) == null ? void 0 : r.story,
+    n =
+      ((m = (d = a.descriptor) == null ? void 0 : d.address) == null
+        ? void 0
+        : m.pathByNames) || "/",
+    s = `${o}${n}`.replace(/\/+$/, "") || o,
+    i = document.createElement("h3");
+  ((i.className = "pane-title"),
+    (i.textContent = t.name || "(matter)"),
+    e.appendChild(i));
+  const c = document.createElement("div");
+  ((c.className = "sub"),
+    (c.textContent = `matterId ${t.matterId || "?"}`),
+    e.appendChild(c));
+  const l = _("meta");
+  if (
+    (t.type && l.appendChild(U("type", t.type)),
+    t.byBeingId && l.appendChild(U("written by", t.byBeingId)),
+    e.appendChild(l),
+    t.preview)
+  ) {
+    const u = _("preview"),
+      g = document.createElement("pre");
+    ((g.className = "preview-block"),
+      (g.textContent = t.preview),
+      u.appendChild(g),
+      e.appendChild(u));
+  }
+  if (
+    t.qualities &&
+    typeof t.qualities == "object" &&
+    Object.keys(t.qualities).length
+  ) {
+    const u = _("qualities");
+    (u.appendChild(re(t.qualities)), e.appendChild(u));
+  }
+  const p = b.operationsForTarget("matter");
+  if (p.length) {
+    const u = _(`DO actions (${p.length})`);
+    for (const g of p) u.appendChild(Lt(g, s, { matterId: t.matterId }));
+    e.appendChild(u);
+  }
+}
+function st(e, t, a) {
+  const o = document.createElement("div");
+  o.className = "action-row";
+  const n = document.createElement("code");
+  ((n.className = "op-label"), (n.textContent = `BE.${e}`), o.appendChild(n));
+  const s = document.createElement("form");
+  s.className = "action-form";
+  const i = {};
+  for (const p of a) {
+    const r = document.createElement("input");
+    ((r.type = p === "password" ? "password" : "text"),
+      (r.placeholder = p),
+      (r.className = "action-input"),
+      (i[p] = r),
+      s.appendChild(r));
+  }
+  const c = document.createElement("button");
+  ((c.type = "submit"),
+    (c.className = "btn-sm btn-primary"),
+    (c.textContent = e),
+    s.appendChild(c));
+  const l = document.createElement("div");
+  return (
+    (l.className = "action-result hidden"),
+    (s.onsubmit = async (p) => {
+      p.preventDefault();
+      const r = {};
+      for (const d of a) r[d] = i[d].value;
+      (pe(l, "…", "pending"), (c.disabled = !0));
+      try {
+        const d = await b.beOp(e, t, r);
+        pe(l, JSON.stringify(d, null, 2), "ok");
+      } catch (d) {
+        pe(l, `${d.code || "error"}: ${d.message || String(d)}`, "err");
+      } finally {
+        c.disabled = !1;
+      }
+    }),
+    o.appendChild(s),
+    o.appendChild(l),
+    o
+  );
+}
+function Ga(e, t, a) {
+  const o = document.createElement("div");
+  o.className = "action-row";
+  const n = document.createElement("code");
+  ((n.className = "op-label"), (n.textContent = `BE.${e}`), o.appendChild(n));
+  const s = document.createElement("button");
+  ((s.className = "btn-sm"), (s.textContent = e), o.appendChild(s));
+  const i = document.createElement("div");
+  return (
+    (i.className = "action-result hidden"),
+    (s.onclick = async () => {
+      (pe(i, "…", "pending"), (s.disabled = !0));
+      try {
+        const c = await b.beOp(e, t, a || {});
+        pe(i, JSON.stringify(c, null, 2), "ok");
+      } catch (c) {
+        pe(i, `${c.code || "error"}: ${c.message || String(c)}`, "err");
+      } finally {
+        s.disabled = !1;
+      }
+    }),
+    o.appendChild(i),
+    o
+  );
+}
+function Lt(e, t, a = {}) {
+  const o = document.createElement("div");
+  o.className = "action-row";
+  const n = Object.keys(a).length
+    ? (s, i, c) => b.doOp(s, i, { ...a, ...c })
+    : b.doOp;
+  return (Q(o, { op: e, address: t, doOp: n, submitLabel: "do" }), o);
+}
+function Wa(e, t, { story: a, stance: o } = {}) {
+  var C, E, y, w;
+  const n = b.state,
+    s = _("LLM at this space");
+  e.appendChild(s);
+  const i = document.createElement("div");
+  ((i.className = "llm-flow"),
+    (i.textContent = "(loading chain…)"),
+    s.appendChild(i));
+  const c = ((C = t.qualities) == null ? void 0 : C.llm) || {},
+    l = document.createElement("div");
+  l.className = "llm-config";
+  const p = document.createElement("div");
+  ((p.className = "kv-label"),
+    (p.textContent = `${t.being}'s LLM config`),
+    l.appendChild(p));
+  const r = Array.isArray(c.default) ? c.default.length : c.default ? 1 : 0;
+  l.appendChild(U("default fallback", `${r} connection${r === 1 ? "" : "s"}`));
+  const d = c.slots && typeof c.slots == "object" ? c.slots : {},
+    m = Object.keys(d);
+  if (m.length)
+    for (const N of m) {
+      const k = Array.isArray(d[N]) ? d[N] : d[N] ? [d[N]] : [];
+      l.appendChild(
+        U(`slot: ${N}`, `${k.length} connection${k.length === 1 ? "" : "s"}`),
+      );
+    }
+  else l.appendChild(U("able slots", "(none)"));
+  (c.forceReceiver === !0 &&
+    l.appendChild(U("forceReceiver", "yes — chain caps here")),
+    c.forceActor === !0 &&
+      l.appendChild(U("forceActor", "yes — chain jumps to actor side")),
+    c.preferOwn === !0 && l.appendChild(U("preferOwn", "yes")),
+    s.appendChild(l));
+  const u = document.createElement("div");
+  ((u.className = "sub muted"),
+    (u.textContent = "Edit via set-being-llm in DO actions below."),
+    s.appendChild(u));
+  const g = t.beingId || null,
+    h = ((E = n.session) == null ? void 0 : E.username) || null,
+    f = t.defaultAble || "main";
+  if (!g) {
+    i.textContent = "(receiver beingId unavailable — descriptor missing)";
+    return;
+  }
+  Promise.resolve(
+    n.client.see("llm-chain", {
+      args: {
+        receiverBeingId: g,
+        receiverSpaceId:
+          ((w = (y = n.descriptor) == null ? void 0 : y.position) == null
+            ? void 0
+            : w.spaceId) || null,
+        actorBeingName: h,
+        able: f,
+      },
+    }),
+  )
+    .then((N) => {
+      i.innerHTML = "";
+      const k = (N && N.result) || N || {},
+        v = Array.isArray(k.chain) ? k.chain : [],
+        $ = k.reason || null,
+        L = k.chosen || null;
+      if (v.length === 0) {
+        const O = document.createElement("div");
+        ((O.className = "sub"),
+          (O.textContent = $ || "(no candidates in chain)"),
+          i.appendChild(O));
+        return;
+      }
+      const S = document.createElement("div");
+      ((S.className = "kv-label"),
+        (S.textContent = `chain preview — able: ${f}`),
+        i.appendChild(S));
+      const q = document.createElement("ul");
+      q.className = "llm-chain";
+      for (const O of v) {
+        const M = document.createElement("li");
+        M.className = "llm-chain-entry";
+        const x =
+            L &&
+            O.connectionId === L.connectionId &&
+            O.step === L.step &&
+            O.source === L.source,
+          A = document.createElement("span");
+        ((A.className = "llm-chain-marker"), (A.textContent = x ? "✓" : " "));
+        const H = document.createElement("span");
+        ((H.className = "llm-chain-step"), (H.textContent = `step ${O.step}`));
+        const F = document.createElement("span");
+        ((F.className = "llm-chain-source"), (F.textContent = O.source));
+        const D = document.createElement("span");
+        ((D.className = "llm-chain-model"),
+          (D.textContent = O.model || O.name || O.connectionId.slice(0, 8)),
+          x && (M.style.fontWeight = "bold"),
+          M.appendChild(A),
+          M.appendChild(H),
+          M.appendChild(F),
+          M.appendChild(D),
+          q.appendChild(M));
+      }
+      if ((i.appendChild(q), $)) {
+        const O = document.createElement("div");
+        ((O.className = "sub muted"),
+          (O.textContent = `reason: ${$}`),
+          i.appendChild(O));
+      }
+    })
+    .catch((N) => {
+      i.innerHTML = "";
+      const k = document.createElement("div");
+      ((k.className = "sub muted"),
+        (k.textContent = `(preview failed: ${(N == null ? void 0 : N.message) || N})`),
+        i.appendChild(k));
+    });
+}
+function pe(e, t, a) {
+  ((e.className = `action-result action-${a}`),
+    e.classList.remove("hidden"),
+    (e.textContent = t));
+}
+function _(e) {
+  const t = document.createElement("div");
+  t.className = "panel-section";
+  const a = document.createElement("h4");
+  return ((a.textContent = e), t.appendChild(a), t);
+}
+function U(e, t) {
+  const a = document.createElement("div");
+  a.className = "kv";
+  const o = document.createElement("span");
+  ((o.className = "kv-label"), (o.textContent = e));
+  const n = document.createElement("span");
+  return (
+    (n.className = "kv-value"),
+    (n.textContent = t == null ? "(none)" : String(t)),
+    a.appendChild(o),
+    a.appendChild(n),
+    a
+  );
+}
+function re(e) {
+  const t = document.createElement("pre");
+  return (
+    (t.className = "json"),
+    (t.textContent = JSON.stringify(e, null, 2)),
+    t
+  );
+}
+function G(e, t) {
+  const a = document.createElement("span");
+  return ((a.className = `badge badge-${t}`), (a.textContent = e), a);
+}
+function Ke(e) {
+  const t = document.createElement("li");
+  return ((t.className = "dim"), (t.textContent = e), t);
+}
+const Ka = Object.freeze(
+  Object.defineProperty(
+    {
+      __proto__: null,
+      clearDetail: $t,
+      renderDescriptor: Be,
+      setConnectionStatus: wt,
+      setLoading: Nt,
+      setStatus: ie,
+      showInspector: We,
+    },
+    Symbol.toStringTag,
+    { value: "Module" },
+  ),
+);
+function Xa(e) {
+  const t = document.getElementById("auth-overlay");
+  if (!t) return;
+  (t.classList.remove("hidden"), (t.innerHTML = ""));
+  const a = document.createElement("div");
+  a.className = "auth-card";
+  const o = document.createElement("h2");
+  ((o.textContent = "claim an identity"), a.appendChild(o));
+  const n = document.createElement("div");
+  ((n.className = "sub"), (n.textContent = `on ${e}`), a.appendChild(n));
+  const s = document.createElement("div");
+  s.className = "tabs";
+  const i = it("claim", !0),
+    c = it("register", !1);
+  (s.appendChild(i), s.appendChild(c), a.appendChild(s));
+  const l = lt("name", "input"),
+    p = lt("password", "input", "password");
+  (a.appendChild(l.wrap), a.appendChild(p.wrap));
+  const r = document.createElement("div");
+  r.className = "field hidden";
+  const d = document.createElement("label");
+  d.textContent = "import key (optional)";
+  const m = document.createElement("textarea");
+  ((m.placeholder =
+    "24-word recovery phrase, or the exported key PEM — empty mints a fresh identity"),
+    (m.rows = 2),
+    (m.style.width = "100%"),
+    (m.style.boxSizing = "border-box"),
+    r.appendChild(d),
+    r.appendChild(m),
+    a.appendChild(r));
+  const u = document.createElement("button");
+  ((u.className = "btn-primary btn-block"),
+    (u.textContent = "claim"),
+    a.appendChild(u));
+  const g = document.createElement("div");
+  ((g.className = "auth-err hidden"), a.appendChild(g));
+  const h = document.createElement("button");
+  ((h.className = "btn-link"),
+    (h.textContent = "claim as @cherub (no password)"),
+    (h.title = "ad-hoc test identity"),
+    a.appendChild(h));
+  let f = "connect";
+  ((i.onclick = () => {
+    ((f = "connect"),
+      ct(i, c),
+      (u.textContent = "connect"),
+      r.classList.add("hidden"));
+  }),
+    (c.onclick = () => {
+      ((f = "birth"),
+        ct(c, i),
+        (u.textContent = "register"),
+        r.classList.remove("hidden"));
+    }),
+    (u.onclick = async () => {
+      g.classList.add("hidden");
+      const C = l.input.value.trim(),
+        E = p.input.value;
+      if (!C) {
+        Re(g, "name required");
+        return;
+      }
+      try {
+        ((u.disabled = !0),
+          (u.textContent =
+            f === "connect" ? "connecting..." : "registering..."));
+        const y = f === "birth" ? m.value.trim() : "";
+        await b.signIn(f, C, E, y ? { importKey: y } : {});
+      } catch (y) {
+        (Re(g, `${y.code || "error"}: ${y.message || "sign-in failed"}`),
+          (u.disabled = !1),
+          (u.textContent = f === "connect" ? "connect" : "register"));
+      }
+    }),
+    (h.onclick = async () => {
+      g.classList.add("hidden");
+      try {
+        ((h.disabled = !0), await b.signIn("connect", "cherub", ""));
+      } catch (C) {
+        (Re(g, `${C.code || "error"}: ${C.message || "cherub connect failed"}`),
+          (h.disabled = !1));
+      }
+    }),
+    t.appendChild(a),
+    (t.onclick = (C) => {
+      C.target === t && Ee();
+    }),
+    setTimeout(() => l.input.focus(), 10));
+}
+function Ee() {
+  const e = document.getElementById("auth-overlay");
+  e && (e.classList.add("hidden"), (e.innerHTML = ""));
+}
+function it(e, t) {
+  const a = document.createElement("button");
+  return ((a.className = "tab" + (t ? " active" : "")), (a.textContent = e), a);
+}
+function ct(e, t) {
+  (e.classList.add("active"), t.classList.remove("active"));
+}
+function lt(e, t, a = "text") {
+  const o = document.createElement("div");
+  o.className = "field";
+  const n = document.createElement("label");
+  n.textContent = e;
+  const s = document.createElement(t);
+  return (
+    (s.type = a),
+    o.appendChild(n),
+    o.appendChild(s),
+    { wrap: o, input: s }
+  );
+}
+function Re(e, t) {
+  ((e.textContent = t), e.classList.remove("hidden"));
+}
+const T = {
+    client: null,
+    discovery: null,
+    descriptor: null,
+    session: null,
+    currentAddress: null,
+    operations: [],
+    selectedBeing: null,
+  },
+  b = {
+    get state() {
+      return T;
+    },
+    navigate: () => {},
+    signIn: async () => {},
+    signOut: async () => {},
+    sendSummon: async () => {},
+    cancelByRootCorrelation: async () => {},
+    doOp: async () => {},
+    beOp: async () => {},
+    operationsForTarget: () => [],
+    selectBeing: () => {},
+  },
+  Ya = `
 <div id="flat-app" class="flat-root">
   <header id="top-bar">
     <div id="brand">
@@ -53,4 +6090,362 @@ prev: ${e.p||"(genesis)"}`:"(no identity)",n.appendChild(u);const g=document.cre
   <div id="loading-bar" class="hidden"></div>
   <div id="auth-overlay" class="hidden"></div>
 </div>
-`.trim();function It(e,t){var o;if(!e)throw new Error("mountFlatView: rootContainer required");if(!(t!=null&&t.client))throw new Error("mountFlatView: ctx.client required");e.innerHTML=Ya,e.querySelector("#flat-app"),T.client=t.client,T.discovery=t.discovery||null,T.descriptor=t.descriptor||null,T.session=t.session||null,T.currentAddress=(o=t.descriptor)!=null&&o.address?rt(t.descriptor,t.discovery):null,T.operations=[],T.selectedBeing=t.selectedBeing||null,b.navigate=n=>{typeof t.onNavigate=="function"&&t.onNavigate(n)},b.signIn=async(n,s,i,c={})=>{if(typeof t.onSignIn=="function")return t.onSignIn(n,s,i,c)},b.signOut=async()=>{if(typeof t.onSignOut=="function")return t.onSignOut()},b.presentNameAuth=()=>{if(typeof t.onNameAuth=="function")return t.onNameAuth()},b.sendSummon=async(n,s,i={})=>{var g,h;if(!t.client)throw new Error("flat.sendSummon: no client");const c=(g=t.discovery)==null?void 0:g.story,l=((h=t.session)==null?void 0:h.username)||"arrival",p=`${c}/@${l}`,r=`c-${dt()}`,d={from:p,content:s,correlation:r,...i.intent?{intent:i.intent}:{},...i.inReplyTo?{inReplyTo:i.inReplyTo}:{}},m=i.rootCorrelation?{rootCorrelation:i.rootCorrelation}:{},u=await t.client.call(n,d,m);return{correlation:r,reply:u}},b.cancelByRootCorrelation=async n=>{var p,r;if(!t.client||!n)return;const s=(p=t.discovery)==null?void 0:p.story,i=((r=t.session)==null?void 0:r.username)||"arrival",c=`${s}/./threads/${n}`,l=`${s}/@${i}`;try{await t.client.call(c,{from:l,content:"(cancel)",correlation:`cancel-${dt()}`},{priority:"HUMAN",rootCorrelation:n})}catch(d){console.warn("[flat] cancel failed:",(d==null?void 0:d.code)||(d==null?void 0:d.message)||d)}},b.doOp=async(n,s,i={})=>{if(!t.client)throw new Error("flat.doOp: no client");return t.client.do(n,s,i)},b.see=async(n,s={})=>{if(!t.client)throw new Error("flat.see: no client");return t.client.see(n,s)},b.beOp=async(n,s,i={})=>{if(!t.client)throw new Error("flat.beOp: no client");return(n==="birth"||n==="connect")&&typeof t.onSignIn=="function"?t.onSignIn(n,i.name,i.password||""):t.client.be(n,s,i)},b.operationsForTarget=n=>n?T.operations.filter(s=>Array.isArray(s.targets)&&s.targets.includes(n)):[],b.selectBeing=(n,s)=>{T.selectedBeing=n?{beingId:String(n),name:s||null}:null,typeof t.onSelectBeing=="function"&&t.onSelectBeing(n,s)},Va();const a=Za();return T.descriptor&&Be(T.descriptor,{session:T.session,discovery:T.discovery}),Qa(t).then(()=>{T.descriptor&&Be(T.descriptor,{session:T.session,discovery:T.discovery})}),{update(n){n&&(T.descriptor=n,T.currentAddress=rt(n,T.discovery),Be(n,{session:T.session,discovery:T.discovery}))},setSelection(n){T.selectedBeing=n||null},dispose(){a(),ge==null||ge(),Ee==null||Ee(),me&&(clearInterval(me),me=null),e.innerHTML="",T.client=null,T.descriptor=null,T.currentAddress=null,T.operations=[],T.selectedBeing=null}}}let me=null;function Va(){me&&clearInterval(me),me=setInterval(ue,15e3),ue()}async function ue(){var a,o;const e=document.querySelector("#inbox-chip"),t=document.querySelector("#inbox-count");if(!(!e||!t)){if(!((a=T.session)!=null&&a.token)||!((o=T.client)!=null&&o.see)){e.style.display="none";return}e.style.display="";try{const n=await T.client.see("my-inbox"),s=Array.isArray(n==null?void 0:n.pending)?n.pending.length:0;t.textContent=s===0?"·":String(s),t.style.color=s>0?"#e8b762":"#6b7d72",e.style.borderColor=s>0?"#6b5320":"#2c3a32"}catch(n){console.warn("[inbox-chip] count fetch failed:",(n==null?void 0:n.message)||n)}}}function Za(e){let t=!1,a=null;const o=n=>{var c,l,p,r;const s=n.target;if(!(s&&(s.tagName==="INPUT"||s.tagName==="TEXTAREA"||s.isContentEditable))){if(n.key==="/"){n.preventDefault();const d=document.getElementById("address-input");d&&(d.focus(),d.select());return}if(n.key==="g"){t=!0,a&&clearTimeout(a),a=setTimeout(()=>{t=!1},600);return}if(t){t=!1,a&&(clearTimeout(a),a=null);const d=(c=T.discovery)==null?void 0:c.story;if(!d)return;const m=((p=(l=T.descriptor)==null?void 0:l.address)==null?void 0:p.history)||"0",u=m==="0"?"":`#${m}`;n.key==="h"?(n.preventDefault(),b.navigate(`${d}${u}/`)):n.key==="b"?(n.preventDefault(),b.navigate(`${d}${u}/./beings`)):n.key==="o"?(n.preventDefault(),b.navigate(`${d}${u}/./operations`)):n.key==="r"?(n.preventDefault(),b.navigate(`${d}${u}/./ables`)):n.key==="t"?(n.preventDefault(),b.navigate(`${d}${u}/./threads`)):n.key==="i"&&((r=T.session)!=null&&r.username)&&(n.preventDefault(),b.navigate(`${d}${u}/~`))}}};return window.addEventListener("keydown",o),()=>{window.removeEventListener("keydown",o),a&&clearTimeout(a)}}async function Qa(e){var t;if(!(!(e!=null&&e.client)||!((t=T.discovery)!=null&&t.story)))try{const a=await e.client.see(`${T.discovery.story}/./operations`),o=Array.isArray(a.children)?a.children:[];T.operations=o.map(n=>{var i;const s=((i=n.qualities)==null?void 0:i.operation)||{};return{name:n.name,targets:Array.isArray(s.targets)?s.targets:[],factAction:s.factAction||null,ownerExtension:s.ownerExtension||"seed",skipAudit:!!s.skipAudit,args:s.args||null}})}catch(a){console.warn("[flat] operations load failed:",(a==null?void 0:a.code)||(a==null?void 0:a.message)),T.operations=[]}}function rt(e,t){var i,c,l;const a=(t==null?void 0:t.story)||((i=e==null?void 0:e.address)==null?void 0:i.place)||"",o=((c=e==null?void 0:e.address)==null?void 0:c.history)||"0",n=((l=e==null?void 0:e.address)==null?void 0:l.pathByNames)||"/",s=o==="0"?"":`#${o}`;return`${a}${s}${n}`}function dt(){return`${Date.now()}-${Math.random().toString(36).slice(2,8)}`}const eo=Object.freeze(Object.defineProperty({__proto__:null,clearDetail:$t,closeChat:ge,flat:b,hideAuthOverlay:Ee,mountFlatView:It,openChatFor:$e,refreshInboxCount:ue,setConnectionStatus:wt,setLoading:Nt,setStatus:ie,showAuthOverlay:Xa},Symbol.toStringTag,{value:"Module"}));function oo(){let e=null,t=null,a=null,o=null;const n=[];function s(){o=It(a,{client:e.client,descriptor:e.state.get("descriptor"),discovery:e.state.get("discovery"),session:e.state.get("session"),selectedBeing:e.state.get("selectedBeing"),onNavigate:r=>{e.navigation.navigate(r).catch(()=>{})},onSelectBeing:(r,d)=>e.navigation.selectBeing(r,d),onSignIn:(r,d,m,u)=>e.signIn(r,d,m,u),onSignOut:()=>e.signOut(),onNameAuth:()=>{var r,d;return(d=(r=e.shell)==null?void 0:r.presentNameGate)==null?void 0:d.call(r)},onClose:()=>{var r;return(r=e.shell)==null?void 0:r.switchView("3d")}})}function i(r,d){e=d,t=r,a=document.createElement("div"),a.style.cssText="position:absolute; inset:0; overflow:auto; background:#0a0d0c; color:#c8d3cb;",t.appendChild(a),s(),n.push(e.events.on("client",()=>{try{o==null||o.dispose()}catch{}s();const m=e.state.get("descriptor");m&&o.update(m)}))}function c(r){o==null||o.update(r)}function l(r){var m;(m=o==null?void 0:o.setSelection)==null||m.call(o,r);const d=e.state.get("descriptor");d&&(o==null||o.update(d))}function p(){for(const r of n.splice(0))try{r()}catch{}try{o==null||o.dispose()}catch{}o=null,a==null||a.remove(),a=null,t=null}return{mount:i,onDescriptor:c,onSelection:l,destroy:p}}export{oo as createView};
+`.trim();
+function It(e, t) {
+  var o;
+  if (!e) throw new Error("mountFlatView: rootContainer required");
+  if (!(t != null && t.client))
+    throw new Error("mountFlatView: ctx.client required");
+  ((e.innerHTML = Ya),
+    e.querySelector("#flat-app"),
+    (T.client = t.client),
+    (T.discovery = t.discovery || null),
+    (T.descriptor = t.descriptor || null),
+    (T.session = t.session || null),
+    (T.currentAddress =
+      (o = t.descriptor) != null && o.address
+        ? rt(t.descriptor, t.discovery)
+        : null),
+    (T.operations = []),
+    (T.selectedBeing = t.selectedBeing || null),
+    (b.navigate = (n) => {
+      typeof t.onNavigate == "function" && t.onNavigate(n);
+    }),
+    (b.signIn = async (n, s, i, c = {}) => {
+      if (typeof t.onSignIn == "function") return t.onSignIn(n, s, i, c);
+    }),
+    (b.signOut = async () => {
+      if (typeof t.onSignOut == "function") return t.onSignOut();
+    }),
+    (b.presentNameAuth = () => {
+      if (typeof t.onNameAuth == "function") return t.onNameAuth();
+    }),
+    (b.sendSummon = async (n, s, i = {}) => {
+      var g, h;
+      if (!t.client) throw new Error("flat.sendSummon: no client");
+      const c = (g = t.discovery) == null ? void 0 : g.story,
+        l = ((h = t.session) == null ? void 0 : h.username) || "arrival",
+        p = `${c}/@${l}`,
+        r = `c-${dt()}`,
+        d = {
+          from: p,
+          content: s,
+          correlation: r,
+          ...(i.intent ? { intent: i.intent } : {}),
+          ...(i.inReplyTo ? { inReplyTo: i.inReplyTo } : {}),
+        },
+        m = i.rootCorrelation ? { rootCorrelation: i.rootCorrelation } : {},
+        u = await t.client.call(n, d, m);
+      return { correlation: r, reply: u };
+    }),
+    (b.cancelByRootCorrelation = async (n) => {
+      var p, r;
+      if (!t.client || !n) return;
+      const s = (p = t.discovery) == null ? void 0 : p.story,
+        i = ((r = t.session) == null ? void 0 : r.username) || "arrival",
+        c = `${s}/./threads/${n}`,
+        l = `${s}/@${i}`;
+      try {
+        await t.client.call(
+          c,
+          { from: l, content: "(cancel)", correlation: `cancel-${dt()}` },
+          { priority: "HUMAN", rootCorrelation: n },
+        );
+      } catch (d) {
+        console.warn(
+          "[flat] cancel failed:",
+          (d == null ? void 0 : d.code) ||
+            (d == null ? void 0 : d.message) ||
+            d,
+        );
+      }
+    }),
+    (b.doOp = async (n, s, i = {}) => {
+      if (!t.client) throw new Error("flat.doOp: no client");
+      return t.client.do(n, s, i);
+    }),
+    (b.see = async (n, s = {}) => {
+      if (!t.client) throw new Error("flat.see: no client");
+      return t.client.see(n, s);
+    }),
+    (b.beOp = async (n, s, i = {}) => {
+      if (!t.client) throw new Error("flat.beOp: no client");
+      return (n === "birth" || n === "connect") &&
+        typeof t.onSignIn == "function"
+        ? t.onSignIn(n, i.name, i.password || "")
+        : t.client.be(n, s, i);
+    }),
+    (b.operationsForTarget = (n) =>
+      n
+        ? T.operations.filter(
+            (s) => Array.isArray(s.targets) && s.targets.includes(n),
+          )
+        : []),
+    (b.selectBeing = (n, s) => {
+      ((T.selectedBeing = n ? { beingId: String(n), name: s || null } : null),
+        typeof t.onSelectBeing == "function" && t.onSelectBeing(n, s));
+    }),
+    Va());
+  const a = Za();
+  return (
+    T.descriptor &&
+      Be(T.descriptor, { session: T.session, discovery: T.discovery }),
+    Qa(t).then(() => {
+      T.descriptor &&
+        Be(T.descriptor, { session: T.session, discovery: T.discovery });
+    }),
+    {
+      update(n) {
+        n &&
+          ((T.descriptor = n),
+          (T.currentAddress = rt(n, T.discovery)),
+          Be(n, { session: T.session, discovery: T.discovery }));
+      },
+      setSelection(n) {
+        T.selectedBeing = n || null;
+      },
+      dispose() {
+        (a(),
+          ge == null || ge(),
+          Ee == null || Ee(),
+          me && (clearInterval(me), (me = null)),
+          (e.innerHTML = ""),
+          (T.client = null),
+          (T.descriptor = null),
+          (T.currentAddress = null),
+          (T.operations = []),
+          (T.selectedBeing = null));
+      },
+    }
+  );
+}
+let me = null;
+function Va() {
+  (me && clearInterval(me), (me = setInterval(ue, 15e3)), ue());
+}
+async function ue() {
+  var a, o;
+  const e = document.querySelector("#inbox-chip"),
+    t = document.querySelector("#inbox-count");
+  if (!(!e || !t)) {
+    if (
+      !((a = T.session) != null && a.token) ||
+      !((o = T.client) != null && o.see)
+    ) {
+      e.style.display = "none";
+      return;
+    }
+    e.style.display = "";
+    try {
+      const n = await T.client.see("my-inbox"),
+        s = Array.isArray(n == null ? void 0 : n.pending)
+          ? n.pending.length
+          : 0;
+      ((t.textContent = s === 0 ? "·" : String(s)),
+        (t.style.color = s > 0 ? "#e8b762" : "#6b7d72"),
+        (e.style.borderColor = s > 0 ? "#6b5320" : "#2c3a32"));
+    } catch (n) {
+      console.warn(
+        "[inbox-chip] count fetch failed:",
+        (n == null ? void 0 : n.message) || n,
+      );
+    }
+  }
+}
+function Za(e) {
+  let t = !1,
+    a = null;
+  const o = (n) => {
+    var c, l, p, r;
+    const s = n.target;
+    if (
+      !(
+        s &&
+        (s.tagName === "INPUT" ||
+          s.tagName === "TEXTAREA" ||
+          s.isContentEditable)
+      )
+    ) {
+      if (n.key === "/") {
+        n.preventDefault();
+        const d = document.getElementById("address-input");
+        d && (d.focus(), d.select());
+        return;
+      }
+      if (n.key === "g") {
+        ((t = !0),
+          a && clearTimeout(a),
+          (a = setTimeout(() => {
+            t = !1;
+          }, 600)));
+        return;
+      }
+      if (t) {
+        ((t = !1), a && (clearTimeout(a), (a = null)));
+        const d = (c = T.discovery) == null ? void 0 : c.story;
+        if (!d) return;
+        const m =
+            ((p = (l = T.descriptor) == null ? void 0 : l.address) == null
+              ? void 0
+              : p.history) || "0",
+          u = m === "0" ? "" : `#${m}`;
+        n.key === "h"
+          ? (n.preventDefault(), b.navigate(`${d}${u}/`))
+          : n.key === "b"
+            ? (n.preventDefault(), b.navigate(`${d}${u}/./beings`))
+            : n.key === "o"
+              ? (n.preventDefault(), b.navigate(`${d}${u}/./operations`))
+              : n.key === "r"
+                ? (n.preventDefault(), b.navigate(`${d}${u}/./ables`))
+                : n.key === "t"
+                  ? (n.preventDefault(), b.navigate(`${d}${u}/./threads`))
+                  : n.key === "i" &&
+                    (r = T.session) != null &&
+                    r.username &&
+                    (n.preventDefault(), b.navigate(`${d}${u}/~`));
+      }
+    }
+  };
+  return (
+    window.addEventListener("keydown", o),
+    () => {
+      (window.removeEventListener("keydown", o), a && clearTimeout(a));
+    }
+  );
+}
+async function Qa(e) {
+  var t;
+  if (!(!(e != null && e.client) || !((t = T.discovery) != null && t.story)))
+    try {
+      const a = await e.client.see(`${T.discovery.story}/./operations`),
+        o = Array.isArray(a.children) ? a.children : [];
+      T.operations = o.map((n) => {
+        var i;
+        const s = ((i = n.qualities) == null ? void 0 : i.operation) || {};
+        return {
+          name: n.name,
+          targets: Array.isArray(s.targets) ? s.targets : [],
+          factAction: s.factAction || null,
+          ownerExtension: s.ownerExtension || "seed",
+          skipAudit: !!s.skipAudit,
+          args: s.args || null,
+        };
+      });
+    } catch (a) {
+      (console.warn(
+        "[flat] operations load failed:",
+        (a == null ? void 0 : a.code) || (a == null ? void 0 : a.message),
+      ),
+        (T.operations = []));
+    }
+}
+function rt(e, t) {
+  var i, c, l;
+  const a =
+      (t == null ? void 0 : t.story) ||
+      ((i = e == null ? void 0 : e.address) == null ? void 0 : i.place) ||
+      "",
+    o =
+      ((c = e == null ? void 0 : e.address) == null ? void 0 : c.history) ||
+      "0",
+    n =
+      ((l = e == null ? void 0 : e.address) == null ? void 0 : l.pathByNames) ||
+      "/",
+    s = o === "0" ? "" : `#${o}`;
+  return `${a}${s}${n}`;
+}
+function dt() {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+const eo = Object.freeze(
+  Object.defineProperty(
+    {
+      __proto__: null,
+      clearDetail: $t,
+      closeChat: ge,
+      flat: b,
+      hideAuthOverlay: Ee,
+      mountFlatView: It,
+      openChatFor: $e,
+      refreshInboxCount: ue,
+      setConnectionStatus: wt,
+      setLoading: Nt,
+      setStatus: ie,
+      showAuthOverlay: Xa,
+    },
+    Symbol.toStringTag,
+    { value: "Module" },
+  ),
+);
+function oo() {
+  let e = null,
+    t = null,
+    a = null,
+    o = null;
+  const n = [];
+  function s() {
+    o = It(a, {
+      client: e.client,
+      descriptor: e.state.get("descriptor"),
+      discovery: e.state.get("discovery"),
+      session: e.state.get("session"),
+      selectedBeing: e.state.get("selectedBeing"),
+      onNavigate: (r) => {
+        e.navigation.navigate(r).catch(() => {});
+      },
+      onSelectBeing: (r, d) => e.navigation.selectBeing(r, d),
+      onSignIn: (r, d, m, u) => e.signIn(r, d, m, u),
+      onSignOut: () => e.signOut(),
+      onNameAuth: () => {
+        var r, d;
+        return (d = (r = e.shell) == null ? void 0 : r.presentNameGate) == null
+          ? void 0
+          : d.call(r);
+      },
+      onClose: () => {
+        var r;
+        return (r = e.shell) == null ? void 0 : r.switchView("3d");
+      },
+    });
+  }
+  function i(r, d) {
+    ((e = d),
+      (t = r),
+      (a = document.createElement("div")),
+      (a.style.cssText =
+        "position:absolute; inset:0; overflow:auto; background:#0a0d0c; color:#c8d3cb;"),
+      t.appendChild(a),
+      s(),
+      n.push(
+        e.events.on("client", () => {
+          try {
+            o == null || o.dispose();
+          } catch {}
+          s();
+          const m = e.state.get("descriptor");
+          m && o.update(m);
+        }),
+      ));
+  }
+  function c(r) {
+    o == null || o.update(r);
+  }
+  function l(r) {
+    var m;
+    (m = o == null ? void 0 : o.setSelection) == null || m.call(o, r);
+    const d = e.state.get("descriptor");
+    d && (o == null || o.update(d));
+  }
+  function p() {
+    for (const r of n.splice(0))
+      try {
+        r();
+      } catch {}
+    try {
+      o == null || o.dispose();
+    } catch {}
+    ((o = null), a == null || a.remove(), (a = null), (t = null));
+  }
+  return { mount: i, onDescriptor: c, onSelection: l, destroy: p };
+}
+export { oo as createView };

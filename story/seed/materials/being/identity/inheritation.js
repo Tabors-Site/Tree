@@ -24,8 +24,8 @@
 // stored)": a child born under a covered position is itself covered,
 // because the walk from the child passes through the anchor.
 //
-// I_AM is the source of all authority on its own story and covers
-// everything (parallel to authorize.js's I_AM short-circuit).
+// I is the source of all authority on its own story and covers
+// everything (parallel to authorize.js's I short-circuit).
 //
 // Inheritation points are asymmetric grant/revoke pairs, read the same
 // way lineage.js reads credential attach/detach: the LATEST of the two
@@ -64,8 +64,11 @@ export async function livePointsAt(beingId, history) {
 
   let historyClause = {};
   if (history) {
-    const { resolveHistoryLineage } = await import("../../history/histories.js");
-    historyClause = { history: { $in: await resolveHistoryLineage(String(history)) } };
+    const { resolveHistoryLineage } =
+      await import("../../history/histories.js");
+    historyClause = {
+      history: { $in: await resolveHistoryLineage(String(history)) },
+    };
   }
 
   const [grants, revokes] = await Promise.all([
@@ -149,7 +152,7 @@ async function* walkUp(beingId, history) {
 /**
  * Does `nameId` have authority over `beingId`?
  *
- *   I_AM            → yes, always (universal authority on its story)
+ *   I            → yes, always (universal authority on its story)
  *   owns being or
  *   any ancestor    → yes (ownership anchors downward authority)
  *   holds a point at
@@ -163,8 +166,8 @@ export async function hasAuthorityOver(nameId, beingId, history) {
   if (!nameId || !beingId) return false;
   const name = String(nameId);
 
-  const { I_AM } = await import("../seedBeings.js");
-  if (name === String(I_AM) || name === "i-am" || name === "I_AM") return true;
+  const { I } = await import("../seedBeings.js");
+  if (name === String(I) || name === "i-am" || name === "I") return true;
 
   for await (const { row, points } of walkUp(beingId, history)) {
     if (anchorsAtNode(row, points).has(name)) return true;
@@ -173,15 +176,15 @@ export async function hasAuthorityOver(nameId, beingId, history) {
 }
 
 /**
- * The full set of nameIds with authority over `beingId`: I_AM, every
+ * The full set of nameIds with authority over `beingId`: I, every
  * owner on the walk up, and every Name holding a live inheritation
  * point on the walk up. Use hasAuthorityOver when you only need a
  * yes/no for one Name (it short-circuits).
  */
 export async function authoritiesOver(beingId, history) {
   const out = new Set();
-  const { I_AM } = await import("../seedBeings.js");
-  out.add(String(I_AM));
+  const { I } = await import("../seedBeings.js");
+  out.add(String(I));
 
   for await (const { row, points } of walkUp(beingId, history)) {
     for (const a of anchorsAtNode(row, points)) out.add(a);

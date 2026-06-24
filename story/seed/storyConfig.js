@@ -34,7 +34,7 @@ var initialized = false;
 var cachedStoryUrl = null;
 
 import log from "./seedStory/log.js";
-import { I_AM } from "./materials/being/seedBeings.js";
+import { I } from "./materials/being/seedBeings.js";
 import { registerOperation } from "./ibp/operations.js";
 // NOTE: protocol.js + identity.js are pulled in lazily inside the
 // close-story handler (dynamic import), not at the top level — this
@@ -150,7 +150,9 @@ async function loadConfigFromDb() {
       "of.kind": "library",
       "of.id": libraryId,
       act: { $in: ["config-set", "config-delete"] },
-    }).sort({ seq: 1 }).lean();
+    })
+      .sort({ seq: 1 })
+      .lean();
 
     let state = initial();
     for (const f of facts) state = reduce(state, f);
@@ -159,7 +161,10 @@ async function loadConfigFromDb() {
     const clean = {};
     for (const [k, v] of Object.entries(state.config || {})) {
       if (DANGEROUS_KEYS.has(k)) {
-        log.warn("Story", `Dangerous config key "${k}" found on the library reel. Skipped.`);
+        log.warn(
+          "Story",
+          `Dangerous config key "${k}" found on the library reel. Skipped.`,
+        );
         continue;
       }
       if (k.startsWith("$") || k.startsWith("_")) continue;
@@ -192,9 +197,9 @@ export function getStoryConfigValue(key) {
 
 // A config write is a 5D NAME-ACT on the library reel — emit a config-set/config-delete fact
 // (verb:"name", bodiless, signed by the acting Name) within its own withNameAct. Self-contained:
-// no moment threading, no ./config space. The acting Name is the caller's identity, else the I_AM.
+// no moment threading, no ./config space. The acting Name is the caller's identity, else the I.
 async function nameActConfig(act, params, identity) {
-  const nameId = (identity?.nameId ?? identity?.beingId) || I_AM;
+  const nameId = (identity?.nameId ?? identity?.beingId) || I;
   const { withNameAct } = await import("./sprout.js");
   const { emitFact } = await import("./past/fact/facts.js");
   const { getStoryDomain } = await import("./ibp/address.js");
@@ -216,7 +221,11 @@ async function nameActConfig(act, params, identity) {
   });
 }
 
-export async function setStoryConfigValue(key, value, { internal, identity } = {}) {
+export async function setStoryConfigValue(
+  key,
+  value,
+  { internal, identity } = {},
+) {
   validateKey(key);
   if (PROTECTED_KEYS.has(key) && !internal) {
     throw new Error(
@@ -385,11 +394,11 @@ registerOperation("set-config", {
         "set-config: `value` is required (use delete-config to remove)",
       );
     }
-    // I_AM-internal flows (migrations, first-boot bootstrap, manifest sync) may write
+    // I-internal flows (migrations, first-boot bootstrap, manifest sync) may write
     // PROTECTED_KEYS (seedVersion, disabledExtensions). Other beings stay subject to the
     // protected-key gate inside setStoryConfigValue.
     await setStoryConfigValue(key, value, {
-      internal: identity?.beingId === I_AM,
+      internal: identity?.beingId === I,
       identity,
     });
     const { ranAsMoments } = await import("./ibp/factResult.js");
@@ -411,7 +420,7 @@ registerOperation("delete-config", {
       throw new Error("delete-config: `key` is required");
     }
     await deleteStoryConfigValue(key, {
-      internal: identity?.beingId === I_AM,
+      internal: identity?.beingId === I,
       identity,
     });
     const { ranAsMoments } = await import("./ibp/factResult.js");
@@ -463,7 +472,7 @@ registerOperation("close-story", {
     // act:"close-story", bodiless), mirroring nameActConfig. withNameAct SEALS it BEFORE
     // the shutdown, so the close-story fact is on the chain when the engine's dispatch
     // gate next folds the library reel. The name-act IS the op's fact → ranAsMoments.
-    const nameId = (identity?.nameId ?? identity?.beingId) || I_AM;
+    const nameId = (identity?.nameId ?? identity?.beingId) || I;
     {
       const { withNameAct } = await import("./sprout.js");
       const { emitFact } = await import("./past/fact/facts.js");

@@ -12,15 +12,15 @@
 //
 // signerId is a pubkey id: the producer's NAME id (the Name's _id IS its
 // pubkey — a being never signs, the Name it expresses does), or storyId
-// when the story (I_AM) vouches — the story key's id, NOT the literal
+// when the story (I) vouches — the story key's id, NOT the literal
 // "i-am", so a foreign receiver decodes the key from the id alone. Absent
 // signature => advisory-accepted (pre-signature bundles + producers with
 // no local key); a PRESENT signature that fails verification is a hard
 // refusal at the receiver.
 
-// The I_AM constant (seedBeings.js). Inlined to keep this from importing
+// The I constant (seedBeings.js). Inlined to keep this from importing
 // materials/being at load time; it is a frozen doctrinal value.
-const I_AM = "i-am";
+const I = "i-am";
 const SIG_KIND = "publish-bundle";
 
 function sigPayload(bundleHash, signerId) {
@@ -36,45 +36,55 @@ function sigPayload(bundleHash, signerId) {
  *
  * @param {object} bundle           a clone bundle WITH meta.bundleHash set
  * @param {string} producerBeingId  the vouching agent's BEING id (operator,
- *                                  or I_AM for a story-vouched snapshot).
+ *                                  or I for a story-vouched snapshot).
  *                                  Its NAME (trueName) is resolved and is
  *                                  what actually signs — a being never signs.
  * @param {string} [history]
  */
 export async function signBundle(bundle, producerBeingId, history = "0") {
   const bundleHash = bundle?.meta?.bundleHash;
-  if (!bundleHash) throw new Error("signBundle: bundle.meta.bundleHash must be set first");
+  if (!bundleHash)
+    throw new Error("signBundle: bundle.meta.bundleHash must be set first");
   // When we can't vouch (no producer, or no available key — e.g. a locked
   // human session), CLEAR any existing signature rather than leave it.
   // This is what makes re-signing after an honest edit safe: a stale sig
   // over the OLD bundleHash would otherwise fail the receiver's gate. No
   // signature → unsigned-advisory; a present one always matches the hash.
-  if (!producerBeingId) { delete bundle.meta.signature; return bundle; }
+  if (!producerBeingId) {
+    delete bundle.meta.signature;
+    return bundle;
+  }
 
   // The NAME is the signer. A being never signs — it expresses a trueName
-  // whose key signs. I_AM's name id is the literal "i-am" (loadSigningKey
+  // whose key signs. I's name id is the literal "i-am" (loadSigningKey
   // maps it to the story key). Any other producer is a BEING id (a content
   // hash, NOT a key after the split), so resolve its trueName; signing with
   // the bare beingId would silently produce an unsigned bundle (loadSigningKey
   // returns null for a non-key id).
   let nameId;
-  if (producerBeingId === I_AM) {
-    nameId = I_AM;
+  if (producerBeingId === I) {
+    nameId = I;
   } else {
     const { loadOrFold } = await import("../../materials/projections.js");
     const slot = await loadOrFold("being", String(producerBeingId), history);
     nameId = slot?.state?.trueName || null;
   }
-  if (!nameId) { delete bundle.meta.signature; return bundle; }
+  if (!nameId) {
+    delete bundle.meta.signature;
+    return bundle;
+  }
 
   const { loadSigningKey } = await import("../../past/act/actSig.js");
   const pem = await loadSigningKey(nameId, history);
-  if (!pem) { delete bundle.meta.signature; return bundle; }
-  // signerId is the pubkey id the sig verifies against. For I_AM the
+  if (!pem) {
+    delete bundle.meta.signature;
+    return bundle;
+  }
+  // signerId is the pubkey id the sig verifies against. For I the
   // signing key IS the story key, whose id is storyId (a key id);
   // any other Name's id already IS its pubkey.
   let signerId = nameId;
-  if (nameId === I_AM) {
+  if (nameId === I) {
     const { getStoryIdentity } = await import("../../storyIdentity.js");
     signerId = getStoryIdentity().storyId;
   }
@@ -103,11 +113,27 @@ export async function signBundle(bundle, producerBeingId, history = "0") {
  */
 export async function verifyBundleSig(bundle) {
   const sig = bundle?.meta?.signature;
-  if (!sig?.value) return { ok: true, signerId: null, reason: "unsigned-advisory" };
+  if (!sig?.value)
+    return { ok: true, signerId: null, reason: "unsigned-advisory" };
   const bundleHash = bundle?.meta?.bundleHash;
-  if (!bundleHash) return { ok: false, signerId: sig.signerId || null, reason: "no-bundleHash" };
-  const { isKeyId, verifyNameSig } = await import("../../materials/name/keys.js");
-  if (!isKeyId(sig.signerId)) return { ok: false, signerId: sig.signerId || null, reason: "signer-not-keyid" };
-  const ok = verifyNameSig(sig.signerId, sigPayload(bundleHash, sig.signerId), sig.value);
+  if (!bundleHash)
+    return {
+      ok: false,
+      signerId: sig.signerId || null,
+      reason: "no-bundleHash",
+    };
+  const { isKeyId, verifyNameSig } =
+    await import("../../materials/name/keys.js");
+  if (!isKeyId(sig.signerId))
+    return {
+      ok: false,
+      signerId: sig.signerId || null,
+      reason: "signer-not-keyid",
+    };
+  const ok = verifyNameSig(
+    sig.signerId,
+    sigPayload(bundleHash, sig.signerId),
+    sig.value,
+  );
   return { ok, signerId: sig.signerId, reason: ok ? "verified" : "bad-sig" };
 }

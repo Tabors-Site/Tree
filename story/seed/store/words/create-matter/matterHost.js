@@ -67,7 +67,7 @@ export function matterHostEnv() {
       // Matter type: explicit when given, CLASSIFIED from the content's own
       // signals when omitted; the registry's contentKinds/mime gate below still
       // enforces the result.
-      const { getMatterType, typeAllowsContentKind, typeAllowsMime } =
+      const { getMatterType, typeAllowsContentKind, typeAllowsMime, missingRequiredField } =
         await import("../../../materials/matter/types.js");
       let matterType = typeof spec.type === "string" && spec.type.length
         ? spec.type
@@ -93,6 +93,18 @@ export function matterHostEnv() {
           IBP_ERR.INVALID_INPUT,
           `create-matter: unknown matter type "${matterType}"`,
         );
+      }
+      // REQUIRED-FIELD validation (the `has` schema, all-rules-fold §4). Gated behind the type
+      // declaring any required field, so schema-less types are unaffected. A declared field Y maps
+      // to qualities.<type>.<Y>; an optional field ("may have") is not required.
+      if (typeDef.fields?.length) {
+        const missing = missingRequiredField(typeDef, spec.qualities);
+        if (missing) {
+          throw new IbpError(
+            IBP_ERR.INVALID_INPUT,
+            `create-matter: type "${matterType}" requires field "${missing}"`,
+          );
+        }
       }
 
       // Content through the store, shape-driven. Facts carry CAS refs, never

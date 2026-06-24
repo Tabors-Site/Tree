@@ -1,18 +1,18 @@
 > **Summary — the page folded to its head (a recall of itself).**
 > The kernel line is not "I am **that** I am" but "I am **what** I am". `that` is an empty connector — a
 > pointer that dissolves into the chain, adding nothing. `what` is the **LENS** — the able/can, the same
-> `what` as "what from", the facet-selector. So the line reads *existence (am) bound to its first
-> capability (what)*: a being IS the can it is granted. Word by word it folds the whole genesis in
-> miniature — **I** (the sign/signature, *not a word* — the one who will stamp) → **I am** (the to-be,
+> `what` as "what from", the facet-selector. So the line reads _existence (am) bound to its first
+> capability (what)_: a being IS the can it is granted. Word by word it folds the whole genesis in
+> miniature — **I** (the sign/signature, _not a word_ — the one who will stamp) → **I am** (the to-be,
 > the bare IS, the inner face lit but unassigned) → **I am what** (the first grant — a lens reached for
 > and assigned, the first flow-clause) → **I am what I am** (the loop closes: the being is its can,
-> signed and held). Scale-invariant: the first book's first line read from genesis, *and* the shape of
+> signed and held). Scale-invariant: the first book's first line read from genesis, _and_ the shape of
 > any being waking up — sign → exist → first can → the self that holds it.
 > The `I`'s are **implied** (the signature rides every stamp — you never write `I`), so the line reduces
-> to **Am — what? — Am**: exist → *ask which can* (a genuine question — the first **call/await**, the
+> to **Am — what? — Am**: exist → _ask which can_ (a genuine question — the first **call/await**, the
 > line's one breath, where the being isn't yet fixed) → exist-answered (the grant lands). And the quotes
 > ("Am 'what?' Am") are for **RECALL** — the only thing seen looking back at the chain; the only thing on
-> the bare inner face is the first `am`. **Open cut (this turn, Tabor): maybe it is not `I_AM` at all but
+> the bare inner face is the first `am`. **Open cut (this turn, Tabor): maybe it is not `I` at all but
 > just `I` — the signer — and the `am` is the FOLD** (the IS = the chain read into the present).
 
 ---
@@ -107,4 +107,4 @@ Lmao! The quotes for recall. The recall is the only thing to be seen looking bac
 
 ====
 
-that soogd, read i_am updates cuz i think that wil test ur recall system well, and summarize it at top, I'm even htinking it might not be I_am after all but just I, and the am is the fold
+that soogd, read I updates cuz i think that wil test ur recall system well, and summarize it at top, I'm even htinking it might not be I after all but just I, and the am is the fold

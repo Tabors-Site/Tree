@@ -1,6 +1,6 @@
 Speicif thing to note that thi splan may drift on:
 
-Names all come from a realitys I am, that way everyting stys crytpo-linked. Names are always 1 layer below I_am. Never a hierarchy with names. That is with beings, spaces, matter, ables, etc.
+Names all come from a realitys I am, that way everyting stys crytpo-linked. Names are always 1 layer below I. Never a hierarchy with names. That is with beings, spaces, matter, ables, etc.
 Imagine a reality can have just 2 names, the I am and another name, like Tabor.
 all beings act through tabor , and say he has beings that are matable so names from other elaities can still have beings born under their name on that reality (note be verbs are stlil beings. the name is just identity) with them as the actor but fact landing on relaity
 
@@ -18,7 +18,7 @@ Name
 A Name is the cryptographic identity. It holds a keypair. It signs every act. It accumulates a chain. It persists across contexts, branches, and even cross-reality action.
 What used to be "the Being's keypair" is now "the Name's keypair." What used to be "the Being's chain" is now "the Name's chain." The cryptographic identity layer moves up from Being to Name.
 A Name is not in the world. It exists at the identity layer. The world doesn't contain Names directly; the world contains Beings that Names act through.
-Names descend from the reality's I_AM. Every reality has one I_AM (the root identity, the reality's cryptographic anchor). Other Names are facets of this I_AM, declared into existence through the NAME verb.
+Names descend from the reality's I. Every reality has one I (the root identity, the reality's cryptographic anchor). Other Names are facets of this I, declared into existence through the NAME verb.
 Being
 A Being is the in-world presence of a Name. It's the formed body the Name acts through.
 Beings don't have their own keypairs. They don't sign things — the Name behind them signs. They don't have their own chains — their lifecycle facts live in the Name's chain.
@@ -50,7 +50,7 @@ What stays the same
 Spaces, matter, and the world structure are unchanged.
 The four world-layer verbs (SEE, DO, SUMMON, BE) still operate on the world through Beings.
 Chains exist (now at the name level, not the being level), facts get recorded, roots get computed.
-The reality's identity is still its I_AM. Sovereignty is still cryptographic.
+The reality's identity is still its I. Sovereignty is still cryptographic.
 What's genuinely new
 The fifth verb: NAME. See Doc 2.
 The unified being tree with inheritation points. See Doc 3.
@@ -71,9 +71,9 @@ What NAME does
 NAME creates and manages identity threads. It's how new Names come into existence, how lineage gets declared, how continuation works, how realities federate at the identity level.
 Specific operations that NAME handles:
 
-Declaring a new Name. A Name (often I_AM, but any authorized Name) signs a NAME act that brings a new Name into existence. The new Name has its own keypair, joins the reality's name set as a facet of I_AM, and starts its own chain.
+Declaring a new Name. A Name (often I, but any authorized Name) signs a NAME act that brings a new Name into existence. The new Name has its own keypair, joins the reality's name set as a facet of I, and starts its own chain.
 Declaring a continuation heir. A new Name is birthed with a continuation link to an ancestor's chain. The heir has a fresh keypair; the ancestor's chain becomes biographical prologue.
-Federation handshake. Two I_AMs establish a federation relationship. This is a NAME act between realities — neither side is acting on world content; they're declaring an identity-layer relationship.
+Federation handshake. Two Is establish a federation relationship. This is a NAME act between realities — neither side is acting on world content; they're declaring an identity-layer relationship.
 Cross-reality migration request. A Name asks to be migrated or to visit another reality. NAME-level operation, identity-to-identity.
 Closing a Name. A Name declares itself no longer active. Future acts can't be signed by it. The Name's history persists but the thread closes.
 
@@ -119,12 +119,12 @@ Example for a federation handshake to another reality:
 verb: NAME
 target: bobs-site
 intent: federation-introduce
-issuer: tabors-site/I_AM
+issuer: tabors-site/I
 payload: {
 my-reality-public-key: ...,
 proposed-relationship: peer
 }
-signature: <signed by tabors-site I_AM private key>
+signature: <signed by tabors-site I private key>
 Routing
 NAME envelopes route to the receiving reality's identity-layer handlers. They don't go through the normal in-world action paths.
 The substrate parses the envelope, verifies the signature, checks federation policy (if cross-reality), and routes to the appropriate identity-layer handler based on intent. The handler operates on the reality's name set, lineage records, federation registry, or whatever identity-layer state the intent affects.
@@ -132,9 +132,9 @@ The result is a fact (or facts) recorded at the identity layer. New Names appear
 Authority for NAME
 Who can do NAME in a reality?
 
-The reality's I_AM can do any NAME act in its own reality.
+The reality's I can do any NAME act in its own reality.
 Other Names can do certain NAME acts if granted (e.g., a Name might be authorized to declare child Names under specific conditions).
-Cross-reality NAME acts require federation policies to allow them. By default, a reality only accepts NAME acts from its own I_AM or from federated peers it has explicitly established relationships with.
+Cross-reality NAME acts require federation policies to allow them. By default, a reality only accepts NAME acts from its own I or from federated peers it has explicitly established relationships with.
 
 The authorization model for NAME is at the identity layer, not the inheritation-point layer. Inheritation points govern who can control which beings (world-layer authority). NAME acts are governed by the reality's identity-layer policies (who can declare names, who can federate, etc.).
 What NOT to use NAME for
@@ -153,14 +153,14 @@ Previously, you might have thought of each Name (or what was then "Being") as ha
 This was structurally awkward. Cross-name interactions had to coordinate across parallel structures. Authority was tangled up with tree ownership. Sub-grants required reasoning about which tree a being lived in.
 The refactor uses one unified being tree per reality with Names attached at inheritation points.
 The unified being tree
-Every reality has one being tree. It's rooted at an I-AM being — a special being that mirrors the reality's I_AM name. The I-AM being is the world-layer representation of the reality's root identity.
+Every reality has one being tree. It's rooted at an I-AM being — a special being that mirrors the reality's I name. The I-AM being is the world-layer representation of the reality's root identity.
 Every other being in the reality descends from the I-AM being. The being tree is hierarchical: parent beings have child beings; the I-AM being is the ultimate ancestor of all beings in the reality.
 This is one tree, not multiple trees. The reality has one world; the world has one structure of beings.
 Names as inheritation points
 Names don't have their own being trees. They have inheritation points — attachments to specific positions in the unified being tree.
 An inheritation point is a marker that says "from this position downward, this Name has authority."
 For example, the Tabor name might have an inheritation point at a being called "Tabor" in the being tree. Tabor has authority over that being and all its descendants. If Tabor has a sub-tree (Tabor → Coder → 1, 2, 3), Tabor's inheritation point covers all of it.
-Sub-grants work by adding additional inheritation points. If Tabor wants Bob to have authority over the Coder subtree, Tabor (with I_AM authorization) creates an inheritation point for Bob at the Coder being. Bob now has authority over Coder and its descendants (1, 2, 3) but not over Tabor or anything else outside Coder's subtree.
+Sub-grants work by adding additional inheritation points. If Tabor wants Bob to have authority over the Coder subtree, Tabor (with I authorization) creates an inheritation point for Bob at the Coder being. Bob now has authority over Coder and its descendants (1, 2, 3) but not over Tabor or anything else outside Coder's subtree.
 Multiple Names can have inheritation points covering the same being. If Tabor has a point at Tabor's being (covering everything below) and Bob has a point at Coder (covering Coder and below), then Coder is covered by both Tabor and Bob. Both have authority over Coder; the substrate's policies determine how their authorities compose.
 Computing authority
 For any being, you can compute which Names have authority over it by walking up the being tree and collecting inheritation points along the path.
@@ -169,7 +169,7 @@ Algorithm:
 Start at the being in question.
 Check if any Name has an inheritation point at this being. If so, those Names have authority.
 Walk up to the parent being. Check inheritation points at that position. Those Names also have authority over this being (and its descendants).
-Continue walking up until you reach the I-AM being. The reality's I_AM always has authority (it owns the whole tree).
+Continue walking up until you reach the I-AM being. The reality's I always has authority (it owns the whole tree).
 The set of authorized Names is the union of all inheritation points found along the path.
 
 This is positional. Where the inheritation point is in the tree determines the scope of authority. Higher up means broader authority; lower down means narrower authority.
@@ -187,7 +187,7 @@ Inheritation points are created through NAME-related operations and through spec
 
 When a new Name is declared (NAME verb), it gets a default inheritation point. Typically at a primary being created for it (Tabor name → Tabor being, with inheritation point at Tabor being).
 When a Name grants authority to another Name (a DO operation), an inheritation point gets created. Tabor granting Bob control over Coder creates an inheritation point for Bob at Coder.
-When inheritation points are revoked, they get removed. Bob's inheritation point at Coder can be revoked by Tabor (the grantor) or by I_AM (which has ultimate authority).
+When inheritation points are revoked, they get removed. Bob's inheritation point at Coder can be revoked by Tabor (the grantor) or by I (which has ultimate authority).
 
 The history of inheritation point changes is recorded in the relevant Names' chains. You can query "when did Bob get authority over Coder?" by walking Tabor's chain to find the grant fact.
 Practical implications for code
@@ -203,7 +203,7 @@ Public spaces. A "public" inheritation point at a high level of the tree means m
 Hierarchical organization. Communities, organizations, projects can be modeled as positions in the being tree. The community's "manager" Name has a high inheritation point; sub-team Names have lower inheritation points within the community's scope.
 Clean revocation. Removing an inheritation point cleanly revokes authority over that sub-tree. The Name no longer has access; everything else stays intact.
 The mental model
-The reality has one I_AM (cryptographic identity). The reality has one being tree (world structure, rooted at the I-AM being). Names are facets of I_AM at the identity layer; they attach to the being tree through inheritation points at the world layer.
+The reality has one I (cryptographic identity). The reality has one being tree (world structure, rooted at the I-AM being). Names are facets of I at the identity layer; they attach to the being tree through inheritation points at the world layer.
 Authority comes from inheritation points covering positions. Action happens through beings at positions. The Name behind any acting being is whichever Name's inheritation point covers that being's position and authorizes the specific operation.
 This is structurally simple once you have the model. The reality is one thing, with one identity at the root, one world structure beneath it, and Names connecting them through positional attachments.
 

@@ -43,7 +43,7 @@ await import(`${R}/begin.js`);
 
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const { sealFacts } = await import(`${R}/seed/past/fact/facts.js`);
-const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
+const { I } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { doVerb } = await import(`${R}/seed/ibp/verbs/do.js`);
 const { resolveAbleWord } = await import(
   `${R}/seed/present/word/ableWordRegistry.js`
@@ -73,7 +73,7 @@ const poll = async (fn, t = 60000, e = 250) => {
   }
   return null;
 };
-const ident = { beingId: I_AM, name: "i-am", nameId: "i-am" };
+const ident = { beingId: I, name: "i-am", nameId: "i-am" };
 
 const cherub = await poll(() => findByName("being", "cherub", "0"));
 // drive the REAL set-pointer op via doVerb → the cut handler → history-manager.word

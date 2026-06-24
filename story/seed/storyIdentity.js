@@ -37,7 +37,8 @@ export function getStoryIdentity() {
 
   const domain = cleanDomain(process.env.STORY_DOMAIN || "localhost");
   const name = process.env.STORY_NAME || "My Place";
-  const keyDir = process.env.STORY_KEY_DIR || path.join(process.cwd(), ".story");
+  const keyDir =
+    process.env.STORY_KEY_DIR || path.join(process.cwd(), ".story");
   const privateKeyPath = path.join(keyDir, "story.key");
   const publicKeyPath = path.join(keyDir, "story.key.pub");
 
@@ -66,8 +67,8 @@ export function getStoryIdentity() {
   }
 
   // The story is a wallet: its id IS its public key, encoded the same
-  // z... way as a being id (this story's I_AM shares this exact key,
-  // so storyId === I_AM's key id). Derived from the keypair every boot,
+  // z... way as a being id (this story's I shares this exact key,
+  // so storyId === I's key id). Derived from the keypair every boot,
   // never stored — story.key.pub is the only source of truth. Both the
   // old random-uuid story.id token AND its derived on-disk cache are
   // retired: identity is the key, not a file. (The whole-place CAS tie
@@ -105,7 +106,9 @@ export function setExtensionNamesProvider(fn) {
 export function getStoryInfoPayload() {
   const identity = getStoryIdentity();
   const baseUrl = process.env.STORY_BASE_URL || getStoryUrl();
-  const timezone = getStoryConfigValue("timezone") || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timezone =
+    getStoryConfigValue("timezone") ||
+    Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   return {
     storyId: identity.storyId,
@@ -119,7 +122,10 @@ export function getStoryInfoPayload() {
     timezone,
     capabilities: [
       ...(_getExtNames && _getExtNames().includes("team") ? ["invite"] : []),
-      "proxy", "notify", "public-trees", "llm-proxy",
+      "proxy",
+      "notify",
+      "public-trees",
+      "llm-proxy",
     ],
     extensions: _getExtNames ? _getExtNames() : [],
   };
@@ -175,7 +181,10 @@ export async function verifyCanopyToken(token, remoteStoryPublicKey) {
  */
 export function signData(data) {
   const identity = getStoryIdentity();
-  const buf = Buffer.from(typeof data === "string" ? data : JSON.stringify(data), "utf8");
+  const buf = Buffer.from(
+    typeof data === "string" ? data : JSON.stringify(data),
+    "utf8",
+  );
   return crypto.sign(null, buf, identity.privateKey).toString("base64");
 }
 
@@ -185,7 +194,10 @@ export function signData(data) {
  */
 export function verifySignedData(data, signature, remoteStoryPublicKey) {
   try {
-    const buf = Buffer.from(typeof data === "string" ? data : JSON.stringify(data), "utf8");
+    const buf = Buffer.from(
+      typeof data === "string" ? data : JSON.stringify(data),
+      "utf8",
+    );
     const sigBuf = Buffer.from(signature, "base64");
     return crypto.verify(null, buf, remoteStoryPublicKey, sigBuf);
   } catch {

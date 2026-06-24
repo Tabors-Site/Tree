@@ -45,7 +45,7 @@ import { fileURLToPath } from "url";
 import log from "../../seedStory/log.js";
 import { matterContentId } from "../matter/matterId.js";
 import { HEAVEN_SPACE } from "./heavenSpaces.js";
-import { I_AM } from "../being/seedBeings.js";
+import { I } from "../being/seedBeings.js";
 import { initProjection, tombstoneProjection } from "../projections.js";
 import ProjectionModel, { projectionKey } from "../history/projection.js";
 import { anchorFile } from "../matter/anchor.js";
@@ -194,13 +194,16 @@ export async function syncSourceTree({
   // — the matter-by-spaceId + source type is a substrate-internal
   // lookup pattern, not a wire-facing one.
   const _rootMatterSlot = await ProjectionModel.findOne({
-    history: "0", type: "matter",
+    history: "0",
+    type: "matter",
     "state.spaceId": sourceSpaceId,
     "state.parentMatterId": null,
     "state.type": "source",
     tombstoned: { $ne: true },
   }).lean();
-  let rootMatter = _rootMatterSlot ? { _id: _rootMatterSlot.id, ...(_rootMatterSlot.state || {}) } : null;
+  let rootMatter = _rootMatterSlot
+    ? { _id: _rootMatterSlot.id, ...(_rootMatterSlot.state || {}) }
+    : null;
 
   const rootName = path.basename(targetPath) || "/";
   if (!rootMatter) {
@@ -285,13 +288,16 @@ async function reconcileChildren({
 
   // Existing mirrored children for this parent.
   const _existRows = await ProjectionModel.find({
-    history: "0", type: "matter",
+    history: "0",
+    type: "matter",
     "state.parentMatterId": parentMatterId,
     "state.type": "source",
     tombstoned: { $ne: true },
   }).lean();
   const existing = _existRows.map((s) => ({
-    _id: s.id, name: s.state?.name, content: s.state?.content,
+    _id: s.id,
+    name: s.state?.name,
+    content: s.state?.content,
   }));
   const existingByName = new Map(existing.map((a) => [a.name, a]));
 
@@ -434,9 +440,12 @@ async function removeMatterSubtree(rootId, stats) {
     const id = stack.pop();
     toDelete.push(id);
     const kids = await ProjectionModel.find({
-      history: "0", type: "matter",
+      history: "0",
+      type: "matter",
       "state.parentMatterId": id,
-    }).select("id").lean();
+    })
+      .select("id")
+      .lean();
     for (const k of kids) stack.push(String(k.id));
   }
   if (toDelete.length === 0) return;
@@ -494,13 +503,17 @@ async function createSourceMatter({
   // place rather than re-creating.
   const parent = parentMatterId ? String(parentMatterId) : null;
   const matterId = matterContentId({
-    spaceId, parentMatterId: parent, name, type: "source",
-    content: { path: diskPath, kind }, beingId: I_AM,
+    spaceId,
+    parentMatterId: parent,
+    name,
+    type: "source",
+    content: { path: diskPath, kind },
+    beingId: I,
   });
   const state = {
     spaceId,
     parentMatterId: parent,
-    beingId: I_AM,
+    beingId: I,
     name,
     type: "source",
     content,
@@ -510,7 +523,11 @@ async function createSourceMatter({
   };
   // Disk-folded: no reel, so foldedSeq is a constant. The slot IS the
   // fold of the disk entry.
-  await initProjection("matter", matterId, "0", { state, foldedSeq: 0, position: spaceId });
+  await initProjection("matter", matterId, "0", {
+    state,
+    foldedSeq: 0,
+    position: spaceId,
+  });
 
   if (parent) {
     await ProjectionModel.updateOne(

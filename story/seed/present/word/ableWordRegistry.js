@@ -125,14 +125,14 @@ export function resolveAbleWordViaFold(able, op, history) {
 // projection; these facts are the source. Declaring a word lays a permanent `do:coin`
 // fact; you never delete a word, you DISABLE it (a `do:retire` fact). At boot,
 // rehydrateWordsFromFacts replays them into the map. EVERY fact needs an ACTOR — the being
-// who declares/disables the word (its authority): I_AM for the seed vocabulary, the installer
+// who declares/disables the word (its authority): I for the seed vocabulary, the installer
 // for an extension's words, the operator for a disable. Only the DECLARATION is a fact; the
 // parsed IR is read lazily from the file (like wakes never persists the runtime cursor).
 
 const WORD_COIN = "coin";
 const WORD_RETIRE = "retire";
 
-// I_AM bedrock (the genesis vocabulary on "0" is immutable by anyone but I_AM) now lives in
+// I bedrock (the genesis vocabulary on "0" is immutable by anyone but I) now lives in
 // wordStore.bindWord/disableWord as ONE guard over every word kind — op, type, reducer, concept,
 // ableword — not just able-words. ableWordRegistry no longer carries its own bedrock set or guard.
 
@@ -206,7 +206,7 @@ export async function rehydrateWordsFromFacts() {
   await _ensureMainHistory();
   // The able-words now live in the UNIFIED wordStore fold: a coin fact carries
   // params.word ("able:op") + params.binding.kind === "ableword"; a retire carries params.word.
-  // Rebuild the per-history disabled overlay + the I_AM bedrock set from them. resolveAbleWord reads
+  // Rebuild the per-history disabled overlay + the I bedrock set from them. resolveAbleWord reads
   // the fold for EXISTENCE, so REGISTRY is no longer populated here (it is the pre-genesis buffer).
   const facts = await Fact.find({
     verb: "do",
@@ -255,17 +255,17 @@ export async function rehydrateWordsFromFacts() {
 //   beings     proper-name -> being id (cherub:birth's { Cherub, Arrival }); the
 //              evaluator resolves a proper noun to its id through this (7.md bridge).
 //   through    the being being the acts run THROUGH (identity.beingId): cherub:birth
-//              acts "by I_AM through Cherub", so through = the cherub being id.
+//              acts "by I through Cherub", so through = the cherub being id.
 //   iam        the bootstrap actor name; name === "i-am" short-circuits authorize
 //              (the privileged birth acts are denied for an ordinary summoned name).
 //
 // ATTRIBUTION (two modes; `through` presence is the signal):
-//   being mode (through != null) — the `.word` acts are I_AM's, acting THROUGH a being
-//     (cherub:birth: I_AM through Cherub). The privileged seed acts go through doVerb's
+//   being mode (through != null) — the `.word` acts are I's, acting THROUGH a being
+//     (cherub:birth: I through Cherub). The privileged seed acts go through doVerb's
 //     authorize, which short-circuits on name === "i-am" (the bootstrap axiom); an
 //     ordinary summoned name would be denied. So we run under a DERIVED identity (i-am,
 //     beingId = the being) and override actorAct.by to i-am, so the facts attribute
-//     to I_AM.
+//     to I.
 //   CALLER mode (through == null, THE DEFAULT) — the acts are the CALLER's: a DO-op cut
 //     (take-able) or connect, where the being itself acts. We run under the REAL moment's
 //     identity + actorAct, so the facts attribute to the being that did them (no per-cut
@@ -290,11 +290,12 @@ export async function runAbleWord(
   const being = through != null;
   // identity override (opt-in): a being acting AS ITSELF — e.g. a word-native LLM cognition emitting
   // its own Word (14.md) — passes its own {beingId, name} so the acts attribute to the being (through
-  // = beingId) and sign by its OWN Name (by = moment.actorAct.by), NOT I_AM. Without it: through-mode
-  // = I_AM through the being (seed-internal), caller-mode = moment.identity (the session caller).
-  const identity = identityOverride
-    || (being
-      ? { beingId: String(through), name: iam, nameId: iam } // I_AM through the being
+  // = beingId) and sign by its OWN Name (by = moment.actorAct.by), NOT I. Without it: through-mode
+  // = I through the being (seed-internal), caller-mode = moment.identity (the session caller).
+  const identity =
+    identityOverride ||
+    (being
+      ? { beingId: String(through), name: iam, nameId: iam } // I through the being
       : moment.identity || { beingId: null }); // the caller (default)
   const wordCtx = {
     ...moment,
@@ -353,10 +354,21 @@ export async function runAbleWord(
 // for the generative loop and the do-op store. Legacy callers stay on runAbleWord until cut over.
 export async function runWordToStore(
   ir,
-  { beingId, name = null, history, position = null, env = {}, bindings = {}, beings = {}, trigger = {} } = {},
+  {
+    beingId,
+    name = null,
+    history,
+    position = null,
+    env = {},
+    bindings = {},
+    beings = {},
+    trigger = {},
+  } = {},
 ) {
   if (typeof beingId !== "string" || !beingId.length)
-    throw new Error("runWordToStore: beingId is required (the being that acts)");
+    throw new Error(
+      "runWordToStore: beingId is required (the being that acts)",
+    );
   if (typeof history !== "string" || !history.length)
     throw new Error('runWordToStore: history is required (pass "0" for main)');
   const { withBeingAct } = await import("../../sprout.js");
@@ -392,9 +404,37 @@ export async function runWordToStore(
     },
   };
   await evaluate(ir, ctx);
+  // THE TYPE-SCHEMA APPLY-PASS (all-rules-fold, the DECLARATION half): a `has`/`accepts`/`carries`/
+  // `claims` law folded IS-side into ctx.laws (it lays no act). After the word runs, fold each into a
+  // kind:"type" word — "a meal has a calorie" lays a `meal` type coin carrying the `calorie` field (the
+  // FOLD of every such fact is the type's schema). applyTypeSchemaLaw self-guards (name-shape, ceiling,
+  // heaven-only auto-create, append-only); a bad law warns + skips, never aborting the word.
+  const schemaLaws = (ctx.laws || []).filter(
+    (l) =>
+      l &&
+      (l.kind === "has" ||
+        l.kind === "accepts" ||
+        l.kind === "carries" ||
+        l.kind === "claims"),
+  );
+  if (schemaLaws.length) {
+    const { applyTypeSchemaLaw } = await import("./wordStore.js");
+    for (const law of schemaLaws) {
+      const r = await applyTypeSchemaLaw(law, { history });
+      // a coin fact laid by applyTypeSchemaLaw is a fact-to-store — count it as a deed so `acted`
+      // reflects that the type schema advanced the chain (skipped CAS no-ops don't count).
+      if (r && !r.skipped) stamped++;
+    }
+  }
   // `acted` is the re-invocation signal: true → the chain continues (call the next moment),
   // false → a SEE-rest (nothing committed, nothing to re-invoke from).
-  return { result: ctx.result, laws: ctx.laws || [], bindings: ctx.bindings, stamped, acted: stamped > 0 };
+  return {
+    result: ctx.result,
+    laws: ctx.laws || [],
+    bindings: ctx.bindings,
+    stamped,
+    acted: stamped > 0,
+  };
 }
 
 // wordHasDeeds — does this parsed Word lay anything? True if it has a fact-laying node
@@ -408,11 +448,14 @@ export function wordHasDeeds(node) {
   if (Array.isArray(node)) return node.some(wordHasDeeds);
   if (typeof node !== "object") return false;
   const k = node.kind;
-  if (k === "act" || k === "call" || k === "closure" || k === "derive") return true;
+  if (k === "act" || k === "call" || k === "closure" || k === "derive")
+    return true;
   if (wordHasDeeds(node.body) || wordHasDeeds(node.effects)) return true;
   if (wordHasDeeds(node.then) || wordHasDeeds(node.else)) return true;
   if (Array.isArray(node.cases))
-    return node.cases.some((c) => wordHasDeeds(c?.body) || wordHasDeeds(c?.effects));
+    return node.cases.some(
+      (c) => wordHasDeeds(c?.body) || wordHasDeeds(c?.effects),
+    );
   return false;
 }
 

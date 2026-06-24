@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // credential-detach + credential-attach (the two pure-gate credential slices), LIVE
-// through the bridge with ZERO stubs. detach is self-only (or I_AM); attach is
-// being-parent-only (or I_AM). Both lay NO fact of their own — the detach/attach RECORD
+// through the bridge with ZERO stubs. detach is self-only (or I); attach is
+// being-parent-only (or I). Both lay NO fact of their own — the detach/attach RECORD
 // is the dispatcher's audit fact — so the .word only gates + returns. Proves the gates
 // fire correctly (allow the right caller, refuse the wrong one with FORBIDDEN). Full
 // begin.js boot. Scratch DB, wiped.
@@ -17,8 +17,12 @@ const R = path.resolve(__dirname, "../../..");
 const SCRATCH_DB = "mongodb://localhost:27017/story_word_detachattach_cut";
 process.env.PORT = "3795";
 process.env.MONGODB_URI = SCRATCH_DB;
-process.env.JWT_SECRET = process.env.JWT_SECRET || "detachattach-secret-0123456789";
-process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "detachattachcut-keys-" + process.pid);
+process.env.JWT_SECRET =
+  process.env.JWT_SECRET || "detachattach-secret-0123456789";
+process.env.STORY_KEY_DIR = path.join(
+  os.tmpdir(),
+  "detachattachcut-keys-" + process.pid,
+);
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
 const SRC = path.join(os.tmpdir(), "detachattachcut-src");
 fs.rmSync(SRC, { recursive: true, force: true });
@@ -27,7 +31,8 @@ fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
 
 {
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`)).default;
+  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`))
+    .default;
   const conn = await mongoose.createConnection(SCRATCH_DB).asPromise();
   await conn.dropDatabase();
   await conn.close();
@@ -37,54 +42,121 @@ await import(`${R}/begin.js`);
 
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const { withIAmAct } = await import(`${R}/seed/sprout.js`);
-const { birthBeing } = await import(`${R}/seed/materials/being/identity/birth.js`);
-const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
-const { resolveAbleWord, runAbleWord } = await import(`${R}/seed/present/word/ableWordRegistry.js`);
-const { credentialHostEnv } = await import(`${R}/seed/store/words/credential/credentialHost.js`);
+const { birthBeing } = await import(
+  `${R}/seed/materials/being/identity/birth.js`
+);
+const { I } = await import(`${R}/seed/materials/being/seedBeings.js`);
+const { resolveAbleWord, runAbleWord } = await import(
+  `${R}/seed/present/word/ableWordRegistry.js`
+);
+const { credentialHostEnv } = await import(
+  `${R}/seed/store/words/credential/credentialHost.js`
+);
 
-let pass = 0, fail = 0;
-const ok = (l) => { pass++; console.log(`  ✓ ${l}`); };
-const bad = (l, d) => { fail++; console.log(`  ✗ ${l}`); if (d !== undefined) console.log(`      ${typeof d === "string" ? d : JSON.stringify(d)}`); };
-const poll = async (fn, t = 60000, e = 250) => { const t0 = Date.now(); while (Date.now() - t0 < t) { const v = await fn(); if (v) return v; await new Promise((r) => setTimeout(r, e)); } return null; };
+let pass = 0,
+  fail = 0;
+const ok = (l) => {
+  pass++;
+  console.log(`  ✓ ${l}`);
+};
+const bad = (l, d) => {
+  fail++;
+  console.log(`  ✗ ${l}`);
+  if (d !== undefined)
+    console.log(`      ${typeof d === "string" ? d : JSON.stringify(d)}`);
+};
+const poll = async (fn, t = 60000, e = 250) => {
+  const t0 = Date.now();
+  while (Date.now() - t0 < t) {
+    const v = await fn();
+    if (v) return v;
+    await new Promise((r) => setTimeout(r, e));
+  }
+  return null;
+};
 
 const cherub = await poll(() => findByName("being", "cherub", "0"));
 const birth = async (name) => {
   let bid = null;
   await withIAmAct(`birth ${name}`, async (ctx) => {
-    const b = await birthBeing({ spec: { name, parentBeingId: cherub.id, homeId: cherub.state?.homeSpace, cognition: "scripted", defaultAble: "global" }, identity: I_AM, moment: ctx, history: "0" });
+    const b = await birthBeing({
+      spec: {
+        name,
+        parentBeingId: cherub.id,
+        homeId: cherub.state?.homeSpace,
+        cognition: "scripted",
+        defaultAble: "global",
+      },
+      identity: I,
+      moment: ctx,
+      history: "0",
+    });
     bid = b.beingId;
   });
   return bid;
 };
 const run = async (op, caller, target) => {
-  const sc = { actId: randomUUID(), actorAct: { history: "0", by: "i-am" }, identity: { beingId: String(caller) }, deltaF: [], foldedSeqs: new Map(), afterSeal: [] };
+  const sc = {
+    actId: randomUUID(),
+    actorAct: { history: "0", by: "i-am" },
+    identity: { beingId: String(caller) },
+    deltaF: [],
+    foldedSeqs: new Map(),
+    afterSeal: [],
+  };
   try {
     const ir = resolveAbleWord("credential", op);
-    const { result } = await runAbleWord(ir, { moment: sc, history: "0", trigger: { caller: String(caller), target: String(target), branch: "0" }, env: { host: credentialHostEnv() } });
+    const { result } = await runAbleWord(ir, {
+      moment: sc,
+      history: "0",
+      trigger: { caller: String(caller), target: String(target), branch: "0" },
+      env: { host: credentialHostEnv() },
+    });
     return { result, refused: null };
-  } catch (e) { return { result: null, refused: e }; }
+  } catch (e) {
+    return { result: null, refused: e };
+  }
 };
 
-console.log(`\n  verify-creddetachattach-cut (detach + attach gates via the bridge)\n  DB: ${SCRATCH_DB.split("/").pop()}\n`);
+console.log(
+  `\n  verify-creddetachattach-cut (detach + attach gates via the bridge)\n  DB: ${SCRATCH_DB.split("/").pop()}\n`,
+);
 try {
-  if (!cherub) { console.log("  FATAL: genesis failed"); process.exit(1); }
-  resolveAbleWord("credential", "credential-detach") ? ok(`credential-detach.word resolves`) : bad(`detach resolves`);
-  resolveAbleWord("credential", "credential-attach") ? ok(`credential-attach.word resolves`) : bad(`attach resolves`);
+  if (!cherub) {
+    console.log("  FATAL: genesis failed");
+    process.exit(1);
+  }
+  resolveAbleWord("credential", "credential-detach")
+    ? ok(`credential-detach.word resolves`)
+    : bad(`detach resolves`);
+  resolveAbleWord("credential", "credential-attach")
+    ? ok(`credential-attach.word resolves`)
+    : bad(`attach resolves`);
 
-  const victim = await birth("victim");      // parentBeingId = cherub
+  const victim = await birth("victim"); // parentBeingId = cherub
   const stranger = await birth("stranger");
 
   // ── detach: self-only ──
   const d1 = await run("credential-detach", victim, victim);
-  d1.result?.detached === true && d1.result?.targetBeingId === String(victim) ? ok(`detach SELF (caller === target) → detached:true`) : bad(`detach self`, d1.refused?.message || d1.result);
+  d1.result?.detached === true && d1.result?.targetBeingId === String(victim)
+    ? ok(`detach SELF (caller === target) → detached:true`)
+    : bad(`detach self`, d1.refused?.message || d1.result);
   const d2 = await run("credential-detach", stranger, victim);
-  d2.refused && /self-only/i.test(d2.refused.message) ? ok(`detach by a STRANGER → refuse "self-only" [code ${d2.refused.code}]`) : bad(`detach stranger`, d2.refused?.message || d2.result);
+  d2.refused && /self-only/i.test(d2.refused.message)
+    ? ok(`detach by a STRANGER → refuse "self-only" [code ${d2.refused.code}]`)
+    : bad(`detach stranger`, d2.refused?.message || d2.result);
 
   // ── attach: being-parent-only (findBeingParent(victim) === cherub) ──
   const a1 = await run("credential-attach", cherub.id, victim);
-  a1.result?.attached === true && a1.result?.targetBeingId === String(victim) ? ok(`attach by the BEING-PARENT (@cherub) → attached:true`) : bad(`attach parent`, a1.refused?.message || a1.result);
+  a1.result?.attached === true && a1.result?.targetBeingId === String(victim)
+    ? ok(`attach by the BEING-PARENT (@cherub) → attached:true`)
+    : bad(`attach parent`, a1.refused?.message || a1.result);
   const a2 = await run("credential-attach", stranger, victim);
-  a2.refused && /being-parent-only/i.test(a2.refused.message) ? ok(`attach by a STRANGER → refuse "being-parent-only" [code ${a2.refused.code}]`) : bad(`attach stranger`, a2.refused?.message || a2.result);
+  a2.refused && /being-parent-only/i.test(a2.refused.message)
+    ? ok(
+        `attach by a STRANGER → refuse "being-parent-only" [code ${a2.refused.code}]`,
+      )
+    : bad(`attach stranger`, a2.refused?.message || a2.result);
 
   console.log(`\n  ${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);

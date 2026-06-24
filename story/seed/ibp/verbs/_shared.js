@@ -10,8 +10,8 @@
 //
 // Doctrine: everything acts through a being. There is no "scaffold"
 // path that acts without one. Seed-internal calls that used to pass
-// `scaffold: true` now pass `identity: I_AM` (the I-Am acting as
-// itself); authorize() short-circuits on I_AM without a DB read, so
+// `scaffold: true` now pass `identity: I` (the I-Am acting as
+// itself); authorize() short-circuits on I without a DB read, so
 // genesis and runtime use the same one-path entry.
 //
 // Kept private to verbs/. External callers don't reach in here.
@@ -22,7 +22,7 @@ import { resolveTargetHistory } from "../historyResolve.js";
 
 /**
  * Normalize an identity input. Callers may pass a bare string (a
- * beingId — typically `I_AM` for seed-internal calls) OR a full
+ * beingId — typically `I` for seed-internal calls) OR a full
  * `{ beingId, name }` object. This returns the object form so
  * downstream code can read `identity.beingId` / `identity.name`
  * uniformly without branching on input shape.
@@ -44,7 +44,7 @@ export function normalizeIdentity(identity) {
  * Caller-shape gate. Throws if the call has no identity.
  *
  * Every verb call rides a being. Seed-internal flows that used to
- * pass `scaffold: true` now thread `identity: I_AM`; the
+ * pass `scaffold: true` now thread `identity: I`; the
  * unauthenticated SEE path does not call this function. So a missing
  * identity here is always a perimeter threading bug.
  *

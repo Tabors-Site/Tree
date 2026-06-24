@@ -10,60 +10,60 @@
 //     the running process, the runtime. Not a config store, not a
 //     layer beneath beings, not a void. The runtime is a being.
 //
-//  2. I_AM has no able, because it precedes ables. It is the being
+//  2. I has no able, because it precedes ables. It is the being
 //     that plants ./ables. Its identity is the bare primordial
 //     assertion: I AM. Every other being is "(being) a (able) doing
-//     X"; I_AM is simply I_AM. That assertion is its first BE.
+//     X"; I is simply I. That assertion is its first BE.
 //
 //  3. Seed + act → world. The seed is the being: potential,
 //     structure in latency. The act is the becoming: agency
 //     unfolding. The world is what they bring forth: the place, the
-//     tree of spaces. I_AM is the seed with the act inside it,
+//     tree of spaces. I is the seed with the act inside it,
 //     potential quickened toward its form. A being is a moment of
-//     the substrate acting on itself; I_AM is the first such moment
+//     the substrate acting on itself; I is the first such moment
 //     and the only generative one, the substrate acting not within
 //     the world but to make it.
 //
 //  4. There is always a being doing it, no exception. Genesis is
-//     not being-less. I_AM is the doer of genesis. Every act,
+//     not being-less. I is the doer of genesis. Every act,
 //     including the very first, is attributed. The audit loop is
 //     complete from t=0; nothing is ever unattributed.
 //
 //  5. Two kinds of space. Normal space is made by beings, where
 //     beings live, addressable by stance, governed by auth. Place
-//     heaven space is made by I_AM at boot: the fixed nine
+//     heaven space is made by I at boot: the fixed nine
 //     (identity, config, peers, extensions, tools, ables, operations,
-//     source, threads) living inside heaven ("."). These are I_AM's
+//     source, threads) living inside heaven ("."). These are I's
 //     own working memory, surfaced as spaces so SEE reads them
 //     through the same protocol as everything else.
 //
-//  6. Genesis is an ordered sequence. Server starts → I_AM exists
+//  6. Genesis is an ordered sequence. Server starts → I exists
 //     → it plants the place root → it plants ./identity and
 //     registers its own being-record → genesis Facts attribute to it
 //     → it plants the rest of the nine → it plants the first place
-//     beings. Planting a being is two acts: I_AM's DO scaffolds the
+//     beings. Planting a being is two acts: I's DO scaffolds the
 //     space; the new being's BE (register/claim) authors its own
-//     I am. The DO logs to I_AM; the BE logs to the new being as
+//     I am. The DO logs to I; the BE logs to the new being as
 //     its origin.
 //
 //  7. There are no "internal" acts. Drop the internal/external
-//     split. There is only I_AM's acts and other beings' acts,
+//     split. There is only I's acts and other beings' acts,
 //     tracked identically. What looked "internal scaffolding" was
-//     I_AM acting alone before it had planted delegates. Once it
+//     I acting alone before it had planted delegates. Once it
 //     plants others, the work distributes and is logged to them.
 //
-//  8. Seed spaces are owned, not ownerless. Their owner is I_AM.
-//     Ownership stance facts return true for I_AM, false for all
+//  8. Seed spaces are owned, not ownerless. Their owner is I.
+//     Ownership stance facts return true for I, false for all
 //     others. They are unclaimable not because they lack an owner
 //     but because their owner cannot be impersonated. Read freely;
-//     written never, except by I_AM's own ops.
+//     written never, except by I's own ops.
 //
 //  9. Authority flows outward and never loops back. Extensions
-//     exist only because I_AM planted ./extensions. Nothing an
-//     extension does can gate I_AM's genesis. The trust chain is
+//     exist only because I planted ./extensions. Nothing an
+//     extension does can gate I's genesis. The trust chain is
 //     beings all the way down; its root is a being, not a void.
 //
-// 10. I_AM persists. It does not vanish after genesis. It remains
+// 10. I persists. It does not vanish after genesis. It remains
 //     the Node process at steady state (reboot recovery, re-
 //     planting, peer federation), and those acts stay tracked to
 //     it. It is first, and it stays.
@@ -184,5 +184,5 @@ export const HEAVEN_SPACE = Object.freeze({
 
 export const DELETED = "deleted";
 
-// I_AM moved to seed/materials/being/seedBeings.js (it's a being constant,
+// I moved to seed/materials/being/seedBeings.js (it's a being constant,
 // not a space constant).

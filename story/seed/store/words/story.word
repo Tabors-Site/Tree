@@ -1,6 +1,6 @@
 # story.word — what a STORY is: all its histories, the whole told from its root.
 # A story is told from a root, not given as a world is (11.md). It bottoms out in the host
-# (seed/storyIdentity.js — the storyId is I_AM's key id; seed/past/fact/chainRoots.js — the
+# (seed/storyIdentity.js — the storyId is I's key id; seed/past/fact/chainRoots.js — the
 # storyRoot, a hash over the history roots). Descends from word.word, base.word, chain.word,
 # history.word; every word grounded (story, history, fact, chain, hash, main). A history is one
 # line of the story; the story is all of them. The storyId and its seal's signing wait for `name`.

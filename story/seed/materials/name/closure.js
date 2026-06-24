@@ -18,12 +18,12 @@
 // reducer's applyCloseName is idempotent, so a re-firing banish is a no-op.
 
 import { loadProjection } from "../projections.js";
-import { I_AM } from "../being/seedBeings.js";
+import { I } from "../being/seedBeings.js";
 
 /**
  * True if the Name is banished (name:banish stamped). Reads the Name
  * projection's `closedAt` on main. False for a missing Name (no row to
- * close) and for I_AM (never banished in practice — banishing the story
+ * close) and for I (never banished in practice — banishing the story
  * root would brick it).
  *
  * @param {string} nameId
@@ -31,10 +31,10 @@ import { I_AM } from "../being/seedBeings.js";
  */
 export async function isNameBanished(nameId) {
   if (!nameId) return false;
-  // I_AM is the story root — never banished (it would brick the story);
+  // I is the story root — never banished (it would brick the story);
   // short-circuit so the stamper's per-fact gate skips a read on the common
   // case (today every actor is i-am).
-  if (nameId === I_AM) return false;
+  if (nameId === I) return false;
   const slot = await loadProjection("name", String(nameId), "0");
   return !!slot?.state?.closedAt;
 }
@@ -48,5 +48,7 @@ export async function isNameBanished(nameId) {
  * @returns {boolean}
  */
 export function isBanishFact(fact) {
-  return fact?.verb === "name" && (fact?.act === "banish" || fact?.act === "close");
+  return (
+    fact?.verb === "name" && (fact?.act === "banish" || fact?.act === "close")
+  );
 }

@@ -4,7 +4,7 @@
 //
 // A Name is the cryptographic identity that the substrate's signatures
 // bind to. It holds the keypair, signs every act, owns the act-chain,
-// and descends from the story's I_AM through lineage. What used to be
+// and descends from the story's I through lineage. What used to be
 // "the being's keypair / the being's chain" is the NAME's keypair and
 // the NAME's chain: the identity layer, lifted up off the Being.
 //
@@ -14,10 +14,10 @@
 // `Being.name` is a display label, never the identity; the identity is
 // this row's `_id` (the ed25519 public key, did:key "z..." form).
 //
-// Names are flat facets of I_AM: every Name's `parentNameId` resolves
-// toward the story's I_AM one layer down. There is no Name hierarchy
+// Names are flat facets of I: every Name's `parentNameId` resolves
+// toward the story's I one layer down. There is no Name hierarchy
 // (that hierarchy lives in the being tree, as containment, not as
-// sovereignty). I_AM is itself a Name, with `_id = "i-am"` and its key
+// sovereignty). I is itself a Name, with `_id = "i-am"` and its key
 // the story key (storyIdentity.js) — a Name whose biography is the
 // story's own chain.
 //
@@ -65,13 +65,13 @@ const NameSchema = new mongoose.Schema({
   // explicitly by every creation path. NO uuid default: an id-less
   // insert must fail loudly rather than fabricate a non-pubkey identity
   // that can never sign or be self-certifyingly verified. The one
-  // exception is the I_AM Name, whose id is the literal "i-am" and whose
+  // exception is the I Name, whose id is the literal "i-am" and whose
   // signing key is the story key (special-cased in actSig.js).
   _id: { type: String, required: true },
 
   // Lineage. The Name this Name descends from, recorded in the
-  // name:declare fact. Flat: every Name is a facet of I_AM one layer
-  // down, so parentNameId resolves toward I_AM. Null only for the I_AM
+  // name:declare fact. Flat: every Name is a facet of I one layer
+  // down, so parentNameId resolves toward I. Null only for the I
   // Name itself (the root of the story's identity layer).
   parentNameId: { type: String, ref: "Name", default: null },
 
@@ -89,7 +89,7 @@ const NameSchema = new mongoose.Schema({
   // credentials.encryptCredential). Custodial: the home story holds
   // it so the Name can sign while unlocked. Folded from the name:mint
   // fact's params. `select: false` so it never rides a default query.
-  // Null for the I_AM Name (its key is the story key, on disk).
+  // Null for the I Name (its key is the story key, on disk).
   privateKeyEnc: { type: String, select: false, default: null },
 
   // The key-scheme descriptor (alg/encoding/version), so a foreign

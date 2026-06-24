@@ -52,8 +52,8 @@ import { stripForAudit } from "../../materials/redact.js";
  * @param {object} [opts.identity]   { beingId, name } — the being acting.
  *                                   Required. Seed-internal flows that
  *                                   used to pass `scaffold: true` now
- *                                   pass `identity: I_AM_IDENTITY`;
- *                                   authorize() short-circuits on I_AM.
+ *                                   pass `identity: I_IDENTITY`;
+ *                                   authorize() short-circuits on I.
  * @param {object} [opts.moment]  for summon correlation on the Fact
  * @returns the handler's return value
  */
@@ -73,7 +73,7 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
   // Fold-ONLY: a do-op resolves from the live projection (the fold of coin facts), the
   // registry-free path (philosophy/word/10.md §2). The fold is the SOLE source the running system
   // dispatches on — no Map fallback. This IS achievable because the seed declares its words BEFORE it
-  // builds the story: genesis.js declares every do-op onto I_AM's reel (a fact needs only I_AM, not
+  // builds the story: genesis.js declares every do-op onto I's reel (a fact needs only I, not
   // the space/being it will later describe) right after ensureIAm and BEFORE ensureSpaceRoot, so the
   // first do-op dispatched while building the story (create-space, set-being, set-space) already
   // resolves from the fold. The operations Map stays ONLY as the module-load registration buffer that
@@ -145,8 +145,8 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
     );
   }
   // Stance auth runs for every call. authorize() short-circuits on
-  // `identity?.name === I_AM` without a DB read, so seed-internal
-  // flows (I_AM acting on its own story) pass through identically
+  // `identity?.name === I` without a DB read, so seed-internal
+  // flows (I acting on its own story) pass through identically
   // to how `scaffold: true` used to bypass — one path, one doctrine.
   {
     const identity = opts.identity;
@@ -267,7 +267,8 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
       // (computation vs fact-source, the is-be cut one level down) is the other open point.
       const { runWordBody } = await import("../../present/word/matterWord.js");
       const ran = await runWordBody(op.matter, [ctx.params]);
-      result = ran && typeof ran === "object" && "result" in ran ? ran.result : ran;
+      result =
+        ran && typeof ran === "object" && "result" in ran ? ran.result : ran;
     } else {
       result = await op.handler(ctx);
     }
@@ -309,9 +310,10 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
         // self-emits (no skipAudit, no host: emit). Mirrors result._factTarget
         // (resolveAuditTarget). The `_`-prefix means stripForAudit drops it
         // from the recorded result. Falls back to the input params otherwise.
-        params: (result && typeof result === "object" && result._factParams)
-          ? result._factParams
-          : ctx.params,
+        params:
+          result && typeof result === "object" && result._factParams
+            ? result._factParams
+            : ctx.params,
         result: summarizeAuditResult(result),
         actId,
         // History this fact lands on, pre-resolved at the entry. Inherited

@@ -3,7 +3,7 @@
 
 # The registered types. Each: the content it accepts, the ops it carries,
 # and any classification claims it stakes. "It" refers to the type just named
-# (rule 19: a kind stays lowercase; only beings and I / I_AM are capitalized).
+# (rule 19: a kind stays lowercase; only beings and I / I are capitalized).
 A generic is a matter type.
 It accepts text or no content.
 It carries set-matter and end-matter.

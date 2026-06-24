@@ -98,7 +98,9 @@ const VALID_REPLY_MODES = new Set(["asker", "chain-initial"]);
 // Adding a value here requires a substrate change (scheduler, momentum,
 // stamper all branch on it). See the header comment block for the
 // doctrine.
-export const VALID_COGNITION = Object.freeze(new Set(["llm", "human", "scripted"]));
+export const VALID_COGNITION = Object.freeze(
+  new Set(["llm", "human", "scripted"]),
+);
 
 export function getAble(name) {
   if (!name) return null;
@@ -124,12 +126,18 @@ export function listAbles() {
  * @param {Function} handler  async (message, ctx) => CognitionResult
  * @param {string} [ownerExtension]
  */
-export function registerAbleHandler(ableName, handler, ownerExtension = "code-resource") {
+export function registerAbleHandler(
+  ableName,
+  handler,
+  ownerExtension = "code-resource",
+) {
   if (!ableName || typeof ableName !== "string") {
     throw new Error("registerAbleHandler requires a non-empty able name");
   }
   if (typeof handler !== "function") {
-    throw new Error(`registerAbleHandler("${ableName}") requires a handler function`);
+    throw new Error(
+      `registerAbleHandler("${ableName}") requires a handler function`,
+    );
   }
   const prior = HANDLERS.get(ableName);
   if (prior && prior.ownerExtension !== ownerExtension) {
@@ -168,10 +176,14 @@ export function registerAble(name, def, extName = "able-registry") {
   }
 
   // Validate replyTo when present.
-  if (def.replyTo !== undefined && def.replyTo !== null && !VALID_REPLY_MODES.has(def.replyTo)) {
+  if (
+    def.replyTo !== undefined &&
+    def.replyTo !== null &&
+    !VALID_REPLY_MODES.has(def.replyTo)
+  ) {
     throw new Error(
       `registerAble("${name}") invalid replyTo "${def.replyTo}"; ` +
-      `must be one of ${[...VALID_REPLY_MODES].join("|")}`,
+        `must be one of ${[...VALID_REPLY_MODES].join("|")}`,
     );
   }
 
@@ -188,7 +200,7 @@ export function registerAble(name, def, extName = "able-registry") {
   ) {
     throw new Error(
       `registerAble("${name}") invalid requiredCognition "${def.requiredCognition}"; ` +
-      `must be one of ${[...VALID_COGNITION].join("|")} or omitted.`,
+        `must be one of ${[...VALID_COGNITION].join("|")} or omitted.`,
     );
   }
 
@@ -210,9 +222,10 @@ export function registerAble(name, def, extName = "able-registry") {
   // Default dispatch contract. Ables needing sync override; ables with
   // non-message triggers (scheduled, hook-fired) override.
   const respondMode = def.respondMode || "async";
-  const triggerOn   = Array.isArray(def.triggerOn) && def.triggerOn.length > 0
-    ? def.triggerOn
-    : ["message"];
+  const triggerOn =
+    Array.isArray(def.triggerOn) && def.triggerOn.length > 0
+      ? def.triggerOn
+      : ["message"];
 
   // Build the final able spec. summon and buildSystemPrompt are wired
   // lazily because they depend on seed/present modules; importing
@@ -252,8 +265,8 @@ export function registerAble(name, def, extName = "able-registry") {
       if (typeof r !== "string" || !r.length) {
         throw new Error(
           `registerAble("${name}") invalid reach entry: ${JSON.stringify(r)}. ` +
-          `Each entry must be a non-empty string (exact path, spaceId, prefix/**, ` +
-          `or '!' prefix for exclusion).`,
+            `Each entry must be a non-empty string (exact path, spaceId, prefix/**, ` +
+            `or '!' prefix for exclusion).`,
         );
       }
     }
@@ -263,8 +276,8 @@ export function registerAble(name, def, extName = "able-registry") {
   const spec = {
     name,
     ...def,
-    can: unified.can,            // the canonical granted-word-set
-    canSee: unified.canSee,      // group-by-verb VIEWS over `can`, for the rest of the system
+    can: unified.can, // the canonical granted-word-set
+    canSee: unified.canSee, // group-by-verb VIEWS over `can`, for the rest of the system
     canDo: unified.canDo,
     canCall: unified.canCall,
     canBe: unified.canBe,
@@ -289,9 +302,11 @@ export function registerAble(name, def, extName = "able-registry") {
   }
 
   REGISTRY.set(name, Object.freeze(spec));
-  log.verbose("Ables",
+  log.verbose(
+    "Ables",
     `Registered able "${name}" (${extName}) ` +
-    `[verbs: ${permissions.join("/")}${spec.requiredCognition ? `, requires: ${spec.requiredCognition}` : ""}]`);
+      `[verbs: ${permissions.join("/")}${spec.requiredCognition ? `, requires: ${spec.requiredCognition}` : ""}]`,
+  );
 }
 
 /**
@@ -314,11 +329,13 @@ function unifyCan(def, name) {
   if (def.canSee || def.canDo || def.canCall || def.canBe) {
     throw new Error(
       `registerAble("${name}"): canSee/canDo/canCall/canBe are retired — declare \`can\` instead, ` +
-      `a list of { verb, word } (e.g. { verb: "see", word: "ables" }, { verb: "do", word: "set-able" }).`,
+        `a list of { verb, word } (e.g. { verb: "see", word: "ables" }, { verb: "do", word: "set-able" }).`,
     );
   }
   const can = (Array.isArray(def.can) ? def.can : []).map((e) => ({
-    verb: e.verb, word: e.word ?? e.action, ...(e.description ? { description: e.description } : {}),
+    verb: e.verb,
+    word: e.word ?? e.action,
+    ...(e.description ? { description: e.description } : {}),
   }));
   return { can, ...canViews(can) };
 }
@@ -330,10 +347,19 @@ export function canViews(can) {
   const list = Array.isArray(can) ? can : [];
   const byVerb = (v) => list.filter((e) => e.verb === v);
   return {
-    canSee:    byVerb("see").map((e) => e.word),
-    canDo:     byVerb("do").map((e) => (e.description ? { action: e.word, description: e.description } : { action: e.word })),
-    canCall: byVerb("call").map((e) => { const { verb, ...rest } = e; return (Object.keys(rest).length === 1 && rest.word !== undefined) ? rest.word : rest; }),
-    canBe:     byVerb("be").map((e) => e.word),
+    canSee: byVerb("see").map((e) => e.word),
+    canDo: byVerb("do").map((e) =>
+      e.description
+        ? { action: e.word, description: e.description }
+        : { action: e.word },
+    ),
+    canCall: byVerb("call").map((e) => {
+      const { verb, ...rest } = e;
+      return Object.keys(rest).length === 1 && rest.word !== undefined
+        ? rest.word
+        : rest;
+    }),
+    canBe: byVerb("be").map((e) => e.word),
     canRecall: byVerb("recall").map((e) => e.word), // the granted recall-VIEWS — a being's consciousness-level (which folds it may pull)
   };
 }
@@ -345,12 +371,31 @@ function deriveFromCan(can) {
   return [...verbs];
 }
 
+// B2 (623/12, the consciousness-level gate, ARMED): may this being recall a WIDER fold (the `scope`)?
+// Recalling your OWN thread ("recalled" mode) needs no grant — the caller checks that. This gates the
+// "saw" folds (world / lineage / moment / place / a foreign thread): a being may pull them iff its
+// able grants the recall VIEW (`can recall <scope>` — canViews(can).canRecall). I has universal
+// authority on its own story. Async (loads the being + reads its default able's grants).
+export async function canRecallScope(beingId, scope, history) {
+  if (!beingId) return false;
+  const { I } = await import("../../materials/being/seedBeings.js");
+  if (String(beingId) === String(I)) return true; // universal authority
+  const { loadOrFold } = await import("../../materials/projections.js");
+  const slot = await loadOrFold("being", String(beingId), history);
+  const ableName = slot?.state?.defaultAble;
+  if (!ableName) return false;
+  const able = getAble(ableName);
+  if (!able) return false;
+  const views = able.canRecall || canViews(able.can || []).canRecall || [];
+  return Array.isArray(views) && views.includes(scope);
+}
+
 function hasEntries(field) {
   if (!field) return false;
   if (Array.isArray(field)) return field.length > 0;
   if (typeof field === "object") {
-    return Object.values(field).some(
-      (v) => Array.isArray(v) ? v.length > 0 : Boolean(v),
+    return Object.values(field).some((v) =>
+      Array.isArray(v) ? v.length > 0 : Boolean(v),
     );
   }
   return false;
@@ -362,7 +407,7 @@ function validatePermissions(name, list) {
     if (!VALID_PERMISSIONS.has(p)) {
       throw new Error(
         `registerAble("${name}") permissions must be a subset of ` +
-        `[see, do, call, be], got "${p}"`,
+          `[see, do, call, be], got "${p}"`,
       );
     }
     seen.add(p);
@@ -390,35 +435,39 @@ function makeLazyDefaultCall(able) {
  * after extensions register; idempotent.
  */
 export async function syncAblesToSubstrate() {
-  const { HEAVEN_SPACE } = await import("../../materials/space/heavenSpaces.js");
+  const { HEAVEN_SPACE } =
+    await import("../../materials/space/heavenSpaces.js");
   const { manifestItems } = await import("../manifest.js");
   const items = [];
   for (const [name, able] of REGISTRY) {
     items.push({
       name,
       qualities: new Map([
-        ["able", {
-          requiredCognition: able.requiredCognition || null,
-          // NOTE: the verb-summary `permissions: ["see","do",...]` field
-          // retired with the ables-are-auth doctrine (AblesAreAuth.md).
-          // The canX entries below ARE the auth gate; a separate verb
-          // summary is redundant. Consumers that need "does this able
-          // permit verb X" check `able.canX?.length > 0` directly.
-          // `scope` retired alongside it — every able just has a host.
-          reach:       Array.isArray(able.reach) ? able.reach : null,
-          respondMode: able.respondMode  || null,
-          triggerOn:   able.triggerOn    || [],
-          canSee:      able.canSee       || [],
-          canDo:       able.canDo        || [],
-          canCall:   able.canCall    || [],
-          canBe:       able.canBe        || [],
-          replyTo:     able.replyTo      || null,
-          origin:      able.origin       || "seed",
-          // Live ables carry a prompt string (seed/extension ables use
-          // a prompt function we can't serialize). Surface it when
-          // present so the .ables mirror is round-trip-able.
-          prompt:      typeof able.prompt === "string" ? able.prompt : null,
-        }],
+        [
+          "able",
+          {
+            requiredCognition: able.requiredCognition || null,
+            // NOTE: the verb-summary `permissions: ["see","do",...]` field
+            // retired with the ables-are-auth doctrine (AblesAreAuth.md).
+            // The canX entries below ARE the auth gate; a separate verb
+            // summary is redundant. Consumers that need "does this able
+            // permit verb X" check `able.canX?.length > 0` directly.
+            // `scope` retired alongside it — every able just has a host.
+            reach: Array.isArray(able.reach) ? able.reach : null,
+            respondMode: able.respondMode || null,
+            triggerOn: able.triggerOn || [],
+            canSee: able.canSee || [],
+            canDo: able.canDo || [],
+            canCall: able.canCall || [],
+            canBe: able.canBe || [],
+            replyTo: able.replyTo || null,
+            origin: able.origin || "seed",
+            // Live ables carry a prompt string (seed/extension ables use
+            // a prompt function we can't serialize). Surface it when
+            // present so the .ables mirror is round-trip-able.
+            prompt: typeof able.prompt === "string" ? able.prompt : null,
+          },
+        ],
       ]),
     });
   }
@@ -439,33 +488,43 @@ export async function syncAblesToSubstrate() {
  * @returns {Promise<{ loaded: number }>}
  */
 export async function loadLiveAblesFromSubstrate() {
-  const { HEAVEN_SPACE } = await import("../../materials/space/heavenSpaces.js");
+  const { HEAVEN_SPACE } =
+    await import("../../materials/space/heavenSpaces.js");
   const { findByHeavenSpace } = await import("../../materials/projections.js");
-  const { default: Projection } = await import("../../materials/history/projection.js");
+  const { default: Projection } =
+    await import("../../materials/history/projection.js");
   const parent = await findByHeavenSpace(HEAVEN_SPACE.ABLES, "0");
   if (!parent) return { loaded: 0 };
   const rows = await Projection.find({
-    history: "0", type: "space",
+    history: "0",
+    type: "space",
     "state.parent": parent.id,
     tombstoned: { $ne: true },
   }).lean();
-  const children = rows.map((s) => ({ name: s.state?.name, qualities: s.state?.qualities }));
+  const children = rows.map((s) => ({
+    name: s.state?.name,
+    qualities: s.state?.qualities,
+  }));
   let loaded = 0;
   for (const child of children) {
     const quals = child.qualities;
-    const able  = quals instanceof Map ? quals.get("able") : quals?.able;
+    const able = quals instanceof Map ? quals.get("able") : quals?.able;
     if (!able || able.origin !== "live") continue;
     try {
       const promptStr = typeof able.prompt === "string" ? able.prompt : "";
-      registerAble(child.name, {
-        description:       `Live able authored via @able-manager.`,
-        requiredCognition: able.requiredCognition || null,
-        can:       Array.isArray(able.can) ? able.can : [],
-        replyTo:   able.replyTo || null,
-        // Wrap the stored string prompt as a prompt function so the
-        // able spec matches what defaultCall / buildPrompt expect.
-        prompt:    () => promptStr,
-      }, "live");
+      registerAble(
+        child.name,
+        {
+          description: `Live able authored via @able-manager.`,
+          requiredCognition: able.requiredCognition || null,
+          can: Array.isArray(able.can) ? able.can : [],
+          replyTo: able.replyTo || null,
+          // Wrap the stored string prompt as a prompt function so the
+          // able spec matches what defaultCall / buildPrompt expect.
+          prompt: () => promptStr,
+        },
+        "live",
+      );
       loaded++;
     } catch (err) {
       log.warn(
@@ -474,6 +533,9 @@ export async function loadLiveAblesFromSubstrate() {
       );
     }
   }
-  log.info("Ables", `Loaded ${loaded} live able${loaded === 1 ? "" : "s"} from .ables.`);
+  log.info(
+    "Ables",
+    `Loaded ${loaded} live able${loaded === 1 ? "" : "s"} from .ables.`,
+  );
   return { loaded };
 }

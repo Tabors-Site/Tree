@@ -27,10 +27,10 @@ handler; the live gate already births via the evaluator).
    path on the SAME input, diff the sealed `deltaF` (the 5 facts: create-space,
    be:birth, set-space, grant-able, set-being) + the fold. Match (or a reviewed,
    intended difference) -> deletion is justified. The actor model is now RESOLVED
-   in `cherub.word` (Tabor): all five acts are **by I_AM, through Cherub** (the
+   in `cherub.word` (Tabor): all five acts are **by I, through Cherub** (the
    implicit-actor rule); **Cherub is the mother, Arrival the father** (the new
    Name's being at the floor); the being is the **new Name's own** (its
-   trueName), not I_AM's. The handler's incidental Cherub/I_AM mix is the silent
+   trueName), not I's. The handler's incidental Cherub/I mix is the silent
    assumption being corrected, not a delta to preserve, so the diff validates
    against this clean model (the new being's trueName = the arriving Name, father
    tuple = Arrival, mother = Cherub).
@@ -68,7 +68,7 @@ narrative; cherub is the first real `.js` to fall.
 ## Notes for the live cut (from the parser lane)
 
 - **World-strand gate (built, green):** `verify-cherub-shape.mjs` asserts
-  `cherub.word` lays exactly the five world acts in order, by I_AM through
+  `cherub.word` lays exactly the five world acts in order, by I through
   Cherub, the being's trueName = the new Name, lineage mother Cherub / father
   Arrival (6/6). Run it before and after the cut; it's the cheap shape check
   next to the live byte-diff.

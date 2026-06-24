@@ -1,9 +1,9 @@
 # out.word — the wire. Axiom: bottoms out in the host (the out-crossing — the host sends a word
-# the I_AM made to another, and holds for a word back). Descends from word.word, in.word.
+# the I made to another, and holds for a word back). Descends from word.word, in.word.
 
 An out is made of the host.
 
-An out sends a word the I_AM made to another.
-The I_AM holds, and the other's word comes back through an in.
+An out sends a word the I made to another.
+The I holds, and the other's word comes back through an in.
 
 A call is an out, and the holding is the await.

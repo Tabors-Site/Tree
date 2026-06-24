@@ -108,7 +108,7 @@ async function createMatterHandler(ctx) {
   // content's own signals (a cas ref's mime/filename, a {url}
   // object, bare text) and adopts the top candidate; the registry's
   // contentKinds/mime enforcement below still gates the result.
-  const { getMatterType, typeAllowsContentKind, typeAllowsMime } =
+  const { getMatterType, typeAllowsContentKind, typeAllowsMime, missingRequiredField } =
     await import("../../../materials/matter/types.js");
   let matterType = typeof spec.type === "string" && spec.type.length
     ? spec.type
@@ -134,6 +134,18 @@ async function createMatterHandler(ctx) {
       IBP_ERR.INVALID_INPUT,
       `create-matter: unknown matter type "${matterType}"`,
     );
+  }
+  // REQUIRED-FIELD validation (the `has` schema, all-rules-fold §4). Gated behind the type declaring
+  // any required field, so schema-less types are unaffected. A declared field Y maps to
+  // qualities.<type>.<Y>; an optional ("may have") field is not required.
+  if (typeDef.fields?.length) {
+    const missing = missingRequiredField(typeDef, spec.qualities);
+    if (missing) {
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        `create-matter: type "${matterType}" requires field "${missing}"`,
+      );
+    }
   }
 
   // Content through the store, shape-driven (no origin tag — the

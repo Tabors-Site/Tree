@@ -13,7 +13,7 @@
 // unbind the session, banish = its death). This channel carries the pre-world
 // surface — the Name Form's whole reach:
 //   declare  mint a name (the unauthed bootstrap; the fact's actor is
-//            I_AM, every name being a facet of the story's I_AM). FACT.
+//            I, every name being a facet of the story's I). FACT.
 //   connect  real-name + password -> decrypt the key into the signing
 //            session + bind socket.nameId (the identity-layer be:connect).
 //            SESSION, not a fact. It is the portal's convenience for using a
@@ -23,7 +23,7 @@
 //            be:release — "the name calling its own release"). SESSION.
 //   whoami   report the connection's bound nameId (or null).
 //
-// declare is the only fact-producing op here, and it opens an I_AM
+// declare is the only fact-producing op here, and it opens an I
 // moment directly (withIAmAct — the genesis/bootstrap mechanism)
 // because a pre-world connection has no being to route a transport-act
 // through. login/logout/whoami are pure session control on the socket.
@@ -38,7 +38,7 @@ import { IBP_ERR } from "../../seed/ibp/protocol.js";
 // `connect` is a password surface, so it is rate-limited like be:connect to
 // blunt brute force. Fixed window per (op, ip); entries expire lazily.
 const NAME_RATE = {
-  declare: { max: 5,  windowMs: 60 * 60 * 1000 },
+  declare: { max: 5, windowMs: 60 * 60 * 1000 },
   connect: { max: 10, windowMs: 15 * 60 * 1000 },
 };
 const _nameRateBuckets = new Map(); // "op:ip" -> { count, resetAt }
@@ -62,9 +62,11 @@ function checkNameRate(op, ip) {
 }
 
 function socketIp(socket) {
-  return socket?.handshake?.address
-    || socket?.request?.socket?.remoteAddress
-    || "unknown";
+  return (
+    socket?.handshake?.address ||
+    socket?.request?.socket?.remoteAddress ||
+    "unknown"
+  );
 }
 
 /**
@@ -86,15 +88,23 @@ export async function handleNameSession(socket, msg, ack) {
   }
   try {
     switch (op) {
-      case "declare": return await doDeclare(socket, msg, ack, id);
-      case "connect": return await doConnect(socket, msg, ack, id);
-      case "release": return await doRelease(socket, msg, ack, id);
-      case "see":     return await doSee(socket, msg, ack, id);
-      case "tree":    return await doTree(socket, msg, ack, id);
-      case "whoami":  return await doWhoami(socket, ack, id);
+      case "declare":
+        return await doDeclare(socket, msg, ack, id);
+      case "connect":
+        return await doConnect(socket, msg, ack, id);
+      case "release":
+        return await doRelease(socket, msg, ack, id);
+      case "see":
+        return await doSee(socket, msg, ack, id);
+      case "tree":
+        return await doTree(socket, msg, ack, id);
+      case "whoami":
+        return await doWhoami(socket, ack, id);
       default:
         return ackError(
-          ack, id, IBP_ERR.ACTION_NOT_SUPPORTED,
+          ack,
+          id,
+          IBP_ERR.ACTION_NOT_SUPPORTED,
           `name: unknown session op "${op}" (declare | connect | release | see | tree | whoami)`,
         );
     }
@@ -117,24 +127,31 @@ async function doWhoami(socket, ack, id) {
   let lastBeing = null;
   if (nameId) {
     try {
-      const { lastOpenBeingForName } = await import("../../seed/ibp/descriptor.js");
+      const { lastOpenBeingForName } =
+        await import("../../seed/ibp/descriptor.js");
       lastBeing = await lastOpenBeingForName(nameId);
-    } catch { /* best-effort; fall to the being menu */ }
+    } catch {
+      /* best-effort; fall to the being menu */
+    }
   }
   return ackOk(ack, id, { nameId, lastBeing });
 }
 
-// declare — the pre-world bootstrap. Opens an I_AM moment (no being
-// needed) and mints the name as a facet of the story's I_AM. Both
+// declare — the pre-world bootstrap. Opens an I moment (no being
+// needed) and mints the name as a facet of the story's I. Both
 // real-name and password are OPTIONAL.
 async function doDeclare(socket, msg, ack, id) {
   if (!checkNameRate("declare", socketIp(socket))) {
-    return ackError(ack, id, IBP_ERR.FORBIDDEN,
-      "Too many name declarations from this address; retry later");
+    return ackError(
+      ack,
+      id,
+      IBP_ERR.FORBIDDEN,
+      "Too many name declarations from this address; retry later",
+    );
   }
   const src = msg?.payload || msg || {};
   const payload = {
-    name:     src.name ?? null,
+    name: src.name ?? null,
     password: src.password ?? null,
     soulType: src.soulType ?? null,
   };
@@ -143,7 +160,10 @@ async function doDeclare(socket, msg, ack, id) {
   let nameId = null;
   let reveal = null;
   await withIAmAct("name:declare (pre-world)", async (ctx) => {
-    const r = await nameVerb("declare", payload, { moment: ctx, currentHistory: "0" });
+    const r = await nameVerb("declare", payload, {
+      moment: ctx,
+      currentHistory: "0",
+    });
     nameId = r.nameId;
     reveal = r.reveal || null;
   });
@@ -153,7 +173,7 @@ async function doDeclare(socket, msg, ack, id) {
   return ackOk(ack, id, { ok: true, nameId, reveal });
 }
 
-// Stamp a name:connect / name:release fact on the name's reel via an I_AM
+// Stamp a name:connect / name:release fact on the name's reel via an I
 // moment (the pre-world bootstrap path, same as declare). The NAME op handler
 // gates the transition (already-connected for connect, not-connected for
 // release) and THROWS on a bad one — that throw propagates to the caller, who
@@ -164,11 +184,15 @@ async function stampNameSession(op, nameId) {
   const { getStoryDomain } = await import("../../seed/ibp/address.js");
   const storyDomain = getStoryDomain();
   await withIAmAct(`name:${op}`, async (ctx) => {
-    await nameVerb(op, {}, {
-      address:       `${nameId}@${storyDomain}`,
-      moment:     ctx,
-      currentHistory: "0",
-    });
+    await nameVerb(
+      op,
+      {},
+      {
+        address: `${nameId}@${storyDomain}`,
+        moment: ctx,
+        currentHistory: "0",
+      },
+    );
   });
 }
 
@@ -178,8 +202,12 @@ async function stampNameSession(op, nameId) {
 // be:connect).
 async function doConnect(socket, msg, ack, id) {
   if (!checkNameRate("connect", socketIp(socket))) {
-    return ackError(ack, id, IBP_ERR.FORBIDDEN,
-      "Too many connect attempts from this address; retry later");
+    return ackError(
+      ack,
+      id,
+      IBP_ERR.FORBIDDEN,
+      "Too many connect attempts from this address; retry later",
+    );
   }
   const src = msg?.payload || msg || {};
   const token = src.token ?? src.name ?? null;
@@ -197,19 +225,29 @@ async function doConnect(socket, msg, ack, id) {
   //      session. The portal convenience for not presenting the key each time.
   let result;
   if (privateKey) {
-    const { nameConnectWithKey } = await import("../../seed/materials/name/login.js");
+    const { nameConnectWithKey } =
+      await import("../../seed/materials/name/login.js");
     result = await nameConnectWithKey(privateKey);
   } else if (token && password) {
     const { nameConnect } = await import("../../seed/materials/name/login.js");
     result = await nameConnect(token, password);
   } else {
-    return ackError(ack, id, IBP_ERR.INVALID_INPUT,
-      "name connect requires { token (real-name or pubkey), password } or { privateKey }");
+    return ackError(
+      ack,
+      id,
+      IBP_ERR.INVALID_INPUT,
+      "name connect requires { token (real-name or pubkey), password } or { privateKey }",
+    );
   }
   if (!result.ok) {
     // Uniform failure surface — never leak whether the name exists vs the
     // secret is wrong (both read as a refused connect to the client).
-    return ackError(ack, id, IBP_ERR.UNAUTHORIZED, `connect refused: ${result.reason}`);
+    return ackError(
+      ack,
+      id,
+      IBP_ERR.UNAUTHORIZED,
+      `connect refused: ${result.reason}`,
+    );
   }
   // Stamp the name:connect fact (folds connected:true on the name's reel).
   try {
@@ -227,11 +265,15 @@ async function doConnect(socket, msg, ack, id) {
   // the nameId, no being; the signing key stays in the in-memory session.
   let nameToken = null;
   try {
-    const { generateNameToken } = await import("../../seed/materials/being/identity.js");
+    const { generateNameToken } =
+      await import("../../seed/materials/being/identity.js");
     nameToken = generateNameToken(result.nameId);
     socket.jwt = nameToken;
   } catch (err) {
-    log.warn("IBP", `name token mint failed for ${result.nameId}: ${err.message}`);
+    log.warn(
+      "IBP",
+      `name token mint failed for ${result.nameId}: ${err.message}`,
+    );
   }
   log.debug("IBP", `socket ${socket.id} connected as name ${result.nameId}`);
   return ackOk(ack, id, { ok: true, nameId: result.nameId, token: nameToken });
@@ -249,7 +291,10 @@ async function doRelease(socket, msg, ack, id) {
     try {
       await stampNameSession("release", nameId);
     } catch (err) {
-      log.warn("IBP", `name release fact refused for ${nameId}: ${err.message}; unbinding session anyway`);
+      log.warn(
+        "IBP",
+        `name release fact refused for ${nameId}: ${err.message}; unbinding session anyway`,
+      );
     }
     const { nameRelease } = await import("../../seed/materials/name/login.js");
     nameRelease(nameId);
@@ -267,10 +312,15 @@ async function doSee(socket, msg, ack, id) {
   const src = msg?.payload || msg || {};
   const token = src.token ?? src.name ?? src.nameId ?? null;
   if (!token) {
-    return ackError(ack, id, IBP_ERR.INVALID_INPUT,
-      "name see requires { token (real-name or pubkey) }");
+    return ackError(
+      ack,
+      id,
+      IBP_ERR.INVALID_INPUT,
+      "name see requires { token (real-name or pubkey) }",
+    );
   }
-  const { resolveNameId } = await import("../../seed/materials/name/registry.js");
+  const { resolveNameId } =
+    await import("../../seed/materials/name/registry.js");
   const nameId = await resolveNameId(token);
   if (!nameId) {
     return ackError(ack, id, IBP_ERR.NAME_NOT_FOUND, `no such name: ${token}`);
@@ -293,8 +343,12 @@ async function doSee(socket, msg, ack, id) {
 async function doTree(socket, msg, ack, id) {
   const nameId = socket.nameId || null;
   if (!nameId) {
-    return ackError(ack, id, IBP_ERR.UNAUTHORIZED,
-      "name tree requires a connected name (sign in first)");
+    return ackError(
+      ack,
+      id,
+      IBP_ERR.UNAUTHORIZED,
+      "name tree requires a connected name (sign in first)",
+    );
   }
   const src = msg?.payload || msg || {};
   const history = src.history || socket.currentHistory || null;

@@ -74,7 +74,8 @@ export function invalidateChainRootCache() {
 export async function reelRoot(type, id, history = "0") {
   const { reelKey } = await import("../reel/reelHeads.js");
   const row = await ReelHead.findById(reelKey(history, type, id))
-    .select("head headHash").lean();
+    .select("head headHash")
+    .lean();
   if (!row) return GENESIS_PREV;
   if (row.headHash) return row.headHash;
   const headFact = await Fact.findOne(
@@ -98,9 +99,9 @@ function historyRollup(path, meta, reelRows, actRows) {
     .map((r) => [String(r._id), r.headHash || null])
     .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
   const branchPoint = meta?.branchPoint
-    ? (meta.branchPoint instanceof Map
-        ? Object.fromEntries(meta.branchPoint)
-        : meta.branchPoint)
+    ? meta.branchPoint instanceof Map
+      ? Object.fromEntries(meta.branchPoint)
+      : meta.branchPoint
     : {};
   return rollup({
     history: path,
@@ -118,7 +119,12 @@ function historyRollup(path, meta, reelRows, actRows) {
  * plantGraft recomputes it over what landed. The live storyRoot()
  * below builds the same shapes from the DB.
  */
-export function storyRootFromParts({ story, histories = [], reelHeads = [], actHeads = [] }) {
+export function storyRootFromParts({
+  story,
+  histories = [],
+  reelHeads = [],
+  actHeads = [],
+}) {
   const metaByPath = new Map(
     histories.map((b) => [String(b._id ?? b.path), b]),
   );
@@ -134,11 +140,24 @@ export function storyRootFromParts({ story, histories = [], reelHeads = [], actH
     if (!actsByHistory.has(b)) actsByHistory.set(b, []);
     actsByHistory.get(b).push(r);
   }
-  const paths = new Set(["0", ...metaByPath.keys(), ...rowsByHistory.keys(), ...actsByHistory.keys()]);
+  const paths = new Set([
+    "0",
+    ...metaByPath.keys(),
+    ...rowsByHistory.keys(),
+    ...actsByHistory.keys(),
+  ]);
   const out = [];
   for (const path of [...paths].sort()) {
     const meta = path === "0" ? null : metaByPath.get(path) || null;
-    out.push([path, historyRollup(path, meta, rowsByHistory.get(path) || [], actsByHistory.get(path) || [])]);
+    out.push([
+      path,
+      historyRollup(
+        path,
+        meta,
+        rowsByHistory.get(path) || [],
+        actsByHistory.get(path) || [],
+      ),
+    ]);
   }
   return rollup({ story: story ?? null, histories: out });
 }
@@ -173,11 +192,14 @@ export function graftRootFromParts({ beingId, reelHeads = [], actHeads = [] }) {
  */
 export async function historyRoot(historyPath) {
   return memoized(`history:${historyPath}`, async () => {
-    const { loadHistory } = await import("../../materials/history/histories.js");
+    const { loadHistory } =
+      await import("../../materials/history/histories.js");
     const { default: ActHead } = await import("../act/actHead.js");
     const meta = historyPath === "0" ? null : await loadHistory(historyPath);
     const [rows, actRows] = await Promise.all([
-      ReelHead.find({ history: historyPath }).select("_id head headHash").lean(),
+      ReelHead.find({ history: historyPath })
+        .select("_id head headHash")
+        .lean(),
       ActHead.find({ history: historyPath }).select("_id headHash").lean(),
     ]);
     return historyRollup(historyPath, meta, rows, actRows);
@@ -190,7 +212,8 @@ export async function historyRoot(historyPath) {
  */
 export async function storyRoot() {
   return memoized("story", async () => {
-    const { default: History } = await import("../../materials/history/history.js");
+    const { default: History } =
+      await import("../../materials/history/history.js");
     const { default: ActHead } = await import("../act/actHead.js");
     const { getStoryDomain } = await import("../../ibp/address.js");
     const [historyRows, headRows, actHeadRows] = await Promise.all([
@@ -208,7 +231,7 @@ export async function storyRoot() {
 }
 
 /**
- * The story root, SIGNED by the story (= I_AM) key. A peer given
+ * The story root, SIGNED by the story (= I) key. A peer given
  * only `storyId` (which IS the story public key) plus `storyRoot`
  * and `sig` can verify the root self-certifyingly, with no directory:
  * decode the key from storyId, check the signature over the root.
@@ -222,7 +245,8 @@ export async function signedStoryRoot() {
   // re-sign every call; ed25519 over the same root is deterministic.
   return memoized("story-signed", async () => {
     const root = await storyRoot();
-    const { getStoryIdentity, signData } = await import("../../storyIdentity.js");
+    const { getStoryIdentity, signData } =
+      await import("../../storyIdentity.js");
     const id = getStoryIdentity();
     return {
       storyRoot: root,
@@ -241,7 +265,12 @@ export async function verifyStoryRootSig(storyRoot, storyId, sig) {
   try {
     const { keyIdToPublicKey } = await import("../../materials/name/keys.js");
     const pub = keyIdToPublicKey(storyId);
-    return crypto.verify(null, Buffer.from(String(storyRoot), "utf8"), pub, Buffer.from(sig, "base64"));
+    return crypto.verify(
+      null,
+      Buffer.from(String(storyRoot), "utf8"),
+      pub,
+      Buffer.from(sig, "base64"),
+    );
   } catch {
     return false;
   }
@@ -254,10 +283,15 @@ export async function verifyStoryRootSig(storyRoot, storyId, sig) {
 import { registerSeeOperation } from "../../ibp/seeOps.js";
 
 registerSeeOperation("verify-reel", {
-  description: "Walk a reel's hash chain (history-aware) and report intact/broken with the exact break position.",
+  description:
+    "Walk a reel's hash chain (history-aware) and report intact/broken with the exact break position.",
   args: {
-    type:    { type: "text", label: "Reel kind (being|space|matter)", required: true },
-    id:      { type: "text", label: "Aggregate id", required: true },
+    type: {
+      type: "text",
+      label: "Reel kind (being|space|matter)",
+      required: true,
+    },
+    id: { type: "text", label: "Aggregate id", required: true },
     history: { type: "text", label: "History (default main)", required: false },
   },
   handler: async ({ args, history: ctxHistory }) => {
@@ -267,13 +301,20 @@ registerSeeOperation("verify-reel", {
 });
 
 registerSeeOperation("verify-act", {
-  description: "Verify one act's seal signature self-certifyingly (the signer id IS the key; \"i-am\" verifies against the story key). The wire form of the signed-act badge.",
+  description:
+    'Verify one act\'s seal signature self-certifyingly (the signer id IS the key; "i-am" verifies against the story key). The wire form of the signed-act badge.',
   args: {
     actId: { type: "text", label: "Act id", required: true },
   },
   handler: async ({ args }) => {
     const actId = String(args?.actId || "");
-    const notFound = { actId, found: false, signed: false, verified: false, reason: "not-found" };
+    const notFound = {
+      actId,
+      found: false,
+      signed: false,
+      verified: false,
+      reason: "not-found",
+    };
     if (!actId) return notFound;
     const { default: Act } = await import("../act/act.js");
     const act = await Act.findById(actId).lean();
@@ -294,15 +335,24 @@ registerSeeOperation("verify-act", {
 });
 
 registerSeeOperation("chain-root", {
-  description: "The chain's root hashes: the story root, or one history's root.",
+  description:
+    "The chain's root hashes: the story root, or one history's root.",
   args: {
-    history: { type: "text", label: "History path (omit for the story root + all histories)", required: false },
+    history: {
+      type: "text",
+      label: "History path (omit for the story root + all histories)",
+      required: false,
+    },
   },
   handler: async ({ args }) => {
     if (typeof args?.history === "string" && args.history.length) {
-      return { history: args.history, rootHash: await historyRoot(args.history) };
+      return {
+        history: args.history,
+        rootHash: await historyRoot(args.history),
+      };
     }
-    const { default: History } = await import("../../materials/history/history.js");
+    const { default: History } =
+      await import("../../materials/history/history.js");
     const rows = await History.find({}).select("_id").lean();
     const paths = [...new Set(["0", ...rows.map((b) => String(b._id))])].sort();
     const histories = {};

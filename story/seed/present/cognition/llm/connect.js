@@ -63,7 +63,7 @@ import { randomUUID as uuidv4 } from "node:crypto";
 import log from "../../../seedStory/log.js";
 import Being from "../../../materials/being/being.js";
 import Space from "../../../materials/space/space.js";
-import { I_AM } from "../../../materials/being/seedBeings.js";
+import { I } from "../../../materials/being/seedBeings.js";
 import { getStoryConfigValue } from "../../../storyConfig.js";
 import { getAncestorChain } from "../../../materials/space/ancestorCache.js";
 import { actorHistoryFrom } from "../../../past/act/crossOrigin.js";
@@ -86,16 +86,17 @@ let _iAmBeingId = null;
 async function getIAmBeingId() {
   if (_iAmBeingId) return _iAmBeingId;
   const { findByName } = await import("../../../materials/projections.js");
-  const iAm = await findByName("being", I_AM, "0");
+  const iAm = await findByName("being", I, "0");
   _iAmBeingId = iAm ? String(iAm.id) : null;
   return _iAmBeingId;
 }
 
 function readConnectionsFrom(state) {
   if (!state?.qualities) return {};
-  const conns = state.qualities instanceof Map
-    ? state.qualities.get("llmConnections")
-    : state.qualities?.llmConnections;
+  const conns =
+    state.qualities instanceof Map
+      ? state.qualities.get("llmConnections")
+      : state.qualities?.llmConnections;
   return conns || {};
 }
 
@@ -108,8 +109,8 @@ function _requireHistory(history, hint) {
   if (typeof history !== "string" || !history.length) {
     throw new Error(
       `LLM connection read missing history (${hint}). ` +
-      `Pass moment?.actorAct?.history or actorHistoryFrom(moment) — ` +
-      `no main-bias default. Every read names its history.`,
+        `Pass moment?.actorAct?.history or actorHistoryFrom(moment) — ` +
+        `no main-bias default. Every read names its history.`,
     );
   }
   return history;
@@ -492,21 +493,22 @@ export async function resolveConnectionSpec(
 
   const connectionId = uuidv4();
   const conn = {
-    name:            safeName,
-    baseUrl:         safeBaseUrl,
+    name: safeName,
+    baseUrl: safeBaseUrl,
     encryptedApiKey: apiKey ? encrypt(apiKey) : null,
-    model:           safeModel,
-    createdAt:       new Date(),
-    lastUsedAt:      null,
+    model: safeModel,
+    createdAt: new Date(),
+    lastUsedAt: null,
   };
 
   // isFirst: the being has no LIVE `main` slot yet → add.word's conditional assign-to-main
   // fires (the auto-assign as its OWN word/moment, not a buried second verb). LIVE matters:
   // a main pointing at a DELETED connection counts as empty — which is exactly why delete
   // can drop its slot-clears run-on (the dangling slot ref FOLDS to absent right here).
-  const beingLlmMeta = being.qualities instanceof Map
-    ? being.qualities.get("beingLlm")
-    : being.qualities?.beingLlm;
+  const beingLlmMeta =
+    being.qualities instanceof Map
+      ? being.qualities.get("beingLlm")
+      : being.qualities?.beingLlm;
   const mainSlot = beingLlmMeta?.slots?.main;
   const isFirst = !mainSlot || !existing[mainSlot];
 
@@ -515,7 +517,10 @@ export async function resolveConnectionSpec(
     conn,
     beingId: String(being._id),
     isFirst,
-    setBeingParams: { field: `qualities.llmConnections.${connectionId}`, value: conn },
+    setBeingParams: {
+      field: `qualities.llmConnections.${connectionId}`,
+      value: conn,
+    },
   };
 }
 
@@ -524,22 +529,30 @@ export async function addLlmConnection(
   { name, baseUrl, apiKey, model },
   { identity, moment } = {},
 ) {
-  const { connectionId, conn, beingId: bid, setBeingParams } =
-    await resolveConnectionSpec(beingId, { name, baseUrl, apiKey, model }, { moment });
+  const {
+    connectionId,
+    conn,
+    beingId: bid,
+    setBeingParams,
+  } = await resolveConnectionSpec(
+    beingId,
+    { name, baseUrl, apiKey, model },
+    { moment },
+  );
 
   const { doVerb } = await import("../../../ibp/verbs/do.js");
   await doVerb(
     { kind: "being", id: bid },
     "set-being",
     setBeingParams,
-    identity ? { identity, moment } : { identity: I_AM, moment },
+    identity ? { identity, moment } : { identity: I, moment },
   );
 
   return {
-    _id:     connectionId,
-    name:    conn.name,
+    _id: connectionId,
+    name: conn.name,
     baseUrl: conn.baseUrl,
-    model:   conn.model,
+    model: conn.model,
   };
 }
 
@@ -594,7 +607,10 @@ export async function resolveConnectionUpdate(
     beingId: String(being._id),
     noChange: Object.keys(update).length === 0,
     wasAssigned: Object.values(beingSlots).includes(connectionId),
-    setBeingParams: { field: `qualities.llmConnections.${safeConnId}`, value: merged },
+    setBeingParams: {
+      field: `qualities.llmConnections.${safeConnId}`,
+      value: merged,
+    },
   };
 }
 
@@ -604,19 +620,34 @@ export async function updateLlmConnection(
   { name, baseUrl, apiKey, model },
   { identity, moment } = {},
 ) {
-  const r = await resolveConnectionUpdate(beingId, connectionId, { name, baseUrl, apiKey, model }, { moment });
+  const r = await resolveConnectionUpdate(
+    beingId,
+    connectionId,
+    { name, baseUrl, apiKey, model },
+    { moment },
+  );
   if (r.noChange) {
-    return { _id: r.connectionId, name: r.merged.name, baseUrl: r.merged.baseUrl, model: r.merged.model };
+    return {
+      _id: r.connectionId,
+      name: r.merged.name,
+      baseUrl: r.merged.baseUrl,
+      model: r.merged.model,
+    };
   }
   const { doVerb } = await import("../../../ibp/verbs/do.js");
   await doVerb(
     { kind: "being", id: r.beingId },
     "set-being",
     r.setBeingParams,
-    identity ? { identity, moment } : { identity: I_AM, moment },
+    identity ? { identity, moment } : { identity: I, moment },
   );
   if (r.wasAssigned) clearBeingClientCache(beingId);
-  return { _id: r.connectionId, name: r.merged.name, baseUrl: r.merged.baseUrl, model: r.merged.model };
+  return {
+    _id: r.connectionId,
+    name: r.merged.name,
+    baseUrl: r.merged.baseUrl,
+    model: r.merged.model,
+  };
 }
 
 // resolveConnectionRemoval — the NON-EMITTING floor of delete-llm-connection: load the
@@ -624,7 +655,11 @@ export async function updateLlmConnection(
 // (value:null → setDeepPath delete). ONE fact (the spacebar lift). ONE kernel, TWO callers
 // (E6): the legacy deleteLlmConnection below self-emits via doVerb; delete-llm-connection.word's
 // host see returns setBeingParams as factParams so the DISPATCHER lays the one do:set-being.
-export async function resolveConnectionRemoval(beingId, connectionId, { moment } = {}) {
+export async function resolveConnectionRemoval(
+  beingId,
+  connectionId,
+  { moment } = {},
+) {
   const safeConnId = validateConnectionId(connectionId);
   const { loadOrFold } = await import("../../../materials/projections.js");
   const slot = await loadOrFold("being", beingId, actorHistoryFrom(moment));
@@ -637,18 +672,25 @@ export async function resolveConnectionRemoval(beingId, connectionId, { moment }
   return {
     connectionId: safeConnId,
     beingId: String(being._id),
-    setBeingParams: { field: `qualities.llmConnections.${safeConnId}`, value: null },
+    setBeingParams: {
+      field: `qualities.llmConnections.${safeConnId}`,
+      value: null,
+    },
   };
 }
 
-export async function deleteLlmConnection(beingId, connectionId, { identity, moment } = {}) {
+export async function deleteLlmConnection(
+  beingId,
+  connectionId,
+  { identity, moment } = {},
+) {
   const r = await resolveConnectionRemoval(beingId, connectionId, { moment });
   const { doVerb } = await import("../../../ibp/verbs/do.js");
   await doVerb(
     { kind: "being", id: r.beingId },
     "set-being",
     r.setBeingParams,
-    identity ? { identity, moment } : { identity: I_AM, moment },
+    identity ? { identity, moment } : { identity: I, moment },
   );
   clearBeingClientCache(beingId);
 
@@ -660,7 +702,12 @@ export async function deleteLlmConnection(beingId, connectionId, { identity, mom
   return { removed: true };
 }
 
-export async function assignConnection(beingId, slot, connectionId, { identity, moment } = {}) {
+export async function assignConnection(
+  beingId,
+  slot,
+  connectionId,
+  { identity, moment } = {},
+) {
   if (!isValidUserSlot(slot)) {
     throw new Error("Invalid assignment slot: " + slot);
   }
@@ -680,9 +727,7 @@ export async function assignConnection(beingId, slot, connectionId, { identity, 
   const being = { _id: beingSlot.id, ...beingSlot.state };
 
   const { doVerb } = await import("../../../ibp/verbs/do.js");
-  const opts = identity
-    ? { identity, moment }
-    : { identity: I_AM, moment };
+  const opts = identity ? { identity, moment } : { identity: I, moment };
 
   // All slots (including "main") route through
   // qualities.beingLlm.slots.<slot>. do.set carries the write; the
@@ -729,15 +774,14 @@ export async function assignSpaceConnection(
     }
   }
 
-  const { loadProjection: _lPspace } = await import("../../../materials/projections.js");
+  const { loadProjection: _lPspace } =
+    await import("../../../materials/projections.js");
   const _sSlot = await _lPspace("space", spaceId, "0");
   if (!_sSlot) throw new Error("Space not found");
   const space = { _id: _sSlot.id, ...(_sSlot.state || {}) };
 
   const { doVerb } = await import("../../../ibp/verbs/do.js");
-  const opts = identity
-    ? { identity, moment }
-    : { identity: I_AM, moment };
+  const opts = identity ? { identity, moment } : { identity: I, moment };
 
   // All slots (including "main") write to qualities.llm.slots.<slot>.
   // do.set carries the write; null clears.
@@ -759,8 +803,15 @@ export async function assignSpaceConnection(
 // `.word` issues the ONE deed the branch selects (do set-being / do set-space). connectionId:null
 // clears the slot. ADDITIVE — the legacy assignConnection/assignSpaceConnection keep self-emitting
 // for any direct callers; a dedup is a follow-up.
-export async function resolveSlotAssignment(targetId, kind, slot, connectionId, { caller, moment } = {}) {
-  if (!isValidUserSlot(slot)) throw new Error("Invalid assignment slot: " + slot);
+export async function resolveSlotAssignment(
+  targetId,
+  kind,
+  slot,
+  connectionId,
+  { caller, moment } = {},
+) {
+  if (!isValidUserSlot(slot))
+    throw new Error("Invalid assignment slot: " + slot);
   const safeConnId = validateConnectionId(connectionId);
   const history = actorHistoryFrom(moment, "resolveSlotAssignment");
   const id = String(targetId);
@@ -774,8 +825,13 @@ export async function resolveSlotAssignment(targetId, kind, slot, connectionId, 
     const beingSlot = await loadOrFold("being", id, history);
     if (!beingSlot) throw new Error("Being not found");
     return {
-      isBeing: true, isSpace: false, id: String(beingSlot.id), slot, connectionId: safeConnId,
-      field: `qualities.beingLlm.slots.${slot}`, value: safeConnId,
+      isBeing: true,
+      isSpace: false,
+      id: String(beingSlot.id),
+      slot,
+      connectionId: safeConnId,
+      field: `qualities.beingLlm.slots.${slot}`,
+      value: safeConnId,
     };
   }
 
@@ -788,8 +844,13 @@ export async function resolveSlotAssignment(targetId, kind, slot, connectionId, 
   const sSlot = await loadProjection("space", id, "0");
   if (!sSlot) throw new Error("Space not found");
   return {
-    isBeing: false, isSpace: true, id: String(sSlot.id), slot, connectionId: safeConnId,
-    field: `qualities.llm.slots.${slot}`, value: safeConnId,
+    isBeing: false,
+    isSpace: true,
+    id: String(sSlot.id),
+    slot,
+    connectionId: safeConnId,
+    field: `qualities.llm.slots.${slot}`,
+    value: safeConnId,
   };
 }
 
@@ -813,8 +874,14 @@ export async function resolveSlotAssignment(targetId, kind, slot, connectionId, 
  * @param {object} [opts.moment]  moment's ctx (history read off actorAct)
  * @param {string} [opts.history]    explicit override for non-moment callers
  */
-export async function resolveConnection(beingId, connectionId, cacheKey, { moment, history } = {}) {
-  const resolvedHistory = history || actorHistoryFrom(moment, "resolveConnection");
+export async function resolveConnection(
+  beingId,
+  connectionId,
+  cacheKey,
+  { moment, history } = {},
+) {
+  const resolvedHistory =
+    history || actorHistoryFrom(moment, "resolveConnection");
   const conn = await readConnection(beingId, connectionId, resolvedHistory);
   // baseUrl is required; encryptedApiKey is optional (local LLMs like
   // Ollama / llama.cpp commonly need no auth).
@@ -881,13 +948,13 @@ export async function resolveConnection(beingId, connectionId, cacheKey, { momen
       if (slot) {
         const { doVerb } = await import("../../../ibp/verbs/do.js");
         await doVerb(
-    { kind: "being", id: String(slot.id) },
+          { kind: "being", id: String(slot.id) },
           "set-being",
           {
             field: `qualities.llmConnections.${connectionId}.lastUsedAt`,
             value: new Date().toISOString(),
           },
-          { identity: I_AM, moment },
+          { identity: I, moment },
         );
       }
     } catch (err) {
@@ -912,7 +979,12 @@ export async function resolveConnection(beingId, connectionId, cacheKey, { momen
  *
  * Returns `{ client, model, isCustom, connectionId, noLlm?, fetchedAt }`.
  */
-export async function getClientForBeing(beingId, slot, overrideConnectionId, history) {
+export async function getClientForBeing(
+  beingId,
+  slot,
+  overrideConnectionId,
+  history,
+) {
   if (!beingId) {
     return {
       client: null,
@@ -926,7 +998,7 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId, his
   if (typeof history !== "string" || !history.length) {
     throw new Error(
       "getClientForBeing: history is required. Pass actorHistoryFrom(moment) " +
-      "or the explicit history the read is happening on — no main-bias default."
+        "or the explicit history the read is happening on — no main-bias default.",
     );
   }
 
@@ -981,7 +1053,9 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId, his
     }
 
     if (connectionId) {
-      const entry = await resolveConnection(beingId, connectionId, cacheKey, { history });
+      const entry = await resolveConnection(beingId, connectionId, cacheKey, {
+        history,
+      });
       if (entry) return entry;
     }
   } catch (err) {
@@ -995,19 +1069,23 @@ export async function getClientForBeing(beingId, slot, overrideConnectionId, his
   // holds the connectionId; the connection record itself lives on
   // the root operator's qualities (that's where `add-llm` writes,
   // since the BE op runs as the caller). Earlier doctrine said the
-  // connection lived on I_AM — that's where this lookup used to
+  // connection lived on I — that's where this lookup used to
   // probe — but add-llm has always written to the caller's being.
   // Resolving from the operator matches what the install side
   // actually does and avoids the silent-noLlm trap.
   try {
     const storyLlmId = getStoryConfigValue("storyLlmConnection");
     if (storyLlmId) {
-      const { findRootOperator } = await import("../../../materials/being/identity.js");
+      const { findRootOperator } =
+        await import("../../../materials/being/identity.js");
       const operator = await findRootOperator();
       if (operator?._id) {
         const storyCacheKey = "place:" + slot + ":" + history;
         const storyCached = beingClientCache.get(storyCacheKey);
-        if (storyCached && Date.now() - storyCached.fetchedAt < CLIENT_CACHE_TTL) {
+        if (
+          storyCached &&
+          Date.now() - storyCached.fetchedAt < CLIENT_CACHE_TTL
+        ) {
           return storyCached;
         }
         const storyEntry = await resolveConnection(

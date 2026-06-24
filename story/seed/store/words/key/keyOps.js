@@ -66,7 +66,8 @@ async function resolveTargetNameId(target, moment) {
 // strict boolean — the .word's mark yields true|undefined), or null on a clean miss.
 async function _keyExportViaWord({ target, caller, asker, moment }) {
   if (!moment) return null;
-  const { resolveAbleWord, runAbleWord } = await import("../../../present/word/ableWordRegistry.js");
+  const { resolveAbleWord, runAbleWord } =
+    await import("../../../present/word/ableWordRegistry.js");
   const ir = resolveAbleWord("name", "key-export", moment?.actorAct?.history);
   if (!ir) return null;
   const { keyHostEnv } = await import("./keyHost.js");
@@ -74,10 +75,16 @@ async function _keyExportViaWord({ target, caller, asker, moment }) {
   const history = moment?.actorAct?.history || "0";
   try {
     const { result } = await runAbleWord(ir, {
-      moment, history,
+      moment,
+      history,
       // `target` is bound as an entity object (kind + id) so the .word's `see the
       // target's trueName` can loadProjection — seeRead needs ._id/.id, not a bare string.
-      trigger: { target: { kind: "being", id: String(targetIdOf(target)) }, caller: caller ? String(caller) : null, asker: asker ? String(asker) : null, branch: history },
+      trigger: {
+        target: { kind: "being", id: String(targetIdOf(target)) },
+        caller: caller ? String(caller) : null,
+        asker: asker ? String(asker) : null,
+        branch: history,
+      },
       env: { host: keyHostEnv() },
     });
     if (!result) return null;
@@ -88,10 +95,15 @@ async function _keyExportViaWord({ target, caller, asker, moment }) {
     // back to the being target). No asker → no fact (matches the old `if (askerBeingId)`).
     const askerBeingId = asker ? String(asker) : null;
     return askerBeingId && out.nameId
-      ? stampsFact(out, { exportedNameId: String(out.nameId) }, { kind: "being", id: askerBeingId })
+      ? stampsFact(
+          out,
+          { exportedNameId: String(out.nameId) },
+          { kind: "being", id: askerBeingId },
+        )
       : out;
   } catch (e) {
-    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.FORBIDDEN, e.message);
+    if (e && e.__wordRefusal)
+      throw new IbpError(e.code || IBP_ERR.FORBIDDEN, e.message);
     throw e;
   }
 }
@@ -110,21 +122,26 @@ registerOperation("key-export", {
   handler: async ({ target, identity, moment }) => {
     // THE CONVERSION: key-export's world strand is key.word, run through the bridge.
     // The JS below is the clean-miss fallback.
-    const viaWord = await _keyExportViaWord({ target, caller: identity?.nameId, asker: identity?.beingId, moment });
+    const viaWord = await _keyExportViaWord({
+      target,
+      caller: identity?.nameId,
+      asker: identity?.beingId,
+      moment,
+    });
     if (viaWord) return viaWord;
 
     const history = moment?.actorAct?.history;
     const nameId = await resolveTargetNameId(target, moment);
 
-    // NEVER export the story (I_AM) key. The I_AM "name" id is the literal
+    // NEVER export the story (I) key. The I "name" id is the literal
     // "i-am", and loadSigningKey maps it to the story's private key. A being
     // whose trueName resolved to i-am (e.g. a being born under i-am before it
     // was handed a sovereign name) must NOT become a door to the story key.
     // Hard refusal, before the ownership gate (which i-am===i-am would pass).
-    if (nameId === "i-am" || nameId === "I_AM") {
+    if (nameId === "i-am" || nameId === "I") {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
-        "key-export: the story (I_AM) key is never exportable through a being.",
+        "key-export: the story (I) key is never exportable through a being.",
         { nameId },
       );
     }
@@ -157,10 +174,14 @@ registerOperation("key-export", {
     let mnemonic = null;
     if (privateKeyPem) {
       try {
-        const { seedFromPrivateKeyPem } = await import("../../../materials/name/keys.js");
-        const { entropyToMnemonic } = await import("../../../materials/name/mnemonic.js");
+        const { seedFromPrivateKeyPem } =
+          await import("../../../materials/name/keys.js");
+        const { entropyToMnemonic } =
+          await import("../../../materials/name/mnemonic.js");
         mnemonic = entropyToMnemonic(seedFromPrivateKeyPem(privateKeyPem));
-      } catch { /* PEM-only export (key not seed-derivable) */ }
+      } catch {
+        /* PEM-only export (key not seed-derivable) */
+      }
     }
 
     // No self-emit. The audit fact (who exported which Name's key, the key
@@ -173,13 +194,17 @@ registerOperation("key-export", {
     // RETURN to the asker, but stripForAudit drops them from the recorded result.
     const askerBeingId = identity?.beingId ? String(identity.beingId) : null;
     const out = {
-      nameId,                          // the public key / did:key id exported
-      hasKey:  privateKeyPem !== null, // false when locked + not connected, or keyless
-      privateKeyPem,                   // the Name's signing key (PEM)
-      mnemonic,                        // the same key as 24 BIP39 words
+      nameId, // the public key / did:key id exported
+      hasKey: privateKeyPem !== null, // false when locked + not connected, or keyless
+      privateKeyPem, // the Name's signing key (PEM)
+      mnemonic, // the same key as 24 BIP39 words
     };
     return askerBeingId
-      ? stampsFact(out, { exportedNameId: nameId }, { kind: "being", id: askerBeingId })
+      ? stampsFact(
+          out,
+          { exportedNameId: nameId },
+          { kind: "being", id: askerBeingId },
+        )
       : out;
   },
 });

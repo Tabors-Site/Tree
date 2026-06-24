@@ -2,7 +2,7 @@
 // Run:  node story/seed/present/word/examples/cherub-word-demo.js
 //
 // Proves the multi-effect flow body AND the implicit-actor rule: the five acts
-// are by I_AM, through Cherub (the mother); the being is the new Name's own; the
+// are by I, through Cherub (the mother); the being is the new Name's own; the
 // father is Arrival. No hand-built IR; the program is cherub.word.
 
 import { readFileSync } from "node:fs";
@@ -16,15 +16,15 @@ const source = readFileSync(
 const ir = parse(source);
 const flow = ir[0];
 
-// cherub the being expresses I_AM (the story root Name); the arriving Name is
+// cherub the being expresses I (the story root Name); the arriving Name is
 // "tabor", making its first being "tabor-prime".
 const ctx = {
   dryRun: true,
   history: "main",
   moment: { actId: "<actId>" },
-  identity: { beingId: "Cherub", name: "cherub", nameId: "I_AM" },
+  identity: { beingId: "Cherub", name: "cherub", nameId: "I" },
   trigger: { name: "tabor-prime", password: "hunter2" },
-  env: { iam: "I_AM" },
+  env: { iam: "I" },
   bindings: { placeRoot: "<placeRoot>", ownerName: "tabor" },
 };
 const actor = (by) => (by === "I" ? ctx.identity.nameId : by); // rule 9: I -> the Name

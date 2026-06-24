@@ -34,7 +34,7 @@
 import log from "../../seedStory/log.js";
 import { getInternalConfigValue } from "../../internalConfig.js";
 import { IBP_ERR } from "../../ibp/protocol.js";
-import { I_AM } from "../being/seedBeings.js";
+import { I } from "../being/seedBeings.js";
 
 // ── Cache storage ──
 
@@ -51,7 +51,10 @@ function MAX_ENTRIES() {
 function MAX_DEPTH() {
   return Math.max(
     10,
-    Math.min(Number(getInternalConfigValue("ancestorCacheMaxDepth")) || 100, 500),
+    Math.min(
+      Number(getInternalConfigValue("ancestorCacheMaxDepth")) || 100,
+      500,
+    ),
   );
 }
 const STATS_RESET = 1_000_000_000; // reset counters before overflow
@@ -193,14 +196,16 @@ async function walkFromDb(spaceId, ttl, history) {
     // the history sees its full effective ancestry.
     const { loadOrFold } = await import("../projections.js");
     const _slot = await loadOrFold("space", cursor, history);
-    const n = _slot ? {
-      _id: _slot.id,
-      name: _slot.state?.name,
-      qualities: _slot.state?.qualities,
-      parent: _slot.state?.parent || null,
-      heavenSpace: _slot.state?.heavenSpace,
-      owner: _slot.state?.owner || null,
-    } : null;
+    const n = _slot
+      ? {
+          _id: _slot.id,
+          name: _slot.state?.name,
+          qualities: _slot.state?.qualities,
+          parent: _slot.state?.parent || null,
+          heavenSpace: _slot.state?.heavenSpace,
+          owner: _slot.state?.owner || null,
+        }
+      : null;
     if (!n) {
       // Space not found. Return what we have if any, null if starting space.
       return ancestors.length > 0 ? ancestors : null;
@@ -325,7 +330,7 @@ export function resolveExtensionScopeFromChain(ancestors, confinedExtensions) {
  *
  *   ok, rootId, isRoot
  *   isOwner            true when the being matches the owner on the
- *                      closest ownership boundary (the first non-I_AM
+ *                      closest ownership boundary (the first non-I
  *                      owner walking up from the target)
  *   isTripped          circuit-breaker on the ownership boundary
  *
@@ -346,13 +351,17 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
 
   // ── Heaven path ────────────────────────────────────────────────
   // Any space whose chain passes through heaven (heaven itself or any
-  // Tier-3 heaven space beneath it) uses heaven's owner: I_AM. Heaven
+  // Tier-3 heaven space beneath it) uses heaven's owner: I. Heaven
   // authority for any other being now flows through the angel ABLE
   // grant (per AblesAreAuth), which the able-walk reads directly from
   // qualities.ablesGranted — not from this chain helper.
   const heavenSpace = ancestors.find((s) => s.heavenSpace === "heaven");
   if (heavenSpace) {
-    const isHeavenOwner = !!(idStr && heavenSpace.owner && String(heavenSpace.owner) === idStr);
+    const isHeavenOwner = !!(
+      idStr &&
+      heavenSpace.owner &&
+      String(heavenSpace.owner) === idStr
+    );
     return {
       ok: true,
       rootId: heavenSpace._id,
@@ -384,8 +393,8 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
       };
     }
 
-    // First space with a non-I_AM owner is the ownership boundary.
-    if (space.owner && space.owner !== I_AM) {
+    // First space with a non-I owner is the ownership boundary.
+    if (space.owner && space.owner !== I) {
       ownerNode = space;
       break;
     }
@@ -411,7 +420,11 @@ export function resolveSpaceAccessFromChain(startNodeId, beingId, ancestors) {
     };
   }
 
-  const isOwner = !!(idStr && ownerNode.owner && String(ownerNode.owner) === idStr);
+  const isOwner = !!(
+    idStr &&
+    ownerNode.owner &&
+    String(ownerNode.owner) === idStr
+  );
 
   // Circuit breaker: tripped trees deny write access
   const circuit = ownerNode.qualities?.circuit;

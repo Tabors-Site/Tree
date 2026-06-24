@@ -69,7 +69,7 @@ export async function isHeavenSpace(spaceId) {
   try {
     const chain = await getAncestorChain(id, MAIN);
     if (!Array.isArray(chain)) return false;
-    return chain.some(node => String(node._id || node.id) === heavenId);
+    return chain.some((node) => String(node._id || node.id) === heavenId);
   } catch {
     return false;
   }
@@ -89,21 +89,21 @@ export function _resetHeavenCache() {
  * Heaven is the I-Am's room. Heaven authority is granted in two
  * shapes:
  *
- *   - `owner` of heaven — the bootstrap-axiom ownership field. I_AM
+ *   - `owner` of heaven — the bootstrap-axiom ownership field. I
  *     owns heaven; rare other owners exist by transfer.
  *   - `ablesGranted` entry of `{able: "angel", anchorSpaceId: <heavenId>}`
  *     on the being — the delegated authority under AblesAreAuth.
  *     Seed delegates and humans anointed by cherub.birth carry this.
  *
- * I_AM short-circuits true (universal authority on its own story —
- * same doctrine as authorize.js's I_AM bypass).
+ * I short-circuits true (universal authority on its own story —
+ * same doctrine as authorize.js's I bypass).
  *
  * Returns true if EITHER check matches.
  */
 export async function hasHeavenAuthority(beingId) {
   if (!beingId) return false;
-  const { I_AM } = await import("../being/seedBeings.js");
-  if (String(beingId) === String(I_AM)) return true;
+  const { I } = await import("../being/seedBeings.js");
+  if (String(beingId) === String(I)) return true;
 
   const heavenId = await findHeavenRootId();
   if (!heavenId) return false;
@@ -119,12 +119,15 @@ export async function hasHeavenAuthority(beingId) {
   // Able-grant check — angel able anchored at heaven (the AblesAreAuth
   // delegated-authority path). Walks the being's ablesGranted for a
   // matching entry. Cherub.birth grants this to the first human; the
-  // I_AM grants it to every seed delegate at genesis.
+  // I grants it to every seed delegate at genesis.
   const beingSlot = await loadProjection("being", String(beingId), "0");
   const grants = beingSlot?.state?.qualities?.ablesGranted;
   if (Array.isArray(grants)) {
     for (const g of grants) {
-      if (g?.able === "angel" && String(g?.anchorSpaceId) === String(heavenId)) {
+      if (
+        g?.able === "angel" &&
+        String(g?.anchorSpaceId) === String(heavenId)
+      ) {
         return true;
       }
     }
@@ -132,4 +135,3 @@ export async function hasHeavenAuthority(beingId) {
 
   return false;
 }
-

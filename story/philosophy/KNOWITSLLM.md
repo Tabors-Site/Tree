@@ -34,7 +34,7 @@ One Name can control many Beings across different realities (like having multipl
 
 You (the Name) stay at home, but you can send your "being" (a Being) into other realities to act.Key Changes in This RefactorName becomes the real identitynameId = public key (same as the current beingId)
 Owns the private key, signs all acts, owns the permanent act chain
-Lives under I_AM in a flat hierarchy
+Lives under I in a flat hierarchy
 
 Being becomes just presenceNow has a simple random UUID as \_id
 Has an ownerNameId (points to which Name controls it)
@@ -52,7 +52,7 @@ Authority ChangeInstead of messy per-being mother lines, authority now flows thr
 Why This Is a Big ImprovementMuch cleaner cross-reality behavior (your Name stays home, only beings travel)
 Clear separation between "who you are" vs "what body you're using right now"
 Better foundation for the being/mate pattern you want
-Makes I_AM cleaner as pure root
+Makes I cleaner as pure root
 Prepares for SAM (your "first son" operational root) nicely
 
 The CostThis is a foundation-level refactor. It touches a lot of core systems (acts, facts, birth, authorization, cross-world, genesis, etc.), so it’s disruptive — which is why they’re doing it on fresh-DB only with no migration.

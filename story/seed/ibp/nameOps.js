@@ -5,15 +5,15 @@
 // NAME is the fifth verb, and unlike the four world verbs it does not
 // operate as a stance: it is the IDENTITY layer (outer worlds). It rides
 // the same IBPA, but its address is story-only (`<storyDomain>` — the
-// story's I_AM, where a new name is declared) or `<nameId>@<storyDomain>`
+// story's I, where a new name is declared) or `<nameId>@<storyDomain>`
 // (a specific name, to see or banish it). The portal gives it its own views
 // (create a name, see a name's data / all its acts).
 //
 // A closed set, like BE: two ops, no extension adds a third.
 //
 //   declare — mint a new Name: a fresh ed25519 keypair whose public key is
-//             the Name's id, a facet of the story's I_AM (parentNameId =
-//             I_AM, flat — never a Name hierarchy). The private key is held
+//             the Name's id, a facet of the story's I (parentNameId =
+//             I, flat — never a Name hierarchy). The private key is held
 //             custodially (encrypted) on the Name row.
 //   banish  — the Name tombstones itself: no new fact can ever be signed by
 //             it again (the gate lives in logFact). Its history persists.
@@ -27,11 +27,19 @@
 // a keypair + spec, banish just names its target — and nameVerb stamps the
 // name:declare / name:banish fact.
 
-import { generateNameKeypair, keypairFromPrivateKeyPem, keypairFromSeed, seedFromPrivateKeyPem } from "../materials/name/keys.js";
-import { mnemonicToEntropy, entropyToMnemonic } from "../materials/name/mnemonic.js";
+import {
+  generateNameKeypair,
+  keypairFromPrivateKeyPem,
+  keypairFromSeed,
+  seedFromPrivateKeyPem,
+} from "../materials/name/keys.js";
+import {
+  mnemonicToEntropy,
+  entropyToMnemonic,
+} from "../materials/name/mnemonic.js";
 import { encryptCredential } from "../materials/being/identity/credentials.js";
 import { encryptWithPassword } from "../materials/name/passwordKey.js";
-import { I_AM } from "../materials/being/seedBeings.js";
+import { I } from "../materials/being/seedBeings.js";
 import { IbpError, IBP_ERR } from "./protocol.js";
 
 // Rebuild a keypair from an imported key — the IMPORT half of key custody
@@ -40,7 +48,11 @@ import { IbpError, IBP_ERR } from "./protocol.js";
 // key either skin, same resulting nameId (the pubkey) on any host.
 function keypairFromImport(importKey) {
   const s = String(importKey || "").trim();
-  if (!s) throw new IbpError(IBP_ERR.INVALID_INPUT, "name declare: importKey is empty");
+  if (!s)
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "name declare: importKey is empty",
+    );
   const words = s.split(/\s+/);
   if (words.length === 24) return keypairFromSeed(mnemonicToEntropy(s));
   if (/PRIVATE KEY/.test(s)) return keypairFromPrivateKeyPem(s);
@@ -50,7 +62,7 @@ function keypairFromImport(importKey) {
   );
 }
 
-// declare — mint a new Name as a facet of the story's I_AM. Returns the
+// declare — mint a new Name as a facet of the story's I. Returns the
 // new nameId + the spec the fact carries (applyMintName folds it). The
 // keypair is generated here — this is where key-minting LIVES now (it left
 // birth.js when a being stopped being its own identity).
@@ -70,7 +82,9 @@ async function declareHandler({ payload }) {
   // a Name you already hold onto this story. The imported key's pubkey IS
   // the nameId, so a re-import of a Name that already exists here is a
   // conflict (you connect to it, you don't re-declare it).
-  const keypair = payload?.importKey ? keypairFromImport(payload.importKey) : generateNameKeypair();
+  const keypair = payload?.importKey
+    ? keypairFromImport(payload.importKey)
+    : generateNameKeypair();
   const nameId = keypair.nameId; // the did:key public key IS the Name's id
   if (payload?.importKey) {
     const { loadProjection } = await import("../materials/projections.js");
@@ -82,9 +96,9 @@ async function declareHandler({ payload }) {
     }
   }
   const spec = {
-    // Flat lineage: every declared Name is a facet of the story's I_AM,
+    // Flat lineage: every declared Name is a facet of the story's I,
     // one layer down — never a Name-of-a-Name hierarchy.
-    parentNameId:  I_AM,
+    parentNameId: I,
     // The key at rest. PASSWORD given -> encrypt with a KDF(password) so the
     // server canNOT auto-decrypt it (only login decrypts it into the
     // session); NO password -> system-encrypted (the server signs
@@ -93,14 +107,14 @@ async function declareHandler({ payload }) {
     privateKeyEnc: payload?.password
       ? encryptWithPassword(keypair.privateKeyPem, payload.password)
       : encryptCredential(keypair.privateKeyPem),
-    identity:      { alg: "ed25519", keyEnc: "did:key:ed25519-multibase", v: 1 },
+    identity: { alg: "ed25519", keyEnc: "did:key:ed25519-multibase", v: 1 },
     // The soul this Name decides with (human | llm | scripted). Out of this
     // plan's scope beyond recording it; null when unspecified.
-    soulType:      payload?.soulType ?? null,
+    soulType: payload?.soulType ?? null,
     // The real name (trueName.name) — OPTIONAL human handle. Easier server
     // access (sign in by real-name + password) but never required; you can
     // always act with the private key. Story-scoped. null when unspecified.
-    name:          payload?.name ?? null,
+    name: payload?.name ?? null,
   };
   // The key REVEAL — returned ONCE on the direct response, NEVER in the fact
   // (writeNameFact only stamps result.spec, whose key is encrypted). This is
@@ -108,12 +122,16 @@ async function declareHandler({ payload }) {
   // 24-word paper form + the public key (the nameId). Same "show it once at
   // birth" the being-wallet used to do, now at the Name. An IMPORTED key needs
   // no reveal (the caller already holds it).
-  const reveal = payload?.importKey ? null : {
-    nameId,
-    publicKeyPem:  keypair.publicKeyPem,
-    privateKeyPem: keypair.privateKeyPem,
-    mnemonic:      entropyToMnemonic(seedFromPrivateKeyPem(keypair.privateKeyPem)),
-  };
+  const reveal = payload?.importKey
+    ? null
+    : {
+        nameId,
+        publicKeyPem: keypair.publicKeyPem,
+        privateKeyPem: keypair.privateKeyPem,
+        mnemonic: entropyToMnemonic(
+          seedFromPrivateKeyPem(keypair.privateKeyPem),
+        ),
+      };
   return { nameId, spec, reveal };
 }
 
@@ -143,8 +161,10 @@ async function banishHandler({ addressedNameId, payload }) {
 async function connectNameHandler({ addressedNameId, payload }) {
   const nameId = addressedNameId || payload?.nameId || null;
   if (!nameId) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT,
-      "name connect requires a target name (address it <nameId>@<storyDomain>)");
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "name connect requires a target name (address it <nameId>@<storyDomain>)",
+    );
   }
   const { loadProjection } = await import("../materials/projections.js");
   const slot = await loadProjection("name", String(nameId), "0");
@@ -153,7 +173,10 @@ async function connectNameHandler({ addressedNameId, payload }) {
   }
   const { isNameBanished } = await import("../materials/name/closure.js");
   if (await isNameBanished(String(nameId))) {
-    throw new IbpError(IBP_ERR.FORBIDDEN, "name is banished; it cannot connect");
+    throw new IbpError(
+      IBP_ERR.FORBIDDEN,
+      "name is banished; it cannot connect",
+    );
   }
   return { nameId };
 }
@@ -164,14 +187,18 @@ async function connectNameHandler({ addressedNameId, payload }) {
 async function releaseNameHandler({ addressedNameId, payload }) {
   const nameId = addressedNameId || payload?.nameId || null;
   if (!nameId) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT,
-      "name release requires a target name (address it <nameId>@<storyDomain>)");
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "name release requires a target name (address it <nameId>@<storyDomain>)",
+    );
   }
   const { loadProjection } = await import("../materials/projections.js");
   const slot = await loadProjection("name", String(nameId), "0");
   if (!slot?.state?.connected) {
-    throw new IbpError(IBP_ERR.RESOURCE_CONFLICT,
-      "name is not connected — nothing to release");
+    throw new IbpError(
+      IBP_ERR.RESOURCE_CONFLICT,
+      "name is not connected — nothing to release",
+    );
   }
   return { nameId };
 }
@@ -189,35 +216,45 @@ async function releaseNameHandler({ addressedNameId, payload }) {
 async function setPasswordHandler({ addressedNameId, payload }) {
   const nameId = addressedNameId || payload?.nameId || null;
   if (!nameId) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT,
-      "name set-password requires a target name (address it <nameId>@<storyDomain>)");
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "name set-password requires a target name (address it <nameId>@<storyDomain>)",
+    );
   }
   const { loadProjection } = await import("../materials/projections.js");
   const slot = await loadProjection("name", String(nameId), "0");
-  if (!slot?.state) throw new IbpError(IBP_ERR.NAME_NOT_FOUND, `no such name: ${nameId}`);
+  if (!slot?.state)
+    throw new IbpError(IBP_ERR.NAME_NOT_FOUND, `no such name: ${nameId}`);
 
   // Resolve the private-key PEM — the proof of holding the key.
   let pem = null;
   if (payload?.importKey) {
     pem = keypairFromImport(payload.importKey).privateKeyPem;
   } else {
-    const { getSigningKey } = await import("../materials/name/signingSession.js");
+    const { getSigningKey } =
+      await import("../materials/name/signingSession.js");
     pem = getSigningKey(String(nameId));
     if (!pem) {
       // No held key: this only works when the Name currently has NO password
       // (its key is system-encrypted, so the server can decrypt it). A
       // password-locked key needs an unlock or an importKey first.
-      const { decryptCredential } = await import("../materials/name/credentials.js");
+      const { decryptCredential } =
+        await import("../materials/name/credentials.js");
       pem = decryptCredential(slot.state.privateKeyEnc);
     }
   }
   if (!pem || !/PRIVATE KEY/.test(String(pem))) {
-    throw new IbpError(IBP_ERR.FORBIDDEN,
-      "name set-password: hold the key to change its password — unlock the Name (sign in) or pass its private key (importKey).");
+    throw new IbpError(
+      IBP_ERR.FORBIDDEN,
+      "name set-password: hold the key to change its password — unlock the Name (sign in) or pass its private key (importKey).",
+    );
   }
   // The key MUST be this Name's key (its public key IS the nameId).
   if (String(keypairFromPrivateKeyPem(String(pem)).nameId) !== String(nameId)) {
-    throw new IbpError(IBP_ERR.FORBIDDEN, "name set-password: that key is not this Name's key");
+    throw new IbpError(
+      IBP_ERR.FORBIDDEN,
+      "name set-password: that key is not this Name's key",
+    );
   }
 
   const privateKeyEnc = payload?.password
@@ -228,34 +265,45 @@ async function setPasswordHandler({ addressedNameId, payload }) {
 
 export const NAME_OPS = Object.freeze({
   declare: {
-    description: "Mint a new name (a facet of the story's I_AM) with its own keypair.",
-    label:       "Declare name",
-    args:        { soulType: { type: "string", label: "Soul", required: false } },
-    handler:     declareHandler,
+    description:
+      "Mint a new name (a facet of the story's I) with its own keypair.",
+    label: "Declare name",
+    args: { soulType: { type: "string", label: "Soul", required: false } },
+    handler: declareHandler,
   },
   connect: {
-    description: "Bind the name to a session (the identity-layer be:connect); folds connected on its reel.",
-    label:       "Connect name",
-    args:        {},
-    handler:     connectNameHandler,
+    description:
+      "Bind the name to a session (the identity-layer be:connect); folds connected on its reel.",
+    label: "Connect name",
+    args: {},
+    handler: connectNameHandler,
   },
   release: {
-    description: "Release the name from its session (the name's be:release); folds released on its reel.",
-    label:       "Release name",
-    args:        {},
-    handler:     releaseNameHandler,
+    description:
+      "Release the name from its session (the name's be:release); folds released on its reel.",
+    label: "Release name",
+    args: {},
+    handler: releaseNameHandler,
   },
   "set-password": {
-    description: "Add, change, or remove the Name's password (re-encrypts its private key at rest); requires holding the key — unlock the Name or pass its key.",
-    label:       "Set name password",
-    args:        { password: { type: "string", label: "New password (blank to remove)", required: false } },
-    handler:     setPasswordHandler,
+    description:
+      "Add, change, or remove the Name's password (re-encrypts its private key at rest); requires holding the key — unlock the Name or pass its key.",
+    label: "Set name password",
+    args: {
+      password: {
+        type: "string",
+        label: "New password (blank to remove)",
+        required: false,
+      },
+    },
+    handler: setPasswordHandler,
   },
   banish: {
-    description: "The name tombstones itself; it can never sign a new fact again.",
-    label:       "Banish name",
-    args:        {},
-    handler:     banishHandler,
+    description:
+      "The name tombstones itself; it can never sign a new fact again.",
+    label: "Banish name",
+    args: {},
+    handler: banishHandler,
   },
 });
 

@@ -30,7 +30,9 @@ const VALID_TYPES = new Set(["being", "space", "matter", "name", "library"]);
 
 function assertType(type) {
   if (!VALID_TYPES.has(type)) {
-    throw new Error(`projections: unknown type "${type}" (expected being|space|matter|name)`);
+    throw new Error(
+      `projections: unknown type "${type}" (expected being|space|matter|name)`,
+    );
   }
 }
 
@@ -51,7 +53,7 @@ function assertHistory(history) {
   if (typeof history !== "string" || !history.length) {
     throw new Error(
       `projections: history is required (got ${JSON.stringify(history)}). ` +
-      `Internal callers must thread history from the moment's moment or the wire layer.`,
+        `Internal callers must thread history from the moment's moment or the wire layer.`,
     );
   }
 }
@@ -67,8 +69,8 @@ export function assertHistoryOrThrow(history, callerName) {
   if (typeof history !== "string" || !history.length) {
     throw new Error(
       `${callerName || "substrate consumer"}: history is required ` +
-      `(got ${JSON.stringify(history)}). The wire layer / enclosing moment ` +
-      `must thread history through; this consumer no longer silently defaults to heaven.`,
+        `(got ${JSON.stringify(history)}). The wire layer / enclosing moment ` +
+        `must thread history through; this consumer no longer silently defaults to heaven.`,
     );
   }
   return history;
@@ -97,7 +99,7 @@ export function assertHistoryOrThrow(history, callerName) {
  * history's slot table, no lineage walk. The two canonical uses:
  *
  *   - Post-seal read-back ("I just stamped birth; is the row there?")
- *   - Doctrinal singletons hardcoded to main ("0") . I_AM, the
+ *   - Doctrinal singletons hardcoded to main ("0") . I, the
  *     `./config` cache, boot-time orphan-root walks. These rows live
  *     in main by construction; reading from a history makes no sense.
  *
@@ -125,16 +127,18 @@ export async function loadProjection(type, id, history) {
     const { isHeavenSpace } = await import("./space/heavenLineage.js");
     if (await isHeavenSpace(id)) effectiveHistory = "0";
   }
-  const slot = await Projection.findById(projectionKey(effectiveHistory, type, id)).lean();
+  const slot = await Projection.findById(
+    projectionKey(effectiveHistory, type, id),
+  ).lean();
   if (!slot) return null;
   return {
-    state:      slot.state || {},
-    foldedSeq:  slot.foldedSeq ?? null,
-    position:   slot.position ?? null,
+    state: slot.state || {},
+    foldedSeq: slot.foldedSeq ?? null,
+    position: slot.position ?? null,
     tombstoned: !!slot.tombstoned,
-    type:       slot.type,
-    id:         slot.id,
-    history:    slot.history,
+    type: slot.type,
+    id: slot.id,
+    history: slot.history,
   };
 }
 
@@ -187,7 +191,9 @@ export async function loadOrFold(type, id, history) {
   // initProjection on the way out; the next loadProjection hits cache.
   try {
     const { fold } = await import("../present/stamper/2-fold/foldEngine.js");
-    const { state, foldedSeq } = await fold(type, id, { history: effectiveHistory });
+    const { state, foldedSeq } = await fold(type, id, {
+      history: effectiveHistory,
+    });
     if (!state || Object.keys(state).length === 0) return null;
     // Re-read the slot — fold's initProjection landed the canonical
     // shape (with `position` lifted to the slot level for indexing).
@@ -222,7 +228,13 @@ export async function loadOrFold(type, id, history) {
  * @param {number|null} expectedFoldedSeq
  * @returns {Promise<boolean>}
  */
-export async function saveProjection(type, id, history, next, expectedFoldedSeq) {
+export async function saveProjection(
+  type,
+  id,
+  history,
+  next,
+  expectedFoldedSeq,
+) {
   if (!id) return false;
   assertType(type);
   assertHistory(history);
@@ -231,9 +243,10 @@ export async function saveProjection(type, id, history, next, expectedFoldedSeq)
     throw new Error("saveProjection: next.foldedSeq must be a number");
   }
   const _id = projectionKey(history, type, id);
-  const guard = expectedFoldedSeq == null
-    ? { $or: [{ foldedSeq: null }, { foldedSeq: { $exists: false } }] }
-    : { foldedSeq: expectedFoldedSeq };
+  const guard =
+    expectedFoldedSeq == null
+      ? { $or: [{ foldedSeq: null }, { foldedSeq: { $exists: false } }] }
+      : { foldedSeq: expectedFoldedSeq };
   const r = await Projection.updateOne(
     { _id, ...guard },
     { $set: { state, foldedSeq, position: position ?? null } },
@@ -270,7 +283,7 @@ export async function initProjection(type, id, history, next) {
       $set: {
         state,
         foldedSeq,
-        position:   position ?? null,
+        position: position ?? null,
         tombstoned: false,
       },
       $setOnInsert: { _id, history, type, id },
@@ -301,7 +314,13 @@ export async function initProjection(type, id, history, next) {
  *        Omitted: state is left as-is (release/death paths that only flag).
  * @returns {Promise<void>}
  */
-export async function tombstoneProjection(type, id, history, atFoldedSeq, opts = {}) {
+export async function tombstoneProjection(
+  type,
+  id,
+  history,
+  atFoldedSeq,
+  opts = {},
+) {
   if (!id) throw new Error("tombstoneProjection: id is required");
   assertType(type);
   assertHistory(history);
@@ -311,15 +330,21 @@ export async function tombstoneProjection(type, id, history, atFoldedSeq, opts =
   const _id = projectionKey(history, type, id);
   const set = {
     tombstoned: true,
-    foldedSeq:  atFoldedSeq,
-    position:   null,
+    foldedSeq: atFoldedSeq,
+    position: null,
   };
   if (opts.state && typeof opts.state === "object") set.state = opts.state;
   await Projection.updateOne(
     { _id },
     {
       $set: set,
-      $setOnInsert: { _id, history, type, id, ...(opts.state ? {} : { state: {} }) },
+      $setOnInsert: {
+        _id,
+        history,
+        type,
+        id,
+        ...(opts.state ? {} : { state: {} }),
+      },
     },
     { upsert: true },
   );
@@ -347,8 +372,12 @@ export async function findByPosition(spaceId, history) {
   assertHistory(history);
   if (history === MAIN) {
     const rows = await Projection.find({
-      history: MAIN, position: spaceId, tombstoned: { $ne: true },
-    }).select("type id foldedSeq position").lean();
+      history: MAIN,
+      position: spaceId,
+      tombstoned: { $ne: true },
+    })
+      .select("type id foldedSeq position")
+      .lean();
     return rows.map(toOccupant);
   }
   // Non-main: union with shadowing AND branchPoint filtering. A main
@@ -359,13 +388,19 @@ export async function findByPosition(spaceId, history) {
   const { getBranchPoint } = await import("./history/histories.js");
   const [historyHere, mainOccupants, historyTouched] = await Promise.all([
     Projection.find({
-      history, position: spaceId, tombstoned: { $ne: true },
-    }).select("type id foldedSeq position").lean(),
+      history,
+      position: spaceId,
+      tombstoned: { $ne: true },
+    })
+      .select("type id foldedSeq position")
+      .lean(),
     findByPosition(spaceId, MAIN),
     Projection.find({ history }).select("type id").lean(),
   ]);
   const shadowedKey = (t, i) => `${t}:${i}`;
-  const shadowed = new Set(historyTouched.map((s) => shadowedKey(s.type, s.id)));
+  const shadowed = new Set(
+    historyTouched.map((s) => shadowedKey(s.type, s.id)),
+  );
   // Filter main candidates: (1) not shadowed, (2) existed at branchPoint.
   const mainVisible = [];
   for (const o of mainOccupants) {
@@ -397,16 +432,19 @@ export async function findByName(type, name, history) {
   if (!name) return null;
   // History-local match first (works for main too — main IS just-another-history).
   const historySlot = await Projection.findOne({
-    history, type, "state.name": name, tombstoned: { $ne: true },
+    history,
+    type,
+    "state.name": name,
+    tombstoned: { $ne: true },
   }).lean();
   if (historySlot) {
     return {
-      state:     historySlot.state || {},
+      state: historySlot.state || {},
       foldedSeq: historySlot.foldedSeq ?? null,
-      position:  historySlot.position ?? null,
-      type:      historySlot.type,
-      id:        historySlot.id,
-      history:   historySlot.history,
+      position: historySlot.position ?? null,
+      type: historySlot.type,
+      id: historySlot.id,
+      history: historySlot.history,
     };
   }
   if (history === MAIN) return null;
@@ -421,7 +459,8 @@ export async function findByName(type, name, history) {
   //     (rename, tombstone, divergent fold) — and since the
   //     history-local name query above didn't match it, the inherited
   //     name doesn't resolve here.
-  const { getBranchPoint, loadHistory } = await import("./history/histories.js");
+  const { getBranchPoint, loadHistory } =
+    await import("./history/histories.js");
   const historyRow = await loadHistory(history);
   const parentPath = historyRow?.parent || MAIN;
   const inherited = await findByName(type, name, parentPath);
@@ -429,8 +468,12 @@ export async function findByName(type, name, history) {
   const bp = await getBranchPoint(history, type, inherited.id);
   if (!bp || bp <= 0) return null;
   const touched = await Projection.findOne({
-    history, type, id: inherited.id,
-  }).select("_id").lean();
+    history,
+    type,
+    id: inherited.id,
+  })
+    .select("_id")
+    .lean();
   if (touched) return null;
   return inherited;
 }
@@ -454,24 +497,32 @@ export async function findByParent(beingId, history) {
   assertHistory(history);
   if (history === MAIN) {
     const rows = await Projection.find({
-      history: MAIN, type: "being",
+      history: MAIN,
+      type: "being",
       "state.parentBeingId": beingId,
       tombstoned: { $ne: true },
-    }).select("type id foldedSeq position").lean();
+    })
+      .select("type id foldedSeq position")
+      .lean();
     return rows.map(toOccupant);
   }
-  const { getBranchPoint, loadHistory } = await import("./history/histories.js");
+  const { getBranchPoint, loadHistory } =
+    await import("./history/histories.js");
   const historyRow = await loadHistory(history);
   const parentPath = historyRow?.parent || MAIN;
-  const [historyChildren, inheritedChildren, historyTouched] = await Promise.all([
-    Projection.find({
-      history, type: "being",
-      "state.parentBeingId": beingId,
-      tombstoned: { $ne: true },
-    }).select("type id foldedSeq position").lean(),
-    findByParent(beingId, parentPath),
-    Projection.find({ history, type: "being" }).select("id").lean(),
-  ]);
+  const [historyChildren, inheritedChildren, historyTouched] =
+    await Promise.all([
+      Projection.find({
+        history,
+        type: "being",
+        "state.parentBeingId": beingId,
+        tombstoned: { $ne: true },
+      })
+        .select("type id foldedSeq position")
+        .lean(),
+      findByParent(beingId, parentPath),
+      Projection.find({ history, type: "being" }).select("id").lean(),
+    ]);
   const shadowed = new Set(historyTouched.map((s) => s.id));
   const inheritedVisible = [];
   for (const o of inheritedChildren) {
@@ -498,17 +549,26 @@ export async function listByType(type, history) {
   assertHistory(history);
   if (history === MAIN) {
     const rows = await Projection.find({
-      history: MAIN, type, tombstoned: { $ne: true },
-    }).select("type id foldedSeq position").lean();
+      history: MAIN,
+      type,
+      tombstoned: { $ne: true },
+    })
+      .select("type id foldedSeq position")
+      .lean();
     return rows.map(toOccupant);
   }
-  const { getBranchPoint, loadHistory } = await import("./history/histories.js");
+  const { getBranchPoint, loadHistory } =
+    await import("./history/histories.js");
   const historyRow = await loadHistory(history);
   const parentPath = historyRow?.parent || MAIN;
   const [historySlots, inheritedAll, historyTouched] = await Promise.all([
     Projection.find({
-      history, type, tombstoned: { $ne: true },
-    }).select("type id foldedSeq position").lean(),
+      history,
+      type,
+      tombstoned: { $ne: true },
+    })
+      .select("type id foldedSeq position")
+      .lean(),
     listByType(type, parentPath),
     Projection.find({ history, type }).select("id").lean(),
   ]);
@@ -536,14 +596,14 @@ export async function findRoot(type, history) {
   assertHistory(history);
   const parentField = type === "being" ? "state.parentBeingId" : "state.parent";
   const where = {
-    history, type,
+    history,
+    type,
     tombstoned: { $ne: true },
-    $or: [
-      { [parentField]: null },
-      { [parentField]: { $exists: false } },
-    ],
+    $or: [{ [parentField]: null }, { [parentField]: { $exists: false } }],
   };
-  const rows = await Projection.find(where).select("type id foldedSeq position").lean();
+  const rows = await Projection.find(where)
+    .select("type id foldedSeq position")
+    .lean();
   return rows.map(toOccupant);
 }
 
@@ -562,17 +622,18 @@ export async function findByNamePattern(type, pattern, history) {
   if (!pattern) return [];
   const re = pattern instanceof RegExp ? pattern : new RegExp(pattern);
   const rows = await Projection.find({
-    history, type,
+    history,
+    type,
     "state.name": { $regex: re.source, $options: re.flags },
     tombstoned: { $ne: true },
   }).lean();
   return rows.map((slot) => ({
-    state:     slot.state || {},
+    state: slot.state || {},
     foldedSeq: slot.foldedSeq ?? null,
-    position:  slot.position ?? null,
-    type:      slot.type,
-    id:        slot.id,
-    history:   slot.history,
+    position: slot.position ?? null,
+    type: slot.type,
+    id: slot.id,
+    history: slot.history,
   }));
 }
 
@@ -591,11 +652,17 @@ export async function findByNamePattern(type, pattern, history) {
  * @param {RegExp} [pattern]
  * @returns {Promise<string[]>}
  */
-export async function listMatterNamesInFolder(history, spaceId, parentMatterId, pattern) {
+export async function listMatterNamesInFolder(
+  history,
+  spaceId,
+  parentMatterId,
+  pattern,
+) {
   assertHistory(history);
   if (!spaceId) return [];
   const where = {
-    history, type: "matter",
+    history,
+    type: "matter",
     "state.spaceId": String(spaceId),
     "state.parentMatterId": parentMatterId ? String(parentMatterId) : null,
     tombstoned: { $ne: true },
@@ -618,7 +685,9 @@ export async function countByType(type, history) {
   assertType(type);
   assertHistory(history);
   return await Projection.countDocuments({
-    history, type, tombstoned: { $ne: true },
+    history,
+    type,
+    tombstoned: { $ne: true },
   });
 }
 
@@ -633,7 +702,8 @@ export async function countByParent(beingId, history) {
   if (!beingId) return 0;
   assertHistory(history);
   return await Projection.countDocuments({
-    history, type: "being",
+    history,
+    type: "being",
     "state.parentBeingId": beingId,
     tombstoned: { $ne: true },
   });
@@ -657,13 +727,13 @@ export async function loadProjections(type, ids, history) {
   const out = new Map();
   for (const slot of rows) {
     out.set(slot.id, {
-      state:      slot.state || {},
-      foldedSeq:  slot.foldedSeq ?? null,
-      position:   slot.position ?? null,
+      state: slot.state || {},
+      foldedSeq: slot.foldedSeq ?? null,
+      position: slot.position ?? null,
       tombstoned: !!slot.tombstoned,
-      type:       slot.type,
-      id:         slot.id,
-      history:    slot.history,
+      type: slot.type,
+      id: slot.id,
+      history: slot.history,
     });
   }
   return out;
@@ -682,18 +752,19 @@ export async function findByHeavenSpace(heavenSpaceKind, history) {
   if (!heavenSpaceKind) return null;
   assertHistory(history);
   const slot = await Projection.findOne({
-    history, type: "space",
+    history,
+    type: "space",
     "state.heavenSpace": heavenSpaceKind,
     tombstoned: { $ne: true },
   }).lean();
   if (!slot) return null;
   return {
-    state:     slot.state || {},
+    state: slot.state || {},
     foldedSeq: slot.foldedSeq ?? null,
-    position:  slot.position ?? null,
-    type:      slot.type,
-    id:        slot.id,
-    history:   slot.history,
+    position: slot.position ?? null,
+    type: slot.type,
+    id: slot.id,
+    history: slot.history,
   };
 }
 
@@ -740,7 +811,7 @@ export async function loadHeavenProjection(type, id) {
 
 /**
  * Story's root operator — the first non-system being admitted
- * through cherub. Encapsulates the doctrine (parent-must-be-I_AM-or-
+ * through cherub. Encapsulates the doctrine (parent-must-be-I-or-
  * cherub + name-not-in-system-set + earliest-by-createdAt) so callers
  * can't drift from it.
  *
@@ -755,7 +826,8 @@ export async function findRootOperator(systemNames, history) {
   const allowedParents = ["i-am"];
   if (cherubSlot) allowedParents.push(cherubSlot.id);
   const row = await Projection.findOne({
-    history, type: "being",
+    history,
+    type: "being",
     "state.name": { $type: "string", $nin: systemNames },
     "state.parentBeingId": { $in: allowedParents },
     tombstoned: { $ne: true },

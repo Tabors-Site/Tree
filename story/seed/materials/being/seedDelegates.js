@@ -43,7 +43,7 @@
 // reconciler also keeps existing delegate parentBeingId pointed at
 // me.
 //
-// Lookups for I_AM identity (`findIAm`, `iAmIdentity`,
+// Lookups for I identity (`findIAm`, `iAmIdentity`,
 // `findRootOperator`) live alongside other identity primitives in
 // [identity.js](identity.js). This file owns the delegate roster
 // and the scaffold that ensures their rows exist.
@@ -51,7 +51,7 @@
 import log from "../../seedStory/log.js";
 import { birthBeing } from "./identity/birth.js";
 import { findIAm, iAmIdentity } from "./identity.js";
-import { I_AM } from "./seedBeings.js";
+import { I } from "./seedBeings.js";
 import { findByName, loadProjection } from "../projections.js";
 
 // `invocableBy` is a display label the portal shows next to the
@@ -205,7 +205,10 @@ export async function ensureSeedDelegates(spaceRootId) {
   // ensureSeedDelegates. The I-Am Being row exists by the time this
   // runs.
   if (!spaceRootId) {
-    log.warn("SeedDelegates", "ensureSeedDelegates called without a spaceRootId");
+    log.warn(
+      "SeedDelegates",
+      "ensureSeedDelegates called without a spaceRootId",
+    );
     return { created: 0, existing: 0, deferred: false };
   }
   const { withIAmAct } = await import("../../sprout.js");
@@ -214,7 +217,7 @@ export async function ensureSeedDelegates(spaceRootId) {
   if (!iAm) {
     log.info(
       "SeedDelegates",
-      "no I_AM yet; deferring seed-delegate setup until ensureIAm() runs",
+      "no I yet; deferring seed-delegate setup until ensureIAm() runs",
     );
     return { created: 0, existing: 0, deferred: true };
   }
@@ -231,7 +234,8 @@ export async function ensureSeedDelegates(spaceRootId) {
   // fallback handle placement.
   let circleCoord = null;
   try {
-    const live = (await loadProjection("space", spaceRootId, "0"))?.state || null;
+    const live =
+      (await loadProjection("space", spaceRootId, "0"))?.state || null;
     let size = live?.size || null;
     if (!size && opts.moment?.deltaF) {
       const pendingCreate = opts.moment.deltaF.find(
@@ -243,8 +247,13 @@ export async function ensureSeedDelegates(spaceRootId) {
       );
       size = pendingCreate?.params?.size || null;
     }
-    if (size && Number.isFinite(size.x) && Number.isFinite(size.y) &&
-        size.x > 0 && size.y > 0) {
+    if (
+      size &&
+      Number.isFinite(size.x) &&
+      Number.isFinite(size.y) &&
+      size.x > 0 &&
+      size.y > 0
+    ) {
       const cx = size.x / 2;
       const cy = size.y / 2;
       // Ring radius = quarter of the smaller dimension. Tight enough
@@ -260,7 +269,9 @@ export async function ensureSeedDelegates(spaceRootId) {
         };
       };
     }
-  } catch { /* defensive: leave circleCoord null */ }
+  } catch {
+    /* defensive: leave circleCoord null */
+  }
 
   // Accumulator for the place root's qualities.beings entries. The
   // doctrine (one moment = one act, an act stamps each reel at most
@@ -295,14 +306,20 @@ export async function ensureSeedDelegates(spaceRootId) {
         const beingTarget = { kind: "being", id: String(existingSlot.id) };
         const setFieldInOwnMoment = (label, field, value) =>
           withIAmAct(label, async (ctx) =>
-            doVerb(beingTarget, "set-being", { field, value },
-              { identity: I_AM, moment: ctx }));
+            doVerb(
+              beingTarget,
+              "set-being",
+              { field, value },
+              { identity: I, moment: ctx },
+            ),
+          );
 
         const st = existingSlot.state || {};
         const quals = st.qualities;
-        const existingCognition = quals instanceof Map
-          ? quals.get("cognition")?.defaultKind
-          : quals?.cognition?.defaultKind;
+        const existingCognition =
+          quals instanceof Map
+            ? quals.get("cognition")?.defaultKind
+            : quals?.cognition?.defaultKind;
         if (existingCognition !== spec.cognition) {
           await setFieldInOwnMoment(
             `I correct ${spec.name}'s cognition`,
@@ -376,7 +393,9 @@ export async function ensureSeedDelegates(spaceRootId) {
             // root) and stand at the center of their own 8x8 room.
             ...(spec.homeHeavenSpace
               ? { coord: { x: 4, y: 4 } }
-              : (circleCoord ? { coord: circleCoord(i) } : {})),
+              : circleCoord
+                ? { coord: circleCoord(i) }
+                : {}),
           },
           identity: iAmIdent,
           moment: ctx,
@@ -498,11 +517,11 @@ export async function grantAngelToSeedDelegates() {
           { kind: "being", id: String(slot.id) },
           "grant-able",
           {
-            able:          "angel",
+            able: "angel",
             anchorSpaceId: String(heaven.id),
             anchorBeingId: null,
           },
-          { identity: I_AM, moment: ctx },
+          { identity: I, moment: ctx },
         );
       });
       granted++;
@@ -539,11 +558,11 @@ export async function grantAngelToSeedDelegates() {
           { kind: "being", id: String(slot.id) },
           "grant-able",
           {
-            able:          spec.able,
+            able: spec.able,
             anchorSpaceId: String(rootId),
             anchorBeingId: null,
           },
-          { identity: I_AM, moment: ctx },
+          { identity: I, moment: ctx },
         );
       });
       granted++;

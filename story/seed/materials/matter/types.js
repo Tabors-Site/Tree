@@ -37,8 +37,18 @@
 //                        same namespace semantics as grant-able:<able>).
 
 import log from "../../seedStory/log.js";
-import { resolveTypeFromFold } from "../../present/word/wordStore.js";
+import {
+  resolveTypeFromFold,
+  listFoldedTypes,
+} from "../../present/word/wordStore.js";
 
+// REGISTRY is the module-load REGISTRATION BUFFER, never a resolution truth (mirrors do.js:73-82 for
+// ops): seed types register here at module load — BEFORE seedFold can declare them — and
+// declareTypesToFold (wordStore.js) reads listMatterTypes() at boot to KNOW what to declare onto the
+// fold, exactly like declareOpsToFold reads the ops Map. getMatterType resolves FROM THE FOLD ONLY
+// (the chain), because genesis folds the types in the pre-story window before any matter is created
+// (verify-typesfold-boot: zero Map-fallthroughs at boot). An extension registering a type after boot
+// is likewise caught by the boot-end declareTypesToFold pass (genesis.js).
 const REGISTRY = new Map();
 
 const MAX_REGISTERED = 500;
@@ -79,7 +89,10 @@ const VALID_CONTENT_KINDS = new Set(["text", "binary", "none"]);
  */
 export function registerMatterType(name, def = {}, extName = "seed") {
   if (typeof name !== "string" || !name.length) {
-    log.warn("MatterTypes", "registerMatterType: name must be a non-empty string");
+    log.warn(
+      "MatterTypes",
+      "registerMatterType: name must be a non-empty string",
+    );
     return false;
   }
   const owner = extName || "seed";
@@ -110,7 +123,10 @@ export function registerMatterType(name, def = {}, extName = "seed") {
     }
   }
   if (REGISTRY.size >= MAX_REGISTERED) {
-    log.error("MatterTypes", `Matter-type registry full (${MAX_REGISTERED}). "${name}" rejected.`);
+    log.error(
+      "MatterTypes",
+      `Matter-type registry full (${MAX_REGISTERED}). "${name}" rejected.`,
+    );
     return false;
   }
   if (REGISTRY.has(name)) {
@@ -122,59 +138,87 @@ export function registerMatterType(name, def = {}, extName = "seed") {
     return false;
   }
 
-  let contentKinds = Array.isArray(def.contentKinds) && def.contentKinds.length > 0
-    ? def.contentKinds.filter((k) => VALID_CONTENT_KINDS.has(k))
-    : ["text", "none"];
+  let contentKinds =
+    Array.isArray(def.contentKinds) && def.contentKinds.length > 0
+      ? def.contentKinds.filter((k) => VALID_CONTENT_KINDS.has(k))
+      : ["text", "none"];
   if (contentKinds.length === 0) contentKinds = ["none"];
 
-  REGISTRY.set(name, Object.freeze({
+  REGISTRY.set(
     name,
-    description: typeof def.description === "string" ? def.description : null,
-    contentKinds: Object.freeze([...contentKinds]),
-    mimeTypes: Array.isArray(def.mimeTypes)
-      ? Object.freeze(def.mimeTypes.filter((m) => typeof m === "string" && m.length))
-      : null,
-    ops: Array.isArray(def.ops)
-      ? Object.freeze(def.ops.filter((o) => typeof o === "string" && o.length))
-      : Object.freeze([]),
-    render: def.render && typeof def.render === "object"
-      ? Object.freeze({ ...def.render })
-      : null,
-    claims: freezeClaims(def.claims),
-    // EXECUTABLE matter (native-words-via-matter, 21.md P5): a type whose bytes can be RUN. The
-    // word engine fetches the matter blob by hash and dispatches to this type's run-op HANDLER
-    // (registered via matterWord.registerDriver — the name/handler split do-ops already use). The
-    // effect-class lives HERE, on the type (Tabor): `pure` folds like compiled Word (replay-safe,
-    // cached by hash); `effectful` is a fact-source (stamped once, never recomputed). `entry` is the
-    // exported function the run-op calls. Null = inert matter (a note, a file, a model asset).
-    executable: def.executable && typeof def.executable === "object"
-      ? Object.freeze({
-          effect: def.executable.effect === "pure" ? "pure" : "effectful",
-          entry: typeof def.executable.entry === "string" && def.executable.entry.length ? def.executable.entry : "run",
-        })
-      : null,
-    ownerExtension: owner,
-  }));
+    Object.freeze({
+      name,
+      description: typeof def.description === "string" ? def.description : null,
+      contentKinds: Object.freeze([...contentKinds]),
+      mimeTypes: Array.isArray(def.mimeTypes)
+        ? Object.freeze(
+            def.mimeTypes.filter((m) => typeof m === "string" && m.length),
+          )
+        : null,
+      ops: Array.isArray(def.ops)
+        ? Object.freeze(
+            def.ops.filter((o) => typeof o === "string" && o.length),
+          )
+        : Object.freeze([]),
+      // FIELDS — the type's attribute SCHEMA ("a X has Y"), folded from `has` laws (all-rules-fold).
+      // Each: { name, optional, gloss }. Frozen-empty default; the declaration half (declareTypeField-
+      // ToFold) appends. create-matter required-field validation reads these (deferred).
+      fields: Array.isArray(def.fields)
+        ? Object.freeze(def.fields.map((f) => Object.freeze({ ...f })))
+        : Object.freeze([]),
+      render:
+        def.render && typeof def.render === "object"
+          ? Object.freeze({ ...def.render })
+          : null,
+      claims: freezeClaims(def.claims),
+      // EXECUTABLE matter (native-words-via-matter, 21.md P5): a type whose bytes can be RUN. The
+      // word engine fetches the matter blob by hash and dispatches to this type's run-op HANDLER
+      // (registered via matterWord.registerDriver — the name/handler split do-ops already use). The
+      // effect-class lives HERE, on the type (Tabor): `pure` folds like compiled Word (replay-safe,
+      // cached by hash); `effectful` is a fact-source (stamped once, never recomputed). `entry` is the
+      // exported function the run-op calls. Null = inert matter (a note, a file, a model asset).
+      executable:
+        def.executable && typeof def.executable === "object"
+          ? Object.freeze({
+              effect: def.executable.effect === "pure" ? "pure" : "effectful",
+              entry:
+                typeof def.executable.entry === "string" &&
+                def.executable.entry.length
+                  ? def.executable.entry
+                  : "run",
+            })
+          : null,
+      ownerExtension: owner,
+    }),
+  );
   log.verbose("MatterTypes", `Registered: ${name} (${owner})`);
   return true;
 }
 
 /** Validate + freeze a claims block. Null when absent/malformed. */
 function freezeClaims(claims) {
-  if (!claims || typeof claims !== "object" || Array.isArray(claims)) return null;
+  if (!claims || typeof claims !== "object" || Array.isArray(claims))
+    return null;
   const strList = (v) =>
     Array.isArray(v)
-      ? Object.freeze(v.filter((s) => typeof s === "string" && s.length).map((s) => s.toLowerCase()))
+      ? Object.freeze(
+          v
+            .filter((s) => typeof s === "string" && s.length)
+            .map((s) => s.toLowerCase()),
+        )
       : null;
   const out = {
-    mimeTypes:   strList(claims.mimeTypes),
-    extensions:  strList(claims.extensions),
+    mimeTypes: strList(claims.mimeTypes),
+    extensions: strList(claims.extensions),
     urlPatterns: strList(claims.urlPatterns),
-    schemes:     strList(claims.schemes),
-    priority:    Number.isFinite(claims.priority) ? claims.priority : 0,
+    schemes: strList(claims.schemes),
+    priority: Number.isFinite(claims.priority) ? claims.priority : 0,
   };
-  const empty = !out.mimeTypes?.length && !out.extensions?.length
-    && !out.urlPatterns?.length && !out.schemes?.length;
+  const empty =
+    !out.mimeTypes?.length &&
+    !out.extensions?.length &&
+    !out.urlPatterns?.length &&
+    !out.schemes?.length;
   return empty && out.priority === 0 ? null : Object.freeze(out);
 }
 
@@ -192,21 +236,63 @@ export function unregisterMatterTypesFromExtension(extName) {
     }
   }
   if (count > 0) {
-    log.verbose("MatterTypes", `Unregistered ${count} matter type(s) from "${extName}"`);
+    log.verbose(
+      "MatterTypes",
+      `Unregistered ${count} matter type(s) from "${extName}"`,
+    );
   }
   return count;
 }
 
 export function getMatterType(name) {
   if (typeof name !== "string" || !name.length) return null;
-  // Fold-first: a type resolves from the word-fold (coin facts) when declared; the Map is the
-  // module-load registration buffer + a backstop for non-booted contexts (the projection is empty
-  // until rehydrate). verify-typesfold proves the fold read is value-identical to the Map.
-  return resolveTypeFromFold(name) || REGISTRY.get(name) || null;
+  // Fold-ONLY: a type resolves from the word-fold (coin facts) — the chain is the SOLE truth, no Map
+  // backstop. This mirrors do.js:73-82 for ops: genesis declares every type onto I's reel inside
+  // seedFold (the pre-story window, after ensureIAm and BEFORE the first matter is created), so the
+  // first getMatterType dispatched while building the story already resolves from the fold. The
+  // REGISTRY Map stays ONLY as the module-load registration buffer declareTypesToFold reads to KNOW
+  // what to declare — never a resolution truth. (verify-typesfold-boot: zero Map-fallthroughs at boot;
+  // verify-typesfold proves the fold read is value-identical to the old Map read.)
+  return resolveTypeFromFold(name) || null;
 }
 
+// The module-load REGISTRATION BUFFER, not the live catalog: declareTypesToFold reads this at boot to
+// KNOW what to declare onto the fold (the do-ops' declareOpsToFold-reads-the-Map pattern). NOT a
+// runtime enumeration of what TYPES EXIST — a word-declared type ("a meal has a calorie") never lands
+// in the Map. Runtime enumeration (the classifier, the type picker) reads listMatterTypesFolded.
 export function listMatterTypes() {
   return [...REGISTRY.values()];
+}
+
+// RUNTIME enumeration: every type that EXISTS, read from the fold (the chain) — seed types AND
+// word-declared types alike. This is the live catalog the classifier and the portal type menu read,
+// now that getMatterType is fold-only. Mirrors getMatterType's fold-only resolution one row up.
+export function listMatterTypesFolded() {
+  return listFoldedTypes();
+}
+
+// REQUIRED-FIELD validation (the `has` schema, all-rules-fold §4). A type's `fields` (folded from "a X
+// has a Y" laws) name the attributes a matter of that type MUST carry. A declared field Y maps to the
+// quality path `qualities.<type>.<Y>` (the namespace every type uses — http's currentUrl, connection's
+// socketId, ...). A field with optional:true (declared "a X may have a Y") is NOT required.
+//
+// This is REQUIRED-SET validation, NOT a closed allowlist: it only checks the declared required fields
+// are PRESENT; it never rejects quality keys outside the schema (the open qualities layer stays open).
+// Returns the first missing required field NAME, or null when every required field is present. GATE the
+// caller behind `typeDef.fields?.length` so schema-less types behave exactly as today (dormant until a
+// type declares a required field).
+export function missingRequiredField(typeDef, qualities) {
+  if (!typeDef || !Array.isArray(typeDef.fields) || typeDef.fields.length === 0)
+    return null;
+  const ns =
+    (qualities && typeof qualities === "object" && qualities[typeDef.name]) ||
+    {};
+  for (const f of typeDef.fields) {
+    if (!f || f.optional) continue; // optional ("may have") fields are not required
+    const v = ns[f.name];
+    if (v === undefined || v === null) return f.name;
+  }
+  return null;
 }
 
 /**
@@ -220,7 +306,8 @@ export function typeAllowsContentKind(typeDef, kind) {
 
 /** Does the type's mime allowlist (if any) admit this mimeType? */
 export function typeAllowsMime(typeDef, mimeType) {
-  if (!typeDef || !typeDef.mimeTypes || typeDef.mimeTypes.length === 0) return true;
+  if (!typeDef || !typeDef.mimeTypes || typeDef.mimeTypes.length === 0)
+    return true;
   if (typeof mimeType !== "string" || !mimeType.length) return false;
   const bare = mimeType.split(";")[0].trim().toLowerCase();
   for (const pattern of typeDef.mimeTypes) {
@@ -237,7 +324,8 @@ export function typeAllowsMime(typeDef, mimeType) {
 // ─────────────────────────────────────────────────────────────────────
 
 registerMatterType("generic", {
-  description: "Freeform matter — a note, a context chunk, a qualities-only object.",
+  description:
+    "Freeform matter — a note, a context chunk, a qualities-only object.",
   contentKinds: ["text", "none"],
   ops: ["set-matter", "end-matter"],
   render: { icon: "note", mode: "text" },
@@ -279,7 +367,11 @@ registerMatterType("model", {
     "qualities point back at it. Bytes load natively from the content " +
     "store.",
   contentKinds: ["binary"],
-  mimeTypes: ["model/gltf-binary", "model/gltf+json", "application/octet-stream"],
+  mimeTypes: [
+    "model/gltf-binary",
+    "model/gltf+json",
+    "application/octet-stream",
+  ],
   ops: ["set-matter", "end-matter", "purge-content"],
   render: { icon: "model", mode: "model" },
   claims: {
@@ -296,7 +388,7 @@ registerMatterType("source", {
     "The disk-fold populator (materials/space/source.js) births rows " +
     "with the reference `{ path, kind, size?, mtime?, mimeType?, " +
     "hash? }`; live writes through the mirror mount replace content " +
-    "with a CAS ref (`{ kind:\"cas\", hash, ... }`) the same way file " +
+    'with a CAS ref (`{ kind:"cas", hash, ... }`) the same way file ' +
     "matter does. Both content shapes are legal here; the mount " +
     "rendering layer reads whichever the row currently carries.",
   contentKinds: ["text", "binary", "none"],
@@ -307,7 +399,7 @@ registerMatterType("source", {
 registerMatterType("ibpa", {
   description:
     "An IBPA — the inter-story portal. Content carries the target " +
-    "address (`{ target: \"<story>#<history>/<position>\" }`), the " +
+    'address (`{ target: "<story>#<history>/<position>" }`), the ' +
     "IBP sibling of web's `{ url }` — a COMPLETELY different " +
     "reference world: a url opens into the WWW over HTTP (render " +
     "only, iframes); an IBPA opens into another story over IBP " +
@@ -348,7 +440,8 @@ registerMatterType("connection", {
 // same name/handler split do-ops use. "resource types" (a model, code) are just matter types — this
 // is where the executable ones live, not a separate "resource" registry.
 registerMatterType("wasm", {
-  description: "A WebAssembly module — a word's body as sandboxed, deterministic bytes. Run with no imports (no ambient authority), so it is PURE by default: replay-safe, cached by hash.",
+  description:
+    "A WebAssembly module — a word's body as sandboxed, deterministic bytes. Run with no imports (no ambient authority), so it is PURE by default: replay-safe, cached by hash.",
   contentKinds: ["binary"],
   mimeTypes: ["application/wasm"],
   ops: ["set-matter", "end-matter", "purge-content"],
@@ -358,7 +451,8 @@ registerMatterType("wasm", {
 });
 
 registerMatterType("js", {
-  description: "A JavaScript body — a word's body as JS source. The wider trust hole: full ambient authority unless externally sandboxed, so EFFECTFUL by default (a fact-source). A word may override to pure when its body is genuinely pure.",
+  description:
+    "A JavaScript body — a word's body as JS source. The wider trust hole: full ambient authority unless externally sandboxed, so EFFECTFUL by default (a fact-source). A word may override to pure when its body is genuinely pure.",
   contentKinds: ["text"],
   ops: ["set-matter", "end-matter"],
   render: { icon: "code", mode: "text" },

@@ -147,7 +147,12 @@ registerOperation("ask-able", {
         grantedBy: String(identity.beingId), // self-grant via the able's auto policy
       });
       return stampsFact(
-        { granted: true, path: "auto", able: ableName, anchorSpaceId: foundHost },
+        {
+          granted: true,
+          path: "auto",
+          able: ableName,
+          anchorSpaceId: foundHost,
+        },
         grant,
         { kind: "being", id: identity.beingId },
       );
@@ -162,8 +167,13 @@ registerOperation("ask-able", {
     const ownerId = hostSlot?.state?.owner;
     if (!ownerId) {
       return stampsFact(
-        { granted: false, path: "queue", able: ableName, anchorSpaceId: foundHost,
-          message: `Able "${ableName}" needs manual approval but the host space has no owner to ask.` },
+        {
+          granted: false,
+          path: "queue",
+          able: ableName,
+          anchorSpaceId: foundHost,
+          message: `Able "${ableName}" needs manual approval but the host space has no owner to ask.`,
+        },
         { able: ableName, anchorSpaceId: foundHost, outcome: "queue-no-owner" },
         { kind: "being", id: identity.beingId },
       );
@@ -172,8 +182,13 @@ registerOperation("ask-able", {
     const ownerName = ownerSlot?.state?.name;
     if (!ownerName) {
       return stampsFact(
-        { granted: false, path: "queue", able: ableName, anchorSpaceId: foundHost,
-          message: `Able "${ableName}" needs manual approval but the owner couldn't be addressed.` },
+        {
+          granted: false,
+          path: "queue",
+          able: ableName,
+          anchorSpaceId: foundHost,
+          message: `Able "${ableName}" needs manual approval but the owner couldn't be addressed.`,
+        },
         { able: ableName, anchorSpaceId: foundHost, outcome: "queue-no-owner" },
         { kind: "being", id: identity.beingId },
       );
@@ -207,16 +222,26 @@ registerOperation("ask-able", {
       );
     } catch (err) {
       return stampsFact(
-        { granted: false, path: "queue", able: ableName, anchorSpaceId: foundHost,
-          message: `Failed to send request to @${ownerName}: ${err?.message || err}` },
+        {
+          granted: false,
+          path: "queue",
+          able: ableName,
+          anchorSpaceId: foundHost,
+          message: `Failed to send request to @${ownerName}: ${err?.message || err}`,
+        },
         { able: ableName, anchorSpaceId: foundHost, outcome: "queue-failed" },
         { kind: "being", id: identity.beingId },
       );
     }
 
     return stampsFact(
-      { granted: false, path: "queue", able: ableName, anchorSpaceId: foundHost,
-        message: `Requested. @${ownerName} will see this in their inbox.` },
+      {
+        granted: false,
+        path: "queue",
+        able: ableName,
+        anchorSpaceId: foundHost,
+        message: `Requested. @${ownerName} will see this in their inbox.`,
+      },
       { able: ableName, anchorSpaceId: foundHost, outcome: "queue" },
       { kind: "being", id: identity.beingId },
     );
@@ -245,7 +270,7 @@ async function _askAbleViaWord({ caller, able, space, moment }) {
   if (!moment) return null;
   // HOST ESCAPE: ask-able is HOST-facilitated — the host (i-am) runs the .word THROUGH the asker's
   // being (`through: caller` → runAbleWord's being identity, i-am). So the auto-grant carries
-  // I_AM authority and the queue summon reaches the owner FROM i-am (the host), not the asker (a
+  // I authority and the queue summon reaches the owner FROM i-am (the host), not the asker (a
   // fresh asker holds no able permitting summon — it would be correctly denied). The asker rides
   // in the inbox CONTENT, not the call's `from` stance.
   const { resolveAbleWord, runAbleWord } =
@@ -423,7 +448,12 @@ registerOperation("take-able", {
       grantedBy: String(identity.beingId),
     });
     return stampsFact(
-      { granted: true, path: "grabbed", able: ableName, anchorSpaceId: foundHost },
+      {
+        granted: true,
+        path: "grabbed",
+        able: ableName,
+        anchorSpaceId: foundHost,
+      },
       grant,
       { kind: "being", id: identity.beingId },
     );

@@ -222,14 +222,14 @@ of facts, and it is many; the fact is one, and shared.
 Everything I form is one of six things. The schemas are mine alone.
 Extensions extend through the qualities Map, not through new fields.
 
-| Primitive  | What it is                                                                                                                                         | Schema                                                   |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| **Name**   | The identity that signs. A keypair; its `_id` is the ed25519 public key. Not in the world, it acts THROUGH beings. One Name, many beings. The I-Am is the story's root Name. | [materials/name/name.js](materials/name/name.js)         |
+| Primitive  | What it is                                                                                                                                                                                     | Schema                                                   |
+| ---------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| **Name**   | The identity that signs. A keypair; its `_id` is the ed25519 public key. Not in the world, it acts THROUGH beings. One Name, many beings. The I-Am is the story's root Name.                   | [materials/name/name.js](materials/name/name.js)         |
 | **Being**  | Presence in the world. A formed body a Name acts through. Humans, LLM beings, scripted code, future composites. Its `_id` is a content id; it expresses a `trueName` (the Name that signs it). | [materials/being/being.js](materials/being/being.js)     |
-| **Space**  | A position in the tree. Holds matter, hosts beings, owns quality namespaces.                                                                       | [materials/space/space.js](materials/space/space.js)     |
-| **Matter** | Stuff inside a space. `type` says what it IS; owned bytes live content-addressed in the CAS store, the row carries the reference.                  | [materials/matter/matter.js](materials/matter/matter.js) |
-| **Fact**   | One recorded change. Content addressed; chained through prev-hashes; signed at seal. A chain of facts, folded, is Truth.                           | [past/fact/fact.js](past/fact/fact.js)                   |
-| **Act**    | One sealed moment of one being, the doer's committed deed. Opened in assign, sealed in stamped. Every Fact carries the `actId` of the Act it rode. | [past/act/act.js](past/act/act.js)                       |
+| **Space**  | A position in the tree. Holds matter, hosts beings, owns quality namespaces.                                                                                                                   | [materials/space/space.js](materials/space/space.js)     |
+| **Matter** | Stuff inside a space. `type` says what it IS; owned bytes live content-addressed in the CAS store, the row carries the reference.                                                              | [materials/matter/matter.js](materials/matter/matter.js) |
+| **Fact**   | One recorded change. Content addressed; chained through prev-hashes; signed at seal. A chain of facts, folded, is Truth.                                                                       | [past/fact/fact.js](past/fact/fact.js)                   |
+| **Act**    | One sealed moment of one being, the doer's committed deed. Opened in assign, sealed in stamped. Every Fact carries the `actId` of the Act it rode.                                             | [past/act/act.js](past/act/act.js)                       |
 
 Being, Space, and Matter carry the qualities Map. Name, Fact, and Act
 are fixed shapes (identity, the audit, and the moment-frame don't grow).
@@ -254,14 +254,14 @@ Every act is one of six verbs over an IBP address. Five act in the
 world; NAME acts at the identity layer beneath it. Six verbs are my
 whole public surface.
 
-| Verb       | Acts on              | What I do                                                                                    |
-| ---------- | -------------------- | -------------------------------------------------------------------------------------------- |
-| **SEE**    | Space, Matter, Being | Read the present. Resolve the stance, fold the leaf and occupants, return a place descriptor. Writes nothing.  |
-| **RECALL** | Space, Matter, Being | Read the past. Fold a position's history into past-tense Word — the same `assembleStory` fold the book renders. A cold-walk over the reel; writes nothing. |
-| **DO**     | Space, Matter        | Run a word on the target through a registered operation. Stamps a Fact on the target's reel.     |
-| **BE**     | Being (self)         | The actor's binding: birth, connect, release, switch, death. Stamps a Fact on the actor's own reel. |
+| Verb       | Acts on              | What I do                                                                                                                                                                                                                         |
+| ---------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **SEE**    | Space, Matter, Being | Read the present. Resolve the stance, fold the leaf and occupants, return a place descriptor. Writes nothing.                                                                                                                     |
+| **RECALL** | Space, Matter, Being | Read the past. Fold a position's history into past-tense Word — the same `assembleStory` fold the book renders. A cold-walk over the reel; writes nothing.                                                                        |
+| **DO**     | Space, Matter        | Run a word on the target through a registered operation. Stamps a Fact on the target's reel.                                                                                                                                      |
+| **BE**     | Being (self)         | The actor's binding: birth, connect, release, switch, death. Stamps a Fact on the actor's own reel.                                                                                                                               |
 | **NAME**   | Name                 | Declare and manage a Name — the keypair that signs every act and owns its act-chain: `declare` (a new Name, a fresh keypair) and `banish`. Stamps on the Name's own reel, the most primitive reel, outside the world's histories. |
-| **CALL**   | Being                | Deliver a message. Stamp a `call` Fact on the caller's reel; the cross-cutting fold maintains the inbox. |
+| **CALL**   | Being                | Deliver a message. Stamp a `call` Fact on the caller's reel; the cross-cutting fold maintains the inbox.                                                                                                                          |
 
 Two of the six only read marks and leave none: SEE reads the present,
 RECALL the past. The other four strike one — DO marks the target, BE
@@ -530,9 +530,9 @@ a reducer plus one registry line. The engine never changes.
 a handler that runs on every fact in the fold tail. For projections
 that span reels. Three uses today, one mechanism:
 
-| Projection            | Handler triggers                                                                 | Built in                                                                                               |
-| --------------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| **Position index**    | Every reducer writes `state.position`; `findByPosition` queries the index.       | Implicit in projection field                                                                           |
+| Projection            | Handler triggers                                                            | Built in                                                                                               |
+| --------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| **Position index**    | Every reducer writes `state.position`; `findByPosition` queries the index.  | Implicit in projection field                                                                           |
 | **InboxProjection**   | `call` upserts row; `be:sever` deletes by rootCorrelation; Act seal evicts. | [past/projections/inbox/inboxProjectionFold.js](past/projections/inbox/inboxProjectionFold.js)         |
 | **ThreadsProjection** | `call` upserts row + adds participants; `be:sever` marks; Act seal bumps.   | [past/projections/threads/threadsProjectionFold.js](past/projections/threads/threadsProjectionFold.js) |
 
@@ -633,7 +633,7 @@ your write didn't land. Two legitimate uses:
 
 - **Post-seal read-back.** "I just stamped birth; is the row there?"
   A null return is a seal-failure signal.
-- **Doctrinal singletons hardcoded to main.** I_AM (story-anchored
+- **Doctrinal singletons hardcoded to main.** I (story-anchored
   by construction), the `./config` cache (one config per story),
   boot-time orphan-root walks. Reading these from a non-main branch
   makes no sense; "0" is correct.
@@ -832,7 +832,6 @@ list. The future public-directory id→name slices.
 qualities, flow per being, world signals per space, content per
 matter), inhabit relationships, wake schedules per being, every
 per-position fact stream.
-
 
 ## Orientation — the three turns
 
@@ -1085,12 +1084,7 @@ await story.do(
   { field: "qualities.<ns>.<innerKey>", value },
   opts,
 );
-await story.do(
-  target,
-  "set-matter",
-  { field: "qualities.<ns>", value },
-  opts,
-);
+await story.do(target, "set-matter", { field: "qualities.<ns>", value }, opts);
 ```
 
 The reducer's `applySetQualities` derives the new state; the fold
@@ -1249,27 +1243,27 @@ message.
 
 1. **Able-walk authorization** — the gate the verb dispatcher passes
    through. Layered evaluation (first match wins):
-     - **I-Am bypass** — the bootstrap axiom.
-     - **Anonymous arrival floor** — stateless callers run under
-       arrival's canX (canSee: `["arrival-view"]`, canBe: birth/connect
-       for registration).
-     - **Nearest-claim ownership** — walk the target's ancestor chain
-       for the first non-empty `members.owner`. If the actor is in
-       that claim's owner list → ALLOW. If `@public` is on the claim
-       → public-commons branch fires (visitor floor; canX-gated).
-       Private sub-spaces inside a public-owned commons take
-       precedence over the inherited commons — nearest-claim-wins.
-     - **Able-walk** — for each entry in the caller's
-       `qualities.ablesGranted`, look up the spec at the grant's
-       anchor (walking up `qualities.ables[name]`), check reach,
-       then check the able's canSee/canDo/canSummon/canBe.
-     - **Public-commons** — fires only when nearest-claim is @public.
-       Applies the seed-shipped `public-commons` able canX as the
-       visitor floor.
-     - **Default deny.**
-   The able's canX is the gate; there's no parallel `qualities.permissions`
-   namespace. Authority chains back to I-Am via the grant chain on
-   each being's reel.
+   - **I-Am bypass** — the bootstrap axiom.
+   - **Anonymous arrival floor** — stateless callers run under
+     arrival's canX (canSee: `["arrival-view"]`, canBe: birth/connect
+     for registration).
+   - **Nearest-claim ownership** — walk the target's ancestor chain
+     for the first non-empty `members.owner`. If the actor is in
+     that claim's owner list → ALLOW. If `@public` is on the claim
+     → public-commons branch fires (visitor floor; canX-gated).
+     Private sub-spaces inside a public-owned commons take
+     precedence over the inherited commons — nearest-claim-wins.
+   - **Able-walk** — for each entry in the caller's
+     `qualities.ablesGranted`, look up the spec at the grant's
+     anchor (walking up `qualities.ables[name]`), check reach,
+     then check the able's canSee/canDo/canSummon/canBe.
+   - **Public-commons** — fires only when nearest-claim is @public.
+     Applies the seed-shipped `public-commons` able canX as the
+     visitor floor.
+   - **Default deny.**
+     The able's canX is the gate; there's no parallel `qualities.permissions`
+     namespace. Authority chains back to I-Am via the grant chain on
+     each being's reel.
 2. **Extension scope**, `qualities.extensions.blocked[]` /
    `restricted[]` / `allowed[]` accumulate up the parent chain. Blocked
    extensions get no tools, hooks, ables, or quality writes at that
@@ -1337,17 +1331,17 @@ not a deletion, and words stack.
 
 In the grain of the rest of this file: to register is to **coin** the
 word — strike a `declare-word` fact onto the chain, signed by the name
-that declares it (I_AM for the seed's words, an extension for its own).
+that declares it (I for the seed's words, an extension for its own).
 A word is a coin; the live vocabulary is the fold of those coins;
-disabling strikes a *withdrawal*, never a melt — the coin stays struck,
+disabling strikes a _withdrawal_, never a melt — the coin stays struck,
 its face turned to off. Words stack because coins accumulate, and nothing
 is ever un-struck.
 
-| Registry       | What it registers                                                                                                                            | Lookup                                                 |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| **Operations** | DO actions, keyed `<ext>:<action>`. Bare names reserved for me.                                                                              | [ibp/operations.js](ibp/operations.js)                 |
+| Registry       | What it registers                                                                                                                        | Lookup                                                 |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| **Operations** | DO actions, keyed `<ext>:<action>`. Bare names reserved for me.                                                                          | [ibp/operations.js](ibp/operations.js)                 |
 | **Ables**      | CALL-honoring being templates. Each declares permissions, respondMode, `call(message, ctx)`, optional `buildSystemPrompt` / `toolNames`. | [present/ables/registry.js](present/ables/registry.js) |
-| **Seeds**      | Plantable scaffolds. Recipes that bootstrap a domain. Operators plant via the `plant` DO.                                                    | [materials/seeds.js](materials/seeds.js)               |
+| **Seeds**      | Plantable scaffolds. Recipes that bootstrap a domain. Operators plant via the `plant` DO.                                                | [materials/seeds.js](materials/seeds.js)               |
 
 Auto-namespacing. Extensions write bare names; I record the qualified
 form (`governing:hire-planner`). Same prefixing applies to
@@ -1503,15 +1497,15 @@ write what the able IS; I fill in everything derivable.
 }
 ```
 
-| Field                | Optional? | What it does                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| -------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Field                | Optional? | What it does                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| -------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`               | required  | Kebab-case identifier (`harmony:dancer-llm`). The activeAble on a CALL resolves through it.                                                                                                                                                                                                                                                                                                                                        |
 | `canSee`             | optional  | Preloaded perceptions. Each entry is either an IBP address (preloaded via `seeVerb` — the position descriptor becomes a face block) or a registered SEE op name (preloaded via the seeOps registry — the structured return becomes a face block). Both render as `[<label>]\n<JSON>` in the system prompt. NOT a tool; the being does not pick from a menu. Non-empty → permission `see` is added (verb-layer auth still applies). |
-| `canDo`              | optional  | DO action entries the LLM may invoke via the seed's generic `do` tool. Non-empty → `do` tool exposed, permission `do` added.                                                                                                                                                                                                                                                                                                         |
-| `canSummon`          | optional  | Stance/being targets the LLM may call. Non-empty → `call` tool exposed. Entries may be literal stances OR relationship tokens (`{rel:"parent"}`, `{pattern:"fitness/@coach"}`).                                                                                                                                                                                                                                                  |
-| `canBe`              | optional  | BE operations the LLM may perform on its own identity (`claim`, `release`, `switch`). Non-empty → `be` tool exposed.                                                                                                                                                                                                                                                                                                                 |
-| `defaultOrientation` | optional  | `"forward"` (default), `"half"`, or `"inward"`. Controls what the fold reads. Multi-moment loops are explicit: a able that wants to keep stepping calls `call(target=self)` from inside its act (with whatever orientation the next moment should fold at). No `selfContinue` field — every continuation traces to an explicit CALL emission by the being, not a post-seal side effect.                                                                                                                                                                                                                                                                      |
-| `prompt(ctx)`        | required  | Returns able-intent text. Describes WHO the able is and WHAT it does, in able-language. Does NOT explain verb syntax — that's auto-assembled from `can*` lists.                                                                                                                                                                                                                                                                      |
+| `canDo`              | optional  | DO action entries the LLM may invoke via the seed's generic `do` tool. Non-empty → `do` tool exposed, permission `do` added.                                                                                                                                                                                                                                                                                                       |
+| `canSummon`          | optional  | Stance/being targets the LLM may call. Non-empty → `call` tool exposed. Entries may be literal stances OR relationship tokens (`{rel:"parent"}`, `{pattern:"fitness/@coach"}`).                                                                                                                                                                                                                                                    |
+| `canBe`              | optional  | BE operations the LLM may perform on its own identity (`claim`, `release`, `switch`). Non-empty → `be` tool exposed.                                                                                                                                                                                                                                                                                                               |
+| `defaultOrientation` | optional  | `"forward"` (default), `"half"`, or `"inward"`. Controls what the fold reads. Multi-moment loops are explicit: a able that wants to keep stepping calls `call(target=self)` from inside its act (with whatever orientation the next moment should fold at). No `selfContinue` field — every continuation traces to an explicit CALL emission by the being, not a post-seal side effect.                                            |
+| `prompt(ctx)`        | required  | Returns able-intent text. Describes WHO the able is and WHAT it does, in able-language. Does NOT explain verb syntax — that's auto-assembled from `can*` lists.                                                                                                                                                                                                                                                                    |
 
 What seed derives:
 
@@ -1553,14 +1547,14 @@ The seed registers a small set of sees at boot so common heaven-
 child perceptions have a bare name. Ables can declare `canSee:
 ["ables"]` instead of `["./ables"]`.
 
-| See name     | What it returns                                               |
-| ------------ | ------------------------------------------------------------- |
-| `place`      | The descriptor for the being's current position.              |
+| See name     | What it returns                                             |
+| ------------ | ----------------------------------------------------------- |
+| `place`      | The descriptor for the being's current position.            |
 | `ables`      | The able registry mirror at `<story>/./ables`.              |
 | `tools`      | The tool registry mirror at `<story>/./tools`.              |
 | `operations` | The DO operation registry mirror at `<story>/./operations`. |
 | `identity`   | The I-Am identity bundle at `<story>/./identity`.           |
-| `config`     | The story config at `<story>/./config`.                   |
+| `config`     | The story config at `<story>/./config`.                     |
 | `peers`      | The peer list at `<story>/./peers`.                         |
 | `extensions` | The extension catalog at `<story>/./extensions`.            |
 
@@ -1601,7 +1595,7 @@ Two consumption paths:
 
 ```js
 // 1. Listed in a able's canSee — preloaded as a face block at moment-open.
-canSee: ["place", "library", "llm-connections"]
+canSee: ["place", "library", "llm-connections"];
 
 // 2. Called directly from anywhere (DO handlers, portal, extensions).
 const conns = await story.see("llm-connections");
@@ -1698,17 +1692,17 @@ protocol as everything else. Addressable as `<story>/./<name>`.
 Every boot I verify they exist; missing ones I recreate. Their owner
 is me; they are unclaimable.
 
-| Tier-3 heaven space | Path                     | Holds                                                                                                                                                                        |
-| ----------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `identity`        | `<story>/./identity`   | The story UUID, domain, Ed25519 public key for Canopy federation signing.                                                                                                  |
-| `config`          | `<story>/./config`     | Every runtime config key as a key in this space's qualities Map.                                                                                                             |
-| `peers`           | `<story>/./peers`      | Canopy federation peer list.                                                                                                                                                 |
-| `extensions`      | `<story>/./extensions` | Extension registry. Each loaded extension is a child space here.                                                                                                             |
-| `tools`           | `<story>/./tools`      | Mirror of the runtime tool registry.                                                                                                                                         |
-| `ables`           | `<story>/./ables`      | Mirror of the runtime able registry.                                                                                                                                         |
-| `operations`      | `<story>/./operations` | Mirror of the runtime DO operation registry.                                                                                                                                 |
-| `source`          | `<story>/./source`     | Mirror of my own host-realm body (the files on disk).                                                                                                                        |
-| `threads`         | `<story>/./threads`    | Live coordination chains. Each open thread surfaces as a synthetic child at `./threads/<id>`. SEE returns the ThreadsProjection descriptor; CALL to that address is a cut. |
+| Tier-3 heaven space | Path                   | Holds                                                                                                                                                                      |
+| ------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `identity`          | `<story>/./identity`   | The story UUID, domain, Ed25519 public key for Canopy federation signing.                                                                                                  |
+| `config`            | `<story>/./config`     | Every runtime config key as a key in this space's qualities Map.                                                                                                           |
+| `peers`             | `<story>/./peers`      | Canopy federation peer list.                                                                                                                                               |
+| `extensions`        | `<story>/./extensions` | Extension registry. Each loaded extension is a child space here.                                                                                                           |
+| `tools`             | `<story>/./tools`      | Mirror of the runtime tool registry.                                                                                                                                       |
+| `ables`             | `<story>/./ables`      | Mirror of the runtime able registry.                                                                                                                                       |
+| `operations`        | `<story>/./operations` | Mirror of the runtime DO operation registry.                                                                                                                               |
+| `source`            | `<story>/./source`     | Mirror of my own host-realm body (the files on disk).                                                                                                                      |
+| `threads`           | `<story>/./threads`    | Live coordination chains. Each open thread surfaces as a synthetic child at `./threads/<id>`. SEE returns the ThreadsProjection descriptor; CALL to that address is a cut. |
 
 The `HEAVEN_SPACE` enum names each one. The `heavenSpace` field on Space
 marks the row. The I-Am (me) is `rootOwner`. The reign roster (one
@@ -1906,29 +1900,29 @@ clean and no live consumers depend on any backward-compatibility hop.
 A partial list of the guarantees I enforce. The full list is the
 codebase.
 
-| Protection                    | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Hook timeout / cap / breaker  | 5s per handler; 100 handlers per hook; 5 consecutive failures auto-disable for 5 min with half-open recovery.                                                                                                                                                                                                                                                                                                                                         |
-| Tool circuit breaker          | 5 consecutive failures disables a tool for the session.                                                                                                                                                                                                                                                                                                                                                                                               |
-| Extension init timeout        | 10s per extension `init()`. Hanging init skipped, boot continues.                                                                                                                                                                                                                                                                                                                                                                                     |
-| LLM concurrency + priority    | Global semaphore (`llmMaxConcurrent`); HUMAN > GATEWAY > INTERACTIVE > BACKGROUND queue. Prevents autonomous extensions from starving human responses.                                                                                                                                                                                                                                                                                                |
-| Per-reel append lock          | `withReelLock(type, id, fn)` collapses (allocSeq, insertFact) into one ordered op per reel. Transient gaps vanish; crashes leave harmless permanent gaps that the fold skips.                                                                                                                                                                                                                                                                         |
-| Compare-and-set on foldedSeq  | Concurrent folds race the marker forward; CAS prevents regression. Reducers are pure, so concurrent computes agree.                                                                                                                                                                                                                                                                                                                                   |
-| Document size guard           | Every write checks total document size against `maxDocumentSizeBytes` (14MB default). `onDocumentPressure` fires at 80%.                                                                                                                                                                                                                                                                                                                              |
-| Per-namespace cap             | `qualityNamespaceMaxBytes` (default 512KB) per extension namespace on Being / Space / Matter.                                                                                                                                                                                                                                                                                                                                                         |
-| Matter count per space        | `maxMatterPerSpace` (default 1000) checked in `createMatter`.                                                                                                                                                                                                                                                                                                                                                                                         |
-| Fact query cap                | `factQueryLimit` (default 5000) on every audit query.                                                                                                                                                                                                                                                                                                                                                                                                 |
-| Space locks                   | Structural mutations acquire short-lived locks. Sorted acquisition prevents deadlocks. 30s TTL prevents permanent locks on crash.                                                                                                                                                                                                                                                                                                                     |
-| Space-tree circuit breaker    | Score above 1.0 trips the tree. Read access stays. Off by default.                                                                                                                                                                                                                                                                                                                                                                                    |
-| Ancestor cache                | Shared cache for parent-chain walks. One walk serves every resolution chain.                                                                                                                                                                                                                                                                                                                                                                          |
-| Session / MCP caps            | 10K sessions, 5K MCP clients, oldest-first eviction.                                                                                                                                                                                                                                                                                                                                                                                                  |
-| Password / JWT                | Bcrypt cost 12; constant-time login (dummy hash on miss); JWT carries `jti` for revocation.                                                                                                                                                                                                                                                                                                                                                           |
-| Config key / value validation | Key regex `^[a-zA-Z][a-zA-Z0-9_]{0,63}$`; dangerous keys rejected; 64KB per value cap.                                                                                                                                                                                                                                                                                                                                                                |
-| SSRF protection               | Federation peer registration and LLM connection baseUrls validate hostname against private-IP patterns.                                                                                                                                                                                                                                                                                                                                               |
-| Boot recovery                 | Every boot verifies the nine heaven spaces and the I-Am Being row exist. Missing ones recreated. Partial first-boot crashes leave a recoverable state.                                                                                                                                                                                                                                                                                                  |
-| Genesis sequence              | Boot runs a SEQUENCE of moments (philosophy/factory/MOMENT.md): ensureIAm → ensureSpaceRoot → setIAmHomeSpace → ensureSeedDelegates → roster registration. Each step opens its own `withIAmAct` (one moment, one act). The I-Am acts as itself (`identity: I_AM`); authorize() short-circuits on I_AM without a DB read. The I-Am's be:birth is the first act ("I am that I am"), homeSpace null at birth and set in a later moment once heaven exists. ~141 acts on the I-Am's reel on a fresh boot. |
-| Cross-cutting handler safety  | A failing handler is logged and skipped; the projection self-heals on the next fold pass touching the same fact.                                                                                                                                                                                                                                                                                                                                      |
-| Graceful shutdown             | All interval timers `.unref()`; SIGTERM closes WS, then HTTP, then DB.                                                                                                                                                                                                                                                                                                                                                                                |
+| Protection                    | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hook timeout / cap / breaker  | 5s per handler; 100 handlers per hook; 5 consecutive failures auto-disable for 5 min with half-open recovery.                                                                                                                                                                                                                                                                                                                                                                                   |
+| Tool circuit breaker          | 5 consecutive failures disables a tool for the session.                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Extension init timeout        | 10s per extension `init()`. Hanging init skipped, boot continues.                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| LLM concurrency + priority    | Global semaphore (`llmMaxConcurrent`); HUMAN > GATEWAY > INTERACTIVE > BACKGROUND queue. Prevents autonomous extensions from starving human responses.                                                                                                                                                                                                                                                                                                                                          |
+| Per-reel append lock          | `withReelLock(type, id, fn)` collapses (allocSeq, insertFact) into one ordered op per reel. Transient gaps vanish; crashes leave harmless permanent gaps that the fold skips.                                                                                                                                                                                                                                                                                                                   |
+| Compare-and-set on foldedSeq  | Concurrent folds race the marker forward; CAS prevents regression. Reducers are pure, so concurrent computes agree.                                                                                                                                                                                                                                                                                                                                                                             |
+| Document size guard           | Every write checks total document size against `maxDocumentSizeBytes` (14MB default). `onDocumentPressure` fires at 80%.                                                                                                                                                                                                                                                                                                                                                                        |
+| Per-namespace cap             | `qualityNamespaceMaxBytes` (default 512KB) per extension namespace on Being / Space / Matter.                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Matter count per space        | `maxMatterPerSpace` (default 1000) checked in `createMatter`.                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| Fact query cap                | `factQueryLimit` (default 5000) on every audit query.                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Space locks                   | Structural mutations acquire short-lived locks. Sorted acquisition prevents deadlocks. 30s TTL prevents permanent locks on crash.                                                                                                                                                                                                                                                                                                                                                               |
+| Space-tree circuit breaker    | Score above 1.0 trips the tree. Read access stays. Off by default.                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| Ancestor cache                | Shared cache for parent-chain walks. One walk serves every resolution chain.                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Session / MCP caps            | 10K sessions, 5K MCP clients, oldest-first eviction.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Password / JWT                | Bcrypt cost 12; constant-time login (dummy hash on miss); JWT carries `jti` for revocation.                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Config key / value validation | Key regex `^[a-zA-Z][a-zA-Z0-9_]{0,63}$`; dangerous keys rejected; 64KB per value cap.                                                                                                                                                                                                                                                                                                                                                                                                          |
+| SSRF protection               | Federation peer registration and LLM connection baseUrls validate hostname against private-IP patterns.                                                                                                                                                                                                                                                                                                                                                                                         |
+| Boot recovery                 | Every boot verifies the nine heaven spaces and the I-Am Being row exist. Missing ones recreated. Partial first-boot crashes leave a recoverable state.                                                                                                                                                                                                                                                                                                                                          |
+| Genesis sequence              | Boot runs a SEQUENCE of moments (philosophy/factory/MOMENT.md): ensureIAm → ensureSpaceRoot → setIAmHomeSpace → ensureSeedDelegates → roster registration. Each step opens its own `withIAmAct` (one moment, one act). The I-Am acts as itself (`identity: I`); authorize() short-circuits on I without a DB read. The I-Am's be:birth is the first act ("I am that I am"), homeSpace null at birth and set in a later moment once heaven exists. ~141 acts on the I-Am's reel on a fresh boot. |
+| Cross-cutting handler safety  | A failing handler is logged and skipped; the projection self-heals on the next fold pass touching the same fact.                                                                                                                                                                                                                                                                                                                                                                                |
+| Graceful shutdown             | All interval timers `.unref()`; SIGTERM closes WS, then HTTP, then DB.                                                                                                                                                                                                                                                                                                                                                                                                                          |
 
 ## Genesis
 
@@ -1941,16 +1935,16 @@ self-stamping be:birth fact issues its own actor.
 After that first moment, the rules close. Genesis continues as a
 **sequence of moments**, each its own act on the I-Am's reel:
 
-> 1. "I am that I am"                    — ensureIAm (be:birth)
-> 2. "I create the place root"           — ensureSpaceRoot
+> 1. "I am that I am" — ensureIAm (be:birth)
+> 2. "I create the place root" — ensureSpaceRoot
 > 3. "I create the . heaven space"
-> 4..11. "I create the <tier-3> heaven space"     (one moment each)
-> 12. "I take heaven as my home"         — setIAmHomeSpace
-> 13. "I stand at heaven"
-> 14..22. "I birth @<delegate>"          — one moment per seed delegate
-> 23. "I register my delegates on the place root"
-> 24..26. "seed default permissions / root permissions / root auth flags"
-> 27..35. "anoint @<delegate> as heaven angel"
+>    4..11. "I create the <tier-3> heaven space" (one moment each)
+> 4. "I take heaven as my home" — setIAmHomeSpace
+> 5. "I stand at heaven"
+>    14..22. "I birth @<delegate>" — one moment per seed delegate
+> 6. "I register my delegates on the place root"
+>    24..26. "seed default permissions / root permissions / root auth flags"
+>    27..35. "anoint @<delegate> as heaven angel"
 
 One moment, one act, always (philosophy/factory/MOMENT.md "Moment, act, batch").
 Each step is its own `withIAmAct`. The chicken-and-egg of "I-Am as
@@ -1961,8 +1955,8 @@ heaven once heaven materializes.
 
 **Genesis-era writes act as the I-Am.** Every verb call rides a being
 . there is no scaffold path that acts without one. The I-Am is its
-own identity: seed-internal flows pass `identity: I_AM`; authorize()
-short-circuits on `identity?.name === I_AM` without a DB read.
+own identity: seed-internal flows pass `identity: I`; authorize()
+short-circuits on `identity?.name === I` without a DB read.
 
 A freshly-booted story has ~141 acts on the I-Am's reel — the
 chain of be:birth / do:create-space / do:set-space facts that built

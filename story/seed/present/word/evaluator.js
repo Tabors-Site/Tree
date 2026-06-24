@@ -113,6 +113,13 @@ async function evalNode(node, ctx) {
     case "inheritance-rule":
     case "relate":
     case "declare":
+    // type-schema declarations ("a X has Y" / "a X accepts/carries/claims …"): forward STRUCTURE
+    // (a law — the schema), never a moment/effect. Collected into ctx.laws; the apply-pass
+    // (runWordToStore) folds them into a kind:"type" word's fields/contentKinds/mimeTypes/claims.
+    case "has":
+    case "accepts":
+    case "carries":
+    case "claims":
       (ctx.laws ??= []).push(node);
       return undefined;
     default:
@@ -390,11 +397,20 @@ async function evalRecall(node, ctx) {
     ofLabel = own ? "my own thread" : "their thread";
   }
 
-  // CONSCIOUSNESS-LEVEL (Tabor): which views a being may recall is granted via `can recall <view>`
-  // (canRecall), per being — the aperture is a granted word like everything else, NOT a permission
-  // over public data (it's the capability to compute the wider fold). Enforcement is PERMISSIVE for
-  // now ("allow all saw, show the full story"); when it arms, gate `scope` here against the able's
-  // canRecall: `mode === "recalled" || able.canRecall.includes(scope)`, refusing otherwise.
+  // CONSCIOUSNESS-LEVEL gate (Tabor, 623/12 — ARMED, was permissive): which folds a being may recall
+  // is its able's granted recall VIEWS (`can recall <view>` — canRecall). The aperture is a granted
+  // word, the capability to compute the WIDER fold (not a permission over public data — it is all
+  // public). Recalling your OWN thread (recalled) is always yours; a wider fold (saw) requires the
+  // grant. I bypasses (universal authority). The dry-run parse-check skips the gate.
+  if (mode === "saw" && !ctx.dryRun) {
+    const { canRecallScope } = await import("../ables/registry.js");
+    if (!(await canRecallScope(ownBeing, scope, history))) {
+      throw new WordRefusal(
+        `recall: the "${scope}" view is not granted — your consciousness level does not reach this fold`,
+        "FORBIDDEN",
+      );
+    }
+  }
 
   if (ctx.dryRun) {
     if (node.as) ctx.bindings[node.as] = `<${mode}>`;
@@ -476,8 +492,18 @@ async function evalCall(node, ctx) {
         : null;
   if (node.of == null && node.being == null)
     return foldSelf(node, ctx, { scope: "being", being: selfBeing });
-  if (node.of === "world")
+  if (node.of === "world") {
+    // B2 (623/12, ARMED): the world fold is a WIDER view — gate it by the recall grant. Your own
+    // thread is always yours, but the whole story is the consciousness-level aperture. I bypasses.
+    const { canRecallScope } = await import("../ables/registry.js");
+    if (!(await canRecallScope(selfBeing, "world", ctx.history))) {
+      throw new WordRefusal(
+        `recall: the "world" view is not granted — your consciousness level does not reach this fold`,
+        "FORBIDDEN",
+      );
+    }
     return foldSelf(node, ctx, { scope: "world", being: null });
+  }
   const entity = (v) =>
     v && typeof v === "object" && v.ref != null
       ? getPath(v.ref, ctx)
@@ -511,7 +537,10 @@ async function evalCall(node, ctx) {
   // 623/12: if the named target resolves to the SIGNER, this is a call-to-self ⇒ fold (recall), not
   // an await. (The common self case — a bare quote, `of` null — already returned above.)
   const tid = String(
-    target?._id ?? target?.id ?? (typeof target === "string" ? target : "") ?? "",
+    target?._id ??
+      target?.id ??
+      (typeof target === "string" ? target : "") ??
+      "",
   );
   if (tid && (tid === selfBeing || tid === selfName))
     return foldSelf(node, ctx, { scope: "being", being: selfBeing });
@@ -813,7 +842,9 @@ async function evalAct(act, ctx) {
   // are separate words; splitting birthBeing into a sequence of moments is the downstream
   // birth-split. For now form-being is ONE moment, opened here like any other act.)
   if (act.verb === "be" && act.act === "form-being") {
-    const res = await stampOneAct(ctx, "be:form-being", () => formBeing(params, ctx));
+    const res = await stampOneAct(ctx, "be:form-being", () =>
+      formBeing(params, ctx),
+    );
     if (act.bind) ctx.bindings[act.bind] = res.beingId;
     return res;
   }
@@ -851,7 +882,11 @@ async function evalAct(act, ctx) {
       ctx.bindings[act.bind] = String(
         // matterId first: a composed `do create-matter ... as x` binds the new
         // matter (create-space has no matterId, so its spaceId still wins).
-        res?.matterId ?? res?.spaceId ?? res?.id ?? res?._id ?? ctx.bindings[act.bind],
+        res?.matterId ??
+          res?.spaceId ??
+          res?.id ??
+          res?._id ??
+          ctx.bindings[act.bind],
       );
     return res;
   }
@@ -921,7 +956,11 @@ async function stampOneAct(ctx, label, runFn) {
 // shared-moment mode doing ctx.deltaF.push too would DOUBLE-LIST — live → emitFact owns it.
 async function emit(spec, ctx) {
   const stamp = async (m) => {
-    const fact = { ...spec, actId: m?.actId ?? ctx.moment?.actId, history: ctx.history };
+    const fact = {
+      ...spec,
+      actId: m?.actId ?? ctx.moment?.actId,
+      history: ctx.history,
+    };
     if (spec._sets) Object.assign((ctx.state ??= {}), spec._sets); // the fold: a fact updates state
     if (ctx.dryRun) {
       (m?.deltaF ?? ctx.deltaF).push(fact);
@@ -933,7 +972,8 @@ async function emit(spec, ctx) {
     return fact;
   };
   // The spacebar: a fact is a word, a word is a space, a space is its own commit.
-  if (ctx.perActMoment) return stampOneAct(ctx, `${spec.verb}:${spec.act}`, stamp);
+  if (ctx.perActMoment)
+    return stampOneAct(ctx, `${spec.verb}:${spec.act}`, stamp);
   return stamp(ctx.moment);
 }
 
@@ -976,7 +1016,7 @@ async function callHost(builtin, params, ctx) {
 function resolveName(ref, ctx) {
   if (ref == null) return ctx.identity?.nameId ?? ctx.identity?.beingId ?? null;
   if (ref === "I") return ctx.identity?.nameId ?? ctx.identity?.beingId; // rule 9: I is the Name
-  if (ref === "I_AM") return ctx.env?.iam ?? "I_AM";
+  if (ref === "I") return ctx.env?.iam ?? "I";
   return ref; // a being / Name proper name (Cherub, ...)
 }
 
@@ -1002,7 +1042,10 @@ function resolveTarget(of, ctx) {
   if (of.ref) {
     const key = of.ref.startsWith("$") ? of.ref.slice(1) : of.ref;
     const got = getPath(key, ctx);
-    return { kind: of.kind, id: got !== undefined ? got : ctx.bindings[of.ref] };
+    return {
+      kind: of.kind,
+      id: got !== undefined ? got : ctx.bindings[of.ref],
+    };
   }
   return { kind: of.kind, id: of.id };
 }

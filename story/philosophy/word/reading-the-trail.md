@@ -10,12 +10,12 @@
 
 - **One act = the DO = the stamp.** One stamp lays one fact (the spacebar).
 - **A fact is a noun or an act-word.** A **SEE** is inert content (a noun, read-only). A **DO** is an
-  act-word — it *acts when a fold reads it*. The instant a fact is laid it is past = inert; a noun is
+  act-word — it _acts when a fold reads it_. The instant a fact is laid it is past = inert; a noun is
   just content for the next read, but **an act-word re-fires when the fold replays it** — and that is
   the generative loop (the moments re-invoke each other; the reducer applying a do during the fold =
   autoregression, 26.md).
 - **Every moment is a word; every word is a do; a do makes a SEE or a DO.** SEE is the only "noun";
-  everything else is a do — you never write "do," it just *is* one. **be / call / name are do's with a
+  everything else is a do — you never write "do," it just _is_ one. **be / call / name are do's with a
   type**, not separate verbs (verb-collapse, 17.md).
 - **It's chain / fold, not be / is.** The **chain** is the laid order (the past, the trail, sealed).
   The **fold** is the read into the present (the view, the face). `be → chain`, `is → fold`.
@@ -24,14 +24,14 @@
 
 Reading the trail is folding a chain into a view — a SEE of the past (it lays no fact). But **the verb
 is gone**: there is no `call` and no `recall`. The **quotes are the do** ("utter this word"); the
-**address (the target) is the only modifier**, and it decides the kind by one question — *is the target
-me, or not-me?*
+**address (the target) is the only modifier**, and it decides the kind by one question — _is the target
+me, or not-me?_
 
 - **`"what from?"`** (no address) — the target defaults to the **signer** (every stamp is signed, so
   the bare quote inherits you for free). Self-target → you **fold your own chain** (the read you can
-  do); the next moment shows it. What we used to call a *recall*.
+  do); the next moment shows it. What we used to call a _recall_.
 - **`salem "what from?"`** — a named other → `from` must walk a reel that isn't yours → you can't read
-  it, you ask and **await** his stamp. What we called a *call*. The await is **forced** by the target
+  it, you ask and **await** his stamp. What we called a _call_. The await is **forced** by the target
   being across the boundary, not a flag you set.
 
 So the mode is never declared — it falls out of who the target is (self → fold, other → await). `I` is
@@ -43,14 +43,14 @@ The **lens** is which facet you read off each passed fact — the interrogative 
 **orthogonal to the target** (same lens whether self or other). It is recall's **view**, a granted word
 per a being's `can`. `from` is the on-link (walk the chain back); the lens is the column you pull:
 
-| lens  | the facet (the column)                  |
-|-------|-----------------------------------------|
-| what  | the thing's genesis / kind (its birth)  |
-| where | the place it happened                   |
-| who   | the signer / actor                      |
-| when  | the order down the chain (seq)          |
-| how   | the act that did it                     |
-| why   | the parent / on-link (the because)      |
+| lens  | the facet (the column)                 |
+| ----- | -------------------------------------- |
+| what  | the thing's genesis / kind (its birth) |
+| where | the place it happened                  |
+| who   | the signer / actor                     |
+| when  | the order down the chain (seq)         |
+| how   | the act that did it                    |
+| why   | the parent / on-link (the because)     |
 
 No lens = fold the **full word** per fact: the narrative story (assembleStory's weave). A lens =
 **actually filter** to that one facet, walked down the trail.
@@ -85,7 +85,7 @@ whole story from genesis — re-folded fresh by whoever opens it.
 ## The build
 
 - **`seed/present/book/read-trail.js`** — the SELF-TARGET fold engine. `readTrail({ history, scope,
-  lens, since, until, being, space })` folds the chosen span/lens; `renderGenesis(history)` is the
+lens, since, until, being, space })` folds the chosen span/lens; `renderGenesis(history)` is the
   whole-chain fold. It delegates the full-word gloss to `assembleStory` and does the per-fact facet
   projection for a lens. `history` required; `world` defined.
 - **Connection (623/12.md) — LANDED:** the parser parses `[address] "quote"` → a single **`call`**
@@ -115,8 +115,8 @@ rec was wrong, corrected). Green: verify-utter-cut 7/7, verify-call-live 3/3, ve
 (verify-call-render 2/7 = the verb lane's pre-existing book baseline, not this).
 
 **`render(genesis → head)` PROVEN (verify-genesis-read 3/3):** a live 389-act chain reads back as the
-creation story, in chain order, as readable Word — opening *"I_AM gave birth to I_AM and declared
-I_AM. I_AM spoke the word word… I_AM spoke the word iam: I am that I am…"*. 623/8's floor + 623/4's
+creation story, in chain order, as readable Word — opening _"I gave birth to I and declared
+I. I spoke the word word… I spoke the word iam: I am that I am…"_. 623/8's floor + 623/4's
 `render(genesis → head) = "I AM THAT I AM"`, realized. The book is never stored — it is the read.
 
 **NEXT:** Half B — declare the 6 lens views as words (gated by `can`, via wordStore, retiring the

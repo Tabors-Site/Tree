@@ -35,7 +35,7 @@ import Act from "../../past/act/act.js";
 import { attachActFacts } from "../../past/act/actChain.js";
 import Space from "./space.js";
 import { HEAVEN_SPACE } from "./heavenSpaces.js";
-import { I_AM } from "../being/seedBeings.js";
+import { I } from "../being/seedBeings.js";
 import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
 
 // ─────────────────────────────────────────────────────────────────
@@ -186,7 +186,9 @@ export async function getThreadsSpaceId() {
 export async function describeThread(rootCorrelation) {
   if (!rootCorrelation) return null;
   const summons = await Act.find({ rootCorrelation })
-    .select("_id through to activeAble ibpAddress inReplyTo parentThread stampedAt receivedAt endMessage severedAt priority")
+    .select(
+      "_id through to activeAble ibpAddress inReplyTo parentThread stampedAt receivedAt endMessage severedAt priority",
+    )
     .lean();
   if (!summons.length) {
     // A thread can exist in the ThreadsProjection (the cross-cutting
@@ -195,21 +197,23 @@ export async function describeThread(rootCorrelation) {
     // is the source of truth for "open thread, no acts yet". Fall back
     // so the descriptor still resolves instead of 404-ing on a thread
     // the catalog just listed.
-    const ThreadsProjection = (await import("../../past/projections/threads/threadsProjection.js")).default;
+    const ThreadsProjection = (
+      await import("../../past/projections/threads/threadsProjection.js")
+    ).default;
     const proj = await ThreadsProjection.findById(rootCorrelation).lean();
     if (!proj) return null;
     return {
-      id:              rootCorrelation,
-      state:           proj.severedAt ? "severed" : "pending",
-      depth:           0,
-      liveCount:       0,
-      severedCount:    0,
-      completeCount:   0,
-      participants:    Array.isArray(proj.participants) ? proj.participants : [],
-      parentThread:    proj.parentThread || null,
-      rootStartedAt:   proj.startedAt || proj.createdAt || null,
-      lastAct:         proj.lastAct || null,
-      pending:         true,
+      id: rootCorrelation,
+      state: proj.severedAt ? "severed" : "pending",
+      depth: 0,
+      liveCount: 0,
+      severedCount: 0,
+      completeCount: 0,
+      participants: Array.isArray(proj.participants) ? proj.participants : [],
+      parentThread: proj.parentThread || null,
+      rootStartedAt: proj.startedAt || proj.createdAt || null,
+      lastAct: proj.lastAct || null,
+      pending: true,
     };
   }
 
@@ -220,7 +224,7 @@ export async function describeThread(rootCorrelation) {
   let lastAct = null;
   for (const s of summons) {
     if (s.through) participants.add(String(s.through));
-    if (s.to)      participants.add(String(s.to));
+    if (s.to) participants.add(String(s.to));
     if (s.severedAt) severed++;
     else if (s.endMessage?.time) complete++;
     else live++;
@@ -240,7 +244,9 @@ export async function describeThread(rootCorrelation) {
   // moment for a being acting under thread A who emits a fresh
   // top-level SUMMON.
   const sortedAsc = [...summons].sort(
-    (a, b) => new Date(a.stampedAt || a.receivedAt || 0) - new Date(b.stampedAt || b.receivedAt || 0),
+    (a, b) =>
+      new Date(a.stampedAt || a.receivedAt || 0) -
+      new Date(b.stampedAt || b.receivedAt || 0),
   );
   const rootStamp =
     summons.find((s) => String(s._id) === String(rootCorrelation)) ||
@@ -248,15 +254,15 @@ export async function describeThread(rootCorrelation) {
   const parentThread = rootStamp?.parentThread || null;
 
   return {
-    id:              rootCorrelation,
+    id: rootCorrelation,
     state,
-    depth:           summons.length,
-    liveCount:       live,
-    severedCount:    severed,
-    completeCount:   complete,
-    participants:    [...participants],
+    depth: summons.length,
+    liveCount: live,
+    severedCount: severed,
+    completeCount: complete,
+    participants: [...participants],
     parentThread,
-    rootStartedAt:   rootStamp?.stampedAt || rootStamp?.receivedAt || null,
+    rootStartedAt: rootStamp?.stampedAt || rootStamp?.receivedAt || null,
     lastAct,
     // Surface the acts on the thread so clients can render the chain
     // without a second query. Oldest-first for natural reading order.
@@ -269,19 +275,19 @@ export async function describeThread(rootCorrelation) {
 
 function serializeThreadAct(s) {
   return {
-    _id:             String(s._id),
-    through:         s.through ? String(s.through) : null,
-    to:              s.to ? String(s.to) : null,
-    activeAble:      s.activeAble || null,
-    ibpAddress:      s.ibpAddress || null,
-    inReplyTo:       s.inReplyTo || null,
-    parentThread:    s.parentThread || null,
-    priority:        s.priority || null,
-    startMessage:    s.startMessage || null,
-    endMessage:      s.endMessage || null,
-    receivedAt:      s.receivedAt || null,
-    stampedAt:       s.stampedAt || null,
-    severedAt:       s.severedAt || null,
+    _id: String(s._id),
+    through: s.through ? String(s.through) : null,
+    to: s.to ? String(s.to) : null,
+    activeAble: s.activeAble || null,
+    ibpAddress: s.ibpAddress || null,
+    inReplyTo: s.inReplyTo || null,
+    parentThread: s.parentThread || null,
+    priority: s.priority || null,
+    startMessage: s.startMessage || null,
+    endMessage: s.endMessage || null,
+    receivedAt: s.receivedAt || null,
+    stampedAt: s.stampedAt || null,
+    severedAt: s.severedAt || null,
   };
 }
 
@@ -309,20 +315,26 @@ function serializeThreadAct(s) {
 export async function listLiveThreads({
   limit = 100,
   being = null,
-  able = null,            // intentionally unused; ThreadsProjection
-  position = null,        //   carries no per-Act-row metadata.
-  stance = null,          //   Cross-cutting projection is recipient-
-  priority = null,        //   participant-keyed only. (Future: extend
-} = {}) {                 //   if filtering by able/stance/priority is needed.)
+  able = null, // intentionally unused; ThreadsProjection
+  position = null, //   carries no per-Act-row metadata.
+  stance = null, //   Cross-cutting projection is recipient-
+  priority = null, //   participant-keyed only. (Future: extend
+} = {}) {
+  //   if filtering by able/stance/priority is needed.)
   // Route through the ThreadsProjection (Bucket 3 Option D, 2026-05-23).
   // The legacy per-SEE Act aggregation retired; the cross-cutting fold
   // maintains this projection from call Facts + Act seals.
-  const ThreadsProjection = (await import("../../past/projections/threads/threadsProjection.js")).default;
+  const ThreadsProjection = (
+    await import("../../past/projections/threads/threadsProjection.js")
+  ).default;
   const match = { severedAt: null };
   if (being) {
     match.participants = String(being).replace(/^@/, "");
   }
-  void able; void position; void stance; void priority;
+  void able;
+  void position;
+  void stance;
+  void priority;
 
   const rows = await ThreadsProjection.find(match)
     .sort({ lastAct: -1 })
@@ -359,7 +371,7 @@ export async function markThreadSevered(rootCorrelation, now = new Date()) {
  *
  * Authorization (participation gate): the asker must be a participant
  * in the chain. A participant is any being that appears as `through`
- * or `to` on a Act under this rootCorrelation. The I_AM has
+ * or `to` on a Act under this rootCorrelation. The I has
  * universal authority and always passes. Stance auth gates whether
  * the asker can address `.threads` at all (broad gate); this gate
  * narrows to "this specific thread." Both run.
@@ -401,8 +413,8 @@ export async function cutThread({
   }
 
   // ── Participation gate ──
-  // I_AM always passes. Anyone else must be in the chain.
-  const isIAm = identity?.name === I_AM;
+  // I always passes. Anyone else must be in the chain.
+  const isIAm = identity?.name === I;
   if (!isIAm) {
     if (!identity?.beingId) {
       throw new IbpError(
@@ -441,18 +453,23 @@ export async function cutThread({
   let cancelled = 0;
   try {
     const { emitFact } = await import("../../past/fact/facts.js");
-    const InboxProjection = (await import("../../past/projections/inbox/inboxProjection.js")).default;
-    const severerBeingId = isIAm ? I_AM : String(identity.beingId);
+    const InboxProjection = (
+      await import("../../past/projections/inbox/inboxProjection.js")
+    ).default;
+    const severerBeingId = isIAm ? I : String(identity.beingId);
     cancelled = await InboxProjection.countDocuments({ rootCorrelation });
-    await emitFact({
-      verb:    "be",
-      act:     "sever",
-      through: severerBeingId,
-      of:      { kind: "being", id: severerBeingId }, // severer's own reel
-      params:  { rootCorrelation, reason, priority },
-      actId:   moment?.actId || null,
-      history:  moment?.actorAct?.history || "0",
-    }, moment);
+    await emitFact(
+      {
+        verb: "be",
+        act: "sever",
+        through: severerBeingId,
+        of: { kind: "being", id: severerBeingId }, // severer's own reel
+        params: { rootCorrelation, reason, priority },
+        actId: moment?.actId || null,
+        history: moment?.actorAct?.history || "0",
+      },
+      moment,
+    );
     // When moment is present, the be:sever Fact lives in the
     // caller's ΔF and commits at sealAct; the cross-cutting fold runs
     // post-commit and clears the InboxProjection rows then. When
@@ -468,9 +485,8 @@ export async function cutThread({
   let aborted = 0;
   if (priority === "HUMAN") {
     try {
-      const { abortByRootCorrelations } = await import(
-        "../../present/intake/scheduler.js"
-      );
+      const { abortByRootCorrelations } =
+        await import("../../present/intake/scheduler.js");
       aborted = abortByRootCorrelations([rootCorrelation], reason) || 0;
     } catch {
       // Scheduler unavailable (cognition not booted yet). The
@@ -488,8 +504,6 @@ export async function cutThread({
 
 async function rootStampOf(actId) {
   if (!actId) return null;
-  const s = await Act.findById(actId)
-    .select("rootCorrelation")
-    .lean();
+  const s = await Act.findById(actId).select("rootCorrelation").lean();
   return s?.rootCorrelation || null;
 }

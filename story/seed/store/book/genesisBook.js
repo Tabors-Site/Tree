@@ -10,7 +10,7 @@
 // live build as the fallback; and it is laid into the Library ON DEMAND (when first needed — a
 // share/download), never eagerly at boot.
 //
-// It is sealed by the I_AM (its colophon root is the reality's first signature, reusing
+// It is sealed by the I (its colophon root is the reality's first signature, reusing
 // signedStoryRoot's key-signing machinery — no parallel root system). **Every book out of this
 // story colophons back to it** until someone makes another root. The library's first signature.
 // The economy is Love (colophon.md): given down, received, traced to its Roots, shared again — CAS
@@ -32,18 +32,22 @@ const GENESIS_BOOK_FILE = path.join(__dirname, "..", "genesis.book"); // seed/st
 let _genesisRoot = null;
 
 /** The colophon root of this story's genesis book — the anchor every book descends from. */
-export function genesisRoot() { return _genesisRoot; }
+export function genesisRoot() {
+  return _genesisRoot;
+}
 
 // Every word declared on heaven "0" (the coin facts are the source of truth — the root language).
 async function allSeedWordNames() {
   const Fact = (await import("../../past/fact/fact.js")).default;
-  const coins = await Fact.find({ verb: "do", act: "coin", history: "0" }).select("params.word").lean();
+  const coins = await Fact.find({ verb: "do", act: "coin", history: "0" })
+    .select("params.word")
+    .lean();
   return [...new Set(coins.map((f) => f?.params?.word).filter(Boolean))];
 }
 
 /**
  * Build the genesis book LIVE: capture every seed word (the root language) into a book, titled by
- * the story, sealed by the I_AM (the story key — the first hand, the bottom of every lineage). This
+ * the story, sealed by the I (the story key — the first hand, the bottom of every lineage). This
  * is the one-time/build-tool path; prefer the precomputed `.book` file in normal operation.
  */
 export async function buildGenesisBook() {
@@ -57,7 +61,7 @@ export async function buildGenesisBook() {
     sourceStory: getStoryDomain(),
     createdBy: "i-am",
   });
-  return sealColophon(book); // default signer = the story identity (the I_AM key)
+  return sealColophon(book); // default signer = the story identity (the I key)
 }
 
 /** Load the precomputed genesis `.book` file (a static store artifact), or null if not built yet. */
@@ -89,11 +93,12 @@ export async function writeGenesisBookFile() {
 export async function ensureGenesisBook() {
   const existing = await listLibrary();
   if (existing.length > 0) {
-    _genesisRoot = existing.find((e) => e.kind === "genesis")?.root ?? existing[0].root;
+    _genesisRoot =
+      existing.find((e) => e.kind === "genesis")?.root ?? existing[0].root;
     return _genesisRoot;
   }
 
-  // The genesis book is laid as a 5D NAME-ACT — the I_AM Name signs it onto the library reel with
+  // The genesis book is laid as a 5D NAME-ACT — the I Name signs it onto the library reel with
   // no being (5d.md: only names act in the library; the being stays home). The first signature.
   const { withNameAct } = await import("../../sprout.js");
   return withNameAct("i-am", "lay the genesis book", async (moment) => {

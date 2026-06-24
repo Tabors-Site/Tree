@@ -6,7 +6,7 @@
 //
 // Per seed/AblesAreAuth.md, all authority chains back to I-Am. The
 // I-Am holds the angel able implicitly (the bootstrap axiom: the
-// authorize layer has a code-level I_AM bypass). Every other being
+// authorize layer has a code-level I bypass). Every other being
 // that holds angel got it via a grant from someone who did — most
 // commonly the I-Am at genesis, granting the angel able to each
 // seed delegate at the place root.
@@ -41,7 +41,11 @@ export const angelAble = Object.freeze({
   can: [
     { verb: "see", word: "*" },
     { verb: "do", word: "*", description: "do anything" },
-    { verb: "do", word: "grant-able:*", description: "grant any able to any being" },
+    {
+      verb: "do",
+      word: "grant-able:*",
+      description: "grant any able to any being",
+    },
     { verb: "do", word: "revoke-able:*", description: "revoke any grant" },
     { verb: "call", word: "@*", description: "summon any being" },
     { verb: "be", word: "*", description: "any BE operation" },

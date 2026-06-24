@@ -4,7 +4,7 @@ Graft (the new shape we've been discussing): transport an actual entity with its
 Seed (the template/world-building operation): take the structure of something — a space layout, a able bundle, a configured environment — and plant a new instance of it in your reality. The instance is new (new ids, fresh chains) but shaped like the template. World templates, extension distributions, community blueprints all use this shape.
 These are fundamentally different. Graft preserves identity. Seed creates new instances from patterns. Conflating them was my error in the previous response.
 Why both are needed
-Extension authors need seed. Someone builds a community-reality template — spaces laid out a certain way, default ables configured, starter content in place. They want to publish this as something others can instantiate. Each instantiation is a new community, with its own identity, but shaped like the template. The template author shouldn't have their being's identity preserved across every instance — that would be weird and wrong. Each new community has its own founders, its own I_AM, its own beings.
+Extension authors need seed. Someone builds a community-reality template — spaces laid out a certain way, default ables configured, starter content in place. They want to publish this as something others can instantiate. Each instantiation is a new community, with its own identity, but shaped like the template. The template author shouldn't have their being's identity preserved across every instance — that would be weird and wrong. Each new community has its own founders, its own I, its own beings.
 Beings and realities need graft. When alice migrates from substrate A to substrate B, she IS alice. Her identity is preserved cryptographically. Her chain travels with her. She's not "an alice-shaped being shaped like the original alice" — she's the original alice, now hosted somewhere else.
 You need both operations because they answer different questions:
 
@@ -26,7 +26,7 @@ What it doesn't contain:
 
 Specific beings with their identities (those are graft-shaped, not seed-shaped).
 Specific chains (each instance gets a fresh chain).
-The template author's identity bound to the instances (the template was authored by someone, but each instance has its own I_AM).
+The template author's identity bound to the instances (the template was authored by someone, but each instance has its own I).
 
 When you plant a seed, the receiving reality:
 
@@ -148,7 +148,7 @@ For partial grafts to verify, the destination needs a way to trust that "this pa
 Genesis-rooted extracts. If the partial chain starts from genesis (the being's birth), the destination can verify continuity from a known starting point. Full prefix grafts work this way.
 Checkpoint signatures. Periodically, the being could sign a checkpoint: "at this point in my chain, the head hash is X, my key is Y, I attest this." The destination can verify a partial chain starting from a known checkpoint without needing the chain before it.
 Merkle proof inclusion. For non-contiguous extracts, each included fact comes with a Merkle proof showing it belongs to the being's chain at the position claimed. The proof contains enough hash data to verify the fact is genuinely from the being's chain without including the full chain.
-Origin-reality attestation. The being's home reality (their I_AM) signs an attestation: "these facts are genuinely from this being's chain in our reality." The destination trusts the attestation if they trust the home reality.
+Origin-reality attestation. The being's home reality (their I) signs an attestation: "these facts are genuinely from this being's chain in our reality." The destination trusts the attestation if they trust the home reality.
 Each has tradeoffs. Merkle proofs are mathematically rigorous but require the proof data. Checkpoints are simpler but require the being to have been making them. Reality attestations require federation trust.
 In practice, the substrate probably wants to support multiple mechanisms — the partial graft tooling lets the exporter choose what kind of partial extract they're producing, and the bundle indicates what verification it supports.
 What gets lost in partial graft
@@ -206,7 +206,7 @@ What you have that makes this easy
 You already have:
 
 Beings with cryptographic identities (Phase 2).
-Realities with I_AM keypairs that root identity.
+Realities with I keypairs that root identity.
 Signed acts that prove origin (Phase 3 in progress).
 Content addressing that proves integrity.
 
@@ -220,7 +220,7 @@ Replay protection. An attacker who captures a valid message can't replay it late
 Conventional protocols (TLS) handle all four through certificates and session keys. The certificates establish identity; session keys provide encryption and integrity for the session.
 Your architecture can handle all four through primitives you already have, without needing certificate infrastructure.
 How each property maps to what you have
-Authentication: the realities know each other's I_AM public keys. When reality A sends to reality B, the message is signed by A's I_AM (or by a being in A acting on A's behalf). B verifies the signature against A's known public key. Identity is established without any certificate authority.
+Authentication: the realities know each other's I public keys. When reality A sends to reality B, the message is signed by A's I (or by a being in A acting on A's behalf). B verifies the signature against A's known public key. Identity is established without any certificate authority.
 For the first contact between two realities that don't know each other yet, identity has to be established somehow — either out-of-band (someone shares the public key directly), through a federation directory, or through whatever discovery mechanism the substrate provides. After first contact, both sides know each other's keys.
 Integrity: every IBP message can be signed. The signature covers the message content. Tampering breaks the signature. The receiver verifies the signature before processing the message. Integrity is structural, not bolted on.
 For messages that contain facts (most of IBP traffic), the facts themselves are already hash-chained and signed by their actors. The integrity protection is in the data, not just in the transport. Even if someone modified the message in transit, the inner cryptographic structure would detect the tampering.
@@ -235,7 +235,7 @@ Here's a clean shape for secure IBP from the start:
 Connection setup.
 
 Peer A connects to peer B over the underlying transport (WebSocket).
-A and B exchange their reality I_AM public keys (or being public keys, depending on what's connecting). Each side may have known the other's key already from a federation directory.
+A and B exchange their reality I public keys (or being public keys, depending on what's connecting). Each side may have known the other's key already from a federation directory.
 A and B perform an X25519 key exchange using their ed25519 keys (converted to X25519 via the standard derivation). They both derive the same shared secret.
 Both sides confirm the connection by sending a signed challenge — proving they hold the private key matching the public key they presented.
 
@@ -300,12 +300,12 @@ What to pin doctrinally
 Worth being explicit about the wire security model:
 
 IBP wire security is built from the substrate's cryptographic identity primitives. Connections between realities use X25519 key exchange derived from the parties' ed25519 keys to establish a shared secret. Messages are encrypted with authenticated encryption (ChaCha20-Poly1305 or equivalent) using keys derived from the shared secret plus per-message nonces. Each message is signed by the sender's key for authentication and integrity beyond transport-level protection.
-The substrate does not depend on external certificate authorities or PKI. Identity is rooted in the realities' I_AM keys and the beings' keys. Key compromise is handled through the substrate's existing succession primitives, not through revocation infrastructure.
+The substrate does not depend on external certificate authorities or PKI. Identity is rooted in the realities' I keys and the beings' keys. Key compromise is handled through the substrate's existing succession primitives, not through revocation infrastructure.
 Wire protection is end-to-end. Intermediate routing nodes can route messages but cannot read or modify them. This composes with the data-level cryptographic protection (signed acts, hash-chained facts) to provide layered verification.
 First-contact key discovery is explicit. Realities learn each other's keys through federation directories, out-of-band exchange, or other mechanisms with clear trust models. The substrate does not implicitly trust unknown keys.
 
 The honest summary
-Yes, you can make IBP secure from the start cleanly. The architecture you've already built — beings as keypairs, realities with I_AM, signed acts — gives you the primitives needed. You don't need TLS, certificates, or PKI. You need X25519 key exchange, authenticated encryption, and per-message nonces, all of which libsodium provides.
+Yes, you can make IBP secure from the start cleanly. The architecture you've already built — beings as keypairs, realities with I, signed acts — gives you the primitives needed. You don't need TLS, certificates, or PKI. You need X25519 key exchange, authenticated encryption, and per-message nonces, all of which libsodium provides.
 The implementation is about fifty lines of integration code on top of libsodium. The substrate's identity machinery does the heavy lifting. The result is end-to-end secure transport that's tighter than TLS in some ways (no CA dependence, end-to-end through routing) and equivalent in others.
 This is actually one of the simpler things you'll build. Compared to the architectural depth of CAS, succession, and partial graft, secure transport is a focused engineering task with well-understood primitives. The hard work was the identity architecture; secure transport falls out almost for free.
 Worth doing it right from the beginning. Bolting security on later is much harder than building it in from the start, and you have the primitives now to do it properly without much extra work.

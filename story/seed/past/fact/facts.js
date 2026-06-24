@@ -53,7 +53,8 @@ const REEL_KINDS = new Set(["being", "space", "matter", "name", "library"]);
 // ─────────────────────────────────────────────────────────────────────────
 
 function MAX_PAYLOAD_BYTES() {
-  const raw = Number(getInternalConfigValue("qualityNamespaceMaxBytes")) || 524288;
+  const raw =
+    Number(getInternalConfigValue("qualityNamespaceMaxBytes")) || 524288;
   return Math.max(1024, Math.min(raw, 2 * 1024 * 1024));
 }
 const MAX_ACTION_LENGTH = 100;
@@ -81,7 +82,7 @@ const BEING_ONLY_TARGET_VERBS = new Set(["be", "call"]);
  * Act a Fact onto the reel.
  *
  * @param {object} params           the fact spec (see fields below)
- * @param {string} params.through   actor (I_AM for scaffold flows)
+ * @param {string} params.through   actor (I for scaffold flows)
  * @param {string} params.act       operation or sub-event name
  * @param {string} [params.verb="do"]   "do" | "be" | "summon"
  * @param {{kind:string,id:string}|null} [params.of]  what was acted on.
@@ -141,13 +142,15 @@ export async function logFact(input, opts = {}) {
   // by the Name with NO being (5d.md: the being stays home; only the name acts there). Those
   // require `by` (the signer) instead of `through`.
   if ((!through && verb !== "name") || !act) {
-    throw new Error("logFact requires through (or, for verb:name, a bodiless name-act) and act");
+    throw new Error(
+      "logFact requires through (or, for verb:name, a bodiless name-act) and act",
+    );
   }
   if (typeof history !== "string" || !history.length) {
     throw new Error(
       `logFact: history is required (got ${JSON.stringify(history)}). ` +
-      `Derive it from the target's address (the reel where this Fact lands), ` +
-      `not from the actor's history.`,
+        `Derive it from the target's address (the reel where this Fact lands), ` +
+        `not from the actor's history.`,
     );
   }
   if (typeof act !== "string" || act.length > MAX_ACTION_LENGTH) {
@@ -202,9 +205,8 @@ export async function logFact(input, opts = {}) {
     history !== "0"
   ) {
     try {
-      const { isHeavenSpace } = await import(
-        "../../materials/space/heavenLineage.js",
-      );
+      const { isHeavenSpace } =
+        await import("../../materials/space/heavenLineage.js");
       if (await isHeavenSpace(normalizedTarget.id)) {
         history = "0";
       }
@@ -253,7 +255,7 @@ export async function logFact(input, opts = {}) {
         throw new IbpError(
           IBP_ERR.FORBIDDEN,
           `SCOPE_CHECK_FAILED: could not resolve scope for history "#${history}" ` +
-          `(${err.message}); refusing the write rather than bypass the gate.`,
+            `(${err.message}); refusing the write rather than bypass the gate.`,
           { history, target: normalizedTarget },
         );
       }
@@ -265,8 +267,8 @@ export async function logFact(input, opts = {}) {
           throw new IbpError(
             IBP_ERR.FORBIDDEN,
             `SCOPE_CHECK_FAILED: scope test threw for history "#${history}" ` +
-            `target ${normalizedTarget.kind}:${normalizedTarget.id} ` +
-            `(${err.message}); refusing the write rather than bypass the gate.`,
+              `target ${normalizedTarget.kind}:${normalizedTarget.id} ` +
+              `(${err.message}); refusing the write rather than bypass the gate.`,
             { history, target: normalizedTarget, scopeSpaceId },
           );
         }
@@ -274,10 +276,10 @@ export async function logFact(input, opts = {}) {
           throw new IbpError(
             IBP_ERR.FORBIDDEN,
             `SCOPE_VIOLATION: history "#${history}" is scoped to a subtree and ` +
-            `cannot write to ${normalizedTarget.kind}:${normalizedTarget.id} ` +
-            `(outside scope spaceId "${scopeSpaceId}"). ` +
-            `Switch to the parent history to act on out-of-scope targets, ` +
-            `or widen the history's scope via re-creation.`,
+              `cannot write to ${normalizedTarget.kind}:${normalizedTarget.id} ` +
+              `(outside scope spaceId "${scopeSpaceId}"). ` +
+              `Switch to the parent history to act on out-of-scope targets, ` +
+              `or widen the history's scope via re-creation.`,
             { history, target: normalizedTarget, scopeSpaceId },
           );
         }
@@ -309,15 +311,14 @@ export async function logFact(input, opts = {}) {
   // pre-bootstrap moments emit Facts before any Being row exists;
   // isBeingDead returns false for a missing row so genesis isn't
   // blocked. Death stamps land on actual beings only.
-  const { isBeingDead, isDeathFact } = await import(
-    "../../materials/being/closure.js"
-  );
+  const { isBeingDead, isDeathFact } =
+    await import("../../materials/being/closure.js");
   if (!isDeathFact({ verb, act })) {
-    if (through && await isBeingDead(through, history)) {
+    if (through && (await isBeingDead(through, history))) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
         `logFact: being ${String(through).slice(0, 8)} is closed (be:death). ` +
-        `The actor chain is frozen; no new facts can ride this being.`,
+          `The actor chain is frozen; no new facts can ride this being.`,
         { through },
       );
     }
@@ -325,12 +326,12 @@ export async function logFact(input, opts = {}) {
       normalizedTarget?.kind === "being" &&
       normalizedTarget?.id &&
       String(normalizedTarget.id) !== String(through) &&
-      await isBeingDead(normalizedTarget.id, history)
+      (await isBeingDead(normalizedTarget.id, history))
     ) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
         `logFact: target being ${String(normalizedTarget.id).slice(0, 8)} is closed (be:death). ` +
-        `The being chain is frozen; no new facts can land on this being's reel.`,
+          `The being chain is frozen; no new facts can land on this being's reel.`,
         { targetBeingId: normalizedTarget.id },
       );
     }
@@ -340,16 +341,15 @@ export async function logFact(input, opts = {}) {
   // ACTOR name (by) is banished. The lone exception is the name:banish
   // fact itself, so the tombstone can seal. A Name is story-wide (its reel
   // does not fork), so this reads on main regardless of the fact's history;
-  // isNameBanished short-circuits I_AM, so today's all-i-am traffic skips the
+  // isNameBanished short-circuits I, so today's all-i-am traffic skips the
   // read. See materials/name/closure.js.
-  const { isNameBanished, isBanishFact } = await import(
-    "../../materials/name/closure.js"
-  );
-  if (!isBanishFact({ verb, act }) && by && await isNameBanished(by)) {
+  const { isNameBanished, isBanishFact } =
+    await import("../../materials/name/closure.js");
+  if (!isBanishFact({ verb, act }) && by && (await isNameBanished(by))) {
     throw new IbpError(
       IBP_ERR.FORBIDDEN,
       `logFact: name ${String(by).slice(0, 8)} is banished. ` +
-      `No new fact can be signed by it.`,
+        `No new fact can be signed by it.`,
       { by },
     );
   }
@@ -371,8 +371,11 @@ export async function logFact(input, opts = {}) {
   };
   const hookResult = await hooks.run("beforeFact", hookData);
   if (hookResult.cancelled) {
-    const code = hookResult.timedOut ? IBP_ERR.HOOK_TIMEOUT : IBP_ERR.HOOK_CANCELLED;
-    throw new IbpError(code,
+    const code = hookResult.timedOut
+      ? IBP_ERR.HOOK_TIMEOUT
+      : IBP_ERR.HOOK_CANCELLED;
+    throw new IbpError(
+      code,
       `Fact cancelled: ${hookResult.reason || "extension"}`,
     );
   }
@@ -393,7 +396,8 @@ export async function logFact(input, opts = {}) {
   // originBeingId, originActId} (full provenance tuple); we check by
   // crossOrigin.actId first since actId is unique enough in practice,
   // and the broader tuple guards against pathological reuse.
-  const incomingCrossOrigin = hookData.params?.crossOrigin || cappedParams.value?.crossOrigin;
+  const incomingCrossOrigin =
+    hookData.params?.crossOrigin || cappedParams.value?.crossOrigin;
   if (incomingCrossOrigin?.actId && finalTarget) {
     const existing = await Fact.findOne({
       // History-scoped: the delivery targets a specific world; a
@@ -401,10 +405,12 @@ export async function logFact(input, opts = {}) {
       // different reel and must not suppress this stamp.
       history,
       "of.kind": finalTarget.kind,
-      "of.id":   finalTarget.id,
-      "params.crossOrigin.actId":   incomingCrossOrigin.actId,
+      "of.id": finalTarget.id,
+      "params.crossOrigin.actId": incomingCrossOrigin.actId,
       "params.crossOrigin.beingId": incomingCrossOrigin.beingId,
-    }).select("_id seq").lean();
+    })
+      .select("_id seq")
+      .lean();
     if (existing) {
       // Duplicate delivery — return without writing. Caller treats
       // this as success (the fact already landed on a prior delivery).
@@ -448,7 +454,10 @@ export async function logFact(input, opts = {}) {
     // it for the whole transaction across reels, so a nested
     // withReelLock here would deadlock.
     const runAppend = async () => {
-      const seq = await allocSeq(finalTarget.kind, finalTarget.id, { session, history });
+      const seq = await allocSeq(finalTarget.kind, finalTarget.id, {
+        session,
+        history,
+      });
 
       // INTEGRITY chain: read the prev fact's identity, LINEAGE-
       // AWARE. seq is monotonic per reel; under this lock, prev sits
@@ -459,7 +468,13 @@ export async function logFact(input, opts = {}) {
       // history's fact at the same seq — the chain-corruption bug
       // this lineage walk retires. A missing prev (a true gap from
       // a crashed alloc) falls back to GENESIS_PREV.
-      const p = await prevHashAt(finalTarget.kind, finalTarget.id, seq - 1, history, session);
+      const p = await prevHashAt(
+        finalTarget.kind,
+        finalTarget.id,
+        seq - 1,
+        history,
+        session,
+      );
 
       // The identity IS the hash. Computed over the full content
       // (including history and seq) chained to p; no random ids.
@@ -480,7 +495,10 @@ export async function logFact(input, opts = {}) {
         // branch_target_seq_unique stays a REAL error (two different
         // contents fighting for one slot).
         if (err?.code === 11000 && /_id_?\b/.test(err?.message || "")) {
-          log.debug("DB", `Fact replay deduped (${history}:${finalTarget.kind}:${finalTarget.id} seq=${seq})`);
+          log.debug(
+            "DB",
+            `Fact replay deduped (${history}:${finalTarget.kind}:${finalTarget.id} seq=${seq})`,
+          );
           return;
         }
         throw err;
@@ -507,10 +525,18 @@ export async function logFact(input, opts = {}) {
         // non-reentrant; re-acquiring here would deadlock.
         await runAppend();
       } else {
-        await withReelLock(history, finalTarget.kind, finalTarget.id, runAppend);
+        await withReelLock(
+          history,
+          finalTarget.kind,
+          finalTarget.id,
+          runAppend,
+        );
       }
     } catch (err) {
-      log.error("DB", `Fact append failed (${act} on ${finalTarget.kind}:${finalTarget.id} history=${history}): ${err.message}`);
+      log.error(
+        "DB",
+        `Fact append failed (${act} on ${finalTarget.kind}:${finalTarget.id} history=${history}): ${err.message}`,
+      );
       // Carry the underlying message + code through so callers see the
       // actual cause (E11000 duplicate, missing index, schema validation)
       // instead of the bare "Failed to stamp Fact" wrapper.
@@ -522,7 +548,9 @@ export async function logFact(input, opts = {}) {
       // (a collection-creation race that Mongo asks us to retry), and
       // the retry never happens because the wrapped error lost its
       // labels — boot fails on the first write of genesis.
-      const wrapped = new Error(`Failed to stamp Fact (${history}:${finalTarget.kind}:${finalTarget.id} ${act}): ${err.message}`);
+      const wrapped = new Error(
+        `Failed to stamp Fact (${history}:${finalTarget.kind}:${finalTarget.id} ${act}): ${err.message}`,
+      );
       wrapped.cause = err;
       if (err?.code) wrapped.code = err.code;
       if (err?.errorLabels) wrapped.errorLabels = err.errorLabels;
@@ -544,7 +572,8 @@ export async function logFact(input, opts = {}) {
     // wasted reads against pre-commit state.
     if (!skipEagerFold) {
       try {
-        const { fold } = await import("../../present/stamper/2-fold/foldEngine.js");
+        const { fold } =
+          await import("../../present/stamper/2-fold/foldEngine.js");
         // Fold runs on the SAME history the fact landed on. Without
         // threading it the fold engine throws "history is required"
         // (post-doctrine-shift) and the seal aborts. (fold takes
@@ -553,7 +582,10 @@ export async function logFact(input, opts = {}) {
       } catch (err) {
         // Self-healing: the next fold catches up. Log but don't throw —
         // the fact is the source of truth and is already on disk.
-        log.debug("Fold", `eager-fold failed for ${finalTarget.kind}:${finalTarget.id}: ${err.message}`);
+        log.debug(
+          "Fold",
+          `eager-fold failed for ${finalTarget.kind}:${finalTarget.id}: ${err.message}`,
+        );
       }
     }
   } else {
@@ -607,7 +639,10 @@ async function prevHashAt(kind, id, prevSeq, history, session = null) {
     for (let i = lineage.length - 1; i >= 0; i--) {
       const here = lineage[i];
       const floor = isMain(here) ? 0 : await getBranchPoint(here, kind, id);
-      if (prevSeq > (floor || 0)) { owner = here; break; }
+      if (prevSeq > (floor || 0)) {
+        owner = here;
+        break;
+      }
     }
     if (!owner) return GENESIS_PREV;
   }
@@ -701,20 +736,26 @@ export function groupByReel(deltaF) {
       if (typeof spec.history !== "string" || !spec.history.length) {
         throw new Error(
           `groupByReel: fact spec is missing history (${spec.verb}:${spec.act} on ` +
-          `${of.kind}:${String(of.id).slice(0,8)}). Upstream caller must thread it.`,
+            `${of.kind}:${String(of.id).slice(0, 8)}). Upstream caller must thread it.`,
         );
       }
       const history = spec.history;
       const key = `${history}:${of.kind}:${of.id}`;
-      const entry = factsByReel.get(key)
-        || { history, kind: of.kind, id: String(of.id), facts: [] };
+      const entry = factsByReel.get(key) || {
+        history,
+        kind: of.kind,
+        id: String(of.id),
+        facts: [],
+      };
       entry.facts.push(spec);
       factsByReel.set(key, entry);
     } else {
       orphanFacts.push(spec);
     }
   }
-  const sortedReels = [...factsByReel.keys()].sort().map(k => factsByReel.get(k));
+  const sortedReels = [...factsByReel.keys()]
+    .sort()
+    .map((k) => factsByReel.get(k));
   return { sortedReels, orphanFacts };
 }
 
@@ -836,8 +877,8 @@ export async function foldAfterCommit(sortedReels) {
         await hooks.run("afterReelArrival", {
           reels: sortedReels.map((r) => ({
             reelKind: r.kind,
-            reelId:   String(r.id),
-            history:  r.history,
+            reelId: String(r.id),
+            history: r.history,
           })),
         });
       } catch (err) {
@@ -1119,7 +1160,9 @@ export async function getFacts({
 
   if (beingId) {
     if (typeof history !== "string" || !history) {
-      throw new Error("getFacts: history is required when beingId is set (auth walks the chain)");
+      throw new Error(
+        "getFacts: history is required when beingId is set (auth walks the chain)",
+      );
     }
     const access = await resolveSpaceAccess(spaceId, beingId, history);
     if (!access.ok)
@@ -1152,15 +1195,26 @@ export async function getFacts({
  * Returns facts targeting (kind, id) ordered newest-first by default
  * (explorer view); pass { order: "asc" } for chain-walk order.
  */
-export async function getReel({ targetKind, targetId, limit, offset, order = "desc" }) {
+export async function getReel({
+  targetKind,
+  targetId,
+  limit,
+  offset,
+  order = "desc",
+}) {
   if (!targetKind || !targetId) {
     throw new Error("getReel: targetKind and targetId required");
   }
   if (!REEL_KINDS.has(targetKind)) {
-    throw new Error(`getReel: targetKind must be one of ${[...REEL_KINDS].join("|")}`);
+    throw new Error(
+      `getReel: targetKind must be one of ${[...REEL_KINDS].join("|")}`,
+    );
   }
   const query = { "of.kind": targetKind, "of.id": String(targetId) };
-  const safeLimit  = Math.min(Math.max(Number(limit)  || 100, 1), MAX_QUERY_LIMIT());
+  const safeLimit = Math.min(
+    Math.max(Number(limit) || 100, 1),
+    MAX_QUERY_LIMIT(),
+  );
   const safeOffset = Math.max(0, Number(offset) || 0);
   const dir = order === "asc" ? 1 : -1;
   const facts = await Fact.find(query)
@@ -1185,7 +1239,9 @@ export async function describeReel(targetKind, targetId, opts = {}) {
     const { loadProjection } = await import("../../materials/projections.js");
     const slot = await loadProjection(targetKind, targetId, "0");
     targetName = slot?.state?.name || null;
-  } catch { /* name lookup is best-effort */ }
+  } catch {
+    /* name lookup is best-effort */
+  }
   return {
     target: { kind: targetKind, id: String(targetId), name: targetName },
     // Redact secrets on the way over the wire — the fact-chain in the DB
@@ -1199,19 +1255,22 @@ export async function describeReel(targetKind, targetId, opts = {}) {
 function serializeFactForReel(f) {
   return {
     // The fact's identity IS its content hash; p is the chain link.
-    _id:       String(f._id),
-    seq:       f.seq,
-    verb:      f.verb,
-    act:       f.act,
-    of:        f.of,
-    params:    f.params,
-    result:    f.result,
-    p:         f.p,
-    date:      f.date,
-    through:   f.through?._id ? String(f.through._id)
-               : (f.through ? String(f.through) : null),
+    _id: String(f._id),
+    seq: f.seq,
+    verb: f.verb,
+    act: f.act,
+    of: f.of,
+    params: f.params,
+    result: f.result,
+    p: f.p,
+    date: f.date,
+    through: f.through?._id
+      ? String(f.through._id)
+      : f.through
+        ? String(f.through)
+        : null,
     beingName: f.through?.name || null,
-    actId:     f.actId || null,
+    actId: f.actId || null,
   };
 }
 

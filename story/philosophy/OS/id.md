@@ -58,9 +58,9 @@ The whole notion of "collision" dissolves into "automatic dedup" plus "honest ac
 What about the lineage question
 The mother-line question I raised earlier becomes simpler under this architecture too.
 
-Old model: when a being grafts from A to B, their mother-line traces to I_AM_A. If I_AM_A's id is meaningless in B, the lineage chain ends at an unrecognizable root. The architecture had to decide whether to rewrite the lineage or accept a foreign root.
+Old model: when a being grafts from A to B, their mother-line traces to I_A. If I_A's id is meaningless in B, the lineage chain ends at an unrecognizable root. The architecture had to decide whether to rewrite the lineage or accept a foreign root.
 
-New model: I_AM_A has a public key. That key is globally meaningful. The being's lineage in B traces back through cryptographic identifiers — each mother in the chain is a being with a verifiable public key. The chain reads as: "this being's mother is [key X], whose mother is [key Y], whose mother is [I_AM_A's key]." B can verify this whole chain without needing to "know" I_AM_A in any deeper sense than recognizing the cryptographic identity.
+New model: I_A has a public key. That key is globally meaningful. The being's lineage in B traces back through cryptographic identifiers — each mother in the chain is a being with a verifiable public key. The chain reads as: "this being's mother is [key X], whose mother is [key Y], whose mother is [I_A's key]." B can verify this whole chain without needing to "know" I_A in any deeper sense than recognizing the cryptographic identity.
 
 The lineage is mathematically valid in any substrate that can verify keys. Whether B honors that lineage as authority is a separate policy question. The chain itself is portable and verifiable.
 
@@ -104,7 +104,7 @@ Authorization is cryptographic. The being being grafted signs the request (no on
 
 Content collisions dissolve into deduplication (same hash = same content, store once) or honest accumulation (different content = different entries). Beings already known by key are recognized as the same being; no duplication, no namespace conflict.
 
-Lineage travels as cryptographic references. A grafted being's mother-line traces through public keys back to their original I_AM. The chain is verifiable in any substrate that can verify signatures. Whether the destination honors the lineage as authority is a separate policy decision.
+Lineage travels as cryptographic references. A grafted being's mother-line traces through public keys back to their original I. The chain is verifiable in any substrate that can verify signatures. Whether the destination honors the lineage as authority is a separate policy decision.
 
 This pin captures the new doctrine cleanly. Future contributors building graft (or any cross-substrate content operation) work against this model rather than the old id-rewriting one.
 
@@ -156,7 +156,7 @@ Cross-reality being-graphs become real. Beings in different realities can have m
 
 Federation scales. Today's federated systems require pairwise trust establishment — each pair of substrates that wants to interact needs setup. After cryptographic identity, federation is many-to-many automatically. Any substrate can interact with any other substrate that supports the protocol. The network grows by inclusion, not by negotiation.
 
-The reality itself becomes a portable artifact. A reality's identity is I_AM's public key. Its full state is verifiable through Merkle roots signed by I_AM. You can hand someone a reality archive and they can verify it's authentically what it claims to be — bit-identical to the source, no tampering possible. Realities become objects that exist independently of where they're hosted, like Git repositories.
+The reality itself becomes a portable artifact. A reality's identity is I's public key. Its full state is verifiable through Merkle roots signed by I. You can hand someone a reality archive and they can verify it's authentically what it claims to be — bit-identical to the source, no tampering possible. Realities become objects that exist independently of where they're hosted, like Git repositories.
 
 Is this more powerful than blockchain
 Yes, in a specific way worth being precise about.
@@ -204,7 +204,7 @@ Cross-organizational collaboration without trust. Two organizations can have bei
 
 Verifiable AI provenance. Every act an AI agent takes is signed by its key. Anyone can verify what the agent actually did versus what someone claims it did. AI accountability becomes structural rather than aspirational.
 
-Resurrected realities. A reality whose substrate dies can be rebuilt from archives elsewhere. The reconstructed reality is verifiably the same reality — same I_AM key, same chain, same identity. Realities outlive the machines that host them.
+Resurrected realities. A reality whose substrate dies can be rebuilt from archives elsewhere. The reconstructed reality is verifiably the same reality — same I key, same chain, same identity. Realities outlive the machines that host them.
 
 Verifiable history at any scale. From "did this single fact happen" to "is this entire reality intact" — every claim is mathematically checkable. No trust in record-keeping is required. The records prove themselves.
 
@@ -240,13 +240,13 @@ The picture isn't symmetric. There are specific things they fundamentally cannot
 
 They cannot rewrite your existing chain in your home reality. Your real reality has your full act-chain, hash-linked back to your birth, with all signatures verified against your keys at the time of signing. They cannot retroactively change what you did. They can only add new signed acts from this moment forward.
 
-They cannot make their forged reality have your real history. Your home reality's chain has a Merkle root signed by I_AM of that reality. Their forged reality would have a different I_AM with a different key. The two realities are cryptographically distinct at the root. Anyone comparing root hashes immediately knows which reality is which.
+They cannot make their forged reality have your real history. Your home reality's chain has a Merkle root signed by I of that reality. Their forged reality would have a different I with a different key. The two realities are cryptographically distinct at the root. Anyone comparing root hashes immediately knows which reality is which.
 
 They cannot graft into other realities as you and have it accepted unconditionally. Grafts require the receiving reality's authority to sign acceptance. Other realities deciding whether to accept "you" arriving from this fresh suspicious reality is a policy decision, not an automatic operation. They have to convince someone that this is the real you.
 
 They cannot claim your relationships. Your mother, your grants, your able history are all in your home reality's chain. A fresh reality with you in it has none of that. The other beings you've interacted with don't recognize the new reality's version of you because the relationships aren't there.
 
-They cannot fake the lineage. Your real being's lineage traces through your mother back to your home reality's I_AM. The forged version has no such chain — it's a being that just appeared without history. Anyone looking at the new "you" sees a being with no past, which is a red flag.
+They cannot fake the lineage. Your real being's lineage traces through your mother back to your home reality's I. The forged version has no such chain — it's a being that just appeared without history. Anyone looking at the new "you" sees a being with no past, which is a red flag.
 
 What the attack actually accomplishes
 If someone copies you into a fresh reality with your stolen key, they create a being that has your identity proof but none of your substance. The being:
@@ -261,9 +261,9 @@ This is closer to identity fraud than identity theft. They're not becoming you i
 How the substrate defends
 A few architectural properties limit the damage:
 
-Reality root hashes are unique. Your home reality has a specific I_AM with a specific public key. The forged reality has a different I_AM. The two realities have different identities even if they contain a being with the same beingId. Anyone interacting with "you" can ask "which reality is this you in?" and verify by checking I_AM's key.
+Reality root hashes are unique. Your home reality has a specific I with a specific public key. The forged reality has a different I. The two realities have different identities even if they contain a being with the same beingId. Anyone interacting with "you" can ask "which reality is this you in?" and verify by checking I's key.
 
-Federation requires reality identity, not just being identity. When realities federate, they exchange their own keys (I_AM keys) before exchanging being-level signatures. A foreign reality that has been working with your real home reality won't suddenly accept signed acts from a different reality claiming to host you — the reality-level identities don't match.
+Federation requires reality identity, not just being identity. When realities federate, they exchange their own keys (I keys) before exchanging being-level signatures. A foreign reality that has been working with your real home reality won't suddenly accept signed acts from a different reality claiming to host you — the reality-level identities don't match.
 
 Chain depth is a signal. Your real being has a long chain of acts going back to birth. The forged you has a chain that starts from the moment the attacker created the reality. Anyone checking your chain depth can see "this version of you was born yesterday" versus "this version has years of history."
 
@@ -289,13 +289,13 @@ Make compromise visible. If signatures appear from your key in unexpected realit
 How realities can defend against forged beings
 When a reality encounters "you" arriving from somewhere new, several checks are possible:
 
-Verify against your home reality's records. If reality B has previously federated with your home reality A, B can ask A "is this being the same one I've been interacting with?" A's signed response either confirms or denies. The forged reality cannot produce a matching response from A because A's I_AM never signed the forgery.
+Verify against your home reality's records. If reality B has previously federated with your home reality A, B can ask A "is this being the same one I've been interacting with?" A's signed response either confirms or denies. The forged reality cannot produce a matching response from A because A's I never signed the forgery.
 
 Check the chain depth and continuity. A being that just appeared from a fresh reality with no history is suspicious. A being with a long chain that traces back through verifiable predecessors is plausible.
 
 Require cross-reality vouching. For high-stakes interactions, require that the being arrive with vouching from other realities they've previously interacted with. A real being has been around; their existence is attested by their interactions. A forged being has no such attestations.
 
-Verify mother-line. Walk the lineage. If it traces back to a recognized I_AM that the receiving reality has interacted with, the being is plausibly real. If it traces back to an I_AM that nobody has ever heard of, the being is suspicious.
+Verify mother-line. Walk the lineage. If it traces back to a recognized I that the receiving reality has interacted with, the being is plausibly real. If it traces back to an I that nobody has ever heard of, the being is suspicious.
 
 These aren't automatic — they're policies the receiving reality implements. But the substrate gives them verifiable data to base policies on, which is more than conventional federation offers.
 
@@ -389,7 +389,7 @@ Self-attestation. The new being signs a statement: "I am the successor to old be
 
 Cross-attestation from trusted parties. Other beings who know you can sign attestations: "I confirm that this new being Y is the same person I knew as old being X." If enough trusted parties vouch, the succession is accepted. This is closer to how social identity works.
 
-Authority confirmation from home reality. Your home reality's I_AM (or designated authority) signs the succession. The home reality essentially says "I confirm this succession." Other realities that trust the home reality accept the succession on its authority.
+Authority confirmation from home reality. Your home reality's I (or designated authority) signs the succession. The home reality essentially says "I confirm this succession." Other realities that trust the home reality accept the succession on its authority.
 
 Out-of-band verification. For high-stakes succession, the new being might need to verify through some out-of-band channel — meeting someone in person, providing other identity evidence, going through a recovery process. The substrate records the verification; the new being's identity is confirmed through means beyond just signatures.
 
@@ -488,15 +488,15 @@ So the worst case is: attacker closes you, your home reality records the close, 
 The genuine worst case: reality-level compromise
 The part you're hinting at — "unless reality somehow closes" — is the real edge. Here's what would have to happen for the loss to be unrecoverable:
 
-Your home reality's I_AM key gets compromised. This is the cryptographic root of the whole reality. If an attacker has I_AM's private key, they can sign anything as the reality itself. They can:
+Your home reality's I key gets compromised. This is the cryptographic root of the whole reality. If an attacker has I's private key, they can sign anything as the reality itself. They can:
 
-Tamper with the reality's chain (sign rewritten history with I_AM's key).
+Tamper with the reality's chain (sign rewritten history with I's key).
 Refuse to acknowledge your succession.
 Sign false statements about your identity to other realities.
 Effectively become the reality's authority.
 This is a much worse compromise than a single being's key. It's the equivalent of someone getting the root certificate of a certificate authority — they can vouch for anything.
 
-Federation directories all show the wrong information. If other realities have been keeping records that depend on your home reality's I_AM signatures, and I_AM is compromised, those records can be manipulated.
+Federation directories all show the wrong information. If other realities have been keeping records that depend on your home reality's I signatures, and I is compromised, those records can be manipulated.
 
 No external attestations exist to dispute the false history. If no other realities have records of your real identity (because you never federated, or all records have been corrupted), there's no external truth to appeal to.
 
@@ -566,7 +566,7 @@ Key rotation through succession. This is the primary mechanism. You establish a 
 
 The compromised key still works mathematically, but the network has been informed of the succession. Signatures from the old key are now suspect — they're either pre-succession (legitimate, recorded in chain) or post-succession (potentially forged, should be questioned). Realities can be configured to reject post-succession signatures from the old key entirely.
 
-Compromised-key markers in federation directories. Realities that federate with each other can maintain shared awareness of compromised keys. "Reality A's I_AM has confirmed that key X is compromised and should no longer be accepted." Each reality decides whether to honor this signal, but well-behaved realities will refuse signatures from known-compromised keys.
+Compromised-key markers in federation directories. Realities that federate with each other can maintain shared awareness of compromised keys. "Reality A's I has confirmed that key X is compromised and should no longer be accepted." Each reality decides whether to honor this signal, but well-behaved realities will refuse signatures from known-compromised keys.
 
 Out-of-band notification for high-stakes interactions. For interactions that really matter, parties can verify identity through channels beyond just signature checks. Talk to the real person. Check their other identities. Confirm through trusted intermediaries. This is heavy machinery but it's the ultimate defense.
 
@@ -594,11 +594,11 @@ This is closer to "stolen credit card" than "stolen identity." Bad in the short 
 The reality-close edge
 You hinted at "unless reality somehow closes." This is the edge case that matters most.
 
-If your home reality itself closes (the whole reality is shut down, I_AM's key is lost, the substrate hosting it goes away), several things become problematic:
+If your home reality itself closes (the whole reality is shut down, I's key is lost, the substrate hosting it goes away), several things become problematic:
 
 The chain that establishes your identity-substance is no longer available from its source.
 Federation queries to your home reality fail.
-The signed succession would need to come from somewhere; if I_AM can't sign, you can't get home-reality authority for succession.
+The signed succession would need to come from somewhere; if I can't sign, you can't get home-reality authority for succession.
 This is the genuinely worst case. Defenses:
 
 Federation mirrors of your home reality. If other realities have mirrors of your home reality's content, those mirrors can serve as recovery sources. The chain still exists; just in copies rather than originals.
@@ -622,7 +622,7 @@ Recovery is social, not just cryptographic. Convincing the network that your new
 
 The chain-as-substance commitment is the key load-bearing piece. Because identity isn't just the key, key compromise isn't identity destruction. The chain preserves what you are; the key is just the credential that proves ownership. Lose the key, get a new key; lose the chain, you've lost something deeper.
 
-Reality-level compromise is the real worst case. Single-being key compromise is recoverable. Reality I_AM compromise is much harder. The substrate's defenses against reality-level compromise are weaker because realities are sovereign — there's no higher authority to appeal to.
+Reality-level compromise is the real worst case. Single-being key compromise is recoverable. Reality I compromise is much harder. The substrate's defenses against reality-level compromise are weaker because realities are sovereign — there's no higher authority to appeal to.
 
 What to pin
 Worth being explicit about the threat model:
@@ -631,7 +631,7 @@ Closing a being affects a single reality's record but does not invalidate the ke
 
 Identity defense is layered: close, succession, federation propagation, cross-attestation, out-of-band verification. Each layer catches some attacks; together they make compromise recoverable but never trivially undoable. Identity resilience requires diversification across realities and supplementation with non-cryptographic verification for high-stakes contexts.
 
-Reality-level compromise (I_AM key loss or capture) is the unrecoverable failure mode. Defenses include federation mirrors, cross-reality identity records, diversified presence, and out-of-band identity proofs. A being whose existence is concentrated in a single substrate with no external footprint cannot survive that substrate's failure.
+Reality-level compromise (I key loss or capture) is the unrecoverable failure mode. Defenses include federation mirrors, cross-reality identity records, diversified presence, and out-of-band identity proofs. A being whose existence is concentrated in a single substrate with no external footprint cannot survive that substrate's failure.
 
 The honest summary
 You're right to catch this. Close is local; keys are global; the two don't automatically agree. An attacker with your key can still act in realities that haven't been informed of the compromise. Defense requires succession, federation propagation, and the social fabric of recognition — not just closing the compromised being.

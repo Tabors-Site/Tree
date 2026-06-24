@@ -24,13 +24,13 @@ treeos start
 
 ## The model
 
-A story is one cryptographically anchored world, rooted in a single Name: I_AM. I_AM's keypair signs the genesis fact and every Merkle root from t=0 onward. Every Name is its own public key; a being is a presence a Name uses to act. Every act produces facts; facts are content addressed and chained through prev-hashes. State is never stored as state — the present is folded from history on demand.
+A story is one cryptographically anchored world, rooted in a single Name: I. I's keypair signs the genesis fact and every Merkle root from t=0 onward. Every Name is its own public key; a being is a presence a Name uses to act. Every act produces facts; facts are content addressed and chained through prev-hashes. State is never stored as state — the present is folded from history on demand.
 
 Everything the seed exposes is a **word**: every verb, op, able, and kind is a declared fact the system folds and runs. The vocabulary is not a registry; it is the fold of those facts.
 
 Federation works without a central authority because every Name and every story is self-certifying. Two stories verify each other by exchanging signed root hashes; the math runs locally. Names also meet in a fifth-dimensional **Library** — sharing **books** (carriable slices of a story) and Searching across the stories they are peered with.
 
-Read [`philosophy/I_AM.md`](philosophy/I_AM.md) for the cryptographic root, [`philosophy/theorems.md`](philosophy/theorems.md) for the formal results, and [`philosophy/word/`](philosophy/word/) for the Word.
+Read [`philosophy/I.md`](philosophy/I.md) for the cryptographic root, [`philosophy/theorems.md`](philosophy/theorems.md) for the formal results, and [`philosophy/word/`](philosophy/word/) for the Word.
 
 ## The six verbs
 
@@ -51,7 +51,7 @@ BE is the one verb where the actor IS the target. Its five ops are birth, connec
 
 | Primitive | What it is                                                                                                        |
 | --------- | ----------------------------------------------------------------------------------------------------------------- |
-| Name      | A keypair. The identity that signs every act and owns its act-chain and lineage. The story's own Name is I_AM.    |
+| Name      | A keypair. The identity that signs every act and owns its act-chain and lineage. The story's own Name is I.       |
 | Being     | A presence — a being a Name uses to act in a place (a uuid owned by a Name). Humans, LLM beings, scripted beings. |
 | Space     | A position in the tree. Holds matter, hosts beings, owns quality namespaces.                                      |
 | Matter    | Stuff inside a space. Types declare what it IS (file, model, http, ibpa, source, and extension types).            |
@@ -68,7 +68,7 @@ protocols/           IBP — the six verbs; the cross-story federation.
 transports/          HTTP, WebSocket, CLI: thin shims that translate into IBP.
 resources/           Where you build. Extensions sit beside the seed and add their own words.
 portal/              The 3D portal client (active dev). Served at /. Three.js + Vite.
-philosophy/          The doctrine: math, theorems, the Word (word/), MOMENT, FOLD, STAMPER, I_AM.
+philosophy/          The doctrine: math, theorems, the Word (word/), MOMENT, FOLD, STAMPER, I.
 plant.js             Operator's first act. Once.
 begin.js             t=0. Opens senses. Fires genesis.
 genesis.js           The unfolding that forms the story.
@@ -98,7 +98,7 @@ After this, `mongodb://localhost:27017/story` should work.
 
 - [`seed/FACTORY.md`](seed/FACTORY.md), the seed in its own words
 - [`philosophy/`](philosophy/), the doctrine
-- [`philosophy/I_AM.md`](philosophy/I_AM.md), the cryptographic root
+- [`philosophy/I.md`](philosophy/I.md), the cryptographic root
 - [`philosophy/theorems.md`](philosophy/theorems.md), the formal results
 - [`philosophy/word/`](philosophy/word/), the Word
 - [`resources/README.md`](resources/README.md), building extensions

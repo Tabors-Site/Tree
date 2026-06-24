@@ -21,21 +21,36 @@ import { captureBook } from "./capture.js";
 // seals (sealColophon, the Name vouches) then shares. SEE = "nothing enters your story."
 registerSeeOperation("capture-book", {
   ownerExtension: "seed",
-  description: "Capture selected story elements (words / a being-reel slice / matter) into a Book",
+  description:
+    "Capture selected story elements (words / a being-reel slice / matter) into a Book",
   args: {
-    select: { type: "json", label: "Selection { title?, words?, reelOf?, history?, matter?, code? }", required: true },
+    select: {
+      type: "json",
+      label: "Selection { title?, words?, reelOf?, history?, matter?, code? }",
+      required: true,
+    },
   },
   handler: async ({ identity, args, history }) => {
     if (!identity?.beingId) {
-      throw new IbpError(IBP_ERR.UNAUTHORIZED, "capture-book: identity required (the capturing being)");
+      throw new IbpError(
+        IBP_ERR.UNAUTHORIZED,
+        "capture-book: identity required (the capturing being)",
+      );
     }
     const select = args?.select;
     if (!select || typeof select !== "object") {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "capture-book: `select` is required");
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "capture-book: `select` is required",
+      );
     }
     // (Self-or-heaven gating on reel slices that carry be:birth facts is a refinement — TODO,
     //  mirror capture-being's gate; the words/own-reel cases are the common path.)
-    const book = await captureBook({ history: history || "0", createdBy: identity?.nameId ?? null, ...select });
+    const book = await captureBook({
+      history: history || "0",
+      createdBy: identity?.nameId ?? null,
+      ...select,
+    });
     return { book };
   },
 });
@@ -54,13 +69,19 @@ registerOperation("share-book", {
   handler: async ({ params, identity }) => {
     const book = params?.book;
     if (!book || typeof book !== "object") {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "share-book: params.book is required (the sealed book to share)");
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "share-book: params.book is required (the sealed book to share)",
+      );
     }
     const v = await verifyColophon(book);
     if (!v.ok) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, `share-book: colophon verification failed — ${v.reason}`);
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        `share-book: colophon verification failed — ${v.reason}`,
+      );
     }
-    // The acting Name — the sharer's identity (falls back to the I_AM for seed-internal shares).
+    // The acting Name — the sharer's identity (falls back to the I for seed-internal shares).
     const nameId = identity?.nameId ?? identity?.beingId ?? "i-am";
     const { withNameAct } = await import("../../sprout.js");
     const { layBookOnLibrary } = await import("./library.js");
@@ -68,7 +89,12 @@ registerOperation("share-book", {
       layBookOnLibrary(book, { moment, by: nameId, kind: kindOf(book) }),
     );
     const { ranAsMoments } = await import("../../ibp/factResult.js");
-    return ranAsMoments({ root: v.root, bodyRef: result.bodyRef, signers: v.signers ?? [], unsigned: !!v.unsigned });
+    return ranAsMoments({
+      root: v.root,
+      bodyRef: result.bodyRef,
+      signers: v.signers ?? [],
+      unsigned: !!v.unsigned,
+    });
   },
 });
 
@@ -76,7 +102,8 @@ registerOperation("share-book", {
 // catalog). Replaces the old `clones` discovery op. Pure read; search/visit/plant start here.
 registerSeeOperation("library", {
   ownerExtension: "seed",
-  description: "List the Books in this story's Library (the shared-book catalog)",
+  description:
+    "List the Books in this story's Library (the shared-book catalog)",
   args: {},
   handler: async () => {
     const { listLibrary } = await import("./library.js");
@@ -95,18 +122,37 @@ registerOperation("share-story", {
   factAction: "share-story",
   // No skipAudit: captureGraft lays the whole-story name-act on the library reel; ranAsMoments
   // (returned below) tells the dispatcher to stamp none of its own.
-  args: { storyName: { type: "text", label: "Story name (optional)", required: false } },
+  args: {
+    storyName: {
+      type: "text",
+      label: "Story name (optional)",
+      required: false,
+    },
+  },
   handler: async ({ identity, params }) => {
     if (!identity?.beingId) {
-      throw new IbpError(IBP_ERR.UNAUTHORIZED, "share-story: identity required");
+      throw new IbpError(
+        IBP_ERR.UNAUTHORIZED,
+        "share-story: identity required",
+      );
     }
-    const { hasHeavenAuthority } = await import("../../materials/space/heavenLineage.js");
+    const { hasHeavenAuthority } =
+      await import("../../materials/space/heavenLineage.js");
     if (!(await hasHeavenAuthority(identity.beingId))) {
-      throw new IbpError(IBP_ERR.FORBIDDEN, "share-story: only beings with heaven authority may capture the whole story (the genome).");
+      throw new IbpError(
+        IBP_ERR.FORBIDDEN,
+        "share-story: only beings with heaven authority may capture the whole story (the genome).",
+      );
     }
     const { captureGraft } = await import("./graft.js");
-    const result = await captureGraft({ capturedBy: String(identity.beingId), storyName: params?.storyName || null });
+    const result = await captureGraft({
+      capturedBy: String(identity.beingId),
+      storyName: params?.storyName || null,
+    });
     const { ranAsMoments } = await import("../../ibp/factResult.js");
-    return ranAsMoments({ savedTo: result.savedTo, counts: result.bundle.meta.counts });
+    return ranAsMoments({
+      savedTo: result.savedTo,
+      counts: result.bundle.meta.counts,
+    });
   },
 });

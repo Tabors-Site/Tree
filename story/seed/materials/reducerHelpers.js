@@ -32,7 +32,17 @@ const QUALITIES_PREFIX = "qualities.";
 // verb separates the intent (an audit-trail "rename") from the bare
 // scalar write, but the fold is the same one-field update on the
 // matter row's name. See materials/matter/ops.js renameMatterHandler.
-const SET_ACTIONS = new Set(["set-space", "set-being", "set-matter", "set-model", "rename-matter", "set-render", "set-being-flow", "set-owner", "remove-owner"]);
+const SET_ACTIONS = new Set([
+  "set-space",
+  "set-being",
+  "set-matter",
+  "set-model",
+  "rename-matter",
+  "set-render",
+  "set-being-flow",
+  "set-owner",
+  "remove-owner",
+]);
 const CREATE_ACTIONS = new Set(["create-space", "create-matter"]);
 
 // Plain scalar/array fields the `do:set` op writes on a single
@@ -172,9 +182,12 @@ export function applySetQualities(state, fact) {
         qualities: { ...currentQualities, [namespace]: value },
       };
     }
-    const currentNs = (currentQualities[namespace] && typeof currentQualities[namespace] === "object" && !Array.isArray(currentQualities[namespace]))
-      ? currentQualities[namespace]
-      : {};
+    const currentNs =
+      currentQualities[namespace] &&
+      typeof currentQualities[namespace] === "object" &&
+      !Array.isArray(currentQualities[namespace])
+        ? currentQualities[namespace]
+        : {};
     const newNs = merge ? { ...currentNs, ...value } : value;
     return {
       ...state,
@@ -183,9 +196,11 @@ export function applySetQualities(state, fact) {
   }
 
   // Deep path: walk into the namespace and set the leaf
-  const currentNs = (currentQualities[namespace] && typeof currentQualities[namespace] === "object")
-    ? currentQualities[namespace]
-    : {};
+  const currentNs =
+    currentQualities[namespace] &&
+    typeof currentQualities[namespace] === "object"
+      ? currentQualities[namespace]
+      : {};
   const newNs = setDeepPath(currentNs, parts.slice(1), value);
   return {
     ...state,
@@ -306,7 +321,7 @@ export function applyConnectionState(state, fact) {
  *   verb:   "be"
  *   action: "death"
  *   target.kind: "being", target.id: <being whose death we're recording>
- *   params.byActor: <beingId who closed this being> (today: always I_AM)
+ *   params.byActor: <beingId who closed this being> (today: always I)
  *
  * The projection lands at `qualities.death = { time, byActor }`.
  * Consumers test `being.qualities.death?.time != null` for the
@@ -411,8 +426,10 @@ export function applyAbleGrants(state, fact) {
   // act (every act makes a fact) but carry the grant record (grantedBy/grantedAt) ONLY when
   // they actually granted — the no-grant paths (an idempotent re-take, a queued ask) stamp
   // the act with no grantedBy, so the `!grantedBy` guard below stops them here (nothing folds).
-  const isGrant  =
-    fact.act === "grant-able" || fact.act === "take-able" || fact.act === "ask-able";
+  const isGrant =
+    fact.act === "grant-able" ||
+    fact.act === "take-able" ||
+    fact.act === "ask-able";
   const isRevoke = fact.act === "revoke-able";
   if (!isGrant && !isRevoke) return state;
   if (fact?.of?.kind !== "being") return state;
@@ -435,10 +452,11 @@ export function applyAbleGrants(state, fact) {
     const grantedAt = params.grantedAt || fact.date?.toISOString?.() || null;
     // Dedupe by the uniqueness tuple — re-emit is idempotent.
     const alreadyHas = existing.some(
-      (e) => e.able === able
-        && (e.anchorSpaceId || null) === anchorSpaceId
-        && (e.anchorBeingId || null) === anchorBeingId
-        && (e.grantedBy || null) === grantedBy,
+      (e) =>
+        e.able === able &&
+        (e.anchorSpaceId || null) === anchorSpaceId &&
+        (e.anchorBeingId || null) === anchorBeingId &&
+        (e.grantedBy || null) === grantedBy,
     );
     if (alreadyHas) return state;
     const next = [
@@ -459,12 +477,13 @@ export function applyAbleGrants(state, fact) {
 
   // Revoke: drop the matching entry. If none matches, no-op.
   const filtered = existing.filter(
-    (e) => !(
-      e.able === able
-      && (e.anchorSpaceId || null) === anchorSpaceId
-      && (e.anchorBeingId || null) === anchorBeingId
-      && (e.grantedBy || null) === grantedBy
-    ),
+    (e) =>
+      !(
+        e.able === able &&
+        (e.anchorSpaceId || null) === anchorSpaceId &&
+        (e.anchorBeingId || null) === anchorBeingId &&
+        (e.grantedBy || null) === grantedBy
+      ),
   );
   if (filtered.length === existing.length) return state;
   return {
@@ -483,22 +502,22 @@ export function applyCreateBeing(state, fact) {
 
   return {
     ...state,
-    name:          spec.name,
-    password:      spec.password,
+    name: spec.name,
+    password: spec.password,
     defaultAble,
     // The trueName this presence expresses (the mother's trueName at
     // birth; host-transferable later). Folds from the be:birth spec.
-    trueName:      spec.trueName ?? null,
+    trueName: spec.trueName ?? null,
     parentBeingId: spec.parentBeingId ?? null,
-    homeSpace:     spec.homeSpace ?? null,
-    homeHistory:    spec.homeHistory ?? null,
-    isRemote:      Boolean(spec.isRemote),
-    homeStory:   spec.homeStory ?? null,
+    homeSpace: spec.homeSpace ?? null,
+    homeHistory: spec.homeHistory ?? null,
+    isRemote: Boolean(spec.isRemote),
+    homeStory: spec.homeStory ?? null,
     // Cognition (closed-set: "llm" | "human" | "scripted") lives at
     // qualities.cognition.defaultKind. Effective cognition is computed
     // at read time by beingCognition() in identity/lookups.js, which
     // checks the inhabit projection first and falls back to this.
-    qualities:     spec.qualities ?? {},
+    qualities: spec.qualities ?? {},
     // Being.children retired 2026-05-23; downward walks query by
     // parentBeingId (parallel to Space.children retirement).
     // `position` carries either an explicit `spec.position` (caller
@@ -506,14 +525,14 @@ export function applyCreateBeing(state, fact) {
     // back to homeSpace. Legacy `spec.currentSpace` accepted as an
     // alias during migration; callers should pass `spec.position`
     // going forward.
-    position:      spec.position ?? spec.currentSpace ?? spec.homeSpace ?? null,
+    position: spec.position ?? spec.currentSpace ?? spec.homeSpace ?? null,
     // Coord inside the position space. createBeing assigns a random
     // coord inside the position space's size when none was passed;
     // the reducer just records it. Movement later writes coord via
     // set-being:coord facts which applySetField picks up.
-    coord:         spec.coord ?? null,
-    createdAt:     fact.date,
-    updatedAt:     fact.date,
+    coord: spec.coord ?? null,
+    createdAt: fact.date,
+    updatedAt: fact.date,
   };
 }
 
@@ -556,20 +575,20 @@ export function applyCreateSpace(state, fact) {
 
   return {
     ...state,
-    name:         spec.name,
-    type:         spec.type ?? null,
-    parent:       spec.parent ?? spec.parentId ?? null,
-    owner:        initialOwner,
-    heavenSpace:    spec.heavenSpace ?? null,
-    size:         spec.size ?? null,
+    name: spec.name,
+    type: spec.type ?? null,
+    parent: spec.parent ?? spec.parentId ?? null,
+    owner: initialOwner,
+    heavenSpace: spec.heavenSpace ?? null,
+    size: spec.size ?? null,
     // Space's own coord within its parent. The createSpace handler
     // assigns a random coord inside the parent's size when none was
     // passed; the reducer just records it.
-    coord:        spec.coord ?? null,
-    qualities:    spec.qualities ?? {},
-    createdAt:    fact.date,
-    updatedAt:    fact.date,
-    position:     spec.parent ?? spec.parentId ?? null,
+    coord: spec.coord ?? null,
+    qualities: spec.qualities ?? {},
+    createdAt: fact.date,
+    updatedAt: fact.date,
+    position: spec.parent ?? spec.parentId ?? null,
   };
 }
 
@@ -630,8 +649,12 @@ export function applyMove(state, fact) {
   if (kind !== "space" && kind !== "matter") return state;
   const { coord, to } = fact?.params || {};
 
-  if (coord && typeof coord === "object" &&
-      Number.isFinite(coord.x) && Number.isFinite(coord.y)) {
+  if (
+    coord &&
+    typeof coord === "object" &&
+    Number.isFinite(coord.x) &&
+    Number.isFinite(coord.y)
+  ) {
     const next = { x: coord.x, y: coord.y };
     if (Number.isFinite(coord.z)) next.z = coord.z;
     return { ...state, coord: next, updatedAt: fact.date };
@@ -641,8 +664,10 @@ export function applyMove(state, fact) {
   // appropriate field (state.parent for space, state.spaceId for matter)
   // plus the denormalized position cache.
   if (typeof to === "string" && to) {
-    if (kind === "space")  return { ...state, parent: to, position: to, updatedAt: fact.date };
-    if (kind === "matter") return { ...state, spaceId: to, position: to, updatedAt: fact.date };
+    if (kind === "space")
+      return { ...state, parent: to, position: to, updatedAt: fact.date };
+    if (kind === "matter")
+      return { ...state, spaceId: to, position: to, updatedAt: fact.date };
   }
 
   return state;
@@ -654,26 +679,26 @@ export function applyCreateMatter(state, fact) {
   const spec = fact?.params || {};
   return {
     ...state,
-    spaceId:        spec.spaceId ?? null,
-    beingId:        spec.beingId ?? null,
-    name:           spec.name ?? null,
+    spaceId: spec.spaceId ?? null,
+    beingId: spec.beingId ?? null,
+    name: spec.name ?? null,
     // Content: a CAS ref object ({kind:"cas", hash, ...}) for owned
     // bytes; reference types keep their reference shapes (http {url},
     // ibpa {target}, source {path}). The reducer copies, never
     // computes — preview rides on the fact.
-    content:        spec.content ?? null,
+    content: spec.content ?? null,
     // Registered matter type (materials/matter/types.js). Defaulted
     // here too so pre-type facts fold deterministically.
-    type:           spec.type || "generic",
+    type: spec.type || "generic",
     // Born-at-a-position. Validated (clamped-or-thrown) in the
     // handler before the fact stamped; the reducer copies.
-    coord:          spec.coord ?? null,
+    coord: spec.coord ?? null,
     parentMatterId: spec.parentMatterId ?? null,
-    qualities:      spec.qualities ?? {},
-    children:       [],
-    position:       spec.spaceId ?? null,
-    createdAt:      fact.date,
-    updatedAt:      fact.date,
+    qualities: spec.qualities ?? {},
+    children: [],
+    position: spec.spaceId ?? null,
+    createdAt: fact.date,
+    updatedAt: fact.date,
   };
 }
 
@@ -690,7 +715,8 @@ export function applyPurgeContent(state, fact) {
   if (fact?.verb !== "do" || fact?.act !== "purge-content") return state;
   if (fact?.of?.kind !== "matter") return state;
   const hash = fact?.params?.hash;
-  if (!hash || !state?.content || typeof state.content !== "object") return state;
+  if (!hash || !state?.content || typeof state.content !== "object")
+    return state;
   if (state.content.hash !== hash) return state;
   return {
     ...state,
@@ -720,8 +746,9 @@ function setDeepPath(obj, pathParts, value) {
   }
   // Recurse into child
   const childRaw = obj[head];
-  const child = (childRaw && typeof childRaw === "object" && !Array.isArray(childRaw))
-    ? childRaw
-    : {};
+  const child =
+    childRaw && typeof childRaw === "object" && !Array.isArray(childRaw)
+      ? childRaw
+      : {};
   return { ...obj, [head]: setDeepPath(child, rest, value) };
 }

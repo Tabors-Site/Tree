@@ -19,7 +19,7 @@ import { randomUUID as uuidv4 } from "node:crypto";
 import Space from "../materials/space/space.js";
 import log from "../seedStory/log.js";
 import { emitFact } from "../past/fact/facts.js";
-import { I_AM } from "../materials/being/seedBeings.js";
+import { I } from "../materials/being/seedBeings.js";
 import { assertHistoryOrThrow } from "../materials/projections.js";
 
 // Normalize a qualities container (Map or plain object) into a
@@ -30,44 +30,57 @@ function canonJson(v) {
   if (v === null || typeof v !== "object") return v;
   if (v instanceof Map) v = Object.fromEntries(v);
   if (Array.isArray(v)) return v.map(canonJson);
-  return Object.keys(v).sort().reduce((acc, k) => { acc[k] = canonJson(v[k]); return acc; }, {});
+  return Object.keys(v)
+    .sort()
+    .reduce((acc, k) => {
+      acc[k] = canonJson(v[k]);
+      return acc;
+    }, {});
 }
 
 function qualitiesDiffer(existingQuals, desiredQuals) {
-  return JSON.stringify(canonJson(existingQuals)) !== JSON.stringify(canonJson(desiredQuals));
+  return (
+    JSON.stringify(canonJson(existingQuals)) !==
+    JSON.stringify(canonJson(desiredQuals))
+  );
 }
 
 // Stamp a do:create-space Fact for a new manifest child Space.
 // Eager-fold inside logFact runs applyCreateSpace + initProjection
-// to materialize the row. I_AM is the actor because manifest sync
-// is seed-internal scaffolding — extension load runs after I_AM is
+// to materialize the row. I is the actor because manifest sync
+// is seed-internal scaffolding — extension load runs after I is
 // planted, so the Being row exists.
 async function createChildByFact({ parentId, name, type, qualities }) {
   const id = uuidv4();
-  const specQualities = qualities instanceof Map
-    ? Object.fromEntries(qualities)
-    : (qualities || {});
+  const specQualities =
+    qualities instanceof Map ? Object.fromEntries(qualities) : qualities || {};
   // One-DO-per-moment doctrine: each create-space is its own act.
   // The wrapping withIAmAct opens a fresh moment so emitFact's
   // counter sees an isolated op, sealAct gets opCount=1.
   const { withIAmAct } = await import("../sprout.js");
   await withIAmAct(`manifest:create ${name}`, async (ctx) => {
-    await emitFact({
-      verb:    "do",
-      act:     "create-space",
-      through: I_AM,
-      of:      { kind: "space", id },
-      params:  {
-        name,
-        type:      type ?? null,
-        parent:    String(parentId),
-        // No initial owner class — heaven-tier spaces inherit access
-        // through the walker.
-        qualities: specQualities,
+    await emitFact(
+      {
+        verb: "do",
+        act: "create-space",
+        through: I,
+        of: { kind: "space", id },
+        params: {
+          name,
+          type: type ?? null,
+          parent: String(parentId),
+          // No initial owner class — heaven-tier spaces inherit access
+          // through the walker.
+          qualities: specQualities,
+        },
+        actId: ctx.actId,
+        history: assertHistoryOrThrow(
+          ctx.actorAct?.history,
+          "manifest(createSpace)",
+        ),
       },
-      actId: ctx.actId,
-      history: assertHistoryOrThrow(ctx.actorAct?.history, "manifest(createSpace)"),
-    }, ctx);
+      ctx,
+    );
   });
   return id;
 }
@@ -77,9 +90,10 @@ async function createChildByFact({ parentId, name, type, qualities }) {
 // fact; per-reel append lock serializes them.
 async function refreshQualitiesByFact(spaceId, qualities) {
   if (!qualities) return;
-  const entries = qualities instanceof Map
-    ? [...qualities.entries()]
-    : Object.entries(qualities);
+  const entries =
+    qualities instanceof Map
+      ? [...qualities.entries()]
+      : Object.entries(qualities);
   if (entries.length === 0) return;
   const { doVerb } = await import("../ibp/verbs/do.js");
   const { loadOrFold } = await import("../materials/projections.js");
@@ -90,13 +104,17 @@ async function refreshQualitiesByFact(spaceId, qualities) {
   // matches the doctrine "each one is a DO, not a group of DOs."
   for (const [ns, value] of entries) {
     await withIAmAct(`manifest:refresh-${ns}`, async (ctx) => {
-      const refreshed = await loadOrFold("space", spaceId, ctx.actorAct.history);
+      const refreshed = await loadOrFold(
+        "space",
+        spaceId,
+        ctx.actorAct.history,
+      );
       if (!refreshed) return;
       await doVerb(
         { kind: "space", id: String(refreshed.id) },
         "set-space",
         { field: `qualities.${ns}`, value, merge: false },
-        { identity: I_AM, moment: ctx },
+        { identity: I, moment: ctx },
       );
     });
   }
@@ -108,14 +126,17 @@ async function refreshQualitiesByFact(spaceId, qualities) {
 async function deleteChildByFact(childId) {
   const { doVerb } = await import("../ibp/verbs/do.js");
   const { withIAmAct } = await import("../sprout.js");
-  await withIAmAct(`manifest:delete ${String(childId).slice(0, 8)}`, async (ctx) => {
-    await doVerb(
-      { kind: "space", id: String(childId) },
-      "end-space",
-      {},
-      { identity: I_AM, moment: ctx },
-    );
-  });
+  await withIAmAct(
+    `manifest:delete ${String(childId).slice(0, 8)}`,
+    async (ctx) => {
+      await doVerb(
+        { kind: "space", id: String(childId) },
+        "end-space",
+        {},
+        { identity: I, moment: ctx },
+      );
+    },
+  );
 }
 
 export async function manifestItems({
@@ -144,13 +165,19 @@ export async function manifestItems({
 
   // Children with parent === parentSlot.id and type matching itemType.
   // Direct projection query for the type+parent intersection.
-  const { default: Projection } = await import("../materials/history/projection.js");
-  const existingChildren = (await Projection.find({
-    history: "0", type: "space",
-    "state.parent": parentSlot.id,
-    "state.type": itemType,
-    tombstoned: { $ne: true },
-  }).select("id state").lean()).map((s) => ({
+  const { default: Projection } =
+    await import("../materials/history/projection.js");
+  const existingChildren = (
+    await Projection.find({
+      history: "0",
+      type: "space",
+      "state.parent": parentSlot.id,
+      "state.type": itemType,
+      tombstoned: { $ne: true },
+    })
+      .select("id state")
+      .lean()
+  ).map((s) => ({
     _id: s.id,
     name: s.state?.name,
     qualities: s.state?.qualities,
@@ -177,16 +204,19 @@ export async function manifestItems({
       // (existing kept but not desired → delete loop below), or an
       // extension's quality data actually changed (deep-unequal here
       // → fall through to refresh).
-      if (item.qualities && qualitiesDiffer(existing.qualities, item.qualities)) {
+      if (
+        item.qualities &&
+        qualitiesDiffer(existing.qualities, item.qualities)
+      ) {
         await refreshQualitiesByFact(existing._id, item.qualities);
       }
       kept++;
       continue;
     }
     await createChildByFact({
-      parentId:  parent._id,
-      name:      item.name,
-      type:      itemType,
+      parentId: parent._id,
+      name: item.name,
+      type: itemType,
       qualities: item.qualities,
     });
     created++;
@@ -219,14 +249,18 @@ export async function addManifestChild({
   const parentSlot = await findByHeavenSpace(heavenSpace, "0");
   if (!parentSlot) return null;
   const parent = { _id: parentSlot.id };
-  const { default: Projection } = await import("../materials/history/projection.js");
+  const { default: Projection } =
+    await import("../materials/history/projection.js");
   const existing = await Projection.findOne({
-    history: "0", type: "space",
+    history: "0",
+    type: "space",
     "state.parent": parentSlot.id,
     "state.name": name,
     "state.type": itemType,
     tombstoned: { $ne: true },
-  }).select("id").lean();
+  })
+    .select("id")
+    .lean();
   if (existing) {
     if (qualities) {
       await refreshQualitiesByFact(existing.id, qualities, moment);
@@ -257,14 +291,18 @@ export async function removeManifestChild({
   const { findByHeavenSpace } = await import("../materials/projections.js");
   const parentSlot = await findByHeavenSpace(heavenSpace, "0");
   if (!parentSlot) return false;
-  const { default: Projection } = await import("../materials/history/projection.js");
+  const { default: Projection } =
+    await import("../materials/history/projection.js");
   const child = await Projection.findOne({
-    history: "0", type: "space",
+    history: "0",
+    type: "space",
     "state.parent": parentSlot.id,
     "state.name": name,
     "state.type": itemType,
     tombstoned: { $ne: true },
-  }).select("id").lean();
+  })
+    .select("id")
+    .lean();
   if (!child) return false;
   await deleteChildByFact(child.id, moment);
   return true;

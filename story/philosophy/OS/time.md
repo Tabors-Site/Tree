@@ -291,7 +291,7 @@ structures play time stamp adjacent ables:
   the sequence of how this formed presence changed over time.
 - **Per space reels.** Each space's structural facts (sub spaces, contents,
   properties) accumulate in its reel.
-- **Per reality I_AM acts.** The I_AM's chain is the reality's identity history,
+- **Per reality I acts.** The I's chain is the reality's identity history,
   the foundational acts that shaped its identity layer. Not a global clock, but
   the reality's master timeline in that narrow sense.
 - **Roots (Merkle structures).** chainRoots.js computes reel roots, branch
@@ -360,7 +360,7 @@ referencing:
 
 Persistent state it would keep:
 
-- The reality's I_AM key (the cryptographic root)
+- The reality's I key (the cryptographic root)
 - All the reels (per Name, per being, per space) as appendable logs
 - Periodic root hashes (snapshots summarizing state at various points)
 - Federation references (links to other realities at acts of contact)
@@ -373,7 +373,7 @@ State it would not keep as core:
   rather than CPU cycles)
 - A scheduler tick (no periodic interrupts; the kernel wakes on events)
 
-Boot would be: hardware initializes, the kernel reads the I_AM key and reel
+Boot would be: hardware initializes, the kernel reads the I key and reel
 storage, computes the current root to verify integrity, and starts the event
 loop. After that it runs only when something happens: a packet, user input, a
 fact arriving, a fold requested.
@@ -814,7 +814,7 @@ TreeOS doesn't have a single global time-stamp reel because there's no global ti
 Per-Name act-chains. Every Name has a chain of acts they've signed. Each act has a position in the chain (sequence number, prev-hash, hash). This is the Name's local time — the sequence of moments where this Name acted. The chain serves the able of the RTC for that Name: it's persistent, it advances when activity happens, it provides the canonical ordering of that Name's history.
 Per-being matter and presence facts. Each being has facts about their state (position, properties, holdings). These facts accumulate in reels keyed by the being. When the being changes, new facts get appended. The being's history is its reel. This is more granular than the Name's chain — it's the sequence of how this specific formed presence has changed over time.
 Per-space space facts. Each space has a reel of facts about its structure (sub-spaces, contents, properties). The space's evolution is captured in its reel.
-Per-reality I_AM acts. The I_AM's chain is the reality's master timeline in some sense — the foundational acts that shaped the reality's identity layer. Not a global time for everything in the reality, but the reality's identity history.
+Per-reality I acts. The I's chain is the reality's master timeline in some sense — the foundational acts that shaped the reality's identity layer. Not a global time for everything in the reality, but the reality's identity history.
 Roots — Merkle structures. chainRoots.js computes reel-roots, branch-roots, reality-roots. These are hash structures that compress all the time-state into compact verifiable summaries. A reality-root is a hash that summarizes the entire reality's history. This is like a checksum over all the reels combined — not a clock, but a verifiable snapshot of "the state of all time in this reality at this moment of querying."
 Federation timestamps. When realities federate or cross-reference, facts in one reality reference acts in another. These cross-references are how time-relationships between realities get established. They're not synchronized clocks — they're event references that create causal links across substrate boundaries.
 So TreeOS replaces the time-stamp infrastructure of a normal computer with content-addressed fact reels at multiple scales. The "time" of a Name is its chain. The "time" of a being is its reel. The "time" of a reality is the combined state of all its reels, summarized in a root hash.
@@ -835,7 +835,7 @@ External synchronization. Normal: NTP. TreeOS: federation handshakes that exchan
 What a TreeOS kernel would actually maintain
 If you built TreeOS as a level-3 OS down to the hardware, the kernel's persistent state would be:
 
-The reality's I_AM key (the cryptographic root)
+The reality's I key (the cryptographic root)
 All the reels (per-Name, per-being, per-space) as appendable logs
 Periodic root hashes (snapshots that summarize state at various points)
 Federation references (links to other realities at acts of contact)
@@ -847,7 +847,7 @@ A monotonic clock (replaced by act-counts within chains)
 Per-process CPU time (since "process" is replaced by Name-activity, measured in acts rather than CPU cycles)
 A scheduler tick (no periodic interrupts; the kernel wakes on events)
 
-The boot sequence would be: hardware initializes, kernel reads I_AM key and reel storage, kernel computes current root to verify integrity, kernel starts the event loop. From then on, the kernel only runs when something happens — a network packet, user input, a fact arriving, a fold being requested.
+The boot sequence would be: hardware initializes, kernel reads I key and reel storage, kernel computes current root to verify integrity, kernel starts the event loop. From then on, the kernel only runs when something happens — a network packet, user input, a fact arriving, a fold being requested.
 The deeper observation
 Normal computers maintain time-stamp infrastructure because they assume time is an external coordinate that has to be tracked. The kernel is essentially a clock-keeper that also runs programs.
 TreeOS treats time as internal to activity. The "time-keeping" infrastructure is the same thing as the activity-recording infrastructure — they're not separate. The reels ARE the time, and they're also the substance of what happened. You don't need a separate clock because the chain of facts is its own timekeeping.

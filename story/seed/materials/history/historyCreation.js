@@ -22,7 +22,12 @@
 
 import History from "./history.js";
 import Fact from "../../past/fact/fact.js";
-import { invalidateHistoryCache, resolveHistoryLineage, MAIN, isMain } from "./histories.js";
+import {
+  invalidateHistoryCache,
+  resolveHistoryLineage,
+  MAIN,
+  isMain,
+} from "./histories.js";
 import { nextChildPath, isValidHistoryPath } from "./historyPath.js";
 
 /**
@@ -37,15 +42,25 @@ import { nextChildPath, isValidHistoryPath } from "./historyPath.js";
  * @param {string} [args.createdBy]           beingId of the operator
  * @returns {Promise<{ path, parent, branchPoint, anchor, createdAt }>}
  */
-export async function createBranch({ parent = MAIN, anchor, label = null, createdBy = null, scope = null } = {}) {
+export async function createBranch({
+  parent = MAIN,
+  anchor,
+  label = null,
+  createdBy = null,
+  scope = null,
+} = {}) {
   if (!isValidHistoryPath(parent)) {
     throw new Error(`createBranch: invalid parent path "${parent}"`);
   }
   if (!anchor || typeof anchor !== "object") {
-    throw new Error("createBranch: anchor is required: { atSeq } or { atTimestamp }");
+    throw new Error(
+      "createBranch: anchor is required: { atSeq } or { atTimestamp }",
+    );
   }
   if (anchor.atSeq == null && anchor.atTimestamp == null) {
-    throw new Error("createBranch: anchor.atSeq or anchor.atTimestamp is required");
+    throw new Error(
+      "createBranch: anchor.atSeq or anchor.atTimestamp is required",
+    );
   }
   // Walk the parent's lineage to validate it's reachable. Throws if
   // anything in the chain is missing.
@@ -73,7 +88,7 @@ export async function createBranch({ parent = MAIN, anchor, label = null, create
   // with SCOPE_VIOLATION at the fact-emission boundary.
   const parentScopeData = isMain(parent)
     ? null
-    : ((await History.findOne({ _id: parent }).lean())?.scope || null);
+    : (await History.findOne({ _id: parent }).lean())?.scope || null;
   const resolvedScope = await _resolveHistoryScope({
     passed: scope,
     parentScope: parentScopeData,
@@ -82,8 +97,9 @@ export async function createBranch({ parent = MAIN, anchor, label = null, create
   });
 
   // 1. Pick the new branch's path.
-  const siblings = await History
-    .find({ parent: isMain(parent) ? null : parent })
+  const siblings = await History.find({
+    parent: isMain(parent) ? null : parent,
+  })
     .select("_id path")
     .lean();
   // For main's children, parent === null in the History collection
@@ -104,13 +120,13 @@ export async function createBranch({ parent = MAIN, anchor, label = null, create
   const branchPointObj = {};
   for (const [reelKey, seq] of branchPoint) branchPointObj[reelKey] = seq;
   const branchDoc = await History.create({
-    _id:         path,
+    _id: path,
     path,
-    parent:      isMain(parent) ? null : parent,
+    parent: isMain(parent) ? null : parent,
     branchPoint: branchPointObj,
-    createdBy:   createdBy || null,
-    label:       label || null,
-    scope:       resolvedScope,
+    createdBy: createdBy || null,
+    label: label || null,
+    scope: resolvedScope,
   });
 
   // 4. Invalidate the lineage cache so the new branch is visible to
@@ -178,8 +194,8 @@ async function snapshotParentHeads({ parent, anchor }) {
 
     const matchStage = {
       "of.kind": { $in: ["being", "space", "matter"] },
-      "of.id":   { $type: "string" },
-      seq:           seqFilter,
+      "of.id": { $type: "string" },
+      seq: seqFilter,
       ...branchMatch,
     };
     if (isLeaf && anchor.atTimestamp != null) {
@@ -188,10 +204,12 @@ async function snapshotParentHeads({ parent, anchor }) {
 
     const agg = await Fact.aggregate([
       { $match: matchStage },
-      { $group: {
-        _id:    { kind: "$of.kind", id: "$of.id" },
-        maxSeq: { $max: "$seq" },
-      } },
+      {
+        $group: {
+          _id: { kind: "$of.kind", id: "$of.id" },
+          maxSeq: { $max: "$seq" },
+        },
+      },
     ]);
 
     for (const row of agg) {
@@ -204,10 +222,13 @@ async function snapshotParentHeads({ parent, anchor }) {
       if (!isLeaf) {
         const successor = lineage[i + 1];
         if (successor && !isMain(successor)) {
-          const succRow = await History.findById(successor).select("branchPoint").lean();
+          const succRow = await History.findById(successor)
+            .select("branchPoint")
+            .lean();
           const bp = succRow?.branchPoint || {};
           const cap = bp instanceof Map ? bp.get(key) : bp[key];
-          if (typeof cap === "number") effectiveSeq = Math.min(effectiveSeq, cap);
+          if (typeof cap === "number")
+            effectiveSeq = Math.min(effectiveSeq, cap);
         }
       }
       const prev = heads.get(key);
@@ -230,20 +251,31 @@ async function snapshotParentHeads({ parent, anchor }) {
  * Throws when the caller tries to widen or move to a disjoint scope
  * without story-root permission.
  */
-async function _resolveHistoryScope({ passed, parentScope, parentHistoryPath, createdBy }) {
-  const noScopePassed = (passed === null || passed === undefined);
+async function _resolveHistoryScope({
+  passed,
+  parentScope,
+  parentHistoryPath,
+  createdBy,
+}) {
+  const noScopePassed = passed === null || passed === undefined;
 
   // Validate + resolve any explicit scope first so shape errors throw
   // before lineage / permission logic runs.
   let resolvedPassed = null;
   if (!noScopePassed) {
-    if (typeof passed !== "object" || typeof passed.path !== "string" || !passed.path.length) {
+    if (
+      typeof passed !== "object" ||
+      typeof passed.path !== "string" ||
+      !passed.path.length
+    ) {
       throw new Error("createBranch: scope must be { path: string }");
     }
     const { resolvePathToSpaceId } = await import("./historyScope.js");
     const spaceId = await resolvePathToSpaceId(passed.path, parentHistoryPath);
     if (!spaceId) {
-      throw new Error(`createBranch: scope.path "${passed.path}" doesn't resolve to a space on parent "#${parentHistoryPath}"`);
+      throw new Error(
+        `createBranch: scope.path "${passed.path}" doesn't resolve to a space on parent "#${parentHistoryPath}"`,
+      );
     }
     resolvedPassed = { path: passed.path, spaceId };
   }
@@ -273,9 +305,9 @@ async function _resolveHistoryScope({ passed, parentScope, parentHistoryPath, cr
   if (!allowed) {
     throw new Error(
       `createBranch: scope "${passed.path}" is not within parent history's scope "${parentScope.path}". ` +
-      `Widening or moving to a disjoint scope requires story-root permission ` +
-      `(heaven owner or angel able). ` +
-      `Sub-branches inherit parent's scope by default; declare a narrower scope to fork within.`,
+        `Widening or moving to a disjoint scope requires story-root permission ` +
+        `(heaven owner or angel able). ` +
+        `Sub-branches inherit parent's scope by default; declare a narrower scope to fork within.`,
     );
   }
   return resolvedPassed;
@@ -292,7 +324,9 @@ async function _isSpaceWithinScope(targetSpaceId, scopeSpaceId, historyPath) {
     const { getAncestorChain } = await import("../space/ancestorCache.js");
     const chain = await getAncestorChain(String(targetSpaceId), historyPath);
     if (!Array.isArray(chain)) return false;
-    return chain.some((node) => String(node._id || node.id) === String(scopeSpaceId));
+    return chain.some(
+      (node) => String(node._id || node.id) === String(scopeSpaceId),
+    );
   } catch {
     return false;
   }
@@ -300,8 +334,8 @@ async function _isSpaceWithinScope(targetSpaceId, scopeSpaceId, historyPath) {
 
 /**
  * Story-root permission = heaven authority (owner of heaven OR
- * angel able granted at heaven). I_AM owns heaven; other beings are
- * admitted via the angel able grant chain that traces back to I_AM
+ * angel able granted at heaven). I owns heaven; other beings are
+ * admitted via the angel able grant chain that traces back to I
  * (per AblesAreAuth).
  *
  * Routes through `authorize()` against heaven so the substrate's
@@ -328,9 +362,9 @@ async function _hasStoryRootPermission(beingId) {
     // can widen branch scope, satisfying the "one gate" doctrine.
     const decision = await authorize({
       identity: { beingId: String(beingId) },
-      verb:     "do",
-      target:   { kind: "position", spaceId: String(heavenSlot.id) },
-      action:   "create-branch",
+      verb: "do",
+      target: { kind: "position", spaceId: String(heavenSlot.id) },
+      action: "create-branch",
     });
     return decision.ok === true;
   } catch {

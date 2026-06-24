@@ -45,7 +45,7 @@ const { withIAmAct } = await import(`${R}/seed/sprout.js`);
 const { birthBeing } = await import(
   `${R}/seed/materials/being/identity/birth.js`
 );
-const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
+const { I } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { getStoryDomain } = await import(`${R}/seed/ibp/address.js`);
 const { resolveAbleWord, runAbleWord } = await import(
   `${R}/seed/present/word/ableWordRegistry.js`
@@ -90,7 +90,7 @@ const birth = async (name, extraSpec = {}) => {
         defaultAble: "global",
         ...extraSpec,
       },
-      identity: I_AM,
+      identity: I,
       moment: ctx,
       history: "0",
     });

@@ -30,7 +30,7 @@
 
 import { registerOperation } from "../../../ibp/operations.js";
 import { IBP_ERR, IbpError } from "../../../ibp/protocol.js";
-import { I_AM } from "../../../materials/being/seedBeings.js";
+import { I } from "../../../materials/being/seedBeings.js";
 import {
   mintCredentialSpec,
   decryptCredential,
@@ -45,10 +45,26 @@ import { targetsFact } from "../../../ibp/factResult.js";
 // resolveAbleWord("credential", "credential-reset") finds the world strand. The cut
 // in the handler runs it through the bridge with credentialHostEnv(); the JS body is
 // the clean-miss fallback.
-registerAbleWord("credential", "credential-reset", new URL("./credential-reset.word", import.meta.url));
-registerAbleWord("credential", "credential-read", new URL("./credential-read.word", import.meta.url));
-registerAbleWord("credential", "credential-detach", new URL("./credential-detach.word", import.meta.url));
-registerAbleWord("credential", "credential-attach", new URL("./credential-attach.word", import.meta.url));
+registerAbleWord(
+  "credential",
+  "credential-reset",
+  new URL("./credential-reset.word", import.meta.url),
+);
+registerAbleWord(
+  "credential",
+  "credential-read",
+  new URL("./credential-read.word", import.meta.url),
+);
+registerAbleWord(
+  "credential",
+  "credential-detach",
+  new URL("./credential-detach.word", import.meta.url),
+);
+registerAbleWord(
+  "credential",
+  "credential-attach",
+  new URL("./credential-attach.word", import.meta.url),
+);
 
 // credential-detach / credential-attach: pure-gate world strands (self-only / being-
 // parent-only). The detach/attach RECORD is the dispatcher's audit fact, so the .word
@@ -56,20 +72,23 @@ registerAbleWord("credential", "credential-attach", new URL("./credential-attach
 // detached|attached} or null on a clean miss. The cut re-adds _factTarget.
 async function _credentialGateViaWord(opName, { caller, target, moment }) {
   if (!moment) return null;
-  const { resolveAbleWord, runAbleWord } = await import("../../../present/word/ableWordRegistry.js");
+  const { resolveAbleWord, runAbleWord } =
+    await import("../../../present/word/ableWordRegistry.js");
   const ir = resolveAbleWord("credential", opName, moment?.actorAct?.history);
   if (!ir) return null;
   const { credentialHostEnv } = await import("./credentialHost.js");
   const b = moment?.actorAct?.history;
   try {
     const { result } = await runAbleWord(ir, {
-      moment, history: b,
+      moment,
+      history: b,
       trigger: { caller: String(caller), target: String(target), branch: b },
       env: { host: credentialHostEnv() },
     });
     return result || null;
   } catch (e) {
-    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.FORBIDDEN, e.message);
+    if (e && e.__wordRefusal)
+      throw new IbpError(e.code || IBP_ERR.FORBIDDEN, e.message);
     throw e;
   }
 }
@@ -79,36 +98,54 @@ async function _credentialGateViaWord(opName, { caller, target, moment }) {
 // re-adds _factTarget (the asker's reel) + coerces hasPlain to a strict boolean.
 async function _credentialReadViaWord({ caller, target, history, moment }) {
   if (!moment) return null;
-  const { resolveAbleWord, runAbleWord } = await import("../../../present/word/ableWordRegistry.js");
-  const ir = resolveAbleWord("credential", "credential-read", moment?.actorAct?.history);
+  const { resolveAbleWord, runAbleWord } =
+    await import("../../../present/word/ableWordRegistry.js");
+  const ir = resolveAbleWord(
+    "credential",
+    "credential-read",
+    moment?.actorAct?.history,
+  );
   if (!ir) return null;
   const { credentialHostEnv } = await import("./credentialHost.js");
   const b = history || moment?.actorAct?.history; // the moment's history; never floor to "0"
   try {
     const { result } = await runAbleWord(ir, {
-      moment, history: b,
+      moment,
+      history: b,
       trigger: { caller: String(caller), target: String(target), branch: b },
       env: { host: credentialHostEnv() },
     });
     if (!result) return null;
     return { ...result, hasPlain: !!result.hasPlain };
   } catch (e) {
-    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.FORBIDDEN, e.message);
+    if (e && e.__wordRefusal)
+      throw new IbpError(e.code || IBP_ERR.FORBIDDEN, e.message);
     throw e;
   }
 }
 
 function targetBeingIdOf(target) {
-  if (target && typeof target === "object" && target.kind === "being" && target.id) {
+  if (
+    target &&
+    typeof target === "object" &&
+    target.kind === "being" &&
+    target.id
+  ) {
     return String(target.id);
   }
   if (typeof target === "string") return target;
-  throw new IbpError(IBP_ERR.INVALID_INPUT, "credential op requires a being target");
+  throw new IbpError(
+    IBP_ERR.INVALID_INPUT,
+    "credential op requires a being target",
+  );
 }
 
 function askerBeingIdOf(identity) {
   if (!identity?.beingId)
-    throw new IbpError(IBP_ERR.UNAUTHORIZED, "credential op requires an identified asker");
+    throw new IbpError(
+      IBP_ERR.UNAUTHORIZED,
+      "credential op requires an identified asker",
+    );
   return String(identity.beingId);
 }
 
@@ -155,10 +192,23 @@ registerOperation("credential-read", {
     // THE CONVERSION: credential-read's world strand is credential-read.word (caller
     // mode). The dispatcher needs _factTarget (the asker's reel) for the audit fact,
     // which the .word omits — re-add it around the bridge result. JS = clean-miss fallback.
-    const viaWord = await _credentialReadViaWord({ caller: askerBeingId, target: targetBeingId, history, moment });
-    if (viaWord) return targetsFact(viaWord, { kind: "being", id: askerBeingId || targetBeingId });
+    const viaWord = await _credentialReadViaWord({
+      caller: askerBeingId,
+      target: targetBeingId,
+      history,
+      moment,
+    });
+    if (viaWord)
+      return targetsFact(viaWord, {
+        kind: "being",
+        id: askerBeingId || targetBeingId,
+      });
 
-    const ok = await hasCredentialAuthority(askerBeingId, targetBeingId, history);
+    const ok = await hasCredentialAuthority(
+      askerBeingId,
+      targetBeingId,
+      history,
+    );
     if (!ok) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
@@ -166,16 +216,20 @@ registerOperation("credential-read", {
         { askerBeingId, targetBeingId },
       );
     }
-    const { loadTargetRow } = await import("../../../materials/_targetShape.js");
+    const { loadTargetRow } =
+      await import("../../../materials/_targetShape.js");
     const beingRow = await loadTargetRow(target, "being", { moment });
     const blob = readCredentialPlainFromBeing(beingRow);
     const plaintext = blob ? decryptCredential(blob) : null;
     const reelBeingId = askerBeingId || targetBeingId;
-    return targetsFact({
-      targetBeingId,
-      hasPlain: plaintext !== null,
-      plaintext,
-    }, { kind: "being", id: reelBeingId });
+    return targetsFact(
+      {
+        targetBeingId,
+        hasPlain: plaintext !== null,
+        plaintext,
+      },
+      { kind: "being", id: reelBeingId },
+    );
   },
 });
 
@@ -194,20 +248,27 @@ registerOperation("credential-read", {
 // attribute to the asker. Returns {targetBeingId, plaintext}, or null on a clean miss.
 async function _credentialResetViaWord({ caller, target, history, moment }) {
   if (!moment) return null;
-  const { resolveAbleWord, runAbleWord } = await import("../../../present/word/ableWordRegistry.js");
-  const ir = resolveAbleWord("credential", "credential-reset", moment?.actorAct?.history);
+  const { resolveAbleWord, runAbleWord } =
+    await import("../../../present/word/ableWordRegistry.js");
+  const ir = resolveAbleWord(
+    "credential",
+    "credential-reset",
+    moment?.actorAct?.history,
+  );
   if (!ir) return null;
   const { credentialHostEnv } = await import("./credentialHost.js");
   const b = history || moment?.actorAct?.history; // the moment's history; never floor to "0"
   try {
     const { result } = await runAbleWord(ir, {
-      moment, history: b,
+      moment,
+      history: b,
       trigger: { caller: String(caller), target: String(target), branch: b },
       env: { host: credentialHostEnv() },
     });
     return result || null;
   } catch (e) {
-    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.FORBIDDEN, e.message);
+    if (e && e.__wordRefusal)
+      throw new IbpError(e.code || IBP_ERR.FORBIDDEN, e.message);
     throw e;
   }
 }
@@ -225,10 +286,23 @@ registerOperation("credential-reset", {
     // asker). The dispatcher needs _factTarget (the asker's reel) for its audit fact,
     // which the .word return omits — re-add it around the bridge result. JS body below
     // is the clean-miss fallback.
-    const viaWord = await _credentialResetViaWord({ caller: askerBeingId, target: targetBeingId, history, moment });
-    if (viaWord) return targetsFact(viaWord, { kind: "being", id: askerBeingId || targetBeingId });
+    const viaWord = await _credentialResetViaWord({
+      caller: askerBeingId,
+      target: targetBeingId,
+      history,
+      moment,
+    });
+    if (viaWord)
+      return targetsFact(viaWord, {
+        kind: "being",
+        id: askerBeingId || targetBeingId,
+      });
 
-    const ok = await hasCredentialAuthority(askerBeingId, targetBeingId, history);
+    const ok = await hasCredentialAuthority(
+      askerBeingId,
+      targetBeingId,
+      history,
+    );
     if (!ok) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
@@ -237,8 +311,13 @@ registerOperation("credential-reset", {
       );
     }
     const credential = await mintCredentialSpec(null);
-    const opts = identity ? { identity, moment } : { identity: I_AM, moment };
-    await doVerb(target, "set-being", { field: "password", value: credential.hash }, opts);
+    const opts = identity ? { identity, moment } : { identity: I, moment };
+    await doVerb(
+      target,
+      "set-being",
+      { field: "password", value: credential.hash },
+      opts,
+    );
     await doVerb(
       target,
       "set-being",
@@ -260,10 +339,13 @@ registerOperation("credential-reset", {
       opts,
     );
     const reelBeingId = askerBeingId || targetBeingId;
-    return targetsFact({
-      targetBeingId,
-      plaintext: decryptCredential(credential.plain),
-    }, { kind: "being", id: reelBeingId });
+    return targetsFact(
+      {
+        targetBeingId,
+        plaintext: decryptCredential(credential.plain),
+      },
+      { kind: "being", id: reelBeingId },
+    );
   },
 });
 
@@ -280,11 +362,19 @@ registerOperation("credential-detach", {
     const targetBeingId = targetBeingIdOf(target);
     const askerBeingId = askerBeingIdOf(identity);
     // THE CONVERSION: the world strand is credential-detach.word (caller mode). JS fallback.
-    const viaWord = await _credentialGateViaWord("credential-detach", { caller: askerBeingId, target: targetBeingId, moment });
-    if (viaWord) return targetsFact(viaWord, { kind: "being", id: askerBeingId || targetBeingId });
-    // Self-only EXCEPT I_AM which has universal authority on its own
-    // story (parallels hasCredentialAuthority's I_AM short-circuit).
-    if (askerBeingId !== targetBeingId && askerBeingId !== I_AM) {
+    const viaWord = await _credentialGateViaWord("credential-detach", {
+      caller: askerBeingId,
+      target: targetBeingId,
+      moment,
+    });
+    if (viaWord)
+      return targetsFact(viaWord, {
+        kind: "being",
+        id: askerBeingId || targetBeingId,
+      });
+    // Self-only EXCEPT I which has universal authority on its own
+    // story (parallels hasCredentialAuthority's I short-circuit).
+    if (askerBeingId !== targetBeingId && askerBeingId !== I) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
         "credential-detach is self-only; only the being itself can declare independence",
@@ -292,24 +382,24 @@ registerOperation("credential-detach", {
       );
     }
     const reelBeingId = askerBeingId || targetBeingId;
-    return targetsFact({
-      targetBeingId,
-      detached: true,
-    }, { kind: "being", id: reelBeingId });
+    return targetsFact(
+      {
+        targetBeingId,
+        detached: true,
+      },
+      { kind: "being", id: reelBeingId },
+    );
   },
 });
 
 // credential-attach. The being parent re-asserts authority over a
 // being that previously detached. The act of release belongs to the
 // child; the act of re-binding belongs to the being parent.
-// SINGLE-WRITER: the Fact lands on the BEING PARENT's reel (the
-// asker's reel — the asker IS the being parent, enforced below) with
-// the child's beingId carried in `result.targetBeingId` so
-// isDetachedFromBeingParent can recover it on the lookup side.
-//
-// isDetachedFromBeingParent walks both reels (child's reel for the
-// detach, being parent's reel for the attach) and compares by date
-// to decide the current state.
+// THE FACT LANDS ON THE CHILD's reel (of.id=targetBeingId) — an authority-fact on the target's
+// reel, the SAME pattern as grant-inheritation. This puts the detach (child's reel) and the attach
+// on ONE reel, so isDetachedFromBeingParent orders them by seq, never the clock (623/12). The
+// child's beingId rides in `result.targetBeingId` too, for the lookup filter. The actor (through)
+// is still the being-parent (the writer); the reel is the child (the subject).
 registerOperation("credential-attach", {
   targets: ["being"],
   ownerExtension: "seed",
@@ -318,12 +408,18 @@ registerOperation("credential-attach", {
     const targetBeingId = targetBeingIdOf(target);
     const askerBeingId = askerBeingIdOf(identity);
     // THE CONVERSION: the world strand is credential-attach.word (caller mode). JS fallback.
-    const viaWord = await _credentialGateViaWord("credential-attach", { caller: askerBeingId, target: targetBeingId, moment });
-    if (viaWord) return targetsFact(viaWord, { kind: "being", id: askerBeingId || targetBeingId });
-    // Being-parent-only EXCEPT I_AM (universal authority on its own
+    const viaWord = await _credentialGateViaWord("credential-attach", {
+      caller: askerBeingId,
+      target: targetBeingId,
+      moment,
+    });
+    if (viaWord)
+      return targetsFact(viaWord, { kind: "being", id: targetBeingId });
+    // Being-parent-only EXCEPT I (universal authority on its own
     // story).
-    if (askerBeingId !== I_AM) {
-      const { findBeingParent } = await import("../../../materials/being/identity/lineage.js");
+    if (askerBeingId !== I) {
+      const { findBeingParent } =
+        await import("../../../materials/being/identity/lineage.js");
       const parentBeingId = await findBeingParent(targetBeingId);
       if (!parentBeingId || String(parentBeingId) !== askerBeingId) {
         throw new IbpError(
@@ -333,10 +429,12 @@ registerOperation("credential-attach", {
         );
       }
     }
-    const reelBeingId = askerBeingId || targetBeingId;
-    return targetsFact({
-      targetBeingId,
-      attached: true,
-    }, { kind: "being", id: reelBeingId });
+    return targetsFact(
+      {
+        targetBeingId,
+        attached: true,
+      },
+      { kind: "being", id: targetBeingId },
+    );
   },
 });

@@ -15,17 +15,17 @@
 // its behalf. The key lives only in this stack frame, never on the row,
 // never logged. A being with no local key (a foreign cross-story
 // actor, or a decrypt failure) seals UNSIGNED rather than failing the
-// moment. I_AM is the story itself: it signs with the story key
+// moment. I is the story itself: it signs with the story key
 // (storyIdentity), and because its id "i-am" is not a public key,
 // verification routes to the story public key.
 
 import { canonicalize } from "../fact/hash.js";
 import log from "../../seedStory/log.js";
 
-// The I_AM constant (seed/materials/being/seedBeings.js:26). Inlined to
+// The I constant (seed/materials/being/seedBeings.js:26). Inlined to
 // keep this past-layer module from importing materials at load time; it
 // is a frozen doctrinal value.
-const I_AM = "i-am";
+const I = "i-am";
 
 function normHistory(b) {
   return typeof b === "string" && b.length ? b : "0";
@@ -33,7 +33,7 @@ function normHistory(b) {
 
 function timeISO(act) {
   const t = act?.endMessage?.time;
-  const d = t instanceof Date ? t : (t ? new Date(t) : null);
+  const d = t instanceof Date ? t : t ? new Date(t) : null;
   return d && !isNaN(d.getTime()) ? d.toISOString() : null;
 }
 
@@ -45,15 +45,15 @@ function timeISO(act) {
  */
 export function buildActSigPayload(act, factIds) {
   return {
-    actId:    String(act._id),
-    by:       act.by ?? null,       // the actor: the name whose key signs
-    through:  act.through,          // the being the name acted through
-    to:       act.to ?? null,
-    story:  act.story ?? null,
-    history:   normHistory(act.history),
-    p:        act.p ?? null,
-    factIds:  Array.isArray(factIds) ? [...factIds].map(String).sort() : [],
-    time:     timeISO(act),
+    actId: String(act._id),
+    by: act.by ?? null, // the actor: the name whose key signs
+    through: act.through, // the being the name acted through
+    to: act.to ?? null,
+    story: act.story ?? null,
+    history: normHistory(act.history),
+    p: act.p ?? null,
+    factIds: Array.isArray(factIds) ? [...factIds].map(String).sort() : [],
+    time: timeISO(act),
   };
 }
 
@@ -65,19 +65,20 @@ export function buildActSigPayload(act, factIds) {
  */
 export async function loadSigningKey(nameId, history) {
   try {
-    if (nameId === I_AM) {
+    if (nameId === I) {
       const { getStoryIdentity } = await import("../../storyIdentity.js");
-      return getStoryIdentity().privateKey;     // story ed25519 PEM
+      return getStoryIdentity().privateKey; // story ed25519 PEM
     }
     const { isKeyId } = await import("../../materials/name/keys.js");
-    if (!isKeyId(nameId)) return null;             // not a key-bearing Name
+    if (!isKeyId(nameId)) return null; // not a key-bearing Name
     const { loadProjection } = await import("../../materials/projections.js");
     const slot = await loadProjection("name", nameId, normHistory(history));
     // The signing-session lock is NOT soul-type-gated — ALL Names are the
     // same (Tabor). It applies to PASSWORD-LOCKED Names, never by soul.
     const enc = slot?.state?.privateKeyEnc;
     if (!enc) return null;
-    const { isPasswordLocked } = await import("../../materials/name/passwordKey.js");
+    const { isPasswordLocked } =
+      await import("../../materials/name/passwordKey.js");
     if (isPasswordLocked(enc)) {
       // The server canNOT decrypt a password-locked key; the decrypted PEM
       // lives only in the session (held by login). Not logged in / expired ->
@@ -91,8 +92,9 @@ export async function loadSigningKey(nameId, history) {
       return sessionKey;
     }
     // System-encrypted: the server holds the key and signs automatically.
-    const { decryptCredential } = await import("../../materials/being/identity/credentials.js");
-    return decryptCredential(enc);                 // null on bad blob/key
+    const { decryptCredential } =
+      await import("../../materials/being/identity/credentials.js");
+    return decryptCredential(enc); // null on bad blob/key
   } catch {
     return null;
   }
@@ -115,7 +117,10 @@ export async function signActDoc(actDoc, factIds, pem) {
     const value = signAsName(pem, buildActSigPayload(actDoc, factIds));
     return { alg: "ed25519", by: actDoc.by, value };
   } catch (err) {
-    log.warn("Stamped", `signing failed for act ${String(actDoc?._id || "").slice(0, 8)}: ${err.message}`);
+    log.warn(
+      "Stamped",
+      `signing failed for act ${String(actDoc?._id || "").slice(0, 8)}: ${err.message}`,
+    );
     return null;
   }
 }
@@ -125,7 +130,7 @@ export async function signActDoc(actDoc, factIds, pem) {
  * the act row + the committed facts (the single source of truth for the
  * fact set), then checks the signature against the signer's public key,
  * which is the signer id itself for beings (no directory) or the story
- * key for I_AM.
+ * key for I.
  *
  * @returns {Promise<{ok: boolean, reason: string}>}
  */
@@ -135,23 +140,35 @@ export async function verifyActSig(act, { localStory = null } = {}) {
   if (!sig?.value) {
     // Unsigned. A LOCAL act by a key-bearing being should be signed; a
     // foreign cross-story act is verified on its home substrate.
-    const foreign = localStory != null && act?.story != null && act.story !== localStory;
-    return { ok: foreign, reason: foreign ? "foreign-unsigned-ok" : "unsigned" };
+    const foreign =
+      localStory != null && act?.story != null && act.story !== localStory;
+    return {
+      ok: foreign,
+      reason: foreign ? "foreign-unsigned-ok" : "unsigned",
+    };
   }
   const { default: Fact } = await import("../fact/fact.js");
-  const rows = await Fact.find({ actId: String(act._id) }).select("_id").lean();
+  const rows = await Fact.find({ actId: String(act._id) })
+    .select("_id")
+    .lean();
   const factIds = rows.map((f) => String(f._id)).sort();
   const payload = buildActSigPayload(act, factIds);
 
-  if (by === I_AM) {
+  if (by === I) {
     const { getStoryIdentity } = await import("../../storyIdentity.js");
-    const { verifyWithPublicKeyPem } = await import("../../materials/name/keys.js");
+    const { verifyWithPublicKeyPem } =
+      await import("../../materials/name/keys.js");
     return {
-      ok: verifyWithPublicKeyPem(getStoryIdentity().publicKey, payload, sig.value),
+      ok: verifyWithPublicKeyPem(
+        getStoryIdentity().publicKey,
+        payload,
+        sig.value,
+      ),
       reason: "i-am",
     };
   }
-  const { isKeyId, verifyNameSig } = await import("../../materials/name/keys.js");
+  const { isKeyId, verifyNameSig } =
+    await import("../../materials/name/keys.js");
   if (isKeyId(by)) {
     return { ok: verifyNameSig(by, payload, sig.value), reason: "being" };
   }
@@ -188,20 +205,29 @@ export async function verifyActSig(act, { localStory = null } = {}) {
  * (the peer story signs that); this proves the DEED is fresh (the
  * being signs this).
  */
-export function buildEnvelopeSigPayload({ verb, address, payload, nameId, actId, history, story, time }) {
+export function buildEnvelopeSigPayload({
+  verb,
+  address,
+  payload,
+  nameId,
+  actId,
+  history,
+  story,
+  time,
+}) {
   return {
-    kind:    "cross-story-envelope",
-    verb:    verb || null,
+    kind: "cross-story-envelope",
+    verb: verb || null,
     address: address || null,
     payload: payload ?? null,
     // The SIGNER is the NAME (an ed25519 pubkey id), not the being it acts
     // through — so a foreign actor's cross-world deed verifies self-certifyingly
     // against the name it controls. (Was beingId before the Name/Being split.)
-    nameId:  nameId || null,
-    actId:   actId || null,
+    nameId: nameId || null,
+    actId: actId || null,
     history: normHistory(history),
     story: story || null,
-    time:    time || null,
+    time: time || null,
   };
 }
 
@@ -233,7 +259,10 @@ export async function signEnvelopeBeingSig(env, pem) {
     const value = signAsName(pem, buildEnvelopeSigPayload({ ...env, time }));
     return { alg: "ed25519", by: env.nameId, value, time };
   } catch (err) {
-    log.warn("CrossWorld", `envelope signing failed for ${String(env?.nameId || "").slice(0, 10)}: ${err.message}`);
+    log.warn(
+      "CrossWorld",
+      `envelope signing failed for ${String(env?.nameId || "").slice(0, 10)}: ${err.message}`,
+    );
     return null;
   }
 }
@@ -254,7 +283,8 @@ export async function signEnvelopeBeingSig(env, pem) {
  */
 export async function verifyEnvelopeBeingSig(env, beingSig) {
   if (!beingSig?.value) return { ok: true, reason: "unsigned-advisory" };
-  const { isKeyId, verifyNameSig } = await import("../../materials/name/keys.js");
+  const { isKeyId, verifyNameSig } =
+    await import("../../materials/name/keys.js");
   const by = env?.nameId;
   if (!isKeyId(by)) return { ok: true, reason: "non-key-signer" };
   // Freshness gate. The signing time is part of the signed payload, so a
@@ -264,9 +294,14 @@ export async function verifyEnvelopeBeingSig(env, beingSig) {
   // fail here by design; re-dispatch signs fresh.
   const t = Date.parse(beingSig.time || "");
   if (Number.isNaN(t)) return { ok: false, reason: "missing-time" };
-  if (Math.abs(Date.now() - t) > envelopeSigWindowMs()) return { ok: false, reason: "stale-sig" };
+  if (Math.abs(Date.now() - t) > envelopeSigWindowMs())
+    return { ok: false, reason: "stale-sig" };
   return {
-    ok: verifyNameSig(by, buildEnvelopeSigPayload({ ...env, time: beingSig.time }), beingSig.value),
+    ok: verifyNameSig(
+      by,
+      buildEnvelopeSigPayload({ ...env, time: beingSig.time }),
+      beingSig.value,
+    ),
     reason: "being",
   };
 }

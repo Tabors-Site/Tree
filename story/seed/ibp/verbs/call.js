@@ -43,7 +43,7 @@ import {
   validateOrientation,
 } from "../../present/stamper/2-fold/orientation.js";
 import { IbpError, IBP_ERR } from "../protocol.js";
-import { I_AM } from "../../materials/being/seedBeings.js";
+import { I } from "../../materials/being/seedBeings.js";
 import {
   parseWithContext,
   expand,
@@ -176,7 +176,7 @@ export async function callVerb(stance, message, opts = {}) {
     const reason = validatedMessage.content || "thread cut";
     // Participation check happens inside cutThread: the asker must
     // be a participant in this specific rootCorrelation chain (or
-    // I_AM). Facts live on Act rows, not on Space ancestry —
+    // I). Facts live on Act rows, not on Space ancestry —
     // can't be expressed as a stance property today, so the cut
     // handler enforces it itself.
     const result = await cutThread({
@@ -325,7 +325,7 @@ export async function callVerb(stance, message, opts = {}) {
  * @param {string} args.inboxSpaceId  space the inbox lives at
  * @param {object} args.message       SUMMON envelope
  * @param {string} [args.activeAble]  overrides toBeing.defaultAble
- * @param {object} args.identity      asker identity (typically I_AM)
+ * @param {object} args.identity      asker identity (typically I)
  * @param {string} [args.history]      explicit history for non-moment callers
  * @param {object} [args.moment]   moment ctx for inside-moment callers
  */
@@ -341,7 +341,7 @@ export async function callByResolved(args) {
     moment = null,
     history: argsHistory = null,
   } = args || {};
-  // Accept bare-string identity shorthand (typically `I_AM` for seed-
+  // Accept bare-string identity shorthand (typically `I` for seed-
   // internal summons) alongside the regular `{beingId, name}` shape.
   const identity = normalizeIdentity(rawIdentity);
   if (!toBeingId)
@@ -500,8 +500,8 @@ async function _dispatchCall({
   // scheduler picks from there.
   //
   // For seed-internal flows with no identity (DO-trigger fan-out,
-  // scheduled wakes, genesis scaffolding), the summoner is I_AM.
-  const summonerBeingId = identity?.beingId ? String(identity.beingId) : I_AM;
+  // scheduled wakes, genesis scaffolding), the summoner is I.
+  const summonerBeingId = identity?.beingId ? String(identity.beingId) : I;
   const messageId = randomUUID();
   const sentAt = new Date().toISOString();
 
@@ -542,11 +542,11 @@ async function _dispatchCall({
       // set it explicitly so the MOMENT-LESS wire summon (no moment.actorAct,
       // the summon becomes the RECIPIENT's moment) still links to the
       // summoner's Name. Precedence mirrors emitFact: moment's actor name,
-      // then the caller's signed-in Name, then I_AM for seed-internal flows.
+      // then the caller's signed-in Name, then I for seed-internal flows.
       by:
         moment?.actorAct?.by ??
         identity?.nameId ??
-        (summonerBeingId === I_AM ? I_AM : null),
+        (summonerBeingId === I ? I : null),
       of: { kind: "being", id: recipientBeingId }, // right stance
       params: {
         correlation: messageId,

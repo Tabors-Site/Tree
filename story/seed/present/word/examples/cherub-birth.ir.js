@@ -67,7 +67,7 @@ export const cherubBirth = {
       kind: "act",
       verb: "do",
       op: "set-space",
-      by: "I_AM",
+      by: "I",
       of: { kind: "space", ref: "home" },
       params: { field: "owner", value: "$child" },
     },
@@ -85,7 +85,7 @@ export const cherubBirth = {
       kind: "act",
       verb: "do",
       op: "set-being",
-      by: "I_AM",
+      by: "I",
       of: { kind: "being", ref: "child" },
       params: {
         field: "qualities.lineage",
@@ -97,7 +97,7 @@ export const cherubBirth = {
 };
 
 // Deferred to later Phase 2 work (kept out of the first slice on purpose):
-// - the first-being path (parent = I_AM, post-seal grant-able:angel via afterSeal)
+// - the first-being path (parent = I, post-seal grant-able:angel via afterSeal)
 // - the connect ops (credential bind, owned, inherit / father-priority)
 // See README.md.
 export default cherubBirth;

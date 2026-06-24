@@ -2,7 +2,7 @@
 
 The foundational `.word` vocabulary the boot reads, in descent order, before anything else. Read
 from `word.word` outward, every word is grounded only on the words before it, and the whole stacks
-as a fact-chain on I_AM's reel — so that `render(genesis → head)` reads back as the creation story.
+as a fact-chain on I's reel — so that `render(genesis → head)` reads back as the creation story.
 The book is never stored; it IS the read.
 
 ## The one law
@@ -16,14 +16,14 @@ moment is a word. `word.word` says it in six lines.
 An **axiom** is a word made of the host (the bottom turtle); a **theorem** is a word made of words.
 The kernel is six axioms, and nothing else bottoms out in the host:
 
-| floor | axiom | is | host today (the porting layer) |
-|---|---|---|---|
-| pure | `hash` | content → address (the WHAT) | sha256 over canonical JSON (`past/fact/hash.js`) |
-| pure | `sign` | unforgeable keyed attribution (the WHO, the "I") | Ed25519 (`storyIdentity.js`) |
-| store | `stamp` (do) | hash + sign + persist | `Fact.create` → Mongo |
-| store | `read` (see) | fetch by address | `Fact.findOne` |
-| membrane | `in` | a word the I_AM did not make crosses in (a message, the clock, the lot) | `socket.on` / `req.body` |
-| membrane | `out` | a word crosses out and holds for a word back (this is a call) | `ack` / `emit` / `fetch` |
+| floor    | axiom        | is                                                                   | host today (the porting layer)                   |
+| -------- | ------------ | -------------------------------------------------------------------- | ------------------------------------------------ |
+| pure     | `hash`       | content → address (the WHAT)                                         | sha256 over canonical JSON (`past/fact/hash.js`) |
+| pure     | `sign`       | unforgeable keyed attribution (the WHO, the "I")                     | Ed25519 (`storyIdentity.js`)                     |
+| store    | `stamp` (do) | hash + sign + persist                                                | `Fact.create` → Mongo                            |
+| store    | `read` (see) | fetch by address                                                     | `Fact.findOne`                                   |
+| membrane | `in`         | a word the I did not make crosses in (a message, the clock, the lot) | `socket.on` / `req.body`                         |
+| membrane | `out`        | a word crosses out and holds for a word back (this is a call)        | `ack` / `emit` / `fetch`                         |
 
 `hash` and `sign` are woven into `base.word` and `iam.word`; `stamp` and `read` are named in
 `word.word` as `do` and `see`; `in` and `out` are their own words. The axiom is the **property**,
@@ -36,8 +36,8 @@ Time is **not** an axiom and **not** order. Order is the chain itself — the on
 position, the fold — and the **wordstamp** (hash + sign + on-link) carries identity, authorship,
 and sequence natively. A timestamp is content: a witness the world hands you through `in`, a field
 on a fact like owner or color, which the system never consults to know what came after what. Time
-lives as a `now` able (a theorem on `in`), never in the kernel. *The timestamps became the
-wordstamps.*
+lives as a `now` able (a theorem on `in`), never in the kernel. _The timestamps became the
+wordstamps._
 
 ## The load order (descent)
 

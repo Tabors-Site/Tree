@@ -40,7 +40,7 @@ TreeOS has four things that matter, in this order:
 
 Name
 
-A Name is an identity. It holds a keypair. It signs acts. It descends from I_AM through lineage. Names persist across contexts, accumulate chains, and are what the substrate’s signatures bind to.
+A Name is an identity. It holds a keypair. It signs acts. It descends from I through lineage. Names persist across contexts, accumulate chains, and are what the substrate’s signatures bind to.
 
 A Name is your identity. It’s what acts.
 
@@ -95,7 +95,7 @@ Why this matters for building
 
 When you’re writing code, ask: am I operating on the identity, the presence, the cognition, or the world? The answer tells you which primitive to use.
 
-Don’t conflate Beings with Names. A Being doesn’t sign; only the Name behind it signs. A Being doesn’t have lineage to I_AM; the Name does. A Being can be despawned; the Name persists.
+Don’t conflate Beings with Names. A Being doesn’t sign; only the Name behind it signs. A Being doesn’t have lineage to I; the Name does. A Being can be despawned; the Name persists.
 
 Don’t conflate Name with Being.name. The Name is the cryptographic identity. Being.name is just a label on a formed presence. The label might match across many Beings; the cryptographic identity is what actually persists and signs.
 
@@ -282,7 +282,7 @@ This is actually a pretty interesting governance idea.
 
 The problem you’re identifying is:
 
-I_AM
+I
 ↓
 Public
 ↓
@@ -290,9 +290,9 @@ Tabor
 ↓
 Beings
 
-If I_AM retains ultimate authority forever, then nobody below it is ever truly sovereign.
+If I retains ultimate authority forever, then nobody below it is ever truly sovereign.
 
-Even if Tabor has his own Name and chain, the holder of the I_AM key could theoretically:
+Even if Tabor has his own Name and chain, the holder of the I key could theoretically:
 
 revoke permissions,
 rewrite inheritance,
@@ -307,7 +307,7 @@ What you’re proposing is something like a Founder Renunciation Act.
 
 After creating the reality and bootstrapping the initial naming structure:
 
-I_AM
+I
 ↓
 Public
 ↓
@@ -323,16 +323,16 @@ NAME renounce
 
 which seals a fact:
 
-The private key corresponding to I_AM has been intentionally destroyed.
+The private key corresponding to I has been intentionally destroyed.
 
 After that:
 
-I_AM remains in history.
-I_AM remains in lineage.
-I_AM remains as the root ancestor.
+I remains in history.
+I remains in lineage.
+I remains as the root ancestor.
 But:
 
-I_AM
+I
 
 can never sign again.
 
@@ -362,7 +362,7 @@ Your model
 
 The founder creates:
 
-I_AM
+I
 
 Then deliberately removes themselves from the chain of command.
 
@@ -374,7 +374,7 @@ The biggest benefit is exactly what you noticed:
 
 A visitor from another reality can verify:
 
-I_AM burned at fact X.
+I burned at fact X.
 
 and know:
 
@@ -392,13 +392,13 @@ One thing I’d be careful about is distinguishing:
 
 Destroying the key
 
-I_AM key = gone forever
+I key = gone forever
 
 from
 
 Renouncing authority
 
-I_AM key exists
+I key exists
 but protocol refuses its acts
 
 The second is cryptographically safer.
@@ -417,7 +417,7 @@ What’s fascinating is that this connects back to your recent thoughts about bi
 
 In your architecture:
 
-I_AM
+I
 
 starts as a founder Name.
 
@@ -455,7 +455,7 @@ Names
 
 Instead it’s:
 
-I_AM (burned)
+I (burned)
 ├─ Tabor
 ├─ Bob
 └─ Alice
@@ -568,11 +568,11 @@ capabilities
 
 ⸻
 
-In that model, burning I_AM becomes much more meaningful.
+In that model, burning I becomes much more meaningful.
 
 Because after the burn:
 
-I_AM
+I
 
 cannot override any Name.
 

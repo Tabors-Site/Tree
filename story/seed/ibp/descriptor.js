@@ -173,7 +173,7 @@ export async function buildDiscovery() {
         Number(getStoryConfigValue("maxUploadBytes")) || 104857600,
       allowedMimeTypes: getStoryConfigValue("allowedMimeTypes") || null,
     },
-    // The chain fingerprint, SIGNED by the story (= I_AM) key. A peer
+    // The chain fingerprint, SIGNED by the story (= I) key. A peer
     // given storyId (which IS the story public key), storyRoot,
     // and sig verifies the whole chain's provenance self-certifyingly.
     chain: chainBlock,
@@ -467,7 +467,7 @@ const NAME_BEING_CAP = 200;
  * Build a Name's BIOGRAPHIC descriptor ("who is this name") — distinct from
  * the place descriptor's "what is here" (geographic). This is what the Name
  * Form (the pre-world pre-panel) shows for a name: its real-name + public key,
- * lineage toward I_AM, soul, banished state, the beings it acts through, and
+ * lineage toward I, soul, banished state, the beings it acts through, and
  * its activity counts. Caller resolves the token to a nameId first
  * (resolveNameId); pass the resolved nameId here.
  *

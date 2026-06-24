@@ -44,7 +44,7 @@ const { withIAmAct } = await import(`${R}/seed/sprout.js`);
 const { birthBeing } = await import(
   `${R}/seed/materials/being/identity/birth.js`
 );
-const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
+const { I } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { nameVerb } = await import(`${R}/seed/ibp/verbs/name.js`);
 const { cherubBeOps } = await import(`${R}/seed/store/words/cherub/able.js`);
 const { getStoryDomain } = await import(`${R}/seed/ibp/address.js`);
@@ -85,7 +85,7 @@ const birth = async (name, extraSpec = {}) => {
         defaultAble: "global",
         ...extraSpec,
       },
-      identity: I_AM,
+      identity: I,
       moment: ctx,
       history: "0",
     });
@@ -118,7 +118,7 @@ async function declareName(name, password) {
   const sc = {
     actId: randomUUID(),
     actorAct: { history: "0", by: "i-am" },
-    identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" },
+    identity: { beingId: "i-am", name: "I", nameId: "i-am" },
     deltaF: [],
     foldedSeqs: new Map(),
     afterSeal: [],

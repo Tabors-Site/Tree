@@ -16,7 +16,7 @@ facts crammed into one moment (the `_inOp`/`opCount` run-on). Split of labor:
 
 **THE PATTERN (the back-and-forth):** VERB lands one composite `.word` → writes `HANDOFF→ENGINE`
 below → ENGINE wires that caller to `runWordToStore`, proves it live, writes `HANDOFF→VERB` →
-then the *same* wiring drops every op in that shape. One wired `.word` unblocks the cluster.
+then the _same_ wiring drops every op in that shape. One wired `.word` unblocks the cluster.
 
 ## Ready now (ENGINE)
 
@@ -29,19 +29,19 @@ then the *same* wiring drops every op in that shape. One wired `.word` unblocks 
 
 ## BOARD (remaining skipAudit:true → spacebar)
 
-| op | shape (23.md) | owner | status |
-|---|---|---|---|
-| create-space → create.word | composite (`.word`) | VERB | ✅ **LANDED + verified 8/8** (runAbleWord today) |
-| add-llm-connection | **TWO words** (add + assign-to-main) | VERB authors / ENGINE wires run | ✍️ **add.word AUTHORED** — engine wire to runWordToStore (grammar Q below) |
-| update-llm-connection | one-fact word | VERB | ✅ **LANDED + verified 7/7** (atomic, runAbleWord) |
-| delete-llm-connection | one-do + absent-fold | VERB | ✅ **LANDED + verified 9/9** (slot-clears dropped, dangling folds) |
-| assign-llm-slot | one field-set, being/space | VERB | ✅ **LANDED + verified 5/5** (conditional deed, runWordToStore) |
-| set-config / delete-config | name-op (LIBRARY reel) | VERB | ✅ **LANDED** (ranAsMoments; verify-config-5d 6/6) |
-| close-story | library name-act + gate | VERB | DEFERRED — only remaining skipAudit (honest; library-reel batch) |
-| form-portal → portal.word | composite (`.word`) | VERB | ✅ **LANDED + verified 5/5** (runWordToStore + ranAsMoments) |
-| share-* (share-ops) | name-act | VERB | ✅ **LANDED** (ranAsMoments; verify-library 7/7) |
-| **run-model wiring (per `.word`)** | **engine** | **ENGINE** | **waiting on the first landed `.word`** |
-| retire opCount gate + `_inOp` | shared do.js | BOTH | after all callers off the run-on |
+| op                                 | shape (23.md)                        | owner                           | status                                                                     |
+| ---------------------------------- | ------------------------------------ | ------------------------------- | -------------------------------------------------------------------------- |
+| create-space → create.word         | composite (`.word`)                  | VERB                            | ✅ **LANDED + verified 8/8** (runAbleWord today)                           |
+| add-llm-connection                 | **TWO words** (add + assign-to-main) | VERB authors / ENGINE wires run | ✍️ **add.word AUTHORED** — engine wire to runWordToStore (grammar Q below) |
+| update-llm-connection              | one-fact word                        | VERB                            | ✅ **LANDED + verified 7/7** (atomic, runAbleWord)                         |
+| delete-llm-connection              | one-do + absent-fold                 | VERB                            | ✅ **LANDED + verified 9/9** (slot-clears dropped, dangling folds)         |
+| assign-llm-slot                    | one field-set, being/space           | VERB                            | ✅ **LANDED + verified 5/5** (conditional deed, runWordToStore)            |
+| set-config / delete-config         | name-op (LIBRARY reel)               | VERB                            | ✅ **LANDED** (ranAsMoments; verify-config-5d 6/6)                         |
+| close-story                        | library name-act + gate              | VERB                            | DEFERRED — only remaining skipAudit (honest; library-reel batch)           |
+| form-portal → portal.word          | composite (`.word`)                  | VERB                            | ✅ **LANDED + verified 5/5** (runWordToStore + ranAsMoments)               |
+| share-\* (share-ops)               | name-act                             | VERB                            | ✅ **LANDED** (ranAsMoments; verify-library 7/7)                           |
+| **run-model wiring (per `.word`)** | **engine**                           | **ENGINE**                      | **waiting on the first landed `.word`**                                    |
+| retire opCount gate + `_inOp`      | shared do.js                         | BOTH                            | after all callers off the run-on                                           |
 
 ## Handoffs (append newest at the bottom)
 
@@ -57,7 +57,7 @@ then the *same* wiring drops every op in that shape. One wired `.word` unblocks 
   `materials/space/ops.js`; imported in `services.js`. `verify-createspace-cut.mjs` **8/8**, zero
   regression (endspace 5/5, creatematter 6/6). Runs via **`runAbleWord`** today (one `do:create-space`
   fact via the dispatcher, skipAudit gone, NO null terms, parent-lock spans the seal via
-  `moment.afterSeal`). **Floor is safe:** `resolveBirthSpace` is *additive* in `spaces.js`, the
+  `moment.afterSeal`). **Floor is safe:** `resolveBirthSpace` is _additive_ in `spaces.js`, the
   `createSpace` kernel is UNTOUCHED. **→ Wire `_createSpaceViaWord` (in `create-space/index.js`) to
   `runWordToStore`** — one-fact = one moment, the clean first proof. Note: my verifier fires
   `sc.afterSeal` manually after `sealFacts` to mimic the real moment-seal; confirm the real seal path
@@ -72,19 +72,19 @@ then the *same* wiring drops every op in that shape. One wired `.word` unblocks 
 
 - **HANDOFF→ENGINE (VERB, 2026-06-22): update-llm-connection LANDED (7/7) + add.word AUTHORED.**
   - **update-llm-connection ✅** — bundle `seed/store/words/llm-connection/{update-llm-connection.word,
-    llmHost.js, index.js}`, carved from `being/ops.js`, in `services.js`. `verify-updatellm-cut.mjs`
+llmHost.js, index.js}`, carved from `being/ops.js`, in `services.js`. `verify-updatellm-cut.mjs`
     **7/7**: atomic one `do:set-being` (the spacebar lift), merged conn folds, encrypted key preserved,
     no-actor refuses. Atomic (runAbleWord) — no wiring needed, like create.word. (Also re-proved E6
     `resolveConnectionSpec` on the add path.)
   - **add.word — YOUR multi-moment proof, AUTHORED + ready:** `llm-connection/add-llm-connection.word`
-    + the `resolve-connection` host in `llmHost.js` + `isFirst` on `resolveConnectionSpec` (connect.js,
-    behavior-preserving). TWO deeds: `do set-being` (the connection, one fact) then
-    `If $conn.isFirst, do assign-llm-slot` (the auto-assign pulled OUT as its own word/moment). Mirrors
-    portal.word's `do <op> on <target> with { params } as <bind>`. **→ Wire it to runWordToStore + carve
-    add-llm-connection from being/ops.js** (still working via its JS handler + skipAudit — left intact so
-    nothing breaks until you wire; I did NOT register it).
+    - the `resolve-connection` host in `llmHost.js` + `isFirst` on `resolveConnectionSpec` (connect.js,
+      behavior-preserving). TWO deeds: `do set-being` (the connection, one fact) then
+      `If $conn.isFirst, do assign-llm-slot` (the auto-assign pulled OUT as its own word/moment). Mirrors
+      portal.word's `do <op> on <target> with { params } as <bind>`. **→ Wire it to runWordToStore + carve
+      add-llm-connection from being/ops.js** (still working via its JS handler + skipAudit — left intact so
+      nothing breaks until you wire; I did NOT register it).
   - **GRAMMAR Q for you** (you own parser/run): (1) does `do set-being on the being $conn.beingId with
-    {...}` parse — a nested `$`-ref as the deed-target id? portal.word used a bare binding (`spaceId`).
+{...}` parse — a nested `$`-ref as the deed-target id? portal.word used a bare binding (`spaceId`).
     (2) does `If <cond>, do <op> …` (a conditional deed) parse? If either differs, tell me the right form
     and I'll fix the `.word` surface — the host floor + isFirst are solid, only the grammar is open.
 
@@ -96,7 +96,7 @@ then the *same* wiring drops every op in that shape. One wired `.word` unblocks 
   counts as empty, so a re-add auto-assigns). `verify-deletellm-cut.mjs` proves all of it incl. the
   dangling-fold. **assign-llm-slot is gated on your grammar answer**: it branches being=`set-being` /
   space=`set-space`, so it needs the conditional-deed form (`If $a.isBeing, do set-being … / If
-  $a.isSpace, do set-space …`) — the SAME grammar Q as add.word. Confirm the conditional-deed grammar
+$a.isSpace, do set-space …`) — the SAME grammar Q as add.word. Confirm the conditional-deed grammar
   once and I land assign + add together. **Verb-lane llm status: update ✅ delete ✅ landed; add.word
   authored (your wire); assign waiting on grammar.** create.word ✅ too. Three verifiers green
   (createspace 8/8, updatellm 7/7, deletellm 9/9).
@@ -105,7 +105,7 @@ then the *same* wiring drops every op in that shape. One wired `.word` unblocks 
   runWordToStore.** create.word is **atomic**: it computes the spec (`resolve-birth-space`, a `see`,
   lays nothing) and returns `factParams`; the create-space OP's own auto-Fact (`stampsWordFact` →
   do.js) lays the one `do:create-space`. It has **no deeds** — it can't `do create-space` (recursion),
-  and owner/heaven are separate words/moments (right). `runWordToStore` stamps a word's *deeds* (acts
+  and owner/heaven are separate words/moments (right). `runWordToStore` stamps a word's _deeds_ (acts
   on OTHER ops) as moments; create.word has none, so there's nothing to swap. `_createSpaceViaWord`
   correctly keeps `runAbleWord` (run the compute → doVerb lays the one fact). **Already proven:**
   verify-cognition-cut-live had a being say `I make notebook.⏎I make journal.` → 2 `do create-space`
@@ -135,7 +135,7 @@ then the *same* wiring drops every op in that shape. One wired `.word` unblocks 
     because the DEEDS already stamped the facts as N moments. Positive marker, NOT `skipAudit`. This
     is the reusable pattern for every multi-moment composite op.
   - **→ assign-llm-slot is UNBLOCKED:** the conditional-deed grammar works (`If $a.isBeing, do
-    set-being … / If $a.isSpace, do set-space …` parse + resolve now). Land it — same shape; ping me
+set-being … / If $a.isSpace, do set-space …` parse + resolve now). Land it — same shape; ping me
     only if its run differs (it's one fact per branch, atomic → runAbleWord, no runWordToStore needed).
   - **Regression:** wiring add changed its result shape (`{connectionId}`); your update/delete
     verifiers read `add.result.connection._id`, so they broke — I made add return BOTH
@@ -151,7 +151,7 @@ then the *same* wiring drops every op in that shape. One wired `.word` unblocks 
   **set-config / delete-config** (ranAsMoments on the 5D config name-act; verify-config-5d 6/6 incl. the dispatch path),
   **share-book / share-story** (ranAsMoments on the library name-act; verify-library 7/7). The whole llm cluster is
   green (create 8/8, update 7/7, delete 9/9, add 6/6, assign 5/5). **Only `close-story` keeps skipAudit** — correctly
-  deferred (story-wide stop / library-reel batch + the dispatch gate). The remaining `skipAudit:true` *strings* in
+  deferred (story-wide stop / library-reel batch + the dispatch gate). The remaining `skipAudit:true` _strings_ in
   being/ops.js:267, connect.js:449 are STALE COMMENTS above now-dead carved handlers (cleanup follow-up), not live flags.
   **So: the `skipAudit` plumbing in do.js can't be deleted yet (close-story still uses it); 23.md stays in-progress
   until close-story lands.** ranAsMoments note: I used it for the name-acts (config/share) and form-portal — it read as
@@ -181,7 +181,7 @@ then the *same* wiring drops every op in that shape. One wired `.word` unblocks 
   when add.word's `do assign-llm-slot` deed (running inside add's runWordToStore) dispatches the assign op, a nested
   runAbleWord made add's FIRST deed — the connection `do set-being` — STOP FOLDING (the main-slot deed still folded,
   the connection didn't). Deterministic. Reverting assign to **runWordToStore + ranAsMoments** restored green: assign
-  5/5, add 6/6. So a deed-issuing op that can itself be called *as a deed* (add → assign) needs runWordToStore to keep
+  5/5, add 6/6. So a deed-issuing op that can itself be called _as a deed_ (add → assign) needs runWordToStore to keep
   the moment model uniform across the nesting — runAbleVword-inside-runWordToStore disrupts the parent's deed sequencing.
   Worth a look on your side (you own the run-model); for now assign rides runWordToStore and everything's green.
   **FINAL llm + composite state (all verified):** createspace 8/8, updatellm 7/7, deletellm 9/9, addllm 6/6, assignllm
@@ -218,7 +218,7 @@ then the *same* wiring drops every op in that shape. One wired `.word` unblocks 
     field — nothing reads them; a trivial sweep whenever. **The only shared item LEFT is yours: retiring
     `opCount`/`_inOp`**, still load-bearing for genesis/cherub:birth until those last run-on callers come off.
 
-- **HANDOFF→ENGINE (VERB, 2026-06-22): cosmetic sweep DONE + beVerb gated. ONLY opCount/_inOp left (yours, gated).**
+- **HANDOFF→ENGINE (VERB, 2026-06-22): cosmetic sweep DONE + beVerb gated. ONLY opCount/\_inOp left (yours, gated).**
   Tabor asked me to finish the rest cleanly. Done:
   - **Cosmetic sweep:** the 18 dead `skipAudit: false` op declarations (federation/able/history managers,
     history-pointers) are removed, and wordStore's 3 dead `skipAudit` fold fields are gone. `grep skipAudit`
@@ -227,7 +227,7 @@ then the *same* wiring drops every op in that shape. One wired `.word` unblocks 
     `connect`/`release`/`switch` — a closed story can still be connected-to and viewed for reading; only new
     world-changing BE ops (birth, death) refuse. Boot-safe (genesis births on a fresh story → open).
   - **Regression green** after all of it: createspace 8/8, closestory 5/5, addllm 6/6, config 6/6.
-  - **opCount/_inOp — I did NOT touch it; it's genuinely yours + gated.** 4-stamped.js throws on opCount>1;
+  - **opCount/\_inOp — I did NOT touch it; it's genuinely yours + gated.** 4-stamped.js throws on opCount>1;
     `_inOp` is what keeps a `.word` program's deeds (cherub:birth, genesis) in ONE moment without tripping
     that gate. Retiring it needs those run-on callers moved to runWordToStore FIRST (each deed its own
     moment) — a coordinated boot/birth-layer cutover I won't rush solo. When genesis/cherub:birth are off the
@@ -254,3 +254,37 @@ then the *same* wiring drops every op in that shape. One wired `.word` unblocks 
     lens column-names. As long as the lean `.word` ontology (call.word/recall.word/see.word) agrees on that, we don't
     collide. **Half B — declaring the 6 lens VIEWS as words (gated by `can`, resolved via wordStore, NOT the hardcoded
     LENSES map) — is the ontology lane's; coordinate when your lean `.word` rebuild lands.** I touched NO `.word` file.
+
+- **HANDOFF→VERB (ENGINE, 2026-06-23): TIME-PURGE landed across the engine (623/12+20.md) + Half-B1. Touches your files — heads-up.**
+  Tabor: "no time anywhere logically depended." World-logic now orders by ORDER, never the clock (the keeper rule:
+  one-reel→seq · forked→per-history+lineage · causal→walk the act-link · concurrent→deterministic `_id` · clock = content/host
+  only). Read-side sort/logic changes to files some of which are yours — all node-checked + verified (suite below):
+  - `book/assemble.js`: being/lineage/space/moment → `{seq,date}`; world stays `{date,seq}` (presentation). `read-trail.js` mirrors.
+  - `word/wordStore.js getWord` + `_isIAmBedrock` + `word/ableWordRegistry.js` → `{history,seq}` (heaven-first, branch overrides).
+  - `being/identity/inheritation.js livePointsAt`: grant-vs-revoke by `seq`. `being/identity/lineage.js isDetached`: now reads
+    ONE reel — **`credential/credentialOps.js` credential-attach moved to land on the CHILD's reel** (of.id=target, like
+    grant-inheritation), so detach+attach share a reel and seq orders them. Only `isDetached` read it (confirmed).
+  - `wakes/wakeSchedule.js` + `subscriptions.js` → `{history,seq}`. `stamper/2-fold/foldPlace.js`: `loadActChain` walks the
+    Act.p chain (threaded `history`); `recallByBraid` → deterministic `_id`. `store/book/graft.js` → `_id`. `ibp/descriptor.js`
+    lastOpenBeingForName → per-being seq + being-id tiebreak. Doctrine line in `past/fact/fact.js`.
+  - **Half-B1:** the 6 lens views are folded words (`kind:"view"`, host-handler pullers — the reducer twin); read-trail
+    resolves fold-first, the JS `LENSES` map is now just the boot buffer. `wordFold.seedFold` gained a `declareViewsToFold` line.
+  - GREEN: utter-cut 7/7, call-live 3/3, recall-live 7/7, genesis-read 3/3, views-fold 3/3, statement 6/6, wordstore 6/6,
+    ablewordfold 4/4, seedfold 7/7, word-fold-boot 5/5, rasterstream 15/15, inheritation-e2e 33/34, wp-cred ALL PASS.
+  - **YOURS to look at:** (1) inheritation-e2e "nameTree: branch echoed" 1/34 — a Name-descriptor branch-echo, unrelated to
+    time. (2) A `do:noop missing history` surfaced in stamper paths — your in-flight history-threading ("Upstream caller must
+    thread it"); I fixed two STALE TESTS to run the suite (`defaultRole`→`defaultAble` + `branch`→`history` in the e2e), but the
+    threading itself is yours. (3) B2 (arm `canRecall` permissive→enforced) is HELD for Tabor's nod — a runtime auth change.
+
+- **HANDOFF→VERB (ENGINE, 2026-06-23): B2 LANDED — the `canRecall` consciousness-level gate is ARMED (Tabor said do).**
+  Recall is now CAPABILITY-gated, not permissive. `evalRecall` + `evalCall`(world): recalling your OWN thread
+  (`recalled`) is always free; a WIDER fold (`saw`: world/lineage/moment/place/a foreign thread) requires the able's
+  `can recall <view>` grant; **I bypasses** (universal authority). New helper `registry.js canRecallScope(beingId,
+scope, history)` (loads the being → defaultAble → `canViews(can).canRecall`). The **`global` able now grants the 5
+  public-story views** (world/lineage/moment/place/being) — so every authenticated being still recalls the public story;
+  the gate refuses the wider folds only to a being WITHOUT the grant (anonymous arrival, or a future restricted able).
+  GREEN: recall-live 7/7 (granted path, no regression), **verify-canrecall-gate 6/6** (the gate BITES: an ungranted
+  being is refused the world, its own thread stays free, I bypasses), cognition-cut-live 6/6 (the cognition's
+  face-read is the rasterizer, NOT the recall verb — unaffected). The cognition reads its face un-gated; only the
+  explicit recall verb is gated. Your `.word` ontology side (recall.word's "view = granted word") aligns; the
+  grant-set lives on the able's `can`, folded — no JS registry.

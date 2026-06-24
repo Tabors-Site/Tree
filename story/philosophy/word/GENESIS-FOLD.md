@@ -2,7 +2,7 @@
 
 The twenty `.word`s in `seed/words/` now declare the whole seed (word, iam, base, chain, branch,
 reality, fold, weave, see, do, be, name, call, recall, being, space, matter, can, able, flow).
-This plan wires the boot to read them and lay them as I_AM `declare-word` facts on branch 0, so a
+This plan wires the boot to read them and lay them as I `declare-word` facts on branch 0, so a
 boot opened to the story view reads the seed declaring itself, line by line. It is the seam where
 the `.word`s (this half) meet `wordStore.js` (the registry half), so it is written to hand to the sync.
 
@@ -12,7 +12,7 @@ the `.word`s (this half) meet `wordStore.js` (the registry half), so it is writt
   `X is a verb. / Its past is Y.` into `declarePast` (the verb conjugations). `foldWords()` exists.
 - GAP: `foldWords()` has no call site (grep is empty). The fold is not wired to boot at all yet.
 - `seed/present/word/wordStore.js` (the registry half): `bindWord(name, descriptor)` lays a
-  `declare-word` fact carrying a serializable binding through an I_AM act; `getWord` folds the
+  `declare-word` fact carrying a serializable binding through an I act; `getWord` folds the
   `declare-word` / `disable-word` facts back into the descriptor. The registry IS a fold.
 - `seed/present/book/assemble.js:211` already renders `declare-word` as `spoke the word X`
   (and `disable-word` as `silenced the word X`), but from `p.op` and only the name, not the body.
@@ -25,7 +25,7 @@ the `.word`s (this half) meet `wordStore.js` (the registry half), so it is writt
 
 2. **Fold step.** For each `.word`: the word name is the filename (`chain.word` is `chain`); the body
    is the declaration (the `is` / `has` / `can` lines); the `#` header is the axiom and host pointer,
-   not folded. Call `bindWord(name, descriptor)` with the actor as I_AM and branch `"0"`.
+   not folded. Call `bindWord(name, descriptor)` with the actor as I and branch `"0"`.
 
 3. **Descriptor for a CONCEPT word (the open shape).** An op `.word` (like `key.word`) binds with
    `do.ref` + targets (the wordStore shape). A concept `.word` is a description, not an op, so it
@@ -73,11 +73,11 @@ So the story reads the seed in full: the concepts as their bodies, the ops decla
   `declareConcepts()` then `declareOpsToFold()`.
 - Nothing is wired to boot yet: `foldWords`, `declareOpsToFold`, `seedFold` all have no call site.
   So `seedFold` is the ONE call to wire, the shared seam.
-- **The boot point:** the genesis sequence in `seed/sprout.js`, after `ensureIAm()` (the I_AM exists)
+- **The boot point:** the genesis sequence in `seed/sprout.js`, after `ensureIAm()` (the I exists)
   and `ensureSpaceRoot()` (branch 0, heaven, exists), before the surface serves. `await seedFold()`.
 
 ## The result
 
-Boot, open the story view, and read: `I_AM spoke the word word` / `a word is a word` / `I am that I
+Boot, open the story view, and read: `I spoke the word word` / `a word is a word` / `I am that I
 am` / down through `flow`. The seed, declaring itself, as facts on the chain — language no longer
 the one exception to fact, fold, reality.

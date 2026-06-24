@@ -28,7 +28,7 @@
 import log from "../../seedStory/log.js";
 import Being from "../../materials/being/being.js";
 import { IbpError, IBP_ERR } from "../protocol.js";
-import { I_AM } from "../../materials/being/seedBeings.js";
+import { I } from "../../materials/being/seedBeings.js";
 import { getStoryDomain } from "../address.js";
 import { authorize, getAuthConfig } from "../authorize.js";
 import { BE_OPS } from "../beOps.js";
@@ -65,7 +65,11 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   // close-story gate: a closed story refuses the world-changing BE ops (birth, death), but EXEMPTS
   // connect / release / switch — the session/frame ops a reader needs to attach to a closed story
   // and look around (SEE stays open; only NEW acts stop). Genesis births on a FRESH story → open.
-  if (operation !== "connect" && operation !== "release" && operation !== "switch") {
+  if (
+    operation !== "connect" &&
+    operation !== "release" &&
+    operation !== "switch"
+  ) {
     await (await import("../../storyLifecycle.js")).assertStoryOpen();
   }
 
@@ -270,10 +274,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     let childFlow = null;
     if (Array.isArray(payload?.flow)) {
       childFlow = payload.flow;
-    } else if (
-      typeof payload?.flow === "string" &&
-      payload.flow.trim()
-    ) {
+    } else if (typeof payload?.flow === "string" && payload.flow.trim()) {
       try {
         childFlow = JSON.parse(payload.flow);
       } catch (e) {
@@ -505,7 +506,11 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     // `history`. The transport seats socket.currentHistory from result.seatHistory after the seal.
     await emitWordFact(
       switchOp,
-      { through: identity.beingId, actId: moment?.actId || null, history: result.toHistory },
+      {
+        through: identity.beingId,
+        actId: moment?.actId || null,
+        history: result.toHistory,
+      },
       result,
       moment,
     );
@@ -513,7 +518,7 @@ export async function beVerb(operation, payload = {}, opts = {}) {
   }
 
   // BE:death targets the dying being directly (not cherub-on-itself).
-  // Authorize via the able-walk (I_AM bypass admits I_AM; no able
+  // Authorize via the able-walk (I bypass admits I; no able
   // today declares canBe:["death"], so every other actor refuses).
   // The handler returns a closing summary; writeBeFact stamps a
   // be:death fact on the target's reel. The reducer's applyDeath
@@ -667,7 +672,10 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     // binding), reading the fact's params/target the dispatcher declared on the auth result. The
     // keystone's per-kind result policy curates connect's result field; the session token rides the
     // RETURN to the caller (declareConnectFact left `result` untouched), never the fact.
-    const { factResult, through } = declareConnectFact(result, { identity, payload });
+    const { factResult, through } = declareConnectFact(result, {
+      identity,
+      payload,
+    });
     await emitWordFact(
       cherubConnectOp,
       { through, actId: moment?.actId || null, history },
@@ -758,7 +766,10 @@ export async function beVerb(operation, payload = {}, opts = {}) {
     // would duplicate it as { name, from } and the reducer would clobber the freshly-set state
     // (homeSpace/defaultAble/parentBeingId → null), leaving the just-born being homeless. One stamp.
     if (operation === "connect") {
-      const { factResult, through } = declareConnectFact(result, { identity, payload });
+      const { factResult, through } = declareConnectFact(result, {
+        identity,
+        payload,
+      });
       await emitWordFact(
         beOp,
         { through, actId: moment?.actId || null, history },
@@ -813,7 +824,7 @@ function declareConnectFact(result, { identity, payload }) {
     (result && typeof result === "object"
       ? result.userId || result.beingId
       : null) ||
-    I_AM;
+    I;
   const targetBeingId = result?.beingId || identity?.beingId || actorBeingId;
   const driverId = identity?.beingId
     ? String(identity.beingId)

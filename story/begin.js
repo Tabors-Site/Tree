@@ -141,7 +141,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // First-boot actions. plant.js writes .first-boot-actions.json when the
 // operator opts into something that needs a planting step (e.g. store, peering).
 // We consume the file once after extensions have registered their seeds,
-// then delete it. Acts as I_AM against the story root.
+// then delete it. Acts as I against the story root.
 async function runFirstBootActions() {
   const actionsPath = path.join(__dirname, ".first-boot-actions.json");
   if (!fs.existsSync(actionsPath)) return;
@@ -156,10 +156,8 @@ async function runFirstBootActions() {
     return;
   }
   const { getSpaceRootId, getIAmBeingId } = await import("./seed/sprout.js");
-  const { getTemplate } =
-    await import("./seed/store/book/templateRegistry.js");
-  const { plantTemplate } =
-    await import("./seed/store/book/seedPlant.js");
+  const { getTemplate } = await import("./seed/store/book/templateRegistry.js");
+  const { plantTemplate } = await import("./seed/store/book/seedPlant.js");
   const rootSpaceId = getSpaceRootId();
   const iAm = getIAmBeingId();
   let plantedAny = false;
@@ -364,7 +362,7 @@ await genesis(app, { registerRawWebhook });
 // First-boot actions written by plant.js (e.g. "include store →
 // plant store:catalog at the story root"). Consumed once and
 // deleted. Extension templates are already in the registry; this is
-// just the planting acting as I_AM at the chosen target.
+// just the planting acting as I at the chosen target.
 await runFirstBootActions();
 
 // (The genesis book — the seed's words AS a .book — is NOT rendered here. It is a static artifact,
@@ -402,7 +400,7 @@ try {
     // MIRROR step 2: write-bridge. Each FUSE write/truncate/create/
     // unlink/rename/mkdir lands here as a typed ipc request; we run
     // it inside withIAmAct so the act seals on the I-Am's chain
-    // (per the Name primitive, nameId=I_AM signs), reply with a
+    // (per the Name primitive, nameId=I signs), reply with a
     // status the child maps back to a posix errno, and push a
     // mount-invalidate so the child's tree reflects the new content
     // on the next read. Out-of-band invalidation (other beings
@@ -479,7 +477,7 @@ function mapMirrorError(err) {
 
 async function dispatchMirrorOp(msg, pushInvalidate) {
   const { withIAmAct } = await import("./seed/sprout.js");
-  const { I_AM } = await import("./seed/materials/being/seedBeings.js");
+  const { I } = await import("./seed/materials/being/seedBeings.js");
   const { doVerb } = await import("./seed/ibp/verbs/do.js");
   const { putContent, getContent, isCasRef } =
     await import("./seed/materials/matter/contentStore.js");
@@ -531,7 +529,7 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
         { kind: "matter", id: matterId },
         "set-matter",
         { field: "content", value: ref },
-        { identity: I_AM, moment: ctx },
+        { identity: I, moment: ctx },
       );
     });
     pushInvalidate({
@@ -564,7 +562,7 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
         { kind: "matter", id: matterId },
         "set-matter",
         { field: "content", value: ref },
-        { identity: I_AM, moment: ctx },
+        { identity: I, moment: ctx },
       );
     });
     pushInvalidate({
@@ -603,7 +601,7 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
         target,
         "create-matter",
         { name, type: "source", content: ref },
-        { identity: I_AM, moment: ctx },
+        { identity: I, moment: ctx },
       );
       resultMatterId = r?.matterId || null;
     });
@@ -624,7 +622,7 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
         { kind: "matter", id: matterId },
         "end-matter",
         {},
-        { identity: I_AM, moment: ctx },
+        { identity: I, moment: ctx },
       );
     });
     pushInvalidate({ path: msg.path, removed: true, matterId });
@@ -649,14 +647,14 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
             { kind: "matter", id: replaceMatterId },
             "end-matter",
             {},
-            { identity: I_AM, moment: ctx },
+            { identity: I, moment: ctx },
           );
         }
         await doVerb(
           { kind: "matter", id: matterId },
           "rename-matter",
           { name: String(msg.newName || ""), allowReplace: !!replaceMatterId },
-          { identity: I_AM, moment: ctx },
+          { identity: I, moment: ctx },
         );
       });
       if (replaceMatterId) {
@@ -698,7 +696,7 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
         { kind: "matter", id: matterId },
         "set-matter",
         { field: "spaceId", value: sourceSpaceId },
-        { identity: I_AM, moment: ctx },
+        { identity: I, moment: ctx },
       );
     });
     if (msg.newName) {
@@ -707,7 +705,7 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
           { kind: "matter", id: matterId },
           "rename-matter",
           { name: String(msg.newName) },
-          { identity: I_AM, moment: ctx },
+          { identity: I, moment: ctx },
         );
       });
     }
@@ -737,7 +735,7 @@ async function dispatchMirrorOp(msg, pushInvalidate) {
         target,
         "create-matter",
         { name, type: "source", content: { kind: "directory", path: null } },
-        { identity: I_AM, moment: ctx },
+        { identity: I, moment: ctx },
       );
       resultMatterId = r?.matterId || null;
     });

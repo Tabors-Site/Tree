@@ -14,7 +14,7 @@
 //
 // A pure grant primitive: it carries NO .word and registers NO operation.
 
-import { I_AM } from "../../materials/being/seedBeings.js";
+import { I } from "../../materials/being/seedBeings.js";
 
 // Build the grant record (no fact). grantedAt at the wall-clock floor when
 // the caller doesn't pin one (the story has no clock of its own; the instant
@@ -33,8 +33,8 @@ export function buildInternalGrant({
       able,
       anchorSpaceId: anchorSpaceId ? String(anchorSpaceId) : null,
       anchorBeingId: anchorBeingId ? String(anchorBeingId) : null,
-      grantedBy:     grantedBy ? String(grantedBy) : I_AM,
-      grantedAt:     grantedAt || new Date().toISOString(),
+      grantedBy: grantedBy ? String(grantedBy) : I,
+      grantedAt: grantedAt || new Date().toISOString(),
     },
   };
 }

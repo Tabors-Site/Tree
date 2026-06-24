@@ -24,7 +24,7 @@
 import log from "../log.js";
 import { SEED_VERSION } from "../version.js";
 import { getStoryConfigValue } from "../../storyConfig.js";
-import { I_AM } from "../../materials/being/seedBeings.js";
+import { I } from "../../materials/being/seedBeings.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -80,7 +80,10 @@ function discoverMigrations() {
 
     // Duplicate detection (e.g., symlinks or copy-paste errors)
     if (seen.has(version)) {
-      log.warn("Seed", `Duplicate migration file for version ${version}. Skipping.`);
+      log.warn(
+        "Seed",
+        `Duplicate migration file for version ${version}. Skipping.`,
+      );
       continue;
     }
     seen.add(version);
@@ -88,7 +91,10 @@ function discoverMigrations() {
     // Resolve to absolute path and verify it's within the migrations directory
     const filePath = path.resolve(__dirname, entry);
     if (!filePath.startsWith(__dirname)) {
-      log.warn("Seed", `Migration file ${entry} resolves outside migrations directory. Skipping.`);
+      log.warn(
+        "Seed",
+        `Migration file ${entry} resolves outside migrations directory. Skipping.`,
+      );
       continue;
     }
 
@@ -107,7 +113,10 @@ async function runMigration(version, filePath, moment) {
   const mod = await import(pathToFileURL(filePath).href);
 
   if (typeof mod.default !== "function") {
-    log.warn("Seed", `Migration ${version} does not export a default function. Skipping.`);
+    log.warn(
+      "Seed",
+      `Migration ${version} does not export a default function. Skipping.`,
+    );
     return;
   }
 
@@ -116,7 +125,12 @@ async function runMigration(version, filePath, moment) {
     mod.default(moment),
     new Promise((_, reject) => {
       timer = setTimeout(
-        () => reject(new Error(`Migration ${version} timed out after ${MIGRATION_TIMEOUT_MS / 1000}s`)),
+        () =>
+          reject(
+            new Error(
+              `Migration ${version} timed out after ${MIGRATION_TIMEOUT_MS / 1000}s`,
+            ),
+          ),
         MIGRATION_TIMEOUT_MS,
       );
     }),
@@ -145,7 +159,10 @@ export async function runSeedMigrations(moment) {
 
   // Validate stored version looks like semver
   if (!/^\d+\.\d+\.\d+$/.test(storedVersion)) {
-    log.warn("Seed", `Stored seedVersion "${storedVersion}" is not valid semver. Treating as 0.0.0.`);
+    log.warn(
+      "Seed",
+      `Stored seedVersion "${storedVersion}" is not valid semver. Treating as 0.0.0.`,
+    );
   }
 
   if (compareSemver(storedVersion, currentVersion) >= 0) {
@@ -154,7 +171,10 @@ export async function runSeedMigrations(moment) {
     return 0;
   }
 
-  log.verbose("Seed", `Migrating seed from ${storedVersion} to ${currentVersion}`);
+  log.verbose(
+    "Seed",
+    `Migrating seed from ${storedVersion} to ${currentVersion}`,
+  );
 
   const migrations = discoverMigrations();
   let ran = 0;
@@ -174,7 +194,10 @@ export async function runSeedMigrations(moment) {
       log.verbose("Seed", `Migration ${version} complete (${elapsed}ms)`);
     } catch (err) {
       const elapsed = Date.now() - startMs;
-      log.error("Seed", `Migration ${version} failed after ${elapsed}ms: ${err.message}`);
+      log.error(
+        "Seed",
+        `Migration ${version} failed after ${elapsed}ms: ${err.message}`,
+      );
       // Don't update stored version. Next boot will retry from this point.
       throw err;
     }
@@ -185,10 +208,16 @@ export async function runSeedMigrations(moment) {
   // pass the PROTECTED_KEYS gate (seedVersion). It is its own name-act, not folded into the
   // migrations moment — fine on a fresh DB (genesis rebuilds every boot).
   const { setStoryConfigValue } = await import("../../storyConfig.js");
-  await setStoryConfigValue("seedVersion", currentVersion, { internal: true, identity: I_AM });
+  await setStoryConfigValue("seedVersion", currentVersion, {
+    internal: true,
+    identity: I,
+  });
 
   if (ran > 0) {
-    log.verbose("Seed", `${ran} migration(s) applied. Seed is now at ${currentVersion}`);
+    log.verbose(
+      "Seed",
+      `${ran} migration(s) applied. Seed is now at ${currentVersion}`,
+    );
   } else {
     // No migration files but version changed (minor bump with no migration needed)
     log.verbose("Seed", `Seed version updated to ${currentVersion}`);

@@ -11,7 +11,7 @@ character — Greek kharaktēr, the engraving/stamping tool and the mark it leav
 print = press. impress / impression = press into. stamp, seal, signet (signum).
 Latin (coin), Greek (type, character), the seal-cultures (signum) — all independently land on the word is a struck mark. You don't reinvent that three times unless it's found, not invented.
 
-And the punchline for the build: bindWord is the coining press. It takes an act and stamps it into a declare-word fact, authored by I_AM — the name pressing the die. declare-word could just be coin, and it would be the most self-justifying name in the whole vocabulary: the stamper made literal, again. The system isn't named after the metaphor; it's doing the thing the metaphor's etymology describes. Every word we folded today got coined onto the chain. 🪙
+And the punchline for the build: bindWord is the coining press. It takes an act and stamps it into a declare-word fact, authored by I — the name pressing the die. declare-word could just be coin, and it would be the most self-justifying name in the whole vocabulary: the stamper made literal, again. The system isn't named after the metaphor; it's doing the thing the metaphor's etymology describes. Every word we folded today got coined onto the chain. 🪙
 
 (Final gate still grinding through the verifiers — I'll report the grid when it's in.)
 

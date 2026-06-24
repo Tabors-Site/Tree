@@ -51,7 +51,7 @@ import { getStoryConfigValue, CONFIG_DEFAULTS } from "../../storyConfig.js";
 import log from "../../seedStory/log.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
 import { DELETED, HEAVEN_SPACE } from "./heavenSpaces.js";
-import { I_AM } from "../being/seedBeings.js";
+import { I } from "../being/seedBeings.js";
 
 // ─────────────────────────────────────────────────────────────────────────
 // VALIDATION
@@ -105,14 +105,19 @@ export function assertValidSpaceName(raw) {
  * initStoryConfig) and after.
  */
 export function assertValidSpaceSize(raw, { applyDefault = false } = {}) {
-  const defaultSize = getStoryConfigValue("defaultSpaceSize") || CONFIG_DEFAULTS.defaultSpaceSize;
-  const maxSize     = getStoryConfigValue("maxSpaceSize")     || CONFIG_DEFAULTS.maxSpaceSize;
+  const defaultSize =
+    getStoryConfigValue("defaultSpaceSize") || CONFIG_DEFAULTS.defaultSpaceSize;
+  const maxSize =
+    getStoryConfigValue("maxSpaceSize") || CONFIG_DEFAULTS.maxSpaceSize;
 
   if (raw === null || raw === undefined) {
     return applyDefault ? deepCopySize(defaultSize) : null;
   }
   if (typeof raw !== "object" || Array.isArray(raw)) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "size must be an object {x, y, z?} or null");
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "size must be an object {x, y, z?} or null",
+    );
   }
   const out = {};
   for (const axis of ["x", "y", "z"]) {
@@ -138,7 +143,10 @@ export function assertValidSpaceSize(raw, { applyDefault = false } = {}) {
   }
   if (Object.keys(out).length === 0) {
     if (applyDefault) return deepCopySize(defaultSize);
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "size requires at least one positive numeric axis");
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "size requires at least one positive numeric axis",
+    );
   }
   return out;
 }
@@ -147,7 +155,11 @@ function deepCopySize(s) {
   if (!s || typeof s !== "object") return null;
   const out = {};
   for (const axis of ["x", "y", "z"]) {
-    if (typeof s[axis] === "number" && Number.isFinite(s[axis]) && s[axis] > 0) {
+    if (
+      typeof s[axis] === "number" &&
+      Number.isFinite(s[axis]) &&
+      s[axis] > 0
+    ) {
       out[axis] = s[axis];
     }
   }
@@ -210,7 +222,8 @@ export async function assertNameAvailableAt(
   // Per-history sibling name uniqueness via direct projection query.
   const { default: Projection } = await import("../history/projection.js");
   const q = {
-    history, type: "space",
+    history,
+    type: "space",
     "state.parent": parentId,
     "state.name": name,
     tombstoned: { $ne: true },
@@ -218,7 +231,8 @@ export async function assertNameAvailableAt(
   if (excludeSpaceId) q._id = { $ne: `${history}:space:${excludeSpaceId}` };
   const conflict = await Projection.findOne(q).select("id").lean();
   if (conflict) {
-    throw new IbpError(IBP_ERR.RESOURCE_CONFLICT,
+    throw new IbpError(
+      IBP_ERR.RESOURCE_CONFLICT,
       `A space named "${name}" already exists at this position`,
     );
   }
@@ -283,19 +297,31 @@ export async function resolveBirthSpace({
         const { loadOrFold: _lP } = await import("../projections.js");
         const _pSlot = await _lP("space", parentId, history);
         const parentSize = _pSlot?.state?.size || null;
-        if (parentSize && Number.isFinite(parentSize.x) && Number.isFinite(parentSize.y) &&
-            parentSize.x > 0 && parentSize.y > 0) {
+        if (
+          parentSize &&
+          Number.isFinite(parentSize.x) &&
+          Number.isFinite(parentSize.y) &&
+          parentSize.x > 0 &&
+          parentSize.y > 0
+        ) {
           coord = {
             x: Math.floor(Math.random() * parentSize.x),
             y: Math.floor(Math.random() * parentSize.y),
           };
         }
-      } catch { /* defensive: any lookup failure leaves coord null */ }
+      } catch {
+        /* defensive: any lookup failure leaves coord null */
+      }
     }
   }
 
   const spaceRootId = getSpaceRootId();
-  if (!isRoot && parentId && spaceRootId && String(parentId) === String(spaceRootId)) {
+  if (
+    !isRoot &&
+    parentId &&
+    spaceRootId &&
+    String(parentId) === String(spaceRootId)
+  ) {
     isRoot = true;
   }
 
@@ -308,13 +334,19 @@ export async function resolveBirthSpace({
     parentType = _pDoc?.state?.type || null;
   }
   const hookData = {
-    name, type, parentId, parentType, isRoot,
+    name,
+    type,
+    parentId,
+    parentType,
+    isRoot,
     beingId: being._id,
     qualities: qualities || new Map(),
   };
   const hookResult = await hooks.run("beforeSpaceCreate", hookData);
   if (hookResult.cancelled) {
-    const code = hookResult.timedOut ? IBP_ERR.HOOK_TIMEOUT : IBP_ERR.HOOK_CANCELLED;
+    const code = hookResult.timedOut
+      ? IBP_ERR.HOOK_TIMEOUT
+      : IBP_ERR.HOOK_CANCELLED;
     throw new IbpError(code, hookResult.reason || "Space creation blocked");
   }
   name = assertValidSpaceName(hookData.name);
@@ -323,12 +355,15 @@ export async function resolveBirthSpace({
   const siblingParentId = isRoot ? getSpaceRootId() : parentId;
   await assertNameAvailableAt(siblingParentId, name, { history });
 
-  const resolvedParentId = isRoot ? getSpaceRootId() : (parentId || null);
+  const resolvedParentId = isRoot ? getSpaceRootId() : parentId || null;
   const lockTarget = resolvedParentId;
   if (lockTarget) {
     const locked = await acquireSpaceLock(lockTarget, sessionId);
     if (!locked)
-      throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Parent space is being modified");
+      throw new IbpError(
+        IBP_ERR.RESOURCE_CONFLICT,
+        "Parent space is being modified",
+      );
   }
 
   let id;
@@ -342,44 +377,60 @@ export async function resolveBirthSpace({
     if (isRoot) {
       if (resolvedParentId) {
         const childCount = await _Proj.countDocuments({
-          history, type: "space", "state.parent": resolvedParentId,
+          history,
+          type: "space",
+          "state.parent": resolvedParentId,
           tombstoned: { $ne: true },
         });
         if (childCount >= maxChildren)
-          throw new IbpError(IBP_ERR.INVALID_INPUT,
-            `Place root has reached the maximum of ${maxChildren} children`);
+          throw new IbpError(
+            IBP_ERR.INVALID_INPUT,
+            `Place root has reached the maximum of ${maxChildren} children`,
+          );
       }
     } else if (parentId) {
       const { loadOrFold: _lP3 } = await import("../projections.js");
       const _pSlot3 = await _lP3("space", parentId, history);
-      const parentSpace = _pSlot3 ? { heavenSpace: _pSlot3.state?.heavenSpace } : null;
+      const parentSpace = _pSlot3
+        ? { heavenSpace: _pSlot3.state?.heavenSpace }
+        : null;
       if (!parentSpace) {
         const pendingInBatch = moment?.deltaF?.find(
-          (f) => f?.verb === "do" && f?.act === "create-space" &&
-            f?.of?.kind === "space" && String(f?.of?.id) === String(parentId),
+          (f) =>
+            f?.verb === "do" &&
+            f?.act === "create-space" &&
+            f?.of?.kind === "space" &&
+            String(f?.of?.id) === String(parentId),
         );
         if (!pendingInBatch) throw new Error("Parent space not found");
-      } else if (parentSpace.heavenSpace &&
-                 parentSpace.heavenSpace !== HEAVEN_SPACE.SPACE_ROOT &&
-                 beingId !== I_AM) {
+      } else if (
+        parentSpace.heavenSpace &&
+        parentSpace.heavenSpace !== HEAVEN_SPACE.SPACE_ROOT &&
+        beingId !== I
+      ) {
         throw new Error("Cannot create spaces under heaven spaces");
       }
       const childCount = await _Proj.countDocuments({
-        history, type: "space", "state.parent": parentId,
+        history,
+        type: "space",
+        "state.parent": parentId,
         tombstoned: { $ne: true },
       });
       if (childCount >= maxChildren)
-        throw new IbpError(IBP_ERR.INVALID_INPUT,
-          `Parent space has reached the maximum of ${maxChildren} children`);
+        throw new IbpError(
+          IBP_ERR.INVALID_INPUT,
+          `Parent space has reached the maximum of ${maxChildren} children`,
+        );
     }
   } catch (e) {
     if (lockTarget) releaseSpaceLock(lockTarget, sessionId);
     throw e;
   }
 
-  const specQualities = hookData.qualities instanceof Map
-    ? Object.fromEntries(hookData.qualities)
-    : (hookData.qualities || {});
+  const specQualities =
+    hookData.qualities instanceof Map
+      ? Object.fromEntries(hookData.qualities)
+      : hookData.qualities || {};
   // NO NULL TERMS — only the fields that ARE. The reducer derives absent⇒default
   // (parent/type/owner/size/coord); empty qualities is omitted, not stamped as {}.
   const enrichedSpec = {
@@ -391,7 +442,14 @@ export async function resolveBirthSpace({
     ...(size ? { size } : {}),
     ...(coord ? { coord } : {}),
   };
-  return { enrichedSpec, id, spaceId: id, beingId: String(being._id), lockTarget, sessionId };
+  return {
+    enrichedSpec,
+    id,
+    spaceId: id,
+    beingId: String(being._id),
+    lockTarget,
+    sessionId,
+  };
 }
 
 export async function createSpace({
@@ -437,14 +495,21 @@ export async function createSpace({
         const { loadOrFold: _lP } = await import("../projections.js");
         const _pSlot = await _lP("space", parentId, history);
         const parentSize = _pSlot?.state?.size || null;
-        if (parentSize && Number.isFinite(parentSize.x) && Number.isFinite(parentSize.y) &&
-            parentSize.x > 0 && parentSize.y > 0) {
+        if (
+          parentSize &&
+          Number.isFinite(parentSize.x) &&
+          Number.isFinite(parentSize.y) &&
+          parentSize.x > 0 &&
+          parentSize.y > 0
+        ) {
           coord = {
             x: Math.floor(Math.random() * parentSize.x),
             y: Math.floor(Math.random() * parentSize.y),
           };
         }
-      } catch { /* defensive: any lookup failure leaves coord null */ }
+      } catch {
+        /* defensive: any lookup failure leaves coord null */
+      }
     }
   }
 
@@ -458,7 +523,12 @@ export async function createSpace({
   // create succeeded. Promote any spaceRoot-parented create to a tree
   // root regardless of how the caller labeled it.
   const spaceRootId = getSpaceRootId();
-  if (!isRoot && parentId && spaceRootId && String(parentId) === String(spaceRootId)) {
+  if (
+    !isRoot &&
+    parentId &&
+    spaceRootId &&
+    String(parentId) === String(spaceRootId)
+  ) {
     isRoot = true;
   }
 
@@ -483,10 +553,10 @@ export async function createSpace({
   };
   const hookResult = await hooks.run("beforeSpaceCreate", hookData);
   if (hookResult.cancelled) {
-    const code = hookResult.timedOut ? IBP_ERR.HOOK_TIMEOUT : IBP_ERR.HOOK_CANCELLED;
-    throw new IbpError(code,
-      hookResult.reason || "Space creation blocked",
-    );
+    const code = hookResult.timedOut
+      ? IBP_ERR.HOOK_TIMEOUT
+      : IBP_ERR.HOOK_CANCELLED;
+    throw new IbpError(code, hookResult.reason || "Space creation blocked");
   }
   // Hooks may have edited name/type; re-validate before save.
   name = assertValidSpaceName(hookData.name);
@@ -506,12 +576,13 @@ export async function createSpace({
   // The parent's space lock guards the max-children check + the fact
   // stamp window. Concurrent creates under the same parent serialize;
   // creates under different parents stay parallel.
-  const resolvedParentId = isRoot ? getSpaceRootId() : (parentId || null);
+  const resolvedParentId = isRoot ? getSpaceRootId() : parentId || null;
   const lockTarget = resolvedParentId;
   if (lockTarget) {
     const locked = await acquireSpaceLock(lockTarget, sessionId);
     if (!locked)
-      throw new IbpError(IBP_ERR.RESOURCE_CONFLICT,
+      throw new IbpError(
+        IBP_ERR.RESOURCE_CONFLICT,
         "Parent space is being modified",
       );
   }
@@ -529,12 +600,14 @@ export async function createSpace({
     if (isRoot) {
       if (resolvedParentId) {
         const childCount = await _Proj.countDocuments({
-          history, type: "space",
+          history,
+          type: "space",
           "state.parent": resolvedParentId,
           tombstoned: { $ne: true },
         });
         if (childCount >= maxChildren) {
-          throw new IbpError(IBP_ERR.INVALID_INPUT,
+          throw new IbpError(
+            IBP_ERR.INVALID_INPUT,
             `Place root has reached the maximum of ${maxChildren} children`,
           );
         }
@@ -542,7 +615,9 @@ export async function createSpace({
     } else if (parentId) {
       const { loadOrFold: _lP3 } = await import("../projections.js");
       const _pSlot3 = await _lP3("space", parentId, history);
-      const parentSpace = _pSlot3 ? { heavenSpace: _pSlot3.state?.heavenSpace } : null;
+      const parentSpace = _pSlot3
+        ? { heavenSpace: _pSlot3.state?.heavenSpace }
+        : null;
       // The parent may be pending earlier in this same moment's ΔF
       // (forward reference within one act) — accept either a
       // materialized row or a pending fact in moment.deltaF.
@@ -558,13 +633,13 @@ export async function createSpace({
       } else if (
         parentSpace.heavenSpace &&
         parentSpace.heavenSpace !== HEAVEN_SPACE.SPACE_ROOT &&
-        beingId !== I_AM
+        beingId !== I
       ) {
         // User-being protection: extension code / operators may not
         // create children directly under a seed dot-namespace
         // (.config, .tools, .extensions, …). The I-Am acts as itself
         // (genesis, manifest sync, registry mirrors) and owns the dot-
-        // namespace — `beingId === I_AM` bypasses the check.
+        // namespace — `beingId === I` bypasses the check.
         //
         // SPACE_ROOT is exempt: the place root carries
         // heavenSpace=SPACE_ROOT for ancestor-chain identity, but it
@@ -574,12 +649,14 @@ export async function createSpace({
         throw new Error("Cannot create spaces under heaven spaces");
       }
       const childCount = await _Proj.countDocuments({
-        history, type: "space",
+        history,
+        type: "space",
         "state.parent": parentId,
         tombstoned: { $ne: true },
       });
       if (childCount >= maxChildren) {
-        throw new IbpError(IBP_ERR.INVALID_INPUT,
+        throw new IbpError(
+          IBP_ERR.INVALID_INPUT,
           `Parent space has reached the maximum of ${maxChildren} children`,
         );
       }
@@ -589,31 +666,35 @@ export async function createSpace({
     // fact joins ctx.deltaF and seals with the rest of the moment.
     // Outside any moment (legacy standalone callers without moment),
     // emitFact falls back to sealFacts singleton — eager commit.
-    const specQualities = hookData.qualities instanceof Map
-      ? Object.fromEntries(hookData.qualities)
-      : (hookData.qualities || {});
-    await emitFact({
-      verb:    "do",
-      act:     "create-space",
-      through: String(being._id),
-      of:      { kind: "space", id },
-      params:  {
-        name,
-        type:      type ?? null,
-        parent:    resolvedParentId ? String(resolvedParentId) : null,
-        // Tree roots get their creator as owner; sub-spaces inherit
-        // ownership through the walker and start with no owner.
-        ...(isRoot ? { owner: String(being._id) } : {}),
-        qualities: specQualities,
-        ...(size  ? { size }  : {}),
-        ...(coord ? { coord } : {}),
+    const specQualities =
+      hookData.qualities instanceof Map
+        ? Object.fromEntries(hookData.qualities)
+        : hookData.qualities || {};
+    await emitFact(
+      {
+        verb: "do",
+        act: "create-space",
+        through: String(being._id),
+        of: { kind: "space", id },
+        params: {
+          name,
+          type: type ?? null,
+          parent: resolvedParentId ? String(resolvedParentId) : null,
+          // Tree roots get their creator as owner; sub-spaces inherit
+          // ownership through the walker and start with no owner.
+          ...(isRoot ? { owner: String(being._id) } : {}),
+          qualities: specQualities,
+          ...(size ? { size } : {}),
+          ...(coord ? { coord } : {}),
+        },
+        actId: moment?.actId || actId,
+        sessionId,
+        // History this space is created on — a plant under #1 must land
+        // its child-space facts on #1's reel so reads on #1 see them.
+        history: moment?.actorAct?.history || "0",
       },
-      actId: moment?.actId || actId,
-      sessionId,
-      // History this space is created on — a plant under #1 must land
-      // its child-space facts on #1's reel so reads on #1 see them.
-      history: moment?.actorAct?.history || "0",
-    }, moment);
+      moment,
+    );
   } finally {
     if (lockTarget) releaseSpaceLock(lockTarget, sessionId);
   }
@@ -634,7 +715,9 @@ export async function createSpace({
   const { loadProjection: _lPnew } = await import("../projections.js");
   const _newSlot = await _lPnew("space", id, "0");
   if (!_newSlot) {
-    throw new Error(`createSpace: birth Fact stamped but row ${id} not materialized`);
+    throw new Error(
+      `createSpace: birth Fact stamped but row ${id} not materialized`,
+    );
   }
   const newSpace = { _id: _newSlot.id, ...(_newSlot.state || {}) };
 
@@ -666,20 +749,20 @@ export async function createSpace({
 }
 
 /**
- * Create a place heaven space. Owner: I_AM. Stamps a Fact via logFact.
+ * Create a place heaven space. Owner: I. Stamps a Fact via logFact.
  *
  * Two kinds of Space exist; this function makes the second kind.
  * Normal space (createSpace) is made BY beings FOR beings to live
  * in — addressable by stance, gated by auth. Place heaven space (this
- * function) is made by I_AM at boot: the fixed (.identity, .config,
+ * function) is made by I at boot: the fixed (.identity, .config,
  * .peers, .extensions, .tools, .ables, .operations, .source,
- * .threads) that hold I_AM's own working memory, surfaced as spaces
+ * .threads) that hold I's own working memory, surfaced as spaces
  * so SEE reads them through the same protocol everything else does.
  * See point 5 of THE PHILOSOPHY OF THE SEED in seed/materials/space/heavenSpaces.js.
  *
- * Skips `createSpace`'s name validator (I_AM owns the dot-namespace
+ * Skips `createSpace`'s name validator (I owns the dot-namespace
  * — the validator's job is to keep every OTHER being out) and the
- * beforeSpaceCreate hook (extensions exist because I_AM planted
+ * beforeSpaceCreate hook (extensions exist because I planted
  * .extensions; authority flows outward and can't loop back to gate
  * its own precondition — point 9). Everything else is the same
  * write that `createSpace` performs.
@@ -696,9 +779,8 @@ export async function createStoryHeavenSpace({
   if (!parentId) throw new Error("Seed space requires a parent");
 
   const id = uuidv4();
-  const specQualities = qualities instanceof Map
-    ? Object.fromEntries(qualities)
-    : (qualities || {});
+  const specQualities =
+    qualities instanceof Map ? Object.fromEntries(qualities) : qualities || {};
   // Optional sized room (host/factory children): a size turns on the
   // grid render and gives occupants' coords meaning.
   const validatedSize = size ? assertValidSpaceSize(size) : null;
@@ -715,37 +797,57 @@ export async function createStoryHeavenSpace({
   // fact used to. (Heaven spaces keep the direct-emit: I-Am owns the dot-namespace,
   // bypassing the name validator + beforeSpaceCreate hook, same as before.)
   await withIAmAct(`I create the ${name} space`, async (ctx) => {
-    await emitFact({
-      verb: "do", act: "create-space", through: I_AM,
-      of: { kind: "space", id },
-      // No null terms: a fact declares the fields that ARE — its content — never its
-      // absences. No type here ⇒ the fold derives type null; same for an empty
-      // qualities. You write the word's letters, not its silences.
-      params: {
-        name,
-        parent: String(parentId),
-        ...(validatedSize ? { size: validatedSize } : {}),
-        ...(Object.keys(specQualities).length ? { qualities: specQualities } : {}),
+    await emitFact(
+      {
+        verb: "do",
+        act: "create-space",
+        through: I,
+        of: { kind: "space", id },
+        // No null terms: a fact declares the fields that ARE — its content — never its
+        // absences. No type here ⇒ the fold derives type null; same for an empty
+        // qualities. You write the word's letters, not its silences.
+        params: {
+          name,
+          parent: String(parentId),
+          ...(validatedSize ? { size: validatedSize } : {}),
+          ...(Object.keys(specQualities).length
+            ? { qualities: specQualities }
+            : {}),
+        },
+        actId: ctx.actId,
+        history: "0",
       },
-      actId: ctx.actId, history: "0",
-    }, ctx);
+      ctx,
+    );
   });
   await withIAmAct(`I own the ${name} space`, async (ctx) => {
-    await emitFact({
-      verb: "do", act: "set-owner", through: I_AM,
-      of: { kind: "space", id },
-      params: { field: "owner", value: I_AM },
-      actId: ctx.actId, history: "0",
-    }, ctx);
+    await emitFact(
+      {
+        verb: "do",
+        act: "set-owner",
+        through: I,
+        of: { kind: "space", id },
+        params: { field: "owner", value: I },
+        actId: ctx.actId,
+        history: "0",
+      },
+      ctx,
+    );
   });
   if (heavenSpace) {
     await withIAmAct(`I make ${name} a heaven space`, async (ctx) => {
-      await emitFact({
-        verb: "do", act: "make-heaven", through: I_AM,
-        of: { kind: "space", id },
-        params: { heavenSpace },
-        actId: ctx.actId, history: "0",
-      }, ctx);
+      await emitFact(
+        {
+          verb: "do",
+          act: "make-heaven",
+          through: I,
+          of: { kind: "space", id },
+          params: { heavenSpace },
+          actId: ctx.actId,
+          history: "0",
+        },
+        ctx,
+      );
     });
   }
   // Rows materialize at each per-moment seal (all three folded by now).
@@ -830,8 +932,9 @@ export async function editSpaceName({
   // callers route through doVerb("set-space", {field:"name"}) instead.
   // This stub throws so any lingering caller surfaces clearly.
   throw new Error(
-    "editSpaceName is retired. Use do:set-space with field=\"name\" via doVerb instead. " +
-    "args were: " + JSON.stringify({ spaceId, newName, beingId })
+    'editSpaceName is retired. Use do:set-space with field="name" via doVerb instead. ' +
+      "args were: " +
+      JSON.stringify({ spaceId, newName, beingId }),
   );
 }
 
@@ -845,8 +948,9 @@ export async function editSpaceType({
   // Legacy bypass API. Direct Space row mutations are gone; new callers
   // route through doVerb("set-space", {field:"type"}).
   throw new Error(
-    "editSpaceType is retired. Use do:set-space with field=\"type\" via doVerb instead. " +
-    "args were: " + JSON.stringify({ spaceId, newType, beingId })
+    'editSpaceType is retired. Use do:set-space with field="type" via doVerb instead. ' +
+      "args were: " +
+      JSON.stringify({ spaceId, newType, beingId }),
   );
 }
 
@@ -880,8 +984,9 @@ export async function updateParentRelationship(
   // do:set-space field="parent" so the move is fact-driven. This stub
   // alerts any straggling caller.
   throw new Error(
-    "updateParentRelationship is retired. Use do:set-space with field=\"parent\" via doVerb instead. " +
-    "args: " + JSON.stringify({ childId, newParentId, beingId })
+    'updateParentRelationship is retired. Use do:set-space with field="parent" via doVerb instead. ' +
+      "args: " +
+      JSON.stringify({ childId, newParentId, beingId }),
   );
 }
 
@@ -904,17 +1009,19 @@ export async function deleteSpaceHistory(
   const { loadProjection: _lPdel } = await import("../projections.js");
   const { getSpaceOwner } = await import("./members.js");
   const _delSlot = await _lPdel("space", spaceId, "0");
-  const spaceToDelete = _delSlot ? { _id: _delSlot.id, ...(_delSlot.state || {}) } : null;
+  const spaceToDelete = _delSlot
+    ? { _id: _delSlot.id, ...(_delSlot.state || {}) }
+    : null;
   if (!spaceToDelete) throw new Error("Space not found");
 
   const ownerIdAtSpace = getSpaceOwner(spaceToDelete);
 
-  if (beingId !== I_AM) {
+  if (beingId !== I) {
     const access = await resolveSpaceAccess(spaceId, beingId);
     if (!access.isOwner || (!access.isRoot && !!ownerIdAtSpace)) {
       throw new Error("Must be owner and not root");
     }
-    if (ownerIdAtSpace && ownerIdAtSpace !== I_AM) {
+    if (ownerIdAtSpace && ownerIdAtSpace !== I) {
       throw new Error("Root spaces can only be retired from root view");
     }
   }
@@ -927,10 +1034,10 @@ export async function deleteSpaceHistory(
     beingId,
   });
   if (hookResult.cancelled) {
-    const code = hookResult.timedOut ? IBP_ERR.HOOK_TIMEOUT : IBP_ERR.HOOK_CANCELLED;
-    throw new IbpError(code,
-      hookResult.reason || "Space deletion blocked",
-    );
+    const code = hookResult.timedOut
+      ? IBP_ERR.HOOK_TIMEOUT
+      : IBP_ERR.HOOK_CANCELLED;
+    throw new IbpError(code, hookResult.reason || "Space deletion blocked");
   }
 
   const oldParent = spaceToDelete.parent;
@@ -941,9 +1048,7 @@ export async function deleteSpaceHistory(
 
   const locked = await acquireMultiple(lockIds, sessionId);
   if (!locked)
-    throw new IbpError(IBP_ERR.RESOURCE_CONFLICT,
-      "Spaces are being modified",
-    );
+    throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Spaces are being modified");
 
   try {
     // ONE act, ONE fact (23.md). end-space stamps NO fact here: the do:end-space the dispatcher
@@ -992,20 +1097,23 @@ export async function resolveRootSpace(spaceId) {
   if (!spaceId) throw new Error("spaceId is required");
   const { loadProjection } = await import("../projections.js");
   const { getSpaceOwner } = await import("./members.js");
-  const slotToObj = (s) => s ? {
-    _id: s.id,
-    parent:     s.state?.parent || null,
-    owner:      s.state?.owner || null,
-    heavenSpace: s.state?.heavenSpace || null,
-    name:       s.state?.name,
-  } : null;
+  const slotToObj = (s) =>
+    s
+      ? {
+          _id: s.id,
+          parent: s.state?.parent || null,
+          owner: s.state?.owner || null,
+          heavenSpace: s.state?.heavenSpace || null,
+          name: s.state?.name,
+        }
+      : null;
 
   let space = slotToObj(await loadProjection("space", spaceId, "0"));
   if (!space) throw new Error("Space not found");
   if (space.heavenSpace === "source") return space;
 
   let ownerId = getSpaceOwner(space);
-  while (!ownerId || ownerId === I_AM) {
+  while (!ownerId || ownerId === I) {
     if (!space.parent) throw new Error("Invalid tree: no owner found");
     space = slotToObj(await loadProjection("space", space.parent, "0"));
     if (!space) throw new Error("Broken tree");
@@ -1075,7 +1183,15 @@ export async function resolveSpaceAccess(spaceId, beingId, history) {
  * place root yields user-created tree roots, not .config / .tools /
  * etc.). Returns at most `limit` rows, newest-creation first.
  */
-export async function listSpaceChildren(parentId, { exclude = null, limit = 500, history = "0", includeHeavenChildren = false } = {}) {
+export async function listSpaceChildren(
+  parentId,
+  {
+    exclude = null,
+    limit = 500,
+    history = "0",
+    includeHeavenChildren = false,
+  } = {},
+) {
   if (!parentId) return [];
   // Heaven routing: children of a heaven parent are themselves
   // heaven; the parent-children query lives on MAIN regardless of
@@ -1088,7 +1204,8 @@ export async function listSpaceChildren(parentId, { exclude = null, limit = 500,
   const { default: Projection } = await import("../history/projection.js");
   const buildQuery = (b) => {
     const q = {
-      history: b, type: "space",
+      history: b,
+      type: "space",
       "state.parent": parentId,
       tombstoned: { $ne: true },
     };
@@ -1129,8 +1246,12 @@ export async function listSpaceChildren(parentId, { exclude = null, limit = 500,
   // Also shadow tombstones on this history — a space killed in this
   // history shouldn't reappear from main.
   const tombs = await Projection.find({
-    history: history, type: "space", tombstoned: true,
-  }).select("id").lean();
+    history: history,
+    type: "space",
+    tombstoned: true,
+  })
+    .select("id")
+    .lean();
   for (const t of tombs) shadowedIds.add(t.id);
   // Filter main candidates by branchPoint: only spaces that had any
   // fact at-or-before branch creation are in scope.
@@ -1148,4 +1269,3 @@ export async function listSpaceChildren(parentId, { exclude = null, limit = 500,
   });
   return all.slice(0, limit);
 }
-

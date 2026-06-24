@@ -59,9 +59,9 @@ being or a history, and out to landing in a living reality.
 Each operation answers WHAT moves; placement answers WHERE it lands. They
 compose freely.
 
-|                                | **at the reality root** (new)                | **at an existing position** (living)  |
-| ------------------------------ | -------------------------------------------- | ------------------------------------- |
-| **SEED** (shell, fresh ids)    | a new top-level world from a template        | a subtree planted under a position    |
+|                                | **at the reality root** (new)                 | **at an existing position** (living)   |
+| ------------------------------ | --------------------------------------------- | -------------------------------------- |
+| **SEED** (shell, fresh ids)    | a new top-level world from a template         | a subtree planted under a position     |
 | **GRAFT** (identity preserved) | a being/history into a fresh or empty reality | a being/history into a running reality |
 
 - **Placement = reality root.** The planted region becomes new top-level
@@ -96,7 +96,7 @@ not a separate operation. It is simply graft at maximal scope, placed at
 the root. The same machinery (verbatim ids, full chains, verify on arrival)
 that brings one being brings them all. The one thing the genome carries
 that a smaller graft does not is the reality's OWN identity: its `realityId`
-(which is I_AM's key) travels too, so the planted result IS the same
+(which is I's key) travels too, so the planted result IS the same
 reality, a mirror or a migration. That is exactly why the genome lands only
 in an empty store — two realities cannot share one, and a reality grafted
 into a _different_ reality would be two identities in one place. A being

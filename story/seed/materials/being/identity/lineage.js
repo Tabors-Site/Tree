@@ -66,51 +66,47 @@ export async function findBeingParent(targetBeingId) {
  *                         (of.kind=being, of.id=parentBeing),
  *                         with `result.targetBeingId === child`
  *
- * The latest of the two (by Fact.date — wall-clock at seal) decides
- * current state. There is no global per-reel seq, so cross-reel
- * ordering uses the seal wall-clock; the two acts are not racing
- * (attach is being-parent-only and gated on a prior detach), so the
- * dates totally order in practice.
+ * Both the detach (the child declares independence) and the attach (the being-parent
+ * re-asserts authority) land on the CHILD's reel (of.id=childId) — authority-facts on the
+ * target's reel, the same pattern as grant-inheritation. So seq TOTALLY ORDERS them on one
+ * reel: the latest action decides. ORDER, never the clock (623/12; 20.md). This replaced a
+ * cross-reel date compare — the structural fix is the attach sharing the child's reel.
  *
- * When the child has no being parent (the I-Am) we short-circuit
- * false — the I-Am cannot detach from anyone.
+ * When the child has no being parent (the I-Am) we short-circuit false — the I-Am cannot
+ * detach from anyone.
  */
 export async function isDetachedFromBeingParent(beingId) {
   if (!beingId) return false;
   const childId = String(beingId);
   const parentBeingId = await findBeingParent(childId);
-
-  const detachQuery = Fact.findOne({
-    "of.kind": "being",
-    "of.id": childId,
-    verb: "do",
-    act: "credential-detach",
-  })
-    .sort({ seq: -1, date: -1 })
-    .select("date")
-    .lean();
-
-  const attachQuery = parentBeingId
-    ? Fact.findOne({
-        "of.kind": "being",
-        "of.id": String(parentBeingId),
-        verb: "do",
-        act: "credential-attach",
-        "result.targetBeingId": childId,
-      })
-        .sort({ seq: -1, date: -1 })
-        .select("date")
-        .lean()
-    : Promise.resolve(null);
+  if (!parentBeingId) return false; // the I-Am has no being-parent — it cannot detach from anyone
 
   const [latestDetach, latestAttach] = await Promise.all([
-    detachQuery,
-    attachQuery,
+    Fact.findOne({
+      "of.kind": "being",
+      "of.id": childId,
+      verb: "do",
+      act: "credential-detach",
+    })
+      .sort({ seq: -1 })
+      .select("seq")
+      .lean(),
+    Fact.findOne({
+      "of.kind": "being",
+      "of.id": childId,
+      verb: "do",
+      act: "credential-attach",
+      "result.targetBeingId": childId,
+    })
+      .sort({ seq: -1 })
+      .select("seq")
+      .lean(),
   ]);
 
   if (!latestDetach) return false;
   if (!latestAttach) return true;
-  return latestDetach.date > latestAttach.date;
+  // Both on the child's reel — seq is the truth-order. Detached iff the latest action is a detach.
+  return latestDetach.seq > latestAttach.seq;
 }
 
 /**
@@ -121,7 +117,7 @@ export async function isDetachedFromBeingParent(beingId) {
  * over the target's tree position:
  *
  *   self   → yes, always (a being may touch its own credential)
- *   I_AM   → yes, always (the story is the source of all authority)
+ *   I   → yes, always (the story is the source of all authority)
  *   else   → the asker's NAME (its trueName) has authority over the
  *            target — it owns the target or an ancestor, or holds an
  *            inheritation point covering it (hasAuthorityOver).
@@ -134,16 +130,21 @@ export async function isDetachedFromBeingParent(beingId) {
  * authority model now; `isDetachedFromBeingParent` remains for any
  * direct reader but is authority-inert here.
  */
-export async function hasCredentialAuthority(askerBeingId, targetBeingId, history) {
+export async function hasCredentialAuthority(
+  askerBeingId,
+  targetBeingId,
+  history,
+) {
   if (!askerBeingId || !targetBeingId) return false;
   if (String(askerBeingId) === String(targetBeingId)) return true;
-  const { I_AM } = await import("../seedBeings.js");
-  if (String(askerBeingId) === String(I_AM)) return true;
+  const { I } = await import("../seedBeings.js");
+  if (String(askerBeingId) === String(I)) return true;
 
   // Resolve a history to read the tree on (never literal "0").
   let b = history;
   if (!b) {
-    const { getDefaultHistory } = await import("../../history/historyRegistry.js");
+    const { getDefaultHistory } =
+      await import("../../history/historyRegistry.js");
     b = await getDefaultHistory();
   }
 
@@ -157,4 +158,3 @@ export async function hasCredentialAuthority(askerBeingId, targetBeingId, histor
   const { hasAuthorityOver } = await import("./inheritation.js");
   return await hasAuthorityOver(String(askerName), String(targetBeingId), b);
 }
-

@@ -16,19 +16,19 @@ pattern, one bedrock guard.
 
 Both lay `do:declare-word` / `do:disable-word` facts, on the same act names, with DIFFERENT params:
 
-| | wordStore.js | ableWordRegistry.js |
-|---|---|---|
-| fact params | `{ word, ownerExtension, binding }` | `{ able, op, source }` |
-| projection | `_projection` (Map, heaven "0" only, sync) | `REGISTRY` (Map) + `_historyDisabled` (per-branch, sync) |
-| read | `getWord` (async, per-branch) / `getWordSync` ("0" only) | `resolveAbleWord` (sync, per-branch, returns the parsed IR) |
-| declare | `bindWord` (+ `declareOpsToFold` etc.) | `registerAbleWord` (buffer) + `declareWordsToChain` |
-| disable | `disableWord(name)` | `disableWord(able, op)` / `enableWord(able, op)` |
-| rehydrate | `rehydrateWordProjection("0")` | `rehydrateWordsFromFacts` (per-branch + bedrock) |
-| bedrock | none | `_genesisWords` (I_AM genesis on "0" is immutable) |
-| host extras | host-handler table (ref -> fn) | `irCache` + `wordOf`, `runAbleWord`, `bornBeingFrom` |
+|             | wordStore.js                                             | ableWordRegistry.js                                         |
+| ----------- | -------------------------------------------------------- | ----------------------------------------------------------- |
+| fact params | `{ word, ownerExtension, binding }`                      | `{ able, op, source }`                                      |
+| projection  | `_projection` (Map, heaven "0" only, sync)               | `REGISTRY` (Map) + `_historyDisabled` (per-branch, sync)    |
+| read        | `getWord` (async, per-branch) / `getWordSync` ("0" only) | `resolveAbleWord` (sync, per-branch, returns the parsed IR) |
+| declare     | `bindWord` (+ `declareOpsToFold` etc.)                   | `registerAbleWord` (buffer) + `declareWordsToChain`         |
+| disable     | `disableWord(name)`                                      | `disableWord(able, op)` / `enableWord(able, op)`            |
+| rehydrate   | `rehydrateWordProjection("0")`                           | `rehydrateWordsFromFacts` (per-branch + bedrock)            |
+| bedrock     | none                                                     | `_genesisWords` (I genesis on "0" is immutable)             |
+| host extras | host-handler table (ref -> fn)                           | `irCache` + `wordOf`, `runAbleWord`, `bornBeingFrom`        |
 
 The duplication is the declare/disable/rehydrate/projection machinery. ableWordRegistry has THREE
-things wordStore does not: a SYNC per-branch enabled-state overlay, I_AM bedrock protection, and the
+things wordStore does not: a SYNC per-branch enabled-state overlay, I bedrock protection, and the
 able-specific host layer (IR cache + the evaluator runner + the birth-cut reader).
 
 ## Caller surface (what must keep working)
@@ -63,6 +63,7 @@ enabled-on-branch) -> the `source` -> `wordOf(source)` (IR cache, unchanged) -> 
 ## The gap, and the two ways to close each half
 
 ### Gap A — the SYNC per-branch overlay
+
 `resolveAbleWord` is synchronous and per-branch (a word can be disabled on branch X but live on "0").
 wordStore's `getWordSync` is "0"-only; `getWord` is per-branch but async. Two options:
 
@@ -75,11 +76,12 @@ wordStore's `getWordSync` is "0"-only; `getWord` is per-branch but async. Two op
   overlay serves ALL words (an op/type could be branch-disabled too). Bigger; do it only if other
   words need per-branch disable.
 
-### Gap B — I_AM bedrock (the genesis-vocabulary immutability)
-`_assertMayChange` forbids a non-I_AM actor from disabling/re-declaring an I_AM genesis word ON "0"
-(per-branch shadowing still allowed). This is the general "words stack EXCEPT I_AM bedrock" rule
+### Gap B — I bedrock (the genesis-vocabulary immutability)
+
+`_assertMayChange` forbids a non-I actor from disabling/re-declaring an I genesis word ON "0"
+(per-branch shadowing still allowed). This is the general "words stack EXCEPT I bedrock" rule
 (project_iam_genesis_immutable), not a ableword quirk. Recommended: MOVE it into `wordStore.bindWord`
-/ `disableWord` as a guard over ALL words (ops/types/reducers/concepts are all I_AM-on-"0" bedrock
+/ `disableWord` as a guard over ALL words (ops/types/reducers/concepts are all I-on-"0" bedrock
 too — they should be equally protected). One guard, every word. This is a strict improvement the
 unification earns.
 
@@ -96,18 +98,18 @@ unification earns.
 - WP-3 — resolveAbleWord reads wordStore. Existence from `getWordSync(able:op)` (the binding's
   `source`), enabled-state from Gap-A1's overlay. `wordOf`/`irCache` unchanged. Delete REGISTRY.
 - WP-4 — disable/enable + rehydrate delegate. `disableWord(able,op)` -> `wordStore.disableWord(able:op)`
-  + flip the overlay; `enableWord` -> `bindWord` re-declare. `rehydrateWordsFromFacts` reads
-  wordStore's ableword facts (existence) + builds `_historyDisabled` from the per-branch disable facts.
+  - flip the overlay; `enableWord` -> `bindWord` re-declare. `rehydrateWordsFromFacts` reads
+    wordStore's ableword facts (existence) + builds `_historyDisabled` from the per-branch disable facts.
 - WP-5 — bedrock to wordStore (Gap B). Move `_assertMayChange` into `wordStore.bindWord`/`disableWord`
-  as a general I_AM-genesis-on-"0" guard; delete ableWordRegistry's `_genesisWords`/`_assertMayChange`.
+  as a general I-genesis-on-"0" guard; delete ableWordRegistry's `_genesisWords`/`_assertMayChange`.
 - WP-6 — audit assemble.js + the book view. Confirm/repoint its ableWordRegistry usage onto the
   unified read (listFoldedAblewords or getWord). Any other inspector too.
-- WP-7 — verification (the hot-path gate). Full boot. Then the bridge verifiers green: verify-cherub-*
-  (birth), verify-connect-*, verify-take-able-*, verify-grantable-cut, verify-credread/credreset-cut,
+- WP-7 — verification (the hot-path gate). Full boot. Then the bridge verifiers green: verify-cherub-_
+  (birth), verify-connect-_, verify-take-able-\*, verify-grantable-cut, verify-credread/credreset-cut,
   verify-setpointer/deletepointer-cut, verify-setworldsignal-cut, verify-setmodel-cut,
   verify-creatematter-cut, verify-bridge-live. Plus: auth able-walk (a granted able still authorizes),
-  a per-branch DISABLE test (a ableword off on branch X, on at "0"), and a bedrock test (a non-I_AM
-  disable of an I_AM genesis word on "0" is refused, but shadowing on a branch is allowed).
+  a per-branch DISABLE test (a ableword off on branch X, on at "0"), and a bedrock test (a non-I
+  disable of an I genesis word on "0" is refused, but shadowing on a branch is allowed).
 
 ## Risks
 
@@ -115,7 +117,7 @@ unification earns.
   null breaks birth/connect/auth. WP-7's bridge verifiers are the gate; run them after EVERY WP.
 - SYNC timing: resolveAbleWord must stay synchronous (no await) — the overlay read is in-memory only.
 - The bedrock move (WP-5) changes behavior for ALL words; verify ops/types can't be overridden on "0"
-  by a non-I_AM actor (a strict tightening — confirm nothing legitimately re-declares on "0").
+  by a non-I actor (a strict tightening — confirm nothing legitimately re-declares on "0").
 - registerAbleWord is PRE-GENESIS (buffer); the bindWord flush must wait for the writable chain
   (seedFold), exactly as declareOpsToFold already does.
 

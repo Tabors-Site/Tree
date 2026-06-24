@@ -39,7 +39,7 @@ import { hooks } from "../../hooks.js";
 import { getStoryConfigValue } from "../../storyConfig.js";
 import { invalidateSpace } from "./ancestorCache.js";
 import { resolveSpaceAccess } from "./spaces.js";
-import { I_AM } from "../being/seedBeings.js";
+import { I } from "../being/seedBeings.js";
 import { emitFact } from "../../past/fact/facts.js";
 
 /**
@@ -81,12 +81,27 @@ export async function isTreeAlive(treeId) {
  * @returns {Promise<{ total, spaceCount, qualitiesDensity, errorRate, raw }>}
  */
 export async function checkTreeHealth(treeId) {
-  const maxSpaces     = parseInt(getInternalConfigValue("maxTreeSpaces")        || "10000",      10);
-  const maxQualBytes  = parseInt(getInternalConfigValue("maxTreeQualityBytes") || "1073741824", 10);
-  const maxErrors     = parseInt(getInternalConfigValue("maxTreeErrorRate")     || "100",        10);
-  const spaceWeight   = parseFloat(getInternalConfigValue("circuitSpaceWeight")   || "0.4");
-  const densityWeight = parseFloat(getInternalConfigValue("circuitDensityWeight") || "0.3");
-  const errorWeight   = parseFloat(getInternalConfigValue("circuitErrorWeight")   || "0.3");
+  const maxSpaces = parseInt(
+    getInternalConfigValue("maxTreeSpaces") || "10000",
+    10,
+  );
+  const maxQualBytes = parseInt(
+    getInternalConfigValue("maxTreeQualityBytes") || "1073741824",
+    10,
+  );
+  const maxErrors = parseInt(
+    getInternalConfigValue("maxTreeErrorRate") || "100",
+    10,
+  );
+  const spaceWeight = parseFloat(
+    getInternalConfigValue("circuitSpaceWeight") || "0.4",
+  );
+  const densityWeight = parseFloat(
+    getInternalConfigValue("circuitDensityWeight") || "0.3",
+  );
+  const errorWeight = parseFloat(
+    getInternalConfigValue("circuitErrorWeight") || "0.3",
+  );
 
   // 1. Space count in this tree.
   const spaceCount = await Space.countDocuments({ owner: treeId });
@@ -106,7 +121,10 @@ export async function checkTreeHealth(treeId) {
     let totalSampleSize = 0;
     for (const s of sample) {
       try {
-        const quals = s.qualities instanceof Map ? Object.fromEntries(s.qualities) : (s.qualities || {});
+        const quals =
+          s.qualities instanceof Map
+            ? Object.fromEntries(s.qualities)
+            : s.qualities || {};
         totalSampleSize += Buffer.byteLength(JSON.stringify(quals), "utf8");
       } catch {
         totalSampleSize += 1024; // estimate 1KB on serialization failure
@@ -118,7 +136,10 @@ export async function checkTreeHealth(treeId) {
   // 3. Error rate. Fact reel failures on spaces in this tree.
   // Aggregation with $lookup so we don't load the descendant id list
   // into memory.
-  const checkInterval = parseInt(getInternalConfigValue("circuitCheckInterval") || "3600000", 10);
+  const checkInterval = parseInt(
+    getInternalConfigValue("circuitCheckInterval") || "3600000",
+    10,
+  );
   const since = new Date(Date.now() - checkInterval);
 
   let factErrors = 0;
@@ -131,7 +152,14 @@ export async function checkTreeHealth(treeId) {
           "params.error": { $exists: true },
         },
       },
-      { $lookup: { from: "spaces", localField: "of.id", foreignField: "_id", as: "_space" } },
+      {
+        $lookup: {
+          from: "spaces",
+          localField: "of.id",
+          foreignField: "_id",
+          as: "_space",
+        },
+      },
       { $unwind: "$_space" },
       { $match: { "_space.owner": treeId } },
       { $count: "total" },
@@ -143,16 +171,18 @@ export async function checkTreeHealth(treeId) {
 
   const totalErrors = factErrors;
 
-  const spaceScore   = maxSpaces    > 0 ? (spaceCount       / maxSpaces)    * spaceWeight   : 0;
-  const densityScore = maxQualBytes > 0 ? (qualitiesDensity  / maxQualBytes) * densityWeight : 0;
-  const errorScore   = maxErrors    > 0 ? (totalErrors      / maxErrors)    * errorWeight   : 0;
+  const spaceScore = maxSpaces > 0 ? (spaceCount / maxSpaces) * spaceWeight : 0;
+  const densityScore =
+    maxQualBytes > 0 ? (qualitiesDensity / maxQualBytes) * densityWeight : 0;
+  const errorScore =
+    maxErrors > 0 ? (totalErrors / maxErrors) * errorWeight : 0;
   const total = spaceScore + densityScore + errorScore;
 
   return {
     total,
-    spaceCount:      spaceScore,
+    spaceCount: spaceScore,
     qualitiesDensity: densityScore,
-    errorRate:       errorScore,
+    errorRate: errorScore,
     raw: {
       spaceCount,
       qualitiesDensityBytes: Math.round(qualitiesDensity),
@@ -189,7 +219,7 @@ export async function tripTree(treeId, reason, opts = {}) {
   const scores = opts.scores || {};
 
   const circuit = {
-    tripped:   true,
+    tripped: true,
     reason,
     timestamp: new Date().toISOString(),
     scores,
@@ -200,26 +230,41 @@ export async function tripTree(treeId, reason, opts = {}) {
   // substrate-internal health-monitor writes. The I-Am is the
   // structural actor for background substrate housekeeping.
   const { withIAmAct } = await import("../../sprout.js");
-  await withIAmAct(`Circuit: trip tree ${String(treeId).slice(0, 8)} on #${history}`, async (ctx) => {
-    await emitFact({
-      verb:    "do",
-      act:     "set-space",
-      through: I_AM,
-      of:      { kind: "space", id: String(treeId) },
-      params:  { field: "qualities.circuit", value: circuit, merge: false },
-      // Each history carries its own circuit state. A tree that goes
-      // haywire on history #4 stays alive on main; operators see the
-      // circuit on the history they're inhabiting. Cross-history
-      // contamination would defeat the whole point of branching.
-      history: history,
-    }, ctx);
-  });
+  await withIAmAct(
+    `Circuit: trip tree ${String(treeId).slice(0, 8)} on #${history}`,
+    async (ctx) => {
+      await emitFact(
+        {
+          verb: "do",
+          act: "set-space",
+          through: I,
+          of: { kind: "space", id: String(treeId) },
+          params: { field: "qualities.circuit", value: circuit, merge: false },
+          // Each history carries its own circuit state. A tree that goes
+          // haywire on history #4 stays alive on main; operators see the
+          // circuit on the history they're inhabiting. Cross-history
+          // contamination would defeat the whole point of branching.
+          history: history,
+        },
+        ctx,
+      );
+    },
+  );
   invalidateSpace(treeId, history);
 
   log.warn("Circuit", `Tree ${treeId} tripped on #${history}: ${reason}`);
 
-  hooks.run("onTreeTripped", { treeId, history, reason, scores, timestamp: circuit.timestamp })
-    .catch(err => log.debug("Circuit", `onTreeTripped hook error: ${err.message}`));
+  hooks
+    .run("onTreeTripped", {
+      treeId,
+      history,
+      reason,
+      scores,
+      timestamp: circuit.timestamp,
+    })
+    .catch((err) =>
+      log.debug("Circuit", `onTreeTripped hook error: ${err.message}`),
+    );
 }
 
 /**
@@ -229,9 +274,10 @@ export async function tripTree(treeId, reason, opts = {}) {
  * @param {string} beingId - the caller (required for authorization)
  */
 export async function reviveTree(treeId, beingId, history) {
-  if (!treeId)  throw new Error("treeId is required");
+  if (!treeId) throw new Error("treeId is required");
   if (!beingId) throw new Error("beingId is required");
-  if (typeof history !== "string" || !history) throw new Error("reviveTree: history is required");
+  if (typeof history !== "string" || !history)
+    throw new Error("reviveTree: history is required");
 
   const access = await resolveSpaceAccess(treeId, beingId, history);
   if (!access.ok || !access.isOwner) {
@@ -256,22 +302,37 @@ export async function reviveTree(treeId, beingId, history) {
   // the history they're inhabiting); cross-history revives would
   // accidentally clear other histories' circuits.
   const { withBeingAct } = await import("../../sprout.js");
-  await withBeingAct(String(beingId), `Circuit: revive tree ${String(treeId).slice(0, 8)} on #${history}`, history, async (ctx) => {
-    await emitFact({
-      verb:    "do",
-      act:     "set-space",
-      through: String(beingId),
-      of:      { kind: "space", id: String(treeId) },
-      params:  { field: "qualities.circuit", value: { tripped: false }, merge: false },
-      history: history,
-    }, ctx);
-  });
+  await withBeingAct(
+    String(beingId),
+    `Circuit: revive tree ${String(treeId).slice(0, 8)} on #${history}`,
+    history,
+    async (ctx) => {
+      await emitFact(
+        {
+          verb: "do",
+          act: "set-space",
+          through: String(beingId),
+          of: { kind: "space", id: String(treeId) },
+          params: {
+            field: "qualities.circuit",
+            value: { tripped: false },
+            merge: false,
+          },
+          history: history,
+        },
+        ctx,
+      );
+    },
+  );
   invalidateSpace(treeId, history);
 
   log.info("Circuit", `Tree ${treeId} revived by ${beingId} on #${history}`);
 
-  hooks.run("onTreeRevived", { treeId, timestamp: new Date().toISOString() })
-    .catch(err => log.debug("Circuit", `onTreeRevived hook error: ${err.message}`));
+  hooks
+    .run("onTreeRevived", { treeId, timestamp: new Date().toISOString() })
+    .catch((err) =>
+      log.debug("Circuit", `onTreeRevived hook error: ${err.message}`),
+    );
 }
 
 /**
@@ -281,24 +342,29 @@ export async function reviveTree(treeId, beingId, history) {
 export function startCircuitJob() {
   if (!isEnabled()) return null;
 
-  const interval = parseInt(getInternalConfigValue("circuitCheckInterval") || "3600000", 10);
+  const interval = parseInt(
+    getInternalConfigValue("circuitCheckInterval") || "3600000",
+    10,
+  );
 
   const timer = setInterval(async () => {
     try {
       const { default: Projection } = await import("../history/projection.js");
-      // Filter to non-system owners: owner set AND not the I_AM
+      // Filter to non-system owners: owner set AND not the I
       // sentinel string (system-owned spaces).
       const rows = await Projection.find({
-        history: "0", type: "space",
-        "state.owner": { $exists: true, $ne: I_AM, $nin: [null] },
+        history: "0",
+        type: "space",
+        "state.owner": { $exists: true, $ne: I, $nin: [null] },
         tombstoned: { $ne: true },
       }).lean();
       const anchors = rows.map((s) => ({ _id: s.id, ...(s.state || {}) }));
 
       for (const anchor of anchors) {
-        const meta = anchor.qualities instanceof Map
-          ? anchor.qualities.get("circuit")
-          : anchor.qualities?.circuit;
+        const meta =
+          anchor.qualities instanceof Map
+            ? anchor.qualities.get("circuit")
+            : anchor.qualities?.circuit;
         if (meta?.tripped) continue;
 
         const health = await checkTreeHealth(String(anchor._id));
@@ -309,10 +375,10 @@ export function startCircuitJob() {
             `density ${health.qualitiesDensity.toFixed(2)}, ` +
             `errors ${health.errorRate.toFixed(2)}`;
           await tripTree(String(anchor._id), reason, {
-            spaceCount:      health.spaceCount,
+            spaceCount: health.spaceCount,
             qualitiesDensity: health.qualitiesDensity,
-            errorRate:       health.errorRate,
-            total:           health.total,
+            errorRate: health.errorRate,
+            total: health.total,
           });
         }
       }
@@ -322,6 +388,9 @@ export function startCircuitJob() {
   }, interval);
 
   if (timer.unref) timer.unref();
-  log.verbose("Circuit", `Tree health checks every ${Math.round(interval / 60000)}m`);
+  log.verbose(
+    "Circuit",
+    `Tree health checks every ${Math.round(interval / 60000)}m`,
+  );
   return timer;
 }

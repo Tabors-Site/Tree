@@ -2,7 +2,7 @@
 // The FULL live diff for the cherub deletion (step 1): run ALL FIVE acts of
 // cherub.word through the evaluator LIVE against the real substrate, and assert
 // the world strand the cut must preserve (create-space, be:birth, set-space,
-// grant-able, set-being) under the resolved actor model (I_AM through Cherub,
+// grant-able, set-being) under the resolved actor model (I through Cherub,
 // the being the new Name's own, mother Cherub / father Arrival).
 //
 // Builds on verify-word-cherub.mjs (which proved form-being live). The new piece
@@ -127,13 +127,13 @@ try {
     } catch {}
   }
   await withRetry(() => ensureIAm());
-  // fold-only dispatch: the words declare themselves onto I_AM's reel BEFORE any do-op dispatches
+  // fold-only dispatch: the words declare themselves onto I's reel BEFORE any do-op dispatches
   // (ensureSpaceRoot's create-space). Mirrors genesis.js (ensureIAm -> the words -> the story).
   await withRetry(async () => {
     const wc = {
       actId: randomUUID(),
       actorAct: { history: "0", by: "i-am" },
-      identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" },
+      identity: { beingId: "i-am", name: "I", nameId: "i-am" },
       deltaF: [],
       foldedSeqs: new Map(),
       afterSeal: [],
@@ -161,7 +161,7 @@ try {
     const sc = {
       actId: randomUUID(),
       actorAct: { branch, history: branch, by: "i-am" },
-      identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" },
+      identity: { beingId: "i-am", name: "I", nameId: "i-am" },
       deltaF: [],
       foldedSeqs: new Map(),
       afterSeal: [],
@@ -182,8 +182,8 @@ try {
   // run cherub.word's full flow LIVE through the bridge's resolved IR
   const ir = resolveAbleWord("cherub", "birth");
   const flow = ir[0];
-  // The actor is I_AM (the story), acting THROUGH the Cherub being (bridge.md:
-  // "by I_AM, through Cherub"). name = "i-am" short-circuits authorize (the
+  // The actor is I (the story), acting THROUGH the Cherub being (bridge.md:
+  // "by I, through Cherub"). name = "i-am" short-circuits authorize (the
   // bootstrap axiom), beingId = cherub is the being. _inOp mirrors runAbleWord
   // (the whole flow is one op; do-acts dispatch as nested sub-ops).
   const moment = {

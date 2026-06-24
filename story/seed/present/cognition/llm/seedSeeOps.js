@@ -81,9 +81,11 @@ registerSeeOperation("place", {
     const address = `${getStoryDomain()}/${spaceId}`;
     try {
       return await seeVerb(address, {
-        identity: identity || (ctx?.being?._id
-          ? { beingId: String(ctx.being._id), name: ctx?.being?.name || null }
-          : null),
+        identity:
+          identity ||
+          (ctx?.being?._id
+            ? { beingId: String(ctx.being._id), name: ctx?.being?.name || null }
+            : null),
       });
     } catch (err) {
       log.warn("SeedSees", `see "place" (${address}) failed: ${err.message}`);
@@ -112,44 +114,48 @@ registerSeeOperation("arrival-view", {
     // never appears as a named child of itself.)
     const address = `${getStoryDomain()}/`;
     // The arrival-view op IS the seed's curated anonymous-safe surface.
-    // We read the full place descriptor under I_AM identity (which has
+    // We read the full place descriptor under I identity (which has
     // universal SEE) and then filter to cherub-only. The wire-level
     // authorize already admitted the CALLER for the arrival-view op
     // itself via the able-walk; this inner SEE is a server-internal
     // descriptor fetch, not a delegation of the caller's authority.
-    const { I_AM } = await import("../../../materials/being/seedBeings.js");
-    const iAmIdentity = { beingId: I_AM, name: "I-Am" };
+    const { I } = await import("../../../materials/being/seedBeings.js");
+    const iAmIdentity = { beingId: I, name: "I-Am" };
     try {
       const full = await seeVerb(address, { identity: iAmIdentity });
       if (!full) return null;
 
       // Filter beings → cherub only. Rebuild cherub's actions[] for
       // the ANONYMOUS perspective: arrival sees register + login. The
-      // descriptor's enrichBeings ran under I_AM and filtered to only
-      // release (because I_AM looks "authenticated" to its check); we
+      // descriptor's enrichBeings ran under I and filtered to only
+      // release (because I looks "authenticated" to its check); we
       // override here so the public face surfaces the right actions.
       const { BE_OPS } = await import("../../../ibp/beOps.js");
-      const beings = (Array.isArray(full.beings)
-        ? full.beings.filter((b) => b?.being === "cherub" || b?.name === "cherub")
-        : []
+      const beings = (
+        Array.isArray(full.beings)
+          ? full.beings.filter(
+              (b) => b?.being === "cherub" || b?.name === "cherub",
+            )
+          : []
       ).map((cherub) => {
         const actions = [];
         if (BE_OPS.birth) {
           actions.push({
-            verb:        "be",
-            action:      "birth",
-            label:       BE_OPS.birth.label || "Register",
+            verb: "be",
+            action: "birth",
+            label: BE_OPS.birth.label || "Register",
             description: BE_OPS.birth.description || "Create a new account",
-            args:        BE_OPS.birth.args || {},
+            args: BE_OPS.birth.args || {},
           });
         }
         if (BE_OPS.connect) {
           actions.push({
-            verb:        "be",
-            action:      "connect",
-            label:       BE_OPS.connect.label || "Log in",
-            description: BE_OPS.connect.description || "Sign in to your account",
-            args:        BE_OPS.connect.args || {},
+            verb: "be",
+            action: "connect",
+            label: BE_OPS.connect.label || "Log in",
+            description:
+              BE_OPS.connect.description || "Sign in to your account",
+            args: BE_OPS.connect.args || {},
           });
         }
         return { ...cherub, actions };
@@ -165,40 +171,52 @@ registerSeeOperation("arrival-view", {
       let myBeings = [];
       if (identity?.nameId) {
         try {
-          const { buildNameDescriptor } = await import("../../../ibp/descriptor.js");
+          const { buildNameDescriptor } =
+            await import("../../../ibp/descriptor.js");
           const story = getStoryDomain();
           const nameDesc = await buildNameDescriptor(identity.nameId);
           myBeings = (nameDesc?.beings || []).map((b) => ({
-            being:      b.name,
-            name:       b.name,
-            beingId:    b.beingId,
+            being: b.name,
+            name: b.name,
+            beingId: b.beingId,
             homeHistory: b.homeHistory || null,
-            mine:       true,
-            actions:    (BE_OPS.connect && b.name) ? [{
-              verb:        "be",
-              action:      "connect",
-              label:       `Use ${b.name}`,
-              description: "Drive a being you own (no password — your name is signed in)",
-              address:     `${story}/@${b.name}`,
-            }] : [],
+            mine: true,
+            actions:
+              BE_OPS.connect && b.name
+                ? [
+                    {
+                      verb: "be",
+                      action: "connect",
+                      label: `Use ${b.name}`,
+                      description:
+                        "Drive a being you own (no password — your name is signed in)",
+                      address: `${story}/@${b.name}`,
+                    },
+                  ]
+                : [],
           }));
         } catch (err) {
-          log.warn("SeedSees", `arrival-view name roster failed: ${err.message}`);
+          log.warn(
+            "SeedSees",
+            `arrival-view name roster failed: ${err.message}`,
+          );
         }
       }
 
       return {
-        kind:    full.kind || "place",
+        kind: full.kind || "place",
         address: full.address,
-        size:    full.size  || null,
-        coord:   full.coord || null,
-        space: full.space ? {
-          name:  full.space.name,
-          size:  full.space.size  || null,
-          coord: full.space.coord || null,
-        } : null,
-        beings:   [...beings, ...myBeings],
-        matter:   [],
+        size: full.size || null,
+        coord: full.coord || null,
+        space: full.space
+          ? {
+              name: full.space.name,
+              size: full.space.size || null,
+              coord: full.space.coord || null,
+            }
+          : null,
+        beings: [...beings, ...myBeings],
+        matter: [],
         children: [],
         // qualities intentionally dropped — anonymous callers don't see
         // operator-side state. The arrival able's reach is the public

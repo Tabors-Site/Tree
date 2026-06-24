@@ -10,33 +10,33 @@
 // handler at all, only a `can[]` grant-set pointing at words that already answer; words stack.
 //
 // Generalizes ableWordRegistry's (able:op) coin fold to any word + a full descriptor:
-// same act names, same I_AM-is-the-seed-vocabulary actor, same "disable is a new fact" rule.
+// same act names, same I-is-the-seed-vocabulary actor, same "disable is a new fact" rule.
 // (9.md §2/§6; the words-stack doctrine; the wakes pattern of an in-memory projection over facts.)
 
 const COIN = "coin";
 const RETIRE = "retire";
 
-// Every word-fact needs an actor (the being whose authority declares it). I_AM declares the seed
+// Every word-fact needs an actor (the being whose authority declares it). I declares the seed
 // vocabulary; an extension installer or a being in world declares its own. Mirrors ableWordRegistry.
 async function _actor(actorBeingId) {
   if (actorBeingId) return String(actorBeingId);
-  const { I_AM } = await import("../../materials/being/seedBeings.js");
-  return String(I_AM); // the origin being declares the seed vocabulary
+  const { I } = await import("../../materials/being/seedBeings.js");
+  return String(I); // the origin being declares the seed vocabulary
 }
 
 let _iAmId = null;
 async function _iAm() {
   if (_iAmId == null) {
-    const { I_AM } = await import("../../materials/being/seedBeings.js");
-    _iAmId = String(I_AM);
+    const { I } = await import("../../materials/being/seedBeings.js");
+    _iAmId = String(I);
   }
   return _iAmId;
 }
 
-// BEDROCK (project_iam_genesis_immutable): is `name`'s current heaven ("0") declaration I_AM's? Then
-// it is genesis bedrock — immutable on "0" by anyone but I_AM (per-history shadowing is still allowed).
-// Covers EVERY word kind (op/type/reducer/concept/ableword), since all are I_AM's words on "0". Reads
-// the latest "0" coin fact's author. Only consulted on a non-I_AM write to "0" (rare).
+// BEDROCK (project_iam_genesis_immutable): is `name`'s current heaven ("0") declaration I's? Then
+// it is genesis bedrock — immutable on "0" by anyone but I (per-history shadowing is still allowed).
+// Covers EVERY word kind (op/type/reducer/concept/ableword), since all are I's words on "0". Reads
+// the latest "0" coin fact's author. Only consulted on a non-I write to "0" (rare).
 async function _isIAmBedrock(name) {
   const { default: Fact } = await import("../../past/fact/fact.js");
   const decl = await Fact.find({
@@ -52,7 +52,7 @@ async function _isIAmBedrock(name) {
 }
 
 // Lay facts THROUGH a proper act (assign opens it, the stamper seals it), never a bare emit.
-// Ride the caller's moment if given, else open I_AM's own act. Same shape as ableWordRegistry.
+// Ride the caller's moment if given, else open I's own act. Same shape as ableWordRegistry.
 async function _inAct(moment, label, fn) {
   if (moment) return fn(moment);
   const { withIAmAct } = await import("../../sprout.js");
@@ -98,15 +98,15 @@ export async function bindWord(
         return { word: name, history: String(history), skipped: true };
     }
   }
-  // BEDROCK guard — AFTER the dedup, so I_AM's idempotent genesis re-declares skip above and only a
-  // real override by ANOTHER reaches here. A non-I_AM cannot re-declare an I_AM "0" word on "0".
+  // BEDROCK guard — AFTER the dedup, so I's idempotent genesis re-declares skip above and only a
+  // real override by ANOTHER reaches here. A non-I cannot re-declare an I "0" word on "0".
   if (
     String(history) === "0" &&
     String(actor) !== (await _iAm()) &&
     (await _isIAmBedrock(name))
   ) {
     throw new Error(
-      `the I_AM genesis word "${name}" is bedrock on heaven and cannot be re-declared by another — only I_AM may, or shadow it on your own history`,
+      `the I genesis word "${name}" is bedrock on heaven and cannot be re-declared by another — only I may, or shadow it on your own history`,
     );
   }
   await _inAct(moment, `I coin the word ${name}`, (ctx) =>
@@ -135,14 +135,14 @@ export async function disableWord(
 ) {
   const { emitFact } = await import("../../past/fact/facts.js");
   const actor = await _actor(actorBeingId);
-  // BEDROCK: same guard as bindWord — a non-I_AM cannot disable an I_AM "0" word (shadow on a history).
+  // BEDROCK: same guard as bindWord — a non-I cannot disable an I "0" word (shadow on a history).
   if (
     String(history) === "0" &&
     String(actor) !== (await _iAm()) &&
     (await _isIAmBedrock(name))
   ) {
     throw new Error(
-      `the I_AM genesis word "${name}" is bedrock on heaven and cannot be disabled by another — only I_AM may, or shadow it on your own history`,
+      `the I genesis word "${name}" is bedrock on heaven and cannot be disabled by another — only I may, or shadow it on your own history`,
     );
   }
   await _inAct(moment, `I retire the word ${name}`, (ctx) =>
@@ -437,6 +437,8 @@ export async function declareTypesToFold({
           t.executable && typeof t.executable === "object"
             ? { ...t.executable }
             : null, // 21.md P5: the run-op + effect-class ride the fold
+        // FIELDS — the type's attribute schema ("a X has Y"), folded from `has` laws (all-rules-fold).
+        fields: Array.isArray(t.fields) ? [...t.fields] : [],
       },
       { moment, history, skipIfUnchanged: true },
     );
@@ -466,6 +468,7 @@ export function resolveTypeFromFold(name) {
       w.executable && typeof w.executable === "object"
         ? { ...w.executable }
         : null, // 21.md P5
+    fields: Array.isArray(w.fields) ? [...w.fields] : [],
     ownerExtension: w.ownerExtension || "seed",
   };
 }
@@ -477,6 +480,277 @@ export function listFoldedTypes() {
     if (b?.kind === "type") out.push(resolveTypeFromFold(name));
   }
   return out;
+}
+
+// ── the DECLARATION half of "a X has Y" (matter-type ← fold convergence; all-rules-fold) ──
+//
+// A `has` law ("A meal has a calorie.") declares a FIELD on a matter TYPE: the schema is a fact, not a
+// JS registry edit. declareTypeFieldToFold APPENDS the field to the type word's `fields` array (the
+// FOLD of every `has` fact for that subject is the field-set). If the type word exists, re-bind it with
+// the field appended (CAS no-op on re-declare via skipIfUnchanged). If it does NOT yet exist,
+// AUTO-CREATE a minimal type word so "a X has Y" alone introduces the type.
+//
+// GUARDS (the type-name shape + the genesis-immutable rule):
+//   * the subject must match a matter-type NAME (SEED_NAME_RE / EXT_NAME_RE from types.js) — an invalid
+//     name is a log.warn + skip, NEVER a throw (a bad `has` can't abort the whole word mid-fold).
+//   * the MAX_REGISTERED ceiling is honored (a runaway word can't flood the type registry).
+//   * AUTO-CREATE only on heaven history "0" (the seed vocabulary lives there); on a branch, a `has` on
+//     an unknown type is a no-op skip (a branch can append a field to an existing type, not mint one).
+//   * a `has` only APPENDS to `fields`; it NEVER rewrites contentKinds/ops/claims (I-genesis-immutable
+//     — the type's intrinsic shape is bedrock; a field is additive).
+const TYPE_SEED_NAME_RE = /^[a-z][a-z0-9-]*$/;
+const TYPE_EXT_NAME_RE = /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/;
+const TYPE_MAX_REGISTERED = 500;
+
+export async function declareTypeFieldToFold(
+  subject,
+  field,
+  { moment = null, history = "0" } = {},
+) {
+  const log = (await import("../../seedStory/log.js")).default;
+  const name = String(subject || "");
+  // NAME-SHAPE guard: only a valid matter-type name may carry a field. Invalid → warn + skip (the bad
+  // `has` is inert; the rest of the word keeps folding). NEVER throw mid-fold.
+  if (!TYPE_SEED_NAME_RE.test(name) && !TYPE_EXT_NAME_RE.test(name)) {
+    log.warn(
+      "WordStore",
+      `declareTypeFieldToFold("${name}"): invalid type name (a "has" subject must be a matter-type name). Skipped.`,
+    );
+    return { skipped: true, reason: "invalid-name" };
+  }
+  const f = {
+    name: String(field?.name ?? ""),
+    optional: !!field?.optional,
+    ...(field?.gloss != null
+      ? { gloss: String(field.gloss) }
+      : { gloss: null }),
+  };
+  if (!f.name) {
+    log.warn(
+      "WordStore",
+      `declareTypeFieldToFold("${name}"): a field needs a name. Skipped.`,
+    );
+    return { skipped: true, reason: "no-field-name" };
+  }
+  // Read the subject's CURRENT type binding from the FOLD (all-rules-fold — never the Map).
+  const existing = resolveTypeFromFold(name);
+  if (existing) {
+    // APPEND-ONLY: keep the type's intrinsic shape (contentKinds/ops/claims/…) verbatim; add the field.
+    // skipIfUnchanged makes a re-declare of the same field a CAS no-op (the fold already carries it).
+    const fields = [...(Array.isArray(existing.fields) ? existing.fields : [])];
+    if (!fields.some((x) => x && x.name === f.name)) fields.push(f);
+    return bindWord(
+      name,
+      {
+        ownerExtension: existing.ownerExtension || "seed",
+        kind: "type",
+        description: existing.description ?? null,
+        contentKinds: Array.isArray(existing.contentKinds)
+          ? [...existing.contentKinds]
+          : ["text", "none"],
+        mimeTypes: Array.isArray(existing.mimeTypes)
+          ? [...existing.mimeTypes]
+          : null,
+        ops: Array.isArray(existing.ops) ? [...existing.ops] : [],
+        render:
+          existing.render && typeof existing.render === "object"
+            ? { ...existing.render }
+            : null,
+        claims:
+          existing.claims && typeof existing.claims === "object"
+            ? JSON.parse(JSON.stringify(existing.claims))
+            : null,
+        executable:
+          existing.executable && typeof existing.executable === "object"
+            ? { ...existing.executable }
+            : null,
+        fields,
+      },
+      { moment, history, skipIfUnchanged: true },
+    );
+  }
+  // AUTO-CREATE a minimal type word — but ONLY on heaven "0" (the seed vocabulary). On a branch, a `has`
+  // on an unknown type is a no-op skip (you append to an existing type, you don't mint one off heaven).
+  if (String(history) !== "0") {
+    log.warn(
+      "WordStore",
+      `declareTypeFieldToFold("${name}"): no such type on history "${history}" and auto-create is heaven-only. Skipped.`,
+    );
+    return { skipped: true, reason: "no-type-off-heaven" };
+  }
+  // MAX_REGISTERED ceiling: count the folded type words so a runaway word can't flood the registry.
+  if (listFoldedTypes().length >= TYPE_MAX_REGISTERED) {
+    log.error(
+      "WordStore",
+      `declareTypeFieldToFold("${name}"): type registry full (${TYPE_MAX_REGISTERED}). Rejected.`,
+    );
+    return { skipped: true, reason: "registry-full" };
+  }
+  return bindWord(
+    name,
+    {
+      ownerExtension: "seed",
+      kind: "type",
+      description: null,
+      contentKinds: ["text", "none"],
+      mimeTypes: null,
+      ops: [],
+      render: null,
+      claims: null,
+      executable: null,
+      fields: [f],
+    },
+    { moment, history, skipIfUnchanged: true },
+  );
+}
+
+// declareTypeListToFold — the `accepts`/`carries`/`claims` siblings of `has` (the registry vocabulary).
+// "A meal accepts text." → APPEND to contentKinds; "carries image/png" → mimeTypes; "claims .json" →
+// claims.extensions/mimeTypes/schemes (the classification advertisement). Each appends to an EXISTING
+// type word verbatim-elsewhere (append-only, I-genesis-immutable), auto-creating a minimal type on
+// heaven "0" exactly as declareTypeFieldToFold does. `which` ∈ {contentKinds, mimeTypes, claims}.
+async function declareTypeListToFold(
+  subject,
+  items,
+  which,
+  { moment = null, history = "0" } = {},
+) {
+  const log = (await import("../../seedStory/log.js")).default;
+  const name = String(subject || "");
+  if (!TYPE_SEED_NAME_RE.test(name) && !TYPE_EXT_NAME_RE.test(name)) {
+    log.warn(
+      "WordStore",
+      `declareTypeListToFold("${name}", ${which}): invalid type name. Skipped.`,
+    );
+    return { skipped: true, reason: "invalid-name" };
+  }
+  const list = (Array.isArray(items) ? items : [])
+    .map(String)
+    .filter((s) => s.length);
+  if (!list.length) return { skipped: true, reason: "no-items" };
+  const existing = resolveTypeFromFold(name);
+  if (!existing) {
+    if (String(history) !== "0") {
+      log.warn(
+        "WordStore",
+        `declareTypeListToFold("${name}"): no such type off heaven; auto-create is heaven-only. Skipped.`,
+      );
+      return { skipped: true, reason: "no-type-off-heaven" };
+    }
+    if (listFoldedTypes().length >= TYPE_MAX_REGISTERED) {
+      log.error(
+        "WordStore",
+        `declareTypeListToFold("${name}"): type registry full. Rejected.`,
+      );
+      return { skipped: true, reason: "registry-full" };
+    }
+  }
+  const base = existing || {
+    ownerExtension: "seed",
+    description: null,
+    contentKinds: ["text", "none"],
+    mimeTypes: null,
+    ops: [],
+    render: null,
+    claims: null,
+    executable: null,
+    fields: [],
+  };
+  // append-only union into the chosen list (contentKinds/mimeTypes) or the claims block.
+  const out = {
+    ownerExtension: base.ownerExtension || "seed",
+    kind: "type",
+    description: base.description ?? null,
+    contentKinds: Array.isArray(base.contentKinds)
+      ? [...base.contentKinds]
+      : ["text", "none"],
+    mimeTypes: Array.isArray(base.mimeTypes) ? [...base.mimeTypes] : null,
+    ops: Array.isArray(base.ops) ? [...base.ops] : [],
+    render:
+      base.render && typeof base.render === "object"
+        ? { ...base.render }
+        : null,
+    claims:
+      base.claims && typeof base.claims === "object"
+        ? JSON.parse(JSON.stringify(base.claims))
+        : null,
+    executable:
+      base.executable && typeof base.executable === "object"
+        ? { ...base.executable }
+        : null,
+    fields: Array.isArray(base.fields) ? [...base.fields] : [],
+  };
+  const union = (cur, add) => {
+    const seen = new Set(cur || []);
+    for (const x of add)
+      if (!seen.has(x)) {
+        seen.add(x);
+      }
+    return [...seen];
+  };
+  if (which === "contentKinds")
+    out.contentKinds = union(out.contentKinds, list);
+  else if (which === "mimeTypes")
+    out.mimeTypes = union(out.mimeTypes || [], list);
+  else if (which === "claims") {
+    // a claim item routes by SHAPE: ".ext" → extensions, "a/b" mime → mimeTypes, a bare scheme word →
+    // schemes. The classification advertisement (types.js freezeClaims reads these on a getMatterType).
+    const c =
+      out.claims && typeof out.claims === "object" ? { ...out.claims } : {};
+    const exts = [],
+      mimes = [],
+      schemes = [];
+    for (const it of list) {
+      if (it.startsWith(".")) exts.push(it.toLowerCase());
+      else if (it.includes("/")) mimes.push(it.toLowerCase());
+      else schemes.push(it.toLowerCase());
+    }
+    if (exts.length) c.extensions = union(c.extensions, exts);
+    if (mimes.length) c.mimeTypes = union(c.mimeTypes, mimes);
+    if (schemes.length) c.schemes = union(c.schemes, schemes);
+    out.claims = c;
+  }
+  return bindWord(name, out, { moment, history, skipIfUnchanged: true });
+}
+
+// applyTypeSchemaLaw — the apply-pass dispatcher (runWordToStore calls this per type-schema law after
+// the word runs). Routes `has` → a field, `accepts` → contentKinds, `carries` → mimeTypes, `claims` →
+// the claims block. Reads the parser's real node fields ({subject, property, optional, gloss} for has;
+// {subject, items} for the list siblings). A non-schema law is ignored (returns null).
+export async function applyTypeSchemaLaw(
+  law,
+  { moment = null, history = "0" } = {},
+) {
+  if (!law || typeof law !== "object") return null;
+  switch (law.kind) {
+    case "has":
+      return declareTypeFieldToFold(
+        law.subject,
+        {
+          name: law.property,
+          optional: !!law.optional,
+          gloss: law.gloss ?? null,
+        },
+        { moment, history },
+      );
+    case "accepts":
+      return declareTypeListToFold(law.subject, law.items, "contentKinds", {
+        moment,
+        history,
+      });
+    case "carries":
+      return declareTypeListToFold(law.subject, law.items, "mimeTypes", {
+        moment,
+        history,
+      });
+    case "claims":
+      return declareTypeListToFold(law.subject, law.items, "claims", {
+        moment,
+        history,
+      });
+    default:
+      return null;
+  }
 }
 
 // ── able-words as words (the ableWordRegistry unification; ABLES-UNIFICATION.md) ──
@@ -646,7 +920,7 @@ export function resolveNameOpFromFold(opName) {
 // serialized). Verb-namespaced "be:<op>" so be:connect/be:release never collide with name:connect/
 // name:release in the shared projection. Unlike NAME, a BE op also carries `bootstrap` (birth/connect
 // skip assertVerbCaller — the caller has no identity yet); it's a serializable boolean, so it rides
-// the binding. BE_OPS stays as the load-time registration buffer this reads. I_AM's own genesis
+// the binding. BE_OPS stays as the load-time registration buffer this reads. I's own genesis
 // be:birth (sprout.js) is a raw emitFact, never beVerb, so it predates + grounds this fold untouched.
 // Per-op result-curation for the be:<op> facts: a fail-CLOSED ALLOWLIST of what the stamped fact's
 // `result` may record, restoring the old writeBeFact `safeResult`. The keystone (emitWordFact)

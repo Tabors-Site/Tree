@@ -6,7 +6,7 @@
 // "wake me when this happens at that position." When the watched
 // event arrives, the being's prior request is what fires — the wake
 // is a SELF-WAKE, not an external command. The SUMMON's asker and
-// receiver are the same being. I_AM is the routing machinery, not
+// receiver are the same being. I is the routing machinery, not
 // the holder of the declaration; the being holds it (registry
 // keyed by _byBeing).
 //
@@ -143,7 +143,7 @@ export async function subscribe(beingId, sub, opts = {}) {
   if (typeof opts.history !== "string" || !opts.history.length) {
     throw new Error(
       `subscribe requires opts.history (got ${JSON.stringify(opts.history)}). ` +
-      `No silent default to main — pass "0" explicitly for genesis / seed paths.`,
+        `No silent default to main — pass "0" explicitly for genesis / seed paths.`,
     );
   }
 
@@ -170,21 +170,24 @@ export async function subscribe(beingId, sub, opts = {}) {
 
   // Stamp the fact. Per-reel append-lock serializes against any
   // concurrent unsubscribe of the same id.
-  await emitFact({
-    through: String(opts.actorBeingId || beingIdStr),
-    history: opts.history,
-    verb:    "do",
-    act:     "subscription-registered",
-    of:      { kind: "being", id: beingIdStr },
-    params:  {
-      subscriptionId: id,
-      event:          entry.event,
-      scope:          entry.scope,
-      filter:         entry.filter,
-      priority:       entry.priority,
-      coalesceMs:     entry.coalesceMs,
+  await emitFact(
+    {
+      through: String(opts.actorBeingId || beingIdStr),
+      history: opts.history,
+      verb: "do",
+      act: "subscription-registered",
+      of: { kind: "being", id: beingIdStr },
+      params: {
+        subscriptionId: id,
+        event: entry.event,
+        scope: entry.scope,
+        filter: entry.filter,
+        priority: entry.priority,
+        coalesceMs: entry.coalesceMs,
+      },
     },
-  }, opts.moment || null);
+    opts.moment || null,
+  );
 
   _addRegistryEntry(entry);
 
@@ -218,14 +221,17 @@ export async function unsubscribe(subscriptionId, opts = {}) {
   const entry = _index.get(subscriptionId);
   if (!entry) return false;
 
-  await emitFact({
-    through: String(opts.actorBeingId || entry.beingId),
-    history: opts.history,
-    verb:    "do",
-    act:     "subscription-cancelled",
-    of:      { kind: "being", id: entry.beingId },
-    params:  { subscriptionId },
-  }, opts.moment || null);
+  await emitFact(
+    {
+      through: String(opts.actorBeingId || entry.beingId),
+      history: opts.history,
+      verb: "do",
+      act: "subscription-cancelled",
+      of: { kind: "being", id: entry.beingId },
+      params: { subscriptionId },
+    },
+    opts.moment || null,
+  );
 
   _dropRegistryEntry(subscriptionId);
   return true;
@@ -294,7 +300,9 @@ function _dropRegistryEntry(id) {
   // there's no inbox to deliver them to once the subscription is gone.
   const pending = _pendingCoalesce.get(id);
   if (pending) {
-    try { clearTimeout(pending.timer); } catch {}
+    try {
+      clearTimeout(pending.timer);
+    } catch {}
     _pendingCoalesce.delete(id);
   }
   return true;
@@ -337,7 +345,10 @@ export async function rehydrateFromFacts() {
     Fact = (await import("../../past/fact/fact.js")).default;
     History = (await import("../../materials/history/history.js")).default;
   } catch (err) {
-    log.warn("Subscriptions", `rehydrate skipped: model load failed (${err.message})`);
+    log.warn(
+      "Subscriptions",
+      `rehydrate skipped: model load failed (${err.message})`,
+    );
     return 0;
   }
 
@@ -345,12 +356,18 @@ export async function rehydrateFromFacts() {
   const MAIN = "0";
   const histories = [MAIN];
   try {
-    const historyRows = await History.find({ deleted: { $ne: true } }, "_id").lean();
+    const historyRows = await History.find(
+      { deleted: { $ne: true } },
+      "_id",
+    ).lean();
     for (const row of historyRows) {
       if (row._id !== MAIN) histories.push(row._id);
     }
   } catch (err) {
-    log.warn("Subscriptions", `rehydrate history enumeration failed: ${err.message}`);
+    log.warn(
+      "Subscriptions",
+      `rehydrate history enumeration failed: ${err.message}`,
+    );
   }
 
   // One query pulls every subscription fact across every history. Ordered by (history, seq) — within
@@ -359,13 +376,15 @@ export async function rehydrateFromFacts() {
   const subFacts = await Fact.find({
     verb: "do",
     action: { $in: ["subscription-registered", "subscription-cancelled"] },
-  }).sort({ history: 1, seq: 1 }).lean();
+  })
+    .sort({ history: 1, seq: 1 })
+    .lean();
 
   // Lazy-load lineage walker only when we actually have facts.
   let isInLineage = null;
   if (subFacts.length > 0) {
-    isInLineage = (await import("./wakeSchedule.js")).__isInHistoryLineageForTests
-      || null;
+    isInLineage =
+      (await import("./wakeSchedule.js")).__isInHistoryLineageForTests || null;
   }
 
   let restored = 0;
@@ -375,7 +394,7 @@ export async function rehydrateFromFacts() {
       // Subscription facts target the being's own reel; we need the
       // history-lineage filter same as wakes use. Inline-check via
       // Fact.history matching the target history or any ancestor.
-      if (!await _factInHistoryLineage(fact, history, History)) continue;
+      if (!(await _factInHistoryLineage(fact, history, History))) continue;
       const id = fact.params?.subscriptionId;
       if (!id) continue;
       if (fact.action === "subscription-registered") {
@@ -426,14 +445,16 @@ async function _factInHistoryLineage(fact, viewerHistory, History) {
 function _entryFromFact(fact) {
   const p = fact.params || {};
   return {
-    id:         p.subscriptionId,
-    beingId:    String(fact.target?.id || fact.beingId),
-    event:      p.event,
-    scope:      p.scope,
-    filter:     p.filter || null,
-    priority:   Number.isFinite(p.priority) ? Number(p.priority) : 4,
-    coalesceMs: Number.isFinite(p.coalesceMs) && p.coalesceMs > 0
-                  ? Number(p.coalesceMs) : 0,
+    id: p.subscriptionId,
+    beingId: String(fact.target?.id || fact.beingId),
+    event: p.event,
+    scope: p.scope,
+    filter: p.filter || null,
+    priority: Number.isFinite(p.priority) ? Number(p.priority) : 4,
+    coalesceMs:
+      Number.isFinite(p.coalesceMs) && p.coalesceMs > 0
+        ? Number(p.coalesceMs)
+        : 0,
   };
 }
 
@@ -550,7 +571,7 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
   // A subscription is the being's standing assignment of attention:
   // "wake me when this happens." When the watched event arrives, the
   // being's prior request is what fires. The wake is therefore a
-  // SELF-WAKE — the asker and the receiver are the same being. I_AM
+  // SELF-WAKE — the asker and the receiver are the same being. I
   // is the routing machinery, not the holder of the declaration.
   //
   // The original DO actor (whoever wrote the matter / fired the
@@ -599,7 +620,9 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
         );
         continue;
       }
-      const subSpaceForStance = payload?.spaceId ? String(payload.spaceId) : targetSpace;
+      const subSpaceForStance = payload?.spaceId
+        ? String(payload.spaceId)
+        : targetSpace;
       const senderStance = `${storyDomain}/${subSpaceForStance}@${subIdentity.name}`;
 
       const eventContent = _renderTriggerContent(eventName, payload);
@@ -640,7 +663,7 @@ export async function emitToSubscribers(eventName, payload, options = {}) {
   return emitted;
 }
 
-// Single-SUMMON delivery. The verb runs auth (the I_AM passes
+// Single-SUMMON delivery. The verb runs auth (the I passes
 // universally) and dispatches through the standard inbox + able
 // path. There is no direct appendToInbox + wake bypass.
 //
@@ -732,7 +755,7 @@ async function _flushCoalesce(sub) {
     // mid-window delete drops the wake instead of summoning a
     // phantom.
     const identity = pending.identity
-      ? (await _loadSubscriberIdentity(sub.beingId))
+      ? await _loadSubscriberIdentity(sub.beingId)
       : null;
     if (!identity) return;
     await _emitOne({
@@ -760,7 +783,7 @@ async function _flushCoalesce(sub) {
 /**
  * Load { beingId, name } for the subscribing being. Self-wakes need
  * this to mint the SUMMON as the being itself rather than as the
- * I_AM dispatcher. Returns null when the being is gone (deleted
+ * I dispatcher. Returns null when the being is gone (deleted
  * mid-flight or between subscribe and fire); callers drop the wake
  * silently in that case.
  */

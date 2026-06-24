@@ -72,5 +72,15 @@ export const globalAble = Object.freeze({
     { verb: "call", word: "@cherub", description: "address the gate" },
     // Anyone can release their own session.
     { verb: "be", word: "release", description: "log out / release identity" },
+    // RECALL views — the consciousness level (recall.word: "a view is a granted word"). Every
+    // authenticated being carrying `global` recalls the PUBLIC story: the world, a being's lineage,
+    // one moment's cross-section, a place's history, a being's thread. Recalling YOUR OWN thread
+    // needs no grant (it is always yours). The recall gate (evalRecall/foldSelf) refuses these wider
+    // folds to a being WITHOUT the grant (anonymous arrival) — the aperture is earned, per 623/12.
+    { verb: "recall", word: "world",   description: "recall the whole story" },
+    { verb: "recall", word: "lineage", description: "recall a being's family story" },
+    { verb: "recall", word: "moment",  description: "recall one act's cross-section" },
+    { verb: "recall", word: "place",   description: "recall a place's history" },
+    { verb: "recall", word: "being",   description: "recall a foreign being's thread (your own is always yours)" },
   ],
 });

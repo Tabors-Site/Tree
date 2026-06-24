@@ -29,7 +29,7 @@ try {
     ? ok(`every Map type folds: ${folded.length} folded >= ${mapTypes.length} in the Map`)
     : bad(`fold count`, { folded: folded.length, map: mapTypes.length });
   // The parity that makes a fold-first getMatterType safe: field-by-field value-identity.
-  const FIELDS = ["name", "description", "contentKinds", "mimeTypes", "ops", "render", "claims", "executable", "ownerExtension"];
+  const FIELDS = ["name", "description", "contentKinds", "mimeTypes", "ops", "render", "claims", "executable", "fields", "ownerExtension"];
   const mismatches = [];
   for (const m of mapTypes) {
     const f = resolveTypeFromFold(m.name);

@@ -36,7 +36,7 @@
 // below H. The `reach` list adjusts the base in order; later entries
 // win on conflict.
 
-import { I_AM } from "../materials/being/seedBeings.js";
+import { I } from "../materials/being/seedBeings.js";
 import { loadOrFold } from "../materials/projections.js";
 import { getSpaceRootId } from "../sprout.js";
 import { getAncestorChain } from "../materials/space/ancestorCache.js";
@@ -82,7 +82,7 @@ export async function authorizeViaAbles(args) {
   const actorHistory = args.actorHistory || history;
 
   // Bootstrap axiom.
-  if (identity?.beingId === I_AM || identity?.name === I_AM) {
+  if (identity?.beingId === I || identity?.name === I) {
     return { ok: true, able: "i-am", anchor: null };
   }
 
@@ -394,9 +394,7 @@ export function permitsReceiverSummon(able, intent) {
     return { ok: false, reason: "receiver able missing" };
   }
   const receiverEntries = Array.isArray(able.canCall)
-    ? able.canCall.filter(
-        (e) => typeof e === "object" && e?.as === "receiver",
-      )
+    ? able.canCall.filter((e) => typeof e === "object" && e?.as === "receiver")
     : [];
   if (receiverEntries.length === 0) {
     // No declared receiver entries → able accepts anything. Current

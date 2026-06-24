@@ -82,13 +82,13 @@ function getBeingPositionRecord(beingId) {
 function persistBeingPosition(beingId, spaceId, moment = null) {
   if (!beingId) return;
   const spec = {
-    verb:    "be",
-    act:     "occupy",
+    verb: "be",
+    act: "occupy",
     through: String(beingId),
-    of:      { kind: "being", id: String(beingId) },
-    params:  { toPosition: spaceId || null },
-    actId:   moment?.actId || null,
-    history:  moment?.actorAct?.history || "0",
+    of: { kind: "being", id: String(beingId) },
+    params: { toPosition: spaceId || null },
+    actId: moment?.actId || null,
+    history: moment?.actorAct?.history || "0",
   };
   // Inside a moment: push synchronously to ctx.deltaF (rides the
   // existing Act). The push bypasses emitFact (whose async crossOrigin
@@ -105,7 +105,7 @@ function persistBeingPosition(beingId, spaceId, moment = null) {
   // Outside the accumulating moment (system housekeeping): the being
   // acts as ITSELF, on its own chain, signed by its own Name — via
   // withBeingAct. (Previously wrapped in withIAmAct, which mis-attributed
-  // the position change to I_AM even though the being is the one moving.)
+  // the position change to I even though the being is the one moving.)
   // emitFact derives nameId from the being's act context. "Every fact
   // comes from an act" (MOMENT.md) — no orphan facts.
   (async () => {
@@ -165,7 +165,9 @@ export async function setCurrentSpace(beingId, spaceId, moment) {
   if (!beingId) return;
   const history = moment?.actorAct?.history;
   if (typeof history !== "string" || !history) {
-    throw new Error("setCurrentSpace: moment.actorAct.history is required; planting a being at a position needs the actor's history to derive the right tree-root.");
+    throw new Error(
+      "setCurrentSpace: moment.actorAct.history is required; planting a being at a position needs the actor's history to derive the right tree-root.",
+    );
   }
   const p = getBeingPositionRecord(beingId);
   p.position = spaceId || null;

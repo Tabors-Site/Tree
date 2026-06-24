@@ -21,14 +21,19 @@ import {
   assertNameAvailableAt,
 } from "./spaces.js";
 import { getStoryDomain } from "../../ibp/address.js";
-import { IbpError, IBP_ERR, mapPatternsToIbpError } from "../../ibp/protocol.js";
-import { I_AM } from "../being/seedBeings.js";
-import { detectTargetKind, targetIdOf, loadTargetRow } from "../_targetShape.js";
-import { targetsFact, stampsFact } from "../../ibp/factResult.js";
 import {
-  setOwner,
-  removeOwner,
-} from "./ownership.js";
+  IbpError,
+  IBP_ERR,
+  mapPatternsToIbpError,
+} from "../../ibp/protocol.js";
+import { I } from "../being/seedBeings.js";
+import {
+  detectTargetKind,
+  targetIdOf,
+  loadTargetRow,
+} from "../_targetShape.js";
+import { targetsFact, stampsFact } from "../../ibp/factResult.js";
+import { setOwner, removeOwner } from "./ownership.js";
 
 // Namespaces NOT writable through set-space qualities (each has its own verb).
 const RESERVED_SET_META_NS = new Set([
@@ -91,8 +96,13 @@ async function setOnSpaceHandler({ target, params, identity, moment }) {
   // read happens between, the moment holds the act-chain lock).
   try {
     const { invalidateSpace } = await import("./ancestorCache.js");
-    invalidateSpace(String(targetIdOf(target) || ""), moment?.actorAct?.history || null);
-  } catch { /* cache module unavailable — nothing to invalidate */ }
+    invalidateSpace(
+      String(targetIdOf(target) || ""),
+      moment?.actorAct?.history || null,
+    );
+  } catch {
+    /* cache module unavailable — nothing to invalidate */
+  }
 
   // ── qualities paths ────────────────────────────────────
   //
@@ -128,17 +138,22 @@ async function setOnSpaceHandler({ target, params, identity, moment }) {
       // belt-and-suspenders hasAccess check via resolveSpaceAccess
       // retired with the contributor class — the able's canDo +
       // reach is the single source of truth.
-      return targetsFact({
-        written: true,
-        spaceId: String(target.spaceId),
-        namespace,
-        kind: "space",
-      }, { kind: "space", id: target.spaceId });
+      return targetsFact(
+        {
+          written: true,
+          spaceId: String(target.spaceId),
+          namespace,
+          kind: "space",
+        },
+        { kind: "space", id: target.spaceId },
+      );
     }
 
     if (parts.length === 1 && value !== null) {
       if (typeof value !== "object") {
-        throw new Error("set-space: qualities-namespace value must be an object");
+        throw new Error(
+          "set-space: qualities-namespace value must be an object",
+        );
       }
     }
 
@@ -169,13 +184,20 @@ async function setOnSpaceHandler({ target, params, identity, moment }) {
     if (kind === "stance") {
       const spaceId = target?.spaceId;
       if (!spaceId) {
-        throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Resolved address has no spaceId");
+        throw new IbpError(
+          IBP_ERR.SPACE_NOT_FOUND,
+          "Resolved address has no spaceId",
+        );
       }
       // Authorization runs in the verb dispatcher's able-walk; this
       // handler trusts that. The hasAccess gate via resolveSpaceAccess
       // retired with the contributor class (AblesAreAuth).
       const { loadOrFold } = await import("../projections.js");
-      const _slot1 = await loadOrFold("space", spaceId, moment?.actorAct?.history || "0");
+      const _slot1 = await loadOrFold(
+        "space",
+        spaceId,
+        moment?.actorAct?.history || "0",
+      );
       const row = _slot1 ? { _id: _slot1.id, ...(_slot1.state || {}) } : null;
       if (!row) {
         throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Space not found");
@@ -215,7 +237,11 @@ async function setOnSpaceHandler({ target, params, identity, moment }) {
       // then returns the shape; doVerb auto-stamps do:set-space and
       // the space reducer's applySetField writes Space.type.
       const { loadOrFold } = await import("../projections.js");
-      const _slot2 = await loadOrFold("space", spaceId, moment?.actorAct?.history || "0");
+      const _slot2 = await loadOrFold(
+        "space",
+        spaceId,
+        moment?.actorAct?.history || "0",
+      );
       const row = _slot2 ? { heavenSpace: _slot2.state?.heavenSpace } : null;
       if (!row) {
         throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Space not found");
@@ -252,8 +278,14 @@ async function setOnSpaceHandler({ target, params, identity, moment }) {
   // in materials/space/members.js; this validator enforces only the
   // wire shape.
   if (field === "owner") {
-    if (value !== null && value !== undefined && (typeof value !== "string" || !value.length)) {
-      throw new Error("set-space: `owner` value must be a beingId string or null");
+    if (
+      value !== null &&
+      value !== undefined &&
+      (typeof value !== "string" || !value.length)
+    ) {
+      throw new Error(
+        "set-space: `owner` value must be a beingId string or null",
+      );
     }
     const spaceId = targetIdOf(target);
     return { spaceId, owner: value || null };
@@ -271,35 +303,57 @@ async function setOnSpaceHandler({ target, params, identity, moment }) {
       return { spaceId, coord: null };
     }
     if (typeof value !== "object" || Array.isArray(value)) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "set-space: coord must be {x, y, z?} or null");
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "set-space: coord must be {x, y, z?} or null",
+      );
     }
     const out = {};
     for (const a of ["x", "y", "z"]) {
       if (value[a] === undefined) continue;
       if (typeof value[a] !== "number" || !Number.isFinite(value[a])) {
-        throw new IbpError(IBP_ERR.INVALID_INPUT, `set-space: coord.${a} must be a finite number`);
+        throw new IbpError(
+          IBP_ERR.INVALID_INPUT,
+          `set-space: coord.${a} must be a finite number`,
+        );
       }
       out[a] = value[a];
     }
     if (Object.keys(out).length === 0) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "set-space: coord requires at least one axis");
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "set-space: coord requires at least one axis",
+      );
     }
     // Bounds-check against the parent's size. Same doctrine as
     // set-being:coord (assertCoordInBounds in being/ops.js): silent
     // clamping was a lie; throw and let cognition reface.
     const { loadOrFold } = await import("../projections.js");
-    const _selfSlot = await loadOrFold("space", spaceId, moment?.actorAct?.history || "0");
+    const _selfSlot = await loadOrFold(
+      "space",
+      spaceId,
+      moment?.actorAct?.history || "0",
+    );
     const parentId = _selfSlot?.state?.parent;
     if (parentId) {
-      const _parentSlot = await loadOrFold("space", parentId, moment?.actorAct?.history || "0");
+      const _parentSlot = await loadOrFold(
+        "space",
+        parentId,
+        moment?.actorAct?.history || "0",
+      );
       const parentRow = _parentSlot ? { size: _parentSlot.state?.size } : null;
       const parentSize = parentRow?.size || null;
       if (parentSize) {
         for (const a of ["x", "y", "z"]) {
           if (out[a] === undefined) continue;
-          const cap = typeof parentSize[a] === "number" && parentSize[a] > 0 ? parentSize[a] : null;
+          const cap =
+            typeof parentSize[a] === "number" && parentSize[a] > 0
+              ? parentSize[a]
+              : null;
           if (cap === null) continue;
-          const high = Number.isInteger(out[a]) ? Math.trunc(cap) - 1 : cap - Number.EPSILON;
+          const high = Number.isInteger(out[a])
+            ? Math.trunc(cap) - 1
+            : cap - Number.EPSILON;
           if (out[a] < 0 || out[a] > high) {
             throw new IbpError(
               IBP_ERR.INVALID_INPUT,
@@ -338,12 +392,16 @@ async function setOnSpaceHandler({ target, params, identity, moment }) {
 
 async function endSpaceHandler({ target, identity, moment }) {
   const spaceId = targetIdOf(target);
-  // The actor is whoever called. I_AM-internal flows (registry mirror
-  // sync at genesis + boot) pass `identity: I_AM`.
+  // The actor is whoever called. I-internal flows (registry mirror
+  // sync at genesis + boot) pass `identity: I`.
   const actorBeingId = identity?.beingId || null;
   // Forward the open moment's actId so deleteSpaceHistory's internal
   // do.set-space writes ride the same Act.
-  const deleted = await deleteSpaceHistory(spaceId, actorBeingId, moment?.actId || null);
+  const deleted = await deleteSpaceHistory(
+    spaceId,
+    actorBeingId,
+    moment?.actId || null,
+  );
   return { deathSpaceId: String(deleted?._id || spaceId) };
 }
 
@@ -376,16 +434,27 @@ registerOperation("make-heaven", {
   ownerExtension: "seed",
   factAction: "make-heaven",
   args: {
-    heavenSpace: { type: "text", label: "Heaven marker (which heaven space)", required: true },
+    heavenSpace: {
+      type: "text",
+      label: "Heaven marker (which heaven space)",
+      required: true,
+    },
   },
   handler: ({ target, params }) => {
     const spaceId = String(targetIdOf(target));
     const which = params?.heavenSpace;
     if (!which || typeof which !== "string") {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "make-heaven requires a heavenSpace marker");
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "make-heaven requires a heavenSpace marker",
+      );
     }
     // ONE act, ONE fact: the dispatcher stamps do:make-heaven; applyMakeHeaven folds heavenSpace.
-    return stampsFact({ spaceId, heavenSpace: which }, { heavenSpace: which }, { kind: "space", id: spaceId });
+    return stampsFact(
+      { spaceId, heavenSpace: which },
+      { heavenSpace: which },
+      { kind: "space", id: spaceId },
+    );
   },
 });
 
@@ -398,9 +467,22 @@ registerOperation("set-space", {
   // rules. See operations.js isNamespaceKeyedAction.
   useNamespaceKey: true,
   args: {
-    field: { type: "text", label: "Field (e.g. name, status, qualities.<ns>.<key>)", required: true },
-    value: { type: "json", label: "Value (JSON; null to clear)", required: false },
-    merge: { type: "bool", label: "Merge (for qualities objects)", default: true, required: false },
+    field: {
+      type: "text",
+      label: "Field (e.g. name, status, qualities.<ns>.<key>)",
+      required: true,
+    },
+    value: {
+      type: "json",
+      label: "Value (JSON; null to clear)",
+      required: false,
+    },
+    merge: {
+      type: "bool",
+      label: "Merge (for qualities objects)",
+      default: true,
+      required: false,
+    },
   },
   handler: setOnSpaceHandler,
 });
@@ -434,18 +516,28 @@ function spaceIdFromTarget(target) {
   const kind = detectTargetKind(target);
   if (kind === "stance") {
     if (!target?.spaceId) {
-      throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Resolved position has no spaceId");
+      throw new IbpError(
+        IBP_ERR.SPACE_NOT_FOUND,
+        "Resolved position has no spaceId",
+      );
     }
     return String(target.spaceId);
   }
   const id = targetIdOf(target);
-  if (!id) throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Target does not resolve to a space");
+  if (!id)
+    throw new IbpError(
+      IBP_ERR.SPACE_NOT_FOUND,
+      "Target does not resolve to a space",
+    );
   return String(id);
 }
 
 function requireActor(identity) {
   if (!identity?.beingId) {
-    throw new IbpError(IBP_ERR.UNAUTHORIZED, "An authenticated being is required");
+    throw new IbpError(
+      IBP_ERR.UNAUTHORIZED,
+      "An authenticated being is required",
+    );
   }
   return String(identity.beingId);
 }
@@ -453,7 +545,10 @@ function requireActor(identity) {
 // ownership.js throws plain Errors; map their messages to IBP codes so
 // the portal shows FORBIDDEN / NOT_FOUND rather than a generic 500.
 const PERMISSION_ERROR_PATTERNS = [
-  [/only the .*owner|cannot add the owner|already the owner|cannot modify heaven|cannot set ownership|stance authorization/i, IBP_ERR.FORBIDDEN],
+  [
+    /only the .*owner|cannot add the owner|already the owner|cannot modify heaven|cannot set ownership|stance authorization/i,
+    IBP_ERR.FORBIDDEN,
+  ],
   [/not found/i, IBP_ERR.SPACE_NOT_FOUND],
   [/being is being modified|concurrently/i, IBP_ERR.RESOURCE_CONFLICT],
   [/maximum|required|cannot/i, IBP_ERR.INVALID_INPUT],
@@ -487,17 +582,27 @@ registerOperation("set-owner", {
     const spaceId = spaceIdFromTarget(target);
     const actor = requireActor(identity);
     const newOwnerId = String(params?.newOwnerId || "").trim();
-    if (!newOwnerId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`newOwnerId` is required");
+    if (!newOwnerId)
+      throw new IbpError(IBP_ERR.INVALID_INPUT, "`newOwnerId` is required");
     let factParams;
     try {
       // setOwner does the auth + lock + CAS, hands the lock to afterSeal, and
       // returns the {field:"owner", value} for the ONE do:set-owner fact the
       // dispatcher stamps (applySetField folds it). No skipAudit (23.md).
-      factParams = await setOwner(spaceId, newOwnerId, actor, moment?.actorAct?.history || "0", moment);
+      factParams = await setOwner(
+        spaceId,
+        newOwnerId,
+        actor,
+        moment?.actorAct?.history || "0",
+        moment,
+      );
     } catch (err) {
       throw mapPatternsToIbpError(err, PERMISSION_ERROR_PATTERNS);
     }
-    return stampsFact({ ownerSet: true, spaceId, newOwnerId }, factParams, { kind: "space", id: String(spaceId) });
+    return stampsFact({ ownerSet: true, spaceId, newOwnerId }, factParams, {
+      kind: "space",
+      id: String(spaceId),
+    });
   },
 });
 
@@ -512,14 +617,21 @@ registerOperation("remove-owner", {
     try {
       // Threads the moment now (was dropped) so the dispatcher stamps the ONE
       // do:remove-owner fact (owner=null, folded by applySetField). No skipAudit.
-      factParams = await removeOwner(spaceId, actor, moment?.actorAct?.history || "0", moment);
+      factParams = await removeOwner(
+        spaceId,
+        actor,
+        moment?.actorAct?.history || "0",
+        moment,
+      );
     } catch (err) {
       throw mapPatternsToIbpError(err, PERMISSION_ERROR_PATTERNS);
     }
-    return stampsFact({ ownerRemoved: true, spaceId }, factParams, { kind: "space", id: String(spaceId) });
+    return stampsFact({ ownerRemoved: true, spaceId }, factParams, {
+      kind: "space",
+      id: String(spaceId),
+    });
   },
 });
-
 
 // ─────────────────────────────────────────────────────────────────────
 // PRIVATE HELPERS
@@ -601,10 +713,12 @@ async function createSpaceChild({ target, params, identity, moment, kind }) {
 
 function shapeNewSpace(newSpace) {
   const spaceId = String(newSpace._id);
-  return targetsFact({
-    spaceId,
-    name: newSpace.name,
-    position: `${getStoryDomain()}/${spaceId}`,
-  }, { kind: "space", id: spaceId });
+  return targetsFact(
+    {
+      spaceId,
+      name: newSpace.name,
+      position: `${getStoryDomain()}/${spaceId}`,
+    },
+    { kind: "space", id: spaceId },
+  );
 }
-

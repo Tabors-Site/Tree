@@ -98,7 +98,7 @@ SUMMON from outside the fold scope. A Being might be summoned by another Being w
 
 Acts that affect things outside the actor's fold scope. A Being can only act on what they can see (and what their ables permit them to act on). If they can't see something, they can't act on it. The able-scoped fold both shows them what's there and limits what they can affect. Authorization is unified with perception.
 
-The whole-reality fold for I_AM or admin views. Sometimes you want to see the whole reality without able-scoping. This is a special case — admin queries, debugging, audit views. These would use unscoped folds (or maximally-scoped ables like "I_AM full visibility"). Different from normal Being folds.
+The whole-reality fold for I or admin views. Sometimes you want to see the whole reality without able-scoping. This is a special case — admin queries, debugging, audit views. These would use unscoped folds (or maximally-scoped ables like "I full visibility"). Different from normal Being folds.
 
 The summary
 You've identified a real problem and the right solution. Folds shouldn't be universal computations that get filtered after. Folds should be able-scoped from the start, driven by the Being's active able composition (their current flow).

@@ -151,7 +151,7 @@ A **name** is an identity — a keypair — and nothing in the story: it holds n
 - It **owns** act-chains — one per being it acts through, per history ($A_b^w$, REELS). A name acts through many beings, in many histories, at once; the chains run in parallel under the one name.
 - It **uses** beings as beings. A being is the name's presence in the story; the name is the being's identity. A name may express many beings; a being expresses exactly one name.
 
-A name's own reel **does not fork** — it stands above the histories, one identity whatever timeline its beings stand in. Names are minted, never copied: a BE-birth binds a fresh being to its signer. The root name is **I-AM** (GENESIS) — the only name no other name minted, and the signer of every root hash (I_AM.md).
+A name's own reel **does not fork** — it stands above the histories, one identity whatever timeline its beings stand in. Names are minted, never copied: a BE-birth binds a fresh being to its signer. The root name is **I-AM** (GENESIS) — the only name no other name minted, and the signer of every root hash (I.md).
 
 ### BEING & BECOMING
 
@@ -183,7 +183,7 @@ $$\mu_0 = (\,\text{I-AM},\;\; \text{I-AM},\;\; \mathrm{Fold}(\text{I-AM},\,\varn
 
 $$\mathcal{W} \;:=\; \mathrm{Seal}(\mu_0)$$
 
-$\mu_0$ is the one moment with no concurrency — before it the braid has not forked. **I-AM is the root name** — the keypair that signs $a_0$ and, by descent, every root after it (I_AM.md). It acts through itself: name and being are one at the root. Its first deeds **declare the words** the rest is said in — that a fact is a word, a verb is a word, a being is a word (WORD below); the language grounds itself before anything else is born. Every later being is minted by a BE-act of an existing name through a being; the I-AM is the root of both lines — the name no other name minted.
+$\mu_0$ is the one moment with no concurrency — before it the braid has not forked. **I-AM is the root name** — the keypair that signs $a_0$ and, by descent, every root after it (I.md). It acts through itself: name and being are one at the root. Its first deeds **declare the words** the rest is said in — that a fact is a word, a verb is a word, a being is a word (WORD below); the language grounds itself before anything else is born. Every later being is minted by a BE-act of an existing name through a being; the I-AM is the root of both lines — the name no other name minted.
 
 ### WORD
 

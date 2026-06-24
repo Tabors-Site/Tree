@@ -256,8 +256,8 @@ export async function genesis(app, opts = {}) {
   //   unnecessarily. The seed is the genesis when plant mode is active.
   //
   // The seed declares itself onto the chain BEFORE the story it builds: the verb pasts, the concept
-  // .words, and the do-ops, all as I_AM coin facts on I_AM's OWN reel (of: I_AM, wordStore.js
-  // bindWord) — which needs only I_AM, not any space/being. A fact is laid before the story it
+  // .words, and the do-ops, all as I coin facts on I's OWN reel (of: I, wordStore.js
+  // bindWord) — which needs only I, not any space/being. A fact is laid before the story it
   // describes (the place is folded FROM facts), so the WORD fold does not depend on the PLACE fold.
   // Declared after ensureIAm and BEFORE ensureSpaceRoot, every bootstrap do-op (create-space,
   // set-being, set-space) resolves from the FOLD, not the Map: genesis IS words (word/10.md §2, 13.md).
@@ -275,7 +275,8 @@ export async function genesis(app, opts = {}) {
       // kernel == word.word — every concept is in the fold, grounds on declared words, and its host
       // pointers resolve. SOFT during the transition (logs the axiom/theorem split + any gaps); flip
       // to { strict:true } once the foundation is clean to make a gap a boot error.
-      const { assertDescentSymmetry } = await import("./seed/present/word/axioms.js");
+      const { assertDescentSymmetry } =
+        await import("./seed/present/word/axioms.js");
       assertDescentSymmetry(getWordSync);
     } catch (err) {
       log.warn(
@@ -290,7 +291,7 @@ export async function genesis(app, opts = {}) {
       // Step 1: "I am that I am" — birth I-Am alone, homeSpace=null.
       await ensureIAm();
 
-      // Step 1.5: the words declare themselves onto I_AM's reel, BEFORE the story-building below,
+      // Step 1.5: the words declare themselves onto I's reel, BEFORE the story-building below,
       // so every do-op dispatched while building the story resolves fold-only (no Map fallback).
       await declareTheWords();
 
@@ -320,8 +321,7 @@ export async function genesis(app, opts = {}) {
           "I register my delegates on the place root",
           async (ctx) => {
             const { doVerb } = await import("./seed/ibp/verbs/do.js");
-            const { I_AM } =
-              await import("./seed/materials/being/seedBeings.js");
+            const { I } = await import("./seed/materials/being/seedBeings.js");
             await doVerb(
               { kind: "space", id: String(getSpaceRootId()) },
               "set-space",
@@ -330,7 +330,7 @@ export async function genesis(app, opts = {}) {
                 value: seedDelegateRoster,
                 merge: true,
               },
-              { identity: I_AM, moment: ctx },
+              { identity: I, moment: ctx },
             );
           },
         );
@@ -391,7 +391,7 @@ export async function genesis(app, opts = {}) {
   // assigner, story-manager, arrival, etc.) need hasAccess on
   // heaven so they can act inside the Tier-3 heaven spaces (./ables,
   // ./operations, ./tools, ...). Mechanism: add them as contributors
-  // on heaven. I_AM is heaven's rootOwner already; the new
+  // on heaven. I is heaven's rootOwner already; the new
   // contributors list grows from boot scaffold (seed delegates) and
   // later cherub.register (first human heaven authority).
   //
@@ -616,27 +616,21 @@ export async function genesis(app, opts = {}) {
       await import("./seed/materials/projections.js");
     const { HEAVEN_SPACE } =
       await import("./seed/materials/space/heavenSpaces.js");
-    const { I_AM } = await import("./seed/materials/being/seedBeings.js");
+    const { I } = await import("./seed/materials/being/seedBeings.js");
     const heaven = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, "0");
     const storyRootId = getSpaceRootId();
 
     if (heaven) {
       await withIAmAct("I install angel on heaven", async (ctx) => {
-        await hostAbleAt(String(heaven.id), "angel", angelAble, I_AM, ctx);
+        await hostAbleAt(String(heaven.id), "angel", angelAble, I, ctx);
       });
     }
     if (storyRootId) {
       await withIAmAct("I install global on the story root", async (ctx) => {
-        await hostAbleAt(String(storyRootId), "global", globalAble, I_AM, ctx);
+        await hostAbleAt(String(storyRootId), "global", globalAble, I, ctx);
       });
       await withIAmAct("I install arrival on the story root", async (ctx) => {
-        await hostAbleAt(
-          String(storyRootId),
-          "arrival",
-          arrivalAble,
-          I_AM,
-          ctx,
-        );
+        await hostAbleAt(String(storyRootId), "arrival", arrivalAble, I, ctx);
       });
       // Host every other seed delegate able on the story root too.
       // Per the single-gate doctrine, the able-walk authorize finds each
@@ -686,7 +680,7 @@ export async function genesis(app, opts = {}) {
       ];
       for (const [name, spec] of installs) {
         await withIAmAct(`I install ${name} on the story root`, async (ctx) => {
-          await hostAbleAt(String(storyRootId), name, spec, I_AM, ctx);
+          await hostAbleAt(String(storyRootId), name, spec, I, ctx);
         });
       }
     }

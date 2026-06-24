@@ -23,7 +23,8 @@ fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
 
 {
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`)).default;
+  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`))
+    .default;
   const conn = await mongoose.createConnection(SCRATCH_DB).asPromise();
   await conn.dropDatabase();
   await conn.close();
@@ -32,10 +33,18 @@ process.env.SOURCE_TREE_ROOT = SRC;
 await import(`${R}/begin.js`);
 
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
-const { I_AM } = await import(`${R}/seed/materials/being/seedBeings.js`);
+const { I } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { assembleStory } = await import(`${R}/seed/present/book/assemble.js`);
 
-const poll = async (fn, t = 60000, e = 250) => { const t0 = Date.now(); while (Date.now() - t0 < t) { const v = await fn(); if (v) return v; await new Promise((r) => setTimeout(r, e)); } return null; };
+const poll = async (fn, t = 60000, e = 250) => {
+  const t0 = Date.now();
+  while (Date.now() - t0 < t) {
+    const v = await fn();
+    if (v) return v;
+    await new Promise((r) => setTimeout(r, e));
+  }
+  return null;
+};
 const head = (label, lines, n = 6) => {
   console.log(`\n  ── ${label} ── (${lines.length} acts)`);
   for (const a of lines.slice(0, n)) console.log(`     ${a.line}`);
@@ -45,23 +54,37 @@ const head = (label, lines, n = 6) => {
 console.log(`\n  THE STORY PANEL — world / being / place / lineage\n`);
 try {
   const cherub = await poll(() => findByName("being", "cherub", "0"));
-  if (!cherub) { console.log("  FATAL: genesis failed"); process.exit(1); }
+  if (!cherub) {
+    console.log("  FATAL: genesis failed");
+    process.exit(1);
+  }
   await new Promise((r) => setTimeout(r, 1500));
 
   // WORLD — the whole branch
   const world = await assembleStory("world", { branch: "0" });
   head("WORLD (the whole branch's story)", world);
-  if (!world.length) { console.log("\n  (no facts on the branch — fact-stamping is down mid-rename; re-run after it settles)"); process.exit(0); }
+  if (!world.length) {
+    console.log(
+      "\n  (no facts on the branch — fact-stamping is down mid-rename; re-run after it settles)",
+    );
+    process.exit(0);
+  }
 
-  // BEING — I_AM's own thread
-  const being = await assembleStory("being", { branch: "0", being: String(I_AM) });
-  head("BEING (I_AM's own thread, first person)", being);
+  // BEING — I's own thread
+  const being = await assembleStory("being", { branch: "0", being: String(I) });
+  head("BEING (I's own thread, first person)", being);
 
   // MOMENT (WHEN) — one moment's cross-section (pick an act with an actId from the world story)
   const withAct = world.find((a) => a.actId);
   if (withAct) {
-    const moment = await assembleStory("moment", { branch: "0", moment: withAct.actId });
-    head(`MOMENT (the act ${String(withAct.actId).slice(0, 8)} — only its landings, the when)`, moment);
+    const moment = await assembleStory("moment", {
+      branch: "0",
+      moment: withAct.actId,
+    });
+    head(
+      `MOMENT (the act ${String(withAct.actId).slice(0, 8)} — only its landings, the when)`,
+      moment,
+    );
   } else {
     console.log("\n  ── MOMENT ── (no act carried an actId to scope a moment)");
   }
@@ -69,17 +92,29 @@ try {
   // PLACE (WHERE) — a space's whole history (pick a space that some fact targeted)
   const withSpace = world.find((a) => a.of?.kind === "space" && a.of?.id);
   if (withSpace) {
-    const place = await assembleStory("place", { branch: "0", space: withSpace.of.id });
-    head(`PLACE (the space ${String(withSpace.of.id).slice(0, 8)} — its whole history, the where)`, place);
+    const place = await assembleStory("place", {
+      branch: "0",
+      space: withSpace.of.id,
+    });
+    head(
+      `PLACE (the space ${String(withSpace.of.id).slice(0, 8)} — its whole history, the where)`,
+      place,
+    );
   } else {
     console.log("\n  ── PLACE ── (no fact targeted a space to scope a where)");
   }
 
-  // LINEAGE — I_AM and its children, one generation
-  const lineage = await assembleStory("lineage", { branch: "0", being: String(I_AM), depth: 1 });
-  head("LINEAGE (I_AM + its children, depth 1 — the family story)", lineage);
+  // LINEAGE — I and its children, one generation
+  const lineage = await assembleStory("lineage", {
+    branch: "0",
+    being: String(I),
+    depth: 1,
+  });
+  head("LINEAGE (I + its children, depth 1 — the family story)", lineage);
 
-  console.log(`\n  five views, one coordinate system: who × when × where — read, watch, act.`);
+  console.log(
+    `\n  five views, one coordinate system: who × when × where — read, watch, act.`,
+  );
   process.exit(0);
 } catch (err) {
   console.log(`\n  ! crashed: ${err.stack || err.message}`);

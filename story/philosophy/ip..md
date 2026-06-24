@@ -4,26 +4,28 @@
 
 ## What the file covers
 
-1. **LAN realities (mDNS).** Today a reality is found by DNS domain. On a local network there is no DNS, so realities advertise and discover each other over mDNS instead, same I_AM identity, transport-agnostic IBP, federate locally. The substrate does not depend on DNS; it depends on I_AM keys, IBP envelopes, content-addressed facts, and cryptographic federation. Bounded work: mDNS plus a pluggable resolver chain (mDNS, then DNS, then DHT, then friend-of-friend).
+1. **LAN realities (mDNS).** Today a reality is found by DNS domain. On a local network there is no DNS, so realities advertise and discover each other over mDNS instead, same I identity, transport-agnostic IBP, federate locally. The substrate does not depend on DNS; it depends on I keys, IBP envelopes, content-addressed facts, and cryptographic federation. Bounded work: mDNS plus a pluggable resolver chain (mDNS, then DNS, then DHT, then friend-of-friend).
 
-2. **Network address as signed facts.** The I_AM key is the truth of what a reality is. Where it can be reached, local IP, public IP, DNS name, mDNS name, is a set of overrideable address-facts it publishes and re-stamps as the network changes. A layered model: Layer 0 cryptographic identity, Layer 1 mutable network-presence facts, Layer 2 naming overlays, Layer 3 consumer-side routing. The payoff: DNS becomes overrideable. A signed address-fact beats a hijacked DNS record, because the attacker cannot produce the I_AM signature.
+2. **Network address as signed facts.** The I key is the truth of what a reality is. Where it can be reached, local IP, public IP, DNS name, mDNS name, is a set of overrideable address-facts it publishes and re-stamps as the network changes. A layered model: Layer 0 cryptographic identity, Layer 1 mutable network-presence facts, Layer 2 naming overlays, Layer 3 consumer-side routing. The payoff: DNS becomes overrideable. A signed address-fact beats a hijacked DNS record, because the attacker cannot produce the I signature.
 
 3. **Replacing IP routing, honestly.** Four approaches are weighed: overlay on IP (what I2P, Tor, Yggdrasil, and Tailscale do, achievable now, TreeOS's Peering already is this), local mesh (wifi-direct, LoRa, bypass ISP routers within physical proximity), Layer 2 cryptographic addressing, and devices-as-routers. The conclusion is honest: you cannot make ISP-owned routers natively forward non-IP traffic, so wide-area rides IP as transport, mesh handles local autonomy, and alternative physical infrastructure (community fiber, wireless backhaul) is a long-term community project, not a software feature.
 
 4. **Collapsing IP and DNS into one identity.** The pubkey IS the routing address; the nickname (with an optional `#pubkey` suffix to disambiguate) is the human-readable form. Two centralized systems (IANA address allocation plus registrar-controlled DNS) become one substrate-native binding, signed by the reality. The reframe that names the whole thing: IP addresses machines; IBP addresses identities (Names acting through beings). Identity becomes primary at the protocol instead of reinvented by every app on top.
 
-5. **Building the router.** A TreeOS-native router is a small computer (an SoC, RAM and flash, Ethernet PHYs or a switch chip, power, optional wifi) running firmware that forwards on I_AM pubkeys instead of IP prefixes, with a routing protocol like Babel or OLSR adapted to cryptographic addresses. The realistic path is not custom silicon: repurpose an SBC (a Banana Pi R3, or a GL.iNet router on OpenWRT). The novel work is firmware and protocol, not hardware. A six-month plan reaches a working prototype on commodity boards; custom PCBs only become worth it once the firmware is proven.
+5. **Building the router.** A TreeOS-native router is a small computer (an SoC, RAM and flash, Ethernet PHYs or a switch chip, power, optional wifi) running firmware that forwards on I pubkeys instead of IP prefixes, with a routing protocol like Babel or OLSR adapted to cryptographic addresses. The realistic path is not custom silicon: repurpose an SBC (a Banana Pi R3, or a GL.iNet router on OpenWRT). The novel work is firmware and protocol, not hardware. A six-month plan reaches a working prototype on commodity boards; custom PCBs only become worth it once the firmware is proven.
 
 ## My take
 
 The single most useful thing to see is that **effort and value are inverted across these layers.** Naming (the DNS replacement) is the highest sovereignty value for the least work; IP routing and custom hardware are the lowest sovereignty value for the most. The truest sentence in the whole exploration, that the IP layer is the deepest piece and the hardest to change but also the least of a sovereignty concern, should be the headline, not a footnote. Build the naming layer; rent IP.
 
 **What is genuinely strong:**
+
 - Collapsing IP and DNS into one identity is the real idea, and it is already true at the IBP layer in software. You do not need a router to make pubkey-is-address true; you need the Peering and address-fact layer. The router would make it tangible, but the substance is code.
 - "IBP not IP, it addresses identities, not machines" is the actual novel contribution. The whole application stack reinvents identity because the network underneath lacks it. Making identity primary at the protocol is the point, and it is a software fact.
 - Address-facts as a layered model is architecturally consistent: network identity is just another fact category. DNS-as-override is a real, shippable security property.
 
 **Where I would push back:**
+
 - **Network presence should be ephemeral, not chain history.** Stamping a permanent fact on every DHCP renewal or interface flap spams the chain and leaks a forever-log of your movements and topology. Keep current reachability as a gossiped hint to peers; put only deliberate, stable bindings (your declared nickname, your "I claim this DNS name" assertion) on the chain. Reachability is a hint, not a biography.
 - **The router is a separate project, and SBC-first is correct.** The file already lands there. Custom hardware is premature and the build is a fun but distinct hardware track that competes for attention with the substrate work (the Name/Being/Soul refactor, federation, Peering). Do not let the deepest, least-leveraged layer pull focus.
 - **"Replace IP" wide-area is a social and infrastructure project**, community fiber and mesh, years and physical capital, not firmware. Hold the overlay framing tightly so the pitch never drifts into "we replace the internet."
@@ -46,12 +48,12 @@ What the substrate currently assumes
 Right now realities are identified by DNS domain (tabors-site). The substrate uses this for:
 
 Routing IBP envelopes (resolve domain → IP → connect)
-Verifying federation handshakes (the I_AM key is associated with the domain)
+Verifying federation handshakes (the I key is associated with the domain)
 Bootstrap discovery (defaults point to known domains)
 Naming addresses in IBPA (NAME tabors-site, SEE tabors-site::lab/equipment@tabor)
-The DNS dependency is at the routing and addressing layer. The cryptographic identity (I_AM keypair) is separate — that's what actually proves a reality is who it claims to be. The domain is just the human-readable way to find the reality on the public internet.
+The DNS dependency is at the routing and addressing layer. The cryptographic identity (I keypair) is separate — that's what actually proves a reality is who it claims to be. The domain is just the human-readable way to find the reality on the public internet.
 
-For LAN, you need different routing but the same cryptographic identity model. The reality's I_AM is still the source of truth; the question is just how to find it on the local network instead of through public DNS.
+For LAN, you need different routing but the same cryptographic identity model. The reality's I is still the source of truth; the question is just how to find it on the local network instead of through public DNS.
 
 What LAN support actually requires
 A few specific things to add or change:
@@ -67,9 +69,9 @@ Use a explicit prefix: lan:tabors-laptop vs tabors-site.
 Just use whatever string and let the resolver figure out where to find it (try mDNS first, fall back to DNS).
 The third is probably cleanest from a user perspective — you don't think about whether something is LAN or public, you just refer to it by name and the substrate handles routing.
 
-Different transport layer. Currently TreeOS connects via WebSocket over HTTPS to a domain. For LAN, you might still want WebSockets, but you can skip HTTPS-via-public-CA (since LAN realities won't have public certificates). You could use self-signed certificates (the I_AM key can sign its own cert), or you could use unencrypted WebSocket on LAN (security is provided at the IBP layer via the ephemeral X25519 handshake anyway).
+Different transport layer. Currently TreeOS connects via WebSocket over HTTPS to a domain. For LAN, you might still want WebSockets, but you can skip HTTPS-via-public-CA (since LAN realities won't have public certificates). You could use self-signed certificates (the I key can sign its own cert), or you could use unencrypted WebSocket on LAN (security is provided at the IBP layer via the ephemeral X25519 handshake anyway).
 
-Federation discovery within LAN. When two LAN realities want to federate, they need to find each other and verify identity. mDNS gives them findability. The cryptographic handshake (I_AM keys signing each other's introductions) gives them identity verification. This composes naturally — discover via mDNS, verify cryptographically, federate.
+Federation discovery within LAN. When two LAN realities want to federate, they need to find each other and verify identity. mDNS gives them findability. The cryptographic handshake (I keys signing each other's introductions) gives them identity verification. This composes naturally — discover via mDNS, verify cryptographically, federate.
 
 LAN-to-public bridging. If your LAN reality wants to interact with a public DNS reality (and vice versa), you need a bridge. Either your LAN reality has a public-facing endpoint, or the public reality reaches into your LAN through some intermediary. This is the trickier part because LAN realities are usually behind NAT and not directly reachable from the public internet.
 
@@ -80,11 +82,11 @@ Make the address resolver pluggable. Currently the substrate resolves a reality 
 
 Make the cryptographic layer transport-agnostic. The IBP envelope verification works regardless of transport. WebSocket over HTTPS, WebSocket over plain TCP on LAN, even other transports (Bluetooth, USB, whatever) — the substrate doesn't care as long as the bytes get through. This separation is probably already mostly there since the IBP layer is described as wrapping at the envelope layer not at the WebSocket layer.
 
-Add mDNS service advertisement. When a TreeOS reality starts on a LAN, it advertises itself: "I'm a TreeOS reality, my I_AM public key is X, you can reach me at this IP and port." Other LAN realities listening will pick this up.
+Add mDNS service advertisement. When a TreeOS reality starts on a LAN, it advertises itself: "I'm a TreeOS reality, my I public key is X, you can reach me at this IP and port." Other LAN realities listening will pick this up.
 
 Add mDNS service discovery. When a TreeOS reality wants to find other realities, it queries mDNS for the service type. It gets back a list of advertisements. It can then connect to any of them and do the cryptographic handshake to verify identity.
 
-Federation works the same way. Once you have a network connection to another reality (however you found them — DNS or mDNS), the federation protocol is unchanged. They exchange I_AM keys, establish trust (or not), share resources or beings as authorized.
+Federation works the same way. Once you have a network connection to another reality (however you found them — DNS or mDNS), the federation protocol is unchanged. They exchange I keys, establish trust (or not), share resources or beings as authorized.
 
 The harder parts
 A few things that are genuinely tricky:
@@ -93,7 +95,7 @@ NAT traversal for public-LAN bridging. If your LAN reality wants to be reachable
 
 This is the same problem any P2P system has. Solutions exist but they're not trivial. For initial LAN support, you might skip this — LAN realities are LAN-only, public realities are public, you can choose how to deploy.
 
-Identity ambiguity. Multiple LAN networks might have realities with the same .local name. "tabors-laptop.local" exists on three different home networks. As long as you're on one network at a time, this isn't a problem. But if you move between networks (laptop carrying realities around), you might have conflicts. The cryptographic identity (I_AM key) is the actual source of truth; the local name is just a convenience.
+Identity ambiguity. Multiple LAN networks might have realities with the same .local name. "tabors-laptop.local" exists on three different home networks. As long as you're on one network at a time, this isn't a problem. But if you move between networks (laptop carrying realities around), you might have conflicts. The cryptographic identity (I key) is the actual source of truth; the local name is just a convenience.
 
 Federation persistence. If your LAN reality has federated with another LAN reality (your laptop with your desktop), what happens when one of them leaves the network? The federation relationship persists (it's recorded in both realities' chains), but the reachability is gone. When they're both back on the network, they should reconnect automatically. This requires the substrate to maintain federation state separate from current reachability — which is probably already the right architecture but worth being explicit about.
 
@@ -126,7 +128,7 @@ Probably a couple weeks of focused work to land good LAN support. Less if the su
 The substrate doesn't fundamentally care
 The substrate's cryptographic and architectural commitments don't depend on DNS. They depend on:
 
-I_AM keys for identity (already independent of DNS)
+I keys for identity (already independent of DNS)
 IBP envelopes for messaging (already transport-agnostic)
 Content-addressed facts and reels (already location-independent)
 Federation through cryptographic handshakes (already not DNS-dependent)
@@ -155,13 +157,13 @@ Got it. You're describing something more elegant than just "add LAN support" —
 Let me work through this.
 
 The model you're describing
-A reality has its I_AM key — that's the cryptographic identity, the actual truth of what the reality is. Network addresses (IPs, DNS names) are facts the reality publishes about where it can currently be reached. Multiple address-facts can coexist; consumers pick the right one for their context.
+A reality has its I key — that's the cryptographic identity, the actual truth of what the reality is. Network addresses (IPs, DNS names) are facts the reality publishes about where it can currently be reached. Multiple address-facts can coexist; consumers pick the right one for their context.
 
 Boot sequence:
 
-Reality starts up. I_AM key is loaded (persistent, unchanged).
+Reality starts up. I key is loaded (persistent, unchanged).
 Network driver initializes. Reality detects current network state: local IP on the home network, public IP if reachable, network interfaces available.
-Reality stamps facts: "my current local IP is X," "my current public IP is Y," etc. These are signed by the I_AM and become part of the reality's network-state record.
+Reality stamps facts: "my current local IP is X," "my current public IP is Y," etc. These are signed by the I and become part of the reality's network-state record.
 If DNS is configured, additional facts: "I'm reachable at tabors-site.com (which currently resolves to public IP Y)."
 Reality starts accepting connections on the addresses it published.
 When the network changes — IP renewal from DHCP, switching from WiFi to Ethernet, network driver reset, leaving one network and joining another — the reality detects this and stamps updated facts. The old facts become historical (they record where the reality used to be); the new facts are current.
@@ -184,7 +186,7 @@ Cross-reality awareness of address state. Other realities that have interacted w
 The address-facts as a layered model
 Worth being precise about the layering:
 
-Layer 0: Cryptographic identity. I_AM public key. The truth of what reality this is. Verified by signature. Never changes (unless the reality's key rotates, which is a separate identity-layer operation).
+Layer 0: Cryptographic identity. I public key. The truth of what reality this is. Verified by signature. Never changes (unless the reality's key rotates, which is a separate identity-layer operation).
 
 Layer 1: Network presence facts. Local IPs, public IPs, port numbers, transport details. These change based on network conditions. Stamped as facts in the reality's chain. The most recent ones are current; older ones are historical.
 
@@ -198,7 +200,7 @@ How the facts work concretely
 Each address-fact would be something like:
 
 verb: NAME (or maybe a special address-publication act)
-issuer: this reality's I_AM
+issuer: this reality's I
 intent: publish-address
 payload: {
 type: "local-ipv4" | "public-ipv4" | "public-ipv6" | "dns" | "mdns" | ...
@@ -208,7 +210,7 @@ transport: "wss" | "ws" | "tcp" | ...
 ttl: optional duration (how long this address is expected to be valid)
 metadata: optional additional info
 }
-signed by I_AM key
+signed by I key
 The reality stamps these facts whenever its network state changes. The substrate maintains the latest-valid set of address facts as derived state (folded from the chain).
 
 When another reality wants to connect, they query the chain (or their cached copy) for the current address facts. They get back a list. They try them in order of preference (probably local addresses first if they're on the same network, public addresses or DNS for cross-network).
@@ -241,7 +243,7 @@ Connection failure: If you try to connect using a cached address and it fails, y
 
 Multiple simultaneous addresses: Try them in order. If local-IP works (same LAN), use that. If public-IP works (different network, NAT-traversed), use that. If DNS works (general internet), use that.
 
-Long absence: If a reality has been unreachable for a while, you keep the federation relationship but back off on connection attempts. When new address facts appear (signed by the right I_AM), you know they're back and can reconnect.
+Long absence: If a reality has been unreachable for a while, you keep the federation relationship but back off on connection attempts. When new address facts appear (signed by the right I), you know they're back and can reconnect.
 
 The DNS-as-override piece you mentioned
 This is interesting and worth being precise about.
@@ -252,7 +254,7 @@ If the DNS actually resolves correctly, this is just informational — anyone re
 
 If DNS changes (you switched providers, your IP changed but DNS hasn't updated yet, the DNS is being attacked), the reality's published address fact is the source of truth. Consumers can detect "DNS says X but the reality says Y" and trust the reality's cryptographically-signed claim over the DNS infrastructure.
 
-This means DNS becomes overrideable by the cryptographic substrate. The reality controls what addresses it claims; DNS is one channel for publishing that claim, but the chain is the ultimate record. If someone hijacks your DNS, they can't actually impersonate your reality because they don't have your I_AM key. The signed address facts are the truth.
+This means DNS becomes overrideable by the cryptographic substrate. The reality controls what addresses it claims; DNS is one channel for publishing that claim, but the chain is the ultimate record. If someone hijacks your DNS, they can't actually impersonate your reality because they don't have your I key. The signed address facts are the truth.
 
 This is a real security property. DNS hijacking attacks become harder because the substrate has a separate, cryptographically-grounded source of truth about where realities live.
 
@@ -263,7 +265,7 @@ The fact-reel architecture handles it naturally. Network state is just another c
 
 The IBP layer is already transport-agnostic. Connecting to a reality means establishing IBP communication, regardless of how you found them. mDNS, DNS, raw IP — once you have a connection, IBP works the same way.
 
-Federation works through identity, not address. The federation relationship is between I_AM keys. Address facts are just the operational layer for actually finding each other. Address changes don't affect federation; they just affect how connections get established.
+Federation works through identity, not address. The federation relationship is between I keys. Address facts are just the operational layer for actually finding each other. Address changes don't affect federation; they just affect how connections get established.
 
 The substrate becomes location-fluid. A reality can move between networks, change addresses, even temporarily go offline, and the substrate handles it through the fact-update mechanism. There's no fixed "this reality lives at this address" — there's "this reality has currently published these address facts."
 
@@ -289,7 +291,7 @@ Network identity as substrate concern, not infrastructure concern. Most systems 
 
 Cross-network coherence. A reality is the same reality whether it's on your LAN, on the public internet, on a different LAN you've moved to, or temporarily unreachable. The identity is stable; the addresses are facts.
 
-Self-sovereign networking. You control your reality's network identity through your I_AM key. No external authority can claim to be you on a network. DNS is convenience; cryptography is truth.
+Self-sovereign networking. You control your reality's network identity through your I key. No external authority can claim to be you on a network. DNS is convenience; cryptography is truth.
 
 History of presence. The reality's chain records where it was, when. This is useful for debugging, auditing, understanding patterns. "When was this reality on this network" is answerable from the chain.
 
@@ -331,18 +333,18 @@ Routers along the path look at the destination address
 Each router has a routing table: "for addresses in this prefix, forward to this next-hop"
 Routing tables are built through protocols like BGP (between ISPs) and OSPF (within networks)
 The aggregate of all routing tables creates the path from source to destination
-The centralization is in steps 1-2 (who gives you an address) and in step 5 (who decides what your prefix means in the global routing table). The physical routing in steps 3-4 is mostly hardware.What you could replaceA few different approaches with different scope:Approach 1: Overlay network on top of IP.Devices have TreeOS identities (I_AM pubkeys). They also have IP addresses (assigned by their local network). The substrate maintains a mapping from I_AM pubkey to current IP address. Packets ride IP routing as normal, but the addressing the user sees is cryptographic.This is what I2P, Tor, IPFS, Yggdrasil, and others do. They use IP as a transport but provide their own logical addressing on top. The centralization in IP allocation still exists, but you don't depend on it for identity — your I_AM is your address, the IP is just current physical reachability.This is achievable now. TreeOS basically does this already. The Peering layer mapping I_AM to IP is the overlay.Approach 2: Mesh networking, bypass infrastructure routers.Devices route packets directly to each other through whatever physical connections they have. WiFi mesh networks, Bluetooth mesh, LoRa, lots of devices linking up directly without going through ISP routers.This works for local mesh — a neighborhood, a building, a campus. Devices act as routers for each other, packets hop device-to-device until they reach the destination.For wide-area routing, mesh has limits. To get from your house to a server across the country without using ISP infrastructure, you'd need a continuous mesh of devices between you and the destination. Possible in dense urban areas, hard in rural ones, impossible across oceans without satellite or undersea cables.There are projects exploring this — Yggdrasil, cjdns, Briar, Locha Mesh, NYC Mesh community networks. They work at various scales but haven't scaled to internet-replacement.Approach 3: Layer 2 routing with cryptographic addressing.Use Ethernet frames (MAC addresses) directly instead of IP. MAC addresses are 48-bit hardware identifiers assigned at manufacturing. Devices on the same Ethernet segment can send frames directly to each other without IP.This works within a single broadcast domain — usually a LAN, sometimes a metropolitan network. Doesn't extend across routers (which is by design — routers separate broadcast domains).You could imagine extending this with cryptographic addresses — devices identified by I_AM pubkeys at the link layer, frames addressed by those pubkeys, switches forwarding based on a learned topology. This is partially what some research networks do.The constraint: existing hardware switches don't know about cryptographic addresses. They forward based on MAC addresses. If you wanted switches to forward by I_AM, you'd need new hardware or new switch firmware. Existing routers definitely don't know about your addresses.Approach 4: Devices as routers, custom routing protocol over existing wires.This is what you were sketching. The wires are the same. The wifi chips are the same. The fiber is the same. But the routing logic is different — devices themselves route packets using a TreeOS-native protocol that doesn't depend on IP at all.The challenge: existing routers and switches don't speak your protocol. They speak IP, Ethernet, ARP, OSPF, BGP. If you send them non-IP traffic, they don't know what to do with it.You'd need to either:
+The centralization is in steps 1-2 (who gives you an address) and in step 5 (who decides what your prefix means in the global routing table). The physical routing in steps 3-4 is mostly hardware.What you could replaceA few different approaches with different scope:Approach 1: Overlay network on top of IP.Devices have TreeOS identities (I pubkeys). They also have IP addresses (assigned by their local network). The substrate maintains a mapping from I pubkey to current IP address. Packets ride IP routing as normal, but the addressing the user sees is cryptographic.This is what I2P, Tor, IPFS, Yggdrasil, and others do. They use IP as a transport but provide their own logical addressing on top. The centralization in IP allocation still exists, but you don't depend on it for identity — your I is your address, the IP is just current physical reachability.This is achievable now. TreeOS basically does this already. The Peering layer mapping I to IP is the overlay.Approach 2: Mesh networking, bypass infrastructure routers.Devices route packets directly to each other through whatever physical connections they have. WiFi mesh networks, Bluetooth mesh, LoRa, lots of devices linking up directly without going through ISP routers.This works for local mesh — a neighborhood, a building, a campus. Devices act as routers for each other, packets hop device-to-device until they reach the destination.For wide-area routing, mesh has limits. To get from your house to a server across the country without using ISP infrastructure, you'd need a continuous mesh of devices between you and the destination. Possible in dense urban areas, hard in rural ones, impossible across oceans without satellite or undersea cables.There are projects exploring this — Yggdrasil, cjdns, Briar, Locha Mesh, NYC Mesh community networks. They work at various scales but haven't scaled to internet-replacement.Approach 3: Layer 2 routing with cryptographic addressing.Use Ethernet frames (MAC addresses) directly instead of IP. MAC addresses are 48-bit hardware identifiers assigned at manufacturing. Devices on the same Ethernet segment can send frames directly to each other without IP.This works within a single broadcast domain — usually a LAN, sometimes a metropolitan network. Doesn't extend across routers (which is by design — routers separate broadcast domains).You could imagine extending this with cryptographic addresses — devices identified by I pubkeys at the link layer, frames addressed by those pubkeys, switches forwarding based on a learned topology. This is partially what some research networks do.The constraint: existing hardware switches don't know about cryptographic addresses. They forward based on MAC addresses. If you wanted switches to forward by I, you'd need new hardware or new switch firmware. Existing routers definitely don't know about your addresses.Approach 4: Devices as routers, custom routing protocol over existing wires.This is what you were sketching. The wires are the same. The wifi chips are the same. The fiber is the same. But the routing logic is different — devices themselves route packets using a TreeOS-native protocol that doesn't depend on IP at all.The challenge: existing routers and switches don't speak your protocol. They speak IP, Ethernet, ARP, OSPF, BGP. If you send them non-IP traffic, they don't know what to do with it.You'd need to either:
 
 Tunnel your protocol through IP packets (which is the overlay approach again)
 Replace the routers with devices running your protocol (which is mesh networking)
 Get cooperative ISPs to forward your protocol traffic natively (which doesn't scale)
-So you can't really use existing routers for non-IP routing. Existing routers are IP routers. They forward IP packets. If your packets aren't IP, you need different routers.What's actually feasibleA few honest paths:Within a LAN: full TreeOS routing is feasible.Replace the LAN's routers and switches with TreeOS-native devices. They speak the substrate's protocol natively. Within the LAN, no IP needed. Devices addressed by I_AM, frames routed by cryptographic identity, no DHCP, no DNS, no IP allocation.This is buildable. Custom firmware on commodity hardware (OpenWRT-style), or new device designs. A home or office network could run entirely on TreeOS routing.Between LANs over the internet: overlay on IP.Use IP as the transport for inter-network communication. Your TreeOS-native LAN bridges to the internet through a gateway that translates between TreeOS addressing and IP. Cross-LAN packets get encapsulated in IP, sent across the public internet (using whatever IP the gateway has), then decapsulated by the destination LAN's gateway.This is how VPN-style mesh networks work. Tailscale, ZeroTier, Nebula — they all do this. The cryptographic identity is the substrate; IP is the transport between sites.Local mesh: bypass infrastructure where possible.If you have multiple TreeOS devices in physical proximity, they can mesh directly without going through the ISP's network. Wifi-direct, Bluetooth mesh, LoRa, or even wired direct connections. The mesh provides connectivity for the local cluster; the cluster bridges to the wider internet when needed.This works for a neighborhood, a building, a community. Doesn't replace the long-haul backbone — you still need internet infrastructure for cross-continent traffic — but it provides local autonomy.Long arc: alternative physical infrastructure.Communities building their own physical networks — community-owned fiber, wireless backhaul between buildings, satellite uplinks. NYC Mesh and other community network projects do this. The infrastructure is owned by the community rather than ISPs.This is real work but it exists. Combined with TreeOS routing on top, you'd have genuinely independent networking — physical infrastructure not owned by corporations, logical addressing not depending on IANA.What devices-as-routers actually meansEvery TreeOS device can be a router. It maintains:
+So you can't really use existing routers for non-IP routing. Existing routers are IP routers. They forward IP packets. If your packets aren't IP, you need different routers.What's actually feasibleA few honest paths:Within a LAN: full TreeOS routing is feasible.Replace the LAN's routers and switches with TreeOS-native devices. They speak the substrate's protocol natively. Within the LAN, no IP needed. Devices addressed by I, frames routed by cryptographic identity, no DHCP, no DNS, no IP allocation.This is buildable. Custom firmware on commodity hardware (OpenWRT-style), or new device designs. A home or office network could run entirely on TreeOS routing.Between LANs over the internet: overlay on IP.Use IP as the transport for inter-network communication. Your TreeOS-native LAN bridges to the internet through a gateway that translates between TreeOS addressing and IP. Cross-LAN packets get encapsulated in IP, sent across the public internet (using whatever IP the gateway has), then decapsulated by the destination LAN's gateway.This is how VPN-style mesh networks work. Tailscale, ZeroTier, Nebula — they all do this. The cryptographic identity is the substrate; IP is the transport between sites.Local mesh: bypass infrastructure where possible.If you have multiple TreeOS devices in physical proximity, they can mesh directly without going through the ISP's network. Wifi-direct, Bluetooth mesh, LoRa, or even wired direct connections. The mesh provides connectivity for the local cluster; the cluster bridges to the wider internet when needed.This works for a neighborhood, a building, a community. Doesn't replace the long-haul backbone — you still need internet infrastructure for cross-continent traffic — but it provides local autonomy.Long arc: alternative physical infrastructure.Communities building their own physical networks — community-owned fiber, wireless backhaul between buildings, satellite uplinks. NYC Mesh and other community network projects do this. The infrastructure is owned by the community rather than ISPs.This is real work but it exists. Combined with TreeOS routing on top, you'd have genuinely independent networking — physical infrastructure not owned by corporations, logical addressing not depending on IANA.What devices-as-routers actually meansEvery TreeOS device can be a router. It maintains:
 A list of directly-connected devices (wifi peers, Ethernet neighbors, Bluetooth contacts)
-A routing table mapping I_AM pubkeys to next-hop neighbors
+A routing table mapping I pubkeys to next-hop neighbors
 A discovery protocol for learning about distant realities through the mesh
 When a packet arrives:
 
-Source and destination are I_AM pubkeys
+Source and destination are I pubkeys
 Device looks up destination in its routing table
 If direct neighbor: send directly
 If known via some hop count: forward to the appropriate next-hop
@@ -358,7 +360,7 @@ Avoid centralization in physical infrastructure ownership without building new p
 The IP layer is hard to remove because it's embedded in hardware. The IP allocation centralization (IANA) is the part that's cleanly replaceable through overlay addressing. The physical infrastructure centralization (ISPs) requires actual physical alternatives.
 
 What TreeOS could realistically build
-Phase 1: substrate-native LAN routing. Custom firmware on home routers that speaks TreeOS protocols natively. Devices on a home network identify each other by I_AM pubkey, no DHCP, no IP allocation, no NAT. Local autonomy within the home.
+Phase 1: substrate-native LAN routing. Custom firmware on home routers that speaks TreeOS protocols natively. Devices on a home network identify each other by I pubkey, no DHCP, no IP allocation, no NAT. Local autonomy within the home.
 Phase 2: VPN-style overlay for wide-area. TreeOS devices in different LANs connect through encrypted tunnels over the public internet. Each site is a TreeOS LAN; the wide-area is conventional IP encapsulating TreeOS traffic. Looks like Tailscale but with TreeOS identity instead of WireGuard keys.
 Phase 3: mesh integration. TreeOS devices in physical proximity can connect directly through wifi-direct, Bluetooth, or LoRa. The mesh extends the LAN beyond the wire. Multiple meshes can interconnect through the overlay.
 Phase 4: community infrastructure. Where communities build their own physical infrastructure (community fiber, mesh wireless), TreeOS provides the routing layer natively. The combination is genuine independence from corporate networking.
@@ -384,7 +386,7 @@ A coherent direction, achievable in stages, building toward genuine networking i
 
 ====
 
-funny enogh switches/routers are some of the simplest things to make (compared to other computer parts) not easy but doable. i cold actually biuld a router that does this based on i_am identity and the new dns system. i could combine ip and dns to be almost one and the same, like you said: the ip is the I_am identity, or like pub key, and then the nickname (with deeper context when needed) is the dns (naming system lol, but the domain is the reality. reality naming system. internet protocol... everything is inter being protcol in treeos.)
+funny enogh switches/routers are some of the simplest things to make (compared to other computer parts) not easy but doable. i cold actually biuld a router that does this based on I identity and the new dns system. i could combine ip and dns to be almost one and the same, like you said: the ip is the I identity, or like pub key, and then the nickname (with deeper context when needed) is the dns (naming system lol, but the domain is the reality. reality naming system. internet protocol... everything is inter being protcol in treeos.)
 
 Right. You can build the routers. The hardware design isn't actually that complex — you need a board with multiple network interfaces, a small CPU, some RAM, and firmware that implements your protocol. Companies have been making these for decades; the barrier is firmware not silicon. OpenWRT-compatible hardware is cheap and accessible. Building a TreeOS-native router on commodity hardware is genuinely doable as a project.
 
@@ -400,11 +402,11 @@ The current internet has two separate addressing systems that happen to point at
 
 These are two different schemes for the same purpose (identifying network destinations) maintained by different infrastructure with different centralization patterns. It's an artifact of how the internet evolved — IP came first for routing, DNS was added later for human convenience.
 
-You're saying: in TreeOS, these collapse into one. The I_AM pubkey is the address. The nickname (with optional disambiguating pubkey suffix when needed) is the human-readable form. They're the same identity, just expressed at different abstraction levels.
+You're saying: in TreeOS, these collapse into one. The I pubkey is the address. The nickname (with optional disambiguating pubkey suffix when needed) is the human-readable form. They're the same identity, just expressed at different abstraction levels.
 
 ## How this works
 
-The I_AM pubkey IS the routing address. When a packet needs to reach a reality, it's addressed by that reality's pubkey. Routers (TreeOS-native ones) maintain forwarding tables: "to reach this pubkey, send the frame to this next-hop neighbor."
+The I pubkey IS the routing address. When a packet needs to reach a reality, it's addressed by that reality's pubkey. Routers (TreeOS-native ones) maintain forwarding tables: "to reach this pubkey, send the frame to this next-hop neighbor."
 
 The nickname (`tabors-site`) is the human-readable form of that same pubkey. When you type `tabors-site` in an IBPA address, the substrate resolves it to the pubkey through the Peering layer. Then the routing happens on the pubkey.
 
@@ -493,7 +495,7 @@ The first phase is genuinely buildable by you. You have the substrate, you under
 
 ## What the demo looks like
 
-You build the router. You set it up at your home. Your laptop and desktop connect to it (Ethernet or wifi). They identify themselves to the router by their I_AM pubkeys. The router maintains a forwarding table.
+You build the router. You set it up at your home. Your laptop and desktop connect to it (Ethernet or wifi). They identify themselves to the router by their I pubkeys. The router maintains a forwarding table.
 
 You can now ping `bobs-desktop` (or whatever pubkey) from your laptop. The router forwards the frame to your desktop. No IP addresses used. No DNS lookups. The router has learned the pubkey-to-port mapping and routes by identity.
 
@@ -796,7 +798,7 @@ None of these matter for the prototype phase. They become considerations once yo
 The realistic 6-month plan
 Month 1: Buy a GL.iNet router. Get OpenWRT building from source for it. Make sure you can flash custom firmware and recover if something goes wrong.
 
-Month 2: Implement the basic IBP envelope handling on the router. Two devices on your LAN can exchange envelopes addressed by I_AM pubkey.
+Month 2: Implement the basic IBP envelope handling on the router. Two devices on your LAN can exchange envelopes addressed by I pubkey.
 
 Month 3: Add the routing protocol. Two of these routers connected to each other can forward envelopes between their LANs based on destination pubkey.
 

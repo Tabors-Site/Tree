@@ -38,7 +38,7 @@
 //   seed floor         50   (url→http, ibpa→ibpa, model ext/mime→
 //                            model, binary mime→file, text→generic)
 
-import { listMatterTypes, getMatterType } from "./types.js";
+import { listMatterTypesFolded, getMatterType } from "./types.js";
 
 const SCORE = Object.freeze({
   MIME_EXACT: 100,
@@ -119,7 +119,7 @@ export function classifyMatter(input = {}) {
     if (!cur || score > cur.score) candidates.set(type, { score, reason });
   };
 
-  for (const def of listMatterTypes()) {
+  for (const def of listMatterTypesFolded()) {
     const c = def.claims;
     const prio = c?.priority || 0;
     if (c) {
@@ -185,7 +185,7 @@ export function classifyMatter(input = {}) {
  * scores against.
  */
 export function serializeTypeCatalog() {
-  return listMatterTypes().map((def) => ({
+  return listMatterTypesFolded().map((def) => ({
     name:         def.name,
     description:  def.description,
     contentKinds: [...def.contentKinds],

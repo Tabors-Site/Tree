@@ -37,7 +37,10 @@ function foldVerbPasts(text) {
   let count = 0;
   for (const line of text.split("\n")) {
     const v = line.match(/^\s*([A-Za-z][A-Za-z-]*) is a verb\b/);
-    if (v) { current = v[1].toLowerCase(); continue; }
+    if (v) {
+      current = v[1].toLowerCase();
+      continue;
+    }
     const p = line.match(/^\s*Its past is ([A-Za-z][A-Za-z-]*)/);
     if (p && current && !declared.has(current)) {
       declarePast(current, p[1].toLowerCase());
@@ -56,14 +59,20 @@ export function foldWords() {
     try {
       total += foldVerbPasts(fs.readFileSync(file, "utf8"));
     } catch (err) {
-      log.warn("WordFold", `could not fold ${path.basename(file)}: ${err.message}`);
+      log.warn(
+        "WordFold",
+        `could not fold ${path.basename(file)}: ${err.message}`,
+      );
     }
   }
-  log.verbose("WordFold", `folded ${total} declared verb pasts from the foundation words`);
+  log.verbose(
+    "WordFold",
+    `folded ${total} declared verb pasts from the foundation words`,
+  );
   return total;
 }
 
-// ── the concept fold: declare each concept .word as an I_AM coin fact ──
+// ── the concept fold: declare each concept .word as an I coin fact ──
 //
 // The companion to foldVerbPasts. Where that folds verbs.word's PASTS into the tense lookup, this
 // folds the twenty concept .words onto the chain, one bindWord each, carrying {kind:"concept", says,
@@ -75,8 +84,12 @@ import { CONCEPT_WORDS } from "./conceptWords.js";
 
 // Split a .word into its declaration body (the `says`) and its # header (the axiom + host pointer).
 function readConceptWord(name) {
-  const text = fs.readFileSync(path.join(STORE, "words", `${name}.word`), "utf8");
-  const header = [], body = [];
+  const text = fs.readFileSync(
+    path.join(STORE, "words", `${name}.word`),
+    "utf8",
+  );
+  const header = [],
+    body = [];
   for (const line of text.split("\n")) {
     if (line.startsWith("#")) header.push(line.replace(/^#\s?/, ""));
     else body.push(line);
@@ -84,7 +97,7 @@ function readConceptWord(name) {
   return { says: body.join("\n").trim(), axiom: header.join("\n").trim() };
 }
 
-// Declare every concept word into the fold, in descent order, each through bindWord as an I_AM
+// Declare every concept word into the fold, in descent order, each through bindWord as an I
 // coin fact carrying {kind:"concept", says, axiom}. Dedup by word is the wordStore guard.
 export async function declareConcepts({ moment = null, history = "0" } = {}) {
   const { bindWord } = await import("./wordStore.js");
@@ -92,10 +105,17 @@ export async function declareConcepts({ moment = null, history = "0" } = {}) {
   for (const name of CONCEPT_WORDS) {
     try {
       const { says, axiom } = readConceptWord(name);
-      await bindWord(name, { kind: "concept", says, axiom }, { moment, history, skipIfUnchanged: true });
+      await bindWord(
+        name,
+        { kind: "concept", says, axiom },
+        { moment, history, skipIfUnchanged: true },
+      );
       count++;
     } catch (err) {
-      log.warn("WordFold", `could not declare concept word ${name}: ${err.message}`);
+      log.warn(
+        "WordFold",
+        `could not declare concept word ${name}: ${err.message}`,
+      );
     }
   }
   log.verbose("WordFold", `declared ${count} concept words into the fold`);
@@ -116,8 +136,8 @@ export async function declareConcepts({ moment = null, history = "0" } = {}) {
 // types, reducers, and able-words declared beside them. This is the shared seam, the one boot call
 // both halves meet at; wire it after the story is established, before the surface renders.
 export async function seedFold({ moment = null, history = "0" } = {}) {
-  foldWords();                                 // verb pasts, sync, the tense lookup
-  await declareConcepts({ moment, history });   // the concept descent, this half
+  foldWords(); // verb pasts, sync, the tense lookup
+  await declareConcepts({ moment, history }); // the concept descent, this half
   const store = await import("./wordStore.js");
   if (typeof store.declareOpsToFold === "function") {
     await store.declareOpsToFold({ moment, history }); // the do-ops, the wordStore half

@@ -16,7 +16,7 @@
 
 import { hooks } from "../../hooks.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
-import { I_AM } from "../being/seedBeings.js";
+import { I } from "../being/seedBeings.js";
 import { acquireSpaceLock, releaseSpaceLock } from "./spaceLocks.js";
 import { invalidateSpace } from "./ancestorCache.js";
 
@@ -43,7 +43,13 @@ export function getSpaceOwner(spaceRow) {
  * keeps NO implicit write access on transfer — under AblesAreAuth,
  * any continued authority requires a granted able.
  */
-export async function setSpaceOwner(spaceId, newOwnerId, actor, history, moment = null) {
+export async function setSpaceOwner(
+  spaceId,
+  newOwnerId,
+  actor,
+  history,
+  moment = null,
+) {
   if (typeof history !== "string" || !history) {
     throw new Error("setSpaceOwner: history is required (thread from moment).");
   }
@@ -53,7 +59,8 @@ export async function setSpaceOwner(spaceId, newOwnerId, actor, history, moment 
   const slot = await loadOrFold("space", spaceId, history);
   const space = slot ? slot.state : null;
   if (!space) throw new Error("Space not found");
-  if (space.heavenSpace) throw new Error("Cannot set ownership on heaven spaces");
+  if (space.heavenSpace)
+    throw new Error("Cannot set ownership on heaven spaces");
 
   await assertBeingExists(newOwnerId, history);
 
@@ -65,20 +72,26 @@ export async function setSpaceOwner(spaceId, newOwnerId, actor, history, moment 
   // Two authorization shapes: (1) replacing an existing owner — only
   // that owner can; (2) claiming an unowned position — the parent
   // owner must approve.
-  if (currentOwnerId && currentOwnerId !== I_AM) {
+  if (currentOwnerId && currentOwnerId !== I) {
     if (String(currentOwnerId) !== String(actor)) {
       throw new Error("Only the current owner can reassign owner");
     }
   } else if (space.parent) {
     await assertResolvedOwner(space.parent, actor, history);
   } else {
-    throw new Error("Cannot set owner on a top-level space with no current owner");
+    throw new Error(
+      "Cannot set owner on a top-level space with no current owner",
+    );
   }
 
   const previousOwnerId = currentOwnerId;
 
   const locked = await acquireSpaceLock(spaceId, actor);
-  if (!locked) throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Space ownership is being modified");
+  if (!locked)
+    throw new IbpError(
+      IBP_ERR.RESOURCE_CONFLICT,
+      "Space ownership is being modified",
+    );
   // CAS check inside the lock: re-read owner, abort if a concurrent writer
   // raced past us. On the abort path the lock is released immediately; on
   // the success path the lock is handed to afterSeal so it SPANS the
@@ -106,10 +119,14 @@ export async function setSpaceOwner(spaceId, newOwnerId, actor, history, moment 
   const cleanup = () => {
     releaseSpaceLock(spaceId, actor);
     invalidateSpace(spaceId);
-    hooks.run("afterMembersChange", {
-      spaceId, action: "setSpaceOwner",
-      targetUserId: newOwnerId, previousOwnerId,
-    }).catch(() => {});
+    hooks
+      .run("afterMembersChange", {
+        spaceId,
+        action: "setSpaceOwner",
+        targetUserId: newOwnerId,
+        previousOwnerId,
+      })
+      .catch(() => {});
   };
   if (moment?.afterSeal) moment.afterSeal.push(cleanup);
   else cleanup();
@@ -126,7 +143,9 @@ export async function setSpaceOwner(spaceId, newOwnerId, actor, history, moment 
  */
 export async function removeSpaceOwner(spaceId, actor, history, moment = null) {
   if (typeof history !== "string" || !history) {
-    throw new Error("removeSpaceOwner: history is required (thread from moment).");
+    throw new Error(
+      "removeSpaceOwner: history is required (thread from moment).",
+    );
   }
   const { loadOrFold } = await import("../projections.js");
   const slot = await loadOrFold("space", spaceId, history);
@@ -135,7 +154,8 @@ export async function removeSpaceOwner(spaceId, actor, history, moment = null) {
   if (space.heavenSpace) throw new Error("Cannot modify heaven spaces");
 
   const ownerId = getSpaceOwner(space);
-  if (!ownerId || ownerId === I_AM) throw new Error("Space has no owner to remove");
+  if (!ownerId || ownerId === I)
+    throw new Error("Space has no owner to remove");
 
   if (space.parent) {
     await assertResolvedOwner(space.parent, actor, history);
@@ -146,7 +166,11 @@ export async function removeSpaceOwner(spaceId, actor, history, moment = null) {
   const removedOwnerId = ownerId;
 
   const locked = await acquireSpaceLock(spaceId, actor);
-  if (!locked) throw new IbpError(IBP_ERR.RESOURCE_CONFLICT, "Space ownership is being modified");
+  if (!locked)
+    throw new IbpError(
+      IBP_ERR.RESOURCE_CONFLICT,
+      "Space ownership is being modified",
+    );
 
   // ONE act, ONE fact (23.md): remove-owner returns its do:remove-owner fact
   // (owner=null, folded by applySetField); the lock + cleanup ride afterSeal so
@@ -155,9 +179,13 @@ export async function removeSpaceOwner(spaceId, actor, history, moment = null) {
   const cleanup = () => {
     releaseSpaceLock(spaceId, actor);
     invalidateSpace(spaceId);
-    hooks.run("afterMembersChange", {
-      spaceId, action: "removeSpaceOwner", targetUserId: removedOwnerId,
-    }).catch(() => {});
+    hooks
+      .run("afterMembersChange", {
+        spaceId,
+        action: "removeSpaceOwner",
+        targetUserId: removedOwnerId,
+      })
+      .catch(() => {});
   };
   if (moment?.afterSeal) moment.afterSeal.push(cleanup);
   else cleanup();

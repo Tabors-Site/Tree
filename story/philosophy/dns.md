@@ -1,10 +1,10 @@
 # TreeOS as its own DNS: summary and plan
 
-**In one line.** Every TreeOS instance can be its own name server. A reality already has a cryptographic identity (its I_AM key) and already federates through Peering, so it can resolve names to network addresses itself, with signed facts instead of registrars, and never depend on DNS for the truth of who a reality is or where it lives.
+**In one line.** Every TreeOS instance can be its own name server. A reality already has a cryptographic identity (its I key) and already federates through Peering, so it can resolve names to network addresses itself, with signed facts instead of registrars, and never depend on DNS for the truth of who a reality is or where it lives.
 
 ## What it is
 
-A DNS server is just a forwarder that maps names to addresses. TreeOS already has the two things a name server needs: an identity to vouch for records (the I_AM key) and a federation layer to pass them around (Peering). So the substrate can BE the resolver. Peering becomes a distributed DNS whose records are signed by I_AM keys, not authorized by ICANN.
+A DNS server is just a forwarder that maps names to addresses. TreeOS already has the two things a name server needs: an identity to vouch for records (the I key) and a federation layer to pass them around (Peering). So the substrate can BE the resolver. Peering becomes a distributed DNS whose records are signed by I keys, not authorized by ICANN.
 
 The trigger was a small observation: `tabor@gmail.com` and `tabor@treeos.ai` look identical but mean different things. The `local@domain` shape belongs to email. Reality scoped identity needs its own shape, and that points at the larger move: TreeOS owning its own addressing and resolution end to end.
 
@@ -14,7 +14,7 @@ It replaces the parts of the web stack that are centralized or fragile, and keep
 
 - **Resolution (replaces DNS).** Each reality stamps signed address facts (its current IP, port, transport). Peering federates and caches them. To find reality B you query the Peering network for B's signed facts. No DNS lookup, no registrar.
 - **Transport (replaces HTTP and WebSocket).** IBP envelopes ride a lean protocol directly over TCP or UDP, signed cryptographically. No HTTP overhead, no CA dependency. An HTTPS gateway stays available for browsers.
-- **Identity (replaces CAs).** The I_AM public key is the root of trust. A hijacked DNS record or a coerced certificate authority cannot impersonate a reality, because neither can produce the I_AM signature.
+- **Identity (replaces CAs).** The I public key is the root of trust. A hijacked DNS record or a coerced certificate authority cannot impersonate a reality, because neither can produce the I signature.
 - **Packet delivery (keeps IP).** IP still moves the bytes. Replacing IP means an overlay network (I2P, Yggdrasil), a separate and much larger undertaking that is not worth it. IP is fine; the layers above it are the problem.
   YES KEEP IP LOL THAT IS LOWER ON OSI THAN NEEDED FOR NOW
 
@@ -26,7 +26,7 @@ An independent networking stack, not an app on top of the web. The web stack is 
 
 Each step ships value on its own, and the order proves the foundations before the novel parts.
 
-1. **LAN discovery (mDNS).** Realities advertise `_treeos._tcp` with their I_AM key and alias and discover each other on a local network with no DNS. Days of work on existing libraries.
+1. **LAN discovery (mDNS).** Realities advertise `_treeos._tcp` with their I key and alias and discover each other on a local network with no DNS. Days of work on existing libraries.
 2. **Signed address facts.** The reality's network Name stamps its address (IP, port, transport) as substrate facts. DNS becomes one publishing channel; the signed fact is the source of truth. The architecture exists and needs implementation.
 3. **Native transport.** IBP over raw TCP or UDP, signed, no HTTP. Keep the HTTPS and WebSocket gateway for browsers and restrictive firewalls. Both modes coexist.
 4. **Peering resolution and alias claims.** Each instance acts as a resolver for realities it knows and forwards signed claims for ones it does not. This is the distributed DNS core and the most novel piece, so it lands once the layers under it are proven.
@@ -44,7 +44,7 @@ A focused two to three week build demonstrates the whole idea with no public inf
 - **Collide.** A third reality also claims `tabors-site`; resolution surfaces both claimants instead of picking one.
 - **Forward.** A reality on another LAN finds B by asking A, which forwards B's signed claim. Discovery with no central infrastructure.
 
-What exists already: IBP envelopes and signing, reality identity via I_AM keys, TCP transport. What the demo adds: mDNS advertise and discover, the signed address fact, the Peering claim and forward protocol, and alias resolution in the IBPA parser. Phase 6 (forwarding) is the only genuinely new piece; the rest is existing primitives or standard technique.
+What exists already: IBP envelopes and signing, reality identity via I keys, TCP transport. What the demo adds: mDNS advertise and discover, the signed address fact, the Peering claim and forward protocol, and alias resolution in the IBPA parser. Phase 6 (forwarding) is the only genuinely new piece; the rest is existing primitives or standard technique.
 
 Hold this as the direction after the current refactor stabilizes. It is not a bolt on. The substrate's cryptographic identity, signed facts, and federated trust are already most of what an independent name and routing layer needs.
 
@@ -80,14 +80,14 @@ A TreeOS reality has a public-facing component: a process listening on a known p
 
 To reach a reality, you need:
 
-Their I_AM public key (the identity)
+Their I public key (the identity)
 Their current network address (IP and port)
-The I_AM key comes from prior knowledge or from looking them up in the Peering layer. The network address comes from their published address facts (stamped by them, federated through Peering, cached by anyone who's interacted with them).
+The I key comes from prior knowledge or from looking them up in the Peering layer. The network address comes from their published address facts (stamped by them, federated through Peering, cached by anyone who's interacted with them).
 
 When you want to send something:
 
 Open TCP connection to their IP:port
-Send an IBP envelope (signed by your Name, addressed to their I_AM or to specific Names in their reality)
+Send an IBP envelope (signed by your Name, addressed to their I or to specific Names in their reality)
 Their substrate receives the envelope, verifies the signature, routes it to the appropriate handler
 Response (if any) comes back over the same connection or a new one
 No HTTP. No DNS resolution (for already-known realities; first-time discovery still needs some bootstrapping). No web infrastructure dependency. Just IP + your own transport + cryptographic addressing.
@@ -123,9 +123,9 @@ This is the same approach IPFS and similar systems take. You get most of the ben
 What this gives you
 A few real benefits:
 
-No DNS hijacking attacks. If someone takes over the DNS for treeos.ai, they can't actually impersonate the reality because they don't have the I_AM key. The signed address facts are the truth. DNS becomes one possible discovery mechanism, not a security-critical infrastructure dependency.
+No DNS hijacking attacks. If someone takes over the DNS for treeos.ai, they can't actually impersonate the reality because they don't have the I key. The signed address facts are the truth. DNS becomes one possible discovery mechanism, not a security-critical infrastructure dependency.
 
-No CA dependency. Currently HTTPS depends on certificate authorities. They issue certificates; browsers trust them. CAs can be compromised, coerced, or simply make mistakes. TreeOS's transport doesn't need CAs — the cryptographic identity is the I_AM key, which is its own root of trust.
+No CA dependency. Currently HTTPS depends on certificate authorities. They issue certificates; browsers trust them. CAs can be compromised, coerced, or simply make mistakes. TreeOS's transport doesn't need CAs — the cryptographic identity is the I key, which is its own root of trust.
 
 Censorship resistance. Governments or ISPs can block DNS resolution for specific domains. They can't easily block TreeOS routing because the discovery is distributed and the transport doesn't look like HTTP. (They could block specific IPs, but that's a different attack.)
 
@@ -158,7 +158,7 @@ The web is centralized at certain layers (DNS, CAs) and that's a real limitation
 How this composes with everything else
 This direction reinforces several existing commitments:
 
-Self-sovereign identity. Your reality's I_AM is the truth. Network identity flows from cryptographic identity, not from infrastructure assignments.
+Self-sovereign identity. Your reality's I is the truth. Network identity flows from cryptographic identity, not from infrastructure assignments.
 
 Federation through verification. Realities trust each other based on cryptographic verification, not based on shared infrastructure trust.
 
@@ -200,12 +200,12 @@ well they are just dns server forwarding. theoretically, each treeos instance co
 Show me what ibp address would look lik after and a short demo plan
 
 6:07 AM
-Right — DNS servers are just forwarders that resolve names to addresses. Every TreeOS instance can be one, because every instance already knows its own reality's identity and can resolve queries about other realities it knows. The Peering layer is essentially a distributed DNS where the records are signed by I_AM keys instead of authorized by registrars.
+Right — DNS servers are just forwarders that resolve names to addresses. Every TreeOS instance can be one, because every instance already knows its own reality's identity and can resolve queries about other realities it knows. The Peering layer is essentially a distributed DNS where the records are signed by I keys instead of authorized by registrars.
 
 Alias conflicts
 Multiple realities might claim the alias tabors-site. The Peering layer handles this differently than DNS:
 
-Each claimant has signed their own alias claim with their I_AM key
+Each claimant has signed their own alias claim with their I key
 Peering nodes return all known claimants for an alias
 The querying reality decides which one to use based on its own trust policies (known peers, friend-of-friend recommendations, community consensus, or pinned pubkey suffix)
 No central authority decides who "owns" an alias
@@ -216,8 +216,8 @@ A reasonable demo of TreeOS self-resolution would show:
 
 Setup: Two TreeOS realities on a LAN, no DNS configured for them, no public IPs needed.
 
-Reality A: laptop running TreeOS, I_AM pubkey z6Mk7nF8..., alias claim tabors-site
-Reality B: desktop running TreeOS, I_AM pubkey z6Mq2pR4..., alias claim bobs-site
+Reality A: laptop running TreeOS, I pubkey z6Mk7nF8..., alias claim tabors-site
+Reality B: desktop running TreeOS, I pubkey z6Mq2pR4..., alias claim bobs-site
 Phase 1 — bootstrap discovery:
 
 Each reality starts up. The network Name detects local IP (192.168.1.42 for laptop, 192.168.1.50 for desktop). Stamps current address facts:
@@ -230,7 +230,7 @@ transport: "tcp"
 }
 Each reality also advertises itself via mDNS on the LAN:
 
-\_treeos.\_tcp.local service, with TXT record containing I_AM pubkey and alias claim
+\_treeos.\_tcp.local service, with TXT record containing I pubkey and alias claim
 tabors-site.\_treeos.\_tcp.local → 192.168.1.42:6677
 Phase 2 — discovery handshake:
 
@@ -290,7 +290,7 @@ Already mostly there:
 
 IBP envelopes and signing (exists)
 TCP transport (exists if you have the network layer)
-Reality identity through I_AM keys (exists)
+Reality identity through I keys (exists)
 Needs to be added:
 
 mDNS advertisement and discovery (couple days of work with existing libraries)

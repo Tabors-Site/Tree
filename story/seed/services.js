@@ -146,7 +146,11 @@ import {
   registerMatterType as ibpRegisterMatterType,
   unregisterMatterType as ibpUnregisterMatterType,
   getMatterType as ibpGetMatterType,
-  listMatterTypes as ibpListMatterTypes,
+  // RUNTIME enumeration reads the FOLD (the chain), not the Map: a word-declared type
+  // ("a meal has a calorie") exists only as a fact, never in the registration buffer. The IBP
+  // surface enumerates what TYPES EXIST, so it folds. (listMatterTypes — the Map — is the boot
+  // buffer only, read by declareTypesToFold.)
+  listMatterTypesFolded as ibpListMatterTypes,
 } from "./materials/matter/types.js";
 import {
   registerInboxRenderer as ibpRegisterInboxRenderer,

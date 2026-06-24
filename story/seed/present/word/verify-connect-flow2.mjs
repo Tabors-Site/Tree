@@ -105,7 +105,7 @@ async function declareName(name, password) {
   const sc = {
     actId: randomUUID(),
     actorAct: { branch, by: "i-am" },
-    identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" },
+    identity: { beingId: "i-am", name: "I", nameId: "i-am" },
     deltaF: [],
     foldedSeqs: new Map(),
     afterSeal: [],

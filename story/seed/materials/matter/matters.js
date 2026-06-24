@@ -62,6 +62,7 @@ import {
   getMatterType,
   typeAllowsContentKind,
   typeAllowsMime,
+  missingRequiredField,
 } from "./types.js";
 
 // Place-config-driven knobs. Read at call time so config changes take
@@ -204,6 +205,16 @@ async function createMatter({
     throw new Error(
       `Unknown matter type "${type}". Registered types: seed basics plus extension-registered "<ext>:<type>" names.`,
     );
+  }
+  // REQUIRED-FIELD validation (the `has` schema, all-rules-fold §4). Gated behind the type declaring
+  // any required field, so schema-less types are unaffected. A declared field Y maps to
+  // qualities.<type>.<Y> (here, the caller's initialQualities); an optional ("may have") field is not
+  // required. Required-set only — never a closed allowlist (the open qualities layer stays open).
+  if (typeDef.fields?.length) {
+    const missing = missingRequiredField(typeDef, initialQualities);
+    if (missing) {
+      throw new Error(`type "${type}" requires field "${missing}"`);
+    }
   }
   const history = assertHistoryOrThrow(moment?.actorAct?.history, "matters(moment)");
 

@@ -50,17 +50,25 @@ export function wireLiveHooks() {
   // specific event are free to skip — the cost is one descriptor
   // re-fetch by clients with a live subscription, bounded by their
   // own debounce in handleDescriptorEvent.
-  hooks.register("afterQualityWrite", async ({ spaceId, ns, target, history }) => {
-    if (!spaceId) return;
-    emitPositionInvalidate(spaceId, `qualities:${ns}`);
-    if (target?.kind === "space") {
-      try {
-        const { loadProjection } = await import("../../seed/materials/projections.js");
-        const slot = await loadProjection("space", target.id, history || "0");
-        if (slot?.state?.parent) emitPositionInvalidate(slot.state.parent, `child-metadata:${ns}`);
-      } catch { /* defensive */ }
-    }
-  }, "ibp-live");
+  hooks.register(
+    "afterQualityWrite",
+    async ({ spaceId, ns, target, history }) => {
+      if (!spaceId) return;
+      emitPositionInvalidate(spaceId, `qualities:${ns}`);
+      if (target?.kind === "space") {
+        try {
+          const { loadProjection } =
+            await import("../../seed/materials/projections.js");
+          const slot = await loadProjection("space", target.id, history || "0");
+          if (slot?.state?.parent)
+            emitPositionInvalidate(slot.state.parent, `child-metadata:${ns}`);
+        } catch {
+          /* defensive */
+        }
+      }
+    },
+    "ibp-live",
+  );
 
   // PositionProjection deltas. Skinny push: just (beingId, x, y, seq)
   // for the affected space. Clients map beingId to a mesh, apply the
@@ -68,16 +76,20 @@ export function wireLiveHooks() {
   // still fires for the same write through afterFieldWrite — that
   // remains the catch-up path for clients that missed a delta. The
   // delta is the latency optimization.
-  hooks.register("afterPositionUpdate", async (payload) => {
-    if (!payload?.spaceId) return;
-    emitPositionDelta(payload.spaceId, {
-      beingId:     payload.beingId,
-      x:           payload.x,
-      y:           payload.y,
-      ...(payload.z !== undefined ? { z: payload.z } : {}),
-      lastMoveSeq: payload.lastMoveSeq,
-    });
-  }, "ibp-live");
+  hooks.register(
+    "afterPositionUpdate",
+    async (payload) => {
+      if (!payload?.spaceId) return;
+      emitPositionDelta(payload.spaceId, {
+        beingId: payload.beingId,
+        x: payload.x,
+        y: payload.y,
+        ...(payload.z !== undefined ? { z: payload.z } : {}),
+        lastMoveSeq: payload.lastMoveSeq,
+      });
+    },
+    "ibp-live",
+  );
 
   // Non-qualities scalar writes (size, name, type, parent, position, ...).
   // The descriptor surfaces these on beings/matters/spaces, so any
@@ -92,45 +104,70 @@ export function wireLiveHooks() {
   // recreating every mesh in the scene. The delta is the
   // authoritative live path for coord; invalidate covers fields
   // the delta doesn't carry.
-  hooks.register("afterFieldWrite", async ({ spaceId, field, target, history }) => {
-    if (!spaceId) return;
-    // Skip coord ONLY for being writes . set-being:coord has its own
-    // lightweight emitPositionDelta path (see afterPositionUpdate
-    // above) so an extra invalidate would force a debounced full
-    // descriptor refetch 10x/sec while a human walks. For space and
-    // matter coord changes, there's no delta path . the parent
-    // descriptor must be invalidated so the portal repaints the
-    // child at its new cell. Without this, moving a space or matter
-    // succeeds at the substrate but the visual stays at the old cell.
-    if (field === "coord" && target?.kind === "being") return;
-    emitPositionInvalidate(spaceId, `field:${field}`);
-    if (target?.kind === "space") {
-      try {
-        const { loadProjection } = await import("../../seed/materials/projections.js");
-        const slot = await loadProjection("space", target.id, history || "0");
-        if (slot?.state?.parent) emitPositionInvalidate(slot.state.parent, `child-field:${field}`);
-      } catch { /* defensive */ }
-    }
-  }, "ibp-live");
+  hooks.register(
+    "afterFieldWrite",
+    async ({ spaceId, field, target, history }) => {
+      if (!spaceId) return;
+      // Skip coord ONLY for being writes . set-being:coord has its own
+      // lightweight emitPositionDelta path (see afterPositionUpdate
+      // above) so an extra invalidate would force a debounced full
+      // descriptor refetch 10x/sec while a human walks. For space and
+      // matter coord changes, there's no delta path . the parent
+      // descriptor must be invalidated so the portal repaints the
+      // child at its new cell. Without this, moving a space or matter
+      // succeeds at the substrate but the visual stays at the old cell.
+      if (field === "coord" && target?.kind === "being") return;
+      emitPositionInvalidate(spaceId, `field:${field}`);
+      if (target?.kind === "space") {
+        try {
+          const { loadProjection } =
+            await import("../../seed/materials/projections.js");
+          const slot = await loadProjection("space", target.id, history || "0");
+          if (slot?.state?.parent)
+            emitPositionInvalidate(slot.state.parent, `child-field:${field}`);
+        } catch {
+          /* defensive */
+        }
+      }
+    },
+    "ibp-live",
+  );
 
   // Structural changes: new/removed/moved children change the parent's
   // descriptor. Matter writes change the affected position's content.
-  hooks.register("afterSpaceCreate", async ({ space }) => {
-    if (space?.parent) emitPositionInvalidate(space.parent, "child-created");
-  }, "ibp-live");
-  hooks.register("afterSpaceDelete", async ({ space }) => {
-    if (space?.parent) emitPositionInvalidate(space.parent, "child-deleted");
-  }, "ibp-live");
-  hooks.register("afterMatter", async ({ spaceId }) => {
-    if (spaceId) emitPositionInvalidate(spaceId, "matter-changed");
-  }, "ibp-live");
+  hooks.register(
+    "afterSpaceCreate",
+    async ({ space }) => {
+      if (space?.parent) emitPositionInvalidate(space.parent, "child-created");
+    },
+    "ibp-live",
+  );
+  hooks.register(
+    "afterSpaceDelete",
+    async ({ space }) => {
+      if (space?.parent) emitPositionInvalidate(space.parent, "child-deleted");
+    },
+    "ibp-live",
+  );
+  hooks.register(
+    "afterMatter",
+    async ({ spaceId }) => {
+      if (spaceId) emitPositionInvalidate(spaceId, "matter-changed");
+    },
+    "ibp-live",
+  );
 
   // Chainstep state changes: every tool call shifts the "activity" field
   // for the being whose chainstep just ran. Invalidate the bound spaceId
   // so subscribers re-fetch and see the new activity entry.
-  hooks.register("afterToolCall", async ({ spaceId, toolName }) => {
-    if (spaceId) emitPositionInvalidate(spaceId, `tool:${toolName || "unknown"}`);
-  }, "ibp-live");
+  hooks.register(
+    "afterToolCall",
+    async ({ spaceId, toolName }) => {
+      if (spaceId)
+        emitPositionInvalidate(spaceId, `tool:${toolName || "unknown"}`);
+    },
+    "ibp-live",
+  );
 
   // Act seal: the being's activity flips from "acting" to "said" (the
   // endMessage prose). Without this fire the bubble keeps showing the
@@ -138,15 +175,25 @@ export function wireLiveHooks() {
   // call triggers a refetch. Invalidate the being's current space so
   // the descriptor's sealed-fallback path lands the spoken text above
   // the mesh.
-  hooks.register("afterAct", async ({ beingOut }) => {
-    if (!beingOut) return;
-    try {
-      const b = await (await import("../../seed/materials/being/being.js")).default
-        .findById(beingOut).select("position homeSpace").lean();
-      const sId = b?.position || b?.homeSpace;
-      if (sId) emitPositionInvalidate(String(sId), "act-sealed");
-    } catch { /* descriptor refresh is best-effort */ }
-  }, "ibp-live");
+  hooks.register(
+    "afterAct",
+    async ({ beingOut }) => {
+      if (!beingOut) return;
+      try {
+        const b = await (
+          await import("../../seed/materials/being/being.js")
+        ).default
+          .findById(beingOut)
+          .select("position homeSpace")
+          .lean();
+        const sId = b?.position || b?.homeSpace;
+        if (sId) emitPositionInvalidate(String(sId), "act-sealed");
+      } catch {
+        /* descriptor refresh is best-effort */
+      }
+    },
+    "ibp-live",
+  );
 
   // Stamper live loop (./factory/present). Every sealed act nudges
   // the actor's stamper-space subscribers — the synthetic space's
@@ -155,20 +202,26 @@ export function wireLiveHooks() {
   // one Map lookup per seal. The protocols→seed direction holds:
   // seed fires the hook, this side listens (the factPush inversion).
   let _factoryPresentIdCache = null;
-  hooks.register("afterAct", async ({ beingIn }) => {
-    if (!beingIn) return;
-    try {
-      emitPositionInvalidate(`stamper:${beingIn}`, "act-sealed");
-      if (_factoryPresentIdCache === null) {
-        const { getFactoryPresentSpaceId } =
-          await import("../../seed/materials/space/factory.js");
-        _factoryPresentIdCache = (await getFactoryPresentSpaceId()) || false;
+  hooks.register(
+    "afterAct",
+    async ({ beingIn }) => {
+      if (!beingIn) return;
+      try {
+        emitPositionInvalidate(`stamper:${beingIn}`, "act-sealed");
+        if (_factoryPresentIdCache === null) {
+          const { getFactoryPresentSpaceId } =
+            await import("../../seed/materials/space/factory.js");
+          _factoryPresentIdCache = (await getFactoryPresentSpaceId()) || false;
+        }
+        if (_factoryPresentIdCache) {
+          emitPositionInvalidate(_factoryPresentIdCache, "act-sealed");
+        }
+      } catch {
+        /* stamper refresh is best-effort */
       }
-      if (_factoryPresentIdCache) {
-        emitPositionInvalidate(_factoryPresentIdCache, "act-sealed");
-      }
-    } catch { /* stamper refresh is best-effort */ }
-  }, "ibp-live-stamper");
+    },
+    "ibp-live-stamper",
+  );
 
   // DO-trigger fan-out. The three substrate write events fan out
   // through the subscription registry: any being subscribed to one of
@@ -178,8 +231,16 @@ export function wireLiveHooks() {
   // whether to act. This is the universal bridge between Mode 2
   // (anonymous code emitting DOs) and Mode 1 (beings reacting to
   // substrate changes through summons).
-  hooks.register("afterMatter",        (payload) => emitToSubscribers("afterMatter",        payload), "ibp-subscriptions");
-  hooks.register("afterQualityWrite", (payload) => emitToSubscribers("afterQualityWrite", payload), "ibp-subscriptions");
+  hooks.register(
+    "afterMatter",
+    (payload) => emitToSubscribers("afterMatter", payload),
+    "ibp-subscriptions",
+  );
+  hooks.register(
+    "afterQualityWrite",
+    (payload) => emitToSubscribers("afterQualityWrite", payload),
+    "ibp-subscriptions",
+  );
 
   // Reactive inner-face dispatch. Every batch of reels that received
   // facts in the just-committed seal fans into the innerFaceLive
@@ -197,38 +258,48 @@ export function wireLiveHooks() {
   // that becomes a concern, a microtask-batched queue keyed by subId
   // is the next optimization. The current shape is correct for the
   // present workload.
-  hooks.register("afterReelArrival", async ({ reels }) => {
-    if (!Array.isArray(reels) || reels.length === 0) return;
-    const subIds = new Set();
-    for (const reel of reels) {
-      const key = reelKey(reel);
-      if (!key) continue;
-      const bucket = getSubscribersForReel(key);
-      for (const subId of bucket) subIds.add(subId);
-    }
-    if (subIds.size === 0) return;
-    const op = getSeeOperation("my-inner-face");
-    if (!op || typeof op.handler !== "function") return;
-    for (const subId of subIds) {
-      const sub = getInnerFaceSub(subId);
-      if (!sub || !sub.socket?.connected) continue;
-      try {
-        const face = await op.handler({
-          identity: { beingId: sub.beingId, name: null },
-          args:     {},
-          ctx:      null,
-          history:  sub.history,
-        });
-        if (!face) continue;
-        applyRefold(subId, face);
-        emitInnerFace(sub.socket, face);
-      } catch (err) {
-        log.warn("InnerFaceLive", `refold dispatch failed for sub ${subId}: ${err.message}`);
+  hooks.register(
+    "afterReelArrival",
+    async ({ reels }) => {
+      if (!Array.isArray(reels) || reels.length === 0) return;
+      const subIds = new Set();
+      for (const reel of reels) {
+        const key = reelKey(reel);
+        if (!key) continue;
+        const bucket = getSubscribersForReel(key);
+        for (const subId of bucket) subIds.add(subId);
       }
-    }
-  }, "ibp-inner-face-live");
+      if (subIds.size === 0) return;
+      const op = getSeeOperation("my-inner-face");
+      if (!op || typeof op.handler !== "function") return;
+      for (const subId of subIds) {
+        const sub = getInnerFaceSub(subId);
+        if (!sub || !sub.socket?.connected) continue;
+        try {
+          const face = await op.handler({
+            identity: { beingId: sub.beingId, name: null },
+            args: {},
+            ctx: null,
+            history: sub.history,
+          });
+          if (!face) continue;
+          applyRefold(subId, face);
+          emitInnerFace(sub.socket, face);
+        } catch (err) {
+          log.warn(
+            "InnerFaceLive",
+            `refold dispatch failed for sub ${subId}: ${err.message}`,
+          );
+        }
+      }
+    },
+    "ibp-inner-face-live",
+  );
 
-  log.info("IBP", "live SEE hooks wired (afterMetadataWrite, afterSpace*, afterMatter, afterToolCall, afterReelArrival); DO-trigger subscriptions wired (afterMatter, afterMetadataWrite)");
+  log.info(
+    "IBP",
+    "live SEE hooks wired (afterMetadataWrite, afterSpace*, afterMatter, afterToolCall, afterReelArrival); DO-trigger subscriptions wired (afterMatter, afterMetadataWrite)",
+  );
 }
 
 /**
@@ -237,7 +308,10 @@ export function wireLiveHooks() {
  */
 export function initIBPHttp(app) {
   registerIbpBootstrap(app);
-  log.info("IBP", "IBP HTTP bootstrap registered at /.well-known/treeos-portal");
+  log.info(
+    "IBP",
+    "IBP HTTP bootstrap registered at /.well-known/treeos-portal",
+  );
 }
 
 /**
@@ -274,15 +348,17 @@ export function initIBPWS(io) {
   // catch-up window after boot is acceptable.
   (async () => {
     try {
-      const [{ rehydrateFromFacts: rehydrateSubs }, { rehydrateFromFacts: rehydrateSchedules }] =
-        await Promise.all([
-          import("../../seed/present/wakes/subscriptions.js"),
-          import("../../seed/present/wakes/wakeSchedule.js"),
-        ]);
+      const [
+        { rehydrateFromFacts: rehydrateSubs },
+        { rehydrateFromFacts: rehydrateSchedules },
+      ] = await Promise.all([
+        import("../../seed/present/wakes/subscriptions.js"),
+        import("../../seed/present/wakes/wakeSchedule.js"),
+      ]);
       await Promise.all([rehydrateSubs(), rehydrateSchedules()]);
       // The able-words are declared into the unified wordStore fold at genesis
       // (declareAbleWordsToFold, in seedFold + the boot-end pass). Here, after genesis, REHYDRATE
-      // rebuilds the per-history disabled overlay + the I_AM bedrock set from those fold facts, so a
+      // rebuilds the per-history disabled overlay + the I bedrock set from those fold facts, so a
       // restart re-applies any disables. resolveAbleWord reads the fold for existence; the chain is
       // the durable truth.
       const { rehydrateWordsFromFacts } =
@@ -302,9 +378,20 @@ export function initIBPWS(io) {
 // Re-exports for convenience — anything that wants to USE the IBP
 // primitives (e.g. eventually emit ibp:event frames from within a Speak
 // handler) can import them through this module.
-export { parseFromSocket, parseWithContext, format, canonical, getStoryDomain } from "../../seed/ibp/address.js";
+export {
+  parseFromSocket,
+  parseWithContext,
+  format,
+  canonical,
+  getStoryDomain,
+} from "../../seed/ibp/address.js";
 export { resolveStance } from "../../seed/ibp/resolver.js";
-export { buildPlaceDescriptor, buildDiscovery, DESCRIPTOR_VERSION, IBP_PROTOCOL_VERSION } from "../../seed/ibp/descriptor.js";
+export {
+  buildPlaceDescriptor,
+  buildDiscovery,
+  DESCRIPTOR_VERSION,
+  IBP_PROTOCOL_VERSION,
+} from "../../seed/ibp/descriptor.js";
 export { IbpError, IBP_ERR, isIbpError } from "../../seed/ibp/protocol.js";
 // Scheduler observability only. Mutators like `wake`, `abortCurrent`,
 // and the cancel sweeps are NOT re-exported: they let callers fabricate
@@ -312,7 +399,10 @@ export { IbpError, IBP_ERR, isIbpError } from "../../seed/ibp/protocol.js";
 // right way to wake a being is to SUMMON them; the right way to cut a
 // sub-tree is to SUMMON `<story>/./threads/<id>` (priority HUMAN for
 // out-of-band interrupt).
-export { getCurrentRootCorrelation, getStats as getSchedulerStats } from "../../seed/present/intake/scheduler.js";
+export {
+  getCurrentRootCorrelation,
+  getStats as getSchedulerStats,
+} from "../../seed/present/intake/scheduler.js";
 // Reply aggregation pattern for fanout (Foreman → Workers, etc.).
 export { aggregate } from "../../seed/present/replies.js";
 // Subscription registry — extensions declare DO-trigger interest so

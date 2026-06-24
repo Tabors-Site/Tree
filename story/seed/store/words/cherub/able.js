@@ -24,7 +24,7 @@
 //   switch   . change THIS session's history on the same being.
 //              Per-session — does not touch other sockets of the
 //              same being. Stamps an audit fact on the new history.
-//   death    . close a being's lifecycle (I_AM-only today).
+//   death    . close a being's lifecycle (I-only today).
 //
 // History seating: handlers never touch the socket (the moment path
 // can't carry one — acts are records). Handlers that change which
@@ -74,13 +74,21 @@ registerAbleWord(
 // be:truename's world strand — the rung-3 verb-op worked example. The .word
 // reproduces the gate ordering + builds the fact params (truenameHost.js wires the
 // four floor see-ops); the BE dispatcher stamps the one fact from its factParams.
-registerAbleWord("cherub", "truename", new URL("./truename.word", import.meta.url));
+registerAbleWord(
+  "cherub",
+  "truename",
+  new URL("./truename.word", import.meta.url),
+);
 // be:death's world strand — the rung-3 verb-op #2 (a pure fact-lay; the kill authority is the
 // verb-level authorize() in be.js). The .word owns the op gates + builds the fact params.
 registerAbleWord("cherub", "death", new URL("./death.word", import.meta.url));
 // be:release's world strand — the rung-3 verb-op #3 (the first fact-vs-session split: the .word
 // authors the be:release FACT; the handler keeps the HOST session effects — lockSigning + seatHistory).
-registerAbleWord("cherub", "release", new URL("./release.word", import.meta.url));
+registerAbleWord(
+  "cherub",
+  "release",
+  new URL("./release.word", import.meta.url),
+);
 // be:switch's world strand — verb-op #4 (the CROSS-HISTORY fact: the .word authors be:switch on the
 // destination history; the transport seats socket.currentHistory from seatHistory after the seal).
 registerAbleWord("cherub", "switch", new URL("./switch.word", import.meta.url));
@@ -138,12 +146,12 @@ async function birthHandler({ payload, ctx }) {
   }
 
   // ── First-being bootstrap ──
-  // The I_AM already exists (planted by ensureSpaceRoot at boot) and
-  // I (cherub) was summoned forth by the I_AM at genesis. The very
+  // The I already exists (planted by ensureSpaceRoot at boot) and
+  // I (cherub) was summoned forth by the I at genesis. The very
   // first human registration is admitted through me like every other
   // one . I mint them via the BE birth pathway (birthBeing). Two things
   // differ from the subsequent path: their being-tree parent is the
-  // I_AM directly (so they become the first heaven authority), and
+  // I directly (so they become the first heaven authority), and
   // beforeRegister is bypassed because hook listeners are not yet
   // loaded on a fresh story. The cherub at the gate admits the
   // first arrival the same way as every later one.
@@ -205,8 +213,7 @@ async function birthHandler({ payload, ctx }) {
           const { HEAVEN_SPACE } =
             await import("../../../materials/space/heavenSpaces.js");
           const { doVerb } = await import("../../../ibp/verbs/do.js");
-          const { I_AM } =
-            await import("../../../materials/being/seedBeings.js");
+          const { I } = await import("../../../materials/being/seedBeings.js");
           const heaven = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, "0");
           if (heaven) {
             await withIAmAct(
@@ -221,7 +228,7 @@ async function birthHandler({ payload, ctx }) {
                     anchorBeingId: null,
                   },
                   {
-                    identity: { beingId: I_AM, name: "I-Am" },
+                    identity: { beingId: I, name: "I-Am" },
                     moment: anointCtx,
                   },
                 );
@@ -751,12 +758,14 @@ function extractTargetName(address) {
 // (name:logout alone logs the name out). NO JS fallback for the fact — the word is the op.
 async function _releaseViaWord({ identity, moment }) {
   if (!moment) return null;
-  const { resolveAbleWord, runAbleWord } = await import("../../../present/word/ableWordRegistry.js");
+  const { resolveAbleWord, runAbleWord } =
+    await import("../../../present/word/ableWordRegistry.js");
   const ir = resolveAbleWord("cherub", "release", moment?.actorAct?.history);
   if (!ir) return null;
   try {
     const { result } = await runAbleWord(ir, {
-      moment, history: moment?.actorAct?.history,
+      moment,
+      history: moment?.actorAct?.history,
       trigger: { caller: identity?.beingId ? String(identity.beingId) : null },
       env: { host: {} }, // release.word has no floor see-ops
     });
@@ -764,7 +773,8 @@ async function _releaseViaWord({ identity, moment }) {
     const { stampsWordFact } = await import("../../../ibp/factResult.js");
     return stampsWordFact(result, "being");
   } catch (e) {
-    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
+    if (e && e.__wordRefusal)
+      throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
     throw e;
   }
 }
@@ -772,12 +782,16 @@ async function _releaseViaWord({ identity, moment }) {
 async function releaseHandler({ identity, moment }) {
   const wordResult = await _releaseViaWord({ identity, moment });
   if (!wordResult) {
-    throw new IbpError(IBP_ERR.INTERNAL, "be:release: release.word is not available (the word is the op — there is no JS fallback)");
+    throw new IbpError(
+      IBP_ERR.INTERNAL,
+      "be:release: release.word is not available (the word is the op — there is no JS fallback)",
+    );
   }
   // Session effects (HOST, not a world-change): unbind the being-keyed signing latch — NEVER the
   // name session. seatHistory is the home history the transport re-seats socket.currentHistory to.
   if (identity?.beingId) {
-    const { lockSigning } = await import("../../../materials/name/signingSession.js");
+    const { lockSigning } =
+      await import("../../../materials/name/signingSession.js");
     lockSigning(String(identity.beingId));
   }
   const seatHistory = await findHomeHistoryOfBeing(identity?.beingId);
@@ -816,7 +830,8 @@ async function releaseHandler({ identity, moment }) {
 // word is the op.
 async function _switchViaWord({ payload, identity, moment }) {
   if (!moment) return null;
-  const { resolveAbleWord, runAbleWord } = await import("../../../present/word/ableWordRegistry.js");
+  const { resolveAbleWord, runAbleWord } =
+    await import("../../../present/word/ableWordRegistry.js");
   const ir = resolveAbleWord("cherub", "switch", moment?.actorAct?.history);
   if (!ir) return null;
   const { switchHostEnv } = await import("./switchHost.js");
@@ -825,10 +840,12 @@ async function _switchViaWord({ payload, identity, moment }) {
   // have no wire hint, so the actor's act history IS the seat they were on.
   const fromHistory =
     (typeof payload?.fromHistory === "string" && payload.fromHistory) ||
-    moment?.actorAct?.history || null;
+    moment?.actorAct?.history ||
+    null;
   try {
     const { result } = await runAbleWord(ir, {
-      moment, history: moment?.actorAct?.history,
+      moment,
+      history: moment?.actorAct?.history,
       trigger: {
         caller: identity?.beingId ? String(identity.beingId) : null,
         history: String(payload?.history || "").trim(),
@@ -840,7 +857,8 @@ async function _switchViaWord({ payload, identity, moment }) {
     const { stampsWordFact } = await import("../../../ibp/factResult.js");
     return stampsWordFact(result, "being");
   } catch (e) {
-    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
+    if (e && e.__wordRefusal)
+      throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
     throw e;
   }
 }
@@ -848,7 +866,10 @@ async function _switchViaWord({ payload, identity, moment }) {
 async function switchHandler({ payload, identity, moment }) {
   const result = await _switchViaWord({ payload, identity, moment });
   if (!result) {
-    throw new IbpError(IBP_ERR.INTERNAL, "be:switch: switch.word is not available (the word is the op — there is no JS fallback)");
+    throw new IbpError(
+      IBP_ERR.INTERNAL,
+      "be:switch: switch.word is not available (the word is the op — there is no JS fallback)",
+    );
   }
   // No session effect in the handler: the transport seats socket.currentHistory from result.seatHistory
   // AFTER the moment seals (stamp-then-seat). The handler hands back the seat inputs + the fact.
@@ -866,11 +887,11 @@ async function switchHandler({ payload, identity, moment }) {
 // being's reel. The reducer's applyDeath in reducerHelpers.js
 // projects qualities.death = { time, byActor }.
 //
-// Authority gate: today only I_AM may perform be:death. The authorize
+// Authority gate: today only I may perform be:death. The authorize
 // step in beVerb's dispatch routes through the able-walk which
-// short-circuits true for I_AM and refuses everyone else (no able
+// short-circuits true for I and refuses everyone else (no able
 // today declares a be:death capability). Future doctrine may extend the
-// authority list (mother + governance ables); for now, I_AM only.
+// authority list (mother + governance ables); for now, I only.
 // ────────────────────────────────────────────────────────────────────
 
 // be:death — close a being's lifecycle. WIRED bundle (mirrors truename): the world strand is
@@ -881,14 +902,16 @@ async function switchHandler({ payload, identity, moment }) {
 // authorize() (run before this), not an op concern.
 async function _deathViaWord({ beingName, payload, identity, moment }) {
   if (!moment) return null;
-  const { resolveAbleWord, runAbleWord } = await import("../../../present/word/ableWordRegistry.js");
+  const { resolveAbleWord, runAbleWord } =
+    await import("../../../present/word/ableWordRegistry.js");
   const ir = resolveAbleWord("cherub", "death", moment?.actorAct?.history);
   if (!ir) return null;
   const { deathHostEnv } = await import("./deathHost.js");
   const history = moment?.actorAct?.history;
   try {
     const { result } = await runAbleWord(ir, {
-      moment, history,
+      moment,
+      history,
       trigger: {
         caller: identity?.beingId ? String(identity.beingId) : null,
         beingName: beingName || null,
@@ -899,7 +922,8 @@ async function _deathViaWord({ beingName, payload, identity, moment }) {
     const { stampsWordFact } = await import("../../../ibp/factResult.js");
     return stampsWordFact(result, "being"); // factParams {byActor} + factTarget → _factParams/_factTarget
   } catch (e) {
-    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
+    if (e && e.__wordRefusal)
+      throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
     throw e;
   }
 }
@@ -922,16 +946,24 @@ async function deathHandler({ beingName, identity, payload, moment }) {
 // .word RETURNS { trueName: nameId } as `factParams`; the shim promotes it to the
 // dispatcher's `_factParams` so beVerb lays the ONE caller-attributed be:truename
 // fact. The inert summary below is the clean-miss fallback (no .word IR).
-async function _truenameViaWord({ address, beingName, payload, identity, moment }) {
+async function _truenameViaWord({
+  address,
+  beingName,
+  payload,
+  identity,
+  moment,
+}) {
   if (!moment) return null;
-  const { resolveAbleWord, runAbleWord } = await import("../../../present/word/ableWordRegistry.js");
+  const { resolveAbleWord, runAbleWord } =
+    await import("../../../present/word/ableWordRegistry.js");
   const ir = resolveAbleWord("cherub", "truename", moment?.actorAct?.history);
   if (!ir) return null;
   const { truenameHostEnv } = await import("./truenameHost.js");
   const history = moment?.actorAct?.history;
   try {
     const { result } = await runAbleWord(ir, {
-      moment, history,
+      moment,
+      history,
       trigger: {
         caller: identity?.beingId ? String(identity.beingId) : null,
         beingName: beingName || null,
@@ -946,13 +978,26 @@ async function _truenameViaWord({ address, beingName, payload, identity, moment 
     const { stampsWordFact } = await import("../../../ibp/factResult.js");
     return stampsWordFact(result, "being");
   } catch (e) {
-    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
+    if (e && e.__wordRefusal)
+      throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
     throw e;
   }
 }
 
-async function truenameHandler({ address, beingName, identity, payload, moment }) {
-  const result = await _truenameViaWord({ address, beingName, payload, identity, moment });
+async function truenameHandler({
+  address,
+  beingName,
+  identity,
+  payload,
+  moment,
+}) {
+  const result = await _truenameViaWord({
+    address,
+    beingName,
+    payload,
+    identity,
+    moment,
+  });
   if (result) return result;
   // NO JS fallback: truename.word IS the op, the single source of truth. If its IR is absent (the
   // .word failed to register), the op honestly cannot run — that is the truthful state, not
@@ -975,7 +1020,7 @@ async function truenameHandler({ address, beingName, identity, payload, moment }
 export const cherubBeOps = Object.freeze({
   birth: {
     description:
-      "Create a top-level being owned by your name (cherub is right below I_AM). You're already signed in as your name — no password needed.",
+      "Create a top-level being owned by your name (cherub is right below I). You're already signed in as your name — no password needed.",
     label: "Create a top-level being",
     args: {
       name: { type: "text", label: "Name your being", required: true },
@@ -1028,7 +1073,7 @@ export const cherubBeOps = Object.freeze({
   death: {
     description:
       "Close this being's lifecycle. One-way; the chain locks. " +
-      "Past acts + grants remain valid. Today I_AM only.",
+      "Past acts + grants remain valid. Today I only.",
     label: "Close being",
     args: {},
     handler: deathHandler,
@@ -1079,7 +1124,7 @@ async function _registerHumanWithFreshHome({
 }) {
   const { randomUUID: uuidv4 } = await import("node:crypto");
   const { emitFact } = await import("../../../past/fact/facts.js");
-  const { I_AM } = await import("../../../materials/being/seedBeings.js");
+  const { I } = await import("../../../materials/being/seedBeings.js");
 
   // ── 1. Create the home space ──
   // Human homes are 100×100 grid bounded territories under the place
@@ -1087,7 +1132,7 @@ async function _registerHumanWithFreshHome({
   // exists to reference); step 1 stamps the space with no owner.
   const homeId = uuidv4();
   const placeRootId = getSpaceRootId();
-  const actorId = cherubIdentity?.beingId || I_AM;
+  const actorId = cherubIdentity?.beingId || I;
   await emitFact(
     {
       verb: "do",
@@ -1119,7 +1164,7 @@ async function _registerHumanWithFreshHome({
       // OWNED BY THE CONNECTED NAME. A being cherub mints for a signed-in name
       // is that NAME's own (sovereign trueName), NOT a child of i-am. Without
       // this, a name's being defaults to the mother's trueName (i-am) — the
-      // funk where the being shows as I_AM and its key-export would surface the
+      // funk where the being shows as I and its key-export would surface the
       // story key. Null only for the anonymous/pre-name path (no connected
       // name), where the mother's default is correct.
       ...(ownerNameId ? { trueName: String(ownerNameId) } : {}),
@@ -1134,7 +1179,7 @@ async function _registerHumanWithFreshHome({
   });
 
   // ── 3. Set the new being as owner of the home ──
-  // The home is a tree root they own. Stamped as I_AM because cherub
+  // The home is a tree root they own. Stamped as I because cherub
   // already authorized the whole compound act; doing it under the new
   // being's identity faces a chicken-and-egg with stance auth (they're
   // becoming the owner; auth needs them to already be one).
@@ -1144,7 +1189,7 @@ async function _registerHumanWithFreshHome({
     "set-space",
     { field: "owner", value: String(result.beingId) },
     {
-      identity: I_AM,
+      identity: I,
       moment,
       currentHistory: moment?.actorAct?.history || "0",
     },
@@ -1208,7 +1253,7 @@ async function _registerHumanWithFreshHome({
       merge: false,
     },
     {
-      identity: I_AM,
+      identity: I,
       moment,
       currentHistory: moment?.actorAct?.history || "0",
     },
@@ -1278,7 +1323,7 @@ async function _birthViaWordOrJs({
         Cherub: String(parentBeingId),
         ...(arrivalSlot ? { Arrival: String(arrivalSlot.id) } : {}),
       },
-      through: String(parentBeingId), // I_AM acts THROUGH Cherub (cherub.word)
+      through: String(parentBeingId), // I acts THROUGH Cherub (cherub.word)
     });
   } catch (err) {
     const laid =
@@ -1507,7 +1552,7 @@ function mapSeedError(err) {
 export const cherubAble = Object.freeze({
   name: "cherub",
   description:
-    "The gate, right below I_AM. Processes the three BE ops (birth/connect/release) AND summon:mate — a connected name births its first TOP-LEVEL being through cherub (owned by the name). Down the chain, names reuse summon:mate on @birther / be:birth on their own beings.",
+    "The gate, right below I. Processes the three BE ops (birth/connect/release) AND summon:mate — a connected name births its first TOP-LEVEL being through cherub (owned by the name). Down the chain, names reuse summon:mate on @birther / be:birth on their own beings.",
   // Seed delegate able — hosted on the story root. The cherub being
   // gets this able granted at boot by the I-Am. `can` includes
   // do:grant-able:human + do:grant-able:global so cherub can anoint new
@@ -1551,7 +1596,7 @@ export const cherubAble = Object.freeze({
       word: "mate",
       as: "receiver",
       description:
-        "Birth your first being through your name — a top-level being, owned by you (cherub is right below I_AM)",
+        "Birth your first being through your name — a top-level being, owned by you (cherub is right below I)",
     },
     { verb: "be", word: "birth" },
     { verb: "be", word: "connect" },
@@ -1559,7 +1604,7 @@ export const cherubAble = Object.freeze({
   ],
 
   // summon:mate — a connected NAME, acting through @arrival, asks cherub to
-  // birth its FIRST being. Cherub is right below I_AM, so it mints TOP-LEVEL
+  // birth its FIRST being. Cherub is right below I, so it mints TOP-LEVEL
   // beings; the child is OWNED by the summoner's name (sovereign trueName),
   // not a being of cherub. Down the chain the name reuses summon:mate against
   // @birther / be:birth on its own beings. (A name CAN be given beings without
@@ -1627,7 +1672,7 @@ async function handleCherubMate(message, ctx) {
       }
     );
   }
-  // Top-level: at the story root, parented under cherub (right below I_AM).
+  // Top-level: at the story root, parented under cherub (right below I).
   let homeSpaceId = messageObj.homeSpaceId || null;
   if (!homeSpaceId) {
     try {

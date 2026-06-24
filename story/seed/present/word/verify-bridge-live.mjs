@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // The bridge's live entry point, end to end. Where verify-cherub-live.mjs hand-built
-// the I_AM-through-Cherub ctx and called evaluate() directly, THIS drives the SAME
+// the I-through-Cherub ctx and called evaluate() directly, THIS drives the SAME
 // five-act diff through `runAbleWord` from a REALISTIC summoner moment (the arrival's
 // attribution, `_inOp` NOT preset) — proving runAbleWord derives the actor model the
 // green diff proved (overrides identity + actorAct.by to i-am, shares the chain),
 // so the birthHandler cut is a trivial call into this one tested entry point.
 //
-// Two assertions beyond the green seven: the laid facts attribute to I_AM (the
+// Two assertions beyond the green seven: the laid facts attribute to I (the
 // override worked), and the caller's own moment is UNTOUCHED (the derivation is
 // clean — the host session strand that follows reads the real moment, not i-am).
 // Isolated test DB, wiped at start and end.
@@ -120,13 +120,13 @@ try {
     } catch {}
   }
   await withRetry(() => ensureIAm());
-  // fold-only dispatch: the words declare themselves onto I_AM's reel BEFORE any do-op dispatches
+  // fold-only dispatch: the words declare themselves onto I's reel BEFORE any do-op dispatches
   // (ensureSpaceRoot's create-space). Mirrors genesis.js (ensureIAm -> the words -> the story).
   await withRetry(async () => {
     const wc = {
       actId: randomUUID(),
       actorAct: { history: "0", by: "i-am" },
-      identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" },
+      identity: { beingId: "i-am", name: "I", nameId: "i-am" },
       deltaF: [],
       foldedSeqs: new Map(),
       afterSeal: [],
@@ -154,7 +154,7 @@ try {
     const sc = {
       actId: randomUUID(),
       actorAct: { history, by: "i-am" },
-      identity: { beingId: "i-am", name: "I_AM", nameId: "i-am" },
+      identity: { beingId: "i-am", name: "I", nameId: "i-am" },
       deltaF: [],
       foldedSeqs: new Map(),
       afterSeal: [],
@@ -269,8 +269,8 @@ try {
   // ── the two new assertions: the derivation is correct AND clean ──
   const allByIam = moment.deltaF.every((f) => String(f.by) === "i-am");
   allByIam
-    ? ok(`every laid fact attributes to I_AM (the actor-model override worked)`)
-    : bad(`facts attribute to I_AM`, moment.deltaF.map((f) => f.by).join(", "));
+    ? ok(`every laid fact attributes to I (the actor-model override worked)`)
+    : bad(`facts attribute to I`, moment.deltaF.map((f) => f.by).join(", "));
 
   JSON.stringify(moment.actorAct) === sealedActorAct
     ? ok(

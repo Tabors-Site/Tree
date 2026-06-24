@@ -52,7 +52,7 @@ const MatterSchema = new mongoose.Schema({
   // spaceId is a bare space-id, OR the DELETED sentinel ("deleted")
   // for soft-deleted matter (the set-matter handler validates which).
   spaceId: { type: String, required: true },
-  // beingId is the creator's bare being-id (I_AM for genesis-time
+  // beingId is the creator's bare being-id (I for genesis-time
   // creations) OR the DELETED sentinel for soft-deleted matter.
   beingId: { type: String, required: true },
 
@@ -63,7 +63,7 @@ const MatterSchema = new mongoose.Schema({
   // The matter tree at this space. Root matter has
   // parentMatterId: null; descendants chain through parentMatterId.
   parentMatterId: { type: String, ref: "Matter", default: null, index: true },
-  children:       [{ type: String, ref: "Matter" }],
+  children: [{ type: String, ref: "Matter" }],
 
   // What this matter IS — its registered matter type (types.js).
   // The type decides the content shape, where the bytes live, and
@@ -107,7 +107,7 @@ const MatterSchema = new mongoose.Schema({
   // here. `position` mirrors `spaceId` once position-facts land; for
   // now reducer output stays null.
   foldedSeq: { type: Number, default: null },
-  position:  { type: String, default: null },
+  position: { type: String, default: null },
 
   // Reducer-owned timestamps. NO `default: Date.now` and NO pre-save
   // hook. Mongoose-managed defaults would fire when the reducer

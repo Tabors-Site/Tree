@@ -12,20 +12,31 @@
 // NATIVE do:set-being acts, and the reveal rides the return — only the KDF and its
 // cutoff instant remain host (the one external-resource escape).
 
-import { mintCredentialSpec, decryptCredential } from "../../../materials/being/identity/credentials.js";
-import { hasCredentialAuthority, findBeingParent } from "../../../materials/being/identity/lineage.js";
+import {
+  mintCredentialSpec,
+  decryptCredential,
+} from "../../../materials/being/identity/credentials.js";
+import {
+  hasCredentialAuthority,
+  findBeingParent,
+} from "../../../materials/being/identity/lineage.js";
 import { loadTargetRow } from "../../../materials/_targetShape.js";
 
-const historyOf = (ctx) => ctx?.moment?.actorAct?.history || ctx?.history || "0";
+const historyOf = (ctx) =>
+  ctx?.moment?.actorAct?.history || ctx?.history || "0";
 
 export function credentialHostEnv() {
   return {
     // hasCredentialAuthority(caller, target, branch) -> the being-tree authority
-    // fold (lineage.js): self/I_AM short-circuit, else the asker's NAME (trueName)
+    // fold (lineage.js): self/I short-circuit, else the asker's NAME (trueName)
     // owning the target or an ancestor / holding a covering point. One composite
     // predicate the JS handler calls as a unit.
     hasCredentialAuthority: async ({ args: [caller, target, history] }, ctx) =>
-      hasCredentialAuthority(String(caller), String(target), history || historyOf(ctx)),
+      hasCredentialAuthority(
+        String(caller),
+        String(target),
+        history || historyOf(ctx),
+      ),
 
     // see-op "mint-credential" -> the fresh credential spec the native writes + the
     // reveal-on-return read: the scrypt `hash`, the encrypted blob (`plain` ->
@@ -38,10 +49,10 @@ export function credentialHostEnv() {
     "mint-credential": async () => {
       const spec = await mintCredentialSpec(null);
       return {
-        hash:      spec.hash,
-        plain:     spec.plain,
+        hash: spec.hash,
+        plain: spec.plain,
         plaintext: decryptCredential(spec.plain),
-        resetAt:   new Date().toISOString(),
+        resetAt: new Date().toISOString(),
       };
     },
 
@@ -53,7 +64,11 @@ export function credentialHostEnv() {
     // qualities.auth.credentialPlain read, Map-safe). The cleartext rides the .word's
     // return only; the dispatcher's audit strips it (rule 7).
     "read-credential": async ({ args: [target] }, ctx) => {
-      const beingRow = await loadTargetRow({ kind: "being", id: String(target) }, "being", { moment: ctx?.moment || null });
+      const beingRow = await loadTargetRow(
+        { kind: "being", id: String(target) },
+        "being",
+        { moment: ctx?.moment || null },
+      );
       const q = beingRow?.qualities;
       const auth = q instanceof Map ? q.get("auth") : q?.auth;
       const blob = auth?.credentialPlain || null;
@@ -69,10 +84,13 @@ export function credentialHostEnv() {
     // loadTargetRow(target) -> the being row for credential-read (its
     // qualities.auth.credentialPlain). Threads moment so an in-flight row resolves.
     loadTargetRow: async ({ args: [target] }, ctx) =>
-      loadTargetRow({ kind: "being", id: String(target) }, "being", { moment: ctx?.moment || null }),
+      loadTargetRow({ kind: "being", id: String(target) }, "being", {
+        moment: ctx?.moment || null,
+      }),
 
     // findBeingParent(target) -> the being-parent beingId for credential-attach's
     // being-parent-only gate (reads the be:birth fact's parentBeingId).
-    "find-being-parent": async ({ args: [target] }) => findBeingParent(String(target)),
+    "find-being-parent": async ({ args: [target] }) =>
+      findBeingParent(String(target)),
   };
 }

@@ -155,7 +155,7 @@ const RULES = [
     (m) => ({ kind: "is", subject: m[1].toLowerCase(), isA: m[2] }),
   ],
 
-  // I_AM's genesis acts (the LIFE register — acts performed in sequence, not law
+  // I's genesis acts (the LIFE register — acts performed in sequence, not law
   // or a watch; rule 9, "I" is the Name). Rendered forward from the root, this is
   // the creation story. Rule 19 disambiguates "I make X": a Capital X is a being
   // (birth it); a lowercase X is a space (create it).
@@ -233,8 +233,8 @@ const EFFECT_RULES = [
 
   // The cherub birth acts. THE IMPLICIT-ACTOR RULE: an unqualified act inside a
   // flow is by the Name ("I", resolved to the acting Name) THROUGH the flow's
-  // being (here Cherub, the mother). So all five are I_AM acting through Cherub.
-  // The new being is the NEW NAME's own (its trueName), not I_AM's; Cherub is the
+  // being (here Cherub, the mother). So all five are I acting through Cherub.
+  // The new being is the NEW NAME's own (its trueName), not I's; Cherub is the
   // mother, Arrival (the new Name's being at the floor) is the father. This is
   // what _registerHumanWithFreshHome assumed silently, now in the open.
   // "make a home space." -> do:create-space under the place root (the parent),
@@ -649,11 +649,11 @@ function guardForward(line) {
 }
 
 // RULE 19 (capitalization is a one-way signal): the only intentional capitals
-// are beings and the Name-refs I / I_AM. A kind / op / property is lowercase,
+// are beings and the Name-refs I / I. A kind / op / property is lowercase,
 // written with its article ("A model") or named by a reference ("It"). A
 // bare-capitalized kind reads as a being, so trip it loudly.
 const RULE19_KIND =
-  /^(?!It |I |I_AM |The |A |An )([A-Z][a-z]\w*) (accepts|carries|claims|has|may have|can|cannot)\b/;
+  /^(?!It |I |I |The |A |An )([A-Z][a-z]\w*) (accepts|carries|claims|has|may have|can|cannot)\b/;
 function guardCapitals(line) {
   const m = line.match(RULE19_KIND);
   if (m) {
@@ -875,7 +875,10 @@ function parseCond(text, c) {
   // drop parenthetical GLOSSES ("(not remote)") — a paren with whitespace before it — but KEEP
   // a see-op CALL's args (`missing(history)`, the `(` hugs its name), so an inline see-op cond
   // survives the and/or split to parseLeaf (the as-removal: `If destination-missing(history)`).
-  const t = raw.replace(/\s+\([^)]*\)/g, " ").replace(/\s+/g, " ").trim();
+  const t = raw
+    .replace(/\s+\([^)]*\)/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
   const ors = splitTop(t, /,?\s+or\s+/i); // absorb a comma before the connective ("X, or Y")
   if (ors.length > 1) return { any: ors.map((p) => parseCond(p, c)) };
   const ands = splitTop(t, /,?\s+and\s+/i); // ("X, and Y" -> no trailing comma on X)
@@ -964,11 +967,21 @@ function parseLeaf(t, c) {
   // unambiguous spellings (no `under`/`over`/`below` synonyms — those surface in prose words).
   if ((m = s.match(/^(.+?)\s+is less than\s+(.+)$/i)))
     return neg({
-      test: { op: "compare", as: "lt", path: refKey(m[1]), against: refLit(m[2]) },
+      test: {
+        op: "compare",
+        as: "lt",
+        path: refKey(m[1]),
+        against: refLit(m[2]),
+      },
     });
   if ((m = s.match(/^(.+?)\s+is greater than\s+(.+)$/i)))
     return neg({
-      test: { op: "compare", as: "gt", path: refKey(m[1]), against: refLit(m[2]) },
+      test: {
+        op: "compare",
+        as: "gt",
+        path: refKey(m[1]),
+        against: refLit(m[2]),
+      },
     });
   // a single bareword cond is a flow-local flag read: "signedIn", "asFather"
   if (/^[A-Za-z]\w*$/.test(s.trim())) {
@@ -1069,8 +1082,10 @@ function oper(v) {
   // nested literals: a value can be an object or array whose leaves recurse through
   // refLit, so $refs and inner objects nest. resolveValue (evaluator) walks the result
   // at run time. Enables `do create-matter with { content: { target: $address } }`.
-  if (x.startsWith("{") && x.endsWith("}")) return { value: parseObjectLiteral(x) };
-  if (x.startsWith("[") && x.endsWith("]")) return { value: parseArrayLiteral(x) };
+  if (x.startsWith("{") && x.endsWith("}"))
+    return { value: parseObjectLiteral(x) };
+  if (x.startsWith("[") && x.endsWith("]"))
+    return { value: parseArrayLiteral(x) };
   if (/^true$/i.test(x)) return { value: true };
   if (/^false$/i.test(x)) return { value: false };
   if (/^-?\d+(\.\d+)?$/.test(x)) return { value: Number(x) };
@@ -1096,7 +1111,9 @@ function refKey(s) {
 const LENS_WORDS = new Set(["where", "who", "when", "how", "why"]);
 function parseLens(quoteBody) {
   const x = String(quoteBody || "").trim();
-  const m = x.match(/^(what|where|who|when|how|why)\b\s*(?:from\b)?\s*\??\s*(.*)$/i);
+  const m = x.match(
+    /^(what|where|who|when|how|why)\b\s*(?:from\b)?\s*\??\s*(.*)$/i,
+  );
   if (!m) return { lens: null, body: x };
   const w = m[1].toLowerCase();
   return { lens: LENS_WORDS.has(w) ? w : null, body: m[2].trim() };
@@ -1126,10 +1143,26 @@ function splitTopCommas(s) {
       if (ch === '"') inStr = false;
       continue;
     }
-    if (ch === '"') { inStr = true; buf += ch; continue; }
-    if (ch === "{" || ch === "[") { depth++; buf += ch; continue; }
-    if (ch === "}" || ch === "]") { depth = Math.max(0, depth - 1); buf += ch; continue; }
-    if (ch === "," && depth === 0) { if (buf.trim()) out.push(buf.trim()); buf = ""; continue; }
+    if (ch === '"') {
+      inStr = true;
+      buf += ch;
+      continue;
+    }
+    if (ch === "{" || ch === "[") {
+      depth++;
+      buf += ch;
+      continue;
+    }
+    if (ch === "}" || ch === "]") {
+      depth = Math.max(0, depth - 1);
+      buf += ch;
+      continue;
+    }
+    if (ch === "," && depth === 0) {
+      if (buf.trim()) out.push(buf.trim());
+      buf = "";
+      continue;
+    }
     buf += ch;
   }
   if (buf.trim()) out.push(buf.trim());
@@ -1227,16 +1260,32 @@ function splitInlineIf(inner) {
       if (ch === '"') inStr = false;
       continue;
     }
-    if (ch === '"') { inStr = true; continue; }
-    if (ch === "(" || ch === "{" || ch === "[") { depth++; continue; }
-    if (ch === ")" || ch === "}" || ch === "]") { depth = Math.max(0, depth - 1); continue; }
+    if (ch === '"') {
+      inStr = true;
+      continue;
+    }
+    if (ch === "(" || ch === "{" || ch === "[") {
+      depth++;
+      continue;
+    }
+    if (ch === ")" || ch === "}" || ch === "]") {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
     if (depth !== 0) continue;
     const rest = inner.slice(i);
-    const explicit = rest.match(/^\s+then\s+/i) || rest.match(/^\s*(?:→|->)\s*/);
+    const explicit =
+      rest.match(/^\s+then\s+/i) || rest.match(/^\s*(?:→|->)\s*/);
     if (explicit)
-      return { cond: inner.slice(0, i).trim(), then: rest.slice(explicit[0].length).trim() };
+      return {
+        cond: inner.slice(0, i).trim(),
+        then: rest.slice(explicit[0].length).trim(),
+      };
     if (ch === "," && !/^\s*(?:and|or)\b/i.test(inner.slice(i + 1)))
-      return { cond: inner.slice(0, i).trim(), then: inner.slice(i + 1).trim() };
+      return {
+        cond: inner.slice(0, i).trim(),
+        then: inner.slice(i + 1).trim(),
+      };
   }
   return null;
 }
@@ -1245,18 +1294,47 @@ function splitInlineIf(inner) {
 // quoted comma is never split.
 function splitInlineEffects(s) {
   const parts = [];
-  let depth = 0, inStr = false, buf = "", i = 0;
+  let depth = 0,
+    inStr = false,
+    buf = "",
+    i = 0;
   while (i < s.length) {
     const ch = s[i];
-    if (inStr) { buf += ch; if (ch === '"') inStr = false; i++; continue; }
-    if (ch === '"') { inStr = true; buf += ch; i++; continue; }
-    if (ch === "(" || ch === "{" || ch === "[") { depth++; buf += ch; i++; continue; }
-    if (ch === ")" || ch === "}" || ch === "]") { depth = Math.max(0, depth - 1); buf += ch; i++; continue; }
+    if (inStr) {
+      buf += ch;
+      if (ch === '"') inStr = false;
+      i++;
+      continue;
+    }
+    if (ch === '"') {
+      inStr = true;
+      buf += ch;
+      i++;
+      continue;
+    }
+    if (ch === "(" || ch === "{" || ch === "[") {
+      depth++;
+      buf += ch;
+      i++;
+      continue;
+    }
+    if (ch === ")" || ch === "}" || ch === "]") {
+      depth = Math.max(0, depth - 1);
+      buf += ch;
+      i++;
+      continue;
+    }
     if (depth === 0) {
       const m = s.slice(i).match(/^(?:,\s*and\s+|,\s*|\s+and\s+)/i);
-      if (m) { if (buf.trim()) parts.push(buf.trim()); buf = ""; i += m[0].length; continue; }
+      if (m) {
+        if (buf.trim()) parts.push(buf.trim());
+        buf = "";
+        i += m[0].length;
+        continue;
+      }
     }
-    buf += ch; i++;
+    buf += ch;
+    i++;
   }
   if (buf.trim()) parts.push(buf.trim());
   return parts;
@@ -1279,7 +1357,7 @@ function parseBinds(clause) {
 // an unqualified act inside a flow: by the Name ("I", resolved to the acting
 // Name at run time, rule 9), THROUGH the flow's being (the being in the
 // header). The implicit-actor rule — a flow's body acts inherit its actor and
-// being rather than restating them; here, I_AM through Cherub.
+// being rather than restating them; here, I through Cherub.
 function beingAct(c, verbName, op, of, params) {
   const a = { kind: "act", verb: verbName, act: op, by: "I", through: c.being };
   if (of) a.of = of;
@@ -1419,12 +1497,34 @@ function splitItems(s) {
       i++;
       continue;
     }
-    if (ch === '"') { inStr = true; buf += ch; i++; continue; }
-    if (ch === "{" || ch === "[") { depth++; buf += ch; i++; continue; }
-    if (ch === "}" || ch === "]") { depth = Math.max(0, depth - 1); buf += ch; i++; continue; }
+    if (ch === '"') {
+      inStr = true;
+      buf += ch;
+      i++;
+      continue;
+    }
+    if (ch === "{" || ch === "[") {
+      depth++;
+      buf += ch;
+      i++;
+      continue;
+    }
+    if (ch === "}" || ch === "]") {
+      depth = Math.max(0, depth - 1);
+      buf += ch;
+      i++;
+      continue;
+    }
     if (depth === 0) {
-      const m = str.slice(i).match(/^(?:,\s*and\s+|,\s*or\s+|\s+and\s+|\s+or\s+|,\s*)/i);
-      if (m) { if (buf.trim()) parts.push(buf.trim()); buf = ""; i += m[0].length; continue; }
+      const m = str
+        .slice(i)
+        .match(/^(?:,\s*and\s+|,\s*or\s+|\s+and\s+|\s+or\s+|,\s*)/i);
+      if (m) {
+        if (buf.trim()) parts.push(buf.trim());
+        buf = "";
+        i += m[0].length;
+        continue;
+      }
     }
     buf += ch;
     i++;

@@ -10,7 +10,7 @@
 // the session is open, the stamper signs the Name's acts with the held
 // key; on logout (or TTL expiry) the key is wiped and the Name's acts
 // seal UNSIGNED until the next login. A Name whose key is NOT password-
-// locked (system-encrypted, or I_AM's story key) never needs this —
+// locked (system-encrypted, or I's story key) never needs this —
 // signing is automatic.
 //
 // All Names are the same here: the latch is NOT soul-type-gated. It is a
@@ -24,9 +24,9 @@
 // held key live here. A restart locks everyone (the safe direction) — the
 // held keys are gone and everyone re-authenticates.
 
-const DEFAULT_TTL_MS = 30 * 60_000;   // 30 minutes, slid on every signed seal
+const DEFAULT_TTL_MS = 30 * 60_000; // 30 minutes, slid on every signed seal
 
-const _unlocked = new Map();          // nameId -> { key: PEM|null, expiresAt }
+const _unlocked = new Map(); // nameId -> { key: PEM|null, expiresAt }
 
 /**
  * Open (or refresh) a signing session for a Name. `key` is the decrypted
@@ -35,7 +35,10 @@ const _unlocked = new Map();          // nameId -> { key: PEM|null, expiresAt }
  */
 export function unlockSigning(nameId, key = null, ttlMs = DEFAULT_TTL_MS) {
   if (!nameId) return;
-  _unlocked.set(String(nameId), { key: key || null, expiresAt: Date.now() + ttlMs });
+  _unlocked.set(String(nameId), {
+    key: key || null,
+    expiresAt: Date.now() + ttlMs,
+  });
 }
 
 /** Close a Name's signing session (logout, explicit lock). Wipes the key. */
@@ -47,7 +50,10 @@ export function lockSigning(nameId) {
 export function isSigningUnlocked(nameId) {
   const e = _unlocked.get(String(nameId));
   if (!e) return false;
-  if (Date.now() > e.expiresAt) { _unlocked.delete(String(nameId)); return false; }
+  if (Date.now() > e.expiresAt) {
+    _unlocked.delete(String(nameId));
+    return false;
+  }
   return true;
 }
 

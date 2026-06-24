@@ -43,8 +43,11 @@
 import { randomUUID as uuidv4 } from "node:crypto";
 import { registerOperation } from "../../../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
-import { detectTargetKind, targetIdOf } from "../../../materials/_targetShape.js";
-import { I_AM } from "../../../materials/being/seedBeings.js";
+import {
+  detectTargetKind,
+  targetIdOf,
+} from "../../../materials/_targetShape.js";
+import { I } from "../../../materials/being/seedBeings.js";
 import { registerAbleWord } from "../../../present/word/ableWordRegistry.js";
 // The auth gate + the model-matter resolve moved to modelHost.js (the host-escape glue);
 // import them back for the JS fallback below (the bodies are verbatim).
@@ -54,7 +57,11 @@ import { resolveModelMatter, assertMaySetModel } from "./modelHost.js";
 // ("render", "set-model") to model.word, its host escapes wired by modelHost.js. WIRED:
 // _setModelViaWord runs the `.word` through the bridge (CALLER mode); the JS
 // setModelHandler below is the clean-miss fallback.
-registerAbleWord("render", "set-model", new URL("./model.word", import.meta.url));
+registerAbleWord(
+  "render",
+  "set-model",
+  new URL("./model.word", import.meta.url),
+);
 
 const SKINS_SPACE_NAME = "skins";
 
@@ -68,38 +75,49 @@ const SKINS_SPACE_NAME = "skins";
 export async function ensureSkinsSpace(history = "0", moment = null) {
   const { getSpaceRootId } = await import("../../../sprout.js");
   const rootId = getSpaceRootId();
-  if (!rootId) throw new IbpError(IBP_ERR.INTERNAL, "ensureSkinsSpace: story root not ready");
+  if (!rootId)
+    throw new IbpError(
+      IBP_ERR.INTERNAL,
+      "ensureSkinsSpace: story root not ready",
+    );
 
-  const { default: Projection } = await import("../../../materials/history/projection.js");
+  const { default: Projection } =
+    await import("../../../materials/history/projection.js");
   // History-local first, then main's inherited row (the lazy-fill
   // idiom): the catalog is minted on main and inherited by histories.
   for (const b of history === "0" ? ["0"] : [history, "0"]) {
     const row = await Projection.findOne({
-      history: b, type: "space",
+      history: b,
+      type: "space",
       "state.parent": String(rootId),
       "state.name": SKINS_SPACE_NAME,
       tombstoned: { $ne: true },
-    }).select("id").lean();
+    })
+      .select("id")
+      .lean();
     if (row) return String(row.id);
   }
 
   const id = uuidv4();
   const { emitFact } = await import("../../../past/fact/facts.js");
-  await emitFact({
-    verb:    "do",
-    act:     "create-space",
-    through: I_AM,
-    of:      { kind: "space", id },
-    params: {
-      name:   SKINS_SPACE_NAME,
-      type:   "space",
-      parent: String(rootId),
-      size:   { x: 100, y: 100 },
-      qualities: {},
+  await emitFact(
+    {
+      verb: "do",
+      act: "create-space",
+      through: I,
+      of: { kind: "space", id },
+      params: {
+        name: SKINS_SPACE_NAME,
+        type: "space",
+        parent: String(rootId),
+        size: { x: 100, y: 100 },
+        qualities: {},
+      },
+      actId: moment?.actId || null,
+      history,
     },
-    actId:  moment?.actId || null,
-    history,
-  }, moment);
+    moment,
+  );
   return id;
 }
 
@@ -109,14 +127,16 @@ export async function ensureSkinsSpace(history = "0", moment = null) {
 // (field/value/merge), or null on a clean miss so the JS body runs. WordRefusal → IbpError.
 async function _setModelViaWord({ target, params, caller, moment }) {
   if (!moment) return null;
-  const { resolveAbleWord, runAbleWord } = await import("../../../present/word/ableWordRegistry.js");
+  const { resolveAbleWord, runAbleWord } =
+    await import("../../../present/word/ableWordRegistry.js");
   const ir = resolveAbleWord("render", "set-model", moment?.actorAct?.history);
   if (!ir) return null;
   const { modelHostEnv } = await import("./modelHost.js");
   const history = moment?.actorAct?.history;
   try {
     const { result } = await runAbleWord(ir, {
-      moment, history,
+      moment,
+      history,
       trigger: {
         target,
         kind: detectTargetKind(target),
@@ -134,7 +154,8 @@ async function _setModelViaWord({ target, params, caller, moment }) {
     });
     return result || null;
   } catch (e) {
-    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
+    if (e && e.__wordRefusal)
+      throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
     throw e;
   }
 }
@@ -146,12 +167,18 @@ async function setModelHandler({ target, params, identity, moment }) {
   // THE CONVERSION: set-model's world strand is model.word (caller mode). It enriches the
   // op's params (field/value/merge) in place and returns the §7 result; the JS body below
   // is the clean-miss fallback.
-  const viaWord = await _setModelViaWord({ target, params, caller: identity.beingId, moment });
+  const viaWord = await _setModelViaWord({
+    target,
+    params,
+    caller: identity.beingId,
+    moment,
+  });
   if (viaWord) return viaWord;
 
   const kind = detectTargetKind(target);
   const targetId = targetIdOf(target);
-  if (!targetId) throw new IbpError(IBP_ERR.INVALID_INPUT, "set-model: target required");
+  if (!targetId)
+    throw new IbpError(IBP_ERR.INVALID_INPUT, "set-model: target required");
   const history = moment?.actorAct?.history || "0";
 
   await assertMaySetModel(kind, targetId, identity, history);
@@ -161,16 +188,24 @@ async function setModelHandler({ target, params, identity, moment }) {
   // the space's qualities.render.matterModels.<type>; the descriptor
   // resolves matter models as per-matter override → space per-type
   // default → the type def's extension default.
-  const forMatterType = typeof params?.forMatterType === "string" && params.forMatterType.length
-    ? params.forMatterType
-    : null;
+  const forMatterType =
+    typeof params?.forMatterType === "string" && params.forMatterType.length
+      ? params.forMatterType
+      : null;
   if (forMatterType) {
     if (kind !== "space") {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "set-model: forMatterType applies to space targets only");
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        "set-model: forMatterType applies to space targets only",
+      );
     }
-    const { getMatterType } = await import("../../../materials/matter/types.js");
+    const { getMatterType } =
+      await import("../../../materials/matter/types.js");
     if (!getMatterType(forMatterType)) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, `set-model: unknown matter type "${forMatterType}"`);
+      throw new IbpError(
+        IBP_ERR.INVALID_INPUT,
+        `set-model: unknown matter type "${forMatterType}"`,
+      );
     }
   }
   const fieldPath = forMatterType
@@ -191,7 +226,12 @@ async function setModelHandler({ target, params, identity, moment }) {
     params.field = fieldPath;
     params.value = null;
     params.merge = false;
-    return { cleared: true, kind, targetId: String(targetId), ...(forMatterType ? { forMatterType } : {}) };
+    return {
+      cleared: true,
+      kind,
+      targetId: String(targetId),
+      ...(forMatterType ? { forMatterType } : {}),
+    };
   }
 
   if (!params?.modelMatterId) {
@@ -200,12 +240,15 @@ async function setModelHandler({ target, params, identity, moment }) {
       "set-model: `modelMatterId` required (upload first via create-matter type=model, or pass clear=true)",
     );
   }
-  const modelMatter = await resolveModelMatter(String(params.modelMatterId), history);
+  const modelMatter = await resolveModelMatter(
+    String(params.modelMatterId),
+    history,
+  );
   const model = {
     matterId: String(modelMatter._id),
-    hash:     modelMatter.content.hash,
-    url:      `/api/v1/content/${modelMatter.content.hash}`,
-    name:     modelMatter.name || modelMatter.content.name || null,
+    hash: modelMatter.content.hash,
+    url: `/api/v1/content/${modelMatter.content.hash}`,
+    name: modelMatter.name || modelMatter.content.name || null,
   };
 
   // One render write, one fact. Per-type space defaults write only
@@ -216,10 +259,20 @@ async function setModelHandler({ target, params, identity, moment }) {
     params.field = fieldPath;
     params.value = model;
     params.merge = true;
-    return { set: true, kind, targetId: String(targetId), forMatterType, model };
+    return {
+      set: true,
+      kind,
+      targetId: String(targetId),
+      forMatterType,
+      model,
+    };
   }
   const renderPatch = { model };
-  if (typeof params?.scale === "number" && Number.isFinite(params.scale) && params.scale > 0) {
+  if (
+    typeof params?.scale === "number" &&
+    Number.isFinite(params.scale) &&
+    params.scale > 0
+  ) {
     renderPatch.scale = params.scale;
   }
   if (params?.rotation && typeof params.rotation === "object") {
@@ -237,11 +290,33 @@ registerOperation("set-model", {
   ownerExtension: "seed",
   factAction: "set-model",
   args: {
-    modelMatterId: { type: "text", label: "Model matter id (a type=model matter, e.g. from /skins)", required: false },
-    forMatterType: { type: "text", label: "Space targets only: set as the default for all matter of this type in the space", required: false },
-    scale:         { type: "json", label: "Scale (positive number, optional)", required: false },
-    rotation:      { type: "json", label: "Rotation {x,y,z} (optional)", required: false },
-    clear:         { type: "bool", label: "Remove the model", default: false, required: false },
+    modelMatterId: {
+      type: "text",
+      label: "Model matter id (a type=model matter, e.g. from /skins)",
+      required: false,
+    },
+    forMatterType: {
+      type: "text",
+      label:
+        "Space targets only: set as the default for all matter of this type in the space",
+      required: false,
+    },
+    scale: {
+      type: "json",
+      label: "Scale (positive number, optional)",
+      required: false,
+    },
+    rotation: {
+      type: "json",
+      label: "Rotation {x,y,z} (optional)",
+      required: false,
+    },
+    clear: {
+      type: "bool",
+      label: "Remove the model",
+      default: false,
+      required: false,
+    },
   },
   handler: setModelHandler,
 });

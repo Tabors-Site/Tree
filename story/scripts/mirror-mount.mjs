@@ -56,11 +56,13 @@ function ipcReady() {
 
 function ipcRequest(payload) {
   if (!ipcReady()) {
-    return Promise.reject(Object.assign(new Error("mirror: no ipc channel"), { code: "EIO" }));
+    return Promise.reject(
+      Object.assign(new Error("mirror: no ipc channel"), { code: "EIO" }),
+    );
   }
   const cid = `m${ipcCidSeq++}`;
   // Honor the Name primitive (philosophy/names/plan.md). Every act
-  // carries nameId; the parent signs as I_AM in step 2. Naming the
+  // carries nameId; the parent signs as I in step 2. Naming the
   // expectation in the envelope keeps a per-uid mount upgrade a
   // clean swap (the child only changes the nameId here; the parent
   // changes which key signs).
@@ -68,15 +70,26 @@ function ipcRequest(payload) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       ipcPending.delete(cid);
-      reject(Object.assign(new Error(`mirror: ipc timeout for ${payload.op}`), { code: "EIO" }));
+      reject(
+        Object.assign(new Error(`mirror: ipc timeout for ${payload.op}`), {
+          code: "EIO",
+        }),
+      );
     }, IPC_TIMEOUT_MS);
     ipcPending.set(cid, { resolve, reject, timer });
     try {
       process.send(envelope);
     } catch (err) {
       const p = ipcPending.get(cid);
-      if (p) { clearTimeout(p.timer); ipcPending.delete(cid); }
-      reject(Object.assign(new Error(`mirror: ipc send failed: ${err.message}`), { code: "EIO" }));
+      if (p) {
+        clearTimeout(p.timer);
+        ipcPending.delete(cid);
+      }
+      reject(
+        Object.assign(new Error(`mirror: ipc send failed: ${err.message}`), {
+          code: "EIO",
+        }),
+      );
     }
   });
 }
@@ -85,23 +98,37 @@ function ipcRequest(payload) {
 // Codes the parent emits map onto Fuse.* constants the kernel reads.
 function fuseErrnoFor(code) {
   switch (code) {
-    case "EACCES":    return Fuse.EACCES;
-    case "EEXIST":    return Fuse.EEXIST;
-    case "ENOENT":    return Fuse.ENOENT;
-    case "ENOSPC":    return Fuse.ENOSPC;
-    case "EXDEV":     return Fuse.EXDEV;
-    case "ENOTEMPTY": return Fuse.ENOTEMPTY;
-    case "EINVAL":    return Fuse.EINVAL;
-    case "EROFS":     return Fuse.EROFS;
-    case "EIO":       return Fuse.EIO;
-    default:          return Fuse.EIO;
+    case "EACCES":
+      return Fuse.EACCES;
+    case "EEXIST":
+      return Fuse.EEXIST;
+    case "ENOENT":
+      return Fuse.ENOENT;
+    case "ENOSPC":
+      return Fuse.ENOSPC;
+    case "EXDEV":
+      return Fuse.EXDEV;
+    case "ENOTEMPTY":
+      return Fuse.ENOTEMPTY;
+    case "EINVAL":
+      return Fuse.EINVAL;
+    case "EROFS":
+      return Fuse.EROFS;
+    case "EIO":
+      return Fuse.EIO;
+    default:
+      return Fuse.EIO;
   }
 }
 
 function rejectAllPending(code = "EIO") {
   for (const [cid, p] of ipcPending) {
     clearTimeout(p.timer);
-    p.reject(Object.assign(new Error(`mirror: pending request ${cid} aborted`), { code }));
+    p.reject(
+      Object.assign(new Error(`mirror: pending request ${cid} aborted`), {
+        code,
+      }),
+    );
   }
   ipcPending.clear();
 }
@@ -110,14 +137,20 @@ function rejectAllPending(code = "EIO") {
 
 let sourceCount = 0;
 try {
-  process.env.MONGODB_URI = process.env.MONGODB_URI || fs.readFileSync(
-    path.join(REPO_ROOT, ".env"), "utf8",
-  ).split("\n").find((l) => l.startsWith("MONGODB_URI="))?.split("=")[1]?.trim();
+  process.env.MONGODB_URI =
+    process.env.MONGODB_URI ||
+    fs
+      .readFileSync(path.join(REPO_ROOT, ".env"), "utf8")
+      .split("\n")
+      .find((l) => l.startsWith("MONGODB_URI="))
+      ?.split("=")[1]
+      ?.trim();
 
   if (process.env.MONGODB_URI) {
     const { default: mongoose } = await import("mongoose");
     await mongoose.connect(process.env.MONGODB_URI);
-    const { default: Projection } = await import("../seed/materials/history/projection.js");
+    const { default: Projection } =
+      await import("../seed/materials/history/projection.js");
 
     // source matters: type=matter, state.content.kind in {"file","directory"},
     // state.content.path is the absolute disk path.
@@ -143,7 +176,8 @@ try {
       for (let i = 0; i < parts.length - 1; i++) {
         tree.get(cur).entries.add(parts[i]);
         const next = cur === "/" ? `/${parts[i]}` : `${cur}/${parts[i]}`;
-        if (!tree.has(next)) tree.set(next, { kind: "dir", entries: new Set() });
+        if (!tree.has(next))
+          tree.set(next, { kind: "dir", entries: new Set() });
         cur = next;
       }
       const leaf = parts[parts.length - 1];
@@ -151,7 +185,8 @@ try {
       const kind = row.state.content.kind === "directory" ? "dir" : "file";
       pathToMatterId.set(mountPath, String(row.id));
       if (kind === "dir") {
-        if (!tree.has(mountPath)) tree.set(mountPath, { kind: "dir", entries: new Set() });
+        if (!tree.has(mountPath))
+          tree.set(mountPath, { kind: "dir", entries: new Set() });
       } else {
         const hash = row.state.content.hash;
         if (!hash) continue; // unanchored (oversize or pre-anchor data): no render.
@@ -167,7 +202,9 @@ try {
     console.log(`Loaded ${sourceCount} files from matter projections.`);
     await mongoose.disconnect();
   } else {
-    console.error("No MONGODB_URI in env. Story must be running for the mirror to read source matter.");
+    console.error(
+      "No MONGODB_URI in env. Story must be running for the mirror to read source matter.",
+    );
     process.exit(2);
   }
 } catch (err) {
@@ -191,8 +228,12 @@ process.on?.("message", (msg) => {
     clearTimeout(p.timer);
     ipcPending.delete(msg.cid);
     if (msg.status === "ok") p.resolve(msg.data || {});
-    else p.reject(Object.assign(new Error(msg.error?.message || "mirror: ipc error"),
-                                 { code: msg.error?.code || "EIO" }));
+    else
+      p.reject(
+        Object.assign(new Error(msg.error?.message || "mirror: ipc error"), {
+          code: msg.error?.code || "EIO",
+        }),
+      );
     return;
   }
   if (msg.type === "mount-invalidate") {
@@ -278,11 +319,14 @@ const handlers = {
     const node = tree.get(p);
     if (!node) return cb(Fuse.ENOENT);
     cb(0, {
-      mtime: now, atime: now, ctime: now,
+      mtime: now,
+      atime: now,
+      ctime: now,
       nlink: node.kind === "dir" ? 2 : 1,
       size: node.size || 0,
       mode: node.kind === "dir" ? 0o40755 : 0o100644,
-      uid, gid,
+      uid,
+      gid,
     });
   },
 
@@ -380,7 +424,12 @@ const handlers = {
         mode,
       });
       const newMatterId = reply.matterId;
-      tree.set(p, { kind: "file", hash: reply.hash || null, size: reply.size || 0, mimeType: null });
+      tree.set(p, {
+        kind: "file",
+        hash: reply.hash || null,
+        size: reply.size || 0,
+        mimeType: null,
+      });
       if (newMatterId) pathToMatterId.set(p, String(newMatterId));
       parentNode.entries.add(leaf);
       cb(0, 42);
@@ -400,7 +449,8 @@ const handlers = {
       pathToMatterId.delete(p);
       const parentDir = path.posix.dirname(p);
       const parent = tree.get(parentDir);
-      if (parent && parent.kind === "dir") parent.entries.delete(path.posix.basename(p));
+      if (parent && parent.kind === "dir")
+        parent.entries.delete(path.posix.basename(p));
       cb(0);
     } catch (err) {
       cb(fuseErrnoFor(err.code));
@@ -421,7 +471,9 @@ const handlers = {
     // pattern: write a temp file, rename temp over the original). We
     // forward the displaced matterId so the parent can end it in the
     // same moment as the rename.
-    const replaceMatterId = tree.has(newPath) ? (pathToMatterId.get(newPath) || null) : null;
+    const replaceMatterId = tree.has(newPath)
+      ? pathToMatterId.get(newPath) || null
+      : null;
     try {
       await ipcRequest({
         op: "rename",
@@ -446,7 +498,8 @@ const handlers = {
       if (replaceMatterId) pathToMatterId.delete(newPath);
       pathToMatterId.set(newPath, matterId);
       const op = tree.get(oldParent);
-      if (op && op.kind === "dir") op.entries.delete(path.posix.basename(oldPath));
+      if (op && op.kind === "dir")
+        op.entries.delete(path.posix.basename(oldPath));
       const np = tree.get(newParent);
       if (np && np.kind === "dir") np.entries.add(newLeaf);
       cb(0);
@@ -482,10 +535,10 @@ const handlers = {
 
   // Step-2 deferrals: tools that probe these must not fail loudly on
   // a no-op surface.
-  chmod:   (p, mode, cb) => cb(0),
-  chown:   (p, uid, gid, cb) => cb(Fuse.ENOTSUP),
+  chmod: (p, mode, cb) => cb(0),
+  chown: (p, uid, gid, cb) => cb(Fuse.ENOTSUP),
   symlink: (target, link, cb) => cb(Fuse.ENOTSUP),
-  rmdir:   (p, cb) => cb(Fuse.ENOTSUP),
+  rmdir: (p, cb) => cb(Fuse.ENOTSUP),
 };
 
 // ─── mount ──────────────────────────────────────────────────────────
@@ -510,6 +563,6 @@ const teardown = () => {
     process.exit(0);
   });
 };
-process.on("SIGINT",  teardown);
+process.on("SIGINT", teardown);
 process.on("SIGTERM", teardown);
-process.on("SIGHUP",  teardown);
+process.on("SIGHUP", teardown);

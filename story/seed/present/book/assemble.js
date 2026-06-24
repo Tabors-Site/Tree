@@ -20,11 +20,11 @@
 import { pastOf } from "../word/verbTense.js";
 
 // ── fact-field accessors (the Word's clause names) ──────────────────────────────────
-const actorName = (f) => f.by ?? null;     // the actor Name (rule 9)
-const beingOf   = (f) => f.through ?? null; // the being the act ran through (rule 9)
-const objOf     = (f) => f.of ?? null;      // the object acted on { kind, id }
-const opOf      = (f) => f.act ?? f.verb;   // the operation (act); the verb names the family
-const recv      = (f) => f.to ?? null;      // the receiver (rule 17)
+const actorName = (f) => f.by ?? null; // the actor Name (rule 9)
+const beingOf = (f) => f.through ?? null; // the being the act ran through (rule 9)
+const objOf = (f) => f.of ?? null; // the object acted on { kind, id }
+const opOf = (f) => f.act ?? f.verb; // the operation (act); the verb names the family
+const recv = (f) => f.to ?? null; // the receiver (rule 17)
 
 // ── the four story views ────────────────────────────────────────────────────────────
 export async function assembleStory(
@@ -62,11 +62,12 @@ export async function assembleStory(
     // but the facts of everything LOCATED IN it — child spaces (Space.parent), matter present
     // (Matter.spaceId), and beings present (Being.position) — each one's chain. So the place
     // reads as the location's full history: the room and everything that lived in it.
-    const [{ default: Matter }, { default: Being }, { default: Space }] = await Promise.all([
-      import("../../materials/matter/matter.js"),
-      import("../../materials/being/being.js"),
-      import("../../materials/space/space.js"),
-    ]);
+    const [{ default: Matter }, { default: Being }, { default: Space }] =
+      await Promise.all([
+        import("../../materials/matter/matter.js"),
+        import("../../materials/being/being.js"),
+        import("../../materials/space/space.js"),
+      ]);
     const S = String(space);
     const [matterIn, beingsIn, childSpaces] = await Promise.all([
       Matter.find({ spaceId: S }).select("_id").lean(),
@@ -74,7 +75,12 @@ export async function assembleStory(
       Space.find({ parent: S }).select("_id").lean(),
     ]);
     const beingIds = beingsIn.map((b) => String(b._id));
-    const ofIds = [S, ...childSpaces.map((s) => String(s._id)), ...matterIn.map((m) => String(m._id)), ...beingIds];
+    const ofIds = [
+      S,
+      ...childSpaces.map((s) => String(s._id)),
+      ...matterIn.map((m) => String(m._id)),
+      ...beingIds,
+    ];
     // facts ON any of those (the object side) OR acts BY a being present here (the through side)
     q.$or = [{ "of.id": { $in: ofIds } }, { through: { $in: beingIds } }];
   }
@@ -92,7 +98,11 @@ export async function assembleStory(
   // explicit nameId (INCLUDING null) overrides: recall passes its own being for a `recalled` view
   // (first person) and null for a `saw` view (third person); the book defaults to the being it scopes.
   const focal =
-    nameId !== undefined ? nameId : (scope === "being" || scope === "lineage" ? being : null);
+    nameId !== undefined
+      ? nameId
+      : scope === "being" || scope === "lineage"
+        ? being
+        : null;
   return weave(facts, focal, names);
 }
 
@@ -136,7 +146,7 @@ function weave(facts, focalBeing, names) {
   const acts = [];
   const byAct = new Map();
   for (const f of facts) {
-    if (isSelfCall(f)) continue;   // the wake-call kickoff — not a story event
+    if (isSelfCall(f)) continue; // the wake-call kickoff — not a story event
     const key = f.actId ? `act:${f.actId}` : `solo:${f._id}`;
     let act = byAct.get(key);
     if (!act) {
@@ -186,7 +196,7 @@ async function resolveNames(facts, history) {
     if (o && o.id)
       want.set(String(o.id), o.kind === "stance" ? "space" : o.kind || "being");
   }
-  const names = new Map([["i-am", "I_AM"]]);
+  const names = new Map([["i-am", "I"]]);
   for (const [id, kind] of want) {
     try {
       const slot = await loadOrFold(kind, id, history);
@@ -216,8 +226,13 @@ function pastPhrase(f, names) {
       // The unified word shape: params.word + binding. A concept word carries its declaration in
       // binding.says; show it, so the story reads the seed.
       const word = p.word || "?";
-      const says = p.binding && typeof p.binding.says === "string" ? p.binding.says.replace(/\s*\n\s*/g, " ").trim() : null;
-      return says ? `${pastOf("speak")} the word ${word}: ${says}` : `${pastOf("speak")} the word ${word}`;
+      const says =
+        p.binding && typeof p.binding.says === "string"
+          ? p.binding.says.replace(/\s*\n\s*/g, " ").trim()
+          : null;
+      return says
+        ? `${pastOf("speak")} the word ${word}: ${says}`
+        : `${pastOf("speak")} the word ${word}`;
     }
     case "retire":
       return `${pastOf("silence")} the word ${p.word || "?"}`;
@@ -249,14 +264,32 @@ function pastPhrase(f, names) {
       // Content may be a string (saying) OR an object payload (with). Only a STRING is "said";
       // an object renders by intent, never as "[object Object]".
       const raw = p.content ?? p.message ?? p.saying ?? p.said;
-      const fromObj = raw && typeof raw === "object" ? (raw.content ?? raw.message ?? raw.text ?? raw.saying) : null;
-      const said = typeof raw === "string" ? raw : typeof fromObj === "string" ? fromObj : null;
+      const fromObj =
+        raw && typeof raw === "object"
+          ? (raw.content ?? raw.message ?? raw.text ?? raw.saying)
+          : null;
+      const said =
+        typeof raw === "string"
+          ? raw
+          : typeof fromObj === "string"
+            ? fromObj
+            : null;
       const hasSaid = typeof said === "string" && said !== "";
-      const intent = p.intent && !["message", "talk", "say", "reply", "call", "summon"].includes(p.intent) ? String(p.intent).replace(/-/g, " ") : null; // an intent LABEL, not a deed — no past-tensing
+      const intent =
+        p.intent &&
+        !["message", "talk", "say", "reply", "call", "summon"].includes(
+          p.intent,
+        )
+          ? String(p.intent).replace(/-/g, " ")
+          : null; // an intent LABEL, not a deed — no past-tensing
       if (f.inReplyTo || p.inReplyTo)
-        return hasSaid ? `${pastOf("reply")} to ${who}, and ${pastOf("say")} "${said}"` : `${pastOf("reply")} to ${who}`;
-      if (hasSaid) return `${pastOf("say")} "${said}" to ${who}`;                 // message → the call is implied
-      return intent ? `${pastOf("call")} ${who} to ${intent}` : `${pastOf("call")} ${who}`; // intent-only → "called"
+        return hasSaid
+          ? `${pastOf("reply")} to ${who}, and ${pastOf("say")} "${said}"`
+          : `${pastOf("reply")} to ${who}`;
+      if (hasSaid) return `${pastOf("say")} "${said}" to ${who}`; // message → the call is implied
+      return intent
+        ? `${pastOf("call")} ${who} to ${intent}`
+        : `${pastOf("call")} ${who}`; // intent-only → "called"
     }
     case "verdict": {
       // the recorded memory of a recall — "saw the world that it was good (because …)". The
@@ -286,19 +319,20 @@ function fieldGloss(field) {
 // than dumped — never leak a blob or a secret-bearing value into the story.
 function glossSetValue(value, names) {
   if (value == null) return null;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === "number" || typeof value === "boolean")
+    return String(value);
   if (typeof value === "string") return names.get(value) || `"${value}"`;
   if (typeof value === "object") {
     if (Number.isFinite(value.x) && Number.isFinite(value.y))
       return `(${value.x}, ${value.y}${Number.isFinite(value.z) ? `, ${value.z}` : ""})`;
-    if (value.id) return displayName(value.id, names);     // an owner/position ref → the name
-    return null;                                            // a blob — don't dump it
+    if (value.id) return displayName(value.id, names); // an owner/position ref → the name
+    return null; // a blob — don't dump it
   }
   return null;
 }
 
 function displayActor(a, names) {
-  if (a.byName === "i-am") return "I_AM";
+  if (a.byName === "i-am") return "I";
   return (
     names.get(String(a.byBeing)) ||
     names.get(String(a.byName)) ||
@@ -316,7 +350,7 @@ function displayName(id, names) {
   const s = String(id);
   const out =
     names && names.has(s) ? names.get(s) : s.length > 14 ? s.slice(0, 8) : s;
-  return out === "i-am" ? "I_AM" : out;
+  return out === "i-am" ? "I" : out;
 }
 
 // join an act's deeds into one sentence: "A", "A and B", "A, B, and C"

@@ -56,7 +56,7 @@ async function findRootForHeavenSpace(heavenSpaceKind) {
   return { _id: slot.id, ...slot.state };
 }
 import { HEAVEN_SPACE } from "./materials/space/heavenSpaces.js";
-import { I_AM } from "./materials/being/seedBeings.js";
+import { I } from "./materials/being/seedBeings.js";
 import {
   createStoryHeavenSpace,
   assertValidSpaceSize,
@@ -111,7 +111,7 @@ export async function withGenesisGuard(fn) {
 /**
  * The I-Am acts in a single moment.
  *
- * Opens one Act under through=to=I_AM, runs fn with a fresh
+ * Opens one Act under through=to=I, runs fn with a fresh
  * moment, seals one act with whatever facts fn emitted. One moment,
  * one act, always (philosophy/MOMENT.md). The genesis sequence is
  * one of these per step; scaffold reconciliations (manifest sync,
@@ -142,15 +142,15 @@ export async function withIAmAct(sourceLabel, fn) {
   const { withActChainLock } = await import("./past/act/actChainLock.js");
   const { getStoryDomain } = await import("./ibp/address.js");
   const story = getStoryDomain();
-  return withActChainLock(story, "0", I_AM, async () => {
+  return withActChainLock(story, "0", I, async () => {
     const now = new Date();
 
     // Content-addressed like every act (past/act/actHash.js): identity
     // = hash of the opening, chained to the I-Am's previous sealed act.
     const { computeActId, readActHead } = await import("./past/act/actHash.js");
     const opening = {
-      through: I_AM,
-      to: I_AM,
+      through: I,
+      to: I,
       ibpAddress: null,
       activeAble: null,
       inboxMessageId: null,
@@ -160,15 +160,15 @@ export async function withIAmAct(sourceLabel, fn) {
       story,
       history: "0",
     };
-    const p = await readActHead(story, "0", I_AM);
+    const p = await readActHead(story, "0", I);
     const actId = computeActId(p, opening);
     const plannedAct = {
       _id: actId,
       p,
-      // I_AM the being expresses I_AM the Name (its key is the story key).
-      by: I_AM,
-      through: I_AM,
-      to: I_AM,
+      // I the being expresses I the Name (its key is the story key).
+      by: I,
+      through: I,
+      to: I,
       ibpAddress: null,
       activeAble: null,
       inboxMessageId: null,
@@ -342,7 +342,7 @@ export async function withNameAct(nameId, sourceLabel, fn) {
   const { getStoryDomain } = await import("./ibp/address.js");
   const story = getStoryDomain();
   // Keyed by the NAME on the 5D marker history "5d" — runs parallel to that name's being-chains
-  // (different key AND different history, so even the I_AM, whose name==being id, never collides).
+  // (different key AND different history, so even the I, whose name==being id, never collides).
   return withActChainLock(story, "5d", nameId, async () => {
     const now = new Date();
     const { computeActId, readActHead } = await import("./past/act/actHash.js");
@@ -363,7 +363,7 @@ export async function withNameAct(nameId, sourceLabel, fn) {
     const plannedAct = {
       _id: actId,
       p,
-      by: nameId,    // the Name IS the signer + the chain key
+      by: nameId, // the Name IS the signer + the chain key
       through: null, // no body
       to: null,
       ibpAddress: null,
@@ -390,7 +390,9 @@ export async function withNameAct(nameId, sourceLabel, fn) {
       opCount: moment._opCount || 0,
     });
     if (!sealed) {
-      throw new Error(`withNameAct(${sourceLabel}): sealAct returned null — Act did not materialize`);
+      throw new Error(
+        `withNameAct(${sourceLabel}): sealAct returned null — Act did not materialize`,
+      );
     }
     return result;
   });
@@ -503,35 +505,56 @@ export async function ensureSpaceRoot() {
     // folding to the same row. (This is the very first space — parent:null, the
     // I-Am-as-actor chicken-and-egg handled by withIAmAct above.)
     await withIAmAct("I create the place root", async (ctx) => {
-      await emitFact({
-        verb: "do", act: "create-space", through: I_AM,
-        of: { kind: "space", id: rootId },
-        // No null terms: the root has no parent, so `parent` is simply not said
-        // (absent ⇒ root). A fact declares its content — its letters — not its
-        // silences. The fold derives type null + empty qualities from their absence.
-        params: {
-          name: storyName,
-          size: assertValidSpaceSize(null, { applyDefault: true }),
+      await emitFact(
+        {
+          verb: "do",
+          act: "create-space",
+          through: I,
+          of: { kind: "space", id: rootId },
+          // No null terms: the root has no parent, so `parent` is simply not said
+          // (absent ⇒ root). A fact declares its content — its letters — not its
+          // silences. The fold derives type null + empty qualities from their absence.
+          params: {
+            name: storyName,
+            size: assertValidSpaceSize(null, { applyDefault: true }),
+          },
+          actId: ctx.actId,
+          history: "0",
         },
-        actId: ctx.actId, history: "0",
-      }, ctx);
+        ctx,
+      );
     });
     await withIAmAct("I own the place root", async (ctx) => {
-      await emitFact({
-        verb: "do", act: "set-owner", through: I_AM,
-        of: { kind: "space", id: rootId },
-        params: { field: "owner", value: I_AM },
-        actId: ctx.actId, history: "0",
-      }, ctx);
+      await emitFact(
+        {
+          verb: "do",
+          act: "set-owner",
+          through: I,
+          of: { kind: "space", id: rootId },
+          params: { field: "owner", value: I },
+          actId: ctx.actId,
+          history: "0",
+        },
+        ctx,
+      );
     });
-    await withIAmAct("I make the place root the space-root heaven", async (ctx) => {
-      await emitFact({
-        verb: "do", act: "make-heaven", through: I_AM,
-        of: { kind: "space", id: rootId },
-        params: { heavenSpace: HEAVEN_SPACE.SPACE_ROOT },
-        actId: ctx.actId, history: "0",
-      }, ctx);
-    });
+    await withIAmAct(
+      "I make the place root the space-root heaven",
+      async (ctx) => {
+        await emitFact(
+          {
+            verb: "do",
+            act: "make-heaven",
+            through: I,
+            of: { kind: "space", id: rootId },
+            params: { heavenSpace: HEAVEN_SPACE.SPACE_ROOT },
+            actId: ctx.actId,
+            history: "0",
+          },
+          ctx,
+        );
+      },
+    );
     spaceRoot = { _id: rootId };
     log.verbose("Story", `Created place root: ${rootId.slice(0, 8)}`);
   }
@@ -566,7 +589,7 @@ export async function ensureSpaceRoot() {
         { kind: "space", id: String(heavenSpace._id) },
         "set-space",
         { field: "parent", value: String(spaceRoot._id) },
-        { identity: I_AM, moment: ctx },
+        { identity: I, moment: ctx },
       );
     });
   }
@@ -615,7 +638,7 @@ export async function ensureSpaceRoot() {
           { kind: "space", id: String(space._id) },
           "set-space",
           { field: "parent", value: String(heavenSpaceParentId) },
-          { identity: I_AM, moment: ctx },
+          { identity: I, moment: ctx },
         );
       });
     }
@@ -674,7 +697,7 @@ export async function ensureSpaceRoot() {
               { kind: "space", id: String(space._id) },
               "set-space",
               { field: "parent", value: String(regionSlot._id) },
-              { identity: I_AM, moment: ctx },
+              { identity: I, moment: ctx },
             );
           },
         );
@@ -692,7 +715,7 @@ export async function ensureSpaceRoot() {
               { kind: "space", id: String(space._id) },
               "set-space",
               { field: "size", value: def.size },
-              { identity: I_AM, moment: ctx },
+              { identity: I, moment: ctx },
             );
           });
         }
@@ -711,7 +734,7 @@ export async function ensureSpaceRoot() {
     for (const r of allRoots) {
       const slot = await loadProjection("space", r.id, "0");
       const ownerId = getSpaceOwner(slot?.state) || null;
-      if (ownerId != null && ownerId !== I_AM) orphanRoots.push({ _id: r.id });
+      if (ownerId != null && ownerId !== I) orphanRoots.push({ _id: r.id });
     }
     const { doVerb } = await import("./ibp/verbs/do.js");
     for (const root of orphanRoots) {
@@ -723,7 +746,7 @@ export async function ensureSpaceRoot() {
               { kind: "space", id: String(root._id) },
               "set-space",
               { field: "parent", value: String(spaceRoot._id) },
-              { identity: I_AM, moment: ctx },
+              { identity: I, moment: ctx },
             );
           },
         );
@@ -793,19 +816,19 @@ export async function ensureSpaceRoot() {
 // chicken-and-egg unlock from seed/done/IamToActs.md.
 export async function ensureIAm() {
   const { findByName } = await import("./materials/projections.js");
-  const existing = await findByName("being", I_AM, "0");
+  const existing = await findByName("being", I, "0");
   if (existing) {
     iAmBeingIdCache = String(existing.id);
     return { _id: existing.id, ...existing.state };
   }
 
-  // The I-Am's _id IS the I_AM string constant. This is the doctrinal
-  // shape. When other code says `through: I_AM` (in facts, in parent
+  // The I-Am's _id IS the I string constant. This is the doctrinal
+  // shape. When other code says `through: I` (in facts, in parent
   // references, in audit attribution), it names the actual being row
-  // whose _id is the I_AM constant. No indirection, no string-vs-uuid
+  // whose _id is the I constant. No indirection, no string-vs-uuid
   // mismatch.
-  const id = I_AM;
-  // I_AM the being carries NO password. The root's authority is its Name's story key
+  const id = I;
+  // I the being carries NO password. The root's authority is its Name's story key
   // (the i-am Name has privateKeyEnc:null and signs with storyIdentity — see the
   // name:declare just below), never a being credential; and a being password is OPTIONAL,
   // owned by the Name. The auto-generated credential every other being gets at birth is a
@@ -815,9 +838,9 @@ export async function ensureIAm() {
   };
 
   await withIAmAct("I am that I am", async (ctx) => {
-    // I_AM is first a NAME (the root identity, parentNameId=null) and then
+    // I is first a NAME (the root identity, parentNameId=null) and then
     // a being that expresses it. The name:declare folds the i-am Name row;
-    // the being born just below belongs to it (trueName=I_AM). The i-am
+    // the being born just below belongs to it (trueName=I). The i-am
     // Name signs with the story key (storyIdentity), so it stores no
     // privateKeyEnc — loadSigningKey special-cases the i-am name to the
     // story key. The name reel is the most primitive reel.
@@ -848,12 +871,12 @@ export async function ensureIAm() {
         through: id, // self-stamping — the not-yet-existing being is its own actor
         of: { kind: "being", id },
         params: {
-          name: I_AM,
+          name: I,
           ables: [],
           defaultAble: null,
           // The being expresses the i-am Name (the root identity). Every
           // being birthed under i-am inherits this trueName.
-          trueName: I_AM,
+          trueName: I,
           // Root of the being-tree.
           parentBeingId: null,
           // homeSpace is null at birth. A later step in the genesis
@@ -868,7 +891,7 @@ export async function ensureIAm() {
           qualities,
         },
         actId: ctx.actId,
-        // Genesis is main-only — I_AM births before any history exists.
+        // Genesis is main-only — I births before any history exists.
         history: "0",
         // Op count: this be:birth is emitted directly (not through
         // beVerb), so it doesn't bump opCount. The moment seals with
@@ -901,30 +924,30 @@ export async function setIAmHomeSpace(heavenSpaceId) {
     throw new Error("setIAmHomeSpace: heavenSpaceId is required");
   }
   const { loadProjection } = await import("./materials/projections.js");
-  const iAmSlot = await loadProjection("being", I_AM, "0");
+  const iAmSlot = await loadProjection("being", I, "0");
   const currentHome = iAmSlot?.state?.homeSpace || null;
   if (currentHome === String(heavenSpaceId)) {
-    return { _id: I_AM, _alreadyHome: true };
+    return { _id: I, _alreadyHome: true };
   }
   const { doVerb } = await import("./ibp/verbs/do.js");
   await withIAmAct("I take heaven as my home", async (ctx) => {
     await doVerb(
-      { kind: "being", id: I_AM },
+      { kind: "being", id: I },
       "set-being",
       { field: "homeSpace", value: String(heavenSpaceId) },
-      { identity: I_AM, moment: ctx },
+      { identity: I, moment: ctx },
     );
   });
   // The position field follows the same value: I-Am stands at heaven.
   await withIAmAct("I stand at heaven", async (ctx) => {
     await doVerb(
-      { kind: "being", id: I_AM },
+      { kind: "being", id: I },
       "set-being",
       { field: "position", value: String(heavenSpaceId) },
-      { identity: I_AM, moment: ctx },
+      { identity: I, moment: ctx },
     );
   });
-  return { _id: I_AM };
+  return { _id: I };
 }
 
 export async function getSpaceRoot() {
@@ -939,9 +962,9 @@ export function getSpaceRootId() {
 }
 
 /**
- * The I-Am Being's actual _id. After 2026-05-29 this is the I_AM
+ * The I-Am Being's actual _id. After 2026-05-29 this is the I
  * string constant ("i-am") on fresh installs. sprout's ensureIAm
- * mints the I-Am with _id = I_AM, so the constant IS the id. Pre-
+ * mints the I-Am with _id = I, so the constant IS the id. Pre-
  * existing realities whose I-Am row was minted with a UUID before
  * the change retain that UUID; the cache reflects whichever shape
  * the row has. Sync accessor — only valid after ensureIAm() has run
@@ -957,7 +980,7 @@ export function isBeingRoot(space) {
   if (!space) return false;
   if (space.heavenSpace) return false;
   const ownerId = space.owner ? String(space.owner) : null;
-  if (!ownerId || ownerId === I_AM) return false;
+  if (!ownerId || ownerId === I) return false;
   const spaceRootId = getSpaceRootId();
   const parentId = space.parent ? String(space.parent) : null;
   if (spaceRootId && parentId && parentId !== String(spaceRootId)) return false;
@@ -1035,7 +1058,7 @@ export async function syncExtensionsToTree(manifests) {
               extChildTarget,
               "set-space",
               { field: "type", value: "resource" },
-              { identity: I_AM, moment: ctx },
+              { identity: I, moment: ctx },
             );
           });
         }
@@ -1067,7 +1090,7 @@ export async function syncExtensionsToTree(manifests) {
                   value: extensionQuality,
                   merge: false,
                 },
-                { identity: I_AM, moment: ctx },
+                { identity: I, moment: ctx },
               );
             },
           );
@@ -1088,7 +1111,7 @@ export async function syncExtensionsToTree(manifests) {
               parent: String(extSpace._id),
               qualities: Object.fromEntries(qualities),
             },
-            { identity: I_AM, moment: ctx },
+            { identity: I, moment: ctx },
           );
         });
       } catch (err) {
@@ -1110,7 +1133,7 @@ export async function syncExtensionsToTree(manifests) {
           { kind: "space", id: String(spaceId) },
           "set-space",
           { field: "qualities.extension.loaded", value: false },
-          { identity: I_AM, moment: ctx },
+          { identity: I, moment: ctx },
         );
       });
     }

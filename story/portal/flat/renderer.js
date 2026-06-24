@@ -304,7 +304,7 @@ function openIntentSummon(beingEntry, offer) {
   const promptText =
     offer.intent === "mate"
       ? isCherub
-        ? `Birth your first being through your name. It will be a top-level being, owned by you (cherub is right below I_AM). Name it:`
+        ? `Birth your first being through your name. It will be a top-level being, owned by you (cherub is right below I). Name it:`
         : `Summon @${beingEntry.being} to mate. The new child has @${beingEntry.being} as mother and you as father. Optional: child name. (Leave blank for auto-generated.)`
       : `Summon @${beingEntry.being} with intent="${offer.intent}". Optional message:`;
   const userInput = window.prompt(promptText, "");

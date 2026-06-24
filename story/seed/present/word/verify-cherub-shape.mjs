@@ -2,7 +2,7 @@
 // Run:  node story/seed/present/word/verify-cherub-shape.mjs
 //
 // Asserts cherub.word reproduces the WORLD strand the deletion must preserve:
-// the five acts in order, the surfaced actor model (I_AM through Cherub), the
+// the five acts in order, the surfaced actor model (I through Cherub), the
 // owner (the new Name), and the lineage (mother Cherub, father Arrival). This is
 // the cheap shape check; the engine's verify-word-cherub.mjs is the live gate,
 // and the full 5-act live byte-diff (after doVerb-in-live-mode lands) is the
@@ -54,7 +54,7 @@ check(
   allThrough,
 );
 
-// the being is the new Name's own (trueName), not I_AM's
+// the being is the new Name's own (trueName), not I's
 const fb = (flow.effects || []).find((e) => e.act === "form-being");
 check(
   "form-being sets the being's trueName to the new Name",
@@ -76,9 +76,9 @@ const ctx = {
   dryRun: true,
   history: "main",
   moment: { actId: "<actId>" },
-  identity: { beingId: "Cherub", name: "cherub", nameId: "I_AM" },
+  identity: { beingId: "Cherub", name: "cherub", nameId: "I" },
   trigger: { name: "tabor-prime", password: "pw" },
-  env: { iam: "I_AM" },
+  env: { iam: "I" },
   bindings: { placeRoot: "<placeRoot>", ownerName: "tabor" },
 };
 const facts = await evaluate(flow, ctx);

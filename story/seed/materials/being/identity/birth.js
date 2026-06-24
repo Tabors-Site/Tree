@@ -42,7 +42,7 @@ import log from "../../../seedStory/log.js";
 import { emitFact } from "../../../past/fact/facts.js";
 import { mintCredentialSpec } from "./credentials.js";
 import { beingContentId } from "../beingId.js";
-import { I_AM } from "../seedBeings.js";
+import { I } from "../seedBeings.js";
 import { getStoryDomain } from "../../../ibp/address.js";
 
 // ─────────────────────────────────────────────────────────────────────
@@ -198,7 +198,7 @@ export async function birthBeing({
     );
   }
 
-  // Accept bare-string identity shorthand (typically `I_AM` for
+  // Accept bare-string identity shorthand (typically `I` for
   // seed-internal births). normalizeIdentity returns the object shape
   // downstream code expects to read identity.beingId / identity.name.
   const { normalizeIdentity } = await import("../../../ibp/verbs/_shared.js");
@@ -215,7 +215,7 @@ export async function birthBeing({
       `birthBeing("${name}"): spec.parentBeingId is required. The being-tree ` +
         `is rooted at the I-Am; every other being chains back through its ` +
         `parent. Pass identity.beingId or iAm._id. ` +
-        `Genesis (I_AM itself) bypasses this file and stamps its own be:birth ` +
+        `Genesis (I itself) bypasses this file and stamps its own be:birth ` +
         `from ensureIAm.`,
     );
   }
@@ -270,8 +270,8 @@ export async function birthBeing({
   //     and enforces the cherub-arrival vs birther-authenticated split
   //     inline before reaching this function.
   //   - Cherub's able.js calls this from within its authorized flow.
-  //   - seedDelegates calls this at boot under the I_AM identity (the
-  //     I_AM short-circuit covers it).
+  //   - seedDelegates calls this at boot under the I identity (the
+  //     I short-circuit covers it).
   // Re-authorizing here with a synthetic `be:create-being` operation
   // name was a defense-in-depth gate that polluted the BE namespace
   // with a non-protocol operation (BE dispatches only birth / connect /
@@ -324,7 +324,7 @@ export async function birthBeing({
   // BIRTH-GATE (inheritation). You may attach a child under a being-tree
   // position only where you have authority over it. Three cases are
   // inherently allowed and skip the walk:
-  //   • root admission   (parent = I_AM) — how new top-level beings enter;
+  //   • root admission   (parent = I) — how new top-level beings enter;
   //                       WHO may do this is gated at the SUMMON/BE layer
   //                       (cherub's arrival able), not by the being-tree.
   //   • self-birth       (parent = the minter) — a being births its own
@@ -337,9 +337,8 @@ export async function birthBeing({
   // what stops a Name grafting a child under a subtree it doesn't control.
   {
     const minterBeingId = identity?.beingId ? String(identity.beingId) : null;
-    const isIAmMinter =
-      minterBeingId === String(I_AM) || identity?.name === I_AM;
-    const underRoot = String(parentBeingId) === String(I_AM);
+    const isIAmMinter = minterBeingId === String(I) || identity?.name === I;
+    const underRoot = String(parentBeingId) === String(I);
     const underSelf = minterBeingId && String(parentBeingId) === minterBeingId;
     if (!isIAmMinter && !underRoot && !underSelf && !parentPending) {
       let gateHistory = history;
@@ -758,7 +757,7 @@ export async function birthBeing({
  * Mother wins as grantor on ties.
  *
  * No-op when neither parent has any grants (the bootstrap case;
- * I-Am's grants are implicit via the I_AM bypass and not stored on
+ * I-Am's grants are implicit via the I bypass and not stored on
  * qualities.ablesGranted).
  *
  * @param {object} args
@@ -861,20 +860,20 @@ function _grantKey(grant) {
  */
 async function _anointGlobal({ childId, history, moment }) {
   const { getSpaceRootId } = await import("../../../sprout.js");
-  const { I_AM } = await import("../seedBeings.js");
+  const { I } = await import("../seedBeings.js");
   const rootId = getSpaceRootId();
   if (!rootId) return; // boot-window edge; the I-Am birth itself runs before root materializes
   await emitFact(
     {
       verb: "do",
       act: "grant-able",
-      through: I_AM,
+      through: I,
       of: { kind: "being", id: String(childId) },
       params: {
         able: "global",
         anchorSpaceId: String(rootId),
         anchorBeingId: null,
-        grantedBy: I_AM,
+        grantedBy: I,
         grantedAt: new Date().toISOString(),
       },
       actId: moment?.actId || null,

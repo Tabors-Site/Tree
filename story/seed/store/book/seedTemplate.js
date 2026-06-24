@@ -52,7 +52,11 @@
 // See `bundle.js` for the bundle shape; see `graft.js` for the apply
 // side.
 
-import { ref, REF_INSERTION_POINT, REF_GRAFT_INITIATOR } from "../../materials/ref.js";
+import {
+  ref,
+  REF_INSERTION_POINT,
+  REF_GRAFT_INITIATOR,
+} from "../../materials/ref.js";
 import { remapRefs } from "../../materials/refWalker.js";
 import { redactSecrets } from "../../materials/redact.js";
 import { emptyBundle } from "./bundle.js";
@@ -80,31 +84,38 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   // loadProjection silently skipped (continue on !slot) those rows and
   // produced incomplete bundles. The walker only sees what loadOrFold
   // surfaces.
-  const { loadProjection, loadOrFold } = await import("../../materials/projections.js");
-  const { default: Projection } = await import("../../materials/history/projection.js");
+  const { loadProjection, loadOrFold } =
+    await import("../../materials/projections.js");
+  const { default: Projection } =
+    await import("../../materials/history/projection.js");
 
   // Direct projection query for "children of space X in history B".
   // (The generic findByParent helper is being-specific; spaces don't
   // have a single substrate wrapper, so we query directly here.)
   const findSpaceChildren = async (parentId) => {
     return await Projection.find({
-      history: history, type: "space",
+      history: history,
+      type: "space",
       "state.parent": parentId,
       tombstoned: { $ne: true },
-    }).select("id").lean();
+    })
+      .select("id")
+      .lean();
   };
 
   const rootSlot = await loadOrFold("space", scopeSpaceId, history);
   if (!rootSlot) {
-    throw new Error(`captureTemplate: space "${scopeSpaceId}" not found in history "${history}"`);
+    throw new Error(
+      `captureTemplate: space "${scopeSpaceId}" not found in history "${history}"`,
+    );
   }
 
   const bundle = emptyBundle({
-    sourceStory:      opts.sourceStory || null,
-    sourceHistory:       history,
-    sourceScopeName:    opts.scopeName || rootSlot.state?.name || null,
+    sourceStory: opts.sourceStory || null,
+    sourceHistory: history,
+    sourceScopeName: opts.scopeName || rootSlot.state?.name || null,
     sourceScopeSpaceId: scopeSpaceId,
-    operatorBeingId:    opts.operatorBeingId || null,
+    operatorBeingId: opts.operatorBeingId || null,
   });
 
   // ── 1. Walk the space subtree (BFS, depth-ascending) ──
@@ -160,12 +171,15 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   // — travels. The earlier check gated on `state.password`, which is
   // present on every being (birthBeing hashes a credential for all
   // cognition kinds), so the filter excluded all beings.
-  const { beingCognition } = await import("../../materials/being/identity/lookups.js");
-  const { SEED_DELEGATES } = await import("../../materials/being/seedDelegates.js");
+  const { beingCognition } =
+    await import("../../materials/being/identity/lookups.js");
+  const { SEED_DELEGATES } =
+    await import("../../materials/being/seedDelegates.js");
   const SEED_DELEGATE_NAMES = new Set(SEED_DELEGATES.map((d) => d.name));
   for (const spaceId of capturedSpaceIds) {
     const beingRows = await Projection.find({
-      history: history, type: "being",
+      history: history,
+      type: "being",
       "state.homeSpace": spaceId,
       tombstoned: { $ne: true },
     }).lean();
@@ -180,7 +194,8 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   // ── 3. Walk matter whose spaceId is in the captured set ──
   for (const spaceId of capturedSpaceIds) {
     const matterRows = await Projection.find({
-      history: history, type: "matter",
+      history: history,
+      type: "matter",
       "state.spaceId": spaceId,
       tombstoned: { $ne: true },
     }).lean();
@@ -194,28 +209,33 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   // sourceId (which equals the source-substrate id for v1; future
   // versions might re-key for privacy). For uncaptured ids, use the
   // appropriate sentinel.
-  const isCapturedSpace  = (id) => capturedSpaceIds.has(id);
-  const isCapturedBeing  = (id) => capturedBeingIds.has(id);
+  const isCapturedSpace = (id) => capturedSpaceIds.has(id);
+  const isCapturedBeing = (id) => capturedBeingIds.has(id);
   const isCapturedMatter = (id) => capturedMatterIds.has(id);
 
   // Remap a space's owner for bundle export. Bundle-internal beings
-  // become tagged Refs; out-of-bundle owners (or I_AM) collapse to
+  // become tagged Refs; out-of-bundle owners (or I) collapse to
   // GRAFT_INITIATOR so the graft attributes them to the operator.
   const remapOwnerForBundle = (owner) => {
     if (!owner) return null;
-    return tagId("being", String(owner), { uncapturedSentinel: REF_GRAFT_INITIATOR });
+    return tagId("being", String(owner), {
+      uncapturedSentinel: REF_GRAFT_INITIATOR,
+    });
   };
 
   // Build a tagging function: turns a bare-string id (or null) into a
   // Ref (or sentinel, or null). Kind is given by the field's known type.
   const tagId = (kind, id, { uncapturedSentinel }) => {
     if (id === null || id === undefined) return null;
-    if (typeof id !== "string") return id;  // already a Ref or other shape; pass through
+    if (typeof id !== "string") return id; // already a Ref or other shape; pass through
     const inside =
-      kind === "space"  ? isCapturedSpace(id)  :
-      kind === "being"  ? isCapturedBeing(id)  :
-      kind === "matter" ? isCapturedMatter(id) :
-      false;
+      kind === "space"
+        ? isCapturedSpace(id)
+        : kind === "being"
+          ? isCapturedBeing(id)
+          : kind === "matter"
+            ? isCapturedMatter(id)
+            : false;
     if (inside) return ref(kind, id);
     return uncapturedSentinel;
   };
@@ -257,13 +277,15 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   // never sees, leaving dangling references after graft.
   const filterQualities = (qualities) => {
     if (!qualities || typeof qualities !== "object") return qualities || {};
-    const out = qualities instanceof Map
-      ? Object.fromEntries(qualities)
-      : { ...qualities };
+    const out =
+      qualities instanceof Map
+        ? Object.fromEntries(qualities)
+        : { ...qualities };
     if (out.beings && typeof out.beings === "object") {
-      const beings = out.beings instanceof Map
-        ? Object.fromEntries(out.beings)
-        : { ...out.beings };
+      const beings =
+        out.beings instanceof Map
+          ? Object.fromEntries(out.beings)
+          : { ...out.beings };
       for (const [name, entry] of Object.entries(beings)) {
         const eid = entry?.beingId;
         if (typeof eid === "string" && !capturedBeingIds.has(eid)) {
@@ -280,22 +302,25 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
     if (!slot) continue;
     const state = slot.state || {};
     bundle.content.spaces.push({
-      sourceId:     spaceId,
-      name:         state.name || null,
-      type:         state.type || null,
+      sourceId: spaceId,
+      name: state.name || null,
+      type: state.type || null,
       // parent → INSERTION_POINT if it's the scope root (its parent
       // sits outside); otherwise it's another captured space.
-      parent:       spaceId === scopeSpaceId
-        ? REF_INSERTION_POINT
-        : tagId("space", state.parent, { uncapturedSentinel: REF_INSERTION_POINT }),
+      parent:
+        spaceId === scopeSpaceId
+          ? REF_INSERTION_POINT
+          : tagId("space", state.parent, {
+              uncapturedSentinel: REF_INSERTION_POINT,
+            }),
       // owner → tagged. Bundle-internal owners keep their Refs so the
       // graft remap preserves the relationship; out-of-bundle owners
-      // (or I_AM) collapse to GRAFT_INITIATOR so the graft attributes
+      // (or I) collapse to GRAFT_INITIATOR so the graft attributes
       // them to the operator.
-      owner:        remapOwnerForBundle(state.owner),
-      size:         state.size || null,
-      coord:        state.coord || null,
-      qualities:    redactSecrets(filterQualities(state.qualities)),
+      owner: remapOwnerForBundle(state.owner),
+      size: state.size || null,
+      coord: state.coord || null,
+      qualities: redactSecrets(filterQualities(state.qualities)),
     });
   }
 
@@ -305,16 +330,22 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
     if (!slot) continue;
     const state = slot.state || {};
     bundle.content.beings.push({
-      sourceId:      beingId,
-      name:          state.name || null,
-      defaultAble:   state.defaultAble || null,
-      parentBeingId: tagId("being", state.parentBeingId, { uncapturedSentinel: REF_GRAFT_INITIATOR }),
-      homeSpace:     tagId("space", state.homeSpace, { uncapturedSentinel: REF_INSERTION_POINT }),
-      position:      tagId("space", state.position, { uncapturedSentinel: REF_INSERTION_POINT }),
-      coord:         state.coord || null,
+      sourceId: beingId,
+      name: state.name || null,
+      defaultAble: state.defaultAble || null,
+      parentBeingId: tagId("being", state.parentBeingId, {
+        uncapturedSentinel: REF_GRAFT_INITIATOR,
+      }),
+      homeSpace: tagId("space", state.homeSpace, {
+        uncapturedSentinel: REF_INSERTION_POINT,
+      }),
+      position: tagId("space", state.position, {
+        uncapturedSentinel: REF_INSERTION_POINT,
+      }),
+      coord: state.coord || null,
       // A clone travels over the wire / to disk for sharing — redact api
       // keys + credentials from being qualities (llmConnections, auth).
-      qualities:     redactSecrets(state.qualities || {}),
+      qualities: redactSecrets(state.qualities || {}),
     });
   }
 
@@ -326,14 +357,20 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
     const state = slot.state || {};
     if (state.content?.kind === "cas") casRefCount++;
     bundle.content.matter.push({
-      sourceId:       matterId,
-      name:           state.name || null,
-      spaceId:        tagId("space", state.spaceId, { uncapturedSentinel: REF_INSERTION_POINT }),
-      beingId:        tagId("being", state.beingId, { uncapturedSentinel: REF_GRAFT_INITIATOR }),
-      parentMatterId: tagId("matter", state.parentMatterId, { uncapturedSentinel: null }),
-      type:           state.type || "generic",
-      content:        state.content || null,
-      qualities:      redactSecrets(state.qualities || {}),
+      sourceId: matterId,
+      name: state.name || null,
+      spaceId: tagId("space", state.spaceId, {
+        uncapturedSentinel: REF_INSERTION_POINT,
+      }),
+      beingId: tagId("being", state.beingId, {
+        uncapturedSentinel: REF_GRAFT_INITIATOR,
+      }),
+      parentMatterId: tagId("matter", state.parentMatterId, {
+        uncapturedSentinel: null,
+      }),
+      type: state.type || "generic",
+      content: state.content || null,
+      qualities: redactSecrets(state.qualities || {}),
     });
   }
   // ── 7b. CAS blobs — the BYTES travel with the bundle ──
@@ -345,40 +382,67 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   // verifies the recomputed hash equals the claimed hash BEFORE any
   // fact stamps; a lying blob refuses the whole graft cold.
   {
-    const maxBlobBytes  = Number(opts.maxCasBlobBytes)  > 0 ? Number(opts.maxCasBlobBytes)  : 8 * 1024 * 1024;
-    const maxTotalBytes = Number(opts.maxCasTotalBytes) > 0 ? Number(opts.maxCasTotalBytes) : 32 * 1024 * 1024;
+    const maxBlobBytes =
+      Number(opts.maxCasBlobBytes) > 0
+        ? Number(opts.maxCasBlobBytes)
+        : 8 * 1024 * 1024;
+    const maxTotalBytes =
+      Number(opts.maxCasTotalBytes) > 0
+        ? Number(opts.maxCasTotalBytes)
+        : 32 * 1024 * 1024;
     const wanted = new Map(); // hash → size
     for (const m of bundle.content.matter) {
       const c = m.content;
-      if (c && typeof c === "object" && c.kind === "cas" && c.hash && !c.purged) {
+      if (
+        c &&
+        typeof c === "object" &&
+        c.kind === "cas" &&
+        c.hash &&
+        !c.purged
+      ) {
         wanted.set(c.hash, typeof c.size === "number" ? c.size : null);
       }
     }
     bundle.casBlobs = {};
     bundle.casManifest = { included: [], omitted: [] };
     if (wanted.size > 0) {
-      const { getContent } = await import("../../materials/matter/contentStore.js");
+      const { getContent } =
+        await import("../../materials/matter/contentStore.js");
       let total = 0;
       for (const [hash, size] of wanted) {
         try {
           const buf = await getContent(hash);
           if (!buf) {
-            bundle.casManifest.omitted.push({ hash, reason: "bytes not in local store" });
+            bundle.casManifest.omitted.push({
+              hash,
+              reason: "bytes not in local store",
+            });
             continue;
           }
           if (buf.length > maxBlobBytes) {
-            bundle.casManifest.omitted.push({ hash, size: buf.length, reason: `exceeds per-blob cap ${maxBlobBytes}` });
+            bundle.casManifest.omitted.push({
+              hash,
+              size: buf.length,
+              reason: `exceeds per-blob cap ${maxBlobBytes}`,
+            });
             continue;
           }
           if (total + buf.length > maxTotalBytes) {
-            bundle.casManifest.omitted.push({ hash, size: buf.length, reason: `bundle cas budget ${maxTotalBytes} exhausted` });
+            bundle.casManifest.omitted.push({
+              hash,
+              size: buf.length,
+              reason: `bundle cas budget ${maxTotalBytes} exhausted`,
+            });
             continue;
           }
           bundle.casBlobs[hash] = buf.toString("base64");
           bundle.casManifest.included.push({ hash, size: buf.length });
           total += buf.length;
         } catch (err) {
-          bundle.casManifest.omitted.push({ hash, reason: err?.message || "read failed" });
+          bundle.casManifest.omitted.push({
+            hash,
+            reason: err?.message || "read failed",
+          });
         }
       }
       const { default: log } = await import("../../seedStory/log.js");
@@ -386,12 +450,15 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
         log.warn(
           "Clone",
           `casBlobs: ${bundle.casManifest.included.length}/${wanted.size} blob(s) travel; ` +
-          `${bundle.casManifest.omitted.length} omitted — their refs graft but the bytes ` +
-          `stay unresolvable until fetched (federation hash-fetch follow-up). ` +
-          `Omissions: ${bundle.casManifest.omitted.map((o) => `${o.hash.slice(0, 12)}(${o.reason})`).join("; ")}`,
+            `${bundle.casManifest.omitted.length} omitted — their refs graft but the bytes ` +
+            `stay unresolvable until fetched (federation hash-fetch follow-up). ` +
+            `Omissions: ${bundle.casManifest.omitted.map((o) => `${o.hash.slice(0, 12)}(${o.reason})`).join("; ")}`,
         );
       } else {
-        log.info("Clone", `casBlobs: all ${wanted.size} content blob(s) travel with the bundle`);
+        log.info(
+          "Clone",
+          `casBlobs: all ${wanted.size} content blob(s) travel with the bundle`,
+        );
       }
     }
   }
@@ -430,11 +497,15 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
     const { getAble } = await import("../../present/ables/registry.js");
     for (const name of ableNames) {
       const origin = getAble(name)?.origin;
-      if (origin && origin !== "seed" && origin !== "live") extNames.add(origin);
+      if (origin && origin !== "seed" && origin !== "live")
+        extNames.add(origin);
     }
-  } catch { /* registry unavailable in standalone tools; ables list still travels */ }
+  } catch {
+    /* registry unavailable in standalone tools; ables list still travels */
+  }
   try {
-    const { getLoadedExtensionNames } = await import("../../../shared/loader.js");
+    const { getLoadedExtensionNames } =
+      await import("../../../shared/loader.js");
     const loadedExt = new Set(getLoadedExtensionNames());
     const sweep = (qualities) => {
       if (!qualities || typeof qualities !== "object") return;
@@ -445,7 +516,9 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
     for (const s of bundle.content.spaces) sweep(s.qualities);
     for (const b of bundle.content.beings) sweep(b.qualities);
     for (const m of bundle.content.matter) sweep(m.qualities);
-  } catch { /* loader absent (headless capture); able-origin derivation above still ran */ }
+  } catch {
+    /* loader absent (headless capture); able-origin derivation above still ran */
+  }
   bundle.manifest.ables = [...ableNames].sort();
   bundle.manifest.extensions = [...extNames].sort();
 
@@ -489,14 +562,14 @@ export async function computeBundleHash(bundle) {
   const body = canonicalize({
     bundleVersion: bundle.meta?.bundleVersion ?? bundle.bundleVersion ?? null,
     sourceStory: bundle.meta?.sourceStory ?? null,
-    sourceHistory:  bundle.meta?.sourceHistory ?? null,
+    sourceHistory: bundle.meta?.sourceHistory ?? null,
     sourceScopeSpaceId: bundle.meta?.sourceScopeSpaceId ?? null,
-    sourceScopeName:    bundle.meta?.sourceScopeName ?? null,
-    createdAt:     bundle.meta?.createdAt ?? null,
-    manifest:      bundle.manifest ?? null,
-    parameters:    bundle.parameters ?? null,
-    content:       bundle.content ?? null,
-    casManifest:   bundle.casManifest ?? null,
+    sourceScopeName: bundle.meta?.sourceScopeName ?? null,
+    createdAt: bundle.meta?.createdAt ?? null,
+    manifest: bundle.manifest ?? null,
+    parameters: bundle.parameters ?? null,
+    content: bundle.content ?? null,
+    casManifest: bundle.casManifest ?? null,
   });
   return crypto.createHash("sha256").update(body).digest("hex");
 }

@@ -19,7 +19,7 @@ Two things this sharpens about the build. First, the mechanism of "redeclare a m
 
 The companion to [government.word](./government.word). That file is the FORWARD
 fold: subjective, the founding spoken as acts and laws, parser-able, the present
-in which I_AM acts and the reel forms behind it. This is the INNER fold: the same
+in which I acts and the reel forms behind it. This is the INNER fold: the same
 founding turned into an object and reasoned over, the reel read backward, the
 pattern named. It is the OBJECTIVE register, the Paul language, the commentary.
 

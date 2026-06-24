@@ -24,7 +24,7 @@
 // position — exactly what hasAuthorityOver answers. authorize.js gates
 // these the same way (inheritation coverage as a do-on-being fallback),
 // but the handler re-checks for defense in depth and for direct-call
-// paths that bypass authorize. I_AM (universal authority) always may.
+// paths that bypass authorize. I (universal authority) always may.
 //
 // These self-register at module load; seed/services.js imports this
 // file for side effects.
@@ -32,11 +32,16 @@
 import { registerOperation } from "../../ibp/operations.js";
 import { targetsFact } from "../../ibp/factResult.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
-import { I_AM } from "./seedBeings.js";
+import { I } from "./seedBeings.js";
 import { hasAuthorityOver } from "./identity/inheritation.js";
 
 function positionBeingIdOf(target) {
-  if (target && typeof target === "object" && target.kind === "being" && target.id) {
+  if (
+    target &&
+    typeof target === "object" &&
+    target.kind === "being" &&
+    target.id
+  ) {
     return String(target.id);
   }
   if (typeof target === "string") return target;
@@ -47,10 +52,10 @@ function positionBeingIdOf(target) {
 }
 
 // The acting Name (the granter/revoker). DO acts carry identity.nameId
-// post-split; the I_AM seed paths carry the I_AM being/name instead.
+// post-split; the I seed paths carry the I being/name instead.
 function actingNameOf(identity) {
   if (identity?.nameId) return String(identity.nameId);
-  if (identity?.name === I_AM || identity?.beingId === I_AM) return String(I_AM);
+  if (identity?.name === I || identity?.beingId === I) return String(I);
   return null;
 }
 
@@ -75,7 +80,12 @@ async function assertGrantableName(grantedName, history) {
   }
 }
 
-async function assertAuthorityOverPosition(actingName, position, history, opName) {
+async function assertAuthorityOverPosition(
+  actingName,
+  position,
+  history,
+  opName,
+) {
   const ok = await hasAuthorityOver(actingName, position, history);
   if (!ok) {
     throw new IbpError(
@@ -103,9 +113,10 @@ registerOperation("grant-inheritation", {
         "grant-inheritation requires an identified acting Name",
       );
     }
-    const grantedName = (params && typeof params.name === "string" && params.name.trim())
-      ? params.name.trim()
-      : null;
+    const grantedName =
+      params && typeof params.name === "string" && params.name.trim()
+        ? params.name.trim()
+        : null;
     if (!grantedName) {
       throw new IbpError(
         IBP_ERR.INVALID_INPUT,
@@ -113,12 +124,20 @@ registerOperation("grant-inheritation", {
       );
     }
     await assertGrantableName(grantedName, history);
-    await assertAuthorityOverPosition(actingName, position, history, "grant-inheritation");
-    return targetsFact({
-      name: grantedName,
+    await assertAuthorityOverPosition(
+      actingName,
       position,
-      grantedBy: actingName,
-    }, { kind: "being", id: position });
+      history,
+      "grant-inheritation",
+    );
+    return targetsFact(
+      {
+        name: grantedName,
+        position,
+        grantedBy: actingName,
+      },
+      { kind: "being", id: position },
+    );
   },
 });
 
@@ -140,20 +159,29 @@ registerOperation("revoke-inheritation", {
         "revoke-inheritation requires an identified acting Name",
       );
     }
-    const grantedName = (params && typeof params.name === "string" && params.name.trim())
-      ? params.name.trim()
-      : null;
+    const grantedName =
+      params && typeof params.name === "string" && params.name.trim()
+        ? params.name.trim()
+        : null;
     if (!grantedName) {
       throw new IbpError(
         IBP_ERR.INVALID_INPUT,
         "revoke-inheritation requires params.name (the Name whose point to remove)",
       );
     }
-    await assertAuthorityOverPosition(actingName, position, history, "revoke-inheritation");
-    return targetsFact({
-      name: grantedName,
+    await assertAuthorityOverPosition(
+      actingName,
       position,
-      revokedBy: actingName,
-    }, { kind: "being", id: position });
+      history,
+      "revoke-inheritation",
+    );
+    return targetsFact(
+      {
+        name: grantedName,
+        position,
+        revokedBy: actingName,
+      },
+      { kind: "being", id: position },
+    );
   },
 });

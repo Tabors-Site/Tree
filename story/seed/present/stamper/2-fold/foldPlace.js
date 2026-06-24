@@ -133,7 +133,7 @@ export async function foldPlace(beingId, orientation = ORIENTATION.FORWARD, opts
 
   // Inward: the world drops out. The face is A_b in act-order.
   if (ω === ORIENTATION.INWARD) {
-    const actChain = await loadActChain(beingId);
+    const actChain = await loadActChain(beingId, history);
     return { orientation: ω, self, actChain, _weave: weave };
   }
 
@@ -217,21 +217,40 @@ async function buildForwardFace(beingId, self, stash, history = "0", able = null
  * still exist for audit, but the being doesn't "see" them in inward
  * reflection).
  */
-async function loadActChain(beingId) {
-  const rows = await Act.find({
-    to: String(beingId),
-    severedAt: null,
-  })
-    .sort({ stampedAt: 1 })
-    .select("_id through to activeAble stampedAt startMessage endMessage rootCorrelation inReplyTo answers parentThread innerFace")
+async function loadActChain(beingId, history) {
+  const { readActHead } = await import("../../../past/act/actHash.js");
+  const { GENESIS_PREV } = await import("../../../past/fact/hash.js");
+  const { getStoryDomain } = await import("../../../ibp/address.js");
+  const story = getStoryDomain();
+  // ORDER is the chain, never the clock (623/12; 20.md: the fold, not a variable mutating over steps).
+  // Acts carry no seq, but they are hash-linked by `p` (the being's previous sealed act). One query
+  // loads the being's acts; we walk the p-chain IN-MEMORY from the head (readActHead) back to
+  // GENESIS_PREV, then reverse for oldest-first (the true act-order). Cross-history continuity rides
+  // `p` — a branch's tip walks back through its fork — so this is the being's chain on THIS history's
+  // lineage (sibling branches drop out, correctly). Severed acts are traversed (to keep the chain
+  // intact) but excluded from the face, matching the old `severedAt: null` filter.
+  const rows = await Act.find({ to: String(beingId) })
+    .select("_id through to activeAble p severedAt stampedAt startMessage endMessage rootCorrelation inReplyTo answers parentThread innerFace")
     .lean();
+  const byId = new Map(rows.map(r => [String(r._id), r]));
+  let cursor = await readActHead(story, String(history), String(beingId)); // the head hash (GENESIS_PREV if none)
+  const ordered = [];
+  const seen = new Set(); // cheap cycle guard
+  while (cursor && cursor !== GENESIS_PREV && !seen.has(cursor)) {
+    seen.add(cursor);
+    const r = byId.get(String(cursor));
+    if (!r) break; // the chain reaches outside this being's loaded acts (a graft boundary) — stop
+    if (!r.severedAt) ordered.push(r);
+    cursor = r.p;
+  }
+  ordered.reverse(); // oldest-first (act-order)
 
-  return rows.map(r => ({
+  return ordered.map(r => ({
     actId:           String(r._id),
     through:         r.through,
     to:              r.to,
     activeAble:      r.activeAble,
-    stampedAt:       r.stampedAt,
+    stampedAt:       r.stampedAt, // recorded content (a witnessed timestamp), never the order
     startMessage:    r.startMessage,
     endMessage:      r.endMessage,
     rootCorrelation: r.rootCorrelation,
@@ -292,7 +311,9 @@ async function recallByBraid(beingId, forwardFace, { cap }) {
     actId:   { $ne: null },
     $or:     orClauses,
   })
-    .sort({ date: -1 }) // most-recent stitches first (braid-distance proxy)
+    .sort({ _id: -1 }) // deterministic (the act hash), never the clock (623/12). The braid-distance
+    // here is a tunable proxy; the IDEAL is causal hop-distance over the stitch graph — this is the
+    // safe clock-free interim (the heuristic stays deterministic + replay-safe).
     .limit(cap)
     .select("actId of date")
     .lean();

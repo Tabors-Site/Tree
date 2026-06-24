@@ -39,7 +39,7 @@
 // `sendCaughtError` consults it; explicit `sendError(res, status,
 // ...)` callers still pass a status if they want to.
 //
-// Domain-specific enums (HEAVEN_SPACE, DELETED, I_AM)
+// Domain-specific enums (HEAVEN_SPACE, DELETED, I)
 // live with their domain modules — not here.
 
 import log from "../seedStory/log.js";

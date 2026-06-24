@@ -40,7 +40,7 @@
 
 import log from "../seedStory/log.js";
 import { IBP_ERR } from "./protocol.js";
-import { I_AM } from "../materials/being/seedBeings.js";
+import { I } from "../materials/being/seedBeings.js";
 import { getWordSync } from "../present/word/wordStore.js";
 import { isExtensionBlockedAtSpace } from "../materials/space/extensionScope.js";
 import { authorizeViaAbles } from "./ableAuth.js";
@@ -66,8 +66,8 @@ export async function authorize(args) {
   const { identity, verb, target, moment = null } = args;
 
   // 1. I-Am bypass. The bootstrap axiom.
-  if (identity?.name === I_AM || identity?.beingId === I_AM) {
-    return { ok: true, actor: I_AM };
+  if (identity?.name === I || identity?.beingId === I) {
+    return { ok: true, actor: I };
   }
 
   // 2. SEE on .discovery. Pre-identity surface every client reads on

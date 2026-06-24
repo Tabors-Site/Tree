@@ -36,7 +36,10 @@ function b58encode(buf) {
       digits[j] = carry % 58;
       carry = (carry / 58) | 0;
     }
-    while (carry) { digits.push(carry % 58); carry = (carry / 58) | 0; }
+    while (carry) {
+      digits.push(carry % 58);
+      carry = (carry / 58) | 0;
+    }
   }
   let out = "1".repeat(zeros);
   for (let i = digits.length - 1; i >= 0; i--) out += B58[digits[i]];
@@ -56,10 +59,14 @@ function b58decode(str) {
       bytes[j] = carry & 0xff;
       carry = carry >> 8;
     }
-    while (carry) { bytes.push(carry & 0xff); carry = carry >> 8; }
+    while (carry) {
+      bytes.push(carry & 0xff);
+      carry = carry >> 8;
+    }
   }
   const out = Buffer.alloc(zeros + bytes.length);
-  for (let i = 0; i < bytes.length; i++) out[zeros + bytes.length - 1 - i] = bytes[i];
+  for (let i = 0; i < bytes.length; i++)
+    out[zeros + bytes.length - 1 - i] = bytes[i];
   return out;
 }
 
@@ -89,15 +96,21 @@ const MAX_KEY_ID_LEN = 64;
 
 /** Recover a public KeyObject from a key id. Self-certifying. */
 export function keyIdToPublicKey(keyId) {
-  if (!isKeyId(keyId)) throw new Error(`keyIdToPublicKey: not a key id: ${keyId}`);
-  if (keyId.length > MAX_KEY_ID_LEN) throw new Error("keyIdToPublicKey: id too long");
+  if (!isKeyId(keyId))
+    throw new Error(`keyIdToPublicKey: not a key id: ${keyId}`);
+  if (keyId.length > MAX_KEY_ID_LEN)
+    throw new Error("keyIdToPublicKey: id too long");
   const decoded = b58decode(keyId.slice(1));
   if (decoded[0] !== 0xed || decoded[1] !== 0x01) {
     throw new Error("keyIdToPublicKey: not an ed25519 multicodec key");
   }
   const raw = decoded.subarray(2);
   return crypto.createPublicKey({
-    key: { kty: "OKP", crv: "Ed25519", x: Buffer.from(raw).toString("base64url") },
+    key: {
+      kty: "OKP",
+      crv: "Ed25519",
+      x: Buffer.from(raw).toString("base64url"),
+    },
     format: "jwk",
   });
 }
@@ -147,14 +160,19 @@ export function verifyNameSig(nameId, payloadObj, sigB64) {
 
 /**
  * Verify a signature against a raw SPKI public-key PEM, not a key id.
- * Used where the signer's id is NOT its public key: I_AM, whose id is
+ * Used where the signer's id is NOT its public key: I, whose id is
  * the literal "i-am" and whose key is the story key (storyIdentity).
  * Same canonicalizer as signAsName, so the two are symmetric.
  */
 export function verifyWithPublicKeyPem(publicKeyPem, payloadObj, sigB64) {
   try {
     const msg = Buffer.from(canonicalize(payloadObj), "utf8");
-    return crypto.verify(null, msg, publicKeyPem, Buffer.from(sigB64, "base64"));
+    return crypto.verify(
+      null,
+      msg,
+      publicKeyPem,
+      Buffer.from(sigB64, "base64"),
+    );
   } catch {
     return false;
   }
@@ -171,7 +189,10 @@ export function keyIdFromPublicKeyPem(publicKeyPem) {
 // 16-byte DER prefix. The seed form is what BIP39 puts on paper
 // (mnemonic.js) and what key-import rebuilds a keypair from. Same key,
 // three skins: PEM (wire/export), seed (paper), keypair (live).
-const PKCS8_ED25519_PREFIX = Buffer.from("302e020100300506032b657004220420", "hex");
+const PKCS8_ED25519_PREFIX = Buffer.from(
+  "302e020100300506032b657004220420",
+  "hex",
+);
 
 /** The raw 32-byte seed of an ed25519 private-key PEM. */
 export function seedFromPrivateKeyPem(privateKeyPem) {
@@ -180,7 +201,8 @@ export function seedFromPrivateKeyPem(privateKeyPem) {
     throw new Error("seedFromPrivateKeyPem: not an ed25519 private key");
   }
   const seed = Buffer.from(jwk.d, "base64url");
-  if (seed.length !== 32) throw new Error("seedFromPrivateKeyPem: bad seed length");
+  if (seed.length !== 32)
+    throw new Error("seedFromPrivateKeyPem: bad seed length");
   return seed;
 }
 
@@ -192,7 +214,8 @@ export function seedFromPrivateKeyPem(privateKeyPem) {
  */
 export function keypairFromSeed(seed) {
   const buf = Buffer.from(seed);
-  if (buf.length !== 32) throw new Error("keypairFromSeed: seed must be 32 bytes");
+  if (buf.length !== 32)
+    throw new Error("keypairFromSeed: seed must be 32 bytes");
   const priv = crypto.createPrivateKey({
     key: Buffer.concat([PKCS8_ED25519_PREFIX, buf]),
     format: "der",

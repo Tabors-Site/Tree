@@ -1,7 +1,7 @@
 // TreeOS Portal — the story view.
 //
 // The book made a surface: the SAME `assembleStory` fold the kernel weaves for the LLM's RECALL,
-// painted instead of read. Facts woven into past-tense WORD — "I_AM gave birth to cherub and
+// painted instead of read. Facts woven into past-tense WORD — "I gave birth to cherub and
 // granted cherub the global able." — never JSON, never verb:op. One coordinate system, who × when
 // × where; the scope switcher picks the view:
 //
@@ -23,8 +23,10 @@
 import "../styles/history-view.css";
 
 export function createView() {
-  let ctx = null, root = null, els = null;
-  let scope = "world";          // world | me | lineage | selected | here
+  let ctx = null,
+    root = null,
+    els = null;
+  let scope = "world"; // world | me | lineage | selected | here
   let acts = [];
   let sourceLabel = "";
   let loadSeq = 0;
@@ -32,9 +34,10 @@ export function createView() {
 
   // ── Mount ───────────────────────────────────────────────────────
   function mount(rootEl, portalCtx) {
-    ctx = portalCtx; root = rootEl;
+    ctx = portalCtx;
+    root = rootEl;
     const wrap = document.createElement("div");
-    wrap.id = "history-view";          // reuse the history view's chrome styling
+    wrap.id = "history-view"; // reuse the history view's chrome styling
     wrap.classList.add("story-view");
     wrap.innerHTML = `
       <div id="hv-bar">
@@ -47,11 +50,11 @@ export function createView() {
       <div id="hv-feed"></div>`;
     root.appendChild(wrap);
     els = {
-      scope:   wrap.querySelector("[data-el=scope]"),
-      title:   wrap.querySelector("[data-el=title]"),
-      now:     wrap.querySelector("[data-el=now]"),
+      scope: wrap.querySelector("[data-el=scope]"),
+      title: wrap.querySelector("[data-el=title]"),
+      now: wrap.querySelector("[data-el=now]"),
       refresh: wrap.querySelector("[data-el=refresh]"),
-      feed:    wrap.querySelector("#hv-feed"),
+      feed: wrap.querySelector("#hv-feed"),
     };
     els.refresh.addEventListener("click", () => load());
     els.now.addEventListener("click", () => ctx.navigation.returnToNow());
@@ -59,14 +62,17 @@ export function createView() {
     renderScope();
     load();
 
-    teardowns.push(ctx.state.subscribe((partial) => {
-      if ("historicalAnchor" in partial) paintAnchor();
-    }));
+    teardowns.push(
+      ctx.state.subscribe((partial) => {
+        if ("historicalAnchor" in partial) paintAnchor();
+      }),
+    );
   }
 
   function onDescriptor(_desc, meta = {}) {
     // a real move re-reads "world"/"here" (the place changed); other scopes are being-fixed
-    if (meta.reason === "navigate" && (scope === "here" || scope === "world")) load();
+    if (meta.reason === "navigate" && (scope === "here" || scope === "world"))
+      load();
     paintAnchor();
   }
   function onSelection() {
@@ -75,7 +81,11 @@ export function createView() {
   }
   function destroy() {
     loadSeq++;
-    for (const fn of teardowns.splice(0)) { try { fn(); } catch {} }
+    for (const fn of teardowns.splice(0)) {
+      try {
+        fn();
+      } catch {}
+    }
     els = null;
     if (root) root.innerHTML = "";
     root = null;
@@ -89,7 +99,11 @@ export function createView() {
       out.push({ id: "me", label: "me" });
       out.push({ id: "lineage", label: "lineage" });
     }
-    if (m.selectedBeing?.beingId) out.push({ id: "selected", label: `@${m.selectedBeing.name || "selected"}` });
+    if (m.selectedBeing?.beingId)
+      out.push({
+        id: "selected",
+        label: `@${m.selectedBeing.name || "selected"}`,
+      });
     if (m.descriptor?.address?.spaceId) out.push({ id: "here", label: "here" });
     return out;
   }
@@ -115,16 +129,26 @@ export function createView() {
   // map the active scope to the SEE story args + a human label
   function storyRequest() {
     const m = ctx.state.get();
-    if (scope === "world")   return { args: { scope: "world" },   label: "the world's story" };
-    if (scope === "me")      return { args: { scope: "being" },   label: "my story" };
-    if (scope === "lineage") return { args: { scope: "lineage" }, label: "my family's story" };
+    if (scope === "world")
+      return { args: { scope: "world" }, label: "the world's story" };
+    if (scope === "me") return { args: { scope: "being" }, label: "my story" };
+    if (scope === "lineage")
+      return { args: { scope: "lineage" }, label: "my family's story" };
     if (scope === "selected") {
-      const id = m.selectedBeing?.beingId; if (!id) return null;
-      return { args: { scope: "being", being: String(id) }, label: `@${m.selectedBeing?.name || "selected"}'s story` };
+      const id = m.selectedBeing?.beingId;
+      if (!id) return null;
+      return {
+        args: { scope: "being", being: String(id) },
+        label: `@${m.selectedBeing?.name || "selected"}'s story`,
+      };
     }
     if (scope === "here") {
-      const id = m.descriptor?.address?.spaceId; if (!id) return null;
-      return { args: { scope: "place", space: String(id) }, label: "this place's story" };
+      const id = m.descriptor?.address?.spaceId;
+      if (!id) return null;
+      return {
+        args: { scope: "place", space: String(id) },
+        label: "this place's story",
+      };
     }
     return null;
   }
@@ -133,7 +157,11 @@ export function createView() {
   async function load() {
     if (!ctx?.client) return;
     const req = storyRequest();
-    if (!req) { acts = []; renderFeed("nothing to read here — sign in or pick a being"); return; }
+    if (!req) {
+      acts = [];
+      renderFeed("nothing to read here — sign in or pick a being");
+      return;
+    }
     const seq = ++loadSeq;
     renderFeed("reading the story…");
     try {
@@ -145,9 +173,11 @@ export function createView() {
     } catch (err) {
       if (seq !== loadSeq || !els) return;
       const refused = err?.code === "FORBIDDEN" || err?.code === "UNAUTHORIZED";
-      renderFeed(refused
-        ? "the story is readable once you claim an identity — register via @cherub"
-        : `could not read the story: ${err?.code || ""} ${err?.message || ""}`);
+      renderFeed(
+        refused
+          ? "the story is readable once you claim an identity — register via @cherub"
+          : `could not read the story: ${err?.code || ""} ${err?.message || ""}`,
+      );
     }
   }
 
@@ -175,7 +205,11 @@ export function createView() {
     }
     let lastDay = null;
     for (const a of acts) {
-      const ts = a.date ? (typeof a.date === "string" ? a.date : new Date(a.date).toISOString()) : null;
+      const ts = a.date
+        ? typeof a.date === "string"
+          ? a.date
+          : new Date(a.date).toISOString()
+        : null;
       const day = ts ? ts.slice(0, 10) : "—";
       if (day !== lastDay) {
         lastDay = day;

@@ -2,7 +2,7 @@
 //
 // NAME — the fifth verb. The identity layer (outer worlds), not a world
 // stance: you address it story-only (`<storyDomain>` — the story's
-// I_AM, where a name is declared) or `<nameId>@<storyDomain>` (a specific
+// I, where a name is declared) or `<nameId>@<storyDomain>` (a specific
 // name, to banish or see it). It rides the same IBPA but never resolves a
 // position; the portal gives it its own views (create a name, see a name's
 // data / all its acts).
@@ -11,8 +11,8 @@
 //
 // PERMISSIONS (for now): anyone can call NAME. The verb only requires a
 // caller identity (so the fact has an actor); there is no able-walk yet.
-// declare's actor resolves to I_AM today (every being's trueName is i-am),
-// so I_AM mints the new name as its facet, and the name:declare fact lands
+// declare's actor resolves to I today (every being's trueName is i-am),
+// so I mints the new name as its facet, and the name:declare fact lands
 // on the NEW name's reel — making it. "declare is open, banish is self-only,
 // and a real authorize()" come later.
 //
@@ -21,7 +21,7 @@
 
 import { IbpError, IBP_ERR } from "../protocol.js";
 import { getStoryDomain } from "../address.js";
-import { I_AM } from "../../materials/being/seedBeings.js";
+import { I } from "../../materials/being/seedBeings.js";
 import { emitWordFact, stampsFact } from "../factResult.js";
 import { resolveNameOpFromFold } from "../../present/word/wordStore.js";
 import { resolveNameId } from "../../materials/name/registry.js";
@@ -43,7 +43,10 @@ import {
 function parseNameAddress(address) {
   if (address == null || address === "") return { story: null, nameId: null };
   if (typeof address !== "string") {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "name: address must be a string (<storyDomain> or <nameId>@<storyDomain>)");
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "name: address must be a string (<storyDomain> or <nameId>@<storyDomain>)",
+    );
   }
   if (/[:/#]/.test(address)) {
     throw new IbpError(
@@ -54,7 +57,10 @@ function parseNameAddress(address) {
   }
   const at = address.indexOf("@");
   if (at === -1) return { story: address, nameId: null };
-  return { story: address.slice(at + 1) || null, nameId: address.slice(0, at) || null };
+  return {
+    story: address.slice(at + 1) || null,
+    nameId: address.slice(0, at) || null,
+  };
 }
 
 /**
@@ -66,7 +72,10 @@ function parseNameAddress(address) {
  */
 export async function nameVerb(operation, payload = {}, opts = {}) {
   if (typeof operation !== "string" || !operation.length) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "story.name requires an operation");
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "story.name requires an operation",
+    );
   }
   refuseHistoricalWrite("name", payload, opts);
   // close-story dispatch gate: no name-acts once the story is closed (the one-way, story-wide
@@ -74,10 +83,10 @@ export async function nameVerb(operation, payload = {}, opts = {}) {
   await (await import("../../storyLifecycle.js")).assertStoryOpen();
 
   const {
-    address        = null,
+    address = null,
     currentStory = null,
-    currentHistory  = null,
-    moment      = null,
+    currentHistory = null,
+    moment = null,
   } = opts;
 
   const history = resolveHistoryForFact(moment, currentHistory, "name");
@@ -86,7 +95,9 @@ export async function nameVerb(operation, payload = {}, opts = {}) {
   const { story, nameId: addressedToken } = parseNameAddress(address);
   // A name-address token can be a PUBKEY or a REAL-NAME; resolve it via the
   // registry to the nameId (the real-name -> pubkey auto-translation).
-  const addressedNameId = addressedToken ? await resolveNameId(addressedToken) : null;
+  const addressedNameId = addressedToken
+    ? await resolveNameId(addressedToken)
+    : null;
   if (story && story !== storyDomain) {
     throw new IbpError(
       IBP_ERR.SPACE_NOT_FOUND,
@@ -97,7 +108,7 @@ export async function nameVerb(operation, payload = {}, opts = {}) {
 
   // Fold-ONLY: the NAME op resolves from the live word-fold (the coin facts seedFold declared at
   // genesis Step 1.5), NOT the NAME_OPS Map — which is now only the load-time registration buffer
-  // declareNameOpsToFold reads. Mirrors do.js's resolveDoOpFromFold. I_AM's own bootstrap
+  // declareNameOpsToFold reads. Mirrors do.js's resolveDoOpFromFold. I's own bootstrap
   // name:declare (sprout.js) is a raw emitFact, never a nameVerb call, so it predates and grounds
   // this fold — only WORLD-driven NAME acts dispatch here.
   const nameOp = resolveNameOpFromFold(operation);
@@ -111,7 +122,7 @@ export async function nameVerb(operation, payload = {}, opts = {}) {
   // PRE-WORLD ops (declare / connect / release) are callable with NO being
   // identity — they ARE the front door, before you have a name or a being
   // (the Name Form): declare mints, connect/release bind/unbind the session,
-  // all with the fact's actor resolving to I_AM. (connect is gated by the
+  // all with the fact's actor resolving to I. (connect is gated by the
   // password proof in the session channel + the already-connected reel gate;
   // release by the not-connected gate.) banish (and later ops) require a
   // caller. Anyone may call any of them for now (real permissions land later).
@@ -132,7 +143,10 @@ export async function nameVerb(operation, payload = {}, opts = {}) {
   // declareNameFact attaches the fact's params (declare → {spec}; banish/connect/release →
   // {byActor}) + the target name. The keystone's name-policy OMITS the result field entirely, so the
   // minted `reveal` cannot reach the chain — it rides ONLY the RETURN below to the asker.
-  const { factResult, through } = declareNameFact(result, { operation, identity });
+  const { factResult, through } = declareNameFact(result, {
+    operation,
+    identity,
+  });
   await emitWordFact(
     nameOp,
     { through, actId: moment?.actId || null, history },
@@ -143,7 +157,12 @@ export async function nameVerb(operation, payload = {}, opts = {}) {
   // `reveal` (declare only) carries the freshly minted key ONCE for backup —
   // private key + 24 words + public key. It rides the handler return, never the
   // fact. Null for banish/connect/release and for imported keys.
-  return { ok: true, operation, nameId: result.nameId, reveal: result.reveal || null };
+  return {
+    ok: true,
+    operation,
+    nameId: result.nameId,
+    reveal: result.reveal || null,
+  };
 }
 
 /**
@@ -151,12 +170,12 @@ export async function nameVerb(operation, payload = {}, opts = {}) {
  * keystone (emitWordFact) — the twin of be.js's declareConnectFact. The fact's TARGET is the name
  * acted on (the NEW name for declare — making its reel; the addressed name for banish). The params:
  * declare records the public spec; banish/connect/release record only `byActor`. The ACTOR
- * (`through`) is the caller's being, or I_AM for the pre-world ops (every being's trueName is i-am
+ * (`through`) is the caller's being, or I for the pre-world ops (every being's trueName is i-am
  * today). The minted `reveal` (declare) is NOT touched here and never reaches the fact: the keystone
  * OMITS the result field for a name-op, so the key rides ONLY the verb's RETURN to the asker.
  */
 function declareNameFact(result, { operation, identity }) {
-  const actorBeingId = identity?.beingId || I_AM;
+  const actorBeingId = identity?.beingId || I;
   const params =
     operation === "declare"
       ? { spec: result.spec }

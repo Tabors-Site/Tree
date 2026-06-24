@@ -1,6 +1,6 @@
 # Ables Are Auth — Unifying Stance Auth + Able Registry
 
-> *Source notes: `philosophy/CROSS-WORLD/auth3.jpg` + `auth4.jpg` — "All beings who are owner/contributor in heaven have angel able. I-AM is first, and from him all permissions strangle as needed down the Being Tree. Each parent assigns and delegates the permissions they have to their child."*
+> _Source notes: `philosophy/CROSS-WORLD/auth3.jpg` + `auth4.jpg` — "All beings who are owner/contributor in heaven have angel able. I-AM is first, and from him all permissions strangle as needed down the Being Tree. Each parent assigns and delegates the permissions they have to their child."_
 
 > **The sections below this header trace the design's evolution. The doctrine the substrate actually implements is summarized in the "Final doctrine" section right after this. Read that section first — earlier sections preserve the thinking for context.**
 
@@ -20,22 +20,22 @@ When an action needs to be universally available — like "every being can reque
 
 Any field or flag that bypasses the able-walk introduces parallel gating and erodes the single-gate property. Past examples we explicitly retired:
 
-| Bypass | Why we retired it | What replaced it |
-|---|---|---|
-| `qualities.permissions` namespace | Parallel gate growing alongside ables | Ables host on `qualities.ables`; canX is the contract |
-| `claimedByPublic` branch in `ableAuth.js` | Hardcoded special-case for one being | `acquisition.autoOnEntry` on ables; visitors get a grant via the regular path |
-| `op.skipAuthorize` field (briefly added 2026-06-10, retired same-day) | Generic bypass for "ops that don't fit the gate" | Universal capabilities live on `global.canDo`; every being holds `global` |
+| Bypass                                                                | Why we retired it                                | What replaced it                                                              |
+| --------------------------------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------- |
+| `qualities.permissions` namespace                                     | Parallel gate growing alongside ables            | Ables host on `qualities.ables`; canX is the contract                         |
+| `claimedByPublic` branch in `ableAuth.js`                             | Hardcoded special-case for one being             | `acquisition.autoOnEntry` on ables; visitors get a grant via the regular path |
+| `op.skipAuthorize` field (briefly added 2026-06-10, retired same-day) | Generic bypass for "ops that don't fit the gate" | Universal capabilities live on `global.canDo`; every being holds `global`     |
 
 **Recognition criterion**: if an op's authorization story reads "the verb gate is skipped because…" — that's parallel gating. The right answer is always "what able expresses this capability, and which beings hold it." If everyone needs the capability, it goes on `global`. If a specific class needs it, it goes on a able granted to that class.
 
 ### Four orthogonal pieces
 
-| Lives on | Field | What it carries |
-|---|---|---|
-| **Space** | `qualities.ables[name] = {canSee, canDo, canSummon, canBe, reach?, ...}` | The able's spec. Hosted at the space where it was authored. |
-| **Being** | `qualities.ablesGranted = [{able, anchorSpaceId, grantedBy, grantedAt}]` | The grants the being holds. Travel with the being. |
-| **Being** | `qualities.flow = [{when, able}, ...]` | Which held able to PLAY at moment-time. |
-| **Able spec** | `able.reach: [path-pattern, ...]` | Optional. Path filter that adjusts the default "host + descendants" coverage. |
+| Lives on      | Field                                                                    | What it carries                                                               |
+| ------------- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------- |
+| **Space**     | `qualities.ables[name] = {canSee, canDo, canSummon, canBe, reach?, ...}` | The able's spec. Hosted at the space where it was authored.                   |
+| **Being**     | `qualities.ablesGranted = [{able, anchorSpaceId, grantedBy, grantedAt}]` | The grants the being holds. Travel with the being.                            |
+| **Being**     | `qualities.flow = [{when, able}, ...]`                                   | Which held able to PLAY at moment-time.                                       |
+| **Able spec** | `able.reach: [path-pattern, ...]`                                        | Optional. Path filter that adjusts the default "host + descendants" coverage. |
 
 Each piece does one job. Beings carry their grants everywhere; the grants become active only when their able's reach covers the current target. Movement never strips a grant — just makes it contextually applicable or not.
 
@@ -45,15 +45,15 @@ A able lives on the `qualities.ables` of the space where it was authored. That's
 
 Foundational seed ables:
 
-| Able | Hosted on | Implicit reach |
-|---|---|---|
-| `angel` | heaven (`<story>/.`) | heaven + descendants (system spaces) |
-| `global` | story root (`<story>/`) | the whole story |
-| `human` | story root | the whole story |
-| `arrival` | story root (implicit floor) | the whole story |
-| `cherub` | story root | the whole story |
-| `birther` / `llm-assigner` / `able-manager` / ... | story root | the whole story |
-| `coder` (operator-authored) | wherever they author it (e.g. `/coders/`) | host + descendants |
+| Able                                              | Hosted on                                 | Implicit reach                       |
+| ------------------------------------------------- | ----------------------------------------- | ------------------------------------ |
+| `angel`                                           | heaven (`<story>/.`)                      | heaven + descendants (system spaces) |
+| `global`                                          | story root (`<story>/`)                   | the whole story                      |
+| `human`                                           | story root                                | the whole story                      |
+| `arrival`                                         | story root (implicit floor)               | the whole story                      |
+| `cherub`                                          | story root                                | the whole story                      |
+| `birther` / `llm-assigner` / `able-manager` / ... | story root                                | the whole story                      |
+| `coder` (operator-authored)                       | wherever they author it (e.g. `/coders/`) | host + descendants                   |
 
 There is **no `scope: "global" | "anchored"` distinction**. There's just "where it lives." A able hosted at the story root reaches everywhere because the story root is everyone's ancestor.
 
@@ -63,10 +63,10 @@ By default a able reaches its host + all descendants. The optional `reach` field
 
 ```js
 reach: [
-  "/docs/coding/**",      // ADD this subtree (lateral extension outside host's descendants)
-  "!/coders/legacy/**",   // REMOVE this subtree from default coverage
-  "!/coders/sandbox",     // REMOVE this specific space
-]
+  "/docs/coding/**", // ADD this subtree (lateral extension outside host's descendants)
+  "!/coders/legacy/**", // REMOVE this subtree from default coverage
+  "!/coders/sandbox", // REMOVE this specific space
+];
 ```
 
 **Default base**: implicit `host/**` (host + all descendants). The reach list **adjusts** the base — additions extend, `!` entries carve out. Patterns are evaluated in order; later entries win on conflict.
@@ -75,13 +75,14 @@ To strictly limit coverage to specific spaces (ignore default descent):
 
 ```js
 reach: [
-  "!**",                       // strip the default base (no descent)
-  "/coders/widget-team",       // only this one space
-  "/coders/docs/**",           // and this subtree
-]
+  "!**", // strip the default base (no descent)
+  "/coders/widget-team", // only this one space
+  "/coders/docs/**", // and this subtree
+];
 ```
 
 Pattern vocabulary (small):
+
 - `<exact-path>` — exact match (`"/town/bench"`)
 - `<spaceId>` — exact space-id match
 - `prefix/**` — subtree (any depth below)
@@ -157,10 +158,12 @@ Operators wanting a richer commons surface author a real able on the public-owne
 **The permanence is structural, not policed**: public has no cognition, no canDo, no handler. There's no actor that could ever sign a `set-owner` removing itself. The silence IS the lock.
 
 **Recovery paths**:
+
 - **Branch the timeline** from before the transfer happened. Same shape as any substrate mistake recovery. The realistic path.
 - **I-Am owns public.** As an extremis safety hatch, I-Am holds public's own `members.owner` slot — so an I-Am-class operator could `remove-owner` on a public-owned space. Doctrinally available, but a high bar.
 
 Edge cases:
+
 - **Hybrid ownership** (Public + a real owner): the real owner's authority still works — they can revoke things, install ables, etc. Public's seat just adds the commons-able floor for visitors.
 - **Public-only ownership**: nobody can ever wrest it back without timeline branching or I-Am intervention.
 - **Custom commons surface**: an operator authors `qualities.ables.commons-visitor` on the public-owned space with their own canX. Granted visitors get its full reach; non-granted visitors fall back to the seed-shipped public-commons.
@@ -168,7 +171,7 @@ Edge cases:
 
 ### Contributors retire as a gate
 
-Under ables-are-auth the `members.contributor` class (and any custom member class) is bookkeeping only — it does NOT gate authorize. Owners model "secondary owners" as ables with the appropriate canDo (set-able, grant-able:*, create-space, etc.). One mechanism — ables + ownership — covers everything the old member-class system did, and operators can author whatever shape they want without the substrate baking in second-class authorities.
+Under ables-are-auth the `members.contributor` class (and any custom member class) is bookkeeping only — it does NOT gate authorize. Owners model "secondary owners" as ables with the appropriate canDo (set-able, grant-able:\*, create-space, etc.). One mechanism — ables + ownership — covers everything the old member-class system did, and operators can author whatever shape they want without the substrate baking in second-class authorities.
 
 ### be:birth doctrine — two paths to mint a being
 
@@ -199,13 +202,13 @@ The two paths produce the same outcome (a new being parented to the requester); 
 
 Per the doctrine, the able's canX is the gate. `canSee` is a list of SEE op names with an explicit "all-access" wildcard:
 
-| `canSee` | What it permits |
-|---|---|
-| `["*"]` | Can call any registered SEE op AND see raw position descriptors (`client.see(address)`) |
-| `["place"]` | Can call `see("place")` only. Raw position SEE REFUSES. |
-| `["arrival-view"]` | Can call `see("arrival-view")` only. |
-| `["place", "library"]` | Can call those two ops; raw position SEE refuses. |
-| `[]` | Cannot SEE anything |
+| `canSee`               | What it permits                                                                         |
+| ---------------------- | --------------------------------------------------------------------------------------- |
+| `["*"]`                | Can call any registered SEE op AND see raw position descriptors (`client.see(address)`) |
+| `["place"]`            | Can call `see("place")` only. Raw position SEE REFUSES.                                 |
+| `["arrival-view"]`     | Can call `see("arrival-view")` only.                                                    |
+| `["place", "library"]` | Can call those two ops; raw position SEE refuses.                                       |
+| `[]`                   | Cannot SEE anything                                                                     |
 
 The seed-shipped `arrival` able hosts `canSee: ["arrival-view"]` — anonymous visitors get one filtered window into the story (root layout + cherub only, via the `arrival-view` SEE op). They cannot enumerate beings, see matter, or descend into child spaces.
 
@@ -215,7 +218,7 @@ The seed-shipped `arrival` able hosts `canSee: ["arrival-view"]` — anonymous v
 
 ```js
 async function authorize({identity, verb, target, action, intent, operation, branch}):
-  if identity?.beingId === I_AM: return ok           // bootstrap axiom
+  if identity?.beingId === I: return ok           // bootstrap axiom
   if !identity?.beingId: apply implicit arrival floor // anonymous read
 
   for each grant in identity.ablesGranted:
@@ -278,6 +281,7 @@ If no clause produces a held + reaching able, the moment fails loud (`no granted
 Gate: caller must hold a able at targetSpace (or above) whose canDo includes `set-able` (or `*`). The "travel rule" of auth3 — can't author a able at a space you have no authority over.
 
 Effect:
+
 - The fact is `do:set-able` with target being the space (kind: "space", id: targetSpace) and params carrying the spec.
 - The space reducer folds this into `qualities.ables[name]`.
 - The author is auto-granted the new able at that space (separate `grant-able` fact emitted in the same moment).
@@ -301,14 +305,14 @@ registerAble("global", globalAble, "seed");
 // ...
 
 // Tomorrow: ables are templates + installed-on-spaces
-saveTemplate("angel", angelAble, "seed");        // template shelf
+saveTemplate("angel", angelAble, "seed"); // template shelf
 saveTemplate("global", globalAble, "seed");
 // ...
 
-await installAbleOnSpace(heaven,        "angel",  angelAble, I_AM);
-await installAbleOnSpace(storyRoot,   "global", globalAble, I_AM);
-await installAbleOnSpace(storyRoot,   "human",  humanAble,  I_AM);
-await installAbleOnSpace(storyRoot,   "cherub", cherubAble, I_AM);
+await installAbleOnSpace(heaven, "angel", angelAble, I);
+await installAbleOnSpace(storyRoot, "global", globalAble, I);
+await installAbleOnSpace(storyRoot, "human", humanAble, I);
+await installAbleOnSpace(storyRoot, "cherub", cherubAble, I);
 // ... all the seed delegates' ables installed on story root
 // (cherub & friends operate story-wide)
 ```
@@ -319,12 +323,12 @@ The bootstrap grants (I-Am grants angel to seed delegates) stay the same — the
 
 ### Frontend — three panels fall out
 
-| Panel | What it shows |
-|---|---|
+| Panel                              | What it shows                                                                                                                                                                                                                                                                                                           |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Place panel** (current position) | Walks ancestors collecting all `qualities.ables[*]` → renders "ables in effect here" labeled by host space. Below: viewer's `qualities.ablesGranted` filtered to grants whose able reaches here, with canX they unlock. Below that (for space owners): "Author able here" — opens set-able form anchored at this space. |
-| **Story tab** | SEE story-root's `qualities.ables` — the foundational ables for this whole world. For angels: forms to author new global-reach ables, edit canX, etc. |
-| **Heaven tab** (or sub-section) | SEE heaven's `qualities.ables` (`angel` + any heaven-only system ables). |
-| **Template library** | SEE the registry — the shelf of available able specs to install on spaces. "Install at <space>" buttons. |
+| **Story tab**                      | SEE story-root's `qualities.ables` — the foundational ables for this whole world. For angels: forms to author new global-reach ables, edit canX, etc.                                                                                                                                                                   |
+| **Heaven tab** (or sub-section)    | SEE heaven's `qualities.ables` (`angel` + any heaven-only system ables).                                                                                                                                                                                                                                                |
+| **Template library**               | SEE the registry — the shelf of available able specs to install on spaces. "Install at <space>" buttons.                                                                                                                                                                                                                |
 
 ### What retires
 
@@ -371,13 +375,13 @@ This is the load-bearing smell. A able's `canDo: ["set-config"]` is documentatio
 
 The doctrine you sketched in auth3 + auth4 fuses these. Per the notes:
 
-- *"All permissions apply to beings/ables only, and what they can SEE / DO / CALL. Never controlling space/matter access. Those are through Acts."*
-- *"I-AM is first, and from him all permissions strangle as needed down the Being Tree. Each parent assigns and delegates the permissions they have to their child."*
-- *"Should Ables be local down the ancestry they came from? Meaning the spaces they were created at and down."*
-- *"This would be ablesGranted[], flow. There would still be a global Able registry."*
-- *"When a new AbleDO happens, the Actor decides if its global / whole story, or privatized (only inherited or given away)."*
+- _"All permissions apply to beings/ables only, and what they can SEE / DO / CALL. Never controlling space/matter access. Those are through Acts."_
+- _"I-AM is first, and from him all permissions strangle as needed down the Being Tree. Each parent assigns and delegates the permissions they have to their child."_
+- _"Should Ables be local down the ancestry they came from? Meaning the spaces they were created at and down."_
+- _"This would be ablesGranted[], flow. There would still be a global Able registry."_
+- _"When a new AbleDO happens, the Actor decides if its global / whole story, or privatized (only inherited or given away)."_
 
-The endgame: **ables ARE the access control.** A being's `ablesGranted[]` is the list of ables they hold; each entry is anchored at a space. When the being acts, authorize walks their granted ables, finds the ones whose anchor is an ancestor of the target, and checks if any of those ables' `canX` lists permits the action. Stance properties (`arrival`/`owner`/`contributor`) survive but they become INPUTS into able grants (the cherub anoints new humans into the `angel` able *because* they registered, not because they're a member class).
+The endgame: **ables ARE the access control.** A being's `ablesGranted[]` is the list of ables they hold; each entry is anchored at a space. When the being acts, authorize walks their granted ables, finds the ones whose anchor is an ancestor of the target, and checks if any of those ables' `canX` lists permits the action. Stance properties (`arrival`/`owner`/`contributor`) survive but they become INPUTS into able grants (the cherub anoints new humans into the `angel` able _because_ they registered, not because they're a member class).
 
 ## The unified model
 
@@ -460,7 +464,7 @@ Three traits:
 
 - **Anchored.** Each grant is bound to a space. The able only takes effect at that space and below — auth walks the target's ancestor chain and checks if the able's anchor appears.
 - **From-someone.** Every grant records who granted it. Replay can verify the grant chain back to I-Am.
-- **Append-only.** Grants are facts. Revocation is a *revoke-able* fact, not an in-place deletion (mirrors how subscriptions work — register and cancel facts compose at fold time).
+- **Append-only.** Grants are facts. Revocation is a _revoke-able_ fact, not an in-place deletion (mirrors how subscriptions work — register and cancel facts compose at fold time).
 
 #### Duplicate grants from different grantors
 
@@ -487,14 +491,14 @@ The `defaultAble` field stays for now (drives the terminal clause for legacy rea
 
 **Two code-level shortcuts stay** at the top of `authorize` — they are NOT grants:
 
-- **I-Am bypass** — `identity?.beingId === I_AM` always succeeds. The bootstrap axiom.
+- **I-Am bypass** — `identity?.beingId === I` always succeeds. The bootstrap axiom.
 - **Implicit arrival** — anonymous callers (no `beingId`) run under an implicit `arrival` able at the place root: `canSee` for the public surface, `canBe: ["birth", "connect"]` for registration. Stateless callers don't carry grants.
 
 Every other being's authority flows through `ablesGranted`.
 
 ### Scope: global vs anchored
 
-Per auth4 — *"When a new AbleDO happens, the Actor decides if its global / whole story, or privatized (only inherited or given away)."*
+Per auth4 — _"When a new AbleDO happens, the Actor decides if its global / whole story, or privatized (only inherited or given away)."_
 
 - **`scope: "global"`** — The able is available story-wide. A grant of a global able takes effect everywhere; `anchorSpaceId` is the place root. Used for system ables (angel, human) and for explicitly public ables.
 - **`scope: "anchored"`** (default for new ables) — The able only takes effect at and below the anchor space. A coder granted at `<story>/coders/` can act within that subtree but not outside it.
@@ -513,11 +517,13 @@ Being.qualities.ablesGranted = [
 ```
 
 Match rules:
+
 - **Space anchor matches** when the target's spaceId equals `anchorSpaceId` OR is a descendant of it.
 - **Being anchor matches** when the target's being equals `anchorBeingId` (right-stance `@being` for CALL / DO-against-being / BE).
 - A grant entry has at most one anchor type populated (the other is null); both null is invalid (the able has nothing to anchor on).
 
 Use cases:
+
 - **Position ables**: coder at /coders/, factory-worker at /factories/widget-co/. Space-anchored.
 - **Relationship ables**: friend-of-alice, customer-of-vendor, family-with-bob. Being-anchored.
 - **Hybrid ables**: today space-anchored, tomorrow being-anchored — same able mechanism, different anchor.
@@ -551,7 +557,7 @@ Term-collision note: the able NAME is `global` (carries the "every being gets th
 
 #### "Public" / "private" are implicit in the able's reach
 
-Per auth3 — *"All permissions apply to beings/ables only, and what they can SEE/DO/CALL. Never controlling space/matter access. Those are through Acts."*
+Per auth3 — _"All permissions apply to beings/ables only, and what they can SEE/DO/CALL. Never controlling space/matter access. Those are through Acts."_
 
 There is **no public/private property on a space**. A space is "public" if any granted able reaches it; "private" if no able does. The descriptor pipeline filters beings/matter/children at SEE-time — anything outside the actor's granted-able reach is simply not surfaced. The being literally doesn't load the SEE info for it. No flag, no gate-at-the-space; the able's reach IS the access surface.
 
@@ -582,26 +588,28 @@ The canX entries stay simple: action names, op names, being-name patterns, opera
 ```
 
 Per field:
+
 - **canSee** — list of SEE-op names (e.g. `"place"`, `"llm-chain"`, `"<ext>:<name>"`) or `"*"`. No patterns.
 - **canDo** — list of `{action, description?}`. Action is the DO op name. No patterns.
 - **canSummon** — list of `{pattern?, intent?, as?, description?}`. Each entry declares a call edge this able participates in. The `as` field discriminates which side:
   - `as: "actor"` (default if absent) — caller-side: this able can SEND a call matching the entry's `pattern` + `intent`. Authorize consults these on the CALLER'S able at dispatch.
   - `as: "receiver"` — receiver-side: this able ACCEPTS the call when targeted. UI discovery + symmetric checks consult these on the TARGET'S able. `pattern` is irrelevant for receiver entries (the able IS the receiver); `intent` names what's accepted. The runtime gate is still the able's `call(message, ctx)` function — `as: "receiver"` is a declaration, not a guard.
-  
+
   `pattern` is the BEING-name pattern (`@coder*`), NOT a space path. One field, two surfaces — same shape as left-stance/right-stance everywhere else in the substrate. Example:
-  
+
   ```js
   // coder able
   canSummon: [
-    { intent: "review", pattern: "@coder*", as: "actor" },   // I can ask peer coders for review
-    { intent: "review", as: "receiver" },                    // I accept review requests
-  ]
-  
+    { intent: "review", pattern: "@coder*", as: "actor" }, // I can ask peer coders for review
+    { intent: "review", as: "receiver" }, // I accept review requests
+  ];
+
   // birther able
   canSummon: [
-    { intent: "mate", as: "receiver" },                      // I accept mate requests
-  ]
+    { intent: "mate", as: "receiver" }, // I accept mate requests
+  ];
   ```
+
 - **canBe** — operation-only (`{operation, description?}` or bare string). BE acts on self; no positional gating inside canBe.
 - **reach** — new optional field. Only meaningful when `scope: "global"`. Empty/absent → applies everywhere. Present → constrained to those paths/IDs.
 
@@ -620,7 +628,7 @@ No regex. No wildcards in names. No per-canX patterns. First match in the `reach
 
 ```js
 authorize({verb, target, action, intent, operation, identity}):
-  if identity?.beingId === I_AM: return ok      // bootstrap axiom
+  if identity?.beingId === I: return ok      // bootstrap axiom
   if no identity: apply implicit arrival floor   // anonymous read surface
 
   for each grant in identity.ablesGranted:
@@ -657,7 +665,7 @@ In both cases the anchor also serves:
 
 ### Who can grant a able: encoded as canDo
 
-Per the user — *"even ables can only be given out by certain ables, completing the hierarchy."*
+Per the user — _"even ables can only be given out by certain ables, completing the hierarchy."_
 
 Each able declares its grantors through the **canDo entries on grantor ables**. For able X to be grantable by able Y, Y's canDo must include `grant-able:X` (or a wildcard prefix). No special "grantableBy" field on the able being granted — the gate lives on the grantor side.
 
@@ -684,6 +692,7 @@ coder.canDo = [
 ```
 
 Authorize check on `grant-able`:
+
 1. Build the action key: `grant-able:<ableName>` from the grant's params.
 2. Walk the caller's granted ables reachable at the grant's anchor.
 3. Find any able whose canDo permits that action key (exact or wildcard).
@@ -695,7 +704,7 @@ The same pattern applies to `revoke-able:<ableName>` — revocation is governed 
 
 ### The travel rule (acquiring a able)
 
-Auth3 — *"A factory worker can't just have a coder able. It would need to either: (a) travel to the coder space, and ask if it could join / be a part of its space, thus gaining the permission. (b) travel their, and ask coders if factory workers could have able at their space. (c) study on own, and make own 'Coder' able and matter, etc."*
+Auth3 — _"A factory worker can't just have a coder able. It would need to either: (a) travel to the coder space, and ask if it could join / be a part of its space, thus gaining the permission. (b) travel their, and ask coders if factory workers could have able at their space. (c) study on own, and make own 'Coder' able and matter, etc."_
 
 This shape falls out for free:
 
@@ -708,17 +717,24 @@ No special machinery needed beyond grant-able + the existing set-able op.
 ### Authorize collapses to a able-walk
 
 ```js
-async function authorize({ identity, verb, target, action, intent, operation }) {
-  if (identity?.beingId === I_AM) return { ok: true, able: "i-am" };
+async function authorize({
+  identity,
+  verb,
+  target,
+  action,
+  intent,
+  operation,
+}) {
+  if (identity?.beingId === I) return { ok: true, able: "i-am" };
 
   // 1. Load actor's granted ables + the actor's flow active able.
   const acted = await listGrantedAbles(identity.beingId);
 
   // 2. Filter to ables whose anchor reaches the target.
   const ancestors = await getAncestorChain(target.spaceId, branch);
-  const ancestorIds = new Set(ancestors.map(a => String(a._id)));
-  const reachable = acted.filter(g =>
-    g.scope === "global" || ancestorIds.has(g.anchorSpaceId)
+  const ancestorIds = new Set(ancestors.map((a) => String(a._id)));
+  const reachable = acted.filter(
+    (g) => g.scope === "global" || ancestorIds.has(g.anchorSpaceId),
   );
 
   // 3. For each able, check if its canX permits this verb+action.
@@ -729,14 +745,18 @@ async function authorize({ identity, verb, target, action, intent, operation }) 
       return { ok: true, able: grant.able, anchor: grant.anchorSpaceId };
     }
   }
-  return { ok: false, reason: "no granted able permits this action at this position" };
+  return {
+    ok: false,
+    reason: "no granted able permits this action at this position",
+  };
 }
 
 function permits(able, verb, action, intent, operation) {
-  if (verb === "see")    return matchAny(able.canSee, "*");
-  if (verb === "do")     return matchAny(able.canDo, action);
-  if (verb === "call")   return matchAny(able.canSummon, `@${target.being}`, intent);
-  if (verb === "be")     return matchAny(able.canBe, operation);
+  if (verb === "see") return matchAny(able.canSee, "*");
+  if (verb === "do") return matchAny(able.canDo, action);
+  if (verb === "call")
+    return matchAny(able.canSummon, `@${target.being}`, intent);
+  if (verb === "be") return matchAny(able.canBe, operation);
   return false;
 }
 ```
@@ -759,7 +779,7 @@ The `matchAny` helper does the wildcard + prefix matching from today's `scoreKey
 
 ### Stance properties
 
-`deriveStanceProperties` retains its surface — `arrival` / `owner` / `contributor` / `memberClasses` still get derived. But authorize stops consulting them as gates. They become INPUTS for able grants (e.g. cherub anoints new humans into the `angel` able *because* their stance properties show they registered).
+`deriveStanceProperties` retains its surface — `arrival` / `owner` / `contributor` / `memberClasses` still get derived. But authorize stops consulting them as gates. They become INPUTS for able grants (e.g. cherub anoints new humans into the `angel` able _because_ their stance properties show they registered).
 
 ### Heaven / angels
 
@@ -804,10 +824,12 @@ The op runs an **explicit canDo check** before authoring — no back door:
 4. If not, refuse with `FORBIDDEN`. The travel rule from auth3 — "can't just have a coder able" — generalizes: can't just author one out of thin air either.
 
 If permitted, the op emits TWO facts atomically:
+
 - `do:set-able` — the able definition lands as a Fact (creates the able in the registry + the `./ables/<name>` mirror).
 - `do:grant-able(able=<newAble>, anchorSpaceId=<targetSpace>, grantedBy=<author>)` — the author is auto-granted the able at the target space.
 
 Scope-specific gates on the canDo check:
+
 - `scope: "global"` requires the author to hold a able with `canDo: ["set-able"]` reachable from the place root (so authoring a global able needs story-wide permission — typically the angel able).
 - `scope: "anchored"` requires the same canDo at the target space (or above).
 
@@ -815,7 +837,7 @@ Without this gate a coder could author `super-admin` with canDo: `["*"]` and sel
 
 ### `move-able` (future, deferred)
 
-Per auth3 — *"Then ables would be relocated or copied to other spaces upon a receiving Being's permission... and, thus, the Beings permissions."* — A future op to relocate a able's anchor (re-anchor at a different space, transferring its reach). Deferred for now.
+Per auth3 — _"Then ables would be relocated or copied to other spaces upon a receiving Being's permission... and, thus, the Beings permissions."_ — A future op to relocate a able's anchor (re-anchor at a different space, transferring its reach). Deferred for now.
 
 ## Migration
 
@@ -906,7 +928,7 @@ Already shows the LLM that'll respond. After this lands, it can also show:
 - **Time-bound grants** — no wall-clock expiry; the story has no clock. When a story-time unit exists (moments / reel seq / harmony beats), grants can carry a bound in that unit, enforced at the able-walk.
 - **Composite ables via stacking** — `ableComposer.composeStack` keeps working for cognition-frame composition. The authorize walk treats stacked ables as a union (any able in the stack permits → allow). No new primitive.
 - **Able versioning** — when a able's canDo changes after being granted, the granted able uses the LATEST definition. Future versioned grants would freeze the canDo at grant-time. Out of scope.
-- **Permissions on Space/Matter directly** — auth3 is explicit: *"Never controlling space/matter access. Those are through Acts."* — so this stays. The space/matter doesn't have its own permission gate; the only gate is "did the actor's able permit this action."
+- **Permissions on Space/Matter directly** — auth3 is explicit: _"Never controlling space/matter access. Those are through Acts."_ — so this stays. The space/matter doesn't have its own permission gate; the only gate is "did the actor's able permit this action."
 
 ## Pinned doctrine (for FACTORY.md / PERMISSIONS.md after Pass 4)
 

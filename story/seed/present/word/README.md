@@ -32,9 +32,9 @@ Lays five facts, the same five the JS handler lays:
 ```
 do:create-space   by Cherub   -> space:<home>
 be:birth          by <being>  -> being:<being>     (form-being -> birthBeing; +inherited +global live)
-do:set-space      by I_AM     -> space:<home>      (owner)
+do:set-space      by I     -> space:<home>      (owner)
 do:grant-able     by Cherub   -> being:<being>     (human)
-do:set-being      by I_AM     -> being:<being>     (lineage)
+do:set-being      by I     -> being:<being>     (lineage)
 ```
 
 ## Slice 2: harmony (the pulse)
@@ -109,7 +109,7 @@ Remaining for the full gate: run the whole five-act sequence live (the `create-s
 
 ## What is stubbed or deferred (on purpose)
 
-- The **first-being path** (parent = I_AM, the post-seal `grant-able:angel` via `summonCtx.afterSeal`).
+- The **first-being path** (parent = I, the post-seal `grant-able:angel` via `summonCtx.afterSeal`).
 - The **connect** ops (credential bind, owned, inherit / father-priority).
 - Dry-run **placeholders** for the content-hash beingId and for `birthBeing`'s internal grant facts (they materialize when `form-being` runs live).
 - **Live stamper wiring (the bridge)**: resolve a able's logic as a `.word` program OR (legacy) a JS handler, preferring `.word`. Word is NOT a cognition kind — it is the stamper's medium. A `.word` able runs the same whether scripted, llm, or human cognition decides inside it (1.md: declarations are uniform across cognitions; the stamper only records who authored each). Cognition (scripted / llm / human) stays its own axis: the logic for how a being decides which words to make and how to handle the words coming in.

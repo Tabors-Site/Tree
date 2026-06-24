@@ -17,12 +17,12 @@ import {
 } from "../../projections.js";
 
 /**
- * Find the I_AM: the place's first Being row, the root of the
+ * Find the I: the place's first Being row, the root of the
  * being-tree, identified by `parentBeingId: null`. Every other
  * being on the place chains back to it. Created during
  * `ensureSpaceRoot()`; absent only on a pre-bootstrap place.
  *
- * History-aware: main-history only by default; I_AM is a doctrinal
+ * History-aware: main-history only by default; I is a doctrinal
  * singleton at the story root, not a per-history concept.
  */
 export async function findIAm() {
@@ -33,8 +33,8 @@ export async function findIAm() {
   return slot ? { _id: slot.id, name: slot.state?.name || null } : null;
 }
 
-// Cached I_AM identity object suitable for `opts.identity` on verb
-// calls. The I_AM has universal authority on its story; seed-internal
+// Cached I identity object suitable for `opts.identity` on verb
+// calls. The I has universal authority on its story; seed-internal
 // callers (DO-trigger fan-out, scheduled-wake tick, genesis
 // scaffolding) pass this identity so `authorize` shorts to allow.
 let _iAmIdentityCache = null;
@@ -79,11 +79,15 @@ const SEED_SYSTEM_BEING_NAMES = [
  * @param {string} [history="0"]
  * @returns {Promise<boolean>}
  */
-export async function isAncestorOf(ancestorBeingId, descendantBeingId, history = "0") {
+export async function isAncestorOf(
+  ancestorBeingId,
+  descendantBeingId,
+  history = "0",
+) {
   if (!ancestorBeingId || !descendantBeingId) return false;
   const ancestor = String(ancestorBeingId);
   let cursor = String(descendantBeingId);
-  if (cursor === ancestor) return false;  // self isn't your own ancestor
+  if (cursor === ancestor) return false; // self isn't your own ancestor
   const visited = new Set();
   const MAX_HOPS = 64;
   let hops = 0;
@@ -147,7 +151,7 @@ export async function findRootOperator(history = "0") {
  * Check if no human-cognition being has yet been registered through
  * the cherub. Used by the first-boot path (and by cherub.birth) to
  * decide whether to take the first-being bootstrap branch — which
- * sets the new human as a direct child of I_AM and queues the heaven
+ * sets the new human as a direct child of I and queues the heaven
  * anoint via moment.afterSeal.
  *
  * Uses a cognition-based query rather than a name-list exclusion so
@@ -160,7 +164,8 @@ export async function findRootOperator(history = "0") {
 export async function isFirstBeing(history = "0") {
   const { default: Projection } = await import("../../history/projection.js");
   const row = await Projection.findOne({
-    history: history, type: "being",
+    history: history,
+    type: "being",
     "state.qualities.cognition.defaultKind": "human",
     tombstoned: { $ne: true },
   })
@@ -180,7 +185,11 @@ export async function isFirstBeing(history = "0") {
 export async function findBeingByName(name, history = "0") {
   if (!name || typeof name !== "string") return null;
   const escaped = name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const matches = await findByNamePattern("being", new RegExp(`^${escaped}$`, "i"), history);
+  const matches = await findByNamePattern(
+    "being",
+    new RegExp(`^${escaped}$`, "i"),
+    history,
+  );
   if (matches.length === 0) return null;
   const slot = matches[0];
   return { _id: slot.id, position: slot.position, ...slot.state };
@@ -222,7 +231,8 @@ export async function findBeingCandidatesByName(name) {
   }).lean();
   if (rows.length === 0) return [];
 
-  const { getDefaultHistory } = await import("../../history/historyRegistry.js");
+  const { getDefaultHistory } =
+    await import("../../history/historyRegistry.js");
   const defaultHistory = await getDefaultHistory();
 
   // Group slots per being id, then pick each being's home slot.
@@ -235,13 +245,15 @@ export async function findBeingCandidatesByName(name) {
   const candidates = [];
   for (const [id, slots] of byId) {
     const home =
-      slots.find((s) => s.state?.homeHistory && s.history === s.state.homeHistory) ||
+      slots.find(
+        (s) => s.state?.homeHistory && s.history === s.state.homeHistory,
+      ) ||
       slots.find((s) => s.history === defaultHistory) ||
       slots[0];
     candidates.push({
-      _id:        id,
+      _id: id,
       homeHistory: home.state?.homeHistory || defaultHistory,
-      position:   home.position ?? null,
+      position: home.position ?? null,
       ...(home.state || {}),
     });
   }
@@ -269,16 +281,22 @@ export async function findBeingCandidatesByName(name) {
  * @returns {Promise<string>}
  */
 export async function findHomeHistoryOfBeing(beingId) {
-  const { getDefaultHistory } = await import("../../history/historyRegistry.js");
+  const { getDefaultHistory } =
+    await import("../../history/historyRegistry.js");
   const defaultHistory = await getDefaultHistory();
   if (!beingId) return defaultHistory;
   const { default: Projection } = await import("../../history/projection.js");
   const slots = await Projection.find({
-    type: "being", id: String(beingId), tombstoned: { $ne: true },
-  }).select("history state.homeHistory").lean();
+    type: "being",
+    id: String(beingId),
+    tombstoned: { $ne: true },
+  })
+    .select("history state.homeHistory")
+    .lean();
   if (slots.length === 0) return defaultHistory;
   const home =
-    slots.find((s) => s.state?.homeHistory && s.history === s.state.homeHistory) ||
-    slots[0];
+    slots.find(
+      (s) => s.state?.homeHistory && s.history === s.state.homeHistory,
+    ) || slots[0];
   return home.state?.homeHistory || defaultHistory;
 }
