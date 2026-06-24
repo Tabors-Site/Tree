@@ -21,6 +21,15 @@
 //     display helper for beings filtering timelines, never truth
 //     (Tabor doctrine 2026-06-11); the OS shows it off the kernel
 //     clock and the chain doesn't commit to it.
+//   startMessage — the moment's prose LABEL (a human annotation) and
+//     its source. A label is DRIFT in the identity (Tabor doctrine
+//     2026-06-23: "moment labels are drift"): the act's truth is the
+//     FACTS it seals (the Word, themselves hash-chained), and the
+//     human-readable line renders from those, never from an authored
+//     string. Distinct inbound moments are already separated by their
+//     routing (ibpAddress / inboxMessageId / inReplyTo) and chain
+//     position (p); the source is redundant with `through`. The label
+//     stays on the Act row for display, OUT of the digest.
 //   rootCorrelation — derived threading (a parentless act is its OWN
 //     root, which would be circular in the digest; recoverable as
 //     parent's root else self).
@@ -49,7 +58,6 @@ export function contentOfAct(act) {
     inboxMessageId: act.inboxMessageId ?? null,
     inReplyTo:      act.inReplyTo ?? null,
     parentThread:   act.parentThread ?? null,
-    startMessage:   act.startMessage ?? null,
     story:        act.story ?? null,
     history:         typeof act.history === "string" && act.history.length ? act.history : "0",
   };

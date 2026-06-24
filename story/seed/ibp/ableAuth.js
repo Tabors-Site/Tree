@@ -44,8 +44,18 @@ import {
   getAbleSpecForGrant,
   ableReachesTarget as reachCovers,
 } from "../present/ables/spaceLookup.js";
+import { listFoldedProhibitions } from "../present/word/wordStore.js";
 
 const ARRIVAL_ABLE = "arrival";
+
+// Segment a token the SAME way applyProhibitionLaw stored it (wordStore.js _prohibSeg): lowercase,
+// non-alphanumeric runs → "-", trimmed. So a request able/verb/action compares like-for-like
+// against a folded cannot, whether the law named "set-being" or "Set Being".
+const _seg = (s) =>
+  String(s ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 
 /**
  * Walk the caller's granted ables against the target/verb/action and
@@ -80,6 +90,32 @@ export async function authorizeViaAbles(args) {
   // the portal" semantic). Defaults to history when caller didn't
   // distinguish.
   const actorHistory = args.actorHistory || history;
+
+  // ── PROHIBITION-WINS (rule 14: a cannot beats a can) — STRICTLY ADDITIVE ──────────────
+  //
+  // BEFORE the positive able-walk, consult the OBJECTIVE prohibition register (the FOLD of every
+  // `cannot` law, listFoldedProhibitions). If a folded cannot covers one of the ACTOR's ables for
+  // the requested {verb, action/seeOp/operation/intent}, the action is forbidden by LAW regardless
+  // of any grant — a cannot beats a can.
+  //
+  // CRITICAL INVARIANT: this is purely ADDITIVE. It may ONLY turn an ok:true into ok:false, NEVER
+  // the reverse, and when no folded cannot matches it is a PURE NO-OP (zero behavior change vs the
+  // pre-law gate). prohibitedByLaw short-circuits the instant the register is empty (the common
+  // case — no chain read, no grant load), and only ever RETURNS prohibited; it never grants. The
+  // read is computed-on-read off the live projection (sync), so the gate stays pure + replayable.
+  const blocked = await prohibitedByLaw({
+    identity,
+    verb,
+    action,
+    intent,
+    operation,
+    seeOp,
+    history,
+    actorHistory,
+  });
+  if (blocked) {
+    return { ok: false, reason: "prohibited by law" };
+  }
 
   // Bootstrap axiom.
   if (identity?.beingId === I || identity?.name === I) {
@@ -235,6 +271,101 @@ export async function authorizeViaAbles(args) {
             : "") +
       ` at this target`,
   };
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Prohibition register (rule 14: a cannot beats a can) — strictly additive
+// ────────────────────────────────────────────────────────────────────
+
+/**
+ * Does a folded `cannot` law forbid this actor's request? Read on demand off the prohibition
+ * register (listFoldedProhibitions — the FOLD of every cannot word). Returns true ONLY when a
+ * law's subject-able matches one of the actor's ables AND its verb/object matches the request;
+ * otherwise false. NEVER grants — the caller uses the result solely to flip an ok:true to
+ * ok:false (the strictly-additive invariant). Short-circuits when the register is empty (the
+ * common case: no chain read, no grant load — a pure no-op vs the pre-law gate).
+ *
+ * @returns {Promise<boolean>} true = forbidden by law; false = no matching cannot (no-op)
+ */
+async function prohibitedByLaw({
+  identity,
+  verb,
+  action,
+  intent,
+  operation,
+  seeOp,
+  history,
+  actorHistory,
+}) {
+  // The register IS the fold; empty → nothing to check (the overwhelming common case). This is the
+  // pure-no-op fast path: no chain read, no grant load, zero behavior change vs today.
+  const laws = listFoldedProhibitions();
+  if (!Array.isArray(laws) || laws.length === 0) return false;
+
+  // The OBJECT the request names within its verb (the action/seeOp/operation/intent), segmented to
+  // compare against a law's stored `of`. A do names an action, a see a seeOp, a be an operation, a
+  // call an intent; `null` when the request names only the bare verb.
+  const reqVerb = _seg(verb);
+  const reqObject = _seg(action || seeOp || operation || intent || "");
+
+  // The actor's able names (segmented). The prohibition's subject is an able name; a law only
+  // fires when it names one of THESE — that is what keeps the check additive (it can never forbid
+  // an actor whose ables no law mentions). I-Am acts under "i-am"; an anonymous caller under the
+  // arrival floor able; a seated being under each granted able. Loaded lazily, ONLY because a law
+  // exists (the empty-register fast path already returned).
+  const ableNames = await actorAbleNames(identity, history, actorHistory);
+  if (ableNames.size === 0) return false;
+
+  for (const law of laws) {
+    const subject = _seg(law.subject);
+    if (!ableNames.has(subject)) continue; // the law names an able this actor does not bear
+
+    // VERB/OBJECT match. A law's `verb` is either the auth verb (see/do/call/be) OR the English
+    // verb that names the forbidden action ("back" in "a member cannot back a proposal"); its `of`
+    // is the further object, or null = the whole verb. So a law covers the request when:
+    //   * law.verb === the request verb  AND  (law.of is null OR law.of === the request object), or
+    //   * law.verb === the request object (the English-verb-as-action form; no further object).
+    const lawVerb = _seg(law.verb);
+    const lawOf = law.of != null ? _seg(law.of) : null;
+
+    const coversByVerb =
+      lawVerb === reqVerb && (lawOf == null || (reqObject && lawOf === reqObject));
+    const coversByAction =
+      lawOf == null && reqObject && lawVerb === reqObject;
+
+    if (coversByVerb || coversByAction) return true;
+  }
+  return false;
+}
+
+/**
+ * The set of able names (segmented) the actor bears, for the prohibition check. I-Am bears the
+ * "i-am" able; an anonymous / canopy-verified-only caller bears the arrival floor able; a seated
+ * being bears each able in qualities.ablesGranted. Read from the actor's OWN history (where their
+ * grants live), mirroring the positive walk's grant load. Pure read (no fact). Called ONLY when a
+ * prohibition law exists.
+ */
+async function actorAbleNames(identity, history, actorHistory) {
+  const names = new Set();
+  if (identity?.beingId === I || identity?.name === I) {
+    names.add(_seg("i-am"));
+    return names;
+  }
+  if (!identity?.beingId) {
+    // anonymous: the implicit arrival floor able
+    names.add(_seg(ARRIVAL_ABLE));
+    return names;
+  }
+  const slot = await loadOrFold("being", String(identity.beingId), actorHistory);
+  for (const grant of readGrantsFromSlot(slot)) {
+    if (grant?.able) names.add(_seg(grant.able));
+  }
+  // A canopy-verified foreign actor (or a local being with no grants) also falls through to the
+  // arrival floor in the positive walk, so include the arrival able as part of its borne set.
+  if (identity?.canopyVerifiedSender || identity?.story) {
+    names.add(_seg(ARRIVAL_ABLE));
+  }
+  return names;
 }
 
 // ────────────────────────────────────────────────────────────────────

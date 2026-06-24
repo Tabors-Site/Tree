@@ -97,7 +97,7 @@ try {
     : bad(`should be Map-absent`, "found in Map");
 
   // DO it through an I act: doVerb misses the Map, folds the word, resolves the ref, runs it
-  const iam = String(I);
+  const iId = String(I);
   const targetId = String(cherub.id ?? cherub._id);
   let result;
   await withIAmAct("test the fold op", async (moment) => {
@@ -107,7 +107,7 @@ try {
       { x: 42 },
       {
         moment,
-        identity: { name: "i-am", beingId: iam, nameId: iam },
+        identity: { name: "i-am", beingId: iId, nameId: iId },
         currentHistory: "0",
       },
     );

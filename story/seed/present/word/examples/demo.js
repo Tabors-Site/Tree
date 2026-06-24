@@ -15,7 +15,7 @@ const ctx = {
   moment: { actId: "<actId>" },
   identity: { beingId: "Cherub", name: "cherub", nameId: "Cherub" },
   trigger: { name: "tabor", password: "hunter2" }, // the birth summon payload
-  env: { iam: "I" },
+  env: { I: "I" },
   bindings: { placeRoot: "<placeRoot>" }, // the story's root space, ambient
 };
 

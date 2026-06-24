@@ -753,6 +753,93 @@ export async function applyTypeSchemaLaw(
   }
 }
 
+// ── the PROHIBITION REGISTER (rule 14: a cannot beats a can) — the OBJECTIVE law half ──
+//
+// "A member cannot back a proposal." / "No member can back it." declares a PROHIBITION: a
+// (subject-able, verb, of) triple the able-walk reads BEFORE the positive grant-walk and that turns
+// an ok:true into ok:false (ableAuth.js). The register is NOT a JS table — it is the FOLD of every
+// `cannot` fact, exactly as a matter-type's field-set is the fold of every `has` fact (all-rules-fold).
+//
+// Each distinct cannot is its own kind:"law" word so the fold is content-addressed + append-only:
+// the word name encodes the triple ("law:cannot:<subject>:<verb>:<of>"), so re-declaring the SAME
+// cannot is a CAS no-op (skipIfUnchanged), and a never-deleted law stays a fact forever (you'd retire
+// it with a do:retire, the same as any word). The FOLD of all such words IS the prohibition register,
+// read on demand by listFoldedProhibitions (the sync projection read, the wakes / type-word pattern).
+//
+// MIRRORS declareTypeFieldToFold's self-guards: a NAME-SHAPE guard on the subject (an able name), the
+// MAX ceiling (a runaway word can't flood the register), heaven-only/append-only (the binding is the
+// triple verbatim; re-declare is a no-op). A bad law is a log.warn + skip, NEVER a throw mid-fold.
+const PROHIBITION_MAX = 2000;
+const _prohibSeg = (s) =>
+  String(s ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+export async function applyProhibitionLaw(
+  law,
+  { moment = null, history = "0" } = {},
+) {
+  const log = (await import("../../seedStory/log.js")).default;
+  if (!law || typeof law !== "object") return null;
+  // The parser shapes both "A X cannot Y …" and "No X can Y …" to {kind:"cannot"}; "prohibition"
+  // is the doctrine's equivalent node name (evaluator collects both). Accept either.
+  if (law.kind !== "cannot" && law.kind !== "prohibition") return null;
+  const subject = _prohibSeg(law.subject); // the able the prohibition binds (e.g. "member")
+  const verb = _prohibSeg(law.verb); // the auth verb / English verb the cannot names (see/do/back/…)
+  if (!subject || !verb) {
+    log.warn(
+      "WordStore",
+      `applyProhibitionLaw: a cannot needs a subject-able + a verb (got subject="${law.subject}", verb="${law.verb}"). Skipped.`,
+    );
+    return { skipped: true, reason: "incomplete-cannot" };
+  }
+  const of = law.of != null && law.of !== "it" ? _prohibSeg(law.of) : null; // the object (action/seeOp), or null = the whole verb
+  // The triple → one word name. The FOLD of every such word for a (subject, verb, of) IS the register
+  // entry; an identical re-declare is a CAS no-op. Each entry is content-addressed by its own name.
+  const word = `law:cannot:${subject}:${verb}:${of ?? "*"}`;
+  // MAX ceiling — count the folded prohibition words so a runaway word can't flood the register.
+  const existing = getWordSync(word);
+  if (!existing && listFoldedProhibitions().length >= PROHIBITION_MAX) {
+    log.error(
+      "WordStore",
+      `applyProhibitionLaw("${word}"): prohibition register full (${PROHIBITION_MAX}). Rejected.`,
+    );
+    return { skipped: true, reason: "register-full" };
+  }
+  return bindWord(
+    word,
+    {
+      ownerExtension: "seed",
+      kind: "law",
+      law: "cannot", // the law's polarity (a cannot beats a can — rule 14)
+      subject, // the able the prohibition binds
+      verb, // the verb it forbids
+      of, // the object (action/seeOp/operation/intent), or null = the whole verb
+      // the original prose, for audit (a gloss, never interpreted on read).
+      gloss: typeof law.of === "string" ? `cannot ${law.verb} ${law.of}` : null,
+    },
+    { moment, history, skipIfUnchanged: true },
+  );
+}
+
+// listFoldedProhibitions — the prohibition REGISTER, read on demand off the live projection (the fold
+// of every `cannot` word). Each entry: {subject, verb, of}. ableAuth.js consults this BEFORE the
+// positive able-walk (rule 14): a cannot covering the actor's ables for the requested {verb,
+// action/seeOp} turns an ok:true into ok:false. Pure read (no chain hit), so the auth gate stays sync.
+export function listFoldedProhibitions() {
+  const out = [];
+  for (const [, b] of _projection) {
+    if (b?.kind === "law" && b?.law === "cannot")
+      out.push({
+        subject: String(b.subject),
+        verb: String(b.verb),
+        of: b.of != null ? String(b.of) : null,
+      });
+  }
+  return out;
+}
+
 // ── able-words as words (the ableWordRegistry unification; ABLES-UNIFICATION.md) ──
 //
 // A able-word is a word named "able:op", kind:"ableword", carrying its IR SOURCE (the .word file).

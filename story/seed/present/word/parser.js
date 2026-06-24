@@ -24,6 +24,82 @@
 //   the effects (acts). The engine already loops a flow's effects; this is the
 //   parser learning to GROUP the header with its indented body.
 
+// ── THE host: FLOOR — a NAMED CLOSED SET, not "any fn()" ──────────────────────
+//
+// The host: escape is the one place a .word reaches into JS. The doctrine kills the host: false-
+// category everywhere else (reads = see-verbs, writes = set-verbs); the genuine floor is the CRYPTO
+// + SESSION/TRANSPORT strand that cannot serialize as a fact. This is the exact set the .word corpus
+// uses today (grep `host:\s*\w+\(` over story/**.word): the cherub-connect flow (the connect-time
+// being/name candidate walk + father/displacement session logic, which the transport layer owns) and
+// the key/credential crypto (token minting, password verification). An UNKNOWN host: fn is rejected
+// (see the EFFECT_RULES host: rule) so the door stays shut. Add a name here ONLY for a genuine new
+// crypto/transport floor primitive, deliberately, in the open.
+const HOST_FLOOR = new Set([
+  // crypto (minting / verification — cannot be a fact)
+  "generateToken",
+  "generateInheritToken",
+  "verifyPassword",
+  // session / transport (the connect-time being/name walk the transport layer owns)
+  "searchByName",
+  "findBeingCandidatesByName",
+  "extractTargetName",
+  "fatherMatch",
+  "selectCandidate",
+  "displaceInhabitor",
+  "driverTrueNameForFather",
+  "driverTrueNameForbeing",
+]);
+
+// ── THE METACIRCULAR HOOK: the grammar reads (some of) its rules from the Word ──
+//
+// "The verse and the parser are the same thing" (Tabor): a grammar rule is a Word, not host
+// machinery. parse() stays SYNC (5+ sync call sites, zero `await parse`); the fold's read path is
+// sync too (getWordSync = a Map read; resolveHostHandler = a Map.get), so consulting it here is safe.
+//
+// THE FLOOR BOUNDARY (9.md §2 two-face — so no one mistakes the proof for more than it is): the
+// rule's STRUCTURE (kind, the emitted node-shape) is LIFTED data, read from the fold below; the
+// regex-MATCHER is a host AXIOM behind a ref, registered by grammarFold.declareGrammarRulesToFold
+// and resolved here. "Declared in Word for self-description, run by the kernel for behavior." Only
+// the top-level RULES table consults the fold (apply scopes it); EFFECT_RULES is never consulted.
+// FOLD-FIRST, fall-through: an EMPTY fold (pre-boot, or the many parser tests that import parse()
+// without booting genesis) falls straight through to the hardcoded RULES = identical old behavior.
+import { getWordSync, resolveHostHandler } from "./wordStore.js";
+
+const GRAMMAR_RULE_WORDS = ["owns-rule", "i-am-rule"]; // the lifted set — explicit, tiny
+
+// foldRules — read each lifted rule-word from the live projection. Skip unless it is a kind:"rule"
+// word with a parse.ref whose host matcher resolves. Returns [word, matcherFn] pairs (empty pre-boot).
+function foldRules() {
+  const out = [];
+  for (const name of GRAMMAR_RULE_WORDS) {
+    const w = getWordSync(name);
+    if (!w || w.kind !== "rule" || !w.parse?.ref) continue;
+    const matcher = resolveHostHandler(w.parse.ref);
+    if (typeof matcher === "function") out.push([w, matcher]);
+  }
+  return out;
+}
+
+// buildFromFoldRule — turn a fold rule's match into its node: deep-clone w.node, substituting any
+// string value "$N" with the capture m[N]. i-am has no captures (a literal clone); owns substitutes
+// m[1]/m[2]. One builder, both rules — the substitution path is what i-am alone could not prove.
+function buildFromFoldRule(w, m) {
+  const sub = (v) => {
+    if (typeof v === "string") {
+      const cap = v.match(/^\$(\d+)$/);
+      return cap ? m[Number(cap[1])] : v;
+    }
+    if (Array.isArray(v)) return v.map(sub);
+    if (v && typeof v === "object") {
+      const o = {};
+      for (const k of Object.keys(v)) o[k] = sub(v[k]);
+      return o;
+    }
+    return v;
+  };
+  return sub(w.node);
+}
+
 // ── single-line forms (top level: declarations + one-line flows) ──────────────
 const RULES = [
   // structure / kinds (rule 8). A name is a SINGLE TOKEN (letters/digits/hyphen/
@@ -160,7 +236,9 @@ const RULES = [
   // the creation story. Rule 19 disambiguates "I make X": a Capital X is a being
   // (birth it); a lowercase X is a space (create it).
   [
-    /^I am that I am\.$/i,
+    // the genesis line is now the QUESTION, not the loop: existence, the quoted recall ("what?"),
+    // existence answered — `I am "what?" I am.` (matches iam.word). The `I` is the sign, by: "I".
+    /^I am "what\?" I am\.$/i,
     () => ({ kind: "act", verb: "name", act: "i-am", by: "I" }),
   ],
   [
@@ -318,16 +396,36 @@ const EFFECT_RULES = [
   // §7 host escape: "host: searchByName(name) as candidates." -> an act that calls a
   // host builtin and binds its result (the session/transport strand stays host; this is
   // how the .word reaches it). evalAct runs act.host via callHost + binds act.bind.
+  //
+  // CLOSED SET (the door the wart used to reach into JS, now shut): the floor is NOT "any host: fn()".
+  // The doctrine kills the host: false-category everywhere else (reads are see-verbs, writes are
+  // set-verbs); the only genuine floor escapes are the CRYPTO + SESSION/TRANSPORT strand that cannot
+  // be a fact — key/token minting, password verification, and the connect-time being/name candidate
+  // walk that the session layer owns. So this rule is restricted to the NAMED set actually used in
+  // the corpus (the cherub-connect flow + key/credential ops). An UNKNOWN host: fn is REJECTED with a
+  // clear error (the twin of guardForward), shutting the door — a new floor escape must be added here
+  // deliberately, in the open, never slipped through. (Grep of the .word corpus pins the set; if a
+  // genuine new crypto/transport floor fn lands, add its name here with a one-word note on why.)
   [
     /^host:\s*(\w+)\(([^)]*)\)\s*(?:as\s+(\w+))?\.?$/i,
-    (m) => ({
-      kind: "act",
-      verb: "do",
-      act: m[1],
-      host: m[1],
-      params: { args: argList(m[2], "$") },
-      ...(m[3] ? { bind: m[3] } : {}),
-    }),
+    (m) => {
+      if (!HOST_FLOOR.has(m[1])) {
+        throw new Error(
+          `word parser: host: "${m[1]}" is not a recognized FLOOR escape. ` +
+            `The host: door is a CLOSED SET — only crypto / session-transport primitives that cannot be a fact ` +
+            `(${[...HOST_FLOOR].join(", ")}). A read is a see-verb, a write is a set-verb; a new floor escape must be ` +
+            `added to HOST_FLOOR deliberately. (philosophy/word/9.md: the host shrinks to an irreducible bottom turtle.)`,
+        );
+      }
+      return {
+        kind: "act",
+        verb: "do",
+        act: m[1],
+        host: m[1],
+        params: { args: argList(m[2], "$") },
+        ...(m[3] ? { bind: m[3] } : {}),
+      };
+    },
   ],
 
   // ── §5 mark + §7 control-flow terminators (inline body effects) ──────────────
@@ -726,6 +824,15 @@ function parseEffect(line, c) {
 }
 
 function apply(line, c, rules) {
+  // FOLD-FIRST, scoped to the top-level table: a lifted rule-word wins when present (the metacircular
+  // loop). An empty fold (pre-boot / un-booted parser tests) yields no pairs → falls straight through
+  // to the hardcoded RULES below = identical old behavior. EFFECT_RULES never reaches here.
+  if (rules === RULES) {
+    for (const [w, matcher] of foldRules()) {
+      const mm = matcher(line);
+      if (mm) return buildFromFoldRule(w, mm);
+    }
+  }
   for (const [re, build] of rules) {
     const m = line.match(re);
     if (m) return build(m, c);
@@ -773,6 +880,9 @@ function collectBody(raw, startI, parentIndent, c) {
           prev.else = sub.nodes;
         } else if (opener.type === "if") {
           out.push({ kind: "if", cond: opener.cond, then: sub.nodes });
+        } else if (opener.type === "while") {
+          // the conditional loop (P4): re-read the see each pass; the body grows the chain.
+          out.push({ kind: "while", cond: opener.cond, body: sub.nodes });
         } else {
           // foreach
           out.push({
@@ -840,6 +950,8 @@ function parseBlockOpener(line, c) {
   if ((m = line.match(/^If (.+):$/i)))
     return { type: "if", cond: parseCond(m[1], c) }; // §2 block
   if (/^Otherwise:$/i.test(line)) return { type: "else" }; // §2 else
+  if ((m = line.match(/^While (.+):$/i)))
+    return { type: "while", cond: parseCond(m[1], c) }; // P4: the conditional loop
   if ((m = line.match(/^For each (\w+) in (.+?)(\s+in order)?:$/i)))
     // §3 foreach
     return {
@@ -912,6 +1024,18 @@ function parseLeaf(t, c) {
     return neg({
       seeCall: m[1],
       args: m[2].trim() ? argList(m[2]).map((r) => ({ ref: r })) : [],
+    });
+  // AUTHORITY PREDICATE (the being-tree walk, the floor predicate): `<X> has authority over <Y>` /
+  // `<X> has credential authority over <Y>`. The inline conditional form of the `see whether …`
+  // predicate — a LIVE being-tree authority walk, resolved through ctx.env.host.hasAuthorityOver
+  // (the name→being walk) or hasCredentialAuthority (the being→being credential axis), the floor
+  // floorHostEnv wires under every .word runner. Lifts to resolvedBy so `If <caller> has authority
+  // over <target>:` gates the branch on the real inheritation walk instead of failing closed (a bare
+  // clause). `not …` already flipped `negated` above; `neg` carries it onto the predicate.
+  if ((m = s.match(/^(.+?)\s+has(\s+credential)?\s+authority over\s+(.+)$/i)))
+    return neg({
+      resolvedBy: m[2] ? "hasCredentialAuthority" : "hasAuthorityOver",
+      args: [{ ref: refKey(m[1]) }, { ref: refKey(m[3]) }],
     });
   // DEIXIS (here/there/where): `there` sets the EXISTENTIAL context, `is/are` makes the
   // claim within it — so "there is <X>" is a PRESENCE check, "there is no <X>" its absence.

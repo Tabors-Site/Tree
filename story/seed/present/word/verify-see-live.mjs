@@ -294,18 +294,18 @@ try {
   const ap3 = await see(
     {
       kind: "see",
-      of: { ref: "iam" },
+      of: { ref: "I" },
       hasAuthorityOver: { ref: "a" },
       credential: true,
       bind: "auth",
     },
-    { iam: { beingId: I }, a: { beingId: alice } },
+    { I: { beingId: I }, a: { beingId: alice } },
   );
   ap3.bindings.auth === true
     ? ok(
         `AUTHORITY: I has credential authority over @alice → true (the root walk)`,
       )
-    : bad(`auth iam`, ap3.bindings.auth);
+    : bad(`auth I`, ap3.bindings.auth);
   // general (name -> being) authority + a clean FALSE: an unrelated name has none.
   const ap4 = await see(
     {

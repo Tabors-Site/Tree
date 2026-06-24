@@ -166,5 +166,13 @@ export async function seedFold({ moment = null, history = "0" } = {}) {
   if (typeof readTrail.declareViewsToFold === "function") {
     await readTrail.declareViewsToFold({ moment, history });
   }
+  // (11) the GRAMMAR RULES (kind:"rule") — the metacircular loop's first cut: two grammar rules
+  // (owns, i-am) lifted from parser.js's hardcoded table into the fold as coin facts. The regex
+  // matcher stays a host axiom behind a ref; the rule's STRUCTURE is lifted data (9.md §2 two-face).
+  // parse() consults the fold FIRST for these two, falling through to RULES when the fold is empty.
+  const grammar = await import("./grammarFold.js");
+  if (typeof grammar.declareGrammarRulesToFold === "function") {
+    await grammar.declareGrammarRulesToFold({ moment, history });
+  }
   return true;
 }

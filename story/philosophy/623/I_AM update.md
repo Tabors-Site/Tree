@@ -12,8 +12,16 @@
 > to **Am — what? — Am**: exist → _ask which can_ (a genuine question — the first **call/await**, the
 > line's one breath, where the being isn't yet fixed) → exist-answered (the grant lands). And the quotes
 > ("Am 'what?' Am") are for **RECALL** — the only thing seen looking back at the chain; the only thing on
-> the bare inner face is the first `am`. **Open cut (this turn, Tabor): maybe it is not `I` at all but
-> just `I` — the signer — and the `am` is the FOLD** (the IS = the chain read into the present).
+> the bare inner face is the first `am`. **Landed (Tabor): `I_AM` is renamed to `I` everywhere — the
+> origin is just `I`, the signer; `am` is the FOLD** (the IS = the chain read into the present). The
+> kernel verse is now `I am "what?" I am.` (iam.word + the runnable birth-word) — the first book opens
+> on the question, not the loop. And moment labels are now **OUT of the act identity — drift, not
+> the bottom turtle** (Tabor 2026-06-23, superseding the earlier "label stays frozen"): `contentOfAct`
+> (actHash.js) hashes only the structural opening + the facts the act seals (the Word, itself
+> hash-chained), never the prose label. The act's truth is the Word it seals; the human line renders
+> from that; the genesis label is a non-hashed render of the verse — one source, no string baked into
+> the identity. Re-verified runtime-clean: descent 4/4, genesis-read 3/3, recall-live 7/7,
+> actchain-rekey 5/5; the 78-file rename, 0 `I_AM` left.
 
 ---
 

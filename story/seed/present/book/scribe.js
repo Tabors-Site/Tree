@@ -8,12 +8,12 @@
 // Word) and grounds (the place as it stands can hold the act).
 
 export async function draftWord(candidate, { history = "0", position = null } = {}) {
-  const { parse } = await import("../word/parser.js");
+  const { parseV2 } = await import("../word/parser.js");
   const issues = [];
 
   let statements;
   try {
-    statements = parse(candidate);
+    statements = parseV2(candidate);
   } catch (err) {
     return {
       draft: candidate, parses: false, grounded: false, pressable: false,

@@ -297,6 +297,10 @@ function pastPhrase(f, names) {
       const what = typeof p.that === "string" ? p.that : JSON.stringify(p.that);
       return `${p.mode || "saw"}${p.of ? ` ${p.of}` : ""} that ${what}${p.because ? ` (because ${p.because})` : ""}`;
     }
+    case "if":
+      // the branch-record of a control-flow if (P4): which way the fold went. The condition was a
+      // see (no fact); this do marks the chosen way, and the taken consequent chains on it.
+      return `${pastOf("take")} the ${p.taken || "?"} branch`;
     case "i-am":
       return `${pastOf("speak")} its own name`;
     default:

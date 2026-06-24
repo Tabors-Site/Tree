@@ -83,6 +83,8 @@ async function evalNode(node, ctx) {
       return evalMark(node, ctx); // §5: a flow-local flag a sibling cond reads
     case "foreach":
       return evalForeach(node, ctx); // §3: iterate a source
+    case "while":
+      return evalWhile(node, ctx); // P4: the conditional loop — re-read the see each pass
     case "break":
       throw BREAK; // §3: halt the nearest foreach
     case "refuse":
@@ -146,7 +148,28 @@ async function evalFlow(flow, ctx) {
 // reads the OR of them.
 async function evalIf(node, ctx) {
   const { resolveCond } = await import("./cond.js");
-  const taken = (await resolveCond(node.cond, ctx)) ? node.then : node.else;
+  const hit = await resolveCond(node.cond, ctx);
+  // chain-native (20.md §80, P4): a BRANCH IS A FACT. The condition is a see (resolveCond reads
+  // the fold, lays nothing); the branch-record is a do — a do:if carrying which way it went, on the
+  // being's own reel (the do:verdict precedent). In per-act-moment mode (runWordToStore) it opens
+  // its OWN moment, so the head advances to the do:if act and the taken consequent chains on it;
+  // the untaken branch never reaches the chain. The choice is auditable + byte-identical on replay.
+  // In legacy in-moment mode (runAbleWord) the guard is false — the branch stays inline, no fact,
+  // byte-identical to before, protecting the ~16 live flows + the do-op .words.
+  if (ctx.perActMoment) {
+    const self = ctx.identity?.beingId ?? null;
+    await emit(
+      {
+        verb: "do",
+        act: "if",
+        through: self,
+        of: { kind: "being", id: self },
+        params: { taken: hit ? "then" : "else" },
+      },
+      ctx,
+    );
+  }
+  const taken = hit ? node.then : node.else;
   for (const n of taken || []) await evalNode(n, ctx);
 }
 
@@ -642,6 +665,31 @@ async function evalForeach(node, ctx) {
   }
 }
 
+// ── while (P4): the conditional loop — a loop is a fold that grows the chain (20.md §27) ──
+//
+// The condition is a SEE: resolveCond reads the LIVE fold each pass (ctx.state/bindings the body
+// updated), and lays nothing. Each body act that lays a fact opens its own moment, so pass N+1
+// chains on pass N — the chain head is the program counter, the facts ARE the iterations, never a
+// JS counter. The loop ends when the see goes false: a fold-read, not a clock or a count. A guard
+// caps a runaway loop (a see that never flips) so a bad Word fails loud, not forever. `break`
+// halts THIS loop only (the foreach sibling); refuse/return/errors unwind past it.
+async function evalWhile(node, ctx) {
+  const { resolveCond } = await import("./cond.js");
+  let guard = 0;
+  while (await resolveCond(node.cond, ctx)) {
+    if (++guard > 100000)
+      throw new Error(
+        "word: while loop exceeded 100000 passes — the see never went false",
+      );
+    try {
+      for (const n of node.body || []) await evalNode(n, ctx);
+    } catch (e) {
+      if (e === BREAK) return; // break halts THIS loop, continue after it
+      throw e;
+    }
+  }
+}
+
 // ── refuse (§7): a host HALT, fail-closed, NO fact ─────────────────────────────────
 // Throws a WordRefusal the verb layer maps to the ack error envelope; the moment rolls
 // back. A §8 gate's onFail is a refuse. Distinct from a cond's negation (§10) and from
@@ -1016,7 +1064,7 @@ async function callHost(builtin, params, ctx) {
 function resolveName(ref, ctx) {
   if (ref == null) return ctx.identity?.nameId ?? ctx.identity?.beingId ?? null;
   if (ref === "I") return ctx.identity?.nameId ?? ctx.identity?.beingId; // rule 9: I is the Name
-  if (ref === "I") return ctx.env?.iam ?? "I";
+  if (ref === "I") return ctx.env?.I ?? "I";
   return ref; // a being / Name proper name (Cherub, ...)
 }
 

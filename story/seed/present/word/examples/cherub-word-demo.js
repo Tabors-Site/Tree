@@ -24,7 +24,7 @@ const ctx = {
   moment: { actId: "<actId>" },
   identity: { beingId: "Cherub", name: "cherub", nameId: "I" },
   trigger: { name: "tabor-prime", password: "hunter2" },
-  env: { iam: "I" },
+  env: { I: "I" },
   bindings: { placeRoot: "<placeRoot>", ownerName: "tabor" },
 };
 const actor = (by) => (by === "I" ? ctx.identity.nameId : by); // rule 9: I -> the Name

@@ -17,8 +17,20 @@ import { randomUUID } from "node:crypto";
 import { parse } from "./parser.js";
 import { evaluate } from "./evaluator.js";
 import { resolveAbleWordSource } from "./wordStore.js";
+import { floorHostEnv } from "../../store/words/cherub/floorHostEnv.js";
 
 const k = (able, op) => `${able}:${op}`;
+
+// Merge the SHARED floor of host predicates (floorHostEnv: hasAuthorityOver / isAncestorOf /
+// hasCredentialAuthority / findByName) UNDER the caller's env, so a .word's `If <caller> has
+// authority over <target>:` cond resolves LIVE instead of failing closed (cond.js's fail-closed
+// default when ctx.env.host has no matching fn). Strictly additive: the caller's own env.host wins
+// on a name clash (it is spread LAST), so any per-op host env (connectHostEnv, credentialHostEnv,
+// …) is untouched; a word that wired none now gets the floor. Returns a fresh env to spread.
+function _withFloorHost(env = {}) {
+  const { host: callerHost, ...restEnv } = env;
+  return { ...restEnv, host: { ...floorHostEnv(), ...(callerHost || {}) } };
+}
 
 // (able, op) -> the `.word` file that replaces its JS handler.
 // The engine now holds ZERO built-in words: every word self-registers via
@@ -256,7 +268,7 @@ export async function rehydrateWordsFromFacts() {
 //              evaluator resolves a proper noun to its id through this (7.md bridge).
 //   through    the being being the acts run THROUGH (identity.beingId): cherub:birth
 //              acts "by I through Cherub", so through = the cherub being id.
-//   iam        the bootstrap actor name; name === "i-am" short-circuits authorize
+//   actorName        the bootstrap actor name; name === "i-am" short-circuits authorize
 //              (the privileged birth acts are denied for an ordinary summoned name).
 //
 // ATTRIBUTION (two modes; `through` presence is the signal):
@@ -281,7 +293,7 @@ export async function runAbleWord(
     bindings = {},
     beings = {},
     through = null,
-    iam = "i-am",
+    actorName = "i-am",
     env = {},
     identity: identityOverride = null,
   },
@@ -295,12 +307,12 @@ export async function runAbleWord(
   const identity =
     identityOverride ||
     (being
-      ? { beingId: String(through), name: iam, nameId: iam } // I through the being
+      ? { beingId: String(through), name: actorName, nameId: actorName } // I through the being
       : moment.identity || { beingId: null }); // the caller (default)
   const wordCtx = {
     ...moment,
     identity,
-    ...(being ? { actorAct: { ...(moment.actorAct || {}), by: iam } } : {}), // caller keeps its actorAct
+    ...(being ? { actorAct: { ...(moment.actorAct || {}), by: actorName } } : {}), // caller keeps its actorAct
     deltaF: moment.deltaF, // SAME array: facts land on the real moment
     _inOp: true, // the whole program is ONE op (see below)
   };
@@ -311,8 +323,9 @@ export async function runAbleWord(
     history,
     // default id-minter for `bind` sites (the home space): create-space honors the
     // target id, so a minted uuid becomes the home's id and later acts reference it.
-    // A caller can override via env.mintId.
-    env: { iam, mintId: () => randomUUID(), ...env },
+    // A caller can override via env.mintId. env.host merges the shared floor predicates
+    // (floorHostEnv) UNDER the caller's host, so `If … has authority over …:` resolves live.
+    env: { I: actorName, mintId: () => randomUUID(), ..._withFloorHost(env) },
     deltaF: moment.deltaF,
     bindings: { ...trigger, ...bindings },
     beings,
@@ -389,7 +402,10 @@ export async function runWordToStore(
     // where the being STANDS — create-space raises the new space under it (evalAct), and ops
     // that read the actor's position fold off it. Threaded from the being's presence.
     position: position ? String(position) : null,
-    env: { mintId: () => randomUUID(), ...env },
+    // env.host merges the shared floor predicates (floorHostEnv) UNDER the caller's host (additive;
+    // the caller wins on a clash), so a generative-loop Word's `If … has authority over …:` cond
+    // resolves LIVE against the being-tree instead of failing closed.
+    env: { mintId: () => randomUUID(), ..._withFloorHost(env) },
     bindings: { ...trigger, ...bindings },
     beings,
     trigger: { ...trigger },
@@ -423,6 +439,22 @@ export async function runWordToStore(
       const r = await applyTypeSchemaLaw(law, { history });
       // a coin fact laid by applyTypeSchemaLaw is a fact-to-store — count it as a deed so `acted`
       // reflects that the type schema advanced the chain (skipped CAS no-ops don't count).
+      if (r && !r.skipped) stamped++;
+    }
+  }
+  // THE PROHIBITION APPLY-PASS (rule 14, the OBJECTIVE law half): a `cannot`/`prohibition` law folded
+  // IS-side into ctx.laws ("A member cannot back a proposal." / "No member can back it."). After the
+  // word runs, fold each into a kind:"law" prohibition word — the FOLD of every such fact for a
+  // (subject-able, verb, of) IS the objective prohibition register (listFoldedProhibitions), read on
+  // demand by the able-walk (a cannot beats a can). applyProhibitionLaw self-guards (name-shape,
+  // ceiling, content-addressed/append-only); a bad law warns + skips, never aborting the word.
+  const prohibitionLaws = (ctx.laws || []).filter(
+    (l) => l && (l.kind === "cannot" || l.kind === "prohibition"),
+  );
+  if (prohibitionLaws.length) {
+    const { applyProhibitionLaw } = await import("./wordStore.js");
+    for (const law of prohibitionLaws) {
+      const r = await applyProhibitionLaw(law, { history });
       if (r && !r.skipped) stamped++;
     }
   }

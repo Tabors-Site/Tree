@@ -164,7 +164,7 @@ try {
     branch,
     moment,
     identity: moment.identity,
-    env: { iam: String(cherub.id) },
+    env: { I: String(cherub.id) },
     bindings: {},
     deltaF: [],
     flows: [],

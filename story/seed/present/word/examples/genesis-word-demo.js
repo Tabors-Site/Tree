@@ -23,7 +23,7 @@ const ctx = {
   history: "main",
   moment: { actId: "<genesis>" },
   identity: { nameId: "I", name: "I" },
-  env: { iam: "I" },
+  env: { I: "I" },
   bindings: {},
 };
 

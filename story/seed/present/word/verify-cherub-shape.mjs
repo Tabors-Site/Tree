@@ -78,7 +78,7 @@ const ctx = {
   moment: { actId: "<actId>" },
   identity: { beingId: "Cherub", name: "cherub", nameId: "I" },
   trigger: { name: "tabor-prime", password: "pw" },
-  env: { iam: "I" },
+  env: { I: "I" },
   bindings: { placeRoot: "<placeRoot>", ownerName: "tabor" },
 };
 const facts = await evaluate(flow, ctx);

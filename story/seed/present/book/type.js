@@ -13,12 +13,12 @@ export async function typeIntoBook(wordText, { moment, identity, history = "0", 
   if (!moment || !Array.isArray(moment.deltaF)) {
     throw new Error("typeIntoBook: needs an OPEN act (moment with deltaF) — the press happens inside a moment");
   }
-  const { parse } = await import("../word/parser.js");
+  const { parseV2 } = await import("../word/parser.js");
   const { evaluate } = await import("../word/evaluator.js");
 
   let statements;
   try {
-    statements = parse(wordText);
+    statements = parseV2(wordText);
   } catch (err) {
     return { ok: false, where: "parse", error: err.message, statements: 0, laid: [] };
   }

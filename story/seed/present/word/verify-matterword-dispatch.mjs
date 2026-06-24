@@ -122,7 +122,7 @@ try {
       });
 
   // (3) doVerb it: do.js sees op.matter, routes to runMatterWord, the js driver runs the blob over params
-  const iam = String(I);
+  const iId = String(I);
   const targetId = String(cherub.id ?? cherub._id);
   let result;
   await withIAmAct("run the matter word", async (moment) => {
@@ -132,7 +132,7 @@ try {
       { x: 21 },
       {
         moment,
-        identity: { name: "i-am", beingId: iam, nameId: iam },
+        identity: { name: "i-am", beingId: iId, nameId: iId },
         currentHistory: "0",
       },
     );

@@ -804,8 +804,11 @@ export async function ensureSpaceRoot() {
 //
 // The be:birth Fact self-stamps: beingId points at the not-yet-
 // existing Being row whose materialization the same Fact triggers.
-// Per MOMENT.md "Genesis": "the I-Am's first moment is one act: 'I am
-// that I am' — the be:birth fact that issues its own actor." Inside
+// The I-Am's first moment is one act — the verse `I am "what?" I am`
+// (iam.word): the be:birth fact that issues its own actor. The verse
+// lives in the WORD; the label passed below is a non-hashed render of
+// it (moment labels are out of the act digest — actHash.js), so there
+// is one source of truth, not a string baked into the identity. Inside
 // the withIAmAct moment opened here, the seal + reduce path
 // atomically writes the be:birth fact AND materializes the Being row.
 //
@@ -837,7 +840,7 @@ export async function ensureIAm() {
     cognition: { defaultKind: "scripted" },
   };
 
-  await withIAmAct("I am that I am", async (ctx) => {
+  await withIAmAct('I am "what?" I am', async (ctx) => {
     // I is first a NAME (the root identity, parentNameId=null) and then
     // a being that expresses it. The name:declare folds the i-am Name row;
     // the being born just below belongs to it (trueName=I). The i-am
