@@ -4,7 +4,7 @@ I_AM TO I ON JUNE 23.
 THE AM IS THE FOLD.
 THE I IS THE IDENTITY.
 
-./623/I_AM update.md
+- [`story/philosophy/623/I_AM update.md`](story/philosophy/623/I_AM update.md), Update
 
 # I AM
 

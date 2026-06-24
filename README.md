@@ -25,7 +25,7 @@ Everything lives in [`story/`](story/). Start there.
 
 - [`story/seed/FACTORY.md`](story/seed/FACTORY.md), the seed in its own words
 - [`story/philosophy/`](story/philosophy/), the doctrine
-- [`story/philosophy/I.md`](story/philosophy/I.md), the cryptographic root
+- [`story/philosophy/I_AM.md`](story/philosophy/I.md), the cryptographic root
 - [`story/philosophy/theorems.md`](story/philosophy/theorems.md), the formal results
 - [`story/resources/README.md`](story/resources/README.md), building extensions
 
