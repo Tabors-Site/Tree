@@ -6,9 +6,11 @@
 # COMPOSITION, not escape. form-portal is a COMPOSITE word: it validates the foreign
 # address (see-ops, the floor reads), finds the containing space, then COMPOSES the
 # create-matter word with a nested ibpa spec — `do create-matter with { ... }`. The
-# matter is born by create-matter's own clean path (the dispatcher lays the one
-# caller-attributed do:create-matter fact); form-portal lays no fact of its own
-# (ranAsMoments — its create-matter deed is the fact). No host: emit — the work is words all the way down.
+# matter is born by create-matter's own clean path, and that nested do:create-matter
+# deed pools INTO form-portal's ONE moment (runOpWord runs this .word IN the op's moment),
+# laid atomically with the caller's transaction. form-portal lays NO fact of its own
+# (ranAsMoments — the deed IS the fact, there is no own do:form-portal audit). No host:
+# emit — the work is words all the way down.
 #
 # The see-ops stay host (the floor): has-address / valid-address (the IBPA shape
 # checks, bounded regex) and resolve-containing-space (the by-id matter load that
@@ -18,15 +20,18 @@
 # caller's create-matter:ibpa capability (honest — a portal IS a matter), on top of
 # form-portal. The old host-emit path bypassed that.
 #
-# The bridge binds `caller` (the actor's beingId), `target` (the space-or-matter the
-# portal forms in, the typed {kind,id}), `foreignAddress` (params.target, the IBPA
-# string), and `name` (params.name, optional).
+# The standard trigger (do.js runOpWord) binds `caller` (the actor's beingId), `target`
+# (the DISPATCH target — the space-or-matter the portal forms in, the typed {kind,id}),
+# `name` (params.name, optional), and `params` (the whole op-param object). The IBPA the
+# portal points at is the op param ALSO named `target`, so it is read as `the params's
+# target` ($params.target, the nested object) — the dispatch `target` (the space) SHADOWS
+# any top-level param of the same name, so the IBPA must be reached through `params`.
 
 When a being forms a portal:
   If no caller, refuse with "form-portal requires an identified actor" as unauthorized.
-  If not has-address(foreignAddress), refuse with "form-portal: target must be a foreign IBPA string (e.g. bing.com#0/library)" as invalid-input.
-  If not valid-address(foreignAddress), refuse with "form-portal: target does not look like a foreign IBPA. Expected <story-domain>[#<history>]/<position>." as invalid-input.
+  If not has-address(params's target), refuse with "form-portal: target must be a foreign IBPA string (e.g. bing.com#0/library)" as invalid-input.
+  If not valid-address(params's target), refuse with "form-portal: target does not look like a foreign IBPA. Expected <story-domain>[#<history>]/<position>." as invalid-input.
   see resolve-containing-space(target) as spaceId.
   If no spaceId, refuse with "form-portal: cannot determine containing space for the matter target" as invalid-input.
-  do create-matter on the space spaceId with { type: "ibpa", content: { target: $foreignAddress }, name: $name, qualities: { portal: { target: $foreignAddress, createdBy: $caller } } } as portalMatter.
-  Return formed: true, matterId: $portalMatter, spaceId: $spaceId, target: $foreignAddress.
+  do create-matter on the space spaceId with { type: "ibpa", content: { target: $params.target }, name: $name, qualities: { portal: { target: $params.target, createdBy: $caller } } } as portalMatter.
+  Return formed: true, matterId: $portalMatter, spaceId: $spaceId, target: $params.target.

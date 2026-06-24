@@ -3,11 +3,26 @@
 // history-pointers store bundle. Carved from history-manager/ops.js.
 //
 // The two named-pointer registry ops — set-pointer / delete-pointer —
-// plus their bridge runners and their co-located `.word` slices. The
-// pointer map lives on the `.histories` heaven space's qualities.pointers.
-// The IBP address parser resolves named pointers (#main, #prod) through
-// this map via resolveHistoryPointers (the wire-layer async step).
-// Canonical paths (#0, #1a2) bypass.
+// plus their co-located `.word` slices. The pointer map lives on the
+// `.histories` heaven space's qualities.pointers. The IBP address parser
+// resolves named pointers (#main, #prod) through this map via
+// resolveHistoryPointers (the wire-layer async step). Canonical paths
+// (#0, #1a2) bypass.
+//
+// WORD-SOURCED (handler-less, Tabor's no-mirror law): neither op has a JS
+// handler. Each op's world strand IS its `.word` — set-pointer is
+// history-manager.word, delete-pointer is delete-pointer.word — the ONLY
+// path. Each registers a `word` descriptor ({ noun:"being", able:
+// "history-manager" }) + its hostEnv (historyManagerHostEnv); the
+// dispatcher's generic runOpWord (do.js) resolves the `.word`, runs it with
+// the standard trigger { name, canonical, caller, branch }, and stamps the
+// one caller-attributed audit fact (do:set-pointer / do:delete-pointer) on
+// the call target — the .word's own `replace ... qualities.pointers` is the
+// lone WORLD write. There is no `_xViaWord` adapter and no JS body — the
+// per-op wiring collapsed into the one generic word-dispatch path, so this
+// file is registration only. On a clean miss runOpWord REFUSES (a gone word
+// = the op is gone — executability is a fold), it does NOT fall through to a
+// shadow JS body (the duplication the Word dissolves).
 //
 // These ops were briefly hosted on a dedicated @history-registry
 // delegate; retired 2026-06-04 when "heaven never branches" landed.
@@ -15,23 +30,14 @@
 // workflow they participate in (merging frequently re-points main).
 
 import { registerOperation } from "../../../ibp/operations.js";
-import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
-import {
-  readPointers,
-  POINTER_NAME_MAX_LENGTH,
-  RESERVED_POINTERS,
-  findPointersSpaceId,
-  isPointerName,
-} from "../../../materials/history/historyRegistry.js";
-import { doVerb } from "../../../ibp/verbs/do.js";
 import { registerAbleWord } from "../../../present/word/ableWordRegistry.js";
-import log from "../../../seedStory/log.js";
+import { historyManagerHostEnv } from "./historyManagerHost.js";
 
 // Self-register this bundle's co-located `.word` slices (CONVERTING.md): importing
 // this module (at seed boot, or in a DRY harness) registers them so resolveAbleWord(
-// "history-manager", "set-pointer") finds it. The cut wires the bridge into the
-// set-pointer handler (run the .word's CONTROL strand through runAbleWord with
-// historyManagerHostEnv; JS handler stays as the clean-miss fallback).
+// "history-manager", "set-pointer") finds it. do.js's runOpWord resolves the word by
+// its able key ("history-manager") + op name, runs its CONTROL strand through
+// runAbleWord with historyManagerHostEnv (the ONLY path).
 registerAbleWord(
   "history-manager",
   "set-pointer",
@@ -43,46 +49,13 @@ registerAbleWord(
   new URL("./delete-pointer.word", import.meta.url),
 );
 
-// Canonical-path grammar (mirrors history_RE in address.js). Used by
-// set-pointer to reject structurally-invalid `canonical` arguments.
-const CANONICAL_PATH_RE = /^(?:0|\d+(?:[a-z]+\d+)*(?:[a-z]+)?)$/;
-
-// set-pointer's world strand is history-manager.word (the gate chain), run through the
-// bridge in CALLER mode (no `through` — the pointer write attributes to the setter). The
-// heaven reads + the lone set-space stay host. Returns {set,name,canonical,previous}, or
-// null on a clean miss so the JS body below runs.
-async function _setPointerViaWord({ caller, name, canonical, moment }) {
-  if (!moment) return null;
-  const { resolveAbleWord, runAbleWord } =
-    await import("../../../present/word/ableWordRegistry.js");
-  const ir = resolveAbleWord(
-    "history-manager",
-    "set-pointer",
-    moment?.actorAct?.history,
-  );
-  if (!ir) return null;
-  const { historyManagerHostEnv } = await import("./historyManagerHost.js");
-  const history = moment?.actorAct?.history || "0";
-  try {
-    const { result } = await runAbleWord(ir, {
-      moment,
-      history,
-      trigger: {
-        caller: caller ? String(caller) : null,
-        name,
-        canonical,
-        history,
-      },
-      env: { host: historyManagerHostEnv() },
-    });
-    return result || null;
-  } catch (e) {
-    if (e && e.__wordRefusal)
-      throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
-    throw e;
-  }
-}
-
+// set-pointer — WORD-SOURCED. history-manager.word's CONTROL strand (caller gate,
+// name/canonical validation, .histories resolution) runs through runOpWord in CALLER
+// mode (no `through` — the pointer write attributes to the setter). The two regex
+// validators + the heaven reads + the lone set-space onto qualities.pointers are the
+// host escapes wired by historyManagerHost.js. The .word returns
+// {set,name,canonical,previous}; no idFrom, so the dispatcher's auto-Fact lands on the
+// call target (the acting being / stance), carrying the call params.
 registerOperation("set-pointer", {
   targets: ["being", "stance"],
   ownerExtension: "seed",
@@ -99,97 +72,14 @@ registerOperation("set-pointer", {
       required: true,
     },
   },
-  handler: async ({ params, identity, moment }) => {
-    // THE CONVERSION: prefer the bridge; the JS below is the clean-miss fallback.
-    const viaWord = await _setPointerViaWord({
-      caller: identity?.beingId,
-      name: params?.name,
-      canonical: params?.canonical,
-      moment,
-    });
-    if (viaWord) return viaWord;
-
-    if (!identity?.beingId) {
-      throw new IbpError(
-        IBP_ERR.UNAUTHORIZED,
-        "set-pointer requires an authenticated being",
-      );
-    }
-    const name = String(params?.name || "")
-      .trim()
-      .toLowerCase();
-    const canonical = String(params?.canonical || "").trim();
-    if (!isPointerName(name)) {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        `set-pointer: name "${name}" is invalid. ` +
-          `Must start with a lowercase letter, end with a letter or digit, ` +
-          `and contain only lowercase letters, digits, and single hyphens ` +
-          `(no consecutive or trailing hyphens). Max ${POINTER_NAME_MAX_LENGTH} chars.`,
-      );
-    }
-    if (!CANONICAL_PATH_RE.test(canonical)) {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        `set-pointer: canonical "${canonical}" is not a structurally valid path (expected "0", "1", "1a", "7b3", etc.)`,
-      );
-    }
-
-    const current = await readPointers();
-    const next = { ...current, [name]: canonical };
-
-    const historiesSpaceId = await findPointersSpaceId();
-    if (!historiesSpaceId) {
-      throw new IbpError(
-        IBP_ERR.INTERNAL,
-        "set-pointer: .histories heaven space not found . story is not properly bootstrapped",
-      );
-    }
-    await doVerb(
-      { kind: "space", id: historiesSpaceId },
-      "set-space",
-      { field: "qualities.pointers", value: next, merge: false },
-      { identity, moment },
-    );
-
-    log.verbose(
-      "history-manager",
-      `set-pointer #${name} → #${canonical} (by ${identity.beingId.slice(0, 8)})`,
-    );
-    return { set: true, name, canonical, previous: current[name] || null };
-  },
+  word: { noun: "being", able: "history-manager" },
+  hostEnv: historyManagerHostEnv,
 });
 
-// delete-pointer's world strand is delete-pointer.word (the gate chain), run through the
-// bridge in CALLER mode. The heaven read + the lone pointer-map set-space stay host.
-// Returns {name, deleted, alreadyAbsent} or null on a clean miss so the JS body runs.
-async function _deletePointerViaWord({ caller, name, moment }) {
-  if (!moment) return null;
-  const { resolveAbleWord, runAbleWord } =
-    await import("../../../present/word/ableWordRegistry.js");
-  const ir = resolveAbleWord(
-    "history-manager",
-    "delete-pointer",
-    moment?.actorAct?.history,
-  );
-  if (!ir) return null;
-  const { historyManagerHostEnv } = await import("./historyManagerHost.js");
-  const history = moment?.actorAct?.history;
-  try {
-    const { result } = await runAbleWord(ir, {
-      moment,
-      history,
-      trigger: { caller: caller ? String(caller) : null, name, history },
-      env: { host: historyManagerHostEnv() },
-    });
-    return result || null;
-  } catch (e) {
-    if (e && e.__wordRefusal)
-      throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
-    throw e;
-  }
-}
-
+// delete-pointer — WORD-SOURCED. delete-pointer.word's CONTROL strand (caller gate,
+// valid name, non-reserved name, .histories resolution) runs through runOpWord in
+// CALLER mode. The heaven read + the lone pointer-map set-space stay host. Returns
+// {name,deleted,alreadyAbsent}; the auto-Fact lands on the call target.
 registerOperation("delete-pointer", {
   targets: ["being", "stance"],
   ownerExtension: "seed",
@@ -200,65 +90,6 @@ registerOperation("delete-pointer", {
       required: true,
     },
   },
-  handler: async ({ params, identity, moment }) => {
-    // THE CONVERSION: prefer the bridge; the JS below is the clean-miss fallback.
-    const viaWord = await _deletePointerViaWord({
-      caller: identity?.beingId,
-      name: params?.name,
-      moment,
-    });
-    if (viaWord) return viaWord;
-
-    if (!identity?.beingId) {
-      throw new IbpError(
-        IBP_ERR.UNAUTHORIZED,
-        "delete-pointer requires an authenticated being",
-      );
-    }
-    const name = String(params?.name || "")
-      .trim()
-      .toLowerCase();
-    if (!isPointerName(name)) {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        `delete-pointer: name "${name}" is invalid. ` +
-          `Must start with a lowercase letter, end with a letter or digit, ` +
-          `and contain only lowercase letters, digits, and single hyphens. ` +
-          `Max ${POINTER_NAME_MAX_LENGTH} chars.`,
-      );
-    }
-    if (RESERVED_POINTERS.includes(name)) {
-      throw new IbpError(
-        IBP_ERR.FORBIDDEN,
-        `delete-pointer: "${name}" is reserved and cannot be deleted. Re-point it via set-pointer instead.`,
-      );
-    }
-
-    const current = await readPointers();
-    if (!Object.prototype.hasOwnProperty.call(current, name)) {
-      return { deleted: false, name, alreadyAbsent: true };
-    }
-    const next = { ...current };
-    delete next[name];
-
-    const historiesSpaceId = await findPointersSpaceId();
-    if (!historiesSpaceId) {
-      throw new IbpError(
-        IBP_ERR.INTERNAL,
-        "delete-pointer: .histories heaven space not found",
-      );
-    }
-    await doVerb(
-      { kind: "space", id: historiesSpaceId },
-      "set-space",
-      { field: "qualities.pointers", value: next, merge: false },
-      { identity, moment },
-    );
-
-    log.verbose(
-      "history-manager",
-      `delete-pointer #${name} (by ${identity.beingId.slice(0, 8)})`,
-    );
-    return { deleted: true, name };
-  },
+  word: { noun: "being", able: "history-manager" },
+  hostEnv: historyManagerHostEnv,
 });

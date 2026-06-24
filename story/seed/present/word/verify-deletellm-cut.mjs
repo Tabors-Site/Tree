@@ -147,7 +147,7 @@ try {
     model: "m",
     apiKey: "sk-a",
   });
-  const idA = addA.result?.connection?._id;
+  const idA = addA.result?.connectionId ?? addA.result?.connection?._id;
   idA
     ? ok(`seeded conn A (auto-assigned to main): ${String(idA).slice(0, 8)}…`)
     : bad(`add A`, addA.refused?.message || addA.result);

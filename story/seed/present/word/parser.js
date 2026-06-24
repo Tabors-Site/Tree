@@ -50,6 +50,87 @@ const HOST_FLOOR = new Set([
   "driverTrueNameForbeing",
 ]);
 
+// ── THE SEE FLOOR — the twin of HOST_FLOOR, for the see-op door ───────────────
+//
+// A see-op (`see <op>(args) as v`, or the inline predicate form `<op>(args)` in a cond) reaches a
+// host-backed READ/COMPUTE through the able's see-op registry (ctx.env.host). The verb IS the nature:
+// a see lays NO fact — it is a perception (a substrate read) or a pure compute (an output sensed from
+// inputs). That inertness is the whole contract, so the door must be as CLOSED as HOST_FLOOR's: not
+// "any op()" but the EXACT set the .word corpus dispatches via the see path today (the IR walk over
+// story/**.word: node.act for the block form, cond.seeCall for the inline predicate). An UNKNOWN
+// see-op is REJECTED (the twin of the host: guard) so a noun-read cannot be invented unannounced.
+//
+// THE BOUNDARY (why these and not the action-sees): the kept names READ/COMPUTE and stamp NO fact —
+// validations (validate-render-block, valid-*), resolves/computes (resolve-source, resolve-birth-spec,
+// owner-of, find-being-parent, story-root), crypto/credential reads (load-key, read-credential,
+// mint-credential, paper-form), pointer/connection reads, and the inline presence predicates
+// (missing/exists/lives-on/grabbable …). The ACTION-sees — the ops that run for their EFFECT and lay
+// a fact (write-model, clear-model: 17.md's see=inert correction) — are NOT here: they were re-typed
+// `do <op>(args)` (the do-op escape rule), so they leave the see path entirely and never reach this
+// set. Add a name here ONLY for a genuine new perception/compute, deliberately, in the open; an op
+// that changes the world is a `do`, not a `see`.
+const SEE_FLOOR = new Set([
+  // validations / shape + name checks (pure compute, no fact)
+  "validate-render-block",
+  "valid-canonical",
+  "valid-pointer-name",
+  "valid-address",
+  "valid-key",
+  "valid-namespace",
+  // resolves / lookups (a substrate read or a derive from inputs)
+  "resolve-source",
+  "resolve-birth-space",
+  "resolve-birth-spec",
+  "resolve-connection",
+  "resolve-connection-removal",
+  "resolve-connection-update",
+  "resolve-containing-space",
+  "resolve-model-block",
+  "resolve-name-id",
+  "resolve-rename-spec",
+  "resolve-set-being-spec",
+  "resolve-set-space-spec",
+  "resolve-slot-assignment",
+  "resolve-target-being",
+  "owner-of",
+  "space-id-of",
+  "set-owner-block",
+  "remove-owner-block",
+  "find-being-parent",
+  "find-pointers-space-id",
+  "read-pointers",
+  "story-root",
+  "asked-policy",
+  "parse-signal-value",
+  // able / authority reads (the grant gates' perceptions, NOT the grant itself)
+  "able-spec-for-grant",
+  "able-request",
+  "grant-internal",
+  "grant-stamp",
+  "assert-may-set-model",
+  // pointer / signal / connection writes the corpus still speaks as see-ops (host-backed)
+  "set-pointer-map",
+  "delete-pointer-map",
+  "signal-fact",
+  // crypto / credential reads (minting / key reads — cannot be a fact, see-shaped)
+  "load-key",
+  "read-credential",
+  "mint-credential",
+  "reel-head-of",
+  "paper-form",
+  // inline PRESENCE / domain predicates (the `If <op>(args)` cond form — a live check, no bind, no fact)
+  "able-exists",
+  "already-holds",
+  "being-lives-on",
+  "destination-missing",
+  "destination-paused",
+  "has-address",
+  "is-grabbable",
+  "is-reserved-pointer",
+  "name-banished",
+  "name-exists",
+]);
+
 // ── THE METACIRCULAR HOOK: the grammar reads (some of) its rules from the Word ──
 //
 // "The verse and the parser are the same thing" (Tabor): a grammar rule is a Word, not host
@@ -565,12 +646,26 @@ const EFFECT_RULES = [
   // keeps `see the …` (READ/QUERY) and `see whether …` (PREDICATE) on their own rules.
   [
     /^see\s+(?!the\b|whether\b)([\w-]+)(?:\(([^)]*)\))?\s+as\s+(\w+)\.?$/i,
-    (m) => ({
-      kind: "see",
-      act: m[1],
-      args: m[2] !== undefined ? argList(m[2], "$") : [],
-      bind: m[3],
-    }),
+    (m) => {
+      // SEE_FLOOR guard (the twin of the host: floor): the see-op door is a CLOSED SET, not "any
+      // op()". An UNKNOWN see-op is REJECTED so a noun-read cannot be invented unannounced; a new
+      // perception/compute must be added to SEE_FLOOR deliberately. An op that changes the world is
+      // a `do`, not a `see` (the action-see correction) — it never belongs in this set.
+      if (!SEE_FLOOR.has(m[1])) {
+        throw new Error(
+          `word parser: see-op "${m[1]}" is not a recognized SEE FLOOR perception. ` +
+            `The see-op door is a CLOSED SET — only host-backed READS / pure COMPUTES that lay NO fact ` +
+            `(${[...SEE_FLOOR].join(", ")}). An op that changes the world is a \`do\`, not a \`see\`; a new ` +
+            `perception/compute must be added to SEE_FLOOR deliberately. (philosophy/word/17.md: see is inert.)`,
+        );
+      }
+      return {
+        kind: "see",
+        act: m[1],
+        args: m[2] !== undefined ? argList(m[2], "$") : [],
+        bind: m[3],
+      };
+    },
   ],
 
   // ── WRITE: the substrate write verb (THE WALL's write side) → do:set-<kind>.
@@ -626,6 +721,28 @@ const EFFECT_RULES = [
       to: m[2].toLowerCase(),
       ...(m[3] !== undefined ? { with: valueExpr(m[3]) } : {}),
       ...(m[4] ? { bind: m[4] } : {}),
+    }),
+  ],
+
+  // ── DO-OP ESCAPE (the action-see correction, 17.md): "do <escape>(args) [as <bind>]." The
+  // twin of the see-op call (`see <op>(args) as v`) — SAME backing fn (ctx.env.host[escape]),
+  // SAME {args} convention, SAME callHost dispatch — but typed `verb:"do"`, because the escape
+  // runs for its EFFECT (it ENRICHES the op's params in place, the set-<kind> {field,value,merge}
+  // shape the dispatcher's auto-fact reads), and a see must be inert (a noun-read lays nothing).
+  // `write-model` is the canonical case: it mutates the closed-over params, so it is a `do`
+  // wearing `see`; this surface types it right. It lays NO SEPARATE fact (the enrichment rides
+  // the parent op's one auto-fact, exactly as the see form did) — evalAct runs act.host via
+  // callHost and binds act.bind, no doVerb dispatch. The paren-args `(…)` is the discriminator
+  // that splits this escape from the `on/with` doVerb dispatch rule below.
+  [
+    /^do\s+(?!the\b|a\b|an\b)([\w-]+)\(([^)]*)\)(?:\s+as\s+(\w+))?\.?$/i,
+    (m) => ({
+      kind: "act",
+      verb: "do",
+      act: m[1],
+      host: m[1],
+      params: { args: argList(m[2], "$") },
+      ...(m[3] ? { bind: m[3] } : {}),
     }),
   ],
 
@@ -1020,11 +1137,22 @@ function parseLeaf(t, c) {
   // `see <op>(args) as v` dispatches via callHost — and the cond reads its result's truthiness.
   // A live check with NO bind, NO fact: the noun's own check IS the condition. `not <op>(args)`
   // negates via the block above. (A `(` hugging its name marks a call; a gloss has a space.)
-  if ((m = s.match(/^([a-z][\w-]*)\((.*)\)$/i)))
+  if ((m = s.match(/^([a-z][\w-]*)\((.*)\)$/i))) {
+    // SEE_FLOOR guard (the inline twin): an inline see-op predicate dispatches through the SAME
+    // ctx.env.host registry as `see <op>(args) as v`, so the SAME closed set gates it. An UNKNOWN
+    // see-op predicate is REJECTED — the door stays shut on both faces of the see verb.
+    if (!SEE_FLOOR.has(m[1]))
+      throw new Error(
+        `word parser: see-op predicate "${m[1]}" is not a recognized SEE FLOOR perception. ` +
+          `The see-op door is a CLOSED SET — only host-backed READS / pure COMPUTES that lay NO fact ` +
+          `(${[...SEE_FLOOR].join(", ")}). An op that changes the world is a \`do\`, not a \`see\`; a new ` +
+          `perception/compute must be added to SEE_FLOOR deliberately. (philosophy/word/17.md: see is inert.)`,
+      );
     return neg({
       seeCall: m[1],
       args: m[2].trim() ? argList(m[2]).map((r) => ({ ref: r })) : [],
     });
+  }
   // AUTHORITY PREDICATE (the being-tree walk, the floor predicate): `<X> has authority over <Y>` /
   // `<X> has credential authority over <Y>`. The inline conditional form of the `see whether …`
   // predicate — a LIVE being-tree authority walk, resolved through ctx.env.host.hasAuthorityOver
@@ -1036,6 +1164,17 @@ function parseLeaf(t, c) {
     return neg({
       resolvedBy: m[2] ? "hasCredentialAuthority" : "hasAuthorityOver",
       args: [{ ref: refKey(m[1]) }, { ref: refKey(m[3]) }],
+    });
+  // ONE-HOP BEING-PARENT (the floor predicate, NARROWER than authority): `<X> is the being-parent
+  // of <Y>` → did X perform Y's BIRTH act (the parentBeingId on Y's be:birth fact, findBeingParent)?
+  // IMMEDIATE parent only — distinct from `has authority over` / `descends from`, which walk the whole
+  // ancestry. credential-attach is being-parent-ONLY, so its gate reads this native relation instead
+  // of pulling the parent out to hand-compare. Resolved through ctx.env.host.isBeingParentOf
+  // (floorHostEnv). MUST precede the `is`-equality rule below, which would else mis-read it.
+  if ((m = s.match(/^(.+?)\s+is the being-parent of\s+(.+)$/i)))
+    return neg({
+      resolvedBy: "isBeingParentOf",
+      args: [{ ref: refKey(m[1]) }, { ref: refKey(m[2]) }],
     });
   // DEIXIS (here/there/where): `there` sets the EXISTENTIAL context, `is/are` makes the
   // claim within it — so "there is <X>" is a PRESENCE check, "there is no <X>" its absence.
@@ -1107,6 +1246,19 @@ function parseLeaf(t, c) {
         against: refLit(m[2]),
       },
     });
+  // TYPE predicates (§1) — the primitive shape checks: `<X> is a [finite] number`,
+  // `<X> is a string` / `<X> is text`. The host floor's `Number.isFinite` / `typeof` named
+  // as native Word predicates (cond.js resolveTest isFinite/isString), so a `.word` validates
+  // a value's shape without a bespoke per-op host fn. MUST precede the kind-check rule below:
+  // `number`/`string`/`text` are not aggregate KINDs (space/being/matter), so the kind rule
+  // would otherwise mis-route `the coord's x is a number` to an equality on `coord.x.kind`.
+  if ((m = s.match(/^(.+?)\s+(?:is|are)\s+(?:a\s+|an\s+)?(?:finite\s+)?number$/i)))
+    return neg({ test: { op: "isFinite", path: refKey(m[1]) } });
+  if (
+    (m = s.match(/^(.+?)\s+(?:is|are)\s+(?:a\s+)?string$/i)) ||
+    (m = s.match(/^(.+?)\s+(?:is|are)\s+text$/i))
+  )
+    return neg({ test: { op: "isString", path: refKey(m[1]) } });
   // a single bareword cond is a flow-local flag read: "signedIn", "asFather"
   if (/^[A-Za-z]\w*$/.test(s.trim())) {
     const f = s.trim();

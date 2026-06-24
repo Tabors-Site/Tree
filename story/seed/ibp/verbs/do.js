@@ -40,6 +40,165 @@ import {
 } from "./_shared.js";
 import { stripForAudit } from "../../materials/redact.js";
 
+// WORD-SOURCED dispatch — the ONE word-runtime for handler-less ops. A word-sourced op has no
+// JS handler; its body is a word, and runWord runs it. The body's STORAGE is the only thing that
+// differs, and it is resolved HERE as a fetch detail (not a runtime fork at the dispatcher):
+//
+//   op.matter — the body is a content-addressed code blob (a NATIVE word, 21.md P5). Fetch it
+//     from CAS by hash and run it through its matter TYPE's run-op (runWordBody, matterWord.js),
+//     which enforces executability + the effect-class (pure → replay-safe, cached by hash;
+//     effectful → a one-time fact-source). CONTRACT NOTES, the two open co-design points with the
+//     engine lane: (1) inputs pass as [ctx.params] — fine for the `js` driver (an object), but
+//     `wasm` needs a numbers/linear-memory marshalling layer, so structured-params-over-wasm is
+//     unresolved; (2) effect-class→fact: this stamps BOTH pure and effectful once
+//     (every-act-makes-a-fact) — whether a PURE native word should stamp at all (computation vs
+//     fact-source, the is-be cut one level down) is the other open point.
+//
+//   op.word — the body is a co-located `.word` folded onto the chain (a THEOREM word). Resolve it
+//     and run it via runOpWord below. The `.word` file vs the CAS blob is WHERE the body lives,
+//     not HOW it runs — both are "the word is the source," so they share this one entry.
+//
+// A native body wins if (impossibly) both are set: it is the more primitive body. The op still
+// flows through the SAME auth + one-fact path as a handler op for either body (resolveDoOpFromFold
+// carries factAction/targets/auth uniformly).
+async function runWord(op, ctx) {
+  if (op.matter) {
+    const { runWordBody } = await import("../../present/word/matterWord.js");
+    const ran = await runWordBody(op.matter, [ctx.params]);
+    return ran && typeof ran === "object" && "result" in ran ? ran.result : ran;
+  }
+  return runOpWord(op, ctx);
+}
+
+// runOpWordToStore — the MULTI-MOMENT runtime for a `runAsStore` op (add-llm-connection). Where
+// runOpWord's runAbleWord path runs the body in the caller's ONE moment, this runs it through
+// runWordToStore so EACH deed (do set-being, then do assign-llm-slot) seals as its OWN moment /
+// fact / commit — the genuine generative chain. The op lays NO own fact (returns ranAsMoments).
+// Needs an identified actor: the being whose reel the deeds open their moments on. Builds the same
+// STANDARD trigger as runOpWord; self-contained so it never touches the runAbleWord / through path.
+async function runOpWordToStore(op, ctx, ir, history) {
+  const { runWordToStore } = await import(
+    "../../present/word/ableWordRegistry.js"
+  );
+  const { detectTargetKind, targetIdOf } = await import(
+    "../../materials/_targetShape.js"
+  );
+  const { ranAsMoments } = await import("../factResult.js");
+  const caller = ctx.identity?.beingId ? String(ctx.identity.beingId) : null;
+  if (!caller) {
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      `${op.name}: requires an identified actor (its deeds open moments on the actor's reel)`,
+    );
+  }
+  try {
+    const { result } = await runWordToStore(ir, {
+      beingId: caller,
+      name: null,
+      history,
+      env: { host: op.hostEnv ? op.hostEnv() : {} },
+      trigger: {
+        ...Object.fromEntries(Object.keys(op.args || {}).map((k) => [k, null])),
+        ...(ctx.params || {}),
+        target: ctx.target,
+        targetId: ctx.target != null ? targetIdOf(ctx.target) : null,
+        targetKind: detectTargetKind(ctx.target),
+        params: ctx.params || {},
+        caller,
+        branch: history,
+      },
+    });
+    return ranAsMoments(result || {});
+  } catch (e) {
+    if (e && e.__wordRefusal)
+      throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
+    throw e;
+  }
+}
+
+// runOpWord — run a THEOREM word body (a co-located `.word`). The op declares `word: { noun, idFrom }`
+// + carries its `hostEnv` factory; its `.word` is the only implementation. We resolve the word, run it
+// through the bridge with the STANDARD trigger `{ target, targetKind, params, caller, branch }`
+// (the shape create.word/create-matter.word already read), then promote the word-authored fact
+// (factParams + optional factTarget) via stampsWordFact so the ONE auto-Fact path stamps it.
+// On a clean miss (no word on this history) the op REFUSES — there is no JS body to fall back
+// to. This replaces every per-op `_xViaWord` adapter; the per-op index.js shrinks to a
+// registration. A WordRefusal surfaces as the same IbpError a handler would have thrown.
+async function runOpWord(op, ctx) {
+  const { resolveAbleWord, runAbleWord } = await import(
+    "../../present/word/ableWordRegistry.js"
+  );
+  const { detectTargetKind, targetIdOf } = await import("../../materials/_targetShape.js");
+  const history = ctx.moment?.actorAct?.history;
+  // `word.able` is the ableword RESOLUTION key (the registerAbleWord namespace — e.g.
+  // set-world-signal lives under its granting able "able-manager"); `word.noun` is the
+  // fact's TARGET KIND (stampsWordFact, below). They coincide for many ops (create-space:
+  // "space"/"space") but diverge when the .word's home able ≠ the target kind, so resolve
+  // by `able` and fall back to `noun`.
+  const ir = resolveAbleWord(op.word.able || op.word.noun, op.name, history);
+  if (!ir) {
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      `${op.name}: ${op.name}.word is not available on this history`,
+    );
+  }
+  // MULTI-MOMENT composite (op.word.runAsStore): its deeds must each seal as their OWN moment, so
+  // route to runWordToStore and return — a self-contained path that never reaches runAbleWord below.
+  if (op.word.runAsStore) return runOpWordToStore(op, ctx, ir, history);
+  try {
+    const { result } = await runAbleWord(ir, {
+      moment: ctx.moment,
+      history,
+      // Through-mode (op.word.through): run the `.word` THROUGH the caller being — being-mode in
+      // runAbleWord, where the identity name resolves to i-am (privileged). A HOST-FACILITATED op
+      // needs this: ask-able's queue path `call`s the able's owner, and a fresh asker holds no able
+      // permitting a summon (it would be correctly denied), so the call must authorize as I, FROM
+      // i-am, with the asker riding in the inbox CONTENT. The op's OWN auth (doVerb authorize) and
+      // the auto-Fact attribution still use the real caller (opts.identity) — only the `.word`'s
+      // internal acts run privileged. Default (no through) = caller mode, the acts are the caller's.
+      ...(op.word.through
+        ? { through: ctx.identity?.beingId ? String(ctx.identity.beingId) : null }
+        : {}),
+      trigger: {
+        // Declared args null-filled FIRST: an op param that's ABSENT resolves to null
+        // (not the literal "$arg"), matching what the per-op bridges passed explicitly.
+        ...Object.fromEntries(Object.keys(op.args || {}).map((k) => [k, null])),
+        // Op params, BOTH ways: spread top-level (legacy .words read `$namespace`
+        // directly) AND nested under `params` (create.word et al. pass the whole object
+        // to their see). Present params override the null-fill above.
+        ...(ctx.params || {}),
+        // Standard keys LAST so an op param can never shadow them. `targetId` is the
+        // EXTRACTED id (a .word reads $targetId when the fact targets the dispatch target);
+        // `target` stays the raw {kind,id}/ref for ops whose see resolves it itself.
+        target: ctx.target,
+        targetId: ctx.target != null ? targetIdOf(ctx.target) : null,
+        targetKind: detectTargetKind(ctx.target),
+        params: ctx.params || {},
+        caller: ctx.identity?.beingId ? String(ctx.identity.beingId) : null,
+        branch: history,
+      },
+      env: { host: op.hostEnv ? op.hostEnv() : {} },
+    });
+    if (!result) return null;
+    const { stampsWordFact, ranAsMoments } = await import("../factResult.js");
+    // PURE-COMPOSITION (form-portal): the word laid its entailed deeds into THIS op's one
+    // moment and has NO own fact — mark ranAsMoments so the dispatcher stamps nothing of its
+    // own (the deeds ARE the facts, atomic with the caller). The op declares this nature.
+    if (op.word.ranAsMoments) return ranAsMoments(result);
+    // OWN-FACT op: ALWAYS promote the word-authored fact. stampsWordFact lifts `factParams` and
+    // honors a returned `factTarget` — a {kind,id} for a DYNAMIC-kind op (the fact reel varies),
+    // or a scalar / the `idFrom` field for a fixed-noun op. When the word authored NO factParams
+    // it returns the result untouched, so the auto-Fact falls back to ctx.params + resolveAuditTarget
+    // exactly as before (a no-op for those ops — grant-able). This is the path that frees move /
+    // set-model and the set-* family to stay one word with a varying fact kind.
+    return stampsWordFact(result, op.word.noun, op.word.idFrom);
+  } catch (e) {
+    if (e && e.__wordRefusal)
+      throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
+    throw e;
+  }
+}
+
 /**
  * DO. Run a registered operation against a target, stamp a Fact, return
  * the handler's result.
@@ -252,23 +411,14 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
 
   let result;
   try {
-    if (op.matter) {
-      // NATIVE WORD (P5): the op's body is MATTER — a content-addressed blob — not a host handler.
-      // Run it through the engine lane's production entry `runWordBody` (matterWord.js), which fetches
-      // the blob from CAS by hash and dispatches to its matter TYPE's run-op, enforcing executability +
-      // the effect-class (pure → replay-safe, cached by hash; effectful → a one-time fact-source). The
-      // op's params are the inputs; the run-op's output is the result the auto-Fact below stamps —
-      // a native word still flows through the SAME auth + one-fact path as a handler op (op.matter
-      // rides resolveDoOpFromFold, so factAction/targets/auth are uniform). CONTRACT NOTES, the two
-      // open co-design points with the engine lane: (1) inputs pass as [ctx.params] — fine for the `js`
-      // driver (an object), but `wasm` needs a real numbers/linear-memory marshalling layer, so
-      // structured-params-over-wasm is unresolved; (2) effect-class→fact: this stamps BOTH pure and
-      // effectful once (every-act-makes-a-fact) — whether a PURE native word should stamp at all
-      // (computation vs fact-source, the is-be cut one level down) is the other open point.
-      const { runWordBody } = await import("../../present/word/matterWord.js");
-      const ran = await runWordBody(op.matter, [ctx.params]);
-      result =
-        ran && typeof ran === "object" && "result" in ran ? ran.result : ran;
+    // TWO dispatch paths, not three: an op is WORD-SOURCED (no JS handler — its body is a word)
+    // or it is a JS handler (the ~60 honest, transitional pure-JS ops). The word's STORAGE —
+    // a content-addressed matter blob vs a co-located `.word` folded onto the chain — is a
+    // FETCH detail resolved INSIDE runWord, not a third runtime at the dispatch level. One
+    // word-runtime: every word-capability is built once. (CONVERTING.md / Tabor's no-mirror law;
+    // ".word files are an act-chain read back" — file vs CAS is where the body LIVES, not how it RUNS.)
+    if (op.matter || op.word) {
+      result = await runWord(op, ctx);
     } else {
       result = await op.handler(ctx);
     }
@@ -289,6 +439,14 @@ export async function doVerb(target, operation, params = {}, opts = {}) {
   // through runWordToStore (the spacebar / moments.md), or a name-act that laid its own library-reel
   // fact (config / share / close-story). The `skipAudit` flag is RETIRED — every former user is now
   // a ranAsMoments composite/name-act or a plain one-fact word, so the dispatch no longer reads it.
+  //
+  // WHY a flag and not "observe ctx.deltaF growth": the honest end-state IS for the dispatcher to
+  // OBSERVE whether the op laid its own facts rather than be TOLD. But the two self-stamping shapes
+  // seal OUTSIDE this moment's deltaF — runWordToStore opens a FRESH moment per deed (the deeds never
+  // touch ctx.deltaF), and a name-act seals on the library reel through withNameAct. So deltaF growth
+  // cannot see them; watching it would double-stamp every composite. Deriving instead of asserting is
+  // blocked on unifying runWordToStore + runAbleWord into ONE moment model (already flagged for the
+  // engine in llm-connection/index.js). Until that lands, the asserted flag is the only signal there is.
   const ranAsMoments =
     result && typeof result === "object" && result._ranAsMoments === true;
   const shouldAudit = !ranAsMoments;

@@ -785,6 +785,19 @@ server.listen(PORT, "0.0.0.0", () => {
     /* observation only */
   }
   printReady();
+  // The conversion board (the law: two states, never three — word-SOLE = the word is the
+  // only path; pure-JS = a JS handler still stands behind it, mirror or not = zero progress).
+  // Loud at boot, AFTER every op (seed + extensions) has registered, so the ratio is the true
+  // one. The only move that converts an op is DELETING its handler (operations.js).
+  import("./seed/ibp/operations.js")
+    .then((ops) => {
+      const t = ops.tallyConversion();
+      log.info(
+        "Seed",
+        `conversion board — ${t.wordSole} word-SOLE · ${t.pureJS} pure-JS · ${t.total} ops (the only move that converts one is deleting its handler)`,
+      );
+    })
+    .catch(() => {});
 });
 
 // Graceful shutdown closes my channels in reverse: pending MCP

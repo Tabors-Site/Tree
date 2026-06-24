@@ -2,75 +2,65 @@
 //
 // set-model — give a being, space, or matter its 3D body.
 //
-// Models ARE matter (type "model", .glb bytes in the content store).
-// The flow is two ops, cleanly split:
+// Models ARE matter (type "model", .glb bytes in the content store). The flow is two ops,
+// cleanly split:
 //
-//   1. UPLOAD is create-matter: POST the bytes to /api/v1/content,
-//      then `do create-matter { type: "model", content: <ref> }`
-//      targeting the story root's `skins` space — the catalog
-//      space that holds every uploaded model so the 3D portal can
-//      display them all and beings can see which ids exist.
+//   1. UPLOAD is create-matter: POST the bytes to /api/v1/content, then
+//      `do create-matter { type: "model", content: <ref> }` targeting the story root's
+//      `skins` space — the catalog space that holds every uploaded model so the 3D portal
+//      can display them all and beings can see which ids exist.
 //
-//   2. SET is this op: `do set-model { modelMatterId }` on a being,
-//      space, or matter. Clicking a model in the skins space calls
-//      this against your own being; copying the id lets you set it
-//      on spaces/matter you own.
+//   2. SET is this op: `do set-model { modelMatterId }` on a being, space, or matter.
+//      Clicking a model in the skins space calls this against your own being; copying the
+//      id lets you set it on spaces/matter you own.
 //
-// The write lands at `qualities.render.model` — the same render
-// namespace set-render owns — as the resolved block:
-//
-//   { matterId, hash, url, name }
-//
-// matterId is the source pointer (the model matter); hash + url are
-// snapshotted so renderers load bytes straight from the content
-// store with immutable caching, no second lookup.
+// The write lands at `qualities.render.model` (the same render namespace set-render owns) as
+// the resolved block { matterId, hash, url, name }: matterId is the source pointer; hash + url
+// are snapshotted so renderers load bytes straight from the content store with immutable
+// caching, no second lookup.
 //
 // Who may set what:
 //   being  — the being itself (your body is yours), or the root owner.
-//   matter — the matter's author, or the root owner. Extension
-//            authors set DEFAULTS for all matter of their type via
-//            the type def's render.model; this op is the per-matter
-//            override beings write into the story's history.
-//   space  — the space's owner, or the root owner. A space's model
-//            is its body in the PARENT's scene (the pyramid you
-//            click to enter); the child carries its own model and
-//            the parent's descriptor reaches into children to place
-//            them.
+//   matter — the matter's author, or the root owner. (Extension authors set DEFAULTS for all
+//            matter of their type via the type def's render.model; this op is the per-matter
+//            override beings write into the story's history.)
+//   space  — the space's owner, or the root owner. A space's model is its body in the PARENT's
+//            scene (the pyramid you click to enter).
 //
-// Targets being/space/matter — the cross-kind shape lives at
-// materials/ root beside moveOp.js / portalOp.js for the same reason.
+// WORD-SOURCED (handler-less, Tabor's no-mirror law): set-model has NO JS handler. Its world
+// strand is model.word — the ONLY path. The op registers a `word` descriptor + its `hostEnv`
+// (modelHostEnv); the dispatcher's generic runOpWord (do.js) resolves the word, runs it with
+// the standard trigger { target, targetKind, targetId, caller, branch, ... }, and promotes the
+// word-authored fact (factParams { field, value, merge } + factTarget { kind, id }) via
+// stampsWordFact. There is no `_setModelViaWord` adapter and no JS body — apart from
+// ensureSkinsSpace (genesis furniture, below) this file is registration only.
+//
+// DYNAMIC fact kind: the target is being | space | matter, so the fact reel varies. model.word
+// names both via a {kind,id} factTarget (stampsWordFact honors the object kind, not the op's
+// noun), so NO idFrom — the word authors its own target. `noun: "being"` is the registry's
+// required default; the word's factTarget overrides it per set. The compute (the per-kind auth
+// gate, the model-matter resolve + snapshot, the set-<kind> field/value/merge) lives in
+// modelHost.js as the `see` escapes the word reaches — pure reads, they lay NO fact.
 
 import { randomUUID as uuidv4 } from "node:crypto";
 import { registerOperation } from "../../../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
-import {
-  detectTargetKind,
-  targetIdOf,
-} from "../../../materials/_targetShape.js";
 import { I } from "../../../materials/being/seedBeings.js";
 import { registerAbleWord } from "../../../present/word/ableWordRegistry.js";
-// The auth gate + the model-matter resolve moved to modelHost.js (the host-escape glue);
-// import them back for the JS fallback below (the bodies are verbatim).
-import { resolveModelMatter, assertMaySetModel } from "./modelHost.js";
+import { modelHostEnv } from "./modelHost.js";
 
 // Self-register this slice's co-located WORLD strand (CONVERTING.md): the bridge resolves
-// ("render", "set-model") to model.word, its host escapes wired by modelHost.js. WIRED:
-// _setModelViaWord runs the `.word` through the bridge (CALLER mode); the JS
-// setModelHandler below is the clean-miss fallback.
-registerAbleWord(
-  "render",
-  "set-model",
-  new URL("./model.word", import.meta.url),
-);
+// ("render", "set-model") to model.word, its host escapes wired by modelHost.js. Registered
+// at module load (services.js imports this file at seed boot).
+registerAbleWord("render", "set-model", new URL("./model.word", import.meta.url));
 
 const SKINS_SPACE_NAME = "skins";
 
 /**
- * Find (or mint) the story root's `skins` space — the model
- * catalog. A normal space, not heaven: it forks with histories like
- * everything else, so each history shows its own models. Called at
- * boot (genesis background furniture) so uploads always have a home;
- * idempotent by name-under-root.
+ * Find (or mint) the story root's `skins` space — the model catalog. A normal space, not
+ * heaven: it forks with histories like everything else, so each history shows its own models.
+ * Called at boot (genesis background furniture) so uploads always have a home; idempotent by
+ * name-under-root.
  */
 export async function ensureSkinsSpace(history = "0", moment = null) {
   const { getSpaceRootId } = await import("../../../sprout.js");
@@ -83,8 +73,8 @@ export async function ensureSkinsSpace(history = "0", moment = null) {
 
   const { default: Projection } =
     await import("../../../materials/history/projection.js");
-  // History-local first, then main's inherited row (the lazy-fill
-  // idiom): the catalog is minted on main and inherited by histories.
+  // History-local first, then main's inherited row (the lazy-fill idiom): the catalog is
+  // minted on main and inherited by histories.
   for (const b of history === "0" ? ["0"] : [history, "0"]) {
     const row = await Projection.findOne({
       history: b,
@@ -121,170 +111,9 @@ export async function ensureSkinsSpace(history = "0", moment = null) {
   return id;
 }
 
-// set-model's world strand is model.word: the auth gate, the model-block resolve, and the
-// set-<kind> param-enrichment (via the host). CALLER mode (no `through`): the set attributes
-// to the asker. Returns {set:true,...} / {cleared:true,...} with params enriched in place
-// (field/value/merge), or null on a clean miss so the JS body runs. WordRefusal → IbpError.
-async function _setModelViaWord({ target, params, caller, moment }) {
-  if (!moment) return null;
-  const { resolveAbleWord, runAbleWord } =
-    await import("../../../present/word/ableWordRegistry.js");
-  const ir = resolveAbleWord("render", "set-model", moment?.actorAct?.history);
-  if (!ir) return null;
-  const { modelHostEnv } = await import("./modelHost.js");
-  const history = moment?.actorAct?.history;
-  try {
-    const { result } = await runAbleWord(ir, {
-      moment,
-      history,
-      trigger: {
-        target,
-        kind: detectTargetKind(target),
-        caller: caller ? String(caller) : null,
-        modelMatterId: params?.modelMatterId ?? null,
-        scale: params?.scale ?? null,
-        rotation: params?.rotation ?? null,
-        clear: params?.clear ?? false,
-        forMatterType: params?.forMatterType ?? null,
-        branch: history,
-      },
-      // The host env CLOSES OVER the op's params so write-model/clear-model enrich it in
-      // place (the same object the dispatcher's auto-fact reads). NO emit, NO skipAudit.
-      env: { host: modelHostEnv(params) },
-    });
-    return result || null;
-  } catch (e) {
-    if (e && e.__wordRefusal)
-      throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
-    throw e;
-  }
-}
-
-async function setModelHandler({ target, params, identity, moment }) {
-  if (!identity?.beingId) {
-    throw new IbpError(IBP_ERR.UNAUTHORIZED, "set-model: identity required");
-  }
-  // THE CONVERSION: set-model's world strand is model.word (caller mode). It enriches the
-  // op's params (field/value/merge) in place and returns the §7 result; the JS body below
-  // is the clean-miss fallback.
-  const viaWord = await _setModelViaWord({
-    target,
-    params,
-    caller: identity.beingId,
-    moment,
-  });
-  if (viaWord) return viaWord;
-
-  const kind = detectTargetKind(target);
-  const targetId = targetIdOf(target);
-  if (!targetId)
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "set-model: target required");
-  const history = moment?.actorAct?.history || "0";
-
-  await assertMaySetModel(kind, targetId, identity, history);
-
-  // forMatterType: a SPACE-level default for every matter of one type
-  // sitting in that space ("all notes here look like this"). Lives at
-  // the space's qualities.render.matterModels.<type>; the descriptor
-  // resolves matter models as per-matter override → space per-type
-  // default → the type def's extension default.
-  const forMatterType =
-    typeof params?.forMatterType === "string" && params.forMatterType.length
-      ? params.forMatterType
-      : null;
-  if (forMatterType) {
-    if (kind !== "space") {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        "set-model: forMatterType applies to space targets only",
-      );
-    }
-    const { getMatterType } =
-      await import("../../../materials/matter/types.js");
-    if (!getMatterType(forMatterType)) {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        `set-model: unknown matter type "${forMatterType}"`,
-      );
-    }
-  }
-  const fieldPath = forMatterType
-    ? `qualities.render.matterModels.${forMatterType}`
-    : "qualities.render.model";
-
-  // The op stamps its OWN fact (action "set-model"): the handler did
-  // the authorization above (self/author/owner), so delegating the
-  // write to set-<kind> would wrongly demand the caller also hold
-  // set-being:render etc. wherever they stand (you wear a model from
-  // /skins while standing in /skins). The fact carries the same
-  // {field, value, merge} shape the set-<kind> trio uses — params are
-  // enriched in place (the grant-able pattern) and the qualities
-  // reducer applies it as one more deep write.
-
-  // ── Clear path ──
-  if (params?.clear === true || params?.clear === "true") {
-    params.field = fieldPath;
-    params.value = null;
-    params.merge = false;
-    return {
-      cleared: true,
-      kind,
-      targetId: String(targetId),
-      ...(forMatterType ? { forMatterType } : {}),
-    };
-  }
-
-  if (!params?.modelMatterId) {
-    throw new IbpError(
-      IBP_ERR.INVALID_INPUT,
-      "set-model: `modelMatterId` required (upload first via create-matter type=model, or pass clear=true)",
-    );
-  }
-  const modelMatter = await resolveModelMatter(
-    String(params.modelMatterId),
-    history,
-  );
-  const model = {
-    matterId: String(modelMatter._id),
-    hash: modelMatter.content.hash,
-    url: `/api/v1/content/${modelMatter.content.hash}`,
-    name: modelMatter.name || modelMatter.content.name || null,
-  };
-
-  // One render write, one fact. Per-type space defaults write only
-  // the model block at their deep path; entity-level sets can bundle
-  // scale/rotation, merged into the existing render block (the
-  // animations/sounds channels stay untouched).
-  if (forMatterType) {
-    params.field = fieldPath;
-    params.value = model;
-    params.merge = true;
-    return {
-      set: true,
-      kind,
-      targetId: String(targetId),
-      forMatterType,
-      model,
-    };
-  }
-  const renderPatch = { model };
-  if (
-    typeof params?.scale === "number" &&
-    Number.isFinite(params.scale) &&
-    params.scale > 0
-  ) {
-    renderPatch.scale = params.scale;
-  }
-  if (params?.rotation && typeof params.rotation === "object") {
-    renderPatch.rotation = params.rotation;
-  }
-  params.field = "qualities.render";
-  params.value = renderPatch;
-  params.merge = true;
-
-  return { set: true, kind, targetId: String(targetId), model };
-}
-
+// WORD-SOURCED registration — no handler. do.js routes this through runOpWord (CALLER mode),
+// which runs model.word and stamps the one caller-attributed do:set-model fact on the target
+// (dynamic kind via the word's factTarget).
 registerOperation("set-model", {
   targets: ["being", "space", "matter"],
   ownerExtension: "seed",
@@ -318,5 +147,6 @@ registerOperation("set-model", {
       required: false,
     },
   },
-  handler: setModelHandler,
+  word: { noun: "being", able: "render" },
+  hostEnv: modelHostEnv,
 });

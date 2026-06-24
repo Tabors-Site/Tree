@@ -16,6 +16,7 @@ import Fuse from "fuse-native";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { execSync } from "child_process";
 import { getContent } from "../seed/materials/matter/contentStore.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -543,6 +544,21 @@ const handlers = {
 
 // ─── mount ──────────────────────────────────────────────────────────
 
+// A prior FUSE mount that died leaves MOUNT dangling ("Transport endpoint is not
+// connected"), so mkdirSync below fails ENOTCONN and boot dies. Clear ONLY a stale
+// mount (ENOTCONN on stat), never a healthy one — so a crashed mount self-heals.
+try {
+  fs.statSync(MOUNT);
+} catch (e) {
+  if (e && e.code === "ENOTCONN") {
+    for (const tool of ["fusermount", "fusermount3"]) {
+      try {
+        execSync(`${tool} -u ${JSON.stringify(MOUNT)}`, { stdio: "ignore" });
+        break;
+      } catch {}
+    }
+  }
+}
 fs.mkdirSync(MOUNT, { recursive: true });
 const fuse = new Fuse(MOUNT, handlers, { force: true, mkdir: true });
 

@@ -66,8 +66,19 @@ export function stampsWordFact(result, kind, idFrom = null) {
   // The word should always author its fact params (every act makes a fact); if it didn't,
   // fall through with the input so the dispatcher still stamps the act from ctx.params.
   if (factParams == null) return rest;
-  const id = factTarget != null ? factTarget : idFrom ? rest[idFrom] : null;
-  return stampsFact(rest, factParams, id != null ? { kind, id } : null);
+  // The fact's TARGET, named three ways: a {kind,id} factTarget — a DYNAMIC kind, the word names
+  // both for an op whose fact reel varies (move → space|matter, set-model → being|space|matter);
+  // a SCALAR factTarget (kind = the op's noun); or a bare `idFrom` field on the result (kind =
+  // noun). None → the dispatcher resolves the audit target from the call-target (resolveAuditTarget),
+  // preserving its real kind. The dynamic case is what lets a varying-kind op stay one word.
+  let target = null;
+  if (factTarget && typeof factTarget === "object" && factTarget.id != null) {
+    target = { kind: factTarget.kind ?? kind, id: String(factTarget.id) };
+  } else {
+    const id = factTarget != null ? factTarget : idFrom ? rest[idFrom] : null;
+    if (id != null) target = { kind, id };
+  }
+  return stampsFact(rest, factParams, target);
 }
 
 // emitWordFact — the ONE dispatcher-side emit for a FIXED-NOUN fact-word (17.md STEP 2). Lays the

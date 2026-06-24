@@ -62,7 +62,7 @@ export function connectHostEnv() {
     // plumbing escape to the Word. The token is the visible return value; the unlock is the
     // host side-effect of establishing the session.
     generateToken: async ({ args: [candidate] }) => {
-      const token = generateToken(candidate);
+      const token = await generateToken(candidate);
       if (candidate?.trueName) {
         const { unlockSigning } =
           await import("../../../materials/name/signingSession.js");
@@ -171,7 +171,7 @@ export function connectHostEnv() {
 
     // generateInheritToken(chosen, driver) → the being's token, but signing as `driver`
     // (connectHandler L595: generateToken({ ...targetBeing, trueName: driverTrueName })).
-    generateInheritToken: ({ args: [chosen, driver] }) =>
+    generateInheritToken: async ({ args: [chosen, driver] }) =>
       generateToken({ ...chosen, trueName: driver }),
   };
 }

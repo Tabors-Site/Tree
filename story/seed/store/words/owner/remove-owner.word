@@ -1,0 +1,11 @@
+# remove-owner.word — clear a space's owner (the remove-owner DO op). WORD-SOLE. The auth + lock +
+# CAS are the FLOOR (ownership.js removeOwner), reached through `see remove-owner-block` — it
+# returns the {field:"owner", value:null} block and lays no fact. The word AUTHORS the dispatcher's
+# ONE do:remove-owner fact: factParams = the block, factTarget = the space. `see space-id-of`
+# resolves the space id from a space or stance target. The trigger binds target, caller, branch.
+
+When a being removes the owner of a space:
+  If no caller, refuse with "remove-owner: identity required" as unauthorized.
+  see space-id-of(target) as spaceId.
+  see remove-owner-block(spaceId, caller) as block.
+  Return ownerRemoved: true, spaceId: $spaceId, factParams: $block, factTarget: { kind: "space", id: $spaceId }.

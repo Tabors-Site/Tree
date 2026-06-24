@@ -68,10 +68,29 @@ export function registerOperation(name, spec) {
     log.warn("Operations", `registerOperation("${name}"): spec is required`);
     return false;
   }
-  if (typeof spec.handler !== "function") {
+  // Two states, never three (Tabor's law). An op is WORD-SOURCED (a `word` descriptor, the
+  // `.word` is the only path, NO handler) or HANDLER-BASED (a JS handler). Declaring BOTH is a
+  // mirror at the registry — refused here so the bug can't be born. A word-sourced op reads
+  // `tallyConversion` as word-SOLE; a handler op as pure-JS.
+  const isWordSourced = !!spec.word && typeof spec.word === "object";
+  if (isWordSourced && typeof spec.handler === "function") {
     log.warn(
       "Operations",
-      `registerOperation("${name}"): handler must be a function`,
+      `registerOperation("${name}"): an op is its WORD or its HANDLER, never both (no mirrors).`,
+    );
+    return false;
+  }
+  if (!isWordSourced && typeof spec.handler !== "function") {
+    log.warn(
+      "Operations",
+      `registerOperation("${name}"): needs a handler function OR a word descriptor { noun, idFrom? }.`,
+    );
+    return false;
+  }
+  if (isWordSourced && (typeof spec.word.noun !== "string" || !spec.word.noun)) {
+    log.warn(
+      "Operations",
+      `registerOperation("${name}"): word.noun (the registerAbleWord key) is required for a word-sourced op.`,
     );
     return false;
   }
@@ -139,7 +158,20 @@ export function registerOperation(name, spec) {
   REGISTRY.set(name, {
     name,
     targets: [...spec.targets],
-    handler: spec.handler,
+    // handler XOR word (enforced above). A word-sourced op has handler:null so
+    // tallyConversion counts it word-SOLE; do.js routes it through runOpWord.
+    handler: typeof spec.handler === "function" ? spec.handler : null,
+    // ranAsMoments: a PURE-COMPOSITION op (form-portal) lays its entailed deeds and NO own
+    // fact, so the dispatcher stamps nothing (the deeds ARE the facts). Own-fact ops
+    // (create-space, credential-reset) leave it false and the dispatcher stamps their one
+    // audit fact. It declares the op's NATURE (has an own fact or not), not a runtime mode.
+    // runAsStore: a MULTI-MOMENT composite (add-llm-connection) whose deeds must each seal as
+    // their OWN moment — do.js runs it through runWordToStore, not runAbleWord (one shared
+    // moment). Implies ranAsMoments (the deeds are the facts). The execution-model declaration.
+    // through: a HOST-FACILITATED op (ask-able) whose .word runs THROUGH the caller in being-mode
+    // (identity name = i-am), so its internal acts — the queue summon to the owner — authorize as I.
+    word: isWordSourced ? { noun: spec.word.noun, able: spec.word.able || null, idFrom: spec.word.idFrom || null, through: spec.word.through === true, ranAsMoments: spec.word.ranAsMoments === true, runAsStore: spec.word.runAsStore === true } : null,
+    hostEnv: typeof spec.hostEnv === "function" ? spec.hostEnv : null,
     schema: spec.schema || null,
     // Field schema for the op's params (type + label per field). Drives
     // the portal's "directing" forms; null for ops that take no input or
@@ -254,6 +286,32 @@ export function listOperations(filter = {}) {
     ownerExtension: op.ownerExtension,
     args: op.args || null,
   }));
+}
+
+/**
+ * The conversion board — the law: two states, never three (Tabor, 2026-06-24).
+ * An op is either:
+ *   - word-SOLE: NO JS handler — its `.word` is the only path (converted, one source).
+ *   - pure-JS:   a JS handler exists — INCLUDING an op that also has a `.word` standing
+ *                behind a handler, which is *decorated*, NOT converted (two sources = the
+ *                bug), and so it counts as pure-JS: zero progress on the board.
+ * The ONLY move that increments word-SOLE is DELETING the handler. A mirror earns nothing,
+ * so the metric refuses to reward "word + fallback" and enforces "no fallbacks" structurally:
+ * the careful instinct (keep the old thing working) and the rule (delete the handler) only
+ * agree once a mirror is worth zero on the board.
+ *
+ * Today every registered op has a handler — registerOperation requires one (above) — so
+ * word-SOLE reads 0 until the registry accepts a handler-less, word-sourced op. That 0 is
+ * the honest truth: the structure currently forbids word-SOLE.
+ */
+export function tallyConversion() {
+  let wordSole = 0;
+  let pureJS = 0;
+  for (const op of REGISTRY.values()) {
+    if (typeof op.handler === "function") pureJS += 1;
+    else wordSole += 1;
+  }
+  return { wordSole, pureJS, total: REGISTRY.size };
 }
 
 /**

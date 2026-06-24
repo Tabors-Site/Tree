@@ -122,6 +122,18 @@ await is("nested ALL[ ANY[...], NEGATED flag ]", { all: [
   { negated: true, flag: "canInhabit" },
 ] }, ctx, true);
 
+// ── test:isFinite / isString (the §1 TYPE primitives — `is a finite number` / `is a string`) ──
+const shapeCtx = { bindings: { coord: { x: 5, y: 2, z: "bad" }, to: "space-1", n: 0, nan: NaN, inf: Infinity } };
+await is("coord.x is a finite number", { test: { op: "isFinite", path: "coord.x" } }, shapeCtx, true);
+await is("coord.z (string) is NOT a finite number", { test: { op: "isFinite", path: "coord.z" } }, shapeCtx, false);
+await is("absent coord.w → not finite (no silent coercion)", { test: { op: "isFinite", path: "coord.w" } }, shapeCtx, false);
+await is("NaN is not finite", { test: { op: "isFinite", path: "nan" } }, shapeCtx, false);
+await is("Infinity is not finite", { test: { op: "isFinite", path: "inf" } }, shapeCtx, false);
+await is("0 is a finite number (not falsy-confused)", { test: { op: "isFinite", path: "n" } }, shapeCtx, true);
+await is("negated: coord.z is NOT a finite number → true", { negated: true, test: { op: "isFinite", path: "coord.z" } }, shapeCtx, true);
+await is("to is a string", { test: { op: "isString", path: "to" } }, shapeCtx, true);
+await is("coord.x (number) is NOT a string", { test: { op: "isString", path: "coord.x" } }, shapeCtx, false);
+
 // ── degenerate: an unrecognized clause is fail-closed false ──
 await is("bare clause (no structure) → false (fail-closed)", { clause: "verification succeeds", negated: false }, ctx, false);
 await is("null cond → false", null, ctx, false);

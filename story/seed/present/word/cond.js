@@ -60,6 +60,14 @@ function resolveTest(test, ctx) {
     case "reads":
     case "holds":
       return left !== undefined && left !== null && left !== false;
+    // TYPE primitives (parser §1 type predicates): the host floor's typeof / Number.isFinite,
+    // named as native Word tests so a `.word` checks a value's shape with no bespoke host fn.
+    // `isFinite` is the "is a [finite] number" gate (NaN/Infinity/non-number all read false);
+    // `isString` is the "is a string / is text" gate.
+    case "isFinite":
+      return Number.isFinite(left);
+    case "isString":
+      return typeof left === "string";
     case "in": {
       const coll = resolveOperand(test.against !== undefined ? test.against : test.value, ctx);
       return Array.isArray(coll) ? coll.some((x) => idEquals(x, left)) : false;

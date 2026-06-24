@@ -1,0 +1,46 @@
+# genesis.word — the creation sequence: the acts the I takes to make the world, read and run by
+# a shrunken genesis.js (the host floor that opens the book). `I am "what?" I am` is the host
+# turtle (ensureIAm) — the I cannot run a Word until it exists; everything AFTER it lives here,
+# run at boot-end once the foundation words are folded and the ables are registered.
+#
+# The host reader (genesis.js → runWordToStore as the I) binds the world-anchors it already holds:
+#   $heaven  — the heaven space id (.)            $root — the story root space id (/)
+# and the delegate roster as proper names (cherub, birther, …) → their being ids. Looking up an
+# id is floor (the host has it); the GRANT is the Word. The single flow's effects run
+# unconditionally (evalFlow — the trigger has matched to get here), each a do = its own moment.
+#
+# ── SLICE 1: the grants (grantAngelToSeedDelegates) ──
+# Every seed delegate is granted (a) the angel able anchored at heaven — identity + heaven access,
+# the chain back to the I IS their authority — and (b) its own matching able anchored at the story
+# root, the day-to-day toolkit. @public never acts (no grants); @arrival is the shared anonymous
+# stance (no angel — angel's canSee:["*"] would leak everything — its own arrival able only). The
+# grant reducer dedupes by (able, anchor, grantor), so each grant is idempotent and unconditional.
+
+When the I makes the world:
+  # (a) angel at heaven — every delegate but @public and @arrival.
+  do grant-able on the being cherub with { able: "angel", anchorSpaceId: $heaven }.
+  do grant-able on the being birther with { able: "angel", anchorSpaceId: $heaven }.
+  do grant-able on the being able-manager with { able: "angel", anchorSpaceId: $heaven }.
+  do grant-able on the being able-finder with { able: "angel", anchorSpaceId: $heaven }.
+  do grant-able on the being flow-composer with { able: "angel", anchorSpaceId: $heaven }.
+  do grant-able on the being llm-assigner with { able: "angel", anchorSpaceId: $heaven }.
+  do grant-able on the being story-manager with { able: "angel", anchorSpaceId: $heaven }.
+  do grant-able on the being history-manager with { able: "angel", anchorSpaceId: $heaven }.
+  do grant-able on the being federation-manager with { able: "angel", anchorSpaceId: $heaven }.
+  do grant-able on the being http-server with { able: "angel", anchorSpaceId: $heaven }.
+  do grant-able on the being websocket-pool with { able: "angel", anchorSpaceId: $heaven }.
+  do grant-able on the being mongo with { able: "angel", anchorSpaceId: $heaven }.
+  # (b) each delegate's own able at the story root — every delegate but @public.
+  do grant-able on the being arrival with { able: "arrival", anchorSpaceId: $root }.
+  do grant-able on the being cherub with { able: "cherub", anchorSpaceId: $root }.
+  do grant-able on the being birther with { able: "birther", anchorSpaceId: $root }.
+  do grant-able on the being able-manager with { able: "able-manager", anchorSpaceId: $root }.
+  do grant-able on the being able-finder with { able: "able-finder", anchorSpaceId: $root }.
+  do grant-able on the being flow-composer with { able: "flow-composer", anchorSpaceId: $root }.
+  do grant-able on the being llm-assigner with { able: "llm-assigner", anchorSpaceId: $root }.
+  do grant-able on the being story-manager with { able: "story-manager", anchorSpaceId: $root }.
+  do grant-able on the being history-manager with { able: "history-manager", anchorSpaceId: $root }.
+  do grant-able on the being federation-manager with { able: "federation-manager", anchorSpaceId: $root }.
+  do grant-able on the being http-server with { able: "http-server", anchorSpaceId: $root }.
+  do grant-able on the being websocket-pool with { able: "websocket-pool", anchorSpaceId: $root }.
+  do grant-able on the being mongo with { able: "mongo-connection", anchorSpaceId: $root }.

@@ -4,11 +4,12 @@
 # The WORLD effect is a do:set-space on the story root at the field path
 # `qualities.world.<namespace>.<key>` = value. The CONTROL strand (the two
 # kebab-case gates + the not-initialized guard) is `.word`. The genuine computes
-# stay `host:`:
-#   - validNamespace / validKey: regex validation (pure computation, not a read).
-#   - parseSignalValue: the JSON / type coercion of the raw value (computation).
-#   - signalField: the dynamic dotted field-path qualities.world.<ns>.<key>.
-#   - storyRoot: the story-root space id (a read, refuses INTERNAL on absence).
+# read as `see`-ops (bottoming out in host fns, but spoken as see-ops, never
+# `host:` escapes):
+#   - valid-namespace / valid-key: regex validation (pure computation, not a read).
+#   - parse-signal-value: the JSON / type coercion of the raw value (computation).
+#   - signal-fact: the dynamic dotted field-path qualities.world.<ns>.<key>.
+#   - story-root: the story-root space id (a read, refuses INTERNAL on absence).
 # There is NO host: emit and NO `set the space root's ...` write sentence — the
 # word lays no fact of its own. It returns the set-space params (field, value) as
 # `factParams` (the cut promotes them to the dispatcher's _factParams) plus the

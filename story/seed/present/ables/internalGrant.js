@@ -7,25 +7,24 @@
 // (grantedBy = caller) since the policy decision IS the substrate's authority.
 //
 //   buildInternalGrant — the NON-emitting builder. Returns the grant RECORD (the SAME
-//                        {able, anchorSpaceId, anchorBeingId, grantedBy, grantedAt} the reducer
-//                        folds), grantedAt at the wall-clock floor. The acquisition `.word`s `see`
-//                        this (no fact); the dispatcher's ONE auto-Fact lays the caller-attributed
-//                        do:grant-able.
+//                        {able, anchorSpaceId, anchorBeingId, grantedBy} the reducer folds).
+//                        The acquisition `.word`s `see` this (no fact); the dispatcher's ONE
+//                        auto-Fact lays the caller-attributed do:grant-able. No grantedAt: a
+//                        grant's WHEN is its place in the chain (the fact's seq), never a clock.
 //
 // A pure grant primitive: it carries NO .word and registers NO operation.
 
 import { I } from "../../materials/being/seedBeings.js";
 
-// Build the grant record (no fact). grantedAt at the wall-clock floor when
-// the caller doesn't pin one (the story has no clock of its own; the instant
-// rides here, never the eval loop — same shape as grant-able's grant-stamp).
+// Build the grant record (no fact). No timestamp: the grant's when is the chain position of
+// the do:grant-able fact the dispatcher lays, ordered by seq/lineage (the time-purge removed
+// the wall-clock from grant ordering entirely).
 export function buildInternalGrant({
   granteeBeingId,
   able,
   anchorSpaceId,
   anchorBeingId = null,
   grantedBy,
-  grantedAt = null,
 }) {
   return {
     granteeBeingId: String(granteeBeingId),
@@ -34,7 +33,6 @@ export function buildInternalGrant({
       anchorSpaceId: anchorSpaceId ? String(anchorSpaceId) : null,
       anchorBeingId: anchorBeingId ? String(anchorBeingId) : null,
       grantedBy: grantedBy ? String(grantedBy) : I,
-      grantedAt: grantedAt || new Date().toISOString(),
     },
   };
 }

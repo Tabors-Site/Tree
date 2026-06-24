@@ -572,66 +572,9 @@ const PERMISSION_ERROR_PATTERNS = [
 // Operators define their own contributor able via the able-manager UI
 // (set-able) with whatever canDo entries fit their story.
 
-registerOperation("set-owner", {
-  targets: ["space", "stance"],
-  ownerExtension: "seed",
-  args: {
-    newOwnerId: { type: "text", label: "New owner being id", required: true },
-  },
-  handler: async ({ target, params, identity, moment }) => {
-    const spaceId = spaceIdFromTarget(target);
-    const actor = requireActor(identity);
-    const newOwnerId = String(params?.newOwnerId || "").trim();
-    if (!newOwnerId)
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "`newOwnerId` is required");
-    let factParams;
-    try {
-      // setOwner does the auth + lock + CAS, hands the lock to afterSeal, and
-      // returns the {field:"owner", value} for the ONE do:set-owner fact the
-      // dispatcher stamps (applySetField folds it). No skipAudit (23.md).
-      factParams = await setOwner(
-        spaceId,
-        newOwnerId,
-        actor,
-        moment?.actorAct?.history || "0",
-        moment,
-      );
-    } catch (err) {
-      throw mapPatternsToIbpError(err, PERMISSION_ERROR_PATTERNS);
-    }
-    return stampsFact({ ownerSet: true, spaceId, newOwnerId }, factParams, {
-      kind: "space",
-      id: String(spaceId),
-    });
-  },
-});
-
-registerOperation("remove-owner", {
-  targets: ["space", "stance"],
-  ownerExtension: "seed",
-  args: {},
-  handler: async ({ target, identity, moment }) => {
-    const spaceId = spaceIdFromTarget(target);
-    const actor = requireActor(identity);
-    let factParams;
-    try {
-      // Threads the moment now (was dropped) so the dispatcher stamps the ONE
-      // do:remove-owner fact (owner=null, folded by applySetField). No skipAudit.
-      factParams = await removeOwner(
-        spaceId,
-        actor,
-        moment?.actorAct?.history || "0",
-        moment,
-      );
-    } catch (err) {
-      throw mapPatternsToIbpError(err, PERMISSION_ERROR_PATTERNS);
-    }
-    return stampsFact({ ownerRemoved: true, spaceId }, factParams, {
-      kind: "space",
-      id: String(spaceId),
-    });
-  },
-});
+// set-owner / remove-owner moved to store/words/owner/ (WORD-SOLE: set-owner.word +
+// remove-owner.word + ownerHostEnv). The auth + per-space lock + CAS stay in ownership.js
+// (setOwner / removeOwner), now reached as `see` escapes. Imported for side effects by genesis.js.
 
 // ─────────────────────────────────────────────────────────────────────
 // PRIVATE HELPERS

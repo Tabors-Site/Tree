@@ -1,25 +1,33 @@
-// setRenderHost.js — host-escape glue for the set-render DO op (setRender.js).
+// setRenderHost.js — the see-escape set-render.word reaches (the op's hostEnv).
 //
-// THE WALL. set-render's world strand is set-render.word: the target-kind gate,
-// the kind dispatch, and the render write (a NATIVE do:set-<kind> at the static
-// field qualities.render — NOT a host escape). The ONE genuine host escape is
-// validateRenderBlock: pure schema computation (reject unknown top-level keys;
-// validate the model / scale / rotation / animations / sounds shapes), which is
-// neither a substrate read nor a write. This wires the SAME validateRenderBlock
-// the JS handler calls into ctx.env.host — no reimplementation.
+// THE WALL. set-render's world strand is set-render.word — the ONLY path (no JS
+// handler). The CONTROL strand (the return) is `.word`. The ONE genuine compute reads
+// as a `see`-op (bottoming out in a host fn, but spoken as a see-op, never a `host:`
+// escape), a pure compute (NO fact):
+//   - validate-render-block(params, kind): validate the target KIND (matter|space|being)
+//     + the render block (reject unknown top-level keys; validate model / scale /
+//     rotation / animations / sounds — THROWS IbpError on a bad kind or key, surfacing
+//     as the op's refusal), then shape the { field:"qualities.render", value, merge }
+//     the lone do:set-render fact carries (the SAME shape the retired JS handler laid,
+//     which applySetQualities folds unchanged).
+// There is NO host: emit and NO write sentence — the word lays no fact of its own. It
+// returns the fact params as `factParams`; do.js's runOpWord promotes them to _factParams
+// and the ONE auto-Fact path lays the caller-attributed do:set-render fact, its target
+// resolved to the DISPATCH target (resolveAuditTarget's call-target fallback) so of.kind
+// stays the actual matter|space|being kind.
 //
-// callHost invokes it as `fn({ args: [params] }, ctx)` (the parser emits
-// `host: validateRenderBlock(params) as block` -> params:{ args:["$params"] }).
-// It lays no fact; the WRITE form's set-<kind> acts lay the lone world fact via
-// the evaluator's live doVerb path, attributed per the cut (see setRender.js).
+// callHost invokes it as `fn({ args: [params, kind] }, ctx)` (the parser emits
+// `see validate-render-block(params, targetKind) as renderParams`). NO reimplementation —
+// it reuses the SAME validateRenderBlock the op already exported.
 
 import { validateRenderBlock } from "./setRender.js";
 
 export function setRenderHostEnv() {
   return {
-    // validateRenderBlock(params) -> the validated render block (throws IbpError
-    // on an unknown key or a malformed channel). The SAME function the JS handler
-    // calls; pure compute, no fact.
-    "validate-render-block": ({ args: [params] }) => validateRenderBlock(params),
+    // validate-render-block(params, kind) -> the do:set-render fact params { field,
+    // value, merge } (throws IbpError on a bad kind, an unknown key, or a malformed
+    // channel). Pure compute, no fact.
+    "validate-render-block": ({ args: [params, kind] }) =>
+      validateRenderBlock(params, kind),
   };
 }

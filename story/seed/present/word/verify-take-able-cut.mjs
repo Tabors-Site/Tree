@@ -220,7 +220,7 @@ try {
       );
   takeFact?.params?.grantedBy
     ? ok(
-        `it carries the grant record (grantedBy/grantedAt) — applyAbleGrants folds the grant from the take`,
+        `it carries the grant record (grantedBy, no clock) — applyAbleGrants folds the grant from the take`,
       )
     : bad(`grant record on the take fact`, takeFact?.params);
   String(takeFact?.by) === String(taker)

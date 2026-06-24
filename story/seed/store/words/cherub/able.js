@@ -246,7 +246,7 @@ async function birthHandler({ payload, ctx }) {
       });
     }
 
-    const identityToken = generateToken(being);
+    const identityToken = await generateToken(being);
     // Open the signing session keyed by the being's NAME (its trueName) —
     // loadSigningKey reads the session by nameId, not being id. A fresh
     // being's trueName is its mother's (e.g. i-am), which system-signs
@@ -320,7 +320,7 @@ async function birthHandler({ payload, ctx }) {
 
   hooks.run("afterRegister", { user: being, req: ctx?.req }).catch(() => {});
 
-  const identityToken = generateToken(being);
+  const identityToken = await generateToken(being);
   // Open the signing session keyed by the being's NAME (its trueName), not
   // the being id (loadSigningKey reads the session by nameId).
   {
@@ -405,7 +405,7 @@ async function connectHandler({
       await _constantTimeReject(password);
       throw new IbpError(IBP_ERR.UNAUTHORIZED, "Invalid credentials");
     }
-    const identityToken = generateToken(being);
+    const identityToken = await generateToken(being);
     // Password verified: open the signing session keyed by the being's NAME
     // (its trueName), not the being id (loadSigningKey reads it by nameId).
     {
@@ -470,7 +470,7 @@ async function connectHandler({
         ) {
           // The token carries the VERIFIED current trueName as its nameId, so
           // the new session's portal identity matches what we just checked.
-          const identityToken = generateToken({
+          const identityToken = await generateToken({
             ...candidate,
             trueName: currentTrueName,
           });
@@ -706,7 +706,7 @@ async function connectHandler({
       );
       driverTrueName = fatherSlot?.state?.trueName || String(identity.beingId);
     }
-    const identityToken = generateToken({
+    const identityToken = await generateToken({
       ...targetBeing,
       trueName: driverTrueName,
     });

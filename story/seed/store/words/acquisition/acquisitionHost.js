@@ -1,15 +1,22 @@
 // acquisitionHost.js — host-escape glue for the acquisition ops (take-able, ask-able).
-// Wires the SAME primitives the JS handlers call into ctx.env.host: the able-spec
-// lookup, the take/asked policies, the already-holds check, the grant-record BUILD, and
-// the queue-path owner summon. No reimplementation — only the env adapter the `.word`
-// reaches through `see`/`host:` escapes. callHost invokes each as `fn({ args }, ctx)`.
+// Wires the floor primitives into ctx.env.host: the able-spec lookup, the take/asked
+// policies, the already-holds check, the grant-record BUILD, and the queue-path owner read.
+// No reimplementation — only the env adapter the `.word` reaches through `see` escapes.
+// callHost invokes each as `fn({ args }, ctx)`.
 //
-// The grant no longer self-emits: `grant-internal` is a `see` builtin (a pure compute,
-// NO fact) that BUILDS the grant record (buildInternalGrant — the SAME {able, anchor,
-// grantedBy, grantedAt} the reducer folds, grantedAt at the wall-clock floor). The
-// `.word` returns it as factParams and the dispatcher's ONE auto-Fact lays the caller-
-// attributed do:grant-able. The queue path's owner summon stays a host escape (a SUMMON
-// is a transport delivery, not a substrate fact).
+// Both ops are WORD-SOLE (handler-less; do.js's runOpWord runs their `.word`). take-able runs
+// CALLER-mode (the taker IS the actor). ask-able declares `word.through:true` — HOST-FACILITATED:
+// its queue path `call`s the host owner with intent "able-request", and that summon must come FROM
+// i-am (I-authority), because a fresh asker holds no able permitting a summon and would be
+// correctly denied. through-mode runs ask-able.word THROUGH the caller (being-mode, identity name
+// = i-am), so the `call` authorizes as I; the asker rides in the inbox CONTENT (able-request), not
+// the call's `from`. The op's own auth and the do:ask-able attribution still use the real caller.
+//
+// The grant does NOT self-emit: `grant-internal` is a `see` (a pure compute, NO fact) that
+// BUILDS the grant record (buildInternalGrant: the SAME {able, anchor, grantedBy} the reducer
+// folds). No grantedAt: a grant's when is the chain position of its fact (seq), not a clock.
+// The `.word` returns it as factParams
+// and the dispatcher's ONE auto-Fact lays the caller-attributed do:ask-able / do:take-able.
 import { getAbleSpecForGrant } from "../../../present/ables/spaceLookup.js";
 import { normalizeAcquisition, alreadyHoldsAble } from "../../../present/ables/acquisition.js";
 import { loadOrFold } from "../../../materials/projections.js";
@@ -39,9 +46,9 @@ export function acquisitionHostEnv() {
       return alreadyHoldsAble(existing, String(able), found?.anchor);
     },
     // the grant record (auto / grabbed path): a pure compute, NO fact. Builds the SAME
-    // {able, anchorSpaceId, anchorBeingId, grantedBy, grantedAt} the reducer folds
-    // (grantedAt at the wall-clock floor), returned FLAT so the .word's Return reads
-    // $granted.able / .anchorSpaceId / .anchorBeingId / .grantedBy / .grantedAt straight
+    // {able, anchorSpaceId, anchorBeingId, grantedBy} the reducer folds (no grantedAt: the
+    // grant's when is its fact's chain seq, not a clock), returned FLAT so the .word's Return
+    // reads $granted.able / .anchorSpaceId / .anchorBeingId / .grantedBy straight
     // into factParams. The dispatcher's ONE auto-Fact lays the caller-attributed
     // do:grant-able from those params — the op no longer self-emits.
     "grant-internal": ({ args: [caller, able, found] }) => {

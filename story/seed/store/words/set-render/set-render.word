@@ -4,34 +4,23 @@
 # the model it appears as in 3D, the animations + sounds fact-arrivals trigger,
 # and any future sensory channel. set-render writes the whole block in one op.
 #
-# THE WALL. The CONTROL strand (the target-kind gate + the kind dispatch + the
-# merge-vs-replace fork) is .word. The render write is a NATIVE do:set-<kind>
-# act at the static field qualities.render — one WRITE line per kind, the same
-# {field, value, merge} the JS handler's inner doVerb laid (which the
-# applySetQualities reducer applies unchanged). validateRenderBlock STAYS host:
-# it is genuine schema computation (reject unknown keys; validate model/scale/
-# rotation/animations/sounds shapes), not a substrate read. The bridge binds
-# `kind` (matter|space|being), the target id under the noun the WRITE form reads
-# (`being` / `space` / `matter`), `merge` (the op default true unless the caller
-# passed merge:false), and `branch`.
+# WORD-SOLE (handler-less). The CONTROL strand (the return) is `.word`. The ONE genuine
+# compute reads as a `see`-op (a host fn, but spoken as a see-op, never a `host:` escape),
+# a pure compute (NO fact):
+#   - validate-render-block(params, targetKind): validate the target KIND + the render
+#     block (reject unknown keys; validate model / scale / rotation / animations / sounds
+#     — THROWS IbpError on a bad kind or key, surfacing as the op's refusal), then shape
+#     the { field:"qualities.render", value, merge } the lone do:set-render fact carries
+#     (the SAME shape the retired JS handler laid; applySetQualities folds it unchanged).
+# There is NO host: emit and NO write sentence — the word lays no fact of its own. It
+# returns the fact params as `factParams` (the cut promotes them to the dispatcher's
+# _factParams); the ONE auto-Fact path in do.js lays the caller-attributed do:set-render
+# fact, its target resolved to the DISPATCH target (call-target fallback) so of.kind stays
+# the actual matter|space|being kind.
+#
+# The bridge binds the standard trigger: `targetKind` (matter|space|being) and the render
+# `params` (the block: model, scale, rotation, animations, sounds, merge).
 
 When a being sets the render of a target:
-  see validate-render-block(params) as block.
-  Match the kind:
-    For being:
-      If merge:
-        set the being's qualities.render to $block.
-      Otherwise:
-        replace the being's qualities.render with $block.
-    For space:
-      If merge:
-        set the space's qualities.render to $block.
-      Otherwise:
-        replace the space's qualities.render with $block.
-    For matter:
-      If merge:
-        set the matter's qualities.render to $block.
-      Otherwise:
-        replace the matter's qualities.render with $block.
-    Otherwise:
-      refuse with "set-render: target must be matter, space, or being".
+  see validate-render-block(params, targetKind) as renderParams.
+  Return rendered: true, factParams: $renderParams.

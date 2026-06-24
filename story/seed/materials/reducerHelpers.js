@@ -411,7 +411,6 @@ export function applyTrueName(state, fact) {
  *       anchorSpaceId: <spaceId | null>,
  *       anchorBeingId: <beingId | null>,
  *       grantedBy:     <grantorBeingId>,
- *       grantedAt:     <iso timestamp>,
  *     }
  *   }
  *
@@ -423,7 +422,7 @@ export function applyAbleGrants(state, fact) {
   if (fact?.verb !== "do") return state;
   // A able grant folds from WHICHEVER act granted it: an explicit do:grant-able, or a being
   // TAKING (do:take-able) / being granted via ASK (do:ask-able). Take/ask ALWAYS stamp their
-  // act (every act makes a fact) but carry the grant record (grantedBy/grantedAt) ONLY when
+  // act (every act makes a fact) but carry the grant record (grantedBy) ONLY when
   // they actually granted — the no-grant paths (an idempotent re-take, a queued ask) stamp
   // the act with no grantedBy, so the `!grantedBy` guard below stops them here (nothing folds).
   const isGrant =
@@ -440,7 +439,12 @@ export function applyAbleGrants(state, fact) {
   const anchorSpaceId = params.anchorSpaceId || null;
   const anchorBeingId = params.anchorBeingId || null;
   if (!anchorSpaceId && !anchorBeingId) return state;
-  const grantedBy = params.grantedBy || null;
+  // grantedBy is the GRANTOR. take/ask/internal carry it in params; a word-sourced
+  // grant-able does NOT duplicate it — grantedBy is the fact's SIGNER (the acting being on
+  // `through`). Read params first (those paths), fall back to the signer (the no-mirror law:
+  // the grantor isn't restated, it's who signed).
+  const grantedBy =
+    params.grantedBy || (fact.through ? String(fact.through) : null);
   if (!grantedBy) return state;
 
   const existingQualities = state.qualities || {};
@@ -449,7 +453,10 @@ export function applyAbleGrants(state, fact) {
     : [];
 
   if (isGrant) {
-    const grantedAt = params.grantedAt || fact.date?.toISOString?.() || null;
+    // No clock: a grant's WHEN is its PLACE in the chain (seq/lineage) — chains create off
+    // each other, that ordering IS the time. NEVER derive it from fact.date (the wall-clock
+    // the time-purge removed). No path passes a grantedAt anymore. The builders, the .words,
+    // and this reducer all dropped it; the fact's seq is the only "when".
     // Dedupe by the uniqueness tuple — re-emit is idempotent.
     const alreadyHas = existing.some(
       (e) =>
@@ -466,7 +473,6 @@ export function applyAbleGrants(state, fact) {
         anchorSpaceId,
         anchorBeingId,
         grantedBy,
-        grantedAt,
       },
     ];
     return {

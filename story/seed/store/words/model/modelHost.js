@@ -1,29 +1,34 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// modelHost.js — host-escape glue for model.word's `host:` escapes (store/words/model/,
-// the set-model DO op). Wires the SAME primitives the JS setModelHandler calls into
-// ctx.env.host so model.word can reach the genuine COMPUTE through `see`/`host:` escapes.
-// NO reimplementation — every escape below calls the exact same logic the JS handler ran.
+// modelHost.js — host-escape glue for model.word's `see` escapes (store/words/model/,
+// the set-model DO op). Wires the SAME primitives the old JS setModelHandler called into
+// ctx.env.host so model.word can reach the genuine COMPUTE through `see` escapes. NO
+// reimplementation — every escape below calls the exact same logic the handler ran.
 //
-// THE DESIGN — param-ENRICHMENT, NOT a direct emit. set-model lays no fact of its own:
-// it MUTATES the op's `params` (field / value / merge, the set-<kind> shape) in place, and
-// the dispatcher's auto-fact (do.js — no skipAudit) + the qualities reducer apply the
-// write as one more deep set. So the four escapes here CLOSE OVER the op's `params` object
-// (modelHostEnv(params)) and mutate it; the JS fallback keeps working unchanged because it
-// enriches the SAME object. The two pure-COMPUTE escapes (assert-may-set-model the per-kind
-// auth gate, resolve-model-block the content-store snapshot) lay nothing and read no params.
+// THE DESIGN — the word AUTHORS its fact, the host READS. set-model lays no separate fact:
+// the dispatcher's auto-fact (do.js runOpWord → stampsWordFact) stamps the ONE caller-
+// attributed do:set-model. model.word RETURNS that fact's params (field / value / merge,
+// the set-<kind> shape) as `factParams` plus a {kind,id} `factTarget` (the dynamic reel:
+// being | space | matter); the qualities reducer applies the write. The host escapes are
+// PURE READS — they compute the field/value/merge block and RETURN it; they mutate nothing
+// (no closed-over params, so the generic runOpWord can call modelHostEnv() with no args),
+// lay no fact, and are spoken as `see` (a see is inert).
 //
-// Four escapes (callHost invokes each as `fn({ args: [...] }, ctx)`):
-//   assert-may-set-model — the per-kind self/author/owner gate (throws on deny). Pure read.
-//   resolve-model-block  — resolve the model matter + snapshot {matterId,hash,url,name},
-//                          carry the optional scale/rotation. Content-store work, NO fact.
-//   write-model          — validate forMatterType (space-only + a known type), then MUTATE
-//                          the closed-over params to the set-<kind> {field,value,merge}.
-//   clear-model          — MUTATE params to null the model at its field path.
+// SEE_FLOOR is a CLOSED set (17.md) — a `.word` may only call see-ops on the recognized list,
+// so this slice reuses its two existing floor names: assert-may-set-model and resolve-model-block.
 //
-// resolveModelMatter + assertMaySetModel are EXPORTED so index.js imports them back for the
-// JS fallback (the bodies are verbatim from the pre-cut index.js). ensureSkinsSpace STAYS in
-// index.js (genesis.js imports it from there).
+// Two escapes (callHost invokes each as `fn({ args: [...] }, ctx)`):
+//   assert-may-set-model — the per-kind self/author/owner gate (throws on deny). Returns true.
+//   resolve-model-block  — the ONE block builder, branched on `clear`. SET: resolve the model
+//                          matter + snapshot {matterId,hash,url,name}, validate forMatterType
+//                          (space-only + a known type), build the set-<kind> {field,value,merge}
+//                          (a per-type space default at qualities.render.matterModels.<type>, else
+//                          {model[,scale][,rotation]} merged into qualities.render). CLEAR: the
+//                          {field, value:null, merge:false} that nulls the model at its field path.
+//                          Content-store work + field-path computation; lays NO fact.
+//
+// resolveModelMatter + assertMaySetModel stay EXPORTED (the slice's reusable primitives).
+// ensureSkinsSpace STAYS in index.js (genesis.js imports it from there).
 
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { targetIdOf } from "../../../materials/_targetShape.js";
@@ -98,13 +103,19 @@ async function isRootOwner(spaceId, actorId) {
 const historyOf = (ctx) =>
   ctx?.moment?.actorAct?.history || ctx?.history || "0";
 
-// Build the host env for model.word, CLOSING OVER the op's `params` object so the
-// write/clear escapes can ENRICH it in place (the set-<kind> {field,value,merge} shape the
-// dispatcher's auto-fact reads). NO fact is laid here — enrichment, not emission.
-export function modelHostEnv(params) {
+// Normalize forMatterType: a non-empty string or null. Shared by both block builders.
+function normalizeForMatterType(forMatterType) {
+  return typeof forMatterType === "string" && forMatterType.length ? forMatterType : null;
+}
+
+// Build the host env for model.word. NO closed-over params — every escape is a pure READ
+// that RETURNS its result; the word promotes it to the fact (factParams / factTarget) and
+// the dispatcher stamps the one do:set-model. modelHostEnv() takes no args (the generic
+// runOpWord calls hostEnv() with none).
+export function modelHostEnv() {
   return {
     // The per-kind self/author/owner gate. Reads the moment's history, calls the SAME
-    // assertMaySetModel the JS handler calls (throws IbpError on deny). Returns true on pass.
+    // assertMaySetModel the old handler called (throws IbpError on deny). Returns true on pass.
     "assert-may-set-model": async ({ args: [kind, target, caller] }, ctx) => {
       const targetId = targetIdOf(target);
       const history = historyOf(ctx);
@@ -112,31 +123,43 @@ export function modelHostEnv(params) {
       return true;
     },
 
-    // Resolve the model matter + snapshot its body (matterId/hash/url/name) and carry the
-    // optional scale/rotation through to write-model. Content-store work, lays NO fact.
-    "resolve-model-block": async ({ args: [modelMatterId, scale, rotation] }, ctx) => {
+    // resolve-model-block — the ONE see (reusing the SEE_FLOOR name; the door is a closed set)
+    // that builds the do:set-model fact's params: the set-<kind> { field, value, merge }. Two
+    // shapes, branched on `clear`:
+    //
+    //   clear=true  → null the model at its field path (no model resolve): the per-type space
+    //                 default path (qualities.render.matterModels.<type>) when forMatterType,
+    //                 else the entity model (qualities.render.model). value:null, merge:false.
+    //
+    //   clear=false → resolve the model matter + snapshot its body ({matterId,hash,url,name}),
+    //                 validate forMatterType (space-only + a known matter type, throwing
+    //                 IbpError otherwise), and build the block: a per-type space default lands
+    //                 the model block at the deep matterModels path (merge:true); an entity-level
+    //                 set merges the render patch (model + optional positive scale + rotation)
+    //                 into qualities.render.
+    //
+    // Content-store work + the field-path computation; lays NO fact (the word promotes the
+    // returned block to factParams; the dispatcher stamps the one do:set-model).
+    "resolve-model-block": async ({ args: [kind, modelMatterId, scale, rotation, forMatterType, clear] }, ctx) => {
+      const fmt = normalizeForMatterType(forMatterType);
+
+      if (clear === true || clear === "true") {
+        return {
+          field: fmt ? `qualities.render.matterModels.${fmt}` : "qualities.render.model",
+          value: null,
+          merge: false,
+        };
+      }
+
       const history = historyOf(ctx);
       const modelMatter = await resolveModelMatter(String(modelMatterId), history);
-      return {
-        model: {
-          matterId: String(modelMatter._id),
-          hash:     modelMatter.content.hash,
-          url:      `/api/v1/content/${modelMatter.content.hash}`,
-          name:     modelMatter.name || modelMatter.content.name || null,
-        },
-        scale:    typeof scale === "number" ? scale : null,
-        rotation: rotation && typeof rotation === "object" ? rotation : null,
+      const model = {
+        matterId: String(modelMatter._id),
+        hash:     modelMatter.content.hash,
+        url:      `/api/v1/content/${modelMatter.content.hash}`,
+        name:     modelMatter.name || modelMatter.content.name || null,
       };
-    },
 
-    // The write: validate forMatterType (space-only + a known matter type, throwing
-    // IbpError otherwise), then MUTATE the closed-over params to the set-<kind>
-    // {field,value,merge} shape. For a per-type space default the model block lands at the
-    // deep matterModels path; for an entity-level set the render patch (model + optional
-    // scale/rotation) merges into qualities.render. NO fact — the dispatcher's auto-fact
-    // + the qualities reducer apply the enriched params.
-    "write-model": async ({ args: [kind, forMatterType, bundle] }) => {
-      const fmt = typeof forMatterType === "string" && forMatterType.length ? forMatterType : null;
       if (fmt) {
         if (kind !== "space") {
           throw new IbpError(IBP_ERR.INVALID_INPUT, "set-model: forMatterType applies to space targets only");
@@ -145,32 +168,17 @@ export function modelHostEnv(params) {
         if (!getMatterType(fmt)) {
           throw new IbpError(IBP_ERR.INVALID_INPUT, `set-model: unknown matter type "${fmt}"`);
         }
-        params.field = `qualities.render.matterModels.${fmt}`;
-        params.value = bundle.model;
-        params.merge = true;
-        return true;
+        return { field: `qualities.render.matterModels.${fmt}`, value: model, merge: true };
       }
-      const renderPatch = { model: bundle.model };
-      if (typeof bundle.scale === "number" && Number.isFinite(bundle.scale) && bundle.scale > 0) {
-        renderPatch.scale = bundle.scale;
-      }
-      if (bundle.rotation && typeof bundle.rotation === "object") {
-        renderPatch.rotation = bundle.rotation;
-      }
-      params.field = "qualities.render";
-      params.value = renderPatch;
-      params.merge = true;
-      return true;
-    },
 
-    // The clear: MUTATE the closed-over params to null the model at its field path (the
-    // per-type space default path when forMatterType, else the entity model). NO fact.
-    "clear-model": ({ args: [kind, forMatterType] }) => {
-      const fmt = typeof forMatterType === "string" && forMatterType.length ? forMatterType : null;
-      params.field = fmt ? `qualities.render.matterModels.${fmt}` : "qualities.render.model";
-      params.value = null;
-      params.merge = false;
-      return true;
+      const renderPatch = { model };
+      if (typeof scale === "number" && Number.isFinite(scale) && scale > 0) {
+        renderPatch.scale = scale;
+      }
+      if (rotation && typeof rotation === "object") {
+        renderPatch.rotation = rotation;
+      }
+      return { field: "qualities.render", value: renderPatch, merge: true };
     },
   };
 }

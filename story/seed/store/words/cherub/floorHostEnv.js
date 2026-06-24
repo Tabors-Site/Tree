@@ -24,7 +24,10 @@ import {
   isAncestorOf,
   findBeingByName,
 } from "../../../materials/being/identity/lookups.js";
-import { hasCredentialAuthority } from "../../../materials/being/identity/lineage.js";
+import {
+  hasCredentialAuthority,
+  findBeingParent,
+} from "../../../materials/being/identity/lineage.js";
 
 // Resolve a history to read the tree on — NEVER the literal "0" (never-default-branch-zero). The
 // adapters that hand history straight to a walk resolve it here; the lineage/credential shim
@@ -93,6 +96,21 @@ export function floorHostEnv() {
       const [asker, target, history] = _args(params, ctx);
       const h = await _historyOf(history, ctx);
       return await hasCredentialAuthority(_id(asker), _id(target), h);
+    },
+
+    // isBeingParentOf(caller, target) → is `caller` the IMMEDIATE being-parent of `target`?
+    // ONE-HOP only: the parentBeingId on the target's be:birth fact (findBeingParent, a fold read —
+    // NOT the live, reparent-driftable row field). NARROWER than hasAuthorityOver /
+    // hasCredentialAuthority, which walk the WHOLE ancestry; credential-attach is being-parent-ONLY
+    // ("only the being parent can re-attach", lineage.js), so its gate reads THIS, never the
+    // any-depth authority walk (which would WIDEN it). The .word surface `If <caller> is the
+    // being-parent of <target>:` resolves here, reusing the SAME findBeingParent the JS gate called.
+    // findBeingParent is a global of.id fold (no history arg), so this takes none.
+    isBeingParentOf: async (...params) => {
+      const ctx = params[params.length - 1];
+      const [caller, target] = _args(params, ctx);
+      const parent = await findBeingParent(_id(target));
+      return parent != null && String(parent) === _id(caller);
     },
 
     // findByName(name[, history]) → the canonical history-scoped being lookup (lookups.js

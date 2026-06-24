@@ -209,7 +209,20 @@ export async function renderTrailText(opts = {}) {
 // different branches; there is no default. Returns the narrative text + the structured book.
 export async function renderGenesis(history) {
   const r = await readTrail({ history: requireHistory(history), scope: "world" });
-  return { text: bookToText(r.book), book: r.book };
+  let text = bookToText(r.book);
+  // The conversion board, at the bottom of the read (Tabor: the count goes in the genesis
+  // render itself). The law: two states, never three — word-SOLE = the word is the only
+  // path; pure-JS = a JS handler still stands behind it (mirror or not = zero progress).
+  // Loud on purpose: word-SOLE is the number that must climb, a mirror earns nothing. A
+  // meta-line, set off from the Word by the dashes.
+  try {
+    const { tallyConversion } = await import("../../ibp/operations.js");
+    const t = tallyConversion();
+    text += `\n\n— ${t.wordSole} word-SOLE · ${t.pureJS} pure-JS · ${t.total} ops —`;
+  } catch {
+    /* the op registry isn't loaded in this read (some harnesses) — omit the board */
+  }
+  return { text, book: r.book };
 }
 
 // ── the target decides the mode (623/12.md), NOT a call/recall verb ─────────────────────────────────

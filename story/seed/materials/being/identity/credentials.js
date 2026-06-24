@@ -134,10 +134,19 @@ export async function verifyPassword(being, password) {
  * session token. Carries a unique `jti` for revocation; expiry configurable
  * via story config (default 30 days).
  */
-export function generateToken(being) {
+export async function generateToken(being) {
   const expiresIn = getStoryConfigValue("jwtExpiryDays")
     ? `${Math.max(1, Math.min(Number(getStoryConfigValue("jwtExpiryDays")), 365))}d`
     : "30d";
+
+  // iss_seq — the being's reel HEAD at mint: the token's PLACE in the chain, not a clock.
+  // Revocation (verifyTokenStrict) compares this seq against the being's tokensInvalidBefore
+  // (the reel head a credential-reset stamped), so "tokens from before the reset" is a
+  // CHAIN-POSITION test. `exp` (below) stays wall-clock on purpose — a session's lifetime is a
+  // host policy (an idle session still expires), which is not a logical/causal order. The
+  // time-purge rule: no clock decides causal ordering; the seq does.
+  const { readHead } = await import("../../../past/reel/reelHeads.js");
+  const issSeq = await readHead("being", String(being._id), { history: "0" });
 
   return signJwtHS256(
     {
@@ -146,6 +155,7 @@ export function generateToken(being) {
       // The PORTAL identity: the Name this being expresses (its trueName).
       // null when the being has no trueName yet.
       nameId: being.trueName || null,
+      iss_seq: issSeq,
       jti: crypto.randomUUID(),
     },
     JWT_SECRET,
@@ -205,6 +215,7 @@ export function decodeToken(token) {
       name: decoded.name,
       nameId: decoded.nameId ?? null,
       iat: decoded.iat,
+      iss_seq: decoded.iss_seq ?? null,
       jti: decoded.jti,
     };
   } catch {
@@ -243,11 +254,18 @@ export async function verifyTokenStrict(token, { loadBeing = true } = {}) {
     being.qualities instanceof Map
       ? being.qualities.get("auth")
       : being.qualities?.auth;
-  if (authMeta?.tokensInvalidBefore) {
-    const invalidBefore =
-      new Date(authMeta.tokensInvalidBefore).getTime() / 1000;
-    if (decoded.iat && decoded.iat < invalidBefore) return null;
-  }
+  // Revocation orders by CHAIN POSITION, never the clock. A credential-reset stamps
+  // tokensInvalidBefore = the being's reel HEAD at the reset; the reset's own writes advance
+  // the head past it, so a token minted afterward survives. A token minted at-or-before that
+  // seq (iss_seq <= cutoff) is revoked. Pre-seq tokens carry no iss_seq, so they fall through
+  // here and age out via `exp`. (The time-purge: no wall-clock in the revocation order.)
+  const cutoff = authMeta?.tokensInvalidBefore;
+  if (
+    typeof cutoff === "number" &&
+    typeof decoded.iss_seq === "number" &&
+    decoded.iss_seq <= cutoff
+  )
+    return null;
 
   return {
     beingId: decoded.beingId,

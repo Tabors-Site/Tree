@@ -1,8 +1,9 @@
 #!/usr/bin/env node
-// form-portal as a COMPOSITE word: portal.word composes `do create-matter with { nested ibpa
-// spec }` (the new nested-object grammar), laying ONE caller-attributed do:create-matter fact
-// via the dispatcher — no host: emit, no redundant do:form-portal audit (skipAudit). Proves the
-// nested-param grammar end to end + the composition. CALLER mode. Full begin.js boot. Scratch DB.
+// form-portal as a TRUE one-moment COMPOSITE word: portal.word composes `do create-matter with
+// { nested ibpa spec }` (the nested-object grammar). form-portal is WORD-SOLE (no handler) +
+// ranAsMoments, so the nested do:create-matter deed pools INTO the op's ONE moment (atomic with
+// the caller's transaction) and form-portal lays NO own fact (no do:form-portal audit). Proves
+// the one-moment composition + nested-param grammar end to end. Full begin.js boot. Scratch DB.
 
 import fs from "fs";
 import os from "os";
@@ -104,18 +105,26 @@ try {
       )
     : bad(`form-portal return`, result);
 
-  // 2. the create-matter deed ran as its OWN moment (runWordToStore) — it is NOT in the
-  //    form-portal op's moment (deltaF), and there is no do:form-portal audit (ranAsMoments,
-  //    the zero-skipAudit marker). The deed sealed to store; the fold below is the proof.
+  // 2. ONE MOMENT (not the run-on): form-portal is a PURE-COMPOSITION, so the nested
+  //    `do create-matter` deed pools INTO the form-portal op's ONE moment — it IS in the
+  //    op's deltaF (atomic with the caller's transaction, runOpWord runs the .word in the
+  //    op's moment), and form-portal lays NO fact of its own (ranAsMoments → no
+  //    do:form-portal audit). So deltaF holds EXACTLY one do:create-matter and NO
+  //    do:form-portal.
   const acts = sc.deltaF.map((f) => `${f.verb}:${f.act}`);
-  const inOpMoment = sc.deltaF.filter(
+  const createMatterDeeds = sc.deltaF.filter(
     (f) => f.verb === "do" && f.act === "create-matter",
   );
-  inOpMoment.length === 0 && !sc.deltaF.some((f) => f.act === "form-portal")
+  createMatterDeeds.length === 1 &&
+  !sc.deltaF.some((f) => f.act === "form-portal")
     ? ok(
-        `create-matter ran as its OWN moment via runWordToStore (not in the op moment), no do:form-portal audit (ranAsMoments) — op deltaF [${acts.join(", ") || "empty"}]`,
+        `create-matter is in the op's ONE moment (deltaF holds exactly one do:create-matter, atomic with the caller), no do:form-portal audit (ranAsMoments) — op deltaF [${acts.join(", ") || "empty"}]`,
       )
     : bad(`moment model`, acts);
+
+  // Seal the op's one moment to the store — under the one-moment model NOTHING
+  // materializes until this seal (the deed rides the caller's deltaF, not its own).
+  await sealFacts(sc.deltaF);
 
   // 3. the folded portal matter is caller-attributed (qualities.portal.createdBy = the caller)
   const pm = await poll(() =>
@@ -127,8 +136,7 @@ try {
       )
     : bad(`attribution`, pm?.state?.qualities?.portal);
 
-  // 4. after seal, the ibpa matter materializes with the folded nested content + qualities
-  await sealFacts(sc.deltaF);
+  // 4. the ibpa matter materializes with the folded nested content + qualities
   const matter = await poll(() =>
     loadOrFold("matter", String(result.matterId), "0"),
   );

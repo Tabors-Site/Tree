@@ -19,10 +19,12 @@ import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
 import { targetIdOf, loadTargetRow } from "../_targetShape.js";
 import { assertMatterCoordInBounds } from "./coordBounds.js";
 import { registerAbleWord } from "../../present/word/ableWordRegistry.js";
-import { stampsFact, stampsWordFact } from "../../ibp/factResult.js";
+import { stampsFact } from "../../ibp/factResult.js";
+import { renameMatterHostEnv } from "./renameMatterHost.js";
 
 // Self-register the co-located world strand so resolveAbleWord("matter", "rename-matter") finds it
-// (CONVERTING.md step 3). The cut prefers the bridge; the JS handler is the clean-miss fallback.
+// (CONVERTING.md step 3). rename-matter is WORD-SOLE: rename-matter.word is the ONLY path (do.js
+// runOpWord runs it); there is no JS handler to fall back to.
 registerAbleWord("matter", "rename-matter", new URL("./rename-matter.word", import.meta.url));
 
 const RESERVED_SET_META_NS = new Set([
@@ -160,7 +162,7 @@ async function setOnMatterHandler({ target, params, moment }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// rename-matter
+// rename-matter — WORD-SOLE (registered below). No JS handler.
 // ─────────────────────────────────────────────────────────────────────
 //
 // First-class verb for "the matter's name changes." Live writes
@@ -168,95 +170,16 @@ async function setOnMatterHandler({ target, params, moment }) {
 // through here so the audit trail names the intent ("I renamed this
 // matter") instead of recording a bare set-matter on the name field.
 //
-// Per-parent uniqueness check runs in the handler (pre-flight on the
-// live projection), matching the matter-naming doctrine: name scope
-// is the folder (spaceId + parentMatterId). The reducer side reuses
-// applySetField on the name field — rename-matter is added to
-// SET_ACTIONS in reducerHelpers.js so the same fold path applies.
-
-// WIRED: rename-matter.word is the live path; the JS body below is the clean-miss fallback. The .word
-// runs the SAME world read (load + per-folder uniqueness) through resolve-rename-spec (renameMatterHost.js),
-// returns {matterId, name}, and the dispatcher lays the do:rename-matter fact (stampsWordFact targets the
-// matter via matterId). Behavior-preserving; no second fact (the auto-Fact path stamps once).
-async function _renameMatterViaWord({ target, params, moment }) {
-  if (!moment) return null;
-  const { resolveAbleWord, runAbleWord } = await import("../../present/word/ableWordRegistry.js");
-  const ir = resolveAbleWord("matter", "rename-matter", moment?.actorAct?.history);
-  if (!ir) return null;
-  const { renameMatterHostEnv } = await import("./renameMatterHost.js");
-  const history = moment?.actorAct?.history;
-  try {
-    const { result } = await runAbleWord(ir, {
-      moment, history,
-      trigger: {
-        target,
-        name: params?.name,
-        allowReplace: params?.allowReplace === true,
-        branch: history,
-      },
-      env: { host: renameMatterHostEnv() },
-    });
-    if (!result) return null;
-    return stampsWordFact(result, "matter", "matterId");
-  } catch (e) {
-    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
-    throw e;
-  }
-}
-
-async function renameMatterHandler({ target, params, moment }) {
-  const viaWord = await _renameMatterViaWord({ target, params, moment });
-  if (viaWord) return viaWord;
-
-  const newName = params?.name;
-  if (typeof newName !== "string" || !newName.length) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "rename-matter: `name` is required and must be a non-empty string");
-  }
-  // `allowReplace` opts out of the per-folder uniqueness check. The
-  // caller is responsible for ensuring the colliding row is ended in
-  // the same moment (i.e. an end-matter fact for it is in this
-  // moment.deltaF ahead of this rename). The atomic-rename-replace
-  // path the mirror mount uses for editor save patterns (vim writes a
-  // temp file then renames over the original) goes through here.
-  const allowReplace = params?.allowReplace === true;
-  target = await loadTargetRow(target, "matter", { moment });
-  const matterId = String(target._id);
-  const history = moment?.actorAct?.history || "0";
-  const spaceId = target.spaceId ? String(target.spaceId) : null;
-  const parentMatterId = target.parentMatterId ? String(target.parentMatterId) : null;
-  if (!spaceId) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "rename-matter: matter has no spaceId");
-  }
-  if (!allowReplace) {
-    // Per-(spaceId, parentMatterId) uniqueness check on the live
-    // projection. A name collision throws INVALID_INPUT carrying a
-    // tag the IPC bridge maps to EEXIST.
-    const { listMatterNamesInFolder } = await import("../projections.js");
-    const existing = await listMatterNamesInFolder(history, spaceId, parentMatterId);
-    const taken = new Set(existing.map((n) => String(n).toLowerCase()));
-    // Strip the current name from the taken set so renaming to the
-    // same name is a no-op (not a collision).
-    if (typeof target.name === "string") {
-      taken.delete(target.name.toLowerCase());
-    }
-    if (taken.has(newName.toLowerCase())) {
-      throw new IbpError(
-        IBP_ERR.INVALID_INPUT,
-        `rename-matter: name "${newName}" already in use in this folder`,
-        { reason: "name-in-use" },
-      );
-    }
-  }
-  // Lay the name EXACTLY like set-being / set-space lay a scalar (Tabor): _factParams
-  // { field:"name", value } so applySetField folds it onto the row — the rename-matter.word path
-  // does the same. (The bare { name } the auto-Fact used to stamp was the "weird funk" — applySetField
-  // folds only { field, value }, so the name never reached the row. This is the fix.)
-  return stampsFact(
-    { matterId, name: newName },
-    { field: "name", value: newName },
-    { kind: "matter", id: matterId },
-  );
-}
+// rename-matter.word is the SOLE path. The `name`-required gate + the
+// return are the .word; the world READ (load the matter, require its
+// spaceId, run the per-(spaceId, parentMatterId) folder-uniqueness
+// check) is the host see-op resolve-rename-spec (renameMatterHost.js),
+// reaching loadTargetRow + listMatterNamesInFolder. The .word returns
+// { matterId, name, factParams: { field:"name", value } }; do.js's
+// runOpWord promotes factParams + the matter target (idFrom:"matterId")
+// via stampsWordFact, so the lone do:rename-matter fact lands on the
+// matter's reel and applySetField folds the name exactly like set-being
+// / set-space lay a scalar field.
 
 // ─────────────────────────────────────────────────────────────────────
 // end-matter
@@ -402,6 +325,9 @@ registerOperation("set-matter", {
   handler: setOnMatterHandler,
 });
 
+// WORD-SOLE: rename-matter.word is the only path (do.js runOpWord). idFrom:"matterId" targets
+// the fact at the matter and promotes the word's factParams ({field:"name", value}); resolve-
+// rename-spec (renameMatterHostEnv) is the lone host READ (load + folder-uniqueness). No handler.
 registerOperation("rename-matter", {
   targets: ["matter"],
   ownerExtension: "seed",
@@ -409,7 +335,8 @@ registerOperation("rename-matter", {
   args: {
     name: { type: "text", label: "New name (per-folder uniqueness enforced)", required: true },
   },
-  handler: renameMatterHandler,
+  word: { noun: "matter", idFrom: "matterId" },
+  hostEnv: renameMatterHostEnv,
 });
 
 registerOperation("end-matter", {

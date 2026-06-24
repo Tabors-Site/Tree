@@ -56,9 +56,8 @@ const { resolveAbleWord, runAbleWord } = await import(
 const { credentialHostEnv } = await import(
   `${R}/seed/store/words/credential/credentialHost.js`
 );
-const { comparePassword, decryptCredential } = await import(
-  `${R}/seed/materials/being/identity/credentials.js`
-);
+const { comparePassword, decryptCredential, generateToken, verifyTokenStrict } =
+  await import(`${R}/seed/materials/being/identity/credentials.js`);
 
 let pass = 0,
   fail = 0;
@@ -182,12 +181,11 @@ try {
   const plainReal =
     auth.credentialPlain &&
     decryptCredential(auth.credentialPlain) === r.plaintext;
-  const cutoffReal =
-    auth.tokensInvalidBefore &&
-    !Number.isNaN(new Date(auth.tokensInvalidBefore).getTime());
+  // tokensInvalidBefore is now a reel-position SEQ (the chain's order), not a parseable date.
+  const cutoffReal = typeof auth.tokensInvalidBefore === "number";
   noPlaceholders && pwReal && pwVerifies && plainReal && cutoffReal
     ? ok(
-        `@victim row re-minted with REAL values: scrypt$ hash verifies vs the returned plaintext, credentialPlain decrypts to it, tokensInvalidBefore parses (no "$..." placeholders)`,
+        `@victim row re-minted with REAL values: scrypt$ hash verifies vs the returned plaintext, credentialPlain decrypts to it, tokensInvalidBefore is a reel-position seq (no "$..." placeholders)`,
       )
     : bad(`row values`, {
         noPlaceholders,
@@ -266,6 +264,46 @@ try {
         `an asker with no credential authority → refuse "no credential authority", NO writes`,
       )
     : bad(`gate`, gateRefused?.message || (sc2.deltaF || []).map((f) => f.act));
+
+  // ── 5. the revocation MEANS, by SEQ not clock: a token minted BEFORE a reset is rejected,
+  //  one minted AFTER survives — proving tokensInvalidBefore is a chain position that
+  //  verifyTokenStrict enforces against the token's iss_seq (no wall-clock in the revoke order). ──
+  const v2 = await birth("seqvictim");
+  const beforeTok = await generateToken({
+    _id: String(v2),
+    name: "seqvictim",
+    trueName: null,
+  });
+  const sc3 = {
+    actId: randomUUID(),
+    actorAct: { history: "0", by: "i-am" },
+    identity: ident,
+    deltaF: [],
+    foldedSeqs: new Map(),
+    afterSeal: [],
+  };
+  await doVerb(
+    { kind: "being", id: String(v2) },
+    "credential-reset",
+    {},
+    { identity: ident, moment: sc3, currentHistory: "0" },
+  );
+  if (sc3.deltaF.length) await sealFacts(sc3.deltaF);
+  await loadOrFold("being", String(v2), "0"); // prime the projection with the new cutoff
+  const afterTok = await generateToken({
+    _id: String(v2),
+    name: "seqvictim",
+    trueName: null,
+  });
+  const beforeRejected =
+    (await verifyTokenStrict(beforeTok, { loadBeing: false })) === null;
+  const afterAccepted =
+    (await verifyTokenStrict(afterTok, { loadBeing: false })) !== null;
+  beforeRejected && afterAccepted
+    ? ok(
+        `revocation MEANS by seq: pre-reset token REJECTED, post-reset token ACCEPTED (chain position, no clock)`,
+      )
+    : bad(`seq-revocation`, { beforeRejected, afterAccepted });
 
   console.log(`\n  ${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);

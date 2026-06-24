@@ -1,33 +1,49 @@
-# key.word — key-export, the NAME's private-key custody op (name/keyOps.js).
+# key.word — key-export, the NAME's private-key custody op (key/keyOps.js).
 #
 # The wallet "back up / take your identity elsewhere" path. Return the resolved
 # NAME's private key (decrypted PEM) + its 24-word paper form to whoever is acting
 # AS that Name. The CONTROL strand — resolve the Name off the being target, the
 # DOUBLE GATE (the I hard-refusal then the ownership gate), and the §7 return —
-# is .word. The genuine computation stays `host:`: loadKey (the crypto key reader,
-# i-am→story key / password-locked→session PEM / system-encrypted→decrypt, the
-# SAME loadSigningKey the seal signs with) and paperForm (the seed→24 BIP39 words
-# derive).
+# is .word. The genuine computation reads as `see`-ops: load-key (the crypto key
+# reader, i-am→story key / password-locked→session PEM / system-encrypted→decrypt,
+# the SAME loadSigningKey the seal signs with) and paper-form (the seed→24 BIP39
+# words derive). They bottom out in host fns wired by keyHost, but the body speaks
+# them as see-ops, never a `host:` escape.
 #
-# THE WALL: the trueName read is a `see` (a substrate READ is a verb, no fact); only
-# the crypto stays host. The two gates lay no fact (CONTROL = recall).
+# WORD-SOLE (handler-less): keyOps.js registers `word: { noun:"being", idFrom:"askerBeingId" }`
+# + `hostEnv: keyHostEnv`; do.js's generic runOpWord runs this `.word` with the STANDARD
+# trigger { target, targetKind, params, caller, branch } and promotes the word-authored fact
+# via stampsWordFact. There is NO JS handler — this `.word` IS the op.
 #
-# NO host: emit — the word lays no fact of its own. The lone WORLD fact, the audit
-# (who exported which Name's key, the key NOWHERE in it), is the dispatcher's ONE
-# auto-Fact: the cut promotes the returned `nameId` into _factParams {exportedNameId}
-# and forces _factTarget at the ASKER's being, so do.js lays the caller-attributed
-# (through = asker) do:key-export audit — the SAME fact recordExport used to self-emit,
-# now on the one emit path. The bridge binds `target` (the being target), `caller`
-# (the connected Name id = identity.nameId), `asker` (identity.beingId), `branch`.
+# THE STANDARD TRIGGER's `caller` is the ASKER'S BEING id (do.js binds caller=identity.beingId),
+# which is exactly the reel the audit fact lands on — so the §7 return surfaces it as
+# `askerBeingId` and idFrom promotes it to the fact target. The CONNECTED NAME (the gate axis
+# — identity.nameId, the SAME server ground truth the seal is keyed by, NOT the driven being's
+# trueName, so driving a being you do not own never exports the owner's key) is a separate read:
+# `see resolve-name-id as connectedName` reaches keyHost's resolve-name-id, which returns
+# ctx.identity.nameId. The two gates compare the target's owner against THAT, lay no fact.
+#
+# THE WALL: the trueName read is a `see` too (a substrate READ is a verb, no fact); the
+# crypto reads are see-ops over host fns. The two gates lay no fact (CONTROL = recall).
+#
+# NO host: emit — the word lays no fact of its own. The lone WORLD fact, the audit (who
+# exported which Name's key, the key NOWHERE in it), is the dispatcher's ONE auto-Fact: the
+# word returns `factParams { exportedNameId }` (the public did:key id) + `askerBeingId` (the
+# asker's reel, promoted to the fact target by idFrom), so do.js lays the caller-attributed
+# (through = asker) do:key-export audit — the key NOWHERE in it (stripForAudit drops the
+# privateKeyPem/mnemonic reveals from the recorded result; factParams never carries them).
 
 When a Name exports its key, with a target:
   see the target's trueName as owner.
   If no owner, refuse with "key-export: target being expresses no trueName (no Name to export)" as invalid-input.
+  # the CONNECTED NAME (identity.nameId) — the gate axis, read from the session, never the
+  # driven being's trueName. keyHost's resolve-name-id returns ctx.identity.nameId.
+  see resolve-name-id as connectedName.
   # the DOUBLE GATE, part 1: the story (I) key is NEVER exportable through a being.
   If the owner equals i-am, or the owner equals I, refuse with "key-export: the story (I) key is never exportable through a being." as forbidden.
   # the DOUBLE GATE, part 2: you may export only the key of the Name you are acting AS.
-  If not the owner equals the caller, refuse with "key-export: you can export only the key of the Name you are connected as" as forbidden.
+  If not the owner equals the connectedName, refuse with "key-export: you can export only the key of the Name you are connected as" as forbidden.
   see load-key(owner) as privateKey.
   If privateKey, the key is found.
   see paper-form(privateKey) as mnemonic.
-  Return nameId: $owner, hasKey: $keyFound, privateKeyPem: $privateKey, mnemonic: $mnemonic.
+  Return nameId: $owner, hasKey: $keyFound, privateKeyPem: $privateKey, mnemonic: $mnemonic, askerBeingId: $caller, factParams: { exportedNameId: $owner }.

@@ -97,6 +97,69 @@ import { hooks } from "./seed/hooks.js";
 import { syncExtensionsToTree } from "./seed/sprout.js";
 import log from "./seed/seedStory/log.js";
 
+// Read the creation sequence (story/seed/store/genesis.word) and run it as the I — the same
+// runWordToStore path cognition uses to run a being's spoken Word: one act = one moment on the
+// I's reel. The host floor (this reader) resolves the world-anchors the Word references and binds
+// them; the Word does the acts. The story becomes data the boot reads-and-runs, not code the boot
+// IS. The verse (`I am "what?" I am`) stays the host turtle (ensureIAm) — the I cannot run a Word
+// until it exists; everything after it lives in genesis.word, run here at boot-end.
+//
+// SLICE 1: the grants (the former grantAngelToSeedDelegates). The grant reducer dedupes by
+// (able, anchor, grantor), so the run is idempotent across Awakenings. Gated to !plantedFromSeed
+// by the caller (a planted seed already carries the grants; re-running would inflate the chain).
+//
+// Delegates ride BINDINGS, not `beings`: resolveTarget reads bindings for `on the being <name>`,
+// but resolveValue only auto-resolves proper names via `beings` — so an able name that equals a
+// delegate name (able "cherub") must stay a literal string, never resolve to a being id.
+async function readAndRunGenesisWord() {
+  const fs = await import("fs");
+  const { fileURLToPath } = await import("url");
+  const { parse } = await import("./seed/present/word/parser.js");
+  const { runWordToStore } = await import(
+    "./seed/present/word/ableWordRegistry.js"
+  );
+  const { findByName, findByHeavenSpace } = await import(
+    "./seed/materials/projections.js"
+  );
+  const { HEAVEN_SPACE } = await import(
+    "./seed/materials/space/heavenSpaces.js"
+  );
+  const { getSpaceRootId } = await import("./seed/sprout.js");
+  const { I } = await import("./seed/materials/being/seedBeings.js");
+  const { SEED_DELEGATES } = await import(
+    "./seed/materials/being/seedDelegates.js"
+  );
+
+  const heaven = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, "0");
+  const rootId = getSpaceRootId();
+  if (!heaven || !rootId) {
+    log.warn(
+      "Genesis",
+      "genesis.word skipped: heaven/root not yet materialized",
+    );
+    return;
+  }
+  const src = fs.readFileSync(
+    fileURLToPath(new URL("./seed/store/genesis.word", import.meta.url)),
+    "utf8",
+  );
+  const ir = parse(src);
+  const bindings = { heaven: String(heaven.id), root: String(rootId) };
+  for (const spec of SEED_DELEGATES) {
+    const slot = await findByName("being", spec.name, "0");
+    if (slot) bindings[spec.name] = String(slot.id);
+  }
+  // name:I is REQUIRED — authorize() short-circuits on identity.name === I; without it every
+  // privileged grant hits the full able-walk and is denied (the I holds no granted ables).
+  await runWordToStore(ir, {
+    beingId: I,
+    name: I,
+    history: "0",
+    position: String(heaven.id),
+    bindings,
+  });
+}
+
 // Boot mode, decided once per process. Read by printReady at the
 // end so the closing line ("I am born." vs "I am awake.") matches
 // what actually happened. "Beginning" if Mongo held no place root
@@ -140,7 +203,7 @@ export async function genesis(app, opts = {}) {
       mongoose.connection.once("error", reject);
     });
   }
-  log.info("Genesis", "I open my memory.");
+  log.info("Genesis", "Memory connected.");
 
   // The physical floor every space, matter, being, and Fact sits on.
   const { ensureIndexes } = await import("./seed/seedStory/indexes.js");
@@ -264,10 +327,13 @@ export async function genesis(app, opts = {}) {
   // Idempotent (reboot dedup-skips; rehydrate refills the projection). Guarded: a fold failure logs.
   const declareTheWords = async () => {
     try {
-      await withIAmAct("the words declare themselves", async (ctx) => {
-        const { seedFold } = await import("./seed/present/word/wordFold.js");
-        await seedFold({ moment: ctx });
-      });
+      // One word = one moment = one fact (philosophy/word/623, plan Phase A): the seed
+      // declares itself as a SEQUENCE of one-word moments, not all the vocabulary pooled
+      // into one moment (a run-on the stamper now refuses). moment:null → each bindWord's
+      // _inAct opens its OWN withIAmAct moment per coin. Same per-item-moment doctrine the
+      // syncAbles/syncOperations passes at boot-end already follow.
+      const { seedFold } = await import("./seed/present/word/wordFold.js");
+      await seedFold({ moment: null });
       const { rehydrateWordProjection, getWordSync } =
         await import("./seed/present/word/wordStore.js");
       await rehydrateWordProjection("0");
@@ -288,7 +354,7 @@ export async function genesis(app, opts = {}) {
 
   if (!plantedFromSeed) {
     await withGenesisGuard(async () => {
-      // Step 1: "I am that I am" — birth I-Am alone, homeSpace=null.
+      // Step 1: "I am what? I am" — birth I-Am alone, homeSpace=null.
       await ensureIAm();
 
       // Step 1.5: the words declare themselves onto I's reel, BEFORE the story-building below,
@@ -361,9 +427,9 @@ export async function genesis(app, opts = {}) {
   // heaven-contributors list.
 
   if (!plantedFromSeed) {
-    // I read my own remembered settings out of ./config.
+    // Read settings out of ./config.
     await initStoryConfig();
-    log.info("Genesis", "I remember my settings.");
+    log.info("Genesis", "Settings loaded.");
 
     // I mirror the story/ directory into space and matter under
     // `.source`. The source-space id cache primes for the read-only
@@ -371,11 +437,11 @@ export async function genesis(app, opts = {}) {
     const { ensureSourceTree } =
       await import("./seed/materials/space/source.js");
     await ensureSourceTree();
-    log.info("Genesis", "I see my own body.");
+    log.info("Genesis", "Source tree mirrored.");
 
     // Stance-permissions seeding retired (seed/AblesAreAuth.md). The
     // able registry is the gate; the I-Am's bootstrap grants below
-    // (after able registration + grantAngelToSeedDelegates) hand the
+    // (after able registration + the genesis.word grants) hand the
     // angel able to each seed delegate. No qualities.permissions rows
     // are written; authorize.js no longer reads any such rows.
   } else {
@@ -384,7 +450,7 @@ export async function genesis(app, opts = {}) {
     // needed — reading config from .env / process.env shouldn't
     // change the planted state, just hydrate runtime cache.
     await initStoryConfig();
-    log.info("Genesis", "I remember my settings.");
+    log.info("Genesis", "Settings loaded.");
   }
 
   // Beings with heaven authority. The seed delegates (cherub, birther, llm-
@@ -417,7 +483,7 @@ export async function genesis(app, opts = {}) {
       const { runSeedMigrations } =
         await import("./seed/seedStory/migrations/runner.js");
       const migrationsRan = await runSeedMigrations(ctx);
-      if (migrationsRan) log.info("Genesis", "I update my form.");
+      if (migrationsRan) log.info("Genesis", "Migrations applied.");
     });
   }
   // Note: plantedFromSeed skips seed migrations because the seed's
@@ -566,7 +632,7 @@ export async function genesis(app, opts = {}) {
   registerAble("public", publicAble, "seed");
 
   // Cherub + llm-assigner. Registered HERE (before hostAbleAt
-  // and grantAngelToSeedDelegates) so the install loop has access to
+  // and the genesis.word grants) so the install loop has access to
   // their specs and the self-able grants land cleanly. Real work
   // happens through their verb handlers (cherub owns the BE_OPS table;
   // llm-assigner is registered before the host/grant loop); the
@@ -701,9 +767,9 @@ export async function genesis(app, opts = {}) {
   // The being reducer dedupes by (able, anchor, grantor) so a reboot
   // re-emit is a no-op.
   if (!plantedFromSeed) {
-    const { grantAngelToSeedDelegates } =
-      await import("./seed/materials/being/seedDelegates.js");
-    await grantAngelToSeedDelegates();
+    // The grants are now the I's acts, read and run from genesis.word (the creation sequence)
+    // rather than called as JS. Slice 1 of turning genesis into a .word — see readAndRunGenesisWord.
+    await readAndRunGenesisWord();
     if (bootMode === "Beginning") {
       log.info("Genesis", "I grant my delegates their ables.");
     }
@@ -748,6 +814,11 @@ export async function genesis(app, opts = {}) {
   // store bundle (the word + its handler). The bundle registers its
   // operation + word at module load, so a side-effect import fires it.
   await import("./seed/store/words/set-world-signal/index.js");
+
+  // set-owner / remove-owner . carved from materials/space/ops.js into their own store bundle
+  // (set-owner.word + remove-owner.word + ownerHostEnv, both WORD-SOLE). The auth + per-space
+  // lock + CAS stay in ownership.js, reached as `see` escapes. Side-effect import registers them.
+  await import("./seed/store/words/owner/index.js");
 
   // set-being-flow . the typed write that puts a flow on a
   // being's qualities. flow-composer (LLM helper) targets this op.
@@ -957,7 +1028,7 @@ export async function genesis(app, opts = {}) {
     await import("./seed/materials/space/spaceCircuit.js");
   startCircuitJob();
 
-  log.info("Genesis", "I start my background jobs.");
+  log.info("Genesis", "Background jobs started.");
 
   // I mirror my live registries into the ./tools, ./ables, and
   // ./operations heaven spaces. SEE on those addresses now reflects
@@ -983,26 +1054,17 @@ export async function genesis(app, opts = {}) {
       typesFolded = 0,
       ableWordsFolded = 0,
       seeOpsFolded = 0;
-    await withIAmAct("I declare the rest of my ops", async (ctx) => {
-      folded = await declareOpsToFold({ moment: ctx });
-    });
-    // The matter TYPES fold the same way (the types-Map migration): a type is a word with
-    // kind:"type", and getMatterType resolves it from the fold as well as the Map.
-    await withIAmAct("I declare my matter types", async (ctx) => {
-      typesFolded = await declareTypesToFold({ moment: ctx });
-    });
-    // The ABLE-WORDS too (the ableWordRegistry unification): a able-word is a word "able:op",
-    // kind:"ableword". This boot-end pass catches any bundle that registered after seedFold.
-    await withIAmAct("I declare my able-words", async (ctx) => {
-      ableWordsFolded = await declareAbleWordsToFold({ moment: ctx });
-    });
-    // The SEE ops too: SEE is an OPEN registry, and the able-dir + host-able + extension see ops
-    // (llm-connections, http-stats, connections, harmony:neighbors, ...) register AFTER seedFold.
-    // This boot-end pass folds them so seeVerb resolves every see op from the fold (kind:"seeop").
-    // (NAME/BE need no boot-end pass — closed seed sets, fully caught at seedFold.)
-    await withIAmAct("I declare my see ops", async (ctx) => {
-      seeOpsFolded = await declareSeeOpsToFold({ moment: ctx });
-    });
+    // One word = one moment = one fact (philosophy/word/623, plan Phase A): each declare
+    // lays its coins as a SEQUENCE of one-word moments (moment:null → each bindWord opens
+    // its own withIAmAct), not pooled into one moment (a run-on the stamper now refuses).
+    // Same per-item-moment doctrine the syncAbles/syncOperations passes below already follow.
+    //   ops → do.ref/word coins; types → kind:"type"; able-words → kind:"ableword"
+    //   (catches bundles registered after seedFold); see ops → kind:"seeop" (OPEN registry).
+    //   (NAME/BE need no boot-end pass — closed seed sets, fully caught at seedFold.)
+    folded = await declareOpsToFold({ moment: null });
+    typesFolded = await declareTypesToFold({ moment: null });
+    ableWordsFolded = await declareAbleWordsToFold({ moment: null });
+    seeOpsFolded = await declareSeeOpsToFold({ moment: null });
     await rehydrateWordProjection("0");
     log.verbose(
       "Genesis",

@@ -149,7 +149,7 @@ try {
       apiKey: "sk-aaa",
     },
   );
-  const connId = add.result?.connection?._id;
+  const connId = add.result?.connectionId ?? add.result?.connection?._id;
   connId
     ? ok(
         `seeded a connection via add (E6 resolveConnectionSpec ran): ${String(connId).slice(0, 8)}…`,

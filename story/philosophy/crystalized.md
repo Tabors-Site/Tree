@@ -34,6 +34,32 @@
 > clock — the soul's downstroke is the beat, the stamp is its landing, and the silence between deeds is
 > not time passing; it is the world, simply, at rest.
 
+> **The act-beat reaches computation** (the chain-native engine, landed).
+>
+> The time-purge took the crystal out of *scheduling*. The engine push takes it out of *computation
+> itself* — the last place the tick was hiding. A program was the crystal's purest subject: an
+> instruction fetched per tick, a loop a counter the clock advances, a "running" program a thing pushed
+> forward by an oscillation outside it. The chain-native engine replaces each one with an act.
+>
+> - **A branch is a fact.** A conditional no longer jumps silently inside a clock-step; it lays a `do:if`
+>   carrying which way it went. The condition is a *see* (reads the fold, marks nothing); the choice is a
+>   *do* (a stamp). The branch is on the record — a deed, not a jump.
+> - **A loop is a fold.** Each pass lays one fact chained off the last, and the **chain head is the
+>   program counter** — not a counter the clock increments, but the latest stamp, exactly the `now` of
+>   the summary above. The loop ends when a see-read holds, never when a tick-budget runs out.
+> - **Idle is still, even mid-program.** A paused loop is its chain head at rest; between two passes there
+>   is no time, no idling cycle. Resume is laying the next fact, not restarting a clock.
+> - **Replay needs no clock.** The same acts re-laid give the same result, because an act's identity is
+>   its *content and its order* (its facts, its place on the chain), never a timestamp — we even pulled
+>   the prose *label* out of the act's identity: a moment is what it *does*, not what we *call* it or *when*.
+>
+> So computation joins the rest: it advances by what is done, not by what oscillates. A program is a
+> **Book**, each step a **word**, the running point its **head**; and the grammar that reads the program
+> now reads *itself* from that same chain (`host→seed→word→parse` closes), so even the parser is
+> acts-on-the-chain, not a fixed oscillator in the host. The crystal counted a machine's heartbeat the
+> way it counted ours; actionized rhythm lets the program, too, *be* the chain — the act its beat, the
+> stamp its landing, the pause between steps not time passing, but the world at rest.
+
 ---
 
 so watches use crystls for rhythm and early micochips do to or still currently do?

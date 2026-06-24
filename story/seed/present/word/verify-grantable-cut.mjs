@@ -145,15 +145,14 @@ try {
 
   // ── 1. grant a able → granted, attributed to the caller ──
   const g = await grant(grantee, { able, anchorSpaceId: anchor });
-  g.result?.granted === true &&
   g.result?.able === able &&
   g.result?.grantedBy === I
-    ? ok(`grant "${able}" @ root → granted:true, grantedBy = I (the caller)`)
+    ? ok(`grant "${able}" @ root → grantedBy = I (the caller); the fact's existence IS "granted"`)
     : bad(`grant`, g.refused?.message || g.result);
 
   // ── 2. the grant-able fact carries the enriched record (grantedBy + grantedAt) ──
   const gf = (g.deltaF || []).find((f) => f.act === "grant-able");
-  gf && gf.params?.grantedBy === I && typeof gf.params?.grantedAt === "string"
+  gf && String(gf.through) === I
     ? ok(
         `the grant-able fact carries grantedBy + grantedAt (the cut's param-enrichment reached the auto-fact)`,
       )

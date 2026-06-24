@@ -32,21 +32,24 @@
 // are an additive change here rather than a silent-drop-of-typos in
 // the wild.
 //
-// Implementation: sugar over set-<kind>(field="qualities.render", value).
-// set-render itself is skipAudit; the inner set-<kind> stamps the
-// fact with action="set-<kind>" and field="qualities.render", which the
-// existing applySetQualities reducer handles unchanged. ONE fact per
-// set-render, rides the calling moment's deltaF normally.
+// WORD-SOLE (handler-less, Tabor's no-mirror law): set-render has NO JS handler. Its
+// world strand is set-render.word — the ONLY path. The op registers a `word` descriptor
+// (+ its `hostEnv`, setRenderHostEnv); do.js's generic runOpWord resolves set-render.word,
+// runs it with the standard trigger, and promotes the word-authored `factParams`
+// ({ field:"qualities.render", value, merge }) via stampsWordFact. The op's WORLD effect
+// is the ONE do:set-render fact carrying the render block as a qualities.render set; the
+// target's reducer folds it via applySetQualities (set-render ∈ SET_ACTIONS), exactly as
+// the JS handler's stampsFact laid. No `_setRenderViaWord` adapter, no JS body — the only
+// JS that remains is validateRenderBlock (the schema floor the .word reaches as a see-op).
 
 import { registerOperation } from "../../../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
-import { detectTargetKind, targetIdOf } from "../../../materials/_targetShape.js";
-import { stampsFact } from "../../../ibp/factResult.js";
 import { registerAbleWord } from "../../../present/word/ableWordRegistry.js";
+import { setRenderHostEnv } from "./setRenderHost.js";
 
-// Self-register the co-located world strand so resolveAbleWord("render",
-// "set-render") finds it (CONVERTING.md step 3). The cut prefers the bridge and
-// falls back to the JS handler on a clean miss.
+// Self-register this slice's co-located WORLD strand (CONVERTING.md): the bridge
+// resolves ("render", "set-render") to set-render.word, its see-escapes wired by
+// setRenderHost.js. Registered at module load (services.js imports this file at boot).
 registerAbleWord("render", "set-render", new URL("./set-render.word", import.meta.url));
 
 const VALID_KEYS = new Set([
@@ -58,7 +61,21 @@ const VALID_KEYS = new Set([
   "merge",
 ]);
 
-export function validateRenderBlock(input) {
+// The set-render floor (a pure compute, NO fact): validate the target KIND + the render
+// block, then shape the do:set-render fact params { field:"qualities.render", value, merge }
+// the dispatcher lays (the SAME shape the retired JS handler's stampsFact carried, which
+// applySetQualities folds unchanged). The .word reaches this as the `validate-render-block`
+// see-op (the closed SEE_FLOOR allows that name); `kind` is the standard trigger's targetKind.
+// THROWS IbpError on a bad kind or a malformed block — surfacing as the op's refusal. (Named
+// validate-render-block since validation is its substance; it returns the fact params, not a
+// bare block, so the word can `Return … factParams: $renderParams` with no second see-op.)
+export function validateRenderBlock(input, kind = null) {
+  if (kind != null && kind !== "matter" && kind !== "space" && kind !== "being") {
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      `set-render: target must be matter, space, or being (got "${kind || "untyped"}")`,
+    );
+  }
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new IbpError(IBP_ERR.INVALID_INPUT, "set-render: params must be an object");
   }
@@ -162,36 +179,31 @@ export function validateRenderBlock(input) {
     block[channel] = out;
   }
 
-  return block;
+  // Shape the do:set-render fact params: the validated block at qualities.render, merge
+  // default true unless the caller passed merge:false (the SAME { field, value, merge }
+  // the retired handler's stampsFact laid). `merge` is a control flag, never copied into
+  // the block itself (it is not a render property).
+  return { field: "qualities.render", value: block, merge: input?.merge !== false };
 }
 
-async function setRenderHandler(ctx) {
-  const { target, params, identity, moment } = ctx;
-  const kind = detectTargetKind(target);
-  if (kind !== "matter" && kind !== "space" && kind !== "being") {
-    throw new IbpError(
-      IBP_ERR.INVALID_INPUT,
-      `set-render: target must be matter, space, or being (got "${kind || "untyped"}")`,
-    );
-  }
-
-  const block = validateRenderBlock(params);
-  const merge = params?.merge !== false;
-
-  // ONE act, ONE fact (23.md): set-render returns its OWN fact — do:set-render carrying the render
-  // block as a qualities.render set — and the dispatcher stamps it. The target's reducer folds it via
-  // applySetQualities (set-render is in SET_ACTIONS), exactly as the inner set-<kind> used to. The old
-  // sugar (an inner doVerb(set-<kind>) + skipAudit so the outer wouldn't double-stamp) is gone: the
-  // verb names what the being does ("set how this renders"), one fact, the fold derives the qualities.
-  return stampsFact(
-    { rendered: true },
-    { field: "qualities.render", value: block, merge },
-    { kind, id: String(targetIdOf(target)) },
-  );
-}
-
+// WORD-SOURCED registration — no handler. do.js routes this through runOpWord, which
+// runs set-render.word (CALLER mode) and promotes its word-authored factParams
+// ({ field:"qualities.render", value, merge }) to the dispatcher's _factParams. The ONE
+// auto-Fact path stamps the lone do:set-render fact (factAction defaults to "set-render"),
+// and applySetQualities (set-render ∈ SET_ACTIONS) folds it onto the target.
+//
+// DYNAMIC TARGET KIND. set-render's fact lands on the DISPATCH target (a matter OR a space
+// OR a being — of.kind must be the actual kind, since reels are keyed by of.kind:of.id and
+// the fold queries the target's own kind). stampsWordFact would force of.kind = word.noun
+// (one fixed kind), so the .word deliberately returns NO target id (no `factTarget`, and
+// idFrom names a field it never returns): stampsWordFact then sets only _factParams and
+// leaves _factTarget UNSET, so resolveAuditTarget (do.js) falls back to the typed
+// call-target and the fact carries the real matter|space|being kind. DO NOT make the .word
+// return `factTargetId` — that would pin every render fact to one kind and break the
+// space/being fold.
 registerOperation("set-render", {
   targets: ["matter", "space", "being"],
   ownerExtension: "seed",
-  handler: setRenderHandler,
+  word: { noun: "matter", able: "render", idFrom: "factTargetId" },
+  hostEnv: setRenderHostEnv,
 });

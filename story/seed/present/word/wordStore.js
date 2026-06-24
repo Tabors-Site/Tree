@@ -282,14 +282,35 @@ export function resolveWordFromFold(name) {
         }
       : null;
   const handler = w.do?.ref ? resolveHostHandler(w.do.ref) : null;
-  // Unrunnable: neither a resolvable host handler nor a matter body. (A do.ref that fails to resolve
-  // with NO matter fallback stays null — the prior "missing handler → null" contract, preserved.)
-  if (!handler && !matter) return null;
+  // WORD-SOURCED (handler-less): the word's body is its co-located `.word` — do.js's runOpWord runs
+  // it. It carries a `word` marker { noun, idFrom } + the hostEnv as a host ref (like authAction), so
+  // it is RUNNABLE with no host handler and no matter. This is the runtime face of "every word is a
+  // moment laid by a do" (no second engine): an op-word advances by the same step as any word.
+  const word =
+    w.word && typeof w.word === "object" && w.word.noun
+      ? {
+          noun: String(w.word.noun),
+          able: w.word.able ? String(w.word.able) : null,
+          idFrom: w.word.idFrom || null,
+          // through: run the .word THROUGH the caller (being-mode) for a HOST-FACILITATED op whose
+          // internal acts must authorize as I (ask-able's owner summon). do.js's runOpWord reads it.
+          through: w.word.through === true,
+          ranAsMoments: w.word.ranAsMoments === true,
+          runAsStore: w.word.runAsStore === true,
+        }
+      : null;
+  const hostEnv =
+    word && w.hostEnv?.ref ? resolveHostHandler(w.hostEnv.ref) : null;
+  // Unrunnable: none of host handler / matter body / word body. (A do.ref that fails to resolve with
+  // NO matter and NO word stays null — the prior "missing handler → null" contract, preserved.)
+  if (!handler && !matter && !word) return null;
   const spec = {
     name,
     kind: w.kind || null,
     handler,
     matter,
+    word,
+    hostEnv,
     factAction:
       typeof w.factAction === "string" && w.factAction ? w.factAction : null,
     factVerb: typeof w.factVerb === "string" && w.factVerb ? w.factVerb : null,
@@ -328,10 +349,16 @@ export function resolveDoOpFromFold(name) {
   const w = resolveWordFromFold(name);
   if (!w) return null;
   const spec = {
+    name, // the op name — runOpWord needs it to resolve the op's `.word` (noun, name)
     handler: w.handler,
     matter: w.matter || null, // a native do-op: body is matter, dispatch routes to runMatterWord
+    word: w.word || null, // a word-sourced op: body is its `.word`, dispatch routes to runOpWord
+    hostEnv: w.hostEnv || null, // the word's resolved host-escape factory (from its host ref)
     targets: w.targets || ["being", "space", "matter"],
     matterTypes: w.matterTypes,
+    // the op's field schema — runOpWord null-fills these declared args so an ABSENT param
+    // resolves to null, not the literal "$arg", in a word-sourced op's see-calls.
+    args: w.args || null,
     factAction: w.factAction || String(name),
     ownerExtension: w.ownerExtension,
     _fromFold: true,
@@ -357,8 +384,16 @@ export async function declareOpsToFold({
   let n = 0;
   for (const name of names) {
     const op = getOperation(name);
-    if (!op?.handler) continue;
-    registerHostHandler(name, op.handler);
+    // WORD-SOURCED (handler-less) ops carry a `word` descriptor instead of a handler — their
+    // body is the co-located `.word`, dispatched by do.js's runOpWord. Both shapes declare to
+    // the fold; an op with NEITHER a handler nor a word is not runnable and is skipped.
+    const isWord = !!op?.word && typeof op.word === "object" && !!op.word.noun;
+    if (!op?.handler && !isWord) continue;
+    if (op.handler) registerHostHandler(name, op.handler);
+    // hostEnv is a function (the word's host escapes) — carry it as a host ref like authAction.
+    const hostEnvRef =
+      isWord && typeof op.hostEnv === "function" ? `${name}:hostEnv` : null;
+    if (hostEnvRef) registerHostHandler(hostEnvRef, op.hostEnv);
     // authAction is a function (the auth-key refinement); carry it as a host ref so the fold op keeps it.
     const authRef =
       typeof op.authAction === "function" ? `${name}:authAction` : null;
@@ -368,7 +403,21 @@ export async function declareOpsToFold({
       {
         ownerExtension: op.ownerExtension || "seed",
         kind: "op",
-        do: { ref: name },
+        // handler body → a do.ref; word body → a `word` marker + the hostEnv ref. Never both.
+        ...(op.handler ? { do: { ref: name } } : {}),
+        ...(isWord
+          ? {
+              word: {
+                noun: op.word.noun,
+                able: op.word.able || undefined,
+                idFrom: op.word.idFrom || null,
+                through: op.word.through === true ? true : undefined,
+                ranAsMoments: op.word.ranAsMoments === true ? true : undefined,
+                runAsStore: op.word.runAsStore === true ? true : undefined,
+              },
+              hostEnv: hostEnvRef ? { ref: hostEnvRef } : undefined,
+            }
+          : {}),
         authAction: authRef ? { ref: authRef } : undefined,
         targets: Array.isArray(op.targets) ? [...op.targets] : ["being"],
         matterTypes:

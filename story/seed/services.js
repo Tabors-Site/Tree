@@ -187,8 +187,10 @@ import "./past/fact/chainRoots.js";
 // Side-effect import. Registers the unified `do move` op (relocates
 // a space or a matter into a new destination space). The cross-kind
 // shape doesn't belong in any single material's ops file; it lives
-// at materials/ root for that reason. See materials/moveOp.js.
-import "./store/words/move/moveOp.js";
+// in its own store-word bundle (move.word + moveHost.js) for that
+// reason. WIRED: the handler runs move.word through the bridge, the
+// JS body is the clean-miss fallback. See store/words/move/index.js.
+import "./store/words/move/index.js";
 // Side-effect import. Registers `do set-model` — points a being /
 // space / matter at a model matter (type "model", bytes in the
 // content store) by writing qualities.render.model. Upload is plain

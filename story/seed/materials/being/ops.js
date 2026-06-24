@@ -19,13 +19,15 @@
 
 import { registerOperation } from "../../ibp/operations.js";
 import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
-import Being from "./being.js";
-import Space from "../space/space.js";
-import { detectTargetKind, targetIdOf, loadTargetRow } from "../_targetShape.js";
+import { registerAbleWord } from "../../present/word/ableWordRegistry.js";
+import { detectTargetKind, targetIdOf } from "../_targetShape.js";
+import { setBeingHostEnv } from "./setBeingHost.js";
 
-const RESERVED_SET_META_NS = new Set([
-  "inbox", // per-being inbox; written through SUMMON
-]);
+// Self-register the co-located world strand so resolveAbleWord("being", "set-being") finds it.
+// set-being is WORD-SOLE: set-being.word is the ONLY path (do.js runOpWord runs it); there is no
+// JS handler. The genuine substrate reads (name-uniqueness, coord-bounds) bottom out in
+// resolve-set-being-spec (setBeingHost.js), reusing assertCoordInBounds (exported below) + findByName.
+registerAbleWord("being", "set-being", new URL("./set-being.word", import.meta.url));
 
 // SPATIAL axes the clamp considers. Two-dimensional by default; z is
 // allowed when both the being's coord write and the space's size
@@ -61,7 +63,9 @@ const COORD_AXES = ["x", "y", "z"];
  * any coord passes. The check is "stay inside the declared box";
  * without a box there's nothing to enforce.
  */
-async function assertCoordInBounds(beingDoc, raw, history = "0") {
+// Exported for setBeingHost.js (set-being.word's resolve-set-being-spec floor read reuses the
+// SAME clamp the handler ran — no reimplementation).
+export async function assertCoordInBounds(beingDoc, raw, history = "0") {
   const out = {};
   for (const a of COORD_AXES) {
     if (typeof raw[a] === "number" && Number.isFinite(raw[a])) {
@@ -95,158 +99,21 @@ async function assertCoordInBounds(beingDoc, raw, history = "0") {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// set-being
+// set-being — WORD-SOLE (registered below). No JS handler.
 // ─────────────────────────────────────────────────────────────────────
 //
-// params: { field, value, merge=true }
-// field paths:
-//   "name" / "ables" / "defaultAble" / "homeSpace" /
-//   "parentBeingId"                                  → schema-field writes
-//   "qualities.<namespace>"                          → set/merge that namespace
-//   "qualities.<namespace>.<innerKey>"               → merge one inner key
-//   value=null on a qualities path                   → unset
-//   ("cognition" lives at qualities.cognition.defaultKind, written via
-//    the qualities.* paths, not as a schema-field write.)
-
-async function setOnBeingHandler({ target, params, moment }) {
-  const { field, value, merge = true } = params || {};
-  if (!field || typeof field !== "string") {
-    throw new Error("set-being: `field` is required");
-  }
-  // The verb layer hands us a typed identity ({kind, id}) or a bare
-  // string id. set-being needs row contents (qualities namespaces
-  // for merge, current name for uniqueness check, current position
-  // for the clamp helper). Load the row once at the top — the rest
-  // of the handler reads from the doc. moment threads the moment's
-  // deltaF so an in-flight being just stamped in the same scaffold
-  // can be set without waiting for sealAct.
-  target = await loadTargetRow(target, "being", { moment });
-
-  // ── qualities paths ────────────────────────────────────
-  if (field.startsWith("qualities.")) {
-    const rest = field.slice("qualities.".length);
-    const parts = rest.split(".");
-    const namespace = parts[0];
-    if (RESERVED_SET_META_NS.has(namespace)) {
-      throw new Error(
-        `set-being: qualities namespace "${namespace}" is not writable through set-being; it has a dedicated verb.`,
-      );
-    }
-    if (parts.length === 1 && value !== null) {
-      if (typeof value !== "object") {
-        throw new Error("set-being: qualities-namespace value must be an object");
-      }
-    }
-    return {
-      written: true,
-      beingId: String(target._id),
-      ...(parts.length === 1 ? { namespace } : { field }),
-      ...(value === null ? { unset: true } : {}),
-    };
-  }
-
-  // ── schema-field writes ────────────────────────────────
-
-  if (field === "name") {
-    if (!value || typeof value !== "string") {
-      throw new Error("set-being: `value` must be a string for field=name");
-    }
-    const history = moment?.actorAct?.history || "0";
-    const { findByName } = await import("../projections.js");
-    const existing = await findByName("being", value, history);
-    if (existing && String(existing.id) !== String(target._id)) {
-      throw new Error(`set-being: name "${value}" already taken on history ${history}`);
-    }
-    return { beingId: String(target._id), name: value };
-  }
-
-  if (field === "parentBeingId") {
-    if (value === null || value === undefined) {
-      return { beingId: String(target._id), parentBeingId: null };
-    }
-    if (typeof value !== "string" || !value.length) {
-      throw new Error(
-        `set-being: parentBeingId must be a being id string or null . got ${typeof value}`,
-      );
-    }
-    return { beingId: String(target._id), parentBeingId: value };
-  }
-
-  if (field === "defaultAble") {
-    if (
-      value !== null && value !== undefined &&
-      typeof value !== "string"
-    ) {
-      throw new Error(`set-being: \`defaultAble\` value must be a string or null`);
-    }
-    return { beingId: String(target._id), defaultAble: value };
-  }
-
-  if (field === "homeSpace") {
-    if (value === null || value === undefined) {
-      return { beingId: String(target._id), homeSpace: null };
-    }
-    if (typeof value !== "string" || !value.length) {
-      throw new Error(
-        `set-being: homeSpace must be a space id string or null . got ${typeof value}`,
-      );
-    }
-    return { beingId: String(target._id), homeSpace: value };
-  }
-
-  // password is bcrypt-hashed by the caller (credential ops, register
-  // flow) before set-being is called. The op records the hash on the
-  // Being's reel; the reducer's applySetField writes state.password.
-  // Plaintext never reaches this layer.
-  if (field === "password") {
-    if (typeof value !== "string" || !value.length) {
-      throw new Error("set-being: `password` value must be the bcrypt hash string");
-    }
-    return { beingId: String(target._id), password: value };
-  }
-
-  // position: the Space this being is in. The DO-side counterpart to
-  // be:occupy; either form lands the same Being.position write
-  // through the reducer. The portal emits this on navigate-to-sized-
-  // space so the being shows up in descriptor.occupantsByPosition
-  // for everyone else in that space.
-  if (field === "position") {
-    if (value !== null && value !== undefined && (typeof value !== "string" || !value.length)) {
-      throw new Error(
-        `set-being: position must be a space id string or null . got ${typeof value}`,
-      );
-    }
-    const newId = value || null;
-    // Capture the OLD position into the fact's params so the live-SEE
-    // hook fan can invalidate BOTH rooms — the one the being left and
-    // the one they entered.
-    const fromId = target?.position || null;
-    if (fromId && fromId !== newId) {
-      params.fromPosition = fromId;
-    }
-    return { beingId: String(target._id), position: newId, fromPosition: fromId };
-  }
-
-  // coord: the being's coord inside its position space. Shape `{ x, y, z? }`
-  // or null to unset. The seed clamps each axis to the bounding box on
-  // the being's position space (Space.size) so a being structurally
-  // cannot exist outside the space it's in. When the space has no
-  // size, the coord passes through as written.
-  if (field === "coord") {
-    if (value === null || value === undefined) {
-      return { beingId: String(target._id), coord: null };
-    }
-    if (typeof value !== "object" || Array.isArray(value)) {
-      throw new Error("set-being: `coord` value must be an object {x,y,z?} or null");
-    }
-    const validated = await assertCoordInBounds(target, value, moment?.actorAct?.history || "0");
-    return { beingId: String(target._id), coord: validated };
-  }
-
-  throw new Error(
-    `set-being: unknown field "${field}". Supported: name, defaultAble, homeSpace, parentBeingId, password, position, coord, qualities.<namespace>[.<innerKey>]`,
-  );
-}
+// Write one Being field — a schema scalar (name / defaultAble / homeSpace / parentBeingId /
+// password / position / coord) or a qualities path (qualities.<ns>[.<inner>]).
+//
+// set-being.word is the SOLE path. The CONTROL strand (the `field`-required gate + the return)
+// is the .word; the genuine substrate READS — load the being row, the per-history name-UNIQUENESS
+// check (findByName), and the COORD-BOUNDS check (assertCoordInBounds, above, reads Space.size and
+// THROWS out-of-bounds) — are the host see-op resolve-set-being-spec (setBeingHost.js), reaching
+// loadTargetRow + findByName + assertCoordInBounds (the SAME primitives the old handler called). The
+// .word returns { beingId, factParams }; do.js's runOpWord promotes factParams + the being target
+// (idFrom:"beingId") via stampsWordFact, so the lone do:set-being fact lands on the being's reel and
+// applySetField / applySetQualities fold it exactly as before — the same { field, value[, merge]
+// [, fromPosition] } the dispatcher stamped when a JS handler stood here.
 
 // (end-being removed 2026-06-21: it was a throwing symmetry stub — "not implemented at the DO layer"
 // — with no internal callers and no reducer fold. Identity-ending lives on the BE verb, where the
@@ -334,6 +201,10 @@ async function assignLlmSlotHandler({ target, params, identity, moment }) {
 // Registration
 // ─────────────────────────────────────────────────────────────────────
 
+// WORD-SOLE: set-being.word is the only path (do.js runOpWord). idFrom:"beingId" targets the
+// fact at the being and promotes the word's factParams ({field, value[, merge][, fromPosition]});
+// resolve-set-being-spec (setBeingHostEnv) is the lone host READ (load + name-uniqueness +
+// coord-bounds). No handler.
 registerOperation("set-being", {
   targets: ["being"],
   ownerExtension: "seed",
@@ -346,7 +217,8 @@ registerOperation("set-being", {
     value: { type: "json", label: "Value (JSON; null to clear)", required: false },
     merge: { type: "bool", label: "Merge (for qualities objects)", default: true, required: false },
   },
-  handler: setOnBeingHandler,
+  word: { noun: "being", able: "being", idFrom: "beingId" },
+  hostEnv: setBeingHostEnv,
 });
 
 
@@ -361,7 +233,7 @@ registerOperation("set-being", {
 // Both ops emit one Fact each on the target being's reel. The being
 // reducer (applyAbleGrants in reducerHelpers.js) folds them into
 // qualities.ablesGranted:
-//   grant-able  → append { able, anchorSpaceId|anchorBeingId, grantedBy, grantedAt }
+//   grant-able  → append { able, anchorSpaceId|anchorBeingId, grantedBy }
 //   revoke-able → remove the matching tuple (able, anchor*, grantedBy)
 //
 // Duplicate grants from different grantors live as separate entries,

@@ -874,7 +874,6 @@ async function _anointGlobal({ childId, history, moment }) {
         anchorSpaceId: String(rootId),
         anchorBeingId: null,
         grantedBy: I,
-        grantedAt: new Date().toISOString(),
       },
       actId: moment?.actId || null,
       history: history,

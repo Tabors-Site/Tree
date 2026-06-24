@@ -149,14 +149,27 @@ async function evalFlow(flow, ctx) {
 async function evalIf(node, ctx) {
   const { resolveCond } = await import("./cond.js");
   const hit = await resolveCond(node.cond, ctx);
-  // chain-native (20.md §80, P4): a BRANCH IS A FACT. The condition is a see (resolveCond reads
-  // the fold, lays nothing); the branch-record is a do — a do:if carrying which way it went, on the
-  // being's own reel (the do:verdict precedent). In per-act-moment mode (runWordToStore) it opens
-  // its OWN moment, so the head advances to the do:if act and the taken consequent chains on it;
-  // the untaken branch never reaches the chain. The choice is auditable + byte-identical on replay.
-  // In legacy in-moment mode (runAbleWord) the guard is false — the branch stays inline, no fact,
-  // byte-identical to before, protecting the ~16 live flows + the do-op .words.
-  if (ctx.perActMoment) {
+  // chain-native (20.md §80, P4): a BRANCH IS A FACT — but only a real FORK is. A do:if records a
+  // point where the chain could have gone more than one way and a later reader needs to know which.
+  // A GUARD is not a fork: `If no caller, refuse` has ONE live path — it reads the fold and either
+  // passes through (continue, no fact) or refuses (the moment rolls back, no fact either way). The
+  // condition is a see; a guard that passes chose nothing. So lay the do:if ONLY for a genuine
+  // two-way choice between continuing futures — both arms present and neither a bare `refuse`
+  // terminal (a refuse arm is a guard-with-an-explicit-else, still one live future). The test is
+  // "was there a fork," not "did the taken arm lay a fact" (Tabor): both arms must be live.
+  // In per-act-moment mode (runWordToStore) a fork's do:if opens its own moment, the head advances
+  // to it, and the taken consequent chains on it. In legacy in-moment mode (runAbleWord) the do:if
+  // never fires — branches stay inline, byte-identical, protecting the ~16 live flows + the do-op .words.
+  const isRefuseOnly = (b) =>
+    Array.isArray(b) && b.length === 1 && b[0]?.kind === "refuse";
+  const thenB = node.then || [],
+    elseB = node.else || [];
+  const isFork =
+    thenB.length > 0 &&
+    elseB.length > 0 &&
+    !isRefuseOnly(thenB) &&
+    !isRefuseOnly(elseB);
+  if (ctx.perActMoment && isFork) {
     const self = ctx.identity?.beingId ?? null;
     await emit(
       {

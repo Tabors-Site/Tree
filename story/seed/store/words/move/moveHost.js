@@ -1,21 +1,21 @@
-// moveHost.js — host-escape glue for the move op (moveOp.js, do:move). Wires the
-// SAME primitives the JS handler calls into ctx.env.host: the param validators
-// (computation over coord/to/subject) and the source-space resolution (a multi-step
-// projection read — Space.exists for the dest, loadOrFold over space/matter for the
-// subject's parent / containing space, and the coord bounds check against the
-// container's size — that the `see` forms cannot yet shape). NO reimplementation;
-// the validators mirror the JS handler's checks and resolveSource calls the SAME
-// Space.exists / loadOrFold the JS handler imports.
+// moveHost.js — the ONE host escape for the move op (move/index.js, do:move): the
+// source-space READ, `resolve-source`. The four param validators that used to live here
+// (require-mode / require-subject-kind / valid-coord-shape / valid-to) are GONE — they were
+// conditions wearing a host fn (623/20: control flow IS the conditional Word), and move.word
+// now expresses each as a native gate (presence `no coord`, kind `is a space`, and the type
+// primitives `is a finite number` / `is a string` the grammar speaks). What stayed is the one
+// thing a `see` form cannot yet shape: a multi-step projection read.
 //
-// callHost invokes each as `fn({ args: [...] }, ctx)`. The validators are pure
-// (return a boolean the `.word` gates on); resolveSource is a READ — it lays NO
-// fact (the move fact is the dispatcher's own audit fact) — and throws the SAME
-// IbpError the JS handler throws (so the messages/codes are byte-identical and the
-// evaluator propagates it to the verb layer exactly as the JS throw would).
+// callHost invokes resolve-source as `fn({ args: [...] }, ctx)`. It is a READ — it lays NO
+// fact (the move fact is the dispatcher's own audit fact) — and throws the SAME IbpError the
+// JS handler throws (so the messages/codes are byte-identical and the evaluator propagates it
+// to the verb layer exactly as the JS throw would). The bridge binds an absent coord/to to
+// null, so the `if (to)` / `if (coord)` guards below read presence directly.
 
 import Space from "../../../materials/space/space.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { detectTargetKind, targetIdOf } from "../../../materials/_targetShape.js";
+import { assertCoordWithinSize } from "../../../materials/matter/coordBounds.js";
 
 const historyOf = (ctx) => ctx?.moment?.actorAct?.history || ctx?.history || "0";
 
@@ -24,59 +24,15 @@ function subjectKind(subject) {
   return detectTargetKind(subject);
 }
 
-// A nullable trigger param (coord / to) that the evaluator could not bind passes
-// through as its own literal placeholder ("$coord" / "$to"): resolveValue returns
-// the placeholder when the binding is null/undefined (a `?? v` fallthrough). The JS
-// handler reads the param as ABSENT in that case, so normalize the placeholder back
-// to undefined before the validators run — behavior-preserving, not a new rule.
-const absent = (v) => (typeof v === "string" && /^\$\w+$/.test(v) ? undefined : v);
-
 export function moveHostEnv() {
   return {
-    // exactly one of coord / to (the SAME mutual-exclusion the JS handler asserts):
-    // both-absent and both-present are the two rejected shapes.
-    "require-mode": ({ args: [coordArg, toArg] }) => {
-      const coord = absent(coordArg), to = absent(toArg);
-      return !!(coord ? !to : to);
-    },
-
-    // the subject must be a space or matter (beings move themselves, not via move).
-    "require-subject-kind": ({ args: [subject] }) => {
-      const kind = subjectKind(subject);
-      return kind === "space" || kind === "matter";
-    },
-
-    // coord-mode shape: { x, y[, z] } with finite numbers (true when coord is absent,
-    // so a container-mode move passes this gate untouched — the SAME `if (coord)` guard).
-    "valid-coord-shape": ({ args: [coordArg] }) => {
-      const coord = absent(coordArg);
-      if (!coord) return true;
-      return typeof coord === "object" &&
-        Number.isFinite(coord.x) && Number.isFinite(coord.y);
-    },
-
-    // container-mode dest must be a non-empty string id (true when `to` is absent —
-    // a coord-mode move passes untouched, the SAME `if (to)` guard).
-    "valid-to": ({ args: [toArg] }) => {
-      const to = absent(toArg);
-      if (!to) return true;
-      return typeof to === "string" && to.length > 0;
-    },
-
-    // (notSelfMove COLLAPSED to a native Word gate in move.word: "If the subject's kind
-    // equals space and the to equals the subject's id: refuse" — a space-into-itself check
-    // is a CONDITION, not a compute. The predecessor host gates fence off the inputs where
-    // the plain `equals` would differ from the old String()-coercing host fn. Proven
-    // equivalent over the reachable region; subjectKind/targetIdOf stay, resolveSource uses them.)
-
-    // resolveSource(subject, coord, to, history) — the source-space READ (the world
+    // resolve-source(subject, coord, to, history) — the source-space READ (the world
     // strand's only substrate touch). Mirrors the JS handler's destExists check, the
     // loadOrFold over the subject to capture fromSpaceId, and the coord bounds check
     // against the container's size. Reuses the SAME Space.exists / loadOrFold; lays NO
     // fact; throws the SAME IbpError on a missing dest / missing subject / out-of-bounds.
-    "resolve-source": async ({ args: [subject, coordArg, toArg, argHistory] }, ctx) => {
-      const coord = absent(coordArg), to = absent(toArg);
-      const history = absent(argHistory) || historyOf(ctx);
+    "resolve-source": async ({ args: [subject, coord, to, argHistory] }, ctx) => {
+      const history = argHistory || historyOf(ctx);
       const kind = subjectKind(subject);
       const targetId = targetIdOf(subject);
       const { loadOrFold } = await import("../../../materials/projections.js");
@@ -115,25 +71,14 @@ export function moveHostEnv() {
 
       // coord-mode bounds: throw on out-of-bounds rather than clamping (a silent clamp
       // would lie — the reel would say "moved to (X,Y)" while the row stored a clamped
-      // value). The SAME per-axis check against the container's size.
+      // value). This calls the SAME canonical bounds math create-matter / set-matter use
+      // (coordBounds.assertCoordWithinSize) — NOT an inline copy, so move can't drift from
+      // the matter check. x/y are guaranteed finite by move.word's shape gates and z is
+      // finite-or-absent, so the helper's non-finite skip is a no-op here.
       if (coord && fromSpaceId) {
         const containerSlot = await loadOrFold("space", fromSpaceId, history);
         const size = containerSlot?.state?.size || null;
-        if (size) {
-          for (const axis of ["x", "y", "z"]) {
-            if (!Number.isFinite(coord[axis])) continue;
-            const cap = typeof size[axis] === "number" && size[axis] > 0 ? size[axis] : null;
-            if (cap === null) continue;
-            const high = Number.isInteger(coord[axis]) ? Math.trunc(cap) - 1 : cap - Number.EPSILON;
-            if (coord[axis] < 0 || coord[axis] > high) {
-              throw new IbpError(
-                IBP_ERR.INVALID_INPUT,
-                `move: coord.${axis}=${coord[axis]} is out of bounds (0..${high} for this container)`,
-                { axis, value: coord[axis], cap: high },
-              );
-            }
-          }
-        }
+        assertCoordWithinSize(coord, size, { op: "move", noun: "container" });
       }
 
       return fromSpaceId;

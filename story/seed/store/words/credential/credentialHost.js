@@ -1,59 +1,63 @@
 // credentialHost.js — host-escape glue for the credential ops (credential-reset
 // first; read/detach/attach share the same primitives). Wires the SAME functions
-// the JS handlers in credentialOps.js call into ctx.env.host: the authority FOLD,
-// the crypto mint/decrypt, the target-row load, the being-parent lookup, and the
-// ordered set-being writes. No reimplementation — only the env adapter the `.word`
+// the JS handlers in credentialOps.js call into ctx.env.host: the crypto mint/decrypt
+// and the target-row load. No reimplementation — only the env adapter the `.word`
 // reaches through `host:` escapes (the orchestration strand the cut deletes).
+//
+// The AUTHORITY and BEING-PARENT walks are NO LONGER here. They are read INLINE in the
+// gates now — `If <caller> has credential authority over <target>` and `If <caller> is the
+// being-parent of <target>` — resolved through floorHostEnv's hasCredentialAuthority /
+// isBeingParentOf (the shared floor predicate every .word runner merges). A relation read
+// as a native cond, never a value pulled out to hand-compare.
 //
 // callHost invokes each as `fn({ args: [...] }, ctx)` (the parser emits
 // `host: fn(a, b) as c` -> params:{ args:["$a","$b"] }). After the verb-native
 // collapse, NONE of these lay a fact: the authority walk is a read (now a SEE
 // predicate in the .word), the crypto is compute, the three re-mint writes are
-// NATIVE do:set-being acts, and the reveal rides the return — only the KDF and its
-// cutoff instant remain host (the one external-resource escape).
+// NATIVE do:set-being acts, and the reveal rides the return — only the KDF (scrypt/AES),
+// remains the host floor. The revoke cutoff is a reel-head READ (chain position), no clock.
 
 import {
   mintCredentialSpec,
   decryptCredential,
 } from "../../../materials/being/identity/credentials.js";
-import {
-  hasCredentialAuthority,
-  findBeingParent,
-} from "../../../materials/being/identity/lineage.js";
-import { loadTargetRow } from "../../../materials/_targetShape.js";
-
-const historyOf = (ctx) =>
-  ctx?.moment?.actorAct?.history || ctx?.history || "0";
+import { loadTargetRow, targetIdOf } from "../../../materials/_targetShape.js";
 
 export function credentialHostEnv() {
   return {
-    // hasCredentialAuthority(caller, target, branch) -> the being-tree authority
-    // fold (lineage.js): self/I short-circuit, else the asker's NAME (trueName)
-    // owning the target or an ancestor / holding a covering point. One composite
-    // predicate the JS handler calls as a unit.
-    hasCredentialAuthority: async ({ args: [caller, target, history] }, ctx) =>
-      hasCredentialAuthority(
-        String(caller),
-        String(target),
-        history || historyOf(ctx),
-      ),
+    // resolve-target-being(target) -> the bare being id of the DO target. The WORD-SOLE
+    // bridge binds the STANDARD trigger `target` as the {kind,id} identity (do.js runOpWord),
+    // but a direct-bridge caller may bind a bare id string; targetIdOf normalizes BOTH to the
+    // id the gates / writes / reveal key on (the SAME normalize the deleted JS adapter did via
+    // targetBeingIdOf). A derive-from-inputs see (it lays no fact), in SEE_FLOOR.
+    "resolve-target-being": async ({ args: [target] }) =>
+      String(targetIdOf(target)),
 
     // see-op "mint-credential" -> the fresh credential spec the native writes + the
     // reveal-on-return read: the scrypt `hash`, the encrypted blob (`plain` ->
-    // qualities.auth.credentialPlain), the cleartext (`plaintext`, decrypted once here so
-    // it rides the return, never a fact — rule 7), and the cutoff instant (`resetAt`). A
-    // pure COMPUTE perceived as a value — the .word says `see mint-credential as
-    // credential`; the verb IS the nature (no fact, like every see). The KDF/scrypt + AES
-    // encrypt are the genuine computation; `resetAt` is the ONE wall-clock read, scoped to
-    // this crypto see-op (rule 13's token-cutoff) — never the eval loop.
+    // qualities.auth.credentialPlain), and the cleartext (`plaintext`, decrypted once here so
+    // it rides the return, never a fact — rule 7). A pure COMPUTE perceived as a value — the
+    // .word says `see mint-credential as credential`; the verb IS the nature (no fact, like
+    // every see). The KDF/scrypt + AES encrypt are the genuine computation. NO clock here: the
+    // revoke cutoff moved to `reel-head-of` below — a chain position, not a wall-clock instant.
     "mint-credential": async () => {
       const spec = await mintCredentialSpec(null);
       return {
         hash: spec.hash,
         plain: spec.plain,
         plaintext: decryptCredential(spec.plain),
-        resetAt: new Date().toISOString(),
       };
+    },
+
+    // see-op "reel-head-of" -> the target being's current reel HEAD seq on "0": the CHAIN
+    // POSITION a credential-reset stamps as tokensInvalidBefore. A session token carries the
+    // reel head it was minted at (iss_seq, generateToken); minted at-or-before this seq ->
+    // revoked (verifyTokenStrict). The reset's own three set-being writes advance the head past
+    // it, so post-reset tokens survive. A pure read (no fact), in SEE_FLOOR — the time-purge's
+    // answer to "tokens from before the reset": a seq, never a clock.
+    "reel-head-of": async ({ args: [target] }) => {
+      const { readHead } = await import("../../../past/reel/reelHeads.js");
+      return readHead("being", String(targetIdOf(target)), { history: "0" });
     },
 
     // readCredential(target) -> credential-read's one host escape: read the target
@@ -87,10 +91,5 @@ export function credentialHostEnv() {
       loadTargetRow({ kind: "being", id: String(target) }, "being", {
         moment: ctx?.moment || null,
       }),
-
-    // findBeingParent(target) -> the being-parent beingId for credential-attach's
-    // being-parent-only gate (reads the be:birth fact's parentBeingId).
-    "find-being-parent": async ({ args: [target] }) =>
-      findBeingParent(String(target)),
   };
 }

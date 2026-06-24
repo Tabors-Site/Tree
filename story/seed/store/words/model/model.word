@@ -1,27 +1,31 @@
 # model.word — set-model: give a being/space/matter its 3D body (store/words/model/, the
 # set-model DO op).
 #
-# The CONTROL strand (the clear-vs-set fork + the modelMatterId gate) is .word. The
-# genuine computes stay host (modelHost.js): assert-may-set-model (the per-kind self/
-# author/owner auth gate, throws on deny), resolve-model-block (resolve the model matter +
-# snapshot hash/url/name — content-store work), write-model / clear-model (the set-<kind>
-# field-path enrichment over being/space/matter).
+# The CONTROL strand (the actor gate + the clear-vs-set fork + the modelMatterId gate) is
+# .word. The genuine computes stay host READS (modelHost.js), reusing the two SEE_FLOOR names
+# this slice owns (the see-op door is a CLOSED set, 17.md): assert-may-set-model (the per-kind
+# self/author/owner auth gate, throws on deny) and resolve-model-block (the ONE block builder —
+# branched on `clear`: SET resolves the model matter + snapshots hash/url/name AND builds the
+# set-<kind> {field,value,merge}; CLEAR builds the null {field,value,merge}). Each is a pure
+# `see` — it reads/computes and RETURNS; it lays no fact and mutates nothing.
 #
-# THE DESIGN — param-ENRICHMENT, not a direct emit: set-model lays NO fact of its own. The
-# write/clear escapes MUTATE the op's params (field / value / merge, the set-<kind> shape)
-# in place, and the dispatcher's auto-fact + the qualities reducer apply the write. So the
-# JS fallback keeps working unchanged. The escapes are kebab-case (modelHost.js), invoked
-# via `see <escape>(...) as <bind>` (the key.word pattern for a kebab returning escape).
+# THE DESIGN — the word AUTHORS its fact. set-model lays no separate fact: the dispatcher's
+# auto-fact (do.js runOpWord → stampsWordFact) stamps the ONE caller-attributed do:set-model.
+# The word RETURNS that fact's params (`factParams` = the {field,value,merge} block resolve-model-
+# block built) plus a {kind,id} `factTarget` — the DYNAMIC reel (being | space | matter), so
+# stampsWordFact targets the right slot and the qualities reducer applies the deep write. The
+# top-level set/cleared is the ANSWER the asker reads (the result).
 #
-# The bridge binds `target`, `kind`, `caller`, `branch`, and the params (`modelMatterId`,
-# `scale`, `rotation`, `clear`, `forMatterType`).
+# The STANDARD trigger binds `target` ({kind,id}), `targetKind` (its extracted kind),
+# `targetId` (its extracted id), `caller` (the acting being), `branch`, and the params
+# (`modelMatterId`, `scale`, `rotation`, `clear`, `forMatterType`).
 
 When a caller sets a model on a target:
-  see assert-may-set-model(kind, target, caller) as gated.
+  If no caller, refuse with "set-model: identity required" as unauthorized.
+  see assert-may-set-model(targetKind, target, caller) as gated.
   If clear:
-    see clear-model(kind, forMatterType) as cleared.
-    Return cleared: true.
-  If no modelMatterId, refuse with "modelMatterId required: upload a model matter first, or pass clear=true" as invalid-input.
-  see resolve-model-block(modelMatterId, scale, rotation) as bundle.
-  see write-model(kind, forMatterType, bundle) as wrote.
-  Return set: true.
+    see resolve-model-block(targetKind, modelMatterId, scale, rotation, forMatterType, clear) as block.
+    Return cleared: true, factParams: $block, factTarget: { kind: $targetKind, id: $targetId }.
+  If no modelMatterId, refuse with "set-model: `modelMatterId` required (upload first via create-matter type=model, or pass clear=true)" as invalid-input.
+  see resolve-model-block(targetKind, modelMatterId, scale, rotation, forMatterType, clear) as block.
+  Return set: true, factParams: $block, factTarget: { kind: $targetKind, id: $targetId }.

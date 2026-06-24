@@ -60,6 +60,7 @@ export function llmHostEnv() {
         { moment: ctx?.moment ?? null },
       );
       return {
+        beingId,
         connectionId: r.connectionId,
         wasAssigned: r.wasAssigned,
         setBeingParams: r.setBeingParams,
@@ -75,7 +76,7 @@ export function llmHostEnv() {
       const { resolveConnectionRemoval } = await import("../../../present/cognition/llm/connect.js");
       const beingId = String(targetIdOf(target));
       const r = await resolveConnectionRemoval(beingId, p.connectionId, { moment: ctx?.moment ?? null });
-      return { connectionId: r.connectionId, setBeingParams: r.setBeingParams };
+      return { beingId, connectionId: r.connectionId, setBeingParams: r.setBeingParams };
     },
 
     // assign-llm-slot: validate slot + connection-exists, bake the set params + branch flags

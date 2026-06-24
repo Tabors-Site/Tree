@@ -10,7 +10,7 @@
 // grant-able emits one Fact on the target being's reel. The being
 // reducer (applyAbleGrants in reducerHelpers.js) folds it into
 // qualities.ablesGranted:
-//   grant-able  → append { able, anchorSpaceId|anchorBeingId, grantedBy, grantedAt }
+//   grant-able  → append { able, anchorSpaceId|anchorBeingId, grantedBy }
 //
 // Duplicate grants from different grantors live as separate entries,
 // each separately revocable. The being holds the able until ALL
@@ -21,102 +21,22 @@
 // `grant-able:*` for super-grantors like angel) permits granting X.
 // The chain back to I-Am is structural.
 //
-// This self-registers at module load. `seed/services.js` imports this
-// file for side effects; the registry is populated before any caller
-// dispatches.
+// WORD-SOURCED (handler-less, Tabor's no-mirror law): grant-able has NO JS handler.
+// Its world strand is grant-able.word — the ONLY path. The op registers a `word`
+// descriptor ({ noun:"being", idFrom:"granteeBeingId" }) + its `hostEnv` (grantHostEnv);
+// do.js's generic runOpWord resolves grant-able.word, runs it with the standard trigger,
+// and promotes the word-authored `factParams` (the grant record) + the grantee target
+// (granteeBeingId) via stampsWordFact. The op's WORLD effect is the one do:grant-able fact
+// on the grantee's reel. No `_grantAbleViaWord` adapter, no JS body — registration only.
 
 import { registerOperation } from "../../../ibp/operations.js";
-import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { registerAbleWord } from "../../../present/word/ableWordRegistry.js";
-import { targetIdOf } from "../../../materials/_targetShape.js";
+import { grantHostEnv } from "./grantHost.js";
 
-async function grantAbleHandler({ target, params, identity, moment }) {
-  // THE CONVERSION: grant-able's validation + record is grant-able.word (caller mode). The
-  // .word returns the record; the cut enriches the op params with grantedBy/grantedAt so
-  // the dispatcher's auto-emitted grant-able fact carries them (the being reducer reads
-  // them from fact.params). JS body = clean-miss fallback.
-  const viaWord = await _grantAbleViaWord({ caller: identity?.beingId, target, able: params?.able, anchorSpaceId: params?.anchorSpaceId, anchorBeingId: params?.anchorBeingId, moment });
-  if (viaWord) {
-    if (params) { params.grantedBy = viaWord.grantedBy; params.grantedAt = viaWord.grantedAt; }
-    return viaWord;
-  }
-
-  if (!identity?.beingId) {
-    throw new IbpError(
-      IBP_ERR.UNAUTHORIZED,
-      "grant-able: identity required (the grantor's beingId)",
-    );
-  }
-  if (!params || typeof params !== "object") {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "grant-able: params required");
-  }
-  const { able, anchorSpaceId = null, anchorBeingId = null } = params;
-  if (typeof able !== "string" || !able.length) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "grant-able: `able` is required");
-  }
-  if (!anchorSpaceId && !anchorBeingId) {
-    throw new IbpError(
-      IBP_ERR.INVALID_INPUT,
-      "grant-able: one of `anchorSpaceId` or `anchorBeingId` is required",
-    );
-  }
-  if (anchorSpaceId && anchorBeingId) {
-    throw new IbpError(
-      IBP_ERR.INVALID_INPUT,
-      "grant-able: only one of `anchorSpaceId` or `anchorBeingId` may be set",
-    );
-  }
-  // Validate the able exists in the registry — can't grant a non-able.
-  const { getAble } = await import("../../../present/ables/registry.js");
-  const ableSpec = getAble(able);
-  if (!ableSpec) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, `grant-able: able "${able}" is not registered`);
-  }
-  // Enrich params in-place so the auto-emitted Fact carries the full
-  // grant record (grantedBy + grantedAt). The being reducer reads
-  // these from fact.params and appends to qualities.ablesGranted.
-  // No expiry: wall-clock expiry is a human-time concept the story
-  // has no clock for; a grant lasts until revoked. Time-bound grants
-  // arrive with story-time (moments), not ISO timestamps — see
-  // present/ables/acquisition.js.
-  const grantedBy = String(identity.beingId);
-  const grantedAt = new Date().toISOString();
-  params.grantedBy = grantedBy;
-  params.grantedAt = grantedAt;
-  return {
-    granted: true,
-    able,
-    granteeBeingId: String(targetIdOf(target)),
-    anchorSpaceId,
-    anchorBeingId,
-    grantedBy,
-    grantedAt,
-  };
-}
-
-// grant-able's world strand is grant-able.word (the gates + the able-registry check + the
-// record). CALLER mode. Returns {granted, able, granteeBeingId, anchorSpaceId,
-// anchorBeingId, grantedBy, grantedAt} or null on a clean miss so the JS body runs.
+// Self-register this slice's co-located WORLD strand (CONVERTING.md): the bridge
+// resolves ("being", "grant-able") to grant-able.word, its host escapes wired by
+// grantHost.js. Registered at module load (services.js imports this file at boot).
 registerAbleWord("being", "grant-able", new URL("./grant-able.word", import.meta.url));
-async function _grantAbleViaWord({ caller, target, able, anchorSpaceId, anchorBeingId, moment }) {
-  if (!moment) return null;
-  const { resolveAbleWord, runAbleWord } = await import("../../../present/word/ableWordRegistry.js");
-  const ir = resolveAbleWord("being", "grant-able", moment?.actorAct?.history);
-  if (!ir) return null;
-  const { grantHostEnv } = await import("./grantHost.js");
-  const history = moment?.actorAct?.history;
-  try {
-    const { result } = await runAbleWord(ir, {
-      moment, history,
-      trigger: { caller: caller ? String(caller) : null, target: target ? String(targetIdOf(target)) : null, able: able ?? null, anchorSpaceId: anchorSpaceId ?? null, anchorBeingId: anchorBeingId ?? null, branch: history },
-      env: { host: grantHostEnv() },
-    });
-    return result || null;
-  } catch (e) {
-    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
-    throw e;
-  }
-}
 
 registerOperation("grant-able", {
   targets: ["being"],
@@ -138,5 +58,10 @@ registerOperation("grant-able", {
     typeof params?.able === "string" && params.able.length
       ? `grant-able:${params.able}`
       : "grant-able",
-  handler: grantAbleHandler,
+  // No idFrom: the fact targets the dispatch target (the grantee) by default, and its params
+  // ARE the input grant (able + anchor). grantedBy is the signer (the fact's `through`), not
+  // a params field. There is no grantedAt: a grant's when IS its fact's chain place (seq), not
+  // a stored clock value. So the .word just validates + returns the caller-facing result.
+  word: { noun: "being" },
+  hostEnv: grantHostEnv,
 });

@@ -57,6 +57,14 @@ import { loadSigningKey, signActDoc } from "../../past/act/actSig.js";
 import Fact from "../../past/fact/fact.js";
 import log from "../../seedStory/log.js";
 
+// One-word-one-moment enforcement mode (see the guard in sealAct).
+// "warn"  — log run-ons (multi-fact moments) but let them seal (discovery phase,
+//           keeps the boot path alive while run-ons are converted to runWordToStore).
+// "throw" — refuse a run-on at the seal (the end state: the law is in the floor).
+// Env override so it can be flipped without an edit; default "warn" until Phase A's
+// conversions land, then "throw".
+const ONE_WORD_MODE = process.env.TREEOS_ONE_WORD === "throw" ? "throw" : "warn";
+
 function MAX_CHAT_CONTENT_BYTES() {
   return Math.max(
     10000,
@@ -193,6 +201,50 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
       `Doctrine (philosophy/MOMENT.md): one moment = one DO/BE/SUMMON. ` +
       `Split into separate moments — open each in its own withIAmAct / withBeingAct.`,
     );
+  }
+
+  // ── ONE-WORD-ONE-MOMENT: the spacebar enforcement (philosophy/word/623, 23.md;
+  // plan elegant-cooking-teapot Phase A). It is ALWAYS one word: one word = one
+  // moment = one fact. A "word" can be 100 words, but each of those is one word,
+  // one word, one word — laid in sequence, each its own act→fact at the head, the
+  // chain re-folding between. There is no multi-fact moment. The run-on (N facts
+  // pooled into one moment via runAbleWord — cherub:birth's five deeds, etc.) is the
+  // drift this floor deletes: it must become a SENTENCE run moment-to-moment
+  // (runWordToStore), one deed = one moment.
+  //
+  // MODE: "warn" surfaces every run-on (naming its facts) without breaking the boot
+  // path, so the runAbleWord composites can be converted one at a time; "throw" is
+  // the end state — a run-on cannot seal at all ("everything has to work to work").
+  // Flip ONE_WORD_MODE to "throw" once Phase A's conversions are green.
+  // The ONE sanctioned fusion: the self-grounding root birth (the I-Am genesis axiom).
+  // "I is implied as the signer of each word" (Tabor) — and at the very root, identity and
+  // existence are co-primitive: the not-yet-existing being declares its own name AND births
+  // itself in one irreducible "I am." A be:birth whose actor IS its target (through === of.id)
+  // is, by construction, a being birthing ITSELF — only a self-grounding root can do that
+  // (every other birth has a distinct parent actor, so this cannot be forged into a loophole).
+  // This is the lone place name:declare + be:birth fuse in one atomic moment, kept atomic so the
+  // bootstrap stays zero-trace-on-crash. Everything else is strictly one word = one fact.
+  const isGenesisRootBirth =
+    hasFacts &&
+    deltaF.some(
+      (f) =>
+        f?.verb === "be" &&
+        f?.act === "birth" &&
+        f?.of?.id != null &&
+        String(f.through) === String(f.of.id),
+    );
+  if (hasFacts && deltaF.length > 1 && !isGenesisRootBirth) {
+    const facts = deltaF
+      .map((f) => `${f?.verb || "?"}:${f?.act || "?"}→${f?.of?.kind || "?"}:${String(f?.of?.id || "?").slice(0, 8)}`)
+      .join(", ");
+    const msg =
+      `RUN-ON: Act ${String(plannedAct._id).slice(0, 8)} (${plannedAct.to?.slice?.(0, 8) || "?"}) ` +
+      `lays ${deltaF.length} facts in ONE moment [${facts}]. ` +
+      `The law is one word = one moment = one fact (philosophy/word/623). ` +
+      `This is a run-on — make it a SENTENCE: run the deeds moment-to-moment via ` +
+      `runWordToStore (one deed = one moment), not pooled via runAbleWord.`;
+    if (ONE_WORD_MODE === "throw") throw new Error(`sealAct: ${msg}`);
+    log.warn("OneWord", msg);
   }
 
   const endTime = new Date();

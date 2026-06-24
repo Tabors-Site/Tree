@@ -1,37 +1,68 @@
 # move.word — do:move: pick up a space or matter and put it somewhere else
-# (moveOp.js, the move op; per doctrine do:move is the position change, not be).
+# (move/index.js, the move op; per doctrine do:move is the position change, not be).
 #
 # Two modes discriminated by which param the caller passes: coord-mode (move the
-# subject to a new cell inside its current container) and container-mode (carry the
-# subject across a doorway into a different space). The handler is a GATE + READ +
-# ENRICH strand: it validates the request, reads the source space (so the live-SEE
-# layer can invalidate both ends), and hands the move fact its `fromSpaceId` plus
-# `_factTarget`. The ONE world fact (do:move) is the op's OWN audit fact, stamped by
-# the dispatcher from the enriched params and attributed to the CALLER — the `.word`
-# does NOT emit it (that would double-lay); it RETURNS the enrichment the cut writes
-# back into params/result.
+# target to a new cell inside its current container) and container-mode (carry the
+# target across a doorway into a different space). The word is a GATE + READ + RETURN
+# strand: it validates the request, reads the source space (so the live-SEE layer can
+# invalidate both ends), and RETURNS the move fact — its params (moved/mode/fromSpaceId)
+# and its factTarget (the moved subject {kind,id}). The ONE world fact (do:move) is the
+# op's OWN audit fact, stamped by the dispatcher (do.js runOpWord → stampsWordFact) from
+# the returned factParams/factTarget and attributed to the CALLER. The word does NOT
+# emit it (that would double-lay); it AUTHORS the fact and returns it.
 #
-# THE WALL. The CONTROL strand (the mode fork + every refuse + the return) is `.word`.
-# The genuine computes stay `host:`:
-#   - requireMode / requireSubjectKind / validCoordShape / validTo / notSelfMove:
-#     pure validation over the params (computation, not a read).
-#   - resolveSource: the source-space read — loadOrFold over space/matter for the
-#     subject's parent / containing space, plus the destination-exists check and the
-#     coord bounds check against the container's size. These are multi-step projection
-#     lookups (slot.state.parent / .spaceId / .size) the `see` forms cannot yet shape,
-#     so they are reached as ONE host escape that calls the SAME Space.exists /
-#     loadOrFold the JS handler calls (no reimplementation). It returns the fromSpaceId
-#     the move fact records, or refuses on a missing dest / missing subject / out-of-bounds.
-# The bridge binds `subject` ({kind,id} of the moved thing), `coord`, `to`, `branch`.
+# WORD-SOLE: every VALIDATION gate is NATIVE Word — presence (`no coord`), kind
+# (`is a space`), and the type primitives (`is a finite number`, `is a string`) the
+# grammar speaks (parser §1 + cond.js isFinite/isString). The ONLY host escape left is
+# `resolve-source`, the genuine multi-step projection READ: loadOrFold over space/matter
+# for the target's parent / containing space, the destination-exists check, and the coord
+# bounds check against the container's size — multi-step projection lookups (slot.state
+# .parent / .spaceId / .size) the see forms cannot shape, reached as ONE see-op calling
+# the SAME Space.exists / loadOrFold (no reimplementation). It returns the fromSpaceId the
+# move fact records, or refuses on a missing dest / missing subject / out-of-bounds.
+#
+# DYNAMIC fact kind: the moved subject is a space OR a matter, so the fact reel varies.
+# The word names BOTH via factTarget: { kind: $target.kind, id: $targetId } — stampsWordFact
+# honors the {kind,id} object directly (not forced to the op's noun), so one word, one
+# moment, covers both reels. fromSpaceId rides factParams (it was the adapter's params
+# mutation); the moved subject is the factTarget (it was the adapter's targetsFact).
+#
+# The STANDARD trigger binds `target` ({kind,id} of the moved thing — the dispatch
+# target), `targetId` (its extracted id), `coord`, `to`, and `branch`.
 
 When a being brings matter into a space:
-  If not require-mode(coord, to), refuse with "move: must specify either `coord` (in-space) or `to` (cross-space), not both".
-  If not require-subject-kind(subject), refuse with "move: target must be a space or matter".
-  If not valid-coord-shape(coord), refuse with "move: `coord` must be { x, y[, z] } with finite numbers".
-  If not valid-to(to), refuse with "move: `to` must be a space id string".
-  # a space cannot move into itself. A native gate: the predecessor host gates above
-  # guarantee a real typed subject + a real non-empty string `to` reach here, so the plain
-  # `equals` (String-coercing, via idEquals) matches the old host String(to) !== String(id).
-  If the subject's kind equals space and the to equals the subject's id, refuse with "move: cannot move a space into itself".
-  see resolve-source(subject, coord, to, branch) as fromSpaceId.
-  Return fromSpaceId: $fromSpaceId.
+  # exactly one mode — coord (in-space) xor to (cross-space). Two native presence gates,
+  # the same split and the same two messages. The trigger binds an absent param to null,
+  # so `no coord` / `coord` read presence directly.
+  If no coord, and no to, refuse with "move: must specify either `coord` (in-space) or `to` (cross-space)".
+  If coord, and to, refuse with "move: `coord` and `to` are mutually exclusive; pick one mode".
+  # the subject must be a space or matter (beings move themselves, not via move). A native
+  # kind gate on the bound {kind,id} — equivalent to the old detectTargetKind host fn over
+  # move's reachable inputs (a bare-string target is ambiguous for a two-kind op and never
+  # typed here, so its absent .kind refuses identically).
+  If not the target is a space, and not the target is a matter, refuse with "move: target must be a space or matter".
+  # coord-mode shape: { x, y[, z] } with finite numbers. Native type gates — x and y are
+  # required-finite; z is OPTIONAL but, WHEN PRESENT, must be finite. (That last gate closes
+  # the silent-accept-bad-z hole: a non-finite z used to slip the shape check and then get
+  # skipped by the bounds loop, sealing a move with a garbage z.) A container-mode move (no
+  # coord) passes every coord gate untouched.
+  If coord, and the coord's x is not a finite number, refuse with "move: `coord` must be { x, y[, z] } with finite numbers".
+  If coord, and the coord's y is not a finite number, refuse with "move: `coord` must be { x, y[, z] } with finite numbers".
+  If the coord's z is present, and the coord's z is not a finite number, refuse with "move: `coord.z`, when present, must be a finite number".
+  # container-mode dest must be a string id (a coord-mode move, no `to`, passes untouched;
+  # an empty `to` is already caught as absence by the mode gate above).
+  If to, and the to is not a string, refuse with "move: `to` must be a space id string".
+  # a space cannot move into itself. The native gates above guarantee a real typed target +
+  # a real `to` reach here, so the plain `equals` (String-coercing, via idEquals) matches the
+  # old host String(to) !== String(id).
+  If the target's kind equals space and the to equals the target's id, refuse with "move: cannot move a space into itself".
+  see resolve-source(target, coord, to, branch) as fromSpaceId.
+  # AUTHOR the op's own do:move fact. factParams ARE the original move params (coord-mode: the
+  # coord; container-mode: the `to` dest) plus fromSpaceId (the live-SEE invalidation hint resolve-
+  # source found) — the SAME shape the old adapter's `params.fromSpaceId = ...` mutation produced,
+  # so applyMove (reducerHelpers.js) folds coord→cell / to→spaceId,parent unchanged. factTarget
+  # names the moved SUBJECT (not the room it left), its kind dynamic (space|matter). The top-level
+  # moved/mode are the ANSWER the asker reads (the result), not fact params. coord-mode vs container-
+  # mode is the only branch — the gates above already rejected the both/neither cases.
+  If coord, Return moved: true, mode: "coord", factParams: { coord: $coord, fromSpaceId: $fromSpaceId }, factTarget: { kind: $target.kind, id: $targetId }.
+  Return moved: true, mode: "container", factParams: { to: $to, fromSpaceId: $fromSpaceId }, factTarget: { kind: $target.kind, id: $targetId }.

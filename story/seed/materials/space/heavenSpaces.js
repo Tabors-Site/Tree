@@ -143,11 +143,19 @@ export const HEAVEN_SPACE = Object.freeze({
   // ("1", "1a", "1a1", ...); main itself is the implicit "0" and has
   // no child here. Children carry history metadata in their qualities
   // (parent, branchPoint, label, paused state). SEE on
-  // `<story>/./branches` returns the history tree; the underlying
+  // `<story>/./histories` returns the history tree; the underlying
   // truth is the History Mongo collection (one row per non-main
   // history). See seed/materials/history/histories.js for the read
   // helpers and seed/timeline.md for the doctrine.
-  BRANCHES: "branches",
+  //
+  // NOTE: the enum key is HISTORIES (value "histories") — every consumer
+  // (sprout's planting list, historyRegistry's findHeavenSpace, the
+  // ./histories child-plant address in historyCreation) references
+  // HEAVEN_SPACE.HISTORIES. An earlier rename to BRANCHES/"branches"
+  // was never adopted (zero consumers) and left HEAVEN_SPACE.HISTORIES
+  // undefined, so the planted space carried heavenSpace:undefined and
+  // pointer lookups returned "the .histories heaven space was not found."
+  HISTORIES: "histories",
   // The host tier: the running machine represented through the same
   // protocol as everything else. `host` is tier-3 under heaven; its
   // three children hold the HTTP listener, the WebSocket pool, and

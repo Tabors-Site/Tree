@@ -1,0 +1,13 @@
+# set-owner.word — set a space's owner (the set-owner DO op). WORD-SOLE: this `.word` is the only
+# path. The input gates are the word; the auth + per-space lock + CAS are the FLOOR, reached
+# through `see set-owner-block` (ownership.js setOwner) — it returns the {field:"owner", value}
+# block and lays no fact. The word AUTHORS the dispatcher's ONE do:set-owner fact: factParams = the
+# block, factTarget = the space. The target is a space or a resolved stance; `see space-id-of`
+# resolves the space id from either. The STANDARD trigger binds target, caller, branch, newOwnerId.
+
+When a being sets the owner of a space:
+  If no caller, refuse with "set-owner: identity required" as unauthorized.
+  If no newOwnerId, refuse with "set-owner: newOwnerId is required" as invalid-input.
+  see space-id-of(target) as spaceId.
+  see set-owner-block(spaceId, newOwnerId, caller) as block.
+  Return ownerSet: true, spaceId: $spaceId, newOwnerId: $newOwnerId, factParams: $block, factTarget: { kind: "space", id: $spaceId }.

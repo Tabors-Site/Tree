@@ -37,18 +37,13 @@
 // by `end-matter`, or by a future story-time (moments) mechanism.
 
 import { registerOperation } from "../../../ibp/operations.js";
-import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
-import { emitFact } from "../../../past/fact/facts.js";
-import { detectTargetKind, targetIdOf } from "../../../materials/_targetShape.js";
-import { matterContentId } from "../../../materials/matter/matterId.js";
 import { registerAbleWord } from "../../../present/word/ableWordRegistry.js";
-import { targetsFact, ranAsMoments } from "../../../ibp/factResult.js";
+import { portalHostEnv } from "./portalHost.js";
 
 // Self-register this module's co-located `.word` slice (CONVERTING.md): importing
 // portalOp.js (at seed boot, or in a DRY harness) registers it so
-// resolveAbleWord("portal", "form-portal") finds the world strand. The cut in the
-// handler runs it through the bridge with portalHostEnv(); the JS body is the
-// clean-miss fallback.
+// resolveAbleWord("portal", "form-portal") finds the world strand. do.js's runOpWord
+// resolves and runs portal.word in the OP's ONE moment with portalHostEnv() wired.
 registerAbleWord("portal", "form-portal", new URL("./portal.word", import.meta.url));
 
 // Matches the IBPA shapes a portal can point at. A portal opens onto
@@ -72,159 +67,23 @@ registerAbleWord("portal", "form-portal", new URL("./portal.word", import.meta.u
 export const IBPA_RE =
   /^(?:[a-zA-Z0-9.\-_]+(?:#[^/]+)?|#[^/]+)\/.*$/;
 
-// The .word is the live path: run portal.word through the bridge (CALLER mode, host
-// see-ops wired by portalHost.js). It COMPOSES create-matter with a nested ibpa spec —
-// no host: emit. Returns the result, or null on a clean miss so the JS body below runs.
-async function _formPortalViaWord({ target, params, identity, moment }) {
-  if (!moment) return null;
-  const caller = identity?.beingId;
-  if (!caller) throw new IbpError(IBP_ERR.UNAUTHORIZED, "form-portal requires an identified actor");
-  const { resolveAbleWord, runWordToStore } = await import("../../../present/word/ableWordRegistry.js");
-  const history = moment?.actorAct?.history;
-  const ir = resolveAbleWord("portal", "form-portal", history);
-  if (!ir) return null;
-  const { portalHostEnv } = await import("./portalHost.js");
-  try {
-    // portal.word composes a `do create-matter` deed → its OWN moment via runWordToStore;
-    // ranAsMoments tells the dispatcher the op stamps none of its own (the zero-skipAudit marker).
-    const { result } = await runWordToStore(ir, {
-      beingId: String(caller),
-      name: null,
-      history,
-      env: { host: portalHostEnv() },
-      trigger: {
-        target,
-        foreignAddress: params?.target ?? null,
-        name: params?.name ?? null,
-        caller: String(caller),
-      },
-    });
-    return result ? ranAsMoments(result) : null;
-  } catch (e) {
-    if (e && e.__wordRefusal) throw new IbpError(e.code || IBP_ERR.INVALID_INPUT, e.message);
-    throw e;
-  }
-}
-
-async function formPortalHandler({ target, params, moment, identity }) {
-  // form-portal's world strand is portal.word (composes do:create-matter via runWordToStore).
-  // NO JS fallback (Tabor): the .word IS the op. On a clean miss, refuse.
-  const viaWord = await _formPortalViaWord({ target, params, identity, moment });
-  if (!viaWord) {
-    throw new IbpError(IBP_ERR.INVALID_INPUT, "form-portal: portal.word is not available on this history");
-  }
-  return viaWord;
-  // ── (dead) the old JS compose fallback follows — unreachable now, cleanup follow-up ──
-
-  const { target: foreignAddress, name } = params || {};
-
-  if (typeof foreignAddress !== "string" || !foreignAddress.length) {
-    throw new IbpError(
-      IBP_ERR.INVALID_INPUT,
-      "form-portal: `target` must be a foreign IBPA string (e.g. \"bing.com#0/library\")",
-    );
-  }
-  if (!IBPA_RE.test(foreignAddress)) {
-    throw new IbpError(
-      IBP_ERR.INVALID_INPUT,
-      `form-portal: \`target\` doesn't look like a foreign IBPA: "${foreignAddress}". ` +
-        `Expected "<story-domain>[#<branch>]/<position>".`,
-    );
-  }
-
-  // Resolve the containing space. Portal forms inside the space the
-  // actor is acting on. Matter targets get the matter's containing
-  // space; space targets are the space itself.
-  const kind = detectTargetKind(target);
-  let spaceId;
-  if (kind === "space") {
-    spaceId = String(targetIdOf(target));
-  } else if (kind === "matter") {
-    const { loadOrFold } = await import("../../../materials/projections.js");
-    const history = moment?.actorAct?.history || "0";
-    const matterSlot = await loadOrFold("matter", String(targetIdOf(target)), history);
-    spaceId = matterSlot?.state?.spaceId || null;
-    if (!spaceId) {
-      throw new IbpError(
-        IBP_ERR.SPACE_NOT_FOUND,
-        "form-portal: cannot determine containing space for the matter target",
-      );
-    }
-  } else {
-    throw new IbpError(
-      IBP_ERR.INVALID_INPUT,
-      `form-portal: target must be a space or matter (got ${kind})`,
-    );
-  }
-
-  const actorBeingId = identity?.beingId
-    ? String(identity.beingId)
-    : null;
-  if (!actorBeingId) {
-    throw new IbpError(
-      IBP_ERR.UNAUTHORIZED,
-      "form-portal requires an identified actor",
-    );
-  }
-
-  const history = moment?.targetHistory || moment?.actorAct?.history || "0";
-
-  // ONE fact births the typed portal whole: type, the content
-  // reference, and the qualities.portal provenance block all ride
-  // the create-matter params (applyCreateMatter copies qualities).
-  // The content lives on the foreign story — the {target} reference
-  // shape says so; no separate origin tag.
-  //
-  // Build the spec FIRST, then content-address the row id from it with
-  // matterContentId — the same recipe every other matter uses (matter/
-  // ops.js). Hashing the exact object that rides the fact guarantees the
-  // id is byte-reproducible from its birth spec, never a floating uuid.
-  const createSpec = {
-    spaceId,
-    beingId: actorBeingId,
-    type: "ibpa",
-    content: { target: foreignAddress },
-    name: name || `portal → ${foreignAddress}`,
-    parentMatterId: null,
-    qualities: {
-      // Renderer back-compat + provenance. `content.target` is
-      // canonical; qualities.portal.target mirrors it for the
-      // existing 3D portal-mesh keying.
-      portal: {
-        target:    foreignAddress,
-        createdBy: actorBeingId,
-      },
-    },
-  };
-  const matterId = matterContentId(createSpec);
-
-  await emitFact(
-    {
-      verb: "do",
-      act: "create-matter",
-      through: actorBeingId,
-      of: { kind: "matter", id: matterId },
-      params: createSpec,
-      actId: moment?.actId || null,
-      history,
-    },
-    moment,
-  );
-
-  return targetsFact({
-    formed: true,
-    matterId,
-    spaceId,
-    target: foreignAddress,
-  }, { kind: "matter", id: matterId });
-}
-
+// WORD-SOURCED registration — NO handler (Tabor's no-mirror law: an op is its `.word`
+// OR pure-JS, never both; WORD-SOLE = no handler). do.js's runOpWord resolves
+// portal.word and runs it via runAbleWord in the OP's ONE moment, so the nested
+// `do create-matter` deed pools INTO that moment — laid atomically with the caller.
+//
+// form-portal is a PURE-COMPOSITION: its whole effect is one entailed event ("a portal
+// IS a matter" → one do:create-matter fact). `ranAsMoments: true` tells the dispatcher
+// this op stamps NONE of its own — there is no own do:form-portal audit; the
+// create-matter deed IS the fact. (NOT skipAudit; a one-moment composite.)
+//
+// `able:"portal"` is the ableword resolution key (registerAbleWord namespace);
+// `noun:"matter"` is the entailed deed's target kind. `idFrom` is omitted — form-portal
+// lays no own fact, so there is no own target to mint. hostEnv wires the see-op floor
+// reads (has-address / valid-address / resolve-containing-space) portal.word reaches.
 registerOperation("form-portal", {
   targets: ["space", "matter"],
   ownerExtension: "seed",
-  // form-portal lays NO fact of its own: portal.word composes a do:create-matter deed
-  // (its own moment via runWordToStore), and ranAsMoments tells the dispatcher this op
-  // stamps none of its own — the zero-skipAudit marker, NOT skipAudit.
   args: {
     target: {
       type: "text",
@@ -237,5 +96,6 @@ registerOperation("form-portal", {
       required: false,
     },
   },
-  handler: formPortalHandler,
+  word: { noun: "matter", able: "portal", ranAsMoments: true },
+  hostEnv: portalHostEnv,
 });
