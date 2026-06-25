@@ -1,17 +1,42 @@
 {
   "name": "treeos-story",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
-  "license": "AGPL-3.0",
-  "engines": {
-    "node": ">=18"
-  },
   "scripts": {
-    "story": "cd story && node plant.js",
-    "start": "cd story && node plant.js",
-    "dev": "cd story && node plant.js",
-    "build": "cd site && npm run build",
-    "test": "node --test test/core.test.js"
+    "start": "node plant.js",
+    "test": "node .test/scripts/verify-canon-vectors.js && node .test/scripts/verify-history-resolution.js",
+    "test:e2e": "bash .test/e2e/run-e2e.sh",
+    "build:portal": "cd portal && npm install && npm run build",
+    "dev:portal": "cd portal && npm run dev",
+    "postinstall": "cd portal && npm install && npm run build"
+  },
+  "keywords": [
+    "IBP",
+    "human",
+    "LLMs",
+    "beings",
+    "fact",
+    "act",
+    "history",
+    "federation",
+    "Ours",
+    "5d",
+    "library",
+    "theword",
+    ".word",
+    "truth"
+  ],
+  "author": "Tabor Holly",
+  "license": "AGPL-3.0",
+  "description": "TreeOS Story. Plant the seed. Grow your own Story. Share and receive The Word and Books.",
+  "homepage": "https://treeos.ai",
+  "dependencies": {
+    "file-type": "^22.0.1",
+    "multer": "^2.1.1",
+    "openai": "^6.42.0",
+    "socket.io": "^4.8.1"
+  },
+  "optionalDependencies": {
+    "fuse-native": "^2.2.6"
   }
 }

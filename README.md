@@ -1,6 +1,6 @@
 # TreeOS Story
 
-![stamper](stamper.gif)
+![stamper](/philosophy/stamper.gif)
 
 Plant a seed on a host. It stores and grows a federated and cryptographically signed Story: histories of Named beings who act in space on matter.
 
@@ -21,16 +21,16 @@ The planting (first boot) walks you through setup. Open the URL it prints to use
 
 ## Read deeper
 
-Everything lives in [`story/`](story/). Start there.
+Everything now lives at the repo root. Start with the seed.
 
-- [`story/seed/FACTORY.md`](story/seed/FACTORY.md), the seed in its own words
-- [`story/philosophy/`](story/philosophy/), the doctrine
-- [`story/philosophy/I_AM.md`](story/philosophy/I.md), the cryptographic root
-- [`story/philosophy/theorems.md`](story/philosophy/theorems.md), the formal results
-- [`story/resources/README.md`](story/resources/README.md), building extensions
+- [`seed/FACTORY.md`](seed/FACTORY.md), the seed in its own words
+- [`philosophy/`](philosophy/), the doctrine
+- [`philosophy/I_AM.md`](philosophy/I.md), the cryptographic root
+- [`philosophy/theorems.md`](philosophy/theorems.md), the formal results
+- [`resources/README.md`](resources/README.md), building extensions
 
 ## License
 
-Dual licensed: AGPL-3.0 (free and open) or commercial (paid, closed-source friendly). See [`story/LICENSING.md`](story/LICENSING.md).
+Dual licensed: AGPL-3.0 (free and open) or commercial (paid, closed-source friendly). See [`LICENSING.md`](LICENSING.md).
 
 Created by Tabor Holly. taborgreat@gmail.com.

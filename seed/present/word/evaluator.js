@@ -1,0 +1,1367 @@
+// The Word evaluator, Phase 2 skeleton.
+//
+// Walks a Word IR program (clause-grained nodes, see philosophy/word/5.md) and
+// executes it, emitting facts into ctx.deltaF, the same accumulator the stamper
+// uses. An act, run, becomes a fact (4.md: "an act and a fact are one clause at
+// two tenses"). One act may lay several facts (form-being below).
+//
+// Two modes:
+//   - dryRun: facts are collected into ctx.deltaF only (no DB, no real birth).
+//     Use this to diff the evaluator's facts against the JS handler's facts,
+//     the Phase 2 gate.
+//   - live: facts go through emitFact into the real moment (moment.deltaF),
+//     and form-being dispatches to the real birthBeing primitive.
+//
+// Faithful to the cherub birth flow mapped from the JS handlers:
+//   story/seed/present/ables/cherub/able.js (_registerHumanWithFreshHome)
+//   story/seed/materials/being/identity/birth.js (birthBeing)
+
+// Live-mode primitives (emitFact, birthBeing) are imported lazily inside the live
+// branches, so dry-run never loads the DB stack and can run standalone.
+
+// getPath is the shared dotted-path resolver (cond.js is pure — no DB — so a static
+// import is safe). resolveValue uses it so a `$a.b` write ref descends the same way the
+// `see`/`return`/cond sides already do (the write/read symmetry the credential-reset cut
+// exposed: a flat lookup left `$credential.hash` an unresolved literal in the row).
+import { getPath } from "./cond.js";
+
+// ── entry ────────────────────────────────────────────────────────────────────
+
+// Control-flow unwinds (8.md Engine answers, the CONTROL strand — none lay a fact):
+//   BREAK   — halts the nearest foreach (§3), caught by evalForeach.
+//   WordReturn — a SUCCESS terminator (§7): ends the flow with a `result` the host
+//     transport reads (tokens / seatHistory / reveal). Benign: evaluate() catches it.
+//   WordRefusal — a host HALT (§7): an IbpError-shaped abort that propagates OUT of
+//     evaluate() so the verb layer maps it to the ack error envelope and the moment
+//     rolls back. NO fact laid.
+const BREAK = { __wordBreak: true };
+class WordRefusal extends Error {
+  constructor(message, code = "FORBIDDEN") {
+    super(message || "refused");
+    this.name = "WordRefusal";
+    this.__wordRefusal = true;
+    this.code = code;
+  }
+}
+
+// Run a program (a node or an array of nodes) against a context, return ctx.deltaF.
+// ctx = { moment, identity, history, trigger, env, bindings?, deltaF?, dryRun? }
+// A §7 `return` sets ctx.result and unwinds here (benign); a §7 `refuse` propagates.
+export async function evaluate(program, ctx) {
+  ctx.bindings ??= {};
+  ctx.deltaF ??= [];
+  const nodes = Array.isArray(program) ? program : [program];
+  try {
+    for (const node of nodes) await evalNode(node, ctx);
+  } catch (e) {
+    if (e && e.__wordReturn) {
+      ctx.result = e.result;
+      return ctx.deltaF;
+    } // success terminator
+    throw e; // WordRefusal + real errors propagate to the verb layer
+  }
+  return ctx.deltaF;
+}
+
+async function evalNode(node, ctx) {
+  switch (node.kind) {
+    case "flow":
+      return evalFlow(node, ctx);
+    case "act":
+      return evalAct(node, ctx);
+    case "see":
+      return evalSee(node, ctx); // the READ verb: query the substrate, no fact
+    case "call":
+      return evalCall(node, ctx); // the CALL verb: reach another being (space), lays the reach record
+    case "quotedWord":
+      return evalQuotedWord(node, ctx); // a quoted word: open/said*/close one-word stamps; close sends (call) or folds (recall)
+    case "recall":
+      return evalRecall(node, ctx); // the RECALL verb: reach back across TIME into a chain (no fact); a verdict records the conclusion
+    case "closure":
+      return evalClosure(node, ctx);
+    case "if":
+      return evalIf(node, ctx); // §2: branch in the moment
+    case "mark":
+      return evalMark(node, ctx); // §5: a flow-local flag a sibling cond reads
+    case "foreach":
+      return evalForeach(node, ctx); // §3: iterate a source
+    case "while":
+      return evalWhile(node, ctx); // P4: the conditional loop — re-read the see each pass
+    case "break":
+      throw BREAK; // §3: halt the nearest foreach
+    case "refuse":
+      return evalRefuse(node, ctx); // §7: host halt, no fact
+    case "return":
+      return evalReturn(node, ctx); // §7: success terminator, no fact
+    case "gate":
+      return evalGate(node, ctx); // §8: pre-seal precondition, fail-closed
+    case "match":
+      return evalMatch(node, ctx); // §9: type dispatch (flat surface)
+    case "derive":
+      return evalDerive(node, ctx); // §7: emit a fact, OR register a read-rule
+    // ── the LAW strand (§11 + is/can/cannot): the OBJECTIVE register's first move.
+    // Registered, NEVER run as effects — read backward off the reel (computed-on-read,
+    // Q6/Q7). The parser's reasoning guard is the subject/object wall; everything here
+    // is the law side of it (government-innerfold.md). Collected into ctx.laws until the
+    // able/type-registry integration arms them in authorizeViaAbles / registerMatterType.
+    case "is":
+    case "can":
+    case "cannot":
+    case "law":
+    case "capability":
+    case "extends":
+    case "property":
+    case "prohibition":
+    case "derive-rule":
+    case "lifetime":
+    case "inheritance-rule":
+    case "relate":
+    case "declare":
+    // type-schema declarations ("a X has Y" / "a X accepts/carries/claims …"): forward STRUCTURE
+    // (a law — the schema), never a moment/effect. Collected into ctx.laws; the apply-pass
+    // (runWordToStore) folds them into a kind:"type" word's fields/contentKinds/mimeTypes/claims.
+    case "has":
+    case "accepts":
+    case "carries":
+    case "claims":
+      (ctx.laws ??= []).push(node);
+      return undefined;
+    default:
+      throw new Error(`word: unknown node kind "${node.kind}"`);
+  }
+}
+
+// ── flow (rule 6: a dormant watch; the trigger has already matched to get here) ──
+
+async function evalFlow(flow, ctx) {
+  for (const name of flow.binds || []) ctx.bindings[name] = ctx.trigger?.[name];
+  // the body is `body` (8.md §0) or the legacy `effects` (the current slices); accept
+  // either until the parser settles on `body`.
+  for (const node of flow.body || flow.effects || []) await evalNode(node, ctx);
+}
+
+// ── if (§2): resolve the condition, run the taken branch IN the moment ──────────
+//
+// The condition resolves through the shared `resolveCond` (cond.js, the §1 surface:
+// test skeletons, host predicates, flow-local flags, all/any, negation). then/else are
+// node arrays (a comma-conjoined list inline, or an indented body); the untaken branch
+// is skipped, so its effects never reach the chain. The cherub-connect accumulate-then-
+// branch shape: marks set flow-local flags in a loop, then an `if (no being was found)`
+// reads the OR of them.
+async function evalIf(node, ctx) {
+  const { resolveCond } = await import("./cond.js");
+  const hit = await resolveCond(node.cond, ctx);
+  // chain-native (20.md §80, P4): a BRANCH IS A FACT — but only a real FORK is. A do:if records a
+  // point where the chain could have gone more than one way and a later reader needs to know which.
+  // A GUARD is not a fork: `If no caller, refuse` has ONE live path — it reads the fold and either
+  // passes through (continue, no fact) or refuses (the moment rolls back, no fact either way). The
+  // condition is a see; a guard that passes chose nothing. So lay the do:if ONLY for a genuine
+  // two-way choice between continuing futures — both arms present and neither a bare `refuse`
+  // terminal (a refuse arm is a guard-with-an-explicit-else, still one live future). The test is
+  // "was there a fork," not "did the taken arm lay a fact" (Tabor): both arms must be live.
+  // In per-act-moment mode (runWordToStore) a fork's do:if opens its own moment, the head advances
+  // to it, and the taken consequent chains on it. In legacy in-moment mode (runAbleWord) the do:if
+  // never fires — branches stay inline, byte-identical, protecting the ~16 live flows + the do-op .words.
+  const isRefuseOnly = (b) =>
+    Array.isArray(b) && b.length === 1 && b[0]?.kind === "refuse";
+  const thenB = node.then || [],
+    elseB = node.else || [];
+  const isFork =
+    thenB.length > 0 &&
+    elseB.length > 0 &&
+    !isRefuseOnly(thenB) &&
+    !isRefuseOnly(elseB);
+  if (ctx.perActMoment && isFork) {
+    const self = ctx.identity?.beingId ?? null;
+    await emit(
+      {
+        verb: "do",
+        act: "if",
+        through: self,
+        of: { kind: "being", id: self },
+        params: { taken: hit ? "then" : "else" },
+      },
+      ctx,
+    );
+  }
+  const taken = hit ? node.then : node.else;
+  for (const n of taken || []) await evalNode(n, ctx);
+}
+
+// ── mark (§5): a self-directed flow-local boolean a SIBLING condition later reads ──
+//
+// The parser canonicalized the flag name via inferFlag (its lane), so both the mark and
+// the bare-leaf cond that reads it name the same flag. OR-accumulate: a flag set in any
+// branch or any loop pass stays true (disjunctive — "asFather true if any path
+// succeeded"), so a mark never resets a flag within a flow. Flow-local: it lives in
+// ctx.bindings, never a fact (the CONTROL strand, not WORLD).
+async function evalMark(node, ctx) {
+  const v = node.value !== undefined ? !!node.value : true;
+  ctx.bindings[node.flag] = !!(ctx.bindings[node.flag] || v);
+}
+
+// ── see (the READ verb): query the substrate, NO fact ─────────────────────────────
+//
+// The Word's reads ARE verbs, not host escapes — the see-registry dissolves into Word
+// (1.md). Three forms, live-resolved against the projection read-model + the canonical
+// reads; SEE never stamps a fact (chainRoots.js: "the verb that never stamps facts").
+//   QUERY:     { see, of:"<kind>", where:{<field>:<val>}, bind, one?:bool }   → row(s)
+//   READ:      { see, of:<ref>, read:"<dotted-quality>", fresh?:bool, bind }  → a value
+//   PREDICATE: { see, of:<ref>, descendsFrom:<ref>, bind }                    → bool (being-tree)
+async function evalSee(node, ctx) {
+  const { getPath } = await import("./cond.js");
+  if (ctx.dryRun) {
+    const tag =
+      node.read ||
+      (typeof node.of === "string"
+        ? node.of
+        : node.descendsFrom !== undefined
+          ? "descends"
+          : "see");
+    if (node.bind) ctx.bindings[node.bind] = `<see:${tag}>`;
+    return ctx.bindings[node.bind];
+  }
+  const entity = (v) =>
+    v && typeof v === "object" && v.ref != null
+      ? getPath(v.ref, ctx)
+      : resolveValue(v, ctx);
+  let result = null;
+
+  // A registered SEE-op: a read or pure-compute exposed as a verb (the host:->see
+  // dissolution — `see mint-credential as credential`, `see find-by-name(name) as cand`).
+  // Dispatch its backing fn (ctx.env.host, the able's see-op handlers) — PERCEPTION, lays
+  // NO fact, exactly like every other see. The verb IS the nature; no tag. (A compute is
+  // see-shaped: it perceives an output from its inputs, changing nothing in the world.)
+  if (node.act) {
+    const args = (node.args || []).map((a) => resolveValue(a, ctx));
+    result = await callHost(node.act, { args }, ctx);
+    if (node.bind) ctx.bindings[node.bind] = result;
+    return result;
+  }
+
+  if (typeof node.of === "string") {
+    result = await seeQuery(
+      node.of,
+      resolveValue(node.where, ctx) || {},
+      ctx.history,
+    );
+    if (node.one) result = Array.isArray(result) ? (result[0] ?? null) : result;
+  } else if (node.descendsFrom !== undefined) {
+    const subject = entity(node.of),
+      ancestor = entity(node.descendsFrom);
+    const { isAncestorOf } =
+      await import("../../materials/being/identity/lookups.js");
+    result = await isAncestorOf(
+      String(ancestor?.beingId ?? ancestor?._id ?? ancestor),
+      String(subject?._id ?? subject?.beingId ?? subject),
+    );
+  } else if (node.hasAuthorityOver !== undefined) {
+    // AUTHORITY PREDICATE: does <of> have authority over <hasAuthorityOver>? The being-
+    // tree authority WALK is a read, so it's a `see` verb (the credential-reset gate, the
+    // grant gates). `credential:true` = credential authority (being -> being, the re-mint
+    // gate); else general authority (name -> being). Resolved via the canonical walks the
+    // JS gates call, exactly as `descends from` resolves via isAncestorOf.
+    const subject = entity(node.of),
+      object = entity(node.hasAuthorityOver);
+    // Resolve the #main pointer, never floor to literal "0": an authority WALK on the wrong
+    // tree is an auth bug (never-default-history-zero). hasCredentialAuthority self-resolves a
+    // falsy history, but hasAuthorityOver hands history straight to walkUp, so resolve here.
+    let history = node.history ?? ctx.history;
+    if (!history) {
+      const { getDefaultHistory } =
+        await import("../../materials/history/historyRegistry.js");
+      history = await getDefaultHistory();
+    }
+    const objId = String(object?.beingId ?? object?._id ?? object);
+    if (node.credential) {
+      const { hasCredentialAuthority } =
+        await import("../../materials/being/identity/lineage.js");
+      result = await hasCredentialAuthority(
+        String(subject?.beingId ?? subject?._id ?? subject),
+        objId,
+        history,
+      );
+    } else {
+      const { hasAuthorityOver } =
+        await import("../../materials/being/identity/inheritation.js");
+      result = await hasAuthorityOver(
+        String(subject?.nameId ?? subject?.trueName ?? subject),
+        objId,
+        history,
+      );
+    }
+  } else if (node.read != null) {
+    result = await seeRead(
+      entity(node.of),
+      node.read,
+      node.fresh,
+      node.history ?? ctx.history,
+    );
+  }
+
+  if (node.bind) ctx.bindings[node.bind] = result;
+  return result;
+}
+
+// query a kind's projection rows by a flat field predicate. being-by-name routes to the
+// canonical cross-history sweep so the candidate shape (_id, homeHistory, ...state) matches
+// what the flows read; other queries hit the read-model (the fold) directly.
+async function seeQuery(kind, where, history) {
+  if (
+    kind === "being" &&
+    where &&
+    where.name &&
+    Object.keys(where).length === 1
+  ) {
+    const { findBeingCandidatesByName } =
+      await import("../../materials/being/identity/lookups.js");
+    return findBeingCandidatesByName(String(where.name));
+  }
+  // Curated projection query. A naive projection scan would have no history
+  // filter (crossing every history's rows); the curated peer scopes to the
+  // running Word's history lineage via listByType + per-id loadProjection, then
+  // filters by the flat `state.<field>` predicates. (Threading ctx.history
+  // narrows an all-histories scan to the world the caller stands in.)
+  const { listByType, loadProjection } =
+    await import("../../materials/projections.js");
+  const h = history || "0";
+  const fields = Object.keys(where || {});
+  const out = [];
+  for (const occ of await listByType(kind, h)) {
+    const slot = await loadProjection(kind, occ.id, h);
+    if (!slot || slot.tombstoned) continue;
+    const state = slot.state || {};
+    let match = true;
+    for (const k of fields) {
+      // Flat field predicate, mirroring the prior `state.<k>` equality.
+      const have = k.split(".").reduce((o, p) => (o == null ? o : o[p]), state);
+      if (have !== where[k]) {
+        match = false;
+        break;
+      }
+    }
+    if (!match) continue;
+    // tag each row with its `kind` so a later `see <row>'s <quality>` READ knows
+    // which projection to re-read (space/matter, not just being).
+    out.push({
+      _id: occ.id,
+      kind,
+      homeHistory: state.homeHistory,
+      ...state,
+    });
+  }
+  return out;
+}
+
+// read a bound entity's dotted quality; `fresh` re-reads the projection (vs the bound
+// snapshot, which can lag), matching connectHandler's "re-read fresh at connect time".
+// The kind comes from the entity (`subject.kind` — set by seeQuery, or by a {kind,id} bind
+// like move's `subject`), defaulting to "being" (back-compatible: connect's candidates
+// carry no kind and are beings). So space/matter slot reads are now `see` verbs too.
+async function seeRead(subject, quality, fresh, history) {
+  // A bare id STRING is an id (key-export's target arrives as a plain beingId, not a row;
+  // cherub-connect's collapse only worked because its candidate was already a row). Treat
+  // it as { id }, kind=being, so the fresh read can loadProjection it — without this guard
+  // a string subject silently reads "i-am"["trueName"] → null.
+  const str = typeof subject === "string";
+  let src = str ? null : subject;
+  const kind = (str ? null : subject?.kind) || "being";
+  const id = str ? subject : (subject?._id ?? subject?.id);
+  if (fresh && id) {
+    const { loadProjection } = await import("../../materials/projections.js");
+    const proj = await loadProjection(
+      kind,
+      String(id),
+      (str ? null : subject?.homeHistory) || history || "0",
+    );
+    src = proj?.state ?? src;
+  }
+  return (
+    String(quality)
+      .split(".")
+      .reduce((o, k) => (o == null ? o : o[k]), src) ?? null
+  );
+}
+
+// ── recall (the SIXTH verb): reach back across TIME into a chain — the inner fold ──────
+//
+// CALL reaches across SPACE (a being, now); RECALL reaches across TIME (a chain, the past) —
+// the "re-" is the temporal vector, one reaching at two distances. Reading a chain back lays
+// NO fact (private cognition). The OBJECT decides BOTH the rendering and the gate: your OWN
+// thread (recalled, always yours) or the WORLD you stand in (saw, the space's thread you can
+// see); a foreign being's thread is private. What WRITES is the VERDICT — `recall <X> that
+// <Y>` publishes the conclusion as a do:verdict fact; the two ends surface (what recalled +
+// what concluded), the reflecting between stays silent. "saw … that it was good": the watching
+// is private, the JUDGMENT is the fact. IR: { kind:"recall", of:<ref|"world">, as?, that? }.
+async function evalRecall(node, ctx) {
+  const history = ctx.history ?? "0";
+  const ownBeing =
+    ctx.identity?.beingId != null ? String(ctx.identity.beingId) : null;
+  const ownName =
+    ctx.identity?.nameId != null
+      ? String(ctx.identity.nameId)
+      : ctx.identity?.name != null
+        ? String(ctx.identity.name)
+        : null;
+
+  // resolve the recall TARGET to a STORY scope (who × when × where) — the SAME fold the book and
+  // the frontend story-views read. RECALL is the cognition changing views into the past/world:
+  //   world         → the whole history                      (saw)
+  //   {lineage: B}   → B + its descendants, the family story  (own → recalled, else saw)
+  //   {moment: A}    → one act's cross-section                (saw)
+  //   {place: S}     → a space's whole history                (saw)
+  //   <being> / own  → a being's own thread                   (own → recalled, else saw)
+  // mode renders first-person ("I", your own thread) vs third-person ("saw", anything else).
+  const of = node.of;
+  const resolveRef = (v) =>
+    v && typeof v === "object" && v.ref != null
+      ? getPath(v.ref, ctx)
+      : resolveValue(v, ctx);
+  const idOf = (v) => {
+    const r = resolveRef(v);
+    return String(r?._id ?? r?.id ?? r ?? "");
+  };
+  let scope = "world",
+    params = { history },
+    mode = "saw",
+    ofLabel = "the world";
+  if (of === "world" || of?.ref === "world") {
+    scope = "world";
+    mode = "saw";
+    ofLabel = "the world";
+  } else if (of && typeof of === "object" && of.lineage !== undefined) {
+    const b = idOf(of.lineage) || ownBeing;
+    const own = b === ownBeing;
+    scope = "lineage";
+    params.being = b;
+    if (of.depth != null) params.depth = of.depth;
+    mode = own ? "recalled" : "saw";
+    ofLabel = own ? "my lineage" : "their lineage";
+  } else if (of && typeof of === "object" && of.moment !== undefined) {
+    scope = "moment";
+    params.moment = idOf(of.moment);
+    mode = "saw";
+    ofLabel = "that moment";
+  } else if (
+    of &&
+    typeof of === "object" &&
+    (of.place !== undefined || of.space !== undefined)
+  ) {
+    scope = "place";
+    params.space = idOf(of.place ?? of.space);
+    mode = "saw";
+    ofLabel = "that place";
+  } else {
+    const id = idOf(of) || ownBeing;
+    const own = id === ownBeing || id === ownName;
+    scope = "being";
+    params.being = own ? ownBeing : id;
+    mode = own ? "recalled" : "saw";
+    ofLabel = own ? "my own thread" : "their thread";
+  }
+
+  // CONSCIOUSNESS-LEVEL gate (Tabor, 623/12 — ARMED, was permissive): which folds a being may recall
+  // is its able's granted recall VIEWS (`can recall <view>` — canRecall). The aperture is a granted
+  // word, the capability to compute the WIDER fold (not a permission over public data — it is all
+  // public). Recalling your OWN thread (recalled) is always yours; a wider fold (saw) requires the
+  // grant. I bypasses (universal authority). The dry-run parse-check skips the gate.
+  if (mode === "saw" && !ctx.dryRun) {
+    const { canRecallScope } = await import("../ables/registry.js");
+    if (!(await canRecallScope(ownBeing, scope, history))) {
+      throw new WordRefusal(
+        `recall: the "${scope}" view is not granted — your consciousness level does not reach this fold`,
+        "FORBIDDEN",
+      );
+    }
+  }
+
+  if (ctx.dryRun) {
+    if (node.as) ctx.bindings[node.as] = `<${mode}>`;
+    if (node.that !== undefined)
+      ctx.deltaF.push({
+        verb: "do",
+        act: "verdict",
+        params: {
+          mode,
+          of: ofLabel,
+          that: resolveValue(node.that, ctx),
+          ...(node.because !== undefined
+            ? { because: resolveValue(node.because, ctx) }
+            : {}),
+        },
+      });
+    return mode;
+  }
+
+  // READ the view back — the WOVEN story (the same fold the book + frontend render), NO fact: the
+  // inner fold the cognition reflects on. recall lays nothing; only the verdict writes. The focal
+  // is your own being when recalled (first person), null when saw (third person).
+  const { assembleStory } = await import("../book/assemble.js");
+  const view = await assembleStory(scope, {
+    ...params,
+    nameId: mode === "recalled" ? params.being || ownBeing : null,
+  });
+  const thread = view;
+  if (node.as) ctx.bindings[node.as] = view;
+
+  // the VERDICT — the conclusion AND the why, published as one memory-write. CRITICAL (Tabor):
+  // the recorded `because` is the being's DECLARED ACCOUNT of its reasoning — an authored Word
+  // claim — NOT the live inference. The actual thinking stays silent and unstored ("refuse to
+  // narrate the thinking"; the because is a pulled word, output not process). So the why on the
+  // chain is the being's CLAIM about why (a self-report, possibly partial/self-serving), not its
+  // computation: continuity for a stateless being, NOT transparency-of-thought. The being's own
+  // chain is its memory; this verdict is the note it leaves itself, in the Word (the new-test form).
+  if (node.that !== undefined) {
+    await emit(
+      {
+        verb: "do",
+        act: "verdict",
+        by: ownName,
+        through: ownBeing,
+        of: { kind: "being", id: ownBeing }, // the memory lands on the being's OWN reel — its chain is its memory
+        params: {
+          mode,
+          of: ofLabel,
+          that: resolveValue(node.that, ctx),
+          ...(node.because !== undefined
+            ? { because: resolveValue(node.because, ctx) }
+            : {}),
+        },
+      },
+      ctx,
+    );
+  }
+  return thread;
+}
+
+// ── call (the CALL verb): reach ANOTHER being across SPACE, now — summon them to act or to
+// talk. Lays the reach RECORD as a fact THROUGH moment, so it rides the moment + the
+// stamper (never a bare emit). `.word` surface: `call <being>, saying <content>` (talk) and
+// `call <being> to <intent>, with <content>` (summon-to-act) — the parser maps the surface
+// to { being, intent?, content }. The backing is TreeOS's summon machinery (callVerb),
+// named `call` at the surface now; the full rename comes later. (RECALL — reaching across
+// TIME into a chain — is the private twin; it lays no fact by itself.)
+async function evalCall(node, ctx) {
+  // 623/12: CALL is the ONE verb; the TARGET decides. `of` absent/null ⇒ the SIGNER (self) ⇒ fold
+  // your own chain (recall = call-to-self); `of`=="world" ⇒ the whole story (self-side fold). A real
+  // OTHER ⇒ the await path below. The mode is never declared — it falls out of who the target is.
+  const selfBeing =
+    ctx.identity?.beingId != null ? String(ctx.identity.beingId) : null;
+  const selfName =
+    ctx.identity?.nameId != null
+      ? String(ctx.identity.nameId)
+      : ctx.identity?.name != null
+        ? String(ctx.identity.name)
+        : null;
+  if (node.of == null && node.being == null)
+    return foldSelf(node, ctx, { scope: "being", being: selfBeing });
+  if (node.of === "world") {
+    // B2 (623/12, ARMED): the world fold is a WIDER view — gate it by the recall grant. Your own
+    // thread is always yours, but the whole story is the consciousness-level aperture. I bypasses.
+    const { canRecallScope } = await import("../ables/registry.js");
+    if (!(await canRecallScope(selfBeing, "world", ctx.history))) {
+      throw new WordRefusal(
+        `recall: the "world" view is not granted — your consciousness level does not reach this fold`,
+        "FORBIDDEN",
+      );
+    }
+    return foldSelf(node, ctx, { scope: "world", being: null });
+  }
+  const entity = (v) =>
+    v && typeof v === "object" && v.ref != null
+      ? getPath(v.ref, ctx)
+      : resolveValue(v, ctx);
+  // `saying <msg>` = a conveyed message (intent "message"); `to <act>[, with <payload>]` =
+  // summon-to-act. `to` is an INTENT LABEL (kebab), NOT a parsed act — the owner receives it
+  // plus the content and decides (a request). The structured payload rides in with/saying/content.
+  const toIntent = node.to
+    ? String(node.to)
+        .trim()
+        .replace(/[^a-z0-9]+/gi, "-")
+        .replace(/^-+|-+$/g, "")
+        .toLowerCase()
+    : null;
+  const intent = toIntent || node.intent || "message";
+  const content = resolveValue(
+    node.with ?? node.saying ?? node.content ?? {},
+    ctx,
+  );
+  if (ctx.dryRun) {
+    const r = `<call:${intent}>`;
+    if (node.bind) ctx.bindings[node.bind] = r;
+    return r;
+  }
+  const { getStoryDomain } = await import("../../ibp/address.js");
+  const { loadOrFold } = await import("../../materials/projections.js");
+  const story = getStoryDomain();
+  // the being to reach -> its stance (story/@name). The being may arrive as a row
+  // (name at top), a projection slot (name under .state), or a bare id (loadOrFold it).
+  const target = entity(node.of ?? node.being);
+  // 623/12: if the named target resolves to the SIGNER, this is a call-to-self ⇒ fold (recall), not
+  // an await. (The common self case — a bare quote, `of` null — already returned above.)
+  const tid = String(
+    target?._id ??
+      target?.id ??
+      (typeof target === "string" ? target : "") ??
+      "",
+  );
+  if (tid && (tid === selfBeing || tid === selfName))
+    return foldSelf(node, ctx, { scope: "being", being: selfBeing });
+  let toName = target?.name ?? target?.state?.name;
+  if (!toName) {
+    const id =
+      target?._id ?? target?.id ?? (typeof target === "string" ? target : null);
+    if (id)
+      toName = (await loadOrFold("being", String(id), ctx.history || "0"))
+        ?.state?.name;
+  }
+  if (!toName)
+    throw new WordRefusal(
+      "call: cannot address the target being",
+      "INVALID_INPUT",
+    );
+  // the caller (the Name acting through its being) is the `from` stance. When the moment carries
+  // only a beingId (a able-op threading its actor without a name), resolve the name off the being
+  // so the `from` is a real stance — otherwise summon authorizes @undefined as anonymous.
+  let fromName = ctx.identity?.name || ctx.identity?.nameId;
+  if (!fromName && ctx.identity?.beingId) {
+    fromName = (
+      await loadOrFold(
+        "being",
+        String(ctx.identity.beingId),
+        ctx.history || "0",
+      )
+    )?.state?.name;
+  }
+  // A call must address FROM a real stance — `@undefined` is NEVER acceptable. An actor with no
+  // resolvable name is a HARD ERROR here, not a silent slide into anonymous downstream.
+  if (!fromName)
+    throw new WordRefusal(
+      "call: the caller has no resolvable name — cannot address from @undefined",
+      "INVALID_INPUT",
+    );
+  const message = {
+    from: `${story}/@${fromName}`,
+    content,
+    ...(node.intent ? { intent: node.intent } : {}),
+  };
+  const { callVerb } = await import("../../ibp/verbs/call.js");
+  const result = await callVerb(`${story}/@${toName}`, message, {
+    identity: ctx.identity,
+    moment: ctx.moment,
+  });
+  if (node.bind) ctx.bindings[node.bind] = result;
+  return result;
+}
+
+// ── span (the quote, as one-word stamps): `[address] "said words"` ────────────────────────────
+// The redesign of CALL. A call is NOT a fat fact: you type it one word at a time on your OWN
+// reel (your name through a being). The quote-marks are words too: an OPEN-quote stamp, one SAID
+// stamp per word, a CLOSE-quote stamp. The close is ONE fact; the send is a SECOND act below it
+// (host afterSeal): on the close the host assembles the span (the said-words between the matching
+// open and this close, on your own reel) and delivers the utterance to the recipient's inbox
+// (call), or folds your own chain (recall = self/world target). Nothing on the chain holds a
+// bundle . the utterance exists only as the run of stamps, assembled on read (spanRead.js). The
+// brackets are figure-inert in every reducer (act '"' / 'said' match nothing), so aggregate state
+// is byte-identical with or without them; the Rust treefold needs no change. 623/12: the target
+// decides the mode . absent/self/world => recall (fold own chain), a real other => call (deliver).
+//
+// FACT SHAPES (all land on the CALLER's reel, of:{being: self}; the recipient rides open.params.to):
+//   open  { verb:"call", act:'"', of:{kind:"being", id:self}, params:{ span:"open", correlation, to } }
+//   said  { verb:"do",   act:"said",                          params:{ word, pos, correlation } }
+//   close { verb:"call", act:'"', of:{kind:"being", id:self}, params:{ span:"close", correlation } }
+async function evalQuotedWord(node, ctx) {
+  const QUOTE = '"';
+  const selfBeing =
+    ctx.identity?.beingId != null ? String(ctx.identity.beingId) : null;
+  const selfName =
+    ctx.identity?.nameId != null
+      ? String(ctx.identity.nameId)
+      : ctx.identity?.name != null
+        ? String(ctx.identity.name)
+        : null;
+  // The said-words: explicit `words` from the parser, else split the raw quote body (spacebar =
+  // one word). Literal said-words, NEVER re-parsed as acts (hi/there are not verbs).
+  const words = Array.isArray(node.words)
+    ? node.words.filter((w) => String(w ?? "").length)
+    : String(node.saying ?? "")
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+
+  // The target decides the mode (623/12). `of` absent/null/"world" or resolving to self => recall.
+  const entity = (v) =>
+    v && typeof v === "object" && v.ref != null
+      ? getPath(v.ref, ctx)
+      : resolveValue(v, ctx);
+  const isWorld = node.of === "world";
+  let target = node.of != null && !isWorld ? entity(node.of) : null;
+  // A call addresses another being by NAME (`story-manager "hi"`). When the binding/ref did not
+  // resolve (no live binding for that name), fall back to the being directory by the literal name .
+  // the common case for a typed call. Recall (of:null) and world never reach this.
+  const ofName =
+    node.of && typeof node.of === "object" && node.of.ref != null
+      ? String(node.of.ref)
+      : typeof node.of === "string"
+        ? node.of
+        : null;
+  if (
+    !isWorld &&
+    ofName &&
+    !(target && (target._id ?? target.id ?? target.name ?? target.state?.name))
+  ) {
+    const { findByName } = await import("../../materials/projections.js");
+    const slot = await findByName("being", ofName, ctx.history || "0");
+    if (slot) target = { _id: slot.id, name: slot.state?.name ?? ofName };
+  }
+  const tid = String(
+    target?._id ?? target?.id ?? (typeof target === "string" ? target : "") ?? "",
+  );
+  const isRecall =
+    node.of == null || isWorld || (tid && (tid === selfBeing || tid === selfName));
+
+  // The recipient stance (call only). FAIL if the named target does not resolve to a being.
+  let toName = null;
+  if (!isRecall) {
+    toName = target?.name ?? target?.state?.name ?? null;
+    if (!toName && (target?._id ?? target?.id ?? typeof target === "string")) {
+      const id = target?._id ?? target?.id ?? target;
+      const { loadOrFold } = await import("../../materials/projections.js");
+      toName = (await loadOrFold("being", String(id), ctx.history || "0"))?.state
+        ?.name;
+    }
+    if (!toName)
+      throw new WordRefusal(
+        "call: that name does not exist here . cannot send the words",
+        "INVALID_INPUT",
+      );
+  }
+
+  // World recall is gated by the consciousness-level grant (623/12 B2). Your own thread is yours.
+  if (isWorld) {
+    const { canRecallScope } = await import("../ables/registry.js");
+    if (!(await canRecallScope(selfBeing, "world", ctx.history)))
+      throw new WordRefusal(
+        `recall: the "world" view is not granted . your consciousness level does not reach this fold`,
+        "FORBIDDEN",
+      );
+  }
+
+  // The caller's stance (call only) . the `from` the recipient sees. Resolved before laying so the
+  // open-quote carries the full envelope; the delivery (handleCall on the close) reads it.
+  let fromStance = null;
+  if (!isRecall) {
+    const { getStoryDomain } = await import("../../ibp/address.js");
+    let fromName = selfName;
+    if (!fromName && selfBeing) {
+      const { loadOrFold } = await import("../../materials/projections.js");
+      fromName = (await loadOrFold("being", selfBeing, ctx.history || "0"))
+        ?.state?.name;
+    }
+    if (!fromName)
+      throw new WordRefusal(
+        "call: the caller has no resolvable name . cannot address from @undefined",
+        "INVALID_INPUT",
+      );
+    fromStance = `${getStoryDomain()}/@${fromName}`;
+  }
+
+  const correlation = await mintCorrelation();
+  const onReel = { kind: "being", id: selfBeing }; // every span stamp lands on the CALLER's reel
+  const base = { through: selfBeing, by: selfName };
+
+  // OPEN-quote stamp . the quote-mark is the word. Carries the correlation + (call) the recipient
+  // envelope (to / from / intent) so the close's delivery has everything without a second resolve.
+  await emit(
+    {
+      ...base,
+      verb: "call",
+      act: QUOTE,
+      of: onReel,
+      params: {
+        quotedWord: "open",
+        correlation,
+        to: isRecall ? null : toName,
+        from: fromStance,
+        intent: isRecall ? null : node.intent || null,
+      },
+    },
+    ctx,
+  );
+  // one SAID stamp per word . the literal said-word, one fact each (the chain re-folds between).
+  let pos = 0;
+  for (const w of words) {
+    await emit(
+      {
+        ...base,
+        verb: "do",
+        act: "said",
+        of: onReel,
+        params: { word: String(w), pos: pos++, correlation },
+      },
+      ctx,
+    );
+  }
+  // CLOSE-quote stamp . ONE fact, one word, no bundle. The send is the second act below (afterSeal).
+  await emit(
+    {
+      ...base,
+      verb: "call",
+      act: QUOTE,
+      of: onReel,
+      params: { quotedWord: "close", correlation },
+    },
+    ctx,
+  );
+
+  if (ctx.dryRun) {
+    const r = isRecall ? "<recall>" : `<call:${toName}>`;
+    if (node.bind) ctx.bindings[node.bind] = r;
+    return r;
+  }
+
+  if (isRecall) {
+    // The close folds your OWN chain (the answer), reading past the span's own quote-stamps.
+    return foldSelf(node, ctx, {
+      scope: isWorld ? "world" : "being",
+      being: isWorld ? null : selfBeing,
+    });
+  }
+
+  // CALL: the send is the second act below the close. The delivery is fold-driven . handleCall
+  // (past/projections/inbox/inboxProjectionFold.js) fires on the close-quote, assembles the span
+  // from this reel, resolves the recipient, materializes the inbox row, and wakes them. The
+  // fail-if-the-name-does-not-exist gate already ran above (toName), so the close only lays when
+  // the recipient is real. Nothing more to do here . the stamps are down.
+  const result = { status: "accepted", correlation, to: toName };
+  if (node.bind) ctx.bindings[node.bind] = result;
+  return result;
+}
+
+// mintCorrelation . a per-span id. crypto.randomUUID at runtime; dry-run never reaches the send,
+// but the stamps still need a stable thread, so derive a deterministic id from the moment + a
+// counter when randomness is unavailable (the no-Math.random discipline in fold-replay contexts).
+let _spanCounter = 0;
+async function mintCorrelation() {
+  try {
+    const { randomUUID } = await import("node:crypto");
+    return randomUUID();
+  } catch {
+    return `span-${++_spanCounter}`;
+  }
+}
+
+// fold YOUR OWN chain through the lens — a SEE of the past, lays NO fact. The seam to read-trail.js
+// (recall.word's lensed engine). The branch is the reader's own (ctx.history), never defaulted —
+// readTrail throws if it is missing (the never-default-branch-zero rule).
+async function foldSelf(node, ctx, { scope, being }) {
+  if (ctx.dryRun) {
+    const r = "<recall>";
+    if (node.bind) ctx.bindings[node.bind] = r;
+    return r;
+  }
+  const { readTrail } = await import("../book/read-trail.js");
+  const r = await readTrail({
+    history: ctx.history,
+    scope,
+    being,
+    lens: node.lens ?? null,
+  });
+  const view = r.kind === "lens" ? r.facets : r.book;
+  if (node.bind) ctx.bindings[node.bind] = view;
+  return view; // no fact — folding the past is a see
+}
+
+// ── foreach (§3): iterate a source; body per item; break halts THIS loop only ──────
+//
+// Source forms (8.md §3): { ref } a bound collection; { ref, filter } filtered per item
+// via the shared resolveCond; { walk } a being-tree walk resolved through the host
+// registry (ctx.env.host.walk — the inheritation up-walk). The item binds to node.bind
+// for the body AND the filter. A §5 flag a mark sets inside the body PERSISTS across
+// iterations and after the loop (the accumulator). A `break` (BREAK sentinel) unwinds
+// to the nearest foreach — caught here; refuse/return/real errors unwind past it.
+async function evalForeach(node, ctx) {
+  const { resolveCond, getPath } = await import("./cond.js");
+  let items;
+  if (node.in?.walk) {
+    const fn = ctx.env?.host?.walk;
+    items = fn ? (await fn(node.in.walk, ctx)) || [] : [];
+  } else {
+    const got = node.in?.ref ? getPath(node.in.ref, ctx) : [];
+    items = Array.isArray(got) ? got : [];
+  }
+  for (const item of items) {
+    ctx.bindings[node.bind] = item;
+    if (node.in?.filter && !(await resolveCond(node.in.filter, ctx))) continue;
+    try {
+      for (const n of node.body || []) await evalNode(n, ctx);
+    } catch (e) {
+      if (e === BREAK) return; // §3 break: stop THIS loop, continue after it
+      throw e; // refuse / return / real errors unwind past the loop
+    }
+  }
+}
+
+// ── while (P4): the conditional loop — a loop is a fold that grows the chain (20.md §27) ──
+//
+// The condition is a SEE: resolveCond reads the LIVE fold each pass (ctx.state/bindings the body
+// updated), and lays nothing. Each body act that lays a fact opens its own moment, so pass N+1
+// chains on pass N — the chain head is the program counter, the facts ARE the iterations, never a
+// JS counter. The loop ends when the see goes false: a fold-read, not a clock or a count. A guard
+// caps a runaway loop (a see that never flips) so a bad Word fails loud, not forever. `break`
+// halts THIS loop only (the foreach sibling); refuse/return/errors unwind past it.
+async function evalWhile(node, ctx) {
+  const { resolveCond } = await import("./cond.js");
+  let guard = 0;
+  while (await resolveCond(node.cond, ctx)) {
+    if (++guard > 100000)
+      throw new Error(
+        "word: while loop exceeded 100000 passes — the see never went false",
+      );
+    try {
+      for (const n of node.body || []) await evalNode(n, ctx);
+    } catch (e) {
+      if (e === BREAK) return; // break halts THIS loop, continue after it
+      throw e;
+    }
+  }
+}
+
+// ── refuse (§7): a host HALT, fail-closed, NO fact ─────────────────────────────────
+// Throws a WordRefusal the verb layer maps to the ack error envelope; the moment rolls
+// back. A §8 gate's onFail is a refuse. Distinct from a cond's negation (§10) and from
+// break (loop-only). The message resolves $binding placeholders.
+async function evalRefuse(node, ctx) {
+  const m =
+    typeof node.message === "string"
+      ? resolveValue(node.message, ctx)
+      : resolveValue(node.message, ctx) || "refused";
+  throw new WordRefusal(String(m), node.code || "FORBIDDEN");
+}
+
+// ── return (§7): a SUCCESS terminator, NO fact ─────────────────────────────────────
+// Resolves named values + literal/ref extras into a result object and unwinds the flow
+// (the __wordReturn signal evaluate() catches). The host transport reads ctx.result
+// (tokens, seatHistory, reveal, asFather) — the "rode the handler return, never the
+// fact" rule. World facts a flow lays came from §7 act/derive nodes that ran BEFORE it.
+async function evalReturn(node, ctx) {
+  const { getPath } = await import("./cond.js");
+  const result = {};
+  for (const name of node.values || []) result[name] = ctx.bindings[name];
+  if (node.extra)
+    for (const k of Object.keys(node.extra)) {
+      const v = node.extra[k];
+      // a {ref} reads a binding/flag/path (e.g. owned:(true/false) from a §5 flag);
+      // anything else ($name or a literal) goes through resolveValue.
+      result[k] =
+        v && typeof v === "object" && v.ref != null
+          ? getPath(v.ref, ctx)
+          : resolveValue(v, ctx);
+    }
+  throw { __wordReturn: true, result };
+}
+
+// ── gate (§8): a PRE-SEAL precondition, fail-closed, lays NO fact ───────────────────
+//
+// Positional: the parser places the gate BEFORE the acts it guards, so it runs first.
+// The predicate is the §1 cond, or a whole-gate host lookup (resolvedBy: findByName /
+// getAble / hasAuthorityOver). Pass → fall through (a guard, not an effect). Fail →
+// run onFail (a refuse: throw WordRefusal, halt, no fact) — mirrors do.js authorize and
+// the NAME-declare must-not-exist throw, both of which abort before emitFact.
+async function evalGate(node, ctx) {
+  const { resolveCond } = await import("./cond.js");
+  const cond = node.cond
+    ? node.cond
+    : node.resolvedBy
+      ? { resolvedBy: node.resolvedBy, args: node.args, negated: node.negated }
+      : null;
+  if (await resolveCond(cond, ctx)) return; // precondition holds
+  if (node.onFail) return evalNode(node.onFail, ctx);
+  throw new WordRefusal(
+    resolveValue(node.message, ctx) || "precondition failed",
+    node.code || "INVALID_INPUT",
+  );
+}
+
+// ── match (§9): type dispatch — keeps a flat surface flat ───────────────────────────
+//
+// Resolve `on` (a ref or a type field), run the FIRST matching case's body: a `label`
+// compares to the on-value; a `when` is a §1 cond; a case with neither is the default.
+// (Forcing the 5-way matter-type dispatch into nested ifs would break reads-cleanly.)
+async function evalMatch(node, ctx) {
+  const { resolveCond, getPath } = await import("./cond.js");
+  const onVal = node.on != null ? getPath(node.on, ctx) : undefined;
+  for (const c of node.cases || []) {
+    const hit =
+      c.label !== undefined
+        ? String(onVal) === String(c.label)
+        : c.when
+          ? await resolveCond(c.when, ctx)
+          : true; // default
+    if (hit) {
+      for (const n of c.body || []) await evalNode(n, ctx);
+      return;
+    }
+  }
+}
+
+// ── derive (§7): the general fact-emission, OR a registered read-rule ───────────────
+//
+// `stored:false` → register a READ-RULE (the objective register: liveness / coverage /
+// containment / authority computed on read off the reel, never persisted — Q7). Default
+// → emit exactly ONE fact (`fact.type` = verb:op), attributed to `attributedTo` (the
+// Name) and landing on its target/reel. The two forms differ purely in `stored`.
+async function evalDerive(node, ctx) {
+  if (node.stored === false) {
+    (ctx.readRules ??= []).push(node); // a law read backward, not a deed
+    return undefined;
+  }
+  const [verb, action] = String(node.fact?.type || "do:derive").split(":");
+  return emit(
+    {
+      verb,
+      act: action,
+      through: node.attributedTo
+        ? resolveName(node.attributedTo, ctx)
+        : (ctx.identity?.nameId ?? ctx.identity?.beingId ?? null),
+      of: node.of ? resolveTarget(node.of, ctx) : undefined,
+      params: resolveValue(node.params, ctx) || {},
+    },
+    ctx,
+  );
+}
+
+// ── standing watches + the pulse (rules 6, 12: the choq) ──────────────────────
+//
+// Beyond the linear cherub flow, declarations register their flows as standing
+// watches. When an act seals a fact, matching watches fire, the choq: completion
+// advances the reel. A self-coupled watch ("when a beat happens, strike again")
+// is a pulse; ctx.maxBeats bounds the observation so the demo terminates.
+
+export function register(program, ctx) {
+  ctx.flows ??= [];
+  const nodes = Array.isArray(program) ? program : [program];
+  for (const node of nodes) if (node.kind === "flow") ctx.flows.push(node);
+}
+
+// drain the trigger queue, firing watches on each new fact, bounded by maxBeats.
+export async function pump(ctx) {
+  ctx._queue ??= [];
+  while (ctx._queue.length) {
+    const fact = ctx._queue.shift();
+    if (fact._event === "beat") {
+      if ((ctx.beats ?? 0) >= (ctx.maxBeats ?? Infinity)) continue; // bound the pulse
+      ctx.beats = (ctx.beats ?? 0) + 1;
+    }
+    for (const flow of ctx.flows || []) {
+      if (matches(flow.when, fact, ctx)) {
+        for (const effect of flow.effects) await evalNode(effect, ctx);
+      }
+    }
+  }
+}
+
+function matches(when, fact, ctx) {
+  if (!when) return false;
+  if (when.on) return fact._event === when.on; // a named event (a beat)
+  if (when.act)
+    return (
+      fact.verb === when.act.verb &&
+      (!when.act.act || fact.act === when.act.act)
+    );
+  if (when.state) return stateMatches(when.state, ctx?.state || {}); // a world state (rule 6 over state)
+  return false;
+}
+
+function stateMatches(cond, state) {
+  for (const k of Object.keys(cond)) if (state[k] !== cond[k]) return false;
+  return true;
+}
+
+// ── the driver: a state wheel (the coupled clock, rules 12 + the choq) ────────
+//
+// Where pump cascades on events, drive turns on STATE. Each turn fires every
+// watch matching the current state: a transition's act changes the state and
+// advances the wheel, a rider just acts on it. The new state enables the next
+// turn, so coupling lives here, the sun setting writes sky=night, which the
+// moon's watch was waiting on. No clock; ctx.maxTurns bounds the observation of
+// an in-principle-endless wheel.
+export async function drive(ctx) {
+  ctx.maxTurns ??= 8;
+  let turns = 0;
+  while (turns < ctx.maxTurns) {
+    if (!(await tickWheel(ctx))) break; // no transition advanced the wheel: it halts
+    turns++;
+  }
+  ctx.turns = turns;
+}
+
+async function tickWheel(ctx) {
+  const before = JSON.stringify(ctx.state ?? {});
+  const matching = (ctx.flows || []).filter(
+    (f) => f.when?.state && stateMatches(f.when.state, ctx.state ?? {}),
+  );
+  if (!matching.length) return false;
+  for (const flow of matching)
+    for (const effect of flow.effects) await evalNode(effect, ctx);
+  return JSON.stringify(ctx.state ?? {}) !== before; // did a transition advance the wheel?
+}
+
+// ── act (the deed; sealed, it is a fact) ──────────────────────────────────────
+
+async function evalAct(act, ctx) {
+  const by = resolveName(act.by, ctx); // rule 9: actor is a Name
+  const through = act.through ? resolveBeing(act.through, ctx) : null; // by/through split: the being
+  const params = resolveValue(act.params, ctx);
+
+  // the escape hatch (5.md compute-call): genuine host computation only
+  if (act.host) {
+    const result = await callHost(act.host, params, ctx);
+    if (act.bind) ctx.bindings[act.bind] = result;
+    return result;
+  }
+
+  // be:form-being dispatches to the host birth primitive. (NOTE: birthBeing still lays
+  // be:birth + the inherited-able grants + the global grant as several facts in this one
+  // moment — a residual run-on inside the host primitive. The spacebar says those grants
+  // are separate words; splitting birthBeing into a sequence of moments is the downstream
+  // birth-split. For now form-being is ONE moment, opened here like any other act.)
+  if (act.verb === "be" && act.act === "form-being") {
+    const res = await stampOneAct(ctx, "be:form-being", () =>
+      formBeing(params, ctx),
+    );
+    if (act.bind) ctx.bindings[act.bind] = res.beingId;
+    return res;
+  }
+
+  // a DO act in live mode runs its real op handler via doVerb, so the op's own
+  // validation and fold run exactly as the JS handler calls them. dry-run below
+  // raw-emits the fact shape instead. resolveTarget mints + binds a fresh id at a
+  // `bind` site (e.g. the home space) so later acts can reference it.
+  if (act.verb === "do" && !ctx.dryRun) {
+    let target = resolveTarget(act.of, ctx);
+    let p = params;
+    if (act.act === "create-space") {
+      // "I make <X>": X NAMES the new space; create-space raises it UNDER its target, which
+      // is where the actor STANDS (the position the session reports) — of names the child,
+      // not the parent. So the noun becomes the name and the position becomes the target.
+      if (act.of?.id && !(p && p.name != null))
+        p = { ...(p || {}), name: act.of.id };
+      if (ctx.position) target = { kind: "space", id: String(ctx.position) };
+    }
+    // One act, one moment, one commit (the spacebar). In per-act-moment mode this do opens its
+    // OWN moment (a withBeingAct cycle) and seals exactly one fact to store; in legacy mode it
+    // runs on the shared ctx.moment that the caller seals.
+    const res = await stampOneAct(ctx, `do:${act.act}`, async (m) => {
+      const { doVerb } = await import("../../ibp/verbs/do.js");
+      return doVerb(target, act.act, p, {
+        identity: ctx.identity,
+        moment: m ?? ctx.moment,
+        currentHistory: ctx.history,
+      });
+    });
+    // bind the id the op actually created (the home space), so later acts
+    // (form-being's homeId, set-space's owner target) reference the real id and
+    // not the pre-mint. create-space returns { spaceId } (space/ops.js).
+    if (act.bind)
+      ctx.bindings[act.bind] = String(
+        // matterId first: a composed `do create-matter ... as x` binds the new
+        // matter (create-space has no matterId, so its spaceId still wins).
+        res?.matterId ??
+          res?.spaceId ??
+          res?.id ??
+          res?._id ??
+          ctx.bindings[act.bind],
+      );
+    return res;
+  }
+
+  // every other verb emits its own fact (the act, sealed)
+  return emit(
+    {
+      verb: act.verb,
+      act: act.act, // the operation within the verb (do:create-space, ...)
+      through: through || by, // the deed lands under the acting being / Name
+      by, // the actor Name (rule 9)
+      of: resolveTarget(act.of, ctx),
+      to: act.to !== undefined ? resolveBeing(act.to, ctx) : undefined, // the receiver (rule 17)
+      params,
+      _event: act.event, // a derived event this act counts as ("that is a beat")
+      _sets: act.sets, // this act's effect on world state (folded below)
+    },
+    ctx,
+  );
+}
+
+// rule 13: a closure names a bounded span
+async function evalClosure(node, ctx) {
+  return emit(
+    {
+      verb: "do",
+      act: "close-span",
+      through: resolveName(node.by, ctx),
+      of: { kind: "span" },
+      params: { name: node.name },
+    },
+    ctx,
+  );
+}
+
+// ── primitive dispatch ────────────────────────────────────────────────────────
+
+// stampOneAct — the spacebar at the act level. In per-act-moment mode (ctx.perActMoment.open
+// set), every fact-laying deed opens its OWN moment: a withBeingAct cycle that opens the act,
+// runs THIS one deed onto a fresh moment, and seals it to store (advancing the chain). So a Word
+// of N acts lays N acts/facts on the chain — one fact each — not N facts crammed into one moment
+// (the _inOp/opCount run-on). ctx.moment is swapped to the fresh moment for the duration so
+// emit/doVerb write into it; bindings/laws stay on ctx across the moments. Without an opener
+// (legacy in-moment accumulation, e.g. runAbleWord) the deed runs on the shared ctx.moment and
+// the caller seals the whole batch — byte-identical to before.
+async function stampOneAct(ctx, label, runFn) {
+  const opener = ctx.perActMoment?.open;
+  if (typeof opener !== "function") return runFn(ctx.moment);
+  let out;
+  await opener(label, async (freshMoment) => {
+    const saved = ctx.moment;
+    ctx.moment = freshMoment;
+    try {
+      out = await runFn(freshMoment);
+    } finally {
+      ctx.moment = saved;
+    }
+  });
+  return out;
+}
+
+// emit a fact. In per-act-moment mode the fact is its OWN word — stampOneAct opens a fresh
+// moment for it and seals it to store; the fact lands in that moment's deltaF (live) carrying
+// its own moment's actId. In legacy mode the fact joins the shared ctx.moment. dry-run collects
+// into the (fresh or shared) moment's deltaF, or ctx.deltaF when momentless. The two live paths
+// are EXCLUSIVE: emitFact itself appends the spec to moment.deltaF (facts.js), so in legacy
+// shared-moment mode doing ctx.deltaF.push too would DOUBLE-LIST — live → emitFact owns it.
+async function emit(spec, ctx) {
+  const stamp = async (m) => {
+    const fact = {
+      ...spec,
+      actId: m?.actId ?? ctx.moment?.actId,
+      history: ctx.history,
+    };
+    if (spec._sets) Object.assign((ctx.state ??= {}), spec._sets); // the fold: a fact updates state
+    if (ctx.dryRun) {
+      (m?.deltaF ?? ctx.deltaF).push(fact);
+    } else {
+      const { emitFact } = await import("../../past/fact/facts.js");
+      await emitFact(fact, m ?? ctx.moment); // appends to the moment's deltaF itself
+    }
+    (ctx._queue ??= []).push(fact); // a sealed fact may fire standing watches (the choq)
+    return fact;
+  };
+  // The spacebar: a fact is a word, a word is a space, a space is its own commit.
+  if (ctx.perActMoment)
+    return stampOneAct(ctx, `${spec.verb}:${spec.act}`, stamp);
+  return stamp(ctx.moment);
+}
+
+// form a being: dry-run models the be:birth fact; live calls the real primitive.
+async function formBeing(spec, ctx) {
+  if (ctx.dryRun) {
+    const beingId = `<being:${spec.name}>`; // birthBeing computes a content hash; placeholder here
+    ctx.deltaF.push({
+      verb: "be",
+      act: "birth",
+      through: beingId,
+      of: { kind: "being", id: beingId },
+      params: spec,
+      actId: ctx.moment?.actId,
+      history: ctx.history,
+    });
+    return { beingId, name: spec.name };
+  }
+  const { birthBeing } =
+    await import("../../materials/being/identity/birth.js");
+  return birthBeing({
+    spec,
+    identity: ctx.identity,
+    moment: ctx.moment,
+    history: ctx.history,
+  });
+}
+
+async function callHost(builtin, params, ctx) {
+  const fn = ctx.env?.host?.[builtin];
+  // pass the eval ctx as a 2nd arg so a host op that lays a fact (e.g. the be:release
+  // displacement) can reach ctx.moment; pure ops ignore it.
+  if (fn) return fn(params, ctx);
+  if (ctx.dryRun) return `<host:${builtin}>`; // placeholder in dry-run
+  throw new Error(`word: no host builtin "${builtin}"`);
+}
+
+// ── reference resolution (rules 9 / 10 / 11) ──────────────────────────────────
+
+function resolveName(ref, ctx) {
+  if (ref == null) return ctx.identity?.nameId ?? ctx.identity?.beingId ?? null;
+  if (ref === "I") return ctx.identity?.nameId ?? ctx.identity?.beingId; // rule 9: I is the Name
+  if (ref === "I") return ctx.env?.I ?? "I";
+  return ref; // a being / Name proper name (Cherub, ...)
+}
+
+function resolveBeing(ref, ctx) {
+  if (ref && ref.ref) return ctx.bindings[ref.ref] ?? ref.ref;
+  return ref;
+}
+
+function resolveTarget(of, ctx) {
+  if (!of) return undefined;
+  if (of.bind) {
+    // a fresh id this act creates (e.g. the home space)
+    const id = ctx.dryRun
+      ? `<${of.bind}>`
+      : (ctx.env?.mintId?.(of.kind) ?? undefined);
+    ctx.bindings[of.bind] = id;
+    return { kind: of.kind, id };
+  }
+  // A `ref` deed-target resolves through getPath (dotted-aware, strips a leading `$`), so a
+  // nested binding works as the target id — `do set-being on the being $conn.beingId` reads
+  // ctx.bindings.conn.beingId. A bare binding (`on the space spaceId`, portal.word) still works
+  // (getPath("spaceId") → ctx.bindings.spaceId). Falls back to the literal key, then of.id.
+  if (of.ref) {
+    const key = of.ref.startsWith("$") ? of.ref.slice(1) : of.ref;
+    const got = getPath(key, ctx);
+    return {
+      kind: of.kind,
+      id: got !== undefined ? got : ctx.bindings[of.ref],
+    };
+  }
+  return { kind: of.kind, id: of.id };
+}
+
+// resolve "$name" placeholders against ctx.bindings, recursively
+function resolveValue(v, ctx) {
+  // A `$`-ref resolves through getPath (dotted-aware): a flat `$target` reads
+  // ctx.bindings.target exactly as before, and a dotted `$credential.hash` descends the
+  // bound object. A genuinely-unbound ref stays the literal (getPath returns undefined).
+  if (typeof v === "string" && v.startsWith("$")) {
+    const got = getPath(v.slice(1), ctx);
+    return got === undefined ? v : got;
+  }
+  // A possessive reference: `credential's hash` parses to { ref: "credential.hash" }, the
+  // SAME shape returns and conditions already use. Resolve it through getPath so a write
+  // value resolves identically to a return value or a cond operand — one ref, one resolver.
+  if (v && typeof v === "object" && v.ref != null) return getPath(v.ref, ctx);
+  // a being's proper name -> its id (the 7.md name/id bridge: the Word names
+  // beings by proper noun, the system keys them by id). Scoped to ctx.beings so
+  // ordinary strings (ables, names) pass through untouched.
+  if (
+    typeof v === "string" &&
+    ctx.beings &&
+    Object.prototype.hasOwnProperty.call(ctx.beings, v)
+  )
+    return ctx.beings[v];
+  if (Array.isArray(v)) return v.map((x) => resolveValue(x, ctx));
+  if (v && typeof v === "object") {
+    const out = {};
+    for (const k of Object.keys(v)) out[k] = resolveValue(v[k], ctx);
+    return out;
+  }
+  return v;
+}
