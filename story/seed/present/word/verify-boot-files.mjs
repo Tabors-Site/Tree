@@ -79,11 +79,11 @@ try {
   // ...). Mirror them so the boot-end fold catches them too. Harmless if the boot sequence here
   // doesn't dispatch them.
   const { registerLlmAssignerOps } = await import(
-    `${SEED}/present/ables/llm-assigner/ops.js`
+    `${SEED}/store/words/llm-assigner/ops.js`
   );
   registerLlmAssignerOps();
   const { registerAbleManagerOps } = await import(
-    `${SEED}/present/ables/able-manager/ops.js`
+    `${SEED}/store/words/able-manager/ops.js`
   );
   registerAbleManagerOps();
 

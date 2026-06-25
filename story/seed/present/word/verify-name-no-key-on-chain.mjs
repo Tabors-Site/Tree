@@ -129,10 +129,11 @@ try {
         )
       : bad(`key leaked onto the fact`, { leaked });
 
-    // 3. the fact still records the act correctly (verb/act/of-name/params)
-    f.verb === "name" && f.act === "leak-probe" && f.of?.kind === "name"
+    // 3. the fact still records the act correctly. A Name has no reel of its own, so the name-op
+    //    fact lands on the LIBRARY reel (of.kind:"library"), folded into library.names[nameId].
+    f.verb === "name" && f.act === "leak-probe" && f.of?.kind === "library"
       ? ok(
-          `the fact still records the act (verb:name, act:leak-probe, of:{kind:name})`,
+          `the fact still records the act (verb:name, act:leak-probe, of:{kind:library})`,
         )
       : bad(`fact shape`, { verb: f.verb, act: f.act, of: f.of });
   }

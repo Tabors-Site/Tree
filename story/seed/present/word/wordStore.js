@@ -1002,13 +1002,14 @@ export async function declareNameOpsToFold({
         do: { ref }, // the runnable answer (the handler), resolved host-side from its ref
         // factAction/factVerb/noun let nameVerb stamp the one name:<op> fact through the keystone
         // (emitWordFact), the twin of the be ops — instead of a hardcoded writeNameFact. The fact's
-        // VERB (name) + target NOUN (name) ride the word explicitly (the hash-continuity anchor). The
-        // keystone's per-kind result policy OMITS the result field for a nameop, so name:declare's
-        // freshly minted `reveal` (private key + mnemonic) can never reach the chain — it rides the
-        // handler RETURN to the asker only, as it always has (the no-result invariant, now enforced).
+        // VERB (name) rides the word; the target NOUN is "library" — a Name has NO reel of its own
+        // (it acts, it is never acted-on), so every name fact lands on the story's LIBRARY reel,
+        // folded into library.names[nameId]. The keystone's per-kind result policy OMITS the result
+        // field for a nameop, so name:declare's freshly minted `reveal` (private key + mnemonic) can
+        // never reach the chain — it rides the handler RETURN to the asker only (the no-result invariant).
         factAction: op.factAction || opName,
         factVerb: "name",
-        noun: "name",
+        noun: "library",
         args: op.args ? JSON.parse(JSON.stringify(op.args)) : undefined,
         label: op.label,
         description: op.description,
@@ -1031,7 +1032,7 @@ export function resolveNameOpFromFold(opName) {
     handler: w.handler,
     factAction: w.factAction || opName,
     factVerb: w.factVerb || "name",
-    noun: w.noun || "name",
+    noun: w.noun || "library",
     args: w.args,
     label: w.label,
     description: w.description,

@@ -45,16 +45,12 @@ export async function describeBeingsCatalog(opts = {}) {
       defaultAble:   state.defaultAble || null,
       homeSpace:     state.homeSpace || null,
       parentBeingId: state.parentBeingId || null,
-      createdAt:     state.createdAt || null,
+      bornOrd:       state.bornOrd ?? null,
     };
   });
-  // Sort by createdAt ascending so first-created shows first (matches
-  // the legacy cursor's `.sort({ createdAt: 1 })`).
-  entries.sort((a, b) => {
-    const at = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-    const bt = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-    return at - bt;
-  });
+  // Sort by birth order (bornOrd = the birth fact's append ordinal), first-created first — clock-free,
+  // the ordinal IS the order (no `new Date(createdAt)`). Replaces the legacy createdAt-asc sort.
+  entries.sort((a, b) => (a.bornOrd ?? 0) - (b.bornOrd ?? 0));
 
   return { beings: entries, count: entries.length };
 }

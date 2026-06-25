@@ -315,7 +315,9 @@ async function callToActivity(summon, opts = {}) {
       content: truncate(text, ACTIVITY_CONTENT_CAP),
       chainstepId: String(summon._id),
       target: null,
-      ts: raw?.time || summon.stampedAt || new Date(),
+      // Display timestamp only (the act's inert seal-time witness); never an
+      // order key. endMessage carries no `time` now, so fall back to act.at.
+      ts: summon.at || new Date(),
     };
   }
 
@@ -384,7 +386,8 @@ async function callToActivity(summon, opts = {}) {
     content: truncate(summon.startMessage?.content || "", ACTIVITY_CONTENT_CAP),
     chainstepId: String(summon._id),
     target,
-    ts: summon.stampedAt || new Date(),
+    // Display timestamp only (the act's inert seal-time witness), never order.
+    ts: summon.at || new Date(),
   };
 }
 

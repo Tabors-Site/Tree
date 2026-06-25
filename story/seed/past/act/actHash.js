@@ -17,10 +17,11 @@
 // in the facts the act produced, which are themselves hash-chained.
 //
 // The opening excludes:
-//   receivedAt / stampedAt — wall-clock witnesses. Human time is a
+//   at — the act's lone wall-clock witness (the seal time). Human time is a
 //     display helper for beings filtering timelines, never truth
 //     (Tabor doctrine 2026-06-11); the OS shows it off the kernel
-//     clock and the chain doesn't commit to it.
+//     clock and the chain doesn't commit to it. Order is act.ord (the
+//     clock-free append ordinal) + the chain `p`, never this.
 //   startMessage — the moment's prose LABEL (a human annotation) and
 //     its source. A label is DRIFT in the identity (Tabor doctrine
 //     2026-06-23: "moment labels are drift"): the act's truth is the

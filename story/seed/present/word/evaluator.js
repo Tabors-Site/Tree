@@ -73,6 +73,8 @@ async function evalNode(node, ctx) {
       return evalSee(node, ctx); // the READ verb: query the substrate, no fact
     case "call":
       return evalCall(node, ctx); // the CALL verb: reach another being (space), lays the reach record
+    case "quotedWord":
+      return evalQuotedWord(node, ctx); // a quoted word: open/said*/close one-word stamps; close sends (call) or folds (recall)
     case "recall":
       return evalRecall(node, ctx); // the RECALL verb: reach back across TIME into a chain (no fact); a verdict records the conclusion
     case "closure":
@@ -650,6 +652,185 @@ async function evalCall(node, ctx) {
   });
   if (node.bind) ctx.bindings[node.bind] = result;
   return result;
+}
+
+// ── span (the quote, as one-word stamps): `[address] "said words"` ────────────────────────────
+// The redesign of CALL. A call is NOT a fat fact: you type it one word at a time on your OWN
+// reel (your name through a being). The quote-marks are words too: an OPEN-quote stamp, one SAID
+// stamp per word, a CLOSE-quote stamp. The close is ONE fact; the send is a SECOND act below it
+// (host afterSeal): on the close the host assembles the span (the said-words between the matching
+// open and this close, on your own reel) and delivers the utterance to the recipient's inbox
+// (call), or folds your own chain (recall = self/world target). Nothing on the chain holds a
+// bundle . the utterance exists only as the run of stamps, assembled on read (spanRead.js). The
+// brackets are figure-inert in every reducer (act '"' / 'said' match nothing), so aggregate state
+// is byte-identical with or without them; the Rust treefold needs no change. 623/12: the target
+// decides the mode . absent/self/world => recall (fold own chain), a real other => call (deliver).
+//
+// FACT SHAPES (all land on the CALLER's reel, of:{being: self}; the recipient rides open.params.to):
+//   open  { verb:"call", act:'"', of:{kind:"being", id:self}, params:{ span:"open", correlation, to } }
+//   said  { verb:"do",   act:"said",                          params:{ word, pos, correlation } }
+//   close { verb:"call", act:'"', of:{kind:"being", id:self}, params:{ span:"close", correlation } }
+async function evalQuotedWord(node, ctx) {
+  const QUOTE = '"';
+  const selfBeing =
+    ctx.identity?.beingId != null ? String(ctx.identity.beingId) : null;
+  const selfName =
+    ctx.identity?.nameId != null
+      ? String(ctx.identity.nameId)
+      : ctx.identity?.name != null
+        ? String(ctx.identity.name)
+        : null;
+  // The said-words: explicit `words` from the parser, else split the raw quote body (spacebar =
+  // one word). Literal said-words, NEVER re-parsed as acts (hi/there are not verbs).
+  const words = Array.isArray(node.words)
+    ? node.words.filter((w) => String(w ?? "").length)
+    : String(node.saying ?? "")
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+
+  // The target decides the mode (623/12). `of` absent/null/"world" or resolving to self => recall.
+  const entity = (v) =>
+    v && typeof v === "object" && v.ref != null
+      ? getPath(v.ref, ctx)
+      : resolveValue(v, ctx);
+  const isWorld = node.of === "world";
+  const target = node.of != null && !isWorld ? entity(node.of) : null;
+  const tid = String(
+    target?._id ?? target?.id ?? (typeof target === "string" ? target : "") ?? "",
+  );
+  const isRecall =
+    node.of == null || isWorld || (tid && (tid === selfBeing || tid === selfName));
+
+  // The recipient stance (call only). FAIL if the named target does not resolve to a being.
+  let toName = null;
+  if (!isRecall) {
+    toName = target?.name ?? target?.state?.name ?? null;
+    if (!toName && (target?._id ?? target?.id ?? typeof target === "string")) {
+      const id = target?._id ?? target?.id ?? target;
+      const { loadOrFold } = await import("../../materials/projections.js");
+      toName = (await loadOrFold("being", String(id), ctx.history || "0"))?.state
+        ?.name;
+    }
+    if (!toName)
+      throw new WordRefusal(
+        "call: that name does not exist here . cannot send the words",
+        "INVALID_INPUT",
+      );
+  }
+
+  // World recall is gated by the consciousness-level grant (623/12 B2). Your own thread is yours.
+  if (isWorld) {
+    const { canRecallScope } = await import("../ables/registry.js");
+    if (!(await canRecallScope(selfBeing, "world", ctx.history)))
+      throw new WordRefusal(
+        `recall: the "world" view is not granted . your consciousness level does not reach this fold`,
+        "FORBIDDEN",
+      );
+  }
+
+  // The caller's stance (call only) . the `from` the recipient sees. Resolved before laying so the
+  // open-quote carries the full envelope; the delivery (handleCall on the close) reads it.
+  let fromStance = null;
+  if (!isRecall) {
+    const { getStoryDomain } = await import("../../ibp/address.js");
+    let fromName = selfName;
+    if (!fromName && selfBeing) {
+      const { loadOrFold } = await import("../../materials/projections.js");
+      fromName = (await loadOrFold("being", selfBeing, ctx.history || "0"))
+        ?.state?.name;
+    }
+    if (!fromName)
+      throw new WordRefusal(
+        "call: the caller has no resolvable name . cannot address from @undefined",
+        "INVALID_INPUT",
+      );
+    fromStance = `${getStoryDomain()}/@${fromName}`;
+  }
+
+  const correlation = await mintCorrelation();
+  const onReel = { kind: "being", id: selfBeing }; // every span stamp lands on the CALLER's reel
+  const base = { through: selfBeing, by: selfName };
+
+  // OPEN-quote stamp . the quote-mark is the word. Carries the correlation + (call) the recipient
+  // envelope (to / from / intent) so the close's delivery has everything without a second resolve.
+  await emit(
+    {
+      ...base,
+      verb: "call",
+      act: QUOTE,
+      of: onReel,
+      params: {
+        quotedWord: "open",
+        correlation,
+        to: isRecall ? null : toName,
+        from: fromStance,
+        intent: isRecall ? null : node.intent || null,
+      },
+    },
+    ctx,
+  );
+  // one SAID stamp per word . the literal said-word, one fact each (the chain re-folds between).
+  let pos = 0;
+  for (const w of words) {
+    await emit(
+      {
+        ...base,
+        verb: "do",
+        act: "said",
+        of: onReel,
+        params: { word: String(w), pos: pos++, correlation },
+      },
+      ctx,
+    );
+  }
+  // CLOSE-quote stamp . ONE fact, one word, no bundle. The send is the second act below (afterSeal).
+  await emit(
+    {
+      ...base,
+      verb: "call",
+      act: QUOTE,
+      of: onReel,
+      params: { quotedWord: "close", correlation },
+    },
+    ctx,
+  );
+
+  if (ctx.dryRun) {
+    const r = isRecall ? "<recall>" : `<call:${toName}>`;
+    if (node.bind) ctx.bindings[node.bind] = r;
+    return r;
+  }
+
+  if (isRecall) {
+    // The close folds your OWN chain (the answer), reading past the span's own quote-stamps.
+    return foldSelf(node, ctx, {
+      scope: isWorld ? "world" : "being",
+      being: isWorld ? null : selfBeing,
+    });
+  }
+
+  // CALL: the send is the second act below the close. The delivery is fold-driven . handleCall
+  // (past/projections/inbox/inboxProjectionFold.js) fires on the close-quote, assembles the span
+  // from this reel, resolves the recipient, materializes the inbox row, and wakes them. The
+  // fail-if-the-name-does-not-exist gate already ran above (toName), so the close only lays when
+  // the recipient is real. Nothing more to do here . the stamps are down.
+  const result = { status: "accepted", correlation, to: toName };
+  if (node.bind) ctx.bindings[node.bind] = result;
+  return result;
+}
+
+// mintCorrelation . a per-span id. crypto.randomUUID at runtime; dry-run never reaches the send,
+// but the stamps still need a stable thread, so derive a deterministic id from the moment + a
+// counter when randomness is unavailable (the no-Math.random discipline in fold-replay contexts).
+let _spanCounter = 0;
+async function mintCorrelation() {
+  try {
+    const { randomUUID } = await import("node:crypto");
+    return randomUUID();
+  } catch {
+    return `span-${++_spanCounter}`;
+  }
 }
 
 // fold YOUR OWN chain through the lens — a SEE of the past, lays NO fact. The seam to read-trail.js

@@ -549,21 +549,13 @@ async function getMatters({ spaceId, limit, offset, startDate, endDate, history 
   // JS. dateRange.createdAt is the {$gte,$lte} Date range buildDate
   // produced; honored field-for-field here.
   let rows = await listMatterSlotsAtSpace(history, spaceIdBare);
-  const cr = dateRange.createdAt || null;
-  if (cr) {
-    rows = rows.filter((s) => {
-      const t = s.state?.createdAt != null ? new Date(s.state.createdAt).getTime() : NaN;
-      if (Number.isNaN(t)) return false;
-      if (cr.$gte && t < cr.$gte.getTime()) return false;
-      if (cr.$lte && t > cr.$lte.getTime()) return false;
-      return true;
-    });
-  }
-  rows.sort((a, b) => {
-    const at = a.state?.createdAt ? new Date(a.state.createdAt).getTime() : 0;
-    const bt = b.state?.createdAt ? new Date(b.state.createdAt).getTime() : 0;
-    return bt - at; // newest first
-  });
+  // FLAG (clock removal): the date-RANGE filter on createdAt was a CLOCK query (callers pass a Date
+  // {$gte,$lte}). createdAt is gone — matter carries bornOrd, the clock-free birth ordinal — and a
+  // birth ordinal can't honor a wall-clock range, so the date filter is DISABLED (returns the full set,
+  // not silently empty). Decision pending: restore it via an inert `at` witness on the matter (a
+  // display-only birth date, never sorted/ordered on for truth) or drop the date-range feature.
+  void dateRange;
+  rows.sort((a, b) => (b.state?.bornOrd ?? 0) - (a.state?.bornOrd ?? 0)); // newest first by birth order
   rows = rows.slice(safeOffset, safeOffset + safeLimit);
 
   // Batch-load author names from the being projection slots.
@@ -737,11 +729,7 @@ async function listMattersAt(spaceId, { limit = 50, history } = {}) {
   // walk inside listMatterSlotsAtSpace now does — main and non-main both go
   // through the one path. Newest-first by state.createdAt, capped at limit.
   const rows = await listMatterSlotsAtSpace(history, String(spaceId));
-  rows.sort((a, b) => {
-    const at = a.state?.createdAt ? new Date(a.state.createdAt).getTime() : 0;
-    const bt = b.state?.createdAt ? new Date(b.state.createdAt).getTime() : 0;
-    return bt - at; // newest first
-  });
+  rows.sort((a, b) => (b.state?.bornOrd ?? 0) - (a.state?.bornOrd ?? 0)); // newest first by birth order (clock-free)
   return rows.slice(0, limit).map(toEntry);
 }
 

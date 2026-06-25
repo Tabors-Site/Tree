@@ -134,8 +134,16 @@ try {
         foldedName: slot?.state?.name,
       });
 
-  // ── 2. the do:rename-matter fact: targets the matter, params {field:"name", value} (like set-space) ──
-  const rf = (r.deltaF || []).find((f) => f.act === "rename-matter");
+  // ── 2. rename-matter is now a COMPOSITE: its do:set-matter deed seals in its OWN moment on the
+  //  matter's reel (not the caller's deltaF). Renaming a matter IS a set-matter leaf-call on field
+  //  "name" — there is no separate do:rename-matter act anymore. Read the deed off the matter reel. ──
+  const { getFactsOnReelWhere } = await import(`${R}/seed/past/fact/facts.js`);
+  const rf = getFactsOnReelWhere(
+    "0",
+    "matter",
+    aId,
+    (f) => f.act === "set-matter" && f.params?.field === "name",
+  ).find((f) => f.params?.value === "renamed.txt");
   rf &&
   rf.verb === "do" &&
   String(rf.of?.id) === aId &&
@@ -144,13 +152,13 @@ try {
   rf.params?.field === "name" &&
   rf.params?.value === "renamed.txt"
     ? ok(
-        `do:rename-matter fact: of {matter, matterId}, through = caller, params {field:"name", value:"renamed.txt"} (exactly like being/space)`,
+        `do:set-matter deed (composite): of {matter, matterId}, through = caller, params {field:"name", value:"renamed.txt"} — the rename IS a set-matter leaf-call`,
       )
     : bad(
         `fact`,
         rf
           ? { verb: rf.verb, of: rf.of, through: rf.through, params: rf.params }
-          : "no fact",
+          : "no set-matter deed on the matter reel",
       );
 
   // ── 3. no-name gate (the .word's "name is required"): refuse, no fact ──
@@ -176,13 +184,18 @@ try {
     name: "taken.txt",
     allowReplace: true,
   });
-  const repf = (replace.deltaF || []).find((f) => f.act === "rename-matter");
+  const repf = getFactsOnReelWhere(
+    "0",
+    "matter",
+    aId,
+    (f) => f.act === "set-matter" && f.params?.field === "name",
+  ).find((f) => f.params?.value === "taken.txt");
   replace.result?.name === "taken.txt" &&
   !replace.refused &&
   repf?.params?.field === "name" &&
   repf?.params?.value === "taken.txt"
     ? ok(
-        `allowReplace=true bypasses the pre-flight refuse → lays {field:"name", value:"taken.txt"} (no refuse)`,
+        `allowReplace=true bypasses the pre-flight refuse → the do:set-matter deed lays {field:"name", value:"taken.txt"} (no refuse)`,
       )
     : bad(`allowReplace`, {
         result: replace.result,

@@ -134,9 +134,9 @@ export const HEAVEN_SPACE = Object.freeze({
   // The threads space. A live tree of coordinated work (a
   // rootCorrelation chain) is addressable here as `./threads/<id>`. No
   // children are persisted; the projection is computed on demand from
-  // inbox + Act records keyed by rootCorrelation. SUMMON to a
-  // thread address is a cut (sever the line and everything hanging
-  // off it). SEE returns the live forest. See
+  // inbox + Act records keyed by rootCorrelation. A thread is read-only:
+  // SEE returns the live forest, and a thread is not a call target (a
+  // call is a fact, a response is a fact; there is no severing). See
   // seed/materials/space/threads.js.
   THREADS: "threads",
   // The histories space. Each child names a divergent world by path

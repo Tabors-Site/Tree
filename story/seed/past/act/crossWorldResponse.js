@@ -21,13 +21,13 @@
 // transitions atomically only when current=attempted; inner face is
 // a single overwrite that's safe to retry.
 
-import { attachInnerFace } from "./innerFace.js";
-
 /**
- * Apply a cross-world response to the actor's local Act. Updates
- * status to the indicated terminal state and (optionally) attaches
- * the foreign descriptor as inner face. Both are independent; either
- * may be a no-op if the data is missing.
+ * Carry a cross-world reply's reported outcome back to the caller. Records NOTHING on the act: an act
+ * is PRESENT and a fact is PAST, so "done" is whether a FACT was stamped for the act (not a status
+ * column), and the inner face was loaded + rasterized BEFORE the act and saved through its opening
+ * (beat 2 → plannedAct.innerFace) — you can't act blind — so the foreign descriptor is already on the
+ * act, with nothing to patch post-seal. Recording the reply itself as a local FACT (the past-tense
+ * proof the cross-story act completed, foldable via getFactsByActId) is the flagged TODO.
  *
  * @param {string} actId  the actor's local Act id (Act._id)
  * @param {object} response  the foreign substrate's reply
@@ -48,18 +48,8 @@ export async function handleCrossWorldResponse(actId, response) {
     throw new Error("handleCrossWorldResponse: response is required");
   }
 
-  // Act-status was RIPPED: an act is PRESENT, a fact is PAST, and "did it complete?" is whether a FACT
-  // was stamped for the act (getFactsByActId) — never a mutable column on the sealed act. So the foreign
-  // reply's outcome is NOT written onto the act. The reported status rides back to the caller as-is;
-  // recording the reply as a local FACT on the actor's reel ("received cross-story reply: <status>"),
-  // the past-tense proof the cross-story act completed, is the flagged TODO (federation, unbuilt).
-  const reportedStatus = response.status || null;
-
-  let innerFaceHash = null;
-  if (response.descriptor && typeof response.descriptor === "object") {
-    const { hash, attached } = await attachInnerFace(actId, response.descriptor);
-    innerFaceHash = attached ? hash : null;
-  }
-
-  return { status: reportedStatus, innerFaceHash };
+  // Nothing is written onto the act (see the doc above): the reported outcome rides back as-is, and the
+  // foreign descriptor was already on the act's opening (loaded before acting). innerFaceHash stays null
+  // — there is no post-seal attach. TODO: record the reply as a local FACT so "done" folds from it.
+  return { status: response.status || null, innerFaceHash: null };
 }

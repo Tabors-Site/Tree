@@ -346,12 +346,11 @@ export function applyDeath(state, fact) {
 
   const qualities = state.qualities || {};
 
-  // Idempotent — first death wins. Re-folding the same fact (or a
-  // duplicate) preserves the original time/byActor and the cleared
-  // rendering state.
-  if (qualities.death?.time) return state;
+  // Idempotent — first death wins. The being is dead the moment the be:death FACT exists; that fact's
+  // existence IS the death (no clock — an act is present, a fact is past, and "when" is the chain
+  // position, not a timestamp). Re-folding preserves the byActor and the cleared rendering state.
+  if (qualities.death) return state;
 
-  const time = fact?.date || null;
   const byActor = fact?.params?.byActor || fact?.through || null;
 
   // Inhabit-state cleared so the "human" cognition flip-up doesn't
@@ -370,7 +369,7 @@ export function applyDeath(state, fact) {
     qualities: {
       ...qualities,
       connection,
-      death: { time, byActor },
+      death: { byActor },
     },
   };
 }
@@ -537,8 +536,7 @@ export function applyCreateBeing(state, fact) {
     // the reducer just records it. Movement later writes coord via
     // set-being:coord facts which applySetField picks up.
     coord: spec.coord ?? null,
-    createdAt: fact.date,
-    updatedAt: fact.date,
+    bornOrd: fact.ord,
   };
 }
 
@@ -592,8 +590,7 @@ export function applyCreateSpace(state, fact) {
     // passed; the reducer just records it.
     coord: spec.coord ?? null,
     qualities: spec.qualities ?? {},
-    createdAt: fact.date,
-    updatedAt: fact.date,
+    bornOrd: fact.ord,
     position: spec.parent ?? spec.parentId ?? null,
   };
 }
@@ -663,7 +660,7 @@ export function applyMove(state, fact) {
   ) {
     const next = { x: coord.x, y: coord.y };
     if (Number.isFinite(coord.z)) next.z = coord.z;
-    return { ...state, coord: next, updatedAt: fact.date };
+    return { ...state, coord: next };
   }
 
   // params.to is a bare space-id. Reducer writes it through to the
@@ -671,9 +668,9 @@ export function applyMove(state, fact) {
   // plus the denormalized position cache.
   if (typeof to === "string" && to) {
     if (kind === "space")
-      return { ...state, parent: to, position: to, updatedAt: fact.date };
+      return { ...state, parent: to, position: to };
     if (kind === "matter")
-      return { ...state, spaceId: to, position: to, updatedAt: fact.date };
+      return { ...state, spaceId: to, position: to };
   }
 
   return state;
@@ -703,8 +700,7 @@ export function applyCreateMatter(state, fact) {
     qualities: spec.qualities ?? {},
     children: [],
     position: spec.spaceId ?? null,
-    createdAt: fact.date,
-    updatedAt: fact.date,
+    bornOrd: fact.ord,
   };
 }
 

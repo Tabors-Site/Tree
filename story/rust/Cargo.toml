@@ -1,0 +1,6 @@
+# TreeOS Rust port workspace. Bottom-up along the determinism spine:
+#   treehash  — Tier 1: content-addressed identity (canonical JSON + SHA-256)
+#   treefold  — Tier 2: the fold engine (per-kind reducers + the pure fold loop)
+[workspace]
+resolver = "2"
+members = ["treehash", "treefold"]

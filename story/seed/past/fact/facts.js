@@ -39,7 +39,7 @@ import { redactSecrets } from "../../materials/redact.js";
 // Reel-bearing target kinds — those with their own seq counter. Other
 // kinds (place, stance) and target-less facts carry seq:null and stay
 // outside the fold model for now.
-const REEL_KINDS = new Set(["being", "space", "matter", "name", "library"]);
+const REEL_KINDS = new Set(["being", "space", "matter", "library"]);
 
 // ─────────────────────────────────────────────────────────────────────────
 // WRITE

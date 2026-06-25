@@ -262,12 +262,12 @@ import "./storyConfig.js";
 // granting them the `angel` able anchored at heaven:
 // `do(@<being>, "grant-able", { able: "angel", anchorSpaceId: <heavenId> })`.)
 // Side-effect import. Registers the InboxProjection cross-cutting
-// fold handlers (summon → upsert, be:sever → delete-by-root).
+// fold handler (summon → upsert).
 // See seed/past/projections/inbox/inboxProjectionFold.js.
 import "./past/projections/inbox/inboxProjectionFold.js";
 // Side-effect import. Registers the ThreadsProjection cross-cutting
-// fold handlers (summon → upsert+addParticipant, be:sever →
-// mark severed). See seed/past/projections/threads/threadsProjectionFold.js.
+// fold handler (summon → upsert+addParticipant).
+// See seed/past/projections/threads/threadsProjectionFold.js.
 import "./past/projections/threads/threadsProjectionFold.js";
 // Side-effect import. Registers the PositionProjection cross-cutting
 // fold handler (do:set-being:coord → upsert (beingId, spaceId) row).

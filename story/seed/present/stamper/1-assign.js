@@ -184,15 +184,13 @@ export async function assign({
     history,
   });
 
-  // Previous moment lookup for `me.previousAble` and
-  // `time.sinceLastMoment`. Best-effort; a being with no prior moment
-  // gets a null `previousAble` and a null `sinceLastMoment`.
+  // Previous moment lookup for `me.previousAble`. Best-effort; a being
+  // with no prior moment gets a null `previousAble`. Flow tests order and
+  // content, never a clock (flow.js: "NO time.*"), so the previous moment
+  // contributes only its able, no timestamp.
   const lastSealed = await findLastSealedForBeing(String(toBeing._id));
   const previousMoment = lastSealed
-    ? {
-        activeAble: lastSealed.activeAble || null,
-        stampedAt: lastSealed.stampedAt || null,
-      }
+    ? { activeAble: lastSealed.activeAble || null }
     : null;
 
   // World signals lookup. Snapshots story root's `qualities.world`
@@ -303,7 +301,6 @@ export async function assign({
     inboxMessageId: entry.correlation,
     inReplyTo: entry.inReplyTo || null,
     rootCorrelation: entry.rootCorrelation || entry.correlation || null,
-    receivedAt: entry.sentAt || null,
     priority: entry.priority || null,
     // History this moment runs on; stamped onto the Act so the act-chain
     // respects lineage on cross-history reads (mirrors the Fact schema).
@@ -623,7 +620,6 @@ async function planActRow(opts = {}) {
     inboxMessageId = null,
     inReplyTo = null,
     rootCorrelation = null,
-    receivedAt = null,
     priority = null,
     history,
     // Bucket 3 Option D: the correlation of the InboxProjection row
@@ -691,7 +687,6 @@ async function planActRow(opts = {}) {
     history,
   });
 
-  const now = new Date();
   const safeMessage = capContent(message);
 
   // Plain object — no store write. stamped.js writes this at seal
@@ -744,7 +739,10 @@ async function planActRow(opts = {}) {
     story: getStoryDomain(),
     history,
   };
-  const p = await readActHead(getStoryDomain(), history, through);
+  // The act-chain is keyed by the NAME (`by`, the signer), not the being it acts
+  // THROUGH: only Names act, so only Names have act-chains (a being is acted
+  // through, never an actor). The row's `through` still records the vessel.
+  const p = await readActHead(getStoryDomain(), history, by);
   actId = computeActId(p, opening);
   // A summon with no parent IS its own root.
   if (!resolvedRoot) resolvedRoot = actId;
@@ -762,8 +760,9 @@ async function planActRow(opts = {}) {
     rootCorrelation: resolvedRoot,
     parentThread: resolvedParentThread,
     answers, // Bucket 3 Option D: closure key the seal evicts on
-    receivedAt: receivedAt || now,
-    stampedAt: now,
+    // No wall-clock on the planned row. The act's lone inert witness is the
+    // seal-time `at`, stamped at seal in 4-stamped.js; order is act.ord (the
+    // clock-free append ordinal stamped by commitMoment), never a timestamp.
     startMessage: { content: safeMessage, source },
     story: getStoryDomain(),
     history,

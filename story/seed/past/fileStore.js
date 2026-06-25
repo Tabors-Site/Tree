@@ -61,7 +61,7 @@ let ROOT = process.env.TREEOS_STORE_ROOT || join(STORE_BASE, DEFAULT_STORY);
 // An act's POSITION in the single append-only commit order. withCommitLock serializes every commit, so
 // this counter is monotonic AND causally correct under ONE writer (nothing commits "before" a thing it
 // causally depends on). It is NOT a clock: reproducible (replay the journal → same order), caused (write
-// order respects causality), and it never reads a wall — the "wordstamp as a number" that stampedAt was
+// order respects causality), and it never reads a wall — the "wordstamp as a number" that a prior act wall-clock was
 // faking. LOCAL ONLY: it totally-orders THIS story's acts; across federated/sovereign stories there is
 // no global order, only causal links (partial, the inReplyTo/rootCorrelation tree). Never read `ord` as
 // a universal timeline. Restored lazily from the max ord already on the act-logs — the acts ARE the
@@ -81,6 +81,14 @@ function nextOrd() {
   return ++_ordCounter;
 }
 
+// Run-on fan-out census: acts that lay facts across >1 reel (the journal's old reason to exist). The
+// no-journal floor's tail-truncation recovery is only atomic with ONE reel per act, so these must be
+// decomposed to one-word; until then commitMoment warns + records them here. Read via fanOutRunOns().
+const _fanOutRunOns = new Set();
+export function fanOutRunOns() {
+  return [..._fanOutRunOns];
+}
+
 // Point the engine at a story (no mongod, no URI):
 //   { root }   explicit dir override (tests use a temp dir) — wins over story.
 //   { story }  a story name → store/<story>; "past"/"main"/absent → store/past (the default).
@@ -90,7 +98,6 @@ export function configureStore({ root, story } = {}) {
   else if (story && story !== DEFAULT_STORY && story !== "main")
     ROOT = join(STORE_BASE, String(story).replace(/[^A-Za-z0-9._-]/g, "_"));
   else ROOT = join(STORE_BASE, DEFAULT_STORY);
-  mkdirSync(join(ROOT, "journal"), { recursive: true });
   mkdirSync(join(ROOT, "reels"), { recursive: true });
   _ordCounter = null; // re-restore the append ordinal lazily for the (possibly new) store
   return ROOT;
@@ -135,8 +142,6 @@ function reelPath(history, kind, id) {
 function headPath(history, kind, id) {
   return join(reelDir(history, kind, id), `${id}.head`);
 }
-const journalPath = () => join(ROOT, "journal", "moment.wal");
-const ackPath = () => join(ROOT, "journal", "moment.wal.ackpos");
 
 // ── durable append helper ──────────────────────────────────────────────────
 // Append bytes to a file and fsync both the file AND its directory (so the entry
@@ -617,13 +622,13 @@ export function indexActDoc(story, history, being, actDoc) {
   }
 }
 
-// ── post-seal act PATCHES (the one mutable-after-seal exception) ─────────────
-// An Act is sealed and immutable EXCEPT for the derived-correlation fields the doctrine permits:
-// status (attempted → terminal), innerFace (the foreign descriptor observation), severedAt (a cut
-// from outside), and qualities.statusMeta. The act-log line is append-only, so a patch is an OVERLAY
-// file beside the logs, keyed by actId; reads merge it over the logged line. The overlay is the file-
-// native peer of Mongo's Act.findOneAndUpdate on those fields. NOT part of the act's content hash, so
-// patching never changes its identity (the hash was over the OPENING; these are closure fields).
+// ── post-seal act PATCH OVERLAY (generic store primitive; no current writer) ──
+// An act-log line is append-only, so any post-seal field write would be an OVERLAY file beside the
+// logs, keyed by actId; reads merge it over the logged line (readActLog). This is the file-native peer
+// of Mongo's Act.findOneAndUpdate, NOT part of the act's content hash (the hash was over the OPENING),
+// so it never changes the act's identity. There is no caller today: a sealed act is immutable (an act
+// is present, a fact is past). The former writers (status, innerFace, the thread-cut severedAt) were
+// all retired; the overlay machinery is kept generic for any future closure field that earns one.
 function actPatchPath(story, actId) {
   return join(ROOT, "acts", pathSafe(story), "_patches", shard(pathSafe(actId)), `${pathSafe(actId)}.json`);
 }
@@ -637,8 +642,8 @@ function loadActPatch(story, actId) {
   }
 }
 // Merge a partial onto the act's patch overlay (shallow merge; last write wins per key). Returns the
-// merged patch. The caller (actChain.patchActStatus) holds any monotonic-transition guard — this is
-// the raw store write. Single-writer ⇒ the load→merge→save is atomic.
+// merged patch. The raw store write for the overlay; a caller would hold any monotonic-transition
+// guard. No caller today (acts are immutable). Single-writer ⇒ the load→merge→save is atomic.
 export function patchAct(story, actId, partial) {
   if (actId == null || !partial || typeof partial !== "object") return null;
   const id = String(actId);
@@ -658,7 +663,7 @@ export function patchAct(story, actId, partial) {
 
 // ── act reads (the file-native peer of Act.find*) ───────────────────────────
 // Scan one being's act-log and return its acts (oldest-first; the log is append-order). Each is the
-// logged line with any patch overlay merged on top (status/innerFace/severedAt).
+// logged line with any patch overlay merged on top (the overlay has no writer today; see above).
 function readActLog(story, history, being) {
   const p = actLogPath(story, history, being);
   if (!existsSync(p)) return [];
@@ -745,22 +750,6 @@ export function actCount(story, filter = {}) {
     if (a && keys.every((kk) => kk === k || String(a[kk]) === String(filter[kk]))) n++;
   }
   return n;
-}
-
-// severedRootCorrelations(story) → the distinct set of rootCorrelations carrying a severed act. The
-// cross-aggregate peer of the old Act.aggregate([{$match:{severedAt}},{$group:{_id:$rootCorrelation}}]):
-// severedAt is a patch-overlay field (not an index facet), so this walks the per-story id index — one
-// readActById per located act (patch-merged) — and collects the rootCorrelation of every act whose
-// severedAt is set. Used at boot to prime the severed-roots cache (materials/space/threads.js). O(acts)
-// but boot-only and bounded; the alternative (a severedAt facet) would index a post-seal-mutable field.
-export function severedRootCorrelations(story) {
-  const out = new Set();
-  const idIndex = loadActIndex(story, "id");
-  for (const actId of Object.keys(idIndex)) {
-    const a = readActById(story, actId);
-    if (a && a.severedAt && a.rootCorrelation) out.add(String(a.rootCorrelation));
-  }
-  return [...out];
 }
 
 // rebuildActIndex(story) — re-derive the act index by scanning every .acts log under the story. Proves
@@ -1200,11 +1189,13 @@ export function listAllActs(story) {
   return out;
 }
 
-// the moment journal (WAL) + the atomic commit ──────────────────────────────
-// A record = one moment = { recId, act?, facts: [{ history, kind, id, spec }] } (N-capable for the
-// transition; N=1 at the target). commitMoment: append the framed record to the WAL + fsync (the
-// commit point), apply each fact to its reel, then advance ackpos. A crash before ack replays the
-// record on boot — idempotent, because appendFact skips a fact whose _id is already the head.
+// the atomic commit (NO journal) ─────────────────────────────────────────────
+// A record = one moment = { recId, act?, facts: [{ history, kind, id, spec }] }. commitMoment computes
+// each fact's identity, ENFORCES one reel per act (a fan-out is a run-on), and applies it — the fsync'd
+// reel-line append (writeFactDoc) IS the stamp, i.e. the commit. There is no WAL: one fact on one reel
+// has no multi-reel "all-or-none" to protect, and the fact's _id is itself the torn-write check (a half
+// append leaves a line the .head never advanced past, which readReel skips). The journal / ack / frame /
+// crc / replay were retired — the act/fact divide is the stamp, the stamp is the durable write.
 
 // One global serialization point. A tiny promise-chain mutex: every commit awaits the previous.
 let _commitTail = Promise.resolve();
@@ -1216,23 +1207,6 @@ function withCommitLock(fn) {
     () => undefined,
   );
   return run;
-}
-
-// CRC32 over the record body so a torn trailing write (crash mid-append) is detectable on replay.
-function crc32(str) {
-  let c = ~0;
-  for (let i = 0; i < str.length; i++) {
-    c ^= str.charCodeAt(i) & 0xff;
-    for (let k = 0; k < 8; k++) c = (c >>> 1) ^ (0xedb88320 & -(c & 1));
-  }
-  return (~c >>> 0).toString(16).padStart(8, "0");
-}
-
-function frame(record) {
-  const body = JSON.stringify(record);
-  // <crc>\t<body>\n — newline-delimited (body is JSON, no raw newlines). On replay, a line whose
-  // crc mismatches (or that has no newline) is the crash's torn record → stop there.
-  return `${crc32(body)}\t${body}\n`;
 }
 
 // Apply a persisted record (facts carry their FULL pre-computed docs) to the reel files. Idempotent
@@ -1248,24 +1222,6 @@ function applyRecord(record) {
   return { factIds, actId: record.act?._id ?? record.actId ?? null };
 }
 
-function readAck() {
-  const p = ackPath();
-  if (!existsSync(p)) return 0;
-  try {
-    return Number(readFileSync(p, "utf8").trim()) || 0;
-  } catch {
-    return 0;
-  }
-}
-function writeAck(offset) {
-  const fd = openSync(ackPath(), "w");
-  try {
-    writeSync(fd, String(offset) + "\n");
-    fsyncSync(fd);
-  } finally {
-    closeSync(fd);
-  }
-}
 
 /**
  * Commit one moment atomically: WAL-append (the commit point) → apply to reels → ack.
@@ -1278,6 +1234,7 @@ export function commitMoment(record) {
     // HERE, under the commit lock and BEFORE the WAL append, so it journals with the act and rides the
     // act-log verbatim. One act per moment (one-word) → one ord per commit.
     if (record.act && record.act.ord == null) record.act.ord = nextOrd();
+    const ord = record.act?.ord ?? null;
     // (1) Compute each fact's identity ONCE, threading per-reel heads (a moment may touch >1 reel
     //     during the run-on transition). Build the persisted record carrying the FULL fact docs, so
     //     replay re-applies the EXACT facts (never re-derives a fresh seq against a moved head).
@@ -1286,18 +1243,36 @@ export function commitMoment(record) {
       const key = `${f.history}:${f.kind}:${f.id}`;
       const head = heads.get(key) || readReelHead(f.history, f.kind, f.id);
       const { doc, nextHead } = computeFactDoc(f.history, f.kind, f.id, f.spec, head);
+      // The moment's append ordinal also rides each FACT (= its act's ord): the clock-free GLOBAL order
+      // the fact sits at across reels (per-reel `seq` is only local). Non-digest — contentOf excludes
+      // it, so it never affects _id or verifyReel, exactly like `date`. Lets the fold read a birth
+      // fact's `ord` as the aggregate's birth position (the createdAt replacement), no clock.
+      if (ord != null) doc.ord = ord;
       heads.set(key, nextHead);
       return { history: f.history, kind: f.kind, id: f.id, doc };
     });
+    // ONE ACT, ONE FACT, ONE REEL. Tail-truncation recovery (drop an unfinished act by cutting its
+    // reel's tail) is only atomic if an act never FANS across reels — a multi-reel act is the run-on
+    // that brought the journal back. Enforce it so the no-journal floor stays sound: a live act's
+    // facts must all land on a SINGLE reel (0 facts is fine — a factless act, e.g. a cross-world attempt).
+    const reels = new Set(facts.map((f) => `${f.history}:${f.kind}:${f.id}`));
+    if (reels.size > 1) {
+      // The act fans across reels — a run-on. Surfaced loudly (and counted) so the remaining run-ons
+      // get decomposed to one-word; once they're gone this becomes a hard throw (the invariant the
+      // no-journal floor rests on). For now we warn-and-proceed so the in-flight conversion still boots.
+      _fanOutRunOns.add(`${record.actId || record.act?._id || "?"}→${[...reels].join("+")}`);
+      // eslint-disable-next-line no-console
+      console.warn(
+        `commitMoment FAN-OUT (run-on): act lays facts on ${reels.size} reels (${[...reels].join(", ")}). ` +
+          `One act = one fact = one reel; decompose into one word per reel.`,
+      );
+    }
     const persisted = { recId: record.recId, act: record.act, actId: record.actId, facts };
-    // (2) WAL append + fsync — THE COMMIT POINT.
-    durableAppend(journalPath(), frame(persisted));
-    // (3) Apply to the reel files (idempotent by seq).
-    const applied = applyRecord(persisted);
-    // (4) Mark done.
-    const jp = journalPath();
-    writeAck(existsSync(jp) ? statSync(jp).size : 0);
-    return applied;
+    // WRITE-THROUGH — no journal. The fact-line append IS the stamp: writeFactDoc fsyncs the reel, and
+    // the fact's _id IS the finished-and-whole check (a torn append leaves a line the .head never
+    // advanced past, which readReel skips). With no fan-out there is no multi-reel "all-or-none" to
+    // protect, so there is no WAL, no ack, no replay — the act/fact divide is the stamp itself.
+    return applyRecord(persisted);
   });
 }
 
@@ -1320,14 +1295,12 @@ export function commitVerbatim(facts) {
   return withCommitLock(() => {
     const list = (facts || []).filter((f) => f && f.doc);
     const persisted = { verbatim: true, facts: list };
-    // (1) WAL append + fsync — THE COMMIT POINT (crash replays this record).
-    durableAppend(journalPath(), frame(persisted));
-    // (2) Apply each pre-built doc to its reel (idempotent by seq).
-    const applied = applyRecord(persisted);
-    // (3) Mark done.
-    const jp = journalPath();
-    writeAck(existsSync(jp) ? statSync(jp).size : 0);
-    return applied;
+    // Write-through (no journal). A verbatim transplant is a BULK graft/book instate, not one live
+    // act's stamp, so the one-reel rule does not apply (it lands a whole genome across many reels). Each
+    // fact carries its own pre-built _id, idempotent by per-reel seq; a torn append is skipped by
+    // readReel and the content hash is the whole-check. The receiver's rollback (truncateReelTo) is the
+    // application-level all-or-none for a partial instate — not a storage WAL.
+    return applyRecord(persisted);
   });
 }
 
@@ -1352,47 +1325,13 @@ export function advanceReelHead(history, kind, id, head, headHash) {
 }
 
 /**
- * Boot replay: re-apply every WAL record at/after the ack offset (idempotent), then advance ack to
- * the last INTACT record. The first crc/framing failure is the crash's torn trailing write → stop,
- * leaving zero trace of the never-committed moment (matching the Mongo path's crashed-moment).
+ * Boot recovery. There is NO journal to replay — the WAL was retired. One act lays ONE fact on ONE
+ * reel; the reel-line append IS the stamp (fsync'd), and the fact's _id is the finished-and-whole
+ * check, so a torn mid-append leaves a line the .head never advanced past and readReel skips. There is
+ * no multi-reel "all-or-none" to recover (commitMoment refuses a fan-out). Kept as a no-op so the boot
+ * caller (dbConfig) is unchanged; the drop-unfinished-act recovery (act-first/fact-last) is the next layer.
  * @returns {{replayed:number, torn:boolean}}
  */
 export function replayJournal() {
-  const jp = journalPath();
-  if (!existsSync(jp)) return { replayed: 0, torn: false };
-  const buf = readFileSync(jp, "utf8");
-  const ack = readAck();
-  let offset = ack;
-  let replayed = 0;
-  let torn = false;
-  // Walk line-by-line from the ack offset.
-  let rest = buf.slice(ack);
-  while (rest.length) {
-    const nl = rest.indexOf("\n");
-    if (nl === -1) {
-      torn = true;
-      break;
-    } // no terminating newline = torn trailing write
-    const line = rest.slice(0, nl);
-    const tab = line.indexOf("\t");
-    const crc = line.slice(0, tab);
-    const body = line.slice(tab + 1);
-    if (tab === -1 || crc32(body) !== crc) {
-      torn = true;
-      break;
-    } // corrupt frame = torn write
-    let record;
-    try {
-      record = JSON.parse(body);
-    } catch {
-      torn = true;
-      break;
-    }
-    applyRecord(record); // idempotent (appendFact skips already-landed _ids)
-    replayed++;
-    offset += Buffer.byteLength(line + "\n", "utf8");
-    rest = rest.slice(nl + 1);
-  }
-  writeAck(offset);
-  return { replayed, torn };
+  return { replayed: 0, torn: false };
 }

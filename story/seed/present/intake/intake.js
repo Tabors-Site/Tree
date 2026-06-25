@@ -31,9 +31,8 @@
 //   - pickNextIntake (queries InboxProjection)
 //   - markIntakeRunning / markIntakeComplete / cancelIntakeByRoot —
 //     RETIRED. Running state is in-memory; completion is the Act seal
-//     evicting the projection row; cancellation is a be:sever fact.
-//     Kept as no-op tombstones so existing callers don't crash mid-
-//     migration.
+//     evicting the projection row. Kept as no-op tombstones so existing
+//     callers don't crash mid-migration.
 
 import { randomUUID } from "crypto";
 import { InboxProjection } from "../../past/projections/inbox/inboxProjectionFold.js";
@@ -153,11 +152,8 @@ export async function enqueueIntake(spaceId, beingId, entry) {
 
 /**
  * Pick the next intake entry the scheduler should process for this
- * being. Highest priority first; ties to oldest. Walks the
- * InboxProjection ancestor-severance check via threads.js;
- * orphans (severed parent chain) are dropped from the projection
- * via a be:sever fact emitted by the cutThread call upstream, so
- * here we just trust the projection.
+ * being. Highest priority first; ties to oldest. Reads the
+ * InboxProjection directly; the projection is the source of truth.
  *
  * The "claim" of a picked entry is in-memory in the scheduler —
  * scheduler.js holds the Map<beingId, currentCorrelation> that
@@ -193,20 +189,6 @@ export async function pickNextIntake(spaceId, beingId, opts = {}) {
     .sort({ priorityRank: 1, sentAt: 1 })
     .lean();
   if (!row) return null;
-
-  // Ancestor-severance: if the root of this entry's chain has been
-  // severed, drop the row (stamp a no-op-but-evict signal would be
-  // ideal; for now, evict directly — the projection is fold output,
-  // and the sever-fact should already have removed it. This is a
-  // belt-and-suspenders for the rare case where the fold is behind).
-  if (row.rootCorrelation) {
-    const { isAncestorSevered } = await import("../../materials/space/threads.js");
-    const check = await isAncestorSevered(row.rootCorrelation);
-    if (check.severed) {
-      await InboxProjection.deleteOne({ _id: row._id });
-      return pickNextIntake(spaceId, beingId);
-    }
-  }
 
   // Shape the return for back-compat with callers that destructure
   // { entry, index }. `index` is no longer meaningful (no array
@@ -283,11 +265,9 @@ export async function markIntakeComplete(/* spaceId, beingId, correlationIds, op
 }
 
 /**
- * Retired (Bucket 3 Option D). Cancellation is a be:sever Fact
- * stamped on the severer's reel; the cross-cutting fold drops the
- * matching InboxProjection rows. Kept as a no-op so existing
- * callers don't crash. The threads.js cutThread now stamps the
- * sever-fact directly.
+ * Retired (Bucket 3 Option D). There is no cancelling queued work: a
+ * call is a fact, a response is a fact, and an appended fact is never
+ * unmade. Kept as a no-op so existing callers don't crash.
  */
 export async function cancelIntakeByRoot(/* spaceId, beingId, rootCorrelation */) {
   return { cancelled: 0, correlations: [] };

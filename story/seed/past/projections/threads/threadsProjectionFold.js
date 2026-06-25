@@ -15,12 +15,6 @@
 //                root), store it so cross-thread lineage walks.
 //                Set startedAt on first insert.
 //
-//   be:sever   → set severedAt on the matching rootCorrelation row.
-//                The InboxProjection handler dropped the affected
-//                open summons separately; this marks the thread
-//                itself cut so SEE on ./threads can render the
-//                severance.
-//
 //   (act seal) → noteActSealOnThread(rootCorrelation) — bumps
 //                lastAct. Called from stamped.js alongside
 //                closeInboxOnAnswer because Act seals aren't fact
@@ -30,8 +24,8 @@ import { FileCollection } from "../../projStore.js";
 import { registerCrossCuttingHandler } from "../../../present/stamper/2-fold/foldEngine.js";
 
 // Cross-cutting fold of live coordination chains, keyed by
-// rootCorrelation. One row per live root; the chain of call / be:sever
-// facts on the story's per-being reels is the record, this file-backed
+// rootCorrelation. One row per live root; the chain of call facts on
+// the story's per-being reels is the record, this file-backed
 // collection (one JSON file per row + a small index under
 // <storeRoot>/proj/threads) is the rebuildable cache. Exported so the
 // thread readers in materials/space/threads.js share the one instance.
@@ -67,7 +61,6 @@ async function handleSummonForThreads(fact /*, type, id*/) {
         _id:       root,
         startedAt: lastAct,
         createdAt: fact.date || new Date(),
-        severedAt: null,
       },
       $addToSet: {
         participants: { $each: [...participants] },
@@ -77,19 +70,7 @@ async function handleSummonForThreads(fact /*, type, id*/) {
   );
 }
 
-async function handleBeSeverForThreads(fact /*, type, id*/) {
-  if (fact?.verb !== "be" || fact?.act !== "sever") return;
-  const root = fact.params?.rootCorrelation;
-  if (!root) return;
-  const at = fact.date || new Date();
-  await ThreadsProjection.updateOne(
-    { _id: root },
-    { $set: { severedAt: at, updatedAt: at } },
-  );
-}
-
 registerCrossCuttingHandler(handleSummonForThreads);
-registerCrossCuttingHandler(handleBeSeverForThreads);
 
 /**
  * Bump the thread's lastAct when a participating Act seals. Called
@@ -100,13 +81,18 @@ registerCrossCuttingHandler(handleBeSeverForThreads);
  * fold engine's per-fact dispatch. This is the explicit hook the
  * seal path calls, paired with closeInboxOnAnswer.
  *
+ * `lastAct` is the ThreadsProjection cache's own bookkeeping field (the
+ * call-fact handler writes it from fact.date; this bumps it on seal). It is
+ * NOT an act clock and nothing orders truth by it; the seal passes no time, so
+ * the bump is stamped here. (Order across threads is the chain, not this field.)
+ *
  * @param {string|null} rootCorrelation
- * @param {Date}        [at=new Date()]
  */
-export async function noteActSealOnThread(rootCorrelation, at = new Date()) {
+export async function noteActSealOnThread(rootCorrelation) {
   if (!rootCorrelation) return;
+  const now = new Date();
   await ThreadsProjection.updateOne(
     { _id: String(rootCorrelation) },
-    { $set: { lastAct: at, updatedAt: at } },
+    { $set: { lastAct: now, updatedAt: now } },
   );
 }

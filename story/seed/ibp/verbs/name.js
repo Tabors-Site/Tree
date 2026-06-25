@@ -176,13 +176,18 @@ export async function nameVerb(operation, payload = {}, opts = {}) {
  */
 function declareNameFact(result, { operation, identity }) {
   const actorBeingId = identity?.beingId || I;
-  const params =
+  const base =
     operation === "declare"
       ? { spec: result.spec }
       : { byActor: String(actorBeingId) };
+  // A Name has an act-chain but NO reel of its own: it ACTS, it is never acted-on.
+  // Every name fact (declare / banish / connect / release / set-password) lands on
+  // the story's LIBRARY reel (the 5th reel, out of any history), carrying the nameId
+  // in params so the library fold catalogs it under names[nameId].
+  const params = { ...base, nameId: String(result.nameId) };
   const factResult = stampsFact(result, params, {
-    kind: "name",
-    id: String(result.nameId),
+    kind: "library",
+    id: getStoryDomain(),
   });
   return { factResult, through: String(actorBeingId) };
 }

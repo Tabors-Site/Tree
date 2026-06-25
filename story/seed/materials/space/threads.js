@@ -12,12 +12,10 @@
 //     thread's descriptor; `see("<story>/./threads")` returns the
 //     live forest. Coordination becomes inspectable.
 //
-//   - SUMMON can cut it. `summon` with target = `./threads/<id>`
-//     severs the thread: the seed cut handler walks every pending
-//     inbox entry under that rootCorrelation and marks it severed,
-//     and (when priority demands) interrupts whatever is running
-//     right now. Same envelope as a normal SUMMON; the address
-//     resolves to a thread instead of a being.
+// A thread is read-only. There is no severing: a call is a fact, a
+// response is a fact, and an appended fact is never unmade. If a being
+// wants to stop coordinating, that decision is its own next act on the
+// reel, not a mutation of the chain that came before.
 //
 // Nothing here is persisted as new storage. A thread is a derived
 // projection: the data lives in Act records (one row per wake-
@@ -27,93 +25,13 @@
 // target.
 //
 // The "id" of a thread is its rootCorrelation. Stable across the
-// whole chain by construction (every reply inherits it). When the
-// root reply places or the thread is cut, the projection's state
-// flips; the rows underneath remain for audit.
+// whole chain by construction (every reply inherits it).
 
 import {
   attachActFacts,
-  getActById,
   getActsByCorrelation,
-  getSeveredRootCorrelations,
-  patchActStatus,
 } from "../../past/act/actChain.js";
 import { HEAVEN_SPACE } from "./heavenSpaces.js";
-import { I } from "../being/seedBeings.js";
-import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
-
-// ─────────────────────────────────────────────────────────────────
-// Severed-roots cache
-// ─────────────────────────────────────────────────────────────────
-//
-// In-memory Set populated by cutThread. The scheduler reads it on
-// every inbox pickup via isAncestorSevered() to decide whether a
-// pending entry's chain still has a live ancestor. Source of truth
-// is severedAt on Act rows; the Set is a fast hit. Rebuilds
-// lazily on cache misses by querying severedAt; rebuilds fully on
-// process boot via primeSeveredRootsCache() (called from genesis).
-
-const _severedRootsCache = new Set();
-
-/**
- * Mark a rootCorrelation as severed in the in-memory cache. Called
- * by cutThread after the DB write succeeds. Idempotent.
- */
-export function noteRootSevered(rootCorrelation) {
-  if (!rootCorrelation) return;
-  _severedRootsCache.add(String(rootCorrelation));
-}
-
-/**
- * Boot-time priming. Walks every Act with severedAt set and
- * populates the in-memory cache so cache hits work from t=0.
- * Cheap: severedAt is indexed; query touches only the severed set.
- */
-export async function primeSeveredRootsCache() {
-  try {
-    // The curated cross-aggregate severed-roots roll-up. severedAt is a
-    // post-seal patch field (not an index facet), so the curated reader walks
-    // the per-story act id-index and collects the distinct rootCorrelation of
-    // every severed act — the file-native peer of the old Act.aggregate
-    // ([$match severedAt, $group rootCorrelation]).
-    for (const root of getSeveredRootCorrelations()) {
-      _severedRootsCache.add(String(root));
-    }
-    return _severedRootsCache.size;
-  } catch {
-    return 0;
-  }
-}
-
-/**
- * Is this rootCorrelation severed, or does it have a severed
- * ancestor in its parentThread chain? Used by the scheduler at
- * inbox pickup to skip orphaned entries.
- *
- * Walk is bounded by spawn depth (typically 3-5). Cache hits short-
- * circuit each level. Visited Set defends against cycles in
- * parentThread (should be impossible by construction, but defensive).
- *
- * @param {string} rootCorrelation
- * @returns {Promise<{ severed: boolean, ancestorId: string|null }>}
- */
-export async function isAncestorSevered(rootCorrelation, visited = new Set()) {
-  if (!rootCorrelation) return { severed: false, ancestorId: null };
-  const id = String(rootCorrelation);
-  if (_severedRootsCache.has(id)) return { severed: true, ancestorId: id };
-  if (visited.has(id)) return { severed: false, ancestorId: null };
-  visited.add(id);
-
-  // Walk up the parentThread chain.
-  const root = getActById(id);
-  if (!root) return { severed: false, ancestorId: null };
-  if (root.severedAt) {
-    _severedRootsCache.add(id);
-    return { severed: true, ancestorId: id };
-  }
-  if (!root.parentThread) return { severed: false, ancestorId: null };
-  return isAncestorSevered(root.parentThread, visited);
-}
 
 // ─────────────────────────────────────────────────────────────────
 // Address recognition
@@ -178,12 +96,13 @@ export async function getThreadsSpaceId() {
  * row carries this rootCorrelation (the thread doesn't exist).
  *
  * State machine:
- *   live      — at least one Act in this chain is unfinished
- *               (no endMessage.time AND no severedAt)
- *   severed   — at least one Act carries severedAt and no
- *               Stamps are still live (the line was cut)
- *   complete  — every Act in this chain carries endMessage.time
- *               with no severedAt (the chain ran to completion)
+ *   live      — at least one Act in this chain is unfinished (no endMessage
+ *               object: the seal never pressed its closing face, e.g. a cross-
+ *               story attempt awaiting its response fact)
+ *   complete  — every Act in this chain was sealed (carries an endMessage
+ *               object; the chain ran to completion). Seal presence, NOT a
+ *               timestamp and NOT prose presence: a verb-act seals with
+ *               endMessage.content == null and still counts complete.
  *
  * @param {string} rootCorrelation
  * @returns {Promise<object|null>}
@@ -208,10 +127,9 @@ export async function describeThread(rootCorrelation) {
     if (!proj) return null;
     return {
       id: rootCorrelation,
-      state: proj.severedAt ? "severed" : "pending",
+      state: "pending",
       depth: 0,
       liveCount: 0,
-      severedCount: 0,
       completeCount: 0,
       participants: Array.isArray(proj.participants) ? proj.participants : [],
       parentThread: proj.parentThread || null,
@@ -223,23 +141,25 @@ export async function describeThread(rootCorrelation) {
 
   const participants = new Set();
   let live = 0;
-  let severed = 0;
   let complete = 0;
-  let lastAct = null;
+  let lastActOrd = null;   // the chain's newest act, by ordinal (the order)
+  let lastAt = null;       // that act's inert seal-time witness (display only)
   for (const s of summons) {
     if (s.through) participants.add(String(s.through));
     if (s.to) participants.add(String(s.to));
-    if (s.severedAt) severed++;
-    else if (s.endMessage?.time) complete++;
+    // Complete = the act was SEALED (its closing face exists). Seal presence,
+    // never a timestamp: a verb-act seals with content == null and is complete.
+    if (s.endMessage != null) complete++;
     else live++;
-    const t = s.endMessage?.time || s.severedAt || s.stampedAt || s.receivedAt;
-    if (t && (!lastAct || t > lastAct)) lastAct = t;
+    // Newest act tracked by the append ordinal (act.ord), never a clock.
+    const o = Number(s.ord);
+    if (Number.isFinite(o) && (lastActOrd == null || o > lastActOrd)) {
+      lastActOrd = o;
+      lastAt = s.at || null;
+    }
   }
 
-  let state;
-  if (live > 0) state = "live";
-  else if (severed > 0) state = "severed";
-  else state = "complete";
+  const state = live > 0 ? "live" : "complete";
 
   // Tree shape: parent thread (if this chain branched off another).
   // The root Act is the one whose _id == rootCorrelation, or the
@@ -247,11 +167,15 @@ export async function describeThread(rootCorrelation) {
   // canonical lineage pointer — auto-stamped when assign opens a
   // moment for a being acting under thread A who emits a fresh
   // top-level SUMMON.
-  const sortedAsc = [...summons].sort(
-    (a, b) =>
-      new Date(a.stampedAt || a.receivedAt || 0) -
-      new Date(b.stampedAt || b.receivedAt || 0),
-  );
+  // Oldest-first by the append ordinal (the chain order, never a clock).
+  const sortedAsc = [...summons].sort((a, b) => {
+    const oa = Number(a.ord);
+    const ob = Number(b.ord);
+    const na = Number.isFinite(oa) ? oa : Infinity;
+    const nb = Number.isFinite(ob) ? ob : Infinity;
+    if (na !== nb) return na - nb;
+    return String(a._id).localeCompare(String(b._id));
+  });
   const rootStamp =
     summons.find((s) => String(s._id) === String(rootCorrelation)) ||
     sortedAsc[0];
@@ -262,12 +186,15 @@ export async function describeThread(rootCorrelation) {
     state,
     depth: summons.length,
     liveCount: live,
-    severedCount: severed,
     completeCount: complete,
     participants: [...participants],
     parentThread,
-    rootStartedAt: rootStamp?.stampedAt || rootStamp?.receivedAt || null,
-    lastAct,
+    // Root's ordinal is the chain-start position (order); its `at` is the inert
+    // display witness. Surface the witness for display continuity.
+    rootStartedAt: rootStamp?.at || null,
+    rootStartedOrd: Number.isFinite(Number(rootStamp?.ord)) ? Number(rootStamp.ord) : null,
+    // Newest act's inert seal-time witness (display only); ordering is by ord.
+    lastAct: lastAt,
     // Surface the acts on the thread so clients can render the chain
     // without a second query. Oldest-first for natural reading order.
     // attachActFacts enriches each with a compact Fact summary so a
@@ -289,9 +216,10 @@ function serializeThreadAct(s) {
     priority: s.priority || null,
     startMessage: s.startMessage || null,
     endMessage: s.endMessage || null,
-    receivedAt: s.receivedAt || null,
-    stampedAt: s.stampedAt || null,
-    severedAt: s.severedAt || null,
+    // The act's append ordinal (the order) + its inert seal-time witness
+    // (display only). The act keeps exactly one wall-clock field, `at`.
+    ord: Number.isFinite(Number(s.ord)) ? Number(s.ord) : null,
+    at: s.at || null,
   };
 }
 
@@ -331,7 +259,7 @@ export async function listLiveThreads({
   const { ThreadsProjection } = await import(
     "../../past/projections/threads/threadsProjectionFold.js"
   );
-  const match = { severedAt: null };
+  const match = {};
   if (being) {
     match.participants = String(being).replace(/^@/, "");
   }
@@ -345,182 +273,4 @@ export async function listLiveThreads({
     .limit(Math.max(1, Math.min(limit, 500)))
     .lean();
   return rows.map((r) => ({ id: r._id, lastAct: r.lastAct }));
-}
-
-/**
- * Mark every Act in a thread's chain as severed. Idempotent:
- * Stamps that already carry severedAt are left alone; Stamps that
- * already ended (endMessage.time) are left alone. Returns the count
- * of rows newly marked.
- */
-export async function markThreadSevered(rootCorrelation, now = new Date()) {
-  if (!rootCorrelation) return 0;
-  // Curated translation of the old Act.updateMany({rootCorrelation,
-  // severedAt:null, "endMessage.time":null}, {$set:{severedAt:now}}): walk the
-  // chain by correlation, then patch each act not already severed and not
-  // already ended. severedAt is in actChain's PATCHABLE_FIELDS (the doctrine's
-  // post-seal-mutable closure exception). modifiedCount == the number newly
-  // patched.
-  const chain = getActsByCorrelation(rootCorrelation);
-  let modified = 0;
-  for (const a of chain) {
-    if (a.severedAt) continue;
-    if (a.endMessage?.time) continue;
-    // FLAG (act-mutation pending conversion to a fact): patches the sealed act with `severedAt` — an
-    // act-row edit (forbidden: an act is present, a fact is past) AND a clock write (`now`). A severance
-    // is an EVENT → a severance FACT on a reel, folded (the thread's severed state reads the fact, not a
-    // patched column). Its own thread; falls out with both the status rip and the clock removal.
-    if (patchActStatus(String(a._id), { severedAt: now })) modified++;
-  }
-  return modified;
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Cut handler
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * Sever a thread. The seed implementation of SUMMON-to-thread.
- *
- * Authorization (participation gate): the asker must be a participant
- * in the chain. A participant is any being that appears as `through`
- * or `to` on a Act under this rootCorrelation. The I has
- * universal authority and always passes. Stance auth gates whether
- * the asker can address `.threads` at all (broad gate); this gate
- * narrows to "this specific thread." Both run.
- *
- * Three steps after auth, in this order:
- *
- *   1. Mark every Act in the chain as severedAt (audit + state).
- *   2. Cancel pending inbox entries for every being that participated
- *      in the chain (scheduler skips cancelled entries on pickup).
- *   3. If priority demands urgency (HUMAN), interrupt anything still
- *      running under this rootCorrelation via the scheduler's
- *      abortByRootCorrelations. Lower priorities let the scheduler
- *      drop into the cancelled inbox entries naturally.
- *
- * Pure operation on existing primitives. The dependencies on the
- * inbox and scheduler are import-on-call to keep this module reachable
- * during early-boot resolver paths that don't need the cognition
- * layer.
- *
- * @param {object} params
- * @param {string} params.rootCorrelation
- * @param {string} [params.priority="INTERACTIVE"]
- * @param {string} [params.reason]
- * @param {object|null} [params.identity]  { beingId, name } of the asker.
- *   Required unless the call is seed-internal (then pass null only
- *   when you intentionally want to bypass the participation check;
- *   never bypass from extension code).
- * @returns {Promise<{ severed: number, cancelled: number, aborted: number }>}
- */
-export async function cutThread({
-  rootCorrelation,
-  priority = "INTERACTIVE",
-  reason = "thread cut",
-  identity = null,
-  moment = null,
-}) {
-  if (!rootCorrelation) {
-    return { severed: 0, cancelled: 0, aborted: 0 };
-  }
-
-  // ── Participation gate ──
-  // I always passes. Anyone else must be in the chain.
-  const isIAm = identity?.name === I;
-  if (!isIAm) {
-    if (!identity?.beingId) {
-      throw new IbpError(
-        IBP_ERR.UNAUTHORIZED,
-        "Cut requires an authenticated asker",
-      );
-    }
-    const askerId = String(identity.beingId);
-    // Participation gate via the curated chain read: the asker must appear as
-    // `through` or `to` on some act under this rootCorrelation. Replaces the
-    // old Act.exists({rootCorrelation, $or:[{through},{to}]}) — same OR test,
-    // expressed over the fetched chain.
-    const chain = getActsByCorrelation(rootCorrelation);
-    const participant = chain.some(
-      (a) => String(a.through ?? "") === askerId || String(a.to ?? "") === askerId,
-    );
-    if (!participant) {
-      throw new IbpError(
-        IBP_ERR.FORBIDDEN,
-        "Only a participant in this thread can cut it",
-      );
-    }
-  }
-
-  // 1. Audit + state on the Act rows.
-  const severed = await markThreadSevered(rootCorrelation);
-  // Cache the severed root so subsequent ancestor-checks short-
-  // circuit without a DB walk. Always populate, even if severed===0
-  // (the chain may have already been marked but the cache lost).
-  noteRootSevered(rootCorrelation);
-
-  // 2. Fact-driven sever (Bucket 3 Option D, 2026-05-23). The
-  //    severer stamps one be:sever Fact on its own reel (single-
-  //    writer); the cross-cutting fold in
-  //    past/projections/inbox/inboxProjectionFold.js sweeps the InboxProjection
-  //    rows whose rootCorrelation matches. Queued moments drop in
-  //    one fold cycle; the legacy per-being intake sweep is gone.
-  //    Inbox audit (the call Facts themselves) is untouched —
-  //    facts are the permanent arrival record.
-  let cancelled = 0;
-  try {
-    const { emitFact } = await import("../../past/fact/facts.js");
-    const { InboxProjection } = await import(
-      "../../past/projections/inbox/inboxProjectionFold.js"
-    );
-    const severerBeingId = isIAm ? I : String(identity.beingId);
-    cancelled = await InboxProjection.countDocuments({ rootCorrelation });
-    await emitFact(
-      {
-        verb: "be",
-        act: "sever",
-        through: severerBeingId,
-        of: { kind: "being", id: severerBeingId }, // severer's own reel
-        params: { rootCorrelation, reason, priority },
-        actId: moment?.actId || null,
-        history: moment?.actorAct?.history || "0",
-      },
-      moment,
-    );
-    // When moment is present, the be:sever Fact lives in the
-    // caller's ΔF and commits at sealAct; the cross-cutting fold runs
-    // post-commit and clears the InboxProjection rows then. When
-    // moment is null (boot/standalone), emitFact committed
-    // immediately and the eager-fold already ran.
-  } catch {
-    // Best-effort. Severed Acts + scheduler abort still close the
-    // line at the audit + runtime layers.
-  }
-
-  // 3. HUMAN-priority cuts interrupt the live task immediately;
-  //    lower priorities let the scheduler drain naturally.
-  let aborted = 0;
-  if (priority === "HUMAN") {
-    try {
-      const { abortByRootCorrelations } =
-        await import("../../present/intake/scheduler.js");
-      aborted = abortByRootCorrelations([rootCorrelation], reason) || 0;
-    } catch {
-      // Scheduler unavailable (cognition not booted yet). The
-      // severed Stamps + cancelled inbox still take effect on next
-      // pickup; we just couldn't interrupt the live task.
-    }
-  }
-
-  return { severed, cancelled, aborted };
-}
-
-// ─────────────────────────────────────────────────────────────────
-// internals
-// ─────────────────────────────────────────────────────────────────
-
-async function rootStampOf(actId) {
-  if (!actId) return null;
-  const s = getActById(actId);
-  return s?.rootCorrelation || null;
 }

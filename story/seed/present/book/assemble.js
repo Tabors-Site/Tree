@@ -18,6 +18,7 @@
 // always a being; its owning Names respond). The accessors below read exactly those.
 
 import { pastOf } from "../word/verbTense.js";
+import { isQuotedWordFact } from "./quotedWord.js";
 
 // ── fact-field accessors (the Word's clause names) ──────────────────────────────────
 const actorName = (f) => f.by ?? null; // the actor Name (rule 9)
@@ -197,6 +198,7 @@ function weave(facts, focalBeing, names) {
   const byAct = new Map();
   for (const f of facts) {
     if (isSelfCall(f)) continue; // the wake-call kickoff — not a story event
+    if (isQuotedWordFact(f)) continue; // a quoted word's brackets + said-words: assembled on read, not lined (TODO: collapse into one `said "..." to <who>` deed via assembleQuotedWords)
     const key = f.actId ? `act:${f.actId}` : `solo:${f._id}`;
     let act = byAct.get(key);
     if (!act) {

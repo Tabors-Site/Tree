@@ -485,11 +485,6 @@ export async function genesis(app, opts = {}) {
   // plant would need to run migrations on the planted data; for now,
   // same-version seeds only.
 
-  // Prime the severed-roots cache. Read-only — no moment needed.
-  const { primeSeveredRootsCache } =
-    await import("./seed/materials/space/threads.js");
-  await primeSeveredRootsCache();
-
   // Cross-world pull-back. Per CROSS-WORLD.md "Pull-back safety": a
   // being whose position is foreign must not stay stuck there across
   // a substrate restart. Scan for beings whose position names a
@@ -550,7 +545,7 @@ export async function genesis(app, opts = {}) {
   // After this registration, the live-able boot loader (later in genesis)
   // walks ./ables/* for origin:"live" entries and registers them too.
   const { ableManagerAble } =
-    await import("./seed/present/ables/able-manager/able.js");
+    await import("./seed/store/words/able-manager/able.js");
   registerAble("able-manager", ableManagerAble, "seed");
 
   // history-manager: creates histories (divergent worlds) from past
@@ -569,7 +564,7 @@ export async function genesis(app, opts = {}) {
   // primitives (template = shape, being = entity); this able is the social
   // protocol on top of them. See protocols/ibp/FEDERATION.md.
   const { federationManagerAble } =
-    await import("./seed/present/ables/federation-manager/able.js");
+    await import("./seed/store/words/federation-manager/able.js");
   registerAble("federation-manager", federationManagerAble, "seed");
 
   // The host tier (nodeServerTest Phase 1): the HTTP listener and the
@@ -631,7 +626,7 @@ export async function genesis(app, opts = {}) {
   // registry entries are stubs that surface canX for the able-walk.
   const { cherubAble } = await import("./seed/store/words/cherub/able.js");
   const { llmAssignerAble } =
-    await import("./seed/present/ables/llm-assigner/able.js");
+    await import("./seed/store/words/llm-assigner/able.js");
   registerAble("cherub", cherubAble, "seed");
   registerAble("llm-assigner", llmAssignerAble, "seed");
 
@@ -701,7 +696,7 @@ export async function genesis(app, opts = {}) {
       const { storyManagerAble } =
         await import("./seed/present/ables/story-manager/able.js");
       const { ableManagerAble } =
-        await import("./seed/present/ables/able-manager/able.js");
+        await import("./seed/store/words/able-manager/able.js");
       const { ableFinderAble } =
         await import("./seed/present/ables/able-finder/able.js");
       const { flowComposerAble } =
@@ -711,7 +706,7 @@ export async function genesis(app, opts = {}) {
       const { mergeMediatorAble } =
         await import("./seed/present/ables/merge-mediator/able.js");
       const { llmAssignerAble } =
-        await import("./seed/present/ables/llm-assigner/able.js");
+        await import("./seed/store/words/llm-assigner/able.js");
       const { publicAble } =
         await import("./seed/present/ables/public/able.js");
       const { httpServerAble: httpServerAbleSpec } =
@@ -791,7 +786,7 @@ export async function genesis(app, opts = {}) {
   // callable by any being with the appropriate canDo (or owner-check
   // on the target space) — no llm-assigner delegate routing required.
   const { registerLlmAssignerOps } =
-    await import("./seed/present/ables/llm-assigner/ops.js");
+    await import("./seed/store/words/llm-assigner/ops.js");
   registerLlmAssignerOps();
 
   // The per-being LLM client-cache fold-hook. The WORD-SOLE llm-connection ops
@@ -805,7 +800,7 @@ export async function genesis(app, opts = {}) {
   // able-manager's set-able DO op. Registered alongside llm-assigner's
   // ops so the able-manager delegate's canDo entry resolves at boot.
   const { registerAbleManagerOps } =
-    await import("./seed/present/ables/able-manager/ops.js");
+    await import("./seed/store/words/able-manager/ops.js");
   registerAbleManagerOps();
   // set-world-signal was carved out of able-manager/ops.js into its own
   // store bundle (the word + its handler). The bundle registers its
@@ -820,7 +815,7 @@ export async function genesis(app, opts = {}) {
   // set-being-flow . the typed write that puts a flow on a
   // being's qualities. flow-composer (LLM helper) targets this op.
   // Loaded by side effect; module-load calls registerOperation.
-  await import("./seed/present/ables/able-manager/flowOp.js");
+  await import("./seed/store/words/able-manager/flowOp.js");
 
   // history-manager's create-history DO op. The substrate's history
   // helpers (seed/materials/history/) own the heavy lifting; the op
@@ -840,7 +835,7 @@ export async function genesis(app, opts = {}) {
   // handlers that thread negotiation state through the federation-manager
   // being's qualities.
   const { registerFederationManagerOps } =
-    await import("./seed/present/ables/federation-manager/ops.js");
+    await import("./seed/store/words/federation-manager/ops.js");
   registerFederationManagerOps();
 
   // Host SEE ops: http-stats, connections. Pure reads over the live

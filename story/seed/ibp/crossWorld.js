@@ -184,12 +184,13 @@ export async function crossStoryDispatch({ envelope, actor, identity } = {}) {
   };
   // Open + advance under the act-chain lock (read-compute-write on
   // the head); the CAS'd advance is the cross-check.
+  // Key the act-chain by the actor's NAME, not the being it acts through.
   const actId = await withActChainLock(
     story,
     actor.history,
-    actor.beingId,
+    actorNameId,
     async () => {
-      const p = await readActHead(story, actor.history, actor.beingId);
+      const p = await readActHead(story, actor.history, actorNameId);
       const id = computeActId(p, opening);
       // Sign the attempt act too. This is the one act path that bypasses
       // sealAct (the documented Stamp-opener exception above), so the
@@ -205,6 +206,10 @@ export async function crossStoryDispatch({ envelope, actor, identity } = {}) {
           to: actor.beingId,
           story,
           history: actor.history,
+          // The seal-time witness is bound into the sig (buildActSigPayload
+          // reads act.at); it MUST match the `at` written to the row below, or
+          // verification rebuilds a different payload and the sig fails.
+          at: now,
         },
         [],
         signingPem,
@@ -215,7 +220,7 @@ export async function crossStoryDispatch({ envelope, actor, identity } = {}) {
       // indexes the doc internally). The curated act layer (actChain.js) is
       // read-only, so this documented Stamp-opener exception writes the row
       // through the storage primitive directly, exactly as the seal path does.
-      appendActLine(story, actor.history, actor.beingId, {
+      appendActLine(story, actor.history, actorNameId, {
         _id: id,
         p,
         by: actorNameId,
@@ -227,8 +232,11 @@ export async function crossStoryDispatch({ envelope, actor, identity } = {}) {
         inReplyTo: null,
         rootCorrelation: id,
         parentThread: null,
-        receivedAt: now,
-        stampedAt: now,
+        // One inert wall-clock witness (the open time), display-only; this
+        // cross-story attempt act is OPEN (no endMessage) until its response
+        // fact crosses back. Order across stories is partial (causal links via
+        // rootCorrelation), never this clock; it carries no local `ord`.
+        at: now,
         startMessage: {
           content: `cross-story ${envelope.verb}`,
           source: actor.beingId,
@@ -238,7 +246,7 @@ export async function crossStoryDispatch({ envelope, actor, identity } = {}) {
         status: "attempted",
         sig,
       });
-      await advanceActHead(story, actor.history, actor.beingId, id, { expectPrev: p });
+      await advanceActHead(story, actor.history, actorNameId, id, { expectPrev: p });
       return id;
     },
   );
@@ -254,7 +262,7 @@ export async function crossStoryDispatch({ envelope, actor, identity } = {}) {
         beingOut: actor.beingId,
         activeAble: null,
         endMessage: null,
-        stoppedAt: now,
+        at: now,
       })
       .catch(() => {});
   } catch {

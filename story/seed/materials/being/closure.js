@@ -52,8 +52,9 @@ export async function isBeingDead(beingId, history) {
     );
   }
   const slot = await loadOrFold("being", String(beingId), history);
-  const time = slot?.state?.qualities?.death?.time;
-  return !!time;
+  // Dead = the be:death FACT folded (qualities.death exists). No clock — the fact's existence IS the
+  // death; "when" is its chain position, not a timestamp.
+  return !!slot?.state?.qualities?.death;
 }
 
 /**

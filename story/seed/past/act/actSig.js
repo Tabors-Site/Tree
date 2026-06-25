@@ -31,8 +31,12 @@ function normHistory(b) {
   return typeof b === "string" && b.length ? b : "0";
 }
 
+// The act's lone inert wall-clock witness (act.at, the seal time) as an ISO
+// string. Bound into the signature as display-content provenance only; it is
+// NOT an order key (the chain `p` + ord carry order). This replaced the act's
+// former closing-face clock when the act collapsed to one wall-clock.
 function timeISO(act) {
-  const t = act?.endMessage?.time;
+  const t = act?.at;
   const d = t instanceof Date ? t : t ? new Date(t) : null;
   return d && !isNaN(d.getTime()) ? d.toISOString() : null;
 }

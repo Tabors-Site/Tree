@@ -14,7 +14,6 @@
 //                                                      ibpAddress/activeAble/
 //                                                      rootCorrelation/answers)
 //   getActChain(story, history, being)    -> act[]   (own-(story,history) chain)
-//   patchActStatus(actId, partial)        -> bool    (status/innerFace/severedAt)
 //   actCount(filter)                      -> number
 //
 // plus the explorer descriptor (describeActChain) + the act-fact attachment
@@ -22,7 +21,8 @@
 //
 // A being's act-chain (MODEL.md: A_b) is the sequence of moments that being
 // authored: the acts on the being's per-(story,history) act-log. Acts have no
-// per-being monotonic seq; the explorer orders newest-first by stampedAt.
+// per-being monotonic seq; the explorer orders newest-first by act.ord (the
+// clock-free append ordinal), never a wall-clock.
 //
 // Used by SEE on <story>/.acts/<beingId> + the curated act sweep callers.
 
@@ -32,7 +32,6 @@ import * as fileStore from "../fileStore.js";
 import { redactSecrets } from "../../materials/redact.js";
 import {
   resolveHistoryLineage,
-  loadHistory,
   MAIN,
   isMain,
 } from "../../materials/history/histories.js";
@@ -57,8 +56,9 @@ function storyOf(story) {
 // ─────────────────────────────────────────────────────────────────────
 
 /**
- * Get one act by id (patch-merged: status/innerFace/severedAt overlay the
- * sealed line). Returns the plain act doc (the .lean() shape) or null.
+ * Get one act by id. Returns the plain act doc (the .lean() shape) or null.
+ * A sealed act is immutable (an act is present, a fact is past) — there are
+ * no post-seal mutable fields to overlay.
  *
  * @param {string} actId
  * @param {string} [story]  the act's story (defaults to the local story)
@@ -125,42 +125,12 @@ export function getActChain(story, history, being) {
   return fileStore.readActChain(storyOf(story), String(history), String(being));
 }
 
-// FLAG — the last act-row mutations, both pending conversion to FACTS. Doctrine: an act is PRESENT, a
-// fact is PAST, and a sealed act has NO editable fields. `status` was RIPPED out (an act is "done" when
-// a fact is stamped for it — getFactsByActId — not via a mutable column). The two that remain are
-// EVENTS that should each be a fact on a reel, folded — their own thread, not chased mid-pass:
-//   innerFace — the foreign descriptor from a cross-story reply; it belongs IN that reply-FACT.
-//   severedAt — a thread cut; the severance is an event → a severance FACT (it also writes `now`, a
-//               clock, so it also falls out with the clock removal).
-const PATCHABLE_FIELDS = new Set([
-  "innerFace",
-  "severedAt",
-]);
-
-/**
- * Patch an act's mutable closure fields (status/innerFace/severedAt). The act's
- * content hash is over its OPENING, so these never change its identity. Writes
- * a patch overlay merged on every read. Only PATCHABLE_FIELDS are accepted; any
- * other key is rejected (the act row is otherwise immutable).
- *
- * @param {string} actId
- * @param {object} partial   the fields to set (e.g. { status: "landed" })
- * @param {string} [story]
- * @returns {boolean}        true if the act exists and the patch landed
- */
-export function patchActStatus(actId, partial, story) {
-  if (actId == null || !partial || typeof partial !== "object") return false;
-  const s = storyOf(story);
-  const id = String(actId);
-  // The act must exist to patch it (a patch on a phantom id is a no-op signal).
-  if (!fileStore.readActById(s, id)) return false;
-  const clean = {};
-  for (const [k, v] of Object.entries(partial)) {
-    if (PATCHABLE_FIELDS.has(k)) clean[k] = v;
-  }
-  if (Object.keys(clean).length === 0) return false;
-  return fileStore.patchAct(s, id, clean) != null;
-}
+// A sealed act has NO editable fields (an act is present, a fact is past). The
+// former post-seal patch primitive and its last user, the thread-cut field,
+// were removed: there is no severing, and nothing patches a sealed act
+// anywhere. The status and inner-face writers had already been retired (done =
+// a fact stamped for the act; the inner face is rasterized before the act
+// through its opening). Acts are immutable.
 
 /**
  * Count acts matching a single-facet equality filter (or ALL acts in the story
@@ -172,20 +142,6 @@ export function patchActStatus(actId, partial, story) {
  */
 export function actCount(filter = {}, story) {
   return fileStore.actCount(storyOf(story), filter || {});
-}
-
-/**
- * The distinct rootCorrelations of every severed act in the story — the
- * cross-aggregate severed-roots roll-up (no per-act-equality facet answers it,
- * since severedAt is a post-seal patch field, not an index facet). Used at boot
- * to prime the severed-roots cache (materials/space/threads.js). The curated
- * peer of the old Act.aggregate([$match severedAt, $group rootCorrelation]).
- *
- * @param {string} [story]
- * @returns {string[]}
- */
-export function getSeveredRootCorrelations(story) {
-  return fileStore.severedRootCorrelations(storyOf(story));
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -202,9 +158,10 @@ export function getSeveredRootCorrelations(story) {
  * @param {object} [opts]
  * @param {string} [opts.history="0"]  history path to read on
  * @param {number} [opts.limit=100]
- * @param {string} [opts.before]      ISO timestamp — when set, only
- *                                    return acts strictly older than
- *                                    this (progressive loading cursor).
+ * @param {number|string} [opts.before]  an ORDINAL cursor (act.ord) — when set,
+ *                                    return only acts strictly older than this
+ *                                    ord (progressive loading, ordered by
+ *                                    sequence, never a Date).
  * @returns {Promise<{ being: {id, name}, acts: object[], count: number }>}
  */
 export async function describeActChain(beingId, opts = {}) {
@@ -213,9 +170,13 @@ export async function describeActChain(beingId, opts = {}) {
     ? opts.history
     : MAIN;
   const limit = Math.min(Math.max(Number(opts.limit) || 100, 1), MAX_LIMIT);
-  const before = typeof opts.before === "string" && opts.before.length
-    ? opts.before
-    : null;
+  // Ordinal cursor: accept a number or numeric string; anything else is "no
+  // cursor" (read from the head).
+  const beforeNum = Number(opts.before);
+  const before =
+    opts.before != null && opts.before !== "" && Number.isFinite(beforeNum)
+      ? beforeNum
+      : null;
 
   const acts = await readActChainLineage({
     beingId: String(beingId),
@@ -324,25 +285,27 @@ export async function attachActFacts(serializedActs, opts = {}) {
 
 /**
  * Read a being's act-chain across a history lineage. Mirrors the fact reel's
- * history-lineage walk in foldEngine, but bounded by timestamp (acts have no
- * per-aggregate seq) — each ancestor owns acts stamped before the next-down
- * history was created; the leaf owns everything after its own creation.
+ * history-lineage walk in foldEngine. ORDER and the fork window are the CHAIN,
+ * never a wall-clock: an act's `ord` (the clock-free append ordinal) is its
+ * position, and a child branch's fork point is the ordinal of its earliest act.
+ *
+ * Each lineage history's own act-log already partitions acts by where they
+ * sealed (the seal keys the log by act.history), so the lower bound is implicit
+ * (an act on `here`'s log cannot predate `here`). The only gate that matters is
+ * the UPPER bound: an ancestor keeps receiving acts after a child forks off it,
+ * and those post-fork acts belong to the ancestor's own divergence, NOT the
+ * child's lineage. So `here`'s acts are included only when their ord is below
+ * the child's fork ordinal (the being's earliest act ord on the child's log).
  *
  * Returns newest-first, capped at limit. Acts with no history field (legacy)
- * are treated as main acts. File-backed: reads each history's own act-chain via
- * fileStore.readActChain, then unions + time-gates + sorts in JS.
+ * are treated as main acts. File-backed via fileStore.readActChain.
  */
 async function readActChainLineage({ beingId, history, limit, before }) {
-  const beforeDate = before ? new Date(before) : null;
-  const beforeOK = beforeDate && !Number.isNaN(beforeDate.getTime());
-  const beforeMs = beforeOK ? beforeDate.getTime() : null;
+  // `before` is an ORDINAL cursor (page acts strictly older than this ord),
+  // never a Date. Numeric or null.
+  const beforeOrd = before != null && before !== "" ? Number(before) : null;
+  const beforeOrdOK = beforeOrd != null && Number.isFinite(beforeOrd);
   const story = getStoryDomain();
-
-  const stamp = (a) => {
-    const t = a?.stampedAt ?? a?.receivedAt ?? null;
-    const ms = t != null ? new Date(t).getTime() : NaN;
-    return Number.isNaN(ms) ? null : ms;
-  };
 
   if (isMain(history)) {
     // Own-history (main) chain. Legacy acts with no history field landed on
@@ -350,50 +313,72 @@ async function readActChainLineage({ beingId, history, limit, before }) {
     // complete.
     const all = fileStore.readActChain(story, MAIN, beingId).filter((a) => {
       if (a.through != null && String(a.through) !== String(beingId)) return false;
-      if (beforeMs != null) {
-        const ms = stamp(a);
-        if (ms == null || !(ms < beforeMs)) return false;
+      if (beforeOrdOK) {
+        const o = ordOf(a);
+        if (o == null || !(o < beforeOrd)) return false;
       }
       return true;
     });
-    return sortNewestFirst(all, stamp).slice(0, limit);
+    return sortNewestFirst(all).slice(0, limit);
   }
 
   const lineage = await resolveHistoryLineage(history);
+
+  // Per-lineage-history fork ordinal: the being's earliest act ord on that
+  // history's own log. A child's fork ord upper-bounds the parent's contribution
+  // (clock-free peer of the old next.createdAt cutoff). Computed once per
+  // history from the same own-log reads used below.
+  const ownActs = new Map(); // history -> acts on its own log (this being)
+  const forkOrd = new Map(); // history -> earliest own-act ord (number|null)
+  for (const h of lineage) {
+    const acts = fileStore
+      .readActChain(story, String(h), beingId)
+      .filter((a) => a.through == null || String(a.through) === String(beingId));
+    ownActs.set(h, acts);
+    let min = null;
+    for (const a of acts) {
+      const o = ordOf(a);
+      if (o != null && (min == null || o < min)) min = o;
+    }
+    forkOrd.set(h, min);
+  }
+
   const out = [];
   for (let i = 0; i < lineage.length; i++) {
     const here = lineage[i];
     const next = lineage[i + 1] || null;
-    const hereDoc = isMain(here) ? null : await loadHistory(here);
-    const lowerMs = hereDoc?.createdAt ? new Date(hereDoc.createdAt).getTime() : null;
-    let upperMs = next ? (await loadHistory(next))?.createdAt : null;
-    upperMs = upperMs ? new Date(upperMs).getTime() : null;
-    if (upperMs != null && lowerMs != null && upperMs <= lowerMs) continue;
-    // The progressive-loading `before` cursor shrinks the upper bound further.
-    let effUpper = upperMs;
-    if (beforeMs != null && (effUpper == null || beforeMs < effUpper)) effUpper = beforeMs;
+    // Upper bound: the child's fork ordinal (exclude `here`'s post-fork
+    // divergence). The progressive-loading `before` cursor shrinks it further.
+    let effUpper = next ? forkOrd.get(next) : null;
+    if (beforeOrdOK && (effUpper == null || beforeOrd < effUpper)) effUpper = beforeOrd;
 
-    for (const a of fileStore.readActChain(story, String(here), beingId)) {
-      if (a.through != null && String(a.through) !== String(beingId)) continue;
-      const ms = stamp(a);
-      if (lowerMs != null && (ms == null || !(ms >= lowerMs))) continue;
-      if (effUpper != null && (ms == null || !(ms < effUpper))) continue;
+    for (const a of ownActs.get(here) || []) {
+      const o = ordOf(a);
+      if (effUpper != null && (o == null || !(o < effUpper))) continue;
       out.push(a);
     }
   }
-  return sortNewestFirst(out, stamp).slice(0, limit);
+  return sortNewestFirst(out).slice(0, limit);
 }
 
-// Sort acts newest-first by stamp; id as a deterministic tiebreak (descending
-// by stampedAt, then by _id). Acts with no stamp sort last.
-function sortNewestFirst(acts, stamp) {
+// The act's append ordinal (act.ord, the clock-free total order) as a number,
+// or null. The sort/window key for the act-chain — never a wall-clock.
+function ordOf(a) {
+  const o = Number(a?.ord);
+  return Number.isFinite(o) ? o : null;
+}
+
+// Sort acts newest-first by the append ordinal (act.ord, the chain order); id
+// as a deterministic tiebreak. Acts with no ord sort last (pre-ordinal /
+// cross-story grafted acts ordered by id alone).
+function sortNewestFirst(acts) {
   return acts.slice().sort((a, b) => {
-    const ta = stamp(a);
-    const tb = stamp(b);
-    if (ta == null && tb == null) return String(b._id).localeCompare(String(a._id));
-    if (ta == null) return 1;
-    if (tb == null) return -1;
-    if (ta !== tb) return tb - ta;
+    const oa = ordOf(a);
+    const ob = ordOf(b);
+    if (oa == null && ob == null) return String(b._id).localeCompare(String(a._id));
+    if (oa == null) return 1;
+    if (ob == null) return -1;
+    if (oa !== ob) return ob - oa;
     return String(b._id).localeCompare(String(a._id));
   });
 }
@@ -431,9 +416,11 @@ function serializeAct(a) {
     priority:        a.priority || null,
     startMessage:    a.startMessage || null,
     endMessage:      a.endMessage || null,
-    receivedAt:      a.receivedAt || null,
-    stampedAt:       a.stampedAt || null,
-    severedAt:       a.severedAt || null,
+    // The act's append ordinal (the order; the progressive-loading cursor pages
+    // by this) and its lone inert seal-time witness (display only). The act
+    // keeps exactly one wall-clock field, `at`.
+    ord:             Number.isFinite(Number(a.ord)) ? Number(a.ord) : null,
+    at:              a.at || null,
     answers:         a.answers || null,
     // History this Act was stamped on. Null on legacy acts predating
     // the field; clients should treat that as main.

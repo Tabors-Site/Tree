@@ -56,7 +56,7 @@ registerOperation("delete-llm-connection", {
   hostEnv: llmHostEnv,
 });
 
-// add-llm-connection — WORD-SOURCED, MULTI-MOMENT composite (runAsStore). add.word lays TWO deeds:
+// add-llm-connection — WORD-SOURCED, MULTI-MOMENT composite (do.js discovers it via wordHasDeeds). add.word lays TWO deeds:
 // `do set-being` (the connection) then `If $conn.isFirst, do assign-llm-slot` (auto-assign-to-main)
 // — each its OWN moment / fact via runWordToStore. The op lays NO own fact (runOpWordToStore wraps
 // the result in ranAsMoments). Host floor: resolve-connection (validate / SSRF / encrypt / mint /
@@ -64,7 +64,7 @@ registerOperation("delete-llm-connection", {
 registerOperation("add-llm-connection", {
   targets: ["being"],
   ownerExtension: "seed",
-  word: { noun: "being", runAsStore: true },
+  word: { noun: "being" },
   hostEnv: llmHostEnv,
 });
 
@@ -75,6 +75,6 @@ registerOperation("add-llm-connection", {
 registerOperation("assign-llm-slot", {
   targets: ["being", "space"],
   ownerExtension: "seed",
-  word: { noun: "being", runAsStore: true },
+  word: { noun: "being" },
   hostEnv: llmHostEnv,
 });

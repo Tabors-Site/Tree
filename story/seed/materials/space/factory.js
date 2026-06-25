@@ -145,28 +145,32 @@ export async function listStamperChildren({ limit = 100 } = {}) {
     .filter((h) => h.headHash);
   if (heads.length === 0) return [];
 
-  // Per-head act lookup → curated getActById (the head act carries stampedAt).
-  const lastByAct = new Map();
+  // Per-head act lookup → curated getActById. Recency is the head act's append
+  // ordinal (act.ord, the clock-free total order), NEVER a wall-clock. The head
+  // `at` witness is display-only and is surfaced separately below.
+  const lastByAct = new Map(); // headHash -> { ord, at }
   for (const h of heads) {
     if (!h.headHash) continue;
     const a = getActById(String(h.headHash));
-    if (a) lastByAct.set(String(h.headHash), a.stampedAt || null);
+    if (a) lastByAct.set(String(h.headHash), { ord: ordOf(a), at: a.at || null });
   }
 
-  const byBeing = new Map(); // beingId -> { histories, lastAct }
+  const byBeing = new Map(); // beingId -> { histories, lastOrd, lastAt }
   for (const h of heads) {
-    const cur = byBeing.get(h.beingId) || { histories: [], lastAct: null };
+    const cur = byBeing.get(h.beingId) || { histories: [], lastOrd: null, lastAt: null };
     cur.histories.push(h.history);
-    const t = lastByAct.get(String(h.headHash));
-    if (t && (!cur.lastAct || t > cur.lastAct)) cur.lastAct = t;
+    const head = lastByAct.get(String(h.headHash));
+    const o = head?.ord ?? null;
+    if (o != null && (cur.lastOrd == null || o > cur.lastOrd)) {
+      cur.lastOrd = o;
+      cur.lastAt = head.at; // the head act's inert display witness
+    }
     byBeing.set(h.beingId, cur);
   }
 
+  // Recent actors first BY ORDINAL (the chain, never the clock).
   const page = [...byBeing.entries()]
-    .sort(
-      (a, b) =>
-        (b[1].lastAct?.getTime?.() || 0) - (a[1].lastAct?.getTime?.() || 0),
-    )
+    .sort((a, b) => (b[1].lastOrd ?? -1) - (a[1].lastOrd ?? -1))
     .slice(0, cap);
 
   const { loadProjection } = await import("../projections.js");
@@ -190,7 +194,10 @@ export async function listStamperChildren({ limit = 100 } = {}) {
       beingId,
       name,
       actCount: actTotal,
-      lastAct: info.lastAct ? new Date(info.lastAct).toISOString() : null,
+      // Display-only seal-time witness of the most recent act (by ordinal); the
+      // ordering above is act.ord, never this. Null when the head act predates
+      // the `at` witness.
+      lastAct: info.lastAt ? new Date(info.lastAt).toISOString() : null,
       histories: info.histories.sort(),
     });
   }
@@ -208,11 +215,12 @@ function actInHistory(act, history) {
   return isMain(history) ? isMain(h) : h === history;
 }
 
-// stampedAt as ms (or null) for the windowing/forkX comparisons.
-function stampMs(act) {
-  const t = act?.stampedAt ?? null;
-  const ms = t != null ? new Date(t).getTime() : NaN;
-  return Number.isNaN(ms) ? null : ms;
+// The act's append ordinal (act.ord, the clock-free total order) as a number,
+// or null. This is the windowing/forkX/sort key — never a wall-clock. `at` (the
+// act's lone inert witness) is display-only and is read separately for output.
+function ordOf(act) {
+  const o = Number(act?.ord);
+  return Number.isFinite(o) ? o : null;
 }
 
 function shortLabel(act) {
@@ -245,7 +253,10 @@ export async function describeStamperSpace(
   const beingId = String(being.beingId);
   const name = being.name;
   const cap = Math.min(Math.max(1, Number(limit) || 100), 500);
-  const beforeMs = before ? new Date(before).getTime() : null;
+  // The `before` cursor is an ORDINAL cursor ("ordered by sequence", Tabor):
+  // page acts strictly older than this ord, never a Date. Numeric (or null).
+  const beforeOrd = before != null && before !== "" ? Number(before) : null;
+  const beforeOrdOK = beforeOrd != null && Number.isFinite(beforeOrd);
 
   // Curated read: every act this being authored (the `through` facet), once.
   // The whole stamper view (history lanes, fork anchors, windows, counts) is a
@@ -258,56 +269,49 @@ export async function describeStamperSpace(
   );
 
   // Lanes: every history this being has sealed acts on. Lane 0 is main; the
-  // rest order by history creation time. Derived from the acts themselves
-  // (each carries its history) — the old ActHead enumeration is unnecessary
-  // now that we hold the full act list.
+  // rest order by BRANCH BIRTH POSITION, derived clock-free from the acts
+  // themselves: a branch's birth is the append-ordinal of its earliest act on
+  // this being's lane (the chain, never a wall-clock). Each lane built from the
+  // act list always carries >= 1 act by this being, so the min ord is defined.
   const historySet = new Set(beingActs.map((a) => a.history || MAIN));
   if (historySet.size === 0) historySet.add(MAIN);
-  const historyMeta = new Map(); // history -> {createdAt: Date|null}
-  for (const b of historySet) {
-    if (isMain(b)) {
-      historyMeta.set(b, { createdAt: null });
-      continue;
-    }
-    try {
-      const row = await loadHistory(b);
-      historyMeta.set(b, {
-        createdAt: row?.createdAt ? new Date(row.createdAt) : null,
-      });
-    } catch {
-      historyMeta.set(b, { createdAt: null });
-    }
+  const historyMinOrd = new Map(); // history -> earliest act ord on this lane (number|null)
+  for (const a of beingActs) {
+    const h = a.history || MAIN;
+    const o = ordOf(a);
+    if (o == null) continue;
+    const cur = historyMinOrd.get(h);
+    if (cur == null || o < cur) historyMinOrd.set(h, o);
   }
   const histories = [...historySet].sort((a, b) => {
     if (isMain(a)) return -1;
     if (isMain(b)) return 1;
-    const ta = historyMeta.get(a)?.createdAt?.getTime() || 0;
-    const tb = historyMeta.get(b)?.createdAt?.getTime() || 0;
-    return ta - tb;
+    // Branch born earlier (lower earliest-act ord) sorts first.
+    const oa = historyMinOrd.get(a) ?? Infinity;
+    const ob = historyMinOrd.get(b) ?? Infinity;
+    if (oa !== ob) return oa - ob;
+    return String(a).localeCompare(String(b));
   });
 
-  // Fork anchor: where along the PARENT lane this history was born.
-  // Wall-clock anchor (acts have no seq; stampedAt is a display
-  // helper, never truth) — honest for a view whose whole job is
-  // display. forkX(main) = 0.
+  // Fork anchor: where along the PARENT lane this history was born. Clock-free:
+  // the branch's birth is the ordinal of its earliest act, and the fork sits
+  // just before it — so forkX = the count of parent-lane acts whose ord is
+  // strictly below that birth ordinal (the ord-based peer of the old
+  // wall-clock at-or-before count). forkX(main) = 0.
   async function forkXFor(history) {
     if (isMain(history)) return 0;
-    const meta = historyMeta.get(history);
-    if (!meta?.createdAt) return 0;
+    const birthOrd = historyMinOrd.get(history);
+    if (birthOrd == null) return 0;
     let parent = MAIN;
     try {
       parent = (await loadHistory(history))?.parent || MAIN;
     } catch {
       /* main */
     }
-    // Acts on the PARENT lane stamped at-or-before this history's birth — the
-    // in-memory peer of the old Act.countDocuments({through, parentClause,
-    // stampedAt:{$lte}}).
-    const cutMs = meta.createdAt.getTime();
     let x = beingActs.filter((a) => {
       if (!actInHistory(a, parent)) return false;
-      const ms = stampMs(a);
-      return ms != null && ms <= cutMs;
+      const o = ordOf(a);
+      return o != null && o < birthOrd;
     }).length;
     // Recurse one level when the parent is itself a history so deep
     // forks anchor against the whole ancestry.
@@ -319,15 +323,16 @@ export async function describeStamperSpace(
   const allSerialized = [];
   let maxHeadX = 0;
 
-  // Sort newest-first by stampedAt, _id as the deterministic tiebreak —
-  // mirrors the old sort { stampedAt: -1, _id: -1 }.
+  // Sort newest-first by the append ordinal (act.ord, the chain order), _id as
+  // the deterministic tiebreak — the clock-free peer of the old newest-first
+  // wall-clock sort.
   const newestFirst = (a, b) => {
-    const ta = stampMs(a);
-    const tb = stampMs(b);
-    if (ta == null && tb == null) return String(b._id).localeCompare(String(a._id));
-    if (ta == null) return 1;
-    if (tb == null) return -1;
-    if (ta !== tb) return tb - ta;
+    const oa = ordOf(a);
+    const ob = ordOf(b);
+    if (oa == null && ob == null) return String(b._id).localeCompare(String(a._id));
+    if (oa == null) return 1;
+    if (ob == null) return -1;
+    if (oa !== ob) return ob - oa;
     return String(b._id).localeCompare(String(a._id));
   };
 
@@ -338,13 +343,14 @@ export async function describeStamperSpace(
 
     const total = laneActs.length;
 
-    // Window: newest cap acts strictly older than the `before` cursor, then
-    // reversed to ascending (the in-memory peer of the old find/sort/limit).
+    // Window: newest cap acts strictly older than the `before` ordinal cursor,
+    // then reversed to ascending (the in-memory peer of the old find/sort/limit,
+    // paging by ord instead of a Date).
     const windowDesc = laneActs
       .filter((a) => {
-        if (beforeMs == null) return true;
-        const ms = stampMs(a);
-        return ms != null && ms < beforeMs;
+        if (!beforeOrdOK) return true;
+        const o = ordOf(a);
+        return o != null && o < beforeOrd;
       })
       .sort(newestFirst)
       .slice(0, cap);
@@ -352,10 +358,10 @@ export async function describeStamperSpace(
 
     let countOlder = 0;
     if (window.length > 0) {
-      const headMs = stampMs(window[0]);
+      const headOrd = ordOf(window[0]);
       countOlder = laneActs.filter((a) => {
-        const ms = stampMs(a);
-        return headMs != null && ms != null && ms < headMs;
+        const o = ordOf(a);
+        return headOrd != null && o != null && o < headOrd;
       }).length;
     }
 
@@ -366,7 +372,9 @@ export async function describeStamperSpace(
       forkX,
       countOlder,
       startMessage: a.startMessage || null,
-      stampedAt: a.stampedAt || null,
+      // Inert seal-time witness for display only; the lane order/coords come
+      // from act.ord + the window index, never from this.
+      at: a.at || null,
     }));
     allSerialized.push(...serialized);
 
@@ -416,7 +424,8 @@ export async function describeStamperSpace(
             action: f.act,
             targetKind: f.of?.kind ?? null,
           })),
-          stampedAt: a.stampedAt ? new Date(a.stampedAt).toISOString() : null,
+          // Display-only seal-time witness; not a sort key.
+          at: a.at ? new Date(a.at).toISOString() : null,
         },
       },
     };

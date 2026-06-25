@@ -14,9 +14,9 @@
 // Two entries:
 //
 //   callVerb         — public, parses the stance, resolves the
-//                        being, dispatches. Threads-cut short-circuit:
-//                        `<story>/./threads/<id>` routes to
-//                        cutThread.
+//                        being, dispatches. A thread address
+//                        (`<story>/./threads/<id>`) is not a call
+//                        target and is refused.
 //
 //   callByResolved   — for callers that already have the receiver
 //                        and inbox space resolved (DO-trigger fan-out,
@@ -53,11 +53,7 @@ import {
 import { resolveStance } from "../resolver.js";
 import { authorize } from "../authorize.js";
 import { permitsReceiverSummon } from "../ableAuth.js";
-import {
-  threadIdFromPath,
-  cutThread,
-  getThreadsSpaceId,
-} from "../../materials/space/threads.js";
+import { threadIdFromPath } from "../../materials/space/threads.js";
 import { getAble } from "../../present/ables/registry.js";
 import { attachHandoff, wake } from "../../present/intake/scheduler.js";
 import {
@@ -139,60 +135,17 @@ export async function callVerb(stance, message, opts = {}) {
     parseCtx,
   );
 
-  // Thread-target history. SUMMON whose right-side path names
-  // `.threads/<id>` is a cut, not a call. The thread is addressable
-  // substrate but has no persistent space row — the resolver would
-  // fail. Route to the seed cut handler before resolveStance runs.
-  // Priority (from the envelope, defaulting to INTERACTIVE) decides
-  // whether the cut runs out-of-band (HUMAN → AbortSignal) or waits
-  // in the queue (lower → drains naturally on next pickup). See
-  // seed/materials/space/threads.js.
-  const targetThreadId = threadIdFromPath(expanded.right?.path);
-  if (targetThreadId) {
-    // Stance auth: broad gate. Is the asker allowed to address
-    // `.threads` on this story at all? The default rule
-    // `summon:.threads:*` matches against the story root and
-    // requires non-arrival (an authenticated being). Per-position
-    // overrides at `.threads` can tighten this.
-    const threadsSpaceId = await getThreadsSpaceId();
-    const decision = await authorize({
-      identity,
-      verb: "call",
-      target: { kind: "thread", id: targetThreadId, spaceId: threadsSpaceId },
-      moment,
-      // The caller's session history (their grants live there). The
-      // wire threads it separately from currentHistory, which carries
-      // the FACT's destination history for this verb.
-      actorHistory: actorHistory || null,
-    });
-    if (!decision.ok) {
-      throw new IbpError(
-        IBP_ERR.FORBIDDEN,
-        decision.reason || "Not allowed to address .threads",
-      );
-    }
-
-    const priority = validatedMessage.priority || "INTERACTIVE";
-    const reason = validatedMessage.content || "thread cut";
-    // Participation check happens inside cutThread: the asker must
-    // be a participant in this specific rootCorrelation chain (or
-    // I). Facts live on Act rows, not on Space ancestry —
-    // can't be expressed as a stance property today, so the cut
-    // handler enforces it itself.
-    const result = await cutThread({
-      rootCorrelation: targetThreadId,
-      priority,
-      reason,
-      identity,
-      moment,
-    });
-    return {
-      status: "accepted",
-      thread: targetThreadId,
-      severed: result.severed,
-      cancelled: result.cancelled,
-      aborted: result.aborted,
-    };
+  // A thread is not a call target. A thread address (`.threads/<id>`)
+  // names a live coordination chain, addressable for SEE, but it has no
+  // being to deliver to and no persistent space row. There is no
+  // severing: a call is a fact, a response is a fact. Refuse the address
+  // here with a clean error rather than letting it fall through to
+  // resolveStance (which would fail confusingly on the missing space).
+  if (threadIdFromPath(expanded.right?.path)) {
+    throw new IbpError(
+      IBP_ERR.INVALID_INPUT,
+      "a thread is not a call target",
+    );
   }
 
   const resolved = await resolveStance(expanded.right, { identity });

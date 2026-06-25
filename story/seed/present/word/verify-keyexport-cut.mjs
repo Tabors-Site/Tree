@@ -115,14 +115,17 @@ const birth = async (name, trueName) => {
 const mintSovereignName = async () => {
   const kp = generateNameKeypair(); // { publicKeyPem, privateKeyPem, nameId }
   const enc = encryptCredential(kp.privateKeyPem); // system-encrypted at rest (not password-locked)
+  const { getStoryDomain } = await import(`${R}/seed/ibp/address.js`);
   await withIAmAct(`mint name ${kp.nameId.slice(0, 12)}`, async (ctx) => {
     await emitFact(
       {
         verb: "name",
         act: "declare",
         through: I,
-        of: { kind: "name", id: kp.nameId },
+        // A Name has no reel of its own; the declare lands on the LIBRARY reel, keyed by nameId.
+        of: { kind: "library", id: getStoryDomain() },
         params: {
+          nameId: kp.nameId,
           spec: {
             parentNameId: I,
             privateKeyEnc: enc,

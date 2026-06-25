@@ -3,18 +3,38 @@
 // Library reducer. (state, fact) -> state.
 //
 // The story's ONE 5D library reel (of.kind "library", one per story, out of any history): the
-// name-level / cross-history facts — shared books, federation peers, story config — folded into a
-// single catalog. The library is the 5th reel kind (5d.md: Ours, the catalog of worlds; only names
-// act there). Pure + deterministic, symmetric with being/space/matter/name reducers.
+// name-level / out-of-world facts, folded into a single catalog. A Name has an act-chain but NO
+// reel of its own (it ACTS, it is never acted-on), so every name-level fact lands HERE:
+//   - names    — name:declare/banish/connect/release/set-password (the Name identity rows)
+//   - books    — share-book (the shared-books catalog)
+//   - peers    — peer-add / peer-remove (the federation graph)
+//   - config   — config-set / config-delete (story-level config)
+// Pure + deterministic, symmetric with the being/space/matter reducers. Only Names act here.
+
+// Name-level ops — the retired per-name reel's facts, now folded into the names catalog keyed by
+// params.nameId. A Name has no reel; this catalog entry IS its folded state.
+const NAME_OPS = new Set(["declare", "mint", "banish", "close", "connect", "release", "set-password"]);
 
 /** Empty initial state. */
 export function initial() {
-  return { books: {}, peers: {}, config: {} };
+  return { names: {}, books: {}, peers: {}, config: {} };
 }
 
 export function reduce(state, fact) {
   const act = fact?.act;
   const p = fact?.params || {};
+
+  // Name identity facts — fold into names[nameId]. A Name acts through a being but is itself
+  // never acted-on, so it has no reel; its declare/banish/connect/release/set-password facts ride
+  // the library reel and fold into one catalog entry. (verb:"name"; nameId carried in params.)
+  if (fact?.verb === "name" && NAME_OPS.has(act)) {
+    const nameId = p.nameId;
+    if (!nameId) return state;
+    const names = state.names || {};
+    const nextEntry = foldName(names[nameId] || {}, fact);
+    if (names[nameId] && nextEntry === names[nameId]) return state; // idempotent no-op
+    return { ...state, names: { ...names, [nameId]: nextEntry } };
+  }
 
   // share-book — a book entered the catalog (latest share of a root wins).
   if (act === "share-book") {
@@ -53,4 +73,40 @@ export function reduce(state, fact) {
   }
 
   return state;
+}
+
+// A Name's identity-layer fold (declare/banish/connect/release/set-password). Ported from the
+// retired per-name reducer. No clock: closure/connection are booleans whose WHEN is the fact's
+// chain position; updatedAt rides the fact's date (the only non-clock witness the row carries).
+// Returns the SAME object reference when a fact is a no-op (idempotent close, key-less set-password)
+// so the caller can skip the write.
+function foldName(s, fact) {
+  const act = fact?.act;
+  const spec = fact?.params?.spec;
+  if (act === "declare" || act === "mint") {
+    if (!spec || typeof spec !== "object") return s;
+    return {
+      ...s,
+      parentNameId:  spec.parentNameId ?? null,
+      privateKeyEnc: spec.privateKeyEnc ?? null,
+      identity:      spec.identity ?? null,
+      soulType:      spec.soulType ?? null,
+      // The real name (trueName.name) — the optional human handle.
+      name:          spec.name ?? null,
+      createdAt:     s.createdAt ?? fact.date,
+      updatedAt:     fact.date,
+    };
+  }
+  if (act === "banish" || act === "close") {
+    if (s.closed) return s;
+    // The banish FACT's existence IS the closure (no clock). "When" is its chain position.
+    return { ...s, closed: true, updatedAt: fact.date };
+  }
+  if (act === "connect") return { ...s, connected: true, updatedAt: fact.date };
+  if (act === "release") return { ...s, connected: false, updatedAt: fact.date };
+  if (act === "set-password") {
+    if (!spec || spec.privateKeyEnc == null) return s;
+    return { ...s, privateKeyEnc: spec.privateKeyEnc, updatedAt: fact.date };
+  }
+  return s;
 }

@@ -447,6 +447,11 @@ export async function syncAblesToSubstrate() {
           "able",
           {
             requiredCognition: able.requiredCognition || null,
+            // `can` is the CANONICAL grant-set (canSee/canDo/canCall/canBe are
+            // the retired, derived view). The gold must carry it or the .ables
+            // mirror rots — a fold-from-gold reader (and any auth read off the
+            // gold) needs the live grant-set, not just the legacy canX.
+            can: Array.isArray(able.can) ? able.can : null,
             // NOTE: the verb-summary `permissions: ["see","do",...]` field
             // retired with the ables-are-auth doctrine (AblesAreAuth.md).
             // The canX entries below ARE the auth gate; a separate verb

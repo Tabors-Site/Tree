@@ -31,7 +31,7 @@ import {
 import { readReelLineage } from "../../../past/fileStore.js";
 import log from "../../../seedStory/log.js";
 
-const REEL_TYPES = new Set(["being", "space", "matter", "name", "library"]);
+const REEL_TYPES = new Set(["being", "space", "matter", "library"]);
 
 // Name-collision self-heal. The per-history unique index on
 // (history, type, state.name) is a backstop on a CACHE — when two live

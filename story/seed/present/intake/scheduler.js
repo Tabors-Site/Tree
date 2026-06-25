@@ -176,9 +176,9 @@ export function getCurrentRootCorrelation(beingId) {
  * aborts actually fired.
  *
  * Cancel-button surface: the caller computes the set of rootCorrelations
- * the user originated (via Act.find({ beingIn: user, "endMessage.time": null })
- * and walking rootCorrelation), then calls this to halt the chain
- * cascade in one sweep. Pending intake entries get cleaned separately
+ * the being originated (the open acts it authored — those whose endMessage has
+ * no closing utterance — walking rootCorrelation), then calls this to halt the
+ * chain cascade in one sweep. Pending intake entries get cleaned separately
  * via cancelIntakeByRoot per (spaceId, beingId).
  *
  * @param {Iterable<string>} rootCorrelations

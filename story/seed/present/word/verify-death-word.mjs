@@ -128,11 +128,11 @@ try {
   });
   const after = await pollFor(
     () => loadProjection("being", beingId, "0"),
-    (s) => !!s?.state?.qualities?.death?.time,
+    (s) => !!s?.state?.qualities?.death,
   );
-  after?.state?.qualities?.death?.time
+  after?.state?.qualities?.death
     ? ok(
-        `be:death folded qualities.death (applyDeath ran — the being is closed)`,
+        `be:death folded qualities.death (applyDeath ran — the being is closed; the FACT's existence IS the death, no clock)`,
       )
     : bad(`death folded`, after?.state?.qualities?.death);
 

@@ -18,8 +18,8 @@
 // What lives here vs threads.js: threads.js owns the **thread**
 // projection — the live tree of coordinated Summons sharing one
 // rootCorrelation, addressable at `<story>/./threads/<id>`. Threads
-// are a domain primitive; reelChains is a query helper. Thread
-// operations (sever, walk lineage, cut) belong in threads.js;
+// are a domain primitive; reelChains is a query helper. Thread-level
+// reads (descriptor, participants, lineage walk) belong in threads.js;
 // raw "give me Summons matching X" belongs here.
 
 // CURATED swap: every raw Act.find/findById/findOne here now routes through
@@ -28,19 +28,16 @@
 // but these wrappers keep their async signatures so every caller is unchanged.
 // The `.select()` projections are dropped (the file act-doc carries the
 // whole row); `.sort()` / `.limit()` / `.findOne()` semantics are reproduced in
-// JS below, matching the prior createdAt-desc / endMessage-time ordering.
+// JS below, ordering by the append ordinal (act.ord) — the clock-free order.
 import {
   getActById,
   getActsByCorrelation,
   getActsByField,
 } from "../../../past/act/actChain.js";
 
-// Sort acts newest-first by a timestamp field, id as a deterministic tiebreak
-// (the file act-log has no createdAt; stampedAt is the seal time, receivedAt
-// the open time — the same ordering keys serializeAct/describeActChain use).
 // Newest-first by the APPEND ORDINAL (the clock-free, LOCAL total order: an act's position in the
 // single commit order — fileStore's _ordCounter). `_id` is only a deterministic tiebreak, and the
-// sole key for any pre-ordinal or cross-story grafted act with no local ord. NEVER reads stampedAt:
+// sole key for any pre-ordinal or cross-story grafted act with no local ord. NEVER reads a wall-clock:
 // the clock is a witness, never truth. Cross-story sets stay PARTIALLY ordered (causal links only).
 function byOrdDesc(a, b) {
   const oa = Number(a?.ord) || 0;
@@ -113,8 +110,8 @@ export async function findByIbpAddress(ibpAddress, opts = {}) {
 
 /**
  * The most recently opened Act where the given being is the
- * responder (to) and the moment is still un-sealed
- * (endMessage.time is null). Used by descriptor.js to surface
+ * responder (to) and the moment has emitted no closing utterance yet
+ * (endMessage.content is null). Used by descriptor.js to surface
  * "this being is currently doing X" — the live activity readout
  * for a Position Description.
  *
@@ -124,11 +121,11 @@ export async function findByIbpAddress(ibpAddress, opts = {}) {
 export async function findOpenForBeing(to) {
   if (!to) return null;
   try {
-    // "still open" = endMessage.time is null/absent. Filter the (to) facet
-    // reel in JS, then pick the most-recent by stampedAt (the prior
-    // findOne + sort{stampedAt:-1}).
+    // "open / not yet said" = endMessage.content is null/absent (a verb-act
+    // that pressed no prose, or an act with no endMessage at all). CONTENT
+    // presence, never a timestamp. Pick the most-recent by act.ord.
     const open = getActsByField("to", to).filter(
-      (a) => a?.endMessage?.time == null,
+      (a) => a?.endMessage?.content == null,
     );
     if (open.length === 0) return null;
     return open.sort(byOrdDesc)[0] || null;
@@ -138,11 +135,12 @@ export async function findOpenForBeing(to) {
 }
 
 /**
- * Most recent SEALED Act for a being. Used by the descriptor as a
- * fallback to surface "what this being last said" so a speech bubble
- * can persist above the mesh between moments. Returns the closed Act
- * with its endMessage attached, or null when the being has never
- * sealed an Act.
+ * Most recent Act where a being SAID something. Used by the descriptor as a
+ * fallback to surface "what this being last said" so a speech bubble can
+ * persist above the mesh between moments. "Said" = the act closed with a prose
+ * utterance (endMessage.content is non-null); a verb-act (do/be, no prose) is
+ * not a said-act and is skipped. Returns that Act with its endMessage attached,
+ * or null when the being has never spoken.
  *
  * @param {string} to
  * @returns {Promise<object|null>}
@@ -150,16 +148,14 @@ export async function findOpenForBeing(to) {
 export async function findLastSealedForBeing(to) {
   if (!to) return null;
   try {
-    // "sealed" = endMessage.time set. Filter the (to) facet reel in JS, then
-    // pick the most-recently-sealed by endMessage.time (the prior findOne +
-    // sort{ "endMessage.time": -1 }).
-    const sealed = getActsByField("to", to).filter(
-      (a) => a?.endMessage?.time != null,
+    // "said" = endMessage.content is present (non-null prose). CONTENT presence,
+    // never a timestamp. Filter the (to) facet reel in JS, then pick the most
+    // recent by act.ord (the clock-free order).
+    const said = getActsByField("to", to).filter(
+      (a) => a?.endMessage?.content != null,
     );
-    if (sealed.length === 0) return null;
-    // Order by the append ordinal (clock-free); was endMessage.time desc. The `.time` FILTER above is
-    // a sealed-vs-open proxy that becomes the status fold in the status pass (Fork 3).
-    return sealed.slice().sort(byOrdDesc)[0] || null;
+    if (said.length === 0) return null;
+    return said.slice().sort(byOrdDesc)[0] || null;
   } catch {
     return null;
   }

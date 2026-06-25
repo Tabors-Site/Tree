@@ -5,7 +5,7 @@
 // handler runs once per fact applied (via dispatchCrossCutting in
 // foldEngine.js).
 //
-// Three handlers, one fact-act each. Since the 2026-06-03
+// Two handlers, one fact-act each. Since the 2026-06-03
 // retarget, the summon fact lands on the RECIPIENT's reel
 // (of = recipient, right stance, like DO) with doer = summoner;
 // the recipient is read from fact.of. Summon facts are
@@ -14,11 +14,6 @@
 //
 //   summon      → upsert InboxProjection row keyed by params.correlation.
 //                 recipient = fact.of.id (the reel it lives on).
-//
-//   be:sever    → delete InboxProjection rows whose rootCorrelation
-//                 matches params.rootCorrelation. Fact lives on the
-//                 severer's reel (of = severer). One fact, many
-//                 rows dropped.
 //
 //   (act seal)  → delete InboxProjection row where _id === act.answers.
 //                 The closure event: the moment that took the summon
@@ -36,10 +31,10 @@ import { registerCrossCuttingHandler } from "../../../present/stamper/2-fold/fol
 
 // The cross-cutting fold of open summons per being. One row per open
 // summon, keyed by correlation, indexed by recipient. The chain of call
-// facts (and the be:sever / act-seal closures) on the story's per-being
-// reels is the record; this file-backed collection (one JSON file per
-// row + a small index under <storeRoot>/proj/inbox) is the rebuildable
-// cache. Exported so the inbox/intake readers share the one instance.
+// facts (and the act-seal closures) on the story's per-being reels is
+// the record; this file-backed collection (one JSON file per row + a
+// small index under <storeRoot>/proj/inbox) is the rebuildable cache.
+// Exported so the inbox/intake readers share the one instance.
 export const InboxProjection = new FileCollection("inbox");
 
 // Priority → numeric rank (lower = picked first). The ONE place the
@@ -54,9 +49,21 @@ export function priorityRankOf(priority) {
 }
 import { assertHistoryOrThrow } from "../../../materials/projections.js";
 import { getActsByField } from "../../act/actChain.js";
+import {
+  isOpenQuote,
+  isCloseQuote,
+  quotedWordForClose,
+} from "../../../present/book/quotedWord.js";
 
 async function handleCall(fact /*, type, id*/) {
   if (fact?.verb !== "call") return;
+
+  // A quoted word (a call typed one word at a time): the open-quote is just a bracket, no
+  // delivery; the CLOSE-quote is the send (the second act below the fact). Everything else is the
+  // legacy fat call (prose `call X, saying Y` -> callVerb), which still carries params.content.
+  if (isOpenQuote(fact)) return;
+  if (isCloseQuote(fact)) return handleQuotedWordClose(fact);
+
   const params = fact.params || {};
   // Recipient is the fact's object (right stance); summoner is
   // through (the actor). Renamed from be:summon (which carried
@@ -108,26 +115,82 @@ async function handleCall(fact /*, type, id*/) {
   );
 }
 
-async function handleBeSever(fact /*, type, id*/) {
-  if (fact?.verb !== "be" || fact?.act !== "sever") return;
-  const rootCorrelation = fact.params?.rootCorrelation;
-  if (!rootCorrelation) return;
-  // Scoped to the sever-fact's history: severing a thread on one
-  // history must not evict a sibling history's open rows (INTAKE.md's
-  // "per history isolation — never crosses"). A thread inherited
-  // across a fork is severed per history, by a sever fact on each.
-  await InboxProjection.deleteMany({
-    rootCorrelation,
-    history: assertHistoryOrThrow(fact.history, "inboxProjectionFold(be:sever)"),
-  });
+// handleQuotedWordClose . the delivery, the second act below the close-quote. A call typed one
+// word at a time lives as a quoted word on the CALLER's reel (open-quote + said-words + close-
+// quote, of:{being:caller}). On the close, assemble the quoted word from the caller's reel, resolve
+// the recipient named on the open (params.to), materialize the inbox row carrying the assembled
+// utterance (the inbox is a rebuildable delivery cache, never chain storage of a bundle), and wake
+// the recipient. A recall (params.to null) delivers nothing . the close folds the caller's own
+// chain back in the evaluator, not here.
+async function handleQuotedWordClose(fact) {
+  const correlation = fact?.params?.correlation;
+  if (!correlation) return;
+  // Answered-guard (same as the fat-call path): a consumed correlation never resurrects.
+  if (getActsByField("answers", String(correlation)).length > 0) return;
+
+  const callerId =
+    fact?.of?.kind === "being" && fact?.of?.id ? String(fact.of.id) : null;
+  if (!callerId) return;
+
+  // Assemble the quoted word from the caller's reel (the words between the matching open and this
+  // close). Recent facts suffice (a quoted word is a contiguous run; 500 covers a long utterance).
+  const { getFactsByBeing } = await import("../../fact/facts.js");
+  const reel = await getFactsByBeing(callerId, 500);
+  const qw = quotedWordForClose(reel, fact);
+  if (!qw) return; // malformed / no matching open . no send
+
+  const toName = qw.open?.params?.to ?? null;
+  if (!toName) return; // recall (self) . no delivery
+
+  const history = assertHistoryOrThrow(
+    fact.history,
+    "inboxProjectionFold(quotedWord-close)",
+  );
+  const { findByName } = await import("../../../materials/projections.js");
+  const slot = await findByName("being", String(toName), history);
+  if (!slot) return; // the name vanished between open and close . nothing to deliver to
+  const recipientId = String(slot.id);
+  const inboxSpaceId = slot.state?.position || slot.state?.homeSpace || null;
+
+  await InboxProjection.updateOne(
+    { _id: correlation },
+    {
+      $set: {
+        recipient: recipientId,
+        summoner: callerId,
+        sender: qw.open?.params?.from || null,
+        content: qw.said, // the assembled utterance . delivery cache, not a stored bundle
+        activeAble: null,
+        intent: qw.open?.params?.intent || null,
+        priority: "INTERACTIVE",
+        priorityRank: priorityRankOf("INTERACTIVE"),
+        orientation: "forward",
+        rootCorrelation: correlation,
+        inReplyTo: null,
+        inboxSpaceId,
+        sentAt: fact.date || new Date(),
+        history,
+      },
+      $setOnInsert: { _id: correlation },
+    },
+    { upsert: true },
+  );
+
+  // Wake the recipient . the row exists now (this runs post-seal in the fold), so the nudge lands
+  // on a populated projection.
+  try {
+    const { wake } = await import("../../../present/intake/scheduler.js");
+    wake(recipientId, inboxSpaceId);
+  } catch {
+    /* wake is best-effort; the row is already indexed for the next scheduler pass */
+  }
 }
 
-// Register both fact-driven handlers with the fold engine. The Act-seal
+// Register the fact-driven handler with the fold engine. The Act-seal
 // handler is invoked directly from stamped.js (see closeInboxOnAnswer
 // below) because Act seals are not fact appends — Acts are their own
 // primitive.
 registerCrossCuttingHandler(handleCall);
-registerCrossCuttingHandler(handleBeSever);
 
 /**
  * Eviction triggered by the answering Act's seal. Called from

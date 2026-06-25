@@ -3,8 +3,8 @@
 // projStore.js — a tiny file-backed collection for the SECONDARY cross-cutting
 // projections (inbox, threads, position). These are NOT the chain (the reels in
 // fileStore.js are truth); they are DERIVED caches — one row per open summon /
-// live thread / being-in-space — rebuildable by re-folding the call/be:sever
-// facts. So they get the simplest durable shape that does the job:
+// live thread / being-in-space — rebuildable by re-folding the call facts. So
+// they get the simplest durable shape that does the job:
 //
 //   <storeRoot>/proj/<name>/<2-char-shard>/<id>.json   one JSON file per row
 //   <storeRoot>/proj/<name>/_index.json                a flat {id: row-subset} cache

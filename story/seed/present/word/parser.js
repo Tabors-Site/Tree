@@ -814,10 +814,16 @@ const EFFECT_RULES = [
     (m) => {
       const saying = m[2];
       const { lens } = parseLens(saying);
+      // A QUOTED WORD (623/12): the quote-marks are words too. evalQuotedWord lays the open-quote,
+      // one `said` stamp per word (the spacebar splits them), and the close-quote . each its own
+      // one-word moment on the caller's reel. The close sends (call) or folds your own chain
+      // (recall). `saying` stays for the lens/recall query; `words` are the said-words to stamp.
+      const words = String(saying).trim().split(/\s+/).filter(Boolean);
       return {
-        kind: "call",
+        kind: "quotedWord",
         of: parseAddress(m[1]),
         saying,
+        words,
         ...(lens ? { lens } : {}),
         ...(m[3] ? { bind: m[3] } : {}),
       };
@@ -990,15 +996,28 @@ function apply(line, c, rules) {
   // FOLD-FIRST, scoped to the top-level table: a lifted rule-word wins when present (the metacircular
   // loop). An empty fold (pre-boot / un-booted parser tests) yields no pairs → falls straight through
   // to the hardcoded RULES below = identical old behavior. EFFECT_RULES never reaches here.
+  if (process.env.PARSE_DEBUG && rules === RULES)
+    console.error(`[parse-debug] apply line=${JSON.stringify(line)} foldRules=${[...foldRules()].length}`);
   if (rules === RULES) {
     for (const [w, matcher] of foldRules()) {
       const mm = matcher(line);
-      if (mm) return buildFromFoldRule(w, mm);
+      if (mm) {
+        if (process.env.PARSE_DEBUG)
+          console.error(`[parse-debug]   foldRule "${w}" matched -> ${JSON.stringify(buildFromFoldRule(w, mm))}`);
+        return buildFromFoldRule(w, mm);
+      }
     }
   }
+  let __i = 0;
   for (const [re, build] of rules) {
     const m = line.match(re);
-    if (m) return build(m, c);
+    if (m) {
+      const r = build(m, c);
+      if (process.env.PARSE_DEBUG && rules === RULES)
+        console.error(`[parse-debug] ${JSON.stringify(line)} matched rule#${__i} -> ${r ? r.kind : "NULL"}`);
+      if (r) return r;
+    }
+    __i++;
   }
   return null;
 }

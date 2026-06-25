@@ -670,7 +670,7 @@ Where reducers handle these:
 
 seed/materials/reducerHelpers.js — applySetQualities accepts arrays at namespace level when merge:false (flow needs this); deep-path writes work for qualities.world.<ns>.<k>
 seed/materials/being/reducer.js — applyConnectionState projects BE:connect/release into qualities.connection.inhabitedBy 3. DO operations added
-All registered through seed/present/ables/able-manager/ops.js:
+All registered through seed/store/words/able-manager/ops.js:
 
 Op Purpose Refusal mode
 set-able Create/replace live able at ./ables/<name> AND hot-register into the in-memory registry Persisted to .ables mirror; in-memory hot-register error surfaces but mirror write succeeds
@@ -772,7 +772,7 @@ Files to look at if you want to read the build:
 seed/able-manager.md — canonical spec
 seed/present/ables/flow.js — evaluator
 seed/present/ables/ableComposer.js — composer
-seed/present/ables/able-manager/ops.js — the three live-author ops
+seed/store/words/able-manager/ops.js — the three live-author ops
 seed/present/stamper/1-assign.js — where everything plugs into the moment
 portal/shared/able-manager-panel.js + being-flow-panel.js — UI
 resources/emotions/ — example modifier extension

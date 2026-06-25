@@ -36,7 +36,7 @@ export async function isNameBanished(nameId) {
   // case (today every actor is i-am).
   if (nameId === I) return false;
   const slot = await loadProjection("name", String(nameId), "0");
-  return !!slot?.state?.closedAt;
+  return !!slot?.state?.closed;
 }
 
 /**

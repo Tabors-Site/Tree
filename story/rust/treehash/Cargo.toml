@@ -1,0 +1,14 @@
+[package]
+name = "treehash"
+version = "0.1.0"
+edition = "2021"
+description = "TreeOS content-addressed identity: canonical JSON + SHA-256, ported byte-for-byte from seed/past/fact/hash.js and seed/past/act/actHash.js. Zero dependencies (std only)."
+license = "AGPL-3.0"
+
+[lib]
+name = "treehash"
+path = "src/lib.rs"
+
+# Zero dependencies on purpose. The hash is the contract every reel's identity is
+# defined against; it should pull in nothing it doesn't own. SHA-256, the JSON
+# parser, and the ECMAScript-faithful number/string formatting are all in src/.

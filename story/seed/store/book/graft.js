@@ -66,7 +66,7 @@ export const GRAFT_BUNDLE_VERSION = "1.0";
 
 // The reel-bearing target kinds — those with their own seq counter (mirrors
 // facts.js REEL_KINDS). A fact lands on a reel keyed (history, kind, id).
-const REEL_KINDS = new Set(["being", "space", "matter", "name", "library"]);
+const REEL_KINDS = new Set(["being", "space", "matter", "library"]);
 
 // The reel coordinates a fact rides — the SAME rule logFact wrote it under, so
 // the genome dump round-trips through commitVerbatim. Reel-bearing facts ride
@@ -764,14 +764,19 @@ async function captureBeingGraft(opts) {
   });
   // Curated: every act this being authored, history-spanning (getActsByField's
   // index is story-wide across histories — the exact peer of Act.find({through})).
-  // Re-sorted by stampedAt to preserve the bundle's array order.
+  // Re-sorted by the append ordinal (act.ord, the clock-free order) so the
+  // bundle array is deterministic; acts with no local ord (pre-ordinal /
+  // cross-story) sort first by id. Never a wall-clock.
   const { getActsByField } = await import("../../past/act/actChain.js");
   const acts = getActsByField("through", beingId)
     .slice()
     .sort((a, b) => {
-      const ta = a?.stampedAt ? new Date(a.stampedAt).getTime() : 0;
-      const tb = b?.stampedAt ? new Date(b.stampedAt).getTime() : 0;
-      return ta - tb;
+      const oa = Number(a?.ord);
+      const ob = Number(b?.ord);
+      const na = Number.isFinite(oa) ? oa : -Infinity;
+      const nb = Number.isFinite(ob) ? ob : -Infinity;
+      if (na !== nb) return na - nb;
+      return String(a?._id).localeCompare(String(b?._id));
     });
 
   // Lineage histories: every distinct non-main history the being touched,

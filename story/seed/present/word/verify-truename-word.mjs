@@ -262,7 +262,7 @@ try {
   });
   await pollFor(
     () => loadProjection("name", banishedName, "0"),
-    (s) => !!s?.state?.closedAt,
+    (s) => !!s?.state?.closed,
   );
   const r3 = await expectRefusal(
     "truename to a banished name",

@@ -147,16 +147,23 @@ try {
     : bad(`reset`, refused?.message || r);
 
   // ── 2. three NATIVE do:set-being facts (password + the two inner-key auth writes) ──
-  const setBeings = (sc.deltaF || []).filter((f) => f.act === "set-being");
-  const fields = setBeings.map((f) => f.params?.field);
-  setBeings.length === 3 &&
-  fields.includes("password") &&
-  fields.includes("qualities.auth.credentialPlain") &&
-  fields.includes("qualities.auth.tokensInvalidBefore")
+  // credential-reset is a COMPOSITE: its 3 set-being deeds each seal in their OWN moment on the
+  // victim's reel (not the caller's deltaF), so read them off the reel.
+  const { getFactsOnReelWhere } = await import(`${R}/seed/past/fact/facts.js`);
+  const setBeings = getFactsOnReelWhere(
+    "0",
+    "being",
+    String(victim),
+    (f) => f.act === "set-being",
+  );
+  const fields = new Set(setBeings.map((f) => f.params?.field));
+  fields.has("password") &&
+  fields.has("qualities.auth.credentialPlain") &&
+  fields.has("qualities.auth.tokensInvalidBefore")
     ? ok(
-        `three NATIVE do:set-being facts: password + qualities.auth.credentialPlain + tokensInvalidBefore (verb-native writes)`,
+        `three NATIVE do:set-being deeds on @victim's reel, each its OWN moment (the composite): password + credentialPlain + tokensInvalidBefore`,
       )
-    : bad(`writes`, fields);
+    : bad(`writes`, [...fields]);
 
   // ── 3. the row re-minted with REAL values (NOT unresolved "$credential.x" placeholders).
   //  This is the assertion that catches the resolveValue dotted-descent bug: a literal

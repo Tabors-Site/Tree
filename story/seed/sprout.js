@@ -140,7 +140,6 @@ export async function withIAmAct(sourceLabel, fn) {
   const { getStoryDomain } = await import("./ibp/address.js");
   const story = getStoryDomain();
   return withActChainLock(story, "0", I, async () => {
-    const now = new Date();
 
     // Content-addressed like every act (past/act/actHash.js): identity
     // = hash of the opening, chained to the I-Am's previous sealed act.
@@ -173,8 +172,8 @@ export async function withIAmAct(sourceLabel, fn) {
       rootCorrelation: actId,
       parentThread: null,
       answers: null,
-      receivedAt: now,
-      stampedAt: now,
+      // No wall-clock on the planned row; the act's lone inert witness is the
+      // seal-time `at` (stamped at seal in 4-stamped). Order is act.ord.
       startMessage: { content: sourceLabel || "I-Am acts.", source: "I-Am" },
       story,
       // I-Am scaffold acts on main.
@@ -246,7 +245,6 @@ export async function withBeingAct(beingId, sourceLabel, history, fn) {
   const { getStoryDomain } = await import("./ibp/address.js");
   const story = getStoryDomain();
   return withActChainLock(story, history, beingId, async () => {
-    const now = new Date();
 
     // Content-addressed like every act (past/act/actHash.js).
     const { computeActId, readActHead } = await import("./past/act/actHash.js");
@@ -273,7 +271,9 @@ export async function withBeingAct(beingId, sourceLabel, history, fn) {
           `cannot resolve the name that signs.`,
       );
     }
-    const p = await readActHead(story, history, beingId);
+    // Key the act-chain by the NAME (the trueName that signs), not the being it
+    // acts through. Matches the seal (4-stamped advances by `by ?? through`).
+    const p = await readActHead(story, history, nameId);
     const actId = computeActId(p, opening);
     const plannedAct = {
       _id: actId,
@@ -288,8 +288,8 @@ export async function withBeingAct(beingId, sourceLabel, history, fn) {
       rootCorrelation: actId,
       parentThread: null,
       answers: null,
-      receivedAt: now,
-      stampedAt: now,
+      // No wall-clock on the planned row; the act's lone inert witness is the
+      // seal-time `at` (stamped at seal in 4-stamped). Order is act.ord.
       startMessage: { content: sourceLabel || "graft act", source: beingId },
       story,
       history: history,
@@ -341,7 +341,6 @@ export async function withNameAct(nameId, sourceLabel, fn) {
   // Keyed by the NAME on the 5D marker history "5d" — runs parallel to that name's being-chains
   // (different key AND different history, so even the I, whose name==being id, never collides).
   return withActChainLock(story, "5d", nameId, async () => {
-    const now = new Date();
     const { computeActId, readActHead } = await import("./past/act/actHash.js");
     const opening = {
       through: null, // 5D: the being stays home
@@ -370,8 +369,8 @@ export async function withNameAct(nameId, sourceLabel, fn) {
       rootCorrelation: actId,
       parentThread: null,
       answers: null,
-      receivedAt: now,
-      stampedAt: now,
+      // No wall-clock on the planned row; the act's lone inert witness is the
+      // seal-time `at` (stamped at seal in 4-stamped). Order is act.ord.
       startMessage: { content: sourceLabel || "name acts.", source: nameId },
       story,
       history: "5d",
@@ -832,20 +831,29 @@ export async function ensureIAm() {
     cognition: { defaultKind: "scripted" },
   };
 
-  await withIAmAct('I am "what?" I am', async (ctx) => {
+  // The verse `I am "what?" I am` is one word at a time, each its own moment on its own reel (the
+  // one-word-one-reel law). `I` = the name birth (the root identity declares itself on the library
+  // reel); `am` = the being declared (the i-am being births on the being reel). They were one
+  // moment laying two facts across two reels (a run-on the new guard refuses); split into two. The
+  // `"what?"` recall that folds this just-formed chain (answer: `am`) is the deeper quotedWord
+  // conversion; the two births alone clear the run-on.
+  await withIAmAct("I", async (ctx) => {
     // I is first a NAME (the root identity, parentNameId=null) and then
     // a being that expresses it. The name:declare folds the i-am Name row;
     // the being born just below belongs to it (trueName=I). The i-am
     // Name signs with the story key (storyIdentity), so it stores no
     // privateKeyEnc — loadSigningKey special-cases the i-am name to the
-    // story key. The name reel is the most primitive reel.
+    // story key. A Name has no reel of its own: the declare lands on the
+    // story's LIBRARY reel (the most primitive reel now), keyed by nameId.
+    const { getStoryDomain } = await import("./ibp/address.js");
     await emitFact(
       {
         verb: "name",
         act: "declare",
         through: id, // self-stamping — i-am declares its own name
-        of: { kind: "name", id },
+        of: { kind: "library", id: getStoryDomain() },
         params: {
+          nameId: id,
           spec: {
             parentNameId: null, // the root name, a facet of nothing above
             privateKeyEnc: null, // signs with the story key, not a stored key
@@ -858,7 +866,11 @@ export async function ensureIAm() {
       },
       ctx,
     );
+  });
 
+  // am . the being declared. Its own moment, one fact on the being reel (split from the name birth
+  // above so the genesis act no longer fans library+being in one moment).
+  await withIAmAct("am", async (ctx) => {
     await emitFact(
       {
         verb: "be",

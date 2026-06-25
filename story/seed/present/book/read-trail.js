@@ -39,6 +39,7 @@
 // the world read.
 
 import { assembleStory } from "./assemble.js";
+import { isQuotedWordFact } from "./quotedWord.js";
 
 // A read is always of a branch. Never default to a pin; thread the caller's branch.
 function requireHistory(history) {
@@ -129,6 +130,9 @@ async function readSpanFacts({ history, scope = "world", since = null, until = n
   const wantBeing = being != null ? String(being) : null;
   const wantSpace = space != null ? String(space) : null;
   const predicate = (f) => {
+    // A quoted word's brackets + said-words are the ASKING (your recall query), not content of
+    // the fold . skip them so the answer is the substantive prior facts (`am "what?" am` => `am`).
+    if (isQuotedWordFact(f)) return false;
     // date window: since is exclusive ($gt), until inclusive ($lte)
     if (sinceMs != null || untilMs != null) {
       const t = f?.date != null ? Date.parse(f.date) : NaN;

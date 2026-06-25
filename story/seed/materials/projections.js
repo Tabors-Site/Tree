@@ -150,6 +150,11 @@ export async function loadProjection(type, id, history) {
   if (!id) return null;
   assertType(type);
   assertHistory(history);
+  // Names have NO reel of their own (only Names act; a Name is never acted-on).
+  // A Name's row folds into the library catalog (library.names[nameId]); a "name"
+  // read redirects there, so every loadProjection("name", ...) caller keeps working
+  // with the per-name reel retired.
+  if (type === "name") return await loadNameSlot(id, history);
   // Heaven routing: spaces in heaven have one projection per story,
   // not per history. If the caller passed a non-MAIN history for a
   // heaven space, transparently rewrite to MAIN so the read returns
@@ -163,6 +168,26 @@ export async function loadProjection(type, id, history) {
   }
   const slot = loadSnapshot(effectiveHistory, type, id);
   return shapeSlot(slot, type, id, effectiveHistory);
+}
+
+// Name rows have no reel; they fold into the library catalog (library.names[nameId]).
+// Fold the library forward (story-global, history "0") and return the name's entry
+// shaped like a normal slot. Null when the name isn't in the catalog.
+async function loadNameSlot(nameId, history) {
+  const { getStoryDomain } = await import("../ibp/address.js");
+  const { fold } = await import("../present/stamper/2-fold/foldEngine.js");
+  const lib = await fold("library", getStoryDomain(), { history: "0" });
+  const entry = lib?.state?.names?.[String(nameId)];
+  if (!entry) return null;
+  return {
+    state: entry,
+    foldedSeq: lib.foldedSeq ?? 0,
+    position: undefined,
+    tombstoned: false,
+    type: "name",
+    id: String(nameId),
+    history,
+  };
 }
 
 /**
@@ -799,10 +824,9 @@ export async function findRootOperator(systemNames, history) {
   const allowedParents = new Set(["i-am"]);
   if (cherubSlot) allowedParents.add(cherubSlot.id);
   const systemSet = new Set(systemNames || []);
-  // Walk the history's own live beings whose parent is I or cherub and
-  // whose name isn't a system name; pick the earliest by createdAt (id
-  // as a deterministic tiebreak). Ordering is state.createdAt asc,
-  // _id asc.
+  // Walk the history's own live beings whose parent is I or cherub and whose name isn't a system
+  // name; pick the earliest by BIRTH ORDER (bornOrd = the birth fact's append ordinal — clock-free,
+  // the ordinal IS the order, replacing the old state.createdAt asc), id as a deterministic tiebreak.
   const candidates = [];
   for (const id of storeListByType(history, "being")) {
     const slot = loadSnapshot(history, "being", id);
@@ -810,13 +834,12 @@ export async function findRootOperator(systemNames, history) {
     const st = slot.state || {};
     if (typeof st.name !== "string" || systemSet.has(st.name)) continue;
     if (!allowedParents.has(st.parentBeingId)) continue;
-    candidates.push({ id, name: st.name, createdAt: st.createdAt });
+    candidates.push({ id, name: st.name, bornOrd: st.bornOrd });
   }
   candidates.sort((a, b) => {
-    const ca = a.createdAt ?? 0;
-    const cb = b.createdAt ?? 0;
-    if (ca < cb) return -1;
-    if (ca > cb) return 1;
+    const ca = a.bornOrd ?? 0;
+    const cb = b.bornOrd ?? 0;
+    if (ca !== cb) return ca - cb;
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   });
   const row = candidates[0];

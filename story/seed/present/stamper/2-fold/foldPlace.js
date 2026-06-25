@@ -63,7 +63,7 @@ const DEFAULT_RECALL_CAP = 16;
  *   {
  *     orientation: "inward",
  *     self:      <being state, folded>,
- *     actChain:  [<{actId, through, to, stampedAt, startMessage,
+ *     actChain:  [<{actId, through, to, ord, at, startMessage,
  *                   endMessage, rootCorrelation, activeAble}>, ...],
  *   }
  *
@@ -212,11 +212,6 @@ async function buildForwardFace(beingId, self, stash, history = "0", able = null
  * one row per Act where the being was the actor (to). The
  * Act-chain is a stored, first-class component of the being per
  * MODEL.md b = (id_b, R_b, A_b) — not a projection of the reel.
- *
- * Severed acts are excluded; a severed thread is treated as removed
- * from the being's act-chain for fold purposes (the underlying Acts
- * still exist for audit, but the being doesn't "see" them in inward
- * reflection).
  */
 async function loadActChain(beingId, history) {
   const { readActHead } = await import("../../../past/act/actHash.js");
@@ -228,21 +223,27 @@ async function loadActChain(beingId, history) {
   // loads the being's acts; we walk the p-chain IN-MEMORY from the head (readActHead) back to
   // GENESIS_PREV, then reverse for oldest-first (the true act-order). Cross-history continuity rides
   // `p` — a branch's tip walks back through its fork — so this is the being's chain on THIS history's
-  // lineage (sibling branches drop out, correctly). Severed acts are traversed (to keep the chain
-  // intact) but excluded from the face, matching the old `severedAt: null` filter.
+  // lineage (sibling branches drop out, correctly).
   // Curated: every act this being authored (Act.find({ to })). The
   // curated read returns the full act docs (the .lean() shape); the
   // p-chain walk below selects the fields it needs.
   const rows = getActsByField("to", String(beingId));
   const byId = new Map(rows.map(r => [String(r._id), r]));
-  let cursor = await readActHead(story, String(history), String(beingId)); // the head hash (GENESIS_PREV if none)
+  // The act-chain is keyed by the being's NAME (only Names act). Resolve the trueName and
+  // walk the Name's head back through this being's acts; the graft-boundary stop below halts
+  // at any act not in this being's loaded set (e.g. a sibling being expressing the same Name).
+  const { loadOrFold } = await import("../../../materials/projections.js");
+  const nameId =
+    (await loadOrFold("being", String(beingId), String(history)))?.state?.trueName ||
+    String(beingId);
+  let cursor = await readActHead(story, String(history), nameId); // the head hash (GENESIS_PREV if none)
   const ordered = [];
   const seen = new Set(); // cheap cycle guard
   while (cursor && cursor !== GENESIS_PREV && !seen.has(cursor)) {
     seen.add(cursor);
     const r = byId.get(String(cursor));
     if (!r) break; // the chain reaches outside this being's loaded acts (a graft boundary) — stop
-    if (!r.severedAt) ordered.push(r);
+    ordered.push(r);
     cursor = r.p;
   }
   ordered.reverse(); // oldest-first (act-order)
@@ -252,7 +253,10 @@ async function loadActChain(beingId, history) {
     through:         r.through,
     to:              r.to,
     activeAble:      r.activeAble,
-    stampedAt:       r.stampedAt, // recorded content (a witnessed timestamp), never the order
+    // The chain order is act.ord (already walked above, p-chain oldest-first);
+    // `at` is the act's lone inert seal-time witness (display only, never order).
+    ord:             Number.isFinite(Number(r.ord)) ? Number(r.ord) : null,
+    at:              r.at ?? null,
     startMessage:    r.startMessage,
     endMessage:      r.endMessage,
     rootCorrelation: r.rootCorrelation,
@@ -330,11 +334,11 @@ async function recallByBraid(beingId, forwardFace, { cap, history = "0" }) {
 
   // Resolve to Act rows. Dedupe by actId — multiple facts can come
   // from one act (a single act stitches multiple entities). Curated
-  // getActById per id; drop severed acts (the old severedAt:null filter).
+  // getActById per id.
   const actIds = [...new Set(stitchFacts.map(f => f.actId))];
   const acts = actIds
     .map((id) => getActById(id))
-    .filter((a) => a && a.severedAt == null);
+    .filter((a) => a);
 
   // Order acts to match the stitch-fact order so braid-distance
   // ranking holds.
@@ -352,7 +356,9 @@ async function recallByBraid(beingId, forwardFace, { cap, history = "0" }) {
       through:         act.through,
       to:              act.to,
       activeAble:      act.activeAble,
-      stampedAt:       act.stampedAt,
+      // Inert seal-time witness (display only); braid order is the stitch sort.
+      ord:             Number.isFinite(Number(act.ord)) ? Number(act.ord) : null,
+      at:              act.at ?? null,
       startMessage:    act.startMessage,
       endMessage:      act.endMessage,
       rootCorrelation: act.rootCorrelation,

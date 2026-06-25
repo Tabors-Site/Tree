@@ -249,7 +249,11 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
     log.warn("OneWord", msg);
   }
 
-  const endTime = new Date();
+  // The ONE inert wall-clock witness on an act: the seal time. Display-content
+  // only — NEVER read for ordering, sorting, folding, or any control flow
+  // (act.ord is the clock-free total order; that is what every reader sorts on).
+  // The act's three former wall-clocks collapse to this single `at`.
+  const at = new Date();
   const safeContent = content != null ? capContent(content) : null;
   // Status is NOT a persisted column on the act line — it is a FOLD (the append-only law: a sealed
   // act has no editable fields). The old `status: "attempted"` was dead weight: every line carried it,
@@ -257,9 +261,14 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
   // disk it was always "attempted" — meaningless. So we don't write it. "Current status" is derived at
   // read (actChain.getActById): a sealed act EXISTS, so locally it landed; a cross-world act's terminal
   // outcome arrives as a SUPERSEDING FACT (handleCrossWorldResponse) and the fold prefers the latest.
+  // endMessage carries CONTENT presence as the open-vs-sealed signal — a
+  // verb-act (do/be, no prose) has content == null; an act that closed with a
+  // prose utterance has content != null. The close is NOT a timestamp and the
+  // endMessage carries no clock. `at` (above) is the act's lone seal-time witness.
   const actDoc = {
     ...plannedAct,
-    endMessage: { content: safeContent, time: endTime, stopped: false },
+    at,
+    endMessage: { content: safeContent, stopped: false },
   };
 
   // Preload the actor NAME's signing key BEFORE the seal so the
@@ -332,7 +341,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
     // verifier mirrors.
     const sortedFactIds = factIds.map((id) => String(id)).sort();
     actDoc.sig = await signActDoc(actDoc, sortedFactIds, signingPem);
-    appendActLine(actDoc.story, actDoc.history || "0", actDoc.through ?? actDoc.by, actDoc);
+    appendActLine(actDoc.story, actDoc.history || "0", actDoc.by ?? actDoc.through, actDoc);
 
     // (3) Advance the act-chain head, CAS'd on this act's `p`. A mismatch
     // means another act sealed between this act's open and its seal —
@@ -342,7 +351,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
     // replay (advanceActHeadFile no-ops when the head already is this id).
     // actDoc.p is the chain prev assign computed from readActHead (GENESIS_PREV
     // for the first act on the chain, never null), so it CAS's correctly here.
-    advanceActHeadFile(actDoc.story, actDoc.history || "0", actDoc.through ?? actDoc.by, actDoc._id, actDoc.p);
+    advanceActHeadFile(actDoc.story, actDoc.history || "0", actDoc.by ?? actDoc.through, actDoc._id, actDoc.p);
   } catch (err) {
     log.error("Stamped", `sealAct aborted (actId=${String(plannedAct._id).slice(0, 8)}): ${err.message}`);
     throw err;
@@ -372,7 +381,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
     try { await closeInboxOnAnswer(inserted.answers); } catch {}
   }
   if (inserted.rootCorrelation) {
-    try { await noteActSealOnThread(inserted.rootCorrelation, endTime); } catch {}
+    try { await noteActSealOnThread(inserted.rootCorrelation); } catch {}
   }
 
   // Fire afterQualityWrite for every committed qualities set/merge fact.
@@ -563,7 +572,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
       beingIn: inserted.through ? String(inserted.through) : null,
       activeAble: inserted.activeAble || null,
       endMessage: inserted.endMessage || null,
-      stoppedAt: endTime,
+      at,
     });
   } catch (err) {
     log.warn("Stamped", `afterAct hook fan failed: ${err.message}`);

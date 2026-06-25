@@ -215,17 +215,17 @@ registerOperation("set-matter", {
   hostEnv: setMatterHostEnv,
 });
 
-// WORD-SOLE: rename-matter.word is the only path (do.js runOpWord). idFrom:"matterId" targets
-// the fact at the matter and promotes the word's factParams ({field:"name", value}); resolve-
-// rename-spec (renameMatterHostEnv) is the lone host READ (load + folder-uniqueness). No handler.
+// WORD-SOLE COMPOSITE: rename-matter.word is the only path. resolve-rename-spec (renameMatterHostEnv)
+// is the lone host READ (load + folder-uniqueness) as a `see`; the write is a `do set-matter` leaf-call
+// on field "name". No factAction / idFrom — the op lays no own fact; the set-matter deed carries its
+// own target and fact (do.js discovers the deed via wordHasDeeds and runs it per-act-moment).
 registerOperation("rename-matter", {
   targets: ["matter"],
   ownerExtension: "seed",
-  factAction: "rename-matter",
   args: {
     name: { type: "text", label: "New name (per-folder uniqueness enforced)", required: true },
   },
-  word: { noun: "matter", idFrom: "matterId" },
+  word: { noun: "matter" },
   hostEnv: renameMatterHostEnv,
 });
 

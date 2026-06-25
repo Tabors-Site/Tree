@@ -1,0 +1,13 @@
+[package]
+name = "treefold"
+version = "0.1.0"
+edition = "2021"
+description = "TreeOS fold engine (Tier 2): per-kind reducers (being/space/matter/name/library) + the pure fold loop, ported from seed/materials/*/reducer.js + reducerHelpers.js. Proven byte-identical to the JS via canonicalized folded state."
+license = "AGPL-3.0"
+
+[dependencies]
+treehash = { path = "../treehash" }
+
+[lib]
+name = "treefold"
+path = "src/lib.rs"

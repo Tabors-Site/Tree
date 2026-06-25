@@ -11,15 +11,16 @@
 import * as being   from "./being/reducer.js";
 import * as space   from "./space/reducer.js";
 import * as matter  from "./matter/reducer.js";
-import * as name    from "./name/reducer.js";
 import * as library from "./library/reducer.js";
 import { resolveReducerFromFold } from "../present/word/wordStore.js";
 
+// Name has NO reducer of its own: a Name acts but is never acted-on, so it has an
+// act-chain and no reel. Name-level facts fold into the LIBRARY reel's `names`
+// catalog (library/reducer.js). loadProjection("name", ...) reads that catalog.
 const _registry = {
   being,
   space,
   matter,
-  name,
   library,
 };
 

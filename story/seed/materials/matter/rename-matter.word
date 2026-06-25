@@ -8,15 +8,17 @@
 # NO host: emit: the word authors the fact params and the ONE auto-Fact path in do.js lays the
 # caller-attributed do:rename-matter fact (the cut's stampsWordFact targets the MATTER via matterId).
 #
-# The fact lays the name EXACTLY like set-being / set-space lay a scalar field (Tabor): params
-# { field: "name", value: <name> }, NOT the bare { name } the JS handler stamped. That old shape was
-# the "weird funk" — applySetField (the reducer rename-matter shares with set-matter:name via
-# SET_ACTIONS) folds only { field, value }, so { name } never reached the row. Emitting { field, value }
-# is the fix this conversion lands: rename-matter now actually folds the matter's name.
+# COMPOSITE (Tabor's leaf/composite model): rename-matter is no longer a mirror laying its own
+# do:rename-matter act. The per-folder uniqueness READ stays a `see` (resolve-rename-spec); the actual
+# write is a `do set-matter` leaf-call on field "name" — folding a matter's name is set-matter's job
+# (set-matter accepts field:"name" via SCALAR_SET_FIELDS / applySetField), not a separate rename-matter
+# act. do.js discovers the deed (wordHasDeeds) and runs it in its own act-moment; this word lays no fact
+# of its own — the set-matter deed IS the rename.
 #
 # The bridge binds `target` (the matter), the new `name`, and the `allowReplace` flag.
 
 When a being renames a matter:
   If no name, refuse with "rename-matter: `name` is required and must be a non-empty string" as invalid-input.
   see resolve-rename-spec(target, name, allowReplace, branch) as renamed.
-  Return matterId: $renamed.matterId, name: $renamed.name, factParams: { field: "name", value: $renamed.name }.
+  do set-matter on the matter $renamed.matterId with { field: "name", value: $renamed.name } as renamedDeed.
+  Return matterId: $renamed.matterId, name: $renamed.name.

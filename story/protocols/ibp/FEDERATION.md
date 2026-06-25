@@ -446,9 +446,9 @@ The identity path (`offer-being`) has its own posture: there is no receiver revi
 
 ### Files
 
-- `seed/present/ables/federation-manager/able.js`, able spec (scripted cognition, summon classifier)
-- `seed/present/ables/federation-manager/handlers.js`, seven intent handlers (six template + deliver-being)
-- `seed/present/ables/federation-manager/ops.js`, seven operator-facing DO ops
+- `seed/store/words/federation-manager/able.js`, able spec (scripted cognition, summon classifier)
+- `seed/store/words/federation-manager/handlers.js`, seven intent handlers (six template + deliver-being)
+- `seed/store/words/federation-manager/ops.js`, seven operator-facing DO ops
 - `seed/materials/being/seedDelegates.js`, @federation-manager delegate row
 - `seed/materials/being/identity/lookups.js`, federation-manager listed as a seed delegate name
 - `genesis.js`, registerAble + registerFederationManagerOps wiring

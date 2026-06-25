@@ -68,6 +68,28 @@ cherub, and **create-matter** (wired + harness-verified 2026-06-19, verify-creat
 **Still inert:** set-model (wiring needs a from-scratch modelHost) and move/portal/set-render (the
 older inert moves).
 
+## Able bundles — `store/words/<able>/` (the whole able: definition + its ops + host)
+
+The factory holds zero words, and a able IS a word (`kind:"ableword"`, name = `able:op`), so a
+code-bearing able belongs in the word package, not in `present/` (the engine). The three ables that
+carry `.word` files moved here 2026-06-25, one at a time, boot-verified after each (genesis creates
+all three from their new home, the conversion board holds at 54 word-SOLE, verify-move-cut 16/0,
+verify-assigner-delegators-cut 6/0). The able MACHINERY stays factory: `present/ables/` keeps
+ableComposer, registry, flow, capabilities, host, spaceLookup, seedResolvers, canStarResolver,
+internalGrant, acquisition.
+
+| bundle              | words / ops                                                                | files                                                                          | boot seam  |
+| ------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ---------- |
+| federation-manager/ | offer-template, offer-being, request-template, accept/reject-template, fulfill/refuse-request (7) | able.js, ops.js, handlers.js, federationManagerHost.js, 7 `.word`              | genesis.js |
+| llm-assigner/       | add-llm, assign-slot, delete-llm, set-being/space/story-llm (6)             | able.js, ops.js, llmAssignerHost.js, 6 `.word`                                 | genesis.js |
+| able-manager/       | set-able, delete-able, set-being-flow (3)                                   | able.js, ops.js, flowOp.js, ableManagerHost.js, setBeingFlowHost.js, 3 `.word` | genesis.js |
+
+able-manager's set-world-signal was already carved out separately (the implementation-bundle table
+above). The pure able-SPECS (angel, human, scribe, arrival, birther, global, public, story-manager,
+flow-composer) and the op-ables not yet word-converted (history-manager, http-server, merge-mediator,
+websocket-pool) still live in `present/ables/`; they follow once converted, or when the home for a
+spec-only able is decided (it mirrors as a space, not an op bundle).
+
 ## Shared-module lifts (the untangles that unblocked the carves)
 
 - **materials/matter/coordBounds.js** — `COORD_AXES` + `assertMatterCoordInBounds`, the single canonical body (it had been verbatim-duplicated in matter/ops.js AND matterHost.js). Imported by the kept matter/ops.js (set-matter) and the create-matter bundle. Killed the duplicate.
