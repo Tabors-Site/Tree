@@ -28,7 +28,7 @@
   ],
   "author": "Tabor Holly",
   "license": "AGPL-3.0",
-  "description": "TreeOS Story server. Plant the seed. Grow trees. Beings live here.",
+  "description": "TreeOS Story. Plant the seed. Grow your own Story. Share and receive The Word and Books.",
   "homepage": "https://treeos.ai",
   "dependencies": {
     "express": "^5.2.1",

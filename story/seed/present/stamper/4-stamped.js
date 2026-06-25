@@ -314,6 +314,13 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
   const factRecords = [];
   for (const reel of reels) {
     for (const spec of reel.facts) {
+      // Stamp the `date` witness logFact's baseDoc stamps (past/fact/facts.js). The Mongo Fact
+      // schema carried `date: { default: Date.now }`, which populated EVERY fact at create
+      // regardless of write path; the file store writes only explicit spec fields, so a
+      // moment-sealed spec (emitFact -> deltaF, never through logFact) must carry it here or
+      // reducers that read fact.date (applyDeath's qualities.death.time, name closedAt) fold null.
+      // Non-hashed: contentOf() excludes `date`, so this never affects _id or verifyReel.
+      if (spec.date == null) spec.date = new Date();
       factRecords.push({ history: reel.history, kind: reel.kind, id: String(reel.id), spec });
     }
   }

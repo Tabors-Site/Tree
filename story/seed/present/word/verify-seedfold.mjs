@@ -75,13 +75,15 @@ try {
       )
     : bad(`concept fold`, being);
 
-  // 2. an OP word folds back as {kind:"op", do.ref}
+  // 2. an OP word folds back as {kind:"op"} with a runnable body. set-space is WORD-SOLE
+  //    (set-space.word is the only path), so it carries factAction + a word marker, NOT a do.ref;
+  //    a handler-based op would carry do.ref. Accept either runnable shape.
   const op = await pollFor(
     () => getWord("set-space"),
     (v) => v && v.kind === "op",
   );
-  op && op.kind === "op" && op.do?.ref === "set-space"
-    ? ok(`op "set-space" declared at genesis, folds back {kind:"op", do.ref}`)
+  op && op.kind === "op" && (op.do?.ref === "set-space" || op.factAction === "set-space")
+    ? ok(`op "set-space" declared at genesis, folds back {kind:"op"} (word-sole: factAction, no do.ref)`)
     : bad(`op fold`, op);
 
   // 3. the root and a few of the descent are present (declare-before-use held)

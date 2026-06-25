@@ -177,7 +177,7 @@ try {
   // Each create-space fact names its space in params.name and frames it under of.id; the space
   // is real iff that of.id FOLDS to a live slot whose folded state carries that name. (Space names
   // are parent-scoped in the store's name index, so resolve through the fact's of.id, not a bare
-  // global name lookup — same existence check, on the aggregate the deed actually made.)
+  // global name lookup. Same existence check, on the aggregate the deed actually made.)
   const names = ["notebook", "journal", "ledger"];
   const csFacts = factFind({ act: "create-space", through: String(speaker) });
   let madeAll = true;

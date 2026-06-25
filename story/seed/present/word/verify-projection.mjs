@@ -26,7 +26,7 @@ try {
   await pollFor(() => findByName("being", "cherub", "0"), (v) => !!v);
   // poll until the projection is rebuilt (rehydrate runs after seedFold seals, post-delegates)
   const op = await pollFor(() => getWordSync("set-space"), (v) => v && v.kind === "op");
-  (op && op.kind === "op" && op.do?.ref === "set-space") ? ok(`getWordSync("set-space") returns the op binding, sync, from the projection`) : bad(`op sync`, op);
+  (op && op.kind === "op" && (op.do?.ref === "set-space" || op.factAction === "set-space")) ? ok(`getWordSync("set-space") returns the op binding, sync, from the projection`) : bad(`op sync`, op);
   const being = getWordSync("being");
   (being && being.kind === "concept") ? ok(`getWordSync("being") returns the concept, sync`) : bad(`concept sync`, being);
   (getWordSync("nonesuch-xyz") === null) ? ok(`an unbound word reads null (sync)`) : bad(`unbound null`, getWordSync("nonesuch-xyz"));
