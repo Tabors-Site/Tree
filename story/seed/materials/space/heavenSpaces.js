@@ -158,16 +158,15 @@ export const HEAVEN_SPACE = Object.freeze({
   HISTORIES: "histories",
   // The host tier: the running machine represented through the same
   // protocol as everything else. `host` is tier-3 under heaven; its
-  // three children hold the HTTP listener, the WebSocket pool, and
-  // the Mongo connection as beings + matter, fully fact-backed (the
-  // opposite of ./source's disk-fold exception). One connection
-  // matter per live socket lives in host-websocket; the request
-  // stream lands on a request-log matter in host-http. See
-  // seed/materials/host/ and philosophy/OS/nodeServerTest.md.
+  // two children hold the HTTP listener and the WebSocket pool as
+  // beings + matter, fully fact-backed (the opposite of ./source's
+  // disk-fold exception). One connection matter per live socket lives
+  // in host-websocket; the request stream lands on a request-log
+  // matter in host-http. See seed/materials/host/ and
+  // philosophy/OS/nodeServerTest.md.
   HOST: "host",
   HOST_HTTP: "host-http",
   HOST_WEBSOCKET: "host-websocket",
-  HOST_MONGO: "host-mongo",
   // The factory tier: the stamping machinery, watched. `factory` is
   // tier-3 under heaven; its two children are read-side projections
   // over Act + Fact rows — nothing new is stored. `present` shows

@@ -6,14 +6,16 @@
 import fs from "fs"; import os from "os"; import path from "path"; import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const DB = "mongodb://localhost:27017/story_receive_being";
-process.env.PORT = "3850"; process.env.MONGODB_URI = DB;
+const DB = path.join(os.tmpdir(), "story_receive_being-" + process.pid);
+process.env.PORT = "3850"; process.env.TREEOS_STORE_BASE = DB;
+fs.rmSync(DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "rcvbeing-0123456789";
 process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "rcvbeing-keys-" + process.pid);
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
 const SRC = path.join(os.tmpdir(), "rcvbeing-src"); fs.rmSync(SRC, { recursive: true, force: true }); fs.mkdirSync(SRC, { recursive: true }); fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
-{ const mongoose = (await import(`${R}/node_modules/mongoose/index.js`)).default; const conn = await mongoose.createConnection(DB).asPromise(); await conn.dropDatabase(); await conn.close(); }
+// (scratch file store fresh-wiped above; no DB to drop)
 await import(`${R}/begin.js`);
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const { captureBook } = await import(`${R}/seed/store/book/capture.js`);
@@ -41,10 +43,13 @@ try {
   (r0.reels === 0) ? ok(`idempotent receive: ${r0.reels} new fact(s) (reel already present)`) : bad("idempotent receive unexpected", r0);
 
   // 3. INSERT path: delete cherub's reel rows, then receive → the reel lands verbatim + verifies.
-  const Fact = (await import(`${R}/seed/past/fact/fact.js`)).default;
-  const ReelHead = (await import(`${R}/seed/past/reel/reelHead.js`)).default;
-  await Fact.deleteMany({ "of.kind": "being", "of.id": beingId });
-  await ReelHead.deleteMany({ id: beingId, type: "being" });
+  // FileStore peer of the old Fact.deleteMany({of.kind:being,of.id}) + ReelHead.deleteMany({id,type:being}):
+  // truncateReelTo(..., 0) rewrites the reel file empty AND resets its .head to genesis, so the reel rows
+  // and the head pointer are both gone, exactly the void instateReel's dedup reads as mode "create".
+  // Truncate every history the captured facts span (the same set instateReel's dedup scans).
+  const { truncateReelTo } = await import(`${R}/seed/past/fileStore.js`);
+  const reelHistories = [...new Set(reel0.facts.map((f) => String(f.history ?? "0")))];
+  for (const h of reelHistories) truncateReelTo(h, "being", beingId, 0);
   const r1 = await receive(book, { history: "0" });
   (r1.reels === reel0.facts.length) ? ok(`INSERT receive (after delete): +${r1.reels} fact(s), reel landed + verifyReel passed`) : bad("insert receive unexpected", { got: r1.reels, want: reel0.facts.length });
 

@@ -32,14 +32,16 @@
 //     timeout/unreachable for cross-world acts whose foreign side
 //     never reported.
 
-import Act from "./act.js";
+import { getActById, patchActStatus } from "./actChain.js";
 
 const TERMINAL_STATES = new Set(["landed", "denied", "timeout", "unreachable", "malformed"]);
 
 /**
  * Transition an Act's status from `attempted` to a terminal state.
- * Atomic: succeeds only if the current status is `attempted`. Returns
- * the updated Act row when the transition lands; returns null when
+ * Single-writer (the stamper process owns the act-log; commits and
+ * patch overlays are serialized), so the read-then-patch transition
+ * is safe. Succeeds only if the current status is `attempted`. Returns
+ * the updated act doc when the transition lands; returns null when
  * the Act was not in `attempted` (already terminal — idempotent
  * no-op) or the Act doesn't exist.
  *
@@ -62,14 +64,19 @@ export async function updateActStatus(actId, status, meta = null) {
       `updateActStatus: status must be one of ${[...TERMINAL_STATES].join("|")} (got "${status}")`
     );
   }
-  const update = { $set: { status } };
+  // Monotonic guard: the transition lands only from `attempted`. A
+  // missing act, or one already in a terminal state, is the idempotent
+  // no-op (returns null). The act-log is single-writer (one stamper
+  // process owns the data dir; commitMoment + the patch overlay are
+  // serialized), so this read-then-patch is not a race.
+  const cur = getActById(String(actId));
+  if (!cur || cur.status !== "attempted") return null;
+
+  const partial = { status };
   if (meta && typeof meta === "object") {
-    update.$set["qualities.statusMeta"] = meta;
+    partial.qualities = { ...(cur.qualities || {}), statusMeta: meta };
   }
-  const result = await Act.findOneAndUpdate(
-    { _id: String(actId), status: "attempted" },
-    update,
-    { returnDocument: "after" },
-  );
-  return result || null;
+  const landed = patchActStatus(String(actId), partial);
+  if (!landed) return null;
+  return { ...cur, ...partial };
 }

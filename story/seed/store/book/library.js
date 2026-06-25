@@ -38,8 +38,18 @@ export async function loadBookBody(hash) {
 /** Every catalog entry on the library reel: [{ root, title, author, sharedBy, bodyRef, kind, seq }]. */
 export async function listLibrary() {
   const libraryId = await getLibraryId();
-  const Fact = (await import("../../past/fact/fact.js")).default;
-  const facts = await Fact.find({ "of.kind": "library", "of.id": libraryId, act: "share-book" }).sort({ seq: 1 }).lean();
+  // CURATED: the library is the 5th reel KIND (of:{kind:"library", id:<story>}),
+  // out of any history — its facts ride history "0" (the reel's main
+  // short-circuit). getFactsOnReelWhere reads that ONE reel and keeps the
+  // share-book facts, seq-ascending (the file-native peer of Mongo's
+  // Fact.find({"of.kind":"library","of.id":libraryId, act:"share-book"}).sort(seq)).
+  const { getFactsOnReelWhere } = await import("../../past/fact/facts.js");
+  const facts = getFactsOnReelWhere(
+    "0",
+    "library",
+    libraryId,
+    (f) => f.act === "share-book",
+  );
   return facts.map((f) => ({ ...(f.params || {}), seq: f.seq, factId: f._id }));
 }
 

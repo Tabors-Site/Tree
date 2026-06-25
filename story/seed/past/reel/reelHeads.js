@@ -16,7 +16,7 @@
 // emitFact pairs them under a per-reel append lock. This module
 // only owns the counter; the lock lives with the append flow.
 
-import ReelHead from "./reelHead.js";
+import * as fileStore from "../fileStore.js";
 import { getBranchPoint, isMain, MAIN } from "../../materials/history/histories.js";
 
 const VALID_TYPES = new Set(["being", "space", "matter", "name", "library"]);
@@ -62,60 +62,30 @@ export async function allocSeq(type, id, opts = {}) {
   const history = typeof opts.history === "string" && opts.history.length > 0
     ? opts.history
     : MAIN;
-  const key = reelKey(history, type, id);
 
-  const baseOpts = opts.session ? { session: opts.session } : {};
+  // The seq is DERIVED from the reel's .head, not an atomic $inc.
+  // FileStore is single-writer (the commitMoment mutex), so the head
+  // read here and the head advance at stamp time can't interleave; the
+  // next seq is simply head+1. (allocSeq itself does not advance the
+  // head — the stamp does, when the fact line lands on the reel.)
+  const { head } = fileStore.readReelHead(history, type, id);
 
-  // Main short-circuit: upsert + $inc in one round trip. First fact
-  // on a reel starts at seq 1; subsequent facts increment.
+  // Main: an empty reel's first fact is seq 1, so head 0 → 1.
   if (isMain(history)) {
-    const doc = await ReelHead.findOneAndUpdate(
-      { _id: key },
-      {
-        $inc: { head: 1 },
-        $setOnInsert: { history, type, id },
-      },
-      { upsert: true, returnDocument: "after", lean: true, ...baseOpts },
-    );
-    return doc.head;
+    return head + 1;
   }
 
   // Non-main histories inherit seqs from the parent's reel at branch
   // time. A history's first fact on reel R starts at branchPoint[R] + 1
   // so the seq stays monotonic across the inherited-prefix + divergent-
-  // tail combination.
-  //
-  // Two-step pattern to avoid race conditions on lazy init:
-  //   1. Try $inc on an existing head. If found, return.
-  //   2. No head yet: read branchPoint from the Branch row, $setOnInsert
-  //      head=branchPoint (NOT branchPoint+1 — we want $inc to produce
-  //      branchPoint+1 for the first caller, branchPoint+2 for the
-  //      second, etc.). Then $inc and return.
-  // The $setOnInsert + subsequent $inc separates "create" from
-  // "allocate" so concurrent first-writers don't each $setOnInsert head=N
-  // and collide.
-  const existing = await ReelHead.findOneAndUpdate(
-    { _id: key },
-    { $inc: { head: 1 } },
-    { returnDocument: "after", lean: true, ...baseOpts },
-  );
-  if (existing) return existing.head;
-
-  // No head yet for (history, reel). Seed from parent's branchPoint.
-  const seedHead = await getBranchPoint(history, type, id) || 0;
-  await ReelHead.findOneAndUpdate(
-    { _id: key },
-    { $setOnInsert: { history, type, id, head: seedHead } },
-    { upsert: true, ...baseOpts },
-  );
-  // After $setOnInsert: head exists (either at seedHead, or already
-  // advanced by a concurrent caller). $inc to claim our seq.
-  const incremented = await ReelHead.findOneAndUpdate(
-    { _id: key },
-    { $inc: { head: 1 } },
-    { returnDocument: "after", lean: true, ...baseOpts },
-  );
-  return incremented.head;
+  // tail combination. When this history's own head is still empty
+  // (head 0 and no facts of its own), seed the first alloc from the
+  // parent's branchPoint so the first divergent fact gets
+  // branchPoint+1; otherwise the head already carries the divergent
+  // tail and head+1 continues it.
+  if (head > 0) return head + 1;
+  const seedHead = (await getBranchPoint(history, type, id)) || 0;
+  return seedHead + 1;
 }
 
 /**
@@ -134,8 +104,7 @@ export async function readHead(type, id, opts = {}) {
   const history = typeof opts.history === "string" && opts.history.length > 0
     ? opts.history
     : "0";
-  const doc = await ReelHead.findById(reelKey(history, type, id)).select("head").lean();
-  return doc?.head || 0;
+  return fileStore.readReelHead(history, type, id).head || 0;
 }
 
 /**
@@ -164,19 +133,16 @@ export async function ensureHeadAtLeast(type, id, minHead, opts = {}) {
   const history = typeof opts.history === "string" && opts.history.length > 0
     ? opts.history
     : "0";
-  const key = reelKey(history, type, id);
-  const doc = await ReelHead.findOneAndUpdate(
-    { _id: key, head: { $lt: minHead } },
-    { $set: { head: minHead, history, type, id } },
-    { upsert: false, returnDocument: "after", lean: true },
-  );
-  if (doc) return doc.head;
-  const existing = await ReelHead.findById(key).select("head").lean();
-  if (existing) return existing.head;
-  const created = await ReelHead.findOneAndUpdate(
-    { _id: key },
-    { $setOnInsert: { history, type, id, head: minHead } },
-    { upsert: true, returnDocument: "after", lean: true },
-  );
-  return created.head;
+
+  // Never regress: when the reel's .head already sits at/above minHead,
+  // it's satisfied. Otherwise seed the head up to minHead. forkReel is
+  // FileStore's head-seeder: it writes head=minHead with the reel's
+  // fact@minHead as the chain root (GENESIS_PREV when the reel is
+  // empty) — exactly the branch-creation seed-from-branchPoint this
+  // helper serves. forkReel is idempotent (no-op once a head exists),
+  // so a no-op seed leaves the existing head untouched and we return it.
+  const cur = fileStore.readReelHead(history, type, id).head || 0;
+  if (cur >= minHead) return cur;
+  fileStore.forkReel(history, history, type, id, minHead);
+  return fileStore.readReelHead(history, type, id).head || 0;
 }

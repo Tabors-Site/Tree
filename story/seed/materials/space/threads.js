@@ -31,9 +31,13 @@
 // root reply places or the thread is cut, the projection's state
 // flips; the rows underneath remain for audit.
 
-import Act from "../../past/act/act.js";
-import { attachActFacts } from "../../past/act/actChain.js";
-import Space from "./space.js";
+import {
+  attachActFacts,
+  getActById,
+  getActsByCorrelation,
+  getSeveredRootCorrelations,
+  patchActStatus,
+} from "../../past/act/actChain.js";
 import { HEAVEN_SPACE } from "./heavenSpaces.js";
 import { I } from "../being/seedBeings.js";
 import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
@@ -67,12 +71,13 @@ export function noteRootSevered(rootCorrelation) {
  */
 export async function primeSeveredRootsCache() {
   try {
-    const rows = await Act.aggregate([
-      { $match: { severedAt: { $ne: null } } },
-      { $group: { _id: "$rootCorrelation" } },
-    ]);
-    for (const r of rows) {
-      if (r._id) _severedRootsCache.add(String(r._id));
+    // The curated cross-aggregate severed-roots roll-up. severedAt is a
+    // post-seal patch field (not an index facet), so the curated reader walks
+    // the per-story act id-index and collects the distinct rootCorrelation of
+    // every severed act — the file-native peer of the old Act.aggregate
+    // ([$match severedAt, $group rootCorrelation]).
+    for (const root of getSeveredRootCorrelations()) {
+      _severedRootsCache.add(String(root));
     }
     return _severedRootsCache.size;
   } catch {
@@ -100,7 +105,7 @@ export async function isAncestorSevered(rootCorrelation, visited = new Set()) {
   visited.add(id);
 
   // Walk up the parentThread chain.
-  const root = await Act.findById(id).select("parentThread severedAt").lean();
+  const root = getActById(id);
   if (!root) return { severed: false, ancestorId: null };
   if (root.severedAt) {
     _severedRootsCache.add(id);
@@ -185,11 +190,10 @@ export async function getThreadsSpaceId() {
  */
 export async function describeThread(rootCorrelation) {
   if (!rootCorrelation) return null;
-  const summons = await Act.find({ rootCorrelation })
-    .select(
-      "_id through to activeAble ibpAddress inReplyTo parentThread stampedAt receivedAt endMessage severedAt priority",
-    )
-    .lean();
+  // The whole chain that descends from this root. The old .select() narrowed
+  // columns as a read optimization; the curated read returns full act docs and
+  // the consumers below read exactly the same fields off them.
+  const summons = getActsByCorrelation(rootCorrelation);
   if (!summons.length) {
     // A thread can exist in the ThreadsProjection (the cross-cutting
     // fold updated it from a call Fact) before any moment has
@@ -197,9 +201,9 @@ export async function describeThread(rootCorrelation) {
     // is the source of truth for "open thread, no acts yet". Fall back
     // so the descriptor still resolves instead of 404-ing on a thread
     // the catalog just listed.
-    const ThreadsProjection = (
-      await import("../../past/projections/threads/threadsProjection.js")
-    ).default;
+    const { ThreadsProjection } = await import(
+      "../../past/projections/threads/threadsProjectionFold.js"
+    );
     const proj = await ThreadsProjection.findById(rootCorrelation).lean();
     if (!proj) return null;
     return {
@@ -324,9 +328,9 @@ export async function listLiveThreads({
   // Route through the ThreadsProjection (Bucket 3 Option D, 2026-05-23).
   // The legacy per-SEE Act aggregation retired; the cross-cutting fold
   // maintains this projection from call Facts + Act seals.
-  const ThreadsProjection = (
-    await import("../../past/projections/threads/threadsProjection.js")
-  ).default;
+  const { ThreadsProjection } = await import(
+    "../../past/projections/threads/threadsProjectionFold.js"
+  );
   const match = { severedAt: null };
   if (being) {
     match.participants = String(being).replace(/^@/, "");
@@ -351,15 +355,20 @@ export async function listLiveThreads({
  */
 export async function markThreadSevered(rootCorrelation, now = new Date()) {
   if (!rootCorrelation) return 0;
-  const result = await Act.updateMany(
-    {
-      rootCorrelation,
-      severedAt: null,
-      "endMessage.time": null,
-    },
-    { $set: { severedAt: now } },
-  );
-  return result.modifiedCount || 0;
+  // Curated translation of the old Act.updateMany({rootCorrelation,
+  // severedAt:null, "endMessage.time":null}, {$set:{severedAt:now}}): walk the
+  // chain by correlation, then patch each act not already severed and not
+  // already ended. severedAt is in actChain's PATCHABLE_FIELDS (the doctrine's
+  // post-seal-mutable closure exception). modifiedCount == the number newly
+  // patched.
+  const chain = getActsByCorrelation(rootCorrelation);
+  let modified = 0;
+  for (const a of chain) {
+    if (a.severedAt) continue;
+    if (a.endMessage?.time) continue;
+    if (patchActStatus(String(a._id), { severedAt: now })) modified++;
+  }
+  return modified;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -423,10 +432,14 @@ export async function cutThread({
       );
     }
     const askerId = String(identity.beingId);
-    const participant = await Act.exists({
-      rootCorrelation,
-      $or: [{ through: askerId }, { to: askerId }],
-    });
+    // Participation gate via the curated chain read: the asker must appear as
+    // `through` or `to` on some act under this rootCorrelation. Replaces the
+    // old Act.exists({rootCorrelation, $or:[{through},{to}]}) — same OR test,
+    // expressed over the fetched chain.
+    const chain = getActsByCorrelation(rootCorrelation);
+    const participant = chain.some(
+      (a) => String(a.through ?? "") === askerId || String(a.to ?? "") === askerId,
+    );
     if (!participant) {
       throw new IbpError(
         IBP_ERR.FORBIDDEN,
@@ -453,9 +466,9 @@ export async function cutThread({
   let cancelled = 0;
   try {
     const { emitFact } = await import("../../past/fact/facts.js");
-    const InboxProjection = (
-      await import("../../past/projections/inbox/inboxProjection.js")
-    ).default;
+    const { InboxProjection } = await import(
+      "../../past/projections/inbox/inboxProjectionFold.js"
+    );
     const severerBeingId = isIAm ? I : String(identity.beingId);
     cancelled = await InboxProjection.countDocuments({ rootCorrelation });
     await emitFact(
@@ -504,6 +517,6 @@ export async function cutThread({
 
 async function rootStampOf(actId) {
   if (!actId) return null;
-  const s = await Act.findById(actId).select("rootCorrelation").lean();
+  const s = getActById(actId);
   return s?.rootCorrelation || null;
 }

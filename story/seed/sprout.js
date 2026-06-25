@@ -39,12 +39,9 @@
 
 import log from "./seedStory/log.js";
 import { randomUUID as uuidv4 } from "node:crypto";
-import Space from "./materials/space/space.js";
 import {
   findByHeavenSpace,
   loadProjection,
-  findByParent as findByParentSlot,
-  countByParent as countByParentSlot,
 } from "./materials/projections.js";
 
 // Sprout-local helper: find the space whose heavenSpace marker matches.
@@ -470,7 +467,6 @@ const HOST_CHILD_SPACES = [
     heavenSpace: HEAVEN_SPACE.HOST_WEBSOCKET,
     size: { x: 8, y: 8 },
   },
-  { name: "mongo", heavenSpace: HEAVEN_SPACE.HOST_MONGO, size: { x: 8, y: 8 } },
 ];
 
 // Children of ./factory. Same create/repair shape as the host block.
@@ -777,18 +773,14 @@ export async function ensureSpaceRoot() {
   // real actor by the time these create-space facts emit), and a
   // separate setIAmHomeSpace(heaven) step runs AFTER heaven exists.
 
-  // childCount read only meaningful on Awakening (rows exist).
+  // childCount read only meaningful on Awakening (rows exist). Verbose log only — best-effort.
   if (!spaceRoot._pending) {
-    // Count children of the space root in the projection collection.
-    const { countByParent: _ } = await import("./materials/projections.js");
-    const { default: Projection } =
-      await import("./materials/history/projection.js");
-    const childCount = await Projection.countDocuments({
-      history: "0",
-      type: "space",
-      "state.parent": spaceRoot._id,
-      tombstoned: { $ne: true },
-    });
+    // Count child spaces of the root via the file-backed projection catalog (no Mongo).
+    const { listByType } = await import("./materials/projections.js");
+    const spaces = await listByType("space", "0").catch(() => []);
+    const childCount = spaces.filter(
+      (s) => String(s?.parent ?? s?.state?.parent ?? "") === String(spaceRoot._id),
+    ).length;
     log.verbose(
       "Place",
       `Space root verified: ${spaceRoot._id} (${childCount} children)`,
@@ -1003,22 +995,25 @@ export async function syncExtensionsToTree(manifests) {
   const extSpace = await findRootForHeavenSpace(HEAVEN_SPACE.EXTENSIONS);
   if (!extSpace) return;
 
-  // Query by parent — children[] on the parent is retired.
-  const { default: Projection } =
-    await import("./materials/history/projection.js");
-  const existingChildren = (
-    await Projection.find({
-      history: "0",
-      type: "space",
-      "state.parent": extSpace._id,
-      tombstoned: { $ne: true },
-    }).lean()
-  ).map((s) => ({
-    _id: s.id,
-    name: s.state?.name,
-    type: s.state?.type,
-    extensionQuality: s.state?.qualities?.extension ?? null,
-  }));
+  // Query by parent — children[] on the parent is retired. Curated read: the
+  // space catalog (listByType) yields the live space ids on main; loadProjection
+  // materializes each slot's state. Keep those whose parent is the extensions
+  // space and that are not tombstoned (loadProjection returns null for
+  // tombstoned slots). Peer of the old Projection.find({type:space, state.parent}).
+  const { listByType } = await import("./materials/projections.js");
+  const spaceOccupants = await listByType("space", "0").catch(() => []);
+  const existingChildren = [];
+  for (const occ of spaceOccupants) {
+    const slot = await loadProjection("space", String(occ.id), "0");
+    if (!slot || slot.tombstoned) continue;
+    if (String(slot.state?.parent ?? "") !== String(extSpace._id)) continue;
+    existingChildren.push({
+      _id: occ.id,
+      name: slot.state?.name,
+      type: slot.state?.type,
+      extensionQuality: slot.state?.qualities?.extension ?? null,
+    });
+  }
 
   const existingByName = new Map();
   for (const c of existingChildren) existingByName.set(c.name, c);

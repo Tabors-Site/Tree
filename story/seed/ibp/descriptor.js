@@ -34,8 +34,6 @@
 import log from "../seedStory/log.js";
 import { getStoryDomain } from "./address.js";
 import { getStoryConfigValue, getStoryUrl } from "../storyConfig.js";
-import Being from "../materials/being/being.js";
-import Fact from "../past/fact/fact.js";
 import { getSpaceRootId } from "../sprout.js";
 import { listMattersAt } from "../materials/matter/matters.js";
 import { HEAVEN_SPACE } from "../materials/space/heavenSpaces.js";
@@ -62,8 +60,6 @@ import {
 import { loadProjection } from "../materials/projections.js";
 import { redactSecrets } from "../materials/redact.js";
 import { BE_OPS } from "./beOps.js";
-import Act from "../past/act/act.js";
-import Projection from "../materials/history/projection.js";
 import { isNameBanished } from "../materials/name/closure.js";
 
 // Fold an aggregate before reading its qualities. Per FOLD.md: the
@@ -325,10 +321,16 @@ async function callToActivity(summon, opts = {}) {
 
   let lastFact = null;
   try {
-    lastFact = await Fact.findOne({ actId: summon._id })
-      .sort({ date: -1 })
-      .select("act params date")
-      .lean();
+    // The act's facts ride the ACTOR's own being reel (one-word doctrine).
+    // getFactsByActId returns them seq-ascending; the latest is the last.
+    // `through` is the being the act ran through (the actor reel); absent
+    // (a 5D name-act) → no being reel, so no fact to surface.
+    const { getFactsByActId } = await import("../past/fact/facts.js");
+    const actorReel = summon.through != null ? String(summon.through) : null;
+    if (actorReel) {
+      const facts = getFactsByActId(history, actorReel, String(summon._id));
+      lastFact = facts.length ? facts[facts.length - 1] : null;
+    }
   } catch {
     // The descriptor never blocks on a Fact lookup.
   }
@@ -414,10 +416,8 @@ async function inferActivityTarget(summon) {
   if (!summon?.inReplyTo) return null;
   let parent;
   try {
-    const Act = (await import("../past/act/act.js")).default;
-    parent = await Act.findById(summon.inReplyTo)
-      .select("activeAble to")
-      .lean();
+    const { getActById } = await import("../past/act/actChain.js");
+    parent = getActById(String(summon.inReplyTo));
   } catch {
     return null;
   }
@@ -463,6 +463,31 @@ async function inferActivityTarget(summon) {
 // exact total rides alongside as `beingCount`.
 const NAME_BEING_CAP = 200;
 
+// Curated enumeration of the beings a Name acts through, across the given
+// histories. There is no curated equality facet for `state.trueName`, so we
+// list every being per history and filter — bounded, fine for a Name Form
+// read. Returns [{ beingId, history, state }] for non-tombstoned matches; the
+// state is the full slot state (callers FIELD-PICK the safe leaves).
+async function beingsByTrueName(histories, nameId) {
+  const { listByType, loadProjection } =
+    await import("../materials/projections.js");
+  const out = [];
+  const seen = new Set();
+  for (const h of histories) {
+    const occupants = await listByType("being", h);
+    for (const occ of occupants) {
+      const key = `${h}:${occ.id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const slot = await loadProjection("being", occ.id, h);
+      if (!slot || slot.tombstoned) continue;
+      if (String(slot.state?.trueName ?? "") !== String(nameId)) continue;
+      out.push({ beingId: String(occ.id), history: h, state: slot.state });
+    }
+  }
+  return out;
+}
+
 /**
  * Build a Name's BIOGRAPHIC descriptor ("who is this name") — distinct from
  * the place descriptor's "what is here" (geographic). This is what the Name
@@ -497,38 +522,33 @@ export async function buildNameDescriptor(nameId) {
   const banished = await isNameBanished(String(nameId));
 
   // The beings this Name acts through (the presences expressing its trueName).
-  // Read from the projections cache (the live store), FIELD-PICKING only the
-  // safe state subfields — never `state.password` / never the whole `state`
-  // (it carries password + the qualities map). Capped list + exact count. The
-  // `state.trueName` filter is an unindexed scan, bounded + fine for a Name
-  // Form read; main-scoped (names + their beings live on "0").
-  const rows = await Projection.find({
-    history: "0",
-    type: "being",
-    "state.trueName": String(nameId),
-    tombstoned: { $ne: true },
-  })
-    .select("id state.name state.defaultAble state.homeSpace state.homeHistory")
-    .sort({ id: 1 })
-    .limit(NAME_BEING_CAP)
-    .lean();
-  const beings = rows.map((r) => ({
-    beingId: String(r.id),
-    name: r.state?.name || null,
-    defaultAble: r.state?.defaultAble || null,
-    homeSpace: r.state?.homeSpace ? String(r.state.homeSpace) : null,
-    homeHistory: r.state?.homeHistory || null,
-  }));
-  const beingCount = await Projection.countDocuments({
-    history: "0",
-    type: "being",
-    "state.trueName": String(nameId),
-    tombstoned: { $ne: true },
-  });
-  // The Name's whole biography of acts, across every being it acts through
-  // (act.nameId is index-backed). factCount is deliberately omitted — Fact has
-  // no nameId index and i-am is a full-collection-scan pathology.
-  const actCount = await Act.countDocuments({ by: String(nameId) });
+  // Read through the curated projection layer (the live store), FIELD-PICKING
+  // only the safe state subfields — never `state.password` / never the whole
+  // `state` (it carries password + the qualities map). Capped list + exact
+  // count. There is no curated equality facet for `state.trueName`, so we
+  // enumerate beings on main and filter (an unindexed scan, bounded + fine for
+  // a Name Form read; main-scoped — names + their beings live on "0").
+  const all = await beingsByTrueName(["0"], String(nameId));
+  const beingCount = all.length;
+  const beings = all
+    .sort((a, b) => (a.beingId < b.beingId ? -1 : a.beingId > b.beingId ? 1 : 0))
+    .slice(0, NAME_BEING_CAP)
+    .map((r) => ({
+      beingId: r.beingId,
+      name: r.state?.name || null,
+      defaultAble: r.state?.defaultAble || null,
+      homeSpace: r.state?.homeSpace ? String(r.state.homeSpace) : null,
+      homeHistory: r.state?.homeHistory || null,
+    }));
+  // The Name's whole biography of acts, across every being it acts through.
+  // FLAG: `by` (the signing name) is NOT an indexed act facet (actChain.js:
+  // "by-walks go through the chain"), so the curated actCount has no facet for
+  // it and returns 0. The old Act.countDocuments({by}) is identically broken
+  // now that acts live in the file store (the Mongo collection is empty). A
+  // by-indexed act facet, or a name-act-log, would be the curated home if a
+  // real count is needed; left at the curated call (returns 0) + flagged.
+  const { actCount: curatedActCount } = await import("../past/act/actChain.js");
+  const actCount = curatedActCount({ by: String(nameId) });
 
   // FIELD-PICK — never `{ ...state }`. privateKeyEnc never appears here.
   // `identity` is the key SCHEME only (alg / encoding / version), no key bytes.
@@ -589,18 +609,12 @@ export async function buildNameTree(nameId, history) {
   const rank = new Map(lineage.map((b, i) => [b, i]));
 
   // The Name's beings whose fold-cache row lives anywhere on this history's
-  // lineage. Bounded scan, capped — same shape as buildNameDescriptor.
-  const rows = await Projection.find({
-    history: { $in: lineage },
-    type: "being",
-    "state.trueName": String(nameId),
-    tombstoned: { $ne: true },
-  })
-    .select(
-      "id history state.name state.trueName state.parentBeingId state.homeHistory state.defaultAble",
-    )
-    .limit(NAME_BEING_CAP)
-    .lean();
+  // lineage. Bounded scan, capped — same shape as buildNameDescriptor. Curated
+  // enumeration (no trueName facet); one row per (history, being) match.
+  const rows = (await beingsByTrueName(lineage, String(nameId))).slice(
+    0,
+    NAME_BEING_CAP,
+  ).map((r) => ({ id: r.beingId, history: r.history, state: r.state }));
 
   // De-dupe by beingId, keeping the row on the history CLOSEST to `br` (the
   // deepest lineage rank — the most current fold for where you stand).
@@ -670,27 +684,36 @@ export async function buildNameTree(nameId, history) {
  */
 export async function lastOpenBeingForName(nameId, history = "0") {
   if (!nameId || String(nameId) === "i-am") return null;
-  const { default: Fact } = await import("../past/fact/fact.js");
   // The name's own be:connect / be:release facts. nameId is the signer (the name acting); target is
   // the being connected/released. ORDER, never the clock (623/12): connect+release for ONE being
   // land on THAT being's reel, so grouping by of.id then seq totally orders each being's actions —
   // the last per being (highest seq) is its current state. ACROSS beings the seqs are incomparable
   // (genuinely concurrent reels); "which being to resume" is a convenience, so the tiebreak is
   // deterministic by being-id, never the clock.
-  const facts = await Fact.find({
-    by: String(nameId),
-    verb: "be",
-    act: { $in: ["connect", "release"] },
-  })
-    .sort({ "of.id": 1, seq: 1 })
-    .select("act of seq")
-    .lean();
-
-  const latest = new Map(); // beingId -> act (its current be-state: connect or release, last by seq)
-  for (const f of facts) {
-    const bid = f.of?.id ? String(f.of.id) : null;
-    if (!bid) continue;
-    latest.set(bid, f.act); // grouped by of.id, ascending seq → last write per being wins
+  //
+  // Curated read: there is no curated "facts by signing name across reels"
+  // facet, so we enumerate the beings on this history and read each being's
+  // own reel, keeping the be:connect/release facts this name signed (`by`).
+  // Each such fact rides the being it targets (of.id === the reel), so the
+  // reel id IS the grouping key. getFactsOnReelWhere returns seq-ascending,
+  // so the last accepted fact per being is its current be-state.
+  const { listByType } = await import("../materials/projections.js");
+  const { getFactsOnReelWhere } = await import("../past/fact/facts.js");
+  const beings = await listByType("being", history);
+  const latest = new Map(); // beingId -> act (current be-state: connect|release, last by seq)
+  for (const occ of beings) {
+    const bid = String(occ.id);
+    const facts = getFactsOnReelWhere(
+      history,
+      "being",
+      bid,
+      (f) =>
+        String(f?.by ?? "") === String(nameId) &&
+        f?.verb === "be" &&
+        (f?.act === "connect" || f?.act === "release"),
+    );
+    if (!facts.length) continue;
+    latest.set(bid, facts[facts.length - 1].act); // seq-ascending → last wins
   }
   let best = null;
   for (const [bid, act] of latest) {
@@ -1365,11 +1388,42 @@ async function listBeingChildren(
   if (!parentBeingId) return [];
   const { beingCognition } =
     await import("../materials/being/identity/lookups.js");
-  const rows = await Being.find({ parentBeingId: String(parentBeingId) })
-    .select("_id name defaultAble homeSpace qualities createdAt")
-    .sort({ createdAt: 1 })
-    .limit(200)
-    .lean();
+  // Curated children-by-parent (findByParent handles the history-lineage
+  // shadow + tombstone semantics). It returns occupant shape only, so load
+  // each child's slot for the state fields, then sort by createdAt + cap —
+  // matching the old Being.find({parentBeingId}).sort({createdAt}).limit(200).
+  const { findByParent, loadProjection } =
+    await import("../materials/projections.js");
+  let br = history;
+  if (typeof br !== "string" || !br.length) {
+    const { getDefaultHistory } =
+      await import("../materials/history/historyRegistry.js");
+    br = await getDefaultHistory();
+  }
+  const occupants = await findByParent(String(parentBeingId), br);
+  const loaded = [];
+  for (const occ of occupants) {
+    const slot = await loadProjection("being", occ.id, br);
+    if (!slot || slot.tombstoned) continue;
+    const st = slot.state || {};
+    loaded.push({
+      _id: occ.id,
+      name: st.name,
+      defaultAble: st.defaultAble,
+      homeSpace: st.homeSpace,
+      qualities: st.qualities,
+      createdAt: st.createdAt,
+    });
+  }
+  const rows = loaded
+    .sort((a, b) => {
+      const ca = a.createdAt ?? 0;
+      const cb = b.createdAt ?? 0;
+      if (ca < cb) return -1;
+      if (ca > cb) return 1;
+      return 0;
+    })
+    .slice(0, 200);
 
   // Live path: project from the rows as-is.
   if (!until) {

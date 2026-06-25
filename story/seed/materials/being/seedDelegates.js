@@ -176,15 +176,6 @@ export const SEED_DELEGATES = [
     description:
       "The WebSocket pool as a being. Lives at ./host/websocket; one connection matter per live socket, created on connect and ended on disconnect. Its act-chain is the connection log; live view via the connections SEE op.",
   },
-  {
-    name: "mongo",
-    able: "mongo-connection",
-    cognition: "scripted",
-    invocableBy: "owner",
-    homeHeavenSpace: "host-mongo",
-    description:
-      "The Mongo connection as a being. Lives at ./host/mongo; stamps boot and reconnect facts on the mongo space's reel; live stats via the mongo-stats SEE op.",
-  },
 ];
 
 /**

@@ -23,7 +23,25 @@ import {
   loadSnapshot,
   saveSnapshot,
   replayJournal,
-} from "../../past/store/fileStore.js";
+  appendActLine,
+  readActHeadFile,
+  advanceActHeadFile,
+  readReelWhere,
+  factsByActId,
+  readActById,
+  actsByCorrelation,
+  actsByField,
+  readActChain,
+  patchAct,
+  actCount,
+  rebuildActIndex,
+  findByName,
+  findByPosition,
+  findByParent,
+  listByType,
+  findByHeavenSpace,
+  rebuildIndex,
+} from "../../past/fileStore.js";
 
 let pass = 0,
   fail = 0;
@@ -195,6 +213,159 @@ try {
     ? ok("stories are sibling folders (main/past → store/past; named → store/<name>) — no renaming")
     : bad("story mapping", { rPast, rMain, rAlpha, base });
   configureStore({ root }); // restore the test root
+
+  // 11. ACT-LOG (the act-chain, peer of the reel files): a being's authored acts append to a
+  //     per-being JSONL log, and the .acthead advances under a CAS. A stale author (wrong expectPrev)
+  //     is REFUSED with ACT_CHAIN_MOVED — the chain can't fork. Idempotent: re-advancing to the head
+  //     is a settled-replay no-op.
+  const story = "past";
+  const author = "being-author-xyz789";
+  const a1 = { _id: "act-001", verb: "do", through: author, p: "0".repeat(64) };
+  const a2 = { _id: "act-002", verb: "do", through: author, p: "act-001" };
+  appendActLine(story, "0", author, a1);
+  const h0 = readActHeadFile(story, "0", author); // empty chain → GENESIS_PREV
+  advanceActHeadFile(story, "0", author, a1._id, "0".repeat(64)); // advance to act-001
+  appendActLine(story, "0", author, a2);
+  advanceActHeadFile(story, "0", author, a2._id, a1._id); // advance to act-002
+  const headNow = readActHeadFile(story, "0", author);
+  let casRefused = false;
+  try {
+    // a stale author still thinks the head is act-001 → must be refused
+    advanceActHeadFile(story, "0", author, "act-003", a1._id);
+  } catch (e) {
+    casRefused = e.message === "ACT_CHAIN_MOVED";
+  }
+  const replayNoop = advanceActHeadFile(story, "0", author, a2._id, a1._id).replayed === true;
+  h0 === "0".repeat(64) && headNow === a2._id && casRefused && replayNoop
+    ? ok("act-log appends + .acthead CAS advances; stale expectPrev → ACT_CHAIN_MOVED; replay no-op")
+    : bad("act-log", { h0, headNow, casRefused, replayNoop });
+
+  // 12. INDEX (the derived find* layer, maintained by saveSnapshot): saving .proj snapshots keeps
+  //     the inverted name/position/parent/type indexes consistent. findByName resolves a name→slot;
+  //     findByPosition lists occupants of a space; findByParent lists children; a tombstone drops out.
+  const ib = "being-indexed-001";
+  const ic = "being-indexed-002";
+  saveSnapshot("0", "being", ib, {
+    state: { name: "Gandalf", parentBeingId: "i-am" },
+    foldedSeq: 1,
+    position: "space-shire",
+    tombstoned: false,
+  });
+  saveSnapshot("0", "being", ic, {
+    state: { name: "Frodo", parentBeingId: ib },
+    foldedSeq: 1,
+    position: "space-shire",
+    tombstoned: false,
+  });
+  const byName = findByName("0", "being", "Gandalf");
+  const byPos = findByPosition("0", "space-shire");
+  const byParent = findByParent("0", ib, "being");
+  const types = listByType("0", "being");
+  byName?.id === ib &&
+  byName?.state?.name === "Gandalf" &&
+  byPos.length === 2 &&
+  byPos.some((o) => o.id === ib) &&
+  byPos.some((o) => o.id === ic) &&
+  byParent.length === 1 &&
+  byParent[0].id === ic &&
+  types.includes(ib) &&
+  types.includes(ic)
+    ? ok("index tracks .proj snapshots — findByName / findByPosition / findByParent / listByType")
+    : bad("index", { byName, byPos: byPos.map((o) => o.id), byParent: byParent.map((o) => o.id), types });
+
+  // 13. TOMBSTONE + REBUILD: tombstoning a slot drops it from every live index; rebuildIndex
+  //     re-derives the index from the .proj snapshots (the rebuildable property).
+  saveSnapshot("0", "being", ic, {
+    state: { name: "Frodo", parentBeingId: ib },
+    foldedSeq: 2,
+    position: null,
+    tombstoned: true,
+  });
+  const goneByName = findByName("0", "being", "Frodo");
+  const posAfterTomb = findByPosition("0", "space-shire");
+  const typesAfterTomb = listByType("0", "being");
+  rebuildIndex("0", "being");
+  const byNameRebuilt = findByName("0", "being", "Gandalf");
+  const typesRebuilt = listByType("0", "being");
+  goneByName === null &&
+  posAfterTomb.length === 1 &&
+  posAfterTomb[0].id === ib &&
+  !typesAfterTomb.includes(ic) &&
+  byNameRebuilt?.id === ib &&
+  typesRebuilt.includes(ib) &&
+  !typesRebuilt.includes(ic)
+    ? ok("tombstone drops from live indexes; rebuildIndex re-derives from snapshots (rebuildable)")
+    : bad("tombstone+rebuild", { goneByName, posAfterTomb: posAfterTomb.map((o) => o.id), typesAfterTomb, byNameRebuilt, typesRebuilt });
+
+  // 14. PREDICATE READ + factsByActId (the curated FACT-query substrate): readReelWhere filters a
+  //     reel by predicate (wordStore's coin/retire reads); factsByActId returns the facts one act
+  //     laid (the actor's facts ride the actor's being reel).
+  const PB = "being-pred-test-01";
+  const mkW = (act, word, aid) => ({
+    recId: `${act}-${word}`,
+    actId: aid,
+    facts: [{ history: "0", kind: "being", id: PB, spec: { through: PB, verb: "do", act, of: { kind: "being", id: PB }, params: { word }, actId: aid, history: "0" } }],
+  });
+  await commitMoment(mkW("coin", "alpha", "act-coin-a"));
+  await commitMoment(mkW("coin", "beta", "act-coin-b"));
+  await commitMoment(mkW("retire", "alpha", "act-retire-a"));
+  const coined = readReelWhere("0", "being", PB, (f) => f.act === "coin");
+  const byAct = factsByActId("0", PB, "act-coin-b");
+  coined.length === 2 &&
+  coined.every((f) => f.act === "coin") &&
+  byAct.length === 1 &&
+  byAct[0].params.word === "beta"
+    ? ok("readReelWhere filters a reel by predicate; factsByActId returns one act's facts")
+    : bad("predicate-read", { coined: coined.map((f) => f.params.word), byAct: byAct.map((f) => f.actId) });
+
+  // 15. ACT INDEX + reads (the curated ACT-query substrate): appendActLine maintains actId→location +
+  //     the inverted facets (rootCorrelation / inReplyTo / through / to). readActById locates by id;
+  //     actsByCorrelation walks the chain; actsByField filters; readActChain reads one being's log;
+  //     actCount counts.
+  const ix = "past";
+  const root1 = "act-root-001";
+  const A = "being-actor-A";
+  const B2 = "being-actor-B";
+  appendActLine(ix, "0", A, { _id: "ax-1", through: A, to: B2, rootCorrelation: root1, inReplyTo: null, stampedAt: new Date(1).toISOString() });
+  appendActLine(ix, "0", B2, { _id: "ax-2", through: B2, to: A, rootCorrelation: root1, inReplyTo: "ax-1", stampedAt: new Date(2).toISOString() });
+  appendActLine(ix, "0", A, { _id: "ax-3", through: A, to: B2, rootCorrelation: root1, inReplyTo: "ax-2", stampedAt: new Date(3).toISOString() });
+  appendActLine(ix, "0", A, { _id: "ax-other", through: A, to: B2, rootCorrelation: "other-root", inReplyTo: null, stampedAt: new Date(4).toISOString() });
+  const oneAct = readActById(ix, "ax-2");
+  const chain = actsByCorrelation(ix, root1);
+  const replies = actsByField(ix, "inReplyTo", "ax-1");
+  const byThrough = actsByField(ix, "through", A);
+  const aLog = readActChain(ix, "0", A);
+  const cntCorr = actCount(ix, { rootCorrelation: root1 });
+  const cntAll = actCount(ix, {});
+  oneAct?._id === "ax-2" &&
+  oneAct?.to === A &&
+  chain.length === 3 &&
+  chain.every((a) => a.rootCorrelation === root1) &&
+  replies.length === 1 && replies[0]._id === "ax-2" &&
+  byThrough.length === 3 && // ax-1, ax-3, ax-other (all through A)
+  aLog.length === 3 &&
+  cntCorr === 3 &&
+  cntAll >= 4
+    ? ok("act index: readActById / actsByCorrelation / actsByField / readActChain / actCount")
+    : bad("act-index", { oneAct: oneAct?._id, chain: chain.map((a) => a._id), replies: replies.map((a) => a._id), byThrough: byThrough.length, aLog: aLog.length, cntCorr, cntAll });
+
+  // 16. ACT PATCH (the one mutable-after-seal exception) + rebuildActIndex: patchAct overlays
+  //     status/innerFace/severedAt on a read; the act-log line stays append-only. rebuildActIndex
+  //     re-derives the index from the .acts logs (rebuildable). Patches survive a rebuild (they
+  //     overlay the logs, not the index).
+  patchAct(ix, "ax-1", { status: "landed", severedAt: new Date(9).toISOString() });
+  const patched = readActById(ix, "ax-1");
+  rebuildActIndex(ix);
+  const afterRebuildById = readActById(ix, "ax-2");
+  const afterRebuildChain = actsByCorrelation(ix, root1);
+  const patchSurvives = readActById(ix, "ax-1");
+  patched?.status === "landed" &&
+  patched?.severedAt != null &&
+  afterRebuildById?._id === "ax-2" &&
+  afterRebuildChain.length === 3 &&
+  patchSurvives?.status === "landed"
+    ? ok("patchAct overlays status/severedAt on read; rebuildActIndex re-derives from logs; patch survives rebuild")
+    : bad("act-patch+rebuild", { patched: patched?.status, afterRebuildById: afterRebuildById?._id, afterRebuildChain: afterRebuildChain.length, patchSurvives: patchSurvives?.status });
 } finally {
   rmSync(root, { recursive: true, force: true });
   rmSync(join(storeBase(), "_verify_iso_"), { recursive: true, force: true });

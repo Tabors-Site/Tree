@@ -56,7 +56,6 @@
 // connect_enabled, one place to verify credentials).
 
 import log from "../../../seed/seedStory/log.js";
-import Being from "../../../seed/materials/being/being.js";
 import { IbpError, IBP_ERR, isIbpError } from "../../../seed/ibp/protocol.js";
 import { assertNoImpersonation } from "./_shared.js";
 import { ackOk, ackError } from "../envelope.js";

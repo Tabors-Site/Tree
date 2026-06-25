@@ -71,21 +71,20 @@ export async function ensureSkinsSpace(history = "0", moment = null) {
       "ensureSkinsSpace: story root not ready",
     );
 
-  const { default: Projection } =
-    await import("../../../materials/history/projection.js");
+  const { listByType, loadProjection } =
+    await import("../../../materials/projections.js");
   // History-local first, then main's inherited row (the lazy-fill idiom): the catalog is
-  // minted on main and inherited by histories.
+  // minted on main and inherited by histories. Curated scan: spaces have no parent-indexed
+  // curated read, so list the kind in the history and filter by parent+name from loaded state.
   for (const b of history === "0" ? ["0"] : [history, "0"]) {
-    const row = await Projection.findOne({
-      history: b,
-      type: "space",
-      "state.parent": String(rootId),
-      "state.name": SKINS_SPACE_NAME,
-      tombstoned: { $ne: true },
-    })
-      .select("id")
-      .lean();
-    if (row) return String(row.id);
+    for (const occ of await listByType("space", b)) {
+      const slot = await loadProjection("space", occ.id, b);
+      if (!slot || slot.tombstoned) continue;
+      const st = slot.state || {};
+      if (String(st.parent ?? "") !== String(rootId)) continue;
+      if (st.name !== SKINS_SPACE_NAME) continue;
+      return String(occ.id);
+    }
   }
 
   const id = uuidv4();

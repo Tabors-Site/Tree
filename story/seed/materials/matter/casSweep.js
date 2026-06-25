@@ -58,25 +58,63 @@ function retentionPolicy() {
 }
 
 /**
- * Collect every hash the chain references (policy "all"): any fact
- * whose params carry a cas content ref — create-matter and
+ * Every live history: main + every non-deleted history row. The curated
+ * reader over the file-backed history store (histories.js) is the seam;
+ * we never enumerate reels/<history> dirs ourselves. Content blobs are
+ * shared across histories (the hash dedups), so the sweep's reference
+ * set must union over ALL of them — a blob is dead only when NO history
+ * references it.
+ */
+async function listSweepHistories() {
+  const { listLiveHistories } = await import("../history/histories.js");
+  const MAIN = "0";
+  const out = [MAIN];
+  try {
+    for (const row of await listLiveHistories()) {
+      if (row._id !== MAIN) out.push(row._id);
+    }
+  } catch (err) {
+    log.warn("CAS", `history enumeration failed (sweeping main only): ${err.message}`);
+  }
+  return out;
+}
+
+/**
+ * Collect every hash the chain references (policy "all"): any matter
+ * fact whose params carry a cas content ref — create-matter and
  * set-matter content writes both put the ref at params.content (or
  * params.value for field=content set-matter facts).
+ *
+ * Curated route (no raw Fact.find): content refs ride matter reels, so
+ * we enumerate each live history's matter ids (projections.listByType)
+ * and read each matter reel through the curated fact seam
+ * (facts.getFactsOnReelWhere), keeping the cas-ref-bearing facts. The
+ * union across reels reproduces the old global `Fact.find({"params.
+ * content.kind":"cas"})` scan, expressed through the one seam.
  */
 async function referencedByFacts() {
-  const { default: Fact } = await import("../../past/fact/fact.js");
+  const { listByType } = await import("../projections.js");
+  const { getFactsOnReelWhere } = await import("../../past/fact/facts.js");
   const referenced = new Set();
-  const queries = [
-    { sel: "params.content.hash", q: { "params.content.kind": "cas" } },
-    { sel: "params.value.hash",   q: { "params.value.kind": "cas" } },
-  ];
-  for (const { sel, q } of queries) {
-    const cursor = Fact.find(q).select(sel).lean().cursor();
-    for await (const row of cursor) {
-      const hash = sel === "params.content.hash"
-        ? row?.params?.content?.hash
-        : row?.params?.value?.hash;
-      if (typeof hash === "string") referenced.add(hash);
+  const hasCasRef = (f) =>
+    f?.params?.content?.kind === "cas" || f?.params?.value?.kind === "cas";
+  for (const history of await listSweepHistories()) {
+    let matterIds;
+    try {
+      matterIds = await listByType("matter", history);
+    } catch (err) {
+      log.warn("CAS", `listByType(matter, #${history}) failed: ${err.message}`);
+      continue;
+    }
+    for (const occ of matterIds) {
+      const id = occ?.id ?? occ;
+      const facts = getFactsOnReelWhere(history, "matter", id, hasCasRef);
+      for (const f of facts) {
+        const h1 = f?.params?.content?.kind === "cas" ? f?.params?.content?.hash : null;
+        const h2 = f?.params?.value?.kind === "cas" ? f?.params?.value?.hash : null;
+        if (typeof h1 === "string") referenced.add(h1);
+        if (typeof h2 === "string") referenced.add(h2);
+      }
     }
   }
   return referenced;
@@ -85,21 +123,38 @@ async function referencedByFacts() {
 /**
  * Collect every hash some live projection's CURRENT content carries
  * (policy "latest"), across ALL histories.
+ *
+ * Curated route (no raw Projection.find): enumerate each live history's
+ * matter ids (projections.listByType, which already drops tombstones)
+ * and fold each to its current state (projections.loadOrFold). The
+ * lineage-aware loadOrFold gives the history's effective CURRENT content
+ * — the same "live, non-tombstoned, current content" set the old global
+ * `Projection.find({type:"matter", "state.content.kind":"cas"})` scan
+ * produced, expressed through the one seam.
  */
 async function referencedByLatestProjections() {
-  const { default: Projection } = await import("../history/projection.js");
+  const { listByType, loadOrFold } = await import("../projections.js");
   const referenced = new Set();
-  const cursor = Projection.find({
-    type: "matter",
-    "state.content.kind": "cas",
-    tombstoned: { $ne: true },
-  }).select("state.content.hash state.content.purged").lean().cursor();
-  for await (const row of cursor) {
-    const c = row?.state?.content;
-    // A purged ref doesn't keep bytes alive — the op already removed
-    // them; resurrecting via the sweep's reference set would be odd
-    // but harmless (the blob is gone). Track it anyway for clarity.
-    if (typeof c?.hash === "string" && c.purged !== true) referenced.add(c.hash);
+  for (const history of await listSweepHistories()) {
+    let matterIds;
+    try {
+      matterIds = await listByType("matter", history);
+    } catch (err) {
+      log.warn("CAS", `listByType(matter, #${history}) failed: ${err.message}`);
+      continue;
+    }
+    for (const occ of matterIds) {
+      const id = occ?.id ?? occ;
+      const slot = await loadOrFold("matter", id, history);
+      if (!slot || slot.tombstoned) continue;
+      const c = slot.state?.content;
+      // A purged ref doesn't keep bytes alive — the op already removed
+      // them; resurrecting via the sweep's reference set would be odd
+      // but harmless (the blob is gone). Skip it for clarity.
+      if (c?.kind === "cas" && typeof c.hash === "string" && c.purged !== true) {
+        referenced.add(c.hash);
+      }
+    }
   }
   return referenced;
 }

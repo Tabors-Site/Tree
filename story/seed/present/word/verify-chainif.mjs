@@ -12,9 +12,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const DB = "mongodb://localhost:27017/story_chainif";
+const DB = path.join(os.tmpdir(), "story_chainif-" + process.pid);
 process.env.PORT = "3839";
-process.env.MONGODB_URI = DB;
+process.env.TREEOS_STORE_BASE = DB;
+fs.rmSync(DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "chainif-0123456789";
 process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "chainif-keys-" + process.pid);
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
@@ -23,12 +25,7 @@ fs.rmSync(SRC, { recursive: true, force: true });
 fs.mkdirSync(SRC, { recursive: true });
 fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`)).default;
-  const conn = await mongoose.createConnection(DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
+// (scratch file store fresh-wiped above; no DB to drop)
 await import(`${R}/begin.js`);
 const { findByName, loadOrFold } = await import(`${R}/seed/materials/projections.js`);
 const { withIAmAct } = await import(`${R}/seed/sprout.js`);
@@ -38,8 +35,8 @@ const { parse } = await import(`${R}/seed/present/word/parser.js`);
 const { runWordToStore } = await import(`${R}/seed/present/word/ableWordRegistry.js`);
 const { getStoryDomain } = await import(`${R}/seed/ibp/address.js`);
 const { verifyActChain } = await import(`${R}/seed/past/act/actHash.js`);
-const { default: Fact } = await import(`${R}/seed/past/fact/fact.js`);
-const { default: Act } = await import(`${R}/seed/past/act/act.js`);
+const { factFindOne, factCount } = await import(`${R}/seed/present/word/_factStoreTest.mjs`);
+const { actFindOne, actCount } = await import(`${R}/seed/present/word/_factStoreTest.mjs`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const poll = async (fn, t = 60000, e = 250) => {
   const t0 = Date.now();
@@ -91,7 +88,8 @@ try {
   }
   const ir = [flowIr];
 
-  const actsBefore = await Act.countDocuments({ through: String(speaker) });
+  const story = getStoryDomain();
+  const actsBefore = actCount({ through: String(speaker) }, story);
 
   // RUN: pass = good ⇒ the THEN way fires.
   await runWordToStore(ir, {
@@ -101,34 +99,33 @@ try {
   await sleep(1500);
 
   // 1. THE BRANCH IS A FACT: a do:if landed on the being's reel, taken=then.
-  const ifFact = await Fact.findOne({ act: "if", through: String(speaker) }).lean();
+  const ifFact = factFindOne({ act: "if", through: String(speaker) });
   ifFact && ifFact.params?.taken === "then"
     ? ok("a do:if fact landed on the being's reel, taken=then — the branch is a fact")
     : bad("do:if fact (taken=then)", { ifFact });
 
   // 2. THE TAKEN WAY CHAINS ON IT: notebook's create-space act has p == the do:if act.
-  const nbFact = await Fact.findOne({ act: "create-space", through: String(speaker) }).lean();
+  const nbFact = factFindOne({ act: "create-space", through: String(speaker) });
   const nbActId = nbFact?.actId;
-  const nbAct = nbActId ? await Act.findById(nbActId).lean() : null;
+  const nbAct = nbActId ? actFindOne({ _id: nbActId }, story) : null;
   nbFact && ifFact && nbAct && String(nbAct.p) === String(ifFact.actId)
     ? ok("the taken consequent (make notebook) chains on the do:if act (its p == the do:if actId)")
     : bad("consequent chains on do:if", { ifActId: ifFact?.actId, nbActId, nbActP: nbAct?.p });
 
   // 3. THE UNTAKEN WAY MAKES NO FACT: ledger was never created; exactly one create-space landed.
   const ledger = await findByName("space", "ledger", "0");
-  const createCount = await Fact.countDocuments({ act: "create-space", through: String(speaker) });
+  const createCount = factCount({ act: "create-space", through: String(speaker) });
   !ledger && createCount === 1
     ? ok("the untaken way (make ledger) made no fact — ledger absent, one create-space only")
     : bad("untaken way silent", { ledger: !!ledger, createCount });
 
   // 4. ONE MOMENT PER ACT: the chain grew by exactly 2 acts (the do:if, then the consequent).
-  const actsAfter = await Act.countDocuments({ through: String(speaker) });
+  const actsAfter = actCount({ through: String(speaker) }, story);
   actsAfter - actsBefore === 2
     ? ok(`the chain grew by exactly 2 acts (${actsBefore} → ${actsAfter}): the do:if + the taken consequent`)
     : bad("chain grew by 2", { actsBefore, actsAfter });
 
   // 5. REPLAY-INTEGRAL: every act recomputes from (p, opening) down to genesis (content-addressed).
-  const story = getStoryDomain();
   const chain = await verifyActChain(story, "0", String(speaker));
   chain.ok
     ? ok(`verifyActChain walks the brancher's reel clean (${chain.count} acts) — byte-identical on replay`)

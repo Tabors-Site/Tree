@@ -12,7 +12,6 @@
 // to the verb layer exactly as the JS throw would). The bridge binds an absent coord/to to
 // null, so the `if (to)` / `if (coord)` guards below read presence directly.
 
-import Space from "../../../materials/space/space.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { detectTargetKind, targetIdOf } from "../../../materials/_targetShape.js";
 import { assertCoordWithinSize } from "../../../materials/matter/coordBounds.js";
@@ -29,8 +28,9 @@ export function moveHostEnv() {
     // resolve-source(subject, coord, to, history) — the source-space READ (the world
     // strand's only substrate touch). Mirrors the JS handler's destExists check, the
     // loadOrFold over the subject to capture fromSpaceId, and the coord bounds check
-    // against the container's size. Reuses the SAME Space.exists / loadOrFold; lays NO
-    // fact; throws the SAME IbpError on a missing dest / missing subject / out-of-bounds.
+    // against the container's size. Reuses the SAME curated loadOrFold for every read
+    // (dest-exists, subject, container); lays NO fact; throws the SAME IbpError on a
+    // missing dest / missing subject / out-of-bounds.
     "resolve-source": async ({ args: [subject, coord, to, argHistory] }, ctx) => {
       const history = argHistory || historyOf(ctx);
       const kind = subjectKind(subject);
@@ -38,10 +38,12 @@ export function moveHostEnv() {
       const { loadOrFold } = await import("../../../materials/projections.js");
 
       // container-mode: the destination must exist (so the fact doesn't seal pointing
-      // at nothing) — the SAME Space.exists the JS handler calls.
+      // at nothing) — the SAME existence check the JS handler makes, now through the
+      // curated projection layer (loadOrFold resolves the dest in THIS history's lineage,
+      // heaven-routed, rather than the model's own-history-blind exists()).
       if (to) {
-        const destExists = await Space.exists({ _id: String(to) });
-        if (!destExists) {
+        const destSlot = await loadOrFold("space", String(to), history);
+        if (!destSlot) {
           throw new IbpError(
             IBP_ERR.SPACE_NOT_FOUND,
             `move: destination space "${to}" not found`,

@@ -19,7 +19,7 @@
 // across worlds, transient cognition state, etc. Each rule produces
 // fact specs the merge-branches op stamps on the merged history.
 
-import mongoose from "mongoose";
+import { listByType, loadOrFold } from "../projections.js";
 
 /**
  * Compute the reset fact specs for a freshly-created merged history.
@@ -55,27 +55,28 @@ export async function computeMergeResetFacts({ mergedHistory, ancestor, actorBei
 // ─────────────────────────────────────────────────────────────────────
 // Rule 1: inhabit-state reset.
 //
-// Query the projections collection for being rows on the ancestor's
-// history that have a non-null inhabitedBy under qualities.connection.
-// For each, emit a be:release on the merged history so the connection-
-// tracking reducer clears the inhabitedBy projection in the merged
-// world.
+// Read the being snapshots on the ancestor's history from the file
+// store and select those with a non-null inhabitedBy under
+// qualities.connection. For each, emit a be:release on the merged
+// history so the connection-tracking reducer clears the inhabitedBy
+// projection in the merged world.
 //
-// The query uses the unified projections collection (`projections`)
-// keyed by `${history}:${type}:${id}`. We filter by history=ancestor +
-// the inhabitedBy field path under state.qualities.
+// projections.listByType gives the live beings on the ancestor history
+// (tombstoned excluded, lineage-aware); loadOrFold reads each folded slot.
+// The inhabitedBy field lives at state.qualities.connection.inhabitedBy
+// — the same shape the Mongo projection doc held.
 // ─────────────────────────────────────────────────────────────────────
 async function _inhabitResetFacts({ mergedHistory, ancestor, actorBeingId }) {
-  const Projection = mongoose.connection.collection("projections");
-  const rows = await Projection.find({
-    type: "being",
-    history: ancestor,
-    "state.qualities.connection.inhabitedBy": { $ne: null, $exists: true },
-  }).project({ id: 1, "state.qualities.connection.inhabitedBy": 1 }).toArray();
+  const beings = await listByType("being", ancestor);
 
   const facts = [];
-  for (const row of rows) {
-    const beingId = String(row.id);
+  for (const occ of beings) {
+    const id = occ.id;
+    const slot = await loadOrFold("being", id, ancestor);
+    if (!slot || slot.tombstoned) continue;
+    const inhabitedBy = slot.state?.qualities?.connection?.inhabitedBy;
+    if (inhabitedBy == null) continue;
+    const beingId = String(id);
     facts.push({
       verb:    "be",
       act:     "release",

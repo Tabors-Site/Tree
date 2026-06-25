@@ -8,14 +8,16 @@
 import fs from "fs"; import os from "os"; import path from "path"; import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const DB = "mongodb://localhost:27017/story_descent";
-process.env.PORT = "3853"; process.env.MONGODB_URI = DB;
+const DB = path.join(os.tmpdir(), "story_descent-" + process.pid);
+process.env.PORT = "3853"; process.env.TREEOS_STORE_BASE = DB;
+fs.rmSync(DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "descent-0123456789";
 process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "descent-keys-" + process.pid);
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
 const SRC = path.join(os.tmpdir(), "descent-src"); fs.rmSync(SRC, { recursive: true, force: true }); fs.mkdirSync(SRC, { recursive: true }); fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
-{ const mongoose = (await import(`${R}/node_modules/mongoose/index.js`)).default; const conn = await mongoose.createConnection(DB).asPromise(); await conn.dropDatabase(); await conn.close(); }
+// (scratch file store fresh-wiped above; no DB to drop)
 await import(`${R}/begin.js`);
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const { getWordSync } = await import(`${R}/seed/present/word/wordStore.js`);

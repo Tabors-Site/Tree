@@ -14,9 +14,11 @@ import { randomUUID } from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const SCRATCH_DB = "mongodb://localhost:27017/story_word_config_cut";
+const SCRATCH_DB = path.join(os.tmpdir(), "story_word_config_cut-" + process.pid);
 process.env.PORT = "3798";
-process.env.MONGODB_URI = SCRATCH_DB;
+process.env.TREEOS_STORE_BASE = SCRATCH_DB;
+fs.rmSync(SCRATCH_DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "config-secret-0123456789";
 process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "configcut-keys-" + process.pid);
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
@@ -26,12 +28,7 @@ fs.mkdirSync(SRC, { recursive: true });
 fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
 
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`)).default;
-  const conn = await mongoose.createConnection(SCRATCH_DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
+// (scratch file store fresh-wiped above; no DB to drop)
 
 await import(`${R}/begin.js`);
 
@@ -39,7 +36,7 @@ const { I } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { doVerb } = await import(`${R}/seed/ibp/verbs/do.js`);
 const { getSpaceRootId } = await import(`${R}/seed/sprout.js`);
 const { getStoryConfigValue } = await import(`${R}/seed/storyConfig.js`);
-const { default: Fact } = await import(`${R}/seed/past/fact/fact.js`);
+const { factFind, factFindOne, factCount } = await import(`${R}/seed/present/word/_factStoreTest.mjs`);
 const { resolveAbleWord } = await import(`${R}/seed/present/word/ableWordRegistry.js`);
 
 let pass = 0,
@@ -82,7 +79,7 @@ async function doOp(target, op, params) {
 }
 // A library-reel name-act fact (verb:"name") with this act + key.
 const nameFact = (act, key) =>
-  Fact.findOne({ verb: "name", act, "of.kind": "library", "params.key": key }).lean();
+  factFindOne({ verb: "name", act, "of.kind": "library", "params.key": key });
 
 console.log(`\n  verify-config-cut (REAL set/delete-config via doVerb → runOpNameAct)\n  DB: ${SCRATCH_DB.split("/").pop()}\n`);
 try {

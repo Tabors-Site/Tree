@@ -73,24 +73,20 @@ export function purgeContentHostEnv() {
       }
 
       // Shared-fate refcount: other live matter (any history) whose CURRENT content is this hash.
-      // Purging would blind them — refuse without force.
+      // Purging would blind them — refuse without force. Routed through the curated cross-history
+      // content-hash reader (projections.findMatterByContentHash), which enumerates the live history
+      // set and each history's own folded matter slots — the file-native peer of the old
+      // Projection.find({type:"matter","state.content.hash":hash}).
       const forced = force === true || force === "true";
-      const { default: Projection } = await import("../history/projection.js");
-      const others = await Projection.find({
-        type: "matter",
-        "state.content.hash": hash,
-        tombstoned: { $ne: true },
-        id: { $ne: String(matterId) },
-      })
-        .select("id history")
-        .lean();
+      const { findMatterByContentHash } = await import("./../projections.js");
+      const others = await findMatterByContentHash(hash, { excludeId: String(matterId) });
       if (others.length > 0 && !forced) {
         throw new IbpError(
           IBP_ERR.RESOURCE_CONFLICT,
           `purge-content: ${others.length} other matter row(s) reference these same bytes ` +
             `(content is deduplicated by hash). Pass force=true to purge anyway — ` +
             `their content goes dark too.`,
-          { referents: others.map((o) => ({ matterId: o.id, history: o.history })) },
+          { referents: others.map((o) => ({ matterId: o.matterId, history: o.history })) },
         );
       }
 

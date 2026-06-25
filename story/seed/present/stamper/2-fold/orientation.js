@@ -127,19 +127,26 @@ export function classifyDeltaF(deltaF, doerId) {
 }
 
 /**
- * Classify a committed Act row by reading its facts from Mongo.
+ * Classify a committed Act row by reading its facts from the reel.
+ *
+ * CURATED: the act's facts ride the DOER's own being reel (one-word doctrine),
+ * so getFactsByActId(history, doerId, actId) is the file-native peer of Mongo's
+ * Fact.find({actId}). History defaults to MAIN — the old read was history-blind
+ * and the doer's facts for one act land on a single reel; a caller acting off
+ * main passes opts.history. The opts.FactModel test-injection seam is retired
+ * (no Mongoose model under the file store); opts is still accepted.
  *
  * @param {string} actId
  * @param {string} doerId  the being who acted (Act.to typically)
  * @param {object} [opts]
- * @param {object} [opts.FactModel]  inject for tests
+ * @param {string} [opts.history="0"]  the reel history the doer's facts ride
  * @returns {Promise<"inner" | "outer">}
  */
 export async function classifyActById(actId, doerId, opts = {}) {
-  const FactModel = opts.FactModel
-    || (await import("../../../past/fact/fact.js")).default;
-  const facts = await FactModel.find({ actId: String(actId) })
-    .select("verb act of params")
-    .lean();
+  const { getFactsByActId } =
+    await import("../../../past/fact/facts.js");
+  const history =
+    typeof opts.history === "string" && opts.history.length ? opts.history : "0";
+  const facts = getFactsByActId(history, String(doerId), String(actId));
   return classifyDeltaF(facts, doerId);
 }

@@ -45,7 +45,6 @@
 
 import log from "../../../seedStory/log.js";
 import { hooks } from "../../../hooks.js";
-import Being from "../../../materials/being/being.js";
 import {
   isFirstBeing,
   findBeingCandidatesByName,

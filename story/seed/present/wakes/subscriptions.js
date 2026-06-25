@@ -340,10 +340,9 @@ export function _resetAll() {
  * @returns {Promise<number>} count of subscriptions restored across all histories
  */
 export async function rehydrateFromFacts() {
-  let Fact, History;
+  let listLiveHistories;
   try {
-    Fact = (await import("../../past/fact/fact.js")).default;
-    History = (await import("../../materials/history/history.js")).default;
+    ({ listLiveHistories } = await import("../../materials/history/histories.js"));
   } catch (err) {
     log.warn(
       "Subscriptions",
@@ -352,14 +351,13 @@ export async function rehydrateFromFacts() {
     return 0;
   }
 
-  // Enumerate live histories: main + every non-deleted History row.
+  // Enumerate live histories: main + every non-deleted history row.
+  // listLiveHistories (histories.js) is the curated reader over the
+  // file-backed history store; loadHistory is the single-row peer.
   const MAIN = "0";
   const histories = [MAIN];
   try {
-    const historyRows = await History.find(
-      { deleted: { $ne: true } },
-      "_id",
-    ).lean();
+    const historyRows = await listLiveHistories();
     for (const row of historyRows) {
       if (row._id !== MAIN) histories.push(row._id);
     }
@@ -370,22 +368,40 @@ export async function rehydrateFromFacts() {
     );
   }
 
-  // One query pulls every subscription fact across every history. Ordered by (history, seq) — within
-  // a history, register + cancel share the being's reel, so seq totally orders them (cancel after its
-  // registration); the per-history lineage walk below composes branches. ORDER, never the clock (623/12).
-  const subFacts = await Fact.find({
-    verb: "do",
-    action: { $in: ["subscription-registered", "subscription-cancelled"] },
-  })
-    .sort({ history: 1, seq: 1 })
-    .lean();
-
-  // Lazy-load lineage walker only when we actually have facts.
-  let isInLineage = null;
-  if (subFacts.length > 0) {
-    isInLineage =
-      (await import("./wakeSchedule.js")).__isInHistoryLineageForTests || null;
+  // Every subscription fact across every history. There is no cross-reel
+  // fact scan primitive, so we enumerate each history's beings (curated
+  // listByType) and read each being's OWN-history reel through the curated
+  // seam, keeping the verb:"do" act:{registered|cancelled} facts. Subscription
+  // facts target the being's own reel (of:{kind:"being", id:beingId}), so the
+  // being-reel read is the complete source. listByType inherits the lineage,
+  // but getFactsOnReelWhere reads only `history`'s own reel — an inherited
+  // being with no divergent subscription facts yields []. Collected flat, then
+  // ordered by (history, seq) — same shape/order as the old Fact.find.
+  const { listByType } = await import("../../materials/projections.js");
+  const { getFactsOnReelWhere } = await import("../../past/fact/facts.js");
+  const SUB_ACTS = new Set([
+    "subscription-registered",
+    "subscription-cancelled",
+  ]);
+  const subFacts = [];
+  for (const h of histories) {
+    const beings = await listByType("being", h);
+    for (const occ of beings) {
+      const facts = getFactsOnReelWhere(
+        h,
+        "being",
+        occ.id,
+        (f) => f?.verb === "do" && SUB_ACTS.has(f?.act),
+      );
+      for (const f of facts) subFacts.push(f);
+    }
   }
+  subFacts.sort((a, b) => {
+    const ha = String(a.history ?? "");
+    const hb = String(b.history ?? "");
+    if (ha !== hb) return ha < hb ? -1 : 1;
+    return (a.seq ?? 0) - (b.seq ?? 0);
+  });
 
   let restored = 0;
   for (const history of histories) {
@@ -394,12 +410,17 @@ export async function rehydrateFromFacts() {
       // Subscription facts target the being's own reel; we need the
       // history-lineage filter same as wakes use. Inline-check via
       // Fact.history matching the target history or any ancestor.
-      if (!(await _factInHistoryLineage(fact, history, History))) continue;
+      if (!(await _factInHistoryLineage(fact, history))) continue;
       const id = fact.params?.subscriptionId;
       if (!id) continue;
-      if (fact.action === "subscription-registered") {
+      // FLAG (pre-existing, now corrected): the old code matched on
+      // `fact.action`, but stamped facts carry `act` (the FactSchema field).
+      // Reading `.action` matched nothing — rehydrate silently restored zero.
+      // Curated fileStore facts expose `act`, so we read it here; this makes
+      // rehydrate actually recover subscriptions. Confirm this is intended.
+      if (fact.act === "subscription-registered") {
         live.set(id, _entryFromFact(fact));
-      } else if (fact.action === "subscription-cancelled") {
+      } else if (fact.act === "subscription-cancelled") {
         live.delete(id);
       }
     }
@@ -427,16 +448,18 @@ export async function rehydrateFromFacts() {
 // precision at boot — subscription liveness is event-driven, not
 // seq-replayed. Plain "stamped on this history or one of its
 // ancestors" matches what `subscribe(history: "1a")` callers expect.
-async function _factInHistoryLineage(fact, viewerHistory, History) {
+async function _factInHistoryLineage(fact, viewerHistory) {
   if (!fact.history || fact.history === viewerHistory) return true;
   if (viewerHistory === "0") return fact.history === "0";
-  // Walk viewerHistory's parent chain.
+  // Walk viewerHistory's parent chain via the curated single-row history
+  // chokepoint (loadHistory) rather than History.findById directly.
+  const { loadHistory } = await import("../../materials/history/histories.js");
   let cursor = viewerHistory;
   const visited = new Set();
   while (cursor && !visited.has(cursor)) {
     visited.add(cursor);
     if (cursor === fact.history) return true;
-    const row = await History.findById(cursor, "parent").lean();
+    const row = await loadHistory(cursor);
     cursor = row?.parent || null;
   }
   return false;
@@ -446,7 +469,11 @@ function _entryFromFact(fact) {
   const p = fact.params || {};
   return {
     id: p.subscriptionId,
-    beingId: String(fact.target?.id || fact.beingId),
+    // FLAG (pre-existing, now corrected): the old code read
+    // `fact.target?.id || fact.beingId`, but stamped facts carry the
+    // target under `of` (FactSchema). Subscription facts set
+    // of:{kind:"being", id:beingId}, so read `of.id` here.
+    beingId: String(fact.of?.id),
     event: p.event,
     scope: p.scope,
     filter: p.filter || null,

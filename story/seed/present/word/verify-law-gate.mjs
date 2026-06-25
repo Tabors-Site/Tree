@@ -25,9 +25,11 @@ import { randomUUID } from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const SCRATCH_DB = "mongodb://localhost:27017/story_lawgate";
+const SCRATCH_DB = path.join(os.tmpdir(), "story_lawgate-" + process.pid);
 process.env.PORT = "3861";
-process.env.MONGODB_URI = SCRATCH_DB;
+process.env.TREEOS_STORE_BASE = SCRATCH_DB;
+fs.rmSync(SCRATCH_DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "lawgate-secret-0123456789";
 process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "lawgate-keys-" + process.pid);
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
@@ -37,12 +39,7 @@ fs.mkdirSync(SRC, { recursive: true });
 fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
 
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`)).default;
-  const conn = await mongoose.createConnection(SCRATCH_DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
+// (scratch file store fresh-wiped above; no DB to drop)
 
 await import(`${R}/begin.js`);
 
@@ -64,7 +61,9 @@ const { authorizeViaAbles } = await import(`${R}/seed/ibp/ableAuth.js`);
 const { listFoldedProhibitions } = await import(
   `${R}/seed/present/word/wordStore.js`
 );
-const { default: Fact } = await import(`${R}/seed/past/fact/fact.js`);
+const { factFind, factFindOne, factCount } = await import(
+  `${R}/seed/present/word/_factStoreTest.mjs`
+);
 
 let pass = 0,
   fail = 0;
@@ -231,14 +230,14 @@ try {
   // ── 2. a member attempting do:back is REFUSED — "prohibited by law" — and NO fact laid ──
   // @delegate bears `member`, so the cannot fires and turns the positive permit (member AND angel
   // do:*) into ok:false. The walk is a pure read; snapshot the fact count immediately around it.
-  const factsBefore = await Fact.countDocuments({});
+  const factsBefore = factCount({});
   const blocked = await walkDo(memberBeing, "back", arena);
   blocked.ok === false && /prohibited by law/i.test(blocked.reason || "")
     ? ok(
         `(2) @delegate do:back → REFUSED (ok:false, reason "prohibited by law") — the cannot beats the can (and even angel's do:*)`,
       )
     : bad(`(2) cannot did not deny`, blocked);
-  const factsAfter = await Fact.countDocuments({});
+  const factsAfter = factCount({});
   factsAfter === factsBefore
     ? ok(
         `(2) the refused walk laid NO fact (${factsBefore} → ${factsAfter}) — the gate is a pre-seal read, fail-closed`,

@@ -2235,22 +2235,27 @@ export async function runExtensionMigrations(moment) {
   // Find the .extensions place heaven space once, so per-extension queries are scoped correctly.
   const { HEAVEN_SPACE } = await import("../seed/materials/space/heavenSpaces.js");
   const { findByHeavenSpace } = await import("../seed/materials/projections.js");
-  const { default: Projection } = await import("../seed/materials/history/projection.js");
   const extensionsParent = await findByHeavenSpace(HEAVEN_SPACE.EXTENSIONS, "0");
+  // Build the extension-child-space map ONCE off the file store (the .extensions children, by name),
+  // replacing the per-extension Projection.findOne (the deleted Mongo model). listByType is
+  // lineage-aware; loadOrFold gives each slot's {parent,name}. The loop below looks up by name.
+  const { listByType, loadOrFold } = await import("../seed/materials/projections.js");
+  const extChildByName = new Map();
+  if (extensionsParent) {
+    for (const o of await listByType("space", "0")) {
+      const slot = await loadOrFold("space", String(o.id), "0");
+      if (slot && !slot.tombstoned && String(slot.state?.parent) === String(extensionsParent.id)) {
+        extChildByName.set(slot.state?.name, { id: String(o.id), state: slot.state });
+      }
+    }
+  }
 
   for (const [name, { manifest, instance }] of loaded) {
     const targetVersion = manifest.provides?.schemaVersion;
     if (!targetVersion) continue; // No schema versioning declared
 
     // Get current version from the extension's child space under .extensions
-    const _extRow = extensionsParent
-      ? await Projection.findOne({
-          branch: "0", type: "space",
-          "state.parent": extensionsParent.id,
-          "state.name": name,
-          tombstoned: { $ne: true },
-        }).lean()
-      : null;
+    const _extRow = extensionsParent ? (extChildByName.get(name) || null) : null;
     const extSpace = _extRow ? { _id: _extRow.id, ...(_extRow.state || {}) } : null;
 
     const meta =

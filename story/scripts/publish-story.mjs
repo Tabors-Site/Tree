@@ -18,7 +18,6 @@
 // Does NOT call the publish intent automatically; prints the manifest
 // + listingHash so you can summon the registrar by hand (or pipe it).
 
-import mongoose from "mongoose";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
@@ -32,28 +31,19 @@ const REPO_ROOT = path.resolve(__dirname, "..");
 const NAME    = process.argv[2] || process.env.STORY_NAME || "story";
 const VERSION = process.argv[3] || "1.0.0";
 
-// Load .env if env isn't set yet.
-if (!process.env.MONGODB_URI) {
-  try {
-    const envText = fs.readFileSync(path.join(REPO_ROOT, ".env"), "utf8");
-    const line = envText.split("\n").find((l) => l.startsWith("MONGODB_URI="));
-    if (line) process.env.MONGODB_URI = line.split("=")[1].trim();
-  } catch {}
-}
-if (!process.env.MONGODB_URI) {
-  console.error("MONGODB_URI not set. Story must be running so source matter is queryable.");
-  process.exit(2);
-}
+// Open the file store (no mongod; the folded matter projections are read from files).
+const { connectDB } = await import("../seed/seedStory/dbConfig.js");
+await connectDB();
+const { listByType, loadOrFold } = await import("../seed/materials/projections.js");
 
-await mongoose.connect(process.env.MONGODB_URI);
-const { default: Projection } = await import("../seed/materials/history/projection.js");
-
-// Walk source matter: every file under REPO_ROOT whose content has a hash.
-const rows = await Projection.find({
-  branch: "0", type: "matter",
-  "state.content.kind": "file",
-  "state.content.hash": { $exists: true },
-}).lean();
+// Walk source matter: every file matter under REPO_ROOT whose content has a hash.
+const rows = [];
+for (const o of await listByType("matter", "0")) {
+  const slot = await loadOrFold("matter", String(o.id), "0");
+  if (slot && !slot.tombstoned && slot.state?.content?.kind === "file" && slot.state?.content?.hash) {
+    rows.push({ id: String(o.id), state: slot.state });
+  }
+}
 
 const files = [];
 for (const row of rows) {

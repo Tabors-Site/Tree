@@ -75,7 +75,6 @@
 // Every step is idempotent. Re-runs reconcile against what already
 // exists. Nothing is re-formed blindly.
 
-import mongoose from "./seed/seedStory/dbConfig.js";
 import { getStoryIdentity, getStoryUrl } from "./seed/storyIdentity.js";
 import {
   ensureSpaceRoot,
@@ -195,14 +194,11 @@ export async function genesis(app, opts = {}) {
   const { foldWords } = await import("./seed/present/word/wordFold.js");
   foldWords();
 
-  // Mongo connection opens as a side effect of importing dbConfig.
-  // Wait for it to land before any read or write fires.
-  if (mongoose.connection.readyState !== 1) {
-    await new Promise((resolve, reject) => {
-      mongoose.connection.once("connected", resolve);
-      mongoose.connection.once("error", reject);
-    });
-  }
+  // Open the file store: ensure the store dir + replay the moment-
+  // journal (crash recovery) before any read or write fires. (The Mongo
+  // auto-connect-on-import side effect is gone; connectDB is the entry.)
+  const { connectDB } = await import("./seed/seedStory/dbConfig.js");
+  await connectDB();
   log.info("Genesis", "Memory connected.");
 
   // The physical floor every space, matter, being, and Fact sits on.
@@ -272,8 +268,10 @@ export async function genesis(app, opts = {}) {
   // beings of the place with it), this is an Awakening. If not, it
   // is the Beginning. A planted seed lands as a special case of
   // Awakening: "I am restored" — the seed's biography is now mine.
-  const Space = (await import("./seed/materials/space/space.js")).default;
-  const existingRoot = await Space.findOne({ parent: null }).lean();
+  // Root-exists check off the file store (the deleted Space model): a parentless space IS the place
+  // root, which findRoot("space") returns. Present → Awakening; absent → Beginning.
+  const { findRoot } = await import("./seed/materials/projections.js");
+  const existingRoot = (await findRoot("space", "0"))[0] || null;
   bootMode = plantedFromSeed
     ? "Restored"
     : existingRoot
@@ -578,17 +576,15 @@ export async function genesis(app, opts = {}) {
     await import("./seed/present/ables/federation-manager/able.js");
   registerAble("federation-manager", federationManagerAble, "seed");
 
-  // The host tier (nodeServerTest Phase 1): the HTTP listener, the
-  // WebSocket pool, and the Mongo connection as beings. Scripted
-  // cognition; their lifecycle code lives in seed/materials/host/.
+  // The host tier (nodeServerTest Phase 1): the HTTP listener and the
+  // WebSocket pool as beings. Scripted cognition; their lifecycle code
+  // lives in seed/materials/host/.
   const { httpServerAble } =
     await import("./seed/present/ables/http-server/able.js");
   registerAble("http-server", httpServerAble, "seed");
   const { websocketPoolAble } =
     await import("./seed/present/ables/websocket-pool/able.js");
   registerAble("websocket-pool", websocketPoolAble, "seed");
-  const { mongoAble } = await import("./seed/present/ables/mongo/able.js");
-  registerAble("mongo-connection", mongoAble, "seed");
 
   // able-finder: LLM helper that authors live ables from English.
   // Summon @able-finder, describe what a being should be able to do,
@@ -726,8 +722,6 @@ export async function genesis(app, opts = {}) {
         await import("./seed/present/ables/http-server/able.js");
       const { websocketPoolAble: websocketPoolAbleSpec } =
         await import("./seed/present/ables/websocket-pool/able.js");
-      const { mongoAble: mongoAbleSpec } =
-        await import("./seed/present/ables/mongo/able.js");
       const installs = [
         ["human", humanAble],
         ["cherub", cherubAble],
@@ -742,7 +736,6 @@ export async function genesis(app, opts = {}) {
         ["public", publicAble],
         ["http-server", httpServerAbleSpec],
         ["websocket-pool", websocketPoolAbleSpec],
-        ["mongo-connection", mongoAbleSpec],
       ];
       for (const [name, spec] of installs) {
         await withIAmAct(`I install ${name} on the story root`, async (ctx) => {
@@ -783,10 +776,10 @@ export async function genesis(app, opts = {}) {
 
   // ── Host runtime (nodeServerTest Phase 1). ──
   // Resolve the ./host spaces + beings, ensure the request-log
-  // matter, sweep stale connection matter from the previous process,
-  // stamp the mongo boot fact. Runs in plant-mode boots too (it only
-  // resolves and reconciles). Failure never blocks boot: the
-  // transport notifiers stay no-ops when not ready.
+  // matter, sweep stale connection matter from the previous process.
+  // Runs in plant-mode boots too (it only resolves and reconciles).
+  // Failure never blocks boot: the transport notifiers stay no-ops
+  // when not ready.
   try {
     const { initHostRuntime } = await import("./seed/materials/host/host.js");
     await initHostRuntime();
@@ -854,17 +847,14 @@ export async function genesis(app, opts = {}) {
     await import("./seed/present/ables/federation-manager/ops.js");
   registerFederationManagerOps();
 
-  // Host SEE ops: http-stats, connections, mongo-stats. Pure reads
-  // over the live process, gated by canSee on the infra ables + angel.
+  // Host SEE ops: http-stats, connections. Pure reads over the live
+  // process, gated by canSee on the infra ables + angel.
   const { registerHttpServerOps } =
     await import("./seed/present/ables/http-server/ops.js");
   registerHttpServerOps();
   const { registerWebsocketPoolOps } =
     await import("./seed/present/ables/websocket-pool/ops.js");
   registerWebsocketPoolOps();
-  const { registerMongoOps } =
-    await import("./seed/present/ables/mongo/ops.js");
-  registerMongoOps();
 
   // I hand my remembered settings (from ./config) down to the seed
   // modules that depend on them. Per-key failures are logged but

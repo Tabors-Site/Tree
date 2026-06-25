@@ -36,7 +36,8 @@
 // `@modelcontextprotocol/sdk` is NO LONGER a declared dependency. It
 // was dropped during the 2026-06 dependency cleanup (MCP was dormant,
 // and the sdk was the only thing dragging in transitive packages the
-// seed actually used directly, e.g. jose, now a direct dep). The
+// seed actually used directly, e.g. jose — which has since also been
+// removed, replaced by seed/jwsEd25519.js over node:crypto). The
 // imports below therefore will NOT resolve until you reinstall it.
 // To re-enable MCP:
 //

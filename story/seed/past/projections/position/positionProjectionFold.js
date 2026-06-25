@@ -23,11 +23,24 @@
 // concurrent live folds both end at the same row. Drop the row, walk
 // the reel, get the same state — that's the discipline.
 
-import mongoose from "mongoose";
-import PositionProjection, { positionRowId } from "./positionProjection.js";
+import { FileCollection } from "../../projStore.js";
 import { registerCrossCuttingHandler } from "../../../present/stamper/2-fold/foldEngine.js";
 import { hooks } from "../../../hooks.js";
 import log from "../../../seedStory/log.js";
+
+// Cross-cutting fold of beings' current coord per space. One row per
+// (beingId, spaceId): "who is at this space, where" is a single indexed
+// read instead of a scan across being position filters. The chain of
+// do:set-being:coord facts on each being's reel is the record; this
+// file-backed collection (one JSON file per row + a small index under
+// <storeRoot>/proj/position) is the rebuildable cache.
+const PositionProjection = new FileCollection("position");
+
+// Build the composite _id from (beingId, spaceId). Single-source so fold
+// and reads can't drift.
+export function positionRowId(beingId, spaceId) {
+  return `${String(beingId)}:${String(spaceId)}`;
+}
 
 async function handleSetBeingCoord(fact /*, type, id*/) {
   if (fact?.verb !== "do" || fact?.act !== "set-being") return;

@@ -55,20 +55,18 @@
 
 import log from "../../seedStory/log.js";
 import { getInternalConfigValue } from "../../internalConfig.js";
-import Being from "../../materials/being/being.js";
 import {
   loadProjection,
   loadOrFold,
   assertHistoryOrThrow,
 } from "../../materials/projections.js";
-import Act from "../../past/act/act.js";
+import { getActById } from "../../past/act/actChain.js";
 import { getStoryConfigValue } from "../../storyConfig.js";
 import {
   resolveActiveStack,
   computeAvailableAbles,
 } from "../ables/flow.js";
 import { composeStack } from "../ables/ableComposer.js";
-import Space from "../../materials/space/space.js";
 import { computeIbpStampAddress } from "../../ibp/address.js";
 import {
   validateOrientation,
@@ -649,9 +647,7 @@ async function planActRow(opts = {}) {
   // chain rooted at the originating user message.
   if (!resolvedRoot && inReplyTo) {
     try {
-      const parent = await Act.findById(inReplyTo)
-        .select("rootCorrelation")
-        .lean();
+      const parent = getActById(inReplyTo);
       resolvedRoot = parent?.rootCorrelation || inReplyTo;
     } catch {
       resolvedRoot = inReplyTo;

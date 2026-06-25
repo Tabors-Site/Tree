@@ -11,7 +11,6 @@
 // dispatches.
 
 import { registerOperation } from "../../ibp/operations.js";
-import Space from "./space.js";
 import { createSpace } from "./spaces.js";
 import { getStoryDomain } from "../../ibp/address.js";
 import {

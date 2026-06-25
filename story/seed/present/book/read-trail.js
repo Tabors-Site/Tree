@@ -115,20 +115,55 @@ export async function resolveViewFromFold(name) {
 // (no lens) still delegates to assembleStory so its weave/pastPhrase stay the one source of glossing.
 // scope "world" → no filter (every reel-kind, every author); "being"/"space" → a single chain.
 async function readSpanFacts({ history, scope = "world", since = null, until = null, being = null, space = null }) {
-  const { default: Fact } = await import("../../past/fact/fact.js");
-  const q = { history: requireHistory(history) };
-  if (since || until) {
-    q.date = {};
-    if (since) q.date.$gt = since instanceof Date ? since : new Date(since);
-    if (until) q.date.$lte = until instanceof Date ? until : new Date(until);
-  }
-  if (scope === "being" && being) q.$or = [{ through: String(being) }, { by: String(being) }];
-  else if (scope === "space" && space) q["of.id"] = String(space);
+  // The CROSS-REEL / WORLD fact read, now through the curated facts.js seam:
+  // every fact on a history across ALL reel-kinds (scope "world"), or a being's
+  // facts by author-OR-actor (through OR by), or a space's facts by of.id,
+  // date-ranged and date-sorted. facts.getHistoryFacts unions every reel of the
+  // history (fileStore.listReelKinds + listReelIds → readReel — the cross-reel
+  // scan substrate) and applies the caller's predicate + sort in JS; we build
+  // the same window + scope filter the old Mongo query expressed, and reproduce
+  // its ordering (world = date then seq; single-reel = seq then date).
+  const h = requireHistory(history);
+  const sinceMs = since != null ? (since instanceof Date ? since.getTime() : new Date(since).getTime()) : null;
+  const untilMs = until != null ? (until instanceof Date ? until.getTime() : new Date(until).getTime()) : null;
+  const wantBeing = being != null ? String(being) : null;
+  const wantSpace = space != null ? String(space) : null;
+  const predicate = (f) => {
+    // date window: since is exclusive ($gt), until inclusive ($lte)
+    if (sinceMs != null || untilMs != null) {
+      const t = f?.date != null ? Date.parse(f.date) : NaN;
+      if (Number.isNaN(t)) return false;
+      if (sinceMs != null && !(t > sinceMs)) return false;
+      if (untilMs != null && !(t <= untilMs)) return false;
+    }
+    // scope: a being's facts (author OR actor), a space's facts (target of.id)
+    if (scope === "being" && wantBeing) {
+      return String(f.through ?? "") === wantBeing || String(f.by ?? "") === wantBeing;
+    }
+    if (scope === "space" && wantSpace) {
+      return String(f.of?.id ?? "") === wantSpace;
+    }
+    return true; // "world" — every reel-kind, every author
+  };
   // A single-reel scope (a being's act-chain, a space's reel) is ordered by the CHAIN — seq, never
   // the clock. "world" spans concurrent reels with no single seq, so date presents the concurrent
   // facts (time as content, for presentation; not as truth-order).
-  const sort = scope === "world" ? { date: 1, seq: 1 } : { seq: 1, date: 1 };
-  return Fact.find(q).sort(sort).lean();
+  const sort = scope === "world"
+    ? (a, b) => {
+        const ad = a?.date != null ? Date.parse(a.date) : 0;
+        const bd = b?.date != null ? Date.parse(b.date) : 0;
+        return ad !== bd ? ad - bd : (a?.seq ?? 0) - (b?.seq ?? 0);
+      }
+    : (a, b) => {
+        const as = a?.seq ?? 0;
+        const bs = b?.seq ?? 0;
+        if (as !== bs) return as - bs;
+        const ad = a?.date != null ? Date.parse(a.date) : 0;
+        const bd = b?.date != null ? Date.parse(b.date) : 0;
+        return ad - bd;
+      };
+  const { getHistoryFacts } = await import("../../past/fact/facts.js");
+  return getHistoryFacts(h, { predicate, sort });
 }
 
 // id -> a readable name, resolved once per read from the live slots (being/space/matter). Falls back

@@ -10,14 +10,20 @@
 //   }
 //
 
-import History from "./history.js";
+// The History registry is now the file-backed history store
+// (historyStore.js), no longer a Mongoose model. The children-listing
+// read goes through the curated listHistoryChildren seam in histories.js
+// (which scans the file-backed collection by parent), the same way the
+// single-row reads go through loadHistory.
 import {
   MAIN,
   loadHistory,
   resolveHistoryLineage,
   commonAncestor,
   divergentFactsSince,
+  listHistoryChildren,
 } from "./histories.js";
+import { getFactsOnReelWhere } from "../../past/fact/facts.js";
 import { readPointers } from "./historyRegistry.js";
 
 export async function describeHistoriesCatalog(historyPath = MAIN) {
@@ -80,12 +86,11 @@ export async function describeHistoriesCatalog(historyPath = MAIN) {
   // in the chain and SEE on a specific deleted path still resolves
   // (current slot above honors the direct lookup), but they don't
   // clutter the history picker. Undelete brings them back.
-  const childRows = await History.find({
-    ...(isMainPath ? { parent: null } : { parent: path }),
-    deleted: { $ne: true },
-  })
-    .sort({ path: 1 })
-    .lean();
+  //
+  // Direct children via the curated history-store seam. Main's children
+  // carry parent=null (main has no row); listHistoryChildren takes null
+  // for that case. Deleted rows are excluded by default.
+  const childRows = await listHistoryChildren(isMainPath ? null : path);
   const children = childRows.map(_serializeHistory);
 
   // The named-pointer map ({ main: "0", prod: "7", ... }). One read; the
@@ -300,36 +305,25 @@ function _summarizeFact(fact) {
 // the merged history (small even for large merges).
 async function _readMergeResolutions(mergedHistory, reelKeys) {
   if (!reelKeys || reelKeys.size === 0) return new Map();
-  const { default: Fact } = await import("../../past/fact/fact.js");
-  // Decompose reel keys ("kind:id") into target filters. Build a single
-  // $in query per kind so the round-trip stays one read.
-  const kindToIds = new Map();
+  // Curated read: each reel key ("kind:id") names one reel on the merged
+  // history. getFactsOnReelWhere reads that reel (seq-ascending) and keeps the
+  // reconciliation facts (params._merge present). The old Fact.find with a
+  // per-kind $in + sort({seq,date}) becomes one curated read per reel; because
+  // the curated read returns seq-ascending, the LAST kept fact per reel is the
+  // latest resolution (same "most recent decision wins" semantics).
+  const byReel = new Map();
   for (const key of reelKeys) {
     const sepIdx = key.indexOf(":");
     if (sepIdx < 0) continue;
     const kind = key.slice(0, sepIdx);
     const id = key.slice(sepIdx + 1);
-    if (!kindToIds.has(kind)) kindToIds.set(kind, []);
-    kindToIds.get(kind).push(id);
-  }
-  if (kindToIds.size === 0) return new Map();
-  const orClauses = [];
-  for (const [kind, ids] of kindToIds) {
-    orClauses.push({ "of.kind": kind, "of.id": { $in: ids } });
-  }
-  const facts = await Fact.find({
-    history: mergedHistory,
-    "params._merge": { $exists: true },
-    $or: orClauses,
-  })
-    .sort({ seq: 1, date: 1 })
-    .lean();
-  // Latest fact per reel wins (if a conflict was resolved more than
-  // once, the most recent decision is what's authoritative).
-  const byReel = new Map();
-  for (const f of facts) {
-    const key = `${f.of.kind}:${f.of.id}`;
-    byReel.set(key, f);
+    const facts = getFactsOnReelWhere(
+      mergedHistory,
+      kind,
+      id,
+      (f) => f?.params?._merge != null,
+    );
+    if (facts.length > 0) byReel.set(key, facts[facts.length - 1]);
   }
   return byReel;
 }

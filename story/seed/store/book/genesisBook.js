@@ -37,11 +37,17 @@ export function genesisRoot() {
 }
 
 // Every word declared on heaven "0" (the coin facts are the source of truth — the root language).
+// The coin facts ride the I's being reel (wordStore.bindWord lays do:coin with of:{being, I}), so
+// read that reel on "0" via the curated getFactsOnReelWhere — the file-native peer of Fact.find.
 async function allSeedWordNames() {
-  const Fact = (await import("../../past/fact/fact.js")).default;
-  const coins = await Fact.find({ verb: "do", act: "coin", history: "0" })
-    .select("params.word")
-    .lean();
+  const { getFactsOnReelWhere } = await import("../../past/fact/facts.js");
+  const { I } = await import("../../materials/being/seedBeings.js");
+  const coins = getFactsOnReelWhere(
+    "0",
+    "being",
+    String(I),
+    (f) => f.verb === "do" && f.act === "coin",
+  );
   return [...new Set(coins.map((f) => f?.params?.word).filter(Boolean))];
 }
 

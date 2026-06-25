@@ -9,10 +9,6 @@
 
 import log from "./seedStory/log.js";
 import { hooks as hooksModule } from "./hooks.js";
-import Being from "./materials/being/being.js";
-import Space from "./materials/space/space.js";
-import Fact from "./past/fact/fact.js";
-import Matter from "./materials/matter/matter.js";
 
 import { emitFact } from "./past/fact/facts.js";
 import { captureGraft } from "./store/book/graft.js";
@@ -439,9 +435,6 @@ export function buildStoryServices({
     // worker arrives at its queue. Simple primitives compose.
     // Pipelines are what beings working together look like, not what I
     // run on their behalf.
-
-    // --- Shared models (always available) ---
-    models: { Being, Space, Fact, Matter },
 
     // --- Hook system ---
     hooks: hooksModule,

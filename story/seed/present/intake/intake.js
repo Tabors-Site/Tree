@@ -36,7 +36,7 @@
 //     migration.
 
 import { randomUUID } from "crypto";
-import InboxProjection from "../../past/projections/inbox/inboxProjection.js";
+import { InboxProjection } from "../../past/projections/inbox/inboxProjectionFold.js";
 import { emitFact } from "../../past/fact/facts.js";
 import { assertHistoryOrThrow } from "../../materials/projections.js";
 import { stashSecrets, restoreSecrets } from "./secretStash.js";

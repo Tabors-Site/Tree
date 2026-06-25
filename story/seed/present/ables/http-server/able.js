@@ -22,12 +22,11 @@ export const httpServerAble = Object.freeze({
   respondMode: "async",
   triggerOn: ["message"],
 
-  // The whole host picture: any infra being's frame can read all
-  // three live-stat ops, plus the do ops it stamps with.
+  // The whole host picture: any infra being's frame can read both
+  // live-stat ops, plus the do ops it stamps with.
   can: [
     { verb: "see", word: "http-stats" },
     { verb: "see", word: "connections" },
-    { verb: "see", word: "mongo-stats" },
     {
       verb:        "do",
       word:        "create-matter",

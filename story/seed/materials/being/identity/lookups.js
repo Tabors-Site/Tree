@@ -14,6 +14,7 @@ import {
   findRoot,
   findRootOperator as findRootOperatorImpl,
   countByType,
+  listByType,
 } from "../../projections.js";
 
 /**
@@ -162,16 +163,18 @@ export async function findRootOperator(history = "0") {
  * for the real first human).
  */
 export async function isFirstBeing(history = "0") {
-  const { default: Projection } = await import("../../history/projection.js");
-  const row = await Projection.findOne({
-    history: history,
-    type: "being",
-    "state.qualities.cognition.defaultKind": "human",
-    tombstoned: { $ne: true },
-  })
-    .select("id")
-    .lean();
-  return row == null;
+  // CURATED: listByType returns the live (non-tombstoned) being occupants
+  // for the history; load each slot's state and test cognition. True when
+  // no human-cognition being is present. The Mongo path matched on the
+  // nested projection field state.qualities.cognition.defaultKind === "human";
+  // here we read the same path off the folded slot state.
+  const occupants = await listByType("being", history);
+  for (const o of occupants) {
+    const slot = await loadProjection("being", o.id, history);
+    const kind = slot?.state?.qualities?.cognition?.defaultKind;
+    if (kind === "human") return false;
+  }
+  return true;
 }
 
 /**
@@ -223,12 +226,35 @@ export async function findBeingByName(name, history = "0") {
 export async function findBeingCandidatesByName(name) {
   if (!name || typeof name !== "string") return [];
   const escaped = name.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const { default: Projection } = await import("../../history/projection.js");
-  const rows = await Projection.find({
-    type: "being",
-    "state.name": { $regex: `^${escaped}$`, $options: "i" },
-    tombstoned: { $ne: true },
-  }).lean();
+  // CURATED CROSS-HISTORY sweep (every history's slot for the name, deduped by
+  // being id, home-slot picked). The projections.js find* layer is history-SCOPED
+  // (own history + lineage), so a cross-history sweep enumerates every history
+  // (the curated, file-backed histories.listAllHistories — main + every branch
+  // path) and runs the own-history name pattern read on each. findByNamePattern
+  // already excludes tombstones and shapes the slot ({id, position, state, ...,
+  // history}); we collect every match, then group + pick the home slot exactly
+  // as the old Projection.find did.
+  const re = new RegExp(`^${escaped}$`, "i");
+  const { listAllHistories } = await import("../../history/histories.js");
+  const histories = ["0"];
+  for (const row of await listAllHistories()) {
+    const p = row?.path ?? row?._id;
+    if (p != null && String(p) !== "0") histories.push(String(p));
+  }
+  const rows = [];
+  for (const h of histories) {
+    for (const slot of await findByNamePattern("being", re, h)) {
+      // findByNamePattern returns the shaped slot {id, position, history, ...state-spread? no}.
+      // It returns shapeSlot: {state, foldedSeq, position, tombstoned, type, id, history}. Keep
+      // the doc-ish row the grouping below reads (id, history, state, position).
+      rows.push({
+        id: slot.id,
+        history: slot.history,
+        state: slot.state,
+        position: slot.position,
+      });
+    }
+  }
   if (rows.length === 0) return [];
 
   const { getDefaultHistory } =
@@ -285,14 +311,29 @@ export async function findHomeHistoryOfBeing(beingId) {
     await import("../../history/historyRegistry.js");
   const defaultHistory = await getDefaultHistory();
   if (!beingId) return defaultHistory;
-  const { default: Projection } = await import("../../history/projection.js");
-  const slots = await Projection.find({
-    type: "being",
-    id: String(beingId),
-    tombstoned: { $ne: true },
-  })
-    .select("history state.homeHistory")
-    .lean();
+  // CURATED CROSS-HISTORY sweep — every history's own slot for ONE being id, to
+  // pick the home slot (history === state.homeHistory). Like
+  // findBeingCandidatesByName: the projections.js layer is history-scoped, so we
+  // enumerate every history (histories.listAllHistories — the curated, file-backed
+  // registry) and do an own-history loadProjection on each. loadProjection
+  // (not loadOrFold) reads only the history's OWN slot — no lineage cold-fold —
+  // so an inherited being yields no slot for a history it never diverged in,
+  // matching the old Projection.find by stored history. Tombstoned slots are
+  // skipped (the old query excluded them).
+  const id = String(beingId);
+  const { listAllHistories } = await import("../../history/histories.js");
+  const histories = ["0"];
+  for (const row of await listAllHistories()) {
+    const p = row?.path ?? row?._id;
+    if (p != null && String(p) !== "0") histories.push(String(p));
+  }
+  const slots = [];
+  for (const h of histories) {
+    const slot = await loadProjection("being", id, h);
+    if (slot && !slot.tombstoned) {
+      slots.push({ history: slot.history, state: slot.state });
+    }
+  }
   if (slots.length === 0) return defaultHistory;
   const home =
     slots.find(

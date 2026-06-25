@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 // Live gate for the Word cherub slice: run the evaluator's form-being against the
-// REAL substrate (Mongo + genesis) and verify it actually births a being, the
-// proof that the Word evaluator drives the live substrate, not just a dry-run.
-// Isolated test DB, wiped at start and end. Modeled on .test/scripts/verify-credential.js.
+// REAL substrate (the file store + genesis) and verify it actually births a being,
+// the proof that the Word evaluator drives the live substrate, not just a dry-run.
+// Isolated file store under a per-pid scratch dir, fresh-wiped at start.
+import os from "os";
 
 import fs from "fs";
 import path from "path";
@@ -23,28 +24,27 @@ for (const line of fs
     v = t.slice(eq + 1).trim();
   if (v && !process.env[k]) process.env[k] = v;
 }
-process.env.MONGODB_URI = "mongodb://localhost:27017/story-word-cherub-test";
+// The Mongo rip: storage is now a directory under store/, selected by
+// TREEOS_STORE_BASE. Point the engine at a per-pid scratch base, fresh-wiped,
+// so this rig runs files-only with no MONGODB_URI and no shared state.
+const STORE_BASE = path.join(os.tmpdir(), "story_word_cherub-" + process.pid);
+process.env.TREEOS_STORE_BASE = STORE_BASE;
+fs.rmSync(STORE_BASE, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 
-const mongoose = (await import("../../seedStory/dbConfig.js")).default;
-if (mongoose.connection.readyState !== 1) {
-  await new Promise((res, rej) => {
-    mongoose.connection.once("connected", res);
-    mongoose.connection.once("error", rej);
-  });
-}
-if (mongoose.connection.name !== "story-word-cherub-test") {
-  console.log(`  REFUSING: wrong DB "${mongoose.connection.name}"`);
-  process.exit(2);
-}
+// Open the file store (make the data dir + replay any journal). This rig runs
+// its own minimal genesis below rather than the full begin.js boot, so it must
+// configure the store itself before the first read/write.
+const { connectDB } = await import("../../seedStory/dbConfig.js");
+await connectDB();
 
 await import("../../materials/space/ops.js");
 await import("../../materials/matter/ops.js");
 await import("../../materials/being/ops.js");
 
-const Being = (await import("../../materials/being/being.js")).default;
 const { ensureSpaceRoot, ensureIAm } = await import("../../sprout.js");
-const { findByName, loadProjection } =
-  await import("../../materials/projections.js");
+const { findByName } = await import("../../materials/projections.js");
+const { factFind } = await import("./_factStoreTest.mjs");
 const { ensureSeedDelegates } =
   await import("../../materials/being/seedDelegates.js");
 const { sealFacts } = await import("../../past/fact/facts.js");
@@ -63,7 +63,9 @@ const bad = (l, d) => {
   if (d) console.log(`      ${d}`);
 };
 
-// transient MongoDB transaction errors (fresh DB / lock contention) want a retry.
+// A thin retry wrapper kept from the Mongo path. The file store is single-writer
+// (no transaction/lock contention), so its predicate never matches and fn runs once;
+// it stays as a harmless guard around the genesis steps.
 async function withRetry(fn, label, tries = 6) {
   for (let i = 0; i < tries; i++) {
     try {
@@ -85,30 +87,12 @@ async function withRetry(fn, label, tries = 6) {
 }
 
 console.log(
-  `\n  verify-word-cherub (live)\n  DB: ${mongoose.connection.host}/${mongoose.connection.name}\n`,
+  `\n  verify-word-cherub (live)\n  store: ${STORE_BASE.split("/").pop()}\n`,
 );
 
 try {
-  await mongoose.connection.db.dropDatabase();
-  // pre-create collections so genesis's first transactional write doesn't hit
-  // "catalog changes; please retry" (a new collection made inside a transaction).
-  for (const c of [
-    "facts",
-    "acts",
-    "beings",
-    "spaces",
-    "matters",
-    "reels",
-    "reelheads",
-    "names",
-    "stamps",
-  ]) {
-    try {
-      await mongoose.connection.db.createCollection(c);
-    } catch {
-      /* exists */
-    }
-  }
+  // (the file store was fresh-wiped above; no DB to drop and no collections to
+  //  pre-create . the reels/journal dirs are made on demand by configureStore.)
   console.log(
     "  genesis: ensureIAm + the words + ensureSpaceRoot + ensureSeedDelegates",
   );
@@ -213,19 +197,17 @@ try {
         `parent=${birthFact?.params?.parentBeingId}`,
       );
 
-  // one act, many facts: birthBeing also lays the inherited + global able grants
-  const grants = moment.deltaF.filter(
-    (f) =>
-      f.verb === "do" &&
-      f.act === "grant-able" &&
-      f.of?.id === birthFact?.of?.id,
-  );
-  grants.length >= 1
-    ? ok(`birthBeing laid ${grants.length} able grant(s) on the new being`)
-    : bad(`able grants laid`, "none");
-
-  // seal the moment, then confirm the being materializes from the chain
+  // seal the moment (commits the be:birth fact), then run the moment's
+  // afterSeal hooks. Under "one word = one moment" birthBeing no longer pools
+  // the able grants into moment.deltaF. It queues them onto moment.afterSeal,
+  // each its OWN moment (an inherited grant THROUGH the parent, plus the global
+  // anoint THROUGH I), laid AFTER the be:birth lands so the child exists
+  // on-chain before it is granted to. The production act-seal (stamper
+  // sealAct) fires those hooks; this low-level rig drives sealFacts(deltaF)
+  // directly, so we run them by hand here, the same callbacks sealAct runs.
   await sealFacts(moment.deltaF);
+  for (const cb of moment.afterSeal || []) await cb();
+
   const born = await findByName("being", "worduser", branch); // fold-aware read
   born
     ? ok(
@@ -233,15 +215,26 @@ try {
       )
     : bad(`@worduser materializes after seal`, "no row found");
 
+  // one act, several facts (across moments): birthBeing lays the inherited and
+  // global able grants on the new being. They land on the child's reel (not in
+  // the caller's deltaF), so read them from the store, the file-store peer of
+  // the old global Fact.find({ verb:"do", act:"grant-able", "of.id": child }).
+  const grants = factFind({
+    verb: "do",
+    act: "grant-able",
+    "of.id": String(birthFact?.of?.id),
+  });
+  grants.length >= 1
+    ? ok(`birthBeing laid ${grants.length} able grant(s) on the new being`)
+    : bad(`able grants laid`, "none");
+
   console.log(`\n  ${pass} passed, ${fail} failed`);
-  await mongoose.connection.db.dropDatabase();
-  await mongoose.disconnect();
+  fs.rmSync(STORE_BASE, { recursive: true, force: true }); // drop the scratch store
   process.exit(fail === 0 ? 0 : 1);
 } catch (err) {
   console.log(`\n  ! crashed: ${err.stack || err.message}`);
   try {
-    await mongoose.connection.db.dropDatabase();
-    await mongoose.disconnect();
+    fs.rmSync(STORE_BASE, { recursive: true, force: true });
   } catch {}
   process.exit(3);
 }

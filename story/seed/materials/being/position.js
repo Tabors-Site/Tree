@@ -30,7 +30,6 @@
 // underlying schema field migrated from `Being.currentSpace` to
 // `Being.position` on 2026-05-29.
 
-import Being from "./being.js";
 import log from "../../seedStory/log.js";
 import { getAncestorChain } from "../space/ancestorCache.js";
 import { getSpaceRootId } from "../../sprout.js";

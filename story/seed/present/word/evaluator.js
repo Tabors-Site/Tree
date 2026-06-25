@@ -238,7 +238,11 @@ async function evalSee(node, ctx) {
   }
 
   if (typeof node.of === "string") {
-    result = await seeQuery(node.of, resolveValue(node.where, ctx) || {});
+    result = await seeQuery(
+      node.of,
+      resolveValue(node.where, ctx) || {},
+      ctx.history,
+    );
     if (node.one) result = Array.isArray(result) ? (result[0] ?? null) : result;
   } else if (node.descendsFrom !== undefined) {
     const subject = entity(node.of),
@@ -300,7 +304,7 @@ async function evalSee(node, ctx) {
 // query a kind's projection rows by a flat field predicate. being-by-name routes to the
 // canonical cross-history sweep so the candidate shape (_id, homeHistory, ...state) matches
 // what the flows read; other queries hit the read-model (the fold) directly.
-async function seeQuery(kind, where) {
+async function seeQuery(kind, where, history) {
   if (
     kind === "being" &&
     where &&
@@ -311,19 +315,40 @@ async function seeQuery(kind, where) {
       await import("../../materials/being/identity/lookups.js");
     return findBeingCandidatesByName(String(where.name));
   }
-  const { default: Projection } =
-    await import("../../materials/history/projection.js");
-  const q = { type: kind, tombstoned: { $ne: true } };
-  for (const k of Object.keys(where || {})) q[`state.${k}`] = where[k];
-  const rows = await Projection.find(q).lean();
-  // tag each row with its `kind` so a later `see <row>'s <quality>` READ knows which
-  // projection to re-read (space/matter, not just being).
-  return rows.map((r) => ({
-    _id: r.id,
-    kind,
-    homeHistory: r.state?.homeHistory,
-    ...(r.state || {}),
-  }));
+  // Curated projection query. The prior Mongo Projection.find had no history
+  // filter (it crossed every history's docs); the curated peer scopes to the
+  // running Word's history lineage via listByType + per-id loadProjection, then
+  // filters by the flat `state.<field>` predicates. (Threading ctx.history
+  // narrows an all-histories Mongo scan to the world the caller stands in.)
+  const { listByType, loadProjection } =
+    await import("../../materials/projections.js");
+  const h = history || "0";
+  const fields = Object.keys(where || {});
+  const out = [];
+  for (const occ of await listByType(kind, h)) {
+    const slot = await loadProjection(kind, occ.id, h);
+    if (!slot || slot.tombstoned) continue;
+    const state = slot.state || {};
+    let match = true;
+    for (const k of fields) {
+      // Flat field predicate, mirroring the prior `state.<k>` equality.
+      const have = k.split(".").reduce((o, p) => (o == null ? o : o[p]), state);
+      if (have !== where[k]) {
+        match = false;
+        break;
+      }
+    }
+    if (!match) continue;
+    // tag each row with its `kind` so a later `see <row>'s <quality>` READ knows
+    // which projection to re-read (space/matter, not just being).
+    out.push({
+      _id: occ.id,
+      kind,
+      homeHistory: state.homeHistory,
+      ...state,
+    });
+  }
+  return out;
 }
 
 // read a bound entity's dotted quality; `fresh` re-reads the projection (vs the bound

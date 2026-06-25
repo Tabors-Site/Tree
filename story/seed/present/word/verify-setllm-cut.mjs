@@ -15,9 +15,11 @@ import { randomUUID } from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const SCRATCH_DB = "mongodb://localhost:27017/story_word_setllm_cut";
+const SCRATCH_DB = path.join(os.tmpdir(), "story_word_setllm_cut-" + process.pid);
 process.env.PORT = "3795";
-process.env.MONGODB_URI = SCRATCH_DB;
+process.env.TREEOS_STORE_BASE = SCRATCH_DB;
+fs.rmSync(SCRATCH_DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "setllm-secret-0123456789";
 process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "setllmcut-keys-" + process.pid);
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
@@ -29,12 +31,7 @@ process.env.SOURCE_TREE_ROOT = SRC;
 process.env.CUSTOM_LLM_API_SECRET_KEY =
   process.env.CUSTOM_LLM_API_SECRET_KEY || "setllm-llm-encryption-key-0123456789ab";
 
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`)).default;
-  const conn = await mongoose.createConnection(SCRATCH_DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
+// (scratch file store fresh-wiped above; no DB to drop)
 
 await import(`${R}/begin.js`);
 
@@ -43,7 +40,7 @@ const { sealFacts } = await import(`${R}/seed/past/fact/facts.js`);
 const { I } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { doVerb } = await import(`${R}/seed/ibp/verbs/do.js`);
 const { resolveAbleWord } = await import(`${R}/seed/present/word/ableWordRegistry.js`);
-const { default: Fact } = await import(`${R}/seed/past/fact/fact.js`);
+const { factFind, factCount } = await import(`${R}/seed/present/word/_factStoreTest.mjs`);
 
 let pass = 0, fail = 0;
 const ok = (l) => { pass++; console.log(`  ✓ ${l}`); };
@@ -86,14 +83,17 @@ try {
 
   // ── set-being-llm: TWO fields (slot list "main" + preferOwn) → TWO separate do:set-being facts ──
   const llmFieldQ = { $in: ["qualities.llm.default", "qualities.llm.preferOwn", "qualities.llm.forceActor", "qualities.llm.forceReceiver"] };
-  const before = await Fact.countDocuments({ act: "set-being", "params.field": llmFieldQ });
+  const before = factCount({ act: "set-being", "params.field": llmFieldQ });
   const r = await did("set-being-llm", T, { slot: "main", connections: ["c-aaa", "c-bbb"], preferOwn: true });
   if (r.refused) { bad("set-being-llm laid its fields", r.refused.message); }
   else {
     await new Promise((res) => setTimeout(res, 800));
-    const facts = await Fact.find({ act: "set-being", "params.field": llmFieldQ }).sort({ _id: -1 }).limit(2).select("actId params").lean();
+    const facts = factFind({ act: "set-being", "params.field": llmFieldQ })
+      .sort((a, b) => (String(a._id) < String(b._id) ? 1 : String(a._id) > String(b._id) ? -1 : 0))
+      .slice(0, 2)
+      .map((f) => ({ actId: f.actId, params: f.params }));
     const after = before + (facts.length ? 0 : 0); // recount below
-    const afterCount = await Fact.countDocuments({ act: "set-being", "params.field": llmFieldQ });
+    const afterCount = factCount({ act: "set-being", "params.field": llmFieldQ });
     const actIds = [...new Set(facts.map((f) => String(f.actId)))];
     afterCount - before === 2
       ? ok(`set-being-llm laid 2 do:set-being facts (one per field: slot list + preferOwn)`)

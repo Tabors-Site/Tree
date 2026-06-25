@@ -10,9 +10,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const DB = "mongodb://localhost:27017/story_wordtostore";
+const DB = path.join(os.tmpdir(), "story_wordtostore-" + process.pid);
 process.env.PORT = "3837";
-process.env.MONGODB_URI = DB;
+process.env.TREEOS_STORE_BASE = DB;
+fs.rmSync(DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "wordtostore-0123456789";
 process.env.STORY_KEY_DIR = path.join(
   os.tmpdir(),
@@ -24,13 +26,7 @@ fs.rmSync(SRC, { recursive: true, force: true });
 fs.mkdirSync(SRC, { recursive: true });
 fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`))
-    .default;
-  const conn = await mongoose.createConnection(DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
+// (scratch file store fresh-wiped above; no DB to drop)
 await import(`${R}/begin.js`);
 const { findByName, loadOrFold } = await import(
   `${R}/seed/materials/projections.js`
@@ -44,8 +40,13 @@ const { parse } = await import(`${R}/seed/present/word/parser.js`);
 const { runWordToStore } = await import(
   `${R}/seed/present/word/ableWordRegistry.js`
 );
-const { default: Fact } = await import(`${R}/seed/past/fact/fact.js`);
-const { default: Act } = await import(`${R}/seed/past/act/act.js`);
+const { getStoryDomain } = await import(`${R}/seed/ibp/address.js`);
+const { factFind, factCount } = await import(
+  `${R}/seed/present/word/_factStoreTest.mjs`
+);
+const { actCount } = await import(
+  `${R}/seed/present/word/_factStoreTest.mjs`
+);
 const poll = async (fn, t = 60000, e = 250) => {
   const t0 = Date.now();
   while (Date.now() - t0 < t) {
@@ -116,8 +117,9 @@ try {
       );
 
   // BEFORE: the speaker's acts + create-space facts under it.
-  const actsBefore = await Act.countDocuments({ through: String(speaker) });
-  const facetsBefore = await Fact.countDocuments({
+  const story = getStoryDomain();
+  const actsBefore = actCount({ through: String(speaker) }, story);
+  const facetsBefore = factCount({
     act: "create-space",
     through: String(speaker),
   });
@@ -132,8 +134,8 @@ try {
   await new Promise((r) => setTimeout(r, 1500));
 
   // AFTER: the chain grew by 3 acts; 3 create-space facts landed.
-  const actsAfter = await Act.countDocuments({ through: String(speaker) });
-  const facetsAfter = await Fact.countDocuments({
+  const actsAfter = actCount({ through: String(speaker) }, story);
+  const facetsAfter = factCount({
     act: "create-space",
     through: String(speaker),
   });
@@ -147,12 +149,10 @@ try {
     : bad(`3 facts landed`, { facetsBefore, facetsAfter });
 
   // Each deed is its OWN act: the 3 facts carry 3 DISTINCT actIds, not one shared.
-  const facts = await Fact.find({
+  const facts = factFind({
     act: "create-space",
     through: String(speaker),
-  })
-    .select("actId")
-    .lean();
+  });
   const actIds = [...new Set(facts.map((f) => String(f.actId)))];
   actIds.length >= 3
     ? ok(
@@ -163,7 +163,7 @@ try {
   // One act, one fact: each of those actIds frames exactly ONE fact.
   let allOne = true;
   for (const aid of actIds.slice(0, 3)) {
-    const n = await Fact.countDocuments({ actId: aid });
+    const n = factCount({ actId: aid });
     if (n !== 1) {
       allOne = false;
       break;
@@ -173,19 +173,27 @@ try {
     ? ok(`each act frames exactly ONE fact (one word, one commit)`)
     : bad("one fact per act", "an actId framed ≠ 1 fact");
 
-  // The three spaces exist, by name (the deeds reached store, not just the chain).
+  // The three spaces exist in store, by name (the deeds reached store, not just the chain).
+  // Each create-space fact names its space in params.name and frames it under of.id; the space
+  // is real iff that of.id FOLDS to a live slot whose folded state carries that name. (Space names
+  // are parent-scoped in the store's name index, so resolve through the fact's of.id, not a bare
+  // global name lookup — same existence check, on the aggregate the deed actually made.)
   const names = ["notebook", "journal", "ledger"];
+  const csFacts = factFind({ act: "create-space", through: String(speaker) });
   let madeAll = true;
+  let missing = null;
   for (const nm of names) {
-    const s = await findByName("space", nm, "0");
-    if (!s) {
+    const f = csFacts.find((x) => x.params?.name === nm);
+    const slot = f ? await loadOrFold("space", String(f.of?.id), "0") : null;
+    if (!slot || slot.tombstoned || slot.state?.name !== nm) {
       madeAll = false;
+      missing = nm;
       break;
     }
   }
   madeAll
     ? ok(`all three spaces (notebook, journal, ledger) exist in store`)
-    : bad("three spaces in store", "a named space missing");
+    : bad("three spaces in store", `a named space missing: ${missing}`);
 
   console.log(`\n  ${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);

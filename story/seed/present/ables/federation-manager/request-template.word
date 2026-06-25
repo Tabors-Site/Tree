@@ -1,0 +1,21 @@
+# request-template.word, the operator pulls a template FROM a peer story
+# (federation-manager/ops.js request-template DO op). Sends the pull request, then records the
+# pendingOutbound negotiation. If the peer's operator fulfills, they push back into us via the
+# offer-template receiving path (the same incoming code as any other push).
+#
+# WORD-SOLE (handler-less, Tabor's no-mirror law): this `.word` is the ONLY path (do.js
+# runOpWordToStore via runWordToStore, runAsStore, so the deed seals its own moment). The host
+# see resolve-federation-spec is the floor: it validates the peer, mints the negotiationId, and
+# resolves the federation-manager being. It lays NO fact; the deed lays the fact. The cross-story
+# request is the sanctioned membrane OUT: see dispatch-federation-intent (verb:call to the peer).
+# The request is sent BEFORE the pendingOutbound record, matching the old handler order.
+#
+# The bridge binds `params` (peer, subtreePath, label) and `caller` (the operator's being).
+
+When the operator requests a template from a peer:
+  If no caller, refuse with "request-template requires an authenticated being." as unauthorized.
+  see resolve-federation-spec(params, caller) as spec.
+  see dispatch-federation-intent($spec.dispatch.peer, $spec.dispatch.intent, $spec.dispatch.payload) as sent.
+  For each w in spec's writes:
+    do set-being on the being $spec.managerId with { field: $w.field, value: $w.value, merge: false } as wrote.
+  Return negotiationId: $spec.negotiationId, peer: $spec.peer, subtreePath: $spec.subtreePath, status: "requested".

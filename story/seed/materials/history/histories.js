@@ -38,7 +38,7 @@
 // implicit root; helpers short-circuit when asked about it. Saves a
 // DB lookup on the hot path.
 
-import History from "./history.js";
+import { HistoryCollection } from "./historyStore.js";
 import { IbpError, IBP_ERR } from "../../ibp/protocol.js";
 
 export const MAIN = "0";
@@ -85,7 +85,7 @@ export function invalidateHistoryCache(path) {
  */
 export async function loadHistory(path) {
   if (_historyDocCache.has(path)) return _historyDocCache.get(path);
-  const row = await History.findById(path).lean();
+  const row = await HistoryCollection.findById(path).lean();
   _historyDocCache.set(path, row || null);
   return row || null;
 }
@@ -195,6 +195,206 @@ export async function isHistoryDeleted(path) {
   return row?.deleted === true;
 }
 
+// ──────────────────────────────────────────────────────────────────
+// Curated CRUD over the file-backed history store
+// ──────────────────────────────────────────────────────────────────
+//
+// The History registry is no longer a Mongoose model; it is a
+// FileCollection (historyStore.js) keyed by path. These helpers are the
+// curated write + multi-row read seam so callers (historiesCatalog,
+// historyCreation, history-manager/ops) never touch HistoryCollection
+// directly. Each write that toggles a flag must be followed by the
+// caller's invalidateHistoryCache(path) so the cached doc reflects it
+// (kept the caller's responsibility, unchanged from the Mongo path).
+
+/**
+ * Direct children of a history path. Rows whose `parent` field equals
+ * the given path. Main's children carry parent=null (main has no row),
+ * so pass `null` for them. Excludes soft-deleted rows by default.
+ * Sorted by path ascending for stable rendering.
+ *
+ * @param {string|null} parentPath  history path, or null for main's children
+ * @param {object} [opts]
+ * @param {boolean} [opts.includeDeleted=false]
+ * @returns {Promise<object[]>}
+ */
+export async function listHistoryChildren(parentPath, { includeDeleted = false } = {}) {
+  const filter = { parent: parentPath ?? null };
+  if (!includeDeleted) filter.deleted = { $ne: true };
+  return HistoryCollection.find(filter).sort({ path: 1 }).lean();
+}
+
+/**
+ * Sibling paths under a parent. Used by createBranch's nextChildPath
+ * arithmetic. For main pass `null` (main's children have parent=null).
+ *
+ * @param {string|null} parentPath
+ * @returns {Promise<string[]>}
+ */
+export async function listSiblingPaths(parentPath) {
+  const rows = await HistoryCollection.find({ parent: parentPath ?? null }).lean();
+  return rows.map((r) => r.path);
+}
+
+/**
+ * Every history row (no filter). The cross-history enumerators
+ * (chainRoots fingerprints, graft export, scheduler axes) need the full
+ * set; there is no per-history single-row peer for "all histories."
+ * @returns {Promise<object[]>}
+ */
+export async function listAllHistories() {
+  return HistoryCollection.find({}).lean();
+}
+
+/**
+ * Every non-deleted history row (the live set). Sorted by path.
+ * @returns {Promise<object[]>}
+ */
+export async function listLiveHistories() {
+  return HistoryCollection.find({ deleted: { $ne: true } }).sort({ path: 1 }).lean();
+}
+
+/**
+ * Count of history rows. Mirrors History.countDocuments({}).
+ * @returns {Promise<number>}
+ */
+export async function countHistories() {
+  return HistoryCollection.countDocuments({});
+}
+
+/**
+ * Bulk-insert verbatim history rows — the curated peer of the
+ * History.insertMany({ ordered: false }) the graft/plant restore used. Each
+ * doc lands keyed by its `_id` (the path); the cache is invalidated so the
+ * freshly-planted rows resolve. The plant gates on an empty store, so there is
+ * nothing to collide with.
+ *
+ * @param {object[]} docs  full history rows (carrying _id/path/parent/branchPoint/...)
+ * @returns {Promise<object[]>}  the stored rows
+ */
+export async function insertHistories(docs = []) {
+  if (!Array.isArray(docs) || docs.length === 0) return [];
+  const stored = await HistoryCollection.insertMany(docs, { ordered: false });
+  invalidateHistoryCache(null);
+  return stored;
+}
+
+/**
+ * Remove every history row — the curated peer of the History.deleteMany({})
+ * the graft unplant used to restore an empty store after a failed plant.
+ * Invalidates the cache. Idempotent.
+ *
+ * @returns {Promise<number>}  rows removed
+ */
+export async function deleteAllHistories() {
+  const { deletedCount } = await HistoryCollection.deleteMany({});
+  invalidateHistoryCache(null);
+  return deletedCount || 0;
+}
+
+/**
+ * Create a history row. `_id` is the path (one doc per path). Returns
+ * the stored row. The caller invalidates the lineage cache afterward.
+ *
+ * @param {object} doc  { path, parent, branchPoint, createdBy, label, scope, ... }
+ * @returns {Promise<object>}
+ */
+export async function createHistory(doc) {
+  const path = doc.path ?? doc._id;
+  if (!path) throw new Error("createHistory: doc requires a path");
+  const row = {
+    _id: path,
+    path,
+    parent: doc.parent ?? null,
+    branchPoint: doc.branchPoint || {},
+    createdBy: doc.createdBy ?? null,
+    createdAt: doc.createdAt ? new Date(doc.createdAt).toISOString() : new Date().toISOString(),
+    label: doc.label ?? null,
+    paused: doc.paused ?? false,
+    pausedBy: doc.pausedBy ?? null,
+    pausedAt: doc.pausedAt ?? null,
+    isLive: doc.isLive ?? false,
+    archivedBecause: doc.archivedBecause ?? null,
+    deleted: doc.deleted ?? false,
+    deletedBy: doc.deletedBy ?? null,
+    deletedAt: doc.deletedAt ?? null,
+    mergeSources: Array.isArray(doc.mergeSources) ? [...doc.mergeSources] : [],
+    scope: doc.scope ?? null,
+  };
+  const stored = await HistoryCollection.create(row);
+  invalidateHistoryCache(path);
+  return stored;
+}
+
+/**
+ * Hard-delete a history row by path. Mirrors History.deleteOne({_id:path}).
+ * This is the structural DELETE the book/graft instate's rollback needs:
+ * when a verbatim instate inserts a fresh history row and a later step
+ * throws, the landed[]-undo removes exactly that row (the receiver's
+ * pre-existing histories are untouched). Distinct from the SOFT delete
+ * (the `deleted` lifecycle flag setHistoryFields toggles) — this removes
+ * the row entirely. Invalidates the cache.
+ *
+ * @param {string} path
+ * @returns {Promise<void>}
+ */
+export async function deleteHistory(path) {
+  if (typeof path !== "string" || !path.length) {
+    throw new Error("deleteHistory: path required");
+  }
+  await HistoryCollection.deleteOne({ _id: path });
+  invalidateHistoryCache(path);
+}
+
+/**
+ * Upsert flag/metadata fields on a history row, keyed by path. Mirrors
+ * the History.updateOne({path}, {$set, $setOnInsert}, {upsert:true})
+ * the lifecycle ops (pause/unpause/delete/undelete/merge) used. When no
+ * row exists yet (implicit-live main, or first toggle on a path) a row
+ * is created carrying the $set fields plus the supplied structural
+ * defaults. Invalidates the cache.
+ *
+ * @param {string} path
+ * @param {object} set           fields to $set
+ * @param {object} [setOnInsert] structural fields applied only on create (e.g. parent)
+ * @returns {Promise<object>}    the stored row
+ */
+export async function setHistoryFields(path, set = {}, setOnInsert = {}) {
+  const existing = await HistoryCollection.findById(path).lean();
+  let row;
+  if (existing) {
+    row = { ...existing, ...set, _id: path, path };
+  } else {
+    // New row: structural defaults + the set fields. Mirror the create
+    // shape so listings/serialization see a complete doc.
+    row = {
+      _id: path,
+      path,
+      parent: setOnInsert.parent ?? null,
+      branchPoint: setOnInsert.branchPoint ?? {},
+      createdBy: setOnInsert.createdBy ?? null,
+      createdAt: setOnInsert.createdAt
+        ? new Date(setOnInsert.createdAt).toISOString()
+        : new Date().toISOString(),
+      label: setOnInsert.label ?? null,
+      paused: false,
+      pausedBy: null,
+      pausedAt: null,
+      isLive: setOnInsert.isLive ?? false,
+      archivedBecause: null,
+      deleted: false,
+      deletedBy: null,
+      deletedAt: null,
+      mergeSources: setOnInsert.mergeSources ?? [],
+      scope: setOnInsert.scope ?? null,
+      ...set,
+    };
+  }
+  const stored = await HistoryCollection.create(row);
+  invalidateHistoryCache(path);
+  return stored;
+}
+
 /**
  * Find the most recent shared ancestor of two histories. Walks both
  * lineages (main → leaf) and returns the deepest path present in
@@ -265,22 +465,39 @@ export async function divergentFactsSince(history, ancestor) {
   const divergentHistories = historyLineage.filter(b => !ancestorSet.has(b));
   if (divergentHistories.length === 0) return new Map();
 
-  const { default: Fact } = await import("../../past/fact/fact.js");
-  const facts = await Fact.find({
-    history: { $in: divergentHistories },
-    "of.kind": { $in: ["being", "space", "matter"] },
-    "of.id":   { $exists: true, $ne: null },
-  }).sort({ seq: 1 }).lean();
+  // Curated read: there is no cross-history fact scan primitive, so we
+  // enumerate the reel-bearing aggregates touched on each divergent
+  // history and read each one's OWN-history reel through the curated
+  // seam. listByType(type, history) over-collects (it inherits the
+  // lineage), but getFactsOnReelWhere reads only `history`'s own reel
+  // file — an inherited aggregate with no divergent facts yields [] and
+  // contributes nothing, so the union is exactly the facts STAMPED on
+  // the divergent histories (what the old Fact.find({history:$in}) did).
+  const { listByType } = await import("../projections.js");
+  const { getFactsOnReelWhere } = await import("../../past/fact/facts.js");
+  const REEL_KINDS = ["being", "space", "matter"];
 
   const byReel = new Map();
-  for (const f of facts) {
-    const key = `${f.of.kind}:${f.of.id}`;
-    let bucket = byReel.get(key);
-    if (!bucket) {
-      bucket = [];
-      byReel.set(key, bucket);
+  for (const h of divergentHistories) {
+    for (const kind of REEL_KINDS) {
+      const occupants = await listByType(kind, h);
+      for (const occ of occupants) {
+        const facts = getFactsOnReelWhere(h, kind, occ.id, (f) => !!f?.of?.id);
+        if (!facts.length) continue;
+        const key = `${kind}:${occ.id}`;
+        let bucket = byReel.get(key);
+        if (!bucket) {
+          bucket = [];
+          byReel.set(key, bucket);
+        }
+        for (const f of facts) bucket.push(f);
+      }
     }
-    bucket.push(f);
+  }
+  // Within each reel bucket, order seq-ascending (a reel may collect
+  // facts from multiple divergent histories, e.g. #1 and #1a).
+  for (const bucket of byReel.values()) {
+    bucket.sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0));
   }
   return byReel;
 }

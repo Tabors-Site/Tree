@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // verify-word-vocab — 14.md §4 step 1: a word-native able renders its vocabulary as WORD GRAMMAR
 // (the words it may speak), not JSON tool schemas. Boot-free: drives renderVocabularyAsWord directly.
+import fs from "fs";
 import os from "os"; import path from "path"; import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");

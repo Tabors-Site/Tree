@@ -13,9 +13,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const DB = "mongodb://localhost:27017/story_matterworddispatch";
+const DB = path.join(os.tmpdir(), "story_matterworddispatch-" + process.pid);
 process.env.PORT = "3839";
-process.env.MONGODB_URI = DB;
+process.env.TREEOS_STORE_BASE = DB;
+fs.rmSync(DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET =
   process.env.JWT_SECRET || "matterworddispatch-0123456789";
 process.env.STORY_KEY_DIR = path.join(
@@ -23,13 +25,7 @@ process.env.STORY_KEY_DIR = path.join(
   "matterworddispatch-keys-" + process.pid,
 );
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`))
-    .default;
-  const conn = await mongoose.createConnection(DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
+// (scratch file store fresh-wiped above; no DB to drop)
 await import(`${R}/begin.js`);
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const { bindWord, resolveDoOpFromFold } = await import(
@@ -42,7 +38,7 @@ const { putContent } = await import(
 );
 const { withIAmAct } = await import(`${R}/seed/sprout.js`);
 const { I } = await import(`${R}/seed/materials/being/seedBeings.js`);
-const { default: Fact } = await import(`${R}/seed/past/fact/fact.js`);
+const { factFind, factFindOne, factCount } = await import(`${R}/seed/present/word/_factStoreTest.mjs`);
 const pollFor = async (fn, pred, t = 12000, e = 250) => {
   const t0 = Date.now();
   while (Date.now() - t0 < t) {
@@ -145,7 +141,7 @@ try {
 
   // (4) it laid its fact through the normal do auto-Fact path (params from the word's _factParams)
   const f = await pollFor(
-    () => Fact.findOne({ verb: "do", act: "matterword-double" }).lean(),
+    () => factFindOne({ verb: "do", act: "matterword-double" }),
     (v) => !!v,
   );
   f && f.params && f.params.computed === 42

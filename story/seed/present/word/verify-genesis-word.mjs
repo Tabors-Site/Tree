@@ -13,9 +13,11 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const SCRATCH_DB = "mongodb://localhost:27017/story_genesis_word";
+const SCRATCH_DB = path.join(os.tmpdir(), "story_genesis_word-" + process.pid);
 process.env.PORT = "3796";
-process.env.MONGODB_URI = SCRATCH_DB;
+process.env.TREEOS_STORE_BASE = SCRATCH_DB;
+fs.rmSync(SCRATCH_DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "genesisword-secret-0123456789";
 process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "genesisword-keys-" + process.pid);
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
@@ -25,12 +27,7 @@ fs.mkdirSync(SRC, { recursive: true });
 fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
 
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`)).default;
-  const conn = await mongoose.createConnection(SCRATCH_DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
+// (scratch file store fresh-wiped above; no DB to drop)
 
 await import(`${R}/begin.js`);
 
@@ -153,11 +150,6 @@ try {
       ? ok(`@public granted nothing (never acts)`)
       : bad(`@public grants`, [...pg]);
   }
-
-  const mg = await grantsOf(beings["mongo"]);
-  mg.has("angel") && mg.has("mongo-connection")
-    ? ok(`@mongo granted angel + mongo-connection (name≠able case)`)
-    : bad(`@mongo grants`, [...mg]);
 
   console.log(`\n  ${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);

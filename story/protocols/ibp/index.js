@@ -19,7 +19,6 @@ import { registerIbpBootstrap } from "./bootstrap-route.js";
 import { attachIbpHandlers } from "./protocol.js";
 import { attachNameSession } from "./nameSession.js";
 import { hooks } from "../../seed/hooks.js";
-import Space from "../../seed/materials/space/space.js";
 import { emitPositionInvalidate, emitPositionDelta } from "./live.js";
 import { registerFactPush } from "./factPush.js";
 import { emitToSubscribers } from "../../seed/present/wakes/subscriptions.js";

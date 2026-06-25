@@ -62,13 +62,13 @@ export async function captureBook(sel = {}, opts = {}) {
   // 2. REELS — verbatim being-reel slices, act-chains STRIPPED.
   const reelSel = Array.isArray(sel.reelOf) ? sel.reelOf : (sel.reelOf ? [sel.reelOf] : []);
   if (reelSel.length) {
-    const Fact = (await import("../../past/fact/fact.js")).default;
+    const { getFactsOnReelWhere } = await import("../../past/fact/facts.js");
     const { reelKey } = await import("../../past/reel/reelHeads.js");
     const { graftRootFromParts } = await import("../../past/fact/chainRoots.js");
     const { loadHistory } = await import("../../materials/history/histories.js");
     const reels = [];
     for (const r of reelSel) {
-      const reel = await captureReel(r, { Fact, reelKey, graftRootFromParts, loadHistory, defaultHistory: history, casHashes });
+      const reel = await captureReel(r, { getFactsOnReelWhere, reelKey, graftRootFromParts, loadHistory, defaultHistory: history, casHashes });
       if (reel) reels.push(reel);
     }
     if (reels.length) body.reels = reels;
@@ -100,21 +100,25 @@ export async function captureBook(sel = {}, opts = {}) {
 
 // Capture one being-reel slice — verbatim facts, no act-chain (a book carries reels only). The
 // mechanism mirrors capturePartialGraft: whole reel, a [fromSeq..toSeq] segment, or a genesis-prefix.
-async function captureReel(r, { Fact, reelKey, graftRootFromParts, loadHistory, defaultHistory, casHashes }) {
+async function captureReel(r, { getFactsOnReelWhere, reelKey, graftRootFromParts, loadHistory, defaultHistory, casHashes }) {
   const being = r?.being ?? r?.beingId;
   if (!being) return null;
   const bid = String(being);
   const history = r.history != null ? String(r.history) : defaultHistory;
 
-  const q = { "of.kind": "being", "of.id": bid, history };
-  if (r.fromSeq != null || r.toSeq != null) {
-    q.seq = {};
-    if (r.fromSeq != null) q.seq.$gte = r.fromSeq;
-    if (r.toSeq != null) q.seq.$lte = r.toSeq;
-  } else if (r.cutoffSeq != null) {
-    q.seq = { $lte: r.cutoffSeq };
-  }
-  const facts = await Fact.find(q).sort({ seq: 1 }).lean();
+  // Seq-range predicate over the being reel. getFactsOnReelWhere returns
+  // seq-ascending (matching the old .sort({ seq: 1 })); the optional
+  // [fromSeq..toSeq] / cutoffSeq window maps to the old $gte/$lte filter.
+  const hasFrom = r.fromSeq != null;
+  const hasTo = r.toSeq != null;
+  const hasCut = !hasFrom && !hasTo && r.cutoffSeq != null;
+  const inRange = (f) => {
+    if (hasFrom && !(f.seq >= r.fromSeq)) return false;
+    if (hasTo && !(f.seq <= r.toSeq)) return false;
+    if (hasCut && !(f.seq <= r.cutoffSeq)) return false;
+    return true;
+  };
+  const facts = getFactsOnReelWhere(history, "being", bid, inRange);
   if (!facts.length) return null;
 
   for (const f of facts) collectCasHashes(f, casHashes);

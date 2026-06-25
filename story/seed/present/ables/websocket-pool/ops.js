@@ -38,13 +38,24 @@ registerSeeOperation("connections", {
     const wsSpace = getHostIds().wsSpace;
     let rows = [];
     if (wsSpace) {
-      const { default: Projection } = await import("../../../materials/history/projection.js");
-      rows = await Projection.find({
-        history: "0", type: "matter",
-        "state.spaceId": wsSpace,
-        "state.type": "connection",
-        tombstoned: { $ne: true },
-      }).lean();
+      // Curated: list live matter on main, load each slot, keep the
+      // connection matter at wsSpace. listByType already excludes
+      // tombstoned (the old tombstoned:{$ne:true}); the spaceId/type
+      // filters reproduce the Projection.find equality clauses. Each
+      // loadProjection returns the full {state, id} shape the rows[]
+      // consumers below read.
+      const { listByType, loadProjection } = await import("../../../materials/projections.js");
+      const ids = await listByType("matter", "0");
+      const loaded = await Promise.all(
+        ids.map((o) => loadProjection("matter", o.id, "0")),
+      );
+      rows = loaded.filter(
+        (r) =>
+          r &&
+          !r.tombstoned &&
+          r.state?.spaceId === wsSpace &&
+          r.state?.type === "connection",
+      );
     }
     const bySocket = new Map(
       rows.map((r) => [r.state?.qualities?.connection?.socketId, r]),

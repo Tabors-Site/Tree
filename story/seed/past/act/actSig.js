@@ -147,10 +147,16 @@ export async function verifyActSig(act, { localStory = null } = {}) {
       reason: foreign ? "foreign-unsigned-ok" : "unsigned",
     };
   }
-  const { default: Fact } = await import("../fact/fact.js");
-  const rows = await Fact.find({ actId: String(act._id) })
-    .select("_id")
-    .lean();
+  // The committed facts are the single source of truth for the fact set.
+  // Under the one-word doctrine they ride the ACTOR's own being reel
+  // (act.through), so read them via the curated getFactsByActId — the
+  // file-native peer of Mongo's Fact.find({ actId }). A 5D name-act
+  // (no `through`) lays no being-reel facts, so the set is empty.
+  const { getFactsByActId } = await import("../fact/facts.js");
+  const actorReel = act?.through != null ? String(act.through) : null;
+  const rows = actorReel
+    ? getFactsByActId(normHistory(act.history), actorReel, String(act._id))
+    : [];
   const factIds = rows.map((f) => String(f._id)).sort();
   const payload = buildActSigPayload(act, factIds);
 

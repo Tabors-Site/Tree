@@ -45,23 +45,31 @@ import { withIAmAct } from "../../sprout.js";
  * @returns {Promise<{ pulledBack: number, scanned: number }>}
  */
 export async function pullBackForeignPositions() {
-  // Query the projection collection — the canonical source of
-  // current being state (per the projection-cache doctrine).
-  // The legacy Being Mongoose collection isn't kept in sync with
-  // qualities/position; projections is the truth.
-  const { default: Projection } = await import("../history/projection.js");
+  // Query the projection cache — the canonical source of current being
+  // state (per the projection-cache doctrine). The legacy Being collection
+  // isn't kept in sync with qualities/position; projections is the truth.
+  //
+  // CURATED swap: the raw Projection.find regex-prefilter became the curated
+  // listByType("being", "0") (live beings on main, tombstones already
+  // filtered) + a per-id loadProjection to read state.position/homeSpace.
+  // The coarse "/"-segment regex was only a scan-narrowing optimization;
+  // isPositionCrossWorld below is the authoritative cross-world test, so the
+  // JS filter loses nothing.
+  const { listByType, loadProjection } =
+    await import("../projections.js");
   const homeStory = getStoryDomain();
   const homeRealm   = { story: homeStory, history: "0" };
 
-  // Cross-world positions encode story + history as a "/" segment;
-  // bare spaceIds never contain "#" or "/". Use a coarse regex
-  // pre-filter then validate in JS to avoid scanning every being.
-  const candidates = await Projection.find({
-    history: "0",
-    type: "being",
-    "state.position": { $regex: /^[^#/]+#?[^/]*\// },
-    tombstoned: { $ne: true },
-  }).select("id state.position state.homeSpace").lean();
+  const occupants = await listByType("being", "0");
+  const candidates = [];
+  for (const occ of occupants) {
+    const slot = await loadProjection("being", occ.id, "0");
+    if (!slot) continue;
+    candidates.push({
+      id: occ.id,
+      state: { position: slot.state?.position, homeSpace: slot.state?.homeSpace },
+    });
+  }
 
   let pulled = 0;
   for (const row of candidates) {

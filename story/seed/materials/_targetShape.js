@@ -222,10 +222,3 @@ export async function loadTargetRow(target, expectedKind, { moment = null } = {}
 
   throw new Error(`loadTargetRow: ${expectedKind} not found with id "${id}"`);
 }
-
-async function _modelFor(kind) {
-  if (kind === "being")  return (await import("./being/being.js")).default;
-  if (kind === "space")  return (await import("./space/space.js")).default;
-  if (kind === "matter") return (await import("./matter/matter.js")).default;
-  throw new Error(`_modelFor: unknown kind "${kind}"`);
-}

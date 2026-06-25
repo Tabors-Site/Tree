@@ -221,10 +221,12 @@ async function receiveReels(reels, opts, landed) {
   const list = Array.isArray(reels) ? reels : [];
   if (list.length === 0) return 0;
 
+  // PURE helpers only — instateReel reads/writes the file world itself
+  // through the curated seam (histories.js + fileStore). The raw Fact /
+  // History / ReelHead models are GONE (Mongo→FileStore rip). These are the
+  // integrity recompute (computeHash / contentOf), the post-instate chain
+  // walk (verifyReel), and the optional reel fingerprint (graftRootFromParts).
   const deps = {
-    Fact: (await import("../../past/fact/fact.js")).default,
-    History: (await import("../../materials/history/history.js")).default,
-    ReelHead: (await import("../../past/reel/reelHead.js")).default,
     ...(await import("../../past/fact/hash.js")), // computeHash, contentOf
     ...(await import("../../past/fact/verifyReel.js")), // verifyReel
     graftRootFromParts: (await import("../../past/fact/chainRoots.js"))

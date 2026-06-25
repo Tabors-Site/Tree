@@ -61,8 +61,6 @@ import { getInternalConfigValue } from "../../../internalConfig.js";
 import crypto from "crypto";
 import { randomUUID as uuidv4 } from "node:crypto";
 import log from "../../../seedStory/log.js";
-import Being from "../../../materials/being/being.js";
-import Space from "../../../materials/space/space.js";
 import { I } from "../../../materials/being/seedBeings.js";
 import { getStoryConfigValue } from "../../../storyConfig.js";
 import { getAncestorChain } from "../../../materials/space/ancestorCache.js";
@@ -925,7 +923,11 @@ export async function resolveLlmConfigSpec(mode, params, caller) {
   } else if (mode === "space") {
     const spaceId = p.spaceId;
     if (!spaceId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`spaceId` is required");
-    const exists = await Space.exists({ _id: spaceId });
+    // Curated existence check: a non-null main projection slot IS the space.
+    // (Mirrors the flat Space.exists({_id}) the Mongo path did; the rest of
+    // this file resolves spaces via loadProjection("space", id, "0").)
+    const { loadProjection } = await import("../../../materials/projections.js");
+    const exists = await loadProjection("space", String(spaceId), "0");
     if (!exists) throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, `Space ${spaceId} not found`);
     kind = "space";
     id = String(spaceId);

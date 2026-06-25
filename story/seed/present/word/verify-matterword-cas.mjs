@@ -6,14 +6,16 @@
 import fs from "fs"; import os from "os"; import path from "path"; import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const DB = "mongodb://localhost:27017/story_matterword_cas";
-process.env.PORT = "3855"; process.env.MONGODB_URI = DB;
+const DB = path.join(os.tmpdir(), "story_matterword_cas-" + process.pid);
+process.env.PORT = "3855"; process.env.TREEOS_STORE_BASE = DB;
+fs.rmSync(DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "matcas-0123456789";
 process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "matcas-keys-" + process.pid);
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
 const SRC = path.join(os.tmpdir(), "matcas-src"); fs.rmSync(SRC, { recursive: true, force: true }); fs.mkdirSync(SRC, { recursive: true }); fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
-{ const mongoose = (await import(`${R}/node_modules/mongoose/index.js`)).default; const conn = await mongoose.createConnection(DB).asPromise(); await conn.dropDatabase(); await conn.close(); }
+// (scratch file store fresh-wiped above; no DB to drop)
 await import(`${R}/begin.js`);
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const { storeMatterBody, resolveMatterWord, runWordBody, seeMatterWord } = await import(`${R}/seed/present/word/matterWord.js`);
@@ -59,10 +61,10 @@ try {
     : bad("a non-matter word wrongly resolved as matter", resolveMatterWord("see"));
 
   // 5. SEE path: a PURE matter word computes via seeMatterWord and makes NO fact.
-  const Fact = (await import(`${R}/seed/past/fact/fact.js`)).default;
-  const before = await Fact.countDocuments({});
+  const { factCount } = await import(`${R}/seed/present/word/_factStoreTest.mjs`);
+  const before = factCount({});
   const see1 = await seeMatterWord("double-body", [21]);
-  const after = await Fact.countDocuments({});
+  const after = factCount({});
   (see1.isMatter === true && see1.result === 42 && after === before)
     ? ok(`seeMatterWord (pure) computed run(21)=42 on the see path and stamped NO fact (${after - before} new facts)`)
     : bad("pure see-compute wrong or stamped a fact", { see1, delta: after - before });

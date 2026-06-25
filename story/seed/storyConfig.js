@@ -143,17 +143,19 @@ async function loadConfigFromDb() {
     // Config lives on the ONE 5D library reel (of:{kind:"library"}) as config-set/config-delete
     // NAME-ACTS — story-level data, out of any history, no being. Replay those facts through the
     // library reducer (facts-as-projection: the fold IS the truth). No more ./config heaven space.
-    const Fact = (await import("./past/fact/fact.js")).default;
+    // The library reel rides history "0" (nameActConfig stamps with history:"0"); the curated
+    // getFactsOnReelWhere returns it seq-ascending (matching the old .sort({ seq: 1 })), filtered
+    // here to the two config acts the old `act: { $in }` selected.
+    const { getFactsOnReelWhere } = await import("./past/fact/facts.js");
     const { getStoryDomain } = await import("./ibp/address.js");
     const { initial, reduce } = await import("./materials/library/reducer.js");
     const libraryId = getStoryDomain();
-    const facts = await Fact.find({
-      "of.kind": "library",
-      "of.id": libraryId,
-      act: { $in: ["config-set", "config-delete"] },
-    })
-      .sort({ seq: 1 })
-      .lean();
+    const facts = getFactsOnReelWhere(
+      "0",
+      "library",
+      libraryId,
+      (f) => f.act === "config-set" || f.act === "config-delete",
+    );
 
     let state = initial();
     for (const f of facts) state = reduce(state, f);

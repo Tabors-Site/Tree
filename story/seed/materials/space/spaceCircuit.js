@@ -33,14 +33,30 @@
 
 import log from "../../seedStory/log.js";
 import { getInternalConfigValue } from "../../internalConfig.js";
-import Space from "./space.js";
-import Fact from "../../past/fact/fact.js";
 import { hooks } from "../../hooks.js";
 import { getStoryConfigValue } from "../../storyConfig.js";
 import { invalidateSpace } from "./ancestorCache.js";
 import { resolveSpaceAccess } from "./spaces.js";
 import { I } from "../being/seedBeings.js";
-import { emitFact } from "../../past/fact/facts.js";
+import { emitFact, getReel } from "../../past/fact/facts.js";
+import { listByType, loadProjection } from "../projections.js";
+
+// Curated owner-scan. There is no owner-indexed curated read (the prior
+// Mongo `{ owner: treeId }` query had no file-store peer), so enumerate
+// the history's spaces and keep those whose folded state names this
+// owner. History "0" — the circuit operates on main, like the prior
+// Mongo collection query did. Returns loaded slots so callers read
+// state.qualities without a second fetch.
+async function ownedSpaceSlots(treeId) {
+  const occupants = await listByType("space", "0");
+  const slots = [];
+  for (const occ of occupants) {
+    const slot = await loadProjection("space", occ.id, "0");
+    if (!slot || slot.tombstoned) continue;
+    if (String(slot.state?.owner ?? "") === String(treeId)) slots.push(slot);
+  }
+  return slots;
+}
 
 /**
  * Is the tree-circuit feature enabled on this story?
@@ -103,8 +119,12 @@ export async function checkTreeHealth(treeId) {
     getInternalConfigValue("circuitErrorWeight") || "0.3",
   );
 
+  // Curated owner-scan: the tree's spaces, loaded once and reused for the
+  // count, the density sample, and the error-rate reel reads below.
+  const ownedSlots = await ownedSpaceSlots(treeId);
+
   // 1. Space count in this tree.
-  const spaceCount = await Space.countDocuments({ owner: treeId });
+  const spaceCount = ownedSlots.length;
 
   // 2. Quality density (estimate total qualities-map size). Sample up to
   //    100 spaces, average, multiply. Random sample — sequential
@@ -112,19 +132,22 @@ export async function checkTreeHealth(treeId) {
   const sampleSize = Math.min(spaceCount, 100);
   let qualitiesDensity = 0;
   if (sampleSize > 0) {
-    const sample = await Space.aggregate([
-      { $match: { owner: treeId } },
-      { $sample: { size: sampleSize } },
-      { $project: { qualities: 1 } },
-    ]);
+    // Random sample without replacement from the loaded owned slots.
+    const pool = ownedSlots.slice();
+    const sample = [];
+    for (let i = 0; i < sampleSize && pool.length; i++) {
+      const j = Math.floor(Math.random() * pool.length);
+      sample.push(pool.splice(j, 1)[0]);
+    }
 
     let totalSampleSize = 0;
     for (const s of sample) {
       try {
+        const rawQuals = s.state?.qualities;
         const quals =
-          s.qualities instanceof Map
-            ? Object.fromEntries(s.qualities)
-            : s.qualities || {};
+          rawQuals instanceof Map
+            ? Object.fromEntries(rawQuals)
+            : rawQuals || {};
         totalSampleSize += Buffer.byteLength(JSON.stringify(quals), "utf8");
       } catch {
         totalSampleSize += 1024; // estimate 1KB on serialization failure
@@ -133,9 +156,12 @@ export async function checkTreeHealth(treeId) {
     qualitiesDensity = (totalSampleSize / sampleSize) * spaceCount;
   }
 
-  // 3. Error rate. Fact reel failures on spaces in this tree.
-  // Aggregation with $lookup so we don't load the descendant id list
-  // into memory.
+  // 3. Error rate. Fact reel failures on spaces in this tree. The prior
+  // Mongo $lookup join scanned the whole fact collection then joined to
+  // owned spaces; the curated peer reads each owned space's reel and
+  // reduces in JS (no cross-reel global scan exists — getReel is
+  // per-target). Same window, same predicate (date >= since, params.error
+  // set).
   const checkInterval = parseInt(
     getInternalConfigValue("circuitCheckInterval") || "3600000",
     10,
@@ -144,29 +170,23 @@ export async function checkTreeHealth(treeId) {
 
   let factErrors = 0;
   try {
-    const errResult = await Fact.aggregate([
-      {
-        $match: {
-          date: { $gte: since },
-          "of.kind": "space",
-          "params.error": { $exists: true },
-        },
-      },
-      {
-        $lookup: {
-          from: "spaces",
-          localField: "of.id",
-          foreignField: "_id",
-          as: "_space",
-        },
-      },
-      { $unwind: "$_space" },
-      { $match: { "_space.owner": treeId } },
-      { $count: "total" },
-    ]);
-    factErrors = errResult[0]?.total || 0;
+    for (const slot of ownedSlots) {
+      const { facts } = await getReel({
+        targetKind: "space",
+        targetId: String(slot.id),
+        // Clamps to the curated factQueryLimit cap (<=50000). The prior
+        // Mongo $lookup had no per-reel cap; a recent-window error scan
+        // stays well under this in practice.
+        limit: 50000,
+      });
+      for (const f of facts) {
+        if (f?.params?.error === undefined) continue;
+        const d = f?.date instanceof Date ? f.date : new Date(f?.date);
+        if (d >= since) factErrors++;
+      }
+    }
   } catch {
-    // Aggregation failure isn't itself an error to count.
+    // Reel-read failure isn't itself an error to count.
   }
 
   const totalErrors = factErrors;
@@ -349,16 +369,18 @@ export function startCircuitJob() {
 
   const timer = setInterval(async () => {
     try {
-      const { default: Projection } = await import("../history/projection.js");
       // Filter to non-system owners: owner set AND not the I
-      // sentinel string (system-owned spaces).
-      const rows = await Projection.find({
-        history: "0",
-        type: "space",
-        "state.owner": { $exists: true, $ne: I, $nin: [null] },
-        tombstoned: { $ne: true },
-      }).lean();
-      const anchors = rows.map((s) => ({ _id: s.id, ...(s.state || {}) }));
+      // sentinel string (system-owned spaces). Curated scan over the
+      // history's spaces (no owner-indexed read; load each + filter).
+      const occupants = await listByType("space", "0");
+      const anchors = [];
+      for (const occ of occupants) {
+        const slot = await loadProjection("space", occ.id, "0");
+        if (!slot || slot.tombstoned) continue;
+        const owner = slot.state?.owner;
+        if (owner == null || owner === I) continue;
+        anchors.push({ _id: occ.id, ...(slot.state || {}) });
+      }
 
       for (const anchor of anchors) {
         const meta =

@@ -80,7 +80,6 @@
 import crypto from "crypto";
 import log from "../../../seedStory/log.js";
 import { hooks } from "../../../hooks.js";
-import Space from "../../../materials/space/space.js";
 import {
   snapshotAncestors,
 } from "../../../materials/space/ancestorCache.js";

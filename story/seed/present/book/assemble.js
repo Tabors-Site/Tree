@@ -40,59 +40,103 @@ export async function assembleStory(
     since = null,
   } = {},
 ) {
-  const { default: Fact } = await import("../../past/fact/fact.js");
-  const q = { history: String(history) };
-  if (since) q.date = { $gt: since instanceof Date ? since : new Date(since) };
+  // CURATED: facts.getHistoryFacts(history, {predicate, sort, limit}) is the
+  // cross-reel / world fact read — every fact in the branch (all reel-kinds, all
+  // authors) kept by a predicate, then sorted. The file-native peer of the old
+  // Mongo Fact.find({history, ...}).sort(...). The book is a CROSS-REEL fold, so
+  // each scope builds the predicate (the $or/$in/date/actId filter becomes a JS
+  // keep-test) and the world scope sorts by (date,seq), the chain scopes by
+  // (seq,date). The entity sub-lookups (place scope, descendantsOf) are already
+  // curated; this routes the fact read through the curated facts.js seam too.
+  const { getHistoryFacts } = await import("../../past/fact/facts.js");
+  const sinceMs = since ? (since instanceof Date ? since.getTime() : Date.parse(since)) : null;
+  // Compose the per-scope keep-test. `null` filter parts pass everything.
+  let scopeMatch = () => true;
 
   // The views are ONE coordinate system, not four parallels: WHO (being → lineage → world, the
   // same author-axis at three widths) × WHEN (a moment's cross-section) × WHERE (a space's whole
   // history). Each is the same scoped fold — only the filter on which facts it reads changes.
   if (scope === "being" && being) {
     // WHO, one: the being's own thread from its start — the being it ran through, or a Name that is it
-    q.$or = [{ through: String(being) }, { by: String(being) }];
+    const b = String(being);
+    scopeMatch = (f) => String(f.through) === b || String(f.by) === b;
   } else if (scope === "lineage" && being) {
     // WHO, widened along the birth tree: the being + its descendants, to an optional stopping depth
-    const ids = await descendantsOf(String(being), depth, String(history));
-    q.through = { $in: ids };
+    const ids = new Set(await descendantsOf(String(being), depth, String(history)));
+    scopeMatch = (f) => ids.has(String(f.through));
   } else if (scope === "moment" && moment) {
     // WHEN: one moment's cross-section — the facts that act laid (its landings on every reel it touched)
-    q.actId = String(moment);
+    const m = String(moment);
+    scopeMatch = (f) => String(f.actId) === m;
   } else if ((scope === "place" || scope === "space") && space) {
     // WHERE: a space's whole story. Not just facts that acted ON the space (of.id === space),
     // but the facts of everything LOCATED IN it — child spaces (Space.parent), matter present
     // (Matter.spaceId), and beings present (Being.position) — each one's chain. So the place
     // reads as the location's full history: the room and everything that lived in it.
-    const [{ default: Matter }, { default: Being }, { default: Space }] =
-      await Promise.all([
-        import("../../materials/matter/matter.js"),
-        import("../../materials/being/being.js"),
-        import("../../materials/space/space.js"),
-      ]);
+    // CURATED: findByPosition(S, history) returns the live occupants ACROSS
+    // KINDS at space S (the slot-level `position` index keys beings by
+    // .position AND matter by .spaceId, both lifted to slot.position) — the
+    // file-native peer of Mongo's Matter.find({spaceId}) + Being.find({position}).
+    // Child spaces have no curated parent-peer (findByParent is being-only), so
+    // listByType("space") + parent filter on the loaded state (the doctrine's
+    // space/matter-parent recipe).
+    const { findByPosition, listByType, loadProjection } =
+      await import("../../materials/projections.js");
     const S = String(space);
-    const [matterIn, beingsIn, childSpaces] = await Promise.all([
-      Matter.find({ spaceId: S }).select("_id").lean(),
-      Being.find({ position: S }).select("_id").lean(),
-      Space.find({ parent: S }).select("_id").lean(),
-    ]);
-    const beingIds = beingsIn.map((b) => String(b._id));
-    const ofIds = [
-      S,
-      ...childSpaces.map((s) => String(s._id)),
-      ...matterIn.map((m) => String(m._id)),
-      ...beingIds,
-    ];
+    const h = String(history);
+    const occupants = await findByPosition(S, h);
+    const matterIds = occupants
+      .filter((o) => o.type === "matter")
+      .map((o) => String(o.id));
+    const beingIds = occupants
+      .filter((o) => o.type === "being")
+      .map((o) => String(o.id));
+    const childSpaceIds = [];
+    for (const o of await listByType("space", h)) {
+      const slot = await loadProjection("space", o.id, h);
+      if (String(slot?.state?.parent ?? "") === S) childSpaceIds.push(String(o.id));
+    }
+    const ofIds = new Set([S, ...childSpaceIds, ...matterIds, ...beingIds]);
+    const beingSet = new Set(beingIds);
     // facts ON any of those (the object side) OR acts BY a being present here (the through side)
-    q.$or = [{ "of.id": { $in: ofIds } }, { through: { $in: beingIds } }];
+    scopeMatch = (f) =>
+      (f.of?.id != null && ofIds.has(String(f.of.id))) || beingSet.has(String(f.through));
   }
   // scope "world" → WHO, all authors: the whole history (no extra filter)
+
+  // The full keep-test: the since-window AND the scope filter. since=null passes everything.
+  const predicate = (f) => {
+    if (sinceMs != null) {
+      const t = f?.date != null ? Date.parse(f.date) : NaN;
+      if (!(t > sinceMs)) return false;
+    }
+    return scopeMatch(f);
+  };
 
   // ORDER is the truth, never the clock (623/12, 20.md). A single chain (being/lineage/space/moment)
   // leads with seq (its chain order); only "world" spans concurrent reels with no single seq, so date
   // PRESENTS the concurrent facts (time as content, not truth-order) — mirrors read-trail.js.
-  const sort = scope === "world" ? { date: 1, seq: 1 } : { seq: 1, date: 1 };
-  let cursor = Fact.find(q).sort(sort).lean();
-  if (limit) cursor = cursor.limit(limit);
-  const facts = await cursor;
+  const cmp =
+    scope === "world"
+      ? (a, b) => {
+          const ad = a?.date != null ? Date.parse(a.date) : 0;
+          const bd = b?.date != null ? Date.parse(b.date) : 0;
+          if (ad !== bd) return ad - bd;
+          return (a?.seq ?? 0) - (b?.seq ?? 0);
+        }
+      : (a, b) => {
+          const as = a?.seq ?? 0;
+          const bs = b?.seq ?? 0;
+          if (as !== bs) return as - bs;
+          const ad = a?.date != null ? Date.parse(a.date) : 0;
+          const bd = b?.date != null ? Date.parse(b.date) : 0;
+          return ad - bd;
+        };
+  const facts = await getHistoryFacts(String(history), {
+    predicate,
+    sort: cmp,
+    limit: limit || 0,
+  });
   const names = await resolveNames(facts, String(history));
   // first-person ("I …") for the FOCAL being's own lines; third-person (saw) otherwise. An
   // explicit nameId (INCLUDING null) overrides: recall passes its own being for a `recalled` view
@@ -112,18 +156,24 @@ export async function assembleBook(history = "0", opts = {}) {
 }
 
 // walk the birth tree from a being down to its descendants, bounded by `depth` (null = all)
-async function descendantsOf(beingId, depth, _history) {
-  const { default: Being } = await import("../../materials/being/being.js");
+async function descendantsOf(beingId, depth, history) {
+  // CURATED: findByParent(beingId, history) is the being-children read (the
+  // file-native peer of Mongo's Being.find({parentBeingId})). Walk it
+  // breadth-first, one frontier-being per call, instead of the old $in batch.
+  const { findByParent } = await import("../../materials/projections.js");
+  const h = String(history);
   const ids = [String(beingId)];
   let frontier = [String(beingId)];
   let remaining = depth == null ? Infinity : Number(depth);
   while (frontier.length && remaining-- > 0) {
-    const kids = await Being.find({ parentBeingId: { $in: frontier } })
-      .select("_id")
-      .lean();
-    const next = kids
-      .map((k) => String(k._id))
-      .filter((id) => !ids.includes(id));
+    const next = [];
+    for (const parent of frontier) {
+      const kids = await findByParent(parent, h);
+      for (const k of kids) {
+        const id = String(k.id);
+        if (!ids.includes(id) && !next.includes(id)) next.push(id);
+      }
+    }
     if (!next.length) break;
     ids.push(...next);
     frontier = next;

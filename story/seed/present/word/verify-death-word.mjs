@@ -14,22 +14,18 @@ import path from "path";
 import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const DB = "mongodb://localhost:27017/story_deathword";
+const DB = path.join(os.tmpdir(), "story_deathword-" + process.pid);
 process.env.PORT = "3837";
-process.env.MONGODB_URI = DB;
+process.env.TREEOS_STORE_BASE = DB;
+fs.rmSync(DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "deathword-0123456789";
 process.env.STORY_KEY_DIR = path.join(
   os.tmpdir(),
   "deathword-keys-" + process.pid,
 );
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`))
-    .default;
-  const conn = await mongoose.createConnection(DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
+// (scratch file store fresh-wiped above; no DB to drop)
 await import(`${R}/begin.js`);
 const { findByName, loadProjection } = await import(
   `${R}/seed/materials/projections.js`
@@ -45,7 +41,7 @@ const { getWordSync } = await import(`${R}/seed/present/word/wordStore.js`);
 const { resolveAbleWord } = await import(
   `${R}/seed/present/word/ableWordRegistry.js`
 );
-const { default: Fact } = await import(`${R}/seed/past/fact/fact.js`);
+const { factFind, factFindOne, factCount } = await import(`${R}/seed/present/word/_factStoreTest.mjs`);
 const { IBP_ERR } = await import(`${R}/seed/ibp/protocol.js`);
 const pollFor = async (fn, pred, t = 16000, e = 250) => {
   const t0 = Date.now();
@@ -144,11 +140,11 @@ try {
   // (4) THE PROOF: the emitted be:death fact carries the WORD's factParams (byActor) + sentinel
   const f = await pollFor(
     () =>
-      Fact.findOne({
+      factFindOne({
         verb: "be",
         act: "death",
         "of.id": String(beingId),
-      }).lean(),
+      }),
     (v) => !!v,
   );
   f &&
@@ -186,11 +182,11 @@ try {
       code = e?.code || null;
     }
   });
-  const ghostFact = await Fact.findOne({
+  const ghostFact = factFindOne({
     verb: "be",
     act: "death",
     "of.id": "ghostbeing404",
-  }).lean();
+  });
   threw && code === IBP_ERR.BEING_NOT_FOUND && !ghostFact
     ? ok(
         `gate: missing target being → ${IBP_ERR.BEING_NOT_FOUND}, no fact (the .word If-no-targetId gate, be.js-equivalent)`,

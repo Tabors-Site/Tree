@@ -165,15 +165,16 @@ export function registerOperation(name, spec) {
     // fact, so the dispatcher stamps nothing (the deeds ARE the facts). Own-fact ops
     // (create-space, credential-reset) leave it false and the dispatcher stamps their one
     // audit fact. It declares the op's NATURE (has an own fact or not), not a runtime mode.
-    // runAsStore: a MULTI-MOMENT composite (add-llm-connection) whose deeds must each seal as
-    // their OWN moment — do.js runs it through runWordToStore, not runAbleWord (one shared
-    // moment). Implies ranAsMoments (the deeds are the facts). The execution-model declaration.
+    // (runAsStore DISSOLVED: do.js DISCOVERS composite-ness via wordHasDeeds(ir) — a word with
+    // DEEDS is a composite, run through runWordToStore so each deed seals its OWN moment; a word
+    // with NONE is atomic (runAbleWord). The leaf/composite split is read off the word, never
+    // declared by a flag. This is the axiom/theorem cut at the op level.)
     // through: a HOST-FACILITATED op (ask-able) whose .word runs THROUGH the caller in being-mode
     // (identity name = i-am), so its internal acts — the queue summon to the owner — authorize as I.
     // factVerb "name": the op's fact is a 5D NAME-ACT on the library reel (config-set, close-story),
     // not a world do-fact. do.js's runOpWord routes it to runOpNameAct (the .word validates + authors
     // the params; the dispatcher lays the name-act on the acting Name's reel).
-    word: isWordSourced ? { noun: spec.word.noun, able: spec.word.able || null, idFrom: spec.word.idFrom || null, through: spec.word.through === true, factVerb: spec.word.factVerb === "name" ? "name" : null, ranAsMoments: spec.word.ranAsMoments === true, runAsStore: spec.word.runAsStore === true } : null,
+    word: isWordSourced ? { noun: spec.word.noun, able: spec.word.able || null, idFrom: spec.word.idFrom || null, through: spec.word.through === true, factVerb: spec.word.factVerb === "name" ? "name" : null, ranAsMoments: spec.word.ranAsMoments === true } : null,
     hostEnv: typeof spec.hostEnv === "function" ? spec.hostEnv : null,
     schema: spec.schema || null,
     // Field schema for the op's params (type + label per field). Drives

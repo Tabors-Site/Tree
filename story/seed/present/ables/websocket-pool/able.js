@@ -27,7 +27,6 @@ export const websocketPoolAble = Object.freeze({
   can: [
     { verb: "see", word: "connections" },
     { verb: "see", word: "http-stats" },
-    { verb: "see", word: "mongo-stats" },
     {
       verb:        "do",
       word:        "create-matter",

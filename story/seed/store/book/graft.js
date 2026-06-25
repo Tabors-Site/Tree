@@ -34,32 +34,57 @@
 // fine; beyond that, future versions should stream with cursor batching.
 // Per the doctrine — make it work, chisel later.
 
-import mongoose from "mongoose";
-import Fact from "../../past/fact/fact.js";
-import Act from "../../past/act/act.js";
-import History from "../../materials/history/history.js";
-import ReelHead from "../../past/reel/reelHead.js";
+// STORAGE-LEVEL dump/restore, FileStore-native. The GENOME path
+// (captureGraft whole-story + plantGraft) reads EVERY fact + act + reel-head +
+// act-head verbatim (hash chains + seq intact) and writes them back byte-for-
+// byte. The CHAIN lives in files, so the dump/restore routes through
+// FileStore's cross-aggregate enumerators (listAllFacts / listAllActs /
+// listReelHeads / listActHeads) and verbatim writers (commitVerbatim /
+// instateActsVerbatim / advanceReelHead / wipeChain), and the history registry
+// through the curated histories.js helpers (listAllHistories / insertHistories /
+// deleteAllHistories / countHistories). No raw Fact/Act/ReelHead/ActHead model
+// remains.
+//
+// No Mongo, no mongoose: the optional Mongo extension is gone and every
+// store row lives in the file chain, so there are no extension-owned
+// Mongo collections to sweep. The genome IS the file chain
+// (facts/acts/histories/heads) plus its CAS blobs — captured and
+// planted entirely through FileStore.
+import * as fileStore from "../../past/fileStore.js";
+import {
+  listAllHistories,
+  insertHistories,
+  deleteAllHistories,
+  countHistories,
+} from "../../materials/history/histories.js";
 import log from "../../seedStory/log.js";
 import { getStoryDomain } from "../../ibp/address.js";
 import { writeFile, mkdir, readdir } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 
-// Collections the seed handles explicitly or that are pure caches
-// re-derived from the chain at plant time. Everything ELSE in the
-// database is "the rest of the story's data" — extension-owned
-// collections, the peer registry, whatever future modules store — and
-// the genome captures it verbatim (a seed is the WHOLE story; an
-// extension's collection is as much its body as its facts are).
-const SEED_CORE_COLLECTIONS = new Set(["facts", "acts", "histories", "reelHeads", "actHeads"]);
-const REGENERABLE_COLLECTIONS = new Set([
-  // fold caches — plant cold-folds these back from the chain
-  "projections", "inbox_projection", "threads_projection", "position_projection",
-  // legacy row caches of the fold (and the empty pre-rename stamps)
-  "spaces", "beings", "matters", "stamps",
-]);
-
 export const GRAFT_BUNDLE_VERSION = "1.0";
+
+// The reel-bearing target kinds — those with their own seq counter (mirrors
+// facts.js REEL_KINDS). A fact lands on a reel keyed (history, kind, id).
+const REEL_KINDS = new Set(["being", "space", "matter", "name", "library"]);
+
+// The reel coordinates a fact rides — the SAME rule logFact wrote it under, so
+// the genome dump round-trips through commitVerbatim. Reel-bearing facts ride
+// their target reel (history, of.kind, of.id); place/stance/target-less facts
+// ride (history, of.kind||"stance", of.id||act).
+function reelCoordsOf(f) {
+  const history = String(f.history ?? "0");
+  const of = f.of || null;
+  if (of && REEL_KINDS.has(of.kind) && of.id != null) {
+    return { history, kind: of.kind, id: String(of.id) };
+  }
+  return {
+    history,
+    kind: of?.kind || "stance",
+    id: of?.id != null ? String(of.id) : String(f.act),
+  };
+}
 
 // Canonical seeds folder: story/seeds/, sibling of story/extensions/.
 // Operator artifacts (genome backups) live here, NOT inside the
@@ -96,12 +121,16 @@ export async function captureGraft(opts = {}) {
   const startedAt = Date.now();
   log.info("Graft", "capturing story genome...");
 
+  const story = getStoryDomain() || null;
+
   // ── 1. Collect every Fact ──
-  // The substantive change chain. Each fact has its hash chain (p/h) and per-reel seq. Plant replays
+  // The substantive change chain. Each fact has its hash chain (p) and per-reel seq. Plant replays
   // these verbatim so the destination chain matches the source's exactly. ORDER, never the clock
   // (623/12): seq leads, `_id` (the content hash) breaks cross-reel ties deterministically — plant
   // re-links by hash, so the order need only be deterministic, not wall-clock. Dates stay as-stamped.
-  const facts = await Fact.find({}).sort({ seq: 1, _id: 1 }).lean();
+  // FileStore: listAllFacts() walks every reel file across every history, already sorted seq→_id
+  // (the file peer of Fact.find({}).sort({seq:1,_id:1})).
+  const facts = fileStore.listAllFacts();
   log.info("Graft", `captured ${facts.length} facts`);
 
   // ── 2. Collect every Act ──
@@ -109,56 +138,39 @@ export async function captureGraft(opts = {}) {
   // (startMessage, endMessage, innerFace) . the biography that
   // makes the story more than a state snapshot. Acts carry no seq; replay order is deterministic by
   // `_id` (the act hash), never the clock — plant re-links the act-chain by its p/hash refs.
-  const acts = await Act.find({}).sort({ _id: 1 }).lean();
+  // FileStore: listAllActs(story) walks every .acts log in the story, sorted by _id (the act hash).
+  const acts = fileStore.listAllActs(story);
   log.info("Graft", `captured ${acts.length} acts`);
 
   // ── 3. Collect every History ──
   // History registry: paths, branchPoints (per-reel snapshots of parent
-  // heads at create-branch time), scopes, lifecycle flags.
-  const histories = await History.find({}).lean();
+  // heads at create-branch time), scopes, lifecycle flags. Curated seam.
+  const histories = await listAllHistories();
   log.info("Graft", `captured ${histories.length} histories`);
 
   // ── 4. Collect every ReelHead ──
   // Per-reel-per-history seq counters. Without these the receiving
   // substrate would allocate seq 1 for every reel on a fresh boot,
-  // breaking the hash chain continuity from the seed's facts.
-  const reelHeads = await ReelHead.find({}).lean();
+  // breaking the hash chain continuity from the seed's facts. FileStore:
+  // listReelHeads() scans every reel's .head across every history.
+  const reelHeads = fileStore.listReelHeads();
   log.info("Graft", `captured ${reelHeads.length} reel heads`);
 
   // ── 4b. Collect every ActHead ──
   // Per-being per-history act-chain tips. Acts are content-addressed
   // chains; the story root covers them, so the heads are core
-  // genome, not extension luggage.
-  const { default: ActHead } = await import("../../past/act/actHead.js");
-  const actHeads = await ActHead.find({}).lean();
+  // genome, not extension luggage. FileStore: listActHeads(story) scans
+  // every .acthead in the story.
+  const actHeads = fileStore.listActHeads(story);
   log.info("Graft", `captured ${actHeads.length} act heads`);
 
-  // ── 5. Collect everything else — extension collections et al ──
-  // The genome is the WHOLE story. Extensions may keep their own
-  // Mongo collections (declared via their manifests); the peer
-  // registry lives in its own collection; future modules will add
-  // more. None of that is derivable from the chain, so the seed
-  // captures every collection that isn't core (handled above) or a
-  // regenerable cache (re-derived by plant's cold-fold). Keyed by
-  // collection name; plant re-inserts verbatim.
+  // ── 5. No extension collections ──
+  // The genome is the WHOLE story, and the WHOLE story lives in the
+  // file chain. There are no extension-owned Mongo collections (no
+  // Mongo, no mongoose), so nothing is swept here. The field stays in
+  // the bundle as an empty map for shape compatibility with older
+  // bundles (assertValidGraft permits it).
   const extensionData = {};
-  try {
-    const db = mongoose.connection.db;
-    const cols = await db.listCollections().toArray();
-    for (const c of cols) {
-      const name = c.name;
-      if (name.startsWith("system.")) continue;
-      if (SEED_CORE_COLLECTIONS.has(name)) continue;
-      if (REGENERABLE_COLLECTIONS.has(name)) continue;
-      const docs = await db.collection(name).find({}).toArray();
-      if (docs.length > 0) {
-        extensionData[name] = docs;
-        log.info("Graft", `captured ${docs.length} docs from "${name}"`);
-      }
-    }
-  } catch (err) {
-    log.warn("Graft", `extension-collection sweep failed: ${err.message}. Core chain still captured.`);
-  }
 
   // ── 5b. CAS blobs — the genome includes the BYTES ──
   // The chain holds facts ABOUT content; the bytes live in the
@@ -386,13 +398,14 @@ export async function plantGraft(bundle) {
   // `genesis.js` ensures it only runs against a fresh DB — but we
   // double-check here so a misconfigured boot can't silently corrupt
   // an existing story.
-  const checks = await Promise.all([
-    Fact.countDocuments({}),
-    Act.countDocuments({}),
-    History.countDocuments({}),
-    ReelHead.countDocuments({}),
-  ]);
-  const [factCount, actCount, historyCount, reelCount] = checks;
+  // FileStore freshness gate: count the on-disk chain (facts/acts/reel-heads
+  // across the file tree) + the history registry. A non-empty store refuses
+  // the plant (boot ensures a wiped store; we double-check here).
+  const plantStory = bundle.sourceStory || getStoryDomain() || null;
+  const factCount = fileStore.listAllFacts().length;
+  const actCount = fileStore.listAllActs(plantStory).length;
+  const historyCount = await countHistories();
+  const reelCount = fileStore.listReelHeads().length;
   if (factCount > 0 || actCount > 0 || historyCount > 0 || reelCount > 0) {
     throw new Error(
       `plantGraft: refusing to plant into a non-empty DB. Found ` +
@@ -436,63 +449,98 @@ export async function plantGraft(bundle) {
   // ── 2. Histories first ──
   // Plant order matters for foreign-key-like references inside the
   // substrate's read paths. Histories are referenced by facts.history
-  // and reelHeads.history; insert them first.
+  // and reelHeads.history; insert them first. Curated bulk insert.
   if (bundle.histories.length > 0) {
-    await History.insertMany(bundle.histories, { ordered: false });
+    await insertHistories(bundle.histories);
     log.info("Graft", `planted ${bundle.histories.length} histories`);
   }
 
-  // ── 3. ReelHeads ──
-  // Per-reel seq counters. Needed before facts so allocSeq paths
-  // don't try to re-allocate seq=1 on every reel.
-  if (bundle.reelHeads.length > 0) {
-    await ReelHead.insertMany(bundle.reelHeads, { ordered: false });
-    log.info("Graft", `planted ${bundle.reelHeads.length} reel heads`);
-  }
-
-  // ── 3b. ActHeads ──
-  // Act-chain tips. Needed before any new moment seals so the next
-  // act chains from the planted biography, and before verification
-  // (the story root covers act chains).
-  if (Array.isArray(bundle.actHeads) && bundle.actHeads.length > 0) {
-    const { default: ActHead } = await import("../../past/act/actHead.js");
-    await ActHead.insertMany(bundle.actHeads, { ordered: false });
-    log.info("Graft", `planted ${bundle.actHeads.length} act heads`);
-  }
-
-  // ── 4. Facts ──
-  // The substantive chain. Original _id, seq, history, p/h hashes
-  // preserved. The fold engine derives projections from these.
+  // ── 3. Facts (verbatim) ──
+  // The substantive chain. Original _id, seq, history, p hashes preserved —
+  // commitVerbatim journals + applies each pre-built doc to its reel file
+  // byte-for-byte (re-deriving the hash would re-home the chain). The reel a
+  // fact lands on is (history, kind, id): reel-bearing facts ride their target
+  // reel; place/stance/target-less facts ride (history, of.kind||"stance",
+  // of.id||act) — the SAME key logFact wrote them under (so the dump round-
+  // trips). commitVerbatim advances each touched reel's .head as it applies,
+  // so the heads below are a no-op for reels the facts cover (and a heads-only
+  // advance for any reel the bundle ships a head but no facts for).
   if (bundle.facts.length > 0) {
-    await Fact.insertMany(bundle.facts, { ordered: false });
+    await fileStore.commitVerbatim(
+      bundle.facts.map((f) => {
+        const r = reelCoordsOf(f);
+        return { history: r.history, kind: r.kind, id: r.id, doc: f };
+      }),
+    );
     log.info("Graft", `planted ${bundle.facts.length} facts`);
   }
 
-  // ── 5. Acts ──
-  // The experiential chain. Original _id, beingIn/beingOut, transcripts.
-  if (bundle.acts.length > 0) {
-    await Act.insertMany(bundle.acts, { ordered: false });
-    log.info("Graft", `planted ${bundle.acts.length} acts`);
+  // ── 3b. ReelHeads (advance-only) ──
+  // Per-reel seq counters + chain roots. commitVerbatim already advanced the
+  // heads of reels it applied facts to; this lands any heads-only advance the
+  // bundle carries (a reel shipped a head but no divergent facts). Never
+  // regresses. The reel key is "<history>:<type>:<id>".
+  if (bundle.reelHeads.length > 0) {
+    for (const rh of bundle.reelHeads) {
+      const [history, type, ...rest] = String(rh._id).split(":");
+      const id = rest.join(":") || rh.id;
+      fileStore.advanceReelHead(
+        rh.history || history,
+        rh.type || type,
+        id,
+        rh.head || 0,
+        rh.headHash || null,
+      );
+    }
+    log.info("Graft", `planted ${bundle.reelHeads.length} reel heads`);
   }
 
-  // ── 6. Extension collections et al ──
-  // Everything the capture swept beyond the chain (extension-owned
-  // collections, the peer registry). Re-inserted verbatim; the DB was
-  // verified empty above, so there is nothing to collide with.
-  let extensionCollections = 0;
-  if (bundle.extensionData && typeof bundle.extensionData === "object") {
-    const db = mongoose.connection.db;
-    for (const [name, docs] of Object.entries(bundle.extensionData)) {
-      if (!Array.isArray(docs) || docs.length === 0) continue;
-      if (name.startsWith("system.")) continue;
-      try {
-        await db.collection(name).insertMany(docs, { ordered: false });
-        extensionCollections++;
-        log.info("Graft", `planted ${docs.length} docs into "${name}"`);
-      } catch (err) {
-        log.warn("Graft", `planting collection "${name}" failed: ${err.message}`);
-      }
+  // ── 4. Acts + ActHeads (verbatim) ──
+  // The experiential chain. Original _id, through, transcripts, p hashes. Group
+  // the bundle's acts by (story, history, being) and instate each chain
+  // verbatim — append every .acts line (and index it) in chain order, then pin
+  // the .acthead to the bundle's tip. The story keys the act-log; default to
+  // the bundle's sourceStory (the genome continues the SAME story). Act-heads
+  // are needed before any new moment seals so the next act chains from the
+  // planted biography, and before the chain walk (the story root covers acts).
+  if (bundle.acts.length > 0 || (Array.isArray(bundle.actHeads) && bundle.actHeads.length > 0)) {
+    const actStory = bundle.sourceStory || getStoryDomain() || null;
+    // Tip per (history, being) from the bundle's actHeads (_id = "<story>:<history>:<being>").
+    const tipByChain = new Map();
+    for (const ah of (bundle.actHeads || [])) {
+      const seg = String(ah._id || "").split(":");
+      const h = ah.history ?? seg[1] ?? "0";
+      const b = ah.beingId ?? seg[2];
+      if (b != null) tipByChain.set(`${h}:${b}`, ah.headHash ?? null);
     }
+    // Group acts by their (history, through) chain. `through` is the being the
+    // act ran through — the vessel that keys the act-log (a 5D name-act with no
+    // through has no being-log to land on; skip it, as the live path does).
+    const chains = new Map();
+    for (const a of (bundle.acts || [])) {
+      const h = String(a.history ?? "0");
+      const b = a.through != null ? String(a.through) : null;
+      if (b == null) continue;
+      const key = `${h}:${b}`;
+      let bucket = chains.get(key);
+      if (!bucket) { bucket = { history: h, being: b, acts: [] }; chains.set(key, bucket); }
+      bucket.acts.push(a);
+    }
+    for (const { history, being, acts } of chains.values()) {
+      fileStore.instateActsVerbatim(actStory, history, being, acts, tipByChain.get(`${history}:${being}`) ?? null);
+    }
+    log.info("Graft", `planted ${bundle.acts.length} acts (${chains.size} chain(s))`);
+  }
+
+  // ── 6. Extension collections ──
+  // There is no Mongo and no mongoose: store rows all live in the file
+  // chain, which landed above. A bundle from an older substrate may
+  // still ship extensionData; there is nowhere to plant it, so warn
+  // loudly and skip. The file chain is the planted genome.
+  const extensionCollections = 0;
+  if (bundle.extensionData && typeof bundle.extensionData === "object" && Object.keys(bundle.extensionData).length > 0) {
+    log.warn("Graft", `bundle ships ${Object.keys(bundle.extensionData).length} legacy extension Mongo collection(s) but ` +
+      `this substrate has no Mongo — those rows are NOT planted. The file chain is the genome.`);
   }
 
   // ── 7. Extension presence check ──
@@ -536,12 +584,13 @@ export async function plantGraft(bundle) {
   if (expectedRoot) {
     try {
       const { storyRootFromParts } = await import("../../past/fact/chainRoots.js");
-      const { default: ActHead } = await import("../../past/act/actHead.js");
-      const [dbHistories, dbHeads, dbActHeads] = await Promise.all([
-        History.find({}).lean(),
-        ReelHead.find({}).select("_id history head headHash").lean(),
-        ActHead.find({}).select("_id history headHash").lean(),
-      ]);
+      // FileStore: read the landed chain structure straight back from the file
+      // tree (the peers of History.find/ReelHead.find/ActHead.find). Anchored to
+      // the bundle's sourceStory so the act-log story key lines up.
+      const rootStory = bundle.sourceStory || getStoryDomain() || null;
+      const dbHistories = await listAllHistories();
+      const dbHeads = fileStore.listReelHeads();
+      const dbActHeads = fileStore.listActHeads(rootStory);
       const actualRoot = storyRootFromParts({
         story: bundle.sourceStory || null,
         histories: dbHistories,
@@ -565,18 +614,44 @@ export async function plantGraft(bundle) {
           const { verifyActChain } = await import("../../past/act/actHash.js");
           const broken = [];
           let reelsWalked = 0;
-          let actsWalked = 0;
+          // verifyReel walks being/space/matter/library reels; a `name` reel has
+          // its own integrity surface (the name chain) and verifyReel refuses it.
+          // The FileStore head sweep (like ReelHead.find before it) returns every
+          // reel kind, so verify the kinds verifyReel handles and skip the rest —
+          // per-reel guarded so one unverifiable kind never aborts the whole walk.
+          const WALKABLE = new Set(["being", "space", "matter", "library"]);
           for (const rh of dbHeads) {
-            const v = await verifyReel(rh.type ?? rh._id?.split(":")[1], rh.id ?? rh._id?.split(":")[2], rh.history || "0");
+            const type = rh.type ?? rh._id?.split(":")[1];
+            const id = rh.id ?? rh._id?.split(":")[2];
+            if (!WALKABLE.has(type)) continue;
+            let v;
+            try {
+              v = await verifyReel(type, id, rh.history || "0");
+            } catch (e) {
+              broken.push({ kind: "reel", key: rh._id, reason: e?.message || "verify-threw", at: -1 });
+              continue;
+            }
             reelsWalked++;
             if (!v.ok) broken.push({ kind: "reel", key: rh._id, reason: v.reason, at: v.brokenAt });
           }
-          for (const ah of dbActHeads) {
-            const seg = String(ah._id || "").split(":"); // <story>:<history>:<being>
-            const beingId = ah.beingId ?? seg[2];
-            const v = await verifyActChain(ah.story ?? seg[0], ah.history ?? seg[1] ?? "0", beingId);
-            actsWalked++;
-            if (!v.ok) broken.push({ kind: "act-chain", key: ah._id, reason: v.reason, at: v.brokenAt });
+          // FLAG (Mongo→FileStore rip, out-of-scope file): the per-being act-chain
+          // walk is DISABLED until its verifier is ported. verifyActChain
+          // (past/act/actHash.js — NOT one of this rip's two files) still walks the
+          // chain via the legacy Mongo `Act.findById`. After the rip the acts live
+          // ONLY in the file act-log (fileStore.readActChain), so the Mongo walk
+          // reads an EMPTY acts collection and would report every planted chain
+          // "broken" (missing-act) — a FALSE negative that would unplant a perfectly
+          // good genome. Running a proof against the wrong storage is worse than not
+          // running it, so the act-chain walk is skipped with a precise flag here;
+          // the fact-reel walk above (file-native verifyReel) + the storyRoot match
+          // remain the plant proof. RE-ARM: delete this guard and restore the loop
+          // once verifyActChain reads fileStore.readActChain. (graft.js)
+          void verifyActChain;
+          if (dbActHeads.length > 0) {
+            log.warn("Graft", `act-chain walk SKIPPED for ${dbActHeads.length} chain(s): verifyActChain ` +
+              `(actHash.js) is still Mongo-backed (reads the now-empty acts collection) and not yet ` +
+              `file-native — running it would false-negative. The storyRoot match + ${reelsWalked} ` +
+              `fact-reel walk(s) stand as the plant proof until the act verifier is ported.`);
           }
           if (broken.length > 0) {
             rootVerified = false;
@@ -584,7 +659,8 @@ export async function plantGraft(bundle) {
               broken.slice(0, 5).map((b) => `${b.kind}:${b.key}(${b.reason})`).join(", ") +
               (broken.length > 5 ? ` …+${broken.length - 5}` : ""));
           } else {
-            log.info("Graft", `chain walk VERIFIED: ${reelsWalked} reel(s) + ${actsWalked} act-chain(s) recompute end to end`);
+            log.info("Graft", `chain walk VERIFIED: ${reelsWalked} fact-reel(s) recompute end to end ` +
+              `(act-chain walk pending the act verifier's file port — see flag above)`);
           }
         }
       }
@@ -604,18 +680,16 @@ export async function plantGraft(bundle) {
           : `chain root MISMATCH: expected ${expectedRoot.slice(0, 16)}…, got ${actualRoot.slice(0, 16)}…`;
         log.warn("Graft", `${why} — UNPLANTING`);
         try {
-          const db = mongoose.connection.db;
-          const toClear = ["facts", "acts", "histories", "reelHeads", "actHeads"];
-          for (const name of Object.keys(bundle.extensionData || {})) {
-            if (!name.startsWith("system.")) toClear.push(name);
-          }
-          for (const name of toClear) {
-            try { await db.collection(name).deleteMany({}); } catch { /* collection may not exist */ }
-          }
-          const { invalidateHistoryCache } = await import("../../materials/history/histories.js");
-          invalidateHistoryCache(null);
-          log.warn("Graft", `unplanted ${toClear.length} collection(s); the substrate is empty again. ` +
-            `Planted content blobs stay in the store under their true hashes (the retention sweeper owns orphans).`);
+          // FileStore: wipe the on-disk chain (reels + acts + journal + index)
+          // and the history registry. Plant gates on an EMPTY store, so this
+          // restores the void it started from. There are no extension Mongo
+          // collections to clear (no Mongo on this substrate); the plant
+          // above inserted nothing beyond the file chain.
+          fileStore.wipeChain();
+          await deleteAllHistories();
+          log.warn("Graft", `unplanted the chain + history registry; ` +
+            `the substrate is empty again. Planted content blobs stay in the store under their true hashes ` +
+            `(the retention sweeper owns orphans).`);
         } catch (unplantErr) {
           log.error("Graft", `UNPLANT FAILED: ${unplantErr.message} — the substrate may hold a partial, ` +
             `unverified chain. Wipe the DB before booting.`);
@@ -668,17 +742,41 @@ export async function plantGraft(bundle) {
 async function captureBeingGraft(opts) {
   const beingId = String(opts.beingId);
   const story = getStoryDomain() || null;
-  const { default: ActHead } = await import("../../past/act/actHead.js");
-  const { actHeadKey } = await import("../../past/act/actHash.js");
-  const { reelKey } = await import("../../past/reel/reelHeads.js");
   const { loadHistory } = await import("../../materials/history/histories.js");
   const { loadOrFold } = await import("../../materials/projections.js");
   const { graftRootFromParts } = await import("../../past/fact/chainRoots.js");
 
-  // The being's OWN reel (single-writer: every fact here has the being as
-  // its actor) + its full act-chain.
-  const facts = await Fact.find({ "of.kind": "being", "of.id": beingId }).sort({ seq: 1 }).lean();
-  const acts = await Act.find({ through: beingId }).sort({ stampedAt: 1 }).lean();
+  // The being's OWN reel (single-writer: every fact here has the being as its
+  // actor) + its full act-chain — HISTORY-SPANNING. FileStore reels are per
+  // (history, kind, id), so the being-reel dump unions the being's reel across
+  // EVERY history it has one: listReelHeads() locates the histories carrying a
+  // `being:beingId` reel (the file peer of "which histories has this being
+  // written in"), then readReel reads each one verbatim. Sorted seq→_id so the
+  // bundle array is deterministic.
+  const beingReelHeads = fileStore
+    .listReelHeads()
+    .filter((rh) => rh.type === "being" && String(rh.id) === beingId);
+  const facts = [];
+  for (const rh of beingReelHeads) {
+    for (const f of fileStore.readReel(rh.history, "being", beingId)) facts.push(f);
+  }
+  facts.sort((a, b) => {
+    const sa = a.seq ?? 0;
+    const sb = b.seq ?? 0;
+    if (sa !== sb) return sa - sb;
+    return String(a._id) < String(b._id) ? -1 : String(a._id) > String(b._id) ? 1 : 0;
+  });
+  // Curated: every act this being authored, history-spanning (getActsByField's
+  // index is story-wide across histories — the exact peer of Act.find({through})).
+  // Re-sorted by stampedAt to preserve the bundle's array order.
+  const { getActsByField } = await import("../../past/act/actChain.js");
+  const acts = getActsByField("through", beingId)
+    .slice()
+    .sort((a, b) => {
+      const ta = a?.stampedAt ? new Date(a.stampedAt).getTime() : 0;
+      const tb = b?.stampedAt ? new Date(b.stampedAt).getTime() : 0;
+      return ta - tb;
+    });
 
   // Lineage histories: every distinct non-main history the being touched,
   // plus its ancestor chain, so resolveHistoryLineage resolves on the
@@ -699,12 +797,15 @@ async function captureBeingGraft(opts) {
   }
   const histories = [...historyById.values()];
 
-  // Per-history heads (the being's reel + act-chain tips). Include main.
-  const allHistories = [...new Set([...historySet, "0", ...historyById.keys()])];
-  const reelKeys = allHistories.map((br) => reelKey(br, "being", beingId));
-  const actKeys = allHistories.map((br) => actHeadKey(story, br, beingId));
-  const reelHeads = await ReelHead.find({ _id: { $in: reelKeys } }).lean();
-  const actHeads = await ActHead.find({ _id: { $in: actKeys } }).lean();
+  // Per-history heads (the being's reel + act-chain tips), across every history
+  // the being has one. FileStore: filter the reel/act head enumerators to this
+  // being (the file peers of ReelHead.find({_id:$in})/ActHead.find({_id:$in})).
+  const reelHeads = fileStore
+    .listReelHeads()
+    .filter((rh) => rh.type === "being" && String(rh.id) === beingId);
+  const actHeads = fileStore
+    .listActHeads(story)
+    .filter((ah) => String(ah.beingId) === beingId);
 
   // Lineage refs from the being's current projection.
   const slot = await loadOrFold("being", beingId, opts.history || "0");

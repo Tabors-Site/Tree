@@ -66,11 +66,7 @@ import { callByResolved } from "../../ibp/verbs/call.js";
 import { getStoryDomain } from "../../ibp/address.js";
 import { getSpaceRootId } from "../../sprout.js";
 import { emitFact } from "../../past/fact/facts.js";
-import {
-  MAIN,
-  resolveHistoryLineage,
-  getBranchPoint,
-} from "../../materials/history/histories.js";
+import { MAIN } from "../../materials/history/histories.js";
 
 const MIN_INTERVAL_MS = 250;
 const DEFAULT_TICK_MS = 1000;
@@ -306,23 +302,27 @@ export function resetEmitter() {
  * registry.
  */
 export async function rehydrateFromFacts() {
-  let Fact, History;
+  let listLiveHistories, listByType, readReelBetween;
   try {
-    Fact = (await import("../../past/fact/fact.js")).default;
-    History = (await import("../../materials/history/history.js")).default;
+    ({ listLiveHistories } = await import("../../materials/history/histories.js"));
+    ({ listByType } = await import("../../materials/projections.js"));
+    ({ readReelBetween } = await import("../stamper/2-fold/foldEngine.js"));
   } catch (err) {
-    log.warn("Schedule", `rehydrate skipped: model load failed (${err.message})`);
+    log.warn("Schedule", `rehydrate skipped: curated layer load failed (${err.message})`);
     return 0;
   }
 
-  // Enumerate live histories: main + every non-deleted History row.
+  // Cross-history enumeration of every live history. The history registry
+  // is the file-backed history store; listLiveHistories (histories.js) is
+  // the curated reader for "every non-deleted history row" (loadHistory is
+  // single-row only).
+  //
+  // Enumerate live histories: main + every non-deleted history row.
   // Soft-deleted histories keep their facts in the chain but don't
   // tick. Undelete restores by rerunning rehydrate.
   const histories = [MAIN];
   try {
-    const historyRows = await History
-      .find({ deleted: { $ne: true } }, "_id")
-      .lean();
+    const historyRows = await listLiveHistories();
     for (const row of historyRows) {
       if (row._id !== MAIN) histories.push(row._id);
     }
@@ -330,29 +330,56 @@ export async function rehydrateFromFacts() {
     log.warn("Schedule", `rehydrate history enumeration failed: ${err.message}`);
   }
 
-  // One query pulls every wake fact across every history. Ordered by (history, seq) — within a
-  // history, schedule + cancel share the being's reel, so seq totally orders them (cancel after its
-  // schedule); the per-history lineage walk below composes branches. ORDER, never the clock (623/12).
-  const wakeFacts = await Fact.find({
-    verb: "do",
-    action: { $in: ["wake-scheduled", "wake-cancelled"] },
-  }).sort({ history: 1, seq: 1 }).lean();
-
+  // STORAGE SWAP (Mongo rip): the old global `Fact.find({verb,action:$in})`
+  // scan + hand-rolled lineage walk are replaced by the curated reel layer.
+  // Wake facts ride the BEING reel (of:{kind:"being",id}), so for each live
+  // history we enumerate that history's beings through the curated projection
+  // layer (listByType, which already inherits the lineage with branchPoint
+  // gating) and read each being's reel through the curated lineage-aware
+  // reader (foldEngine.readReelBetween). readReelBetween resolves
+  // (lineage, floors) and unions the parent prefix up to each branchPoint
+  // with the history's own divergent tail — exactly the inheritance the
+  // removed _isInHistoryLineage reproduced by hand, now done once in the
+  // fold engine. Reels come back seq-ascending, so within a being's reel
+  // schedule + cancel are totally ordered (cancel after its schedule).
+  // ORDER, never the clock (623/12).
   const now = Date.now();
   let restored = 0;
 
   for (const history of histories) {
+    let beings;
+    try {
+      beings = await listByType("being", history);
+    } catch (err) {
+      log.warn(
+        "Schedule",
+        `rehydrate being enumeration failed for #${history}: ${err.message}`,
+      );
+      continue;
+    }
     const live = new Map();
-    for (const fact of wakeFacts) {
-      const inLineage = await _isInHistoryLineage(fact, history);
-      if (!inLineage) continue;
-      const scheduleId = fact.params?.scheduleId;
-      if (!scheduleId) continue;
-      if (fact.action === "wake-scheduled") {
-        const entry = _entryFromFact(fact, history, now);
-        if (entry) live.set(scheduleId, entry);
-      } else if (fact.action === "wake-cancelled") {
-        live.delete(scheduleId);
+    for (const occ of beings) {
+      let reel;
+      try {
+        reel = await readReelBetween("being", occ.id, null, null, history);
+      } catch (err) {
+        log.warn(
+          "Schedule",
+          `rehydrate reel read failed for being ${String(occ.id).slice(0, 8)} ` +
+            `on #${history}: ${err.message}`,
+        );
+        continue;
+      }
+      for (const fact of reel) {
+        if (fact.verb !== "do") continue;
+        const scheduleId = fact.params?.scheduleId;
+        if (!scheduleId) continue;
+        if (fact.act === "wake-scheduled") {
+          const entry = _entryFromFact(fact, history, now);
+          if (entry) live.set(scheduleId, entry);
+        } else if (fact.act === "wake-cancelled") {
+          live.delete(scheduleId);
+        }
       }
     }
     for (const entry of live.values()) {
@@ -446,7 +473,9 @@ function _entryFromFact(fact, history, nowMs) {
   const params = fact.params || {};
   const intervalMs = Number(params.intervalMs);
   if (!Number.isFinite(intervalMs) || intervalMs < MIN_INTERVAL_MS) return null;
-  const beingId = String(fact.target?.id || "");
+  // Wake facts ride the being reel as of:{kind:"being",id} — the
+  // being-target id IS the scheduled being.
+  const beingId = String(fact.of?.id || "");
   if (!beingId) return null;
   const scheduleId = params.scheduleId;
   if (!scheduleId) return null;
@@ -461,42 +490,6 @@ function _entryFromFact(fact, history, nowMs) {
     nextFireMs:    nowMs + intervalMs,
     lastFireMs:    null,
   };
-}
-
-// True when `fact` is inherited by `targetHistory`'s reel-lineage.
-//
-// Rules:
-//   . factHistory === targetHistory         . divergent path, always inherited
-//   . factHistory is an ancestor in lineage . inherited iff fact.seq is at or
-//                                            below the branchPoint cutoff
-//                                            for the next-deeper child on
-//                                            this fact's reel.
-//
-// Non-reel-bearing facts (no target.kind/id) inherit by ancestor
-// inclusion alone. Wake facts always carry target = { kind: "being",
-// id: <beingId> }, so the branchPoint check is the live path.
-async function _isInHistoryLineage(fact, targetHistory) {
-  const factHistory = fact.history || MAIN;
-  if (factHistory === targetHistory) return true;
-
-  const lineage = await resolveHistoryLineage(targetHistory);
-  const idx = lineage.indexOf(factHistory);
-  if (idx === -1) return false;
-  if (idx === lineage.length - 1) return true;
-
-  const childHistory = lineage[idx + 1];
-  const kind = fact.target?.kind;
-  const id   = fact.target?.id;
-  if (!kind || !id) return true;
-
-  let bp;
-  try {
-    bp = await getBranchPoint(childHistory, kind, id);
-  } catch {
-    return false;
-  }
-  if (bp == null) return false;
-  return typeof fact.seq === "number" && fact.seq <= bp;
 }
 
 async function _defaultEmitter(entry, nowMs) {

@@ -11,7 +11,7 @@
 // when the wire-protocol federation slice places.
 
 import log from "../../seed/seedStory/log.js";
-import StoryPeer from "./models/storyPeer.js";
+import StoryPeer, { buildPeerDoc } from "./models/storyPeer.js";
 
 /**
  * Reject private/internal addresses (SSRF defense).
@@ -48,21 +48,23 @@ export async function registerPeer({ domain, publicKey, storyId, baseUrl, name, 
     throw new Error("Cannot register a peer with a private or internal address");
   }
 
-  const existing = await StoryPeer.findOne({ domain });
+  const existing = await StoryPeer.findById(domain);
   if (existing) {
+    // Mutate in place (the old mongoose doc-mutate + save), preserving
+    // every other field, then upsert the row by its _id (= domain).
     existing.publicKey = publicKey;
-    existing.storyId    = storyId;
+    existing.storyId   = storyId;
     existing.baseUrl   = url;
     existing.name      = name || existing.name;
     existing.status    = "active";
     if (typeof requireSignedEnvelopes === "boolean") {
       existing.requireSignedEnvelopes = requireSignedEnvelopes;
     }
-    await existing.save();
+    await StoryPeer.updateOne({ _id: domain }, { $set: existing }, { upsert: true });
     return existing;
   }
 
-  return StoryPeer.create({
+  const doc = buildPeerDoc({
     domain,
     storyId,
     publicKey,
@@ -71,22 +73,26 @@ export async function registerPeer({ domain, publicKey, storyId, baseUrl, name, 
     status: "active",
     requireSignedEnvelopes: requireSignedEnvelopes === true,
   });
+  await StoryPeer.updateOne({ _id: domain }, { $set: doc }, { upsert: true });
+  return doc;
 }
 
 export async function removePeer(domain) {
-  return StoryPeer.deleteOne({ domain });
+  return StoryPeer.deleteOne({ _id: domain });
 }
 
 export async function blockPeer(domain) {
-  return StoryPeer.findOneAndUpdate({ domain }, { status: "blocked" }, { returnDocument: "after" });
+  await StoryPeer.updateOne({ _id: domain }, { $set: { status: "blocked" } });
+  return StoryPeer.findById(domain);
 }
 
 export async function unblockPeer(domain) {
-  return StoryPeer.findOneAndUpdate({ domain }, { status: "active" }, { returnDocument: "after" });
+  await StoryPeer.updateOne({ _id: domain }, { $set: { status: "active" } });
+  return StoryPeer.findById(domain);
 }
 
 export async function getPeerByDomain(domain) {
-  return StoryPeer.findOne({ domain });
+  return StoryPeer.findById(domain);
 }
 
 export async function getAllPeers() {

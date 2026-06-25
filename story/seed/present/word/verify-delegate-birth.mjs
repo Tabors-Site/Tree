@@ -14,9 +14,11 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const SCRATCH_DB = "mongodb://localhost:27017/story_delegate_birth";
+const SCRATCH_DB = path.join(os.tmpdir(), "story_delegate_birth-" + process.pid);
 process.env.PORT = "3799";
-process.env.MONGODB_URI = SCRATCH_DB;
+process.env.TREEOS_STORE_BASE = SCRATCH_DB;
+fs.rmSync(SCRATCH_DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "delegatebirth-secret-0123456789";
 process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "delegatebirth-keys-" + process.pid);
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
@@ -26,12 +28,7 @@ fs.mkdirSync(SRC, { recursive: true });
 fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
 
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`)).default;
-  const conn = await mongoose.createConnection(SCRATCH_DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
+// (scratch file store fresh-wiped above; no DB to drop)
 
 await import(`${R}/begin.js`);
 
@@ -46,7 +43,7 @@ const { runWordToStore } = await import(
   `${R}/seed/present/word/ableWordRegistry.js`
 );
 const { genesisHostEnv } = await import(`${R}/seed/store/genesisHost.js`);
-const Fact = (await import(`${R}/seed/past/fact/fact.js`)).default;
+const { factFind, factFindOne, factCount } = await import(`${R}/seed/present/word/_factStoreTest.mjs`);
 
 let pass = 0,
   fail = 0;
@@ -71,11 +68,14 @@ const poll = async (fn, t = 60000, e = 250) => {
 };
 
 const TEST_NAME = "genesis-test-being";
-// The name rides a BINDING ($testName), never a quoted literal — see-op args are always treated as
-// refs (argList prefixes "$"), so `findByName("x")` would resolve to undefined. genesis.word feeds
-// delegate names the same way (a foreach loop-var or a host binding), never a bare quoted literal.
+// The name rides a BINDING, never a quoted literal — a see-op paren-arg is always treated as a ref
+// (the parser's argList already prefixes "$"), so the arg is the BARE binding name `testName`, NOT a
+// `$`-prefixed token (that would double-prefix to `$$testName` and resolve to the literal, never the
+// binding) and never a quoted literal (`findByName("x")` would look up a being literally named "x").
+// Every production .word feeds see-op args this same bareword way (genesis.word's delegate names: a
+// foreach loop-var or a host binding). Inside the `{ … }` object literal, `$name` is the ref form.
 const birthSrc = `When the I makes the world:
-  see findByName($testName) as existing.
+  see findByName(testName) as existing.
   If no existing, form a being with { name: $testName, cognition: "scripted", defaultAble: "global", parentBeingId: $I, homeId: $root } as t.`;
 
 console.log(
@@ -141,12 +141,12 @@ try {
   } else {
     ok(`the test being is born (${String(born.id).slice(0, 8)})`);
     // SELF-STAMPED: the be:birth fact's actor is the being itself, never the I, never a mother.
-    const birthFact = await Fact.findOne({
+    const birthFact = factFindOne({
       verb: "be",
       act: "birth",
       "of.kind": "being",
       "of.id": String(born.id),
-    }).lean();
+    });
     birthFact &&
     String(birthFact.through) === String(born.id) &&
     String(birthFact.through) !== String(I)
@@ -177,7 +177,7 @@ try {
   } catch (e) {
     run2Err = e.message;
   }
-  const births = await Fact.countDocuments({
+  const births = factCount({
     verb: "be",
     act: "birth",
     "of.kind": "being",

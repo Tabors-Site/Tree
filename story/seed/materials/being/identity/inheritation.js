@@ -35,7 +35,7 @@
 // queries are history-agnostic; only the tree WALK is history-aware
 // (a being's parent/owner are read from its projection on `history`).
 
-import Fact from "../../../past/fact/fact.js";
+import { getFactsOnReelWhere } from "../../../past/fact/facts.js";
 import { loadProjection } from "../../projections.js";
 
 const MAX_TREE_DEPTH = 256; // cycle/runaway guard for the upward walk.
@@ -62,37 +62,41 @@ export async function livePointsAt(beingId, history) {
   if (!beingId) return new Set();
   const position = String(beingId);
 
-  let historyClause = {};
+  // The grant/revoke facts ride the POSITION being's reel. Read them via
+  // the curated getFactsOnReelWhere (the file-native peer of Fact.find),
+  // unioning the history's reel-lineage when a history is given (a sub-
+  // history sees main's grants; main does not see a sub-history's). The
+  // lineage is main→leaf, and FileStore reels are seq-ascending with seqs
+  // contiguous across forks, so reading lineage-in-order yields the facts
+  // in the same {seq:1} order the Mongo sort produced.
+  //
+  // FLAG: the history-agnostic union (no `history` arg — "any grant
+  // anywhere") has NO curated peer. The curated reel read is per-(history,
+  // kind, id); there is no all-histories reel scan. This path is reached
+  // only when livePointsAt is called WITHOUT a history; the live callers
+  // (descriptor.js, the walkUp below) always pass one, so this falls back
+  // to the own-history ("0") read rather than a true cross-history union.
+  let histories = ["0"];
   if (history) {
     const { resolveHistoryLineage } =
       await import("../../history/histories.js");
-    historyClause = {
-      history: { $in: await resolveHistoryLineage(String(history)) },
-    };
+    histories = await resolveHistoryLineage(String(history));
   }
 
-  const [grants, revokes] = await Promise.all([
-    Fact.find({
-      "of.kind": "being",
-      "of.id": position,
-      verb: "do",
-      act: "grant-inheritation",
-      ...historyClause,
-    })
-      .sort({ seq: 1, date: 1 })
-      .select("params seq")
-      .lean(),
-    Fact.find({
-      "of.kind": "being",
-      "of.id": position,
-      verb: "do",
-      act: "revoke-inheritation",
-      ...historyClause,
-    })
-      .sort({ seq: 1, date: 1 })
-      .select("params seq")
-      .lean(),
-  ]);
+  const isGrant = (f) => f.verb === "do" && f.act === "grant-inheritation";
+  const isRevoke = (f) => f.verb === "do" && f.act === "revoke-inheritation";
+  const grants = [];
+  const revokes = [];
+  for (const h of histories) {
+    for (const f of getFactsOnReelWhere(
+      String(h),
+      "being",
+      position,
+      (x) => isGrant(x) || isRevoke(x),
+    )) {
+      (f.act === "grant-inheritation" ? grants : revokes).push(f);
+    }
+  }
 
   // Latest grant / latest revoke per granted Name, by chain ORDER (seq), never the clock (623/12).
   // Both land on ONE reel (of.id:position), so seq totally orders them; sorted ascending, last wins.

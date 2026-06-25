@@ -23,7 +23,10 @@ import { addManifestChild, removeManifestChild } from "../../manifest.js";
 import { HEAVEN_SPACE } from "../../../materials/space/heavenSpaces.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
 import { registerAble, unregisterAble, getAble } from "../registry.js";
-import Being from "../../../materials/being/being.js";
+import {
+  listByType,
+  loadProjection,
+} from "../../../materials/projections.js";
 
 // Same regex the able registry enforces via name validation.
 const ABLE_NAME_RE = /^[a-z][a-z0-9-]*(:[a-z][a-z0-9-]+)?$/;
@@ -42,21 +45,26 @@ function parseLines(value) {
 
 // Walk every being's flow + defaultAble for references to a able name (delete-able's safety check).
 async function findAbleReferences(name) {
-  const rows = await Being.find({})
-    .select("_id name defaultAble qualities")
-    .lean();
+  // Curated cross-being scan on main: the prior Being.find({}) read the
+  // whole beings collection; listByType("being","0") gives the live ids
+  // and loadProjection reads each being's defaultAble/qualities/name.
+  const occupants = await listByType("being", "0");
   const hits = [];
-  for (const row of rows) {
-    if (row.defaultAble === name) {
-      hits.push({ beingId: String(row._id), name: row.name, via: "defaultAble" });
+  for (const occ of occupants) {
+    const slot = await loadProjection("being", occ.id, "0");
+    if (!slot || slot.tombstoned) continue;
+    const state = slot.state || {};
+    const beingId = String(occ.id);
+    if (state.defaultAble === name) {
+      hits.push({ beingId, name: state.name, via: "defaultAble" });
       continue;
     }
-    const quals = row.qualities;
+    const quals = state.qualities;
     const flow = quals instanceof Map ? quals.get("flow") : quals?.flow;
     if (Array.isArray(flow)) {
       for (const clause of flow) {
         if (clause && clause.able === name) {
-          hits.push({ beingId: String(row._id), name: row.name, via: "flow" });
+          hits.push({ beingId, name: state.name, via: "flow" });
           break;
         }
       }

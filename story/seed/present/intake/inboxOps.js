@@ -19,6 +19,7 @@
 
 import { registerSeeOperation } from "../../ibp/seeOps.js";
 import { loadOrFold } from "../../materials/projections.js";
+import { readPendingForRecipient } from "./inbox.js";
 import { buildInboxRenderSpec } from "./inboxRenderers.js";
 import { getStoryDomain } from "../../ibp/address.js";
 
@@ -27,13 +28,10 @@ registerSeeOperation("my-inbox", {
   description: "The caller's pending inbox — every open summon addressed to them. Returns {pending: [...]} sorted newest-first; each entry carries a `render` spec the panel uses verbatim.",
   handler: async ({ identity, history }) => {
     if (!identity?.beingId) return { pending: [], total: 0 };
-    const InboxProjection = (await import("../../past/projections/inbox/inboxProjection.js")).default;
-    const rows = await InboxProjection.find({
-      recipient: String(identity.beingId),
-      ...(history ? { history } : {}),
-    })
-      .sort({ sentAt: -1 })
-      .lean();
+    // Curated inbox reader (present/intake/inbox.js) — the per-recipient
+    // pending view, newest-first, scoped to history when given. Replaces
+    // the direct InboxProjection.find reach-in.
+    const rows = await readPendingForRecipient(identity.beingId, { history });
     // Enrich with summoner names so the panel can render @from
     // without a second round-trip per row.
     const story = getStoryDomain();

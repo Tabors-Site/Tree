@@ -54,7 +54,7 @@ import express from "express";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import rateLimit from "express-rate-limit";
+import rateLimit from "./middleware/rateLimit.js";
 import { sendError, IBP_ERR } from "../../seed/ibp/protocol.js";
 import log from "../../seed/seedStory/log.js";
 

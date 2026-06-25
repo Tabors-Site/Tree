@@ -94,6 +94,7 @@ const SEE_FLOOR = new Set([
   "resolve-set-being-flow-spec",
   "resolve-set-space-spec",
   "resolve-set-matter-spec",
+  "resolve-end-matter-spec",
   "resolve-end-space-spec",
   "resolve-inheritation",
   "resolve-slot-assignment",
@@ -123,6 +124,14 @@ const SEE_FLOOR = new Set([
   "set-pointer-map",
   "delete-pointer-map",
   "signal-fact",
+  // federation send-side floor reads (federationManagerHost.js, the word-SOLE ops): a host READ +
+  // COMPUTE that captures a template/graft bundle, computes its hash, mints the negotiationId, reads
+  // the incoming offer/request record, and BUILDS the { field, value } write list. Lays NO fact (the
+  // ops' .word fans the writes out as do:set-being deeds), so it is see-shaped, like resolve-llm-config.
+  "resolve-federation-spec",
+  // the cross-story membrane out: a call to a peer story, carried by crossStoryDispatch (verb:call).
+  // Irreducible transport (federation reaches another story), so it lives behind a sanctioned floor.
+  "dispatch-federation-intent",
   // crypto / credential reads (minting / key reads — cannot be a fact, see-shaped)
   "load-key",
   "read-credential",
@@ -1401,6 +1410,7 @@ function oper(v) {
     return { value: parseArrayLiteral(x) };
   if (/^true$/i.test(x)) return { value: true };
   if (/^false$/i.test(x)) return { value: false };
+  if (/^null$/i.test(x)) return { value: null }; // a bare `null` is JS null (clear/unset), like true/false — so a composite can `do set-space ... value: null` to clear a field
   if (/^-?\d+(\.\d+)?$/.test(x)) return { value: Number(x) };
   if (/'s\b/.test(x)) return { ref: camelKey(x) }; // possessive: kebab props (reset-at) resolve to the stored camelCase key (resetAt)
   if (/^(the|its|his|her|their|a|an)\s+/i.test(x) || x.includes("."))

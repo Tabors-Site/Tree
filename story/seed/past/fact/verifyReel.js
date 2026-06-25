@@ -24,7 +24,16 @@
 // became "unaddressed" (a row whose _id doesn't verify as a content
 // hash — pre-CAS rows or foreign inserts).
 
-import Fact from "./fact.js";
+// FLAG (Mongo→FileStore rip): direct fileStore import RETAINED. This file is
+// the INTEGRITY primitive — it recomputes each fact's content-hash from the raw
+// p/_id/seq fields across a history lineage with per-history floors. The curated
+// FACT layer (past/fact/facts.js: getReel / getFactsByActId / getFactsOnReelWhere)
+// has NO lineage-floors raw-chain read, and by design it reshapes/redacts facts
+// (serializeFactForReel) — which would destroy the p/_id/seq the chain walk
+// verifies. So this stays a storage-primitive chokepoint (alongside chainRoots.js
+// / verifyReelFrom.js, the other integrity walkers reading fileStore directly).
+// No raw Mongoose model was ever imported here; nothing to remove.
+import { readReelLineage } from "../fileStore.js";
 import { computeHash, contentOf, GENESIS_PREV } from "./hash.js";
 
 const REEL_KINDS = new Set(["being", "space", "matter", "library"]);
@@ -59,29 +68,19 @@ export async function verifyReel(targetKind, targetId, history = "0") {
 
   // The history's visible ranges, identical logic to readReelBetween:
   // lineage[i] owns (floor(lineage[i]), floor(lineage[i+1])]; the
-  // leaf is unbounded above. Main's floor is 0.
+  // leaf is unbounded above. Main's floor is 0. STORAGE SWAP: the
+  // OR-of-ranges Fact.find became a fileStore reel read over the same
+  // (lineage, floors). The chain walk below is byte-for-byte unchanged
+  // (file _id = computeHash(p, contentOf), identical to the Mongo path).
   const lineage = isMain(history) ? ["0"] : await resolveHistoryLineage(history);
-  const ranges = [];
-  for (let i = 0; i < lineage.length; i++) {
-    const here = lineage[i];
-    const next = lineage[i + 1] || null;
-    const lower = isMain(here) ? 0 : (await getBranchPoint(here, targetKind, id)) || 0;
-    const upper = next ? ((await getBranchPoint(next, targetKind, id)) || 0) : null;
-    if (upper != null && upper <= lower) continue;
-    ranges.push({ history: here, lower, upper });
+  const floors = { "0": 0 };
+  for (const h of lineage) {
+    if (isMain(h)) continue;
+    floors[h] = (await getBranchPoint(h, targetKind, id)) || 0;
   }
 
-  const orClauses = ranges.map(({ history: b, lower, upper }) => {
-    const seqFilter = { $type: "number", $gt: lower };
-    if (upper != null) seqFilter.$lte = upper;
-    const historyClause = isMain(b)
-      ? { $or: [{ history: "0" }, { history: { $exists: false } }] }
-      : { history: b };
-    return { "of.kind": targetKind, "of.id": id, seq: seqFilter, ...historyClause };
-  });
-  if (orClauses.length === 0) return { ok: true, count: 0, headHash: null };
-
-  const facts = await Fact.find({ $or: orClauses }).sort({ seq: 1 }).lean();
+  const facts = readReelLineage(lineage, floors, targetKind, id);
+  if (facts.length === 0) return { ok: true, count: 0, headHash: null };
 
   let expectedPrev = GENESIS_PREV;
   let expectedSeq  = 1;

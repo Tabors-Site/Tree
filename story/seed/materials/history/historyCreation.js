@@ -20,11 +20,18 @@
 //
 // Returns the new history's metadata: `{ path, parent, branchPoint }`.
 
-import History from "./history.js";
-import Fact from "../../past/fact/fact.js";
+// The History registry is the file-backed history store
+// (historyStore.js), no longer a Mongoose model. Row write (createHistory),
+// sibling listing (listSiblingPaths), and single-row reads (loadHistory)
+// all go through the curated histories.js seam, which scans/writes the
+// file-backed collection. The Fact-aggregate reel reads below already use
+// the curated facts/projections seam.
 import {
   invalidateHistoryCache,
   resolveHistoryLineage,
+  loadHistory,
+  listSiblingPaths,
+  createHistory,
   MAIN,
   isMain,
 } from "./histories.js";
@@ -88,7 +95,7 @@ export async function createBranch({
   // with SCOPE_VIOLATION at the fact-emission boundary.
   const parentScopeData = isMain(parent)
     ? null
-    : (await History.findOne({ _id: parent }).lean())?.scope || null;
+    : (await loadHistory(parent))?.scope || null;
   const resolvedScope = await _resolveHistoryScope({
     passed: scope,
     parentScope: parentScopeData,
@@ -97,14 +104,9 @@ export async function createBranch({
   });
 
   // 1. Pick the new branch's path.
-  const siblings = await History.find({
-    parent: isMain(parent) ? null : parent,
-  })
-    .select("_id path")
-    .lean();
-  // For main's children, parent === null in the History collection
-  // (main has no row); for non-main, parent matches the actual path.
-  const siblingPaths = siblings.map((s) => s.path);
+  // For main's children, parent === null in the history store (main has
+  // no row); for non-main, parent matches the actual path.
+  const siblingPaths = await listSiblingPaths(isMain(parent) ? null : parent);
   // nextChildPath wants the parent's path (use "0" for main) and the
   // sibling paths to pick the next segment.
   const path = nextChildPath(isMain(parent) ? "0" : parent, siblingPaths);
@@ -115,12 +117,11 @@ export async function createBranch({
   //    reel that's <= the anchor.
   const branchPoint = await snapshotParentHeads({ parent, anchor });
 
-  // 3. Write the History row. Mongoose Map field accepts a plain object;
-  //    we convert before passing.
+  // 3. Write the History row. branchPoint is stored as a plain object
+  //    (reelKey → seq) in the file-backed store.
   const branchPointObj = {};
   for (const [reelKey, seq] of branchPoint) branchPointObj[reelKey] = seq;
-  const branchDoc = await History.create({
-    _id: path,
+  const branchDoc = await createHistory({
     path,
     parent: isMain(parent) ? null : parent,
     branchPoint: branchPointObj,
@@ -162,6 +163,20 @@ async function snapshotParentHeads({ parent, anchor }) {
   const heads = new Map();
   const lineage = await resolveHistoryLineage(parent); // ["0", ...ancestors..., parent] OR just ["0"] for main
 
+  // Curated read (mirrors histories.divergentFactsSince): there is no
+  // cross-history fact-aggregate primitive, so we enumerate the reel-bearing
+  // aggregates touched on each lineage history via listByType(kind, history)
+  // and read each one's OWN-history reel through getFactsOnReelWhere, then
+  // compute the per-reel max seq in JS (the old Fact.aggregate $group/$max).
+  // getFactsOnReelWhere(here, ...) reads ONLY `here`'s own reel file, so an
+  // aggregate listByType inherited from the lineage with no divergent facts
+  // here yields [] and contributes nothing — exactly the old { history: here }
+  // match. Legacy { history: {$exists:false} } facts have no file-store peer
+  // (every file fact carries history); reading (MAIN, ...) covers main.
+  const { listByType } = await import("../projections.js");
+  const { getFactsOnReelWhere } = await import("../../past/fact/facts.js");
+  const REEL_KINDS = ["being", "space", "matter"];
+
   // For the leaf (parent), the upper bound is the anchor's seq or
   // resolved timestamp. For ancestors above the leaf, the upper bound
   // is the next-up branch's branchPoint for each reel. We aggregate
@@ -170,47 +185,40 @@ async function snapshotParentHeads({ parent, anchor }) {
   for (let i = 0; i < lineage.length; i++) {
     const here = lineage[i];
     const isLeaf = i === lineage.length - 1;
-    const branchMatch = isMain(here)
-      ? { $or: [{ history: MAIN }, { history: { $exists: false } }] }
-      : { history: here };
 
-    // Seq filter for this branch's contribution.
-    const seqFilter = { $type: "number" };
-    // Upper bound depends on whether this is the leaf or an ancestor.
-    if (isLeaf) {
-      if (anchor.atSeq != null) {
-        seqFilter.$lte = anchor.atSeq;
+    // Per-fact bound for this branch's contribution: seq must be a number,
+    // and (leaf only) clamp by the anchor's seq or timestamp.
+    const leafSeqCap =
+      isLeaf && anchor.atSeq != null ? anchor.atSeq : null;
+    const leafDateCap =
+      isLeaf && anchor.atTimestamp != null
+        ? new Date(anchor.atTimestamp).getTime()
+        : null;
+    const accept = (f) => {
+      if (typeof f?.seq !== "number") return false;
+      if (!f?.of?.id || typeof f.of.id !== "string") return false;
+      if (leafSeqCap != null && !(f.seq <= leafSeqCap)) return false;
+      if (leafDateCap != null) {
+        const t = f?.date != null ? new Date(f.date).getTime() : NaN;
+        if (Number.isNaN(t) || !(t <= leafDateCap)) return false;
       }
-      // If atTimestamp instead, we'll resolve per-reel via the date
-      // filter below; no $lte on seq.
-    } else {
-      // Ancestor: limit to the next-up branch's branchPoint for each
-      // reel. Hard to express in one query (it varies per reel), so we
-      // load this ancestor's branchPoint map and use it as the upper
-      // bound during the merge step.
-      // For now, aggregate ALL of this ancestor's facts, then trim
-      // during merge.
-    }
-
-    const matchStage = {
-      "of.kind": { $in: ["being", "space", "matter"] },
-      "of.id": { $type: "string" },
-      seq: seqFilter,
-      ...branchMatch,
+      return true;
     };
-    if (isLeaf && anchor.atTimestamp != null) {
-      matchStage.date = { $lte: new Date(anchor.atTimestamp) };
-    }
 
-    const agg = await Fact.aggregate([
-      { $match: matchStage },
-      {
-        $group: {
-          _id: { kind: "$of.kind", id: "$of.id" },
-          maxSeq: { $max: "$seq" },
-        },
-      },
-    ]);
+    // Aggregate: per (kind, id) reel, the max accepted seq on THIS history.
+    const agg = [];
+    for (const kind of REEL_KINDS) {
+      const occupants = await listByType(kind, here);
+      for (const occ of occupants) {
+        let maxSeq = null;
+        for (const f of getFactsOnReelWhere(here, kind, occ.id, accept)) {
+          if (maxSeq == null || f.seq > maxSeq) maxSeq = f.seq;
+        }
+        if (maxSeq != null) {
+          agg.push({ _id: { kind, id: String(occ.id) }, maxSeq });
+        }
+      }
+    }
 
     for (const row of agg) {
       const key = `${row._id.kind}:${row._id.id}`;
@@ -222,9 +230,7 @@ async function snapshotParentHeads({ parent, anchor }) {
       if (!isLeaf) {
         const successor = lineage[i + 1];
         if (successor && !isMain(successor)) {
-          const succRow = await History.findById(successor)
-            .select("branchPoint")
-            .lean();
+          const succRow = await loadHistory(successor);
           const bp = succRow?.branchPoint || {};
           const cap = bp instanceof Map ? bp.get(key) : bp[key];
           if (typeof cap === "number")

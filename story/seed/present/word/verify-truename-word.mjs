@@ -17,22 +17,18 @@ import path from "path";
 import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const DB = "mongodb://localhost:27017/story_truenameword";
+const DB = path.join(os.tmpdir(), "story_truenameword-" + process.pid);
 process.env.PORT = "3836";
-process.env.MONGODB_URI = DB;
+process.env.TREEOS_STORE_BASE = DB;
+fs.rmSync(DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "truenameword-0123456789";
 process.env.STORY_KEY_DIR = path.join(
   os.tmpdir(),
   "truenameword-keys-" + process.pid,
 );
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`))
-    .default;
-  const conn = await mongoose.createConnection(DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
+// (scratch file store fresh-wiped above; no DB to drop)
 await import(`${R}/begin.js`);
 const { findByName, loadProjection } = await import(
   `${R}/seed/materials/projections.js`
@@ -49,7 +45,7 @@ const { getWordSync } = await import(`${R}/seed/present/word/wordStore.js`);
 const { resolveAbleWord } = await import(
   `${R}/seed/present/word/ableWordRegistry.js`
 );
-const { default: Fact } = await import(`${R}/seed/past/fact/fact.js`);
+const { factFindOne } = await import(`${R}/seed/present/word/_factStoreTest.mjs`);
 const { IBP_ERR } = await import(`${R}/seed/ibp/protocol.js`);
 const pollFor = async (fn, pred, t = 16000, e = 250) => {
   const t0 = Date.now();
@@ -164,11 +160,11 @@ try {
   // (4) THE PROOF: the emitted be:truename fact carries the WORD's factParams + sentinel
   const f = await pollFor(
     () =>
-      Fact.findOne({
+      factFindOne({
         verb: "be",
         act: "truename",
         "of.id": String(beingId),
-      }).lean(),
+      }),
     (v) => !!v,
   );
   f &&
@@ -213,11 +209,11 @@ try {
     { trueName: bogus },
     `${story}/.@tnbeing`,
   );
-  const f1 = await Fact.findOne({
+  const f1 = factFindOne({
     verb: "be",
     act: "truename",
     "params.trueName": bogus,
-  }).lean();
+  });
   r1.threw && r1.code === IBP_ERR.INVALID_INPUT && !f1
     ? ok(
         `gate: non-resolving Name → ${IBP_ERR.INVALID_INPUT}, no fact (the .word If-no-nameId gate, be.js-equivalent)`,
@@ -274,11 +270,11 @@ try {
     { trueName: banishedName },
     `${story}/.@tnbeing`,
   );
-  const f3 = await Fact.findOne({
+  const f3 = factFindOne({
     verb: "be",
     act: "truename",
     "params.trueName": banishedName,
-  }).lean();
+  });
   r3.threw && r3.code === IBP_ERR.FORBIDDEN && !f3
     ? ok(
         `gate: banished Name → ${IBP_ERR.FORBIDDEN}, no fact (the .word If-banished gate, be.js-equivalent)`,

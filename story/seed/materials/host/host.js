@@ -2,19 +2,19 @@
 //
 // The host, represented. nodeServerTest Phase 1.
 //
-// The running machine — the HTTP listener, the WebSocket pool, the
-// Mongo connection — surfaced through the same protocol as everything
-// else: three heaven spaces under ./host, three scripted beings homed
-// in them, and matter for the live state. Fully FACT-BACKED: every
-// lifecycle event here is a real act by a real being sealing real
-// facts (the opposite of ./source's disk-fold exception). If the
-// primitives can describe their own runtime, they can describe a
-// kernel's — that is the test this module runs.
+// The running machine — the HTTP listener and the WebSocket pool —
+// surfaced through the same protocol as everything else: two heaven
+// spaces under ./host, two scripted beings homed in them, and matter
+// for the live state. Fully FACT-BACKED: every lifecycle event here is
+// a real act by a real being sealing real facts (the opposite of
+// ./source's disk-fold exception). If the primitives can describe
+// their own runtime, they can describe a kernel's — that is the test
+// this module runs.
 //
 // Division of labor:
 //   host.js        — resolved ids, readiness, per-being serial act
 //                    lanes, the WebSocket connection lifecycle, the
-//                    Mongo event hooks, the boot reconcile sweep.
+//                    boot reconcile sweep.
 //   requestLog.js  — the per-request HTTP fact pipeline (queue,
 //                    drainer, batching, live counters).
 //
@@ -37,18 +37,16 @@ import { getStoryConfigValue } from "../../storyConfig.js";
 let ready = false;
 let shuttingDown = false;
 const ids = {
-  httpSpace: null, wsSpace: null, mongoSpace: null,
-  httpBeing: null, wsBeing: null, mongoBeing: null,
+  httpSpace: null, wsSpace: null,
+  httpBeing: null, wsBeing: null,
   requestLogMatter: null,
 };
 const socketMatter = new Map(); // socketId -> matterId (live registry)
 const lanes = new Map();        // beingId  -> tail Promise (serial act lanes)
-let lastDisconnectedAt = null;  // mongo gap tracking; works pre-ready
 
 function identityFor(kind) {
   if (kind === "http")  return { beingId: ids.httpBeing,  name: "http-server" };
   if (kind === "ws")    return { beingId: ids.wsBeing,    name: "websocket-pool" };
-  if (kind === "mongo") return { beingId: ids.mongoBeing, name: "mongo" };
   return null;
 }
 
@@ -75,21 +73,17 @@ export async function initHostRuntime() {
 
   const httpSlot  = await findByHeavenSpace(HEAVEN_SPACE.HOST_HTTP, "0");
   const wsSlot    = await findByHeavenSpace(HEAVEN_SPACE.HOST_WEBSOCKET, "0");
-  const mongoSlot = await findByHeavenSpace(HEAVEN_SPACE.HOST_MONGO, "0");
   const httpB  = await findByName("being", "http-server", "0");
   const wsB    = await findByName("being", "websocket-pool", "0");
-  const mongoB = await findByName("being", "mongo", "0");
 
-  if (!httpSlot || !wsSlot || !mongoSlot || !httpB || !wsB || !mongoB) {
+  if (!httpSlot || !wsSlot || !httpB || !wsB) {
     log.warn("Host", "host spaces or beings missing — host facts disabled this boot (notifiers stay no-ops).");
     return;
   }
   ids.httpSpace = String(httpSlot.id);
   ids.wsSpace = String(wsSlot.id);
-  ids.mongoSpace = String(mongoSlot.id);
   ids.httpBeing = String(httpB.id);
   ids.wsBeing = String(wsB.id);
-  ids.mongoBeing = String(mongoB.id);
 
   // The request-log matter: the long-lived aggregate the request
   // stream lands on, so the http SPACE's own reel stays
@@ -102,50 +96,22 @@ export async function initHostRuntime() {
   // each — the chain records the cleanup like everything else.
   await reconcileStaleConnections();
 
-  // The mongo boot fact: this process's connection, as the mongo
-  // being's own act on its space's reel. Config only, no secrets.
-  const { default: mongoose } = await import("../../seedStory/dbConfig.js");
-  const { emitFact } = await import("../../past/fact/facts.js");
-  await enqueueBeingAct(ids.mongoBeing, "mongo: connected", (ctx) =>
-    emitFact({
-      verb: "do",
-      act: "connect",
-      through: ids.mongoBeing,
-      of: { kind: "space", id: ids.mongoSpace },
-      params: {
-        // Witness fields only. Pool sizing / replica topology are ops
-        // tuning, not world truth — they live in env, not the chain.
-        dbName: mongoose.connection?.name || null,
-        host: redactMongoHost(process.env.MONGODB_URI || ""),
-      },
-      actId: ctx.actId,
-      history: "0",
-    }, ctx));
-
   const { bindHttpBeing } = await import("./requestLog.js");
   bindHttpBeing(ids.httpBeing, ids.httpSpace, ids.requestLogMatter, enqueueBeingAct);
 
   ready = true;
-  log.info("Host", "the machine sees itself: ./host is live (http, websocket, mongo).");
-}
-
-// Credentials never enter a fact: mongodb://user:pass@h/db -> h/db.
-export function redactMongoHost(uri) {
-  try {
-    const m = String(uri).match(/^mongodb(\+srv)?:\/\/(?:[^@/]+@)?(.+)$/);
-    return m ? m[2] : null;
-  } catch { return null; }
+  log.info("Host", "the machine sees itself: ./host is live (http, websocket).");
 }
 
 async function ensureRequestLogMatter() {
-  const { default: Projection } = await import("../history/projection.js");
-  const existing = await Projection.findOne({
-    history: "0", type: "matter",
-    "state.spaceId": ids.httpSpace,
-    "state.name": "request-log",
-    tombstoned: { $ne: true },
-  }).lean();
-  if (existing) { ids.requestLogMatter = String(existing.id); return; }
+  // Curated matter-at-space read: the request-log matter is the one row
+  // at the http space named "request-log". listMattersAt does the
+  // history-lineage union + tombstone exclusion (the old tombstoned:{$ne}
+  // guard) and returns the matter's own name; filter to it.
+  const { listMattersAt } = await import("../matter/matters.js");
+  const atSpace = await listMattersAt(ids.httpSpace, { history: "0", limit: Infinity });
+  const existing = atSpace.find((m) => m.name === "request-log");
+  if (existing) { ids.requestLogMatter = String(existing.matterId); return; }
 
   const { doVerb } = await import("../../ibp/verbs/do.js");
   await enqueueBeingAct(ids.httpBeing, "http: create request-log", async (ctx) => {
@@ -171,22 +137,23 @@ async function ensureRequestLogMatter() {
 // socket is not in the live registry (at boot the registry is empty,
 // so ALL rows are stale).
 export async function reconcileStaleConnections() {
-  const { default: Projection } = await import("../history/projection.js");
   const { doVerb } = await import("../../ibp/verbs/do.js");
-  const rows = await Projection.find({
-    history: "0", type: "matter",
-    "state.spaceId": ids.wsSpace,
-    "state.type": "connection",
-    tombstoned: { $ne: true },
-  }).lean();
+  // Curated matter-at-space read: every live (non-tombstoned) connection
+  // matter at the ws space. listMattersAt carries the history-lineage union
+  // + tombstone exclusion the old tombstoned:{$ne} guard did; limit:Infinity
+  // so the whole boot sweep is reconciled (a previous process may leave more
+  // than the default page of stale rows). Filter to type "connection".
+  const { listMattersAt } = await import("../matter/matters.js");
+  const atSpace = await listMattersAt(ids.wsSpace, { history: "0", limit: Infinity });
+  const rows = atSpace.filter((m) => m.type === "connection");
   const liveMatterIds = new Set(socketMatter.values());
   let swept = 0;
   for (const row of rows) {
-    if (liveMatterIds.has(String(row.id))) continue;
+    if (liveMatterIds.has(String(row.matterId))) continue;
     swept++;
-    enqueueBeingAct(ids.wsBeing, `ws reconcile: stale ${row.state?.name || row.id.slice(0, 8)}`, (ctx) =>
+    enqueueBeingAct(ids.wsBeing, `ws reconcile: stale ${row.name || row.matterId.slice(0, 8)}`, (ctx) =>
       doVerb(
-        { kind: "matter", id: String(row.id) },
+        { kind: "matter", id: String(row.matterId) },
         "end-matter",
         {},
         { identity: identityFor("ws"), moment: ctx },
@@ -274,40 +241,6 @@ export function noteSocketDisconnected({ socketId, reason } = {}) {
     });
   } catch (err) {
     log.warn("Host", `noteSocketDisconnected: ${err.message}`);
-  }
-}
-
-// ── mongo notifiers ─────────────────────────────────────────────────
-// The disconnect cannot stamp while Mongo is down, so it only records
-// a timestamp; the reconnect stamps ONE fact carrying the whole gap.
-export function noteMongoDisconnected() {
-  lastDisconnectedAt = new Date();
-}
-
-export function noteMongoReconnected() {
-  try {
-    if (!ready || shuttingDown) return;
-    const downAt = lastDisconnectedAt;
-    lastDisconnectedAt = null;
-    const upAt = new Date();
-    enqueueBeingAct(ids.mongoBeing, "mongo: reconnected", async (ctx) => {
-      const { emitFact } = await import("../../past/fact/facts.js");
-      await emitFact({
-        verb: "do",
-        act: "reconnect",
-        through: ids.mongoBeing,
-        of: { kind: "space", id: ids.mongoSpace },
-        params: {
-          // The gap IS the information; the moment it healed is the
-          // fact's own date. No duplicate timestamps in params.
-          gapMs: downAt ? (upAt - downAt) : null,
-        },
-        actId: ctx.actId,
-        history: "0",
-      }, ctx);
-    });
-  } catch (err) {
-    log.warn("Host", `noteMongoReconnected: ${err.message}`);
   }
 }
 

@@ -9,6 +9,7 @@
 // is the home-id flow: env.mintId pre-mints the home id (like the JS handler's
 // uuidv4), create-space builds it there, form-being + set-space reference it.
 // Isolated test DB, wiped at start and end.
+import os from "os";
 
 import fs from "fs";
 import path from "path";

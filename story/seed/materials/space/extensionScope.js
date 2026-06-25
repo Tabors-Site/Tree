@@ -39,7 +39,6 @@
 // reads as "word/book".
 
 import log from "../../seedStory/log.js";
-import Space from "./space.js";
 import { HEAVEN_SPACE } from "./heavenSpaces.js";
 import {
   getAncestorChain,
@@ -78,17 +77,24 @@ export function setExtensionInstanceLookup(fn) {
  */
 export async function loadConfinedExtensions() {
   try {
-    const { findByHeavenSpace } = await import("../projections.js");
+    const { findByHeavenSpace, loadProjection, listByType } =
+      await import("../projections.js");
     const extSpace = await findByHeavenSpace(HEAVEN_SPACE.EXTENSIONS, "0");
     if (!extSpace) return;
 
-    // Query by parent. Direct projection query because we need state.qualities.
-    const { default: Projection } = await import("../history/projection.js");
-    const children = (await Projection.find({
-      history: "0", type: "space",
-      "state.parent": extSpace.id,
-      tombstoned: { $ne: true },
-    }).select("state").lean()).map((s) => ({ name: s.state?.name, qualities: s.state?.qualities }));
+    // Children-by-parent for SPACES has no curated equality facet, so list
+    // every space on main and keep those parented under the extensions space.
+    // We need state.name + state.qualities, so load each candidate's slot
+    // (listByType returns occupant shape only). Tombstoned slots are already
+    // filtered out by listByType.
+    const occupants = await listByType("space", "0");
+    const children = [];
+    for (const occ of occupants) {
+      const slot = await loadProjection("space", occ.id, "0");
+      const st = slot?.state;
+      if (!st || String(st.parent ?? "") !== String(extSpace.id)) continue;
+      children.push({ name: st.name, qualities: st.qualities });
+    }
 
     const confined = new Set();
     for (const child of children) {

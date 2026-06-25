@@ -6,6 +6,18 @@
 // transport. See able.js for the verb-object naming and the one-token-
 // two-sides note (an op name and the wire intent it emits coincide).
 //
+// All seven send-side ops are WORD-SOLE (handler-less, Tabor's no-mirror
+// law): each `.word` co-located here is the ONLY path. do.js's
+// runOpWordToStore runs each via runWordToStore (runAsStore), so every
+// negotiation write seals its OWN do:set-being moment on the federation-
+// manager being's reel, exactly as the old per-field setQualityField loop.
+// The host floor (federationManagerHost.js) supplies two see-ops: the
+// per-op resolve-federation-spec (a host READ + COMPUTE that captures the
+// bundle, mints the negotiationId, reads the incoming record, and BUILDS
+// the { field, value } write list, laying NO fact) and the shared
+// dispatch-federation-intent (the cross-story membrane OUT, verb:call to
+// the peer, carried by crossStoryDispatch). No JS op handler survives.
+//
 // Seven ops:
 //
 //   offer-template    . push a template out. Captures a template of the
@@ -41,12 +53,24 @@
 // operator policy (auto-accept particular peers, throttle pulls, etc.)
 // lives in flow on the @federation-manager being.
 
-import { randomUUID as uuidv4 } from "node:crypto";
 import log from "../../../seedStory/log.js";
 import { registerOperation } from "../../../ibp/operations.js";
 import { registerSeeOperation } from "../../../ibp/seeOps.js";
+import { registerAbleWord } from "../../../present/word/ableWordRegistry.js";
 import { IbpError, IBP_ERR } from "../../../ibp/protocol.js";
-import { getStoryDomain } from "../../../ibp/address.js";
+import { federationManagerHostEnv } from "./federationManagerHost.js";
+
+// Self-register the co-located world strands so resolveAbleWord("being", <op>) finds them. All
+// seven send-side ops are WORD-SOLE: each `.word` is the ONLY path (do.js runOpWordToStore via
+// runWordToStore, runAsStore). The resolution key is "being" (registerAbleWord first arg), matched
+// by word.able below; word.noun "being" names the deed's target kind (the federation-manager being).
+registerAbleWord("being", "offer-template",   new URL("./offer-template.word",   import.meta.url));
+registerAbleWord("being", "offer-being",      new URL("./offer-being.word",      import.meta.url));
+registerAbleWord("being", "request-template", new URL("./request-template.word", import.meta.url));
+registerAbleWord("being", "accept-template",  new URL("./accept-template.word",  import.meta.url));
+registerAbleWord("being", "reject-template",  new URL("./reject-template.word",  import.meta.url));
+registerAbleWord("being", "fulfill-request",  new URL("./fulfill-request.word",  import.meta.url));
+registerAbleWord("being", "refuse-request",   new URL("./refuse-request.word",   import.meta.url));
 
 export function registerFederationManagerOps() {
   // registerOperation / registerSeeOperation calls below run at module
@@ -96,580 +120,76 @@ registerSeeOperation("federation-status", {
 });
 
 // ────────────────────────────────────────────────────────────────────
-// offer-template . Operator initiates an outbound push.
+// The seven WORD-SOLE DO ops.
 // ────────────────────────────────────────────────────────────────────
+//
+// Each declares `word: { noun: "being", able: "being", runAsStore: true }`
+// + its per-op hostEnv (federationManagerHostEnv(<op>), which closes the
+// op-specific spec resolver over the shared dispatch-federation-intent),
+// and NO handler. runAsStore routes do.js to runOpWordToStore: the `.word`
+// lays each negotiation write as its own do:set-being deed (one moment per
+// field) and fires the one cross-story dispatch. The op returns
+// ranAsMoments, so the dispatcher stamps no separate audit fact, the deeds
+// ARE the record (offer-being / accept-template lay no deed: the dispatch
+// IS the effect). targets ["being","stance"] keeps the address surface the
+// portal already uses; the `.word` resolves the federation-manager being by
+// name (its qualities hold the negotiation state), never the address target.
 
+// offer-template . operator initiates an outbound push.
 registerOperation("offer-template", {
   targets:        ["being", "stance"],
   ownerExtension: "seed",
-  args: {
-    peer: {
-      type:        "text",
-      label:       "Peer story domain (e.g. \"bing.com\")",
-      required:    true,
-    },
-    subtreePath: {
-      type:        "text",
-      label:       "Path or space id of the subtree to push",
-      required:    true,
-    },
-    label: {
-      type:        "text",
-      label:       "Optional human-readable label for the negotiation",
-      required:    false,
-    },
-  },
-  handler: async (ctx) => {
-    const { peer, subtreePath, label } = ctx.params || {};
-    if (!peer || typeof peer !== "string") {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "offer-template requires `peer`");
-    }
-    if (!subtreePath || typeof subtreePath !== "string") {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "offer-template requires `subtreePath`");
-    }
-    if (peer === getStoryDomain()) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "offer-template: cannot push to local story");
-    }
-
-    const negotiationId = uuidv4();
-
-    // 1. Resolve subtreePath to a spaceId. Accepts both a raw uuid and
-    // a slash-separated path.
-    const history = ctx.moment?.actorAct?.history || "0";
-    const spaceId = await resolveSubtreeSpaceId(subtreePath, history);
-    if (!spaceId) {
-      throw new IbpError(IBP_ERR.NOT_FOUND,
-        `offer-template: subtree "${subtreePath}" not found on history ${history}`);
-    }
-
-    // 2. Clone locally.
-    const { captureTemplate } = await import("../../../store/book/seedTemplate.js");
-    let bundle;
-    try {
-      bundle = await captureTemplate(spaceId, { history });
-    } catch (err) {
-      throw new IbpError(IBP_ERR.INTERNAL, `captureTemplate failed: ${err.message}`);
-    }
-
-    // 3. Cache the bundle + record pendingOutbound state BEFORE
-    // dispatching to the peer. This avoids a race where the peer
-    // auto-accepts and fires accept-template back at us before our
-    // moment seals — without these writes visible first, our
-    // handleAcceptGraft would find no cached bundle and refuse.
-    await cacheBundle(ctx, negotiationId, bundle);
-
-    const manifest = bundle?.manifest || null;
-    // The bundle's identity travels WITH the offer: the receiver pins
-    // it, and deliver-template later verifies the delivered bundle
-    // recomputes this exact hash. The accepted thing IS the delivered
-    // thing, cryptographically — no swap in flight, no bait-and-switch
-    // between review and delivery.
-    const bundleHash = bundle?.meta?.bundleHash || null;
-    await writeNegotiation(ctx, "pendingOutbound", negotiationId, {
-      direction:    "push",
-      peer,
-      subtreePath,
-      label:        label || null,
-      manifest,
-      bundleHash,
-      startedAt:    iso(ctx),
-      lastStep:     "offer-pending",
-    });
-
-    // 4. Send offer-template to the peer's federation-manager. The
-    // payload carries only the manifest + bundle hash (cheap
-    // rejection step); the bundle ships later via deliver-template on
-    // accept.
-    await sendIntent(ctx, peer, {
-      intent:             "offer-template",
-      negotiationId,
-      manifest,
-      bundleHash,
-      label:              label || null,
-      sourceSubtreePath:  subtreePath,
-    });
-
-    await setQualityField(ctx, `pendingOutbound.${negotiationId}.lastStep`, "offer-sent");
-
-    return {
-      negotiationId,
-      peer,
-      subtreePath,
-      status: "offered",
-    };
-  },
+  word:           { noun: "being", able: "being", runAsStore: true },
+  hostEnv:        federationManagerHostEnv("offer-template"),
 });
 
-// ────────────────────────────────────────────────────────────────────
-// offer-being . Operator grafts a BEING to a peer story.
-// ────────────────────────────────────────────────────────────────────
-//
-// The IDENTITY counterpart to offer-template (which pushes a CONTENT
-// template). Captures the being's identity-preserving graft bundle
-// (verbatim ids + chain, signed by this story's key) and delivers it
-// one-shot to the peer's federation-manager via deliver-being. No
-// offer/accept review: a being-graft is self-certifying (the receiver
-// verifies the signed graftRoot, no callback) and the peer auto-accepts
-// by federation policy. Peer-to-peer only — never a store/catalog.
+// offer-being . operator grafts a BEING to a peer story (one-shot, self-certifying).
 registerOperation("offer-being", {
   targets:        ["being", "stance"],
   ownerExtension: "seed",
-  args: {
-    peer:    { type: "text", label: "Peer story domain (e.g. \"beta.test\")", required: true },
-    beingId: { type: "text", label: "Being id (pubkey) to graft to the peer", required: true },
-  },
-  handler: async (ctx) => {
-    const { peer, beingId } = ctx.params || {};
-    if (!peer || typeof peer !== "string") {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "offer-being requires `peer`");
-    }
-    if (!beingId || typeof beingId !== "string") {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "offer-being requires `beingId`");
-    }
-    if (peer === getStoryDomain()) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "offer-being: cannot graft to the local story");
-    }
-
-    // Capture the being's graft bundle (verbatim, signed by this story).
-    const { captureGraft } = await import("../../../store/book/graft.js");
-    let bundle;
-    try {
-      ({ bundle } = await captureGraft({ beingId, capturedBy: ctx.identity?.beingId || null, returnOnly: true }));
-    } catch (err) {
-      throw new IbpError(IBP_ERR.INTERNAL, `captureGraft failed: ${err.message}`);
-    }
-    if (!bundle?.meta?.beingId) {
-      throw new IbpError(IBP_ERR.NOT_FOUND, `offer-being: being "${beingId.slice(0, 12)}…" has no reel to capture`);
-    }
-
-    // One-shot delivery. The bundle's self-certification + the canopy sig
-    // are the trust; no negotiation state to cache.
-    const negotiationId = uuidv4();
-    await sendIntent(ctx, peer, { intent: "deliver-being", negotiationId, bundle });
-
-    return {
-      negotiationId,
-      peer,
-      beingId,
-      status: "delivered",
-      counts: bundle.meta.counts,
-    };
-  },
+  word:           { noun: "being", able: "being", runAsStore: true },
+  hostEnv:        federationManagerHostEnv("offer-being"),
 });
 
-// ────────────────────────────────────────────────────────────────────
-// request-template . Operator initiates an outbound pull.
-// ────────────────────────────────────────────────────────────────────
-
+// request-template . operator initiates an outbound pull.
 registerOperation("request-template", {
   targets:        ["being", "stance"],
   ownerExtension: "seed",
-  args: {
-    peer: {
-      type:        "text",
-      label:       "Peer story domain to pull from",
-      required:    true,
-    },
-    subtreePath: {
-      type:        "text",
-      label:       "Path or space id of the subtree on the peer",
-      required:    true,
-    },
-    label: {
-      type:        "text",
-      label:       "Optional human-readable label for the negotiation",
-      required:    false,
-    },
-  },
-  handler: async (ctx) => {
-    const { peer, subtreePath, label } = ctx.params || {};
-    if (!peer || typeof peer !== "string") {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "request-template requires `peer`");
-    }
-    if (!subtreePath || typeof subtreePath !== "string") {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "request-template requires `subtreePath`");
-    }
-    if (peer === getStoryDomain()) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "request-template: cannot pull from local story");
-    }
-
-    const negotiationId = uuidv4();
-
-    await sendIntent(ctx, peer, {
-      intent:        "request-template",
-      negotiationId,
-      subtreePath,
-      label:         label || null,
-    });
-
-    await writeNegotiation(ctx, "pendingOutbound", negotiationId, {
-      direction:   "pull",
-      peer,
-      subtreePath,
-      label:       label || null,
-      startedAt:   iso(ctx),
-      lastStep:    "request-sent",
-    });
-
-    return {
-      negotiationId,
-      peer,
-      subtreePath,
-      status: "requested",
-    };
-  },
+  word:           { noun: "being", able: "being", runAsStore: true },
+  hostEnv:        federationManagerHostEnv("request-template"),
 });
 
-// ────────────────────────────────────────────────────────────────────
-// accept-template . Operator approves an incoming offer-template.
-// ────────────────────────────────────────────────────────────────────
-
+// accept-template . operator approves an incoming offer-template.
 registerOperation("accept-template", {
   targets:        ["being", "stance"],
   ownerExtension: "seed",
-  args: {
-    negotiationId: { type: "text", label: "Negotiation id", required: true },
-  },
-  handler: async (ctx) => {
-    const negotiationId = ctx.params?.negotiationId;
-    if (!negotiationId) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "accept-template requires `negotiationId`");
-    }
-    const offer = await readNegotiation(ctx, "pendingIncomingOffers", negotiationId);
-    if (!offer) {
-      throw new IbpError(IBP_ERR.NOT_FOUND, `no pending offer "${negotiationId}"`);
-    }
-    if (!offer.sender?.story) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT,
-        `offer "${negotiationId}" has no sender story recorded`);
-    }
-
-    await sendIntent(ctx, offer.sender.story, {
-      intent:        "accept-template",
-      negotiationId,
-    });
-
-    return {
-      negotiationId,
-      status: "accepted",
-      sender: offer.sender,
-    };
-  },
+  word:           { noun: "being", able: "being", runAsStore: true },
+  hostEnv:        federationManagerHostEnv("accept-template"),
 });
 
-// ────────────────────────────────────────────────────────────────────
-// reject-template . Operator refuses an incoming offer-template.
-// ────────────────────────────────────────────────────────────────────
-
+// reject-template . operator refuses an incoming offer-template.
 registerOperation("reject-template", {
   targets:        ["being", "stance"],
   ownerExtension: "seed",
-  args: {
-    negotiationId: { type: "text", label: "Negotiation id", required: true },
-    reason:        { type: "text", label: "Optional reason", required: false },
-  },
-  handler: async (ctx) => {
-    const negotiationId = ctx.params?.negotiationId;
-    if (!negotiationId) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "reject-template requires `negotiationId`");
-    }
-    const offer = await readNegotiation(ctx, "pendingIncomingOffers", negotiationId);
-    if (!offer) {
-      throw new IbpError(IBP_ERR.NOT_FOUND, `no pending offer "${negotiationId}"`);
-    }
-
-    await sendIntent(ctx, offer.sender.story, {
-      intent:        "reject-template",
-      negotiationId,
-      reason:        ctx.params?.reason || null,
-    });
-
-    await completeIncomingOffer(ctx, negotiationId, {
-      success: false,
-      reason:  ctx.params?.reason || "rejected by operator",
-    });
-
-    return {
-      negotiationId,
-      status: "rejected",
-    };
-  },
+  word:           { noun: "being", able: "being", runAsStore: true },
+  hostEnv:        federationManagerHostEnv("reject-template"),
 });
 
-// ────────────────────────────────────────────────────────────────────
-// fulfill-request . Operator approves an incoming pull request. Runs
-// the equivalent of offer-template back at the requester.
-// ────────────────────────────────────────────────────────────────────
-
+// fulfill-request . operator approves an incoming pull request (pushes the asked template back).
 registerOperation("fulfill-request", {
   targets:        ["being", "stance"],
   ownerExtension: "seed",
-  args: {
-    negotiationId: { type: "text", label: "Negotiation id", required: true },
-  },
-  handler: async (ctx) => {
-    const negotiationId = ctx.params?.negotiationId;
-    if (!negotiationId) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "fulfill-request requires `negotiationId`");
-    }
-    const request = await readNegotiation(ctx, "pendingIncomingRequests", negotiationId);
-    if (!request) {
-      throw new IbpError(IBP_ERR.NOT_FOUND, `no pending request "${negotiationId}"`);
-    }
-    if (!request.puller?.story) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT,
-        `request "${negotiationId}" has no puller story recorded`);
-    }
-
-    // Push the requested subtree back at the puller. Reuses the
-    // offer-template code path so the receiver side runs the same
-    // offer-template handling regardless of whether the push was operator
-    // initiated or pull driven.
-    const history = ctx.moment?.actorAct?.history || "0";
-    const spaceId = await resolveSubtreeSpaceId(request.subtreePath, history);
-    if (!spaceId) {
-      throw new IbpError(IBP_ERR.NOT_FOUND,
-        `fulfill-request: requested subtree "${request.subtreePath}" not found on history ${history}`);
-    }
-
-    const { captureTemplate } = await import("../../../store/book/seedTemplate.js");
-    const bundle = await captureTemplate(spaceId, { history });
-    const pushNegotiationId = uuidv4();
-    await cacheBundle(ctx, pushNegotiationId, bundle);
-
-    await sendIntent(ctx, request.puller.story, {
-      intent:             "offer-template",
-      negotiationId:      pushNegotiationId,
-      manifest:           bundle?.manifest || null,
-      label:              request.label || null,
-      sourceSubtreePath:  request.subtreePath,
-      replyToRequest:     negotiationId,
-    });
-
-    await writeNegotiation(ctx, "pendingOutbound", pushNegotiationId, {
-      direction:    "push",
-      peer:         request.puller.story,
-      subtreePath:  request.subtreePath,
-      label:        request.label || null,
-      manifest:     bundle?.manifest || null,
-      startedAt:    iso(ctx),
-      lastStep:     "offer-sent",
-      replyToRequest: negotiationId,
-    });
-
-    // Mark the request as fulfilled (closed). Outbound's negotiationId
-    // is the new one; the original request id is sealed.
-    await completeIncomingRequest(ctx, negotiationId, {
-      success:                true,
-      summary:                { pushNegotiationId },
-    });
-
-    return {
-      negotiationId,
-      pushNegotiationId,
-      status:                 "pushing",
-      peer:                   request.puller.story,
-    };
-  },
+  word:           { noun: "being", able: "being", runAsStore: true },
+  hostEnv:        federationManagerHostEnv("fulfill-request"),
 });
 
-// ────────────────────────────────────────────────────────────────────
-// refuse-request . Operator refuses an incoming pull request.
-// ────────────────────────────────────────────────────────────────────
-
+// refuse-request . operator refuses an incoming pull request.
 registerOperation("refuse-request", {
   targets:        ["being", "stance"],
   ownerExtension: "seed",
-  args: {
-    negotiationId: { type: "text", label: "Negotiation id", required: true },
-    reason:        { type: "text", label: "Optional reason", required: false },
-  },
-  handler: async (ctx) => {
-    const negotiationId = ctx.params?.negotiationId;
-    if (!negotiationId) {
-      throw new IbpError(IBP_ERR.INVALID_INPUT, "refuse-request requires `negotiationId`");
-    }
-    const request = await readNegotiation(ctx, "pendingIncomingRequests", negotiationId);
-    if (!request) {
-      throw new IbpError(IBP_ERR.NOT_FOUND, `no pending request "${negotiationId}"`);
-    }
-
-    await sendIntent(ctx, request.puller.story, {
-      intent:        "reject-template",
-      negotiationId,
-      reason:        ctx.params?.reason || null,
-    });
-
-    await completeIncomingRequest(ctx, negotiationId, {
-      success: false,
-      reason:  ctx.params?.reason || "rejected by operator",
-    });
-
-    return {
-      negotiationId,
-      status: "rejected",
-    };
-  },
+  word:           { noun: "being", able: "being", runAsStore: true },
+  hostEnv:        federationManagerHostEnv("refuse-request"),
 });
 
-// ────────────────────────────────────────────────────────────────────
-// Helpers shared with handlers.js (state I/O + cross-story dispatch).
-// ────────────────────────────────────────────────────────────────────
-
-async function sendIntent(ctx, peerStory, message) {
-  const { crossStoryDispatch } = await import("../../../ibp/crossWorld.js");
-  const actorBeingId = ctx.moment?.actorAct?.through || ctx.identity?.beingId;
-  const actorHistory  = ctx.moment?.actorAct?.history  || "0";
-  if (!actorBeingId) {
-    throw new IbpError(IBP_ERR.INTERNAL, "sendIntent: no actor beingId in ctx");
-  }
-
-  // Envelope intent is canonical (per seed/SUMMON.md): the auth gate
-  // and the receiver's permitsReceiverSummon both read it from the
-  // envelope. crossStoryDispatch passes payload.message straight
-  // through to callVerb, so envelope.intent on the wire is the same
-  // envelope.intent the local verb stamps onto the summon Fact. The
-  // rest of the federation fields (negotiationId, manifest, bundle,
-  // etc.) ride inside content as before.
-  const { intent: messageIntent, ...rest } = message || {};
-  const envelope = {
-    id:      uuidv4(),
-    verb:    "call",
-    address: `${peerStory}/@federation-manager`,
-    payload: {
-      message: {
-        from:    "/@federation-manager",
-        intent:  messageIntent || null,
-        content: { kind: "federation", ...rest },
-      },
-    },
-  };
-
-  try {
-    const result = await crossStoryDispatch({
-      envelope,
-      actor:    { beingId: actorBeingId, history: actorHistory },
-      identity: { beingId: actorBeingId, name: ctx.identity?.name || null },
-    });
-    if (result?.peerAck?.status !== "ok") {
-      log.warn("FederationManager",
-        `cross-story dispatch to ${peerStory} non-ok: ${JSON.stringify(result?.peerAck?.error || result?.peerAck).slice(0, 300)}`);
-    } else {
-      log.info("FederationManager",
-        `cross-story dispatch to ${peerStory} ok (intent=${envelope.payload.message.intent})`);
-    }
-    return result;
-  } catch (err) {
-    log.warn("FederationManager", `cross-story dispatch to ${peerStory} failed: ${err.message}`);
-    throw new IbpError(IBP_ERR.INTERNAL,
-      `cross-story dispatch to "${peerStory}" failed: ${err.message}`);
-  }
-}
-
-async function resolveSubtreeSpaceId(subtreePath, history) {
-  // If already a uuid, return as-is.
-  if (/^[0-9a-f-]{36}$/i.test(subtreePath)) return subtreePath;
-  // Otherwise resolve through the address parser. Bare paths are
-  // interpreted relative to the local story root.
-  try {
-    const { parseWithContext, expand, getStoryDomain: _gRD } = await import("../../../ibp/address.js");
-    const { resolveStance } = await import("../../../ibp/resolver.js");
-    const localStory = _gRD();
-    const parseCtx = {
-      currentStory: localStory,
-      currentHistory:  history,
-      currentUser:    null,
-      currentPath:    null,
-    };
-    const parsed = parseWithContext(subtreePath, parseCtx);
-    const expanded = expand(parsed, parseCtx);
-    const resolved = await resolveStance(expanded.right || expanded, parseCtx);
-    return resolved?.spaceId || null;
-  } catch (err) {
-    log.warn("FederationManager", `resolveSubtreeSpaceId failed for "${subtreePath}": ${err.message}`);
-    return null;
-  }
-}
-
-async function cacheBundle(ctx, negotiationId, bundle) {
-  await setQualityField(ctx, `bundleCache.${negotiationId}`, bundle);
-}
-
-async function writeNegotiation(ctx, bucket, negotiationId, value) {
-  await setQualityField(ctx, `${bucket}.${negotiationId}`, value);
-}
-
-async function readNegotiation(ctx, bucket, negotiationId) {
-  const myBeingId = ctx.moment?.actorAct?.through || ctx.identity?.beingId;
-  if (!myBeingId) return null;
-  // Read directly from the projection. The able being is the
-  // federation-manager being itself; in v1 we read its own state.
-  // For an operator calling do:accept-template on @federation-manager,
-  // the addressed being is the federation-manager (whose qualities
-  // hold the negotiation state).
-  const history = ctx.moment?.actorAct?.history || "0";
-  const { loadOrFold } = await import("../../../materials/projections.js");
-  // Resolve the federation-manager being by name (not the caller's
-  // beingId, which is the operator). The negotiation state lives on
-  // the federation-manager being.
-  const { findByName } = await import("../../../materials/projections.js");
-  const slot = await findByName("being", "federation-manager", history);
-  if (!slot) return null;
-  const q = slot.state?.qualities;
-  const qualities = q instanceof Map ? Object.fromEntries(q.entries()) : q;
-  const fed = qualities?.federation || {};
-  const bucketMap = fed[bucket] || {};
-  return bucketMap[negotiationId] || null;
-}
-
-async function completeIncomingOffer(ctx, negotiationId, outcome) {
-  await setQualityField(ctx, `completed.${negotiationId}`, {
-    direction:   "incoming",
-    completedAt: iso(ctx),
-    ...outcome,
-  });
-  await setQualityField(ctx, `pendingIncomingOffers.${negotiationId}`, null);
-}
-
-async function completeIncomingRequest(ctx, negotiationId, outcome) {
-  await setQualityField(ctx, `completed.${negotiationId}`, {
-    direction:   "incoming-request",
-    completedAt: iso(ctx),
-    ...outcome,
-  });
-  await setQualityField(ctx, `pendingIncomingRequests.${negotiationId}`, null);
-}
-
-async function setQualityField(ctx, subPath, value) {
-  // Resolve the federation-manager being. The operator's op handler
-  // ctx has the operator as actor; the negotiation state lives on the
-  // federation-manager being, addressed by name.
-  const history = ctx.moment?.actorAct?.history || "0";
-  const { findByName } = await import("../../../materials/projections.js");
-  const slot = await findByName("being", "federation-manager", history);
-  if (!slot) {
-    log.warn("FederationManager", "setQualityField: no federation-manager being found");
-    return;
-  }
-  const myBeingId = String(slot.id);
-  const { doVerb } = await import("../../../ibp/verbs/do.js");
-  await doVerb(
-    { kind: "being", id: myBeingId },
-    "set-being",
-    {
-      field: `qualities.federation.${subPath}`,
-      value,
-    },
-    {
-      identity:      ctx.identity || { beingId: myBeingId, name: "federation-manager" },
-      moment:     ctx.moment,
-      currentHistory: history,
-    },
-  );
-}
-
-function iso(ctx) {
-  return ctx.moment?.actorAct?.date
-    ? new Date(ctx.moment.actorAct.date).toISOString()
-    : null;
-}
+log.verbose("federation-manager",
+  "registered 7 word-SOLE DO ops + 1 SEE op (offer-template/offer-being/request-template/accept-template/reject-template/fulfill-request/refuse-request + federation-status)");

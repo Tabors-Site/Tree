@@ -14,9 +14,11 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const SCRATCH_DB = "mongodb://localhost:27017/story_word_fold";
+const SCRATCH_DB = path.join(os.tmpdir(), "story_word_fold-" + process.pid);
 process.env.PORT = "3799";
-process.env.MONGODB_URI = SCRATCH_DB;
+process.env.TREEOS_STORE_BASE = SCRATCH_DB;
+fs.rmSync(SCRATCH_DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "wordfold-secret-0123456789";
 process.env.STORY_KEY_DIR = path.join(
   os.tmpdir(),
@@ -29,20 +31,16 @@ fs.mkdirSync(SRC, { recursive: true });
 fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
 
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`))
-    .default;
-  const conn = await mongoose.createConnection(SCRATCH_DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
+// (scratch file store fresh-wiped above; no DB to drop)
 
 await import(`${R}/begin.js`);
 
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const { I } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const reg = await import(`${R}/seed/present/word/ableWordRegistry.js`);
-const { default: Fact } = await import(`${R}/seed/past/fact/fact.js`);
+const { factFind, factCount } = await import(
+  `${R}/seed/present/word/_factStoreTest.mjs`
+);
 
 let pass = 0,
   fail = 0;
@@ -69,10 +67,10 @@ const poll = async (fn, t = 60000, e = 250) => {
 const ABLE = "credential",
   OP = "credential-reset";
 const WORD = `${ABLE}:${OP}`; // the unified word name (able:op) the fold keys on
+// All coin/retire facts ride I's being-reel, so the store's seq-ascending scan
+// reproduces the old `{ date: 1, seq: 1 }` chain order exactly.
 const wordFacts = () =>
-  Fact.find({ verb: "do", act: { $in: ["coin", "retire"] } })
-    .sort({ date: 1, seq: 1 })
-    .lean();
+  factFind({ verb: "do", act: { $in: ["coin", "retire"] } });
 
 console.log(
   `\n  verify-word-fold (the word registry as a chain fold)\n  DB: ${SCRATCH_DB.split("/").pop()}\n`,
@@ -87,7 +85,7 @@ try {
   // 1. the BOOT wiring auto-declared the seed vocabulary to the chain (poll — declareWordsToChain
   //    runs async after genesis). This is the landing: the registry IS a fold of the chain.
   const declared = await poll(async () => {
-    const n = await Fact.countDocuments({ verb: "do", act: "coin" });
+    const n = factCount({ verb: "do", act: "coin" });
     return n >= 16 ? n : null;
   });
   declared
@@ -150,9 +148,9 @@ try {
   const { declareAbleWordsToFold } = await import(
     `${R}/seed/present/word/wordStore.js`
   );
-  const before8 = await Fact.countDocuments({ verb: "do", act: "coin" });
+  const before8 = factCount({ verb: "do", act: "coin" });
   await declareAbleWordsToFold({});
-  const after8 = await Fact.countDocuments({ verb: "do", act: "coin" });
+  const after8 = factCount({ verb: "do", act: "coin" });
   after8 === before8
     ? ok(
         `declareAbleWordsToFold idempotent (re-run laid 0 new coin facts — dedup-skip)`,

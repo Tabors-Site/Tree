@@ -58,34 +58,26 @@ export async function resolvePathToSpaceId(pathString, history) {
   if (!rootId) return null;
 
   let cursorId = rootId;
-  const { default: Projection } = await import("./projection.js");
-  const { isMain } = await import("./histories.js");
-  const { resolveHistoryLineage } = await import("./histories.js");
-
-  // Build the history's lineage chain (e.g. ["0"] for main, ["0", "1"]
-  // for a child of main, etc.) so segment lookups walk inherited
-  // content. A subtree history may need to find a space planted on its
-  // parent's reel; querying only the current history's projection table
-  // misses it.
-  const lineage = isMain(history) ? ["0"] : await resolveHistoryLineage(history);
-  // From leaf history outward to root, so the most-divergent history
-  // wins on shadow.
-  const orderedHistories = [...lineage].reverse();
-
-  for (const segment of segments) {
-    let resolvedChild = null;
-    for (const b of orderedHistories) {
-      const child = await Projection.findOne({
-        history: b,
-        type: "space",
-        "state.parent": cursorId,
-        "state.name": segment,
-        tombstoned: { $ne: true },
-      }).lean();
-      if (child) { resolvedChild = child; break; }
+  // Curated, file-backed path walk. listByType("space", history) is already lineage-aware (it folds
+  // in inherited spaces from the parent histories with branchPoint + divergence-shadow gating — the
+  // same logic the old explicit lineage loop did), so one call gives every space visible in this
+  // history. We load each space's slot for its {parent, name} (the occupant shape carries only
+  // id/position) and walk the segments by parent+name match.
+  const { listByType, loadOrFold } = await import("../projections.js");
+  const occupants = await listByType("space", history);
+  const spaces = [];
+  for (const o of occupants) {
+    const slot = await loadOrFold("space", String(o.id), history);
+    if (slot && !slot.tombstoned) {
+      spaces.push({ id: String(o.id), parent: slot.state?.parent ?? null, name: slot.state?.name ?? null });
     }
-    if (!resolvedChild) return null;
-    cursorId = String(resolvedChild.id);
+  }
+  for (const segment of segments) {
+    const child = spaces.find(
+      (s) => String(s.parent) === String(cursorId) && s.name === segment,
+    );
+    if (!child) return null;
+    cursorId = child.id;
   }
   return cursorId;
 }

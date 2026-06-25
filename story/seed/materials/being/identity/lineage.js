@@ -28,7 +28,7 @@
 // be:credential-attach Fact on the being parent's reel naming the
 // target)..
 
-import Fact from "../../../past/fact/fact.js";
+import { getFactsOnReelWhere } from "../../../past/fact/facts.js";
 
 /**
  * Return the beingId of whoever birthed `targetBeingId`, or null if
@@ -44,16 +44,17 @@ import Fact from "../../../past/fact/fact.js";
  */
 export async function findBeingParent(targetBeingId) {
   if (!targetBeingId) return null;
-  const fact = await Fact.findOne({
-    verb: "be",
-    act: "birth",
-    "of.kind": "being",
-    "of.id": String(targetBeingId),
-  })
-    .sort({ seq: 1, date: 1 })
-    .select("params")
-    .lean();
-  return fact?.params?.parentBeingId || null;
+  // The be:birth fact lands on the new being's OWN reel. Curated read of
+  // that reel, earliest-seq-first (getFactsOnReelWhere returns
+  // seq-ascending, matching the old .sort({ seq: 1, date: 1 })); [0] is
+  // the birth fact. See FLAG below on history.
+  const facts = getFactsOnReelWhere(
+    "0",
+    "being",
+    String(targetBeingId),
+    (f) => f.verb === "be" && f.act === "birth",
+  );
+  return facts[0]?.params?.parentBeingId || null;
 }
 
 /**
@@ -81,27 +82,27 @@ export async function isDetachedFromBeingParent(beingId) {
   const parentBeingId = await findBeingParent(childId);
   if (!parentBeingId) return false; // the I-Am has no being-parent — it cannot detach from anyone
 
-  const [latestDetach, latestAttach] = await Promise.all([
-    Fact.findOne({
-      "of.kind": "being",
-      "of.id": childId,
-      verb: "do",
-      act: "credential-detach",
-    })
-      .sort({ seq: -1 })
-      .select("seq")
-      .lean(),
-    Fact.findOne({
-      "of.kind": "being",
-      "of.id": childId,
-      verb: "do",
-      act: "credential-attach",
-      "result.targetBeingId": childId,
-    })
-      .sort({ seq: -1 })
-      .select("seq")
-      .lean(),
-  ]);
+  // Both the detach and the re-attach land on the CHILD's reel
+  // (of.kind=being, of.id=child). Curated reel read keeps the matching
+  // facts seq-ascending; the LAST element is the highest-seq one (the old
+  // .sort({ seq: -1 }).findOne). Single reel → one read covers both.
+  const detaches = getFactsOnReelWhere(
+    "0",
+    "being",
+    childId,
+    (f) => f.verb === "do" && f.act === "credential-detach",
+  );
+  const attaches = getFactsOnReelWhere(
+    "0",
+    "being",
+    childId,
+    (f) =>
+      f.verb === "do" &&
+      f.act === "credential-attach" &&
+      f.result?.targetBeingId === childId,
+  );
+  const latestDetach = detaches[detaches.length - 1] || null;
+  const latestAttach = attaches[attaches.length - 1] || null;
 
   if (!latestDetach) return false;
   if (!latestAttach) return true;

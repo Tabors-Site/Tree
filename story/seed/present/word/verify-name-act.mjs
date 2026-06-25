@@ -9,9 +9,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const DB = "mongodb://localhost:27017/story_name_act";
+const DB = path.join(os.tmpdir(), "story_name_act-" + process.pid);
 process.env.PORT = "3851";
-process.env.MONGODB_URI = DB;
+process.env.TREEOS_STORE_BASE = DB;
+fs.rmSync(DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "nameact-0123456789";
 process.env.STORY_KEY_DIR = path.join(
   os.tmpdir(),
@@ -23,21 +25,18 @@ fs.rmSync(SRC, { recursive: true, force: true });
 fs.mkdirSync(SRC, { recursive: true });
 fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`))
-    .default;
-  const conn = await mongoose.createConnection(DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
+// (scratch file store fresh-wiped above; no DB to drop)
 await import(`${R}/begin.js`);
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const { withNameAct } = await import(`${R}/seed/sprout.js`);
 const { emitFact } = await import(`${R}/seed/past/fact/facts.js`);
 const { getStoryDomain } = await import(`${R}/seed/ibp/address.js`);
-const { default: ActHead } = await import(`${R}/seed/past/act/actHead.js`);
+const { readActHeadFile } = await import(`${R}/seed/past/fileStore.js`);
+const { GENESIS_PREV } = await import(`${R}/seed/past/fact/hash.js`);
 const { verifyActChain } = await import(`${R}/seed/past/act/actHash.js`);
-const Fact = (await import(`${R}/seed/past/fact/fact.js`)).default;
+const { factFindOne } = await import(
+  `${R}/seed/present/word/_factStoreTest.mjs`
+);
 const poll = async (fn, t = 20000, e = 300) => {
   const t0 = Date.now();
   while (Date.now() - t0 < t) {
@@ -88,11 +87,11 @@ try {
   });
 
   // 1. The fact landed on the library reel — bodiless (through null), name-signed, history "0".
-  const f = await Fact.findOne({
+  const f = factFindOne({
     "of.kind": "library",
     "of.id": libraryId,
     act: "test-5d-fact",
-  }).lean();
+  });
   f && f.by === nameId && f.through == null && String(f.history) === "0"
     ? ok(
         `bodiless verb:name fact on the library reel (by=${f.by}, through=${f.through}, history=${f.history}, seq=${f.seq})`,
@@ -100,10 +99,11 @@ try {
     : bad("library fact not laid right", f);
 
   // 2. The NAME-act-chain advanced — keyed <story>:5d:<name> (distinct from any being-chain).
-  const head = await ActHead.findById(`${story}:5d:${nameId}`).lean();
-  head && head.headHash
+  // readActHeadFile returns the chain-head HASH (or GENESIS_PREV when the chain is empty).
+  const head = readActHeadFile(story, "5d", nameId);
+  head && head !== GENESIS_PREV
     ? ok(
-        `name-act-chain advanced: ${story}:5d:${nameId} (head ${String(head.headHash).slice(0, 12)}…)`,
+        `name-act-chain advanced: ${story}:5d:${nameId} (head ${String(head).slice(0, 12)}…)`,
       )
     : bad("no 5d name-act head", head);
 
@@ -114,10 +114,15 @@ try {
     : bad("name-act-chain verify failed", v);
 
   // 4. The I's 4D being-chain (<story>:0:i-am) is SEPARATE and untouched by the name-act.
-  const beingHead = await ActHead.findById(`${story}:0:${nameId}`).lean();
-  beingHead && head && beingHead.headHash !== head.headHash
+  // Each readActHeadFile is the chain-head HASH; both chains must exist (non-genesis) and differ.
+  const beingHead = readActHeadFile(story, "0", nameId);
+  beingHead &&
+  beingHead !== GENESIS_PREV &&
+  head &&
+  head !== GENESIS_PREV &&
+  beingHead !== head
     ? ok(
-        "the I being-chain (0) and name-chain (5d) are distinct heads — no collision",
+        "the I being-chain (0) and name-chain (5d) are distinct heads, no collision",
       )
     : bad("being/name chains collided or missing", { beingHead, head });
 

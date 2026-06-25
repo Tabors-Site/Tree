@@ -14,22 +14,18 @@ import path from "path";
 import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const DB = "mongodb://localhost:27017/story_releaseword";
+const DB = path.join(os.tmpdir(), "story_releaseword-" + process.pid);
 process.env.PORT = "3838";
-process.env.MONGODB_URI = DB;
+process.env.TREEOS_STORE_BASE = DB;
+fs.rmSync(DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "releaseword-0123456789";
 process.env.STORY_KEY_DIR = path.join(
   os.tmpdir(),
   "releaseword-keys-" + process.pid,
 );
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`))
-    .default;
-  const conn = await mongoose.createConnection(DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
+// (scratch file store fresh-wiped above; no DB to drop)
 await import(`${R}/begin.js`);
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const { withIAmAct } = await import(`${R}/seed/sprout.js`);
@@ -40,7 +36,9 @@ const { getWordSync } = await import(`${R}/seed/present/word/wordStore.js`);
 const { resolveAbleWord } = await import(
   `${R}/seed/present/word/ableWordRegistry.js`
 );
-const { default: Fact } = await import(`${R}/seed/past/fact/fact.js`);
+const { factFind, factFindOne, factCount } = await import(
+  `${R}/seed/present/word/_factStoreTest.mjs`
+);
 const pollFor = async (fn, pred, t = 16000, e = 250) => {
   const t0 = Date.now();
   while (Date.now() - t0 < t) {
@@ -112,8 +110,7 @@ try {
 
   // (3) THE PROOF: the emitted be:release fact carries the WORD's factParams + sentinel
   const f = await pollFor(
-    () =>
-      Fact.findOne({ verb: "be", act: "release", "of.id": String(I) }).lean(),
+    () => factFindOne({ verb: "be", act: "release", "of.id": String(I) }),
     (v) => !!v,
   );
   f &&

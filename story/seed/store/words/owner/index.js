@@ -13,7 +13,7 @@ import { ownerHostEnv } from "./ownerHost.js";
 registerAbleWord("space", "set-owner", new URL("./set-owner.word", import.meta.url));
 registerAbleWord("space", "remove-owner", new URL("./remove-owner.word", import.meta.url));
 
-// set-owner — COMPOSITE (runAsStore): the `.word` gates the ownership auth (may-set-owner), then
+// set-owner — COMPOSITE (discovered: its `.word` has a do-deed): the `.word` gates the ownership auth (may-set-owner), then
 // `do set-space {field:owner}` — the set-space LEAF lays the fact in its own moment. No own fact;
 // the deed IS the fact. The unified word model: set-owner is a gated set-space ("apple is do"), not
 // an own-fact op returning a block for the dispatcher to stamp.
@@ -23,17 +23,17 @@ registerOperation("set-owner", {
   args: {
     newOwnerId: { type: "text", label: "New owner being id", required: true },
   },
-  word: { noun: "space", runAsStore: true },
+  word: { noun: "space" },
   hostEnv: ownerHostEnv,
 });
 
-// remove-owner — COMPOSITE (runAsStore): the `.word` gates (may-remove-owner), then `do set-space
+// remove-owner — COMPOSITE (discovered: its `.word` has a do-deed): the `.word` gates (may-remove-owner), then `do set-space
 // {field:owner, value:null}` — the set-space LEAF clears the owner in its own moment. Like set-owner:
 // no own fact, the deed IS the fact, the chain shows do:set-space {field:owner}.
 registerOperation("remove-owner", {
   targets: ["space", "stance"],
   ownerExtension: "seed",
   args: {},
-  word: { noun: "space", runAsStore: true },
+  word: { noun: "space" },
   hostEnv: ownerHostEnv,
 });

@@ -58,11 +58,11 @@ export function computeHash(prev, content) {
 
 /**
  * Extract the hashable content from a Fact row. Excludes `p` (folded
- * in separately by computeHash), the identity itself (`_id` is the
- * digest's OUTPUT — including it would be circular), and mongoose
- * internals (`__v`). Includes every domain field so the digest
- * captures the whole deed, INCLUDING `history` (the world the deed
- * happened in; normalized so an absent field hashes like main).
+ * in separately by computeHash) and the identity itself (`_id` is the
+ * digest's OUTPUT — including it would be circular). Includes every
+ * domain field so the digest captures the whole deed, INCLUDING
+ * `history` (the world the deed happened in; normalized so an absent
+ * field hashes like main).
  *
  * `foldSeq` (PARALLEL FACTS §1.3) is included WHEN PRESENT so the
  * chain commits to the stale-detection key. Mutating that value on a

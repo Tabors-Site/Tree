@@ -31,9 +31,29 @@
 // failures self-heal on the next fold round. Handlers are idempotent
 // — upsert and delete-by-key both tolerate replay.
 
-import InboxProjection, { priorityRankOf } from "./inboxProjection.js";
+import { FileCollection } from "../../projStore.js";
 import { registerCrossCuttingHandler } from "../../../present/stamper/2-fold/foldEngine.js";
+
+// The cross-cutting fold of open summons per being. One row per open
+// summon, keyed by correlation, indexed by recipient. The chain of call
+// facts (and the be:sever / act-seal closures) on the story's per-being
+// reels is the record; this file-backed collection (one JSON file per
+// row + a small index under <storeRoot>/proj/inbox) is the rebuildable
+// cache. Exported so the inbox/intake readers share the one instance.
+export const InboxProjection = new FileCollection("inbox");
+
+// Priority → numeric rank (lower = picked first). The ONE place the
+// enum-to-rank mapping lives; the fold writes priorityRank from it. The
+// string enum sorts lexically to the WRONG order, so the scheduler sorts
+// on this rank, never on `priority`.
+export const PRIORITY_RANK = Object.freeze({
+  HUMAN: 1, GATEWAY: 2, INTERACTIVE: 3, BACKGROUND: 4,
+});
+export function priorityRankOf(priority) {
+  return PRIORITY_RANK[priority] ?? 3;
+}
 import { assertHistoryOrThrow } from "../../../materials/projections.js";
+import { getActsByField } from "../../act/actChain.js";
 
 async function handleCall(fact /*, type, id*/) {
   if (fact?.verb !== "call") return;
@@ -52,9 +72,10 @@ async function handleCall(fact /*, type, id*/) {
   // hits this (the answering Act can't exist before the summon fact
   // commits); it protects replay paths (a lagging slot catching up,
   // a deliberate recovery rebuild) from double execution. One
-  // indexed exists-check on Act.answers.
-  const { default: Act } = await import("../../act/act.js");
-  const answered = await Act.exists({ answers: String(params.correlation) });
+  // indexed exists-check on Act.answers → curated getActsByField("answers", …);
+  // existence = any act carrying this correlation in its answers facet.
+  const answered =
+    getActsByField("answers", String(params.correlation)).length > 0;
   if (answered) return;
 
   await InboxProjection.updateOne(

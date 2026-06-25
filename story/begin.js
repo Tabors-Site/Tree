@@ -112,13 +112,12 @@
 //
 
 import express from "express";
-import cors from "cors";
+import cors from "./transports/http/middleware/cors.js";
 import http from "http";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import cookieParser from "cookie-parser";
-import mongoose from "mongoose";
+import cookieParser from "./transports/http/middleware/cookies.js";
 
 import registerRoutes from "./transports/http/handler.js";
 import { initWebSocketServer } from "./transports/ws/websocket.js";
@@ -134,6 +133,7 @@ import {
   noteHttpShutdown,
 } from "./seed/materials/host/requestLog.js";
 import { getStoryUrl } from "./seed/storyIdentity.js";
+import { isDbHealthy } from "./seed/seedStory/dbConfig.js";
 import log from "./seed/seedStory/log.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -349,7 +349,7 @@ app.get("/health", (_req, res) => {
   sendOk(res, {
     ok: true,
     uptime: Math.floor(process.uptime()),
-    db: mongoose.connection.readyState === 1 ? "connected" : "disconnected",
+    db: isDbHealthy() ? "connected" : "disconnected",
   });
 });
 
@@ -836,12 +836,9 @@ async function shutdown(signal) {
     wsServer?.close?.();
   } catch {}
 
-  // Drop the disconnect listener so it does not log after the shell
-  // prompt returns.
-  mongoose.connection.removeAllListeners("disconnected");
-  try {
-    await mongoose.connection.close();
-  } catch {}
+  // No Mongo connection to tear down: the chain is an on-disk file
+  // store (seedStory/dbConfig.js) that needs no close. The store's
+  // moment-journal is durable on disk; the next boot replays it.
   server.close(() => {});
   log.info("Seed", "I sleep.");
   process.exit(0);

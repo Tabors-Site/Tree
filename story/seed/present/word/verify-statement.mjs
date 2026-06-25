@@ -8,9 +8,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const DB = "mongodb://localhost:27017/story_statement";
+const DB = path.join(os.tmpdir(), "story_statement-" + process.pid);
 process.env.PORT = "3823";
-process.env.MONGODB_URI = DB;
+process.env.TREEOS_STORE_BASE = DB;
+fs.rmSync(DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "statement-0123456789";
 process.env.STORY_KEY_DIR = path.join(
   os.tmpdir(),
@@ -22,13 +24,7 @@ fs.rmSync(SRC, { recursive: true, force: true });
 fs.mkdirSync(SRC, { recursive: true });
 fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`))
-    .default;
-  const conn = await mongoose.createConnection(DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
+// (scratch file store fresh-wiped above; no DB to drop)
 await import(`${R}/begin.js`);
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const { withIAmAct } = await import(`${R}/seed/sprout.js`);
@@ -37,7 +33,9 @@ const { birthBeing } = await import(
   `${R}/seed/materials/being/identity/birth.js`
 );
 const { handleType } = await import(`${R}/protocols/ibp/verbs/type.js`);
-const { default: Fact } = await import(`${R}/seed/past/fact/fact.js`);
+const { factFind, factFindOne, factCount } = await import(
+  `${R}/seed/present/word/_factStoreTest.mjs`
+);
 const poll = async (fn, t = 60000, e = 250) => {
   const t0 = Date.now();
   while (Date.now() - t0 < t) {
@@ -98,34 +96,34 @@ try {
   };
 
   // 1. a VALID Word with no leading "I" and no period → first-person + terminator assumed → a fact lands
-  const before = await Fact.countDocuments({ act: "create-space" });
+  const before = factCount({ act: "create-space" });
   const r1 = await callType(socket, "make notebook");
   r1?.status === "ok"
     ? ok(`valid Word accepted ("make notebook" → "I make notebook.")`)
     : bad(`valid accepted`, r1);
   const made = await poll(
-    async () => (await Fact.countDocuments({ act: "create-space" })) > before,
+    async () => factCount({ act: "create-space" }) > before,
     8000,
   );
   made
     ? ok(`a create-space fact landed under the typist`)
     : bad(`fact landed`, { before });
-  const sp = await Fact.findOne({
+  const sp = factFindOne({
     act: "create-space",
     through: String(typist),
-  }).lean();
+  });
   sp
     ? ok(`the new space is attributed to the typist (the "I")`)
     : bad(`attributed to typist`, "no create-space through typist");
 
   // 2. an INVALID Word → REJECT with the hint + NOTHING lands
-  const total = await Fact.countDocuments({});
+  const total = factCount({});
   const r2 = await callType(socket, "zxqwv blarg nonsense word");
   r2?.status === "error" && r2?.error?.message
     ? ok(`invalid Word REJECTED with a hint: "${r2.error.message}"`)
     : bad(`invalid rejected`, r2);
   await new Promise((r) => setTimeout(r, 600));
-  const total2 = await Fact.countDocuments({});
+  const total2 = factCount({});
   total2 === total
     ? ok(`nothing laid on rejection (the press failed clean, no fact forced)`)
     : bad(`no fact on reject`, { total, total2 });

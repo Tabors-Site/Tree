@@ -10,9 +10,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const DB = "mongodb://localhost:27017/story_actchain_rekey";
+const DB = path.join(os.tmpdir(), "story_actchain_rekey-" + process.pid);
 process.env.PORT = "3846";
-process.env.MONGODB_URI = DB;
+process.env.TREEOS_STORE_BASE = DB;
+fs.rmSync(DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "actchain-0123456789";
 process.env.STORY_KEY_DIR = path.join(
   os.tmpdir(),
@@ -24,17 +26,11 @@ fs.rmSync(SRC, { recursive: true, force: true });
 fs.mkdirSync(SRC, { recursive: true });
 fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`))
-    .default;
-  const conn = await mongoose.createConnection(DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
+// (scratch file store fresh-wiped above; no DB to drop)
 await import(`${R}/begin.js`);
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const { getStoryDomain } = await import(`${R}/seed/ibp/address.js`);
-const { default: ActHead } = await import(`${R}/seed/past/act/actHead.js`);
+const { listActHeads } = await import(`${R}/seed/past/fileStore.js`);
 const { verifyActChain } = await import(`${R}/seed/past/act/actHash.js`);
 const ws = await import(`${R}/seed/present/word/wordStore.js`);
 const poll = async (fn, t = 20000, e = 300) => {
@@ -69,7 +65,7 @@ try {
   console.log(`  story = "${story}"`);
 
   // 1. SHAPE — every ActHead _id is 3-segment, story-prefixed, with fields matching the _id.
-  const heads = await ActHead.find({}).lean();
+  const heads = listActHeads(story);
   heads.length > 0
     ? ok(`genesis produced ${heads.length} act-chain head(s)`)
     : bad("no act-chain heads after genesis");
@@ -118,7 +114,7 @@ try {
     { kind: "op", do: { ref: "noop" } },
     {},
   ); // I act on "0"
-  const after = await ActHead.find({}).lean();
+  const after = listActHeads(story);
   const changed = after.filter(
     (h) => before.get(String(h._id)) !== String(h.headHash),
   );

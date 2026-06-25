@@ -13,9 +13,11 @@ import { fileURLToPath } from "url";
 import { randomUUID } from "crypto";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const DB = "mongodb://localhost:27017/story_closestory_cut";
+const DB = path.join(os.tmpdir(), "story_closestory_cut-" + process.pid);
 process.env.PORT = "3793";
-process.env.MONGODB_URI = DB;
+process.env.TREEOS_STORE_BASE = DB;
+fs.rmSync(DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "closestory-0123456789";
 process.env.STORY_KEY_DIR = path.join(
   os.tmpdir(),
@@ -35,13 +37,7 @@ process.kill = (pid, sig) => {
   return _kill(pid, sig);
 };
 
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`))
-    .default;
-  const conn = await mongoose.createConnection(DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
+// (scratch file store fresh-wiped above; no DB to drop)
 await import(`${R}/begin.js`);
 
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
@@ -50,7 +46,7 @@ const { I } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { doVerb } = await import(`${R}/seed/ibp/verbs/do.js`);
 const { getStoryDomain } = await import(`${R}/seed/ibp/address.js`);
 const { getSpaceRootId } = await import(`${R}/seed/sprout.js`);
-const Fact = (await import(`${R}/seed/past/fact/fact.js`)).default;
+const { factFind, factFindOne, factCount } = await import(`${R}/seed/present/word/_factStoreTest.mjs`);
 
 let pass = 0,
   fail = 0;
@@ -126,12 +122,12 @@ try {
 
   // ── 2. the close-story NAME-ACT landed on the library reel (verb:name, bodiless, by the Name) ──
   const cf = await poll(() =>
-    Fact.findOne({
+    factFindOne({
       "of.kind": "library",
       "of.id": story,
       act: "close-story",
       verb: "name",
-    }).lean(),
+    }),
   );
   cf && cf.through == null && cf.by && String(cf.params?.closedBy) === String(I)
     ? ok(

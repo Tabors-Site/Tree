@@ -993,7 +993,6 @@ async function seeAtTime({
 // expects. Preserves the being qualifier from the original resolution
 // so the descriptor still attributes to the right stance.
 async function _redirectResolvedToSpace(resolved, positionRow) {
-  const Space = (await import("../../materials/space/space.js")).default;
   // Walk parents to build the chain. Stop at the place root (parent
   // === null). The chain rendered into the descriptor's `pathByNames`
   // mirrors the live resolver's output.

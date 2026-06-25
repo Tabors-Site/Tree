@@ -46,7 +46,10 @@
 // be:switch fact on the REEL, not the act-chain.
 
 import { computeHash, GENESIS_PREV } from "../fact/hash.js";
-import ActHead from "./actHead.js";
+import {
+  readActHeadFile,
+  advanceActHeadFile,
+} from "../fileStore.js";
 
 /** The hashable opening of an act. */
 export function contentOfAct(act) {
@@ -73,9 +76,9 @@ export function actHeadKey(story, history, beingId) {
 
 /** The being's act-chain head on a (story, history) (GENESIS_PREV when none). */
 export async function readActHead(story, history, beingId) {
-  const row = await ActHead.findById(actHeadKey(story, history, beingId))
-    .select("headHash").lean();
-  return row?.headHash || GENESIS_PREV;
+  // File-backed (fileStore): the .acthead beside the being's act-log holds
+  // the chain head as a derived pointer (rebuildable from the act-log).
+  return readActHeadFile(story, history, beingId);
 }
 
 /**
@@ -94,47 +97,23 @@ export async function readActHead(story, history, beingId) {
  * row stays open, and the retry re-opens from the new head.
  */
 export async function advanceActHead(story, history, beingId, actId, { session = null, expectPrev } = {}) {
-  const _id = actHeadKey(story, history, beingId);
+  // File-backed CAS (fileStore.advanceActHeadFile): the .acthead beside the
+  // being's act-log advances under a compare-and-set on the prior head. A
+  // stale author is refused with ACT_CHAIN_MOVED — the chain can't fork. The
+  // single global commit mutex serializes writes, so the `session` arg (a
+  // Mongo-era ownership token) is no longer load-bearing; accepted for
+  // signature parity, ignored.
+  void session;
   if (expectPrev === undefined) {
-    // Legacy unconditional advance (callers that own their serialization).
-    const update = ActHead.updateOne(
-      { _id },
-      { $set: { headHash: actId }, $setOnInsert: { story, history, beingId: String(beingId) } },
-      { upsert: true },
-    );
-    if (session) update.session(session);
-    await update;
-    return;
+    // Legacy unconditional advance (callers that own their serialization):
+    // read the current head and advance off it so the CAS always lands.
+    expectPrev = readActHeadFile(story, history, beingId);
   }
-
-  const isGenesis = expectPrev == null || expectPrev === GENESIS_PREV;
-  const filter = isGenesis
-    ? { _id, $or: [{ headHash: null }, { headHash: { $exists: false } }] }
-    : { _id, headHash: expectPrev };
-  const q = ActHead.updateOne(
-    filter,
-    { $set: { headHash: actId }, $setOnInsert: { story, history, beingId: String(beingId) } },
-    // Upsert only for the first act (no head row yet). A non-genesis
-    // upsert would resurrect a filtered-out row and mask the fork.
-    { upsert: isGenesis },
-  );
-  if (session) q.session(session);
-  let moved = false;
-  try {
-    const r = await q;
-    moved = r.matchedCount === 0 && !(r.upsertedCount > 0 || r.upsertedId);
-  } catch (err) {
-    // Genesis upsert losing the insert race surfaces as a duplicate
-    // _id — same meaning: someone else advanced first.
-    if (err?.code === 11000) moved = true;
-    else throw err;
-  }
-  if (moved) {
-    throw new Error(
-      `ACT_CHAIN_MOVED: head of ${_id} is no longer ${String(expectPrev).slice(0, 12)} — ` +
-      `another act sealed between open and seal; refusing to fork the chain`,
-    );
-  }
+  // GENESIS_PREV is the empty-chain prev; readActHeadFile returns it when no
+  // .acthead exists, so a null/GENESIS expectPrev maps onto the genesis case
+  // without a special branch.
+  const prev = expectPrev == null ? GENESIS_PREV : expectPrev;
+  advanceActHeadFile(story, history, beingId, actId, prev);
 }
 
 /**
@@ -147,13 +126,12 @@ export async function advanceActHead(story, history, beingId, actId, { session =
  *           {ok:false, count:number, brokenAt:string, reason:string}}
  */
 export async function verifyActChain(story, history, beingId) {
-  const { default: Act } = await import("./act.js");
-  const head = await ActHead.findById(actHeadKey(story, history, beingId))
-    .select("headHash").lean();
-  let h = head?.headHash || GENESIS_PREV;
+  const { getActById } = await import("./actChain.js");
+  const headHashFile = readActHeadFile(story, history, beingId);
+  let h = headHashFile || GENESIS_PREV;
   let count = 0;
   while (h !== GENESIS_PREV) {
-    const act = await Act.findById(h).lean();
+    const act = await getActById(h, story);
     if (!act) {
       return { ok: false, count, brokenAt: h, reason: "missing-act" };
     }
@@ -166,7 +144,7 @@ export async function verifyActChain(story, history, beingId) {
     count++;
     h = act.p;
   }
-  return { ok: true, count, headHash: head?.headHash || null };
+  return { ok: true, count, headHash: headHashFile !== GENESIS_PREV ? headHashFile : null };
 }
 
 /**
@@ -186,16 +164,15 @@ export async function verifyActChain(story, history, beingId) {
  * @returns {{ok:true,count,headHash}|{ok:false,count,brokenAt,reason}}
  */
 export async function verifyActChainFrom(story, history, beingId, { stopAtP = GENESIS_PREV, fromHead } = {}) {
-  const { default: Act } = await import("./act.js");
+  const { getActById } = await import("./actChain.js");
   let h = fromHead;
   if (h === undefined) {
-    const head = await ActHead.findById(actHeadKey(story, history, beingId)).select("headHash").lean();
-    h = head?.headHash || GENESIS_PREV;
+    h = readActHeadFile(story, history, beingId) || GENESIS_PREV;
   }
   const headHash = (h && h !== GENESIS_PREV) ? h : null;
   let count = 0;
   while (h !== GENESIS_PREV && h !== stopAtP) {
-    const act = await Act.findById(h).lean();
+    const act = await getActById(h, story);
     if (!act) return { ok: false, count, brokenAt: h, reason: "missing-act" };
     if (typeof act.p !== "string") return { ok: false, count, brokenAt: h, reason: "unaddressed" };
     if (computeActId(act.p, contentOfAct(act)) !== act._id) {

@@ -33,10 +33,8 @@
 
 import { IbpError, IBP_ERR } from "../ibp/protocol.js";
 import { getStoryDomain } from "./address.js";
-import Being from "../materials/being/being.js";
-import Space from "../materials/space/space.js";
 import { getSpaceRootId } from "../sprout.js";
-import { resolveRootSpace } from "../materials/space/spaces.js";
+import { resolveRootSpace, listSpaceChildren } from "../materials/space/spaces.js";
 import { getSpaceOwner } from "../materials/space/members.js";
 import { HEAVEN_SPACE } from "../materials/space/heavenSpaces.js";
 
@@ -334,70 +332,37 @@ async function walkSpacePath({
     // still match the unfiltered query, so relaxing is safe.
     const parentIsHeavenRegion = parentSeedSpace !== null;
     const allowSeedSpaceChildren = isHeavenDoor || parentIsHeavenRegion;
-    // History-aware segment lookup. The walker checks the current
-    // history's slot first; on miss (and only on a non-main history),
-    // it falls through to main and validates the main slot existed
-    // at branch creation via getBranchPoint (a tombstone in the
-    // history defeats the fall-through). Same shadow+lineage pattern
-    // as findByName/listSpaceChildren.
-    const baseQuery = {
-      type: "space",
-      "state.parent": currentParent,
-      tombstoned: { $ne: true },
-      ...(allowSeedSpaceChildren
-        ? {}
-        : {
-            $or: [
-              { "state.heavenSpace": null },
-              { "state.heavenSpace": { $exists: false } },
-            ],
-          }),
-    };
-    if (isFirst && !isHeavenDoor && ownerFilter) {
+    // History-aware segment lookup via the CURATED space-children helper.
+    // listSpaceChildren(parent, {history, includeHeavenChildren}) already
+    // does what the raw Projection.findOne block did by hand: own-history
+    // children unioned with main children that existed at branch creation
+    // (branchPoint gate), divergence/tombstone shadowing, and the heaven
+    // marker filter (includeHeavenChildren mirrors allowSeedSpaceChildren).
+    // It returns rows shaped { _id, ...state }, so we match the segment by
+    // UUID (_id) or by name in JS — identical leaf selection to before.
+    const childRows = await listSpaceChildren(currentParent, {
+      history,
+      includeHeavenChildren: allowSeedSpaceChildren,
+      limit: 10000,
+    });
+    // First-segment ownerFilter (always {} from current callers) preserved
+    // as a post-filter so the contract holds if a caller ever passes one.
+    const ownerOk = (row) => {
+      if (!(isFirst && !isHeavenDoor && ownerFilter)) return true;
       for (const [k, v] of Object.entries(ownerFilter)) {
-        baseQuery[`state.${k}`] = v;
+        if (row[k] !== v) return false;
       }
+      return true;
+    };
+    // UUID match wins over name match (the raw query tried _id first).
+    let space = null;
+    if (UUID_RE.test(seg)) {
+      space =
+        childRows.find((r) => String(r._id) === seg && ownerOk(r)) || null;
     }
-    const { default: Projection } =
-      await import("../materials/history/projection.js");
-    async function _findIn(br) {
-      if (UUID_RE.test(seg)) {
-        const byId = await Projection.findOne({
-          ...baseQuery,
-          history: br,
-          _id: `${br}:space:${seg}`,
-        }).lean();
-        if (byId) return byId;
-      }
-      return Projection.findOne({
-        ...baseQuery,
-        history: br,
-        "state.name": seg,
-      }).lean();
+    if (!space) {
+      space = childRows.find((r) => r.name === seg && ownerOk(r)) || null;
     }
-    let _spaceRow = await _findIn(history);
-    if (!_spaceRow && history !== "0") {
-      const mainRow = await _findIn("0");
-      if (mainRow) {
-        const tomb = await Projection.findOne({
-          history,
-          type: "space",
-          id: mainRow.id,
-          tombstoned: true,
-        })
-          .select("_id")
-          .lean();
-        if (!tomb) {
-          const { getBranchPoint } =
-            await import("../materials/history/histories.js");
-          const bp = await getBranchPoint(history, "space", mainRow.id);
-          if (bp && bp > 0) _spaceRow = mainRow;
-        }
-      }
-    }
-    const space = _spaceRow
-      ? { _id: _spaceRow.id, ...(_spaceRow.state || {}) }
-      : null;
     if (!space) {
       throw new IbpError(
         IBP_ERR.SPACE_NOT_FOUND,

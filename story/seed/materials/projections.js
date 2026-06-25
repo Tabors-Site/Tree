@@ -12,18 +12,30 @@
 //   4. Reducers are history-blind. The substrate handles history routing
 //      around them.
 //
-// Storage: a single `projections` collection
-// ([seed/materials/history/projection.js](history/projection.js)) holds
-// every cache slot keyed `<history>:<type>:<id>`. Main (history="0") is
-// not special-cased — its slots live alongside every other history's.
+// Storage: the append-only FileStore (past/fileStore.js). Each
+// (history, type, id) has a `.proj` snapshot slot {state, foldedSeq,
+// position, tombstoned} beside its reel, and a derived inverted INDEX
+// (name / position / parent / type / heavenSpace) the find* queries read.
+// The snapshot + index are a rebuildable CACHE over the reels (the truth);
+// this file is the history-aware READ/WRITE facade over them. Main
+// (history="0") is not special-cased — its slots are own-history slots
+// like any other history's.
 //
-// No legacy compatibility paths. Callers that still read directly from
-// Being / Space / Matter rows for projection data are now broken until
-// swept onto this API (Phase 3). That is intentional: silent dual-shape
-// fallbacks rot the architecture; loud breaks at the boundary are how
-// the sweep gets finished.
+// This file owns the HISTORY-LINEAGE inheritance logic (the walk over
+// parent histories with branchPoint gating + divergence shadowing). The
+// FileStore find* layer is own-history only; the lazy parent walk lives
+// HERE, calling back into FileStore per-history.
 
-import Projection, { projectionKey } from "./history/projection.js";
+import {
+  loadSnapshot,
+  saveSnapshot,
+  initSnapshot,
+  findByName as storeFindByName,
+  findByPosition as storeFindByPosition,
+  findByParent as storeFindByParent,
+  listByType as storeListByType,
+  findByHeavenSpace as storeFindByHeavenSpace,
+} from "../past/fileStore.js";
 
 const MAIN = "0";
 const VALID_TYPES = new Set(["being", "space", "matter", "name", "library"]);
@@ -77,6 +89,28 @@ export function assertHistoryOrThrow(history, callerName) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Slot ↔ return-shape mapping
+//
+// FileStore snapshots hold {state, foldedSeq, position, tombstoned} only.
+// `type`, `id`, and `history` are the lookup COORDINATES (not stored in
+// the slot), so we re-attach them when shaping a return value — the same
+// shape the Mongo-backed projection doc carried.
+// ─────────────────────────────────────────────────────────────────────
+
+function shapeSlot(slot, type, id, history) {
+  if (!slot) return null;
+  return {
+    state: slot.state || {},
+    foldedSeq: slot.foldedSeq ?? null,
+    position: slot.position ?? null,
+    tombstoned: !!slot.tombstoned,
+    type,
+    id,
+    history,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Read / write a single slot
 // ─────────────────────────────────────────────────────────────────────
 
@@ -127,19 +161,8 @@ export async function loadProjection(type, id, history) {
     const { isHeavenSpace } = await import("./space/heavenLineage.js");
     if (await isHeavenSpace(id)) effectiveHistory = "0";
   }
-  const slot = await Projection.findById(
-    projectionKey(effectiveHistory, type, id),
-  ).lean();
-  if (!slot) return null;
-  return {
-    state: slot.state || {},
-    foldedSeq: slot.foldedSeq ?? null,
-    position: slot.position ?? null,
-    tombstoned: !!slot.tombstoned,
-    type: slot.type,
-    id: slot.id,
-    history: slot.history,
-  };
+  const slot = loadSnapshot(effectiveHistory, type, id);
+  return shapeSlot(slot, type, id, effectiveHistory);
 }
 
 /**
@@ -161,7 +184,7 @@ export async function loadProjection(type, id, history) {
  * here means "the aggregate truly doesn't exist anywhere I can reach
  * from this history."
  *
- * Cost: one Mongo lookup on cache hit (fast). On miss: one lineage
+ * Cost: one snapshot read on cache hit (fast). On miss: one lineage
  * walk + reel replay + slot write (slow once, then cached forever).
  * Histories inherit parent state automatically through this path .
  * the first lookup pays the walk; every subsequent lookup is fast.
@@ -242,16 +265,25 @@ export async function saveProjection(
   if (typeof foldedSeq !== "number") {
     throw new Error("saveProjection: next.foldedSeq must be a number");
   }
-  const _id = projectionKey(history, type, id);
-  const guard =
-    expectedFoldedSeq == null
-      ? { $or: [{ foldedSeq: null }, { foldedSeq: { $exists: false } }] }
-      : { foldedSeq: expectedFoldedSeq };
-  const r = await Projection.updateOne(
-    { _id, ...guard },
-    { $set: { state, foldedSeq, position: position ?? null } },
-  );
-  return r.matchedCount > 0;
+  // CAS-guarded write. Mongo's null-guard ($or null/absent) maps to the
+  // FileStore CAS: a never-folded slot has no on-disk snapshot, so an
+  // expectedFoldedSeq of null/undefined must only land when there is no
+  // existing slot. saveSnapshot's CAS compares the on-disk foldedSeq to
+  // expectedFoldedSeq when it's a number; for the null guard we check
+  // the slot is absent ourselves (single-writer commit mutex makes the
+  // load→save sequence atomic).
+  const slot = {
+    state,
+    foldedSeq,
+    position: position ?? null,
+    tombstoned: false,
+  };
+  if (expectedFoldedSeq == null) {
+    const existing = loadSnapshot(history, type, id);
+    if (existing && existing.foldedSeq != null) return false;
+    return saveSnapshot(history, type, id, slot);
+  }
+  return saveSnapshot(history, type, id, slot, expectedFoldedSeq);
 }
 
 /**
@@ -276,20 +308,12 @@ export async function initProjection(type, id, history, next) {
   if (typeof foldedSeq !== "number") {
     throw new Error("initProjection: next.foldedSeq must be a number");
   }
-  const _id = projectionKey(history, type, id);
-  await Projection.updateOne(
-    { _id },
-    {
-      $set: {
-        state,
-        foldedSeq,
-        position: position ?? null,
-        tombstoned: false,
-      },
-      $setOnInsert: { _id, history, type, id },
-    },
-    { upsert: true },
-  );
+  initSnapshot(history, type, id, {
+    state,
+    foldedSeq,
+    position: position ?? null,
+    tombstoned: false,
+  });
 }
 
 /**
@@ -327,38 +351,46 @@ export async function tombstoneProjection(
   if (typeof atFoldedSeq !== "number") {
     throw new Error("tombstoneProjection: atFoldedSeq must be a number");
   }
-  const _id = projectionKey(history, type, id);
-  const set = {
-    tombstoned: true,
+  // A tombstone is a saveSnapshot with tombstoned:true. Preserve the
+  // existing state unless the caller hands a terminal state to record
+  // (the gone-state-is-truth case). Unconditional (no CAS): the
+  // tombstone is the authoritative close of the slot in this history.
+  const existing = loadSnapshot(history, type, id);
+  const state =
+    opts.state && typeof opts.state === "object"
+      ? opts.state
+      : existing?.state || {};
+  saveSnapshot(history, type, id, {
+    state,
     foldedSeq: atFoldedSeq,
     position: null,
-  };
-  if (opts.state && typeof opts.state === "object") set.state = opts.state;
-  await Projection.updateOne(
-    { _id },
-    {
-      $set: set,
-      $setOnInsert: {
-        _id,
-        history,
-        type,
-        id,
-        ...(opts.state ? {} : { state: {} }),
-      },
-    },
-    { upsert: true },
-  );
+    tombstoned: true,
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────
 // History-aware queries with shadow + tombstone semantics.
 //
-// The pattern in every non-main query: union main's contributions
-// (filtered by ids the history has TOUCHED — modified or tombstoned)
-// with the history's own slots. This is how lazy inheritance manifests
-// at the query layer: untouched-in-history aggregates show through from
-// main; touched-in-history ones are shadowed by history's slot.
+// The pattern in every non-main query: union the parent lineage's
+// contributions (filtered by branchPoint + shadowed where this history
+// has its OWN slot for an id) with the history's own slots. This is how
+// lazy inheritance manifests at the query layer: untouched-in-history
+// aggregates show through from the parent; touched-in-history ones are
+// shadowed by this history's slot.
+//
+// The own-history reads delegate to the FileStore index (storeFind*).
+// The lineage walk + branchPoint gating + divergence shadowing live
+// here. Shadowing checks each inherited candidate's own-history slot via
+// loadSnapshot directly (a live OR tombstoned slot shadows), the same
+// per-candidate model findByName uses.
 // ─────────────────────────────────────────────────────────────────────
+
+// True when `history` holds ANY own slot (live OR tombstoned) for this
+// (type, id) — meaning this history's view of that aggregate is
+// authoritative and an inherited row must NOT leak through.
+function historyShadows(history, type, id) {
+  return loadSnapshot(history, type, id) != null;
+}
 
 /**
  * Find aggregates positioned at a space in the given history. Returns
@@ -370,45 +402,22 @@ export async function tombstoneProjection(
 export async function findByPosition(spaceId, history) {
   if (!spaceId) return [];
   assertHistory(history);
-  if (history === MAIN) {
-    const rows = await Projection.find({
-      history: MAIN,
-      position: spaceId,
-      tombstoned: { $ne: true },
-    })
-      .select("type id foldedSeq position")
-      .lean();
-    return rows.map(toOccupant);
-  }
+  const here = storeFindByPosition(history, spaceId).map(toOccupant);
+  if (history === MAIN) return here;
   // Non-main: union with shadowing AND branchPoint filtering. A main
   // aggregate at this position is only visible in `history` if it
   // existed at branch creation (has a branchPoint entry for its reel).
   // Without this filter, aggregates created in main AFTER the history
   // would leak into the history's view of this space.
   const { getBranchPoint } = await import("./history/histories.js");
-  const [historyHere, mainOccupants, historyTouched] = await Promise.all([
-    Projection.find({
-      history,
-      position: spaceId,
-      tombstoned: { $ne: true },
-    })
-      .select("type id foldedSeq position")
-      .lean(),
-    findByPosition(spaceId, MAIN),
-    Projection.find({ history }).select("type id").lean(),
-  ]);
-  const shadowedKey = (t, i) => `${t}:${i}`;
-  const shadowed = new Set(
-    historyTouched.map((s) => shadowedKey(s.type, s.id)),
-  );
-  // Filter main candidates: (1) not shadowed, (2) existed at branchPoint.
+  const mainOccupants = await findByPosition(spaceId, MAIN);
   const mainVisible = [];
   for (const o of mainOccupants) {
-    if (shadowed.has(shadowedKey(o.type, o.id))) continue;
+    if (historyShadows(history, o.type, o.id)) continue;
     const bp = await getBranchPoint(history, o.type, o.id);
     if (bp && bp > 0) mainVisible.push(o);
   }
-  return [...mainVisible, ...historyHere.map(toOccupant)];
+  return [...mainVisible, ...here];
 }
 
 /**
@@ -431,21 +440,9 @@ export async function findByName(type, name, history) {
   assertHistory(history);
   if (!name) return null;
   // History-local match first (works for main too — main IS just-another-history).
-  const historySlot = await Projection.findOne({
-    history,
-    type,
-    "state.name": name,
-    tombstoned: { $ne: true },
-  }).lean();
+  const historySlot = storeFindByName(history, type, name);
   if (historySlot) {
-    return {
-      state: historySlot.state || {},
-      foldedSeq: historySlot.foldedSeq ?? null,
-      position: historySlot.position ?? null,
-      type: historySlot.type,
-      id: historySlot.id,
-      history: historySlot.history,
-    };
+    return shapeSlot(historySlot, type, historySlot.id, history);
   }
   if (history === MAIN) return null;
   // Lazy fall-through to the PARENT history, recursing to main —
@@ -467,14 +464,7 @@ export async function findByName(type, name, history) {
   if (!inherited) return null;
   const bp = await getBranchPoint(history, type, inherited.id);
   if (!bp || bp <= 0) return null;
-  const touched = await Projection.findOne({
-    history,
-    type,
-    id: inherited.id,
-  })
-    .select("_id")
-    .lean();
-  if (touched) return null;
+  if (historyShadows(history, type, inherited.id)) return null;
   return inherited;
 }
 
@@ -495,42 +485,20 @@ export async function findByName(type, name, history) {
 export async function findByParent(beingId, history) {
   if (!beingId) return [];
   assertHistory(history);
-  if (history === MAIN) {
-    const rows = await Projection.find({
-      history: MAIN,
-      type: "being",
-      "state.parentBeingId": beingId,
-      tombstoned: { $ne: true },
-    })
-      .select("type id foldedSeq position")
-      .lean();
-    return rows.map(toOccupant);
-  }
+  const here = storeFindByParent(history, beingId, "being").map(toOccupant);
+  if (history === MAIN) return here;
   const { getBranchPoint, loadHistory } =
     await import("./history/histories.js");
   const historyRow = await loadHistory(history);
   const parentPath = historyRow?.parent || MAIN;
-  const [historyChildren, inheritedChildren, historyTouched] =
-    await Promise.all([
-      Projection.find({
-        history,
-        type: "being",
-        "state.parentBeingId": beingId,
-        tombstoned: { $ne: true },
-      })
-        .select("type id foldedSeq position")
-        .lean(),
-      findByParent(beingId, parentPath),
-      Projection.find({ history, type: "being" }).select("id").lean(),
-    ]);
-  const shadowed = new Set(historyTouched.map((s) => s.id));
+  const inheritedChildren = await findByParent(beingId, parentPath);
   const inheritedVisible = [];
   for (const o of inheritedChildren) {
-    if (shadowed.has(o.id)) continue;
+    if (historyShadows(history, "being", o.id)) continue;
     const bp = await getBranchPoint(history, "being", o.id);
     if (bp && bp > 0) inheritedVisible.push(o);
   }
-  return [...inheritedVisible, ...historyChildren.map(toOccupant)];
+  return [...inheritedVisible, ...here];
 }
 
 /**
@@ -547,39 +515,22 @@ export async function findByParent(beingId, history) {
 export async function listByType(type, history) {
   assertType(type);
   assertHistory(history);
-  if (history === MAIN) {
-    const rows = await Projection.find({
-      history: MAIN,
-      type,
-      tombstoned: { $ne: true },
-    })
-      .select("type id foldedSeq position")
-      .lean();
-    return rows.map(toOccupant);
-  }
+  const here = storeListByType(history, type)
+    .map((id) => slotOccupant(history, type, id))
+    .filter(Boolean);
+  if (history === MAIN) return here;
   const { getBranchPoint, loadHistory } =
     await import("./history/histories.js");
   const historyRow = await loadHistory(history);
   const parentPath = historyRow?.parent || MAIN;
-  const [historySlots, inheritedAll, historyTouched] = await Promise.all([
-    Projection.find({
-      history,
-      type,
-      tombstoned: { $ne: true },
-    })
-      .select("type id foldedSeq position")
-      .lean(),
-    listByType(type, parentPath),
-    Projection.find({ history, type }).select("id").lean(),
-  ]);
-  const shadowed = new Set(historyTouched.map((s) => s.id));
+  const inheritedAll = await listByType(type, parentPath);
   const inheritedVisible = [];
   for (const o of inheritedAll) {
-    if (shadowed.has(o.id)) continue;
+    if (historyShadows(history, type, o.id)) continue;
     const bp = await getBranchPoint(history, type, o.id);
     if (bp && bp > 0) inheritedVisible.push(o);
   }
-  return [...inheritedVisible, ...historySlots.map(toOccupant)];
+  return [...inheritedVisible, ...here];
 }
 
 /**
@@ -594,17 +545,19 @@ export async function listByType(type, history) {
 export async function findRoot(type, history) {
   assertType(type);
   assertHistory(history);
-  const parentField = type === "being" ? "state.parentBeingId" : "state.parent";
-  const where = {
-    history,
-    type,
-    tombstoned: { $ne: true },
-    $or: [{ [parentField]: null }, { [parentField]: { $exists: false } }],
-  };
-  const rows = await Projection.find(where)
-    .select("type id foldedSeq position")
-    .lean();
-  return rows.map(toOccupant);
+  // Roots = aggregates the parent-index buckets under the null key (no
+  // parentBeingId / no parent). The FileStore parent-index keys live
+  // slots by their parent; the null bucket is the roots. Walk the
+  // history's own live ids and keep those whose parent field is empty.
+  const parentField = type === "being" ? "parentBeingId" : "parent";
+  const out = [];
+  for (const id of storeListByType(history, type)) {
+    const slot = loadSnapshot(history, type, id);
+    if (!slot || slot.tombstoned) continue;
+    const parent = slot.state?.[parentField];
+    if (parent == null) out.push(toOccupant(slotShape(slot, type, id)));
+  }
+  return out;
 }
 
 /**
@@ -621,20 +574,19 @@ export async function findByNamePattern(type, pattern, history) {
   assertHistory(history);
   if (!pattern) return [];
   const re = pattern instanceof RegExp ? pattern : new RegExp(pattern);
-  const rows = await Projection.find({
-    history,
-    type,
-    "state.name": { $regex: re.source, $options: re.flags },
-    tombstoned: { $ne: true },
-  }).lean();
-  return rows.map((slot) => ({
-    state: slot.state || {},
-    foldedSeq: slot.foldedSeq ?? null,
-    position: slot.position ?? null,
-    type: slot.type,
-    id: slot.id,
-    history: slot.history,
-  }));
+  // No regex facet in the inverted index: scan the kind's live ids and
+  // filter by name. Own-history (the prior Mongo query was own-history
+  // too — no lineage walk here).
+  const out = [];
+  for (const id of storeListByType(history, type)) {
+    const slot = loadSnapshot(history, type, id);
+    if (!slot || slot.tombstoned) continue;
+    const name = slot.state?.name;
+    if (typeof name === "string" && re.test(name)) {
+      out.push(shapeSlot(slot, type, id, history));
+    }
+  }
+  return out;
 }
 
 /**
@@ -660,18 +612,22 @@ export async function listMatterNamesInFolder(
 ) {
   assertHistory(history);
   if (!spaceId) return [];
-  const where = {
-    history,
-    type: "matter",
-    "state.spaceId": String(spaceId),
-    "state.parentMatterId": parentMatterId ? String(parentMatterId) : null,
-    tombstoned: { $ne: true },
-  };
-  if (pattern instanceof RegExp) {
-    where["state.name"] = { $regex: pattern.source, $options: pattern.flags };
+  const wantSpace = String(spaceId);
+  const wantParent = parentMatterId ? String(parentMatterId) : null;
+  const out = [];
+  for (const id of storeListByType(history, "matter")) {
+    const slot = loadSnapshot(history, "matter", id);
+    if (!slot || slot.tombstoned) continue;
+    const st = slot.state || {};
+    if (String(st.spaceId ?? "") !== wantSpace) continue;
+    const slotParent = st.parentMatterId ? String(st.parentMatterId) : null;
+    if (slotParent !== wantParent) continue;
+    const name = st.name;
+    if (typeof name !== "string") continue;
+    if (pattern instanceof RegExp && !pattern.test(name)) continue;
+    out.push(name);
   }
-  const rows = await Projection.find(where).select("state.name").lean();
-  return rows.map((r) => r.state?.name).filter((n) => typeof n === "string");
+  return out;
 }
 
 /**
@@ -684,11 +640,7 @@ export async function listMatterNamesInFolder(
 export async function countByType(type, history) {
   assertType(type);
   assertHistory(history);
-  return await Projection.countDocuments({
-    history,
-    type,
-    tombstoned: { $ne: true },
-  });
+  return storeListByType(history, type).length;
 }
 
 /**
@@ -701,12 +653,54 @@ export async function countByType(type, history) {
 export async function countByParent(beingId, history) {
   if (!beingId) return 0;
   assertHistory(history);
-  return await Projection.countDocuments({
-    history,
-    type: "being",
-    "state.parentBeingId": beingId,
-    tombstoned: { $ne: true },
-  });
+  return storeFindByParent(history, beingId, "being").length;
+}
+
+/**
+ * CROSS-HISTORY content-hash refcount. Every live (non-tombstoned) matter
+ * row, in ANY history, whose CURRENT content is the CAS ref `hash` —
+ * optionally excluding one matter id. The curated peer of the purge-content
+ * shared-fate gate's old `Projection.find({type:"matter",
+ * "state.content.hash":hash})`: content is deduplicated by hash, so purging
+ * the bytes blinds every matter pointing at them, across every world.
+ *
+ * Per-history materialized read: enumerates the live history set
+ * (listLiveHistories) and, for each, the history's OWN folded matter slots
+ * (the file-store's own-history `type` index, matching the old query's
+ * per-history projection rows — an inherited-but-never-diverged matter has
+ * no row in the child history, exactly as Mongo had none). Returns
+ * [{ matterId, history }].
+ *
+ * @param {string} hash            the content hash to refcount
+ * @param {object} [opts]
+ * @param {string} [opts.excludeId] a matter id to skip (the one being purged)
+ * @returns {Promise<Array<{matterId:string, history:string}>>}
+ */
+export async function findMatterByContentHash(hash, { excludeId } = {}) {
+  if (typeof hash !== "string" || !hash.length) return [];
+  const skip = excludeId != null ? String(excludeId) : null;
+  const { listLiveHistories } = await import("./history/histories.js");
+  const histories = [MAIN];
+  for (const row of await listLiveHistories()) {
+    const path = String(row._id ?? row.path);
+    if (path !== MAIN) histories.push(path);
+  }
+  const out = [];
+  for (const history of histories) {
+    // Own-history materialized matter slots (no lineage over-collection,
+    // no cold-fold): the file-store `type` index lists exactly the ids
+    // physically folded in this history.
+    for (const id of storeListByType(history, "matter")) {
+      if (skip && String(id) === skip) continue;
+      const slot = loadSnapshot(history, "matter", id);
+      if (!slot || slot.tombstoned) continue;
+      const content = slot.state?.content;
+      if (content && typeof content === "object" && content.hash === hash) {
+        out.push({ matterId: String(id), history });
+      }
+    }
+  }
+  return out;
 }
 
 /**
@@ -722,19 +716,11 @@ export async function loadProjections(type, ids, history) {
   assertType(type);
   assertHistory(history);
   if (!Array.isArray(ids) || ids.length === 0) return new Map();
-  const keys = ids.map((id) => projectionKey(history, type, id));
-  const rows = await Projection.find({ _id: { $in: keys } }).lean();
   const out = new Map();
-  for (const slot of rows) {
-    out.set(slot.id, {
-      state: slot.state || {},
-      foldedSeq: slot.foldedSeq ?? null,
-      position: slot.position ?? null,
-      tombstoned: !!slot.tombstoned,
-      type: slot.type,
-      id: slot.id,
-      history: slot.history,
-    });
+  for (const id of ids) {
+    const slot = loadSnapshot(history, type, id);
+    if (!slot) continue;
+    out.set(id, shapeSlot(slot, type, id, history));
   }
   return out;
 }
@@ -751,21 +737,9 @@ export async function loadProjections(type, ids, history) {
 export async function findByHeavenSpace(heavenSpaceKind, history) {
   if (!heavenSpaceKind) return null;
   assertHistory(history);
-  const slot = await Projection.findOne({
-    history,
-    type: "space",
-    "state.heavenSpace": heavenSpaceKind,
-    tombstoned: { $ne: true },
-  }).lean();
+  const slot = storeFindByHeavenSpace(history, "space", heavenSpaceKind);
   if (!slot) return null;
-  return {
-    state: slot.state || {},
-    foldedSeq: slot.foldedSeq ?? null,
-    position: slot.position ?? null,
-    type: slot.type,
-    id: slot.id,
-    history: slot.history,
-  };
+  return shapeSlot(slot, "space", slot.id, history);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -823,30 +797,59 @@ export async function findRootOperator(systemNames, history) {
   assertHistory(history);
   // First find cherub's id (registered through findByName); main+history.
   const cherubSlot = await findByName("being", "cherub", history);
-  const allowedParents = ["i-am"];
-  if (cherubSlot) allowedParents.push(cherubSlot.id);
-  const row = await Projection.findOne({
-    history,
-    type: "being",
-    "state.name": { $type: "string", $nin: systemNames },
-    "state.parentBeingId": { $in: allowedParents },
-    tombstoned: { $ne: true },
-  })
-    .sort({ "state.createdAt": 1, _id: 1 })
-    .select("id state.name")
-    .lean();
-  return row ? { _id: row.id, name: row.state?.name } : null;
+  const allowedParents = new Set(["i-am"]);
+  if (cherubSlot) allowedParents.add(cherubSlot.id);
+  const systemSet = new Set(systemNames || []);
+  // Walk the history's own live beings whose parent is I or cherub and
+  // whose name isn't a system name; pick the earliest by createdAt (id
+  // as a deterministic tiebreak). The Mongo query sorted on
+  // state.createdAt asc, _id asc — reproduce that ordering here.
+  const candidates = [];
+  for (const id of storeListByType(history, "being")) {
+    const slot = loadSnapshot(history, "being", id);
+    if (!slot || slot.tombstoned) continue;
+    const st = slot.state || {};
+    if (typeof st.name !== "string" || systemSet.has(st.name)) continue;
+    if (!allowedParents.has(st.parentBeingId)) continue;
+    candidates.push({ id, name: st.name, createdAt: st.createdAt });
+  }
+  candidates.sort((a, b) => {
+    const ca = a.createdAt ?? 0;
+    const cb = b.createdAt ?? 0;
+    if (ca < cb) return -1;
+    if (ca > cb) return 1;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
+  const row = candidates[0];
+  return row ? { _id: row.id, name: row.name } : null;
 }
 
 // ─────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────
 
+// Reduce a FileStore find* row ({kind|type, id, state, foldedSeq,
+// position, tombstoned}) to the occupant shape callers expect.
 function toOccupant(s) {
   return {
-    type: s.type,
+    type: s.type || s.kind,
     id: s.id,
     foldedSeq: s.foldedSeq ?? null,
     position: s.position ?? null,
   };
+}
+
+// Wrap a bare FileStore slot ({state, foldedSeq, position, tombstoned})
+// with its (type, id) coordinates so toOccupant can read them.
+function slotShape(slot, type, id) {
+  return { type, id, ...slot };
+}
+
+// Load a history's own slot for (type, id) and shape it to an occupant,
+// or null if absent/tombstoned. Used by listByType to materialize the
+// occupant rows the index's id-list points at.
+function slotOccupant(history, type, id) {
+  const slot = loadSnapshot(history, type, id);
+  if (!slot || slot.tombstoned) return null;
+  return toOccupant(slotShape(slot, type, id));
 }

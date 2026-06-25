@@ -39,10 +39,13 @@ registerAbleWord("space", "set-space-llm", new URL("./set-space-llm.word", impor
 registerAbleWord("space", "set-story-llm", new URL("./set-story-llm.word", import.meta.url));
 
 // The three connection-management ops are WORD-SOLE delegators (CONVERTING.md): each `.word`
-// lays ONE entailed deed on the caller's own being — `do add-llm-connection` / `do assign-llm-slot`
+// lays ONE entailed deed on the caller's own being, `do add-llm-connection` / `do assign-llm-slot`
 // / `do delete-llm-connection`, the seed ops that are themselves word-SOLE. Pure composition, words
-// all the way down: no handler, no host read (a delegator reads nothing of the floor), ranAsMoments
-// so the op stamps none of its own — the entailed deed's fact IS the record. dispatch noun "being".
+// all the way down: no handler, no host read (a delegator reads nothing of the floor). runAsStore,
+// so do.js's runOpWordToStore runs each through runWordToStore (the entailed deed seals its own
+// moment on the caller's reel) and wraps the result ranAsMoments, so the op stamps none of its own;
+// the entailed deed's fact IS the record. The ableword resolution key is "being" (registerAbleWord
+// first arg), matched by word.able below; word.noun "being" names the deed's target kind.
 registerAbleWord("being", "add-llm",     new URL("./add-llm.word", import.meta.url));
 registerAbleWord("being", "assign-slot", new URL("./assign-slot.word", import.meta.url));
 registerAbleWord("being", "delete-llm",  new URL("./delete-llm.word", import.meta.url));
@@ -78,27 +81,29 @@ export function registerLlmAssignerOps() {
   // ────────────────────────────────────────────────────────────────
 
   // Add an LLM connection to the caller's own being. WORD-SOLE: add-llm.word is the only path
-  // (do.js runOpWordToStore via runWordToStore — runAsStore — so the entailed deed seals its own
+  // (do.js runOpWordToStore via runWordToStore, runAsStore, so the entailed deed seals its own
   // moment). The `.word` is a PURE-COMPOSITION delegator: it lays ONE deed `do add-llm-connection`
-  // on the caller's own being with { name, baseUrl, model, apiKey } — itself a word-SOLE seed op
-  // that validates / SSRF-gates / encrypts / mints and auto-binds "main" on the being's first
-  // connection. No handler, no hostEnv (a delegator reads nothing of the floor); ranAsMoments, so
-  // the op lays NO fact of its own — the entailed do:add-llm-connection deed IS the record.
+  // on the caller's own being with { name, baseUrl, model, apiKey }, itself a word-SOLE seed op
+  // (store/words/llm-connection, also runAsStore: validate / SSRF-gate / encrypt / mint, then
+  // auto-bind "main" on the being's first connection as a second moment). No handler, no hostEnv
+  // (a delegator reads nothing of the floor); runOpWordToStore wraps the result ranAsMoments, so
+  // the op lays NO fact of its own, the entailed do:add-llm-connection deeds ARE the record.
   registerOperation("add-llm", {
     targets: ["space"],
     ownerExtension: "seed",
-    word: { noun: "being", able: "add-llm", ranAsMoments: true },
+    word: { noun: "being", able: "being", runAsStore: true },
   });
 
   // Bind one of the caller's connections to a slot on their own being. WORD-SOLE: assign-slot.word
-  // is the only path (runOpWordToStore / runAsStore). The `.word` lays ONE deed `do assign-llm-slot`
-  // on the caller's own being with { slot, connectionId } — the word-SOLE seed op that writes
-  // Being.qualities.beingLlm.slots.<slot> (connectionId omitted/null clears the slot). No handler,
-  // no hostEnv; ranAsMoments, so the op lays NO fact of its own — the deed's fact IS the record.
+  // is the only path (runOpWordToStore / runWordToStore, runAsStore). The `.word` lays ONE deed
+  // `do assign-llm-slot` on the caller's own being with { slot, connectionId }, the word-SOLE seed
+  // op that writes Being.qualities.beingLlm.slots.<slot> (connectionId omitted/null clears the
+  // slot). No handler, no hostEnv; runOpWordToStore wraps ranAsMoments, so the op lays NO fact of
+  // its own, the entailed do:assign-llm-slot deed IS the record.
   registerOperation("assign-slot", {
     targets: ["space"],
     ownerExtension: "seed",
-    word: { noun: "being", able: "assign-slot", ranAsMoments: true },
+    word: { noun: "being", able: "being", runAsStore: true },
   });
 
   // List the caller's connections + current slot assignments.
@@ -107,14 +112,15 @@ export function registerLlmAssignerOps() {
   // op (see registerSeeOperation block at the bottom of this file).
 
   // Delete one of the caller's connections. WORD-SOLE: delete-llm.word is the only path
-  // (runOpWordToStore / runAsStore). The `.word` lays ONE deed `do delete-llm-connection` on the
-  // caller's own being with { connectionId } — the word-SOLE seed op that unsets
-  // qualities.llmConnections.<id> (the dangling slot refs fold to absent). No handler, no hostEnv;
-  // ranAsMoments, so the op lays NO fact of its own — the deed's fact IS the record.
+  // (runOpWordToStore / runWordToStore, runAsStore). The `.word` lays ONE deed
+  // `do delete-llm-connection` on the caller's own being with { connectionId }, the word-SOLE seed
+  // op that unsets qualities.llmConnections.<id> (the dangling slot refs fold to absent). No
+  // handler, no hostEnv; runOpWordToStore wraps ranAsMoments, so the op lays NO fact of its own , 
+  // the entailed do:delete-llm-connection deed IS the record.
   registerOperation("delete-llm", {
     targets: ["space"],
     ownerExtension: "seed",
-    word: { noun: "being", able: "delete-llm", ranAsMoments: true },
+    word: { noun: "being", able: "being", runAsStore: true },
   });
 
   // Set the story-level LLM configuration on the place root's
@@ -276,5 +282,5 @@ export function registerLlmAssignerOps() {
     },
   });
 
-  log.verbose("llm-assigner", "registered 6 DO ops + 2 SEE ops (seed: add-llm/delete-llm/assign-slot/set-being-llm/set-space-llm/set-story-llm + 2 SEE: llm-connections/llm-chain)");
+  log.verbose("llm-assigner", "registered 6 word-SOLE DO ops + 2 SEE ops (seed: add-llm/delete-llm/assign-slot/set-being-llm/set-space-llm/set-story-llm + 2 SEE: llm-connections/llm-chain)");
 }

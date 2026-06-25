@@ -200,7 +200,7 @@ async function runOpNameAct(op, ctx, ir, history) {
 // to. This replaces every per-op `_xViaWord` adapter; the per-op index.js shrinks to a
 // registration. A WordRefusal surfaces as the same IbpError a handler would have thrown.
 async function runOpWord(op, ctx) {
-  const { resolveAbleWord, runAbleWord } = await import(
+  const { resolveAbleWord, runAbleWord, wordHasDeeds } = await import(
     "../../present/word/ableWordRegistry.js"
   );
   const { detectTargetKind, targetIdOf } = await import("../../materials/_targetShape.js");
@@ -217,9 +217,14 @@ async function runOpWord(op, ctx) {
       `${op.name}: ${op.name}.word is not available on this history`,
     );
   }
-  // MULTI-MOMENT composite (op.word.runAsStore): its deeds must each seal as their OWN moment, so
-  // route to runWordToStore and return — a self-contained path that never reaches runAbleWord below.
-  if (op.word.runAsStore) return runOpWordToStore(op, ctx, ir, history);
+  // COMPOSITE — DISCOVERED, not flagged (runAsStore dissolved). A word with DEEDS (do/call/...) is a
+  // theorem of leaves: each deed must seal as its OWN act→fact at the head, so route to the per-act-
+  // moment runtime (runWordToStore). A word with NO deeds is ATOMIC — a leaf (a fact-laying primitive,
+  // maybe with a host lock) or an own-fact word — and falls through to runAbleWord, where the auto-Fact
+  // + any afterSeal lock work. `through` (host-facilitated, ask-able) stays being-mode runAbleWord even
+  // with a deed, because its call must authorize as I. This IS the leaf/composite split — the
+  // axiom/theorem cut at the op level — read off the word itself, not declared by a flag.
+  if (wordHasDeeds(ir) && !op.word.through) return runOpWordToStore(op, ctx, ir, history);
   // NAME-ACT (op.word.factVerb === "name"): the op's fact is a 5D name-act on the library reel, not a
   // world do-fact. Route to runOpNameAct — the .word validates + authors the params, the dispatcher
   // lays the name-act on the Name's reel and returns ranAsMoments. Self-contained (never reaches the
@@ -767,7 +772,7 @@ function resolveAuditTarget(target, result, op) {
   throw new Error(
     `resolveAuditTarget: unrecognized target shape for op "${op?.name || "?"}". ` +
       `Expected { kind, id } or string id (with single-kind op). ` +
-      `Got ${typeof target}${target && typeof target === "object" ? ` with keys ${Object.keys(target).join(",")}` : ""}. ` +
+      `Got ${typeof target}${target && typeof target === "object" ? ` {kind:${JSON.stringify(target.kind)}, id:${JSON.stringify(target.id)}}` : ""}. ` +
       `Migrate the caller — Mongoose rows do not cross the verb boundary; pass { kind, id } instead.`,
   );
 }

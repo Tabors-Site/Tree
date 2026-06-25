@@ -27,11 +27,21 @@
 
 import log from "../../seedStory/log.js";
 import { HEAVEN_SPACE } from "./heavenSpaces.js";
-import Act from "../../past/act/act.js";
-import ActHead from "../../past/act/actHead.js";
-import Fact from "../../past/fact/fact.js";
-import ReelHead from "../../past/reel/reelHead.js";
-import { attachActFacts } from "../../past/act/actChain.js";
+// The cross-aggregate head enumerations (every being with sealed acts; every
+// reel head on a history) route through FileStore's list* peers — the file-
+// native enumerators that replaced the raw ActHead / ReelHead model scans
+// (listActHeads / listReelHeads mirror the old Mongo ReelHead/ActHead docs).
+// Per-being act reads and per-reel fact reads route through the curated act /
+// fact layers below.
+import * as fileStore from "../../past/fileStore.js";
+import {
+  attachActFacts,
+  getActsByField,
+  getActById,
+  actCount,
+} from "../../past/act/actChain.js";
+import { getFactsOnReelWhere } from "../../past/fact/facts.js";
+import { getStoryDomain } from "../../ibp/address.js";
 import { MAIN, isMain, loadHistory } from "../history/histories.js";
 
 const HEAVEN_SEGMENT = ".";
@@ -118,24 +128,30 @@ export async function resolveStamperBeing(ref) {
 
 /**
  * One entry per being with sealed acts, recent actors first. Cheap:
- * ActHead is one small row per (being, history); the head act lookup
- * is an indexed _id batch; actCount runs only for the returned page.
+ * one act-head pointer per (being, history); the head act lookup is an
+ * O(1) curated getActById; actCount runs only for the returned page.
  */
 export async function listStamperChildren({ limit = 100 } = {}) {
   const cap = Math.min(Math.max(1, Number(limit) || 100), 500);
-  const heads = await ActHead.find({ headHash: { $ne: null } })
-    .select("history beingId headHash")
-    .lean();
+  // CROSS-BEING head enumeration ("every being that has sealed acts") through
+  // FileStore.listActHeads — the file-native peer of the old
+  // ActHead.find({ headHash: { $ne: null } }). It returns one row per
+  // (history, being) carrying { history, beingId, headHash } (headHash null on
+  // an empty chain), so the $ne-null filter becomes a plain truthy filter. The
+  // PER-HEAD act lookup and per-being count below route through the curated
+  // getActById / actCount.
+  const heads = fileStore
+    .listActHeads(getStoryDomain())
+    .filter((h) => h.headHash);
   if (heads.length === 0) return [];
 
-  const headActs = await Act.find({
-    _id: { $in: heads.map((h) => h.headHash) },
-  })
-    .select("stampedAt through")
-    .lean();
-  const lastByAct = new Map(
-    headActs.map((a) => [String(a._id), a.stampedAt || null]),
-  );
+  // Per-head act lookup → curated getActById (the head act carries stampedAt).
+  const lastByAct = new Map();
+  for (const h of heads) {
+    if (!h.headHash) continue;
+    const a = getActById(String(h.headHash));
+    if (a) lastByAct.set(String(h.headHash), a.stampedAt || null);
+  }
 
   const byBeing = new Map(); // beingId -> { histories, lastAct }
   for (const h of heads) {
@@ -163,16 +179,17 @@ export async function listStamperChildren({ limit = 100 } = {}) {
     } catch {
       /* keep the id stub */
     }
-    let actCount = 0;
+    let actTotal = 0;
     try {
-      actCount = await Act.countDocuments({ through: beingId });
+      // Curated count of this being's authored acts (through facet).
+      actTotal = actCount({ through: beingId });
     } catch {
       /* best effort */
     }
     out.push({
       beingId,
       name,
-      actCount,
+      actCount: actTotal,
       lastAct: info.lastAct ? new Date(info.lastAct).toISOString() : null,
       histories: info.histories.sort(),
     });
@@ -183,11 +200,19 @@ export async function listStamperChildren({ limit = 100 } = {}) {
 // ── the stamper space ───────────────────────────────────────────────
 
 // Acts with no history field (legacy, pre-Act-branching) count as
-// main, mirroring readActChainLineage's compatibility handling.
-function historyClauseFor(history) {
-  return isMain(history)
-    ? { $or: [{ history: MAIN }, { history: { $exists: false } }] }
-    : { history: history };
+// main, mirroring readActChainLineage's compatibility handling. JS
+// predicate peer of the old Mongo historyClause (curated act reads return
+// full act docs; we filter in memory).
+function actInHistory(act, history) {
+  const h = act.history || MAIN;
+  return isMain(history) ? isMain(h) : h === history;
+}
+
+// stampedAt as ms (or null) for the windowing/forkX comparisons.
+function stampMs(act) {
+  const t = act?.stampedAt ?? null;
+  const ms = t != null ? new Date(t).getTime() : NaN;
+  return Number.isNaN(ms) ? null : ms;
 }
 
 function shortLabel(act) {
@@ -220,14 +245,23 @@ export async function describeStamperSpace(
   const beingId = String(being.beingId);
   const name = being.name;
   const cap = Math.min(Math.max(1, Number(limit) || 100), 500);
-  const beforeDate = before ? new Date(before) : null;
+  const beforeMs = before ? new Date(before).getTime() : null;
 
-  // Lanes: every history this being has sealed acts on. Lane 0 is
-  // main; the rest order by history creation time.
-  const heads = await ActHead.find({ beingId, headHash: { $ne: null } })
-    .select("history headHash")
-    .lean();
-  const historySet = new Set(heads.map((h) => h.history || MAIN));
+  // Curated read: every act this being authored (the `through` facet), once.
+  // The whole stamper view (history lanes, fork anchors, windows, counts) is a
+  // projection of this one list — replacing the per-lane Act.find /
+  // Act.countDocuments round-trips with in-memory filters. Acts with `through`
+  // !== beingId can't appear (the facet is exact), but we keep the same
+  // through-guard the Mongo query implied.
+  const beingActs = getActsByField("through", beingId).filter(
+    (a) => a.through == null || String(a.through) === beingId,
+  );
+
+  // Lanes: every history this being has sealed acts on. Lane 0 is main; the
+  // rest order by history creation time. Derived from the acts themselves
+  // (each carries its history) — the old ActHead enumeration is unnecessary
+  // now that we hold the full act list.
+  const historySet = new Set(beingActs.map((a) => a.history || MAIN));
   if (historySet.size === 0) historySet.add(MAIN);
   const historyMeta = new Map(); // history -> {createdAt: Date|null}
   for (const b of historySet) {
@@ -266,17 +300,15 @@ export async function describeStamperSpace(
     } catch {
       /* main */
     }
-    const parentClause = historyClauseFor(parent);
-    let x = 0;
-    try {
-      x = await Act.countDocuments({
-        through: beingId,
-        ...parentClause,
-        stampedAt: { $lte: meta.createdAt },
-      });
-    } catch {
-      x = 0;
-    }
+    // Acts on the PARENT lane stamped at-or-before this history's birth — the
+    // in-memory peer of the old Act.countDocuments({through, parentClause,
+    // stampedAt:{$lte}}).
+    const cutMs = meta.createdAt.getTime();
+    let x = beingActs.filter((a) => {
+      if (!actInHistory(a, parent)) return false;
+      const ms = stampMs(a);
+      return ms != null && ms <= cutMs;
+    }).length;
     // Recurse one level when the parent is itself a history so deep
     // forks anchor against the whole ancestry.
     if (!isMain(parent)) x += await forkXFor(parent);
@@ -287,39 +319,44 @@ export async function describeStamperSpace(
   const allSerialized = [];
   let maxHeadX = 0;
 
+  // Sort newest-first by stampedAt, _id as the deterministic tiebreak —
+  // mirrors the old Mongo sort { stampedAt: -1, _id: -1 }.
+  const newestFirst = (a, b) => {
+    const ta = stampMs(a);
+    const tb = stampMs(b);
+    if (ta == null && tb == null) return String(b._id).localeCompare(String(a._id));
+    if (ta == null) return 1;
+    if (tb == null) return -1;
+    if (ta !== tb) return tb - ta;
+    return String(b._id).localeCompare(String(a._id));
+  };
+
   for (let lane = 0; lane < histories.length; lane++) {
     const history = histories[lane];
-    const clause = historyClauseFor(history);
+    const laneActs = beingActs.filter((a) => actInHistory(a, history));
     const forkX = await forkXFor(history);
 
-    let total = 0;
-    try {
-      total = await Act.countDocuments({ through: beingId, ...clause });
-    } catch {
-      /* 0 */
-    }
+    const total = laneActs.length;
 
-    const windowDesc = await Act.find({
-      through: beingId,
-      ...clause,
-      ...(beforeDate ? { stampedAt: { $lt: beforeDate } } : {}),
-    })
-      .sort({ stampedAt: -1, _id: -1 })
-      .limit(cap)
-      .lean();
-    const window = windowDesc.reverse();
+    // Window: newest cap acts strictly older than the `before` cursor, then
+    // reversed to ascending (the in-memory peer of the old find/sort/limit).
+    const windowDesc = laneActs
+      .filter((a) => {
+        if (beforeMs == null) return true;
+        const ms = stampMs(a);
+        return ms != null && ms < beforeMs;
+      })
+      .sort(newestFirst)
+      .slice(0, cap);
+    const window = windowDesc.slice().reverse();
 
     let countOlder = 0;
     if (window.length > 0) {
-      try {
-        countOlder = await Act.countDocuments({
-          through: beingId,
-          ...clause,
-          stampedAt: { $lt: window[0].stampedAt },
-        });
-      } catch {
-        countOlder = 0;
-      }
+      const headMs = stampMs(window[0]);
+      countOlder = laneActs.filter((a) => {
+        const ms = stampMs(a);
+        return headMs != null && ms != null && ms < headMs;
+      }).length;
     }
 
     const serialized = window.map((a) => ({
@@ -439,27 +476,40 @@ export async function describeStamperSpace(
 
 /**
  * Recent reels. Children route into the EXISTING reel explorer via
- * path /.reel/<kind>/<id>; nothing new is rendered. ReelHead carries
- * no timestamps (and we add none); recency comes from the head
- * fact's date. Capped scan, documented.
+ * path /.reel/<kind>/<id>; nothing new is rendered. A reel head carries
+ * no timestamp (and we add none); recency comes from the head fact's
+ * date (read off the reel). Capped scan, documented.
  */
 export async function listReelChildren({ limit = 100 } = {}) {
   const cap = Math.min(Math.max(1, Number(limit) || 100), 500);
-  const heads = await ReelHead.find({ history: "0" })
-    .select("type id head headHash")
-    .limit(2000)
-    .lean();
+  // CROSS-REEL head enumeration ("every reel on main") through
+  // FileStore.listReelHeads("0") — the file-native peer of the old
+  // ReelHead.find({ history: "0" }). Each row carries { type, id, head,
+  // headHash } (the .head pointer beside the reel). Capped to the same 2000-row
+  // ceiling the Mongo .limit(2000) imposed.
+  const heads = fileStore.listReelHeads("0").slice(0, 2000);
   if (heads.length === 0) return [];
 
-  const hashList = heads.map((h) => h.headHash).filter(Boolean);
-  const headFacts = hashList.length
-    ? await Fact.find({ _id: { $in: hashList } })
-        .select("date")
-        .lean()
-    : [];
-  const dateByHash = new Map(
-    headFacts.map((f) => [String(f._id), f.date || null]),
-  );
+  // The head fact's date — the old code did a by-_id Fact batch over the head
+  // hashes; the file-native head fact IS the reel's fact at seq === head, read
+  // through the curated getFactsOnReelWhere (history-aware, per-reel). One
+  // small read per reel; nothing new stored.
+  const dateByHash = new Map();
+  for (const h of heads) {
+    if (!h.headHash || !(h.head > 0)) continue;
+    try {
+      const at = getFactsOnReelWhere(
+        "0",
+        h.type,
+        String(h.id),
+        (f) => f.seq === h.head,
+      );
+      const headFact = at.length ? at[at.length - 1] : null;
+      if (headFact) dateByHash.set(String(h.headHash), headFact.date || null);
+    } catch {
+      /* best-effort recency; a missing reel just yields no date */
+    }
+  }
 
   return heads
     .map((h) => ({

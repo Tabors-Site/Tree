@@ -1,0 +1,24 @@
+# fulfill-request.word, the operator approves an incoming pull request, pushing the asked
+# template back at the requester (federation-manager/ops.js fulfill-request DO op). Reuses the
+# offer-template wire path so the requester's receive side runs the same handling whether the push
+# was operator-initiated or pull-driven.
+#
+# WORD-SOLE (handler-less, Tabor's no-mirror law): this `.word` is the ONLY path (do.js
+# runOpWordToStore via runWordToStore, runAsStore, each deed its own moment). The host see
+# resolve-federation-spec is the floor: it reads the incoming request, captures the requested
+# template bundle, mints the push negotiationId, resolves the federation-manager being, and BUILDS
+# the write deeds. It lays NO fact; the deeds lay the facts. The cross-story push is the
+# sanctioned membrane OUT: see dispatch-federation-intent. Order matches the old handler: cache
+# the bundle BEFORE the push, then record pendingOutbound + seal the incoming request AFTER it.
+#
+# The bridge binds `params` (negotiationId) and `caller` (the operator's being).
+
+When the operator fulfills an incoming pull request:
+  If no caller, refuse with "fulfill-request requires an authenticated being." as unauthorized.
+  see resolve-federation-spec(params, caller) as spec.
+  For each w in spec's writes:
+    do set-being on the being $spec.managerId with { field: $w.field, value: $w.value, merge: false } as cached.
+  see dispatch-federation-intent($spec.dispatch.peer, $spec.dispatch.intent, $spec.dispatch.payload) as sent.
+  For each w in spec's postWrites:
+    do set-being on the being $spec.managerId with { field: $w.field, value: $w.value, merge: false } as wrote.
+  Return negotiationId: $spec.negotiationId, pushNegotiationId: $spec.pushNegotiationId, status: "pushing", peer: $spec.peer.

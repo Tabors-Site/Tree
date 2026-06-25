@@ -40,9 +40,7 @@
 import log from "../../seedStory/log.js";
 import { getInternalConfigValue } from "../../internalConfig.js";
 import { randomUUID as uuidv4 } from "node:crypto";
-import Matter from "./matter.js";
-import Space from "../space/space.js";
-import { loadProjection, loadOrFold, assertHistoryOrThrow, listMatterNamesInFolder } from "../projections.js";
+import { loadProjection, loadOrFold, listByType, assertHistoryOrThrow, listMatterNamesInFolder } from "../projections.js";
 import { matterContentId } from "./matterId.js";
 import { emitFact, sealFacts } from "../../past/fact/facts.js";
 import { getStoryConfigValue } from "../../storyConfig.js";
@@ -105,6 +103,34 @@ function mimeAllowedByStory(mimeType) {
 
 function escapeRegex(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// ── Matter-at-space read (curated) ──────────────────────────────
+//
+// No curated findByParent for matter (that helper is being-only) and no
+// matter-in-space projection query, so "matter at a space" composes from
+// listByType("matter", history) + a per-slot reload, filtered by
+// state.spaceId. listByType already does the history-lineage union (parent-
+// inheritance shadow + branchPoint gating) and excludes tombstoned slots —
+// the same shadow/tombstone semantics the old hand-rolled non-main union in
+// listMattersAt reproduced, now centralized. Returns full slots
+// ({state, foldedSeq, position, tombstoned, type, id, history}) so callers
+// read s.id / s.state exactly as the old Projection.find().lean() rows.
+async function listMatterSlotsAtSpace(history, spaceId) {
+  const wantSpace = String(spaceId);
+  const occupants = await listByType("matter", history);
+  const out = [];
+  for (const o of occupants) {
+    // loadOrFold (not loadProjection): an occupant inherited from a parent
+    // history has its slot only in the parent until cold-folded. loadOrFold
+    // materializes the leaf-history view; loadProjection would return null and
+    // silently drop inherited matter.
+    const slot = await loadOrFold("matter", o.id, history);
+    if (!slot || slot.tombstoned) continue;
+    if (String(slot.state?.spaceId ?? "") !== wantSpace) continue;
+    out.push(slot);
+  }
+  return out;
 }
 
 /**
@@ -218,8 +244,6 @@ async function createMatter({
   }
   const history = assertHistoryOrThrow(moment?.actorAct?.history, "matters(moment)");
 
-  const { loadOrFold } = await import("../projections.js");
-  const { default: Projection } = await import("../history/projection.js");
   const spaceIdBare = String(spaceId);
   const _spaceSlot = await loadOrFold("space", spaceIdBare, history);
   const targetSpace = _spaceSlot ? {
@@ -231,11 +255,7 @@ async function createMatter({
   if (targetSpace.heavenSpace) throw new Error("Cannot modify heaven spaces");
 
   const max = maxMatterPerSpace();
-  const count = await Projection.countDocuments({
-    history: history, type: "matter",
-    "state.spaceId": spaceIdBare,
-    tombstoned: { $ne: true },
-  });
+  const count = (await listMatterSlotsAtSpace(history, spaceIdBare)).length;
   if (count >= max) {
     throw new Error(`Space has reached the maximum of ${max} matter entries. Delete old matter before adding new ones.`);
   }
@@ -523,21 +543,28 @@ async function getMatters({ spaceId, limit, offset, startDate, endDate, history 
   const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), matterQueryLimit());
   const safeOffset = Math.max(0, Number(offset) || 0);
 
-  const { default: Projection } = await import("../history/projection.js");
   const spaceIdBare = String(spaceId);
-  const where = {
-    history, type: "matter",
-    "state.spaceId": spaceIdBare,
-    tombstoned: { $ne: true },
-  };
-  if (dateRange.createdAt) {
-    where["state.createdAt"] = dateRange.createdAt;
+  // Curated matter-at-space read, then the old query view (date filter on
+  // state.createdAt, newest-first by state.createdAt, offset/limit) applied in
+  // JS. dateRange.createdAt is the Mongo {$gte,$lte} Date range buildDate
+  // produced; honored field-for-field here.
+  let rows = await listMatterSlotsAtSpace(history, spaceIdBare);
+  const cr = dateRange.createdAt || null;
+  if (cr) {
+    rows = rows.filter((s) => {
+      const t = s.state?.createdAt != null ? new Date(s.state.createdAt).getTime() : NaN;
+      if (Number.isNaN(t)) return false;
+      if (cr.$gte && t < cr.$gte.getTime()) return false;
+      if (cr.$lte && t > cr.$lte.getTime()) return false;
+      return true;
+    });
   }
-  const rows = await Projection.find(where)
-    .sort({ "state.createdAt": -1 })
-    .skip(safeOffset)
-    .limit(safeLimit)
-    .lean();
+  rows.sort((a, b) => {
+    const at = a.state?.createdAt ? new Date(a.state.createdAt).getTime() : 0;
+    const bt = b.state?.createdAt ? new Date(b.state.createdAt).getTime() : 0;
+    return bt - at; // newest first
+  });
+  rows = rows.slice(safeOffset, safeOffset + safeLimit);
 
   // Batch-load author names from the being projection slots.
   const authorIds = [...new Set(rows.map((r) => r.state?.beingId).filter(Boolean))];
@@ -691,7 +718,6 @@ async function transferMatter({
 async function listMattersAt(spaceId, { limit = 50, history } = {}) {
   assertHistoryOrThrow(history, "matters.listMattersAt(opts)");
   if (!spaceId) return [];
-  const { default: Projection } = await import("../history/projection.js");
   const toEntry = (s) => {
     const m = s.state || {};
     return {
@@ -705,45 +731,18 @@ async function listMattersAt(spaceId, { limit = 50, history } = {}) {
         : (m.qualities || {}),
     };
   };
-  const spaceIdBare = String(spaceId);
-  const baseQuery = (b) => ({
-    history: b, type: "matter",
-    "state.spaceId": spaceIdBare,
-    tombstoned: { $ne: true },
-  });
-
-  if (history === "0") {
-    const rows = await Projection.find(baseQuery("0"))
-      .sort({ "state.createdAt": -1 })
-      .limit(limit)
-      .lean();
-    return rows.map(toEntry);
-  }
-  // Non-main: union this history's own matters with main's matters that
-  // existed at branch creation. Shadow + tombstone semantics.
-  const { getBranchPoint } = await import("../history/histories.js");
-  const [historyRows, mainRows] = await Promise.all([
-    Projection.find(baseQuery(history)).lean(),
-    Projection.find(baseQuery("0")).lean(),
-  ]);
-  const shadowedIds = new Set(historyRows.map((s) => s.id));
-  const tombs = await Projection.find({
-    history: history, type: "matter", tombstoned: true,
-  }).select("id").lean();
-  for (const t of tombs) shadowedIds.add(t.id);
-  const mainVisible = [];
-  for (const cand of mainRows) {
-    if (shadowedIds.has(cand.id)) continue;
-    const bp = await getBranchPoint(history, "matter", cand.id);
-    if (bp && bp > 0) mainVisible.push(cand);
-  }
-  const all = [...historyRows, ...mainVisible];
-  all.sort((a, b) => {
+  // Curated matter-at-space read. The old hand-rolled non-main union (this
+  // history's own matters + main's matters that existed at branch creation,
+  // with shadow + tombstone semantics) is exactly what listByType's lineage
+  // walk inside listMatterSlotsAtSpace now does — main and non-main both go
+  // through the one path. Newest-first by state.createdAt, capped at limit.
+  const rows = await listMatterSlotsAtSpace(history, String(spaceId));
+  rows.sort((a, b) => {
     const at = a.state?.createdAt ? new Date(a.state.createdAt).getTime() : 0;
     const bt = b.state?.createdAt ? new Date(b.state.createdAt).getTime() : 0;
     return bt - at; // newest first
   });
-  return all.slice(0, limit).map(toEntry);
+  return rows.slice(0, limit).map(toEntry);
 }
 
 /**

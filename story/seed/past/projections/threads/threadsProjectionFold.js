@@ -26,8 +26,16 @@
 //                closeInboxOnAnswer because Act seals aren't fact
 //                appends.
 
-import ThreadsProjection from "./threadsProjection.js";
+import { FileCollection } from "../../projStore.js";
 import { registerCrossCuttingHandler } from "../../../present/stamper/2-fold/foldEngine.js";
+
+// Cross-cutting fold of live coordination chains, keyed by
+// rootCorrelation. One row per live root; the chain of call / be:sever
+// facts on the story's per-being reels is the record, this file-backed
+// collection (one JSON file per row + a small index under
+// <storeRoot>/proj/threads) is the rebuildable cache. Exported so the
+// thread readers in materials/space/threads.js share the one instance.
+export const ThreadsProjection = new FileCollection("threads");
 
 async function handleSummonForThreads(fact /*, type, id*/) {
   if (fact?.verb !== "call") return;

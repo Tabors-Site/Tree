@@ -16,7 +16,6 @@
 // one-DO-per-moment doctrine holds.
 
 import { randomUUID as uuidv4 } from "node:crypto";
-import Space from "../materials/space/space.js";
 import log from "../seedStory/log.js";
 import { emitFact } from "../past/fact/facts.js";
 import { I } from "../materials/being/seedBeings.js";
@@ -43,6 +42,25 @@ function qualitiesDiffer(existingQuals, desiredQuals) {
     JSON.stringify(canonJson(existingQuals)) !==
     JSON.stringify(canonJson(desiredQuals))
   );
+}
+
+// Curated lookup for a manifest child by (parent, name, type) on main.
+// Spaces have no parent-indexed curated read (findByParent is being-only),
+// so list the kind and filter by parent+name+type from loaded state.
+// Returns the child id, or null. Replaces the prior Projection.findOne.
+async function findManifestChildId(parentId, name, itemType) {
+  const { listByType, loadProjection } =
+    await import("../materials/projections.js");
+  for (const occ of await listByType("space", "0")) {
+    const slot = await loadProjection("space", occ.id, "0");
+    if (!slot || slot.tombstoned) continue;
+    const st = slot.state || {};
+    if (String(st.parent ?? "") !== String(parentId)) continue;
+    if (st.name !== name) continue;
+    if (st.type !== itemType) continue;
+    return occ.id;
+  }
+  return null;
 }
 
 // Stamp a do:create-space Fact for a new manifest child Space.
@@ -164,24 +182,24 @@ export async function manifestItems({
   const parent = { _id: parentSlot.id };
 
   // Children with parent === parentSlot.id and type matching itemType.
-  // Direct projection query for the type+parent intersection.
-  const { default: Projection } =
-    await import("../materials/history/projection.js");
-  const existingChildren = (
-    await Projection.find({
-      history: "0",
-      type: "space",
-      "state.parent": parentSlot.id,
-      "state.type": itemType,
-      tombstoned: { $ne: true },
-    })
-      .select("id state")
-      .lean()
-  ).map((s) => ({
-    _id: s.id,
-    name: s.state?.name,
-    qualities: s.state?.qualities,
-  }));
+  // Curated scan: spaces have no parent-indexed curated read (findByParent
+  // is being-only), so list the kind on main and filter by parent+type
+  // from each loaded slot's state.
+  const { listByType, loadProjection } =
+    await import("../materials/projections.js");
+  const existingChildren = [];
+  for (const occ of await listByType("space", "0")) {
+    const slot = await loadProjection("space", occ.id, "0");
+    if (!slot || slot.tombstoned) continue;
+    const st = slot.state || {};
+    if (String(st.parent ?? "") !== String(parentSlot.id)) continue;
+    if (st.type !== itemType) continue;
+    existingChildren.push({
+      _id: occ.id,
+      name: st.name,
+      qualities: st.qualities,
+    });
+  }
 
   const existingByName = new Map(existingChildren.map((c) => [c.name, c]));
   const desiredByName = new Map(items.map((it) => [it.name, it]));
@@ -249,23 +267,12 @@ export async function addManifestChild({
   const parentSlot = await findByHeavenSpace(heavenSpace, "0");
   if (!parentSlot) return null;
   const parent = { _id: parentSlot.id };
-  const { default: Projection } =
-    await import("../materials/history/projection.js");
-  const existing = await Projection.findOne({
-    history: "0",
-    type: "space",
-    "state.parent": parentSlot.id,
-    "state.name": name,
-    "state.type": itemType,
-    tombstoned: { $ne: true },
-  })
-    .select("id")
-    .lean();
-  if (existing) {
+  const existingId = await findManifestChildId(parentSlot.id, name, itemType);
+  if (existingId) {
     if (qualities) {
-      await refreshQualitiesByFact(existing.id, qualities, moment);
+      await refreshQualitiesByFact(existingId, qualities, moment);
     }
-    return existing.id;
+    return existingId;
   }
   return await createChildByFact({
     parentId: parent._id,
@@ -291,19 +298,8 @@ export async function removeManifestChild({
   const { findByHeavenSpace } = await import("../materials/projections.js");
   const parentSlot = await findByHeavenSpace(heavenSpace, "0");
   if (!parentSlot) return false;
-  const { default: Projection } =
-    await import("../materials/history/projection.js");
-  const child = await Projection.findOne({
-    history: "0",
-    type: "space",
-    "state.parent": parentSlot.id,
-    "state.name": name,
-    "state.type": itemType,
-    tombstoned: { $ne: true },
-  })
-    .select("id")
-    .lean();
-  if (!child) return false;
-  await deleteChildByFact(child.id, moment);
+  const childId = await findManifestChildId(parentSlot.id, name, itemType);
+  if (!childId) return false;
+  await deleteChildByFact(childId, moment);
   return true;
 }

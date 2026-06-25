@@ -17,7 +17,7 @@
 // separate function (not an opt on verifyReel) so every full-graft and
 // genome path keeps calling the unchanged genesis-seeded verifyReel.
 
-import Fact from "./fact.js";
+import { readReelLineage } from "../fileStore.js";
 import { computeHash, contentOf, GENESIS_PREV } from "./hash.js";
 
 const REEL_KINDS = new Set(["being", "space", "matter", "library"]);
@@ -47,32 +47,23 @@ export async function verifyReelFrom(
 
   // The history's visible ranges, identical logic to verifyReel /
   // readReelBetween: lineage[i] owns (floor(lineage[i]), floor(lineage[i+1])].
+  // STORAGE SWAP: the OR-of-ranges Fact.find became a fileStore reel
+  // read over the same (lineage, floors). The anchored chain walk below
+  // is byte-for-byte unchanged.
   const lineage = isMain(history) ? ["0"] : await resolveHistoryLineage(history);
-  const ranges = [];
-  for (let i = 0; i < lineage.length; i++) {
-    const here = lineage[i];
-    const next = lineage[i + 1] || null;
-    const lower = isMain(here) ? 0 : (await getBranchPoint(here, targetKind, id)) || 0;
-    const upper = next ? ((await getBranchPoint(next, targetKind, id)) || 0) : null;
-    if (upper != null && upper <= lower) continue;
-    ranges.push({ history: here, lower, upper });
+  const floors = { "0": 0 };
+  for (const h of lineage) {
+    if (isMain(h)) continue;
+    floors[h] = (await getBranchPoint(h, targetKind, id)) || 0;
   }
-
-  const orClauses = ranges.map(({ history: b, lower, upper }) => {
-    const seqFilter = { $type: "number", $gt: lower };
-    if (upper != null) seqFilter.$lte = upper;
-    const historyClause = isMain(b)
-      ? { $or: [{ history: "0" }, { history: { $exists: false } }] }
-      : { history: b };
-    return { "of.kind": targetKind, "of.id": id, seq: seqFilter, ...historyClause };
-  });
-  if (orClauses.length === 0) return { ok: true, count: 0, headHash: null };
 
   // The anchored floor: only the suffix [fromSeq..] participates. A gap
   // BELOW fromSeq is, by declaration, supplied by the anchor; a gap AT OR
   // ABOVE fromSeq is a real break and surfaces as seq-gap below.
-  const facts = await Fact.find({ $and: [{ $or: orClauses }, { seq: { $gte: fromSeq } }] })
-    .sort({ seq: 1 }).lean();
+  // readReelLineage's afterSeq is EXCLUSIVE, so `seq >= fromSeq` is
+  // afterSeq = fromSeq - 1.
+  const facts = readReelLineage(lineage, floors, targetKind, id, fromSeq - 1, null);
+  if (facts.length === 0) return { ok: true, count: 0, headHash: null };
 
   let expectedPrev = anchorPrev;
   let expectedSeq  = fromSeq;

@@ -19,14 +19,16 @@
 // reel and act-chain are byte-identical to before the failed
 // moment.
 //
-// **Phase 2 (this round).** sealAct is the moment's commit boundary.
-// One act → one ΔF → one transaction. The Act row AND every Fact
-// emitted during the moment (moment.deltaF) commit together or
-// not at all. Verb handlers contribute Facts to ctx.deltaF; sealAct
-// drains the array, appends inside one withTransaction along with
-// the Act.create, and runs eager-folds after commit. ΔF=0 moments
-// (LLM with no tool calls) skip the transaction — single-doc Act
-// insert is already atomic.
+// **fileStore swap.** sealAct is the moment's commit boundary. One act
+// → one ΔF → one commitMoment. The Act AND every Fact emitted during
+// the moment (moment.deltaF) commit together through the store's WAL:
+// commitMoment WAL-appends + fsyncs (the commit point), applies each
+// fact to its reel, and returns the factIds it minted. The signed act
+// then lands on the being's act-log (appendActLine) and the act-chain
+// head advances under a CAS (advanceActHeadFile). There is no Mongo
+// transaction and no replica set: the single global commit mutex inside
+// commitMoment serializes the whole write. ΔF=0 moments (LLM with no
+// tool calls) commit an empty facts list — the act still seals.
 //
 // This file owns the create-the-row-fully step AND the moment-wide
 // commit boundary. The four-beat orchestration around it lives in
@@ -38,23 +40,21 @@
 //   sealAct          — atomically commit ΔF + Act row, fire closures
 //   capContent       — shared content-cap helper (also used by assign)
 
-import mongoose from "mongoose";
 import { getInternalConfigValue } from "../../internalConfig.js";
-import Act from "../../past/act/act.js";
 import { assertHistoryOrThrow } from "../../materials/projections.js";
 import { closeInboxOnAnswer } from "../../past/projections/inbox/inboxProjectionFold.js";
 import { noteActSealOnThread } from "../../past/projections/threads/threadsProjectionFold.js";
 import {
-  appendDeltaFInSession,
   foldAfterCommit,
   groupByReel,
-  isReplicaSetCluster,
-  REPLICA_SET_REQUIRED_MSG,
-  withReelLocks,
 } from "../../past/fact/facts.js";
+import {
+  commitMoment,
+  appendActLine,
+  advanceActHeadFile,
+} from "../../past/fileStore.js";
 import { hooks } from "../../hooks.js";
 import { loadSigningKey, signActDoc } from "../../past/act/actSig.js";
-import Fact from "../../past/fact/fact.js";
 import log from "../../seedStory/log.js";
 
 // One-word-one-moment enforcement mode (see the guard in sealAct).
@@ -95,14 +95,14 @@ export function capContent(s) {
  * the moment's full record (every Fact + the Act) lands as one
  * unit. PAST FIXED on the whole moment, not just the Act.
  *
- * Two commit shapes:
- *   - ΔF=0 (content-only act, e.g. an LLM that emitted prose via a
- *     speech tool): single-doc Act.create. No transaction needed.
- *   - ΔF≥1: one session, withTransaction, append the whole ΔF +
- *     Act.create + the CAS'd act-head advance inside. All-or-nothing
- *     across the moment. A replica set is REQUIRED — without one
- *     sealAct throws REPLICA_SET_REQUIRED rather than degrade to a
- *     two-write shape that could land facts without their act.
+ * One commit shape (fileStore): commitMoment WAL-appends the moment
+ * (the actDoc + every Fact spec) and applies the facts to their reels,
+ * returning the minted factIds; the signed act then lands on the
+ * act-log and the act-chain head advances under a CAS. ΔF=0
+ * (content-only act, e.g. an LLM that emitted prose via a speech tool)
+ * commits an empty facts list — same flow, no facts to apply. The
+ * global commit mutex serializes everything; no transaction, no
+ * replica set, no per-reel append lock.
  *
  * Side effects (fire only after the Act lands):
  *   - closeInboxOnAnswer(answers)  evicts the matching
@@ -273,149 +273,118 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
 
   let inserted = null;
   let sortedReels = [];
-  let wasReplay = false;
 
-  // ── ΔF=0: pure single-doc Act insert. No transaction needed. ──
-  if (!Array.isArray(deltaF) || deltaF.length === 0) {
-    try {
-      // Content-only act: sign over an empty fact set (the actId already
-      // commits the opening). Attach BEFORE the create — the only write.
-      actDoc.sig = await signActDoc(actDoc, [], signingPem);
-      inserted = await Act.create(actDoc);
-    } catch (err) {
-      // Duplicate IDENTITY (same opening at the same chain position)
-      // is dedup semantics under content addressing — the act sealed
-      // once already; this is a replay.
-      if (err?.code === 11000) {
-        inserted = await Act.findById(actDoc._id).lean();
-        wasReplay = true;
-        log.debug("Stamped", `act replay deduped (${String(actDoc._id).slice(0, 8)})`);
-      }
-      if (!inserted) {
-        log.error("Stamped", `sealAct insert failed (actId=${String(plannedAct._id).slice(0, 8)}): ${err.message}`);
-        return null;
-      }
-    }
-  } else {
-    // ── ΔF≥1: atomic commit of ΔF + Act inside one transaction. ──
-    // The whole moment commits or nothing does. This is the seal
-    // boundary the math is about.
-    if (!isReplicaSetCluster()) {
-      throw new Error("sealAct: " + REPLICA_SET_REQUIRED_MSG);
-    }
-
-    // PARALLEL FACTS §1.2: acquire every reel lock BEFORE opening
-    // the session, hold them across the entire transaction. This
-    // bounds the snapshot lifetime so two contenders on the same
-    // reel can never have overlapping snapshots. See withReelLocks
-    // for the full rationale; both sealFacts and sealAct follow
-    // this shape.
-    const { sortedReels: lockReels } = groupByReel(deltaF);
-    try {
-      await withReelLocks(lockReels, async () => {
-        const session = await mongoose.startSession();
-        try {
-          await session.withTransaction(async () => {
-            // Reset on retry (withTransaction may retry on transient errors).
-            inserted = null;
-            sortedReels = [];
-
-            // 1. Append every Fact in ΔF (caller holds the locks).
-            const result = await appendDeltaFInSession(deltaF, session);
-            sortedReels = result.sortedReels;
-
-            // 1b. Sign the act over exactly the facts that just landed.
-            // logFact does not surface the computed fact ids, so read
-            // them back in-session (they committed above). Recomputed
-            // every attempt — withTransaction may retry, and a retry
-            // re-appends with fresh ids. Sorted for determinism; the
-            // verifier sorts the same way.
-            const factRows = await Fact.find({ actId: actDoc._id })
-              .select("_id").session(session).lean();
-            const sortedFactIds = factRows.map((f) => String(f._id)).sort();
-            actDoc.sig = await signActDoc(actDoc, sortedFactIds, signingPem);
-
-            // 2. Insert the Act row in the same session.
-            const docs = await Act.create([actDoc], { session });
-            inserted = docs[0];
-
-            // 3. Advance the act-chain head IN the transaction, CAS'd
-            // on the `p` this act chained off. If another act sealed
-            // on this (branch, being) between open and seal, the CAS
-            // throws ACT_CHAIN_MOVED and the whole seal aborts —
-            // facts, act row, head, nothing lands. The alternative
-            // (last-writer-wins after commit) silently forked the
-            // chain. The moment fails loudly; its inbox row stays
-            // open; the retry re-opens from the new head.
-            const { advanceActHead } = await import("../../past/act/actHash.js");
-            await advanceActHead(actDoc.story, actDoc.history || "0", actDoc.through ?? actDoc.by, actDoc._id, {
-              session, expectPrev: actDoc.p,
-            });
-          });
-        } finally {
-          await session.endSession();
-        }
-      });
-    } catch (err) {
-      log.error("Stamped", `sealAct aborted (actId=${String(plannedAct._id).slice(0, 8)}): ${err.message}`);
-      throw err;
-    }
-
-    // Eager-fold AFTER commit (projections see the committed state).
-    await foldAfterCommit(sortedReels);
+  // ── THE SEAL (fileStore). One word = one moment = one commit. ──
+  // There is no transaction, no replica set, no per-reel append lock:
+  // the single global commit mutex inside commitMoment serializes the
+  // whole write (philosophy/mongorust.md). The flow is the same for
+  // ΔF=0 (a content-only act, e.g. an LLM that spoke prose via a speech
+  // tool) and ΔF≥1 — an empty facts list just commits an empty moment
+  // record; the act still seals.
+  //
+  //   (1) commitMoment(record) — THE atomic write. The record carries
+  //       the actDoc (echoed into record.act) and every Fact spec; the
+  //       store WAL-appends + fsyncs (the commit point), applies each
+  //       fact to its reel idempotently, and returns the factIds it
+  //       minted (the _id = computeHash(p, contentOf) — byte-identical
+  //       to the Mongo path, so folds stay compatible).
+  //   (2) sign the act over EXACTLY those factIds (sorted; the verifier
+  //       sorts the same way), then appendActLine the SIGNED act to the
+  //       being's act-log — the act-chain peer of the reel files.
+  //   (3) advanceActHeadFile CAS's the chain head on the `p` this act
+  //       chained off. A stale author is refused with ACT_CHAIN_MOVED
+  //       (the chain can't fork); idempotent on a settled replay.
+  //
+  // groupByReel both buckets the facts for commitMoment AND gives us
+  // the sortedReels shape foldAfterCommit wants (one source of truth
+  // for the reel set). Orphan (place/stance, target-less) facts have
+  // no reel; the one-word doctrine keeps deltaF reel-bearing, so they
+  // do not ride the act path. (A non-empty orphan set is surfaced.)
+  const { sortedReels: reels, orphanFacts } = groupByReel(deltaF);
+  if (Array.isArray(orphanFacts) && orphanFacts.length > 0) {
+    log.warn(
+      "Stamped",
+      `sealAct: ${orphanFacts.length} target-less fact(s) on Act ` +
+        `${String(actDoc._id).slice(0, 8)} have no reel — not stamped by commitMoment.`,
+    );
   }
+
+  // Flatten the per-reel buckets back into the {history,kind,id,spec}
+  // records commitMoment takes. Order within a reel is preserved.
+  const factRecords = [];
+  for (const reel of reels) {
+    for (const spec of reel.facts) {
+      factRecords.push({ history: reel.history, kind: reel.kind, id: String(reel.id), spec });
+    }
+  }
+
+  let factIds = [];
+  try {
+    // (1) THE atomic write. recId keys the WAL record to this moment for
+    // idempotent replay; act is echoed so a crash-replay knows the frame.
+    const committed = await commitMoment({
+      recId: String(actDoc._id),
+      actId: actDoc._id,
+      act: actDoc,
+      facts: factRecords,
+    });
+    factIds = Array.isArray(committed?.factIds) ? committed.factIds : [];
+
+    // (2) Sign over exactly the facts that landed, then write the SIGNED
+    // act to the act-log (the act-chain). Sorted for a determinism the
+    // verifier mirrors.
+    const sortedFactIds = factIds.map((id) => String(id)).sort();
+    actDoc.sig = await signActDoc(actDoc, sortedFactIds, signingPem);
+    appendActLine(actDoc.story, actDoc.history || "0", actDoc.through ?? actDoc.by, actDoc);
+
+    // (3) Advance the act-chain head, CAS'd on this act's `p`. A mismatch
+    // means another act sealed between this act's open and its seal —
+    // taking the head would FORK the chain, so ACT_CHAIN_MOVED propagates
+    // to the caller (the moment fails loudly; its inbox row stays open;
+    // the retry re-opens from the new head). Idempotent on a settled
+    // replay (advanceActHeadFile no-ops when the head already is this id).
+    // actDoc.p is the chain prev assign computed from readActHead (GENESIS_PREV
+    // for the first act on the chain, never null), so it CAS's correctly here.
+    advanceActHeadFile(actDoc.story, actDoc.history || "0", actDoc.through ?? actDoc.by, actDoc._id, actDoc.p);
+  } catch (err) {
+    log.error("Stamped", `sealAct aborted (actId=${String(plannedAct._id).slice(0, 8)}): ${err.message}`);
+    throw err;
+  }
+
+  // The act landed in the act-log; the in-memory signed actDoc IS the
+  // sealed frame the rest of this function reads (answers, rootCorrelation,
+  // to/through, endMessage).
+  inserted = actDoc;
+  sortedReels = reels;
+
+  // Eager-fold AFTER commit (projections see the committed state).
+  if (sortedReels.length > 0) await foldAfterCommit(sortedReels);
 
   if (!inserted) return null;
 
-  // ΔF=0 path only: the transactional path advanced the head inside
-  // its session above. Advance here — where the Act row actually
-  // landed — CAS'd on this act's `p`. A mismatch means another act
-  // sealed between open and seal: the act row is already inserted
-  // (visible in audit) but taking the head would FORK the chain, so
-  // ACT_CHAIN_MOVED propagates to the caller instead. Crashed moments
-  // never reach this line, so the chain only ever points at acts
-  // that exist. The head feeds the NEXT act's `p` (assign reads it)
-  // and the branch/story roots (chainRoots).
-  if (!Array.isArray(deltaF) || deltaF.length === 0) {
-    const { advanceActHead } = await import("../../past/act/actHash.js");
-    try {
-      await advanceActHead(actDoc.story, actDoc.history || "0", actDoc.through ?? actDoc.by, actDoc._id, {
-        expectPrev: actDoc.p,
-      });
-    } catch (err) {
-      // On a REPLAY the head normally moved past this act long ago —
-      // the original seal advanced it. That's the dedup contract, not
-      // a fork. (If the original crashed before advancing, the CAS
-      // above just succeeded and healed it.)
-      if (!(wasReplay && /ACT_CHAIN_MOVED/.test(err.message))) throw err;
-    }
-  }
-
   // Status transition: attempted → landed. For same-world and
-  // same-story cross-branch moments the local Stamper IS the
-  // target — by the time the transaction committed, the facts
-  // landed and the Act can move to "landed" inline here. For
+  // same-story cross-branch moments the local Stamper IS the target —
+  // by the time commitMoment returned, the facts landed and the act is
+  // in its log, so the act can move to "landed" inline here. For
   // cross-story moments the Act is created directly by
-  // crossStoryDispatch (not sealAct) with no deltaF, and its
-  // status transitions when the canopy reply arrives via
+  // crossStoryDispatch (not sealAct) with no deltaF, and its status
+  // transitions when the canopy reply arrives via
   // handleCrossWorldResponse → updateActStatus. So the only path
   // through here is same-story; the foreign-story check is a
   // belt-and-suspenders guard against a future caller routing a
   // cross-story moment through sealAct. See CROSS-WORLD.md +
   // crossWorld.js.
+  //
+  // The transition is now in-memory on the sealed actDoc: the act-log
+  // line is appended with status "attempted" above, and the status is a
+  // closure field OUTSIDE the act's hash digest (actHash.contentOfAct
+  // excludes it), so it mutates by design. (The Mongo Act.updateOne the
+  // transactional path used is gone with Act.create.)
   const hasForeignStoryFact = Array.isArray(deltaF) && deltaF.some(
     (f) => f?.params?.crossOrigin?.story
   );
   if (!hasForeignStoryFact) {
-    try {
-      await Act.updateOne(
-        { _id: inserted._id, status: "attempted" },
-        { $set: { status: "landed" } },
-      );
-      inserted.status = "landed";
-    } catch (err) {
-      log.warn("Stamped", `sealAct: status→landed update failed (actId=${String(inserted._id).slice(0, 8)}): ${err.message}`);
-    }
+    inserted.status = "landed";
   }
 
   // Side effects fire AFTER the Act lands. The Act's existence is

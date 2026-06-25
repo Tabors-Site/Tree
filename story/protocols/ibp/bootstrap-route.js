@@ -18,7 +18,7 @@
 // response carries no credentials and no secrets; it is the IBP equivalent
 // of DNS — a public lookup.
 
-import cors from "cors";
+import cors from "../../transports/http/middleware/cors.js";
 import { getStoryDomain } from "../../seed/ibp/address.js";
 import { IBP_PROTOCOL_VERSION } from "../../seed/ibp/descriptor.js";
 import { getStoryUrl } from "../../seed/storyIdentity.js";

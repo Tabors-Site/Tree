@@ -245,8 +245,7 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
     }
   }
 
-  const { loadProjection, loadOrFold } = await import("../../materials/projections.js");
-  const { default: Projection } = await import("../../materials/history/projection.js");
+  const { loadProjection, loadOrFold, findByName } = await import("../../materials/projections.js");
 
   // ── 1. Verify the target parent space exists. ──
   // loadOrFold: a target parent inherited from the parent history
@@ -275,13 +274,19 @@ export async function plantTemplate(bundle, targetParentSpaceId, opts = {}) {
   if (!rootBundleSpace) {
     throw new Error("plantTemplate: bundle.content.spaces is missing the scope root");
   }
-  const targetSiblings = await Projection.find({
-    history: history, type: "space",
-    "state.parent": targetParentSpaceId,
-    "state.name": rootBundleSpace.name,
-    tombstoned: { $ne: true },
-  }).select("id").lean();
-  if (targetSiblings.length > 0) {
+  // Space names are unique per history, so the curated findByName returns at
+  // most one slot. The collision is that-named space being a child of the
+  // insertion point. findByName inherits the lineage; preserve the old
+  // own-history strictness by requiring the resolved slot to live on `history`
+  // (a non-tombstoned inherited sibling in a parent history is not a same-
+  // history collision the way the old Projection.find({history}) read it).
+  const namedSibling = await findByName("space", rootBundleSpace.name, history);
+  if (
+    namedSibling &&
+    !namedSibling.tombstoned &&
+    namedSibling.history === history &&
+    String(namedSibling.state?.parent ?? "") === String(targetParentSpaceId)
+  ) {
     throw new Error(
       `plantTemplate: a sibling named "${rootBundleSpace.name}" already exists at the insertion point. ` +
       `Rename the bundle's scope root, graft into a different parent, or remove the conflicting sibling first.`,

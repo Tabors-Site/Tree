@@ -22,7 +22,28 @@
 // operations (sever, walk lineage, cut) belong in threads.js;
 // raw "give me Summons matching X" belongs here.
 
-import Act from "../../../past/act/act.js";
+// CURATED swap: every raw Act.find/findById/findOne here now routes through
+// the actChain curated act-query seam (getActById / getActsByCorrelation /
+// getActsByField). The actChain reads are SYNCHRONOUS (file-backed, no await),
+// but these wrappers keep their async signatures so every caller is unchanged.
+// The Mongo `.select()` projections are dropped (the file act-doc carries the
+// whole row); `.sort()` / `.limit()` / `.findOne()` semantics are reproduced in
+// JS below, matching the prior createdAt-desc / endMessage-time ordering.
+import {
+  getActById,
+  getActsByCorrelation,
+  getActsByField,
+} from "../../../past/act/actChain.js";
+
+// Sort acts newest-first by a timestamp field, id as a deterministic tiebreak
+// (the file act-log has no createdAt; stampedAt is the seal time, receivedAt
+// the open time — the same ordering keys serializeAct/describeActChain use).
+function byStampDesc(a, b) {
+  const ta = new Date(a?.stampedAt ?? a?.receivedAt ?? 0).getTime() || 0;
+  const tb = new Date(b?.stampedAt ?? b?.receivedAt ?? 0).getTime() || 0;
+  if (ta !== tb) return tb - ta;
+  return String(b?._id).localeCompare(String(a?._id));
+}
 
 /**
  * Walk the inReplyTo chain backward from a Act to find the
@@ -39,14 +60,10 @@ import Act from "../../../past/act/act.js";
  */
 export async function findChainOpener(actId, maxDepth = 100) {
   if (!actId) return null;
-  let current = await Act.findById(actId)
-    .select("_id inReplyTo")
-    .lean();
+  let current = getActById(actId);
   let depth = 0;
   while (current && current.inReplyTo && depth < maxDepth) {
-    const next = await Act.findById(current.inReplyTo)
-      .select("_id inReplyTo from through to rootCorrelation ibpAddress")
-      .lean();
+    const next = getActById(current.inReplyTo);
     if (!next) break;
     current = next;
     depth++;
@@ -68,11 +85,8 @@ export async function findChainOpener(actId, maxDepth = 100) {
  */
 export async function findByRootCorrelation(rootCorrelation, opts = {}) {
   if (!rootCorrelation) return [];
-  const q = Act.find({ rootCorrelation })
-    .sort({ createdAt: -1 })
-    .lean();
-  if (typeof opts.limit === "number") q.limit(opts.limit);
-  return q;
+  const rows = getActsByCorrelation(rootCorrelation).slice().sort(byStampDesc);
+  return typeof opts.limit === "number" ? rows.slice(0, opts.limit) : rows;
 }
 
 /**
@@ -87,10 +101,10 @@ export async function findByRootCorrelation(rootCorrelation, opts = {}) {
  */
 export async function findByIbpAddress(ibpAddress, opts = {}) {
   if (!ibpAddress) return [];
-  return Act.find({ ibpAddress })
-    .sort({ createdAt: -1 })
-    .limit(opts.limit || 50)
-    .lean();
+  return getActsByField("ibpAddress", ibpAddress)
+    .slice()
+    .sort(byStampDesc)
+    .slice(0, opts.limit || 50);
 }
 
 /**
@@ -106,15 +120,14 @@ export async function findByIbpAddress(ibpAddress, opts = {}) {
 export async function findOpenForBeing(to) {
   if (!to) return null;
   try {
-    return await Act.findOne({
-      to,
-      "endMessage.time": null,
-    })
-      .select(
-        "_id startMessage activeAble inReplyTo rootCorrelation through to ibpAddress stampedAt",
-      )
-      .sort({ stampedAt: -1 })
-      .lean();
+    // "still open" = endMessage.time is null/absent. Filter the (to) facet
+    // reel in JS, then pick the most-recent by stampedAt (the prior
+    // findOne + sort{stampedAt:-1}).
+    const open = getActsByField("to", to).filter(
+      (a) => a?.endMessage?.time == null,
+    );
+    if (open.length === 0) return null;
+    return open.sort(byStampDesc)[0] || null;
   } catch {
     return null;
   }
@@ -133,13 +146,21 @@ export async function findOpenForBeing(to) {
 export async function findLastSealedForBeing(to) {
   if (!to) return null;
   try {
-    return await Act.findOne({
-      to,
-      "endMessage.time": { $ne: null },
-    })
-      .select("_id endMessage activeAble stampedAt")
-      .sort({ "endMessage.time": -1 })
-      .lean();
+    // "sealed" = endMessage.time set. Filter the (to) facet reel in JS, then
+    // pick the most-recently-sealed by endMessage.time (the prior findOne +
+    // sort{ "endMessage.time": -1 }).
+    const sealed = getActsByField("to", to).filter(
+      (a) => a?.endMessage?.time != null,
+    );
+    if (sealed.length === 0) return null;
+    return sealed
+      .slice()
+      .sort((a, b) => {
+        const ta = new Date(a.endMessage.time).getTime() || 0;
+        const tb = new Date(b.endMessage.time).getTime() || 0;
+        if (ta !== tb) return tb - ta;
+        return String(b._id).localeCompare(String(a._id));
+      })[0] || null;
   } catch {
     return null;
   }
@@ -159,12 +180,24 @@ export async function findLastSealedForBeing(to) {
 export async function findByBeing(beingId, opts = {}) {
   if (!beingId) return [];
   const side = opts.side || "either";
-  let q;
-  if (side === "in") q = Act.find({ through: beingId });
-  else if (side === "out") q = Act.find({ to: beingId });
-  else q = Act.find({ $or: [{ through: beingId }, { to: beingId }] });
-  return q
-    .sort({ createdAt: -1 })
-    .limit(opts.limit || 50)
-    .lean();
+  let rows;
+  if (side === "in") {
+    rows = getActsByField("through", beingId);
+  } else if (side === "out") {
+    rows = getActsByField("to", beingId);
+  } else {
+    // $or { through } | { to } → union the two facet reels, dedup by _id.
+    const seen = new Set();
+    rows = [];
+    for (const a of [
+      ...getActsByField("through", beingId),
+      ...getActsByField("to", beingId),
+    ]) {
+      const id = String(a._id);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      rows.push(a);
+    }
+  }
+  return rows.slice().sort(byStampDesc).slice(0, opts.limit || 50);
 }

@@ -22,6 +22,7 @@ import { stampsFact } from "../../ibp/factResult.js";
 import { renameMatterHostEnv } from "./renameMatterHost.js";
 import { setMatterHostEnv } from "./setMatterHost.js";
 import { purgeContentHostEnv } from "./purgeContentHost.js";
+import { endMatterHostEnv } from "./endMatterHost.js";
 
 // Self-register the co-located world strand so resolveAbleWord("matter", "rename-matter") finds it
 // (CONVERTING.md step 3). rename-matter is WORD-SOLE: rename-matter.word is the ONLY path (do.js
@@ -34,6 +35,12 @@ registerAbleWord("matter", "rename-matter", new URL("./rename-matter.word", impo
 // hasContent + assertMatterCoordInBounds — the SAME helpers the old handler called.
 registerAbleWord("matter", "set-matter", new URL("./set-matter.word", import.meta.url));
 registerAbleWord("matter", "purge-content", new URL("./purge-content.word", import.meta.url));
+
+// end-matter is WORD-SOLE: end-matter.word is the ONLY path (do.js runOpWord runs it); there is no JS
+// handler. There is no host out (bytes are content-addressed; the reducer folds the tombstone from the
+// do:end-matter verb). The lone substrate read is the author-or-root-owner auth in resolve-end-matter-
+// spec (endMatterHost.js), reusing loadTargetRow + resolveRootSpace + getSpaceOwner.
+registerAbleWord("matter", "end-matter", new URL("./end-matter.word", import.meta.url));
 
 // ─────────────────────────────────────────────────────────────────────
 // set-matter — WORD-SOLE (registered below). No JS handler.
@@ -69,31 +76,6 @@ registerAbleWord("matter", "purge-content", new URL("./purge-content.word", impo
 // via stampsWordFact, so the lone do:rename-matter fact lands on the
 // matter's reel and applySetField folds the name exactly like set-being
 // / set-space lay a scalar field.
-
-// ─────────────────────────────────────────────────────────────────────
-// end-matter
-// ─────────────────────────────────────────────────────────────────────
-
-async function endMatterHandler({ target, identity, moment }) {
-  const matterId = targetIdOf(target);
-  if (!matterId) throw new Error("end-matter: matterId required");
-  const history = moment?.actorAct?.history || "0";
-  const { endMatter } = await import("./matters.js");
-  let beingId = identity?.beingId;
-  if (!beingId) {
-    const { loadOrFold } = await import("../projections.js");
-    const matterSlot = await loadOrFold("matter", matterId, history);
-    beingId = matterSlot?.state?.beingId || null;
-  }
-  await endMatter({
-    matterId,
-    beingId: String(beingId || ""),
-    actId: moment?.actId || null,
-    sessionId: moment?.sessionId || null,
-    moment,
-  });
-  return { removed: true, matterId };
-}
 
 // ─────────────────────────────────────────────────────────────────────
 // purge-content
@@ -152,17 +134,31 @@ async function purgeContentHandler({ target, params, identity, moment }) {
     );
   }
 
-  // Shared-fate refcount: other live matter (any history) whose CURRENT
-  // content is this hash. Purging would blind them — refuse without
-  // force.
+  // Shared-fate refcount: other live matter whose CURRENT content is this
+  // hash. Purging would blind them — refuse without force.
+  //
+  // FLAG (cross-history scope loss): the Mongo query was history-AGNOSTIC
+  // ("any history" — it scanned EVERY history's matter projections for the
+  // hash). The curated projection layer is per-history (listByType(type,
+  // history) + loadProjection); there is NO curated all-histories content-
+  // hash scan. This dead handler (the LIVE purge-content path is
+  // purgeContentHostEnv / purgeContentHost.js, which still carries the raw
+  // Projection.find) is translated to the OWN-history (the moment's
+  // history) refcount only — a sibling history referencing the same bytes
+  // is no longer counted here. A true cross-history dedup refcount needs a
+  // new curated primitive (e.g. projections.findByContentHash across the
+  // history lineage).
   const force = params?.force === true || params?.force === "true";
-  const { default: Projection } = await import("../history/projection.js");
-  const others = await Projection.find({
-    type: "matter",
-    "state.content.hash": hash,
-    tombstoned: { $ne: true },
-    id: { $ne: String(matterId) },
-  }).select("id history").lean();
+  const { listByType, loadProjection } = await import("../projections.js");
+  const others = [];
+  for (const occ of await listByType("matter", history)) {
+    if (String(occ.id) === String(matterId)) continue;
+    const slot = await loadProjection("matter", String(occ.id), history);
+    if (!slot || slot.tombstoned) continue;
+    if (slot.state?.content?.hash === hash) {
+      others.push({ id: String(occ.id), history });
+    }
+  }
   if (others.length > 0 && !force) {
     throw new IbpError(
       IBP_ERR.RESOURCE_CONFLICT,
@@ -233,12 +229,17 @@ registerOperation("rename-matter", {
   hostEnv: renameMatterHostEnv,
 });
 
+// WORD-SOLE: end-matter.word is the only path (do.js runOpWord). idFrom:"matterId" targets the
+// do:end-matter fact at the matter; the reducer folds the tombstone (spaceId/beingId = DELETED) from
+// the verb. resolve-end-matter-spec (endMatterHostEnv) is the lone host READ (load + author-or-root-
+// owner auth). No handler. No host out (bytes are content-addressed; casSweep + purge-content own them).
 registerOperation("end-matter", {
   targets: ["matter"],
   ownerExtension: "seed",
   factAction: "end-matter",
   args: {},
-  handler: endMatterHandler,
+  word: { noun: "matter", able: "matter", idFrom: "matterId" },
+  hostEnv: endMatterHostEnv,
 });
 
 // WORD-SOLE: purge-content.word is the only path (do.js runOpWord). idFrom:"matterId" targets the

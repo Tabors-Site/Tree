@@ -32,9 +32,20 @@
 // follow-up when scale asks for it.
 
 import crypto from "crypto";
-import ReelHead from "../reel/reelHead.js";
-import Fact from "./fact.js";
+import * as fileStore from "../fileStore.js";
+import { getFactsOnReelWhere } from "./facts.js";
 import { canonicalize, GENESIS_PREV } from "./hash.js";
+
+// CHAIN-STRUCTURE roll-ups, now FileStore-native. This module fingerprints the
+// whole chain: per-reel head hashes, per-being act-chain tips, and the history
+// registry. The curated FACT/ACT/ENTITY seam models facts, acts, and entity
+// projections — not reel-heads or act-heads — so the cross-aggregate enumerators
+// these roll-ups need (every reel head / act head in a history) live on the
+// storage primitive: fileStore.listReelHeads(history?) and listActHeads(story,
+// history?) scan the reel/act file trees and return rows shaped EXACTLY like the
+// old ReelHead/ActHead docs (so the rollup stays byte-identical). The history
+// registry reads go through the curated histories.js helpers (loadHistory /
+// listAllHistories). No raw mongoose model remains in this module.
 
 // EVERY roll-up flows through this one helper — no ad-hoc
 // serialization anywhere in this module. Determinism across
@@ -72,17 +83,25 @@ export function invalidateChainRootCache() {
  * matters; sealFacts appends update headHash inside the transaction.
  */
 export async function reelRoot(type, id, history = "0") {
-  const { reelKey } = await import("../reel/reelHeads.js");
-  const row = await ReelHead.findById(reelKey(history, type, id))
-    .select("head headHash")
-    .lean();
-  if (!row) return GENESIS_PREV;
-  if (row.headHash) return row.headHash;
-  const headFact = await Fact.findOne(
-    { history, "of.kind": type, "of.id": String(id), seq: row.head },
-    { _id: 1 },
-  ).lean();
-  return headFact?._id || GENESIS_PREV;
+  // FileStore swap: the reel's .head carries { head, headHash } — the seq
+  // counter + chain root the denormalized ReelHead.headHash held. An untouched
+  // reel reads head 0 / headHash GENESIS_PREV.
+  const row = fileStore.readReelHead(history, type, String(id));
+  if (!row || !row.head) return GENESIS_PREV;
+  if (row.headHash && row.headHash !== GENESIS_PREV) return row.headHash;
+  // headHash denormalization fell behind (a crash between the fact
+  // append and the $set). STORAGE SWAP: read the head fact from the
+  // reel via the curated layer instead of the Fact collection. The
+  // head fact is the one at seq=row.head; its _id is the reel's walked
+  // root. getFactsOnReelWhere is history-aware (unlike getReel, which
+  // is pinned to main), so it reads the right history's reel.
+  const at = getFactsOnReelWhere(
+    history,
+    type,
+    String(id),
+    (f) => f.seq === row.head,
+  );
+  return at.length ? at[at.length - 1]._id : GENESIS_PREV;
 }
 
 // The ONE history roll-up shape — DB reads and bundle parts both flow
@@ -194,14 +213,12 @@ export async function historyRoot(historyPath) {
   return memoized(`history:${historyPath}`, async () => {
     const { loadHistory } =
       await import("../../materials/history/histories.js");
-    const { default: ActHead } = await import("../act/actHead.js");
+    const { getStoryDomain } = await import("../../ibp/address.js");
     const meta = historyPath === "0" ? null : await loadHistory(historyPath);
-    const [rows, actRows] = await Promise.all([
-      ReelHead.find({ history: historyPath })
-        .select("_id head headHash")
-        .lean(),
-      ActHead.find({ history: historyPath }).select("_id headHash").lean(),
-    ]);
+    // FileStore swap: scan this history's reel heads + act heads from the file
+    // tree (the peers of ReelHead.find/ActHead.find), rows shaped as before.
+    const rows = fileStore.listReelHeads(historyPath);
+    const actRows = fileStore.listActHeads(getStoryDomain(), historyPath);
     return historyRollup(historyPath, meta, rows, actRows);
   });
 }
@@ -212,17 +229,18 @@ export async function historyRoot(historyPath) {
  */
 export async function storyRoot() {
   return memoized("story", async () => {
-    const { default: History } =
-      await import("../../materials/history/history.js");
-    const { default: ActHead } = await import("../act/actHead.js");
+    const { listAllHistories } =
+      await import("../../materials/history/histories.js");
     const { getStoryDomain } = await import("../../ibp/address.js");
-    const [historyRows, headRows, actHeadRows] = await Promise.all([
-      History.find({}).lean(),
-      ReelHead.find({}).select("_id history head headHash").lean(),
-      ActHead.find({}).select("_id history headHash").lean(),
-    ]);
+    const story = getStoryDomain();
+    // FileStore swap: every reel head + act head across every history, from the
+    // file tree (peers of ReelHead.find({})/ActHead.find({})). History registry
+    // stays on the curated histories.js helper.
+    const historyRows = await listAllHistories();
+    const headRows = fileStore.listReelHeads();
+    const actHeadRows = fileStore.listActHeads(story);
     return storyRootFromParts({
-      story: getStoryDomain(),
+      story,
       histories: historyRows,
       reelHeads: headRows,
       actHeads: actHeadRows,
@@ -316,8 +334,8 @@ registerSeeOperation("verify-act", {
       reason: "not-found",
     };
     if (!actId) return notFound;
-    const { default: Act } = await import("../act/act.js");
-    const act = await Act.findById(actId).lean();
+    const { getActById } = await import("../act/actChain.js");
+    const act = getActById(actId);
     if (!act) return notFound;
     const { verifyActSig } = await import("../act/actSig.js");
     const { getStoryDomain } = await import("../../ibp/address.js");
@@ -351,9 +369,9 @@ registerSeeOperation("chain-root", {
         rootHash: await historyRoot(args.history),
       };
     }
-    const { default: History } =
-      await import("../../materials/history/history.js");
-    const rows = await History.find({}).select("_id").lean();
+    const { listAllHistories } =
+      await import("../../materials/history/histories.js");
+    const rows = await listAllHistories();
     const paths = [...new Set(["0", ...rows.map((b) => String(b._id))])].sort();
     const histories = {};
     for (const p of paths) histories[p] = await historyRoot(p);

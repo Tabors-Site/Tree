@@ -175,12 +175,14 @@ async function loadStoryRoot(history) {
   // chain for the receiver/actor space ends at it, but for the
   // chain-walker convenience we load it directly so step 3 / 6 don't
   // depend on having walked space ancestors first.
-  const { default: Projection } = await import("../../../materials/history/projection.js");
-  const row = await Projection.findOne({
-    history: history, type: "space", "state.parent": null, tombstoned: { $ne: true },
-  }).lean();
-  if (!row) return null;
-  return { _id: row.id, ...row.state };
+  const { findRoot, loadProjection } =
+    await import("../../../materials/projections.js");
+  const roots = await findRoot("space", history);
+  if (!roots.length) return null;
+  // findRoot returns occupant shape {type,id,...}; load the slot for state.
+  const slot = await loadProjection("space", roots[0].id, history);
+  if (!slot) return null;
+  return { _id: slot.id, ...slot.state };
 }
 
 // ─────────────────────────────────────────────────────────────────────

@@ -11,9 +11,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const DB = "mongodb://localhost:27017/story_chainloop";
+const DB = path.join(os.tmpdir(), "story_chainloop-" + process.pid);
 process.env.PORT = "3840";
-process.env.MONGODB_URI = DB;
+process.env.TREEOS_STORE_BASE = DB;
+fs.rmSync(DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "chainloop-0123456789";
 process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "chainloop-keys-" + process.pid);
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
@@ -22,12 +24,7 @@ fs.rmSync(SRC, { recursive: true, force: true });
 fs.mkdirSync(SRC, { recursive: true });
 fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`)).default;
-  const conn = await mongoose.createConnection(DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
+// (scratch file store fresh-wiped above; no DB to drop)
 await import(`${R}/begin.js`);
 const { findByName, loadOrFold } = await import(`${R}/seed/materials/projections.js`);
 const { withIAmAct } = await import(`${R}/seed/sprout.js`);
@@ -37,8 +34,8 @@ const { parse } = await import(`${R}/seed/present/word/parser.js`);
 const { runWordToStore } = await import(`${R}/seed/present/word/ableWordRegistry.js`);
 const { getStoryDomain } = await import(`${R}/seed/ibp/address.js`);
 const { verifyActChain } = await import(`${R}/seed/past/act/actHash.js`);
-const { default: Fact } = await import(`${R}/seed/past/fact/fact.js`);
-const { default: Act } = await import(`${R}/seed/past/act/act.js`);
+const { factFind } = await import(`${R}/seed/present/word/_factStoreTest.mjs`);
+const { actFind, actCount } = await import(`${R}/seed/present/word/_factStoreTest.mjs`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const poll = async (fn, t = 60000, e = 250) => {
   const t0 = Date.now();
@@ -76,7 +73,8 @@ try {
   const ir = [{ kind: "flow", binds: [], body: [foreach] }];
   const items = ["alpha", "beta", "gamma"];
 
-  const actsBefore = await Act.countDocuments({ through: String(speaker) });
+  const story = getStoryDomain();
+  const actsBefore = actCount({ through: String(speaker) }, story);
 
   await runWordToStore(ir, {
     beingId: String(speaker), name: "looper", history: "0",
@@ -92,21 +90,21 @@ try {
     : bad("three spaces made", { made });
 
   // 2. EACH PASS GREW THE CHAIN BY ONE ACT: three create-space facts, three distinct actIds.
-  const facts = await Fact.find({ act: "create-space", through: String(speaker) }).select("actId").lean();
+  const facts = factFind({ act: "create-space", through: String(speaker) });
   const actIds = [...new Set(facts.map((f) => String(f.actId)))];
   actIds.length === 3
     ? ok("three create-space facts, three DISTINCT actIds — one moment per pass, not a run-on")
     : bad("three distinct actIds", { actIds });
 
   // 3. THE CHAIN GREW BY EXACTLY THREE ACTS (the three passes, nothing else).
-  const actsAfter = await Act.countDocuments({ through: String(speaker) });
+  const actsAfter = actCount({ through: String(speaker) }, story);
   actsAfter - actsBefore === 3
     ? ok(`the chain grew by exactly 3 acts (${actsBefore} → ${actsAfter}): one per loop pass`)
     : bad("chain grew by 3", { actsBefore, actsAfter });
 
   // 4. THE PASSES CHAIN IN ORDER: following p from the head, the three create-space acts are
   //    contiguous (each pass chains on the one before — the chain head is the program counter).
-  const acts = await Act.find({ _id: { $in: actIds } }).select("_id p").lean();
+  const acts = actFind({ _id: { $in: actIds } }, story);
   const byId = new Map(acts.map((a) => [String(a._id), String(a.p)]));
   let contiguous = false;
   for (const tail of actIds) {
@@ -125,7 +123,7 @@ try {
     : bad("passes chain in order", { byId: Object.fromEntries(byId) });
 
   // 5. REPLAY-INTEGRAL: every act recomputes from (p, opening) down to genesis.
-  const chain = await verifyActChain(getStoryDomain(), "0", String(speaker));
+  const chain = await verifyActChain(story, "0", String(speaker));
   chain.ok
     ? ok(`verifyActChain walks the looper's reel clean (${chain.count} acts) — byte-identical on replay`)
     : bad("verifyActChain clean", chain);
@@ -143,7 +141,7 @@ try {
   ring.forEach((a) => { a.params = { ...(a.params || {}), name: "$label" }; });
   whileNode.body = [...ring, { kind: "act", host: "tick", params: {} }];
 
-  const actsBeforeW = await Act.countDocuments({ through: String(speaker) });
+  const actsBeforeW = actCount({ through: String(speaker) }, story);
   const wres = await runWordToStore([wf], {
     beingId: String(speaker), name: "looper", history: "0", position: String(position),
     bindings: { counter: 3, label: "ring3" },
@@ -159,7 +157,7 @@ try {
   // 7. THE WHILE GREW THE CHAIN: three ring spaces, the chain grew by exactly three.
   const rings = [];
   for (const nm of ["ring3", "ring2", "ring1"]) { const s = await findByName("space", nm, "0"); if (s) rings.push(nm); }
-  const actsAfterW = await Act.countDocuments({ through: String(speaker) });
+  const actsAfterW = actCount({ through: String(speaker) }, story);
   rings.length === 3 && actsAfterW - actsBeforeW === 3
     ? ok(`the while grew the chain by 3 (one per pass): ${rings.join(", ")}`)
     : bad("while grew the chain by 3", { rings, actsBeforeW, actsAfterW });

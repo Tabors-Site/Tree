@@ -4,10 +4,9 @@ import { SEED_VERSION } from "./seedStory/version.js";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
-import { SignJWT, jwtVerify, importPKCS8, importSPKI } from "jose";
+import { signJwtEdDSA, verifyJwtEdDSA } from "./jwsEd25519.js";
 import { keyIdFromPublicKeyPem } from "./materials/name/keys.js";
 
-const ALGORITHM = "Ed25519";
 const TOKEN_EXPIRY = "5m";
 
 let storyIdentity = null;
@@ -137,20 +136,19 @@ export function getStoryInfoPayload() {
  */
 export async function signCanopyToken(beingId, targetDomain) {
   const identity = getStoryIdentity();
-  const privateKey = await importPKCS8(identity.privateKey, "EdDSA");
-
-  const token = await new SignJWT({
-    sub: beingId,
-    iss: identity.domain,
-    aud: targetDomain,
-    storyId: identity.storyId,
-  })
-    .setProtectedHeader({ alg: "EdDSA" })
-    .setExpirationTime(TOKEN_EXPIRY)
-    .setIssuedAt()
-    .sign(privateKey);
-
-  return token;
+  // EdDSA JWT over node:crypto (jwsEd25519). The PEM private key is accepted directly by
+  // crypto.sign (same path as signData below); the claim set + exp ("5m") + iat match the prior jose
+  // token exactly, so a remote story (jose or not) verifies it identically.
+  return signJwtEdDSA(
+    {
+      sub: beingId,
+      iss: identity.domain,
+      aud: targetDomain,
+      storyId: identity.storyId,
+    },
+    identity.privateKey,
+    { expiresIn: TOKEN_EXPIRY },
+  );
 }
 
 /**
@@ -159,10 +157,9 @@ export async function signCanopyToken(beingId, targetDomain) {
  */
 export async function verifyCanopyToken(token, remoteStoryPublicKey) {
   try {
-    const publicKey = await importSPKI(remoteStoryPublicKey, "EdDSA");
-    const { payload } = await jwtVerify(token, publicKey, {
-      algorithms: ["EdDSA"],
-    });
+    // Strict EdDSA-only verify (alg-confusion defense), exp/nbf checked like jose. The SPKI PEM is
+    // accepted directly by crypto.verify (same path as verifySignedData below).
+    const payload = verifyJwtEdDSA(token, remoteStoryPublicKey);
     return { valid: true, payload };
   } catch (err) {
     return { valid: false, error: err.message };

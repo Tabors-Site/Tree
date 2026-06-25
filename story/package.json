@@ -31,16 +31,13 @@
   "description": "TreeOS Story server. Plant the seed. Grow trees. Beings live here.",
   "homepage": "https://treeos.ai",
   "dependencies": {
-    "cookie-parser": "^1.4.7",
-    "cors": "^2.8.5",
     "express": "^5.2.1",
-    "express-rate-limit": "^8.5.2",
     "file-type": "^22.0.1",
-    "fuse-native": "^2.2.6",
-    "jose": "^6.2.3",
-    "mongoose": "^9.7.0",
     "multer": "^2.1.1",
     "openai": "^6.42.0",
     "socket.io": "^4.8.1"
+  },
+  "optionalDependencies": {
+    "fuse-native": "^2.2.6"
   }
 }

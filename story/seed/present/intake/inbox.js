@@ -17,7 +17,7 @@
 // What survives here: per-being readers (`readInbox`,
 // `getInboxSummary`) used by the descriptor and the UI.
 
-import InboxProjection from "../../past/projections/inbox/inboxProjection.js";
+import { InboxProjection } from "../../past/projections/inbox/inboxProjectionFold.js";
 import { assertHistoryOrThrow } from "../../materials/projections.js";
 
 /**
@@ -44,6 +44,35 @@ export async function readInbox(spaceId, beingId, options = {}) {
   let cursor = InboxProjection.find(q).sort({ sentAt: 1 });
   if (typeof options.limit === "number") cursor = cursor.limit(options.limit);
   return await cursor.lean();
+}
+
+/**
+ * Read every open inbox row addressed to a being, across the being's
+ * inbox-spaces, newest-first. This is the per-recipient view the
+ * "my-inbox" SEE renders — keyed on `recipient` (not on a single
+ * inbox-space the way readInbox is), so it gathers the being's whole
+ * pending queue in one history.
+ *
+ * History is OPTIONAL here: when omitted, the row set is the being's
+ * pending summons across every history (the prior behavior of the
+ * SEE handler, which only narrowed by history when the caller passed
+ * one). When present, it scopes to that history's rows.
+ *
+ * Returns the raw InboxProjection rows (same shape readInbox returns);
+ * the SEE handler shapes them into render entries.
+ *
+ * @param {string} recipientId  the being the summons target
+ * @param {object} [options]
+ * @param {string} [options.history]  scope to one history when given
+ * @returns {Promise<Array<object>>}  rows sorted sentAt descending
+ */
+export async function readPendingForRecipient(recipientId, options = {}) {
+  if (!recipientId) return [];
+  const q = {
+    recipient: String(recipientId),
+    ...(options.history ? { history: options.history } : {}),
+  };
+  return await InboxProjection.find(q).sort({ sentAt: -1 }).lean();
 }
 
 /**

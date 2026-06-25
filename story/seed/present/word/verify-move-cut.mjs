@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // move (move.word), LIVE through the bridge with ZERO stubs. The mode fork + every refuse +
-// the §7 return are .word; resolve-source (the source-space READ — Space.exists for the dest,
-// loadOrFold over space/matter for the subject's parent / containing space, and the coord
+// the §7 return are .word; resolve-source (the source-space READ, loadOrFold("space", dest)
+// for the dest-exists check, loadOrFold over space/matter for the subject's parent / containing space, and the coord
 // bounds check against the container's size) is the host escape wired by moveHost.js's
 // moveHostEnv. Proves: a REAL do:move via doVerb runs the .word, folds the moved subject's
 // row (coord in-space, spaceId cross-space), lands the do:move fact targeting the SUBJECT
@@ -15,9 +15,11 @@ import { fileURLToPath } from "url";
 import { randomUUID } from "crypto";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const SCRATCH_DB = "mongodb://localhost:27017/story_word_move_cut";
+const SCRATCH_DB = path.join(os.tmpdir(), "story_word_move_cut-" + process.pid);
 process.env.PORT = "3847";
-process.env.MONGODB_URI = SCRATCH_DB;
+process.env.TREEOS_STORE_BASE = SCRATCH_DB;
+fs.rmSync(SCRATCH_DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "move-secret-0123456789";
 process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "movecut-keys-" + process.pid);
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
@@ -26,12 +28,7 @@ fs.rmSync(SRC, { recursive: true, force: true });
 fs.mkdirSync(SRC, { recursive: true });
 fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`)).default;
-  const conn = await mongoose.createConnection(SCRATCH_DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
+// (scratch file store fresh-wiped above; no DB to drop)
 await import(`${R}/begin.js`);
 const { findByName, loadOrFold } = await import(
   `${R}/seed/materials/projections.js`
@@ -40,7 +37,6 @@ const { sealFacts } = await import(`${R}/seed/past/fact/facts.js`);
 const { I } = await import(`${R}/seed/materials/being/seedBeings.js`);
 const { getSpaceRootId } = await import(`${R}/seed/sprout.js`);
 const { doVerb } = await import(`${R}/seed/ibp/verbs/do.js`);
-const { default: Space } = await import(`${R}/seed/materials/space/space.js`);
 const { resolveAbleWord } = await import(
   `${R}/seed/present/word/ableWordRegistry.js`
 );
@@ -155,12 +151,11 @@ try {
     : bad(`fact`, cf ? { verb: cf.verb, of: cf.of, through: cf.through, params: cf.params } : "no fact");
 
   // ── 3. container-mode move: thing.txt → dest space. The row folds the new spaceId. ──
-  // resolve-source's dest-exists check reads the LEGACY Space collection (Space.exists),
-  // which the real server's full fold materializes but this DRY sealFacts harness does not
-  // (only the `projections` collection that loadOrFold reads is populated here). Seed the
-  // Space row so the dest-exists gate passes, exactly as the live fold would. (The legacy
-  // moveOp.js called the SAME Space.exists — this is a harness setup, not a conversion gap.)
-  await Space.updateOne({ _id: destId }, { $set: { _id: destId, parent: rootSpace } }, { upsert: true });
+  // resolve-source's dest-exists check reads the dest through the curated projection layer
+  // (loadOrFold("space", dest, history)), NOT the deleted Mongo Space collection. The dest
+  // was born by the REAL create-space op above and sealed onto its reel, so loadOrFold
+  // cold-folds it and the dest-exists gate passes with no extra setup (the real fold, not a
+  // stubbed Space row, is what the gate reads, exactly the live path).
   const k = await runOp(matter, "move", { to: destId });
   const slotK = mId ? await loadOrFold("matter", mId, "0") : null;
   k.result?.moved &&

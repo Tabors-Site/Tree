@@ -214,22 +214,42 @@ export async function enableWord(
 // dimming descendants, mirroring wakes' _isInHistoryLineage) is the V2.1 refinement. Also
 // caches #main so the sync resolveAbleWord can fall back to it (never the literal "0").
 export async function rehydrateWordsFromFacts() {
-  const { default: Fact } = await import("../../past/fact/fact.js");
   await _ensureMainHistory();
   // The able-words now live in the UNIFIED wordStore fold: a coin fact carries
   // params.word ("able:op") + params.binding.kind === "ableword"; a retire carries params.word.
   // Rebuild the per-history disabled overlay + the I bedrock set from them. resolveAbleWord reads
   // the fold for EXISTENCE, so REGISTRY is no longer populated here (it is the pre-genesis buffer).
-  const facts = await Fact.find({
-    verb: "do",
-    act: { $in: [WORD_COIN, WORD_RETIRE] },
-  })
-    // Group by history, then seq (623/12: ORDER, never the clock). Reads ALL histories (no filter)
-    // to build the per-branch overlay; parallel branch-seqs are incomparable ACROSS histories, so
-    // group by history ("0" first — heaven the base) and order by seq WITHIN each; the per-branch
-    // consumer composes by lineage (a branch sees heaven + its own). Replaces the date stopgap.
-    .sort({ history: 1, seq: 1 })
-    .lean();
+  //
+  // FileStore swap: coin/retire facts ride I's OWN being-reel (verb==="do",
+  // act ∈ {coin,retire}; wordStore lays them on (history, "being", iAm)). The
+  // curated getFactsOnReelWhere reads ONE reel, seq-ascending — already the
+  // {history, seq} order this fold wants WITHIN a history. We read I's reel on
+  // heaven ("0"), the seed/base vocabulary every history inherits.
+  //
+  // FLAG (rehydrateWordsFromFacts, this read): the prior Mongo Fact.find had NO
+  // history filter — a GLOBAL scan across EVERY history's reels — so the
+  // per-branch disabled overlay (a retire fact on a child branch BR turning a
+  // word off there while it stays on for main) was folded for ALL branches at
+  // boot. The FileStore is partitioned per-(history,kind,id) and there is NO
+  // curated history-enumeration peer (same gap historiesCatalog.js FLAGs for
+  // "children of a history"), so this curated read covers ONLY heaven "0". The
+  // per-branch overlay for non-main histories is NOT rebuilt here. This is the
+  // boot/recovery path (no production caller today — only the verify scripts);
+  // the live per-history overlay is maintained incrementally by disableWord /
+  // enableWord, and the per-call read path (getWord / resolveAbleWordViaFold)
+  // already composes ["0", branch] via the unified fold per history. Rebuilding
+  // the full per-branch boot overlay needs a list-all-histories primitive that
+  // the curated layer does not expose.
+  const { getFactsOnReelWhere } = await import("../../past/fact/facts.js");
+  const { I } = await import("../../materials/being/seedBeings.js");
+  const iAm = String(I);
+  const facts = getFactsOnReelWhere(
+    "0",
+    "being",
+    iAm,
+    (f) =>
+      f.verb === "do" && (f.act === WORD_COIN || f.act === WORD_RETIRE),
+  );
   _historyDisabled.clear();
   const ablewordKeys = new Set(); // params.word of words whose declare marked them kind:"ableword"
   for (const f of facts) {

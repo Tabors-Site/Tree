@@ -6,19 +6,21 @@
 import fs from "fs"; import os from "os"; import path from "path"; import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const DB = "mongodb://localhost:27017/story_config5d";
-process.env.PORT = "3852"; process.env.MONGODB_URI = DB;
+const DB = path.join(os.tmpdir(), "story_config5d-" + process.pid);
+process.env.PORT = "3852"; process.env.TREEOS_STORE_BASE = DB;
+fs.rmSync(DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "config5d-0123456789";
 process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "config5d-keys-" + process.pid);
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
 const SRC = path.join(os.tmpdir(), "config5d-src"); fs.rmSync(SRC, { recursive: true, force: true }); fs.mkdirSync(SRC, { recursive: true }); fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
-{ const mongoose = (await import(`${R}/node_modules/mongoose/index.js`)).default; const conn = await mongoose.createConnection(DB).asPromise(); await conn.dropDatabase(); await conn.close(); }
+// (scratch file store fresh-wiped above; no DB to drop)
 await import(`${R}/begin.js`);
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const sc = await import(`${R}/seed/storyConfig.js`);
 const { getStoryDomain } = await import(`${R}/seed/ibp/address.js`);
-const Fact = (await import(`${R}/seed/past/fact/fact.js`)).default;
+const { factFind, factFindOne, factCount } = await import(`${R}/seed/present/word/_factStoreTest.mjs`);
 const poll = async (fn, t = 20000, e = 300) => { const t0 = Date.now(); while (Date.now() - t0 < t) { const v = await fn(); if (v) return v; await new Promise((r) => setTimeout(r, e)); } return await fn(); };
 let pass = 0, fail = 0; const ok = (l) => { pass++; console.log("  ✓ " + l); }; const bad = (l, d) => { fail++; console.log("  ✗ " + l); if (d !== undefined) console.log("      " + JSON.stringify(d).slice(0, 240)); };
 console.log("\n  verify-config-5d (config on the library reel as name-acts)\n");
@@ -27,7 +29,7 @@ try {
   const story = getStoryDomain();
 
   // 1. The boot migration persisted seedVersion as a bodiless name-act on the library reel.
-  const seedV = await poll(() => Fact.findOne({ "of.kind": "library", "of.id": story, act: "config-set", "params.key": "seedVersion" }).lean(), (v) => !!v);
+  const seedV = await poll(() => factFindOne({ "of.kind": "library", "of.id": story, act: "config-set", "params.key": "seedVersion" }), (v) => !!v);
   (seedV && seedV.through == null && seedV.by && seedV.verb === "name")
     ? ok(`boot wrote seedVersion as a name-act on the library reel (by=${seedV.by}, through=null, verb=${seedV.verb})`)
     : bad("seedVersion not a library name-act", seedV);
@@ -52,7 +54,7 @@ try {
     : bad("config not deleted", sc.getStoryConfigValue("timezone"));
 
   // 5. the config write is a bodiless name-act on the library reel (not a do/space fact).
-  const tzFact = await Fact.findOne({ "of.kind": "library", "of.id": story, act: "config-set", "params.key": "timezone" }).lean();
+  const tzFact = factFindOne({ "of.kind": "library", "of.id": story, act: "config-set", "params.key": "timezone" });
   (tzFact && tzFact.through == null && tzFact.verb === "name")
     ? ok("config write landed bodiless (through=null, verb:name) on the library reel — no ./config space")
     : bad("config write not a library name-act", tzFact);

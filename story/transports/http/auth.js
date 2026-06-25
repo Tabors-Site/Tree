@@ -14,7 +14,7 @@
 import express from "express";
 import { register, login, logout } from "./users.js";
 import authenticate from "./middleware/authenticate.js";
-import rateLimit from "express-rate-limit";
+import rateLimit from "./middleware/rateLimit.js";
 import { sendError, IBP_ERR } from "../../seed/ibp/protocol.js";
 
 const registerLimiter = rateLimit({

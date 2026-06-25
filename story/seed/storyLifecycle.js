@@ -33,14 +33,18 @@ export async function isStoryClosed() {
   _checked = true;
   try {
     const { getStoryDomain } = await import("./ibp/address.js");
-    const Fact = (await import("./past/fact/fact.js")).default;
-    const f = await Fact.findOne({
-      "of.kind": "library",
-      "of.id": getStoryDomain(),
-      act: "close-story",
-      verb: "name",
-    }).lean();
-    _closed = !!f;
+    const { getFactsOnReelWhere } = await import("./past/fact/facts.js");
+    // close-story lays a 5D name-act on the library reel, out of any
+    // history (config/library writes land on "0"). Read that reel via the
+    // curated getFactsOnReelWhere (the file-native peer of Fact.findOne)
+    // and latch closed if any close-story name-act exists.
+    const hits = getFactsOnReelWhere(
+      "0",
+      "library",
+      getStoryDomain(),
+      (f) => f.verb === "name" && f.act === "close-story",
+    );
+    _closed = hits.length > 0;
   } catch {
     _closed = false;
   }

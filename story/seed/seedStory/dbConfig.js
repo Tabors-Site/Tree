@@ -1,83 +1,62 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// My connection to MongoDB.
+// The chain-of-truth's connection — now a FILE store, not Mongo.
 //
-// Every read and write in the world I form goes through Mongoose,
-// which goes through this connection. The connection's state is the
-// story's lifeline; transitions are logged loudly so the operator
-// sees exactly when the DB dropped and when it came back.
-// isDbHealthy() is the single source of truth for DB availability.
+// The storage was ripped from Mongo to an append-only file store
+// (philosophy/mongorust.md; past/fileStore.js). There is no
+// network connection to wait on and no replica set to monitor: the
+// store is a directory under <story>/store/. connectDB() ensures that
+// directory exists and replays the moment-journal (crash recovery)
+// before any read or write fires. isDbHealthy() is a cheap existence
+// check on the store root — the file-store peer of Mongo's readyState.
+//
+// The Mongo→FileStore rip is complete: dbConfig no longer imports or
+// re-exports mongoose. connectDB() opens the file store; isDbHealthy()
+// is the file-store peer of Mongo's readyState. No mongoose remains
+// anywhere in the tree — the optional Mongo extension and every
+// mongoose seam have been deleted, so `npm uninstall mongoose` is safe.
 
 import log from "./log.js";
-import mongoose from "mongoose";
+import { existsSync } from "node:fs";
+import {
+  configureStore,
+  storeRoot,
+  replayJournal,
+} from "../past/fileStore.js";
 
-const mongooseUri = process.env.MONGODB_URI;
-
-if (!mongooseUri) {
-  log.error("DB", "MONGODB_URI is not set in .env. Cannot start.");
-  log.error("DB", "Example: MONGODB_URI=mongodb://localhost:27017/story");
-  process.exit(1);
+/**
+ * Open the file store: ensure the data dir exists (configureStore makes
+ * journal/ + reels/), then replay the moment-journal so any moment that
+ * was committed-to-WAL but not yet acked is re-applied idempotently
+ * before the first read/write. The story name selects the store folder
+ * (default "past"); tests pass an explicit root.
+ *
+ * @param {{root?:string, story?:string}} [opts]
+ * @returns {Promise<{root:string, replayed:number, torn:boolean}>}
+ */
+export async function connectDB(opts = {}) {
+  const root = configureStore(opts);
+  const { replayed, torn } = replayJournal();
+  if (replayed > 0) {
+    log.info("DB", `file store ready at ${root} — replayed ${replayed} journal record(s)`);
+  } else {
+    log.verbose("DB", `file store ready at ${root}`);
+  }
+  if (torn) {
+    log.warn("DB", "moment-journal had a torn trailing record (a crash mid-commit); it was discarded.");
+  }
+  return { root, replayed, torn };
 }
 
-const connectionOptions = {
-  // Initial server selection (boot-time). 5s default; cloud DBs may need 15-30s.
-  serverSelectionTimeoutMS: Number(process.env.MONGO_SELECTION_TIMEOUT) || 5000,
-
-  // Connection pool. Default 10 exhausts at 100 concurrent users.
-  maxPoolSize: Number(process.env.MONGO_MAX_POOL_SIZE) || 50,
-  minPoolSize: Number(process.env.MONGO_MIN_POOL_SIZE) || 5,
-
-  // Per-socket timeout. Hung queries on degraded replicas get killed
-  // instead of blocking the pool forever.
-  socketTimeoutMS: Number(process.env.MONGO_SOCKET_TIMEOUT) || 30000,
-
-  // Failure detection cadence. Lower = faster detection, more overhead.
-  heartbeatFrequencyMS: Number(process.env.MONGO_HEARTBEAT_MS) || 5000,
-};
-
-mongoose
-  .connect(mongooseUri, connectionOptions)
-  .then(() => log.verbose("DB", "MongoDB connected"))
-  .catch((err) => {
-    log.error("DB", `MongoDB connection failed: ${err.message}`);
-    log.error("DB", "Make sure MongoDB is running and MONGODB_URI is correct in .env");
-    process.exit(1);
-  });
-
-// Lifetime event monitoring. These fire after the initial connection
-// succeeds and cover the rest of the process. Every transition logs
-// so the operator can see DB-side disruption clearly.
-mongoose.connection.on("disconnected", () => {
-  log.error("DB", "MongoDB disconnected. Queries will fail until reconnected.");
-  // Host observation: record the moment in memory only (no Mongo
-  // write is possible while down); the reconnect fact carries the
-  // whole gap. Lazy import — this module loads before everything.
-  import("../materials/host/host.js")
-    .then((m) => m.noteMongoDisconnected())
-    .catch(() => {});
-});
-
-mongoose.connection.on("reconnected", () => {
-  log.info("DB", "MongoDB reconnected.");
-  import("../materials/host/host.js")
-    .then((m) => m.noteMongoReconnected())
-    .catch(() => {});
-});
-
-mongoose.connection.on("error", (err) => {
-  log.error("DB", `MongoDB connection error: ${err.message}`);
-});
-
-// No SIGTERM handler here. begin.js owns shutdown ordering: it flushes
-// in-flight host lanes FIRST, then closes this connection. A second
-// handler here raced that sequence — closing Mongo out from under the
-// lanes still sealing their last acts.
-
-// readyState: 0 disconnected, 1 connected, 2 connecting, 3 disconnecting.
-// The conversation loop checks this before entering the tool loop so a
-// tool result can tell the AI "database unavailable" instead of hanging.
+// The file-store peer of Mongo's readyState: the store is "healthy"
+// when its root directory exists. configureStore (called by connectDB
+// at boot) creates it; a missing root means connectDB never ran or the
+// volume vanished. Synchronous + cheap — the conversation loop and the
+// HTTP db-health gate check this before entering a read/write path.
 export function isDbHealthy() {
-  return mongoose.connection.readyState === 1;
+  try {
+    return existsSync(storeRoot());
+  } catch {
+    return false;
+  }
 }
-
-export default mongoose;

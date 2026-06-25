@@ -10,6 +10,7 @@
 // override worked), and the caller's own moment is UNTOUCHED (the derivation is
 // clean — the host session strand that follows reads the real moment, not i-am).
 // Isolated test DB, wiped at start and end.
+import os from "os";
 
 import fs from "fs";
 import path from "path";

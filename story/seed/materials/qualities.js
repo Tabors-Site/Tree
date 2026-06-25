@@ -61,10 +61,7 @@
 // scoped story bundle passes opts.callerExtName (extensions can only
 // write to their own quality namespace).
 
-import Being from "../materials/being/being.js";
 import { getInternalConfigValue } from "../internalConfig.js";
-import Space from "../materials/space/space.js";
-import Matter from "../materials/matter/matter.js";
 import { hooks } from "../hooks.js";
 import { guardQualityWrite } from "./doCeiling.js";
 import { getStoryConfigValue } from "../storyConfig.js";
@@ -165,8 +162,11 @@ function validateData(key, data) {
   return size;
 }
 
-// Build the read-only quality primitives bound to a specific Mongoose
-// model. Same shape across being, space, matter.
+// Build the read-only quality primitives for a primitive kind. Same shape
+// across being, space, matter. No model coupling: getQuality /
+// readQualityNamespace operate on the passed doc; the write methods are
+// retired to fact-driven tombstones, so the old Mongoose `Model` binding
+// is gone.
 //
 // Write methods (setQuality / mergeQuality / incQuality / pushQuality /
 // addToQualitySet / batchSetQuality / unsetQuality) retired 2026-05-23
@@ -187,7 +187,7 @@ function validateData(key, data) {
 // Tombstone methods below throw with a clear migration message. The
 // loader's wrapper (extensions/loader.js) used to bind callerExtName
 // through these methods; that wrapping is retired alongside.
-function createQualityPrimitives({ Model, documentType }) {
+function createQualityPrimitives({ documentType }) {
   const tombstone = (methodName) => () => {
     throw new Error(
       `qualities.${documentType}.${methodName} retired 2026-05-23. ` +
@@ -225,17 +225,14 @@ function createQualityPrimitives({ Model, documentType }) {
 
 export const qualities = Object.freeze({
   being: createQualityPrimitives({
-    Model: Being,
     documentType: "being",
     enforceOwnership: false,
   }),
   space: createQualityPrimitives({
-    Model: Space,
     documentType: "space",
     enforceOwnership: true,
   }),
   matter: createQualityPrimitives({
-    Model: Matter,
     documentType: "matter",
     enforceOwnership: true,
   }),

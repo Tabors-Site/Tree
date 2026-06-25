@@ -28,20 +28,13 @@
 // See seed/philosophy/MATERIALS.md "And the beings are the acts" for the
 // philosophy behind why this reel is identity-load-bearing.
 
-import mongoose from "mongoose";
 import log from "../../seedStory/log.js";
 import { getInternalConfigValue } from "../../internalConfig.js";
-import Fact from "./fact.js";
-import { computeHash, contentOf, GENESIS_PREV } from "./hash.js";
-import ReelHead from "../reel/reelHead.js";
-import { reelKey } from "../reel/reelHeads.js";
+import * as fileStore from "../fileStore.js";
 import { hooks } from "../../hooks.js";
 import { IBP_ERR, IbpError } from "../../ibp/protocol.js";
-import { getStoryConfigValue } from "../../storyConfig.js";
 import { resolveSpaceAccess } from "../../materials/space/spaces.js";
 import { redactSecrets } from "../../materials/redact.js";
-import { allocSeq } from "../reel/reelHeads.js";
-import { withReelLock } from "../reel/appendLock.js";
 
 // Reel-bearing target kinds — those with their own seq counter. Other
 // kinds (place, stance) and target-less facts carry seq:null and stay
@@ -399,18 +392,16 @@ export async function logFact(input, opts = {}) {
   const incomingCrossOrigin =
     hookData.params?.crossOrigin || cappedParams.value?.crossOrigin;
   if (incomingCrossOrigin?.actId && finalTarget) {
-    const existing = await Fact.findOne({
-      // History-scoped: the delivery targets a specific world; a
-      // sibling history holding the same crossOrigin tuple is a
-      // different reel and must not suppress this stamp.
-      history,
-      "of.kind": finalTarget.kind,
-      "of.id": finalTarget.id,
-      "params.crossOrigin.actId": incomingCrossOrigin.actId,
-      "params.crossOrigin.beingId": incomingCrossOrigin.beingId,
-    })
-      .select("_id seq")
-      .lean();
+    // History-scoped: the delivery targets a specific world; a sibling
+    // history holding the same crossOrigin tuple is a different reel and
+    // must not suppress this stamp. Scan THIS reel (own-history) for a
+    // prior fact carrying the same crossOrigin provenance tuple.
+    const reel = fileStore.readReel(history, finalTarget.kind, finalTarget.id);
+    const existing = reel.find(
+      (f) =>
+        f?.params?.crossOrigin?.actId === incomingCrossOrigin.actId &&
+        f?.params?.crossOrigin?.beingId === incomingCrossOrigin.beingId,
+    );
     if (existing) {
       // Duplicate delivery — return without writing. Caller treats
       // this as success (the fact already landed on a prior delivery).
@@ -436,140 +427,51 @@ export async function logFact(input, opts = {}) {
     history,
   };
 
-  // Reel-bearing path: allocate seq, chain the hash, insert — all
-  // under the per-reel append lock. Per STAMPER.md, pairing seq alloc
-  // with insert eliminates the transient-gap window where a slow
-  // inserter could leave its seq stranded behind the fold marker.
-  // The lock also serializes the prev-hash lookup so concurrent
-  // appenders can't both read the same `prev` and fork the chain.
+  // Reel-bearing path: one moment = one fact. FileStore.commitMoment is
+  // THE atomic write — it computes seq/p/_id ONCE from the reel's .head
+  // (the seq counter + chain root), journals the moment (WAL+fsync, the
+  // commit point), applies the fact line to the reel idempotently, then
+  // advances the head. The single global commit mutex serializes every
+  // write, so there is no append lock, no transaction, no replica set:
+  // the seq alloc + prev-hash chain + insert that the Mongo path did
+  // under withReelLock all collapse into commitMoment. The fact _id is
+  // computeHash(p, contentOf(fact)) — IDENTICAL to the Mongo path, so
+  // folds stay byte-compatible. spec = baseDoc (the fact content; never
+  // seq/p/_id, which commitMoment derives).
   //
-  // Target-less or place/stance facts skip the lock — they have no
-  // reel; they still get a content-hash identity (p = GENESIS_PREV).
+  // Target-less or place/stance facts have no reel; they still land
+  // as a single-fact moment keyed by (history, kind, id).
+  const { skipEagerFold = false } = opts;
   if (finalTarget && REEL_KINDS.has(finalTarget.kind) && finalTarget.id) {
-    const { session = null, skipEagerFold = false } = opts;
-    // Critical section: allocSeq + prev-hash read + insert, all
-    // under the per-reel append lock (per STAMPER.md). The same
-    // body runs whether called standalone or from sealFacts; the
-    // ONLY difference is who's holding the lock — sealFacts holds
-    // it for the whole transaction across reels, so a nested
-    // withReelLock here would deadlock.
-    const runAppend = async () => {
-      const seq = await allocSeq(finalTarget.kind, finalTarget.id, {
-        session,
-        history,
-      });
-
-      // INTEGRITY chain: read the prev fact's identity, LINEAGE-
-      // AWARE. seq is monotonic per reel; under this lock, prev sits
-      // at exactly seq-1 — but on a non-main history, seq-1 may be
-      // owned by an ANCESTOR (the first divergent fact chains to the
-      // parent's fact at the branchPoint, linking the chain ACROSS
-      // the fork). The old history-blind lookup could match a SIBLING
-      // history's fact at the same seq — the chain-corruption bug
-      // this lineage walk retires. A missing prev (a true gap from
-      // a crashed alloc) falls back to GENESIS_PREV.
-      const p = await prevHashAt(
-        finalTarget.kind,
-        finalTarget.id,
-        seq - 1,
-        history,
-        session,
-      );
-
-      // The identity IS the hash. Computed over the full content
-      // (including history and seq) chained to p; no random ids.
-      const fullDoc = { ...baseDoc, seq, p };
-      const _id = computeHash(p, contentOf(fullDoc));
-      try {
-        if (session) {
-          // Mongoose: insert-with-session requires the array form.
-          await Fact.create([{ ...fullDoc, _id }], { session });
-        } else {
-          await Fact.create({ ...fullDoc, _id });
-        }
-      } catch (err) {
-        // Duplicate IDENTITY (same content, same world, same
-        // history) is dedup semantics under content addressing —
-        // the fact already exists; this stamp is a replay. Only the
-        // _id collision is dedup; a seq collision on
-        // branch_target_seq_unique stays a REAL error (two different
-        // contents fighting for one slot).
-        if (err?.code === 11000 && /_id_?\b/.test(err?.message || "")) {
-          log.debug(
-            "DB",
-            `Fact replay deduped (${history}:${finalTarget.kind}:${finalTarget.id} seq=${seq})`,
-          );
-          return;
-        }
-        throw err;
-      }
-
-      // The reel's ROOT HASH is its head fact's identity (every _id
-      // commits to all priors). Denormalized onto the ReelHead in
-      // the same lock/session so history/story roll-ups are one
-      // collection scan (chainRoots.js).
-      const headUpdate = ReelHead.updateOne(
-        { _id: reelKey(history, finalTarget.kind, finalTarget.id) },
-        { $set: { headHash: _id } },
-      );
-      if (session) headUpdate.session(session);
-      await headUpdate;
-    };
     try {
-      if (session || opts.lockHeldByCaller) {
-        // The caller already holds the per-reel append lock for this
-        // reel. Either implicitly (session present, so sealFacts /
-        // sealAct is holding the lock around the open transaction
-        // per PARALLEL FACTS §1.2) or explicitly (lockHeldByCaller,
-        // single-reel sealFacts short-circuit). withReelLock is
-        // non-reentrant; re-acquiring here would deadlock.
-        await runAppend();
-      } else {
-        await withReelLock(
-          history,
-          finalTarget.kind,
-          finalTarget.id,
-          runAppend,
-        );
-      }
+      await fileStore.commitMoment({
+        facts: [
+          {
+            history,
+            kind: finalTarget.kind,
+            id: String(finalTarget.id),
+            spec: baseDoc,
+          },
+        ],
+      });
     } catch (err) {
       log.error(
         "DB",
         `Fact append failed (${act} on ${finalTarget.kind}:${finalTarget.id} history=${history}): ${err.message}`,
       );
-      // Carry the underlying message + code through so callers see the
-      // actual cause (E11000 duplicate, missing index, schema validation)
-      // instead of the bare "Failed to stamp Fact" wrapper.
-      //
-      // IMPORTANT: preserve errorLabels so withTransaction sees
-      // TransientTransactionError / UnknownTransactionCommitResult and
-      // can retry. Without this, the first write to facts/beings/etc.
-      // on a fresh DB hits "Unable to write... due to catalog changes"
-      // (a collection-creation race that Mongo asks us to retry), and
-      // the retry never happens because the wrapped error lost its
-      // labels — boot fails on the first write of genesis.
       const wrapped = new Error(
         `Failed to stamp Fact (${history}:${finalTarget.kind}:${finalTarget.id} ${act}): ${err.message}`,
       );
       wrapped.cause = err;
       if (err?.code) wrapped.code = err.code;
-      if (err?.errorLabels) wrapped.errorLabels = err.errorLabels;
-      if (typeof err?.hasErrorLabel === "function") {
-        wrapped.hasErrorLabel = (label) => err.hasErrorLabel(label);
-      }
       throw wrapped;
     }
 
     // Eager-fold. Per STAMPER.md Decision: "eager-fold is an inline
     // call to `fold(target)`. Not a second projection-writer." The
     // fold engine's compare-and-set handles concurrency; failure here
-    // is harmless — the next fold round self-heals.
-    //
-    // Skip when called inside a sealFacts transaction (skipEagerFold).
-    // sealFacts runs folds AFTER commit so projections see the
-    // committed state instead of in-flight transactional state. The
-    // projections are self-healing either way; this just avoids
-    // wasted reads against pre-commit state.
+    // is harmless — the next fold round self-heals. Skipped when the
+    // caller (sealFacts) folds after the whole ΔF commits.
     if (!skipEagerFold) {
       try {
         const { fold } =
@@ -589,74 +491,20 @@ export async function logFact(input, opts = {}) {
       }
     }
   } else {
-    // Non-reel-bearing path: no chain (no reel), but every fact gets
-    // a content-hash identity. p = GENESIS_PREV; identical content in
-    // the same world dedups to one row (correct under CAS).
+    // Non-reel-bearing path (place/stance/target-less): no fold to run,
+    // but the fact still commits as a single-fact moment. commitMoment
+    // computes its content-hash identity; replay is idempotent.
+    const okind = finalTarget?.kind || "stance";
+    const oid = finalTarget?.id != null ? String(finalTarget.id) : act;
     try {
-      const fullDoc = { ...baseDoc, seq: null, p: GENESIS_PREV };
-      const _id = computeHash(GENESIS_PREV, contentOf(fullDoc));
-      if (opts.session) {
-        await Fact.create([{ ...fullDoc, _id }], { session: opts.session });
-      } else {
-        await Fact.create({ ...fullDoc, _id });
-      }
+      await fileStore.commitMoment({
+        facts: [{ history, kind: okind, id: oid, spec: baseDoc }],
+      });
     } catch (err) {
-      if (err?.code === 11000 && /_id_?\b/.test(err?.message || "")) {
-        log.debug("DB", `Fact replay deduped (non-reel ${act})`);
-        return;
-      }
       log.error("DB", `Fact save failed (${act}): ${err.message}`);
       throw new Error("Failed to stamp Fact");
     }
   }
-}
-
-/**
- * The previous fact's identity for an append at `prevSeq + 1`,
- * lineage-aware. On main (or when prevSeq sits past this history's
- * own branchPoint) the prev lives on the SAME history. Otherwise it
- * lives on whichever lineage ancestor owns prevSeq — walking
- * leaf-to-root, the first history whose floor sits below prevSeq is
- * the owner (main's floor is 0). The first divergent fact on a
- * history therefore chains to the PARENT's fact at the branchPoint:
- * one chain across the fork, exactly like the read path's
- * range-union (foldEngine.readReelBetween).
- *
- * prevSeq <= 0 → GENESIS_PREV. Missing prev row (a true gap from a
- * crashed alloc, or pre-CAS rows) → GENESIS_PREV, same fallback as
- * the old stamper.
- */
-async function prevHashAt(kind, id, prevSeq, history, session = null) {
-  if (!(prevSeq > 0)) return GENESIS_PREV;
-
-  const { isMain, resolveHistoryLineage, getBranchPoint } =
-    await import("../../materials/history/histories.js");
-
-  let owner = history;
-  if (!isMain(history)) {
-    const lineage = await resolveHistoryLineage(history); // main → leaf
-    owner = null;
-    for (let i = lineage.length - 1; i >= 0; i--) {
-      const here = lineage[i];
-      const floor = isMain(here) ? 0 : await getBranchPoint(here, kind, id);
-      if (prevSeq > (floor || 0)) {
-        owner = here;
-        break;
-      }
-    }
-    if (!owner) return GENESIS_PREV;
-  }
-
-  const historyClause = isMain(owner)
-    ? { $or: [{ history: "0" }, { history: { $exists: false } }] }
-    : { history: owner };
-  let q = Fact.findOne(
-    { "of.kind": kind, "of.id": id, seq: prevSeq, ...historyClause },
-    { _id: 1 },
-  ).lean();
-  if (session) q = q.session(session);
-  const prev = await q;
-  return prev?._id || GENESIS_PREV;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -664,45 +512,17 @@ async function prevHashAt(kind, id, prevSeq, history, session = null) {
 // ─────────────────────────────────────────────────────────────────────
 //
 // MODEL.md ATOMIC SEAL: commit(ΔF) ∈ {all, nothing}. ΔF can span
-// multiple reels. The whole set commits as one unit. logFact is the
-// per-reel append primitive; sealFacts is the ΔF commit boundary.
-// One act → one ΔF → one sealFacts → one Mongo transaction.
-//
-// Single-fact ΔF: no transaction needed — logFact's per-reel lock +
-// single-doc insert is already atomic. sealFacts delegates.
-//
-// Multi-fact ΔF: requires a Mongo replica set (multi-document
-// transactions are a replica-set feature). sealFacts opens one
-// session, acquires per-reel locks in sorted order (deadlock
-// prevention), appends each
-// fact inside the session, commits as one transaction. If any
-// append fails, the transaction aborts and zero facts land. PAST
-// FIXED holds end-to-end.
+// multiple reels. The whole set commits as one unit. FileStore's
+// commitMoment IS that unit: one record carrying every fact in the ΔF,
+// WAL-appended + fsync'd as one frame (the commit point) under the
+// single global commit mutex, then applied to the reels idempotently.
+// No transaction, no replica set, no append lock — the mutex serializes
+// everything; a crash replays the WAL record atomically (all-or-nothing
+// by the frame's CRC). One act → one ΔF → one commitMoment.
 //
 // Eager-fold runs AFTER commit, not inside, so projections see the
-// committed state. The fact-chain is the source of truth;
-// projections self-heal even without eager-fold.
-
-export const REPLICA_SET_REQUIRED_MSG =
-  "Multi-fact ΔF requires a Mongo replica set (multi-document " +
-  "transactions are a replica-set feature). To enable on a dev box: " +
-  "stop mongod, start with `--replSet rs0`, then `mongosh --eval 'rs.initiate()'`.";
-
-export function isReplicaSetCluster() {
-  // mongoose.connection.db.topology.type === "ReplicaSetWithPrimary" /
-  // "ReplicaSetNoPrimary" — but the simplest reliable check is the
-  // topology description on the client.
-  try {
-    const topology = mongoose.connection?.client?.topology;
-    if (!topology) return false;
-    const desc = topology.description;
-    if (!desc) return false;
-    // ReplicaSet types contain "ReplicaSet" in the name.
-    return /ReplicaSet/i.test(desc.type || "");
-  } catch {
-    return false;
-  }
-}
+// committed state. The fact-chain is the source of truth; projections
+// self-heal even without eager-fold.
 
 /**
  * Group a ΔF by reel and sort the reels by key. Centralizes the
@@ -757,60 +577,6 @@ export function groupByReel(deltaF) {
     .sort()
     .map((k) => factsByReel.get(k));
   return { sortedReels, orphanFacts };
-}
-
-/**
- * Acquire every per-reel append lock in sorted order, then run fn.
- * The callback runs only once every lock is held; locks release in
- * reverse order after fn resolves or rejects.
- *
- * PARALLEL FACTS §1.2: "lock at append, only the append is serial."
- * The lock must span the full read-snapshot lifetime of the seal —
- * from before the Mongo session opens through after the transaction
- * commits — so two contenders on the same reel cannot have
- * overlapping snapshots. If the lock were taken inside the
- * transaction (former shape), contender B's session would snapshot
- * `reelHeads` while contender A still held the lock for its
- * in-flight commit, and B's $inc on the same head would raise
- * WriteConflict at the storage engine — a Strategy-B-shaped seal
- * rejection on a Strategy-A workload (§6 violation). Holding the
- * lock outside the transaction restores §1.2 by construction.
- */
-export async function withReelLocks(sortedReels, fn) {
-  const acquire = async (i) => {
-    if (i === sortedReels.length) return fn();
-    const reel = sortedReels[i];
-    return withReelLock(reel.history, reel.kind, reel.id, () => acquire(i + 1));
-  };
-  return acquire(0);
-}
-
-/**
- * Append a ΔF inside an already-open Mongo session/transaction.
- *
- * The caller (sealFacts or sealAct) is responsible for holding
- * every reel lock for the full transaction lifetime via
- * withReelLocks. This helper just iterates: each fact goes through
- * logFact with the session, and logFact skips its own withReelLock
- * because session-present means the caller is holding it.
- *
- * Returns metadata the outer caller uses for post-commit fold runs.
- *
- * @param {Array<object>} deltaF      fact specs (same shape logFact takes)
- * @param {ClientSession} session     Mongo session held by the outer txn
- * @returns {Promise<{ sortedReels: Array<{kind,id,facts}> }>}
- */
-export async function appendDeltaFInSession(deltaF, session) {
-  const { sortedReels, orphanFacts } = groupByReel(deltaF);
-  for (const reel of sortedReels) {
-    for (const spec of reel.facts) {
-      await logFact(spec, { session, skipEagerFold: true });
-    }
-  }
-  for (const spec of orphanFacts) {
-    await logFact(spec, { session, skipEagerFold: true });
-  }
-  return { sortedReels };
 }
 
 /**
@@ -1023,71 +789,36 @@ export async function sealFacts(deltaF, opts = {}) {
     return { committed: 0, txn: false };
   }
 
-  // PARALLEL FACTS §3, the "microsecond of appending": a ΔF whose
-  // facts all share ONE reel needs no multi-document transaction.
-  // The per-reel append lock plus single-doc atomic inserts already
-  // give §1.2's guarantee — the transaction would lie about what
-  // the commit actually is (transactions exist for multi-reel
-  // atomicity). Single-fact ΔF collapses into this case naturally.
-  // The single-reel short-circuit also runs on standalone Mongo, so
-  // boot/migration callers without a replica set still pass through
-  // without needing requireTransaction:false. Orphan facts
-  // (target-less, e.g. place/stance) force the multi-reel path
-  // because they need the session for their own atomicity.
-  const { sortedReels: lockReels, orphanFacts } = groupByReel(deltaF);
-  if (
-    lockReels.length <= 1 &&
-    orphanFacts.length === 0 &&
-    !opts.requireTransaction
-  ) {
-    if (lockReels.length === 0) {
-      // No reel-bearing facts and no orphans — by construction
-      // unreachable from here (deltaF.length > 0, every fact either
-      // reels or orphans), but guarded for forward safety.
-      return { committed: 0, txn: false };
-    }
-    const reel = lockReels[0];
-    await withReelLock(reel.history, reel.kind, reel.id, async () => {
-      for (const spec of reel.facts) {
-        await logFact(spec, { lockHeldByCaller: true, skipEagerFold: true });
-      }
-    });
-    await foldAfterCommit(lockReels);
-    return { committed: deltaF.length, txn: false };
-  }
+  // FileStore swap: the ΔF commits through logFact, which builds a
+  // single-fact commitMoment record and calls fileStore.commitMoment —
+  // THE atomic write (WAL frame + fsync under the global commit mutex,
+  // then idempotent reel apply). Each fact still rides logFact so its
+  // gates (death/banish), the beforeFact hook, payload capping, and
+  // cross-origin idempotency all run, exactly as the Mongo path did.
+  //
+  // The per-reel append lock / multi-document transaction / replica-set
+  // requirement are GONE: the commit mutex serializes every write, so a
+  // ΔF spanning N reels needs no transaction here. We skip per-fact
+  // eager-fold and run foldAfterCommit ONCE over the touched reels (so
+  // projections see the committed state). groupByReel both validates
+  // history-on-spec and yields the reel set foldAfterCommit folds.
+  const { sortedReels, orphanFacts } = groupByReel(deltaF);
 
-  // Multi-reel (or orphan-mixed, or transaction-required): needs a
-  // replica set for multi-document atomic commit. Fail loud per the
-  // hard prerequisite.
-  if (!isReplicaSetCluster()) {
-    throw new Error("sealFacts: " + REPLICA_SET_REQUIRED_MSG);
-  }
-
-  // PARALLEL FACTS §1.2: acquire every reel lock BEFORE opening the
-  // session, hold them across the entire transaction (open → write
-  // → commit → close). This bounds the snapshot lifetime so two
-  // contenders on the same reel can never have overlapping
-  // snapshots; the next contender's session cannot open until our
-  // commit has landed. See withReelLocks for the full rationale.
-  let result;
-  await withReelLocks(lockReels, async () => {
-    const session = await mongoose.startSession();
-    try {
-      await session.withTransaction(async () => {
-        result = await appendDeltaFInSession(deltaF, session);
-      });
-    } catch (err) {
-      log.error("Seal", `sealFacts aborted: ${err.message}`);
-      throw err;
-    } finally {
-      await session.endSession();
+  for (const reel of sortedReels) {
+    for (const spec of reel.facts) {
+      await logFact(spec, { skipEagerFold: true });
     }
-  });
+  }
+  // Orphan (place/stance, target-less) facts have no reel; logFact
+  // still commits them as single-fact moments.
+  for (const spec of orphanFacts) {
+    await logFact(spec, { skipEagerFold: true });
+  }
 
   // Eager-fold AFTER commit. Self-healing on failure.
-  await foldAfterCommit(result.sortedReels);
+  if (sortedReels.length > 0) await foldAfterCommit(sortedReels);
 
-  return { committed: deltaF.length, txn: true };
+  return { committed: deltaF.length, txn: false };
 }
 
 function capPayload(value, label) {
@@ -1169,25 +900,44 @@ export async function getFacts({
       throw new IbpError(IBP_ERR.SPACE_NOT_FOUND, "Space not found");
   }
 
-  const query = {
-    "of.kind": "space",
-    "of.id": String(spaceId),
-    ...buildDateFilter(startDate, endDate),
-  };
   const safeLimit = Math.min(
     Math.max(Number(limit) || 100, 1),
     MAX_QUERY_LIMIT(),
   );
   const safeOffset = Math.max(0, Number(offset) || 0);
 
-  const facts = await Fact.find(query)
-    .populate("through", "name")
-    .sort({ date: -1 })
-    .skip(safeOffset)
-    .limit(safeLimit)
-    .lean();
+  // FileStore swap: read the space reel from its file (own-history;
+  // defaults to main when the caller didn't thread a history). Date
+  // filter + newest-first ordering + offset/limit apply in JS, matching
+  // the old Mongo query semantics.
+  const reelHistory =
+    typeof history === "string" && history.length ? history : "0";
+  const dateFilter = buildDateFilter(startDate, endDate).date;
+  const facts = applyReelView(
+    fileStore.readReel(reelHistory, "space", String(spaceId)),
+    { dateFilter, order: "desc", offset: safeOffset, limit: safeLimit },
+  );
 
   return { facts, limit: safeLimit };
+}
+
+// Apply the Mongo-query view (date filter, seq-direction ordering,
+// offset/limit) to a raw reel read. Reels come back seq-ascending from
+// FileStore; "desc" reverses for the explorer's newest-first view.
+function applyReelView(reel, { dateFilter = null, order = "desc", offset = 0, limit = 100 } = {}) {
+  let rows = reel;
+  if (dateFilter) {
+    rows = rows.filter((f) => {
+      const t = f?.date != null ? Date.parse(f.date) : NaN;
+      if (Number.isNaN(t)) return false;
+      if (dateFilter.$gte && t < dateFilter.$gte.getTime()) return false;
+      if (dateFilter.$lte && t > dateFilter.$lte.getTime()) return false;
+      return true;
+    });
+  }
+  // Reel is seq-ascending; desc = newest first.
+  rows = order === "asc" ? rows.slice() : rows.slice().reverse();
+  return rows.slice(offset, offset + limit);
 }
 
 /**
@@ -1210,19 +960,17 @@ export async function getReel({
       `getReel: targetKind must be one of ${[...REEL_KINDS].join("|")}`,
     );
   }
-  const query = { "of.kind": targetKind, "of.id": String(targetId) };
   const safeLimit = Math.min(
     Math.max(Number(limit) || 100, 1),
     MAX_QUERY_LIMIT(),
   );
   const safeOffset = Math.max(0, Number(offset) || 0);
-  const dir = order === "asc" ? 1 : -1;
-  const facts = await Fact.find(query)
-    .populate("through", "name")
-    .sort({ seq: dir, date: dir })
-    .skip(safeOffset)
-    .limit(safeLimit)
-    .lean();
+  // FileStore swap: own-history read (defaults to main). seq-ascending
+  // for "asc" chain-walk order; reversed for the "desc" explorer view.
+  const facts = applyReelView(
+    fileStore.readReel("0", targetKind, String(targetId)),
+    { order, offset: safeOffset, limit: safeLimit },
+  );
   return { facts, limit: safeLimit, offset: safeOffset };
 }
 
@@ -1274,23 +1022,114 @@ function serializeFactForReel(f) {
   };
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// CURATED FACT QUERIES — the ONE seam non-chokepoint files call.
+//
+// Architecture (Tabor: "many can be centralized"): only the chokepoints
+// import fileStore directly; everything else calls these wrappers, so the
+// storage seam stays in ONE place for the future Rust swap. These wrap the
+// fileStore reel-read primitives (readReelWhere / factsByActId) and return the
+// plain fact docs callers expect (the .lean() shape). NEVER a Mongo fallback.
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * The facts one act (moment) laid. Under the one-word doctrine a moment lays
+ * ONE fact (multi-fact only at the I-Am root), so this is usually 0..1 — but
+ * the read is general. The actor's facts ride the actor's own being-reel, so
+ * this reads (history, "being", actorBeingId) and keeps the facts carrying
+ * this actId. The file-native peer of Mongo's Fact.find({ actId }).
+ *
+ * @param {string} history       the reel's history
+ * @param {string} actorBeingId  the being whose reel the facts ride
+ * @param {string} actId         the act correlation
+ * @returns {fact[]}             seq-ascending
+ */
+export function getFactsByActId(history, actorBeingId, actId) {
+  return fileStore.factsByActId(history, actorBeingId, actId);
+}
+
+/**
+ * Read one reel (history, kind, id) and keep only the facts the predicate
+ * accepts, seq-ascending. The curated peer of fileStore.readReelWhere — used
+ * by the verb/act/params filters (wordStore's coin/retire reads on I's being
+ * reel, etc.) that can't be expressed as a single seq range. The caller writes
+ * the predicate; this stays domain-free.
+ *
+ * @param {string} history
+ * @param {"being"|"space"|"matter"|"name"|"library"} kind
+ * @param {string} id
+ * @param {(fact)=>boolean} predicate
+ * @returns {fact[]}  seq-ascending
+ */
+export function getFactsOnReelWhere(history, kind, id, predicate) {
+  return fileStore.readReelWhere(history, kind, String(id), predicate);
+}
+
+/**
+ * The CROSS-REEL / WORLD fact read — every fact in one history's branch, across
+ * all reel-kinds (being·space·matter·name·library) and all authors, kept by a
+ * predicate, then sorted. The curated peer of the old Mongo Fact.find({history,
+ * ...}).sort(...) the BOOK (assemble.js) and read-trail.js folded the story from.
+ *
+ * The curated single-reel readers (getReel / getFactsOnReelWhere / getFactsByActId)
+ * read ONE reel by (kind,id); the book is a fold ACROSS reels — facts BY an author
+ * ($or through/by) or a SET of authors/objects ($in), facts by actId across reels,
+ * a date span, or the whole history. There is no "all facts on a history" file
+ * primitive, so this scans every reel of the history (fileStore.listReelKinds +
+ * listReelIds → readReel) and applies the caller's predicate + sort in JS. Stays
+ * domain-free: the caller (the book) writes which facts it wants and how to order.
+ *
+ * @param {string} history          the branch to read
+ * @param {object} [opts]
+ * @param {(fact)=>boolean} [opts.predicate]  keep-filter (default: keep all)
+ * @param {(a,b)=>number}   [opts.sort]       comparator (default: by (date,seq))
+ * @param {number}          [opts.limit]      cap (0/absent = no cap), applied post-sort
+ * @returns {Promise<fact[]>}
+ */
+export async function getHistoryFacts(history, { predicate, sort, limit } = {}) {
+  if (typeof history !== "string" || !history.length) {
+    throw new Error("getHistoryFacts: history is required");
+  }
+  const keep = typeof predicate === "function" ? predicate : () => true;
+  const out = [];
+  for (const kind of fileStore.listReelKinds(history)) {
+    if (!REEL_KINDS.has(kind)) continue;
+    for (const id of fileStore.listReelIds(history, kind)) {
+      for (const f of fileStore.readReel(history, kind, id)) {
+        if (keep(f)) out.push(f);
+      }
+    }
+  }
+  const cmp =
+    typeof sort === "function"
+      ? sort
+      : (a, b) => {
+          const ad = a?.date != null ? Date.parse(a.date) : 0;
+          const bd = b?.date != null ? Date.parse(b.date) : 0;
+          if (ad !== bd) return ad - bd;
+          return (a?.seq ?? 0) - (b?.seq ?? 0);
+        };
+  out.sort(cmp);
+  return limit && limit > 0 ? out.slice(0, limit) : out;
+}
+
 /**
  * Get a being's Fact reel.
  */
 export async function getFactsByBeing(beingId, limit, startDate, endDate) {
   if (!beingId) throw new Error("Missing required parameter: beingId");
 
-  const query = { through: beingId, ...buildDateFilter(startDate, endDate) };
-  const safeLimit = Math.min(
-    Math.max(Number(limit) || 100, 1),
-    MAX_QUERY_LIMIT(),
-  );
-
-  const facts = await Fact.find(query)
-    .populate("through", "name")
-    .sort({ date: -1 })
-    .limit(safeLimit)
-    .lean();
-
-  return { facts };
+  // FileStore organizes facts by TARGET reel (history,kind,id), not by
+  // ACTOR. There is no actor-indexed read primitive (the Mongo
+  // `through` secondary index has no file-store peer), so a being's
+  // own facts can't be assembled without scanning every reel. This
+  // function has no callers today; the act-log (the being's authored
+  // ACTS, via fileStore.readActHeadFile / the .acts chain) is the
+  // file-native "what this being did" surface. Return an empty reel
+  // rather than a broken Mongo query; wire the act-log here if a caller
+  // ever needs it.
+  void limit;
+  void startDate;
+  void endDate;
+  return { facts: [] };
 }

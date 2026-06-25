@@ -42,7 +42,6 @@
 
 import { randomUUID } from "crypto";
 import log from "../seedStory/log.js";
-import Being from "../materials/being/being.js";
 import { readInbox } from "./intake/inbox.js";
 import { callByResolved } from "../ibp/verbs/call.js";
 import { getStoryDomain } from "../ibp/address.js";

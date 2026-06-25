@@ -124,18 +124,19 @@ async function loadBeingById(beingId) {
 
 async function listMatchingBeingNames(matcher) {
   try {
-    // Query projections directly: every being projection has _id
-    // shaped `<history>:being:<id>` with state.name. Project name only
-    // to keep the result lean.
-    const mongoose = (await import("mongoose")).default;
-    const Projection = mongoose.connection.collection("projections");
-    const cursor = Projection.find(
-      { _id: { $regex: "^0:being:" } },
-      { projection: { "state.name": 1 } },
-    );
+    // Curated read: list every being in main (history "0") via the
+    // projections facade, batch-load their slots, and apply the glob
+    // matcher to each name. Same scope as the prior raw query over
+    // projection _ids `^0:being:` (own-history main, live slots) — the
+    // facade's listByType / loadProjections already exclude tombstones.
+    const { listByType, loadProjections } =
+      await import("../../materials/projections.js");
+    const occupants = await listByType("being", "0");
+    const ids = occupants.map((o) => o.id);
+    const slots = await loadProjections("being", ids, "0");
     const out = [];
-    for await (const doc of cursor) {
-      const name = doc?.state?.name;
+    for (const slot of slots.values()) {
+      const name = slot?.state?.name;
       if (typeof name === "string" && matcher(name)) out.push(name);
     }
     return out;

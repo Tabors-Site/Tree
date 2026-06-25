@@ -21,9 +21,11 @@ import path from "path";
 import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const DB = "mongodb://localhost:27017/story_hasfoldstype";
+const DB = path.join(os.tmpdir(), "story_hasfoldstype-" + process.pid);
 process.env.PORT = "3843";
-process.env.MONGODB_URI = DB;
+process.env.TREEOS_STORE_BASE = DB;
+fs.rmSync(DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "hasfoldstype-0123456789";
 process.env.STORY_KEY_DIR = path.join(
   os.tmpdir(),
@@ -35,13 +37,7 @@ fs.rmSync(SRC, { recursive: true, force: true });
 fs.mkdirSync(SRC, { recursive: true });
 fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`))
-    .default;
-  const conn = await mongoose.createConnection(DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
+// (scratch file store fresh-wiped above; no DB to drop)
 
 // ── (6) the REGRESSION guard runs BEFORE boot (standalone — evaluator imports only pure cond.js) ──
 let pass = 0,
@@ -126,7 +122,9 @@ const { resolveTypeFromFold } = await import(
   `${R}/seed/present/word/wordStore.js`
 );
 const { I } = await import(`${R}/seed/materials/being/seedBeings.js`);
-const { default: Fact } = await import(`${R}/seed/past/fact/fact.js`);
+const { factFind, factCount } = await import(
+  `${R}/seed/present/word/_factStoreTest.mjs`
+);
 const { doVerb } = await import(`${R}/seed/ibp/verbs/do.js`);
 const { sealFacts } = await import(`${R}/seed/past/fact/facts.js`);
 const { getSpaceRootId } = await import(`${R}/seed/sprout.js`);
@@ -187,14 +185,12 @@ try {
     name: I,
     history: "0",
   });
-  const coin = await Fact.findOne({
+  const coin = factFind({
     verb: "do",
     act: "coin",
     "params.word": "meal",
     history: "0",
-  })
-    .sort({ seq: -1 })
-    .lean();
+  }).at(-1); // seq-ascending; .at(-1) = highest seq, the old .sort({ seq: -1 }) head
   coin &&
   coin.params?.binding?.kind === "type" &&
   Array.isArray(coin.params.binding.fields) &&
@@ -244,7 +240,7 @@ try {
     : bad("(4) two fields", two?.fields);
 
   // (5) re-declaring "A meal has a calorie." is a CAS no-op (skipIfUnchanged — no new coin).
-  const coinsBefore = await Fact.countDocuments({
+  const coinsBefore = factCount({
     verb: "do",
     act: "coin",
     "params.word": "meal",
@@ -255,7 +251,7 @@ try {
     name: I,
     history: "0",
   });
-  const coinsAfter = await Fact.countDocuments({
+  const coinsAfter = factCount({
     verb: "do",
     act: "coin",
     "params.word": "meal",

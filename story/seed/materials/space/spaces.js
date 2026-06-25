@@ -25,12 +25,9 @@
 // I plant them at boot and the validator's job is to keep every
 // OTHER being out of the dot-namespace.
 
-import mongoose from "mongoose";
 import { randomUUID as uuidv4 } from "node:crypto";
 import { getInternalConfigValue } from "../../internalConfig.js";
 
-import Space from "./space.js";
-import Being from "../being/being.js";
 import { createMatter } from "../matter/matters.js";
 import { emitFact } from "../../past/fact/facts.js";
 import {
@@ -219,18 +216,13 @@ export async function assertNameAvailableAt(
   { excludeSpaceId = null, history = "0" } = {},
 ) {
   if (!parentId) return;
-  // Per-history sibling name uniqueness via direct projection query.
-  const { default: Projection } = await import("../history/projection.js");
-  const q = {
-    history,
-    type: "space",
-    "state.parent": parentId,
-    "state.name": name,
-    tombstoned: { $ne: true },
-  };
-  if (excludeSpaceId) q._id = { $ne: `${history}:space:${excludeSpaceId}` };
-  const conflict = await Projection.findOne(q).select("id").lean();
-  if (conflict) {
+  // Per-history sibling name uniqueness via the file store's scoped
+  // name index. The space name key folds the parent in (parent + name),
+  // so this lookup is exactly the sibling-collision check the Mongo
+  // partial index served. A rename excludes the space being renamed.
+  const { findByName } = await import("../../past/fileStore.js");
+  const conflict = findByName(history, "space", name, { parent: parentId });
+  if (conflict && (!excludeSpaceId || String(conflict.id) !== String(excludeSpaceId))) {
     throw new IbpError(
       IBP_ERR.RESOURCE_CONFLICT,
       `A space named "${name}" already exists at this position`,
@@ -373,15 +365,10 @@ export async function resolveBirthSpace({
       getInternalConfigValue("maxChildrenPerSpace") || "1000",
       10,
     );
-    const { default: _Proj } = await import("../history/projection.js");
+    const { findByParent: _fbp } = await import("../../past/fileStore.js");
     if (isRoot) {
       if (resolvedParentId) {
-        const childCount = await _Proj.countDocuments({
-          history,
-          type: "space",
-          "state.parent": resolvedParentId,
-          tombstoned: { $ne: true },
-        });
+        const childCount = _fbp(history, resolvedParentId, "space").length;
         if (childCount >= maxChildren)
           throw new IbpError(
             IBP_ERR.INVALID_INPUT,
@@ -410,12 +397,7 @@ export async function resolveBirthSpace({
       ) {
         throw new Error("Cannot create spaces under heaven spaces");
       }
-      const childCount = await _Proj.countDocuments({
-        history,
-        type: "space",
-        "state.parent": parentId,
-        tombstoned: { $ne: true },
-      });
+      const childCount = _fbp(history, parentId, "space").length;
       if (childCount >= maxChildren)
         throw new IbpError(
           IBP_ERR.INVALID_INPUT,
@@ -596,15 +578,10 @@ export async function createSpace({
       10,
     );
 
-    const { default: _Proj } = await import("../history/projection.js");
+    const { findByParent: _fbp } = await import("../../past/fileStore.js");
     if (isRoot) {
       if (resolvedParentId) {
-        const childCount = await _Proj.countDocuments({
-          history,
-          type: "space",
-          "state.parent": resolvedParentId,
-          tombstoned: { $ne: true },
-        });
+        const childCount = _fbp(history, resolvedParentId, "space").length;
         if (childCount >= maxChildren) {
           throw new IbpError(
             IBP_ERR.INVALID_INPUT,
@@ -648,12 +625,7 @@ export async function createSpace({
         // protected breaks the plant verb itself.
         throw new Error("Cannot create spaces under heaven spaces");
       }
-      const childCount = await _Proj.countDocuments({
-        history,
-        type: "space",
-        "state.parent": parentId,
-        tombstoned: { $ne: true },
-      });
+      const childCount = _fbp(history, parentId, "space").length;
       if (childCount >= maxChildren) {
         throw new IbpError(
           IBP_ERR.INVALID_INPUT,
@@ -1207,63 +1179,55 @@ export async function listSpaceChildren(
     const { isHeavenSpace } = await import("./heavenLineage.js");
     if (await isHeavenSpace(parentId)) history = "0";
   }
-  const { default: Projection } = await import("../history/projection.js");
-  const buildQuery = (b) => {
-    const q = {
-      history: b,
-      type: "space",
-      "state.parent": parentId,
-      tombstoned: { $ne: true },
-    };
-    // Heaven-marked children (host/factory tiers) are filtered from
-    // ordinary listings; a heaven-region parent asks for them
-    // explicitly. Heaven-marked rows only ever live under
-    // heaven-marked parents, so the flag is collision-safe.
-    if (!includeHeavenChildren) {
-      q.$or = [
-        { "state.heavenSpace": null },
-        { "state.heavenSpace": { $exists: false } },
-      ];
-    }
-    if (exclude) q._id = { $ne: `${b}:space:${exclude}` };
-    return q;
+  // File-store reads: findByParent(history, parent, "space") returns the
+  // LIVE (tombstoned-excluded) child slots at this parent on the given
+  // history. The heaven-flag filter, exclude, and createdAt sort that the
+  // Mongo query expressed in the query document are applied in JS here.
+  const { findByParent, loadSnapshot } = await import(
+    "../../past/fileStore.js"
+  );
+  // A child slot from the store → the row shape callers expect, after the
+  // heaven-marked + exclude filters.
+  const passesFilters = (slot) => {
+    if (!includeHeavenChildren && slot.state?.heavenSpace != null) return false;
+    if (exclude && String(slot.id) === String(exclude)) return false;
+    return true;
   };
   const toRow = (s) => ({ _id: s.id, ...(s.state || {}) });
 
   if (history === "0") {
-    const rows = await Projection.find(buildQuery("0"))
-      .sort({ "state.createdAt": 1 })
-      .limit(limit)
-      .lean();
-    return rows.map(toRow);
+    const rows = findByParent("0", parentId, "space")
+      .filter(passesFilters)
+      .map(toRow);
+    rows.sort((a, b) => {
+      const at = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bt = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return at - bt;
+    });
+    return rows.slice(0, limit);
   }
 
   // Non-main: union the history's own children with main's children
   // that EXISTED at branch creation (branchPoint check). A child
   // created in main AFTER the branch was made must not leak through.
   const { getBranchPoint } = await import("../history/histories.js");
-  const [historyRows, mainRows] = await Promise.all([
-    Projection.find(buildQuery(history)).lean(),
-    Projection.find(buildQuery("0")).lean(),
-  ]);
+  const historyRows = findByParent(history, parentId, "space").filter(
+    passesFilters,
+  );
+  const mainRows = findByParent("0", parentId, "space").filter(passesFilters);
   // History slots: kept as-is (planted on this history).
   const historyOut = historyRows.map(toRow);
-  const shadowedIds = new Set(historyRows.map((s) => s.id));
-  // Also shadow tombstones on this history — a space killed in this
-  // history shouldn't reappear from main.
-  const tombs = await Projection.find({
-    history: history,
-    type: "space",
-    tombstoned: true,
-  })
-    .select("id")
-    .lean();
-  for (const t of tombs) shadowedIds.add(t.id);
+  const shadowedIds = new Set(historyRows.map((s) => String(s.id)));
   // Filter main candidates by branchPoint: only spaces that had any
-  // fact at-or-before branch creation are in scope.
+  // fact at-or-before branch creation are in scope. A main candidate is
+  // shadowed if this history holds its own slot for that id (touched —
+  // moved or tombstoned here): a divergent history-local snapshot
+  // (parent change OR tombstone) means the inherited row is not visible.
   const mainOut = [];
   for (const cand of mainRows) {
-    if (shadowedIds.has(cand.id)) continue;
+    if (shadowedIds.has(String(cand.id))) continue;
+    const localSlot = loadSnapshot(history, "space", cand.id);
+    if (localSlot) continue; // touched on this history (moved/tombstoned) → shadowed
     const bp = await getBranchPoint(history, "space", cand.id);
     if (bp && bp > 0) mainOut.push(toRow(cand));
   }

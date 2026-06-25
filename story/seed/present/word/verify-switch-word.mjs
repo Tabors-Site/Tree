@@ -16,22 +16,18 @@ import path from "path";
 import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const DB = "mongodb://localhost:27017/story_switchword";
+const DB = path.join(os.tmpdir(), "story_switchword-" + process.pid);
 process.env.PORT = "3839";
-process.env.MONGODB_URI = DB;
+process.env.TREEOS_STORE_BASE = DB;
+fs.rmSync(DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "switchword-0123456789";
 process.env.STORY_KEY_DIR = path.join(
   os.tmpdir(),
   "switchword-keys-" + process.pid,
 );
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`))
-    .default;
-  const conn = await mongoose.createConnection(DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
+// (scratch file store fresh-wiped above; no DB to drop)
 await import(`${R}/begin.js`);
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const { withIAmAct } = await import(`${R}/seed/sprout.js`);
@@ -45,7 +41,9 @@ const { getWordSync } = await import(`${R}/seed/present/word/wordStore.js`);
 const { resolveAbleWord } = await import(
   `${R}/seed/present/word/ableWordRegistry.js`
 );
-const { default: Fact } = await import(`${R}/seed/past/fact/fact.js`);
+const { factFindOne } = await import(
+  `${R}/seed/present/word/_factStoreTest.mjs`
+);
 const { IBP_ERR } = await import(`${R}/seed/ibp/protocol.js`);
 const pollFor = async (fn, pred, t = 16000, e = 250) => {
   const t0 = Date.now();
@@ -143,11 +141,11 @@ try {
       });
   const f = await pollFor(
     () =>
-      Fact.findOne({
+      factFindOne({
         verb: "be",
         act: "switch",
         "of.id": String(beingId),
-      }).lean(),
+      }),
     (v) => !!v,
   );
   f &&
@@ -200,11 +198,11 @@ try {
       code4 = e?.code || null;
     }
   });
-  const ghostFact = await Fact.findOne({
+  const ghostFact = factFindOne({
     verb: "be",
     act: "switch",
     "params.toHistory": "ghost404",
-  }).lean();
+  });
   threw4 && code4 === IBP_ERR.INVALID_INPUT && !ghostFact
     ? ok(
         `gate: missing destination history → ${IBP_ERR.INVALID_INPUT} (destination-missing floor read), no fact`,

@@ -1,0 +1,21 @@
+# reject-template.word, the operator refuses an incoming offer-template
+# (federation-manager/ops.js reject-template DO op). Sends reject-template to the sender's story,
+# then seals the incoming offer (records the completed entry and clears the pending one).
+#
+# WORD-SOLE (handler-less, Tabor's no-mirror law): this `.word` is the ONLY path (do.js
+# runOpWordToStore via runWordToStore, runAsStore, each deed its own moment). The host see
+# resolve-federation-spec is the floor: it reads the incoming offer record (refuses an unknown id)
+# and BUILDS the two write deeds (completed.<id> set, pendingIncomingOffers.<id> cleared to null,
+# which the reducer folds absent). It lays NO fact; the deeds lay the facts. The cross-story
+# rejection is the sanctioned membrane OUT: see dispatch-federation-intent. The reject is sent
+# BEFORE the seal writes, matching the old handler order.
+#
+# The bridge binds `params` (negotiationId, reason) and `caller` (the operator's being).
+
+When the operator rejects an incoming template offer:
+  If no caller, refuse with "reject-template requires an authenticated being." as unauthorized.
+  see resolve-federation-spec(params, caller) as spec.
+  see dispatch-federation-intent($spec.dispatch.peer, $spec.dispatch.intent, $spec.dispatch.payload) as sent.
+  For each w in spec's writes:
+    do set-being on the being $spec.managerId with { field: $w.field, value: $w.value, merge: false } as wrote.
+  Return negotiationId: $spec.negotiationId, status: "rejected".

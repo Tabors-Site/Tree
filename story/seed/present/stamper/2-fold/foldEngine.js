@@ -20,7 +20,6 @@
 // the case where two threads race the marker forward and the loser
 // shouldn't roll it back.
 
-import Fact from "../../../past/fact/fact.js";
 import * as reducers from "../../../materials/reducers.js";
 import { loadProjection, saveProjection, initProjection, tombstoneProjection } from "../../../materials/projections.js";
 import {
@@ -29,6 +28,7 @@ import {
   isMain,
   MAIN,
 } from "../../../materials/history/histories.js";
+import { readReelLineage } from "../../../past/fileStore.js";
 import log from "../../../seedStory/log.js";
 
 const REEL_TYPES = new Set(["being", "space", "matter", "name", "library"]);
@@ -154,78 +154,35 @@ export async function readReelBetween(type, id, afterSeq, untilSeq, history) {
     const { isHeavenSpace } = await import("../../../materials/space/heavenLineage.js");
     if (await isHeavenSpace(id)) history = "0";
   }
-  // Main short-circuit: one history, no lineage walk. The history
-  // filter is REQUIRED here — histories share the seq number space
-  // (each seeded from its parent's branchPoint), so without it a
-  // main read swallows other histories' facts: main's state folds in
-  // foreign-history events and main's foldedSeq jumps to the global
-  // max, leaving main's OWN later facts below the marker and
-  // invisible to every subsequent fold (acts on main silently stop
-  // materializing). Legacy pre-Pass-2 rows that lack the `history`
-  // field participate via $exists:false — the same clause the
-  // lineage path below uses for its main segment.
-  if (isMain(history)) {
-    const seqFilter = { $type: "number" };
-    if (typeof afterSeq === "number") seqFilter.$gt  = afterSeq;
-    if (typeof untilSeq === "number") seqFilter.$lte = untilSeq;
-    return await Fact.find({
-      "of.kind": type,
-      "of.id":   id,
-      seq:           seqFilter,
-      $or: [{ history: MAIN }, { history: { $exists: false } }],
-    }).sort({ seq: 1 }).lean();
+
+  // STORAGE SWAP (the Mongo rip): the lineage range-union that used to
+  // be an OR-of-ranges `Fact.find` is now a fileStore reel read. The
+  // fold/rebuild reducer logic is UNCHANGED — only the read source
+  // moved from the Fact collection to the append-only reel files. The
+  // file `_id` = computeHash(p, contentOf) is byte-identical to the
+  // Mongo path, so folds stay byte-compatible.
+  //
+  // resolveHistoryLineage(history) gives main → leaf (["0", "1", ...]);
+  // floors[h] is h's per-reel branchPoint (the seq it forked at), and
+  // fileStore.readReelLineage walks each history's owned (floor_h,
+  // floor_next] range with afterSeq EXCLUSIVE / untilSeq INCLUSIVE —
+  // the same range arithmetic the OR-of-ranges encoded. Main's floor
+  // is 0 (it owns from seq 1). On main, lineage is ["0"] and the walk
+  // collapses to the single-history own-reel read.
+  const lineage = isMain(history) ? [MAIN] : await resolveHistoryLineage(history);
+
+  // floors: history → per-reel branchPoint seq. Main floors at 0 (no
+  // branchPoint — its reel starts at seq 1). Each non-main ancestor
+  // floors at its own branchPoint for THIS reel.
+  const floors = { [MAIN]: 0 };
+  for (const h of lineage) {
+    if (isMain(h)) continue;
+    floors[h] = (await getBranchPoint(h, type, id)) || 0;
   }
 
-  // Non-main: walk the lineage and build a per-ancestor range query.
-  // The lineage is ordered main → leaf (e.g. ["0", "1", "1a", "1a1"]).
-  // For each history X in that list, X owns the seqs from its own
-  // branchPoint (or 1 for main) up to (but not including) the NEXT
-  // history's branchPoint — OR up to untilSeq if X is the leaf.
-  const lineage = await resolveHistoryLineage(history);
-
-  // Compute each ancestor's owned [lo, hi] seq range for this reel.
-  // The leaf inherits the global upper bound (untilSeq). Each non-leaf
-  // X stops at the next branch's branchPoint (which is the seq at
-  // which the next branch diverged from X).
-  const ranges = [];
-  for (let i = 0; i < lineage.length; i++) {
-    const here = lineage[i];
-    const next = lineage[i + 1] || null; // the branch that forked off `here`
-    const lo = isMain(here) ? 0 : await getBranchPoint(here, type, id);
-    // `lo` is EXCLUSIVE in the inherited semantics: facts strictly
-    // after `here`'s starting point. For the LEAF (the branch we're
-    // actually reading) the lower bound is afterSeq if set.
-    const isLeaf = i === lineage.length - 1;
-    const lower = isLeaf
-      ? (typeof afterSeq === "number" ? Math.max(afterSeq, lo) : lo)
-      : lo;
-    const upper = isLeaf
-      ? (typeof untilSeq === "number" ? untilSeq : null)
-      : await getBranchPoint(next, type, id);
-    if (upper != null && upper <= lower) continue; // empty range; skip
-    ranges.push({ history: here, lower, upper });
-  }
-  if (ranges.length === 0) return [];
-
-  // Build the OR-of-ranges query. Each clause filters by history and
-  // its seq range. For main rows that lack the `history` field, match
-  // via `$in: ["0", null, undefined]` ($exists:false) so pre-Pass-2
-  // data participates in lineages that include main.
-  const orClauses = ranges.map(({ history: b, lower, upper }) => {
-    const seqFilter = { $type: "number", $gt: lower };
-    if (upper != null) seqFilter.$lte = upper;
-    const historyClause = isMain(b)
-      ? { $or: [{ history: MAIN }, { history: { $exists: false } }] }
-      : { history: b };
-    return {
-      "of.kind": type,
-      "of.id":   id,
-      seq:           seqFilter,
-      ...historyClause,
-    };
-  });
-
-  return await Fact.find({ $or: orClauses }).sort({ seq: 1 }).lean();
+  const a = typeof afterSeq === "number" ? afterSeq : null;
+  const u = typeof untilSeq === "number" ? untilSeq : null;
+  return readReelLineage(lineage, floors, type, id, a, u);
 }
 
 /**

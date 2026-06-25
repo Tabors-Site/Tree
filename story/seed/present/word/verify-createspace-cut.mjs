@@ -18,9 +18,11 @@ import { randomUUID } from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const SCRATCH_DB = "mongodb://localhost:27017/story_word_createspace_cut";
+const SCRATCH_DB = path.join(os.tmpdir(), "story_word_createspace_cut-" + process.pid);
+fs.rmSync(SCRATCH_DB, { recursive: true, force: true });
 process.env.PORT = "3798";
-process.env.MONGODB_URI = SCRATCH_DB;
+process.env.TREEOS_STORE_BASE = SCRATCH_DB;
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET =
   process.env.JWT_SECRET || "createspace-secret-0123456789";
 process.env.STORY_KEY_DIR = path.join(
@@ -34,14 +36,7 @@ fs.mkdirSync(SRC, { recursive: true });
 fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
 
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`))
-    .default;
-  const conn = await mongoose.createConnection(SCRATCH_DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
-
+// Scratch file store is fresh-wiped above (TREEOS_STORE_BASE); begin.js opens it on boot.
 await import(`${R}/begin.js`);
 
 const { findByName, loadOrFold } = await import(

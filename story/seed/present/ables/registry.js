@@ -490,21 +490,24 @@ export async function syncAblesToSubstrate() {
 export async function loadLiveAblesFromSubstrate() {
   const { HEAVEN_SPACE } =
     await import("../../materials/space/heavenSpaces.js");
-  const { findByHeavenSpace } = await import("../../materials/projections.js");
-  const { default: Projection } =
-    await import("../../materials/history/projection.js");
+  const { findByHeavenSpace, listByType, loadProjection } =
+    await import("../../materials/projections.js");
   const parent = await findByHeavenSpace(HEAVEN_SPACE.ABLES, "0");
   if (!parent) return { loaded: 0 };
-  const rows = await Projection.find({
-    history: "0",
-    type: "space",
-    "state.parent": parent.id,
-    tombstoned: { $ne: true },
-  }).lean();
-  const children = rows.map((s) => ({
-    name: s.state?.name,
-    qualities: s.state?.qualities,
-  }));
+  // Space children of the .ables heaven space. No curated findByParent for
+  // SPACE (that helper is being-only), so list the type and keep those whose
+  // state.parent is this heaven space. listByType already excludes
+  // tombstoned slots (the old `tombstoned: { $ne: true }` filter). The
+  // occupant rows carry only (type, id); reload each slot's state for the
+  // name + qualities the loader reads.
+  const occupants = await listByType("space", "0");
+  const children = [];
+  for (const o of occupants) {
+    const slot = await loadProjection("space", o.id, "0");
+    const st = slot?.state || {};
+    if (String(st.parent ?? "") !== String(parent.id)) continue;
+    children.push({ name: st.name, qualities: st.qualities });
+  }
   let loaded = 0;
   for (const child of children) {
     const quals = child.qualities;

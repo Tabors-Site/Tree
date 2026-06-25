@@ -134,33 +134,22 @@ function rejectAllPending(code = "EIO") {
   ipcPending.clear();
 }
 
-// ─── source matter (needs Mongo) ────────────────────────────────────
+// ─── source matter (from the file store) ────────────────────────────
 
 let sourceCount = 0;
 try {
-  process.env.MONGODB_URI =
-    process.env.MONGODB_URI ||
-    fs
-      .readFileSync(path.join(REPO_ROOT, ".env"), "utf8")
-      .split("\n")
-      .find((l) => l.startsWith("MONGODB_URI="))
-      ?.split("=")[1]
-      ?.trim();
+  const { connectDB } = await import("../seed/seedStory/dbConfig.js");
+  await connectDB();
+  const { listByType, loadOrFold } = await import("../seed/materials/projections.js");
 
-  if (process.env.MONGODB_URI) {
-    const { default: mongoose } = await import("mongoose");
-    await mongoose.connect(process.env.MONGODB_URI);
-    const { default: Projection } =
-      await import("../seed/materials/history/projection.js");
-
-    // source matters: type=matter, state.content.kind in {"file","directory"},
-    // state.content.path is the absolute disk path.
-    const rows = await Projection.find({
-      branch: "0",
-      type: "matter",
-      "state.content.kind": { $in: ["file", "directory"] },
-      "state.content.path": { $exists: true },
-    }).lean();
+  // source matters: type=matter, content.kind in {"file","directory"}, content.path the disk path.
+  const rows = [];
+  for (const o of await listByType("matter", "0")) {
+    const slot = await loadOrFold("matter", String(o.id), "0");
+    if (slot && !slot.tombstoned && ["file", "directory"].includes(slot.state?.content?.kind) && slot.state?.content?.path) {
+      rows.push({ id: String(o.id), state: slot.state });
+    }
+  }
 
     for (const row of rows) {
       const diskPath = row.state?.content?.path;
@@ -200,14 +189,7 @@ try {
         sourceCount++;
       }
     }
-    console.log(`Loaded ${sourceCount} files from matter projections.`);
-    await mongoose.disconnect();
-  } else {
-    console.error(
-      "No MONGODB_URI in env. Story must be running for the mirror to read source matter.",
-    );
-    process.exit(2);
-  }
+  console.log(`Loaded ${sourceCount} files from matter projections.`);
 } catch (err) {
   console.error(`Source enumeration failed: ${err.message}`);
   process.exit(2);

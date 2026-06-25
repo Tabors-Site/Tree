@@ -26,7 +26,6 @@
 // reach the same code path.
 
 import log from "../../seedStory/log.js";
-import Being from "../../materials/being/being.js";
 import { IbpError, IBP_ERR } from "../protocol.js";
 import { I } from "../../materials/being/seedBeings.js";
 import { getStoryDomain } from "../address.js";

@@ -9,19 +9,21 @@
 import fs from "fs"; import os from "os"; import path from "path"; import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const DB = "mongodb://localhost:27017/story_keystone";
-process.env.PORT = "3854"; process.env.MONGODB_URI = DB;
+const DB = path.join(os.tmpdir(), "story_keystone-" + process.pid);
+process.env.PORT = "3854"; process.env.TREEOS_STORE_BASE = DB;
+fs.rmSync(DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "keystone-0123456789";
 process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "keystone-keys-" + process.pid);
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
 const SRC = path.join(os.tmpdir(), "keystone-src"); fs.rmSync(SRC, { recursive: true, force: true }); fs.mkdirSync(SRC, { recursive: true }); fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
-{ const mongoose = (await import(`${R}/node_modules/mongoose/index.js`)).default; const conn = await mongoose.createConnection(DB).asPromise(); await conn.dropDatabase(); await conn.close(); }
+// (scratch file store fresh-wiped above; no DB to drop)
 await import(`${R}/begin.js`);
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
 const { withIAmAct } = await import(`${R}/seed/sprout.js`);
 const { emitWordFact } = await import(`${R}/seed/ibp/factResult.js`);
-const Fact = (await import(`${R}/seed/past/fact/fact.js`)).default;
+const { factFind, factFindOne, factCount } = await import(`${R}/seed/present/word/_factStoreTest.mjs`);
 const poll = async (fn, t = 20000, e = 300) => { const t0 = Date.now(); while (Date.now() - t0 < t) { const v = await fn(); if (v) return v; await new Promise((r) => setTimeout(r, e)); } return await fn(); };
 let pass = 0, fail = 0; const ok = (l) => { pass++; console.log("  ✓ " + l); }; const bad = (l, d) => { fail++; console.log("  ✗ " + l); if (d !== undefined) console.log("      " + JSON.stringify(d).slice(0, 300)); };
 console.log("\n  verify-keystone-result (the result-contract policy — no key reaches the chain)\n");
@@ -39,7 +41,7 @@ try {
       m,
     );
   });
-  const nf = await poll(() => Fact.findOne({ verb: "name", act: "declare", "of.id": "sektest-name" }).lean(), (v) => !!v);
+  const nf = await poll(() => factFindOne({ verb: "name", act: "declare", "of.id": "sektest-name" }), (v) => !!v);
   // result == null (not a populated object) — byte-identical to writeNameFact, which passes no
   // result so the schema defaults it null. The security assertion is hasKey === false.
   const nameClean = nf && nf.result == null && !JSON.stringify(nf).includes(LEAK_KEY) && !JSON.stringify(nf).includes(LEAK_MNE);
@@ -65,7 +67,7 @@ try {
       m,
     );
   });
-  const cf = await poll(() => Fact.findOne({ verb: "be", act: "connect", "of.id": "conn-b1" }).lean(), (v) => !!v);
+  const cf = await poll(() => factFindOne({ verb: "be", act: "connect", "of.id": "conn-b1" }), (v) => !!v);
   const keys = cf?.result ? Object.keys(cf.result).sort() : [];
   const connClean = cf && cf.result && keys.join(",") === "beingAddress,note" && !JSON.stringify(cf).includes(LEAK_TOK) && !JSON.stringify(cf).includes("should-not-appear");
   connClean
@@ -81,7 +83,7 @@ try {
       m,
     );
   });
-  const df = await poll(() => Fact.findOne({ verb: "be", act: "release", "of.id": "rel-b2" }).lean(), (v) => !!v);
+  const df = await poll(() => factFindOne({ verb: "be", act: "release", "of.id": "rel-b2" }), (v) => !!v);
   const defClean = df && df.result && df.result.ok === true && !JSON.stringify(df).includes(LEAK_PEM);
   defClean
     ? ok(`DEFAULT path still stripForAudit: privateKeyPem scrubbed, ok:true kept (result keys=${Object.keys(df.result).join(",")})`)

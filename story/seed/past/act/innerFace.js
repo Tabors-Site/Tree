@@ -29,7 +29,7 @@
 //   storage references the same hash, so consumers don't break.
 
 import crypto from "crypto";
-import Act from "./act.js";
+import { patchActStatus } from "./actChain.js";
 import { normalizeForeignDescriptor } from "../../present/stamper/2-fold/innerFace.js";
 
 /**
@@ -56,16 +56,12 @@ export async function attachInnerFace(actId, descriptor) {
   }
   const hash = hashDescriptor(descriptor);
   const normalized = normalizeForeignDescriptor(descriptor);
-  const update = await Act.findOneAndUpdate(
-    { _id: String(actId) },
-    {
-      $set: {
-        innerFace: { ...normalized, hash },
-      },
-    },
-    { returnDocument: "after" },
-  );
-  return { hash, attached: !!update };
+  // innerFace is a post-seal-mutable closure field (the act's hash is
+  // over its OPENING, so this never changes its identity). patchActStatus
+  // writes the overlay merged on every act-log read; it returns false
+  // when the act doesn't exist (attached:false).
+  const attached = patchActStatus(String(actId), { innerFace: { ...normalized, hash } });
+  return { hash, attached };
 }
 
 /**

@@ -84,23 +84,40 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
   // loadProjection silently skipped (continue on !slot) those rows and
   // produced incomplete bundles. The walker only sees what loadOrFold
   // surfaces.
-  const { loadProjection, loadOrFold } =
+  const { loadOrFold, listByType } =
     await import("../../materials/projections.js");
-  const { default: Projection } =
-    await import("../../materials/history/projection.js");
-
-  // Direct projection query for "children of space X in history B".
-  // (The generic findByParent helper is being-specific; spaces don't
-  // have a single substrate wrapper, so we query directly here.)
+  // Curated space-children peer (spaces.js). listSpaceChildren(parent,{history})
+  // is THE wrapper for "children of space X in history B" — lineage-aware
+  // (own-history unioned with main children that existed at branch creation),
+  // tombstone-shadowed, returning { _id, ...state }. Replaces the raw
+  // Projection.find({type:"space","state.parent":...}). We map to { id } since
+  // the callers here only need ids.
+  const { listSpaceChildren } = await import("../../materials/space/spaces.js");
   const findSpaceChildren = async (parentId) => {
-    return await Projection.find({
-      history: history,
-      type: "space",
-      "state.parent": parentId,
-      tombstoned: { $ne: true },
-    })
-      .select("id")
-      .lean();
+    // includeHeavenChildren:true preserves the raw query's behavior (it had no
+    // heavenSpace filter); the BFS walk above applies its own heaven skip.
+    const rows = await listSpaceChildren(parentId, {
+      history,
+      includeHeavenChildren: true,
+      limit: 100000,
+    });
+    return rows.map((r) => ({ id: String(r._id) }));
+  };
+
+  // Curated "aggregates of a type whose state field === value, on this history's
+  // lineage." listByType is lineage-aware (matching this file's loadOrFold
+  // rationale: inherited rows MUST appear in the bundle); each occupant is then
+  // loadOrFold'd to read its state for the field filter. Returns [{ id, state }].
+  const findByStateField = async (type, field, value) => {
+    const out = [];
+    for (const occ of await listByType(type, history)) {
+      const slot = await loadOrFold(type, String(occ.id), history);
+      if (!slot) continue;
+      if (String(slot.state?.[field] ?? "") === String(value)) {
+        out.push({ id: String(occ.id), state: slot.state || {} });
+      }
+    }
+    return out;
   };
 
   const rootSlot = await loadOrFold("space", scopeSpaceId, history);
@@ -177,12 +194,7 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
     await import("../../materials/being/seedDelegates.js");
   const SEED_DELEGATE_NAMES = new Set(SEED_DELEGATES.map((d) => d.name));
   for (const spaceId of capturedSpaceIds) {
-    const beingRows = await Projection.find({
-      history: history,
-      type: "being",
-      "state.homeSpace": spaceId,
-      tombstoned: { $ne: true },
-    }).lean();
+    const beingRows = await findByStateField("being", "homeSpace", spaceId);
     for (const row of beingRows) {
       const state = row.state || {};
       if (beingCognition(state) === "human") continue;
@@ -193,12 +205,7 @@ export async function captureTemplate(scopeSpaceId, opts = {}) {
 
   // ── 3. Walk matter whose spaceId is in the captured set ──
   for (const spaceId of capturedSpaceIds) {
-    const matterRows = await Projection.find({
-      history: history,
-      type: "matter",
-      "state.spaceId": spaceId,
-      tombstoned: { $ne: true },
-    }).lean();
+    const matterRows = await findByStateField("matter", "spaceId", spaceId);
     for (const row of matterRows) {
       capturedMatterIds.add(row.id);
     }

@@ -38,17 +38,14 @@ async function _iAm() {
 // Covers EVERY word kind (op/type/reducer/concept/ableword), since all are I's words on "0". Reads
 // the latest "0" coin fact's author. Only consulted on a non-I write to "0" (rare).
 async function _isIAmBedrock(name) {
-  const { default: Fact } = await import("../../past/fact/fact.js");
-  const decl = await Fact.find({
-    verb: "do",
-    act: COIN,
-    "params.word": String(name),
-    history: "0",
-  })
-    .sort({ seq: -1, date: -1 }) // ORDER, not the clock: one '0' word-reel → seq is truth (623/12)
-    .limit(1)
-    .lean();
-  return decl.length > 0 && String(decl[0].through) === (await _iAm());
+  const iAm = await _iAm();
+  const { getFactsOnReelWhere } = await import("../../past/fact/facts.js");
+  // The "0" vocabulary coins are all I's words on I's being reel; read them filtered. seq order is
+  // truth (623/12), so the LAST match is the latest coin.
+  const decl = getFactsOnReelWhere("0", "being", iAm, (f) =>
+    f.verb === "do" && f.act === COIN && f.params?.word === String(name),
+  );
+  return decl.length > 0 && String(decl[decl.length - 1].through) === iAm;
 }
 
 // Lay facts THROUGH a proper act (assign opens it, the stamper seals it), never a bare emit.
@@ -168,16 +165,13 @@ export async function disableWord(
 // folds heaven then the branch. A word whose last action is a disable folds to null (off, not
 // deleted). This is the read path the verb dispatch uses instead of a registry get.
 export async function getWord(name, history = "0") {
-  const { default: Fact } = await import("../../past/fact/fact.js");
+  const iAm = await _iAm();
+  const { getFactsOnReelWhere } = await import("../../past/fact/facts.js");
   const histories = String(history) === "0" ? ["0"] : ["0", String(history)];
-  const facts = await Fact.find({
-    verb: "do",
-    act: { $in: [COIN, RETIRE] },
-    "params.word": String(name),
-    history: { $in: histories },
-  })
-    .sort({ history: 1, seq: 1 })
-    .lean();
+  const pred = (f) =>
+    f.verb === "do" && (f.act === COIN || f.act === RETIRE) && f.params?.word === String(name);
+  // Heaven then branch, each already seq-ordered → the {history:1, seq:1} fold order.
+  const facts = histories.flatMap((h) => getFactsOnReelWhere(h, "being", iAm, pred));
   let binding = null,
     owner = null;
   for (const f of facts) {
@@ -204,15 +198,11 @@ export async function getWord(name, history = "0") {
 const _projection = new Map(); // word name -> binding
 
 export async function rehydrateWordProjection(history = "0") {
-  const { default: Fact } = await import("../../past/fact/fact.js");
-  const facts = await Fact.find({
-    verb: "do",
-    act: { $in: [COIN, RETIRE] },
-    history: String(history),
-    "params.word": { $exists: true },
-  })
-    .sort({ date: 1, seq: 1 })
-    .lean();
+  const iAm = await _iAm();
+  const { getFactsOnReelWhere } = await import("../../past/fact/facts.js");
+  const facts = getFactsOnReelWhere(String(history), "being", iAm, (f) =>
+    f.verb === "do" && (f.act === COIN || f.act === RETIRE) && f.params?.word != null,
+  );
   _projection.clear();
   for (const f of facts) {
     const name = f.params?.word;
@@ -298,7 +288,6 @@ export function resolveWordFromFold(name) {
           // factVerb "name": the op's fact is a 5D name-act on the library reel (runOpNameAct).
           factVerb: w.word.factVerb === "name" ? "name" : null,
           ranAsMoments: w.word.ranAsMoments === true,
-          runAsStore: w.word.runAsStore === true,
         }
       : null;
   const hostEnv =
@@ -416,7 +405,6 @@ export async function declareOpsToFold({
                 through: op.word.through === true ? true : undefined,
                 factVerb: op.word.factVerb === "name" ? "name" : undefined,
                 ranAsMoments: op.word.ranAsMoments === true ? true : undefined,
-                runAsStore: op.word.runAsStore === true ? true : undefined,
               },
               hostEnv: hostEnvRef ? { ref: hostEnvRef } : undefined,
             }

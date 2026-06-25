@@ -46,8 +46,13 @@ import log from "../../seedStory/log.js";
 import { matterContentId } from "../matter/matterId.js";
 import { HEAVEN_SPACE } from "./heavenSpaces.js";
 import { I } from "../being/seedBeings.js";
-import { initProjection, tombstoneProjection } from "../projections.js";
-import ProjectionModel, { projectionKey } from "../history/projection.js";
+import {
+  initProjection,
+  tombstoneProjection,
+  loadProjection,
+  listByType,
+  findByPosition,
+} from "../projections.js";
 import { anchorFile } from "../matter/anchor.js";
 
 // Lazy putContent; same boot-order rationale as the loader's lazy
@@ -190,20 +195,22 @@ export async function syncSourceTree({
 
   const stats = { created: 0, updated: 0, removed: 0, kept: 0 };
 
-  // Root matter for targetPath. History-aware via direct Projection query
-  // — the matter-by-spaceId + source type is a substrate-internal
-  // lookup pattern, not a wire-facing one.
-  const _rootMatterSlot = await ProjectionModel.findOne({
-    history: "0",
-    type: "matter",
-    "state.spaceId": sourceSpaceId,
-    "state.parentMatterId": null,
-    "state.type": "source",
-    tombstoned: { $ne: true },
-  }).lean();
-  let rootMatter = _rootMatterSlot
-    ? { _id: _rootMatterSlot.id, ...(_rootMatterSlot.state || {}) }
-    : null;
+  // Root matter for targetPath. Curated read: findByPosition returns the
+  // (non-tombstoned) occupants AT the source space (matter position === its
+  // spaceId), then loadProjection materializes each slot's state so we can
+  // filter to the source-tree root (parentMatterId null + type "source"). The
+  // matter-by-spaceId + source-type lookup is a substrate-internal pattern, so
+  // it composes the curated occupant + slot reads rather than a wire verb.
+  let rootMatter = null;
+  for (const occ of await findByPosition(sourceSpaceId, "0")) {
+    if (occ.type !== "matter") continue;
+    const slot = await loadProjection("matter", String(occ.id), "0");
+    const st = slot?.state || {};
+    if (st.parentMatterId == null && st.type === "source") {
+      rootMatter = { _id: occ.id, ...st };
+      break;
+    }
+  }
 
   const rootName = path.basename(targetPath) || "/";
   if (!rootMatter) {
@@ -262,6 +269,32 @@ export function isSourceSpaceId(spaceId) {
 // RECONCILIATION
 // ────────────────────────────────────────────────────────────────────
 
+// Curated read of the source-matter children directly under `parentMatterId`.
+// The matter projection's inverted index has NO parentMatterId facet (findByParent
+// is BEING-only; findByPosition keys on spaceId, not parent-matter), so we
+// enumerate matter on main via the curated listByType and load each slot's state
+// to filter by parentMatterId (+ optional source-type). loadProjection skips
+// tombstoned via slot.tombstoned. Own-history "0": the ./source mirror is a heaven
+// region and lives only on main. `wantSource` gates the type to the disk mirror's
+// "source" matters (false during the subtree-tombstone walk, which drops the whole
+// subtree regardless of type).
+async function _sourceMattersByParent(parentMatterId, { wantSource = true } = {}) {
+  const out = [];
+  for (const occ of await listByType("matter", "0")) {
+    const slot = await loadProjection("matter", String(occ.id), "0");
+    if (!slot || slot.tombstoned) continue;
+    const st = slot.state || {};
+    const slotParent =
+      st.parentMatterId != null ? String(st.parentMatterId) : null;
+    if (slotParent !== (parentMatterId != null ? String(parentMatterId) : null)) {
+      continue;
+    }
+    if (wantSource && st.type !== "source") continue;
+    out.push({ _id: occ.id, name: st.name, content: st.content });
+  }
+  return out;
+}
+
 async function reconcileChildren({
   diskPath,
   parentMatterId,
@@ -286,19 +319,8 @@ async function reconcileChildren({
     onDisk.set(entry.name, entry);
   }
 
-  // Existing mirrored children for this parent.
-  const _existRows = await ProjectionModel.find({
-    history: "0",
-    type: "matter",
-    "state.parentMatterId": parentMatterId,
-    "state.type": "source",
-    tombstoned: { $ne: true },
-  }).lean();
-  const existing = _existRows.map((s) => ({
-    _id: s.id,
-    name: s.state?.name,
-    content: s.state?.content,
-  }));
+  // Existing mirrored children for this parent (curated, source-typed).
+  const existing = await _sourceMattersByParent(parentMatterId);
   const existingByName = new Map(existing.map((a) => [a.name, a]));
 
   // Create / update / recurse.
@@ -439,14 +461,10 @@ async function removeMatterSubtree(rootId, stats) {
   while (stack.length) {
     const id = stack.pop();
     toDelete.push(id);
-    const kids = await ProjectionModel.find({
-      history: "0",
-      type: "matter",
-      "state.parentMatterId": id,
-    })
-      .select("id")
-      .lean();
-    for (const k of kids) stack.push(String(k.id));
+    // Whole-subtree drop: every child matter under this id, regardless of type
+    // (wantSource:false). Curated parent-scan (no parentMatterId facet exists).
+    const kids = await _sourceMattersByParent(id, { wantSource: false });
+    for (const k of kids) stack.push(String(k._id));
   }
   if (toDelete.length === 0) return;
   // Tombstone each — the projections collection records the deletion
@@ -530,10 +548,21 @@ async function createSourceMatter({
   });
 
   if (parent) {
-    await ProjectionModel.updateOne(
-      { _id: projectionKey("0", "matter", parent) },
-      { $addToSet: { "state.children": matterId } },
-    );
+    // $addToSet on the parent's state.children → curated read-merge-write.
+    // loadProjection reads the parent slot, we append the child id (deduped,
+    // matching $addToSet), and initProjection writes it back preserving the
+    // slot's foldedSeq/position. Own-history "0" (the ./source heaven region).
+    const parentSlot = await loadProjection("matter", String(parent), "0");
+    if (parentSlot) {
+      const pState = parentSlot.state || {};
+      const children = Array.isArray(pState.children) ? [...pState.children] : [];
+      if (!children.includes(matterId)) children.push(matterId);
+      await initProjection("matter", String(parent), "0", {
+        state: { ...pState, children },
+        foldedSeq: parentSlot.foldedSeq ?? 0,
+        position: parentSlot.position ?? pState.position ?? pState.spaceId ?? null,
+      });
+    }
   }
 
   return { _id: matterId, ...state };
@@ -544,8 +573,8 @@ async function createSourceMatter({
 // back through initProjection so the slot stays the authoritative fold
 // of the disk entry.
 async function patchSourceMatter(matterId, patch) {
-  const key = projectionKey("0", "matter", String(matterId));
-  const slot = await ProjectionModel.findById(key).lean();
+  // Curated single-slot read (was ProjectionModel.findById by projectionKey).
+  const slot = await loadProjection("matter", String(matterId), "0");
   if (!slot) return;
   const state = { ...(slot.state || {}), ...patch };
   await initProjection("matter", String(matterId), "0", {

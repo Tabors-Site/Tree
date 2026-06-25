@@ -21,8 +21,9 @@ import {
   MAIN,
   invalidateHistoryCache,
   commonAncestor,
+  loadHistory,
+  setHistoryFields,
 } from "../../../materials/history/histories.js";
-import History from "../../../materials/history/history.js";
 import { computeMergeResetFacts } from "../../../materials/history/resetReels.js";
 import { emitFact } from "../../../past/fact/facts.js";
 import {
@@ -338,8 +339,9 @@ registerOperation("pause-history", {
     // implicit because its lineage walk starts from "0" without a
     // backing doc).
     const isMainHistory = historyPath === MAIN;
+    invalidateHistoryCache(historyPath);
     if (!isMainHistory) {
-      const existing = await History.findOne({ path: historyPath }).lean();
+      const existing = await loadHistory(historyPath);
       if (!existing) {
         throw new IbpError(
           IBP_ERR.SPACE_NOT_FOUND,
@@ -350,27 +352,22 @@ registerOperation("pause-history", {
         return { paused: true, path: historyPath, alreadyPaused: true };
       }
     } else {
-      const existing = await History.findOne({ path: MAIN }).lean();
+      const existing = await loadHistory(MAIN);
       if (existing?.paused) {
         return { paused: true, path: MAIN, alreadyPaused: true };
       }
     }
-    await History.updateOne(
-      { path: historyPath },
+    await setHistoryFields(
+      historyPath,
       {
-        $set: {
-          paused: true,
-          pausedBy: identity?.beingId || null,
-          pausedAt: new Date(),
-          ...(params?.reason ? { archivedBecause: String(params.reason) } : {}),
-        },
-        $setOnInsert: {
-          _id: historyPath,
-          path: historyPath,
-          parent: isMainHistory ? null : undefined,
-        },
+        paused: true,
+        pausedBy: identity?.beingId || null,
+        pausedAt: new Date().toISOString(),
+        ...(params?.reason ? { archivedBecause: String(params.reason) } : {}),
       },
-      { upsert: true },
+      // Main is the only path that upserts a fresh row here (a non-main
+      // pause already confirmed the row exists above). Main's parent=null.
+      { parent: null },
     );
     invalidateHistoryCache(historyPath);
     return { paused: true, path: historyPath };
@@ -395,7 +392,8 @@ registerOperation("unpause-history", {
         "unpause-history: history is required",
       );
     }
-    const row = await History.findOne({ path: historyPath }).lean();
+    invalidateHistoryCache(historyPath);
+    const row = await loadHistory(historyPath);
     if (!row) {
       // No row = not paused (main without a row is the implicit-live
       // default). Treat as alreadyLive idempotently.
@@ -404,17 +402,12 @@ registerOperation("unpause-history", {
     if (!row.paused) {
       return { paused: false, path: historyPath, alreadyLive: true };
     }
-    await History.updateOne(
-      { path: historyPath },
-      {
-        $set: {
-          paused: false,
-          pausedAt: null,
-          pausedBy: null,
-          archivedBecause: null,
-        },
-      },
-    );
+    await setHistoryFields(historyPath, {
+      paused: false,
+      pausedAt: null,
+      pausedBy: null,
+      archivedBecause: null,
+    });
     invalidateHistoryCache(historyPath);
     return { paused: false, path: historyPath };
   },
@@ -461,8 +454,9 @@ registerOperation("delete-history", {
       );
     }
     const isMainHistory = historyPath === MAIN;
+    invalidateHistoryCache(historyPath);
     if (!isMainHistory) {
-      const existing = await History.findOne({ path: historyPath }).lean();
+      const existing = await loadHistory(historyPath);
       if (!existing) {
         throw new IbpError(
           IBP_ERR.SPACE_NOT_FOUND,
@@ -473,27 +467,21 @@ registerOperation("delete-history", {
         return { deleted: true, path: historyPath, alreadyDeleted: true };
       }
     } else {
-      const existing = await History.findOne({ path: MAIN }).lean();
+      const existing = await loadHistory(MAIN);
       if (existing?.deleted) {
         return { deleted: true, path: MAIN, alreadyDeleted: true };
       }
     }
-    await History.updateOne(
-      { path: historyPath },
+    await setHistoryFields(
+      historyPath,
       {
-        $set: {
-          deleted: true,
-          deletedBy: identity?.beingId || null,
-          deletedAt: new Date(),
-          ...(params?.reason ? { archivedBecause: String(params.reason) } : {}),
-        },
-        $setOnInsert: {
-          _id: historyPath,
-          path: historyPath,
-          parent: isMainHistory ? null : undefined,
-        },
+        deleted: true,
+        deletedBy: identity?.beingId || null,
+        deletedAt: new Date().toISOString(),
+        ...(params?.reason ? { archivedBecause: String(params.reason) } : {}),
       },
-      { upsert: true },
+      // Only main upserts a fresh row here (non-main confirmed above).
+      { parent: null },
     );
     invalidateHistoryCache(historyPath);
     return { deleted: true, path: historyPath };
@@ -518,19 +506,19 @@ registerOperation("undelete-history", {
         "undelete-history: history is required",
       );
     }
-    const row = await History.findOne({ path: historyPath }).lean();
+    invalidateHistoryCache(historyPath);
+    const row = await loadHistory(historyPath);
     if (!row) {
       return { deleted: false, path: historyPath, alreadyLive: true };
     }
     if (!row.deleted) {
       return { deleted: false, path: historyPath, alreadyLive: true };
     }
-    await History.updateOne(
-      { path: historyPath },
-      {
-        $set: { deleted: false, deletedAt: null, deletedBy: null },
-      },
-    );
+    await setHistoryFields(historyPath, {
+      deleted: false,
+      deletedAt: null,
+      deletedBy: null,
+    });
     invalidateHistoryCache(historyPath);
     return { deleted: false, path: historyPath };
   },
@@ -686,10 +674,7 @@ registerOperation("merge-histories", {
 
     // Stamp the merge provenance onto the new History row. mergeSources
     // is forensic; the canonical `parent` stays the common ancestor.
-    await History.updateOne(
-      { path: result.path },
-      { $set: { mergeSources: [sourceA, sourceB] } },
-    );
+    await setHistoryFields(result.path, { mergeSources: [sourceA, sourceB] });
     invalidateHistoryCache(result.path);
 
     // Reset reels: state that's history-private by nature (today,
@@ -729,40 +714,26 @@ registerOperation("merge-histories", {
       try {
         for (const historyPath of [sourceA, sourceB]) {
           if (afterAction === "pause") {
-            await History.updateOne(
-              { path: historyPath },
+            await setHistoryFields(
+              historyPath,
               {
-                $set: {
-                  paused: true,
-                  pausedBy: identity?.beingId || null,
-                  pausedAt: new Date(),
-                  archivedBecause: `paused after merge into ${result.path}`,
-                },
-                $setOnInsert: {
-                  _id: historyPath,
-                  path: historyPath,
-                  parent: historyPath === MAIN ? null : undefined,
-                },
+                paused: true,
+                pausedBy: identity?.beingId || null,
+                pausedAt: new Date().toISOString(),
+                archivedBecause: `paused after merge into ${result.path}`,
               },
-              { upsert: true },
+              { parent: null },
             );
           } else if (afterAction === "delete") {
-            await History.updateOne(
-              { path: historyPath },
+            await setHistoryFields(
+              historyPath,
               {
-                $set: {
-                  deleted: true,
-                  deletedBy: identity?.beingId || null,
-                  deletedAt: new Date(),
-                  archivedBecause: `deleted after merge into ${result.path}`,
-                },
-                $setOnInsert: {
-                  _id: historyPath,
-                  path: historyPath,
-                  parent: historyPath === MAIN ? null : undefined,
-                },
+                deleted: true,
+                deletedBy: identity?.beingId || null,
+                deletedAt: new Date().toISOString(),
+                archivedBecause: `deleted after merge into ${result.path}`,
               },
-              { upsert: true },
+              { parent: null },
             );
           }
           invalidateHistoryCache(historyPath);

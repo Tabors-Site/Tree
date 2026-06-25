@@ -29,7 +29,6 @@ When the I makes the world:
   do grant-able on the being federation-manager with { able: "angel", anchorSpaceId: $heaven }.
   do grant-able on the being http-server with { able: "angel", anchorSpaceId: $heaven }.
   do grant-able on the being websocket-pool with { able: "angel", anchorSpaceId: $heaven }.
-  do grant-able on the being mongo with { able: "angel", anchorSpaceId: $heaven }.
   # (b) each delegate's own able at the story root — every delegate but @public.
   do grant-able on the being arrival with { able: "arrival", anchorSpaceId: $root }.
   do grant-able on the being cherub with { able: "cherub", anchorSpaceId: $root }.
@@ -43,4 +42,3 @@ When the I makes the world:
   do grant-able on the being federation-manager with { able: "federation-manager", anchorSpaceId: $root }.
   do grant-able on the being http-server with { able: "http-server", anchorSpaceId: $root }.
   do grant-able on the being websocket-pool with { able: "websocket-pool", anchorSpaceId: $root }.
-  do grant-able on the being mongo with { able: "mongo-connection", anchorSpaceId: $root }.

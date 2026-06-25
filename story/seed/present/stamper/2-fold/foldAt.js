@@ -44,7 +44,7 @@
 // point, then divergent facts from the current branch. Callers
 // don't need to change.
 
-import Fact from "../../../past/fact/fact.js";
+import { getFactsOnReelWhere } from "../../../past/fact/facts.js";
 import * as reducers from "../../../materials/reducers.js";
 import { readReelBetween } from "./foldEngine.js";
 import { assertHistoryOrThrow } from "../../../materials/projections.js";
@@ -135,40 +135,40 @@ export async function resolveUntil(type, id, until, opts = {}) {
   // SEAM: opts key is `history` (foldEngine/descriptor convention);
   // the value is the history slot.
   const history = assertHistoryOrThrow(opts.history || until.history, "resolveUntil(opts)");
+  const atMs = at.getTime();
+  // The highest seq on this reel whose date <= at. FileStore reels are
+  // seq-ascending; read via the curated getFactsOnReelWhere (the file-
+  // native peer of Fact.find) and reduce in JS. A fact with no/invalid
+  // date never counts (mirrors the Mongo `date <= at` clause). seq must
+  // be a number (the old `seq: { $type: "number" }` guard).
+  const dateOK = (f) => {
+    if (typeof f.seq !== "number") return false;
+    const t = f?.date != null ? Date.parse(f.date) : NaN;
+    return !Number.isNaN(t) && t <= atMs;
+  };
+  const maxSeq = (facts) => {
+    let best = null;
+    for (const f of facts) if (best == null || f.seq > best) best = f.seq;
+    return best;
+  };
+
   if (history === "0") {
-    const row = await Fact.findOne({
-      "of.kind": type,
-      "of.id":   id,
-      seq:           { $type: "number" },
-      date:          { $lte: at },
-      $or:           [{ history: "0" }, { history: { $exists: false } }],
-    })
-      .sort({ seq: -1 })
-      .select("seq")
-      .lean();
-    return row ? row.seq : null;
+    // Own-history (main) read. Legacy facts with no history field landed
+    // on the main reel too, so the own-reel read is complete.
+    return maxSeq(getFactsOnReelWhere("0", type, id, dateOK));
   }
-  // Non-main: walk the lineage and union per-ancestor branchMatch
-  // clauses so a fact on the inherited prefix of main counts toward
-  // the history's view at past time.
-  const { resolveHistoryLineage, isMain } = await import("../../../materials/history/histories.js");
+  // Non-main: walk the lineage and union each ancestor's own reel for
+  // this target so a fact on the inherited prefix of main counts toward
+  // the history's view at past time (the file-native peer of the old
+  // OR-of-histories clause).
+  const { resolveHistoryLineage } = await import("../../../materials/history/histories.js");
   const lineage = await resolveHistoryLineage(history);
-  const orClauses = lineage.map((b) =>
-    isMain(b)
-      ? { $or: [{ history: "0" }, { history: { $exists: false } }] }
-      : { history: b },
-  );
-  const row = await Fact.findOne({
-    "of.kind": type,
-    "of.id":   id,
-    seq:           { $type: "number" },
-    date:          { $lte: at },
-    $or:           orClauses,
-  })
-    .sort({ seq: -1 })
-    .select("seq")
-    .lean();
-  return row ? row.seq : null;
+  let best = null;
+  for (const b of lineage) {
+    const s = maxSeq(getFactsOnReelWhere(String(b), type, id, dateOK));
+    if (s != null && (best == null || s > best)) best = s;
+  }
+  return best;
 }
 
 /**

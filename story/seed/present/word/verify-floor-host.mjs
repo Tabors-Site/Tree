@@ -26,9 +26,11 @@ import { randomUUID } from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const SCRATCH_DB = "mongodb://localhost:27017/story_floorhost";
+const SCRATCH_DB = path.join(os.tmpdir(), "story_floorhost-" + process.pid);
 process.env.PORT = "3862";
-process.env.MONGODB_URI = SCRATCH_DB;
+process.env.TREEOS_STORE_BASE = SCRATCH_DB;
+fs.rmSync(SCRATCH_DB, { recursive: true, force: true });
+delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "floorhost-secret-0123456789";
 process.env.STORY_KEY_DIR = path.join(
   os.tmpdir(),
@@ -41,12 +43,7 @@ fs.mkdirSync(SRC, { recursive: true });
 fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
 
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`)).default;
-  const conn = await mongoose.createConnection(SCRATCH_DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
+// (scratch file store fresh-wiped above; no DB to drop)
 
 await import(`${R}/begin.js`);
 
@@ -64,7 +61,9 @@ const { parse } = await import(`${R}/seed/present/word/parser.js`);
 const { runWordToStore } = await import(
   `${R}/seed/present/word/ableWordRegistry.js`
 );
-const { default: Fact } = await import(`${R}/seed/past/fact/fact.js`);
+const { factFind, factCount } = await import(
+  `${R}/seed/present/word/_factStoreTest.mjs`
+);
 
 let pass = 0,
   fail = 0;
@@ -143,18 +142,19 @@ const WORD = `When a being checks a target:
 // target the cond reads. Return BOTH the do:if fact's `taken` (the live walk's branch verdict, on the
 // chain) AND the §7 return's verdict (what the taken branch produced) for THIS run.
 const runFor = async (caller, target, tag) => {
-  const before = await Fact.countDocuments({ verb: "do", act: "if" });
+  const before = factCount({ verb: "do", act: "if" });
   const { result } = await runWordToStore(parse(WORD), {
     beingId: String(target), // a real being acts as the moment's signer (any seated being)
     name: null,
     history: "0",
     bindings: { caller: String(caller), target: String(target) },
   });
-  // the most recent do:if fact (this run's branch verdict)
-  const f = await Fact.findOne({ verb: "do", act: "if", history: "0" })
-    .sort({ seq: -1 })
-    .lean();
-  const after = await Fact.countDocuments({ verb: "do", act: "if" });
+  // the most recent do:if fact (this run's branch verdict) — sort({ seq: -1 }), take the head
+  const f = factFind({ verb: "do", act: "if", history: "0" }).reduce(
+    (best, c) => (best == null || (c.seq ?? 0) > (best.seq ?? 0) ? c : best),
+    null,
+  );
+  const after = factCount({ verb: "do", act: "if" });
   return {
     taken: f?.params?.taken ?? null,
     verdict: result?.verdict ?? null,

@@ -36,8 +36,8 @@
 import { fold } from "./foldEngine.js";
 import { findByPosition, assertHistoryOrThrow } from "../../../materials/projections.js";
 import { ORIENTATION, validateOrientation } from "./orientation.js";
-import Act from "../../../past/act/act.js";
-import Fact from "../../../past/fact/fact.js";
+import { getActById, getActsByField } from "../../../past/act/actChain.js";
+import { getFactsOnReelWhere } from "../../../past/fact/facts.js";
 import { emptyWeave, addReel } from "./weave.js";
 import { canSeeAdmitsReel } from "./canSeeResolver.js";
 
@@ -147,6 +147,7 @@ export async function foldPlace(beingId, orientation = ORIENTATION.FORWARD, opts
   // Half: forward face PLUS the recalled slice of A_b.
   const recalled = await recallByBraid(beingId, forwardFace, {
     cap: opts.recallCap || DEFAULT_RECALL_CAP,
+    history,
   });
   return { orientation: ω, ...forwardFace, recalled, _weave: weave };
 }
@@ -229,9 +230,10 @@ async function loadActChain(beingId, history) {
   // `p` — a branch's tip walks back through its fork — so this is the being's chain on THIS history's
   // lineage (sibling branches drop out, correctly). Severed acts are traversed (to keep the chain
   // intact) but excluded from the face, matching the old `severedAt: null` filter.
-  const rows = await Act.find({ to: String(beingId) })
-    .select("_id through to activeAble p severedAt stampedAt startMessage endMessage rootCorrelation inReplyTo answers parentThread innerFace")
-    .lean();
+  // Curated: every act this being authored (Act.find({ to })). The
+  // curated read returns the full act docs (the .lean() shape); the
+  // p-chain walk below selects the fields it needs.
+  const rows = getActsByField("to", String(beingId));
   const byId = new Map(rows.map(r => [String(r._id), r]));
   let cursor = await readActHead(story, String(history), String(beingId)); // the head hash (GENESIS_PREV if none)
   const ordered = [];
@@ -285,7 +287,7 @@ async function loadActChain(beingId, history) {
  * recency of the stitch-fact. Most recent stitches first, capped.
  * Tunable later without changing the contract.
  */
-async function recallByBraid(beingId, forwardFace, { cap }) {
+async function recallByBraid(beingId, forwardFace, { cap, history = "0" }) {
   if (!forwardFace?.space) return [];
 
   // Entities to walk: the space itself plus every occupant other
@@ -301,31 +303,38 @@ async function recallByBraid(beingId, forwardFace, { cap }) {
   // Find facts on each entity's reel whose actor is this being.
   // Each such fact is a stitch this being made on that entity. The
   // fact's actId points at the Act row that produced it — the act
-  // we recall.
-  const orClauses = entities.map(e => ({
-    "of.kind": e.kind,
-    "of.id":   e.id,
-  }));
-  const stitchFacts = await Fact.find({
-    through: String(beingId),
-    actId:   { $ne: null },
-    $or:     orClauses,
-  })
-    .sort({ _id: -1 }) // deterministic (the act hash), never the clock (623/12). The braid-distance
-    // here is a tunable proxy; the IDEAL is causal hop-distance over the stitch graph — this is the
-    // safe clock-free interim (the heuristic stays deterministic + replay-safe).
-    .limit(cap)
-    .select("actId of date")
-    .lean();
+  // we recall. Curated: the Mongo $or-over-reels query becomes one
+  // curated reel read PER entity (getFactsOnReelWhere is per-reel),
+  // merged. History is the fold's history (the old Fact.find was
+  // history-blind; threading the fold's history is the post-doctrine
+  // correct scope — facts are read on the reel the place renders on).
+  const stitchFacts = [];
+  for (const e of entities) {
+    const onReel = getFactsOnReelWhere(
+      history,
+      e.kind,
+      e.id,
+      (f) => String(f.through) === String(beingId) && f.actId != null,
+    );
+    for (const f of onReel) stitchFacts.push(f);
+  }
+  // deterministic (the act hash) desc, never the clock (623/12). The braid-distance
+  // here is a tunable proxy; the IDEAL is causal hop-distance over the stitch graph — this is the
+  // safe clock-free interim (the heuristic stays deterministic + replay-safe).
+  stitchFacts.sort((a, b) =>
+    String(a._id) < String(b._id) ? 1 : String(a._id) > String(b._id) ? -1 : 0,
+  );
+  stitchFacts.length = Math.min(stitchFacts.length, cap);
 
   if (stitchFacts.length === 0) return [];
 
   // Resolve to Act rows. Dedupe by actId — multiple facts can come
-  // from one act (a single act stitches multiple entities).
+  // from one act (a single act stitches multiple entities). Curated
+  // getActById per id; drop severed acts (the old severedAt:null filter).
   const actIds = [...new Set(stitchFacts.map(f => f.actId))];
-  const acts = await Act.find({ _id: { $in: actIds }, severedAt: null })
-    .select("_id through to activeAble stampedAt startMessage endMessage rootCorrelation innerFace")
-    .lean();
+  const acts = actIds
+    .map((id) => getActById(id))
+    .filter((a) => a && a.severedAt == null);
 
   // Order acts to match the stitch-fact order so braid-distance
   // ranking holds.

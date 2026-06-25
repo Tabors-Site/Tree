@@ -1048,8 +1048,6 @@ export function parseWithContext(input, ctx = {}) {
 // composed string in their `ibpAddress` field; presenceKey lookups
 // use it; thread descriptors group by it.
 
-import Being from "../materials/being/being.js";
-
 const STANCE_PAIR_SEPARATOR = " :: ";
 
 /**

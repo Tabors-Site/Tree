@@ -1,63 +1,68 @@
-import mongoose from "mongoose";
-import { randomUUID as uuidv4 } from "node:crypto";
+// TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
+//
+// storyPeer.js — the file-backed home of the federation peering
+// registry. A StoryPeer is the address-book row for one foreign place:
+// its domain, baseUrl, storyId, public key (the canopy verifies
+// envelopes against it), liveness status, and the small mutable
+// bookkeeping (lastSeenAt, uptimeHistory, rateLimits, consecutive-
+// Failures). It is NOT a folded reel — it is small mutable metadata
+// keyed by domain — so it gets the SAME shape the secondary cross-
+// cutting projections (inbox / threads / position) and the History
+// registry use: a FileCollection, one JSON doc per row, under the store
+// (<storeRoot>/proj/storyPeer/...). This replaces the mongoose
+// StoryPeer model that load-imported "mongoose".
+//
+// The row's `_id` IS the domain (one doc per peer). `findById(domain)`
+// resolves the single row; `findOne({domain})` / `find({})` scan the
+// index. peers.js is the curated read/write seam; it builds the full
+// default-filled doc on register (the defaults the mongoose schema
+// supplied) and upserts it here.
 
-const UptimeEntrySchema = new mongoose.Schema(
-  {
-    date: { type: Date, required: true },
-    checks: { type: Number, default: 0 },
-    successes: { type: Number, default: 0 },
-  },
-  { _id: false }
-);
+import { FileCollection } from "../../../seed/past/projStore.js";
 
-const RateLimitsSchema = new mongoose.Schema(
-  {
-    requestsPerMinute: { type: Number, default: 1000 },
-    requestsPerUserPerMinute: { type: Number, default: 60 },
-  },
-  { _id: false }
-);
+// One instance, shared process-wide. Keyed by domain (each doc's _id ===
+// its domain). Stored as JSON under <storeRoot>/proj/storyPeer/.
+export const StoryPeer = new FileCollection("storyPeer");
 
-const StoryPeerSchema = new mongoose.Schema({
-  _id: { type: String, required: true, default: uuidv4 },
-  domain: { type: String, required: true, unique: true },
-  baseUrl: { type: String, default: null }, // full URL with protocol, e.g. https://my-place.com or http://localhost:3001
-  storyId: { type: String, required: true },
-  publicKey: { type: String, required: true },
-  protocolVersion: { type: Number, default: 1 },
-  seedVersion: { type: String, default: null },
-  name: { type: String, default: "" },
-  lastSeenAt: { type: Date, default: Date.now },
-  status: {
-    type: String,
-    enum: ["active", "degraded", "unreachable", "dead", "blocked"],
-    default: "active",
-  },
-  // Strict envelope mode. When true, every cross-story envelope from
-  // this peer must carry the acting being's own verified signature; the
-  // unsigned-advisory floor (peer-story vouch alone) is refused. Turn
-  // on for peers known to run a signing seed.
-  requireSignedEnvelopes: { type: Boolean, default: false },
-  consecutiveFailures: { type: Number, default: 0 },
-  firstFailureAt: { type: Date, default: null },
-  lastSuccessAt: { type: Date, default: Date.now },
-  uptimeHistory: {
-    type: [UptimeEntrySchema],
-    default: [],
-  },
-  rateLimits: {
-    type: RateLimitsSchema,
-    default: () => ({
+// Build a full peer doc from the supplied fields, filling every default
+// the old mongoose schema supplied (so a freshly registered peer reads
+// back identically to the Mongo path). `domain` becomes the row `_id`.
+export function buildPeerDoc({
+  domain,
+  storyId,
+  publicKey,
+  baseUrl = null,
+  name = "",
+  status = "active",
+  requireSignedEnvelopes = false,
+  protocolVersion = 1,
+  seedVersion = null,
+  extensions = [],
+} = {}) {
+  const now = new Date();
+  return {
+    _id: domain,
+    domain,
+    baseUrl,
+    storyId,
+    publicKey,
+    protocolVersion,
+    seedVersion,
+    name,
+    lastSeenAt: now,
+    status,
+    requireSignedEnvelopes,
+    consecutiveFailures: 0,
+    firstFailureAt: null,
+    lastSuccessAt: now,
+    uptimeHistory: [],
+    rateLimits: {
       requestsPerMinute: 1000,
       requestsPerUserPerMinute: 60,
-    }),
-  },
-  extensions: { type: [String], default: [] },
-  registeredAt: { type: Date, default: Date.now },
-});
-
-StoryPeerSchema.index({ status: 1 });
-
-const StoryPeer = mongoose.model("StoryPeer", StoryPeerSchema);
+    },
+    extensions,
+    registeredAt: now,
+  };
+}
 
 export default StoryPeer;

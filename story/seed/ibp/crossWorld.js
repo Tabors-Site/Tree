@@ -29,7 +29,7 @@
 // inbox / assign / sealAct flow (which already threads crossOrigin
 // correctly via moment.targetHistory).
 
-import Act from "../past/act/act.js";
+import { appendActLine } from "../past/fileStore.js";
 import { handleCrossWorldResponse } from "../past/act/crossWorldResponse.js";
 import { sealFacts } from "../past/fact/facts.js";
 import { getStoryDomain } from "./address.js";
@@ -209,7 +209,13 @@ export async function crossStoryDispatch({ envelope, actor, identity } = {}) {
         [],
         signingPem,
       );
-      await Act.create({
+      // FileStore swap: the act row lands on the actor's per-(story,history)
+      // act-log (keyed by the actor being) via appendActLine — the SAME
+      // act-opener primitive the 4-stamped chokepoint uses (appendActLine
+      // indexes the doc internally). The curated act layer (actChain.js) is
+      // read-only, so this documented Stamp-opener exception writes the row
+      // through the storage primitive directly, exactly as the seal path does.
+      appendActLine(story, actor.history, actor.beingId, {
         _id: id,
         p,
         by: actorNameId,
