@@ -6,7 +6,7 @@
 // Today: applying `do:set` facts to derive qualities state. The
 // `set` op's params shape is `{ field, value, merge=true }`. When
 // `field` starts with "qualities." the reducer needs to produce the
-// new qualities object from the fact alone (no Mongo round-trip).
+// new qualities object from the fact alone (no store round-trip).
 //
 // Pure functions. Same (state, fact) → same state every time. No
 // I/O. Concurrent calls compute identical results.

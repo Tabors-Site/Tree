@@ -14,8 +14,8 @@
 //   5. a DIFFERENT action the member able grants (do:second) is STILL permitted — the cannot is
 //      SURGICAL (it forbids only do:back, not the able wholesale — strictly additive, no over-deny).
 //
-// Mirrors verify-cherub-cut's boot boilerplate (scratch Mongo, fresh key dir, dropDatabase, begin.js,
-// poll findByName cherub on "0"). UNIQUE port 3861 + DB story_lawgate. Filters Mirror/ENOTCONN noise.
+// Mirrors verify-cherub-cut's boot boilerplate (scratch file store, fresh key dir, begin.js,
+// poll findByName cherub on "0"). UNIQUE port 3861 + store story_lawgate. Filters Mirror/ENOTCONN noise.
 
 import fs from "fs";
 import os from "os";
@@ -29,7 +29,6 @@ const SCRATCH_DB = path.join(os.tmpdir(), "story_lawgate-" + process.pid);
 process.env.PORT = "3861";
 process.env.TREEOS_STORE_BASE = SCRATCH_DB;
 fs.rmSync(SCRATCH_DB, { recursive: true, force: true });
-delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "lawgate-secret-0123456789";
 process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "lawgate-keys-" + process.pid);
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });

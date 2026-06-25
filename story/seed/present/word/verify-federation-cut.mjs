@@ -24,7 +24,6 @@ const SCRATCH_DB = path.join(os.tmpdir(), "story_word_federation_cut-" + process
 process.env.PORT = "3795";
 process.env.TREEOS_STORE_BASE = SCRATCH_DB;
 fs.rmSync(SCRATCH_DB, { recursive: true, force: true });
-delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "federationcut-secret-0123456789";
 process.env.STORY_DOMAIN = process.env.STORY_DOMAIN || "alpha.test";
 process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "federationcut-keys-" + process.pid);
@@ -35,13 +34,8 @@ fs.mkdirSync(SRC, { recursive: true });
 fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
 
-// Connect the app's default mongoose instance (the legacy models bind to it; the file-store
-// migration is mid-flight, so the fold + projections still read Mongo). begin.js does not call
-// mongoose.connect in this tree, so do it here before boot, then drop the scratch DB clean.
-const mongoose = (await import(`${R}/node_modules/mongoose/index.js`)).default;
-await mongoose.connect(SCRATCH_DB, { serverSelectionTimeoutMS: 8000 });
-await mongoose.connection.dropDatabase();
-
+// Scratch file store is fresh-wiped above (TREEOS_STORE_BASE); begin.js opens it on boot.
+// The fold + projections read the files.
 await import(`${R}/begin.js`);
 
 const { findByName, loadOrFold } = await import(`${R}/seed/materials/projections.js`);

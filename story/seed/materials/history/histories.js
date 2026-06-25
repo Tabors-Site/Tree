@@ -161,7 +161,7 @@ export async function getBranchPoint(history, type, id) {
   const key = `${type}:${id}`;
   const bp = row.branchPoint;
   if (!bp) return 0;
-  // Mongoose Maps are lean'd to plain objects on lean queries.
+  // branchPoint may arrive as a Map or as a plain object; handle both.
   const v = bp instanceof Map ? bp.get(key) : bp[key];
   return typeof v === "number" ? v : 0;
 }
@@ -199,13 +199,12 @@ export async function isHistoryDeleted(path) {
 // Curated CRUD over the file-backed history store
 // ──────────────────────────────────────────────────────────────────
 //
-// The History registry is no longer a Mongoose model; it is a
-// FileCollection (historyStore.js) keyed by path. These helpers are the
-// curated write + multi-row read seam so callers (historiesCatalog,
-// historyCreation, history-manager/ops) never touch HistoryCollection
-// directly. Each write that toggles a flag must be followed by the
-// caller's invalidateHistoryCache(path) so the cached doc reflects it
-// (kept the caller's responsibility, unchanged from the Mongo path).
+// The History registry is a FileCollection (historyStore.js) keyed by
+// path. These helpers are the curated write + multi-row read seam so
+// callers (historiesCatalog, historyCreation, history-manager/ops) never
+// touch HistoryCollection directly. Each write that toggles a flag must
+// be followed by the caller's invalidateHistoryCache(path) so the cached
+// doc reflects it (the caller's responsibility).
 
 /**
  * Direct children of a history path. Rows whose `parent` field equals

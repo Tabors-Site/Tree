@@ -283,7 +283,7 @@ const PERMISSION_ERROR_PATTERNS = [
 // Stance-arrival handler for create-space. When the op's target arrives
 // from the IBP wire, it's a resolved stance (carries `.chain`,
 // `.spaceId`, `.isSpaceRoot`, `.isHomeRoot`). The inline branch above
-// handles Mongoose-doc shapes; this helper handles the wire shape.
+// handles hydrated-doc shapes; this helper handles the wire shape.
 
 const KERNEL_ERROR_PATTERNS = {
   createChild: [
@@ -307,7 +307,7 @@ async function createSpaceChild({ target, params, identity, moment, kind }) {
   }
 
   // Non-stance path: trust the caller, parent is the target. Accepts
-  // any of the shapes targetIdOf() handles (Mongoose doc, plain
+  // any of the shapes targetIdOf() handles (hydrated doc, plain
   // {_id} / {id} / {spaceId} envelope, raw string id).
   if (kind !== "stance") {
     try {

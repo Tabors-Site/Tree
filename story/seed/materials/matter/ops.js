@@ -137,7 +137,7 @@ async function purgeContentHandler({ target, params, identity, moment }) {
   // Shared-fate refcount: other live matter whose CURRENT content is this
   // hash. Purging would blind them — refuse without force.
   //
-  // FLAG (cross-history scope loss): the Mongo query was history-AGNOSTIC
+  // FLAG (cross-history scope loss): the legacy query was history-AGNOSTIC
   // ("any history" — it scanned EVERY history's matter projections for the
   // hash). The curated projection layer is per-history (listByType(type,
   // history) + loadProjection); there is NO curated all-histories content-

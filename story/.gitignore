@@ -22,6 +22,8 @@ store
 # real sits here. Created by story/scripts/mirror-mount.mjs.
 mirror
 
+/rust
+
 # Per land extension profile. Operator's choices for which extensions
 # wake with the I-Am. Not part of the kernel.
 shared/.disabled

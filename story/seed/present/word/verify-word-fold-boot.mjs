@@ -2,7 +2,7 @@
 // Proves the boot fold (9.md Phase 2): `pastOf` reads verb pasts from the foundation WORDS
 // (seed/words/word.word + verbs.word) via wordFold.js, not from a hardcoded map. The hardcoded
 // map is now EMPTY, so every irregular is a witness: `make` is "maked" before the fold (the bare
-// -ed rule) and "made" after (the Word, folded). No Mongo, no boot: pure functions.
+// -ed rule) and "made" after (the Word, folded). No store, no boot: pure functions.
 
 import { pastOf } from "./verbTense.js";
 

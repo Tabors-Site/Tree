@@ -315,11 +315,11 @@ async function seeQuery(kind, where, history) {
       await import("../../materials/being/identity/lookups.js");
     return findBeingCandidatesByName(String(where.name));
   }
-  // Curated projection query. The prior Mongo Projection.find had no history
-  // filter (it crossed every history's docs); the curated peer scopes to the
+  // Curated projection query. A naive projection scan would have no history
+  // filter (crossing every history's rows); the curated peer scopes to the
   // running Word's history lineage via listByType + per-id loadProjection, then
   // filters by the flat `state.<field>` predicates. (Threading ctx.history
-  // narrows an all-histories Mongo scan to the world the caller stands in.)
+  // narrows an all-histories scan to the world the caller stands in.)
   const { listByType, loadProjection } =
     await import("../../materials/projections.js");
   const h = history || "0";

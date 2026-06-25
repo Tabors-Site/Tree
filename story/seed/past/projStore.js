@@ -14,10 +14,10 @@
 // rebuildable from the per-id files (rebuild()); a corrupt/missing index is
 // never a loss (the per-id files win).
 //
-// It exposes the narrow slice of the Mongoose model surface these projections'
+// It exposes the narrow slice of the collection-model surface these projections'
 // callers actually use (updateOne/deleteOne/deleteMany/findById/findOne/find/
-// aggregate/countDocuments/estimatedDocumentCount), each returning the same
-// shapes the Mongo path returned, so the swap is storage-only — call sites do
+// aggregate/countDocuments/estimatedDocumentCount), each returning the
+// shapes the callers expect, so storage stays behind one seam — call sites do
 // not change. Query support is the minimum the callers exercise: top-level
 // equality, $gte (Date), $nin, $in, $exists, $lt, plus $sort/$limit/$skip and a
 // one-level $group with $sum/$push used by getInboxSummary. No transactions, no
@@ -122,8 +122,8 @@ function eq(a, b) {
 
 // One row against one filter. Supports top-level equality/operator fields and a
 // top-level $or (the only logical operator the callers use). For array fields
-// (e.g. threads.participants) an equality cond matches membership, mirroring
-// Mongoose's implicit array-contains semantics.
+// (e.g. threads.participants) an equality cond matches membership, the
+// implicit array-contains semantics the callers expect.
 function rowMatches(row, filter) {
   if (!filter) return true;
   for (const [key, cond] of Object.entries(filter)) {
@@ -171,10 +171,10 @@ class Cursor {
     this._sort = spec;
     return this;
   }
-  // No-op field projection. Reads here always return full rows; the Mongo
+  // No-op field projection. Reads here always return full rows; the
   // `.find(q).select("a b").lean()` shape works unchanged because callers
   // read the fields off the full row. Kept so the history store (which used
-  // .select on the Mongoose model) swaps storage-only.
+  // .select on the collection) keeps its call shape.
   select() {
     return this;
   }
@@ -187,7 +187,7 @@ class Cursor {
     return this;
   }
   // Reads here are always plain objects; lean() is a no-op pass-through so the
-  // Mongo call shape `.find(q).sort(...).lean()` works unchanged.
+  // call shape `.find(q).sort(...).lean()` works unchanged.
   lean() {
     return this._resolve();
   }
@@ -322,7 +322,7 @@ export class FileCollection {
     return { deletedCount: victims.length };
   }
 
-  // Insert one doc. Mirrors the Mongoose model `.create(doc)` shape the
+  // Insert one doc. Mirrors the `.create(doc)` shape the
   // history store used. The doc's `_id` is the row key (the history store
   // sets `_id` to the path). Returns the stored row.
   async create(doc) {

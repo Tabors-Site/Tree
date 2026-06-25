@@ -101,7 +101,7 @@ export async function advanceActHead(story, history, beingId, actId, { session =
   // being's act-log advances under a compare-and-set on the prior head. A
   // stale author is refused with ACT_CHAIN_MOVED — the chain can't fork. The
   // single global commit mutex serializes writes, so the `session` arg (a
-  // Mongo-era ownership token) is no longer load-bearing; accepted for
+  // transactional ownership token) is no longer load-bearing; accepted for
   // signature parity, ignored.
   void session;
   if (expectPrev === undefined) {

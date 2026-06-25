@@ -18,7 +18,6 @@ const SCRATCH_DB = path.join(os.tmpdir(), "story_word_connect_live-" + process.p
 process.env.PORT = "3795";
 process.env.TREEOS_STORE_BASE = SCRATCH_DB;
 fs.rmSync(SCRATCH_DB, { recursive: true, force: true });
-delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "connectlive-secret-0123456789";
 process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "connectlive-keys-" + process.pid);
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });

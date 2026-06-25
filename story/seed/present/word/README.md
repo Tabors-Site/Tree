@@ -8,7 +8,7 @@ The first real build of The Word: the **cherub birth flow**, hand-built as IR an
 
 - `evaluator.js` — walks the IR and emits facts. It folds facts into `ctx.state`; registers flows as standing watches; `pump`s the choq on events (rules 6, 12); matches watches over state (`when: { state: {...} }`); and `drive`s a state wheel (the coupled clock). Two modes: `dryRun` (collects facts, no DB) and live (`emitFact` into the moment; `form-being` calls the real `birthBeing`).
 - `parser.js` — a minimal template parser (prose -> IR); the larval form of the recursive-descent grammar (Phase 3).
-- `verify-word-cherub.mjs` — the **live gate**: boots a real reality (Mongo + genesis) and runs the evaluator's `form-being` against the real `birthBeing`, asserting a real being is born (5/5).
+- `verify-word-cherub.mjs` — the **live gate**: boots a real reality (an isolated scratch file store + genesis) and runs the evaluator's `form-being` against the real `birthBeing`, asserting a real being is born (5/5).
 - `ableWordRegistry.js` — the **bridge** (Phase 4, host): `(able, be-op) -> .word`, the dual registry preferring `.word`; `resolveAbleWord` returns the parsed IR or null (fall through to the JS handler), `runAbleWord` runs it live in the moment. Seeded with `cherub:birth -> cherub.word`. The only new host code; the rest of a conversion is deletion. See `bridge.md`.
 - `verify-bridge.mjs` — sanity check: the registry resolves `cherub:birth` to the 5-act `cherub.word` and falls through for everything else (5/5).
 
@@ -91,7 +91,7 @@ Reads `harmony.word` (actual prose), parses it to the IR, and runs the pulse, no
 node reality/seed/present/word/verify-word-cherub.mjs   ->   5 passed, 0 failed
 ```
 
-`verify-word-cherub.mjs` boots a real reality (an isolated Mongo DB + genesis: `ensureSpaceRoot` + `ensureIAm` + `ensureSeedDelegates`, with a retry wrapper for the fresh-DB transaction quirks) and runs the evaluator's `form-being` **live** against the real `birthBeing`. It asserts the produced `be:birth` fact names `@worduser` and parents to cherub, that `birthBeing` lays its inherited + global able grants (one act, many facts), and that the being **materializes from the chain** after seal. So the evaluator drives the real substrate, not just a dry-run.
+`verify-word-cherub.mjs` boots a real reality (an isolated scratch file store + genesis: `ensureIAm` + the seed words + `ensureSpaceRoot` + `ensureSeedDelegates`) and runs the evaluator's `form-being` **live** against the real `birthBeing`. It asserts the produced `be:birth` fact names `@worduser` and parents to cherub, that `birthBeing` lays its inherited + global able grants (one act, many facts), and that the being **materializes from the chain** after seal. So the evaluator drives the real substrate, not just a dry-run.
 
 Findings it surfaced (real substrate requirements the idealized IR glossed):
 

@@ -5,9 +5,8 @@ import fs from "fs";
 import os from "os"; import path from "path"; import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-// Set env so the import-time config checks pass — NO boot, NO DB connection; renderVocabularyAsWord
+// Set env so the import-time config checks pass — NO boot, NO store connection; renderVocabularyAsWord
 // only needs the literal can* pass-through (the resolver registry is empty).
-process.env.MONGODB_URI = process.env.MONGODB_URI || "mongodb://localhost:27017/story_wordvocab_noconnect";
 process.env.PORT = process.env.PORT || "3856";
 process.env.JWT_SECRET = process.env.JWT_SECRET || "wordvocab-0123456789";
 process.env.STORY_KEY_DIR = process.env.STORY_KEY_DIR || path.join(os.tmpdir(), "wordvocab-keys");

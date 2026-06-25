@@ -366,6 +366,10 @@ export async function markThreadSevered(rootCorrelation, now = new Date()) {
   for (const a of chain) {
     if (a.severedAt) continue;
     if (a.endMessage?.time) continue;
+    // FLAG (act-mutation pending conversion to a fact): patches the sealed act with `severedAt` — an
+    // act-row edit (forbidden: an act is present, a fact is past) AND a clock write (`now`). A severance
+    // is an EVENT → a severance FACT on a reel, folded (the thread's severed state reads the fact, not a
+    // patched column). Its own thread; falls out with both the status rip and the clock removal.
     if (patchActStatus(String(a._id), { severedAt: now })) modified++;
   }
   return modified;

@@ -5,7 +5,7 @@
 // cond.seeCall). Both dispatch through the SAME ctx.env.host registry as callHost, so the SAME closed
 // set must gate both. An UNKNOWN see-op is REJECTED (the door stays shut on both faces of the verb).
 //
-// This is a PURE-PARSER verifier (no Mongo boot): the gate lives entirely in parse(). It proves:
+// This is a PURE-PARSER verifier (no store boot): the gate lives entirely in parse(). It proves:
 //   1. an unknown BLOCK see-op (`see bogus() as x`) inside a flow body REJECTS;
 //   2. an unknown INLINE see-op predicate (`If bogus(history):`) REJECTS;
 //   3. every LEGIT see-op the corpus uses still PARSES (block + inline forms);

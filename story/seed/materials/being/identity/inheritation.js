@@ -68,7 +68,7 @@ export async function livePointsAt(beingId, history) {
   // history sees main's grants; main does not see a sub-history's). The
   // lineage is main→leaf, and FileStore reels are seq-ascending with seqs
   // contiguous across forks, so reading lineage-in-order yields the facts
-  // in the same {seq:1} order the Mongo sort produced.
+  // in seq-ascending ({seq:1}) order.
   //
   // FLAG: the history-agnostic union (no `history` arg — "any grant
   // anywhere") has NO curated peer. The curated reel read is per-(history,

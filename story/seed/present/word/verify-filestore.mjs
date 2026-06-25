@@ -1,8 +1,8 @@
-// verify-filestore.mjs — boot-free proof of the append-only-file storage core (the Mongo rip
-// foundation, plan elegant-cooking-teapot Phase 1). NO mongod: runs against a temp dir.
+// verify-filestore.mjs — boot-free proof of the append-only-file storage core
+// (plan elegant-cooking-teapot Phase 1). Runs against a temp dir.
 //
-// Proves: (1) a moment's facts append to per-reel files with a valid hash-chain (byte-compatible
-// with the Mongo fact shape, via the shared hash.js); (2) readReel reads them back in seq order;
+// Proves: (1) a moment's facts append to per-reel files with a valid hash-chain (the canonical
+// fact shape, via the shared hash.js); (2) readReel reads them back in seq order;
 // (3) the journal makes commits crash-recoverable — replay is idempotent (re-applying a committed
 // record is a no-op) and a torn trailing WAL record is discarded with zero trace.
 
@@ -163,7 +163,7 @@ try {
     : bad("branching", { seqs: union.map((f) => f.seq), crossLink: union[2]?.p === mainReel[1]?._id, vLin, mainLen: mainReel.length });
 
   // 9. FOLD EQUIVALENCE (the doc's "prove the fold matches"): file-stored facts fold through the
-  //    EXISTING being reducer to the SAME projection state Mongo would produce. Read→fold on files.
+  //    EXISTING being reducer to the canonical projection state. Read→fold on files.
   const { initial, reduce } = await import("../../materials/being/reducer.js");
   const FB = "being-fold-test-01";
   const mkF = (field, value) => ({
@@ -200,7 +200,7 @@ try {
     ? ok("projection snapshot (.proj) round-trips; CAS guard rejects a stale fold")
     : bad("snapshot", { loaded, staleRejected });
 
-  // 7. STORIES (the file equivalent of Mongo's per-DB isolation): a named story maps to its own
+  // 7. STORIES (per-story isolation): a named story maps to its own
   //    sibling folder under the store base; "main"/"past"/absent → the default store/past.
   const base = storeBase();
   const rPast = configureStore({ story: "past" });

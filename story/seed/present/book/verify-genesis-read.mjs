@@ -13,9 +13,10 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const SCRATCH_DB = "mongodb://localhost:27017/story_genesis_read";
+const SCRATCH = path.join(os.tmpdir(), "story_genesis_read-" + process.pid);
 process.env.PORT = "3814";
-process.env.MONGODB_URI = SCRATCH_DB;
+process.env.TREEOS_STORE_BASE = SCRATCH;
+fs.rmSync(SCRATCH, { recursive: true, force: true });
 process.env.JWT_SECRET = process.env.JWT_SECRET || "genesis-read-0123456789";
 process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "genread-keys-" + process.pid);
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
@@ -25,13 +26,7 @@ fs.mkdirSync(SRC, { recursive: true });
 fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
 
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`)).default;
-  const conn = await mongoose.createConnection(SCRATCH_DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
-
+// (scratch file store fresh-wiped above; no DB to drop)
 await import(`${R}/begin.js`);
 
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
@@ -57,11 +52,12 @@ try {
     ? ok(`the chain reads back as a book — ${book.length} acts, ${text.length} chars of Word`)
     : bad(`renders a book`, { len: text?.length, acts: book?.length });
 
-  // 2. it reads in CHAIN ORDER (genesis → head). The WORLD book is DATE-ordered (assembleStory sorts
-  //    by {date, seq}); `seq` is per-reel, so only date is globally monotonic across all the reels.
-  const dates = book.map((a) => a.date).filter(Boolean).map((d) => new Date(d).getTime());
-  const ordered = dates.length > 0 && dates.every((d, i) => i === 0 || d >= dates[i - 1]);
-  ordered ? ok(`the acts read in chain order, genesis → head (${dates.length} dated)`) : bad(`chain order`, dates.slice(0, 12));
+  // 2. it reads in CHAIN ORDER (genesis → head). The store never persists `date` (hash.js:
+  //    "ordering is seq, history is the chain"), so the world book sorts by seq, the file-store
+  //    truth-order. The read is therefore seq-monotonic (non-decreasing) across the acts.
+  const seqs = book.map((a) => a.seq).filter((s) => s != null);
+  const ordered = seqs.length > 0 && seqs.every((s, i) => i === 0 || s >= seqs[i - 1]);
+  ordered ? ok(`the acts read in chain order, genesis → head (${seqs.length} by seq)`) : bad(`chain order`, seqs.slice(0, 12));
 
   // 3. it reads as readable WORD — the opening lines are named subjects + predicates, never raw
   //    ids or "[object Object]" (the read re-rasterizes each fact to its word, per 623/8 §03)

@@ -72,7 +72,7 @@ export function reduce(state, fact) {
     next = { ...next, position: explicit };
   }
 
-  // updatedAt is reducer-owned (no Mongoose defaults, no pre-save
+  // updatedAt is reducer-owned (nothing auto-stamps it, no pre-save
   // hook). applyCreateMatter seeds it on do:create; this catches
   // every later mutating fact so rebuild from the reel produces the
   // same value the live fold landed on.

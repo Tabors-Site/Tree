@@ -12,9 +12,10 @@ import path from "path";
 import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../../..");
-const DB = "mongodb://localhost:27017/story_cognitioncut";
+const DB = path.join(os.tmpdir(), "story_cognitioncut-" + process.pid);
 process.env.PORT = "3841";
-process.env.MONGODB_URI = DB;
+process.env.TREEOS_STORE_BASE = DB;
+fs.rmSync(DB, { recursive: true, force: true });
 process.env.JWT_SECRET = process.env.JWT_SECRET || "cogcut-0123456789";
 process.env.STORY_KEY_DIR = path.join(
   os.tmpdir(),
@@ -26,13 +27,7 @@ fs.rmSync(SRC, { recursive: true, force: true });
 fs.mkdirSync(SRC, { recursive: true });
 fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`))
-    .default;
-  const conn = await mongoose.createConnection(DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
+// (scratch file store fresh-wiped above; no DB to drop)
 await import(`${R}/begin.js`);
 const { findByName, loadOrFold } = await import(
   `${R}/seed/materials/projections.js`
@@ -48,8 +43,10 @@ const { setCurrentSpace, getCurrentSpace } = await import(
 const { runReactorMoment } = await import(
   `${R}/seed/present/cognition/scripted/reactor.js`
 );
-const { default: Fact } = await import(`${R}/seed/past/fact/fact.js`);
-const { default: Act } = await import(`${R}/seed/past/act/act.js`);
+const { getStoryDomain } = await import(`${R}/seed/ibp/address.js`);
+const { factFind, factCount, actCount } = await import(
+  `${R}/seed/present/word/_factStoreTest.mjs`
+);
 const poll = async (fn, t = 60000, e = 250) => {
   const t0 = Date.now();
   while (Date.now() - t0 < t) {
@@ -117,8 +114,9 @@ try {
     : bad(`getCurrentSpace set`, { position });
 
   // baseline AFTER all setup
-  const actsBefore = await Act.countDocuments({ through: String(being) });
-  const facetsBefore = await Fact.countDocuments({
+  const story = getStoryDomain();
+  const actsBefore = actCount({ through: String(being) }, story);
+  const facetsBefore = factCount({
     act: "create-space",
     through: String(being),
   });
@@ -148,8 +146,8 @@ try {
       )
     : bad(`cognition kind === see`, res);
 
-  const actsAfter = await Act.countDocuments({ through: String(being) });
-  const facetsAfter = await Fact.countDocuments({
+  const actsAfter = actCount({ through: String(being) }, story);
+  const facetsAfter = factCount({
     act: "create-space",
     through: String(being),
   });
@@ -164,9 +162,7 @@ try {
       )
     : bad(`2 create-space facts`, { facetsBefore, facetsAfter });
 
-  const facts = await Fact.find({ act: "create-space", through: String(being) })
-    .select("actId")
-    .lean();
+  const facts = factFind({ act: "create-space", through: String(being) });
   const actIds = [...new Set(facts.map((f) => String(f.actId)))];
   actIds.length >= 2
     ? ok(

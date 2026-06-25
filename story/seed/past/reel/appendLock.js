@@ -5,12 +5,13 @@
 // │                                                                  │
 // │  This lock serializes appends to the same reel inside ONE Node   │
 // │  process. It does NOT cross processes. If two Node instances run │
-// │  against the same Mongo, they can both allocate seq + insert     │
+// │  against the same store, they can both allocate seq + insert     │
 // │  concurrently — the per-process lock is invisible across the     │
 // │  wire. Cross-process append safety belongs to a separate         │
-// │  primitive (Mongo $inc + unique index + retry, a distributed     │
-// │  lock service, or the same write-once-per-reel discipline        │
-// │  layered above). Don't infer single-writer from this file alone. │
+// │  primitive (an atomic counter + unique index + retry, a          │
+// │  distributed lock service, or the same write-once-per-reel       │
+// │  discipline layered above). Don't infer single-writer from this  │
+// │  file alone.                                                     │
 // └──────────────────────────────────────────────────────────────────┘
 //
 // Per-reel append lock. The critical-section primitive the write side
@@ -39,7 +40,7 @@
 //
 // Single-process semantics. This module uses an in-process Map of
 // promise chains. Sufficient for one Node process. If multi-process
-// writes to the same DB ever become real, a Mongo-backed advisory
+// writes to the same store ever become real, a store-backed advisory
 // lock would replace this — same call shape.
 
 const _tails = new Map(); // reelKey -> Promise (tail of the chain)

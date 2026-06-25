@@ -924,7 +924,7 @@ export async function resolveLlmConfigSpec(mode, params, caller) {
     const spaceId = p.spaceId;
     if (!spaceId) throw new IbpError(IBP_ERR.INVALID_INPUT, "`spaceId` is required");
     // Curated existence check: a non-null main projection slot IS the space.
-    // (Mirrors the flat Space.exists({_id}) the Mongo path did; the rest of
+    // (A flat space-exists lookup by id; the rest of
     // this file resolves spaces via loadProjection("space", id, "0").)
     const { loadProjection } = await import("../../../materials/projections.js");
     const exists = await loadProjection("space", String(spaceId), "0");

@@ -21,7 +21,7 @@
 // This is the model refusing to let the wire short-circuit into a
 // being's reel. If the transport could directly stamp facts on the
 // being's reel, the wire would be a second writer — same class of
-// bug as opts.actor on createBeing or Mongoose timestamps:true
+// bug as opts.actor on createBeing or an auto-timestamp hook
 // overwriting projections. The transport-summon pattern enforces
 // single-writer at the I/O boundary structurally: the wire CAN'T
 // stamp anything on a being's reel; it can only summon the being,

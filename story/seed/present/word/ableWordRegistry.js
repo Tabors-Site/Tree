@@ -223,33 +223,36 @@ export async function rehydrateWordsFromFacts() {
   // FileStore swap: coin/retire facts ride I's OWN being-reel (verb==="do",
   // act ∈ {coin,retire}; wordStore lays them on (history, "being", iAm)). The
   // curated getFactsOnReelWhere reads ONE reel, seq-ascending — already the
-  // {history, seq} order this fold wants WITHIN a history. We read I's reel on
-  // heaven ("0"), the seed/base vocabulary every history inherits.
+  // {history, seq} order this fold wants WITHIN a history.
   //
-  // FLAG (rehydrateWordsFromFacts, this read): the prior Mongo Fact.find had NO
-  // history filter — a GLOBAL scan across EVERY history's reels — so the
-  // per-branch disabled overlay (a retire fact on a child branch BR turning a
-  // word off there while it stays on for main) was folded for ALL branches at
-  // boot. The FileStore is partitioned per-(history,kind,id) and there is NO
-  // curated history-enumeration peer (same gap historiesCatalog.js FLAGs for
-  // "children of a history"), so this curated read covers ONLY heaven "0". The
-  // per-branch overlay for non-main histories is NOT rebuilt here. This is the
-  // boot/recovery path (no production caller today — only the verify scripts);
-  // the live per-history overlay is maintained incrementally by disableWord /
-  // enableWord, and the per-call read path (getWord / resolveAbleWordViaFold)
-  // already composes ["0", branch] via the unified fold per history. Rebuilding
-  // the full per-branch boot overlay needs a list-all-histories primitive that
-  // the curated layer does not expose.
+  // Per-branch overlay: a GLOBAL scan across EVERY history's reels would fold a
+  // child branch BR's RETIRE (turning a word off there while it stays on for
+  // main) for ALL branches at boot. The file store is
+  // partitioned per-(history,kind,id); listHistories() is the enumeration peer
+  // (the reels/ subdirs). We read I's reel on EVERY history and concatenate —
+  // heaven "0" FIRST so an ableword's COIN (which rides the base-vocabulary reel)
+  // is known before a branch's RETIRE (which rides only the branch reel; the
+  // `if (!ablewordKeys.has(word)) continue` gate below would otherwise drop it).
+  // The per-history bucketing (`br = f.history`) then lands each retire on its own
+  // overlay. getFactsOnReelWhere reads ONE reel (the history's DIVERGENT facts,
+  // not the lineage union), so a branch contributes only its own retire — no dup.
   const { getFactsOnReelWhere } = await import("../../past/fact/facts.js");
+  const { listHistories } = await import("../../past/fileStore.js");
   const { I } = await import("../../materials/being/seedBeings.js");
   const iAm = String(I);
-  const facts = getFactsOnReelWhere(
-    "0",
-    "being",
-    iAm,
-    (f) =>
-      f.verb === "do" && (f.act === WORD_COIN || f.act === WORD_RETIRE),
-  );
+  const histories = listHistories();
+  histories.sort((a, b) => (a === "0" ? -1 : b === "0" ? 1 : a < b ? -1 : a > b ? 1 : 0));
+  const facts = [];
+  for (const h of histories) {
+    for (const f of getFactsOnReelWhere(
+      h,
+      "being",
+      iAm,
+      (f) => f.verb === "do" && (f.act === WORD_COIN || f.act === WORD_RETIRE),
+    )) {
+      facts.push(f);
+    }
+  }
   _historyDisabled.clear();
   const ablewordKeys = new Set(); // params.word of words whose declare marked them kind:"ableword"
   for (const f of facts) {

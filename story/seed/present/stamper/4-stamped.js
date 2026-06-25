@@ -6,7 +6,7 @@
 // PLANNED the row (computed ibpAddress, rootCorrelation,
 // parentThread, etc.) at beat 1. This file presses the closing
 // face — endMessage — onto a row that is WRITTEN HERE for the
-// first time. The row does not exist in Mongo before this call.
+// first time. The row does not exist in the store before this call.
 //
 // **Round 5 restructure.** The Act used to be written at beat 1
 // (assign) and updated at beat 4 (here). That left failed cognitions
@@ -25,7 +25,7 @@
 // commitMoment WAL-appends + fsyncs (the commit point), applies each
 // fact to its reel, and returns the factIds it minted. The signed act
 // then lands on the being's act-log (appendActLine) and the act-chain
-// head advances under a CAS (advanceActHeadFile). There is no Mongo
+// head advances under a CAS (advanceActHeadFile). There is no
 // transaction and no replica set: the single global commit mutex inside
 // commitMoment serializes the whole write. ΔF=0 moments (LLM with no
 // tool calls) commit an empty facts list — the act still seals.
@@ -91,7 +91,7 @@ export function capContent(s) {
  * The plannedAct came from assign.planActRow and carries all the
  * derived fields (ibpAddress, rootCorrelation, parentThread,
  * answers, startMessage, etc.). This function adds endMessage and
- * inserts INSIDE the same Mongo transaction that commits ΔF, so
+ * inserts INSIDE the same atomic commit that lands ΔF, so
  * the moment's full record (every Fact + the Act) lands as one
  * unit. PAST FIXED on the whole moment, not just the Act.
  *
@@ -184,7 +184,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
   //
   // Cross-moment atomicity (federation pull, cross-reel transfer)
   // belongs in a future `withBatch` primitive (a grouping of moments
-  // that share a Mongo session); it never expands a single moment to
+  // that share one commit); it never expands a single moment to
   // hold many ops. Genesis is a SEQUENCE of moments, not a batch —
   // see seed/done/IamToActs.md.
   //
@@ -251,18 +251,15 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
 
   const endTime = new Date();
   const safeContent = content != null ? capContent(content) : null;
-  // Stamper seats the Act's initial status. Cross-world doctrine: an
-  // Act starts at "attempted" when the actor's local chain seals;
-  // transitions exactly once to a terminal state when the target's
-  // world confirms. For same-world moments where the Stamper IS the
-  // target, the post-commit transition happens inline below; for
-  // cross-story moments awaiting a canopy round-trip, the Act stays
-  // at "attempted" until the response arrives via updateActStatus.
-  // See CROSS-WORLD.md "Act lifecycle and status."
+  // Status is NOT a persisted column on the act line — it is a FOLD (the append-only law: a sealed
+  // act has no editable fields). The old `status: "attempted"` was dead weight: every line carried it,
+  // the local "→ landed" transition only ever mutated the in-memory object (never the line), so on
+  // disk it was always "attempted" — meaningless. So we don't write it. "Current status" is derived at
+  // read (actChain.getActById): a sealed act EXISTS, so locally it landed; a cross-world act's terminal
+  // outcome arrives as a SUPERSEDING FACT (handleCrossWorldResponse) and the fold prefers the latest.
   const actDoc = {
     ...plannedAct,
     endMessage: { content: safeContent, time: endTime, stopped: false },
-    status: "attempted",
   };
 
   // Preload the actor NAME's signing key BEFORE the seal so the
@@ -277,7 +274,7 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
   // ── THE SEAL (fileStore). One word = one moment = one commit. ──
   // There is no transaction, no replica set, no per-reel append lock:
   // the single global commit mutex inside commitMoment serializes the
-  // whole write (philosophy/mongorust.md). The flow is the same for
+  // whole write. The flow is the same for
   // ΔF=0 (a content-only act, e.g. an LLM that spoke prose via a speech
   // tool) and ΔF≥1 — an empty facts list just commits an empty moment
   // record; the act still seals.
@@ -286,8 +283,8 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
   //       the actDoc (echoed into record.act) and every Fact spec; the
   //       store WAL-appends + fsyncs (the commit point), applies each
   //       fact to its reel idempotently, and returns the factIds it
-  //       minted (the _id = computeHash(p, contentOf) — byte-identical
-  //       to the Mongo path, so folds stay compatible).
+  //       minted (the _id = computeHash(p, contentOf) — the store's
+  //       content-hash _id, so folds stay compatible).
   //   (2) sign the act over EXACTLY those factIds (sorted; the verifier
   //       sorts the same way), then appendActLine the SIGNED act to the
   //       being's act-log — the act-chain peer of the reel files.
@@ -314,13 +311,6 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
   const factRecords = [];
   for (const reel of reels) {
     for (const spec of reel.facts) {
-      // Stamp the `date` witness logFact's baseDoc stamps (past/fact/facts.js). The Mongo Fact
-      // schema carried `date: { default: Date.now }`, which populated EVERY fact at create
-      // regardless of write path; the file store writes only explicit spec fields, so a
-      // moment-sealed spec (emitFact -> deltaF, never through logFact) must carry it here or
-      // reducers that read fact.date (applyDeath's qualities.death.time, name closedAt) fold null.
-      // Non-hashed: contentOf() excludes `date`, so this never affects _id or verifyReel.
-      if (spec.date == null) spec.date = new Date();
       factRecords.push({ history: reel.history, kind: reel.kind, id: String(reel.id), spec });
     }
   }
@@ -369,30 +359,11 @@ export async function sealAct(plannedAct, { content = null, deltaF = [], afterSe
 
   if (!inserted) return null;
 
-  // Status transition: attempted → landed. For same-world and
-  // same-story cross-branch moments the local Stamper IS the target —
-  // by the time commitMoment returned, the facts landed and the act is
-  // in its log, so the act can move to "landed" inline here. For
-  // cross-story moments the Act is created directly by
-  // crossStoryDispatch (not sealAct) with no deltaF, and its status
-  // transitions when the canopy reply arrives via
-  // handleCrossWorldResponse → updateActStatus. So the only path
-  // through here is same-story; the foreign-story check is a
-  // belt-and-suspenders guard against a future caller routing a
-  // cross-story moment through sealAct. See CROSS-WORLD.md +
-  // crossWorld.js.
-  //
-  // The transition is now in-memory on the sealed actDoc: the act-log
-  // line is appended with status "attempted" above, and the status is a
-  // closure field OUTSIDE the act's hash digest (actHash.contentOfAct
-  // excludes it), so it mutates by design. (The Mongo Act.updateOne the
-  // transactional path used is gone with Act.create.)
-  const hasForeignStoryFact = Array.isArray(deltaF) && deltaF.some(
-    (f) => f?.params?.crossOrigin?.story
-  );
-  if (!hasForeignStoryFact) {
-    inserted.status = "landed";
-  }
+  // No status on the act. An act is ALWAYS PRESENT (the live attempt at the head); a fact is ALWAYS
+  // PAST (the stamp it leaves behind). "Did the act complete?" is not a field on the act — it is
+  // whether a FACT was stamped for it (getFactsByActId): the past-tense proof the present-tense act
+  // happened. Locally that fact is already on the target reel; cross-story it is the reply-fact when it
+  // crosses back. So nothing is written or transitioned here — the act exists, the facts are its done.
 
   // Side effects fire AFTER the Act lands. The Act's existence is
   // the source of truth for "this moment sealed"; the projections

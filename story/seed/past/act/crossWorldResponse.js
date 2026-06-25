@@ -21,7 +21,6 @@
 // transitions atomically only when current=attempted; inner face is
 // a single overwrite that's safe to retry.
 
-import { updateActStatus } from "./status.js";
 import { attachInnerFace } from "./innerFace.js";
 
 /**
@@ -49,18 +48,12 @@ export async function handleCrossWorldResponse(actId, response) {
     throw new Error("handleCrossWorldResponse: response is required");
   }
 
-  let statusResult = null;
-  if (response.status) {
-    try {
-      const updated = await updateActStatus(actId, response.status, response.meta || null);
-      statusResult = updated ? response.status : null;
-    } catch (err) {
-      // updateActStatus throws on bad inputs; bubble up so the caller
-      // sees malformed-response failures rather than silently dropping
-      // the update.
-      throw err;
-    }
-  }
+  // Act-status was RIPPED: an act is PRESENT, a fact is PAST, and "did it complete?" is whether a FACT
+  // was stamped for the act (getFactsByActId) — never a mutable column on the sealed act. So the foreign
+  // reply's outcome is NOT written onto the act. The reported status rides back to the caller as-is;
+  // recording the reply as a local FACT on the actor's reel ("received cross-story reply: <status>"),
+  // the past-tense proof the cross-story act completed, is the flagged TODO (federation, unbuilt).
+  const reportedStatus = response.status || null;
 
   let innerFaceHash = null;
   if (response.descriptor && typeof response.descriptor === "object") {
@@ -68,5 +61,5 @@ export async function handleCrossWorldResponse(actId, response) {
     innerFaceHash = attached ? hash : null;
   }
 
-  return { status: statusResult, innerFaceHash };
+  return { status: reportedStatus, innerFaceHash };
 }

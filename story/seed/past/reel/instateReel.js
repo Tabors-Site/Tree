@@ -11,7 +11,7 @@
 // <story>:<history>:<being>, and they stay home). The act-chain never reaches here — reelKey is
 // <history>:<type>:<id>, no story — so this needs no story param.
 //
-// Mongo→FileStore: the raw models the deps once carried (Fact / History / ReelHead) are GONE.
+// The deps carry no raw storage models (Fact / History / ReelHead) — none exist.
 // instateReel reads/writes the file world directly through the CURATED seam:
 //   - histories     → materials/history/histories.js (loadHistory / createHistory / deleteHistory).
 //   - reel heads     → fileStore.readReelHead / advanceReelHead (the .head pointer; advance-only).
@@ -137,8 +137,8 @@ export async function instateReel(reel, { landed = [], skipVerify = false } = {}
   // is a DERIVED pointer (rebuildable from the reel), and a head over a
   // fact-less reel reads as empty (verifyReelFile([]) is ok) and self-heals on
   // the next fold/rebuild — so a failed receive that advanced a fingerprint
-  // head leaves no truth corrupted (mirrors the Mongo advance-only update,
-  // which likewise wasn't rolled back).
+  // head leaves no truth corrupted (the head advance is advance-only and
+  // likewise isn't rolled back).
   for (const rh of (reel.reelHeads || [])) {
     const [history, kind, id] = String(rh._id).split(":");
     fileStore.advanceReelHead(history, kind, id, rh.head, rh.headHash);

@@ -69,7 +69,7 @@ export async function hostAbleAt(spaceId, name, spec, identity, moment) {
 
 /**
  * Return a shallow copy of the able spec with function-valued fields
- * removed. Required for persistence — Mongo can't serialize functions.
+ * removed. Required for persistence, since the store can't serialize functions.
  * The remaining fields are the AUTH SPEC (data the able-walk gate uses).
  */
 function stripFunctions(spec) {

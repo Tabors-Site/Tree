@@ -1,12 +1,11 @@
 // _factStoreTest.mjs — TEST-ONLY query surface over the file store.
 //
-// The verify rigs were written against Mongo's global collections: `Fact.find(filter)`,
-// `Fact.findOne(filter)`, `Fact.countDocuments(filter)` (and the Act peers) — cross-reel
-// queries with a dotted-key filter. The file store keeps truth as per-reel JSONL, and
-// `listAllFacts()` / `listAllActs()` already scan every reel. This wraps them with a
-// Mongo-lite matcher (dotted keys + equality + $exists/$ne/$in/$eq/$regex) so a rig's
-// assertion body is a near-mechanical swap: Fact.find→factFind, findOne→factFindOne,
-// countDocuments→factCount (Act peers: actFind/actFindOne/actCount). Reads the CURRENT
+// Some verify rigs want cross-reel fact queries with a dotted-key filter
+// (find/findOne/count over every fact, and the Act peers). The file store keeps truth
+// as per-reel JSONL, and `listAllFacts()` / `listAllActs()` already scan every reel.
+// This wraps them with a small document matcher (dotted keys + equality +
+// $exists/$ne/$in/$eq/$regex) so a rig's assertion body reads naturally: factFind,
+// factFindOne, factCount (Act peers: actFind/actFindOne/actCount). Reads the CURRENT
 // store (configured by the rig's TREEOS_STORE_BASE), so call AFTER the deeds land.
 //
 // Not a verify-*.mjs — the suite runner skips it. Production code never imports it.
@@ -40,7 +39,7 @@ function matchOne(value, cond) {
 
 function matches(doc, filter) {
   for (const [key, cond] of Object.entries(filter || {})) {
-    // `branch` was the Mongo field name; the file fact carries `history`.
+    // a rig may filter on `branch`; the file fact carries that under `history`.
     const k = key === "branch" ? "history" : key;
     if (!matchOne(get(doc, k), cond)) return false;
   }

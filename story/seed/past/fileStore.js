@@ -57,6 +57,30 @@ const DEFAULT_STORY = "past"; // the main story's folder is literally `past`
 
 let ROOT = process.env.TREEOS_STORE_ROOT || join(STORE_BASE, DEFAULT_STORY);
 
+// ── append ordinal: the cross-reel order, clock-free (Fork 1 of the clock removal) ──────────────
+// An act's POSITION in the single append-only commit order. withCommitLock serializes every commit, so
+// this counter is monotonic AND causally correct under ONE writer (nothing commits "before" a thing it
+// causally depends on). It is NOT a clock: reproducible (replay the journal → same order), caused (write
+// order respects causality), and it never reads a wall — the "wordstamp as a number" that stampedAt was
+// faking. LOCAL ONLY: it totally-orders THIS story's acts; across federated/sovereign stories there is
+// no global order, only causal links (partial, the inReplyTo/rootCorrelation tree). Never read `ord` as
+// a universal timeline. Restored lazily from the max ord already on the act-logs — the acts ARE the
+// record, so there is no separate counter file to drift out of sync with them.
+let _ordCounter = null;
+function nextOrd() {
+  if (_ordCounter == null) {
+    let max = 0;
+    try {
+      for (const a of listAllActs()) {
+        const o = Number(a?.ord);
+        if (Number.isFinite(o) && o > max) max = o;
+      }
+    } catch {}
+    _ordCounter = max;
+  }
+  return ++_ordCounter;
+}
+
 // Point the engine at a story (no mongod, no URI):
 //   { root }   explicit dir override (tests use a temp dir) — wins over story.
 //   { story }  a story name → store/<story>; "past"/"main"/absent → store/past (the default).
@@ -68,6 +92,7 @@ export function configureStore({ root, story } = {}) {
   else ROOT = join(STORE_BASE, DEFAULT_STORY);
   mkdirSync(join(ROOT, "journal"), { recursive: true });
   mkdirSync(join(ROOT, "reels"), { recursive: true });
+  _ordCounter = null; // re-restore the append ordinal lazily for the (possibly new) store
   return ROOT;
 }
 export function storeRoot() {
@@ -914,7 +939,19 @@ export function findByName(history, kind, name, scope = {}) {
   // Most callers pass a bare name; for scoped kinds we honor an optional scope to disambiguate.
   const probe =
     kind === "being" ? String(name) : nameKey(kind, { ...scope, name });
-  const id = m[probe] !== undefined ? m[probe] : m[String(name)];
+  let id = m[probe] !== undefined ? m[probe] : m[String(name)];
+  // Parent-agnostic fallback (a Mongo-parity restore): the scoped index key for a space/matter is
+  // "<parent...> <name>", so a BARE-name caller (no scope) misses it. The old Mongo findByName was
+  // `Projection.findOne({ "state.name": name })` — matched by name ALONE, parent-agnostic, first hit.
+  // When the scoped + bare probes both miss, scan for the first key whose trailing name segment is
+  // `name` (sibling-unique means at most one per parent; a globally unique name resolves cleanly).
+  if (id === undefined && kind !== "being") {
+    // nameKey joins the scope segments with a NUL byte ("<parent> <name>" for a space), so the
+    // bare name is the final NUL-delimited segment. First hit wins (sibling-unique → one per parent).
+    for (const k of Object.keys(m)) {
+      if (k.split(" ").pop() === String(name)) { id = m[k]; break; }
+    }
+  }
   if (id === undefined) return null;
   const slot = loadSnapshot(history, kind, id);
   if (!slot || slot.tombstoned) return null;
@@ -1008,6 +1045,22 @@ export function rebuildIndex(history, kind) {
 // fileStore stays import-free of the reel layer (which imports fileStore).
 function reelKeyOf(history, type, id) {
   return `${history}:${type}:${id}`;
+}
+
+// Every history that has reels in this story (the reels/ subdirs). The curated history-enumeration
+// peer the per-branch rebuilds need (rehydrateWordsFromFacts' overlay): a partitioned-per-history
+// store has no global Fact.find, so a caller that must fold an aggregate's reel across ALL branches
+// (not just heaven "0") iterates this. Order is readdir order; callers that need "0" first sort it.
+export function listHistories() {
+  const reelsRoot = join(ROOT, "reels");
+  if (!existsSync(reelsRoot)) return [];
+  try {
+    return readdirSync(reelsRoot).filter((h) => {
+      try { return statSync(join(reelsRoot, h)).isDirectory(); } catch { return false; }
+    });
+  } catch {
+    return [];
+  }
 }
 
 // Walk reels/<history>/<kind>/<shard>/ for the given file extension, calling fn(history, kind, id)
@@ -1221,6 +1274,10 @@ function writeAck(offset) {
  */
 export function commitMoment(record) {
   return withCommitLock(() => {
+    // The append ordinal (clock-free cross-reel order; see the _ordCounter note above) is assigned
+    // HERE, under the commit lock and BEFORE the WAL append, so it journals with the act and rides the
+    // act-log verbatim. One act per moment (one-word) → one ord per commit.
+    if (record.act && record.act.ord == null) record.act.ord = nextOrd();
     // (1) Compute each fact's identity ONCE, threading per-reel heads (a moment may touch >1 reel
     //     during the run-on transition). Build the persisted record carrying the FULL fact docs, so
     //     replay re-applies the EXACT facts (never re-derives a fresh seq against a moved head).

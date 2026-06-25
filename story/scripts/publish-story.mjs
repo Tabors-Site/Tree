@@ -31,7 +31,7 @@ const REPO_ROOT = path.resolve(__dirname, "..");
 const NAME    = process.argv[2] || process.env.STORY_NAME || "story";
 const VERSION = process.argv[3] || "1.0.0";
 
-// Open the file store (no mongod; the folded matter projections are read from files).
+// Open the file store; the folded matter projections are read from files.
 const { connectDB } = await import("../seed/seedStory/dbConfig.js");
 await connectDB();
 const { listByType, loadOrFold } = await import("../seed/materials/projections.js");
@@ -61,7 +61,6 @@ for (const row of rows) {
 
 if (files.length === 0) {
   console.error("No anchored source files found. Has the story booted with source.js running?");
-  await mongoose.disconnect();
   process.exit(2);
 }
 
@@ -99,5 +98,4 @@ console.log(JSON.stringify({ listingType: "pack", manifest }, null, 2));
 console.log("");
 console.log("Next step (manual): summon @store-registrar from a being holding the store:publisher able");
 console.log("with intent 'publish-listing' and the payload above.");
-
-await mongoose.disconnect();
+// The file store needs no teardown; nothing to disconnect.

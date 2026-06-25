@@ -2,8 +2,8 @@
 //
 // A code piece runs init(story) at boot. The typical surface it
 // registers is DO ops, SEE ops, hooks, and cognition handlers for
-// able pieces. Anything more substantial (mongoose models, express
-// routes, mcp tools, background jobs) is rare and lives behind
+// able pieces. Anything more substantial (express routes, mcp tools,
+// background jobs) is rare and lives behind
 // optional fields the substrate still supports for legacy reasons,
 // not the standard shape — keep this manifest tight.
 

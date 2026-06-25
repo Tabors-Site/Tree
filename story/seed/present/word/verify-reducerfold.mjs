@@ -15,7 +15,6 @@ const DB = path.join(os.tmpdir(), "story_reducerfold-" + process.pid);
 process.env.PORT = "3843";
 process.env.TREEOS_STORE_BASE = DB;
 fs.rmSync(DB, { recursive: true, force: true });
-delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "reducerfold-0123456789";
 process.env.STORY_KEY_DIR = path.join(
   os.tmpdir(),

@@ -158,9 +158,9 @@ async function run(hookName, data) {
   const branch = data?.branch || data?.moment?.actorAct?.history || "0";
   let blockedExtensions = null;
   if (spaceId && _getScopeFn) {
-    // DB-health gate. When Mongoose is in a "Client must be connected"
-    // state, scope resolution would walk an ancestor cache that's
-    // backed by Mongo queries — every call fails the same way. A wake
+    // Store-health gate. When the file store is not yet open (its root
+    // dir is missing), scope resolution would walk an ancestor cache
+    // that's backed by store reads, every call fails the same way. A wake
     // storm (the dance-floor schedules N dancer ticks/min, each fires
     // multiple hooks each tick) compounds this into a log flood that
     // can saturate the terminal buffer faster than it flushes. Skip

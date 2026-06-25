@@ -218,7 +218,7 @@ export async function assertNameAvailableAt(
   if (!parentId) return;
   // Per-history sibling name uniqueness via the file store's scoped
   // name index. The space name key folds the parent in (parent + name),
-  // so this lookup is exactly the sibling-collision check the Mongo
+  // so this lookup is exactly the sibling-collision check the old
   // partial index served. A rename excludes the space being renamed.
   const { findByName } = await import("../../past/fileStore.js");
   const conflict = findByName(history, "space", name, { parent: parentId });
@@ -931,18 +931,9 @@ export async function editSpaceType({
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Move a space to a new parent.
- *
- *   - Same tree: caller must have write access (owner or contributor).
- *   - Cross-tree: caller must own BOTH tree roots.
- *
- * Runs the three structural writes ($pull from old parent, $set parent,
- * $addToSet on new parent) under a transaction when MongoDB is a
- * replica set; falls back to sequential ops on standalone with a
- * verbose warning.
- *
- * Pass `opts.skipCacheInvalidation` for batched moves so the caller
- * can invalidate once at the end.
+ * Move a space to a new parent. RETIRED — direct space-parent mutation
+ * now flows through do:set-space field="parent" so the move is
+ * fact-driven. This stub throws to alert any straggling caller.
  */
 export async function updateParentRelationship(
   childId,
@@ -1182,7 +1173,7 @@ export async function listSpaceChildren(
   // File-store reads: findByParent(history, parent, "space") returns the
   // LIVE (tombstoned-excluded) child slots at this parent on the given
   // history. The heaven-flag filter, exclude, and createdAt sort that the
-  // Mongo query expressed in the query document are applied in JS here.
+  // old query expressed in the query document are applied in JS here.
   const { findByParent, loadSnapshot } = await import(
     "../../past/fileStore.js"
   );

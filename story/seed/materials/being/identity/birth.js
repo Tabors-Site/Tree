@@ -113,7 +113,7 @@ function validatePassword(password) {
  *                       Create the space FIRST (do:create-space) if
  *                       you want a fresh one — birth doesn't build
  *                       homes. The home must either be already in
- *                       Mongo OR pending earlier in this moment's ΔF.
+ *                       the store OR pending earlier in this moment's ΔF.
  *
  * OPTIONAL:
  *   spec.birthHere      bool (default false). Where to place this

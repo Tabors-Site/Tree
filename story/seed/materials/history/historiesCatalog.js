@@ -10,8 +10,8 @@
 //   }
 //
 
-// The History registry is now the file-backed history store
-// (historyStore.js), no longer a Mongoose model. The children-listing
+// The History registry is the file-backed history store
+// (historyStore.js). The children-listing
 // read goes through the curated listHistoryChildren seam in histories.js
 // (which scans the file-backed collection by parent), the same way the
 // single-row reads go through loadHistory.

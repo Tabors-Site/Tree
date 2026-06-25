@@ -24,13 +24,12 @@ for (const line of fs
     v = t.slice(eq + 1).trim();
   if (v && !process.env[k]) process.env[k] = v;
 }
-// The Mongo rip: storage is now a directory under store/, selected by
-// TREEOS_STORE_BASE. Point the engine at a per-pid scratch base, fresh-wiped,
-// so this rig runs files-only with no MONGODB_URI and no shared state.
+// Storage is a directory under store/, selected by TREEOS_STORE_BASE. Point the
+// engine at a per-pid scratch base, fresh-wiped, so this rig runs files-only with
+// no shared state.
 const STORE_BASE = path.join(os.tmpdir(), "story_word_cherub-" + process.pid);
 process.env.TREEOS_STORE_BASE = STORE_BASE;
 fs.rmSync(STORE_BASE, { recursive: true, force: true });
-delete process.env.MONGODB_URI;
 
 // Open the file store (make the data dir + replay any journal). This rig runs
 // its own minimal genesis below rather than the full begin.js boot, so it must
@@ -63,7 +62,7 @@ const bad = (l, d) => {
   if (d) console.log(`      ${d}`);
 };
 
-// A thin retry wrapper kept from the Mongo path. The file store is single-writer
+// A thin retry wrapper, a harmless guard. The file store is single-writer
 // (no transaction/lock contention), so its predicate never matches and fn runs once;
 // it stays as a harmless guard around the genesis steps.
 async function withRetry(fn, label, tries = 6) {

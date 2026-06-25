@@ -8,7 +8,7 @@ It also provides a "5th dimensional" Library that Names can act in to share book
 
 ## Run it
 
-Needs Node.js 18+ and MongoDB (configured as a replica set).
+Needs Node.js 18+
 
 ```bash
 git clone https://github.com/Tabors-Site/Tree.git

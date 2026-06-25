@@ -23,7 +23,7 @@ extensions/<name>/
   manifest.js    # Required: declares dependencies, capabilities, metadata
   index.js       # Required: exports init(reality) function
   routes.js      # Optional: Express router for HTTP endpoints
-  model.js       # Optional: Mongoose model(s)
+  model.js       # Optional: plain helper module(s) the loader registers in story.models
   ...            # Any other files the extension needs
 ```
 
@@ -190,7 +190,7 @@ The four verbs (`reality.see`, `reality.do`, `reality.summon`, `reality.be`) are
 | `session` | Per-reach session lifecycle. | `createSession`, `endSession`, `getSession`, `SESSION_TYPES`, `registerSessionType` |
 | `llm` | LLM voice apparatus. | `runTurn`, `stepTurn`, `getClientForBeing`, `switchAble`, `registerBeingLlmSlot`, `registerFailoverResolver` |
 | `websocket` | Push channel (transport-agnostic). | `emitToBeing`, `emitNavigate`, `registerSocketHandler`, `getIO` |
-| `models` | Mongoose models. | `Being`, `Space`, `Fact`, `Matter` |
+| `models` | Plain helper modules an extension registers via `provides.models`. Core beings, spaces, facts, and matter are not queryable models; read them by folding the file store through `seed/materials/projections.js`. | `loadOrFold`, `findByName`, `loadProjection`, `listByType` |
 | `hooks` | Lifecycle event bus. | `register`, `run` |
 | `seeds` | Plantable scaffolds. | `register`, `plant`, `unplant`, `list`, `listPlantedAt` |
 | `space` | Space CRUD + tree infrastructure. | `getAncestorChain`, `snapshotAncestors`, `createSpace`, `deleteSpaceBranch`, `checkTreeHealth`, `isTreeAlive`, `getSpaceRootId` |
@@ -1060,8 +1060,8 @@ Four core namespaces (`tools`, `ables`, `extensions`, `llm`) are always writable
 
 Convention:
 - Namespace key MUST match your manifest `name`
-- Data is `Mixed` type, so use plain objects and arrays (no Mongoose subdocument features)
-- The helpers handle `markModified("metadata")` automatically
+- Qualities are stored as plain objects in the file store, so use plain objects and arrays for your namespace data
+- The helpers fold every write into a Fact on the aggregate's reel; the new state is persisted automatically
 - Reading metadata from core code (e.g. treeData) should use:
   `(space.qualities instanceof Map ? space.qualities.get("name") : space.qualities?.name)`
 
@@ -1488,7 +1488,7 @@ setRunChat(async (opts) => {
 
 **Injecting into enrichContext without guarding.** Every enrichContext handler should check if relevant data exists before injecting. If your extension has no data for this space, return early. Do not inject empty objects. Do not run database queries on every context build unless you have data to contribute.
 
-**Writing to metadata without the seed API.** Direct `space.qualities.set()` or `Space.updateOne({ $set: ... })` bypasses namespace ownership, document size guards, and the afterQualityWrite hook. Always use `reality.qualities.*` functions. The seed provides atomic operations for every pattern: `qualities.space.incQuality` for counters, `qualities.space.pushQuality` for capped arrays, `qualities.space.batchSetQuality` for multi-field writes, `qualities.space.unsetQuality` for cleanup. There is no reason to use direct MongoDB for metadata.
+**Writing to metadata without the seed API.** Mutating a folded projection slot in place, or otherwise writing qualities outside the verbs, bypasses namespace ownership, size guards, the afterQualityWrite hook, and the Fact stamp that every write must leave on the aggregate's reel. Always use `reality.qualities.*` functions. The seed provides atomic operations for every pattern: `qualities.space.incQuality` for counters, `qualities.space.pushQuality` for capped arrays, `qualities.space.batchSetQuality` for multi-field writes, `qualities.space.unsetQuality` for cleanup. There is no reason to reach past the seed API to the store for metadata.
 
 **Missing LLM_PRIORITY on background calls.** Every LLM call needs a priority. BACKGROUND for hooks and jobs. INTERACTIVE for user-triggered tools. GATEWAY for external channels. Without priority, background extensions compete with human chat.
 
@@ -1559,7 +1559,7 @@ Extensions run in the same Node.js process as reality. There is no sandbox or im
 
 - Manifests declare dependencies for documentation and scoped injection via `buildScopedCore`, but **do not enforce access boundaries**. Any extension can `import` any file on disk.
 - The `needs` and `optional` fields determine what is injected into `place` during `init()`, not what the extension can access.
-- Extensions have full read/write access to the database via Mongoose models.
+- Extensions have full read/write access to the file store: they can fold projections and append to reels directly, in-process.
 - Extensions can register routes, tools, hooks, and jobs that run with full system privileges.
 
 **For place operators:** Review all third party extension code before installing. Use `DISABLED_EXTENSIONS` to disable problematic extensions without removing their files. Disabling an extension prevents it from loading, unregisters its hooks, and removes its routes, tools, and jobs.

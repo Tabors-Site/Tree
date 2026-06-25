@@ -19,7 +19,6 @@ const SCRATCH_DB = path.join(os.tmpdir(), "story_word_credread_cut-" + process.p
 process.env.PORT = "3794";
 process.env.TREEOS_STORE_BASE = SCRATCH_DB;
 fs.rmSync(SCRATCH_DB, { recursive: true, force: true });
-delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "credread-secret-0123456789";
 process.env.STORY_KEY_DIR = path.join(
   os.tmpdir(),

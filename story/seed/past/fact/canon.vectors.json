@@ -1,7 +1,7 @@
 {
   "format": "treeos-canon-vectors",
-  "version": 1,
-  "note": "Conformance vectors for the content-addressed identity layer. hash = SHA-256(prev + '|' + canonical(content)), hex. canonical = JSON with recursively sorted object keys, undefined keys dropped, empty-object values dropped, empty arrays kept, array undefined -> null, NaN/Infinity -> null, Date -> ISO-8601 with milliseconds and Z (BSON DateTime must serialize the same way), numbers serialized as ECMAScript JSON.stringify does (-0 -> '0', 1e21 -> '1e+21'). fact content NEVER includes date (display witness) and normalizes absent branch to '0'. Any port must reproduce every byte here.",
+  "version": 2,
+  "note": "Conformance vectors for the content-addressed identity layer. hash = SHA-256(prev + '|' + canonical(content)), hex. canonical = JSON with recursively sorted object keys, undefined keys dropped, empty-object values dropped, empty arrays kept, array undefined -> null, NaN/Infinity -> null, Date -> ISO-8601 with milliseconds and Z (BSON DateTime must serialize the same way), numbers serialized as ECMAScript JSON.stringify does (-0 -> '0', 1e21 -> '1e+21'). fact content NEVER includes date (display witness) and normalizes absent branch to '0'. Act openings carry startMessage but the act DIGEST excludes it (moment labels are drift, 2026-06-23): contentOfAct omits startMessage. Any port must reproduce every byte here.",
   "genesisPrev": "0000000000000000000000000000000000000000000000000000000000000000",
   "canonicalize": [
     {
@@ -533,15 +533,11 @@
         "inboxMessageId": null,
         "inReplyTo": null,
         "parentThread": null,
-        "startMessage": {
-          "content": "first act",
-          "source": "be1"
-        },
         "story": "tree.example",
         "history": "0"
       },
-      "canonical": "{\"activeAble\":null,\"history\":\"0\",\"ibpAddress\":null,\"inReplyTo\":null,\"inboxMessageId\":null,\"parentThread\":null,\"startMessage\":{\"content\":\"first act\",\"source\":\"be1\"},\"story\":\"tree.example\",\"through\":\"be1\",\"to\":\"be1\"}",
-      "id": "718d3167f29868bcd8734818f4c06cb3874d37eb8999fb8b670440847c7edabe"
+      "canonical": "{\"activeAble\":null,\"history\":\"0\",\"ibpAddress\":null,\"inReplyTo\":null,\"inboxMessageId\":null,\"parentThread\":null,\"story\":\"tree.example\",\"through\":\"be1\",\"to\":\"be1\"}",
+      "id": "d507ffa249040c51c90c823a413757ec3944e0058fcc7b2ec00a937fb49640b9"
     },
     {
       "name": "act-history-defaulted",
@@ -568,15 +564,11 @@
         "inboxMessageId": null,
         "inReplyTo": null,
         "parentThread": null,
-        "startMessage": {
-          "content": "first act",
-          "source": "be1"
-        },
         "story": "tree.example",
         "history": "0"
       },
-      "canonical": "{\"activeAble\":null,\"history\":\"0\",\"ibpAddress\":null,\"inReplyTo\":null,\"inboxMessageId\":null,\"parentThread\":null,\"startMessage\":{\"content\":\"first act\",\"source\":\"be1\"},\"story\":\"tree.example\",\"through\":\"be1\",\"to\":\"be1\"}",
-      "id": "718d3167f29868bcd8734818f4c06cb3874d37eb8999fb8b670440847c7edabe",
+      "canonical": "{\"activeAble\":null,\"history\":\"0\",\"ibpAddress\":null,\"inReplyTo\":null,\"inboxMessageId\":null,\"parentThread\":null,\"story\":\"tree.example\",\"through\":\"be1\",\"to\":\"be1\"}",
+      "id": "d507ffa249040c51c90c823a413757ec3944e0058fcc7b2ec00a937fb49640b9",
       "expectSameIdAs": "act-minimal"
     },
     {
@@ -605,19 +597,15 @@
         "inboxMessageId": "corr-1",
         "inReplyTo": "corr-0",
         "parentThread": null,
-        "startMessage": {
-          "content": "héllo 世界 🌳",
-          "source": "be2"
-        },
         "story": "tree.example",
         "history": "1a"
       },
-      "canonical": "{\"activeAble\":\"gärtner\",\"history\":\"1a\",\"ibpAddress\":\"tree.example#1a/garden@be3\",\"inReplyTo\":\"corr-0\",\"inboxMessageId\":\"corr-1\",\"parentThread\":null,\"startMessage\":{\"content\":\"héllo 世界 🌳\",\"source\":\"be2\"},\"story\":\"tree.example\",\"through\":\"be2\",\"to\":\"be3\"}",
-      "id": "8d075e80fbab068e5d0175a2e26ca698110e0fe82f70a747f43ee90b69ebb040"
+      "canonical": "{\"activeAble\":\"gärtner\",\"history\":\"1a\",\"ibpAddress\":\"tree.example#1a/garden@be3\",\"inReplyTo\":\"corr-0\",\"inboxMessageId\":\"corr-1\",\"parentThread\":null,\"story\":\"tree.example\",\"through\":\"be2\",\"to\":\"be3\"}",
+      "id": "66bfbf49c677b1d775a971d101c547c8604678957af891e97cae6947a40b45b8"
     },
     {
       "name": "act-chained-second",
-      "prev": "718d3167f29868bcd8734818f4c06cb3874d37eb8999fb8b670440847c7edabe",
+      "prev": "d507ffa249040c51c90c823a413757ec3944e0058fcc7b2ec00a937fb49640b9",
       "opening": {
         "through": "be1",
         "to": "be1",
@@ -641,15 +629,11 @@
         "inboxMessageId": null,
         "inReplyTo": null,
         "parentThread": null,
-        "startMessage": {
-          "content": "second act",
-          "source": "be1"
-        },
         "story": "tree.example",
         "history": "0"
       },
-      "canonical": "{\"activeAble\":null,\"history\":\"0\",\"ibpAddress\":null,\"inReplyTo\":null,\"inboxMessageId\":null,\"parentThread\":null,\"startMessage\":{\"content\":\"second act\",\"source\":\"be1\"},\"story\":\"tree.example\",\"through\":\"be1\",\"to\":\"be1\"}",
-      "id": "b029fbab95f48d2987eafd0de8a176b1a82e067ba4a926687a48acdcdb32f959",
+      "canonical": "{\"activeAble\":null,\"history\":\"0\",\"ibpAddress\":null,\"inReplyTo\":null,\"inboxMessageId\":null,\"parentThread\":null,\"story\":\"tree.example\",\"through\":\"be1\",\"to\":\"be1\"}",
+      "id": "ff420bb322ac9d2217824c8c114b82c1ebfa9113e3583ed5f454a51a61e5d7d1",
       "note": "prev = the id of act-minimal"
     }
   ]

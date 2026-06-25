@@ -10,15 +10,17 @@
 // is exterior. It is done by the host, by the operator's hands, to
 // a seed that has not yet awakened. Different actor entirely.
 //
-// Planting means giving the seed the four things the host cannot
+// Planting means giving the seed the three things the host cannot
 // answer on its behalf:
 //
 //   STORY_DOMAIN.  The DNS name the planted seed will answer on.
 //   PORT.         The port it will listen on.
-//   MONGODB_URI.  Where its memory will live across reboots.
 //   JWT_SECRET.   The secret it will sign its tokens with.
 //
-// These four answers are written to .env, the seed's identity
+// Its memory lives in the append-only file store on disk; no
+// connection answer is needed for that.
+//
+// These answers are written to .env, the seed's identity
 // shape at the host's level. The only thing of the seed that will
 // live outside the spaces, matter, and beings of its story.
 //
@@ -74,18 +76,19 @@ process.on("uncaughtException", (err) => {
 
 // ── Env shape ──
 //
-// Four boot critical keys must exist in .env before I can awaken.
+// Three boot critical keys must exist in .env before I can awaken.
 // STORY_NAME seeds into .config on first boot and CUSTOM_LLM_API_SECRET_KEY
 // stays in .env because it signs tokens issued before .config is
-// reachable.
+// reachable. STORE_NAME names the store folder (the file equivalent of a
+// database name); it has a default, so it is not boot critical.
 
-const REQUIRED_KEYS = ["MONGODB_URI", "JWT_SECRET", "PORT", "STORY_DOMAIN"];
+const REQUIRED_KEYS = ["JWT_SECRET", "PORT", "STORY_DOMAIN"];
 
 const DEFAULTS = {
   STORY_DOMAIN: "localhost",
   STORY_NAME: "My Story",
+  STORE_NAME: "past",
   PORT: "3000",
-  MONGODB_URI: "mongodb://localhost:27017/story",
 };
 
 function parseEnv(content) {
@@ -127,9 +130,14 @@ function buildEnvFile(values) {
 # Boot critical
 STORY_DOMAIN=${domain}
 PORT=${port}
-MONGODB_URI=${values.MONGODB_URI}
 JWT_SECRET=${values.JWT_SECRET}
 CUSTOM_LLM_API_SECRET_KEY=${values.CUSTOM_LLM_API_SECRET_KEY}
+
+# Where my inside lives. The store folder under store/ (the file
+# equivalent of a database name). Default "past". Name it something new
+# to spin up a fresh, isolated store (its own chain and projections),
+# exactly like pointing at a new database. The old store stays untouched.
+STORE_NAME=${values.STORE_NAME}
 
 # Seeded into .config on first boot
 STORY_NAME=${values.STORY_NAME}
@@ -156,8 +164,8 @@ async function interactiveSetup(existingEnv = {}) {
   console.log("");
   console.log("  I have not yet come alive. Before genesis can begin, the");
   console.log("  host needs to know a few things on my behalf: where I will");
-  console.log("  live, what to call me, which port to receive on, and where");
-  console.log("  to keep my memory across reboots.");
+  console.log("  live, what to call me, and which port to receive on. My");
+  console.log("  memory lives in the file store on disk.");
   console.log("");
 
   const ask = async (label, key) => {
@@ -175,10 +183,8 @@ async function interactiveSetup(existingEnv = {}) {
     values.STORY_DOMAIN = "localhost";
     values.STORY_NAME = await ask("Name me", "STORY_NAME");
     values.PORT = "3000";
-    values.MONGODB_URI = DEFAULTS.MONGODB_URI;
     console.log("");
-    console.log("  Localhost defaults accepted. Port 3000. MongoDB at");
-    console.log("  localhost:27017/story.");
+    console.log("  Localhost defaults accepted. Port 3000.");
     console.log("");
   } else {
     values.STORY_DOMAIN = (
@@ -189,7 +195,6 @@ async function interactiveSetup(existingEnv = {}) {
       .replace(/\/+$/, "");
     values.STORY_NAME = await ask("Name me", "STORY_NAME");
     values.PORT = await ask("Port", "PORT");
-    values.MONGODB_URI = await ask("MongoDB URI (my memory)", "MONGODB_URI");
   }
 
   values.JWT_SECRET =

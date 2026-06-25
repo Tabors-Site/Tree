@@ -14,9 +14,10 @@ import path from "path";
 import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../../..");
-const DB = "mongodb://localhost:27017/story_addllm";
+const SCRATCH_DB = path.join(os.tmpdir(), "story_addllm-" + process.pid);
 process.env.PORT = "3847";
-process.env.MONGODB_URI = DB;
+process.env.TREEOS_STORE_BASE = SCRATCH_DB;
+fs.rmSync(SCRATCH_DB, { recursive: true, force: true });
 process.env.JWT_SECRET = process.env.JWT_SECRET || "addllm-0123456789";
 process.env.CUSTOM_LLM_API_SECRET_KEY =
   process.env.CUSTOM_LLM_API_SECRET_KEY ||
@@ -31,13 +32,7 @@ fs.rmSync(SRC, { recursive: true, force: true });
 fs.mkdirSync(SRC, { recursive: true });
 fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`))
-    .default;
-  const conn = await mongoose.createConnection(DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
+// (scratch file store fresh-wiped above; no DB to drop)
 await import(`${R}/begin.js`);
 const { findByName, loadOrFold } = await import(
   `${R}/seed/materials/projections.js`
@@ -48,8 +43,8 @@ const { birthBeing } = await import(
   `${R}/seed/materials/being/identity/birth.js`
 );
 const { doVerb } = await import(`${R}/seed/ibp/verbs/do.js`);
-const { default: Fact } = await import(`${R}/seed/past/fact/fact.js`);
-const { default: Act } = await import(`${R}/seed/past/act/act.js`);
+const { actCount } = await import(`${R}/seed/past/act/actChain.js`);
+const { getHistoryFacts } = await import(`${R}/seed/past/fact/facts.js`);
 const poll = async (fn, t = 60000, e = 250) => {
   const t0 = Date.now();
   while (Date.now() - t0 < t) {
@@ -122,9 +117,9 @@ try {
   being ? ok(`being born (${String(being).slice(0, 8)})`) : bad("being born");
 
   // FIRST add — isFirst TRUE → two deeds, two moments (set-being conn + assign-llm-slot main).
-  const a0 = await Act.countDocuments({ through: String(being) });
+  const a0 = actCount({ through: String(being) });
   await addConn(being, "openai");
-  const a1 = await Act.countDocuments({ through: String(being) });
+  const a1 = actCount({ through: String(being) });
   a1 - a0 === 2
     ? ok(
         `first add → chain GREW BY 2 (${a0}→${a1}): the connection + the auto-assign, each its own moment`,
@@ -132,9 +127,9 @@ try {
     : bad(`first add → 2 moments`, { a0, a1 });
 
   // the deeds carry distinct actIds (two moments, not one run-on)
-  const facts1 = await Fact.find({ through: String(being) })
-    .select("actId act")
-    .lean();
+  const facts1 = await getHistoryFacts("0", {
+    predicate: (f) => String(f.through) === String(being),
+  });
   const actIds1 = [...new Set(facts1.map((f) => String(f.actId)))];
   actIds1.length >= 2
     ? ok(`the two deeds carry DISTINCT actIds — two moments, not a run-on`)
@@ -162,9 +157,9 @@ try {
     : bad(`apiKey leak`, "plaintext on a fact");
 
   // SECOND add — isFirst FALSE (main already set) → ONE deed, ONE moment (no assign).
-  const b0 = await Act.countDocuments({ through: String(being) });
+  const b0 = actCount({ through: String(being) });
   await addConn(being, "anthropic");
-  const b1 = await Act.countDocuments({ through: String(being) });
+  const b1 = actCount({ through: String(being) });
   b1 - b0 === 1
     ? ok(
         `second add → chain GREW BY 1 (${b0}→${b1}): the conditional deed did NOT fire (isFirst false)`,

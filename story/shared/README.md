@@ -46,11 +46,12 @@ several patterns; not knowing they are gone is the #1 way to overbuild.
   has `PositionProjection` (cross-cutting fold of beings' coords per
   space). Read it via `readPositionsInSpace(spaceId)`. Bounds are
   enforced by `set-being:coord` at write time.
-- **Direct `mongoose.model("X")` calls.** Import the model from its
-  seed path:
-  `import Being from "../../seed/materials/being/being.js"`.
-  Same for Space, Matter, Fact. Direct registry lookups bypass the
-  seed's typing.
+- **Direct storage reads.** There are no ORM models to import; the
+  chain is an append-only file store. Read a Being, Space, Matter, or
+  Fact through the seed's projections:
+  `import { loadOrFold, findByName } from "../../seed/materials/projections.js"`.
+  Reaching into the store files directly bypasses the seed's folding
+  and typing.
 - **A `toolNames` field on ables.** It does not exist. The able spec
   IS its four `can*` lists; tool exposure follows from which lists are
   populated.
@@ -817,8 +818,8 @@ export async function init(reality) {
 }
 ```
 
-That is the whole extension. No tool registrations. No mongoose calls.
-No factory duplication. One op, one able, one resolver, one hook.
+That is the whole extension. No tool registrations. No direct store
+reads. No factory duplication. One op, one able, one resolver, one hook.
 
 ---
 
@@ -966,8 +967,9 @@ canSee is preloaded into the face; the being already sees what the
 able declared. To see more, the being moves (DO), changes able (BE
 / flow), or the able spec is edited.
 
-**Calling `mongoose.model("X")`.** Import from the seed:
-`import Being from "../../seed/materials/being/being.js"`.
+**Reading the store directly.** There are no ORM models to import. Go
+through the seed's projections:
+`import { loadOrFold, findByName } from "../../seed/materials/projections.js"`.
 
 **Re-implementing position folds.** The factory's `PositionProjection`
 holds beings' coords per space; `readPositionsInSpace(spaceId)` returns

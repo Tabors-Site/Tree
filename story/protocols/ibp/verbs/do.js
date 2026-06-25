@@ -189,7 +189,7 @@ export async function handleDo(socket, env, ack) {
       identity: { beingId, name: socket.name, nameId: socket.nameId || null },
     });
 
-    // Hand the verb layer a typed identity, not a Mongoose row. The
+    // Hand the verb layer a typed identity, not a raw row. The
     // IBP boundary speaks { kind, id }; raw rows are storage, and
     // storage doesn't cross this boundary. The seed verb dispatcher
     // and op handlers normalize from typed input — fetching rows

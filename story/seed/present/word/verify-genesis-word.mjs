@@ -17,7 +17,6 @@ const SCRATCH_DB = path.join(os.tmpdir(), "story_genesis_word-" + process.pid);
 process.env.PORT = "3796";
 process.env.TREEOS_STORE_BASE = SCRATCH_DB;
 fs.rmSync(SCRATCH_DB, { recursive: true, force: true });
-delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "genesisword-secret-0123456789";
 process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "genesisword-keys-" + process.pid);
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });

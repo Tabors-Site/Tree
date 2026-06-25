@@ -5,7 +5,7 @@
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
-import express from "express";
+import express from "../transports/http/app.js";
 import { fileURLToPath, pathToFileURL } from "url";
 import { buildStoryServices } from "../seed/services.js";
 import { hooks } from "../seed/hooks.js";
@@ -1556,7 +1556,7 @@ async function installAssetPiece(entry, app) {
     return;
   }
   try {
-    const express = (await import("express")).default;
+    const express = (await import("../transports/http/app.js")).default;
     // URL convention for asset pieces: /assets/<pack>/<bundle>/<file>.
     // Standalone (no-pack) asset bundles mount at /assets/<bundle>/.
     const mountUrl = pack
@@ -2237,7 +2237,7 @@ export async function runExtensionMigrations(moment) {
   const { findByHeavenSpace } = await import("../seed/materials/projections.js");
   const extensionsParent = await findByHeavenSpace(HEAVEN_SPACE.EXTENSIONS, "0");
   // Build the extension-child-space map ONCE off the file store (the .extensions children, by name),
-  // replacing the per-extension Projection.findOne (the deleted Mongo model). listByType is
+  // instead of a per-extension lookup. listByType is
   // lineage-aware; loadOrFold gives each slot's {parent,name}. The loop below looks up by name.
   const { listByType, loadOrFold } = await import("../seed/materials/projections.js");
   const extChildByName = new Map();

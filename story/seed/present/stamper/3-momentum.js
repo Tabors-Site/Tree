@@ -3,7 +3,7 @@
 // momentum.js — beat three. The being's act.
 //
 // moment.js orchestrates the four beats; momentum is just beat 3.
-// assign minted actId and planned the Act (no Mongo write); fold
+// assign minted actId and planned the Act (no store write); fold
 // mounts the face; momentum applies the being's motion; stamped
 // seals — ONLY when momentum returned ok:true.
 //

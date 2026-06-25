@@ -26,7 +26,7 @@
 // the actChain curated act-query seam (getActById / getActsByCorrelation /
 // getActsByField). The actChain reads are SYNCHRONOUS (file-backed, no await),
 // but these wrappers keep their async signatures so every caller is unchanged.
-// The Mongo `.select()` projections are dropped (the file act-doc carries the
+// The `.select()` projections are dropped (the file act-doc carries the
 // whole row); `.sort()` / `.limit()` / `.findOne()` semantics are reproduced in
 // JS below, matching the prior createdAt-desc / endMessage-time ordering.
 import {
@@ -38,10 +38,14 @@ import {
 // Sort acts newest-first by a timestamp field, id as a deterministic tiebreak
 // (the file act-log has no createdAt; stampedAt is the seal time, receivedAt
 // the open time — the same ordering keys serializeAct/describeActChain use).
-function byStampDesc(a, b) {
-  const ta = new Date(a?.stampedAt ?? a?.receivedAt ?? 0).getTime() || 0;
-  const tb = new Date(b?.stampedAt ?? b?.receivedAt ?? 0).getTime() || 0;
-  if (ta !== tb) return tb - ta;
+// Newest-first by the APPEND ORDINAL (the clock-free, LOCAL total order: an act's position in the
+// single commit order — fileStore's _ordCounter). `_id` is only a deterministic tiebreak, and the
+// sole key for any pre-ordinal or cross-story grafted act with no local ord. NEVER reads stampedAt:
+// the clock is a witness, never truth. Cross-story sets stay PARTIALLY ordered (causal links only).
+function byOrdDesc(a, b) {
+  const oa = Number(a?.ord) || 0;
+  const ob = Number(b?.ord) || 0;
+  if (oa !== ob) return ob - oa;
   return String(b?._id).localeCompare(String(a?._id));
 }
 
@@ -85,7 +89,7 @@ export async function findChainOpener(actId, maxDepth = 100) {
  */
 export async function findByRootCorrelation(rootCorrelation, opts = {}) {
   if (!rootCorrelation) return [];
-  const rows = getActsByCorrelation(rootCorrelation).slice().sort(byStampDesc);
+  const rows = getActsByCorrelation(rootCorrelation).slice().sort(byOrdDesc);
   return typeof opts.limit === "number" ? rows.slice(0, opts.limit) : rows;
 }
 
@@ -103,7 +107,7 @@ export async function findByIbpAddress(ibpAddress, opts = {}) {
   if (!ibpAddress) return [];
   return getActsByField("ibpAddress", ibpAddress)
     .slice()
-    .sort(byStampDesc)
+    .sort(byOrdDesc)
     .slice(0, opts.limit || 50);
 }
 
@@ -127,7 +131,7 @@ export async function findOpenForBeing(to) {
       (a) => a?.endMessage?.time == null,
     );
     if (open.length === 0) return null;
-    return open.sort(byStampDesc)[0] || null;
+    return open.sort(byOrdDesc)[0] || null;
   } catch {
     return null;
   }
@@ -153,14 +157,9 @@ export async function findLastSealedForBeing(to) {
       (a) => a?.endMessage?.time != null,
     );
     if (sealed.length === 0) return null;
-    return sealed
-      .slice()
-      .sort((a, b) => {
-        const ta = new Date(a.endMessage.time).getTime() || 0;
-        const tb = new Date(b.endMessage.time).getTime() || 0;
-        if (ta !== tb) return tb - ta;
-        return String(b._id).localeCompare(String(a._id));
-      })[0] || null;
+    // Order by the append ordinal (clock-free); was endMessage.time desc. The `.time` FILTER above is
+    // a sealed-vs-open proxy that becomes the status fold in the status pass (Fork 3).
+    return sealed.slice().sort(byOrdDesc)[0] || null;
   } catch {
     return null;
   }
@@ -199,5 +198,5 @@ export async function findByBeing(beingId, opts = {}) {
       rows.push(a);
     }
   }
-  return rows.slice().sort(byStampDesc).slice(0, opts.limit || 50);
+  return rows.slice().sort(byOrdDesc).slice(0, opts.limit || 50);
 }

@@ -706,7 +706,7 @@ async function checkReadOnlySource(target, history) {
  *   2. result.spaceId | matterId | beingId
  *   3. target._factKind + target._id
  *   4. target.spaceId | matterId | beingId
- *   5. target._id                 (Mongoose doc; guess space)
+ *   5. target._id                 (raw row; guess space)
  *   6. target.id                  (kind unknown)
  *   7. target as string           (raw id; kind unknown)
  *
@@ -773,13 +773,13 @@ function resolveAuditTarget(target, result, op) {
     `resolveAuditTarget: unrecognized target shape for op "${op?.name || "?"}". ` +
       `Expected { kind, id } or string id (with single-kind op). ` +
       `Got ${typeof target}${target && typeof target === "object" ? ` {kind:${JSON.stringify(target.kind)}, id:${JSON.stringify(target.id)}}` : ""}. ` +
-      `Migrate the caller — Mongoose rows do not cross the verb boundary; pass { kind, id } instead.`,
+      `Migrate the caller. Raw rows do not cross the verb boundary; pass { kind, id } instead.`,
   );
 }
 
 // Summarize an op's return value for the Fact. Primitives pass through;
-// Mongoose docs collapse to their id; plain objects pass through and
-// the size cap is enforced inside logFact.
+// a row-like doc with toObject collapses to its id; plain objects pass
+// through and the size cap is enforced inside logFact.
 function summarizeAuditResult(result) {
   if (result == null) return null;
   if (typeof result !== "object") return result;

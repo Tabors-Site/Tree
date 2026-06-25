@@ -47,7 +47,7 @@ function isDupKeyError(err) {
   return err?.code === 11000 || err?.cause?.code === 11000;
 }
 // E11000 carries the offending index in its message. Only the NAME
-// index warrants deconfliction; a dup on _id is Mongo's known
+// index warrants deconfliction; a dup on _id is the store's known
 // concurrent-upsert race on the same slot (benign — the slot exists
 // now, a plain retry matches it).
 function isNameDupError(err) {
@@ -155,12 +155,10 @@ export async function readReelBetween(type, id, afterSeq, untilSeq, history) {
     if (await isHeavenSpace(id)) history = "0";
   }
 
-  // STORAGE SWAP (the Mongo rip): the lineage range-union that used to
-  // be an OR-of-ranges `Fact.find` is now a fileStore reel read. The
-  // fold/rebuild reducer logic is UNCHANGED — only the read source
-  // moved from the Fact collection to the append-only reel files. The
-  // file `_id` = computeHash(p, contentOf) is byte-identical to the
-  // Mongo path, so folds stay byte-compatible.
+  // The lineage range-union is a fileStore reel read: the
+  // fold/rebuild reducer logic reads from the append-only reel files,
+  // and the file `_id` = computeHash(p, contentOf) is the store's
+  // content-hash _id, so folds stay byte-compatible.
   //
   // resolveHistoryLineage(history) gives main → leaf (["0", "1", ...]);
   // floors[h] is h's per-reel branchPoint (the seq it forked at), and

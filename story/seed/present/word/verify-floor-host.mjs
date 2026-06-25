@@ -15,8 +15,8 @@
 //   4. the SAME .word, the SAME runner, the ONLY difference the bound caller → the floor resolves
 //      LIVE both ways (proving the inheritation walk, not a constant, gates the branch).
 //
-// Mirrors verify-cherub-cut's boot boilerplate (scratch Mongo, fresh key dir, dropDatabase, begin.js,
-// poll findByName cherub on "0"). UNIQUE port 3862 + DB story_floorhost. Filters Mirror/ENOTCONN noise.
+// Mirrors verify-cherub-cut's boot boilerplate (scratch file store, fresh key dir, begin.js,
+// poll findByName cherub on "0"). UNIQUE port 3862 + store story_floorhost. Filters Mirror/ENOTCONN noise.
 
 import fs from "fs";
 import os from "os";
@@ -30,7 +30,6 @@ const SCRATCH_DB = path.join(os.tmpdir(), "story_floorhost-" + process.pid);
 process.env.PORT = "3862";
 process.env.TREEOS_STORE_BASE = SCRATCH_DB;
 fs.rmSync(SCRATCH_DB, { recursive: true, force: true });
-delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "floorhost-secret-0123456789";
 process.env.STORY_KEY_DIR = path.join(
   os.tmpdir(),

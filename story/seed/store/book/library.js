@@ -41,8 +41,8 @@ export async function listLibrary() {
   // CURATED: the library is the 5th reel KIND (of:{kind:"library", id:<story>}),
   // out of any history — its facts ride history "0" (the reel's main
   // short-circuit). getFactsOnReelWhere reads that ONE reel and keeps the
-  // share-book facts, seq-ascending (the file-native peer of Mongo's
-  // Fact.find({"of.kind":"library","of.id":libraryId, act:"share-book"}).sort(seq)).
+  // share-book facts, seq-ascending (every fact on the library reel with
+  // of.kind="library", of.id=libraryId, act="share-book", in seq order).
   const { getFactsOnReelWhere } = await import("../../past/fact/facts.js");
   const facts = getFactsOnReelWhere(
     "0",

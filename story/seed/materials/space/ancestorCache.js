@@ -260,7 +260,7 @@ export async function snapshotAncestors(spaceId, history) {
   const chain = await getAncestorChain(spaceId, history);
   if (!chain) return null;
   // Deep copy: qualities objects are plain (not Maps), so JSON roundtrip works.
-  // Lean documents from Mongoose are pure JSON-safe objects.
+  // The folded slots are pure JSON-safe objects.
   return JSON.parse(JSON.stringify(chain));
 }
 

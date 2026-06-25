@@ -84,7 +84,7 @@ export function reduce(state, fact) {
     next = { ...next, parent: DELETED, position: DELETED, owner: String(fact.through || next.owner || "") };
   }
 
-  // updatedAt is reducer-owned (no Mongoose timestamps on Space). On
+  // updatedAt is reducer-owned (nothing auto-stamps it on Space). On
   // any state-mutating apply, bump to the current fact's date so
   // rebuild from the reel produces the same value the live fold
   // landed on. applyCreateSpace already seeds both createdAt and

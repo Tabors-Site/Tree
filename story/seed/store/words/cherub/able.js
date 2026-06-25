@@ -158,10 +158,9 @@ async function birthHandler({ payload, ctx }) {
   if (first) {
     const { findIAm } = await import("../../../materials/being/identity.js");
     const iAm = await findIAm();
-    // Beings live in the unified projections collection; the legacy
-    // `beings` Mongoose collection is empty. findByName walks the
-    // projections by (type, name, branch) — the same path every other
-    // by-name lookup uses post-projection-unification.
+    // Beings live in the unified projections collection. findByName
+    // walks the projections by (type, name, branch), the same path
+    // every other by-name lookup uses post-projection-unification.
     const { findByName } = await import("../../../materials/projections.js");
     const cherubSlot = await findByName("being", "cherub", "0");
     const cherubBeingId = cherubSlot ? String(cherubSlot.id) : null;

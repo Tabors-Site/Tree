@@ -27,7 +27,7 @@
 // their own inbox before allowing append.
 //
 // State. Per-being runtime state lives in memory. On crash the
-// state vanishes but inboxes persist in Mongo, so re-wakes catch
+// state vanishes but inboxes persist in the store, so re-wakes catch
 // up. A boot-time recovery pass that scans inboxes for unstamped
 // requests and resumes them is on the roadmap.
 
@@ -130,7 +130,7 @@ function _noteDbDownOnce() {
     _dbDownNotedAt = now;
     log.warn(
       "Scheduler",
-      "Mongoose readyState !== 1; pausing inbox pickup until the connection recovers. Wakes still enqueue.",
+      "file store unavailable; pausing inbox pickup until the store recovers. Wakes still enqueue.",
     );
   }
 }
@@ -244,18 +244,18 @@ async function runLoop(beingId) {
   if (!state) return;
 
   try {
-    // DB-health gate. When Mongoose's readyState !== 1, every query
+    // DB-health gate. When the file store is unavailable, every read
     // will throw. Picking inbox rows under those conditions guarantees
     // each runLoop pass crashes immediately; with a wake storm (the
     // dance-floor schedules ticks that fan to N dancer wakes), N runLoops
     // crash in parallel and the next tick refires them all. The cascade
     // saturates logs faster than the terminal can flush. Pause picking
-    // until the connection comes back; wakes still enqueue, and the next
+    // until the store comes back; wakes still enqueue, and the next
     // wake after recovery drains them.
     //
     // INSIDE the try so the finally clears `running` — an early return
     // before the try left running=true forever and wedged the being's
-    // lane until restart. Live readyState read every pass (dbConfig's
+    // lane until restart. Live store-health read every pass (dbConfig's
     // isDbHealthy), never cached: the gate exists precisely for
     // mid-run outages, which a sticky cache can't see.
     const { isDbHealthy } = await import("../../seedStory/dbConfig.js");

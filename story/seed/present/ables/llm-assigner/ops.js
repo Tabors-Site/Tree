@@ -6,7 +6,7 @@
 // frame). When its handlers turn around and act on substrate, they
 // do so AS THEMSELVES — going through the same DO verbs any other
 // caller uses, under the llm-assigner's own identity. No direct
-// Mongo writes; every substrate touch is grammar.
+// store writes; every touch of spaces, matter, and beings is grammar.
 //
 // First demonstration of the matter-crossing-worlds shape: the
 // matter's origin is `web` and its content is just a YouTube URL —

@@ -9,14 +9,13 @@
 // keyed by domain — so it gets the SAME shape the secondary cross-
 // cutting projections (inbox / threads / position) and the History
 // registry use: a FileCollection, one JSON doc per row, under the store
-// (<storeRoot>/proj/storyPeer/...). This replaces the mongoose
-// StoryPeer model that load-imported "mongoose".
+// (<storeRoot>/proj/storyPeer/...).
 //
 // The row's `_id` IS the domain (one doc per peer). `findById(domain)`
 // resolves the single row; `findOne({domain})` / `find({})` scan the
 // index. peers.js is the curated read/write seam; it builds the full
-// default-filled doc on register (the defaults the mongoose schema
-// supplied) and upserts it here.
+// default-filled doc on register (filling every field a peer row
+// carries) and upserts it here.
 
 import { FileCollection } from "../../../seed/past/projStore.js";
 
@@ -25,8 +24,8 @@ import { FileCollection } from "../../../seed/past/projStore.js";
 export const StoryPeer = new FileCollection("storyPeer");
 
 // Build a full peer doc from the supplied fields, filling every default
-// the old mongoose schema supplied (so a freshly registered peer reads
-// back identically to the Mongo path). `domain` becomes the row `_id`.
+// a peer row carries (so a freshly registered peer reads back fully
+// populated). `domain` becomes the row `_id`.
 export function buildPeerDoc({
   domain,
   storyId,

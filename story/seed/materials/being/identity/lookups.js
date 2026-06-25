@@ -165,9 +165,9 @@ export async function findRootOperator(history = "0") {
 export async function isFirstBeing(history = "0") {
   // CURATED: listByType returns the live (non-tombstoned) being occupants
   // for the history; load each slot's state and test cognition. True when
-  // no human-cognition being is present. The Mongo path matched on the
-  // nested projection field state.qualities.cognition.defaultKind === "human";
-  // here we read the same path off the folded slot state.
+  // no human-cognition being is present. The match is on the nested
+  // projection field state.qualities.cognition.defaultKind === "human",
+  // read off the folded slot state.
   const occupants = await listByType("being", history);
   for (const o of occupants) {
     const slot = await loadProjection("being", o.id, history);

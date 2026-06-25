@@ -10,7 +10,6 @@ const R = path.resolve(__dirname, "../../..");
 const DB = path.join(os.tmpdir(), "story_library-" + process.pid);
 process.env.PORT = "3848"; process.env.TREEOS_STORE_BASE = DB;
 fs.rmSync(DB, { recursive: true, force: true });
-delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "library-0123456789";
 process.env.STORY_NAME = process.env.STORY_NAME || "Test Story";
 process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "library-keys-" + process.pid);

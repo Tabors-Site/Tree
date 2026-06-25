@@ -110,16 +110,15 @@ export function canonicalize(value) {
   return JSON.stringify(toCanonical(value));
 }
 
-// Canonical serialization must match what Mongoose actually stores
+// Canonical serialization must match what the store actually persists
 // (so write-time and read-time hashes converge):
 //   - undefined in an object key → key dropped (JSON.stringify)
 //   - undefined in an array      → becomes null (JSON.stringify)
-//   - empty {} as an object's value → key dropped (Mongoose Mixed
-//                                     silently strips nested empty
-//                                     objects on save)
-//   - empty [] as an object's value → kept (Mongoose preserves)
+//   - empty {} as an object's value → key dropped (nested empty
+//                                     objects are stripped on store)
+//   - empty [] as an object's value → kept (preserved on store)
 //   - Date → ISO string
-//   - Map  → sorted-key object (subdoc/Map coercion for non-.lean reads)
+//   - Map  → sorted-key object (Map coercion when a caller passes one in)
 function toCanonical(value) {
   if (value === undefined) return undefined;
   if (value === null) return null;
@@ -129,8 +128,8 @@ function toCanonical(value) {
     return c === undefined ? null : c;
   });
   if (typeof value === "object") {
-    // Handle Mongoose subdocs / Maps. Lean reads return plain objects;
-    // a Map would only appear if a caller skipped .lean(). Coerce.
+    // Handle Maps. Store reads return plain objects; a Map would only
+    // appear if a caller passed one in directly. Coerce.
     if (value instanceof Map) {
       const entries = [...value.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
       const out = {};

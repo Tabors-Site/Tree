@@ -138,9 +138,9 @@ export async function resolveUntil(type, id, until, opts = {}) {
   const atMs = at.getTime();
   // The highest seq on this reel whose date <= at. FileStore reels are
   // seq-ascending; read via the curated getFactsOnReelWhere (the file-
-  // native peer of Fact.find) and reduce in JS. A fact with no/invalid
-  // date never counts (mirrors the Mongo `date <= at` clause). seq must
-  // be a number (the old `seq: { $type: "number" }` guard).
+  // native reel read) and reduce in JS. A fact with no/invalid
+  // date never counts (the `date <= at` predicate). seq must
+  // be a number (the prior numeric-seq guard).
   const dateOK = (f) => {
     if (typeof f.seq !== "number") return false;
     const t = f?.date != null ? Date.parse(f.date) : NaN;

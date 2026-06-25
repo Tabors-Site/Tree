@@ -134,7 +134,7 @@ export function mergeWeaves(a, b) {
 }
 
 /**
- * Encode for the wire / for Mongo storage. weave is already a plain
+ * Encode for the wire / for store persistence. weave is already a plain
  * JSON array; this hook exists so encoding can evolve (canonicalization,
  * compression) without touching call sites.
  */

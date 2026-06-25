@@ -56,10 +56,11 @@ export async function attachInnerFace(actId, descriptor) {
   }
   const hash = hashDescriptor(descriptor);
   const normalized = normalizeForeignDescriptor(descriptor);
-  // innerFace is a post-seal-mutable closure field (the act's hash is
-  // over its OPENING, so this never changes its identity). patchActStatus
-  // writes the overlay merged on every act-log read; it returns false
-  // when the act doesn't exist (attached:false).
+  // FLAG (act-mutation pending conversion to a fact): this PATCHES the sealed act with the foreign
+  // descriptor — an act-row edit the doctrine forbids (an act is present, a fact is past; a sealed act
+  // has no editable fields). The descriptor is the cross-story REPLY's content; it belongs IN the
+  // reply-FACT (the past-tense record the act completed), not patched onto the present-tense act. Its
+  // own thread, with the cross-story reply-fact TODO. Left as a patch for now (federation, untested).
   const attached = patchActStatus(String(actId), { innerFace: { ...normalized, hash } });
   return { hash, attached };
 }

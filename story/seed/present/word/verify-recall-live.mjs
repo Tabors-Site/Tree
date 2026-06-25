@@ -17,7 +17,6 @@ const SCRATCH_DB = path.join(os.tmpdir(), "story_recall-" + process.pid);
 process.env.PORT = "3813";
 process.env.TREEOS_STORE_BASE = SCRATCH_DB;
 fs.rmSync(SCRATCH_DB, { recursive: true, force: true });
-delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "recall-secret-0123456789";
 process.env.STORY_KEY_DIR = path.join(
   os.tmpdir(),

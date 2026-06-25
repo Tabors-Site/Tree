@@ -2,7 +2,7 @@
 //
 // Facts. The reel of stamped acts.
 //
-// A being is its acts. The Being row in MongoDB is where the reel
+// A being is its acts. The Being row in the store is where the reel
 // attaches; the reel itself, every Fact the being has stamped, is
 // the identity. Without acts, the union of space and matter has
 // nothing to be. The being is made of the acts unfolding.
@@ -87,12 +87,11 @@ const BEING_ONLY_TARGET_VERBS = new Set(["be", "call"]);
  * @param {string|null} [params.homeStory]   federation provenance
  * @param {boolean} [params.wasRemote=false] federation provenance
  * @param {object} [opts]                runtime options (NOT part of the fact)
- * @param {ClientSession} [opts.session] Mongo session for transactional
- *   participation. Passed by `sealFacts` when committing a multi-fact ΔF
- *   inside one transaction. When absent, logFact runs its own per-reel
- *   atomic commit (singleton ΔF, today's behavior). When present, every
- *   Mongo op in the append (allocSeq, prev lookup, Fact.create) carries
- *   the session so they participate in sealFacts' transaction.
+ * @param {object} [opts.session] transactional-participation token, accepted
+ *   for signature parity. Under the file store the single global commit
+ *   mutex serializes the append, so this is no longer load-bearing: logFact
+ *   runs its own per-reel atomic commit (singleton ΔF) whether or not it is
+ *   present. Documented but unused.
  * @param {boolean} [opts.skipEagerFold=false] When true, do not call
  *   the foldEngine's eager-fold after insert. sealFacts sets this when
  *   committing transactionally — folds run after commit on the
@@ -433,9 +432,9 @@ export async function logFact(input, opts = {}) {
   // commit point), applies the fact line to the reel idempotently, then
   // advances the head. The single global commit mutex serializes every
   // write, so there is no append lock, no transaction, no replica set:
-  // the seq alloc + prev-hash chain + insert that the Mongo path did
-  // under withReelLock all collapse into commitMoment. The fact _id is
-  // computeHash(p, contentOf(fact)) — IDENTICAL to the Mongo path, so
+  // the seq alloc + prev-hash chain + insert that withReelLock once
+  // wrapped all collapse into commitMoment. The fact _id is
+  // computeHash(p, contentOf(fact)), the store's content-hash _id, so
   // folds stay byte-compatible. spec = baseDoc (the fact content; never
   // seq/p/_id, which commitMoment derives).
   //
@@ -589,7 +588,7 @@ export function groupByReel(deltaF) {
 export async function foldAfterCommit(sortedReels) {
   try {
     const { fold } = await import("../../present/stamper/2-fold/foldEngine.js");
-    // DB-health gate. When Mongoose dropped its connection between the
+    // DB-health gate. When the file store became unavailable between the
     // commit and the post-seal fold (most commonly: a long synchronous
     // burst starves the heartbeat), every fold below will fail the
     // same way. The projection is a cache — missed folds just defer to
@@ -663,7 +662,7 @@ function _noteFoldDeferredOnce(reelCount) {
     _foldDeferredNotedAt = now;
     log.warn(
       "Fold",
-      `post-seal fold deferred for ${reelCount} reel(s) — Mongoose disconnected. The next read on each aggregate will cold-fold from its reel.`,
+      `post-seal fold deferred for ${reelCount} reel(s), file store unavailable. The next read on each aggregate will cold-fold from its reel.`,
     );
   }
 }
@@ -681,8 +680,8 @@ function _noteFoldDeferredOnce(reelCount) {
  *   transaction shape end-to-end.
  *
  * @returns {Promise<{ committed: number, txn: boolean }>}
- *   committed = number of facts in ΔF (post-commit). txn = whether
- *   a Mongo transaction was used.
+ *   committed = number of facts in ΔF (post-commit). txn = legacy
+ *   transaction flag, always false under the file store.
  */
 /**
  * Emit a Fact from inside a verb handler or material helper. The
@@ -794,7 +793,7 @@ export async function sealFacts(deltaF, opts = {}) {
   // THE atomic write (WAL frame + fsync under the global commit mutex,
   // then idempotent reel apply). Each fact still rides logFact so its
   // gates (death/banish), the beforeFact hook, payload capping, and
-  // cross-origin idempotency all run, exactly as the Mongo path did.
+  // cross-origin idempotency all run, exactly as before.
   //
   // The per-reel append lock / multi-document transaction / replica-set
   // requirement are GONE: the commit mutex serializes every write, so a
@@ -906,10 +905,10 @@ export async function getFacts({
   );
   const safeOffset = Math.max(0, Number(offset) || 0);
 
-  // FileStore swap: read the space reel from its file (own-history;
-  // defaults to main when the caller didn't thread a history). Date
-  // filter + newest-first ordering + offset/limit apply in JS, matching
-  // the old Mongo query semantics.
+  // Read the space reel from its file (own-history; defaults to main
+  // when the caller didn't thread a history). Date filter + newest-first
+  // ordering + offset/limit apply in JS, matching the curated read
+  // semantics.
   const reelHistory =
     typeof history === "string" && history.length ? history : "0";
   const dateFilter = buildDateFilter(startDate, endDate).date;
@@ -921,9 +920,9 @@ export async function getFacts({
   return { facts, limit: safeLimit };
 }
 
-// Apply the Mongo-query view (date filter, seq-direction ordering,
+// Apply the curated read view (date filter, seq-direction ordering,
 // offset/limit) to a raw reel read. Reels come back seq-ascending from
-// FileStore; "desc" reverses for the explorer's newest-first view.
+// the file store; "desc" reverses for the explorer's newest-first view.
 function applyReelView(reel, { dateFilter = null, order = "desc", offset = 0, limit = 100 } = {}) {
   let rows = reel;
   if (dateFilter) {
@@ -1029,7 +1028,7 @@ function serializeFactForReel(f) {
 // import fileStore directly; everything else calls these wrappers, so the
 // storage seam stays in ONE place for the future Rust swap. These wrap the
 // fileStore reel-read primitives (readReelWhere / factsByActId) and return the
-// plain fact docs callers expect (the .lean() shape). NEVER a Mongo fallback.
+// plain fact docs callers expect (the .lean() shape). NEVER an external fallback.
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
@@ -1037,7 +1036,7 @@ function serializeFactForReel(f) {
  * ONE fact (multi-fact only at the I-Am root), so this is usually 0..1 — but
  * the read is general. The actor's facts ride the actor's own being-reel, so
  * this reads (history, "being", actorBeingId) and keeps the facts carrying
- * this actId. The file-native peer of Mongo's Fact.find({ actId }).
+ * this actId. The file-native read for the facts carrying a given actId.
  *
  * @param {string} history       the reel's history
  * @param {string} actorBeingId  the being whose reel the facts ride
@@ -1068,8 +1067,8 @@ export function getFactsOnReelWhere(history, kind, id, predicate) {
 /**
  * The CROSS-REEL / WORLD fact read — every fact in one history's branch, across
  * all reel-kinds (being·space·matter·name·library) and all authors, kept by a
- * predicate, then sorted. The curated peer of the old Mongo Fact.find({history,
- * ...}).sort(...) the BOOK (assemble.js) and read-trail.js folded the story from.
+ * predicate, then sorted. The curated cross-reel read the BOOK (assemble.js)
+ * and read-trail.js fold the story from.
  *
  * The curated single-reel readers (getReel / getFactsOnReelWhere / getFactsByActId)
  * read ONE reel by (kind,id); the book is a fold ACROSS reels — facts BY an author
@@ -1119,15 +1118,14 @@ export async function getHistoryFacts(history, { predicate, sort, limit } = {}) 
 export async function getFactsByBeing(beingId, limit, startDate, endDate) {
   if (!beingId) throw new Error("Missing required parameter: beingId");
 
-  // FileStore organizes facts by TARGET reel (history,kind,id), not by
-  // ACTOR. There is no actor-indexed read primitive (the Mongo
-  // `through` secondary index has no file-store peer), so a being's
-  // own facts can't be assembled without scanning every reel. This
-  // function has no callers today; the act-log (the being's authored
-  // ACTS, via fileStore.readActHeadFile / the .acts chain) is the
-  // file-native "what this being did" surface. Return an empty reel
-  // rather than a broken Mongo query; wire the act-log here if a caller
-  // ever needs it.
+  // The file store organizes facts by TARGET reel (history,kind,id), not
+  // by ACTOR. There is no actor-indexed read primitive (a `through`
+  // secondary index has no file-store peer), so a being's own facts
+  // can't be assembled without scanning every reel. This function has
+  // no callers today; the act-log (the being's authored ACTS, via
+  // fileStore.readActHeadFile / the .acts chain) is the file-native
+  // "what this being did" surface. Return an empty reel rather than a
+  // broken read; wire the act-log here if a caller ever needs it.
   void limit;
   void startDate;
   void endDate;

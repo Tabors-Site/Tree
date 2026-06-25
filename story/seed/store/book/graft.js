@@ -45,9 +45,8 @@
 // deleteAllHistories / countHistories). No raw Fact/Act/ReelHead/ActHead model
 // remains.
 //
-// No Mongo, no mongoose: the optional Mongo extension is gone and every
-// store row lives in the file chain, so there are no extension-owned
-// Mongo collections to sweep. The genome IS the file chain
+// Every store row lives in the file chain, so there are no extension-owned
+// collections to sweep. The genome IS the file chain
 // (facts/acts/histories/heads) plus its CAS blobs — captured and
 // planted entirely through FileStore.
 import * as fileStore from "../../past/fileStore.js";
@@ -166,10 +165,10 @@ export async function captureGraft(opts = {}) {
 
   // ── 5. No extension collections ──
   // The genome is the WHOLE story, and the WHOLE story lives in the
-  // file chain. There are no extension-owned Mongo collections (no
-  // Mongo, no mongoose), so nothing is swept here. The field stays in
-  // the bundle as an empty map for shape compatibility with older
-  // bundles (assertValidGraft permits it).
+  // file chain. There are no extension-owned store collections, so
+  // nothing is swept here. The field stays in the bundle as an empty
+  // map for shape compatibility with older bundles (assertValidGraft
+  // permits it).
   const extensionData = {};
 
   // ── 5b. CAS blobs — the genome includes the BYTES ──
@@ -533,14 +532,14 @@ export async function plantGraft(bundle) {
   }
 
   // ── 6. Extension collections ──
-  // There is no Mongo and no mongoose: store rows all live in the file
-  // chain, which landed above. A bundle from an older substrate may
-  // still ship extensionData; there is nowhere to plant it, so warn
-  // loudly and skip. The file chain is the planted genome.
+  // Store rows all live in the file chain, which landed above. A bundle
+  // from an older store may still ship extensionData; there is nowhere
+  // to plant it, so warn loudly and skip. The file chain is the planted
+  // genome.
   const extensionCollections = 0;
   if (bundle.extensionData && typeof bundle.extensionData === "object" && Object.keys(bundle.extensionData).length > 0) {
-    log.warn("Graft", `bundle ships ${Object.keys(bundle.extensionData).length} legacy extension Mongo collection(s) but ` +
-      `this substrate has no Mongo — those rows are NOT planted. The file chain is the genome.`);
+    log.warn("Graft", `bundle ships ${Object.keys(bundle.extensionData).length} legacy extension collection(s) but ` +
+      `this store has no extension collections, so those rows are NOT planted. The file chain is the genome.`);
   }
 
   // ── 7. Extension presence check ──
@@ -634,24 +633,21 @@ export async function plantGraft(bundle) {
             reelsWalked++;
             if (!v.ok) broken.push({ kind: "reel", key: rh._id, reason: v.reason, at: v.brokenAt });
           }
-          // FLAG (Mongo→FileStore rip, out-of-scope file): the per-being act-chain
-          // walk is DISABLED until its verifier is ported. verifyActChain
-          // (past/act/actHash.js — NOT one of this rip's two files) still walks the
-          // chain via the legacy Mongo `Act.findById`. After the rip the acts live
-          // ONLY in the file act-log (fileStore.readActChain), so the Mongo walk
-          // reads an EMPTY acts collection and would report every planted chain
-          // "broken" (missing-act) — a FALSE negative that would unplant a perfectly
-          // good genome. Running a proof against the wrong storage is worse than not
-          // running it, so the act-chain walk is skipped with a precise flag here;
-          // the fact-reel walk above (file-native verifyReel) + the storyRoot match
-          // remain the plant proof. RE-ARM: delete this guard and restore the loop
-          // once verifyActChain reads fileStore.readActChain. (graft.js)
+          // FLAG (review): the per-being act-chain walk is DISABLED here.
+          // verifyActChain (past/act/actHash.js) now reads the file act-log
+          // (fileStore.readActById via getActById), so the original "verifier
+          // is still on the old store, running it would false-negative" reason
+          // no longer holds. The walk stays gated off for now to preserve the
+          // pre-existing behavior of this plant path; the fact-reel walk above
+          // (verifyReel) + the storyRoot match remain the plant proof. RE-ARM:
+          // delete this guard and restore the loop over dbActHeads now that
+          // verifyActChain is file-native. (graft.js)
           void verifyActChain;
           if (dbActHeads.length > 0) {
-            log.warn("Graft", `act-chain walk SKIPPED for ${dbActHeads.length} chain(s): verifyActChain ` +
-              `(actHash.js) is still Mongo-backed (reads the now-empty acts collection) and not yet ` +
-              `file-native — running it would false-negative. The storyRoot match + ${reelsWalked} ` +
-              `fact-reel walk(s) stand as the plant proof until the act verifier is ported.`);
+            log.warn("Graft", `act-chain walk SKIPPED for ${dbActHeads.length} chain(s): the per-being ` +
+              `act-chain walk is currently gated off in this plant path (verifyActChain is file-native ` +
+              `and could be re-armed — see flag in graft.js). The storyRoot match + ${reelsWalked} ` +
+              `fact-reel walk(s) stand as the plant proof.`);
           }
           if (broken.length > 0) {
             rootVerified = false;
@@ -682,9 +678,9 @@ export async function plantGraft(bundle) {
         try {
           // FileStore: wipe the on-disk chain (reels + acts + journal + index)
           // and the history registry. Plant gates on an EMPTY store, so this
-          // restores the void it started from. There are no extension Mongo
-          // collections to clear (no Mongo on this substrate); the plant
-          // above inserted nothing beyond the file chain.
+          // restores the void it started from. There are no extension store
+          // collections to clear; the plant above inserted nothing beyond the
+          // file chain.
           fileStore.wipeChain();
           await deleteAllHistories();
           log.warn("Graft", `unplanted the chain + history registry; ` +

@@ -1,20 +1,17 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// The chain-of-truth's connection — now a FILE store, not Mongo.
+// The chain-of-truth's connection. The chain is an append-only FILE
+// store (past/fileStore.js), not a network database.
 //
-// The storage was ripped from Mongo to an append-only file store
-// (philosophy/mongorust.md; past/fileStore.js). There is no
-// network connection to wait on and no replica set to monitor: the
-// store is a directory under <story>/store/. connectDB() ensures that
-// directory exists and replays the moment-journal (crash recovery)
-// before any read or write fires. isDbHealthy() is a cheap existence
-// check on the store root — the file-store peer of Mongo's readyState.
+// There is no network connection to wait on and no replica set to
+// monitor: the store is a directory under <story>/store/. connectDB()
+// ensures that directory exists and replays the moment-journal (crash
+// recovery) before any read or write fires. isDbHealthy() is a cheap
+// existence check on the store root.
 //
-// The Mongo→FileStore rip is complete: dbConfig no longer imports or
-// re-exports mongoose. connectDB() opens the file store; isDbHealthy()
-// is the file-store peer of Mongo's readyState. No mongoose remains
-// anywhere in the tree — the optional Mongo extension and every
-// mongoose seam have been deleted, so `npm uninstall mongoose` is safe.
+// dbConfig imports nothing but the file store: connectDB() opens it,
+// isDbHealthy() reports whether the store root is present. No external
+// driver or connection string is involved.
 
 import log from "./log.js";
 import { existsSync } from "node:fs";
@@ -28,17 +25,24 @@ import {
  * Open the file store: ensure the data dir exists (configureStore makes
  * journal/ + reels/), then replay the moment-journal so any moment that
  * was committed-to-WAL but not yet acked is re-applied idempotently
- * before the first read/write. The story name selects the store folder
- * (default "past"); tests pass an explicit root.
+ * before the first read/write.
+ *
+ * The active store folder is the file equivalent of a database name: a
+ * sibling under store/. It is chosen, in order, by an explicit opts.story,
+ * then the STORE_NAME env var, then the default "past". Naming it
+ * something new spins up a fresh, isolated store (its own reels, journal,
+ * and projections under store/<name>/), exactly like pointing at a new
+ * database. Tests pass an explicit root to land in a scratch dir.
  *
  * @param {{root?:string, story?:string}} [opts]
  * @returns {Promise<{root:string, replayed:number, torn:boolean}>}
  */
 export async function connectDB(opts = {}) {
-  const root = configureStore(opts);
+  const story = opts.story ?? process.env.STORE_NAME ?? undefined;
+  const root = configureStore({ ...opts, story });
   const { replayed, torn } = replayJournal();
   if (replayed > 0) {
-    log.info("DB", `file store ready at ${root} — replayed ${replayed} journal record(s)`);
+    log.info("DB", `file store ready at ${root}, replayed ${replayed} journal record(s)`);
   } else {
     log.verbose("DB", `file store ready at ${root}`);
   }
@@ -48,8 +52,8 @@ export async function connectDB(opts = {}) {
   return { root, replayed, torn };
 }
 
-// The file-store peer of Mongo's readyState: the store is "healthy"
-// when its root directory exists. configureStore (called by connectDB
+// Store health: the store is "healthy" when its root directory
+// exists. configureStore (called by connectDB
 // at boot) creates it; a missing root means connectDB never ran or the
 // volume vanished. Synchronous + cheap — the conversation loop and the
 // HTTP db-health gate check this before entering a read/write path.

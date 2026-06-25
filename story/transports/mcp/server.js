@@ -95,7 +95,7 @@ import log from "../../seed/seedStory/log.js";
  * genesis() has finished registering tools) when you want MCP
  * clients to be able to reach this place.
  *
- * @param {import("express").Express} app — the express app to mount on
+ * @param {object} app — the express app to mount on
  * @param {object} [opts]
  * @param {string} [opts.mountPath="/mcp"] — HTTP path prefix
  */

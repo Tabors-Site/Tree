@@ -7,10 +7,9 @@ import fs from "fs"; import os from "os"; import path from "path"; import { file
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
 const TARGET = process.env.CONCEPT_TARGET || "space";
-const DB = `mongodb://localhost:27017/story_conceptfold_${TARGET}`;
+const DB = path.join(os.tmpdir(), `story_conceptfold_${TARGET}-` + process.pid);
 process.env.PORT = String(3840 + (TARGET.charCodeAt(0) % 50)); process.env.TREEOS_STORE_BASE = DB;
 fs.rmSync(DB, { recursive: true, force: true });
-delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "conceptfold-0123456789";
 process.env.STORY_KEY_DIR = path.join(os.tmpdir(), `conceptfold-keys-${TARGET}-` + process.pid);
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });

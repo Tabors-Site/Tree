@@ -4,7 +4,7 @@
 // triggers are state-based (when(state)/then(state)), evaluated once on the
 // `complete` item, over the whole accumulated state. Unit tests on
 // createReactor (pure, synthetic items) + integration over a real trivial
-// face. .env loaded so the innerFace import chain resolves; no Mongo at
+// face. .env loaded so the innerFace import chain resolves; no store reads at
 // runtime (foldedFace supplied, empty canSee).
 import fs from "fs"; import path from "path"; import { fileURLToPath } from "url";
 

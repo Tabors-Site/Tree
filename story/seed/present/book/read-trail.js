@@ -120,9 +120,9 @@ async function readSpanFacts({ history, scope = "world", since = null, until = n
   // facts by author-OR-actor (through OR by), or a space's facts by of.id,
   // date-ranged and date-sorted. facts.getHistoryFacts unions every reel of the
   // history (fileStore.listReelKinds + listReelIds → readReel — the cross-reel
-  // scan substrate) and applies the caller's predicate + sort in JS; we build
-  // the same window + scope filter the old Mongo query expressed, and reproduce
-  // its ordering (world = date then seq; single-reel = seq then date).
+  // scan) and applies the caller's predicate + sort in JS; we build the window
+  // + scope filter here and the ordering (world = date then seq; single-reel =
+  // seq then date).
   const h = requireHistory(history);
   const sinceMs = since != null ? (since instanceof Date ? since.getTime() : new Date(since).getTime()) : null;
   const untilMs = until != null ? (until instanceof Date ? until.getTime() : new Date(until).getTime()) : null;

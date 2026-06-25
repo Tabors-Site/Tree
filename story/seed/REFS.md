@@ -33,7 +33,7 @@ That's the entire load. The walker is the keeper. Refs exist to serve the walker
 - **Handlers** don't refuse bare IDs. `set-being { field: "position", value: "abc-123" }` is the normal shape.
 - **Reducers** don't write Refs to projection state.
 - **Wire / portal** doesn't wrap IDs in `ref()` before sending. Portal sends bare IDs and names; the wire resolves names to IDs.
-- **Mongo queries** don't filter on `.id` subpaths.
+- **Store queries** don't filter on `.id` subpaths.
 - **Indexes** are on the bare field, not `field.id`.
 
 If you find yourself writing code that wraps a bare ID in `ref()` because "the substrate expects Refs," stop. The substrate doesn't. Pass the bare ID.
@@ -112,7 +112,7 @@ Tagging IDs everywhere else was over-engineering: scaffolding around the walker 
 
 Phase 1.6 (2026-06-04) initially migrated every ID-bearing field in the substrate to typed Refs, including handler-side strict validation that refused bare strings. This was over-scoped: the substrate's handlers already knew what kind each field was via their own logic and didn't need the tags. The strictness was rolled back the same day; the walker primitive and Ref helpers stayed. The doctrine was sharpened to its current scope: Refs are content-walking, not substrate-internal.
 
-The completed schema-field migrations (handlers, queries, indexes flipped to `.id` subpaths) get rolled back over time — handlers accept bare IDs again, queries use bare paths, Mongoose schemas drift back to `String` as files are touched for other reasons. Storage may contain stale Refs from the migration period; `refId()` is tolerant of both shapes so consumers read either way.
+The completed schema-field migrations (handlers, queries, indexes flipped to `.id` subpaths) get rolled back over time. Handlers accept bare IDs again, the query layer indexes the bare field, and ID-bearing fields hold plain strings again as files are touched for other reasons. Storage may contain stale Refs from the migration period; `refId()` is tolerant of both shapes so consumers read either way.
 
 ## Doctrinal pin
 

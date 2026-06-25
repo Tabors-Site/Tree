@@ -50,8 +50,8 @@ export async function registerPeer({ domain, publicKey, storyId, baseUrl, name, 
 
   const existing = await StoryPeer.findById(domain);
   if (existing) {
-    // Mutate in place (the old mongoose doc-mutate + save), preserving
-    // every other field, then upsert the row by its _id (= domain).
+    // Mutate the loaded doc in place, preserving every other field,
+    // then upsert the row by its _id (= domain).
     existing.publicKey = publicKey;
     existing.storyId   = storyId;
     existing.baseUrl   = url;

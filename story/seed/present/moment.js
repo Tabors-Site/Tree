@@ -60,7 +60,7 @@ import { runFoldBeat } from "./stamper/2-fold/foldBeat.js";
  * @returns {Promise<{ actId: string|null, result: any, responseEntry: object|null }>}
  *   actId is non-null only when the Act row materialized (cognition
  *   ok:true OR abort path). On ok:false failure, actId is null and
- *   no Mongo state changed.
+ *   no store state changed.
  */
 export async function runMoment({ beingId, spaceId, entry, index, handoff = null, controller } = {}) {
   if (!controller) throw new Error("runMoment requires an AbortController");
@@ -76,7 +76,7 @@ export async function runMoment({ beingId, spaceId, entry, index, handoff = null
   let actInserted = null;     // the Act row, when one materializes
 
   try {
-    // ── Beat 1: assign mints actId + plans the Act. No Mongo write. ──
+    // ── Beat 1: assign mints actId + plans the Act. No store write. ──
     setup = await assign({
       beingId,
       spaceId,

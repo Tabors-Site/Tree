@@ -102,10 +102,15 @@ under that resource's path prefix, sign its hash" (see
 for the whole-reality case; the per-resource case is the same with a
 narrower prefix).
 
-**Dropping the Mongo db never touches localStore.** Your CAS persists
-across chain resets. Old bytes from prior runs become orphaned
-references (no fact in the new chain points at them) and the retention
-sweeper eventually reclaims them.
+**Wiping the chain never touches localStore.** The chain (reels, acts,
+journal, and the derived indexes under the active reality's folder) is
+what a reset clears; the CAS (`localStore/cas`) is a sibling folder,
+shared across realities, so it survives. The store's own `wipeChain()`
+removes exactly `reels`, `acts`, `journal`, and `index` and explicitly
+leaves the shared CAS alone. Your CAS persists across chain resets. Old
+bytes from prior runs become orphaned references (no fact in the new
+chain points at them) and the retention sweeper eventually reclaims
+them.
 
 The on-disk files still being the import surface is the half that's
 not done yet. See [philosophy/OS/MIRROR.md](../philosophy/OS/MIRROR.md)
@@ -650,7 +655,12 @@ Worth pinning so the migration doesn't quietly close any of these.
 
 End-to-end test scenario after migration (drop DB, fresh boot):
 
-1. `mongosh reality --eval 'db.dropDatabase()'`
+1. `rm -rf reality/localStore/"${STORE_NAME:-past}"/{reels,acts,journal,index}`
+   (clear the active reality's chain folders; the shared
+   `reality/localStore/cas` is a sibling and is left intact). Equivalent
+   in code: `wipeChain()` from `seed/past/fileStore.js`, which removes
+   exactly those four subfolders under the current store root and never
+   touches the CAS.
 2. `node reality/plant.js` — wizard discovers packs and standalone
    resources; offers roots; user says yes.
 3. `npm start` — boot resolves the closure of the selected profile,

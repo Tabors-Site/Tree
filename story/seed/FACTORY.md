@@ -326,7 +326,7 @@ present/
 │   │   ├── reel.js            per-presence in-memory carry between moments
 │   │   └── reelChains.js      per-being Act-chain reader helpers
 │   ├── 3-momentum.js       the being's act; returns CognitionResult
-│   └── 4-stamped.js        sealAct: commit Act + ΔF in one Mongo transaction
+│   └── 4-stamped.js        sealAct: commit Act + ΔF in one atomic store commit
 ├── intake/              arrivals: InboxProjection rows, scheduler drains
 │   ├── inbox.js            reader over InboxProjection
 │   ├── intake.js           thin reader and writer over InboxProjection
@@ -415,7 +415,7 @@ They are rebuildable by replaying their fact history.
 The materials define what kinds of fact can be stamped. Each material
 (being, space, matter) is a type with a schema, a reducer, and the ops
 that target it. The reducer is the pure function the fold engine calls
-per fact to derive the aggregate's state, its row in MongoDB.
+per fact to derive the aggregate's state, its slot in the store.
 
 ```
 materials/
@@ -904,22 +904,21 @@ a clean total order.
 facts an act yields lands AND the Act row that frames them lands,
 or none of it does. A crashed moment leaves zero trace.
 
-For ΔF=0 moments (LLM with no tool calls, etc.), the seal is a
-single-doc `Act.create` — atomic by definition. For ΔF≥1 moments,
-`sealAct` opens a Mongo session, calls `appendDeltaFInSession`
-(grouping facts by reel, acquiring per-reel locks in sorted order
-to prevent deadlock, calling logFact-with-session for each), then
-`Act.create` — all inside one `withTransaction`. Either everything
-commits or nothing does, even under crash mid-write. Multi-fact ΔF
-requires Mongo replica set; sealAct refuses to proceed without one.
-
-Two verification scripts back this up:
-[`.test/scripts/verify-seal-atomicity.js`](/.test/scripts/verify-seal-atomicity.js)
-exercises the four sealFacts cases (singleton, multi-fact-on-standalone-throws,
-multi-reel-on-replica-set-commits, injected-failure-mid-txn);
-[`.test/scripts/verify-crash-mid-seal.js`](/.test/scripts/verify-crash-mid-seal.js)
-spawns a subprocess that SIGKILLs itself mid-transaction and asserts
-both reels remain byte-identical AND verifyReel-green post-restart.
+For ΔF=0 moments (LLM with no tool calls, etc.), the seal commits an
+empty facts list. The Act still lands, atomic by definition. For ΔF≥1
+moments, `sealAct` calls `commitMoment` with the whole record (the
+Act echoed into `record.act` plus every Fact spec, grouped by reel).
+`commitMoment` writes that record as one CRC-framed line to the
+moment journal and fsyncs it. That single durable append is the
+commit point. It then applies each fact to its reel and advances the
+ack. Either the whole record is on the journal or it is not; a crash
+mid-write leaves a torn trailing line that replay discards, so the
+never-committed moment leaves zero trace. There is no transaction,
+no session, and no replica set: the single global commit mutex inside
+`commitMoment` serializes every write, so a ΔF spanning many reels
+needs no cross-document machinery, and a crash after the journal
+fsync re-applies the record idempotently on the next boot (each fact
+is skipped if its `_id` already sits at the reel's head).
 
 Full write-side doctrine in
 [philosophy/STAMPER.md](../philosophy/factory/STAMPER.md).
@@ -968,12 +967,11 @@ emitFact(spec, summonCtx)           ← handlers never call logFact directly
 ... more handlers fire inside the same moment, each pushing to ΔF ...
   ↓
 sealAct (stamper/4-stamped.js) when momentum returns ok:true
-  ↓ if ΔF=0: Act.create()             ← single-doc atomic
-  ↓ if ΔF≥1: withTransaction(session):
-      appendDeltaFInSession(ΔF)        ← each fact under per-reel lock
-        allocSeq + Fact.create
-      Act.create([actDoc], {session})  ← framed by the same transaction
-    THE COMMIT: ΔF + Act commit together or NOT AT ALL
+  ↓ commitMoment(record)               ← record = act + every Fact spec
+      journal-append + fsync           ← THE COMMIT POINT (CRC-framed line)
+        per-reel: compute seq/p/_id, apply the fact line
+      advance ack                      ← record now durable
+    THE COMMIT: ΔF + Act commit together or NOT AT ALL (one mutex, no txn)
   ↓ foldAfterCommit(reels)             ← eager-fold per reel post-commit
       reducer.reduce per fact
       applyProjection (CAS)             ← projection row updated
@@ -994,16 +992,18 @@ ATOMIC SEAL.
 **Outside a moment, emitFact falls back to `sealFacts` singleton.**
 Boot scaffolding, migrations, the genesis I-Am self-stamp — these
 have no surrounding moment. emitFact detects `summonCtx === null`
-and commits the spec immediately as a one-fact ΔF (no transaction
-needed for a single-doc insert). The same primitive, two contexts:
+and commits the spec immediately as a one-fact ΔF (one `commitMoment`
+journal frame, atomic on its own). The same primitive, two contexts:
 in-moment it stages; out-of-moment it commits.
 
-**Multi-fact ΔF requires Mongo replica set.** Cross-document
-transactions are a replica-set feature. Single-fact ΔF works on
-standalone Mongo (logFact's per-reel lock is enough); the moment
-the first multi-reel act needs to seal, the dev environment must
-be a single-node replica set. See `story/README.md` for the
-conversion steps.
+**Multi-fact ΔF needs no special setup.** A ΔF spanning many reels
+commits exactly like a single-fact one: `commitMoment` writes the
+whole record as one CRC-framed journal line under the global commit
+mutex, then applies every fact. There is no cross-document
+transaction and no replica set to stand up; the journal frame is the
+all-or-nothing unit and the mutex is the single writer. The store
+opens with `connectDB()` against a plain on-disk directory, so there
+is no URI, cluster, or conversion step to perform.
 
 **One writer.** `fold` is the only thing that ever writes a
 projection row (outside genesis). The fact insert is the only
@@ -1205,9 +1205,9 @@ moment running under root A emits a fresh top-level call),
 by markThreadSevered when a cut runs through this Act's rootCorrelation),
 `priority` (HUMAN | GATEWAY | INTERACTIVE | BACKGROUND), `receivedAt`,
 `stampedAt`. PLANNED in [stamper/1-assign.js](present/stamper/1-assign.js)
-(no Mongo write); CREATED in
+(no store write); CREATED in
 [stamper/4-stamped.js](present/stamper/4-stamped.js) at the seal, inside
-the same transaction that commits the moment's ΔF. Every Fact emitted
+the same `commitMoment` that commits the moment's ΔF. Every Fact emitted
 during the moment carries this Act's `_id` as `actId`.
 
 **The Act row materializes only on `ok:true`.** A failed cognition

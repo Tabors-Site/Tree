@@ -303,9 +303,9 @@ async function recallByBraid(beingId, forwardFace, { cap, history = "0" }) {
   // Find facts on each entity's reel whose actor is this being.
   // Each such fact is a stitch this being made on that entity. The
   // fact's actId points at the Act row that produced it — the act
-  // we recall. Curated: the Mongo $or-over-reels query becomes one
+  // we recall. Curated: the $or-over-reels read becomes one
   // curated reel read PER entity (getFactsOnReelWhere is per-reel),
-  // merged. History is the fold's history (the old Fact.find was
+  // merged. History is the fold's history (the prior read was
   // history-blind; threading the fold's history is the post-doctrine
   // correct scope — facts are read on the reel the place renders on).
   const stitchFacts = [];

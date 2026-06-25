@@ -330,8 +330,8 @@ export async function rehydrateFromFacts() {
     log.warn("Schedule", `rehydrate history enumeration failed: ${err.message}`);
   }
 
-  // STORAGE SWAP (Mongo rip): the old global `Fact.find({verb,action:$in})`
-  // scan + hand-rolled lineage walk are replaced by the curated reel layer.
+  // The old global verb/action scan + hand-rolled lineage walk are
+  // replaced by the curated reel layer.
   // Wake facts ride the BEING reel (of:{kind:"being",id}), so for each live
   // history we enumerate that history's beings through the curated projection
   // layer (listByType, which already inherits the lineage with branchPoint

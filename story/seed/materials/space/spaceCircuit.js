@@ -41,12 +41,10 @@ import { I } from "../being/seedBeings.js";
 import { emitFact, getReel } from "../../past/fact/facts.js";
 import { listByType, loadProjection } from "../projections.js";
 
-// Curated owner-scan. There is no owner-indexed curated read (the prior
-// Mongo `{ owner: treeId }` query had no file-store peer), so enumerate
+// Curated owner-scan. There is no owner-indexed curated read, so enumerate
 // the history's spaces and keep those whose folded state names this
-// owner. History "0" — the circuit operates on main, like the prior
-// Mongo collection query did. Returns loaded slots so callers read
-// state.qualities without a second fetch.
+// owner. History "0" — the circuit operates on main. Returns loaded slots
+// so callers read state.qualities without a second fetch.
 async function ownedSpaceSlots(treeId) {
   const occupants = await listByType("space", "0");
   const slots = [];
@@ -156,12 +154,10 @@ export async function checkTreeHealth(treeId) {
     qualitiesDensity = (totalSampleSize / sampleSize) * spaceCount;
   }
 
-  // 3. Error rate. Fact reel failures on spaces in this tree. The prior
-  // Mongo $lookup join scanned the whole fact collection then joined to
-  // owned spaces; the curated peer reads each owned space's reel and
-  // reduces in JS (no cross-reel global scan exists — getReel is
-  // per-target). Same window, same predicate (date >= since, params.error
-  // set).
+  // 3. Error rate. Fact reel failures on spaces in this tree. The curated
+  // read scans each owned space's reel and reduces in JS (no cross-reel
+  // global scan exists — getReel is per-target). Window predicate is
+  // date >= since, params.error set.
   const checkInterval = parseInt(
     getInternalConfigValue("circuitCheckInterval") || "3600000",
     10,
@@ -174,9 +170,8 @@ export async function checkTreeHealth(treeId) {
       const { facts } = await getReel({
         targetKind: "space",
         targetId: String(slot.id),
-        // Clamps to the curated factQueryLimit cap (<=50000). The prior
-        // Mongo $lookup had no per-reel cap; a recent-window error scan
-        // stays well under this in practice.
+        // Clamps to the curated factQueryLimit cap (<=50000). A
+        // recent-window error scan stays well under this in practice.
         limit: 50000,
       });
       for (const f of facts) {

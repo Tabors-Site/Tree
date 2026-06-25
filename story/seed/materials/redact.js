@@ -86,7 +86,7 @@ export function redactSecrets(value, _seen = new WeakSet()) {
   // what broke the timeline strip. Return these as-is.
   if (value instanceof Date) return value;
   if (value instanceof RegExp) return value;
-  // BSON/Mongo wrappers (ObjectId, Binary, Decimal128, …) implement
+  // BSON wrappers (ObjectId, Binary, Decimal128, …) implement
   // _bsontype + toJSON. Forward as-is so JSON serialization at the wire
   // calls toJSON instead of receiving an empty `{}`.
   if (typeof value._bsontype === "string" && typeof value.toJSON === "function") return value;

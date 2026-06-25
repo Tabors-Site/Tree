@@ -31,7 +31,7 @@
 // Idempotent by construction: re-uploading identical bytes returns
 // the same ref and writes nothing (the store dedups on hash).
 
-import express from "express";
+import express from "../app.js";
 import multer from "multer";
 import { fileTypeFromBuffer } from "file-type";
 import log from "../../../seed/seedStory/log.js";

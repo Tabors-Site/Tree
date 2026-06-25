@@ -42,8 +42,8 @@ export async function assembleStory(
 ) {
   // CURATED: facts.getHistoryFacts(history, {predicate, sort, limit}) is the
   // cross-reel / world fact read — every fact in the branch (all reel-kinds, all
-  // authors) kept by a predicate, then sorted. The file-native peer of the old
-  // Mongo Fact.find({history, ...}).sort(...). The book is a CROSS-REEL fold, so
+  // authors) kept by a predicate, then sorted, straight off the file store.
+  // The book is a CROSS-REEL fold, so
   // each scope builds the predicate (the $or/$in/date/actId filter becomes a JS
   // keep-test) and the world scope sorts by (date,seq), the chain scopes by
   // (seq,date). The entity sub-lookups (place scope, descendantsOf) are already
@@ -76,7 +76,7 @@ export async function assembleStory(
     // CURATED: findByPosition(S, history) returns the live occupants ACROSS
     // KINDS at space S (the slot-level `position` index keys beings by
     // .position AND matter by .spaceId, both lifted to slot.position) — the
-    // file-native peer of Mongo's Matter.find({spaceId}) + Being.find({position}).
+    // the live occupants at space S, both matter (.spaceId) and beings (.position).
     // Child spaces have no curated parent-peer (findByParent is being-only), so
     // listByType("space") + parent filter on the loaded state (the doctrine's
     // space/matter-parent recipe).
@@ -158,7 +158,7 @@ export async function assembleBook(history = "0", opts = {}) {
 // walk the birth tree from a being down to its descendants, bounded by `depth` (null = all)
 async function descendantsOf(beingId, depth, history) {
   // CURATED: findByParent(beingId, history) is the being-children read (the
-  // file-native peer of Mongo's Being.find({parentBeingId})). Walk it
+  // beings whose parentBeingId is this being). Walk it
   // breadth-first, one frontier-being per call, instead of the old $in batch.
   const { findByParent } = await import("../../materials/projections.js");
   const h = String(history);

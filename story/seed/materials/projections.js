@@ -94,7 +94,7 @@ export function assertHistoryOrThrow(history, callerName) {
 // FileStore snapshots hold {state, foldedSeq, position, tombstoned} only.
 // `type`, `id`, and `history` are the lookup COORDINATES (not stored in
 // the slot), so we re-attach them when shaping a return value — the same
-// shape the Mongo-backed projection doc carried.
+// shape the file-store-backed projection slot carries.
 // ─────────────────────────────────────────────────────────────────────
 
 function shapeSlot(slot, type, id, history) {
@@ -265,7 +265,7 @@ export async function saveProjection(
   if (typeof foldedSeq !== "number") {
     throw new Error("saveProjection: next.foldedSeq must be a number");
   }
-  // CAS-guarded write. Mongo's null-guard ($or null/absent) maps to the
+  // CAS-guarded write. A null-guard (expected slot null/absent) maps to the
   // FileStore CAS: a never-folded slot has no on-disk snapshot, so an
   // expectedFoldedSeq of null/undefined must only land when there is no
   // existing slot. saveSnapshot's CAS compares the on-disk foldedSeq to
@@ -575,8 +575,7 @@ export async function findByNamePattern(type, pattern, history) {
   if (!pattern) return [];
   const re = pattern instanceof RegExp ? pattern : new RegExp(pattern);
   // No regex facet in the inverted index: scan the kind's live ids and
-  // filter by name. Own-history (the prior Mongo query was own-history
-  // too — no lineage walk here).
+  // filter by name. Own-history only — no lineage walk here.
   const out = [];
   for (const id of storeListByType(history, type)) {
     const slot = loadSnapshot(history, type, id);
@@ -668,7 +667,7 @@ export async function countByParent(beingId, history) {
  * (listLiveHistories) and, for each, the history's OWN folded matter slots
  * (the file-store's own-history `type` index, matching the old query's
  * per-history projection rows — an inherited-but-never-diverged matter has
- * no row in the child history, exactly as Mongo had none). Returns
+ * no row in the child history). Returns
  * [{ matterId, history }].
  *
  * @param {string} hash            the content hash to refcount
@@ -802,8 +801,8 @@ export async function findRootOperator(systemNames, history) {
   const systemSet = new Set(systemNames || []);
   // Walk the history's own live beings whose parent is I or cherub and
   // whose name isn't a system name; pick the earliest by createdAt (id
-  // as a deterministic tiebreak). The Mongo query sorted on
-  // state.createdAt asc, _id asc — reproduce that ordering here.
+  // as a deterministic tiebreak). Ordering is state.createdAt asc,
+  // _id asc.
   const candidates = [];
   for (const id of storeListByType(history, "being")) {
     const slot = loadSnapshot(history, "being", id);

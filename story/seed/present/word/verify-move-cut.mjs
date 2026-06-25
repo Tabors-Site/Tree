@@ -19,7 +19,6 @@ const SCRATCH_DB = path.join(os.tmpdir(), "story_word_move_cut-" + process.pid);
 process.env.PORT = "3847";
 process.env.TREEOS_STORE_BASE = SCRATCH_DB;
 fs.rmSync(SCRATCH_DB, { recursive: true, force: true });
-delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "move-secret-0123456789";
 process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "movecut-keys-" + process.pid);
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
@@ -152,7 +151,7 @@ try {
 
   // ── 3. container-mode move: thing.txt → dest space. The row folds the new spaceId. ──
   // resolve-source's dest-exists check reads the dest through the curated projection layer
-  // (loadOrFold("space", dest, history)), NOT the deleted Mongo Space collection. The dest
+  // (loadOrFold("space", dest, history)), folded from the file store. The dest
   // was born by the REAL create-space op above and sealed onto its reel, so loadOrFold
   // cold-folds it and the dest-exists gate passes with no extra setup (the real fold, not a
   // stubbed Space row, is what the gate reads, exactly the live path).

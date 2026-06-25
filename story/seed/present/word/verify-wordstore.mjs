@@ -8,7 +8,6 @@ const R = path.resolve(__dirname, "../../..");
 const DB = path.join(os.tmpdir(), "story_wordstore-" + process.pid);
 process.env.PORT = "3829"; process.env.TREEOS_STORE_BASE = DB;
 fs.rmSync(DB, { recursive: true, force: true });
-delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "wordstore-0123456789";
 process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "wordstore-keys-" + process.pid);
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });

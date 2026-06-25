@@ -11,7 +11,7 @@
 // { actId, plannedAct, able, moment } for moment to dispatch, or
 // { skipped } when the entry can't run.
 //
-// **assign no longer writes the Act row to Mongo** (Round 5).
+// **assign no longer writes the Act row to the store** (Round 5).
 // The Act row is created at seal-time by stamped.js, only when
 // cognition returned ok:true. On ok:false the Act row never
 // materializes — that's how "no Act row for the failed moment" is
@@ -284,7 +284,7 @@ export async function assign({
       ? askerName || "transport"
       : askerName || entry.from || "user";
 
-  // Plan the Act row but do NOT write it to Mongo. The Act gets
+  // Plan the Act row but do NOT write it to the store. The Act gets
   // created at seal-time by stamped.js, only when cognition
   // returned ok:true. plannedAct carries the derived fields the
   // seal needs (ibpAddress, rootCorrelation, parentThread); moment
@@ -479,7 +479,7 @@ export async function assign({
     // ΔF accumulator. Every Fact emission inside this moment pushes a
     // spec onto this array (verb handlers and material helpers thread
     // it through). At seal-time, sealAct commits the whole ΔF and the
-    // Act row together in one Mongo transaction. One act → one ΔF →
+    // Act row together in one atomic commit. One act → one ΔF →
     // one commit. Empty for moments that emit no facts (LLM moment
     // with no tool calls); still atomic via single-doc Act insert.
     deltaF: [],
@@ -603,10 +603,10 @@ function capContent(s) {
 
 /**
  * Compute the Act row's derived fields and return a plain object
- * that stamped.js writes to Mongo at seal-time (only when cognition
+ * that stamped.js writes to the store at seal-time (only when cognition
  * returned ok:true). The actId is minted here so DO/BE Facts
  * stamped inside the moment can carry it; the row itself does NOT
- * exist in Mongo until the seal step writes it.
+ * exist in the store until the seal step writes it.
  *
  * Returns null when the inputs are invalid (through missing).
  */
@@ -694,7 +694,7 @@ async function planActRow(opts = {}) {
   const now = new Date();
   const safeMessage = capContent(message);
 
-  // Plain object — no Mongo write. stamped.js writes this at seal
+  // Plain object — no store write. stamped.js writes this at seal
   // time only when cognition returns ok:true. The `_id` is minted
   // here so Facts emitted during the moment can carry actId; the
   // Act row doesn't exist until seal materializes it.

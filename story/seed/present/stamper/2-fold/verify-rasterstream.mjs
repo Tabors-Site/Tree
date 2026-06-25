@@ -2,7 +2,7 @@
 // verify-rasterstream — the live-rasterization core (25.md Pillar D).
 // Boot-free at runtime: pure module logic + one buildInnerFace integration
 // with a trivial able (explicit string caps, empty canSee, a folded face
-// supplied = no Mongo query). The innerFace import chain wants JWT_SECRET
+// supplied = no store read). The innerFace import chain wants JWT_SECRET
 // at load, so we read .env and dynamic-import it after.
 import fs from "fs"; import path from "path"; import { fileURLToPath } from "url";
 import {

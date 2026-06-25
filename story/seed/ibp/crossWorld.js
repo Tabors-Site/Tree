@@ -334,7 +334,7 @@ export async function crossStoryDispatch({ envelope, actor, identity } = {}) {
 /**
  * Inbound cross-story dispatch. Run a substrate verb as the foreign
  * actor. The synthetic moment carries actorAct as a JS object —
- * NOT a Mongo row, since the actor's Act lives on their home
+ * NOT a stored row, since the actor's Act lives on their home
  * substrate. emitFact reads { story, history, through, _id } off this
  * object to compute the crossOrigin block for any facts the verb
  * produces. After the verb returns, sealFacts commits the deltaF.
@@ -429,7 +429,7 @@ export async function runVerbAsForeignActor({
     );
   }
 
-  // Synthetic actorAct. NOT a Mongoose row on this substrate. emitFact
+  // Synthetic actorAct. NOT a stored row on this story. emitFact
   // reads the four identity fields off it to derive crossOrigin.
   const actorAct = {
     _id: actor.actId,

@@ -16,7 +16,6 @@ const SCRATCH_DB = path.join(os.tmpdir(), "story_word_see_live-" + process.pid);
 process.env.PORT = "3791";
 process.env.TREEOS_STORE_BASE = SCRATCH_DB;
 fs.rmSync(SCRATCH_DB, { recursive: true, force: true });
-delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "seelive-secret-0123456789";
 process.env.STORY_KEY_DIR = path.join(
   os.tmpdir(),

@@ -4,7 +4,7 @@
 //
 // A being IS at a position. `Being.position` is the source of truth;
 // this module mirrors it in memory so the runTurn tool loop and
-// websocket dispatch don't hit Mongo on every position read (dozens
+// websocket dispatch don't hit the store on every position read (dozens
 // per turn).
 //
 // Two values per being:

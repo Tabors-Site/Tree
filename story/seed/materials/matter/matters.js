@@ -546,7 +546,7 @@ async function getMatters({ spaceId, limit, offset, startDate, endDate, history 
   const spaceIdBare = String(spaceId);
   // Curated matter-at-space read, then the old query view (date filter on
   // state.createdAt, newest-first by state.createdAt, offset/limit) applied in
-  // JS. dateRange.createdAt is the Mongo {$gte,$lte} Date range buildDate
+  // JS. dateRange.createdAt is the {$gte,$lte} Date range buildDate
   // produced; honored field-for-field here.
   let rows = await listMatterSlotsAtSpace(history, spaceIdBare);
   const cr = dateRange.createdAt || null;
@@ -747,7 +747,7 @@ async function listMattersAt(spaceId, { limit = 50, history } = {}) {
 
 /**
  * Read one matter by id. Lean by default — the caller wants a
- * plain object to inspect, not a Mongoose doc to save back. Pass
+ * plain object to inspect, not a hydrated doc to save back. Pass
  * `{ doc: true }` to get the hydrated doc instead (needed when the
  * caller will mutate + save).
  *

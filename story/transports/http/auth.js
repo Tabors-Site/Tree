@@ -11,7 +11,7 @@
 // html-rendering / email extensions — they live in extensions/,
 // not here.
 
-import express from "express";
+import express from "./app.js";
 import { register, login, logout } from "./users.js";
 import authenticate from "./middleware/authenticate.js";
 import rateLimit from "./middleware/rateLimit.js";

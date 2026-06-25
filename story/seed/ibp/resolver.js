@@ -325,7 +325,7 @@ async function walkSpacePath({
     // its heaven-marked children resolve. Heaven itself parents the
     // tier-3 spaces (config, tools, ables, ...); the region spaces
     // (host, factory) parent their own marked children (http,
-    // websocket, mongo, present, past). Without this, `/./ables`
+    // websocket, present, past). Without this, `/./ables`
     // SPACE_NOT_FOUND at depth 1 and `/./host/http` at depth 2 —
     // marked rows get filtered out. Normal children under heaven
     // spaces (e.g. `./ables/<name>`) carry heavenSpace: null and

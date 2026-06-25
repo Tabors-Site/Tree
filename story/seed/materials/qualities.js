@@ -36,11 +36,11 @@
 // complete with zero qualities; the empty Map is its standing
 // capacity to be qualified.
 //
-// Every write goes through these helpers so concurrent writes to
-// different quality namespaces on the same primitive never clobber
-// each other, and the document-size guard catches anyone trying to
-// push a row past the BSON limit. There is no read-modify-write
-// path; every write uses an atomic MongoDB operator.
+// Writes are fact-driven (see below): each set stamps a Fact on the
+// aggregate's reel and the reducer derives the new qualities state, so
+// concurrent writes to different quality namespaces never clobber each
+// other, and the document-size guard catches anyone trying to push a
+// row past the BSON limit.
 //
 // API:
 //
@@ -165,8 +165,7 @@ function validateData(key, data) {
 // Build the read-only quality primitives for a primitive kind. Same shape
 // across being, space, matter. No model coupling: getQuality /
 // readQualityNamespace operate on the passed doc; the write methods are
-// retired to fact-driven tombstones, so the old Mongoose `Model` binding
-// is gone.
+// retired to fact-driven tombstones, so the old model binding is gone.
 //
 // Write methods (setQuality / mergeQuality / incQuality / pushQuality /
 // addToQualitySet / batchSetQuality / unsetQuality) retired 2026-05-23
@@ -181,7 +180,7 @@ function validateData(key, data) {
 // (see materials/reducerHelpers.applySetQualities) derives the new
 // qualities state; the fold engine writes the projection under the
 // per-reel append lock. Per STAMPER.md: one writer (fold), one source
-// of truth (facts). The legacy direct-Mongo path here would silently
+// of truth (facts). The legacy direct-write path here would silently
 // bypass that — so it's gone.
 //
 // Tombstone methods below throw with a clear migration message. The

@@ -24,7 +24,7 @@
 // became "unaddressed" (a row whose _id doesn't verify as a content
 // hash — pre-CAS rows or foreign inserts).
 
-// FLAG (Mongo→FileStore rip): direct fileStore import RETAINED. This file is
+// FLAG: direct fileStore import RETAINED. This file is
 // the INTEGRITY primitive — it recomputes each fact's content-hash from the raw
 // p/_id/seq fields across a history lineage with per-history floors. The curated
 // FACT layer (past/fact/facts.js: getReel / getFactsByActId / getFactsOnReelWhere)
@@ -32,7 +32,6 @@
 // (serializeFactForReel) — which would destroy the p/_id/seq the chain walk
 // verifies. So this stays a storage-primitive chokepoint (alongside chainRoots.js
 // / verifyReelFrom.js, the other integrity walkers reading fileStore directly).
-// No raw Mongoose model was ever imported here; nothing to remove.
 import { readReelLineage } from "../fileStore.js";
 import { computeHash, contentOf, GENESIS_PREV } from "./hash.js";
 
@@ -71,7 +70,7 @@ export async function verifyReel(targetKind, targetId, history = "0") {
   // leaf is unbounded above. Main's floor is 0. STORAGE SWAP: the
   // OR-of-ranges Fact.find became a fileStore reel read over the same
   // (lineage, floors). The chain walk below is byte-for-byte unchanged
-  // (file _id = computeHash(p, contentOf), identical to the Mongo path).
+  // (file _id = computeHash(p, contentOf), the store's content-hash _id).
   const lineage = isMain(history) ? ["0"] : await resolveHistoryLineage(history);
   const floors = { "0": 0 };
   for (const h of lineage) {

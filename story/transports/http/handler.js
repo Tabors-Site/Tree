@@ -13,8 +13,8 @@
 //
 //   1. app.param guards (block reserved identifiers in URLs).
 //   2. apiLimiter — rate limit every request.
-//   3. /api/v1 dbHealth — 503 cleanly when MongoDB is down instead
-//      of letting Mongoose throw from inside a handler.
+//   3. /api/v1 dbHealth, 503 cleanly when the file store is not open
+//      instead of letting a store read throw from inside a handler.
 //   4. authPageRouter — HTML form login / register / logout.
 //   5. /api/v1/uploads — static serving of uploaded matter.
 //   6. /api/v1 authApiRouter — JSON auth.
@@ -50,7 +50,7 @@ import content from "./api/content.js";
 
 import dbHealth from "./middleware/dbHealth.js";
 
-import express from "express";
+import express from "./app.js";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";

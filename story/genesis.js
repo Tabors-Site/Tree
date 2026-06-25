@@ -114,20 +114,16 @@ async function readAndRunGenesisWord() {
   const fs = await import("fs");
   const { fileURLToPath } = await import("url");
   const { parse } = await import("./seed/present/word/parser.js");
-  const { runWordToStore } = await import(
-    "./seed/present/word/ableWordRegistry.js"
-  );
-  const { findByName, findByHeavenSpace } = await import(
-    "./seed/materials/projections.js"
-  );
-  const { HEAVEN_SPACE } = await import(
-    "./seed/materials/space/heavenSpaces.js"
-  );
+  const { runWordToStore } =
+    await import("./seed/present/word/ableWordRegistry.js");
+  const { findByName, findByHeavenSpace } =
+    await import("./seed/materials/projections.js");
+  const { HEAVEN_SPACE } =
+    await import("./seed/materials/space/heavenSpaces.js");
   const { getSpaceRootId } = await import("./seed/sprout.js");
   const { I } = await import("./seed/materials/being/seedBeings.js");
-  const { SEED_DELEGATES } = await import(
-    "./seed/materials/being/seedDelegates.js"
-  );
+  const { SEED_DELEGATES } =
+    await import("./seed/materials/being/seedDelegates.js");
 
   const heaven = await findByHeavenSpace(HEAVEN_SPACE.HEAVEN, "0");
   const rootId = getSpaceRootId();
@@ -161,10 +157,10 @@ async function readAndRunGenesisWord() {
 
 // Boot mode, decided once per process. Read by printReady at the
 // end so the closing line ("I am born." vs "I am awake.") matches
-// what actually happened. "Beginning" if Mongo held no place root
+// what actually happened. "Beginning" if the file store held no place root
 // when I arrived (no spaces, no matter, no beings yet); "Awakening"
 // if it did. Rebirth is a special case of Awakening that the
-// architecture supports (Fact reel + Mongo backup + federation peer
+// architecture supports (Fact reel + file store backup + federation peer
 // remnants) but the code does not auto-detect; an operator who
 // performs a restore knows which kind of waking they triggered.
 let bootMode = null;
@@ -173,7 +169,7 @@ let bootMode = null;
  * Form the place. begin.js awaits this before opening any senses.
  * The unfolding completes fully before the world can reach in.
  *
- * @param {import("express").Express} app  Express app extensions can
+ * @param {object} app — the HTTP app (transports/http/app.js)  Express app extensions can
  *   attach routes to during loadExtensions. Senses are not yet open;
  *   the app is wired but not listening.
  * @param {object} opts
@@ -195,7 +191,7 @@ export async function genesis(app, opts = {}) {
   foldWords();
 
   // Open the file store: ensure the store dir + replay the moment-
-  // journal (crash recovery) before any read or write fires. (The Mongo
+  // journal (crash recovery) before any read or write fires. (The old
   // auto-connect-on-import side effect is gone; connectDB is the entry.)
   const { connectDB } = await import("./seed/seedStory/dbConfig.js");
   await connectDB();
@@ -521,8 +517,8 @@ export async function genesis(app, opts = {}) {
   // handlers attached); SUMMON / able-walk authorize / canStarResolver
   // all read it. The authoritative storage is the qualities.ables
   // host below (data-only spec), but the registry is what holds the
-  // handler functions and prompt closures since Mongo can't serialize
-  // those.
+  // handler functions and prompt closures since the file store can't
+  // serialize those.
   const { registerAble } = await import("./seed/present/ables/registry.js");
   const { storyManagerAble } =
     await import("./seed/present/ables/story-manager/able.js");

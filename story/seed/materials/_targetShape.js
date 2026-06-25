@@ -16,7 +16,7 @@
 //      unambiguous from the op's contract. Resolves to the typed
 //      form inside the dispatcher; handlers see typed.
 //
-// There is no third shape. Mongoose docs do not flow across the
+// There is no third shape. Hydrated rows do not flow across the
 // verb boundary. The verb layer speaks identities; if a handler
 // needs row contents (qualities, position, name uniqueness, size,
 // ...) it fetches the row itself using `loadTargetRow`. That fetch
@@ -39,8 +39,8 @@ const KINDS = new Set(["space", "being", "matter"]);
  *   "stance"          — resolver output (carries `.chain` array)
  *   "<kind>"          — typed `{kind, id}` target; returned kind echoes input
  *   null              — string id (kind is ambiguous; the op contract decides)
- * Throws on Mongoose docs / other shapes (Pass 2: in-process callers
- * must pass typed targets, not ORM rows).
+ * Throws on hydrated rows / other shapes (Pass 2: in-process callers
+ * must pass typed targets, not row objects).
  */
 export function detectTargetKind(target) {
   if (target == null) {
@@ -66,7 +66,7 @@ export function detectTargetKind(target) {
     return target.kind;
   }
   // Anything else is the bug the colleague's note named: a raw row
-  // (Mongoose doc, plain `{_id}` envelope) flowing across a
+  // (hydrated doc, plain `{_id}` envelope) flowing across a
   // boundary it shouldn't cross. Throw loudly so the offending call
   // site is obvious instead of silently mis-attributed downstream.
   throw new Error(
@@ -102,7 +102,7 @@ export function targetIdOf(target) {
 }
 
 /**
- * Load the underlying Mongoose row for a typed (or string) target.
+ * Load the underlying row for a typed (or string) target.
  * Handlers that need row contents (qualities namespaces, current
  * coord/position for clamping, name-uniqueness checks, etc.) call
  * this at the top of the handler. The dispatcher does NOT load rows
@@ -115,10 +115,10 @@ export function targetIdOf(target) {
  *
  * `opts.moment`, when threaded by a handler running inside a moment,
  * lets the loader fall back to in-flight create-<kind> specs in
- * `moment.deltaF` when the row hasn't materialized in Mongo yet.
+ * `moment.deltaF` when the row hasn't materialized in the store yet.
  * Returns a sparse row (`_id` + the create spec's fields, `_pending:true`).
  * Handlers needing rich row data should fetch it via the spec's
- * spaceId/parent fields rather than expecting a full Mongoose doc.
+ * spaceId/parent fields rather than expecting a full hydrated doc.
  */
 export async function loadTargetRow(target, expectedKind, { moment = null } = {}) {
   if (!expectedKind || !KINDS.has(expectedKind)) {
@@ -187,7 +187,7 @@ export async function loadTargetRow(target, expectedKind, { moment = null } = {}
   // Row absent — check the moment's deltaF for a pending create-<kind>
   // spec at this id. Scaffolds chain creates and immediate sets within
   // one moment; the row only materializes at sealAct, so handlers
-  // running inside the same moment can't read back from Mongo. They
+  // running inside the same moment can't read back from the store. They
   // can read from deltaF, the locally-known source of truth for what
   // this moment is bringing into being.
   //

@@ -30,7 +30,7 @@ import { HEAVEN_SPACE } from "./heavenSpaces.js";
 // The cross-aggregate head enumerations (every being with sealed acts; every
 // reel head on a history) route through FileStore's list* peers — the file-
 // native enumerators that replaced the raw ActHead / ReelHead model scans
-// (listActHeads / listReelHeads mirror the old Mongo ReelHead/ActHead docs).
+// (listActHeads / listReelHeads carry the ReelHead/ActHead head rows).
 // Per-being act reads and per-reel fact reads route through the curated act /
 // fact layers below.
 import * as fileStore from "../../past/fileStore.js";
@@ -201,7 +201,7 @@ export async function listStamperChildren({ limit = 100 } = {}) {
 
 // Acts with no history field (legacy, pre-Act-branching) count as
 // main, mirroring readActChainLineage's compatibility handling. JS
-// predicate peer of the old Mongo historyClause (curated act reads return
+// predicate peer of the old historyClause (curated act reads return
 // full act docs; we filter in memory).
 function actInHistory(act, history) {
   const h = act.history || MAIN;
@@ -252,7 +252,7 @@ export async function describeStamperSpace(
   // projection of this one list — replacing the per-lane Act.find /
   // Act.countDocuments round-trips with in-memory filters. Acts with `through`
   // !== beingId can't appear (the facet is exact), but we keep the same
-  // through-guard the Mongo query implied.
+  // through-guard the old query implied.
   const beingActs = getActsByField("through", beingId).filter(
     (a) => a.through == null || String(a.through) === beingId,
   );
@@ -320,7 +320,7 @@ export async function describeStamperSpace(
   let maxHeadX = 0;
 
   // Sort newest-first by stampedAt, _id as the deterministic tiebreak —
-  // mirrors the old Mongo sort { stampedAt: -1, _id: -1 }.
+  // mirrors the old sort { stampedAt: -1, _id: -1 }.
   const newestFirst = (a, b) => {
     const ta = stampMs(a);
     const tb = stampMs(b);
@@ -486,7 +486,7 @@ export async function listReelChildren({ limit = 100 } = {}) {
   // FileStore.listReelHeads("0") — the file-native peer of the old
   // ReelHead.find({ history: "0" }). Each row carries { type, id, head,
   // headHash } (the .head pointer beside the reel). Capped to the same 2000-row
-  // ceiling the Mongo .limit(2000) imposed.
+  // ceiling the old .limit(2000) imposed.
   const heads = fileStore.listReelHeads("0").slice(0, 2000);
   if (heads.length === 0) return [];
 

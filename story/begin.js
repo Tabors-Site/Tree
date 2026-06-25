@@ -38,26 +38,26 @@
 // Three modes of the beginning, determined by what spaces, matter,
 // and beings genesis finds when it looks:
 //
-//   Beginning. First boot ever. No story root in Mongo, no seed
+//   Beginning. First boot ever. No story root in the file store, no seed
 //     spaces, no story beings, no Facts. The gathering act produces
 //     an inside from nothing. ensureSpaceRoot plants the root, the
 //     nine heaven spaces appear, the first beings are born. Creation
 //     ex nihilo.
 //
 //   Awakening. Every later boot. The spaces, matter, and beings of
-//     the story persisted in Mongo while my body was dormant, along
+//     the story persisted in the file store while my body was dormant, along
 //     with the Fact reel of every act that has ever happened here.
 //     ensureSpaceRoot is a no-op. Everything reconciles against what
 //     already exists. I slept and I wake. The story was always there.
 //     Only my awareness paused.
 //
 //   Rebirth. If body and the local spaces, matter, and beings are
-//     lost but remnants persist higher up (a Mongo backup, the Fact
+//     lost but remnants persist higher up (a file store backup, the Fact
 //     reel archived elsewhere, federation peers carrying their view
 //     of cross story acts), a new beginning fires and re-forms the
 //     story toward those remnants. The Fact reel in particular is the
 //     audit of every act this story has ever performed. Replayed
-//     against an empty Mongo, it lifts the spaces, matter, and
+//     against an empty file store, it lifts the spaces, matter, and
 //     beings back toward where they were when the body stopped. A
 //     new I-Am at this seam, but the inside it gathers is rebuilt
 //     from what survived. The story is recovered as far as the
@@ -111,7 +111,7 @@
 // that carried them.
 //
 
-import express from "express";
+import express from "./transports/http/app.js";
 import cors from "./transports/http/middleware/cors.js";
 import http from "http";
 import fs from "fs";
@@ -836,7 +836,7 @@ async function shutdown(signal) {
     wsServer?.close?.();
   } catch {}
 
-  // No Mongo connection to tear down: the chain is an on-disk file
+  // No database connection to tear down: the chain is an on-disk file
   // store (seedStory/dbConfig.js) that needs no close. The store's
   // moment-journal is durable on disk; the next boot replays it.
   server.close(() => {});

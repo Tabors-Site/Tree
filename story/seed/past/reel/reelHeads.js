@@ -5,8 +5,8 @@
 // Every fact lives on exactly one aggregate's reel. The reel needs
 // a per-reel monotonic seq, allocated atomically at append time so
 // the fold can sort and never invert. `allocSeq(type, id)` is that
-// allocator: single-doc `$inc` with upsert, atomic by Mongo
-// construction, microscopic critical section.
+// allocator: single-doc `$inc` with upsert, atomic by the file
+// store's per-reel append lock, microscopic critical section.
 //
 // See [STAMPER.md](../factory/stamper/STAMPER.md) — "Decision: seq is
 // a per-reel monotonic counter, allocated atomically at append."
@@ -47,7 +47,7 @@ export function reelKey(history, type, id) {
  * @param {string} id  aggregate id
  * @param {object} [opts]
  * @param {string}        [opts.history="0"] history path; defaults to main
- * @param {ClientSession} [opts.session]    Mongo session for transactional participation
+ * @param {object}        [opts.session]    accepted for transactional participation; unused under the file store
  * @returns {Promise<number>} the allocated seq (always >= 1)
  * @throws when type or id is missing/invalid
  */

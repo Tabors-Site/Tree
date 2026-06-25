@@ -9,65 +9,45 @@
 // Two assertions beyond the green seven: the laid facts attribute to I (the
 // override worked), and the caller's own moment is UNTOUCHED (the derivation is
 // clean — the host session strand that follows reads the real moment, not i-am).
-// Isolated test DB, wiped at start and end.
-import os from "os";
-
+// Full begin.js boot. Scratch file store under a per-pid base, wiped at start and end.
 import fs from "fs";
+import os from "os";
 import path from "path";
 import { fileURLToPath } from "url";
 import { randomUUID } from "crypto";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const storyRoot = path.resolve(__dirname, "../../..");
-for (const line of fs
-  .readFileSync(path.resolve(storyRoot, ".env"), "utf8")
-  .split("\n")) {
-  const t = line.trim();
-  if (!t || t.startsWith("#")) continue;
-  const eq = t.indexOf("=");
-  if (eq === -1) continue;
-  const k = t.slice(0, eq).trim(),
-    v = t.slice(eq + 1).trim();
-  if (v && !process.env[k]) process.env[k] = v;
-}
-process.env.MONGODB_URI = "mongodb://localhost:27017/story-word-bridge-live";
+const R = path.resolve(__dirname, "../../.."); // story/
+const SCRATCH = path.join(os.tmpdir(), "story_word_bridge_live-" + process.pid);
+process.env.PORT = "3864";
+process.env.TREEOS_STORE_BASE = SCRATCH;
+fs.rmSync(SCRATCH, { recursive: true, force: true });
+process.env.JWT_SECRET =
+  process.env.JWT_SECRET || "bridgelive-secret-0123456789";
+process.env.STORY_KEY_DIR = path.join(
+  os.tmpdir(),
+  "bridgelive-keys-" + process.pid,
+);
+fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
+const SRC = path.join(os.tmpdir(), "bridgelive-src");
+fs.rmSync(SRC, { recursive: true, force: true });
+fs.mkdirSync(SRC, { recursive: true });
+fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
+process.env.SOURCE_TREE_ROOT = SRC;
 
-const mongoose = (await import("../../seedStory/dbConfig.js")).default;
-if (mongoose.connection.readyState !== 1) {
-  await new Promise((res, rej) => {
-    mongoose.connection.once("connected", res);
-    mongoose.connection.once("error", rej);
-  });
-}
-if (mongoose.connection.name !== "story-word-bridge-live") {
-  console.log(`  REFUSING wrong DB ${mongoose.connection.name}`);
-  process.exit(2);
-}
+// (scratch file store fresh-wiped above; no DB to drop)
 
-await import("../../materials/space/ops.js");
-await import("../../materials/matter/ops.js");
-await import("../../materials/being/ops.js");
-// grant-able + cherub were carved into store-word bundles; import them so do:grant-able
-// dispatches and resolveAbleWord("cherub","birth") resolves (the engine built-in map is retired).
-await import("../../store/words/grant-able/index.js");
-await import("../../store/words/cherub/able.js");
+// Full genesis: I, cherub (+ its ables, incl. the self-registered cherub.word and
+// the do:grant-able / human able the flow dispatches), the seed delegates, the story.
+await import(`${R}/begin.js`);
 
-const { registerAble } = await import("../../present/ables/registry.js");
-const { humanAble } = await import("../../present/ables/human/able.js");
-try {
-  registerAble("human", humanAble);
-} catch {
-  /* already registered */
-}
-
-const { ensureSpaceRoot, ensureIAm } = await import("../../sprout.js");
-const { findByName } = await import("../../materials/projections.js");
-const { ensureSeedDelegates } =
-  await import("../../materials/being/seedDelegates.js");
-const { sealFacts } = await import("../../past/fact/facts.js");
-const { nameVerb } = await import("../../ibp/verbs/name.js");
-const { resolveAbleWord, runAbleWord, bornBeingFrom } =
-  await import("./ableWordRegistry.js");
+const { findByName } = await import(`${R}/seed/materials/projections.js`);
+const { sealFacts } = await import(`${R}/seed/past/fact/facts.js`);
+const { nameVerb } = await import(`${R}/seed/ibp/verbs/name.js`);
+const { getSpaceRootId } = await import(`${R}/seed/sprout.js`);
+const { resolveAbleWord, runAbleWord, bornBeingFrom } = await import(
+  `${R}/seed/present/word/ableWordRegistry.js`
+);
 
 let pass = 0,
   fail = 0;
@@ -80,78 +60,36 @@ const bad = (l, d) => {
   console.log(`  ✗ ${l}`);
   if (d) console.log(`      ${d}`);
 };
-async function withRetry(fn, tries = 6) {
-  for (let i = 0; i < tries; i++) {
-    try {
-      return await fn();
-    } catch (e) {
-      const m = String(e?.message || e);
-      if (
-        i < tries - 1 &&
-        /catalog changes|acquire .* lock|please retry|WriteConflict|TransientTransaction/i.test(
-          m,
-        )
-      ) {
-        await new Promise((r) => setTimeout(r, 250 * (i + 1)));
-        continue;
-      }
-      throw e;
-    }
+const poll = async (fn, t = 60000, e = 250) => {
+  const t0 = Date.now();
+  while (Date.now() - t0 < t) {
+    const v = await fn();
+    if (v) return v;
+    await new Promise((r) => setTimeout(r, e));
   }
-}
+  return null;
+};
 
 console.log(
-  `\n  verify-bridge-live (runAbleWord drives the full 5-act diff)\n  DB: ${mongoose.connection.name}\n`,
+  `\n  verify-bridge-live (runAbleWord drives the full 5-act diff)\n  store: ${SCRATCH.split("/").pop()}\n`,
 );
 try {
-  await mongoose.connection.db.dropDatabase();
-  for (const c of [
-    "facts",
-    "acts",
-    "beings",
-    "spaces",
-    "matters",
-    "reels",
-    "reelheads",
-    "names",
-    "stamps",
-  ]) {
-    try {
-      await mongoose.connection.db.createCollection(c);
-    } catch {}
-  }
-  await withRetry(() => ensureIAm());
-  // fold-only dispatch: the words declare themselves onto I's reel BEFORE any do-op dispatches
-  // (ensureSpaceRoot's create-space). Mirrors genesis.js (ensureIAm -> the words -> the story).
-  await withRetry(async () => {
-    const wc = {
-      actId: randomUUID(),
-      actorAct: { history: "0", by: "i-am" },
-      identity: { beingId: "i-am", name: "I", nameId: "i-am" },
-      deltaF: [],
-      foldedSeqs: new Map(),
-      afterSeal: [],
-    };
-    const { seedFold } = await import("./wordFold.js");
-    await seedFold({ moment: wc });
-    await sealFacts(wc.deltaF);
-    const { rehydrateWordProjection } = await import("./wordStore.js");
-    await rehydrateWordProjection("0");
-  });
-  const spaceRoot = await withRetry(() => ensureSpaceRoot());
-  await withRetry(() => ensureSeedDelegates(spaceRoot._id));
   const history = "0";
-  const cherub = await findByName("being", "cherub", history);
-  if (!cherub) throw new Error("no cherub");
+  const cherub = await poll(() => findByName("being", "cherub", history));
+  if (!cherub) {
+    console.log("  FATAL: genesis failed (no cherub)");
+    process.exit(1);
+  }
   const arrival = await findByName("being", "arrival", history);
+  const placeRoot = String(getSpaceRootId());
   console.log(
-    `  cherub=${cherub.id} placeRoot=${spaceRoot._id} history=${history}`,
+    `  cherub=${cherub.id} placeRoot=${placeRoot} history=${history}`,
   );
 
   // the arriving Name (the father, via arrival), declared first so form-being's
   // trueName = a declared Name.
   let ownerName = null;
-  await withRetry(async () => {
+  {
     const sc = {
       actId: randomUUID(),
       actorAct: { history, by: "i-am" },
@@ -168,7 +106,7 @@ try {
       )
     ).nameId;
     await sealFacts(sc.deltaF);
-  });
+  }
   console.log(
     `  arriving Name (father) = ${String(ownerName).slice(0, 14)}…\n`,
   );
@@ -192,23 +130,21 @@ try {
   };
   const sealedActorAct = JSON.stringify(moment.actorAct);
 
-  await withRetry(() =>
-    runAbleWord(ir, {
-      moment,
-      history,
-      trigger: { name: "tabor-prime", password: "wordpass" },
-      bindings: {
-        ownerName: String(ownerName),
-        placeRoot: String(spaceRoot._id),
-      },
-      beings: {
-        Cherub: String(cherub.id),
-        ...(arrival ? { Arrival: String(arrival.id) } : {}),
-      },
-      through: String(cherub.id),
-      iam: "i-am",
-    }),
-  );
+  await runAbleWord(ir, {
+    moment,
+    history,
+    trigger: { name: "tabor-prime", password: "wordpass" },
+    bindings: {
+      ownerName: String(ownerName),
+      placeRoot,
+    },
+    beings: {
+      Cherub: String(cherub.id),
+      ...(arrival ? { Arrival: String(arrival.id) } : {}),
+    },
+    through: String(cherub.id),
+    iam: "i-am",
+  });
 
   console.log(`  runAbleWord laid ${moment.deltaF.length} fact(s):`);
   for (const f of moment.deltaF)
@@ -294,14 +230,12 @@ try {
     : bad(`bornBeingFrom`, JSON.stringify(being));
 
   console.log(`\n  ${pass} passed, ${fail} failed`);
-  await mongoose.connection.db.dropDatabase();
-  await mongoose.disconnect();
+  fs.rmSync(SCRATCH, { recursive: true, force: true });
   process.exit(fail === 0 ? 0 : 1);
 } catch (err) {
   console.log(`\n  ! crashed: ${err.stack || err.message}`);
   try {
-    await mongoose.connection.db.dropDatabase();
-    await mongoose.disconnect();
+    fs.rmSync(SCRATCH, { recursive: true, force: true });
   } catch {}
   process.exit(3);
 }

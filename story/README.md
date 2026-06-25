@@ -4,14 +4,14 @@ The story the seed makes. This directory IS the story's source, durable storage,
 
 ## Run it
 
-Needs Node.js 18+ and MongoDB (as a replica set, even a single-node one for dev. See "MongoDB" below.)
+Needs Node.js 18+
 
 ```bash
 npm install
 npm start
 ```
 
-First boot runs the setup wizard ([`plant.js`](plant.js)): collects domain, MongoDB URI, picks an extension profile, mints the operator. Every later boot opens senses and unfolds the story ([`begin.js`](begin.js) then [`genesis.js`](genesis.js)).
+First boot runs the setup wizard ([`plant.js`](plant.js)): collects domain, picks an extension profile, mints the operator. Its memory lives in an on-disk file store under `store/`, named by `STORE_NAME` (default `past`), so there is no connection URI to supply. Every later boot opens senses and unfolds the story ([`begin.js`](begin.js) then [`genesis.js`](genesis.js)).
 
 After that, register a being:
 
@@ -75,24 +75,6 @@ genesis.js           The unfolding that forms the story.
 ```
 
 Dependency direction: `transports/` to `protocols/` to `seed/`. Extensions sit beside the three and consume them — they add words, never modify the seed. Seed never imports from protocols or transports.
-
-## MongoDB
-
-The story needs MongoDB as a replica set (single-node is fine for dev). Without it, the story runs until the first multi-fact ΔF (a fact-set spanning more than one reel), at which point the all-or-nothing seal needs a transaction, and Mongo only supports transactions on a replica set.
-
-Convert a local mongod once:
-
-```bash
-sudo sh -c 'cat >> /etc/mongod.conf <<EOF
-
-replication:
-  replSetName: rs0
-EOF'
-sudo systemctl restart mongod
-mongosh --eval 'rs.initiate()'
-```
-
-After this, `mongodb://localhost:27017/story` should work.
 
 ## Read deeper
 

@@ -45,7 +45,7 @@ import { canonicalize, GENESIS_PREV } from "./hash.js";
 // history?) scan the reel/act file trees and return rows shaped EXACTLY like the
 // old ReelHead/ActHead docs (so the rollup stays byte-identical). The history
 // registry reads go through the curated histories.js helpers (loadHistory /
-// listAllHistories). No raw mongoose model remains in this module.
+// listAllHistories).
 
 // EVERY roll-up flows through this one helper — no ad-hoc
 // serialization anywhere in this module. Determinism across

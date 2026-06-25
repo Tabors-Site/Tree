@@ -96,7 +96,7 @@
 // HEAVEN, addressable as `<story>/./config`, `<story>/./tools`,
 // etc. The leading "./" is heaven's door; the inner names carry no
 // reserved sigil because heaven is the namespace. One tier-3 space
-// (host) carries its own children (http, websocket, mongo).
+// (host) carries its own children (http, websocket).
 //
 // The Space schema field `heavenSpace` carries one of these values;
 // beings' own spaces have `heavenSpace: null`.
@@ -125,7 +125,7 @@ export const HEAVEN_SPACE = Object.freeze({
   LIBRARY: "library",
   // The source self-tree. Seed walks its own place/ directory at boot
   // and plants a recursive filesystem-origin matter tree under this
-  // space, mirroring the codebase as Mongo data. After MIRROR.md
+  // space, mirroring the codebase as matter. After MIRROR.md
   // step 2 source matter is writable through the chain: the FUSE
   // mount (scripts/mirror-mount.mjs) bridges writes through the
   // I-Am's verb path; the disk-fold populator (materials/space/
@@ -144,7 +144,7 @@ export const HEAVEN_SPACE = Object.freeze({
   // no child here. Children carry history metadata in their qualities
   // (parent, branchPoint, label, paused state). SEE on
   // `<story>/./histories` returns the history tree; the underlying
-  // truth is the History Mongo collection (one row per non-main
+  // truth is the History file-backed collection (one row per non-main
   // history). See seed/materials/history/histories.js for the read
   // helpers and seed/timeline.md for the doctrine.
   //

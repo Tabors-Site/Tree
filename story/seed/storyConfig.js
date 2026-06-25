@@ -471,7 +471,7 @@ registerOperation("delete-config", {
 // operator (the first registered human). Rather than wiring a new
 // shutdown path, the handler re-raises SIGTERM to itself on a short
 // delay — long enough for the DO ack to flush over the wire before
-// begin.js's existing SIGTERM handler closes WS / Mongo / HTTP and calls
+// begin.js's existing SIGTERM handler closes WS / HTTP and calls
 // process.exit. skipAudit: there's nothing to fold once the world stops,
 // and the act-chain can't observe its own server's death.
 //

@@ -11,9 +11,10 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const SCRATCH_DB = "mongodb://localhost:27017/story_scribe";
+const SCRATCH = path.join(os.tmpdir(), "story_scribe-" + process.pid);
 process.env.PORT = "3807";
-process.env.MONGODB_URI = SCRATCH_DB;
+process.env.TREEOS_STORE_BASE = SCRATCH;
+fs.rmSync(SCRATCH, { recursive: true, force: true });
 process.env.JWT_SECRET = process.env.JWT_SECRET || "scribe-secret-0123456789";
 process.env.STORY_KEY_DIR = path.join(
   os.tmpdir(),
@@ -26,14 +27,7 @@ fs.mkdirSync(SRC, { recursive: true });
 fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
 
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`))
-    .default;
-  const conn = await mongoose.createConnection(SCRATCH_DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
-
+// (scratch file store fresh-wiped above; no DB to drop)
 await import(`${R}/begin.js`);
 
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
@@ -69,7 +63,7 @@ const poll = async (fn, t = 60000, e = 250) => {
 };
 
 console.log(
-  `\n  verify-scribe (drafts + grounds, never presses; the press is yours)\n  DB: ${SCRATCH_DB.split("/").pop()}\n`,
+  `\n  verify-scribe (drafts + grounds, never presses; the press is yours)\n  store: ${SCRATCH}\n`,
 );
 try {
   const cherub = await poll(() => findByName("being", "cherub", "0"));

@@ -21,7 +21,7 @@
 // Returns the new history's metadata: `{ path, parent, branchPoint }`.
 
 // The History registry is the file-backed history store
-// (historyStore.js), no longer a Mongoose model. Row write (createHistory),
+// (historyStore.js). Row write (createHistory),
 // sibling listing (listSiblingPaths), and single-row reads (loadHistory)
 // all go through the curated histories.js seam, which scans/writes the
 // file-backed collection. The Fact-aggregate reel reads below already use

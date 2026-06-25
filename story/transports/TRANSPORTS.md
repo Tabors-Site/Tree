@@ -10,7 +10,7 @@ A transport does not form space, matter, or beings. It does not decide. It carri
 
 The world inside the place speaks one protocol, IBP, over four verbs (SEE / DO / SUMMON / BE) across stances. That protocol is the entire public surface of the inside. Beings of the place know nothing of sockets, of headers, of cookies — those words are not in their dimensions. They know stances, verbs, acks.
 
-The host above the place speaks transports: WebSocket frames, HTTP request/response, MongoDB wire, the Node event loop. The operator typing at the keyboard, the browser pressing a button, the peer place posting across the wire — they all speak transport shapes, not IBP envelopes.
+The host above the place speaks transports: WebSocket frames, HTTP request/response, the Node event loop. The operator typing at the keyboard, the browser pressing a button, the peer place posting across the wire — they all speak transport shapes, not IBP envelopes.
 
 A transport's whole job is to be the seam between the two. It receives the host-shape, fabricates the IBP envelope, calls one shared dispatcher, then translates the ack back into the host-shape. Outside the dispatcher nothing routes; inside it nothing knows about sockets. The dispatcher belongs to `protocols/ibp/`, not to me here.
 
@@ -59,8 +59,9 @@ http/
                         strategies. Sets req.beingId / req.name.
                         attachSpaceAccess derives req.spaceAccess for
                         routes that name a spaceId.
-    dbHealth.js         503 when MongoDB is down. One function call,
-                        no async, no DB query.
+    dbHealth.js         503 when the file store is unavailable. One
+                        existence check on the store root, no async,
+                        no query.
     securityHeaders.js  CSP, frame-options, etc.
     preUploadCheck.js   Pre-multipart gate for uploads.
     authenticateMCP.js  MCP-specific auth scheme.

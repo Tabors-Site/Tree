@@ -64,7 +64,7 @@ export async function computeMergeResetFacts({ mergedHistory, ancestor, actorBei
 // projections.listByType gives the live beings on the ancestor history
 // (tombstoned excluded, lineage-aware); loadOrFold reads each folded slot.
 // The inhabitedBy field lives at state.qualities.connection.inhabitedBy
-// — the same shape the Mongo projection doc held.
+// — the same shape the projection slot holds.
 // ─────────────────────────────────────────────────────────────────────
 async function _inhabitResetFacts({ mergedHistory, ancestor, actorBeingId }) {
   const beings = await listByType("being", ancestor);

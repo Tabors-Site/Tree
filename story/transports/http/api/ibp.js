@@ -35,7 +35,7 @@
 // is instantly callable here. No per-feature route files. The
 // protocol IS the API.
 
-import express from "express";
+import express from "../app.js";
 import { verifyIncoming } from "../../../protocols/ibp/canopy.js";
 import {
   SEALED_CONTENT_TYPE, handshakeHandler,

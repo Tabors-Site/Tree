@@ -125,15 +125,16 @@ export function getActChain(story, history, being) {
   return fileStore.readActChain(storyOf(story), String(history), String(being));
 }
 
-// The post-seal-mutable fields (the doctrine's lone exception to act-row
-// immutability): status (attempted → terminal), innerFace (foreign descriptor
-// observation), severedAt (a cut from outside), and qualities.statusMeta.
+// FLAG — the last act-row mutations, both pending conversion to FACTS. Doctrine: an act is PRESENT, a
+// fact is PAST, and a sealed act has NO editable fields. `status` was RIPPED out (an act is "done" when
+// a fact is stamped for it — getFactsByActId — not via a mutable column). The two that remain are
+// EVENTS that should each be a fact on a reel, folded — their own thread, not chased mid-pass:
+//   innerFace — the foreign descriptor from a cross-story reply; it belongs IN that reply-FACT.
+//   severedAt — a thread cut; the severance is an event → a severance FACT (it also writes `now`, a
+//               clock, so it also falls out with the clock removal).
 const PATCHABLE_FIELDS = new Set([
-  "status",
   "innerFace",
   "severedAt",
-  "qualities.statusMeta",
-  "qualities",
 ]);
 
 /**
@@ -383,8 +384,8 @@ async function readActChainLineage({ beingId, history, limit, before }) {
   return sortNewestFirst(out, stamp).slice(0, limit);
 }
 
-// Sort acts newest-first by stamp; id as a deterministic tiebreak (mirrors the
-// Mongo sort { stampedAt: -1, _id: -1 }). Acts with no stamp sort last.
+// Sort acts newest-first by stamp; id as a deterministic tiebreak (descending
+// by stampedAt, then by _id). Acts with no stamp sort last.
 function sortNewestFirst(acts, stamp) {
   return acts.slice().sort((a, b) => {
     const ta = stamp(a);

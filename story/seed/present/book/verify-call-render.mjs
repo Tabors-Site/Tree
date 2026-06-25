@@ -11,9 +11,10 @@ import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const R = path.resolve(__dirname, "../../..");
-const DB = "mongodb://localhost:27017/story_callrender";
+const SCRATCH = path.join(os.tmpdir(), "story_callrender-" + process.pid);
 process.env.PORT = "3814";
-process.env.MONGODB_URI = DB;
+process.env.TREEOS_STORE_BASE = SCRATCH;
+fs.rmSync(SCRATCH, { recursive: true, force: true });
 process.env.JWT_SECRET = process.env.JWT_SECRET || "callrender-0123456789";
 process.env.STORY_KEY_DIR = path.join(
   os.tmpdir(),
@@ -26,14 +27,7 @@ fs.mkdirSync(SRC, { recursive: true });
 fs.writeFileSync(path.join(SRC, "x.txt"), "x\n");
 process.env.SOURCE_TREE_ROOT = SRC;
 
-{
-  const mongoose = (await import(`${R}/node_modules/mongoose/index.js`))
-    .default;
-  const conn = await mongoose.createConnection(DB).asPromise();
-  await conn.dropDatabase();
-  await conn.close();
-}
-
+// (scratch file store fresh-wiped above; no DB to drop)
 await import(`${R}/begin.js`);
 
 const { findByName } = await import(`${R}/seed/materials/projections.js`);
@@ -43,7 +37,7 @@ const { birthBeing } = await import(
   `${R}/seed/materials/being/identity/birth.js`
 );
 const { assembleStory } = await import(`${R}/seed/present/book/assemble.js`);
-const { default: Fact } = await import(`${R}/seed/past/fact/fact.js`);
+const { sealFacts } = await import(`${R}/seed/past/fact/facts.js`);
 const poll = async (fn, t = 60000, e = 250) => {
   const t0 = Date.now();
   while (Date.now() - t0 < t) {
@@ -89,39 +83,36 @@ try {
   });
   await new Promise((r) => setTimeout(r, 1000));
 
-  // synthetic call/reply facts — assembleStory just READS them (no logFact, no call machinery)
-  const now = Date.now();
+  // synthetic call/reply facts, sealed straight onto the reel; assembleStory just READS them
+  // (no call machinery). sealFacts is the real append: it routes each spec through logFact +
+  // commitMoment, which derives seq/p/_id/date, so the specs carry only the fact's content fields.
   const C = String(cherub.id),
     S = String(sageId);
   // Real call facts carry the recipient on `of` (the right stance), NOT `to`, and content can be
   // a string (saying) OR an object (the `with` payload). Match that shape so the recipient
-  // resolution + content coercion are tested as they actually run.
-  const mk = (i, by, through, recipient, extra) => ({
-    _id: `callrender-${i}`,
-    branch: "0",
+  // resolution + content coercion are tested as they actually run. A reply marks its antecedent
+  // via params.inReplyTo (the render reads `p.inReplyTo`), the file-native peer of the old
+  // top-level reply pointer.
+  const mk = (i, by, through, recipient, params) => ({
+    history: "0",
     actId: `act-cr-${i}`,
     by,
     through,
     of: recipient ? { kind: "being", id: recipient } : null,
     verb: "call",
     act: "call",
-    date: new Date(now + i * 1000),
-    seq: 2000 + i,
-    ...extra,
+    params: params || {},
   });
-  await Fact.collection.insertMany([
-    mk(1, C, C, S, { params: { content: "welcome to the garden" } }), // message → "said '…' to sage"
-    mk(2, S, S, C, {
-      inReplyTo: "callrender-1",
-      params: { content: "thank you" },
-    }), // reply + message
-    mk(3, C, C, S, { params: { intent: "stand-watch" } }), // intent only → "called sage to stand watch"
-    mk(4, C, C, S, { params: {} }), // bare reach → "called sage"
-    mk(5, C, C, S, {
-      params: { content: { able: "warrior", anchorSpaceId: "x" } },
-    }), // OBJECT payload, no message field → call form, NEVER "[object Object]"
-    mk(6, C, C, S, { params: { content: { content: "hi there" } } }), // nested envelope object → extract the message
-  ]);
+  for (const spec of [
+    mk(1, C, C, S, { content: "welcome to the garden" }), // message → "said '…' to sage"
+    mk(2, S, S, C, { inReplyTo: "act-cr-1", content: "thank you" }), // reply + message
+    mk(3, C, C, S, { intent: "stand-watch" }), // intent only → "called sage to stand watch"
+    mk(4, C, C, S, {}), // bare reach → "called sage"
+    mk(5, C, C, S, { content: { able: "warrior", anchorSpaceId: "x" } }), // OBJECT payload, no message field → call form, NEVER "[object Object]"
+    mk(6, C, C, S, { content: { content: "hi there" } }), // nested envelope object → extract the message
+  ]) {
+    await sealFacts([spec]); // one seal per fact, in order, so they read newest-last
+  }
 
   const world = await assembleStory("world", { branch: "0" });
   const lines = world.map((a) => a.line);

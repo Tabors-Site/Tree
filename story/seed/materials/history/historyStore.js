@@ -10,8 +10,7 @@
 // branchPoint are stable. So it gets the SAME shape the secondary
 // cross-cutting projections (inbox / threads / position) use: a
 // FileCollection, one JSON doc per row keyed by path, under the store
-// (<storeRoot>/proj/history/...). This replaces the mongoose History
-// model (history.js, deleted).
+// (<storeRoot>/proj/history/...).
 //
 // The row's `_id` IS the path (one doc per history path), exactly as the
 // old `_id: path` schema. `findById(path)` resolves the single row;

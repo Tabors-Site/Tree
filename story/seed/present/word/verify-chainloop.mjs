@@ -15,7 +15,6 @@ const DB = path.join(os.tmpdir(), "story_chainloop-" + process.pid);
 process.env.PORT = "3840";
 process.env.TREEOS_STORE_BASE = DB;
 fs.rmSync(DB, { recursive: true, force: true });
-delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "chainloop-0123456789";
 process.env.STORY_KEY_DIR = path.join(os.tmpdir(), "chainloop-keys-" + process.pid);
 fs.rmSync(process.env.STORY_KEY_DIR, { recursive: true, force: true });
@@ -88,18 +87,6 @@ try {
   made.length === 3
     ? ok(`the for-each ran three passes — spaces ${made.join(", ")} all exist`)
     : bad("three spaces made", { made });
-
-  // ── TEMP PROBE ──
-  { const { listByType } = await import(`${R}/seed/materials/projections.js`);
-    const sp = await listByType("space", "0");
-    const cs = factFind({ act: "create-space" });
-    console.log("PROBE listByType(space) count:", sp.length);
-    console.log("PROBE create-space facts:", cs.map(f=>JSON.stringify({ofid:String(f.of?.id).slice(0,10), name:f.params?.name, parent:String(f.params?.parentSpaceId??f.params?.parent??"").slice(0,10), hist:f.history})).join(" | "));
-    for (const f of cs) { const slot = await loadOrFold("space", String(f.of?.id), "0"); console.log("PROBE loadOrFold", String(f.of?.id).slice(0,10), "name:", slot?.state?.name, "parent:", String(slot?.state?.parent??"").slice(0,10), "tomb:", slot?.tombstoned); }
-    const ba = await findByName("space", "alpha", "0");
-    console.log("PROBE findByName alpha:", ba ? JSON.stringify({id:String(ba.id||ba._id).slice(0,10), name:ba.state?.name}) : "null");
-  }
-  // ── END PROBE ──
 
   // 2. EACH PASS GREW THE CHAIN BY ONE ACT: three create-space facts, three distinct actIds.
   const facts = factFind({ act: "create-space", through: String(speaker) });

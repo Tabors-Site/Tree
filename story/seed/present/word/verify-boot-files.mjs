@@ -1,14 +1,13 @@
 #!/usr/bin/env node
-// verify-boot-files . a FILES-ONLY genesis boot. No mongod, no MONGODB_URI.
+// verify-boot-files . a FILES-ONLY genesis boot against the append-only file store.
 //
 // Proves the genesis sequence (the earth forming, genesis.js Steps 1-5) runs against the
 // append-only file store alone: connectDB() opens the store dir (configureStore + journal replay),
 // then ensureIAm → seedFold → ensureSpaceRoot → setIAmHomeSpace → a couple seed delegates lay their
 // facts on per-reel files. Afterward loadOrFold("being", I, "0") folds the I-Am back from those
-// files, and the place root folds back from files too. If any of these still reaches for Mongo it
-// dies here with the precise failing module + call.
+// files, and the place root folds back from files too. The store base is the only storage selector.
 //
-// Run: cd story/seed && node present/word/verify-boot-files.mjs   (do NOT set MONGODB_URI)
+// Run: cd story/seed && node present/word/verify-boot-files.mjs
 
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -19,8 +18,7 @@ import { dirname, resolve } from "node:path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SEED = resolve(__dirname, "../..");
 
-// Files-only: a temp store base, and NO MONGODB_URI in the env.
-delete process.env.MONGODB_URI;
+// Files-only: a temp store base is the sole storage selector.
 delete process.env.TREEOS_STORE_ROOT;
 const STORE_BASE = mkdtempSync(join(tmpdir(), "treeos-bootfiles-"));
 process.env.TREEOS_STORE_BASE = STORE_BASE;
@@ -40,13 +38,12 @@ const bad = (m, extra) => {
   fail++;
 };
 
-console.log(`\n  verify-boot-files (files-only genesis: no mongod, no MONGODB_URI)\n`);
-console.log(`  store base: ${STORE_BASE}`);
-console.log(`  MONGODB_URI set: ${process.env.MONGODB_URI ? "YES (BUG)" : "no"}\n`);
+console.log(`\n  verify-boot-files (files-only genesis against the append-only file store)\n`);
+console.log(`  store base: ${STORE_BASE}\n`);
 
 try {
-  // 1. Open the file store (configureStore + journal replay). The file-store peer of connecting
-  //    to Mongo — but no network, no URI.
+  // 1. Open the file store (configureStore + journal replay). No network, no URI:
+  //    the store base directory is the only storage selector.
   const { connectDB, isDbHealthy } = await import(`${SEED}/seedStory/dbConfig.js`);
   const conn = await connectDB({ story: "bootfiles" });
   isDbHealthy()

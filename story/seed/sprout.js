@@ -399,7 +399,7 @@ export async function withNameAct(nameId, sourceLabel, fn) {
 // modeled a batch as "many ops folded into one moment with a label" —
 // that violates the moment-act discipline. Per philosophy/MOMENT.md,
 // a batch is a grouping of multiple moments (each still one act) that
-// share a Mongo transaction for cross-moment atomicity. Building that
+// share one atomic boundary for cross-moment atomicity. Building that
 // requires session-threading through every child sealAct call; it
 // lands when a real use case appears (federation pull, cross-reel
 // transfer). Until then, the verbs themselves seal one act per call
@@ -448,8 +448,8 @@ const STORY_HEAVEN_SPACES = [
   { name: "histories", heavenSpace: HEAVEN_SPACE.HISTORIES },
   // host is the running machine, represented. Its children (below,
   // NOT in this list — the tier-3 repair loop would re-parent them
-  // under heaven) hold the HTTP listener, WebSocket pool, and Mongo
-  // connection as beings + matter. See seed/materials/host/.
+  // under heaven) hold the HTTP listener and WebSocket pool as beings
+  // + matter. See seed/materials/host/.
   { name: "host", heavenSpace: HEAVEN_SPACE.HOST },
   // factory is the stamping machinery, watched: read-side
   // projections over Act + Fact rows (children below, same NOT-in-
@@ -640,7 +640,7 @@ export async function ensureSpaceRoot() {
     }
   }
 
-  // Heaven-region children: http/websocket/mongo under ./host,
+  // Heaven-region children: http/websocket under ./host,
   // present/past under ./factory. Same create/repair shape as the
   // tier-3 loop, but parented under their region space. Skipped when
   // the region failed to plant (degraded boot); next boot heals.
@@ -775,7 +775,7 @@ export async function ensureSpaceRoot() {
 
   // childCount read only meaningful on Awakening (rows exist). Verbose log only — best-effort.
   if (!spaceRoot._pending) {
-    // Count child spaces of the root via the file-backed projection catalog (no Mongo).
+    // Count child spaces of the root via the file-backed projection catalog.
     const { listByType } = await import("./materials/projections.js");
     const spaces = await listByType("space", "0").catch(() => []);
     const childCount = spaces.filter(

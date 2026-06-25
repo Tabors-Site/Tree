@@ -106,7 +106,7 @@ export function reduce(state, fact) {
   next = applySetField(next, fact);
   next = applySetQualities(next, fact);
 
-  // updatedAt is reducer-owned (no Mongoose timestamps on Name). Bump on
+  // updatedAt is reducer-owned (nothing auto-stamps it on Name). Bump on
   // any state-mutating apply so rebuild reproduces the live fold's value.
   if (next !== state) {
     next = { ...next, updatedAt: fact.date };

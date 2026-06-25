@@ -13,7 +13,6 @@ const DB = path.join(os.tmpdir(), "story_book_receive-" + process.pid);
 process.env.PORT = "3847";
 process.env.TREEOS_STORE_BASE = DB;
 fs.rmSync(DB, { recursive: true, force: true });
-delete process.env.MONGODB_URI;
 process.env.JWT_SECRET = process.env.JWT_SECRET || "bookrcv-0123456789";
 process.env.STORY_KEY_DIR = path.join(
   os.tmpdir(),

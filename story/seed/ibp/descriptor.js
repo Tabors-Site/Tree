@@ -543,8 +543,8 @@ export async function buildNameDescriptor(nameId) {
   // The Name's whole biography of acts, across every being it acts through.
   // FLAG: `by` (the signing name) is NOT an indexed act facet (actChain.js:
   // "by-walks go through the chain"), so the curated actCount has no facet for
-  // it and returns 0. The old Act.countDocuments({by}) is identically broken
-  // now that acts live in the file store (the Mongo collection is empty). A
+  // it and returns 0. A direct count keyed on `by` is identically broken
+  // (acts live in the file store, indexed by chain not by signing name). A
   // by-indexed act facet, or a name-act-log, would be the curated home if a
   // real count is needed; left at the curated call (returns 0) + flagged.
   const { actCount: curatedActCount } = await import("../past/act/actChain.js");
@@ -1039,7 +1039,7 @@ async function placeAtSpace(
   // address like <story>/<path>@<name>), surface the immediate
   // children of that being — beings whose parentBeingId points at it.
   // The portal renders this as the "lineage" panel: who did you
-  // birth, who can you inhabit. One Mongo query, lean, capped.
+  // birth, who can you inhabit. One store lookup, lean, capped.
   const beingLineage = resolved.beingId
     ? await listBeingChildren(resolved.beingId, { until, history })
     : null;
@@ -1934,7 +1934,7 @@ async function identityBlock(identity, { until = null, history } = {}) {
   };
 }
 
-// Serialize a Mongoose qualities Map (or already-plain object) into
+// Serialize a qualities Map (or already-plain object) into
 // the wire shape. Returns {} when absent so the field is always
 // present on the descriptor, which keeps client code consistent —
 // `descriptor.qualities.<extName>` is safe to read either way.

@@ -1,8 +1,8 @@
 // TreeOS Seed . AGPL-3.0 . https://treeos.ai . Tabor Holly
 //
-// The DO ceiling. MongoDB's hard wall, on the substrate's side.
+// The DO ceiling. The hard wall on a single document's size.
 //
-// MongoDB caps every BSON document at 16MB. The qualities Map on a
+// A document is capped at 16MB. The qualities Map on a
 // Space, Being, or Matter grows freely under that ceiling. Without
 // an enforcer, an extension's well-meaning write can be the one
 // that crosses it — and from there the whole document is
@@ -14,7 +14,7 @@
 // without checking first. Since every quality write is a DO, this
 // file is the ceiling on every DO.
 //
-// Default ceiling: 14MB. The 2MB headroom under Mongo's 16MB is
+// Default ceiling: 14MB. The 2MB headroom under the 16MB cap is
 // space for the BSON-vs-JSON overhead and concurrent writes that
 // slip in between the check and the write. Configurable via
 // maxDocumentSizeBytes in .config.
@@ -42,14 +42,14 @@ const PRESSURE_THRESHOLD = 0.8; // 80%
 function getMaxBytes() {
   const configured = getInternalConfigValue("maxDocumentSizeBytes");
   if (configured && typeof configured === "number" && configured > 0) {
-    // Floor 1MB, ceiling 16MB (MongoDB hard limit). Below 1MB bricks the system.
+    // Floor 1MB, ceiling 16MB (document hard limit). Below 1MB bricks the system.
     return Math.max(1024 * 1024, Math.min(configured, 16 * 1024 * 1024));
   }
   return DEFAULT_MAX_BYTES;
 }
 
 /**
- * Estimate the BSON size of a Mongoose document.
+ * Estimate the BSON size of a document.
  * Uses JSON serialization as a lower bound (BSON is typically larger
  * due to type headers, but JSON is a safe conservative estimate).
  * For lean() documents, works directly on the plain object.
@@ -57,7 +57,7 @@ function getMaxBytes() {
 // BSON overhead factor: BSON encoding adds type headers, key length bytes,
 // and 64-bit floats. For Map-heavy documents like spaces with extension qualities,
 // BSON can be 20-30% larger than JSON. Factor of 1.3 prevents the 14MB JSON
-// estimate from becoming 17MB+ BSON, which would exceed MongoDB's 16MB limit.
+// estimate from becoming 17MB+ BSON, which would exceed the 16MB limit.
 const BSON_OVERHEAD_FACTOR = 1.3;
 
 function estimateDocSize(doc) {
@@ -74,7 +74,7 @@ function estimateDocSize(doc) {
 /**
  * Check if a write would push a document over the size limit.
  *
- * @param {object} doc - Mongoose document or lean object
+ * @param {object} doc - document or lean object
  * @param {number} additionalBytes - estimated size of the incoming write
  * @param {object} [opts]
  * @param {string} [opts.documentType] - "being", "space", "matter", or "system"
